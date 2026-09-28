@@ -234,10 +234,12 @@ rotation and treat all previously emailed links as compromised.
 2. [Promote production](../.github/workflows/promote-production.yml) advances
    `production` after successful CI on current `main` and a merged PR.
    Manual dispatch also requires a merged PR.
-3. Cloudflare Workers Builds uploads that commit as a Worker version.
-4. [Ramp production](../.github/workflows/ramp.yml) waits for the upload, moves
-   10% of traffic, soaks it for 20 minutes, then finishes at 100% or rolls back
-   on its own. Cancel the run during the soak to hold the canary.
+3. Cloudflare Workers Builds deploys that commit at 100% (`wrangler deploy`).
+   Branch builds only upload a preview version and move no traffic.
+4. The promote workflow's `after-release` job waits for `/whoareyou.json` to
+   report the new version, runs the advisory `dcz:check`, and dispatches
+   `dictionary-roll.yml`. There is no automatic ramp or rollback since
+   2026-09-28; roll back from a workstation with `bun run deploy:promote --rollback`.
 
 To run CI manually, select the desired branch in Actions, or run
 `gh workflow run ci.yml --ref <branch>`. All validation jobs check out the
@@ -302,23 +304,11 @@ GITHUB_TOKEN=$(gh auth token) bun run infra:check
 gh api repos/oddharsh/site/code-scanning/default-setup   # expect state not-configured
 ```
 
-### Ramp a release (`bun run deploy:promote`)
+### Ramp a release by hand (`bun run deploy:promote`)
 
-The Actions workflow uses these environments:
-
-| job | traffic | environment | operator action |
-|---|---|---|---|
-| canary | 10% | `production-canary` | Inspect the new version and Workers Logs. |
-| soak | 50%, then 100%, or rollback | `production-canary` | None; cancel the run to hold at 10%. |
-| verify | unchanged | none | Review the advisory dictionary check. |
-
-The two ramp jobs use the `CLOUDFLARE_API_TOKEN_RAMP` environment secret, whose
-scope is declared in `config/infra.json`. Keep it separate from the
-workstation-only DNS credential.
-
-A newer release cancels an older ramp, including one mid-soak. Inspect
-the latest run and `deploy:promote --status` before acting on an old canary.
-Cancellation or a failed probe leaves the current traffic split in place.
+Production deploys at 100% on its own. A manual ramp is for a version you
+uploaded without deploying (`bun run deploy:version`) and want to watch at 10%
+first, and `--rollback` is how any bad release is undone.
 
 For a workstation ramp, inspect the target first:
 
@@ -1580,9 +1570,11 @@ checkpoints:check` therefore allows the projection to run AHEAD by a contiguous
 tail of unreleased entries, and fails on anything else: behind, mismatched, or a
 gap in the tail.
 
-Traffic moves either from a workstation (`bun run deploy:promote`) or through
-`.github/workflows/ramp.yml`, which canaries at 10% and then waits on a required
-reviewer before 50% and 100%.
+Production traffic moves when Workers Builds deploys a promoted commit at 100%.
+A workstation `bun run deploy:promote` is the only thing that splits it. Nothing
+writes the D1 changelog rows since the ramp was deleted on 2026-09-28, so
+`checkpoints:check` reports released entries as staged until that table is
+retired or written by hand.
 
 ### Turn on Kitesurf for the Browser view
 `/lens/browser` (the Browser view) works out of the box on the Browser Run

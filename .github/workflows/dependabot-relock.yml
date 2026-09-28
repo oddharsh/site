@@ -48,7 +48,7 @@ concurrency:
   # FALSE on purpose. This workflow's own push fires the next run in this group
   # while the run that pushed is still finishing its last step, so
   # cancel-in-progress would cancel the successful run seconds after it did the
-  # work and report it as `cancelled`. ramp.yml has a long note on how expensive
+  # work and report it as `cancelled`. Gotcha 36 has a long note on how expensive
   # a misread cancellation is; a queued no-op costs seconds and lies to nobody.
   cancel-in-progress: false
 

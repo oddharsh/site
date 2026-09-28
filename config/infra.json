@@ -713,7 +713,7 @@
       "the image supplies, stage it the same way: branch trigger first, since it",
       "is the only trigger whose failure costs no release."
     ],
-    "deploy_command": "bash .github/deploy-wrangler.sh versions upload --x-provision=false --x-auto-create=false",
+    "deploy_command": "bash .github/deploy-wrangler.sh deploy --x-provision=false --x-auto-create=false",
     "non_production_deploy_command": "bash .github/deploy-wrangler.sh versions upload --x-provision=false --x-auto-create=false",
     "$comment_build_variables": [
       "SKIP_DEPENDENCY_INSTALL turns the build image's own bootstrap off: it stops",
@@ -734,7 +734,7 @@
     },
     "verifiable": true,
     "promoted_by": ".github/workflows/promote-production.yml",
-    "traffic_moved_by": "bun run deploy:promote (tools/deploy-promote.ts), workstation-only",
+    "traffic_moved_by": "the production deploy_command itself (wrangler deploy, 100% at once, since 2026-09-28); bun run deploy:promote remains the workstation rollback",
     "preview_urls": true
   },
 
@@ -1211,7 +1211,7 @@
           "name": "release-path",
           "color": "e99695",
           "description": "Touches what decides which commit reaches production",
-          "paths": [".github/workflows/ramp.yml", ".github/workflows/promote-production.yml", ".github/deploy-wrangler.sh", "tools/deploy-promote.ts", "tools/lib/release-guard.ts", "wrangler.jsonc", "config/infra.json", "src/worker/checkpoints.json"],
+          "paths": [".github/workflows/promote-production.yml", ".github/deploy-wrangler.sh", "tools/deploy-promote.ts", "tools/lib/release-guard.ts", "wrangler.jsonc", "config/infra.json", "src/worker/checkpoints.json"],
           "why": "These files decide which commit becomes a release and how traffic reaches it. A mistake here is not caught by the page rendering correctly, so the label exists to make the review bar visible from the pull request list."
         },
 

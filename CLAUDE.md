@@ -90,9 +90,9 @@ it is `public/`.
 ```bash
 # production, the normal path, and it needs NOTHING from you at a terminal:
 # merge to main; CI promotes the tested commit to production; Workers Builds
-# UPLOADS it as a version and moves no traffic; ramp.yml then takes it to 10%,
-# soaks it for 20 minutes, and finishes at 100% or rolls back on its own.
-# Cancel that run during the soak to hold the canary at 10%.
+# DEPLOYS it at 100% (`wrangler deploy`, since 2026-09-28; the ramp is gone).
+# promote-production.yml then waits for the new version and rolls the
+# dictionaries onto it.
 #
 # By hand (still supported, and the only way to roll back):
 bun run deploy:promote --dry-run     # which version WOULD ramp. run this first
@@ -231,7 +231,7 @@ bun run infra:apply
 
 # roll the shared-compression dictionaries onto what production is SERVING.
 # .github/workflows/dictionary-roll.yml does this after every release that reaches
-# 100% (ramp.yml dispatches it) and nightly as a backstop, and opens a PR; this is
+# 100% (promote-production.yml dispatches it) and nightly as a backstop, and opens a PR; this is
 # the manual form. Sourced from the wire, so it is correct from any checkout.
 bun run dict:roll
 
@@ -612,168 +612,53 @@ worktrees may edit freely, but a worktree is not a release surface.
   rather than against a declared list, on purpose: a list invites someone to add
   an entry to `infra.json` to turn a red check green, which is the precise change
   the check exists to catch.
-- **Reaching `production` no longer moves traffic.** Workers Builds runs
-  `wrangler versions upload`, so a promotion builds the commit, uploads the
-  assets, checks the secrets, and mints a servable preview URL, while production
-  keeps serving the version it was already serving. Traffic moves when a human
-  ramps it:
+- **Reaching `production` deploys at 100%, since 2026-09-28.** Workers Builds
+  runs `wrangler deploy` on the `production` branch, so a promoted commit serves
+  everyone a few minutes after CI passes on `main`. Branch builds still run
+  `versions upload`, which mints a preview version and moves no traffic, and
+  `infra:check` fails if that ever changes, since every branch push builds
+  against production's bindings.
+
+  **The ramp was deleted as overhead.** From 2026-08-12 to 2026-09-28,
+  `ramp.yml` put each release at 10%, soaked it for 20 minutes against pinned
+  probes, then finished or rolled back, with a reviewer-gated `full` job as a
+  fast path. On a personal site that bought an automatic rollback at the cost
+  of about 70 mostly-empty workflow runs a week, a Cloudflare write token in two
+  GitHub environments, a changelog that depended on a run not being cancelled,
+  and the split-release asset 404s described below. `git log -- .github/workflows/ramp.yml`
+  has the whole history; gotchas 22, 24, 25 and 36 record what it taught.
+
+  What replaced its last job: `promote-production.yml`'s `after-release` job
+  waits for `/whoareyou.json` to report a new "Serving version", then runs
+  `dcz:check` and dispatches `dictionary-roll.yml`, with no Cloudflare
+  credential. Nothing writes the D1 `checkpoints` changelog any more; the site
+  never read it at runtime (`/updates` and `/restore` render the bundled
+  `checkpoints.json`), so `checkpoints:check` will report released rows as
+  pending until that table is retired or written by hand.
+
+  `bun run deploy:promote` still works from a workstation, and it is the
+  rollback:
 
   ```bash
-  bun run deploy:promote
+  bun run deploy:promote --status      # what is serving
+  bun run deploy:promote --rollback    # 100% back to the previous version
   ```
 
-  That walks 10% → 50% → 100%, and between steps it samples `/whoareyou.json`
-  (the one route that reports which VERSION answered — both versions read the
-  same D1 changelog, so `/updates.json` structurally cannot tell them apart) and
-  aborts on a non-200 or on a step that never took. `--to`, `--steps`,
-  `--status`, and `--rollback` are the other modes. The old flat
-  `if (process.env.CI) die()` is gone: `tools/lib/release-guard.ts` asks
-  whether the process can authenticate instead, because a blanket CI ban refused
-  the gated pipeline it was meant to protect while doing nothing about a ramp
-  that starts unauthenticated and dies after traffic already moved.
-
-  **The ramp runs in Actions now, and since 2026-09-22 it RESOLVES ITSELF.**
-  `.github/workflows/ramp.yml` (built 2026-08-12) fires off a successful
-  `Promote production`, waits for Workers Builds to finish uploading, and then:
-
-  | job | traffic | environment | gate |
-  |---|--:|---|---|
-  | `canary` | 10% | `production-canary` | none, runs on its own |
-  | `soak` | 50% then 100%, or rollback | `production-canary` | none, after ~20 min of probing |
-  | `verify` | none | (no environment, no credential) | runs `dcz:check` |
-
-  **The reviewer used to be the only way a release finished, and measured over
-  the last 60 runs of this workflow it finished 2 of the 20 real ramps.** The
-  other 18 were cancelled by the next release while parked at the gate, one of
-  them after waiting 17 hours. Every one had already put its version at 10%, so
-  the settled state of this pipeline was production serving a split that no human
-  chose and no probe had read, with the decision deferred until a later merge
-  deleted the run holding it. A gate nobody passes through is not providing
-  review; it is providing staleness.
-
-  So the reading the gate existed for is now performed by something that actually
-  performs it. `tools/soak-canary.ts` exercises the canaried version directly with
-  `Cloudflare-Workers-Version-Overrides` every few minutes for twenty minutes,
-  then the job finishes the ramp or rolls it back on what it measured. **The
-  `full` job that parked on `production-full`'s reviewer was deleted on
-  2026-09-28**: every real ramp for days had finished through the soak while
-  `full` waited to be cancelled, so each release left an approval request behind.
-  The fast path is a workstation `bun run deploy:promote`. A workstation ramp is untouched;
-  `tools/lib/release-guard.ts` asks whether the process can authenticate rather
-  than whether it is CI, which is what made every path here possible.
-
-  **Four verdicts, and only one of them moves traffic backwards.** `faulty` means
-  a request PINNED to the canaried version came back non-200, which is the origin
-  answering badly rather than sampling noise, and it rolls back and opens an
-  issue. `clean` finishes the ramp. `shipped` means a human beat the soak to it.
-  `unproven` means nothing could be measured (every probe stalled, or the version
-  override stopped applying because the version left the deployment) and it does
-  NOTHING, leaving the split for a person. That asymmetry is gotcha 15's lesson
-  made structural: a measurement failure read as a fault would roll back healthy
-  releases every time a runner had bad egress, and the `unproven` path is what
-  refuses to do that. The soak found its own first `unproven` in testing, against
-  a real deployment change that happened underneath it.
-
-  Two things about it worth knowing before editing it:
-
-  - **It runs on `production-canary`, and that is the load-bearing detail.**
-    Moving traffic needs the write token, the token is an ENVIRONMENT secret, and
-    `production-canary` already ramps traffic with no reviewer, so the soak
-    reusing it widens nothing.
-  - **The human veto is cancelling the RUN.** The canary's step summary says so.
-
-  **The probes moved out of `deploy-promote.ts` to make any of this possible.**
-  `probePinned` and the sampler live in `tools/lib/version-probe.ts`, which holds
-  no credential and touches no filesystem, because `deploy-promote.ts` performs a
-  credentialed `currentDeployment()` at module scope and importing it runs a
-  ramp's worth of authenticated setup. The two checks that decide whether a
-  release is healthy had therefore never been reachable from a test. They are now.
-
-  **`deploy:promote` prints `target version id:` as well as `target version:`,
-  and the difference is load-bearing.** The override header declines to pin on an
-  8-char prefix and says nothing about it (gotcha 36), so a soak handed the short
-  form would probe the live split, watch the incumbent answer 200 twelve times,
-  and report a canary it never touched as clean. `soak-canary.ts` refuses
-  anything that is not a full uuid, and a contract test pins both lines plus the
-  two `sed` captures in `ramp.yml` that keep them apart.
-
-  **Expect more `Ramp production` runs in the Actions tab than releases, and most
-  of them doing nothing.** It fires on `Promote production` COMPLETING, and a
-  skipped promote completes, so every skipped promote spawns a ramp whose `canary`
-  declines to run. On the first real release there were three. They are no-ops, and
-  since 2026-08-12 they take a per-run concurrency group so they start, skip and
-  end rather than queueing behind a ramp parked on the reviewer gate, because
-  concurrency is evaluated BEFORE jobs and previously they could not even reach
-  their own guard.
-
-  **Real ramps do NOT queue, and believing they did cost every release between
-  2026-08-12 and 2026-08-14.** This note used to end "real ramps still share one
-  group and serialize." A concurrency group holds at most ONE pending run, and
-  each new arrival CANCELS the previously pending one. `cancel-in-progress`
-  governs IN-PROGRESS runs alone and does nothing about that, so a ramp parked on
-  the reviewer gate deleted its successors one at a time rather than delaying
-  them, silently, while production stayed on the stale 10/90 split that same
-  parked run had left. Run 31644451923 sat `waiting` two days and three real ramps
-  died behind it, each with ZERO jobs, the last cancelled one second after the
-  next entered the group. `cancel-in-progress: true` since 2026-08-14, so the
-  newest promoted commit wins and an unapproved canary expires instead of blocking
-  what follows. The long argument is at the concurrency block in `ramp.yml`.
-
-  That block shipped with one thing unmeasured, whether `cancel-in-progress`
-  reaches a run merely `waiting` on an environment gate, and **the very next
-  release answered it: yes.** Run 31820445866 entered the group at 16:40:27 on
-  2026-08-14 and the run parked since 15:32:04 was cancelled at 16:40:28. The
-  named fallback, moving `full` into its own workflow, is therefore not needed.
-
-  **The newest `Ramp production` run is usually the no-op rather than the
-  release.** A no-op finishes in seconds while a real ramp waits on Workers
-  Builds, so sorting by recency hands you the wrong run: on 2026-08-14 the two
-  fired six seconds apart and the no-op completed first, which reads as a release
-  that did nothing. Select by `headSha` matching the promoted commit, never by
-  `--limit 1`. **Raising the limit does not fix this**, which the wording here
-  implied for a day: `--limit 3` hid a parked run just as completely on
-  2026-08-16, because no-ops keep arriving and every one of them sorts above the
-  run you want. When the question is "is a ramp parked", filter on `status`
-  instead of on any count; the recipe is at the end of gotcha 36.
-
-  Two things about it that are load-bearing rather than incidental:
-
-  - **It checks out `production`, never `main`.** The ramp writes the D1 changelog
-    by diffing the checked-out `checkpoints.json` against D1, so the tree has to
-    be the one that was built and uploaded. This is gotcha 24 solved rather than
-    relocated: CI cannot ramp from a stale tree, and it cannot ramp from one
-    running AHEAD of what is serving either.
-  - **The wrangler it runs is the pinned one, which was not true when this was
-    written.** `deploy-promote.mjs` shelled out to `npx wrangler`, and npx
-    resolves whatever it can find: measured 2026-08-12 in a tree with no
-    `node_modules`, `npx wrangler --version` answered **4.105.0** from its own
-    cache while this repo pins 4.120.0. So the wrangler that moved production
-    traffic depended on how the script happened to be invoked. It goes through
-    `wranglerCommand()` in `tools/lib/wrangler-bin.ts` now, which NAMES NO
-    PACKAGE MANAGER and runs the pinned entry file under node. The `pnpm exec`
-    that replaced npx was itself wrong the day the tree became bun, since pnpm
-    reads `packageManager` and refuses outright; read that module's header
-    before touching any spawn here. Ramp steps still go through `bun run` to
-    match the documented interface, but that is consistency now rather than the
-    guardrail it briefly was.
-
-  `--to`, `--steps`, `--status`, `--rollback` and `--dry-run` all still work by
-  hand, and a rollback is still a workstation command on purpose.
-
-  What the ramp buys is the ability to read a change before everyone gets it. The
-  script deliberately pauses between steps and tells you to go look at Workers
-  Logs; it checks status codes, and it cannot check whether the page is *right*.
+  It can still walk a version 10% to 50% to 100% by hand, sampling
+  `/whoareyou.json` between steps, when a change deserves a careful look. The
+  two paragraphs below apply to that manual ramp.
 
   **A SPLIT DEPLOYMENT SPLITS ASSET REQUESTS TOO, which is what version affinity
   is for.** Every document here references content-hashed shell assets
   (`/a/luna.<hash8>.css`, `/a/nav.<hash8>.js`), `build.ts` keeps exactly one hash
-  per asset, and during a ramp each request picks a version independently. So a
+  per asset, and during a split (a manual ramp now) each request picks a version independently. So a
   document from one version asks for an asset the other version has never built
   and gets a 404: `/a/*` is `run_worker_first` and is NOT in
   `WORKERS_CACHEABLE_PATHS`, so nothing bridges the two. At the 10% canary that is
   roughly 90% of the new-HTML cohort plus 10% of the old-HTML cohort, per changed
-  asset, on any release touching `nav.js` or `luna.css`. `ramp.yml`'s canary job
-  runs unattended, so it fires on its own. Cloudflare's docs name this exact
+  asset, on any release touching `nav.js` or `luna.css`. It fired on its own
+  while `ramp.yml` canaried every release; with direct deploys it only happens
+  during a manual ramp. Cloudflare's docs name this exact
   case. What keeps it from being permanent is the 404 cache-clamp, which was
   written for `/images/*` (gotcha 1) and has been quietly holding this line too.
 
@@ -826,9 +711,9 @@ worktrees may edit freely, but a worktree is not a release surface.
   looking for it. Cloudflare honours the override only for a version already in the
   deployment, so the probe runs after each step and never before.
 
-  `bun run deploy:direct` still exists and still goes straight to 100%. Keep it: the
-  `infra:check` deadlock below is exactly the case where a ramp's extra step is
-  a liability rather than a safety net.
+  `bun run deploy:direct` still exists and still goes straight to 100% from a
+  workstation, for the `infra:check` deadlock below and anything else that
+  cannot wait for CI.
 - **A SECRET is a version too, so `wrangler secret put` no longer works here.**
   Hit 2026-08-06 adding `BROWSER_RUN_TOKEN`:
 
@@ -849,14 +734,14 @@ worktrees may edit freely, but a worktree is not a release surface.
   bun run wrangler versions secret put -c wrangler.jsonc <NAME>
   ```
 
-  Then ramp it like any other version (`bun run deploy:promote`). Every secret
+  Then put it live with `bun run deploy:promote --to 100`. Every secret
   command in this file, MAINTENANCE.md and `cal/README.md` was the old form and
   is now the new one; they had been unrunnable since gradual deployments landed
   and nobody noticed, because secrets are set about once a year.
 
   **Order matters when the secret is FOR new code.** Merge first so Workers
   Builds uploads a version containing the feature, then set the secret on top of
-  it, then ramp. Setting it first attaches a credential to a version whose code
+  it, then deploy it. Setting it first attaches a credential to a version whose code
   predates the thing that reads it, which is harmless and pointless.
 - **A DURABLE OBJECT LIFECYCLE CHANGE is the thing `--dry-run` structurally
   cannot check.** Adding, renaming, transferring, or deleting a DO class needs a
@@ -1106,9 +991,10 @@ worktrees may edit freely, but a worktree is not a release surface.
   **BUILT 2026-08-12, and this is now a description.** `CLOUDFLARE_API_TOKEN_RAMP`
   is an ENVIRONMENT secret on `production-canary` and `production-full`, never a
   repo secret, so a job that does not name those environments cannot see it and
-  fork PRs cannot reach it. Since 2026-09-28 no job names `production-full`
-  (the soak finishes ramps on `production-canary`), so its copy of the secret is
-  unused. `.github/workflows/ramp.yml` is the only consumer.
+  fork PRs cannot reach it. **Since 2026-09-28 NOTHING consumes it**: `ramp.yml`
+  was its only consumer and is deleted. The two environments and the secret can
+  be removed in Settings > Environments, and the token revoked in Cloudflare; the
+  scope table below is kept as the recipe for a workstation ramp token.
 
   **The scope list, derived from what the ramp actually executes.** This note said
   `Workers Scripts:Edit` + `D1:Edit` "and nothing else" from 2026-08-06 while no
@@ -3931,8 +3817,9 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
 
     `.github/workflows/dictionary-roll.yml` runs the roll against production
     and opens a PR when anything moved. **It fires after every release that
-    reaches 100%, since 2026-09-26**: ramp.yml's `verify` job dispatches it on a
-    `clean` or `shipped` soak, and the nightly schedule stays as the backstop. A
+    reaches 100%, since 2026-09-26**: `promote-production.yml`'s `after-release`
+    job dispatches it once `/whoareyou.json` reports the new version (the ramp's
+    `verify` job did until 2026-09-28), and the nightly schedule stays as the backstop. A
     nightly roll alone fell behind a repo that ships several releases a day: #921
     rolled at 14:42Z, a later release re-minted luna, nav and nav-run, and
     `dcz:check` reported all three uncovered hours later. It is a dispatch from
