@@ -1,10 +1,10 @@
 // ── /lens per-IP crawl budgets ──────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  configText,
   testGlobals,
   assert,
   readFile,
-  readFileSync,
   test,
 } from "./contract-shared.ts";
 
@@ -41,10 +41,10 @@ test("every rate-limit ceiling matches the ratelimits declared in both wrangler 
   assert.equal(new Set(bindings).size, bindings.length, "two budgets share one binding");
 
   // The number in LENS_BUDGETS is what the 429 message quotes; the number in
-  // wrangler.jsonc is what actually limits. A message that disagrees with the
+  // cloudflare.config.ts is what actually limits. A message that disagrees with the
   // ceiling is worse than no message, and nothing else would catch the drift.
-  for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
-    const declared = parseJsonc(readFileSync(config, "utf8")).ratelimits;
+  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
+    const declared = parseJsonc(await configText(config)).ratelimits;
     assert.ok(Array.isArray(declared) && declared.length, `${config} declares no ratelimits`);
     const byName = new Map(declared.map((r) => [r.name, r]));
 

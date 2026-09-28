@@ -15,7 +15,7 @@
 // still reads as hand-written CSS, and the line says where it came from.
 //
 //   bun run build                                         # stage .build/
-//   bun run deploy:direct                                   # build + wrangler deploy -c .build/wrangler.jsonc
+//   bun run deploy:direct                                   # build + wrangler deploy -c .build/cloudflare.config.ts
 //
 // THIS BUILD REQUIRES BUN. `lib/link-integrity.ts` parses each document with
 // HTMLRewriter, which bun and workerd have and node does not, so `node
@@ -40,6 +40,7 @@ import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
+import { siteConfig } from "./lib/site-config.ts";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -163,7 +164,7 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
 // link resolver in step 7b.
 //
 // These are JSONC files and the // COMMENTS INSIDE THESE BLOCKS QUOTE VALUES, so
-// a bare scan for quoted strings reads prose as data. wrangler.jsonc's fold note
+// a bare scan for quoted strings reads prose as data. cloudflare.config.ts's fold note
 // names all eight retired exact /lens rows that way, and the first version of the
 // dev-twin diff duly reported seven of them as drift — a false positive on the
 // one check whose job is telling real drift from none. That was harmless in
@@ -183,6 +184,13 @@ const jsoncStringArray = (configSrc: string, key: string): string[] => {
 // negation form and are left in; a caller wanting only positive patterns filters
 // them itself.
 const runWorkerFirst = (configSrc: string): string[] => jsoncStringArray(configSrc, "run_worker_first");
+
+// The site config as TEXT, for the readers above. cloudflare.config.ts replaced
+// wrangler.jsonc on 2026-09-28, and this is its legacy-shape projection
+// (tools/lib/site-config.ts) pretty-printed: formatted JSON is valid JSONC, so
+// jsoncStringArray and the binding-name scan read it exactly as they read the
+// hand-written file, with no second parser for the TypeScript.
+const siteConfigText = async (): Promise<string> => JSON.stringify(await siteConfig(), null, 2);
 
 // ── deploy-time invariant tripwires (explore-unknowns, phase A) ──────────────
 // Silent-failure classes this codebase has hit or is one careless edit from
@@ -230,7 +238,7 @@ async function checkInvariants() {
   // required literally (a symmetric diff would false-fire on the glob entries —
   // the exact disable-magnet).
   const idx = await read("src/worker/index.ts");
-  const wrangler = await read("wrangler.jsonc");
+  const wrangler = await siteConfigText();
   // Reads ROUTE_TABLE, which is where the dispatch keys live. This matched
   // `const ROUTES = new Map([...])` until 2026-08-19, and that form stopped
   // existing when the table was extracted into its own const so the @type
@@ -373,7 +381,7 @@ async function checkInvariants() {
   if (!clientEdgeDecl(await read("src/styles/luna.css"))) hard.push("luna.css: the client-edge declaration went missing (search \"THE CLIENT EDGE\") — build.ts injects it into every windowed page and has nothing to inject");
 
   // 6 (warn) — the local-dev twin (wrangler.dev.jsonc) must declare the same
-  // bindings as the deploy config (wrangler.jsonc), or local `wrangler dev`
+  // bindings as the deploy config (cloudflare.config.ts), or local `wrangler dev`
   // diverges from prod. Compare the set of binding identifiers by name; a
   // mismatch means a binding was added to one config but not the other.
   //
@@ -412,7 +420,7 @@ async function checkInvariants() {
     const names = (s) => new Set([...s.matchAll(/"(?:binding|name|database_name|bucket_name|dataset)"\s*:\s*"([^"]+)"/g)].map((m) => m[1]));
     const a = names(wrangler), b = names(dev);
     const diff = [...new Set([...a].filter((x) => !b.has(x)).concat([...b].filter((x) => !a.has(x))))];
-    if (diff.length) warn.push(`wrangler.jsonc and wrangler.dev.jsonc binding sets differ (${diff.join(", ")}) — keep the dev twin in sync`);
+    if (diff.length) warn.push(`cloudflare.config.ts and wrangler.dev.jsonc binding sets differ (${diff.join(", ")}) — keep the dev twin in sync`);
 
     const prodAllow = new Set(allow), devAllow = new Set(runWorkerFirst(dev));
     const prodOnly = [...prodAllow].filter((x) => !devAllow.has(x));
@@ -421,7 +429,7 @@ async function checkInvariants() {
       const parts: string[] = [];
       if (prodOnly.length) parts.push(`missing from wrangler.dev.jsonc: ${prodOnly.join(", ")}`);
       if (devOnly.length) parts.push(`only in wrangler.dev.jsonc: ${devOnly.join(", ")}`);
-      warn.push(`wrangler.jsonc and wrangler.dev.jsonc run_worker_first allowlists differ (${parts.join("; ")}) — the two configs disagree about which paths the Worker claims from the asset layer, so dev and prod diverge the moment a file is staged at one of them`);
+      warn.push(`cloudflare.config.ts and wrangler.dev.jsonc run_worker_first allowlists differ (${parts.join("; ")}) — the two configs disagree about which paths the Worker claims from the asset layer, so dev and prod diverge the moment a file is staged at one of them`);
     }
 
     // And the CRONS, which is the drift this file's own comment records: this
@@ -448,9 +456,9 @@ async function checkInvariants() {
     // Free caps an account at five, so zero means the extraction lost the block
     // rather than the site losing its jobs. Deleting every cron is a real edit
     // that should come here and say so, which is the point of failing loudly.
-    if (!prodCrons.length) hard.push("dev-twin drift check read 0 crons from wrangler.jsonc — the scanner has lost the triggers block, not the site its schedule");
+    if (!prodCrons.length) hard.push("dev-twin drift check read 0 crons from cloudflare.config.ts — the scanner has lost the triggers block, not the site its schedule");
     else if (sorted(prodCrons) !== sorted(devCrons)) {
-      warn.push(`wrangler.jsonc and wrangler.dev.jsonc crons differ (wrangler.jsonc: ${prodCrons.join(", ") || "none"}; wrangler.dev.jsonc: ${devCrons.join(", ") || "none"}) — the two schedules must match, or a job fires in one config and not the other`);
+      warn.push(`cloudflare.config.ts and wrangler.dev.jsonc crons differ (cloudflare.config.ts: ${prodCrons.join(", ") || "none"}; wrangler.dev.jsonc: ${devCrons.join(", ") || "none"}) — the two schedules must match, or a job fires in one config and not the other`);
     }
 
     // And the COMPATIBILITY FLAGS, added 2026-08-28 with the first one this repo
@@ -474,9 +482,9 @@ async function checkInvariants() {
     // key or a reformatted array reports a clean build over a config it never
     // read. Removing the last flag is a real edit that should come here and say
     // so, which is the point of failing rather than warning.
-    if (!prodFlags.length) hard.push("dev-twin drift check read 0 compatibility_flags from wrangler.jsonc — either the scanner lost the key or the last flag was dropped; both want a human here");
+    if (!prodFlags.length) hard.push("dev-twin drift check read 0 compatibility_flags from cloudflare.config.ts — either the scanner lost the key or the last flag was dropped; both want a human here");
     else if (sorted(prodFlags) !== sorted(devFlags)) {
-      warn.push(`wrangler.jsonc and wrangler.dev.jsonc compatibility_flags differ (wrangler.jsonc: ${prodFlags.join(", ") || "none"}; wrangler.dev.jsonc: ${devFlags.join(", ") || "none"}) — a flag changes what the runtime hands the Worker, so local dev exercises a different platform from the one that ships`);
+      warn.push(`cloudflare.config.ts and wrangler.dev.jsonc compatibility_flags differ (cloudflare.config.ts: ${prodFlags.join(", ") || "none"}; wrangler.dev.jsonc: ${devFlags.join(", ") || "none"}) — a flag changes what the runtime hands the Worker, so local dev exercises a different platform from the one that ships`);
     }
   } catch (e) { warn.push(`dev-config drift check could not run: ${e.message}`); }
 
@@ -505,7 +513,8 @@ async function checkInvariants() {
     const runtimeFiles = [
       "src/pages/index.html",
       "src/worker/index.ts",
-      "wrangler.jsonc",
+      "cloudflare.config.ts",
+      "wrangler.config.ts",
       "wrangler.dev.jsonc",
     ];
     const forbidden = ["/ledger/rum", "data-cf-beacon", "cloudflareinsights.com"];
@@ -874,7 +883,7 @@ await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 
 // 1) stage: public/ verbatim (.assetsignore rides along). No wrangler config is
-// copied into .build anymore — the deploy config (wrangler.jsonc) points main +
+// copied into .build anymore — the deploy config (cloudflare.config.ts) points its entrypoint +
 // assets at .build/public and runs THIS script via its build.command, so the
 // build output never needs its own config. (Local dev uses wrangler.dev.jsonc.)
 //
@@ -935,7 +944,7 @@ await Promise.all([
   cp("src/pages", `${OUT}/public`, { recursive: true }),
 // The Worker is a PROGRAM, not a document, so its source lives in src/worker
 // beside cal/ and serendipity/ rather than inside the tree of things a browser
-// can fetch. Its STAGED position is unchanged: wrangler.jsonc still points main
+// can fetch. Its STAGED position is unchanged: cloudflare.config.ts still points its entrypoint
 // at .build/src/worker/index.ts, and every deploy path and content hash
 // downstream is therefore untouched by the move.
   cp("src/worker", `${OUT}/src/worker`, { recursive: true }),
@@ -2880,7 +2889,7 @@ let freshFamily: Buffer | null = null;
   for (const rel of await readdir(`${OUT}/public`, { recursive: true })) served.add("/" + rel);
 
   const idxSrc = await readFile("src/worker/index.ts", "utf8");
-  const wranglerSrc = await readFile("wrangler.jsonc", "utf8");
+  const wranglerSrc = await siteConfigText();
   // The same pattern invariant #1 reads the table with, and the same floor. This
   // matched `const ROUTES = new Map([...])` until 2026-09-25, a form that stopped
   // existing on 2026-08-19, so for five weeks routeKeys was EMPTY and every Worker
@@ -3020,7 +3029,7 @@ let freshFamily: Buffer | null = null;
     .sort();
 
   // Canonical request path for a staged asset path. Mirrors the html_handling
-  // rules in wrangler.jsonc (drop-trailing-slash, .html elided) and the
+  // rules in cloudflare.config.ts (drop-trailing-slash, .html elided) and the
   // canonicalPath() the worker applies to the incoming pathname. If these two
   // ever disagree the map silently misses and the page quietly stays loose, which
   // is why the coverage floor below is a HARD failure.

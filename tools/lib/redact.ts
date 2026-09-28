@@ -4,7 +4,7 @@
 // check-infra.ts (100 and 101, 2026-08-29), both at the print loops that drain
 // the fail/warn/pass funnel, and both tracing back to
 // `process.env.CLOUDFLARE_ACCOUNT_ID`. On the VALUE the rule is wrong: that id
-// is committed at wrangler.jsonc's `account_id`, repeated in config/infra.json,
+// is committed at cloudflare.config.ts's `accountId`, repeated in config/infra.json,
 // and print-account-id.ts is what sets the variable in CI by reading that same
 // committed literal. Its own header says the id is not a secret.
 //

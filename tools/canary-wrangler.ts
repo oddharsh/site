@@ -60,6 +60,7 @@ import { asRecord, asText } from "../src/worker/lib/parse.ts";
 import { interpretZstdProbe } from "./lib/bun-pin.ts";
 import { WRANGLER_WATCHES, type WatchResult, interpretTemporalProbe, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { siteWranglerArgs } from "./lib/site-config.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -192,10 +193,11 @@ try {
   // ------------------------------------------------------------------------
   // 1. the dry-run bundle, and whether it moved a byte
   // ------------------------------------------------------------------------
-  // Both dry-runs self-build through wrangler.jsonc's build command, so each
-  // one stages its own tree with the PINNED bun; only the bundler differs.
+  // Both dry-runs self-build through wrangler.config.ts's build command, so
+  // each one stages its own tree with the PINNED bun; only the bundler differs.
+  // Both pass --x-new-config, the flag the site config needs since 2026-09-28.
   {
-    const out = run(NODE, [candidateEntry, "deploy", "--dry-run", "--outdir", candidateOut], { cwd: wt, timeout: 10 * 60_000 });
+    const out = run(NODE, [candidateEntry, "deploy", "--dry-run", "--outdir", candidateOut, "--x-new-config"], { cwd: wt, timeout: 10 * 60_000 });
     const ok = out.status === 0 && existsSync(join(candidateOut, "index.js"));
     step({ name: "deploy --dry-run bundles", ok, hard: true, detail: ok ? `index.js ${statSync(join(candidateOut, "index.js")).size} B` : tail(out).join(" ") });
     if (!ok) {
@@ -204,7 +206,7 @@ try {
     }
   }
   {
-    const [cmd, args] = wranglerCommand(["deploy", "--dry-run", "--outdir", pinnedOut]);
+    const [cmd, args] = wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run", "--outdir", pinnedOut]));
     const out = run(cmd, args, { cwd: ROOT, timeout: 10 * 60_000 });
     if (out.status !== 0 || !existsSync(join(pinnedOut, "index.js"))) {
       console.error(`the PINNED dry-run failed: ${tail(out).join(" ")}`);

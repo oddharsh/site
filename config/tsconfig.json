@@ -73,7 +73,12 @@
   // Reachable and named are separate properties, and only the first one has a
   // check. Adding a tree here moved neither ratchet and left coverage at 374
   // files across 10 programs; the include is what the LINT reads.
+  // The site Worker's own config, named here for the reason
+  // tsconfig.cf-garage.json gives: checked beside the Worker it configures, so a
+  // misspelled binding option is a compile error (since 2026-09-28).
   "include": [
+    "../cloudflare.config.ts",
+    "../wrangler.config.ts",
     "../cal/src/**/*.ts",
     "../src/worker/**/*.ts",
     "../serendipity/**/*.ts",

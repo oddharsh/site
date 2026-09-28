@@ -96,7 +96,7 @@ const worker = defineWorker({
   name: "cf-garage",
   compatibilityDate: "2026-06-16",
   // `new_module_registry` is not date-gated; the argument is at the same key in
-  // the root wrangler.jsonc, and every Worker here carries it.
+  // the root cloudflare.config.ts, and every Worker here carries it.
   compatibilityFlags: ["nodejs_compat", "new_module_registry"],
 
   // `main` is `entrypoint` here, and it is the same file it always was.
@@ -175,9 +175,9 @@ const worker = defineWorker({
 export default defineConfig({
   // The account pin is unchanged and load-bearing for the same reason it always
   // was: this Worker deploys from its own directory, so wrangler resolves the
-  // account here rather than from the root wrangler.jsonc, and auto-selection
+  // account here rather than from the root cloudflare.config.ts, and auto-selection
   // only works while the login sees exactly one account (a second appeared
-  // 2026-08-07). Must equal wrangler.jsonc's account_id; check-infra.ts fails
+  // 2026-08-07). Must equal the root cloudflare.config.ts's accountId; check-infra.ts fails
   // on drift and reads this file for the value, by a line-anchored regex, so
   // keep `accountId:` on a line of its own.
   accountId: "1c99acdb6141579023fb97d24261ea58",

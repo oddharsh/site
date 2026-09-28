@@ -195,7 +195,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Resolve the account id from wrangler.jsonc
+      - name: Resolve the account id from cloudflare.config.ts
         run: bun tools/print-account-id.ts >> "$GITHUB_ENV"
 
       # Workers Builds is still building when the promotion workflow finishes, so
@@ -330,7 +330,7 @@ jobs:
             --worker "$(jq -r '.release.worker' config/infra.json)" \
             --minutes "$SOAK_MINUTES"
 
-      - name: Resolve the account id from wrangler.jsonc
+      - name: Resolve the account id from cloudflare.config.ts
         if: ${{ steps.soak.outputs.verdict == 'clean' || steps.soak.outputs.verdict == 'faulty' }}
         run: bun tools/print-account-id.ts >> "$GITHUB_ENV"
 
@@ -447,7 +447,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Resolve the account id from wrangler.jsonc
+      - name: Resolve the account id from cloudflare.config.ts
         run: bun tools/print-account-id.ts >> "$GITHUB_ENV"
 
       # THE GUARD THIS JOB EXISTS AROUND. Approval is asynchronous, so minutes or

@@ -1,11 +1,11 @@
 // env.ts — the site Worker's binding surface as ONE type, checked against
-// wrangler.jsonc rather than remembered. Bundled by wrangler at deploy; not
+// cloudflare.config.ts rather than remembered. Bundled by wrangler at deploy; not
 // served. Types only, so the whole module erases and nothing here reaches the
 // wire.
 //
 // WHY THIS EXISTS. Every handler in index.ts took `env: any`, so a typo'd
 // binding name was a runtime `undefined` and a deleted binding was nothing at
-// all. That is the failure wrangler.jsonc's own `secrets` block was added to
+// all. That is the failure cloudflare.config.ts's `bindings.secret()` entries (wrangler.jsonc's `secrets` block, until 2026-09-28) were added to
 // catch, one layer up: the comment it replaced had drifted in BOTH directions,
 // naming two secrets nothing reads and omitting two the Worker genuinely does.
 // A comment cannot fail a deploy and neither can `any`.
@@ -22,7 +22,7 @@
 // running typecheck before build reads as broken. It also cannot see tiers 4
 // and 5 below, which are the two carrying real optionality and therefore the
 // two where a type buys something. `bun run env:check` (tools/check-env.ts)
-// diffs this file against wrangler.jsonc in both directions, per tier, and runs
+// diffs this file against cloudflare.config.ts in both directions, per tier, and runs
 // inside `bun run typecheck`, so the config stays the authority for tiers 1 to
 // 3 and a `?` in tier 4 fails the moment the config gates the deploy on that
 // name. (This paragraph described that check for three weeks before it
@@ -35,7 +35,7 @@
 // non-optional and code may read them straight. Tiers 4 and 5 are genuinely
 // absent in normal operation, so they are `?` and every read has to face that.
 // COVER_SECRET, ANALYTICS_READ_TOKEN and BILLING_READ_TOKEN are the ones to
-// look at: wrangler.jsonc argues each is deliberately NOT a required secret
+// look at: cloudflare.config.ts argues each is deliberately NOT a required secret
 // because the path degrades without it, and the `?` here is that argument in a
 // form the compiler enforces.
 
@@ -45,7 +45,7 @@ import type { BookingWorkflow } from "../../../cal/src/workflow.ts";
 import type { CensusWorkflow } from "../census-workflow.ts";
 
 // ---------------------------------------------------------------------------
-// Tier 1 — platform bindings. Declared in wrangler.jsonc; wrangler will not
+// Tier 1 — platform bindings. Declared in cloudflare.config.ts; wrangler will not
 // publish a Worker whose code names one it does not carry.
 // ---------------------------------------------------------------------------
 export interface EnvBindings {
@@ -115,10 +115,10 @@ export interface EnvBindings {
 }
 
 // ---------------------------------------------------------------------------
-// Tier 2 — vars. Plain strings in wrangler.jsonc, so every one arrives as a
+// Tier 2 — vars. Plain strings in cloudflare.config.ts, so every one arrives as a
 // string even where it names a number: SLOT_MINUTES is "30" and the cal module
 // parses it. Typing them `string` rather than the literal wrangler generates is
-// deliberate, because a literal makes editing a var in wrangler.jsonc a TYPE
+// deliberate, because a literal makes editing a var in cloudflare.config.ts a TYPE
 // change and fails unrelated code that compares against it.
 // ---------------------------------------------------------------------------
 export interface EnvVars {
@@ -145,12 +145,12 @@ export interface EnvVars {
 
 // ---------------------------------------------------------------------------
 // Tier 3 — required secrets. The names (never the values) are in
-// wrangler.jsonc's `secrets.required`, which makes them a DEPLOY GATE: wrangler
+// cloudflare.config.ts's `bindings.secret()` entries, which makes them a DEPLOY GATE: wrangler
 // refuses to publish unless each is configured on the Worker. That gate is what
 // earns them a non-optional type here. Set one with the versions form, since
 // `wrangler secret put` deploys immediately and this repo's newest version is
 // normally an unramped upload:
-//   bun run wrangler versions secret put -c wrangler.jsonc <NAME>
+//   bun run wrangler:site versions secret put <NAME>
 // ---------------------------------------------------------------------------
 export interface EnvSecrets {
   CENSUS_KEY: string;
@@ -168,7 +168,7 @@ export interface EnvSecrets {
 // ---------------------------------------------------------------------------
 // Tier 4 — DEGRADING secrets. Read by code, deliberately absent from
 // `secrets.required`, because each one's path is built to degrade and declaring
-// it would fail the deploy over a working site. That is wrangler.jsonc's
+// it would fail the deploy over a working site. That is cloudflare.config.ts's
 // argument; `?` is what makes the compiler hold the code to it. Removing a `?`
 // here to quiet an error is the one edit this file exists to prevent, since it
 // asserts a credential is present on a path whose whole design is that it may
@@ -200,7 +200,7 @@ export interface EnvOptionalSecrets {
 // Tier 5 — INJECTED, never configured. These exist only because a caller built
 // a derived env and spread one in, so they are absent on a normal request by
 // construction and no amount of Cloudflare configuration adds them. They are
-// also why this file could not be generated: nothing in wrangler.jsonc knows
+// also why this file could not be generated: nothing in cloudflare.config.ts knows
 // they exist.
 // ---------------------------------------------------------------------------
 export interface EnvInjected {

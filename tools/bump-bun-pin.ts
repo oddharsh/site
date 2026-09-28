@@ -6,7 +6,7 @@
 // Dependabot owns five ecosystems here and none of them owns this string. The
 // npm updater bumps `@types/bun` and never the runtime; the `bun` ecosystem
 // would not help either, since it reads bun.lock rather than the field. So the
-// one version with no updater is the one that compiles the site: wrangler.jsonc
+// one version with no updater is the one that compiles the site: cloudflare.config.ts
 // builds with `bun tools/build.ts`, and `/a/` and `/i/` URLs are content
 // addressed, so the pinned bun decides what every returning visitor's cached
 // dictionary is keyed against.

@@ -58,7 +58,7 @@
 // write types COUNTER and the two Workflows by importing `.build/src/worker/
 // index`, which is build output that does not exist in a fresh checkout;
 // src/worker/lib/env.ts's header has the long version of why the site's Env is
-// hand-written and checked against wrangler.jsonc instead.
+// hand-written and checked against cloudflare.config.ts instead.
 //
 // The output is NOT COMMITTED. It is a pure function of the wrangler pin and
 // the config, the same argument the Markdown twins and the search index won,
@@ -97,7 +97,7 @@ const KEY_PREFIX = "// gen-runtime-types key ";
 
 // The site config is the one whose output ships; the others are the control.
 const CONFIGS = [
-  { name: "site", config: "wrangler.jsonc" },
+  { name: "site", config: "cloudflare.config.ts" },
   { name: "lwe-ask", config: "lwe-ask/cloudflare.config.ts" },
   { name: "lens-reader", config: "lens-reader/cloudflare.config.ts" },
 ];
@@ -225,7 +225,7 @@ try {
   for (const other of others) {
     if (other.body !== site.body) {
       throw new Error(
-        `gen-runtime-types: ${other.config} generates a different runtime surface from wrangler.jsonc ` +
+        `gen-runtime-types: ${other.config} generates a different runtime surface from cloudflare.config.ts ` +
         `(${other.body.length} vs ${site.body.length} bytes). The shared file no longer fits every Worker; ` +
         `give that program its own generated file rather than typing it against the site's runtime.`,
       );

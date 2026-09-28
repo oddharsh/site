@@ -274,7 +274,7 @@ export default {
     return serveWorkerRequest(request, env, ctx);
   },
 
-  // cron (wrangler.jsonc "triggers"): the /around crawl runs on the frequent
+  // cron (cloudflare.config.ts "triggers"): the /around crawl runs on the frequent
   // schedule so the request path stays a pure KV read and the page is safe to
   // prerender. The weekly schedule sweeps the /lens/census roster into D1.
   async scheduled(event, env, ctx) {
@@ -385,7 +385,7 @@ function withSelfFetchHandler(handle: RouteHandler): RouteHandler {
     handle(request, env.SELF_FETCH === null ? env : withSelfFetch(env, ctx), ctx, url);
 }
 
-// Exact worker-owned routes. This table mirrors wrangler.jsonc's
+// Exact worker-owned routes. This table mirrors cloudflare.config.ts's
 // assets.run_worker_first allowlist: static is the default, and each entry here
 // earns a Worker invocation because it renders, redirects, negotiates, proxies,
 // writes, or needs a deliberate cache-policy override.
@@ -766,7 +766,7 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
     `route ${template}`,
     async (s) => {
       // DID THE VISITOR HANG UP WHILE WE WERE STILL WORKING? `route.aborted`
-      // answers that, and it is what wrangler.jsonc's `enable_request_signal`
+      // answers that, and it is what cloudflare.config.ts's `enable_request_signal`
       // was taken for: nothing on this origin can currently count an abandoned
       // request. /lens is the surface that wants the number and needs no
       // attribute of its own, since /lens is an exact ROUTES entry: its dispatch
@@ -814,7 +814,7 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
         //
         // EXPECT FALSE EVERYWHERE LOCALLY. The in-process harness never delivers
         // a hang-up to a Worker at all, measured across four flag settings on
-        // 2026-08-28 (the argument is at compatibility_flags in wrangler.jsonc),
+        // 2026-08-28 (the argument is at compatibility_flags in cloudflare.config.ts),
         // so a green routes:check says this line does not throw and says nothing
         // about the number. Production is the only place it can answer.
         if (listening) s.setAttribute("route.aborted", hungUp || signal?.aborted === true);

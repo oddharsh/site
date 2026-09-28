@@ -7,7 +7,8 @@
 // well-formed key, and all of them passed. Found from outside, by a probe that
 // computes the thumbprint (oddharsh/doors, agent-identity). This pins the
 // property the verifier keys on, in every place it has to hold.
-import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import {
+  configText, ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { botHeaders, handleSignatureDirectory, jwkThumbprint } from "../src/worker/lib/botauth.ts";
 import { HOMEPAGE_DISCOVERY_LINK, withSecurityHeaders } from "../src/worker/lib/security.ts";
 import { parseJsonc } from "./lib/jsonc.ts";
@@ -166,8 +167,8 @@ test("both asset routers send the directory to the Worker within the platform's 
   // folded into "/.well-known/*" on 2026-09-16, and what this test guards is
   // that the Worker still sees the request, not the spelling of the rule.
   const claims = (rule, path) => rule === path || (rule.endsWith("*") && path.startsWith(rule.slice(0, -1)));
-  for (const name of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
-    const config = parseJsonc(await readFile(new URL(name, ROOT), "utf8"));
+  for (const name of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
+    const config = parseJsonc(await configText(name));
     assert.ok(config.assets.run_worker_first.some((rule) => claims(rule, DIRECTORY_PATH)), name);
     assert.ok(config.assets.run_worker_first.length <= 100, name);
   }

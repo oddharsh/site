@@ -1,7 +1,7 @@
 # cal — coffee booking module
 
 The root site Worker serves this module at `/coffee`. Production bindings and
-booking policy live in [wrangler.jsonc](../wrangler.jsonc).
+booking policy live in [cloudflare.config.ts](../cloudflare.config.ts).
 
 ## Booking flow
 

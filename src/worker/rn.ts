@@ -17,7 +17,7 @@ import { span } from "./lib/trace.ts";
 // updating from a shortcut / curl:
 //   https://aadhar.sh/rn/set?secret=<RN_BUST_SECRET>&url=<new playlist url>
 //
-// required binding:  RN_KV (wrangler.jsonc kv_namespaces)
+// required binding:  RN_KV (cloudflare.config.ts kv_namespaces)
 // required env:      RN_BUST_SECRET (Worker secret)
 //
 // if KV is empty (first deploy, or you deliberately cleared it), the
@@ -1214,7 +1214,7 @@ export async function handleRnSet(request, env) {
   const id = m[1];
 
   if (!env.RN_KV) {
-    return setPage(500, "no kv binding", "the worker can't see RN_KV — bind it in wrangler.jsonc.");
+    return setPage(500, "no kv binding", "the worker can't see RN_KV — bind it in cloudflare.config.ts.");
   }
   // The request-path readers hold this id for PLAYLIST_ID_CACHE_TTL, so a swap
   // takes up to 15 minutes to reach every colo. The confirmation below names the

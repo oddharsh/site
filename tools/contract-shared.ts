@@ -31,6 +31,7 @@ import {
 } from "../src/worker/lens.ts";
 import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../src/worker/lib/agent-execution.ts";
 import { httpWords } from "./check-agent.ts";
+import { siteConfig } from "./lib/site-config.ts";
 import { lensReadiness, lensSitemapVerdict, lensSitemapDeclared, lensAgentDoors } from "../src/worker/lens.ts";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../src/worker/lens-recipes.ts";
 import { handleCoffeeAvailability } from "../src/worker/coffee.ts";
@@ -358,7 +359,18 @@ const terminalGet = (path) => handleTool(terminalReq(path), terminalEnv(), conte
 // double; anything else wants a real type.
 const testGlobals: any = globalThis;
 
+// A Worker config as TEXT, by the file name a test names. The site config is
+// cloudflare.config.ts since 2026-09-28 and is read through its legacy-shape
+// projection (lib/site-config.ts), pretty-printed, so parseJsonc and the
+// regex readers both see the shape they were written against; any other
+// config is its bytes on disk.
+async function configText(name) {
+  if (name === "cloudflare.config.ts") return JSON.stringify(await siteConfig(), null, 2);
+  return readFile(new URL(`../${name}`, import.meta.url), "utf8");
+}
+
 export {
+  configText,
   testGlobals,
   AGENT_SURFACES,
   ART_VERSION,

@@ -20,18 +20,18 @@ import { bindings, defineConfig, triggers } from "@cloudflare/config/public";
 
 export default defineConfig({
   // Pinned because this deploys from its OWN directory, so wrangler resolves the
-  // account from this file rather than from the root wrangler.jsonc. It
+  // account from this file rather than from the root cloudflare.config.ts. It
   // auto-selects only while the login sees exactly one account, and a second
   // appeared on 2026-08-07. Until the pin existed the answer came from
   // ~/.wrangler/cache/wrangler-account.json, which an interactive prompt
   // writes, so a fresh clone or a cleared cache broke the deploy. Must equal
-  // wrangler.jsonc's account_id; check-infra.ts fails on drift.
+  // the root cloudflare.config.ts's accountId; check-infra.ts fails on drift.
   accountId: "1c99acdb6141579023fb97d24261ea58",
   worker: {
     name: "lens-reader",
     compatibilityDate: "2026-07-02",
     // `new_module_registry` is not date-gated; the argument is at the same key
-    // in the root wrangler.jsonc, and every Worker here carries it.
+    // in the root cloudflare.config.ts, and every Worker here carries it.
     compatibilityFlags: ["nodejs_compat", "new_module_registry"],
     entrypoint: "src/index.ts",
 

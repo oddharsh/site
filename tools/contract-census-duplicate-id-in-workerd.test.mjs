@@ -41,7 +41,8 @@ import { createTestHarness } from "wrangler";
 import { parseJsonc } from "./lib/jsonc.ts";
 import { STALE_INSTALL_REMEDY, installedSha, pinnedSha } from "./lib/wrangler-provenance.ts";
 import { CENSUS_ROSTER, isDuplicateInstance } from "../src/worker/census.ts";
-import { ROOT, assert, readFileSync, test } from "./contract-shared.ts";
+import {
+  configText, ROOT, assert, readFileSync, test } from "./contract-shared.ts";
 
 const workerSource = (census) => `
 import { WorkflowEntrypoint } from "cloudflare:workers";
@@ -116,7 +117,7 @@ function wranglerProvenance() {
 test("a same-day census re-run counts every host as a duplicate, measured on the pinned workerd", async () => {
   // Production's flags, for the reason the encodeBody probe gives: a binding
   // measured under different flags is a measurement of a different runtime.
-  const site = parseJsonc(readFileSync(new URL("wrangler.jsonc", ROOT), "utf8"));
+  const site = parseJsonc(await configText("cloudflare.config.ts"));
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "census-dup-")));
   writeFileSync(join(dir, "worker.js"),
     workerSource(fileURLToPath(new URL("src/worker/census.ts", ROOT))));

@@ -26,11 +26,11 @@
 // the canary leg installs into. Nothing is written outside a temp directory it
 // removes. Under node, never bun, for the reason that probe gives (gotcha 38).
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestHarness } from "wrangler";
-import { parseJsonc } from "./lib/jsonc.ts";
+import { siteConfig } from "./lib/site-config.ts";
 
 const WORKER = `
 export default {
@@ -48,7 +48,7 @@ export default {
 // Production's date and flags, read from the tree under test, because the
 // question is what the SITE's Worker would see rather than what the newest
 // compatibility date allows.
-const site = parseJsonc(readFileSync("wrangler.jsonc", "utf8"));
+const site = await siteConfig();
 const dir = mkdtempSync(join(tmpdir(), "workerd-temporal-probe-"));
 try {
   writeFileSync(join(dir, "worker.mjs"), WORKER);

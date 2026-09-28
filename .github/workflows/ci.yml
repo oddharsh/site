@@ -292,7 +292,7 @@ jobs:
       # green before it deploys, because the thing it asserts against is the thing it
       # repairs. That happened the same day (#195) and the documented way out is the
       # local fallback, `bun run deploy`, followed by a re-run.
-      # The account id is read out of wrangler.jsonc rather than from a repo
+      # The account id is read out of cloudflare.config.ts rather than from a repo
       # variable. This step said `vars.CLOUDFLARE_ACCOUNT_ID` until 2026-08-12 and
       # NO repository variable of that name has ever existed, so it expanded to the
       # empty string on every run.
@@ -402,7 +402,7 @@ jobs:
                exit 1 ;;
           esac
 
-      - name: Resolve the account id from wrangler.jsonc
+      - name: Resolve the account id from cloudflare.config.ts
         run: bun tools/print-account-id.ts >> "$GITHUB_ENV"
 
       - name: Check infrastructure declaration

@@ -19,6 +19,7 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { siteWranglerArgs } from "./lib/site-config.ts";
 
 const exec = promisify(execFile);
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -33,7 +34,7 @@ const run = async (cmd, args, opts = {}) => {
 // good response into a parse error. Slice from the first structural character
 // rather than trusting the stream to be clean.
 const runJson = async (args) => {
-  const out = await run(...wranglerCommand(args));
+  const out = await run(...wranglerCommand(await siteWranglerArgs(args)));
   const start = Math.min(...[out.indexOf("["), out.indexOf("{")].filter((i) => i >= 0));
   if (!Number.isFinite(start)) throw new Error("no JSON in wrangler output");
   return JSON.parse(out.slice(start));

@@ -46,7 +46,7 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-# The pinned bun, first on PATH, so wrangler.jsonc's `bun tools/build.ts` and
+# The pinned bun, first on PATH, so wrangler.config.ts's `bun tools/build.ts` and
 # the install below both run under the compiler the repository declares.
 if [ -n "${SKIP_DEPENDENCY_INSTALL:-}" ]; then
   bundir="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/aadhar-sh-bun"
@@ -61,6 +61,28 @@ entry=node_modules/wrangler/bin/wrangler.js
 if [ ! -f "$entry" ]; then
   echo "deploy-wrangler.sh: $entry is missing; the install step did not complete (with SKIP_DEPENDENCY_INSTALL set, that step is the bun install this script runs above)" >&2
   exit 1
+fi
+
+# THE SITE CONFIG IS TYPESCRIPT since 2026-09-28 (cloudflare.config.ts plus
+# wrangler.config.ts, replacing wrangler.jsonc), and wrangler reads it only
+# behind `--x-new-config`. The flag is added HERE rather than in the dashboard
+# Deploy command, which is what made the switch free: the declared command in
+# config/infra.json never changes, so there is no dashboard-first ordering and
+# no infra:check drift, and the flag arrives atomically with the merge that adds
+# the config. Either ORDER of the alternative breaks releases for a window: the
+# dashboard first fails every build of a main without the TS config, the merge
+# first fails every build of a main without wrangler.jsonc.
+#
+# It is the ONE argument this script adds, and it is conditioned on the config
+# existing rather than on which command runs, so the arguments themselves stay
+# in the dashboard string where check-infra reads them. That is safe because
+# the only commands this wrapper is ever handed are the two declared deploy
+# commands, both `versions upload`, which builds from config. Other commands
+# refuse the flag as unknown (`versions list`, `d1`, `kv`, `secret put`, ...,
+# measured 2026-09-28); tools make that split in siteWranglerArgs() in
+# tools/lib/site-config.ts. contract-the-typescript-quarantine pins all of this.
+if [ -f cloudflare.config.ts ]; then
+  set -- "$@" --x-new-config
 fi
 
 # The ENTRY FILE, never `npx`/`bunx`, which FETCH what they cannot resolve

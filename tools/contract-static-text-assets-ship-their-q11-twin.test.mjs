@@ -1,6 +1,7 @@
 // ── static text assets ship their q11 twin ───────────────────────────────────
 // Shared imports live in contract-shared.mjs.
-import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
+import {
+  configText, ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 import { existsSync } from "node:fs";
 import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { servePrecompressedText } from "../src/worker/lib/assets.ts";
@@ -50,8 +51,8 @@ const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").r
 
 test("every text twin sits on a path the Worker claims, in both configs", { skip: needsBuild }, async () => {
   const twins = (await textTwins()).map((rel) => `/${rel.slice(0, -3)}`);
-  for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
-    const allow = jsoncStringArray(await readFile(new URL(config, ROOT), "utf8"), "run_worker_first");
+  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
+    const allow = jsoncStringArray(await configText(config), "run_worker_first");
     assert.ok(allow.length >= 60, `${config}: scanned only ${allow.length} run_worker_first entries; the reader has lost the allowlist`);
     const covered = (p) => allow.includes(p) || allow.some((a) => a.includes("*") && globRe(a).test(p));
     const dead = twins.filter((p) => !covered(p));

@@ -28,7 +28,7 @@ decides which one a given file belongs in:
 | **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …). They stage back to the ROOT of the served tree, so their public URLs are still `/nav.js` and `/luna.css`. Source layout and URL layout are different questions, and only the first one moved. |
 | **`src/dict/`** | `a-dict/`, `p-dict/` and `f-dict/`: the previously shipped bytes of the shell, of each page, and of the site-page family dictionary. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
-| `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. **All three carry a `cloudflare.config.ts`**, wrangler's experimental TypeScript config: cf-garage since 2026-08-23, and lwe-ask and lens-reader since 2026-09-28 through `cf migrate`. So every wrangler command in those directories that reads the config needs `--x-new-config` and runs from the directory itself (gotcha 41). The site Worker stays on `wrangler.jsonc`, because `cf migrate` drops Workflow bindings. |
+| `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. **All three carry a `cloudflare.config.ts`**, wrangler's experimental TypeScript config: cf-garage since 2026-08-23, and lwe-ask and lens-reader since 2026-09-28 through `cf migrate`. So every wrangler command in those directories that reads the config needs `--x-new-config` and runs from the directory itself (gotcha 41). The site Worker moved the same day BY HAND, because `cf migrate` drops its Workflow bindings (gotcha 48). |
 | **`tools/`** | **every developer tool.** The build (`build.ts`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
 | **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `derivations.json` (what each committed derived artifact was made FROM, plus its machine-owned `.lock.json`), `tools.json` (the external binaries), `tsconfig.json`. |
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
@@ -45,11 +45,14 @@ mapping names the directory the file actually authors in.
 Four things stay at the repository root because their tooling demands it, and
 moving any of them costs more than it buys:
 
-- `wrangler.jsonc` + `wrangler.dev.jsonc`. Workers Builds runs from the repo
-  root and wrangler resolves `main` and `assets.directory` relative to the
-  config file, so relocating these means editing the Cloudflare dashboard
-  FIRST (the deploy command is mirrored in `config/infra.json` and `infra:check`
-  fails on drift it would otherwise invent itself).
+- `cloudflare.config.ts` + `wrangler.config.ts` (the site Worker's config since
+  2026-09-28, replacing `wrangler.jsonc`; gotcha 48) + `wrangler.dev.jsonc`.
+  Workers Builds runs from the repo root, the TS loader reads the WORKING
+  DIRECTORY and refuses `-c`, and wrangler resolves the entrypoint and assets
+  directory relative to the config, so relocating these means editing the
+  Cloudflare dashboard FIRST (the deploy command is mirrored in
+  `config/infra.json` and `infra:check` fails on drift it would otherwise invent
+  itself).
 - `package.json` (which carries the four workspaces itself, so there is no
   separate workspace file), `bun.lock`, `.node-version`.
 - `CLAUDE.md` and its `AGENTS.md` symlink, plus `README.md`.
@@ -883,7 +886,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   Use the versions form, which mints a new version and moves no traffic:
 
   ```bash
-  bun run wrangler versions secret put -c wrangler.jsonc <NAME>
+  bun run wrangler:site versions secret put <NAME>
   ```
 
   Then ramp it like any other version (`bun run deploy:promote`). Every secret
@@ -1072,7 +1075,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   both are declared and checked. Without the scope the section degrades to a
   note naming what is missing, exactly like the other five.
 - **Preview URLs are on, and the Worker guards them.** `preview_urls: true` in
-  `wrangler.jsonc`, with `workers_dev: false` kept — production still has no
+  `cloudflare.config.ts` (`previewUrls: true`), with `workersDev: false` kept — production still has no
   workers.dev address; what previews add is a per-VERSION one. The setting is
   explicit because `preview_urls` DEFAULTS to whatever `workers_dev` is, so
   deleting the line turns previews off again without a word.
@@ -2494,7 +2497,7 @@ generic hex back.
   `/lens` rate-limit counters left KV 2026-08-04 for the Rate Limiting binding
   below — they were a WRITE per allowed request on the busiest route here, which
   had quietly made "we use a handful" false.)
-- **LENS_RL_\*** (Rate Limiting bindings, `ratelimits` in `wrangler.jsonc`) —
+- **LENS_RL_\*** (Rate Limiting bindings, `bindings.rateLimit` in `cloudflare.config.ts`) —
   the seven per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
   inspect 30/min, shot 3/min, compare 4/min, browser 3/min, wire 2/min, tools
   10/min, nlweb 4/min. An eighth, `LENS_RL_BROWSER_ALL` at 4/min, is keyed on a
@@ -2509,7 +2512,7 @@ generic hex back.
   `N/min` inside its own correction is still a greppable stale number.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 158 photos at FUJIFILM X-T50 + Leica resolution).
-- **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from public/.
+- **ASSETS** — the Workers static-assets binding (`bindings.assets()` in cloudflare.config.ts), serves files from public/.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
   the **single source of truth for the deploy log**. One row per logged deploy
   (written by the ramp at 100%, staged by bump-version.sh; the retired SW's
@@ -2518,7 +2521,7 @@ generic hex back.
   build) read this one `checkpoints` table, so they cannot drift apart. Schema:
   `checkpoints(vnum INTEGER PK, ts INTEGER, ymd TEXT, version TEXT, slug TEXT, title TEXT)`
   — `slug` is the version suffix / changelog tag, `title` is the human description.
-  **Configured in `wrangler.jsonc`** (d1_databases), like every other binding
+  **Configured in `cloudflare.config.ts`** (`bindings.d1`), like every other binding
   since the Workers migration.
   **Log a deploy** (so both pages stay current):
   `./tools/photos/bump-version.sh <slug> "<title>"`, run INSIDE the PR being
@@ -3518,8 +3521,9 @@ how to recover the plans and their audit from git.
    TRUNCATED response no longer differs from a complete one at the last byte.
    Truncation is caught by `maxBytes` and the marker assertions instead.
 
-   `wrangler.jsonc` self-builds and points both `main` and `assets` at
-   `.build/public`, so no deploy path can ship the readable originals. Local
+   The site config self-builds (`build.command` in `wrangler.config.ts`) and
+   points both the entrypoint and the assets directory at `.build/`, so no deploy
+   path can ship the readable originals. Local
    development uses `wrangler.dev.jsonc` against a SYMLINK FARM at `.dev-assets`,
    staged by `tools/dev-stage.ts`, which `bun run dev` and `bun run dev:remote`
    run first. It reads "against readable `public/`" above this line until
@@ -3575,7 +3579,7 @@ are installed on macOS, so the fallback path doesn't hit Helvetica/Arial.
 ## cal/ — coffee booking module
 
 The root site Worker serves `cal/src/` at `aadhar.sh/coffee`. Its bindings and
-policy live in root `wrangler.jsonc`; `cal/wrangler.test.toml` is the local test
+policy live in root `cloudflare.config.ts`; `cal/wrangler.test.toml` is the local test
 fixture. The build stages the module beside the site Worker entrypoint.
 
 [cal/README.md](cal/README.md) describes the booking flow, Durable Object slot
@@ -6192,10 +6196,12 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     toml (`deploy --dry-run --outdir`, index.js sha256), with every comment
     carried over by hand, since the generator drops them, and the import pointed
     at `@cloudflare/config/public` like this file. Run it with `--no-install`,
-    because its default adds `cf` as a dependency. The site Worker stays on
-    `wrangler.jsonc`: `cf migrate --dry-run` reports that Workflow bindings "are
-    not supported by the new config and were not migrated", which would drop
-    `BOOKING_WORKFLOW` and `CENSUS_WORKFLOW` silently. Two traps met on the way:
+    because its default adds `cf` as a dependency. It REFUSED the site Worker:
+    `cf migrate --dry-run` reports that Workflow bindings "are not supported by
+    the new config and were not migrated", which would drop `BOOKING_WORKFLOW`
+    and `CENSUS_WORKFLOW` silently. That is the migrator's gap rather than the
+    format's (`exports.workflow` and `bindings.workflow` both exist), so the
+    site moved by hand the same day; gotcha 48. Two traps met on the way:
     `wrangler tail` refuses `--x-new-config` (while `tail --x-new-config --help`
     exits 0), so both tail scripts name the Worker instead; and
     `gen-runtime-types` now reads the two configs by IMPORTING them, since a TS
@@ -6706,6 +6712,67 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     covers all of them. An `include.path` naming a missing file is SILENTLY
     IGNORED, so that script reads the driver back out afterwards and fails if it
     is not there.
+
+48. **The site config is TypeScript since 2026-09-28, and most wrangler
+    commands cannot read it.** `cloudflare.config.ts` (what the Worker is) and
+    `wrangler.config.ts` (how wrangler builds it) replaced `wrangler.jsonc`,
+    translated by hand because `cf migrate` drops Workflow bindings. Wrangler
+    reads the pair only behind `--x-new-config`, and only some commands take
+    that flag. Measured the same day, with a real invocation each rather than
+    `--help`, which exits 0 for a flag the command then refuses:
+
+    | accepts `--x-new-config` | refuses it as an unknown argument |
+    |---|---|
+    | `deploy`, `build`, `versions upload`, `versions deploy` | `versions list`, `versions view`, `deployments status`, `versions secret put`, `tail`, `check startup`, `types`, `d1`, `kv` |
+
+    A refusing command given no config loses what `wrangler.jsonc` used to
+    supply by being found: the Worker name, the pinned account (this login sees
+    two, so wrangler will not guess), and binding names like `d1 execute
+    RESTORE_DB`. And `createTestHarness`, which boots the route oracle, takes a
+    config path or an inline object in the LEGACY shape and has no new-config
+    door at all.
+
+    So there is ONE translation. `tools/lib/site-config.ts` projects the TS pair
+    into the legacy shape, and `.wrangler.site.jsonc` is that projection written
+    out: gitignored, regenerated, never edited. `siteWranglerArgs()` makes the
+    split for every tool (`--x-new-config` for a command that builds, `-c` on the
+    generated file for the rest), and `bun run wrangler:site <command>` is the
+    same split for a person: it is what `bun run wrangler <command> -c
+    wrangler.jsonc` was. Readers that want fields call `siteConfig()`; the
+    contract suite goes through `configText()` in `contract-shared.ts`.
+
+    **The release path needed no dashboard change**, and that is the design
+    choice worth defending. The declared deploy command never names a config, so
+    `.github/deploy-wrangler.sh` adds `--x-new-config` itself whenever
+    `cloudflare.config.ts` exists. Either order of the dashboard alternative
+    breaks releases for a window (dashboard first fails every build of a `main`
+    without the TS config; merge first fails every build of one without
+    `wrangler.jsonc`), while an in-repo switch lands atomically with the merge.
+    It is the one argument that script adds, conditioned on the FILE rather than
+    the command, and `contract-the-typescript-quarantine` pins exactly that, with
+    a control that smuggles a second flag and fails.
+
+    How it was proven before `wrangler.jsonc` was deleted, since each check
+    covers a different layer:
+
+    - the dry-run bundle through `--x-new-config` is byte-identical to the
+      jsonc's (`index.js` sha256, 771.75 KiB), with the same 48 bindings;
+    - `wrangler build --x-cf-build-output` resolved to the same name, date,
+      flags, account, 3 routes, 4 crons, 94 `run_worker_first` rows in order,
+      html handling, cache, entrypoint caches, workers.dev and preview settings,
+      observability, Workflows, 10 secrets and 17 vars;
+    - the projection deep-equals the parsed jsonc on all 30 top-level keys,
+      under bun and node, except `dependencies_instrumentation`, a no-op when
+      absent (gotcha 41 has the read);
+    - the route oracle, booted from the generated file, passed 194 of 194.
+
+    **What none of that measures is the one real unknown**: whether `versions
+    upload` accepts the Durable Object and Workflows in EXPORT form
+    (`exports.durableObject`, `exports.workflow`) for classes that already exist
+    under the `v1` migration tag. cf-garage proved it for `deploy`, not for a
+    version upload. A branch build is the instrument, since both Workers Builds
+    commands are `versions upload` against the real Worker, so read the branch
+    build before merging anything that touches `exports`.
 
 ---
 

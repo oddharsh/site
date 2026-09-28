@@ -323,7 +323,7 @@ console.log(`\n  out of scope (${plural(unmanaged.length, "record")}), by owner:
 for (const r of unmanaged) {
   console.log(`    ${r.type.padEnd(5)} ${r.name.padEnd(32)} ${OWNER[r.match] || r.match}`);
 }
-console.log("    resources                                       wrangler creates KV/R2/D1; ids go in wrangler.jsonc");
+console.log("    resources                                       wrangler creates KV/R2/D1; ids go in cloudflare.config.ts");
 console.log("    the Worker                                      Workers Builds is the only publisher");
 
 // ----------------------------------------------------------------- apply ---

@@ -7,7 +7,7 @@ import { CREDENTIAL_NAME, credentialValues, redactCredentials } from "./lib/reda
 // alerts 100 and 101 (js/clear-text-logging, 2026-08-29) land on the two print
 // loops at the bottom of check-infra.ts. Both trace to
 // process.env.CLOUDFLARE_ACCOUNT_ID, which is not a secret: it is committed in
-// wrangler.jsonc, and print-account-id.ts sets the CI variable by reading that
+// cloudflare.config.ts, and print-account-id.ts sets the CI variable by reading that
 // literal. So the alerts are false positives on the value.
 //
 // They are not false positives on the SHAPE. An alert is anchored at its sink,
