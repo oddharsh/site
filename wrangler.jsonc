@@ -148,6 +148,12 @@
   // whatever `workers_dev` is, so the line above was silently turning these off
   // too, and every version this repo has ever uploaded has been unservable.
   //
+  // STILL unservable, measured 2026-09-28: this Worker exports the `Counter`
+  // Durable Object, and Cloudflare mints no preview URL for a Worker that
+  // implements one. Every version reads `has_preview: false`. CLAUDE.md,
+  // "Preview URLs are configured ON and have NEVER SERVED", has the evidence.
+  // The line stays so previews switch on by themselves if the DO ever leaves.
+  //
   // The two settings are independent and mean different things. `workers_dev:
   // false` still holds: PRODUCTION has no workers.dev address, and the only way
   // to reach the deployed site remains aadhar.sh. What this adds is a per-VERSION

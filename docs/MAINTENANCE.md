@@ -424,10 +424,23 @@ is a workstation run, the same standing as `repository.code_scanning`.
 
 ### Preview URLs
 
+**They do not work for this Worker, and never have.** `aadhar-sh` exports the
+`Counter` Durable Object, and Cloudflare generates no version URLs for a Worker
+that implements one. Every uploaded version carries `has_preview: false` in its
+metadata, so `<version-prefix>-aadhar-sh.aadharsh2010.workers.dev` and every
+alias form answer 404 with `x-preview-user-error: true`. Wrangler prints a
+`Version Preview URL:` line only when that flag is true, so the upload is
+silent rather than wrong. CLAUDE.md, "Preview URLs are configured ON and have
+NEVER SERVED", has the measurement and what it would take to change it.
+
+To inspect an uploaded version without a URL, use `wrangler versions view <id>`
+(bindings, secrets) or `Cloudflare-Workers-Version-Overrides` once the version
+is in the deployment.
+
 `preview_urls: true` in `wrangler.jsonc`, with `workers_dev: false` kept.
-Production has no workers.dev address; each uploaded VERSION does, at
-`<version-prefix>-aadhar-sh.<subdomain>.workers.dev`. Wrangler prints it on
-upload, and `--preview-alias` gives a version a stable name instead of a prefix.
+Production has no workers.dev address; were previews possible, each uploaded
+VERSION would get one at `<version-prefix>-aadhar-sh.<subdomain>.workers.dev`,
+and `--preview-alias` would give it a stable name instead of a prefix.
 
 The setting is explicit because `preview_urls` defaults to whatever
 `workers_dev` is. Deleting the line silently turns every preview back off, which
