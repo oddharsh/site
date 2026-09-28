@@ -427,7 +427,7 @@ function shell(title, body, env) {
 //     const startInput = document.getElementById("start");
 //     const submit     = document.getElementById("submit");
 //     const fmt = (ms) => new Date(parseInt(ms, 10)).toLocaleString("en-US", {
-//       timeZone: <HOST_TIMEZONE>,
+//       timeZone: submit.dataset.tz,
 //       weekday: "short", month: "short", day: "numeric",
 //       hour: "numeric", minute: "2-digit"
 //     });
@@ -443,10 +443,14 @@ function shell(title, body, env) {
 // oxc prints strings with backticks, and one of those here would end this
 // template literal (CLAUDE.md gotcha 19), so its output is carried over with
 // double quotes instead.
-function slotPickerScript(env) {
-  const tz = JSON.stringify(env.HOST_TIMEZONE || "UTC");
-  return `(function(){let e=document.querySelectorAll(".slot-btn"),t=document.getElementById("start"),n=document.getElementById("submit"),r=e=>new Date(parseInt(e,10)).toLocaleString("en-US",{timeZone:${tz},weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});e.forEach(i=>i.addEventListener("click",()=>{e.forEach(e=>e.setAttribute("aria-pressed","false")),i.setAttribute("aria-pressed","true"),t.value=i.dataset.start,n.disabled=!1,n.textContent="request "+r(i.dataset.start)}))})();`;
-}
+//
+// The timezone arrives as `data-tz` on the submit button, escaped by esc(),
+// and the script reads it from there, so NOTHING is interpolated into script
+// text. It used to be `timeZone: ${JSON.stringify(tz)}`, which CodeQL flags
+// (js/bad-code-sanitization) and rightly: JSON.stringify escapes neither
+// `</script>` nor U+2028, so it is not a sanitizer for a script context. The
+// script is a constant now, the same on every render.
+const SLOT_PICKER_SCRIPT = `(function(){let e=document.querySelectorAll(".slot-btn"),t=document.getElementById("start"),n=document.getElementById("submit"),r=e=>new Date(parseInt(e,10)).toLocaleString("en-US",{timeZone:n.dataset.tz,weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});e.forEach(i=>i.addEventListener("click",()=>{e.forEach(e=>e.setAttribute("aria-pressed","false")),i.setAttribute("aria-pressed","true"),t.value=i.dataset.start,n.disabled=!1,n.textContent="request "+r(i.dataset.start)}))})();`;
 
 export function bookingPage(slots, env) {
   const base = env.BASE_PATH || "";
@@ -530,12 +534,12 @@ export function bookingPage(slots, env) {
         <input type="text" name="website" class="honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
 
         <div class="actions">
-          <button type="submit" class="xp-button primary" id="submit" disabled>pick a slot first</button>
+          <button type="submit" class="xp-button primary" id="submit" data-tz="${esc(env.HOST_TIMEZONE || "UTC")}" disabled>pick a slot first</button>
         </div>
       </div>
     </form>
 
-    <script>${slotPickerScript(env)}</script>
+    <script>${SLOT_PICKER_SCRIPT}</script>
   `;
 
   return shell("Coffee or a bagel", body, env);
