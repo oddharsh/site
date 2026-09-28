@@ -6172,6 +6172,21 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     still better than a hand-kept list, because a list goes stale without failing
     anything.
 
+    **The `cf` CLI runs here since 2026-09-28, as a workstation global.** Cloudflare
+    launched it as wrangler's successor, and for a JavaScript Worker it DELEGATES
+    to wrangler ("Delegating to Wrangler"), so `cf build` wrote the same 3 files
+    to `.cloudflare/output/v0/` as `wrangler build --x-new-config
+    --x-cf-build-output`, sha256 for sha256, and `cf deploy --dry-run` needs no
+    credential. Install it with `bun add -g cf` and run it from `cf-garage/`.
+    Two things it needed, both recorded in `docs/DEPENDENCIES.md` under
+    `cf-garage/`: cf reads the dev server from the PROJECT'S manifest, so
+    cf-garage names the root's exact wrangler URL (check-wrangler went from an
+    absence test to an equality test to allow it); and cf stays OUT of the tree,
+    because its CLI half pins a second Miniflare and Workerd. The bun door is
+    the one this entry opened with: `cf` resolves to a `#!/usr/bin/env node` shim and runs,
+    while `bun run --bun cf build` puts bun in front of wrangler's config loader
+    and is refused by name.
+
 46. **A re-encode changes the pixels the HISTOGRAMS were computed from, and the
     check that should have caught that compares two files derived from each
     other.** Found 2026-08-23. #394 re-encoded 316 JPEG thumbnails on 2026-08-14,

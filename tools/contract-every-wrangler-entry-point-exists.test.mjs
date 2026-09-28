@@ -150,13 +150,22 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
     await symlink(".bun/wrangler@current/node_modules/wrangler", join(dir, "node_modules/wrangler"));
     run(0, /Wrangler/);
 
-    // Both a newly tracked nested project and a standalone install join the check.
+    // EQUALITY: a project may name Wrangler as a devDependency only by the
+    // root's exact string, which is how cf-garage gives the `cf` CLI a dev
+    // server to delegate to. Anything else, and any other dependency kind,
+    // fails. Both a newly tracked nested project and a standalone install join.
     for (const project of ["cal", "lens-reader", "nested/new project"]) {
-      for (const kind of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
-        await write(`${project}/package.json`, { [kind]: { wrangler: version } });
-        run(1, /must not declare Wrangler/);
-        await write(`${project}/package.json`, {});
+      await write(`${project}/package.json`, { devDependencies: { wrangler: version } });
+      run(0, /Wrangler/);
+      for (const other of ["9.9.9", `^${version}`]) {
+        await write(`${project}/package.json`, { devDependencies: { wrangler: other } });
+        run(1, new RegExp(`${project}: declares Wrangler .* not the root pin`));
       }
+      for (const kind of ["dependencies", "optionalDependencies", "peerDependencies"]) {
+        await write(`${project}/package.json`, { [kind]: { wrangler: version } });
+        run(1, new RegExp(`declares Wrangler under ${kind}`));
+      }
+      await write(`${project}/package.json`, {});
     }
     // A matching version in a second installation still isn't the root install.
     for (const localVersion of [version, "9.9.9"]) {
