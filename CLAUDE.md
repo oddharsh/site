@@ -6766,13 +6766,25 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
       absent (gotcha 41 has the read);
     - the route oracle, booted from the generated file, passed 194 of 194.
 
-    **What none of that measures is the one real unknown**: whether `versions
-    upload` accepts the Durable Object and Workflows in EXPORT form
-    (`exports.durableObject`, `exports.workflow`) for classes that already exist
-    under the `v1` migration tag. cf-garage proved it for `deploy`, not for a
-    version upload. A branch build is the instrument, since both Workers Builds
-    commands are `versions upload` against the real Worker, so read the branch
-    build before merging anything that touches `exports`.
+    **The upload half of the export form is MEASURED; the deploy half is not.**
+    None of the checks above could say whether `versions upload` accepts the
+    Durable Object and Workflows in EXPORT form (`exports.durableObject`,
+    `exports.workflow`) for classes that already exist under the `v1`
+    migration tag, since cf-garage had proved that for `deploy` alone. A branch
+    build is the instrument, because both Workers Builds commands are `versions
+    upload` against the real Worker. It answered on 2026-09-28: version
+    `5c64677c` (alias `claude-site-worker-ts-config`) uploaded with all 48
+    bindings, `fetch` + `scheduled` handlers, the right date and flags, and both
+    Workflows annotated "(defined in aadhar-sh)", the new config's signature.
+
+    What is still unmeasured is `versions deploy`, the step that RECONCILES
+    declarative exports ("reconciled when the version is deployed", in
+    wrangler's own error text). That is precisely where #950's
+    `observability.issues` passed an upload and then failed every ramp, so the
+    first ramp after this lands is the measurement. A refusal there fails the
+    ramp's `versions deploy` before any traffic moves, which is the shape #950
+    had, and `bun run deploy:promote --rollback` is the exit if anything gets
+    further than that.
 
 ---
 
