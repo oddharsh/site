@@ -50,5 +50,5 @@
   // Workers types, and it is the file the Worker's own `Env` is inferred FROM.
   // Checking it beside the Worker it configures is what makes a wrong binding
   // name a type error here rather than a 500 in production.
-  "include": ["../cf-garage/src/**/*.ts", "../cf-garage/cloudflare.config.ts", "../cf-garage/.cloudflare/types/index.d.ts"]
+  "include": ["../cf-garage/src/**/*.ts", "../cf-garage/cloudflare.config.ts", "../cf-garage/wrangler.config.ts", "../cf-garage/.cloudflare/types/index.d.ts"]
 }
