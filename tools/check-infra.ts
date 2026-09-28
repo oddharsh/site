@@ -421,13 +421,15 @@ async function checkTree(infra, wrangler, aux) {
         fail(`infra.json's release.${field} must pin ${flag} (it defaults to TRUE and would let a publish create resources); got ${JSON.stringify(cmd)}`);
       }
     }
-    // A publish that moves traffic by itself defeats the ramp. If a deploy
-    // command ever goes back to a bare `wrangler deploy`, deploy:promote is dead
-    // code and nobody would notice, because the site would keep releasing fine.
-    // On the non-production command it is worse than dead code: a feature branch
-    // would take production traffic on push.
-    if (!/\bversions upload\b/.test(cmd)) {
-      fail(`infra.json's release.${field} should be a \`versions upload\` so a publish does not move traffic (tools/deploy-promote.ts ramps it); got ${JSON.stringify(cmd)}`);
+    // Since 2026-09-28 the two commands have OPPOSITE jobs. Production deploys
+    // at 100% (the ramp was deleted as overhead), while a branch build must only
+    // UPLOAD: every push to every branch builds against production's bindings,
+    // so a `deploy` there would hand a feature branch production traffic.
+    if (field === "non_production_deploy_command" && !/\bversions upload\b/.test(cmd)) {
+      fail(`infra.json's release.${field} must be a \`versions upload\` so a branch build never takes production traffic; got ${JSON.stringify(cmd)}`);
+    }
+    if (field === "deploy_command" && !/\bdeploy-wrangler\.sh deploy\b/.test(cmd)) {
+      fail(`infra.json's release.${field} should be a \`deploy\`: nothing ramps an uploaded version any more, so a \`versions upload\` here ships nothing; got ${JSON.stringify(cmd)}`);
     }
   }
   // Preview URLs are what makes an uploaded version worth anything before it
@@ -436,7 +438,7 @@ async function checkTree(infra, wrangler, aux) {
   if (infra.release.preview_urls !== wrangler.preview_urls) {
     fail(`infra.json's release.preview_urls (${infra.release.preview_urls}) disagrees with wrangler.jsonc's (${wrangler.preview_urls}) — with workers_dev false, an unset value means OFF`);
   }
-  pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler, upload-then-ramp, previews ${wrangler.preview_urls ? "on" : "off"})`);
+  pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler, production deploys and branches only upload, previews ${wrangler.preview_urls ? "on" : "off"})`);
 
   await checkCodeqlWorkflow(infra.repository);
   await checkTriageDeclaration(infra.repository);
@@ -584,15 +586,20 @@ async function checkTriageDeclaration(repo) {
     }
   }
 
-  let workflow;
-  try {
-    workflow = await readFile(join(ROOT, triage.workflow), "utf8");
-  } catch {
-    fail(`infra.json declares repository.triage but ${triage.workflow} is missing, so nothing assigns or labels anything`);
-    return;
-  }
-  if (!workflow.includes("triage.assignee")) {
-    fail(`${triage.workflow} does not read \`triage.assignee\` from infra.json; hard-coding the assignee is how the two silently disagree about who owns the inbox`);
+  // triage.yml was deleted 2026-09-28, so `workflow` is optional: the label
+  // set stays declared because the self-opening workflows and dependabot still
+  // pass these names to `--label`, which fails outright on an unknown one.
+  if (triage.workflow) {
+    let workflow;
+    try {
+      workflow = await readFile(join(ROOT, triage.workflow), "utf8");
+    } catch {
+      fail(`infra.json declares repository.triage.workflow but ${triage.workflow} is missing, so nothing assigns or labels anything`);
+      return;
+    }
+    if (!workflow.includes("triage.assignee")) {
+      fail(`${triage.workflow} does not read \`triage.assignee\` from infra.json; hard-coding the assignee is how the two silently disagree about who owns the inbox`);
+    }
   }
 
   // The self-opening workflows. FLOOR included, for the reason every scanner in
@@ -700,7 +707,7 @@ async function checkTriageDeclaration(repo) {
   }
 
   if (hard.length > before) return;
-  pass(`triage declaration is consistent: ${triage.labels.length} labels, all routed or attributed, ${inline} inline flag(s) and ${dbLabels} dependabot label(s) declared across ${ecosystems} ecosystem(s), ${triage.workflow} reads the assignee from here`);
+  pass(`triage declaration is consistent: ${triage.labels.length} labels, all routed or attributed, ${inline} inline flag(s) and ${dbLabels} dependabot label(s) declared across ${ecosystems} ecosystem(s)${triage.workflow ? `, ${triage.workflow} reads the assignee from here` : ""}`);
 }
 
 // The CodeQL language curation, asserted from the COMMITTED workflow rather
@@ -1601,11 +1608,10 @@ async function checkRepo(infra) {
 // `can_approve_pull_request_reviews` runs the OTHER WAY and is the sharp one.
 // It is true today and declared true to KEEP it, because the dashboard control
 // it maps to is "Allow GitHub Actions to create and approve pull requests" and
-// clearing it stops the default GITHUB_TOKEN from CREATING one. Four scheduled
-// workflows do exactly that on `${{ github.token }}`, dictionary-roll.yml:149
-// among them, and CLAUDE.md prices that particular outage at 161 commits of
-// unrolled dictionaries while `dcz:check` printed PASS the whole time. A
-// cleared checkbox breaks it inside a nightly job with nobody watching.
+// clearing it stops the default GITHUB_TOKEN from CREATING one. The scheduled
+// PR-opening workflows moved to an App token on 2026-09-28 (a github.token PR
+// now needs a human to approve its CI), so nothing here depends on it today;
+// it stays declared so that clearing it is a diff rather than a surprise.
 
 /** How many workflows carry a TOP-LEVEL `permissions:` block, counted rather
  *  than remembered.

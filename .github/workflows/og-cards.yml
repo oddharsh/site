@@ -50,18 +50,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      # Both are GITHUB token scopes. This job holds no Cloudflare credential at
-      # all: it reads production over plain HTTPS like any other visitor.
+      # READ, because the push and the PR go through the App token minted in the
+      # last steps (.github/actions/bot-pr-token says why). This job holds no
+      # Cloudflare credential at all: it reads production over plain HTTPS like
+      # any other visitor.
       #
-      # `contents: write` reaches only the branch below. It CANNOT reach `main`,
+      # The App's push reaches only the branch below. It CANNOT reach `main`,
       # which carries a ruleset with zero bypass actors, so this opens a PR and
       # stops. A bot PR is still a PR.
-      contents: write
-      pull-requests: write
+      contents: read
 
     steps:
       - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up bun
         # config/... no longer applies: the version lives in config/bun-pin.json and the
@@ -115,17 +118,23 @@ jobs:
             git status --short public/og public/garage public/lwe public/pixel-peeper | sed -n '1,40p'
           fi
 
+      - name: Mint the App token that opens the PR
+        if: steps.diff.outputs.changed == 'true'
+        id: bot
+        uses: ./.github/actions/bot-pr-token
+        with:
+          app-id: ${{ secrets.RELOCK_APP_ID }}
+          private-key: ${{ secrets.RELOCK_APP_PRIVATE_KEY }}
+
       - name: Open or update the card PR
         if: steps.diff.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
           BRANCH: chore/og-cards
           ONLY: ${{ inputs.only }}
           BASE_ORIGIN: ${{ inputs.base }}
         run: |
           set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           CARDS=$(git status --porcelain public/og | wc -l | tr -d ' ')
           PAGES=$(git status --porcelain public/garage public/lwe public/pixel-peeper | wc -l | tr -d ' ')

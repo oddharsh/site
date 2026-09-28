@@ -22,9 +22,11 @@ test("histograms: a declaration without zenc's sources has a CI job reproducing 
   const dropped = TOOL_INPUTS.filter((p) => !d.inputs.paths.includes(p));
   if (!dropped.length) return; // back on the digest: covered the old way, nothing to require
 
-  const ci = await readFile(new URL(".github/workflows/ci.yml", ROOT), "utf8");
-  const job = ci.slice(ci.indexOf("name: native photo validation"), ci.indexOf("\n  validate:"));
-  assert.ok(job.length > 100, "could not find the native photo validation job in ci.yml");
+  // photos.yml since 2026-09-28, which runs only when photo code or tiers
+  // move. That is exactly when this output can change.
+  const job = await readFile(new URL(".github/workflows/photos.yml", ROOT), "utf8");
+  assert.match(job, /name: native photo validation/, "could not find the native photo validation job in photos.yml");
+  assert.match(job, /- "tools\/photos\/\*\*"/, "photos.yml must run when zenc or its lockfile moves");
   assert.match(job, /run: bun run histograms:check/, `${dropped.join(", ")} left the digest but native photo validation no longer reproduces the histograms`);
   assert.match(job, /uses: \.\/\.github\/actions\/setup-bun/, "the native job runs a bun script without setting up bun");
 

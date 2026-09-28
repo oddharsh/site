@@ -13,6 +13,12 @@ compatibility_flags = ["new_module_registry"]
 # deploy. Must equal wrangler.jsonc's account_id; check-infra.mjs fails on drift.
 account_id = "1c99acdb6141579023fb97d24261ea58"
 
+# Deploy-only, the same pair lens-reader and the site Worker carry. Source maps
+# keep the original stack locations in Workers Logs, and `wrangler dev` still
+# reads the authored module.
+minify = true
+upload_source_maps = true
+
 # Live "ask a follow-up" for the Learning With Errors explainers. RAG over the
 # author's OWN essay passages (never third-party text): embed the question,
 # retrieve the most relevant verbatim passages from Vectorize, and have Workers

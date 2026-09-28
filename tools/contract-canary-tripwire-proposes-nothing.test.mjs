@@ -228,14 +228,13 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
   assert.ok(askAt > bumper.indexOf("is not proposable yet"), "the bumper builds the engine before gates 1 and 2, so every quiet night pays a cargo build");
   assert.match(bumper.slice(askAt, askAt + 400), /process\.exit\(2\);/, "an engine the bumper cannot build is exit 2, which bun-pin.yml reds, never a failed gate it reads as green");
 
-  // CI's contract matrix is the third caller of the same suite, and it did
-  // not ask either: the cold build ran inside one test's 30s and killed
-  // cargo in the bun legs of runs 36294774979 and 36285475911.
+  // CI is the third caller of the same suite, and it did not ask either: the
+  // cold build ran inside one test's 30s and killed cargo in the bun legs of
+  // runs 36294774979 and 36285475911.
   const ci = await readFile(new URL(".github/workflows/ci.yml", ROOT), "utf8");
-  const job = ci.slice(ci.indexOf("\n  contracts:"), ci.indexOf("\n  network:"));
-  const buildAt = job.indexOf("ensureTimbradoEngine()");
-  assert.ok(buildAt > 0, "the contracts job never builds timbrado's engine, so the suite builds it on one test's clock");
-  assert.ok(buildAt < job.indexOf("Run the full contract suite"), "the contracts job builds the engine after the suite that needs it");
+  const buildAt = ci.indexOf("ensureTimbradoEngine()");
+  assert.ok(buildAt > 0, "CI never builds timbrado's engine, so the suite builds it on one test's clock");
+  assert.ok(buildAt < ci.indexOf("Run the contract suite"), "CI builds the engine after the suite that needs it");
 
   // Behavioural: point TIMBRADO_BIN (timbrado's own override, read on every
   // call) at an engine that does not exist. The guard and the wrapped runWatch
