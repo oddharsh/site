@@ -81,7 +81,8 @@
       "wrangler.dev.jsonc vars.CF_ACCOUNT_ID",
       "cf-garage/cloudflare.config.ts accountId",
       "lwe-ask/wrangler.toml account_id",
-      "lens-reader/wrangler.toml account_id"
+      "lens-reader/wrangler.toml account_id",
+      "counter/wrangler.jsonc account_id"
     ]
   },
   "zone": {

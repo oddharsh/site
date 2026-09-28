@@ -269,6 +269,10 @@ const AUX_CONFIGS = [
   { path: "cf-garage/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
   { path: "lwe-ask/wrangler.toml", key: "account_id", pattern: /^\s*account_id\s*=\s*"([^"]+)"/m },
   { path: "lens-reader/wrangler.toml", key: "account_id", pattern: /^\s*account_id\s*=\s*"([^"]+)"/m },
+  // aadhar-counter hosts the site's Counter Durable Object (CLAUDE.md, "Moving
+  // Counter out"). JSONC, so the key is quoted; the site's own jsonc is parsed
+  // properly above, and this row only needs the one pinned value.
+  { path: "counter/wrangler.jsonc", key: "account_id", pattern: /^\s*"account_id":\s*"([^"]+)"/m },
 ];
 
 async function checkTree(infra, wrangler, aux) {
