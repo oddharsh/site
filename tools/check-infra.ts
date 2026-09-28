@@ -1601,11 +1601,10 @@ async function checkRepo(infra) {
 // `can_approve_pull_request_reviews` runs the OTHER WAY and is the sharp one.
 // It is true today and declared true to KEEP it, because the dashboard control
 // it maps to is "Allow GitHub Actions to create and approve pull requests" and
-// clearing it stops the default GITHUB_TOKEN from CREATING one. Four scheduled
-// workflows do exactly that on `${{ github.token }}`, dictionary-roll.yml:149
-// among them, and CLAUDE.md prices that particular outage at 161 commits of
-// unrolled dictionaries while `dcz:check` printed PASS the whole time. A
-// cleared checkbox breaks it inside a nightly job with nobody watching.
+// clearing it stops the default GITHUB_TOKEN from CREATING one. The scheduled
+// PR-opening workflows moved to an App token on 2026-09-28 (a github.token PR
+// now needs a human to approve its CI), so nothing here depends on it today;
+// it stays declared so that clearing it is a diff rather than a surprise.
 
 /** How many workflows carry a TOP-LEVEL `permissions:` block, counted rather
  *  than remembered.

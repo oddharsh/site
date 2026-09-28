@@ -1,0 +1,65 @@
+name: Bot PR token
+description: >-
+  Mint the aadhar-sh-relock App token, point git's push at it, and commit as
+  the App. For the scheduled jobs that open their own pull requests.
+
+# WHY THE PR-OPENING JOBS STOPPED USING `github.token`.
+#
+# Since GitHub's 2026-06-11 change, a pull request created or pushed by
+# github-actions[bot] runs its workflows only after a human clicks "Approve
+# and run" on it. There is no repository setting that turns this off. So every
+# nightly dictionary roll, bun and wrangler pin, og-card refresh and remote
+# photo batch parked CI and CodeQL as `action_required`: 20 such runs between
+# 2026-09-06 and 2026-09-27, and `validate` is the required check, so none of
+# those PRs could merge until somebody clicked.
+#
+# An App token is an ordinary actor, so its pushes trigger CI the way a
+# person's do. It also triggers triage.yml, which github.token never could.
+#
+# Mint it LAST, after every gate. bun-pin and wrangler-pin run a candidate
+# toolchain published hours ago, and that code should not share a process tree
+# with a token that can push. Same argument dependabot-relock.yml makes for
+# `--no-gates`. The calling job's checkout passes `persist-credentials: false`,
+# so nothing before this step holds a write credential at all.
+
+inputs:
+  app-id:
+    description: secrets.RELOCK_APP_ID
+    required: true
+  private-key:
+    description: secrets.RELOCK_APP_PRIVATE_KEY
+    required: true
+
+outputs:
+  token:
+    description: The App token, for GH_TOKEN on `gh pr create` and friends.
+    value: ${{ steps.app.outputs.token }}
+
+runs:
+  using: composite
+  steps:
+    # Asking for the two permissions by name makes a missing grant fail HERE,
+    # loudly, at mint time, rather than as a 403 from `gh pr create` inside a
+    # nightly job nobody reads.
+    - name: Mint the App token
+      id: app
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        permission-contents: write
+        permission-pull-requests: write
+
+    # The numeric id is what makes the address resolve to the bot account on
+    # github.com instead of showing as an unknown author.
+    - name: Push and commit as the App
+      shell: bash
+      env:
+        GH_TOKEN: ${{ steps.app.outputs.token }}
+        APP_SLUG: ${{ steps.app.outputs.app-slug }}
+      run: |
+        set -euo pipefail
+        uid=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+        git config user.name "${APP_SLUG}[bot]"
+        git config user.email "${uid}+${APP_SLUG}[bot]@users.noreply.github.com"
+        git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"

@@ -53,16 +53,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      # Both are GITHUB token scopes, so the standing rule about never giving CI a
-      # Cloudflare token that can write is untouched, since this job holds no Cloudflare
-      # credential at all. `--live` reads production over plain HTTPS.
+      # READ, because the push and the PR go through the App token minted in the
+      # last steps (.github/actions/bot-pr-token says why). This job holds no
+      # Cloudflare credential at all; `--live` reads production over plain HTTPS.
       #
-      # `contents: write` reaches only the roll branch below. It CANNOT reach `main`
+      # The App's push reaches only the roll branch below. It CANNOT reach `main`
       # or `production`: both carry rulesets with zero bypass actors, which is the
       # property the whole release model rests on and which this job must not become
       # the exception to.
-      contents: write
-      pull-requests: write
+      contents: read
 
     steps:
       - name: Check out main
@@ -72,6 +71,7 @@ jobs:
           # every file with the checkout time, so mtime ordering in a fresh worktree
           # is meaningless). That needs real history, not a shallow clone.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up bun
         # config/... no longer applies: the version lives in config/bun-pin.json and the
@@ -126,16 +126,21 @@ jobs:
             git status --short src/dict/a-dict src/dict/p-dict src/dict/f-dict | sed -n '1,40p'
           fi
 
+      - name: Mint the App token that opens the PR
+        if: steps.diff.outputs.changed == 'true'
+        id: bot
+        uses: ./.github/actions/bot-pr-token
+        with:
+          app-id: ${{ secrets.RELOCK_APP_ID }}
+          private-key: ${{ secrets.RELOCK_APP_PRIVATE_KEY }}
+
       - name: Open or update the roll PR
         if: steps.diff.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
           BRANCH: chore/dictionary-roll
         run: |
           set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           ADOPTED=$(git status --porcelain src/dict/a-dict src/dict/p-dict src/dict/f-dict | grep -c '^??' || true)
           PRUNED=$(git status --porcelain src/dict/a-dict src/dict/p-dict src/dict/f-dict | grep -c '^ D' || true)
 
