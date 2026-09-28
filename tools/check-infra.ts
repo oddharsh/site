@@ -421,13 +421,15 @@ async function checkTree(infra, wrangler, aux) {
         fail(`infra.json's release.${field} must pin ${flag} (it defaults to TRUE and would let a publish create resources); got ${JSON.stringify(cmd)}`);
       }
     }
-    // A publish that moves traffic by itself defeats the ramp. If a deploy
-    // command ever goes back to a bare `wrangler deploy`, deploy:promote is dead
-    // code and nobody would notice, because the site would keep releasing fine.
-    // On the non-production command it is worse than dead code: a feature branch
-    // would take production traffic on push.
-    if (!/\bversions upload\b/.test(cmd)) {
-      fail(`infra.json's release.${field} should be a \`versions upload\` so a publish does not move traffic (tools/deploy-promote.ts ramps it); got ${JSON.stringify(cmd)}`);
+    // Since 2026-09-28 the two commands have OPPOSITE jobs. Production deploys
+    // at 100% (the ramp was deleted as overhead), while a branch build must only
+    // UPLOAD: every push to every branch builds against production's bindings,
+    // so a `deploy` there would hand a feature branch production traffic.
+    if (field === "non_production_deploy_command" && !/\bversions upload\b/.test(cmd)) {
+      fail(`infra.json's release.${field} must be a \`versions upload\` so a branch build never takes production traffic; got ${JSON.stringify(cmd)}`);
+    }
+    if (field === "deploy_command" && !/\bdeploy-wrangler\.sh deploy\b/.test(cmd)) {
+      fail(`infra.json's release.${field} should be a \`deploy\`: nothing ramps an uploaded version any more, so a \`versions upload\` here ships nothing; got ${JSON.stringify(cmd)}`);
     }
   }
   // Preview URLs are what makes an uploaded version worth anything before it
@@ -436,7 +438,7 @@ async function checkTree(infra, wrangler, aux) {
   if (infra.release.preview_urls !== wrangler.preview_urls) {
     fail(`infra.json's release.preview_urls (${infra.release.preview_urls}) disagrees with wrangler.jsonc's (${wrangler.preview_urls}) — with workers_dev false, an unset value means OFF`);
   }
-  pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler, upload-then-ramp, previews ${wrangler.preview_urls ? "on" : "off"})`);
+  pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler, production deploys and branches only upload, previews ${wrangler.preview_urls ? "on" : "off"})`);
 
   await checkCodeqlWorkflow(infra.repository);
   await checkTriageDeclaration(infra.repository);
