@@ -23,7 +23,7 @@
 // one asset every page loads. An inline cast, `= /** @type {T} */ (null)`, keeps
 // the statement intact and costs nothing. Prefer it here, always.
 //
-// public/garage/pretext.lib.js is in the baseline rather than fixed on purpose:
+// src/client/garage/pretext.lib.js is in the baseline rather than fixed on purpose:
 // it is 47KB of generated Unicode BiDi tables across four lines, so its
 // diagnostics are a property of a generator rather than of code anyone edits.
 import { fileURLToPath } from "node:url";

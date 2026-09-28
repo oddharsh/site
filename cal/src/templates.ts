@@ -416,6 +416,38 @@ function shell(title, body, env) {
 </html>`;
 }
 
+// The slot picker, shipped PRE-MINIFIED because /coffee renders per request:
+// no build step ever sees this script, and esbuild's minify rewrites the
+// Worker's code but never the contents of a string. Same convention as
+// lib/island.ts's islandScript. The readable form, which is what to edit and
+// then re-minify with tools/lib/oxc-minify-options.ts:
+//
+//   (function () {
+//     const buttons    = document.querySelectorAll(".slot-btn");
+//     const startInput = document.getElementById("start");
+//     const submit     = document.getElementById("submit");
+//     const fmt = (ms) => new Date(parseInt(ms, 10)).toLocaleString("en-US", {
+//       timeZone: <HOST_TIMEZONE>,
+//       weekday: "short", month: "short", day: "numeric",
+//       hour: "numeric", minute: "2-digit"
+//     });
+//     buttons.forEach(b => b.addEventListener("click", () => {
+//       buttons.forEach(x => x.setAttribute("aria-pressed", "false"));
+//       b.setAttribute("aria-pressed", "true");
+//       startInput.value = b.dataset.start;
+//       submit.disabled = false;
+//       submit.textContent = "request " + fmt(b.dataset.start);
+//     }));
+//   })();
+//
+// oxc prints strings with backticks, and one of those here would end this
+// template literal (CLAUDE.md gotcha 19), so its output is carried over with
+// double quotes instead.
+function slotPickerScript(env) {
+  const tz = JSON.stringify(env.HOST_TIMEZONE || "UTC");
+  return `(function(){let e=document.querySelectorAll(".slot-btn"),t=document.getElementById("start"),n=document.getElementById("submit"),r=e=>new Date(parseInt(e,10)).toLocaleString("en-US",{timeZone:${tz},weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});e.forEach(i=>i.addEventListener("click",()=>{e.forEach(e=>e.setAttribute("aria-pressed","false")),i.setAttribute("aria-pressed","true"),t.value=i.dataset.start,n.disabled=!1,n.textContent="request "+r(i.dataset.start)}))})();`;
+}
+
 export function bookingPage(slots, env) {
   const base = env.BASE_PATH || "";
 
@@ -503,25 +535,7 @@ export function bookingPage(slots, env) {
       </div>
     </form>
 
-    <script>
-    (function () {
-      const buttons    = document.querySelectorAll(".slot-btn");
-      const startInput = document.getElementById("start");
-      const submit     = document.getElementById("submit");
-      const fmt = (ms) => new Date(parseInt(ms, 10)).toLocaleString("en-US", {
-        timeZone: ${JSON.stringify(env.HOST_TIMEZONE || "UTC")},
-        weekday: "short", month: "short", day: "numeric",
-        hour: "numeric", minute: "2-digit"
-      });
-      buttons.forEach(b => b.addEventListener("click", () => {
-        buttons.forEach(x => x.setAttribute("aria-pressed", "false"));
-        b.setAttribute("aria-pressed", "true");
-        startInput.value = b.dataset.start;
-        submit.disabled = false;
-        submit.textContent = "request " + fmt(b.dataset.start);
-      }));
-    })();
-    </script>
+    <script>${slotPickerScript(env)}</script>
   `;
 
   return shell("Coffee or a bagel", body, env);
