@@ -376,7 +376,7 @@ export const AGENT_SURFACES = [
     "path": "/garage/av2",
     "title": "AV2, before anyone can see it",
     "mimeType": "text/html",
-    "description": "AV2 still images, scored against the AVIF this site ships at matched bytes, before any browser can decode them, and why an AV2 file behind a picture fallback still breaks."
+    "description": "AV2 still images scored against the AVIF this site ships at matched bytes: ahead on whole-frame thumbnails, behind on dense detail, and why an AV2 file behind a picture fallback still breaks."
   },
   {
     "path": "/bot",
