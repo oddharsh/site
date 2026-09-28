@@ -90,9 +90,9 @@ it is `public/`.
 ```bash
 # production, the normal path, and it needs NOTHING from you at a terminal:
 # merge to main; CI promotes the tested commit to production; Workers Builds
-# UPLOADS it as a version and moves no traffic; ramp.yml then takes it to 10% on
-# its own and WAITS for you to approve the `full` job in the Actions tab, which
-# is what carries it 50% -> 100%. Approve it there, or run the commands below.
+# UPLOADS it as a version and moves no traffic; ramp.yml then takes it to 10%,
+# soaks it for 20 minutes, and finishes at 100% or rolls back on its own.
+# Cancel that run during the soak to hold the canary at 10%.
 #
 # By hand (still supported, and the only way to roll back):
 bun run deploy:promote --dry-run     # which version WOULD ramp. run this first
@@ -391,24 +391,19 @@ worktrees may edit freely, but a worktree is not a release surface.
   since several agents work in this tree at once (the bullet above) and
   `validate` is a required check, so a red run blocks the merge until somebody
   goes looking.
-- **A new issue or PR assigns and labels itself**, via
-  `.github/workflows/triage.yml`. It reads the title's conventional-commit
-  prefix for a `type:` label and the changed paths for `area:` labels, so
-  `fix(photos):` on a diff under `tools/photos/` arrives tagged without anyone
-  typing a label. Keep writing the title the way you already do; that IS the
-  input. Two labels are worth reacting to rather than filing: **`hashed-asset`**
-  says the diff remints an `/a/` URL and therefore every page and page
-  dictionary (gotcha 35), and **`release-path`** says it touches what decides
-  which commit reaches production.
+- **Labels are applied by hand or inline, since 2026-09-28.** `triage.yml`,
+  which labelled every new issue and PR from its title prefix and changed
+  paths, was deleted as CI overhead. Two labels are still worth applying when
+  they fit: **`hashed-asset`** says the diff remints an `/a/` URL and therefore
+  every page and page dictionary (gotcha 35), and **`release-path`** says it
+  touches what decides which commit reaches production.
 
-  The label set, the routing rules and the assignee are declared in
-  [`infra.json`](config/infra.json) under `repository.triage`, and
-  `bun run infra:check` fails on drift in both directions: a label the workflow
-  can emit but GitHub does not have, and a colour or description edited from the
-  web UI. `bun run labels:sync` plans, `-- --confirm` writes, and it refuses to
-  run in CI like `infra:apply`. **Sync BEFORE merging a label rename**, because
-  `infra:check` is inside the required `validate` check and reads live GitHub,
-  so a declaration that runs ahead of reality blocks its own PR.
+  The label set is still declared in [`infra.json`](config/infra.json) under
+  `repository.triage`, because the self-opening workflows and Dependabot pass
+  those names to `--label`, and `bun run infra:check` (a workstation command
+  now) fails on drift in both directions. `bun run labels:sync` plans,
+  `-- --confirm` writes, and it refuses to run in CI like `infra:apply`.
+  **Sync BEFORE merging a label rename**, or the nightly jobs fail on it.
 
   Four workflows label themselves inline instead (`dictionary-roll`, `bun-pin`,
   `og-cards`, `node-support-window`). That was a platform limit when it was
@@ -425,7 +420,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   weeks, and `validate` is required, so none of those PRs could merge unattended.
   The token is minted after every gate and each job checks out with
   `persist-credentials: false`, so a candidate toolchain never shares a process
-  with a credential that can push. Their PRs now reach `triage.yml` too.
+  with a credential that can push.
 
   **Dependabot is the QUIET half of that, and it was unwatched until 2026-08-27.**
   A `labels:` key in `.github/dependabot.yml` REPLACES the defaults Dependabot
@@ -458,18 +453,19 @@ worktrees may edit freely, but a worktree is not a release surface.
   leverage digest`, with its cursor in a comment marker. It lives outside the
   repository, so nothing here can check it is still scheduled; the issue going
   quiet for weeks is the tell.
-- PR CI lints (`bun run lint`, oxlint including its type-aware rules), builds
-  the site, enforces the performance budget, dry-runs the single
-  site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
-  runs the coffee tests, and sweeps the route oracle against a Worker booted
-  in-process (`bun run routes:check`, wrangler's `createTestHarness()`), so a
-  broken route fails the PR instead of the deploy. Site, native photo, and network
-  validation run in parallel. Four contract jobs consume the site job's built
-  tree: Bun/Node crossed with real/symlinked temporary directories. The required
-  `validate` job depends on the matrix and all three validation jobs
-  and always runs: any failed, cancelled or skipped dependency makes it fail.
-  Keep every validation job in its `needs`; the contract suite checks the census.
-  Production promotion still requires the entire CI workflow to succeed.
+- **PR CI is ONE required job, `validate`, since 2026-09-28.** It lints
+  (oxlint including its type-aware rules), typechecks, builds the site under the
+  performance budget, runs `derive:check`, sweeps the route oracle against a
+  Worker booted in-process (`bun run routes:check`, wrangler's
+  `createTestHarness()`), and runs the bun contract suite and the coffee tests.
+  It was eight jobs until then: node and symlinked-temp-dir contract legs, a
+  network job (`infra:check`, the osv scan, `checkpoints:check`), a native photo
+  job, and a join. That cost about 2 minutes for a personal site whose stakes
+  are the bytes it ships, so what left went to a workstation command or to
+  `photos.yml`, which runs zenc's tests and the histogram reproduction only on
+  PRs touching photo code or tiers. Run `bun run test:node`, `infra:check`,
+  `checkpoints:check` and each auxiliary Worker's own dry-run by hand when a
+  change reaches them. Production promotion still requires CI to succeed.
 - **`.github/workflows/perf-diff.yml` is deliberately OUTSIDE that job**, and the
   separation is the whole design rather than tidiness. It builds the merge base
   and HEAD, diffs the wire sizes, and comments the delta on the PR; it fails on
@@ -644,7 +640,6 @@ worktrees may edit freely, but a worktree is not a release surface.
   |---|--:|---|---|
   | `canary` | 10% | `production-canary` | none, runs on its own |
   | `soak` | 50% then 100%, or rollback | `production-canary` | none, after ~20 min of probing |
-  | `full` | 50% then 100% | `production-full` | REQUIRED REVIEWER, the fast path |
   | `verify` | none | (no environment, no credential) | runs `dcz:check` |
 
   **The reviewer used to be the only way a release finished, and measured over
@@ -659,9 +654,11 @@ worktrees may edit freely, but a worktree is not a release surface.
   So the reading the gate existed for is now performed by something that actually
   performs it. `tools/soak-canary.ts` exercises the canaried version directly with
   `Cloudflare-Workers-Version-Overrides` every few minutes for twenty minutes,
-  then the job finishes the ramp or rolls it back on what it measured. Approving
-  `production-full` still works and is now the FAST PATH rather than the only
-  path: it skips the wait. A workstation ramp is untouched;
+  then the job finishes the ramp or rolls it back on what it measured. **The
+  `full` job that parked on `production-full`'s reviewer was deleted on
+  2026-09-28**: every real ramp for days had finished through the soak while
+  `full` waited to be cancelled, so each release left an approval request behind.
+  The fast path is a workstation `bun run deploy:promote`. A workstation ramp is untouched;
   `tools/lib/release-guard.ts` asks whether the process can authenticate rather
   than whether it is CI, which is what made every path here possible.
 
@@ -677,25 +674,13 @@ worktrees may edit freely, but a worktree is not a release surface.
   refuses to do that. The soak found its own first `unproven` in testing, against
   a real deployment change that happened underneath it.
 
-  Three things about it worth knowing before editing it:
+  Two things about it worth knowing before editing it:
 
   - **It runs on `production-canary`, and that is the load-bearing detail.**
     Moving traffic needs the write token, the token is an ENVIRONMENT secret, and
-    the only other environment holding it is `production-full`, whose reviewer is
-    the thing being routed around. `production-canary` already ramps traffic with
-    no reviewer, so reusing it widens nothing.
-  - **The human veto is cancelling the RUN.** Rejecting the `production-full`
-    deployment does not stop the soak, because the soak is a separate job that
-    never asked for that approval. The canary's step summary says so.
-  - **`verify` needs `soak` rather than `full`.** A job `waiting` on an
-    environment gate has not concluded, so a `needs` on `full` made the
-    post-ramp checks wait exactly as long as the reviewer did, which on the
-    record above meant forever.
-
-  **`full` is idempotent now, and it had to become so.** An approval that arrives
-  after the soak resolved would otherwise run `--steps 50,100` against a version
-  already at 100% and put HALF of production back on the previous build. Its
-  guard exits 0 when the canaried version already holds everything.
+    `production-canary` already ramps traffic with no reviewer, so the soak
+    reusing it widens nothing.
+  - **The human veto is cancelling the RUN.** The canary's step summary says so.
 
   **The probes moved out of `deploy-promote.ts` to make any of this possible.**
   `probePinned` and the sampler live in `tools/lib/version-probe.ts`, which holds
@@ -740,17 +725,6 @@ worktrees may edit freely, but a worktree is not a release surface.
   2026-08-14 and the run parked since 15:32:04 was cancelled at 16:40:28. The
   named fallback, moving `full` into its own workflow, is therefore not needed.
 
-  **`ci.yml` carries a TRIPWIRE for a parked ramp, and it lives there rather than
-  in `ramp.yml` on purpose.** A jam inside a concurrency group cannot be reported
-  from inside that group, which is why two days of stalled releases produced no
-  signal at all. It warns past 6 hours, names the run, and is ADVISORY: failing
-  would gate every merge on a state no PR caused and would deadlock the one PR
-  able to fix a stuck ramp, the same trap `infra:check`'s edge tier documents. It
-  swallows its own API errors for the same reason, since a tripwire that reddens
-  CI on a GitHub hiccup gets muted, and a muted tripwire is worse than none. An
-  unparseable timestamp falls STALE rather than fresh, because the alternative
-  reads as a healthy repo forever. It found a real parked ramp on its first run.
-
   **The newest `Ramp production` run is usually the no-op rather than the
   release.** A no-op finishes in seconds while a real ramp waits on Workers
   Builds, so sorting by recency hands you the wrong run: on 2026-08-14 the two
@@ -762,33 +736,13 @@ worktrees may edit freely, but a worktree is not a release surface.
   run you want. When the question is "is a ramp parked", filter on `status`
   instead of on any count; the recipe is at the end of gotcha 36.
 
-  **A ramp waiting on approval is not stuck.** `waiting` is the environment gate
-  doing its job, and the way to tell it apart from a jam is to ask what it is
-  waiting for:
-
-  ```bash
-  gh api repos/oddharsh/site/actions/runs/<id>/pending_deployments \
-    --jq '.[] | {environment: .environment.name, current_user_can_approve}'
-  ```
-
-  An approvable row means click it. Note also that `gh run view --log` refuses a
-  run that has not finished, so the canary's own output is unreadable until the
-  `full` job resolves; `bun run deploy:promote -- --status` answers what is
-  serving regardless and does not depend on the run at all.
-
-  Three things about it that are load-bearing rather than incidental:
+  Two things about it that are load-bearing rather than incidental:
 
   - **It checks out `production`, never `main`.** The ramp writes the D1 changelog
     by diffing the checked-out `checkpoints.json` against D1, so the tree has to
     be the one that was built and uploaded. This is gotcha 24 solved rather than
     relocated: CI cannot ramp from a stale tree, and it cannot ramp from one
     running AHEAD of what is serving either.
-  - **`full` refuses a version the canary never saw.** Approval is asynchronous
-    and Workers Builds uploads a version for every push, so re-resolving the
-    newest production build after an approval could put traffic on something
-    nothing canaried, silently, and every downstream check would pass because a
-    version that built returns 200s. It compares against the 8-char prefix the
-    canary actually put at 10% and fails if it moved.
   - **The wrangler it runs is the pinned one, which was not true when this was
     written.** `deploy-promote.mjs` shelled out to `npx wrangler`, and npx
     resolves whatever it can find: measured 2026-08-12 in a tree with no
@@ -1152,9 +1106,9 @@ worktrees may edit freely, but a worktree is not a release surface.
   **BUILT 2026-08-12, and this is now a description.** `CLOUDFLARE_API_TOKEN_RAMP`
   is an ENVIRONMENT secret on `production-canary` and `production-full`, never a
   repo secret, so a job that does not name those environments cannot see it and
-  fork PRs cannot reach it. `production-full` carries required reviewers, so
-  majority traffic cannot move without a human. `.github/workflows/ramp.yml` is
-  the only consumer.
+  fork PRs cannot reach it. Since 2026-09-28 no job names `production-full`
+  (the soak finishes ramps on `production-canary`), so its copy of the secret is
+  unused. `.github/workflows/ramp.yml` is the only consumer.
 
   **The scope list, derived from what the ramp actually executes.** This note said
   `Workers Scripts:Edit` + `D1:Edit` "and nothing else" from 2026-08-06 while no

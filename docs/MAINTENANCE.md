@@ -224,19 +224,20 @@ rotation and treat all previously emailed links as compromised.
 
 ## CI/CD release path
 
-1. [CI](../.github/workflows/ci.yml) runs site, native photo, and network validation
-   in parallel. Site validation covers locked dependencies, build,
-   lint, typechecks, module tests, Worker dry-runs, performance gates and the local
-   route oracle. Its built tree is passed to four contract jobs: Bun and Node,
-   each with a real and symlinked temporary directory. The required `validate` job always runs and succeeds only when all
-   jobs succeed; failure, cancellation or skipping fails the gate. Cal and
-   Serendipity ship inside the site Worker.
+1. [CI](../.github/workflows/ci.yml) runs one required job, `validate`: lint,
+   typecheck, the build with its performance budget, `derive:check`, the local
+   route oracle, the bun contract suite, and Cal's tests. Cal and Serendipity
+   ship inside the site Worker. [Photos](../.github/workflows/photos.yml) runs
+   zenc's tests and the histogram reproduction only on PRs that touch photo
+   code or tiers. `infra:check`, `checkpoints:check`, the osv scan and the
+   auxiliary Worker dry-runs are workstation commands now.
 2. [Promote production](../.github/workflows/promote-production.yml) advances
    `production` after successful CI on current `main` and a merged PR.
    Manual dispatch also requires a merged PR.
 3. Cloudflare Workers Builds uploads that commit as a Worker version.
 4. [Ramp production](../.github/workflows/ramp.yml) waits for the upload, moves
-   10% of traffic, and waits for approval before moving 50% and then 100%.
+   10% of traffic, soaks it for 20 minutes, then finishes at 100% or rolls back
+   on its own. Cancel the run during the soak to hold the canary.
 
 To run CI manually, select the desired branch in Actions, or run
 `gh workflow run ci.yml --ref <branch>`. All validation jobs check out the
@@ -308,15 +309,14 @@ The Actions workflow uses these environments:
 | job | traffic | environment | operator action |
 |---|---|---|---|
 | canary | 10% | `production-canary` | Inspect the new version and Workers Logs. |
-| full | 50%, then 100% | `production-full` | Approve this job after reviewing the canary. |
+| soak | 50%, then 100%, or rollback | `production-canary` | None; cancel the run to hold at 10%. |
 | verify | unchanged | none | Review the advisory dictionary check. |
 
 The two ramp jobs use the `CLOUDFLARE_API_TOKEN_RAMP` environment secret, whose
-scope is declared in `config/infra.json`. Keep it separate from CI's read token
-and the workstation-only DNS credential. The full job refuses a target that
-changed while it waited for approval.
+scope is declared in `config/infra.json`. Keep it separate from the
+workstation-only DNS credential.
 
-A newer release cancels an older ramp, including one awaiting approval. Inspect
+A newer release cancels an older ramp, including one mid-soak. Inspect
 the latest run and `deploy:promote --status` before acting on an old canary.
 Cancellation or a failed probe leaves the current traffic split in place.
 

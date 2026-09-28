@@ -14,7 +14,7 @@ description: >-
 # those PRs could merge until somebody clicked.
 #
 # An App token is an ordinary actor, so its pushes trigger CI the way a
-# person's do. It also triggers triage.yml, which github.token never could.
+# person's do.
 #
 # Mint it LAST, after every gate. bun-pin and wrangler-pin run a candidate
 # toolchain published hours ago, and that code should not share a process tree

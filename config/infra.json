@@ -1147,7 +1147,6 @@
         "request that carried it, historically and with no undo."
       ],
       "assignee": "oddharsh",
-      "workflow": ".github/workflows/triage.yml",
       "self_labelling_workflows": 6,
       "$self_labelling_workflows": [
         "The FLOOR on inline `--label` flags across .github/workflows, not a",
