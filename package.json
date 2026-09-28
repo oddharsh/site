@@ -19,6 +19,7 @@
     "search:index": "bun tools/generate-search-index.ts",
     "photos": "bash tools/photos/add-photos.sh",
     "photos:check": "bun tools/photos/check-photo-pipeline.ts",
+    "histograms:check": "bun tools/photos/check-histograms.ts",
     "archive:gate": "bun tools/photos/archive-gate.ts",
     "onestep:probe": "bash tools/photos/onestep-probe.sh",
     "resample:probe": "bun tools/photos/resample-probe.ts",
