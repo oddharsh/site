@@ -39,8 +39,12 @@
     "`tools` names entries in config/tools.json whose `recorded` version is part of",
     "an artifact's identity, so swapping encoders reads as staleness. A FIRST-PARTY",
     "tool needs no such entry, because its source is committed and goes straight",
-    "into `inputs`: zenc's decode and histogram sources are inputs to the histogram",
-    "bake for the same reason the JPEGs are.",
+    "into `inputs`, with ONE exception worth knowing before adding another. The",
+    "histogram bake's tool inputs (zenc's sources and Cargo.lock) are NOT in its",
+    "digest, because that artifact can be reproduced from committed bytes alone, and",
+    "CI does exactly that: `bun run histograms:check` re-bakes it and compares it to",
+    "the committed file. A measured output beats a hashed input, and the hash made",
+    "every zenc dependency bump read as stale until somebody re-baked by hand.",
     "",
     "WHAT IS DELIBERATELY NOT HERE, so the coverage claim stays honest:",
     "  - the MCP server cards, which a contract test already deep-equals against",
@@ -101,27 +105,22 @@
     {
       "id": "images/histograms",
       "tier": "pinned",
-      "why": "THE ONE THIS FILE WAS BUILT FOR. images/histograms.json holds four 64-bin channels per photo, baked by `zenc histogram` from the SHIPPED hashed JPG tier, and build.ts derives the served /images/meta/<stem>.json from it. #394 re-encoded 316 of those JPEGs on 2026-08-14 and re-baked nothing, so the bars described pixels nobody had been served for nine days. photos:check could not see it, because it compares histograms.json against images/meta/, which the build derives FROM histograms.json: two sides of one source agree no matter what the pixels say.",
+      "why": "THE ONE THIS FILE WAS BUILT FOR. images/histograms.json holds four 64-bin channels per photo, baked by `zenc histogram` from the SHIPPED hashed JPG tier, and build.ts derives the served /images/meta/<stem>.json from it. #394 re-encoded 316 of those JPEGs on 2026-08-14 and re-baked nothing, so the bars described pixels nobody had been served for nine days. photos:check could not see it, because it compares histograms.json against images/meta/, which the build derives FROM histograms.json: two sides of one source agree no matter what the pixels say. zenc's sources and Cargo.lock were inputs here until 2026-09-28 and are not now: CI's native photo validation job runs `bun run histograms:check`, which re-bakes every photo with the zenc the tree builds and compares the result to this file byte for byte. That measures the output a tool change could move, where the digest could only say it MIGHT have moved, and it cost a hand re-bake and --lock on every zenc bump (#871, #985). public/i stays, so a re-encode that skips the bake still fails here with no cargo.",
       "outputs": [
         "public/images/histograms.json"
       ],
       "inputs": {
         "paths": [
-          "public/i",
-          "tools/photos/zenc/src/histogram.rs",
-          "tools/photos/zenc/src/pixels.rs",
-          "tools/photos/zenc/Cargo.lock"
+          "public/i"
         ],
         "include": [
-          ".jpg",
-          ".rs",
-          ".lock"
+          ".jpg"
         ]
       },
-      "regenerate": "bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && bun tools/photos/build-histogram-index.ts",
+      "regenerate": "tools/photos/zenc/target/release/zenc histogram --root public && bun tools/photos/build-histogram-index.ts (inside a photo add: bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\")",
       "recorded": {
-        "inputs": "3e83868493882513b476d21c07face243db6b5303a618d7f3a10e235def82abb",
-        "count": 261
+        "inputs": "1a7794939ed47f4c164f7a989edbf557589ef51846b672cfbd9e0d3615a8d0ca",
+        "count": 258
       }
     },
     {
