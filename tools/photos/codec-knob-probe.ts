@@ -82,6 +82,18 @@
 // Lossless (-l, identity matrix, bit-exact on all 16 crops) is 29% LARGER than
 // aom's, and speed 3 did not close it (161,336 B vs 160,357 at speed 6).
 //
+// THE CROPS ARE THE DENSE END. These are /pixel-peeper's detail
+// crops, the hardest native-resolution window per photo, at about 1.08 bits per
+// pixel. The shipped 600px tier averages 0.46, and there AV2 WINS: +0.77 s2 on
+// 28 of 38 whole-frame tiles (av2-tile-probe.ts, 2026-09-28). Read a number
+// from this probe as the worst case, never as the verdict for the tier.
+//
+// TUNING, 2026-09-27/28, on build.sh --tuned with sb-size=128 pinned (base vs
+// AVIF -1.57 train, -2.12 holdout). Only per-segment QM held on the holdout:
+// `a:enable-qm=1+qm-curve=1+qmseg=1+qmseg-level=12` +0.14 (11 of 16), where the
+// QM curve alone is -0.47. Chroma AC +4 (-0.06), Variance Boost and the jpegli
+// mask (train only, -0.54 and -0.25 at their best) did not.
+//
 // Crops are cached in --cache (default: a directory under the OS temp dir), since
 // cutting one from a HIF costs a full-resolution sips decode.
 import { spawn, spawnSync } from "node:child_process";
@@ -258,8 +270,8 @@ function avmVariant(name: string): string[] | null {
   return [...AVM_ARGS, ...pairs.flatMap((p) => ["-a", p])];
 }
 
-const TRAIN = CANDIDATES.format[2];
-const HOLDOUT = ["XT509278", "XT507955", "XT508055", "XT509535", "XT509965", "XT509848", "XT509388", "XT509540"];
+export const TRAIN = CANDIDATES.format[2];
+export const HOLDOUT = ["XT509278", "XT507955", "XT508055", "XT509535", "XT509965", "XT509848", "XT509388", "XT509540"];
 const TIERS = Object.keys(FORMAT_TIER_ANCHOR) as (keyof typeof FORMAT_TIER_ANCHOR)[];
 
 type Codec = "jxl" | "avif" | "avm";
