@@ -254,6 +254,84 @@ test("a 200 is not evidence that kitesurf rendered, and is not reported as if it
   }
 });
 
+test("the binding is the kitesurf door, and its label is a bare kitesurf", async () => {
+  const { runBrowserAction } = await import("../src/worker/lens-render.ts");
+  const realFetch = globalThis.fetch;
+  const sent = [];
+  const goto = { waitUntil: "networkidle2", timeout: 18000 };
+  const payload = { url: "https://example.com", viewport: { width: 1280, height: 800, deviceScaleFactor: 1 }, gotoOptions: goto };
+  const env = {
+    CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok",
+    BROWSER: { quickAction: async (action, body) => { sent.push({ action, body }); return new Response("{}", { status: 200 }); } },
+  };
+  try {
+    // Measured 2026-09-28: the binding validates `browser` as an enum whose only
+    // member is "kitesurf", and rejects an invented engine name. So a 200 from
+    // this door IS Kitesurf, which the REST door has never been able to say.
+    testGlobals.fetch = async () => { throw new Error("REST must not be called while the binding exists"); };
+    const run = await runBrowserAction("snapshot", payload, env);
+    assert.ok(run);
+    assert.equal(run.engine, "kitesurf");
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].body.browser, "kitesurf");
+    // Kitesurf answers 501 "Unsupported options: viewport.deviceScaleFactor",
+    // and 1 is Chromium's default, so the key is dropped rather than paid for.
+    assert.deepEqual(sent[0].body.viewport, { width: 1280, height: 800 });
+    assert.equal(sent[0].body.gotoOptions, goto, "nested config keeps its identity");
+    assert.equal(payload.viewport.deviceScaleFactor, 1, "the caller's payload is not mutated");
+    assert.ok(!("browser" in payload));
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
+});
+
+test("a refused request shape falls back to chromium once, and a spent budget does not", async () => {
+  const { runBrowserAction, kitesurfPayload } = await import("../src/worker/lens-render.ts");
+  const payload = { url: "https://example.com", viewport: { width: 1280, height: 800, deviceScaleFactor: 2 } };
+  // A deviceScaleFactor other than 1 would change the pixels, so it is kept and
+  // left for Kitesurf to refuse by name.
+  assert.equal(kitesurfPayload(payload).viewport.deviceScaleFactor, 2);
+
+  const cases = [{ status: 501, retries: true }, { status: 400, retries: true }, { status: 429, retries: false }, { status: 500, retries: false }, { status: 200, retries: false }];
+  for (const { status, retries } of cases) {
+    const sent = [];
+    const env = {
+      BROWSER: {
+        quickAction: async (_action, body) => {
+          sent.push(body);
+          return new Response("{}", { status: body.browser === "kitesurf" ? status : 200 });
+        },
+      },
+    };
+    const run = await runBrowserAction("snapshot", payload, env);
+    assert.ok(run);
+    if (retries) {
+      // A 400/501 rendered nothing (790ms, no x-browser-ms-used), so the second
+      // call is free, and it carries the caller's payload whole.
+      assert.equal(sent.length, 2, `status ${status} retries`);
+      assert.equal(sent[1], payload, "chromium gets the original payload");
+      assert.equal(run.engine, "chromium-binding", "the engine reported is the one that answered");
+    } else {
+      // A 429 is our own budget and a 5xx is Kitesurf failing; a retry would
+      // spend a render and a rate-limit slot to hide which engine failed.
+      assert.equal(sent.length, 1, `status ${status} does not retry`);
+      assert.equal(run.engine, "kitesurf");
+      assert.equal(run.response.status, status);
+    }
+  }
+});
+
+test("an explicit chromium request skips kitesurf on the binding", async () => {
+  const { runBrowserAction } = await import("../src/worker/lens-render.ts");
+  const sent = [];
+  const env = { BROWSER: { quickAction: async (_a, body) => { sent.push(body); return new Response("{}", { status: 200 }); } } };
+  const run = await runBrowserAction("snapshot", { url: "https://example.com" }, env, { engine: "chromium" });
+  assert.ok(run);
+  assert.equal(sent.length, 1);
+  assert.ok(!("browser" in sent[0]));
+  assert.equal(run.engine, "chromium-binding");
+});
+
 test("the ramp guard asks whether it can authenticate, not whether it is CI", async () => {
   const { releaseCredentialError } = await import("./lib/release-guard.ts");
 

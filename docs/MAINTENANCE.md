@@ -1584,11 +1584,24 @@ Traffic moves either from a workstation (`bun run deploy:promote`) or through
 `.github/workflows/ramp.yml`, which canaries at 10% and then waits on a required
 reviewer before 50% and 100%.
 
-### Turn on Kitesurf for the Browser view
-`/lens/browser` (the Browser view) works out of the box on the Browser Run
-BINDING (Chromium, no credential). Kitesurf, Cloudflare's WASM browser engine for
-agents, is REST-only — the binding's payload schema rejects the `browser` key
-outright — so it needs a token:
+### Kitesurf for the Browser view
+`/lens/browser` (the Browser view) renders on Kitesurf, Cloudflare's WASM browser
+engine for agents, through the Browser Run BINDING, with no credential. Nothing
+needs turning on. It asks `quickAction` for `browser: "kitesurf"`, and the
+binding validates that name (measured 2026-09-28: an invented engine is
+rejected with `expected "kitesurf"`), so the view reports `engine: "kitesurf"`.
+
+Kitesurf refuses options it has not implemented, by name, with a 501. A
+`deviceScaleFactor` of 1 is dropped before the call because it is Chromium's
+default; any other refused option makes the call retry once on Chromium, and the
+view then reports `engine: "chromium-binding"`. If renders start reading
+`chromium-binding` in Workers Logs, look for that 501 before assuming Kitesurf
+went away.
+
+#### The REST fallback, for a deployment with no binding
+
+Before 2026-09-28 the binding rejected the `browser` key outright, so Kitesurf
+was REST-only and needed a token:
 
 ```bash
 # Cloudflare dashboard -> API Tokens -> Create Custom Token
@@ -1598,13 +1611,14 @@ bun run wrangler versions secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
 
 **That is an EDIT scope.** It lives as a Worker secret, never in GitHub, so the
 repo's no-write-token rule is untouched — but it is not a read token and should
-not be described as one. Without it the route silently uses the binding and
-reports `engine: "chromium-binding"`, so the view degrades rather than breaks.
+not be described as one. The binding now wins whenever it exists, so production
+no longer reads this secret. Deleting it and the REST branch of `runBrowserAction` is the open
+follow-up; do it with `versions secret delete` and read gotcha 25 first.
 
 `browser=kitesurf` is documented only on Cloudflare's Kitesurf page, not in the
 Quick Actions reference. The code therefore tries the parameter, falls back once
 on a 400, and remembers the answer for the isolate. If Cloudflare ships it into
-the binding, delete `renderOverRest` and the token with it.
+the binding, delete the REST branch and the token with it (it has; see above).
 
 **The selector rides `/browser-run/<action>`, not `/browser-rendering/<action>`.**
 Both spellings route, so the wrong one drops the opt-in without an error. Fixed

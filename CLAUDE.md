@@ -2549,7 +2549,7 @@ generic hex back.
   the binding, `/lens/shot` returns a clean 503 and the Human view falls back to
   the readable-text reader, so the live iframe + all machine lenses keep working
   regardless. (`CF_ACCOUNT_ID` is read by `/ledger`'s Analytics Engine SQL
-  alongside `ANALYTICS_READ_TOKEN`, and by the Kitesurf REST path below.)
+  alongside `ANALYTICS_READ_TOKEN`, and by the REST fallback below.)
 
   **Kitesurf rides the EXISTING `/lens/browser`, and there is no second route.**
   A `/lens/rendered` was built here on 2026-08-06 and deleted the same day: it
@@ -2558,19 +2558,51 @@ generic hex back.
   Action, and whose `deltaStrip` already computed the HTTP-versus-rendered word
   gap. Read `lens-browser.js` before adding a rendering surface.
 
-  What survives in `lens-render.ts` is the engine seam. **Kitesurf cannot be
-  reached from the binding**: probed 2026-08-06, passing `browser` to
-  `quickAction` returns `{"code":"unrecognized_keys","keys":["browser"]}`, and an
-  invented engine name returns the byte-identical error — the payload schema is
-  CLOSED, so it refuses the option rather than failing on an unknown value. REST
-  is the only door and it wants a `Browser Rendering - Edit` token in
-  `BROWSER_RUN_TOKEN`. That is an EDIT scope living as a Worker secret; it is not
-  in GitHub, so the no-write-token-in-CI rule is intact, but do not confuse it
-  for a read scope. `browser=kitesurf` is in Cloudflare's launch post and NOT in
-  the Quick Actions reference, so the code TRIES it and, on a 400, retries
-  without it and remembers for the isolate. Only the PARAMETER is conditional —
-  REST itself keeps serving, because gating the whole REST path on a dead beta
-  flag silently demoted every later render back to the binding.
+  What survives in `lens-render.ts` is the engine seam, and **since 2026-09-28
+  the BINDING is the Kitesurf door**: `quickAction(action, { ...payload,
+  browser: "kitesurf" })`. This paragraph said the opposite for seven weeks, and
+  it was true when written. Probed 2026-08-06, `browser` came back
+  `unrecognized_keys` for any value. Re-probed 2026-09-28 against the production
+  binding, each case with an invalid `url` so nothing rendered:
+
+  | extra key | errors |
+  |---|---|
+  | none | `Invalid URL` |
+  | `browser: "kitesurf"` | `Invalid URL` alone |
+  | `browser: "definitely-not-an-engine"` | `Invalid URL` + `invalid_value: expected "kitesurf"` |
+  | `definitely_not_a_key_xyz: 1` | `Invalid URL` + `unrecognized_keys` |
+
+  The last row is the control: the schema is still closed, so the second row is
+  acceptance rather than silence. The third row is the one the REST door never
+  gave: the engine name is VALIDATED, which is the bar the `kitesurf:check`
+  paragraph below sets for a bare `kitesurf` label, so the binding path reports
+  exactly that. A real render the same day agreed: example.com came back with
+  `window.chrome` undefined and no WebGL (Chromium has both), in 1118
+  browser-ms against Chromium's 2656, and `/garage` drew its layout, photos and
+  copy with a fallback font and without the SVG taskbar icons.
+
+  **Kitesurf refuses unimplemented options by name, and the refusal is free.**
+  The real `/lens/browser` payload came back 501, code 2000, `Unsupported
+  options: viewport.deviceScaleFactor`, in 790ms with no `x-browser-ms-used`
+  header. So `kitesurfPayload()` drops a `deviceScaleFactor` of exactly 1
+  (Chromium's default, so no pixel changes), and a 400 or 501 on the Kitesurf
+  attempt retries once on Chromium, labelled `chromium-binding`. A 429 or 5xx
+  does NOT retry: it would spend a render and a rate-limit slot to hide which
+  engine failed.
+
+  **Everything from here to the recipes note describes the REST FALLBACK**, which
+  now serves only a deployment with no binding. It wants a `Browser Rendering -
+  Edit` token in `BROWSER_RUN_TOKEN`. That is an EDIT scope living as a Worker
+  secret; it is not in GitHub, so the no-write-token-in-CI rule is intact, but do
+  not confuse it for a read scope. With the binding answering, production no
+  longer needs that secret, and deleting it (plus the REST branch of
+  `runBrowserAction`, per MAINTENANCE.md) is an open follow-up rather than part of the change that
+  moved the door, because a secret change mints a version (gotcha 25).
+  `browser=kitesurf` on REST is in Cloudflare's launch post and NOT in the Quick
+  Actions reference, so the code TRIES it and, on a 400, retries without it and
+  remembers for the isolate. Only the PARAMETER is conditional: REST itself keeps
+  serving, because gating the whole REST path on a dead beta flag silently
+  demoted every later render back to the binding.
 
   **The selector only works on `/browser-run/<action>`, and this posted to
   `/browser-rendering/<action>` until 2026-08-08.** Both spellings ROUTE, which
@@ -2620,6 +2652,10 @@ generic hex back.
   `--render` buys the certain answer for two renders of a 40-byte inline
   document. If the verdict is `enforced`, promote the label and record the date
   and the outputs at the control.
+
+  **The BINDING passed that control on 2026-09-28** (the table above), which is
+  why its label is a bare `kitesurf`. `kitesurf:check` tests the REST door alone
+  and stays the way to settle `kitesurf-requested`.
 
   Worth the effort because Kitesurf is FREE during its beta. The daily
   browser-minute ceiling is what makes `/lens/browser` fragile (and what blacks
