@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "$comment": "-c wrangler.toml is REQUIRED on every one of these, not decoration. Without it wrangler walks UP the tree, finds the root wrangler.jsonc, and runs its build.command (`node tools/build.ts`) from this directory, which dies with MODULE_NOT_FOUND. CI has always passed -c explicitly, so these scripts were broken without any run being able to notice. Found 2026-08-10 when lens-reader hit it on a real deploy.",
+  "$comment": "Every wrangler script that READS the config passes --x-new-config and runs from THIS directory, because the Worker config is cloudflare.config.ts (migrated from wrangler.toml with `cf migrate` on 2026-09-28) and that loader reads the working directory and refuses -c. That retired the old trap this comment used to describe: with a toml, a bare `wrangler` walked UP the tree, found the root wrangler.jsonc, and ran its build.command from here, dying with MODULE_NOT_FOUND. wrangler is declared as a devDependency for the `cf` CLI alone, which reads a project's OWN manifest for its dev server; it is the root pin byte for byte, check-wrangler holds it there, and bun links both to one install. `tail` is the exception and names the Worker instead: it refuses --x-new-config as an unknown argument (measured 2026-09-28, although `tail --x-new-config --help` exits 0), and with a positional name it reads no config and runs no build.",
   "scripts": {
-    "dev": "wrangler dev -c wrangler.toml",
-    "deploy": "wrangler deploy -c wrangler.toml --x-provision=false --x-auto-create=false",
-    "tail": "wrangler tail -c wrangler.toml"
+    "dev": "wrangler dev --x-new-config",
+    "deploy": "wrangler deploy --x-new-config --x-provision=false --x-auto-create=false",
+    "tail": "wrangler tail lwe-ask"
+  },
+  "devDependencies": {
+    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@f96458c"
   }
 }

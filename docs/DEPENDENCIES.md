@@ -717,7 +717,9 @@ the reason, rather than written here with the caret quietly dropped.
   made a 146.26 KiB gzip bundle where the native action produces 2.77 KiB gzip.
 
   It declares ONE dev dependency since 2026-09-28: `wrangler`, as the root's
-  exact pkg.pr.new URL, and that line exists for the `cf` CLI. cf finds a
+  exact pkg.pr.new URL, and that line exists for the `cf` CLI. `lwe-ask/`
+  carries the same line for the same reason; `lens-reader/` cannot, being
+  outside the workspace with its own lockfile, so cf does not run there. cf finds a
   project's dev server by reading that project's own manifest and never walks
   up to the workspace root, so without it `cf build` refuses with "No
   Cloudflare dev-server is installed in this project." Under bun's isolated
