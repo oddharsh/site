@@ -398,6 +398,16 @@ does not make a failed write safe to ignore.
   clean installs) to cut median install time from 4.62 s to 3.03 s and
   `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
   rather than maintained.
+- @cloudflare/config 0.20.0 is the exact root pin for the helpers
+  `cf-garage/cloudflare.config.ts` authors with. workers-sdk#15914 moved them
+  out of `wrangler/experimental-config` and into the `cf` CLI as `cf/config`,
+  which is a one-line re-export of `@cloudflare/config/public`. Depending on
+  `cf` instead would break the one-Miniflare, one-Workerd property above: it
+  pins its own for the CLI half, measured at about 580 MB of `node_modules`
+  (two extra workerd binaries) on 2026-09-28. The generated types still name
+  `cf/config`, so `config/tsconfig.cf-garage.json` maps that specifier to this
+  package. Bump it with the wrangler pin when a new wrangler commit's generated
+  types need a newer version; `cf`'s own dependency on it shows which.
 - Oxc Minify 0.151.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
