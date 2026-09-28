@@ -7,6 +7,7 @@ import {
   test,
   zlibConstants,
 } from "./contract-shared.ts";
+import { asRecord } from "../src/worker/lib/parse.ts";
 
 // ── the Reader lens (/lens/read, lens-reader/) ───────────────────────────────
 // The Reader lens is the one /lens surface that lives in a DIFFERENT Worker, so
@@ -31,21 +32,26 @@ test("the reader's rate-limit message quotes the ceiling wrangler declares", asy
   const constant = src.match(/export const READER_LIMIT_PER_MIN = (\d+)/);
   assert.ok(constant, "reader.js no longer exports READER_LIMIT_PER_MIN");
   const READER_LIMIT_PER_MIN = Number(constant[1]);
-  const toml = readFileSync("./lens-reader/wrangler.toml", "utf8");
-  const declared = toml.match(/\[\[ratelimits\]\][\s\S]*?simple\s*=\s*\{[^}]*limit\s*=\s*(\d+)/);
-  assert.ok(declared, "lens-reader/wrangler.toml declares no ratelimit");
+  // IMPORTED rather than matched, since lens-reader moved to cloudflare.config.ts
+  // (`cf migrate`, 2026-09-28): the value asserted is the value wrangler reads.
+  const config = (await import("../lens-reader/cloudflare.config.ts")).default;
+  const declared = config.worker.env.READER_RL;
+  assert.equal(declared?.type, "rate-limit", "lens-reader/cloudflare.config.ts declares no READER_RL rate limit");
   // Same discipline as LENS_BUDGETS on the site Worker: the constant is what the
-  // 429 message quotes, the toml is what actually throttles, and a message that
+  // 429 message quotes, the config is what actually throttles, and a message that
   // outlives its limit is worse than no message at all.
-  assert.equal(READER_LIMIT_PER_MIN, Number(declared[1]),
+  assert.equal(READER_LIMIT_PER_MIN, declared.simple.limit,
     "the reader's 429 message would quote a limit the binding does not enforce");
 });
 
-test("the reader minifies its dependency-heavy deploy without losing source locations", () => {
-  const toml = readFileSync("./lens-reader/wrangler.toml", "utf8");
-  assert.match(toml, /^minify\s*=\s*true$/m,
+test("the reader minifies its dependency-heavy deploy without losing source locations", async () => {
+  // The TOOLING half of the new config: wrangler.config.ts, beside the Worker.
+  // asRecord because defineWranglerConfig types its return as a union with the
+  // function form; this file exports the object form.
+  const tooling = asRecord((await import("../lens-reader/wrangler.config.ts")).default) ?? {};
+  assert.equal(tooling.minify, true,
     "the Reader Worker should minify its dependency-heavy production bundle");
-  assert.match(toml, /^upload_source_maps\s*=\s*true$/m,
+  assert.equal(tooling.uploadSourceMaps, true,
     "Reader minification must retain original source locations in Workers Logs");
 });
 

@@ -147,9 +147,13 @@ jobs:
           bun test
           bun x --no-install wrangler deploy --dry-run --x-new-config
 
+      # lwe-ask and lens-reader moved to cloudflare.config.ts with `cf migrate`
+      # on 2026-09-28, so both take the same flag as cf-garage above, and the
+      # upload is byte-identical to the toml era. CI stays on wrangler rather
+      # than `cf`: the cf CLI is a workstation global, not a tree dependency.
       - name: Validate LWE ask Worker config
         working-directory: lwe-ask
-        run: bun x --no-install wrangler deploy --dry-run -c wrangler.toml
+        run: bun x --no-install wrangler deploy --dry-run --x-new-config
 
       # The Reader lens Worker. It installs its OWN deps rather than riding the
       # root workspace: defuddle + linkedom are ~22 MB of node_modules that only
@@ -174,7 +178,7 @@ jobs:
           bun install --frozen-lockfile
           bun run typecheck
           bun test
-          bun x --no-install wrangler deploy --dry-run -c wrangler.toml
+          bun x --no-install wrangler deploy --dry-run --x-new-config
 
       # Transfer the exact tree validated above, including hidden assets and
       # symlinks. This artifact belongs to this run; no cross-run build cache.

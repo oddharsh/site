@@ -34,6 +34,9 @@
     "lwe-ask": {
       "name": "lwe-ask",
       "version": "0.1.0",
+      "devDependencies": {
+        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@f96458c",
+      },
     },
     "serendipity": {
       "name": "serendipity-worker",

@@ -28,7 +28,7 @@ decides which one a given file belongs in:
 | **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …). They stage back to the ROOT of the served tree, so their public URLs are still `/nav.js` and `/luna.css`. Source layout and URL layout are different questions, and only the first one moved. |
 | **`src/dict/`** | `a-dict/`, `p-dict/` and `f-dict/`: the previously shipped bytes of the shell, of each page, and of the site-page family dictionary. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
-| `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. `lwe-ask` and `lens-reader` carry a `wrangler.toml`; **`cf-garage` carries a `cloudflare.config.ts`** and is the repository's one trial of wrangler's experimental TypeScript config, so every wrangler command in that directory needs `--x-new-config` (gotcha 41). |
+| `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. **All three carry a `cloudflare.config.ts`**, wrangler's experimental TypeScript config: cf-garage since 2026-08-23, and lwe-ask and lens-reader since 2026-09-28 through `cf migrate`. So every wrangler command in those directories that reads the config needs `--x-new-config` and runs from the directory itself (gotcha 41). The site Worker stays on `wrangler.jsonc`, because `cf migrate` drops Workflow bindings. |
 | **`tools/`** | **every developer tool.** The build (`build.ts`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
 | **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `derivations.json` (what each committed derived artifact was made FROM, plus its machine-owned `.lock.json`), `tools.json` (the external binaries), `tsconfig.json`. |
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
@@ -4654,7 +4654,7 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     Two announced pieces are not shipped and nothing here should be built on them
     yet: **model-first routing** (ask for a model abstractly, let the gateway pick a
     provider and fail over) and **smart routing**. The first is worth watching,
-    since `lwe-ask/wrangler.toml` already carries a scar from `llama-3.1-8b` being
+    since `lwe-ask/cloudflare.config.ts` already carries a scar from `llama-3.1-8b` being
     deprecated out from under `GEN_MODEL` on 2026-05-30.
 
 24. **The ramp writes the changelog from YOUR WORKING TREE, so pull `main` before
@@ -6186,6 +6186,20 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     the one this entry opened with: `cf` resolves to a `#!/usr/bin/env node` shim and runs,
     while `bun run --bun cf build` puts bun in front of wrangler's config loader
     and is refused by name.
+
+    **`cf migrate` moved lwe-ask and lens-reader onto this format the same day,
+    and refused the site Worker.** Each upload came out byte-identical to its
+    toml (`deploy --dry-run --outdir`, index.js sha256), with every comment
+    carried over by hand, since the generator drops them, and the import pointed
+    at `@cloudflare/config/public` like this file. Run it with `--no-install`,
+    because its default adds `cf` as a dependency. The site Worker stays on
+    `wrangler.jsonc`: `cf migrate --dry-run` reports that Workflow bindings "are
+    not supported by the new config and were not migrated", which would drop
+    `BOOKING_WORKFLOW` and `CENSUS_WORKFLOW` silently. Two traps met on the way:
+    `wrangler tail` refuses `--x-new-config` (while `tail --x-new-config --help`
+    exits 0), so both tail scripts name the Worker instead; and
+    `gen-runtime-types` now reads the two configs by IMPORTING them, since a TS
+    config is a program rather than data.
 
 46. **A re-encode changes the pixels the HISTOGRAMS were computed from, and the
     check that should have caught that compares two files derived from each

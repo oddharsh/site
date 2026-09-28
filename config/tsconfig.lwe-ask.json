@@ -35,5 +35,7 @@
   },
   // A GLOB rather than a file list, so a new module joins the program by
   // existing. The allowlist habit is what let ten client islands go unchecked.
-  "include": ["../lwe-ask/src/**/*.ts", "./.generated/workers-runtime.d.ts"]
+  // cloudflare.config.ts is named here for the reason tsconfig.cf-garage.json
+  // gives: checked beside the Worker it configures (since `cf migrate`, 2026-09-28).
+  "include": ["../lwe-ask/src/**/*.ts", "../lwe-ask/cloudflare.config.ts", "./.generated/workers-runtime.d.ts"]
 }

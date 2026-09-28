@@ -7,7 +7,7 @@
 //
 // The split by capability:
 //   root contract-tests.mjs — everything provable from SOURCE TEXT: the rate
-//     limit against wrangler.toml, the shared SSRF guard, the dependency floor,
+//     limit against cloudflare.config.ts, the shared SSRF guard, the dependency floor,
 //     the dropped tally, the tab labels.
 //   here — everything that has to actually RUN.
 import test from "node:test";

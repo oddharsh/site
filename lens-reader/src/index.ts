@@ -86,7 +86,7 @@ async function overBudget(env, request) {
   try {
     const { success } = await limiter.limit({ key: ip });
     // The message quotes READER_LIMIT_PER_MIN, which a contract test pins to the
-    // ceiling declared in wrangler.toml — same discipline as LENS_BUDGETS on the
+    // ceiling declared in cloudflare.config.ts: same discipline as LENS_BUDGETS on the
     // site Worker, where a message outliving its limit is the failure mode.
     return success ? null : `Reader extraction is limited to ${READER_LIMIT_PER_MIN} per minute per visitor. Try again shortly.`;
   } catch (_e) {
