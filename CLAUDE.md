@@ -905,16 +905,28 @@ worktrees may edit freely, but a worktree is not a release surface.
   | 4 | aadhar-counter | `Counter` back to plain `storage: "sqlite"` | the same command |
   | 5 | aadhar-sh | the class code and the tombstone leave; the class moves into `counter/src` | merge a site PR |
 
+  **Progress: steps 1 and 2 are DONE (2026-09-29), step 3 is its PR.** Step 1
+  went live with #1004's release and step 2 is `aadhar-counter` version
+  `deaa1d2c`. The count read 4455 through both, the same number the KV mirror
+  held beforehand, so the format change kept the storage.
+
   **The site steps edit `cloudflare.config.ts`, since #999 replaced
-  `wrangler.jsonc` (gotcha 48).** Step 1 is already in that file's form:
-  `Counter: exports.durableObject({ storage: "sqlite" })` under `exports`, and
-  no migrations anywhere. Step 3 is a `state` on that export plus
-  `worker: "aadhar-counter"` on the `COUNTER` binding. One thing to do before
-  step 3 merges: `tools/lib/site-config.ts`, which projects the TS config into
-  `.wrangler.site.jsonc` for the commands that refuse `--x-new-config`, knows
-  only created classes and throws on any other `state` by name. Teach it the
-  transferred form first, then check the projection against the legacy shape
-  the step table describes.
+  `wrangler.jsonc` (gotcha 48).** Step 3 in that form is two lines:
+  `Counter: exports.durableObject({ state: "transferred", transferredTo:
+  "aadhar-counter" })` and `COUNTER: bindings.durableObject({ worker:
+  "aadhar-counter", exportName: "Counter" })`. `tools/lib/site-config.ts`
+  projects both into the legacy shape `wrangler.dev.jsonc` carries by hand:
+  `script_name` on the binding whenever `worker` names another Worker, and the
+  tombstone as `{ state: "transferred", transferred_to }`. It refused any state
+  but "created" until step 3 taught it this one, and it still refuses the rest
+  by name.
+
+  **Local dev and the route oracle boot BOTH Workers from step 3 on.** workerd
+  refuses to start a Worker whose binding names a service nobody defined, so
+  `bun run dev`, `dev:remote`, the route oracle and the cron contract test all
+  pass `counter/wrangler.jsonc` as a second Worker, with the site first. Locally
+  the binding works end to end: through the harness, `/hit` counted 0, 1, 2 and
+  a peek read 2 without bumping.
 
   **Rehearsed end to end on 2026-09-28** with a throwaway pair built like this
   one (the source started on a legacy `v1` migration beside worker-type
@@ -932,7 +944,25 @@ worktrees may edit freely, but a worktree is not a release surface.
 
   No request failed at any step and the count never reset. Step 3 is the
   commit: the first request after that deploy was already answered by the
-  target's code. A `versions upload` was accepted in the step 1 state, and
+  target's code.
+
+  **Rehearsed AGAIN on 2026-09-29 along production's real path**, because #999
+  landed between the two: the source went legacy migration, then JSONC
+  `exports` (#1004's shape), then `cloudflare.config.ts` (#999's), and steps 3
+  and 5 were written in the TS form above and deployed with `--x-new-config`,
+  the flag `.github/deploy-wrangler.sh` adds. The count ran 3, 6, 9 (TS
+  conversion), 12 (step 2), 16 to 21 through the step 3 deploy, then 24 and 27,
+  with no failed request and no reset. Two things differed from the JSONC run:
+
+  - **The source's code went on answering for about 20 seconds after the step 3
+    deploy** before the target's took over, which is the new version reaching
+    the edge. The count was continuous across the switch (the source wrote 19,
+    the target read 19 and wrote 20), so it is one object changing hands.
+  - **A `versions upload` of the step 3 config is REFUSED**, code 10061,
+    "Cannot create binding for class 'Probe' in script 'zz-xfer2-dst' because
+    it is not currently configured to implement Durable Objects", and it
+    changed nothing: the source kept counting. So the step 3 PR's branch build
+    goes red on production's real Worker and is harmless. A `versions upload` was accepted in the step 1 state, and
   after step 5 one printed a `Version Preview URL:` that answered 200 THROUGH
   the cross-Worker binding, which is the whole point of the exercise.
 
@@ -948,9 +978,22 @@ worktrees may edit freely, but a worktree is not a release surface.
     before running step 2.
   - **Collapsing steps 3 and 5.** Cloudflare's own sequence keeps the class code
     in the source through the commit, and the rehearsal followed it.
-  - **The branch build of the step 3 PR.** It runs `versions upload` on a
-    lifecycle change, so expect it to be refused. It is not a required check,
-    and the production build is `wrangler deploy`.
+  - **A branch build between steps 3 and 4.** The step 3 PR's own branch build
+    is measured (refused, harmless, above). Any OTHER branch pushed after step 3
+    serves and before step 4 runs was not tried, so run step 4 promptly.
+  - **Step 4 before step 3 serves.** `counter/wrangler.jsonc` holds step 4's
+    config as soon as the step 3 PR merges, and both rehearsals ran step 4 only
+    after step 3. Confirm with `bun run deploy:promote --status` first.
+
+  **The FIRST deploy of a new Worker can fail after it succeeds.** Step 2's
+  first run uploaded `aadhar-counter` and recorded the pending transfer, then
+  exited 1 on `10007 This Worker does not exist`: wrangler 4.143 reads the new
+  Worker back through `/workers/workers/<name>` two milliseconds after creating
+  it, to reconcile its workers.dev settings, and that API had not caught up.
+  Reading the account showed the Worker, its version at 100% and the intended
+  subdomain state, and a rerun exited 0. The rehearsal's own first deploy did not
+  hit it, so it is a race. A Worker that already exists never takes that path,
+  which is why step 4 cannot meet it.
 
   Check after each site step: `/hit?peek=1` keeps counting from where it was,
   and a coffee booking still claims its slot. After step 5, a branch build's

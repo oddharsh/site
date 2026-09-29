@@ -300,7 +300,12 @@ test("every configured cron reaches its job, completes, and makes no request no 
   const { alg: _alg, ...jwk } = await crypto.subtle.exportKey("jwk", pair.privateKey);
 
   const server = createTestHarness({
-    workers: [{ configPath: join(dir, "wrangler.jsonc"), secrets: { RN_SIGNING_KEY_JWK: JSON.stringify(jwk) } }],
+    // aadhar-counter boots beside the site: COUNTER binds it since step 3 of
+    // "Moving Counter out", and workerd refuses a binding to an undefined service.
+    workers: [
+      { configPath: join(dir, "wrangler.jsonc"), secrets: { RN_SIGNING_KEY_JWK: JSON.stringify(jwk) } },
+      { configPath: at("counter/wrangler.jsonc") },
+    ],
   });
   try {
     await server.listen();

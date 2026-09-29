@@ -86,7 +86,16 @@ if (remote) {
   config = "./.wrangler.remote.jsonc";
 }
 
-const server = createTestHarness({ workers: [{ configPath: config, prebuiltWorkerDir: values.prebuilt }] });
+// The site's COUNTER binding names the aadhar-counter Worker since step 3 of
+// "Moving Counter out" (CLAUDE.md), and workerd refuses to start a Worker whose
+// binding names a service nobody defined. So the counter boots beside the site:
+// the site stays first, which is the one the harness URL serves.
+const server = createTestHarness({
+  workers: [
+    { configPath: config, prebuiltWorkerDir: values.prebuilt },
+    { configPath: `${root}counter/wrangler.jsonc` },
+  ],
+});
 
 let code = 1;
 try {

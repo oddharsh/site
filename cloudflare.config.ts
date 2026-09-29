@@ -372,9 +372,12 @@ const worker = defineWorker({
     // --dry-run will not catch it.
     SOCIAL_DB: bindings.d1({ name: "aadhar-social", id: "b3ab51c4-da04-40ec-9b36-c7e06611f4ab" }),
 
-    // In-house (no script_name): the Counter class is defined + exported by this
-    // worker (counter.ts -> index.ts). It was cross-script to cf-garage once.
-    COUNTER: bindings.durableObject({ worker: "aadhar-sh", exportName: "Counter" }),
+    // The Counter Durable Object lives in the aadhar-counter Worker (counter/)
+    // since step 3 of "Moving Counter out" (CLAUDE.md): this Worker binds it
+    // there and no longer implements it, which is what lets it have preview
+    // URLs. Same class name, same instances, same storage: the namespace moved
+    // by transfer, so "homepage-visits" and every coffee-slot claim came with it.
+    COUNTER: bindings.durableObject({ worker: "aadhar-counter", exportName: "Counter" }),
 
     // One durable expiry timer per pending coffee booking (cal/src/workflow.ts,
     // re-exported from src/worker/index.ts). Replaced the weekly cron sweep.
@@ -537,7 +540,16 @@ const worker = defineWorker({
     // and kept its storage. What a dry run cannot tell you is whether `versions
     // upload`, this Worker's release path, accepts the same; a branch build is
     // the instrument, since both Workers Builds commands are `versions upload`.
-    Counter: exports.durableObject({ storage: "sqlite" }),
+    //
+    // STEP 3 OF "Moving Counter out": this deploy COMMITS the transfer. The
+    // namespace, every instance and all of their storage now belong to
+    // aadhar-counter, which has been expecting it since step 2. The class code
+    // stays in this Worker until step 5, as Cloudflare's own sequence does,
+    // and step 5 deletes this tombstone with it. Rehearsed on 2026-09-29 in
+    // exactly this syntax: a versions upload of it is REFUSED (10061, so this
+    // PR's branch build goes red and changes nothing), and the real deploy
+    // committed with the count running 16 to 21 through it, no failed request.
+    Counter: exports.durableObject({ state: "transferred", transferredTo: "aadhar-counter" }),
 
     // The two Workflows, by the account-unique name wrangler.jsonc gave them, so
     // existing instances keep their identity across the format change.

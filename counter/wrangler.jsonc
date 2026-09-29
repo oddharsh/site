@@ -9,13 +9,19 @@
 // THE TRANSFER IS FIVE DEPLOYS, ALTERNATING, and this file is written for the
 // one it is at. CLAUDE.md "Moving Counter out" has the sequence and the
 // throwaway rehearsal that measured it (no failed request, no reset count):
-//   1. aadhar-sh declares Counter in `exports` (sqlite)      <- site PR
-//   2. THIS Worker: Counter "expecting-transfer"             <- this file, now
+//   1. aadhar-sh declares Counter in `exports` (sqlite)      <- done 2026-09-29
+//   2. THIS Worker: Counter "expecting-transfer"             <- done 2026-09-29
 //   3. aadhar-sh: Counter "transferred", COUNTER binds here  <- site PR
-//   4. THIS Worker: Counter back to plain sqlite
+//   4. THIS Worker: Counter back to plain sqlite             <- this file, now
 //   5. aadhar-sh drops the class code and the tombstone      <- site PR
-// Step 2 must not run before step 1 is SERVING in production: the target names
-// a source class that has to exist in the exports form.
+//
+// DEPLOY THIS ONLY ONCE STEP 3 IS SERVING. Until aadhar-sh's step 3 deploy
+// commits the transfer, this Worker is still waiting for the namespace, and
+// what a plain `storage: "sqlite"` does to a transfer still pending was never
+// measured: both rehearsals ran this step after step 3 only. The plausible
+// outcome is a fresh, empty class of its own, so treat an early deploy as
+// unsafe. Confirm with `bun run deploy:promote --status` that the serving
+// aadhar-sh version is the step 3 build before running the command above.
 {
   "name": "aadhar-counter",
   "account_id": "1c99acdb6141579023fb97d24261ea58",
@@ -30,11 +36,6 @@
   "observability": { "enabled": true },
   "exports": {
     "default": { "type": "worker" },
-    "Counter": {
-      "type": "durable-object",
-      "storage": "sqlite",
-      "state": "expecting-transfer",
-      "transfer_from": "aadhar-sh"
-    }
+    "Counter": { "type": "durable-object", "storage": "sqlite" }
   }
 }
