@@ -58,7 +58,8 @@
 // `wrangler build --x-new-config --x-cf-build-output` writes, sha256 for sha256.
 // cf is a workstation global (`bun add -g cf`), never a tree dependency,
 // because its CLI half pins a second Miniflare and Workerd; CI stays on the
-// wrangler step above.
+// wrangler step above. lwe-ask and lens-reader followed this file onto the
+// format the same day, through `cf migrate`.
 
 // THE HELPERS MOVED AGAIN, and this import is ahead of the wrangler pin on
 // purpose. workers-sdk#15914 took them out of `wrangler/experimental-config`

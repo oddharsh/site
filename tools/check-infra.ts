@@ -267,12 +267,15 @@ async function resolveWithFallback(name: string, type: string): Promise<DnsResol
 // matches every shape and asserts nothing about any of them.
 const AUX_CONFIGS = [
   { path: "cf-garage/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
-  { path: "lwe-ask/wrangler.toml", key: "account_id", pattern: /^\s*account_id\s*=\s*"([^"]+)"/m },
-  { path: "lens-reader/wrangler.toml", key: "account_id", pattern: /^\s*account_id\s*=\s*"([^"]+)"/m },
+  // lwe-ask and lens-reader joined cf-garage on 2026-09-28 (`cf migrate`), so all
+  // three rows share one shape today. They stay three rows rather than a loop
+  // over a directory list for the reason above: the next format is a row.
+  { path: "lwe-ask/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
+  { path: "lens-reader/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
 ];
 
 async function checkTree(infra, wrangler, aux) {
-  const lwe = aux.get("lwe-ask/wrangler.toml");
+  const lwe = aux.get("lwe-ask/cloudflare.config.ts");
   // Binding names in infra.json must exist in the config that owns them. This
   // is the join that lets infra.json stay ID-free: wrangler.jsonc remains the
   // single source for IDs, and this stops the two describing different worlds.
@@ -280,9 +283,12 @@ async function checkTree(infra, wrangler, aux) {
   for (const n of wrangler.kv_namespaces || []) declared.set(n.binding, { kind: "kv", id: n.id });
   for (const b of wrangler.r2_buckets || []) declared.set(b.binding, { kind: "r2", name: b.bucket_name });
   for (const d of wrangler.d1_databases || []) declared.set(d.binding, { kind: "d1", id: d.database_id, name: d.database_name });
-  if (/binding\s*=\s*"VECTORIZE"/.test(lwe)) {
-    declared.set("VECTORIZE", { kind: "vectorize", name: (lwe.match(/index_name\s*=\s*"([^"]+)"/) || [])[1] });
-  }
+  // The binding NAME is the env key and the index is `name:` on the helper,
+  // since lwe-ask moved to cloudflare.config.ts (2026-09-28). A match that stops
+  // finding it reports the binding as unbound below, so a format change fails
+  // loudly rather than skipping the join.
+  const vectorize = lwe.match(/^\s*VECTORIZE:\s*bindings\.vectorize\(\{\s*name:\s*"([^"]+)"/m);
+  if (vectorize) declared.set("VECTORIZE", { kind: "vectorize", name: vectorize[1] });
 
   const wanted = [
     ...(infra.resources.kv_namespaces || []).map((r) => [r.binding, "kv", r.title]),
