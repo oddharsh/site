@@ -345,6 +345,18 @@ cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 # add-photos.sh actually runs. Workstation-only: it reads the SOOC originals.
 bun run zenc:bench
 
+# OPTIMIZING a knob (bytes, an encoder setting, a dictionary) goes through
+# tools/lib/hillclimb.ts rather than a one-off loop. It splits the items by a
+# hash of their names (70/30), measures a noise band, and keeps a change only if
+# it clears that band on train AND on held-out test. Train up with test flat
+# means overfit, and the loop reverts it. It also logs every round to a JSONL
+# ledger and stops after 3 flat rounds to name the worst items. The brotli band
+# is RECENTRED on zero by default: random deletions save bytes on their own, so
+# the raw band calls a real whitespace strip a regression. Pass
+# `against: "arbitrary"` only to ask whether a change beats deleting that many
+# arbitrary bytes. tools/family-holdout.ts is the temporal version and its first
+# user; it retired the family dictionary's tails (#1005).
+
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
 # NB: the photo manifest is NOT a cache anymore — the worker bundles
 # photo-index.json + hashes.json, so a deploy replaces the pool atomically
