@@ -49,8 +49,10 @@
       "The other three are the AUXILIARY Workers, pinned 2026-08-21 after a",
       "non-interactive deploy of lwe-ask failed on exactly the error this block",
       "was written about. cf-garage, lwe-ask and lens-reader each deploy from",
-      "their own directory with -c wrangler.toml, so wrangler resolves the",
-      "account from THAT file and never reads wrangler.jsonc at all. Until they",
+      "their own directory (with -c wrangler.toml then; all three read a",
+      "cloudflare.config.ts through --x-new-config since 2026-09-28), so",
+      "wrangler resolves the account from THAT file and never reads",
+      "wrangler.jsonc at all. Until they",
       "were pinned the answer came from ~/.wrangler/cache/wrangler-account.json,",
       "which only an interactive prompt writes, so whether a deploy worked",
       "depended on machine-local cache state rather than on anything in the",
@@ -80,8 +82,8 @@
       "wrangler.dev.jsonc account_id",
       "wrangler.dev.jsonc vars.CF_ACCOUNT_ID",
       "cf-garage/cloudflare.config.ts accountId",
-      "lwe-ask/wrangler.toml account_id",
-      "lens-reader/wrangler.toml account_id",
+      "lwe-ask/cloudflare.config.ts accountId",
+      "lens-reader/cloudflare.config.ts accountId",
       "counter/wrangler.jsonc account_id"
     ]
   },
@@ -285,7 +287,7 @@
       { "binding": "SOCIAL_DB", "database": "aadhar-social", "why": "Inbound webmentions behind /inbox, plus the outbound send ledger. Deliberately NOT aadhar-restore: this is moderated, mutable content written by strangers, where checkpoints is the site's own append-only history." }
     ],
     "vectorize_indexes": [
-      { "binding": "VECTORIZE", "index": "lwe-passages", "config": "lwe-ask/wrangler.toml", "why": "Passage index for the /lwe/ask RAG endpoint. Created once by hand; the create command survives only as a comment in that config." }
+      { "binding": "VECTORIZE", "index": "lwe-passages", "config": "lwe-ask/cloudflare.config.ts", "why": "Passage index for the /lwe/ask RAG endpoint. Created once by hand; the create command survives only as a comment in that config." }
     ]
   },
 
@@ -294,8 +296,8 @@
     "expected": [
       { "name": "aadhar-sh", "config": "wrangler.jsonc", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
       { "name": "cf-garage", "config": "cf-garage/cloudflare.config.ts", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
-      { "name": "lwe-ask", "config": "lwe-ask/wrangler.toml", "why": "The /lwe/ask RAG endpoints." },
-      { "name": "lens-reader", "config": "lens-reader/wrangler.toml", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE because Readability needs a DOM Document, and linkedom supplying one costs 94.6 KB gzip on its own against a site bundle already over its 204.24 KiB budget. The second reason this note used to give, run_worker_first's 100-rule cap, EXPIRED when the eight exact /lens rows were folded to /lens + /lens/* and the config dropped to 94; the size reason is doing the work alone now. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
+      { "name": "lwe-ask", "config": "lwe-ask/cloudflare.config.ts", "why": "The /lwe/ask RAG endpoints." },
+      { "name": "lens-reader", "config": "lens-reader/cloudflare.config.ts", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE because Readability needs a DOM Document, and linkedom supplying one costs 94.6 KB gzip on its own against a site bundle already over its 204.24 KiB budget. The second reason this note used to give, run_worker_first's 100-rule cap, EXPIRED when the eight exact /lens rows were folded to /lens + /lens/* and the config dropped to 94; the size reason is doing the work alone now. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
     ],
     "retired": [
       {

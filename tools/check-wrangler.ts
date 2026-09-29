@@ -86,8 +86,19 @@ if (!manifests.includes("package.json")) throw new Error("Wrangler check found n
 for (const manifest of manifests.filter((name) => name !== "package.json")) {
   const project = path.dirname(manifest);
   const pkg = await readJson(manifest);
-  if (["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"].some((kind) => pkg[kind]?.wrangler !== undefined)) {
-    errors.push(`${project}: package.json must not declare Wrangler; use the root pin ${expected}`);
+  // EQUALITY, not absence, since 2026-09-28. The `cf` CLI finds a project's dev
+  // server by reading THAT project's manifest and does not walk up to the
+  // workspace root, so cf-garage has to name wrangler for `cf build` to run at
+  // all. A declaration is allowed when it is the root pin byte for byte, and
+  // only as a devDependency; under bun's isolated linker the same URL resolves
+  // to the same store entry, which the realpath check below still asserts.
+  // Absence could never catch a root bump leaving a project behind, because no
+  // project could name a version; equality can.
+  for (const kind of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
+    const declared = pkg[kind]?.wrangler;
+    if (declared === undefined) continue;
+    if (kind !== "devDependencies") errors.push(`${project}: declares Wrangler under ${kind}; only devDependencies may name it, and only as the root pin ${rootDeclared}`);
+    else if (declared !== rootDeclared) errors.push(`${project}: declares Wrangler ${JSON.stringify(declared)}, which is not the root pin ${JSON.stringify(rootDeclared)}`);
   }
   try {
     const resolved = await realpath(createRequire(path.join(ROOT, manifest)).resolve("wrangler/package.json"));

@@ -103,7 +103,9 @@ export const SUB_MANIFEST_POLICY = [
     manifest: "cf-garage/package.json",
     kind: "npm",
     aliases: [],
-    versionless: new Map(),
+    versionless: new Map([
+      ["wrangler", "the root's exact pkg.pr.new commit URL, restated so the `cf` CLI finds a dev server in cf-garage's own manifest; check-wrangler holds the two byte-equal and bump-wrangler-pin moves both, so the root line in DEPENDENCIES.md is its version"],
+    ]),
   },
   {
     manifest: "tools/photos/zenc/Cargo.toml",

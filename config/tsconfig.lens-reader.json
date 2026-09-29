@@ -38,5 +38,7 @@
     "strictNullChecks": true,
     "strict": false
   },
-  "include": ["../lens-reader/src/**/*.ts", "./.generated/workers-runtime.d.ts"]
+  // Both halves of the config (since `cf migrate`, 2026-09-28) are named here for
+  // the reason tsconfig.cf-garage.json gives; wrangler.config.ts is the tooling half.
+  "include": ["../lens-reader/src/**/*.ts", "../lens-reader/cloudflare.config.ts", "../lens-reader/wrangler.config.ts", "./.generated/workers-runtime.d.ts"]
 }

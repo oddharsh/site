@@ -711,10 +711,29 @@ the reason, rather than written here with the caret quietly dropped.
   postcss, the `nanoid` override and a second esbuild: 68 lockfile entries for
   one runner, and one Dependabot lane that could split the miniflare stack.
 
-- **`cf-garage/`** declares no package dependencies. Its one browser operation
+- **`cf-garage/`** declares no runtime dependencies. Its one browser operation
   calls the native Browser Run `quickAction("screenshot", ...)` binding directly;
   pulling a general-purpose CDP client into this separately deployed demo Worker
   made a 146.26 KiB gzip bundle where the native action produces 2.77 KiB gzip.
+
+  It declares ONE dev dependency since 2026-09-28: `wrangler`, as the root's
+  exact pkg.pr.new URL, and that line exists for the `cf` CLI. `lwe-ask/`
+  carries the same line for the same reason; `lens-reader/` cannot, being
+  outside the workspace with its own lockfile, so cf does not run there. cf finds a
+  project's dev server by reading that project's own manifest and never walks
+  up to the workspace root, so without it `cf build` refuses with "No
+  Cloudflare dev-server is installed in this project." Under bun's isolated
+  linker the same URL resolves to the same store entry, so this adds 3 lines to
+  `bun.lock` and zero packages. `check-wrangler` holds it to the root pin byte
+  for byte, and `wrangler:pin` moves both in one write.
+
+  **`cf` itself is NOT a dependency here, and that is deliberate.** Installed
+  into the tree it pins its own Miniflare and Workerd for its CLI half
+  (`5.20260923.0-alpha` and `1.20260923.1` at beta.1, measured the same day),
+  which breaks the one-Miniflare, one-Workerd property the Wrangler line above
+  rests on. It is a workstation global instead, `bun add -g cf`, the bun form
+  of Cloudflare's `npm i -g cf`. cf-garage deploys by hand and CI stays on
+  wrangler, so nothing that gates a merge ever runs it.
 
 
 <a id="evaluated-and-declined-dmmulroyanti-slop"></a>

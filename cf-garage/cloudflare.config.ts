@@ -39,45 +39,27 @@
 // !== false`, so an ABSENT block collects package dependencies exactly like an
 // explicit `true` does. Verified by reading wrangler's own upload path rather
 // than by dry-run, since a dry run never reports it.
-// THE `cf` CLI WAS TRIALLED HERE ON 2026-09-08 AND CANNOT TAKE THIS WORKER YET,
-// for two independent reasons that are both structural rather than polish. It is
-// Cloudflare's own (workers-sdk maintainers, MIT, depends on the same Miniflare 5
-// wrangler already pulls), and their blog calls it a technical preview and
-// explicitly not production-ready. This directory is where it WOULD land first,
-// on the same argument that put the experimental config here: cheapest place to
-// be wrong, and already on `cf`'s native config format.
+// THE `cf` CLI RUNS HERE since 2026-09-28, the day Cloudflare launched it as
+// wrangler's successor. It was trialled on 2026-09-08 and refused for two
+// reasons, and both are resolved, one by us and one by them:
 //
-// 1. `cf build` REFUSES a project whose own manifest declares no dev server:
-//    "A project must declare exactly one of the following in its manifest",
-//    listing @cloudflare/vite-plugin, wrangler, and the Python and Rust servers.
-//    It checks `cf-garage/package.json` alone and does not walk up to the
-//    workspace root. Declaring wrangler here is precisely what
-//    `tools/check-wrangler.ts` fails on ("package.json must not declare
-//    Wrangler; use the root pin"), so satisfying `cf` breaks a required check.
+// 1. `cf build` wants a dev server in THIS project's manifest ("A project must
+//    declare exactly one of the following in its manifest") and does not walk
+//    up to the workspace root. package.json now names the root's exact wrangler
+//    URL, which bun links to the same store entry, and `tools/check-wrangler.ts`
+//    became an EQUALITY test to allow it, where it used to fail on any
+//    declaration at all.
+// 2. `cf deploy --dry-run` no longer asks for a credential. Measured with no
+//    token and no login on cf 1.0.0-beta.5: plain and `--prebuilt` both print
+//    8.84 KiB / 3.07 KiB gzip and exit 0.
 //
-// 2. `cf deploy --dry-run` REQUIRES a credential, and wrangler's does not.
-//    Measured the same day with no token in the environment: `cf deploy
-//    --prebuilt --dry-run` stops at "No authentication token found", while
-//    `wrangler deploy --dry-run --x-new-config` prints all four bindings and
-//    exits 0. CI dry-runs this config with no Cloudflare credential at all, by
-//    the no-write-token rule, so `cf` cannot stand in for that step.
-//
-// THE SEAM THAT DOES WORK, and it is the interesting half. `wrangler build
-// --x-cf-build-output --x-new-config` writes the Build Output API tree that
-// `cf deploy --prebuilt` is designed to consume:
-//
-//     .cloudflare/output/v0/config.json
-//     .cloudflare/output/v0/workers/default/{worker.config.json,bundle/index.js}
-//
-// The top-level config.json is the settings half (`accountId`, a build
-// context), and worker.config.json carries the name, compatibility date and
-// flags, the fetch trigger, all four bindings and the declarative `Counter` DO
-// export. It was one `workers/default/config.json` until the single-default-
-// export change below split the settings out (read 2026-09-21). So the
-// handoff exists today and only the credential rule stands between it and a
-// working `cf` deploy from a built tree. Re-try when `cf` either reads a
-// workspace root for its dev server or stops asking for auth on a dry run;
-// re-trying on a version bump alone measures nothing.
+// For a JavaScript Worker cf DELEGATES to wrangler ("Delegating to Wrangler"),
+// so `cf build` writes the same three files under .cloudflare/output/v0/ that
+// `wrangler build --x-new-config --x-cf-build-output` writes, sha256 for sha256.
+// cf is a workstation global (`bun add -g cf`), never a tree dependency,
+// because its CLI half pins a second Miniflare and Workerd; CI stays on the
+// wrangler step above. lwe-ask and lens-reader followed this file onto the
+// format the same day, through `cf migrate`.
 
 // THE HELPERS MOVED AGAIN, and this import is ahead of the wrangler pin on
 // purpose. workers-sdk#15914 took them out of `wrangler/experimental-config`
