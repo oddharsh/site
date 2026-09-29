@@ -539,24 +539,13 @@ const worker = defineWorker({
     default: exports.worker({ cache: { enabled: false } }),
     CachedPages: exports.worker({ cache: { enabled: true } }),
 
-    // THE MIGRATION LIST IS GONE, and this is its replacement rather than an
-    // omission: `[{ tag: "v1", new_sqlite_classes: ["Counter"] }]` becomes a
-    // STATE on the export, and a bare `{ storage: "sqlite" }` is the created
-    // form. cf-garage made the same move on 2026-08-23 and its first real deploy
-    // (2026-09-21) reconciled the export against the class created under tag v1
-    // and kept its storage. What a dry run cannot tell you is whether `versions
-    // upload`, this Worker's release path, accepts the same; a branch build is
-    // the instrument, since both Workers Builds commands are `versions upload`.
-    //
-    // STEP 3 OF "Moving Counter out": this deploy COMMITS the transfer. The
-    // namespace, every instance and all of their storage now belong to
-    // aadhar-counter, which has been expecting it since step 2. The class code
-    // stays in this Worker until step 5, as Cloudflare's own sequence does,
-    // and step 5 deletes this tombstone with it. Rehearsed on 2026-09-29 in
-    // exactly this syntax: a versions upload of it is REFUSED (10061, so this
-    // PR's branch build goes red and changes nothing), and the real deploy
-    // committed with the count running 16 to 21 through it, no failed request.
-    Counter: exports.durableObject({ state: "transferred", transferredTo: "aadhar-counter" }),
+    // NO DURABLE OBJECT IS IMPLEMENTED HERE, and that is the point. Counter was
+    // created in this Worker by a v1 migration, moved into this map as a
+    // lifecycle state (#1004), and was transferred to aadhar-counter on
+    // 2026-09-29 (#1006) with its storage; this is the step 5 that removes the
+    // tombstone. A Worker that implements a DO gets no preview URLs, so a
+    // durable-object entry reappearing here takes them away again, and
+    // contract-the-perf-probe fails by name if one does.
 
     // The two Workflows, by the account-unique name wrangler.jsonc gave them, so
     // existing instances keep their identity across the format change.
