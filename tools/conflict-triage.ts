@@ -165,6 +165,9 @@ function mergeTree(base: string, head: string, opts: { githubView: boolean; ledg
   }
   const fields = run.stdout.split("\0");
   const tree = fields.shift() ?? "";
+  // Exit 1 ALSO means "not something we can merge" (a bad ref), with nothing on
+  // stdout. Read as a result, that is an empty conflict list: a clean merge.
+  if (!/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(tree)) throw new Instrument(`git merge-tree produced no tree: ${run.stderr.trim() || "(no stderr)"}`);
   const entries: MergeTree["entries"] = [];
   while (fields.length > 0 && fields[0] !== "") {
     const field = fields.shift() ?? "";
@@ -300,6 +303,9 @@ const CODE = /\.(ts|tsx|js|mjs|cjs|rs|css|html|sh)$/;
 
 export function triage(base: string, head: string, label: string): Report {
   const warnings: string[] = [];
+  for (const ref of [base, head]) {
+    if (gitTry(["rev-parse", "--verify", "-q", `${ref}^{commit}`]) === null) throw new Instrument(`not a commit: ${ref}`);
+  }
   const wired = gitTry(["config", "--get", "merge.json.driver"]) !== null;
   // BOTH passes get a throwaway ledger. The GitHub view should never reach a
   // driver, but when that control fails it fails AFTER the merge ran, and the

@@ -145,6 +145,21 @@ test("control: with the drivers unwired, nothing reads as resolved for free", ()
   }
 });
 
+test("a ref git cannot merge is the instrument failing, never a clean merge", () => {
+  // `git merge-tree` exits 1 for "not something we can merge", the same code
+  // as "merged with conflicts", and prints nothing on stdout. Read as a result,
+  // that is an empty conflict list, so the first version of the tool reported a
+  // typo'd base as a PR with no conflicts. Found by greyout's suite.
+  const dir = fixture({ wired: true });
+  try {
+    const out = spawnSync("bun", [tool, "--base", "no-such-ref", "--head", "feature", "--json"], { cwd: dir, encoding: "utf8" });
+    assert.equal(out.status, 2, out.stdout);
+    assert.match(out.stderr, /no-such-ref/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("hunk grades separate keep-both from near-duplicates and size from kind", () => {
   assert.deepEqual(gradeHunk(["a  b"], ["x"], ["a b"]), { clash: "whitespace", grade: "trivial" });
   assert.deepEqual(gradeHunk(["lint: oxlint"], [], ["dev: bun dev"]), { clash: "add-add", grade: "easy" });
