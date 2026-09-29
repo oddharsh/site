@@ -103,6 +103,21 @@ const HERO = {
   "garage-tooltips":  { hero: [".vinyl-demo", ".recipe-grid"] },
   "garage-wire":      { hero: [".knob-panel", ".knob-grid"] },
   "garage-workers":   { hero: [".cf-feat:has(#probe-btn)"], preset: "#probe-btn" },
+  // Five pages that shipped with their og:image meta already pointing at a card
+  // nobody had generated, so every unfurl was a 404 until 2026-09-29.
+  // av2 spans into the verdict line because the broken third tile only reads as
+  // the finding once the sentence under it says the fallback never loaded.
+  "garage-av2":        { span: [".av2-demo", "#av2-verdict"], hero: [".av2-demo"] },
+  // NOT #dd-demo, which is the obvious pick: it fills from a fetch() after load,
+  // so at capture time it can still be the one-line no-JS placeholder, under the
+  // 120px floor, and the card fell to the whole window. The per-route savings
+  // chart is static markup and is the page's thesis as data.
+  "garage-dictionary": { hero: [".dd-chart"] },
+  "garage-htmx":       { hero: [".hb-demo"] },
+  // No interactive demo. The chroma table is the page's one measurement, and at
+  // 111px it misses the single-hero floor, so it spans from its own heading.
+  "garage-ig-prep":    { span: ['h2:has-text("What the chroma choice costs")', "#ig-chroma"], hero: [".ig-conf"] },
+  "garage-resample":   { hero: ["#hl-demo"] },
   // ── lwe ─────────────────────────────────────────────────────────────────
   "lwe-dac":      { hero: ["#demo-ladder", ".demo"] },
   "lwe-drivers":  { hero: ["#demo-motion", ".demo"] },
