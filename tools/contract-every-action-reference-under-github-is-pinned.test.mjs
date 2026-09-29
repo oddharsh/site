@@ -80,7 +80,9 @@ test("the walked file set is every workflow plus every composite, and nothing el
   const walked = new Set(audit.files);
   for (const f of onDisk) assert.ok(walked.has(f), `${f} is a workflow this scan never opened`);
   assert.ok(walked.has(".github/actions/setup-bun/action.yml"), "the setup-bun composite must be scanned, not exempted for being local");
-  assert.equal(audit.files.length, onDisk.length + 1, `walked ${audit.files.join(", ")}`);
+  const composites = (await readdir(join(root, ".github/actions"))).map((d) => `.github/actions/${d}/action.yml`);
+  for (const f of composites) assert.ok(walked.has(f), `${f} is a composite this scan never opened`);
+  assert.equal(audit.files.length, onDisk.length + composites.length, `walked ${audit.files.join(", ")}`);
 });
 
 test("the committed tree has no unpinned, unreadable or unresolvable reference", async () => {

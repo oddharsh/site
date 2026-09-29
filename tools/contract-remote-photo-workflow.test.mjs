@@ -94,6 +94,11 @@ for (const [routine, paths] of Object.entries(artifacts)) test(`remote ${routine
   const git = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
   await fixture(async ({ root, put, command, shell, trace }) => {
     execFileSync(git, ["init", "-q"], { cwd: root });
+    // The commit identity is .github/actions/bot-pr-token's job, in the step
+    // before this one, so the fixture stands in for it. Without this the step
+    // passes only on a machine with a global git identity, which CI is not.
+    execFileSync(git, ["config", "user.name", "Fixture"], { cwd: root });
+    execFileSync(git, ["config", "user.email", "fixture@example.com"], { cwd: root });
     await put(".gitignore", "bin/\ncalls\n");
     await put("unrelated.txt", "baseline");
     execFileSync(git, ["add", "."], { cwd: root });

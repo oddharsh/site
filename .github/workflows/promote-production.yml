@@ -35,6 +35,9 @@ jobs:
       url: https://aadhar.sh
     env:
       RELEASE_SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
+    outputs:
+      before: ${{ steps.before.outputs.version }}
+      promoted: ${{ steps.promote.outputs.promoted }}
 
     steps:
       - name: Require the tested commit to still be current main
@@ -60,7 +63,28 @@ jobs:
             exit 1
           fi
 
+      # What production serves BEFORE the push, so the job below can tell when
+      # Workers Builds has put the new version live. Read over plain HTTPS; no
+      # credential. Empty on a failed read, and the job below then skips.
+      #
+      # SAMPLED, each read with its own Cloudflare-Workers-Version-Key. Version
+      # affinity pins a client IP to one side of a split, and the job below runs
+      # on a different runner, so one read each side compared two halves of the
+      # SAME split and called the release live after 7 seconds (2026-09-28, the
+      # first run, against the old ramp's 10/90). A per-request key is exempt from
+      # the affinity rule, so eight of them see every version that is serving.
+      - name: Record the versions serving now
+        id: before
+        run: |
+          v="$(for i in 1 2 3 4 5 6 7 8; do
+                curl -fsS --max-time 10 -H "Cloudflare-Workers-Version-Key: promote-$RANDOM-$i" https://aadhar.sh/whoareyou.json \
+                  | jq -r '[.groups[].fields[] | select(.k == "Serving version") | .v][0] // empty' || true
+              done | sort -u | paste -sd ' ' -)"
+          echo "serving before promotion: ${v:-unknown}"
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
+
       - name: Promote exact tested commit to production
+        id: promote
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -77,10 +101,9 @@ jobs:
               -f ref="${ref}" \
               -f sha="${RELEASE_SHA}" >/dev/null
           fi
+          echo "promoted=true" >> "$GITHUB_OUTPUT"
           echo "Promoted ${RELEASE_SHA} to ${ref}."
-          echo "Cloudflare Workers Builds will now UPLOAD this commit as a Worker version."
-          echo "It does NOT move traffic: the deploy command is 'wrangler versions upload'."
-          echo "Ramp production will canary it at 10%, then wait for approval of the full ramp."
+          echo "Cloudflare Workers Builds will now deploy this commit at 100% ('wrangler deploy')."
 
       - name: Publish promotion record
         if: always()
@@ -92,16 +115,83 @@ jobs:
             echo "- release branch: \`production\`"
             echo "- publisher: Cloudflare Workers Builds"
             echo "- target: the aadhar-sh Worker (homepage, Lens, coffee, Serendipity)"
-            echo "- effect: **uploads a version, moves no traffic**"
+            echo "- effect: **deploys at 100%** once Workers Builds finishes"
             echo ""
-            echo "Workers Builds uploads the version. Follow the **Ramp production**"
-            echo "workflow for the automatic 10% canary, then inspect the new version"
-            echo "before approving **50% then 100%** in the production-full environment."
-            echo ""
-            echo "For the workstation fallback, inspect the target first:"
+            echo "To see what is serving, or undo a bad release, from a workstation:"
             echo '```bash'
-            echo "bun run deploy:promote --dry-run"
+            echo "bun run deploy:promote --status"
+            echo "bun run deploy:promote --rollback"
             echo '```'
             echo ""
-            echo "See [the release runbook](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${RELEASE_SHA}/docs/MAINTENANCE.md#cicd-release-path) for ramp, status, and rollback commands."
+            echo "See [the release runbook](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${RELEASE_SHA}/docs/MAINTENANCE.md#cicd-release-path) for status and rollback commands."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # What the ramp's `verify` job did, moved here when the ramp was deleted on
+  # 2026-09-28. Workers Builds deploys at 100% a few minutes after the push
+  # above, so this waits for /whoareyou.json to report a different version,
+  # then checks the dictionary tiers against it and dispatches the roll, so a
+  # release that re-mints shell assets gets its dictionaries committed before
+  # the next one. No Cloudflare credential: both checks read production over
+  # HTTPS. workflow_dispatch is the one event the default token can create that
+  # still starts a run; the nightly schedule stays as the backstop.
+  after-release:
+    name: Post-release checks
+    needs: promote
+    if: ${{ needs.promote.outputs.promoted == 'true' && needs.promote.outputs.before != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Wait for Workers Builds to deploy the release
+        id: live
+        env:
+          BEFORE: ${{ needs.promote.outputs.before }}
+        # Deployed means EVERY sample agrees on one version, and it is not one
+        # of the versions serving before the push. A still-split production, or
+        # the other half of an old split, never satisfies both.
+        run: |
+          for attempt in $(seq 1 40); do
+            seen="$(for i in 1 2 3 4 5 6 7 8; do
+                      curl -fsS --max-time 10 -H "Cloudflare-Workers-Version-Key: after-$RANDOM-$i" https://aadhar.sh/whoareyou.json \
+                        | jq -r '[.groups[].fields[] | select(.k == "Serving version") | .v][0] // empty' || true
+                    done | sort -u)"
+            if [ "$(printf '%s\n' "$seen" | grep -c .)" = 1 ]; then
+              case " ${BEFORE} " in
+                *" ${seen} "*) ;;
+                *) echo "now serving ${seen} alone (was ${BEFORE})"
+                   echo "deployed=true" >> "$GITHUB_OUTPUT"
+                   exit 0 ;;
+              esac
+            fi
+            sleep 30
+          done
+          echo "::warning::production still serves ${BEFORE} after 20 minutes; the Workers Builds deploy may have failed. Skipping the dictionary checks."
+
+      - name: Check out main
+        if: steps.live.outputs.deployed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up bun
+        if: steps.live.outputs.deployed == 'true'
+        uses: ./.github/actions/setup-bun
+
+      - name: Install dependencies
+        if: steps.live.outputs.deployed == 'true'
+        run: bun install --frozen-lockfile
+
+      # Advisory: a stale dictionary tier is a lost optimisation, not an outage.
+      - name: Dictionary tiers against live production
+        if: steps.live.outputs.deployed == 'true'
+        continue-on-error: true
+        run: bun run dcz:check
+
+      - name: Roll the dictionaries onto the release
+        if: steps.live.outputs.deployed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run dictionary-roll.yml --repo "$GITHUB_REPOSITORY" --ref main

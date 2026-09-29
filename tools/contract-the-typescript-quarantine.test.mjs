@@ -93,7 +93,6 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
 
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
   const rootTypecheck = pkg.scripts.typecheck;
-  const ci = await readFile(new URL(".github/workflows/ci.yml", ROOT), "utf8");
 
   const ranBy = new Map();
   const missing = [];
@@ -115,12 +114,10 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
       missing.push(`${name}: ${config} exists but neither the root typecheck nor ${name}/package.json runs it`);
       continue;
     }
-    // CI has to invoke it inside THAT project's step, which is the step that
-    // installs the dependencies the program needs.
-    const step = ci.indexOf(`working-directory: ${name}`);
-    const runs = step !== -1 && ci.slice(step, step + 800).includes("bun run typecheck");
-    if (!runs) missing.push(`${name}: has its own typecheck script, but ci.yml never runs it in its own step`);
-    else ranBy.set(config, name);
+    // Since 2026-09-28 CI no longer runs the auxiliary Workers' own steps, so
+    // the project's script IS the runner: `bun run typecheck` from its own
+    // directory, before deploying it.
+    ranBy.set(config, name);
   }
   assert.deepEqual(missing, [],
     `an auxiliary Worker is unchecked:\n  ${missing.join("\n  ")}`);

@@ -848,7 +848,19 @@ const SHELLS = [
   // unchanged and this one is now minified. Measured: 4,305 B on the wire at the
   // edge's q4 against 2,833 minified with a q11 twin, on 12 pages.
   ["lwe/ask.js", "/lwe/ask.src.js", "lwe-q"],
+  // the vendored @chenglou/pretext 0.0.7 that /garage/pretext imports. It came
+  // prebuilt by its own bundler and shipped from public/ unchanged until
+  // 2026-09-28; oxc takes it 12,974 -> 12,564 B at q11 (-3.2%). The marker is an
+  // export NAME, which survives minification by construction, so losing it
+  // means the module lost its public surface and the page's import would break.
+  ["garage/pretext.lib.js", "/garage/pretext.lib.src.js", "prepareWithSegments"],
 ];
+
+// SHELLS rows that are ES MODULES rather than classic scripts. OXC_MINIFY_OPTIONS
+// parses as a script (module: false), which refuses `export`. A module's
+// top-level names are module-scoped rather than globals, so mangling them is
+// safe and is where most of this file's saving comes from.
+const MODULE_SHELLS = new Set(["garage/pretext.lib.js"]);
 
 // EVERY client script is a SHELLS row, or is sw.js. A file missing from the list
 // ships readable and unminified with no .src.js twin and, the sharper half, no
@@ -861,7 +873,9 @@ const SHELLS = [
 // list is its reason.
 {
   const rows = new Map(SHELLS.map(([file, , marker]) => [file, marker]));
-  const missing = (await readdir("src/client")).filter((f) => f.endsWith(".js") && f !== "sw.js" && !rows.has(f));
+  // Recursive, because two rows (lwe/ask.js, garage/pretext.lib.js) live in a
+  // subdirectory, and a top-level read could not see a third one missing.
+  const missing = (await readdir("src/client", { recursive: true })).filter((f) => f.endsWith(".js") && f !== "sw.js" && !rows.has(f));
   if (missing.length) throw new Error(`SHELLS: ${missing.join(", ")} in src/client but not in the list, so it would ship unminified with no twin and no marker tripwire`);
   const unmarked = [...rows].filter(([, marker]) => !marker).map(([file]) => file);
   if (unmarked.length) throw new Error(`SHELLS: ${unmarked.join(", ")} carries no marker, so a minifier deleting it would pass the build`);
@@ -1159,8 +1173,8 @@ await Promise.all([
 // is exactly why /updates and /restore never got one. Moved below 1f, after the
 // deploy-time documents exist. See the block there.
 
-const minifyJavaScript = (filename, sourceText) => {
-  const result = minifySync(filename, sourceText, OXC_MINIFY_OPTIONS);
+const minifyJavaScript = (filename, sourceText, options: typeof OXC_MINIFY_OPTIONS | object = OXC_MINIFY_OPTIONS) => {
+  const result = minifySync(filename, sourceText, options);
   if (result.errors.length) {
     throw new Error(`${filename}: Oxc parse/minify failed: ${result.errors.map((e) => e.message).join("; ")}`);
   }
@@ -1821,7 +1835,9 @@ for (const [file, srcPath, marker] of SHELLS) {
   const src = await readFile(`src/client/${file}`, "utf8");
   await writeFile(`${OUT}/public/${srcPath.slice(1)}`, src);
 
-  const code = minifyJavaScript(`src/client/${file}`, src);
+  const code = MODULE_SHELLS.has(file)
+    ? minifyJavaScript(`src/client/${file}`, src, { ...OXC_MINIFY_OPTIONS, module: true, mangle: { toplevel: true } })
+    : minifyJavaScript(`src/client/${file}`, src);
   const banner = `/*! minified at deploy - readable source: ${srcPath} */\n`;
   const min = banner + code;
 

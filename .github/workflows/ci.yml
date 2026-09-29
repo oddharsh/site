@@ -21,18 +21,6 @@ on:
 
 permissions:
   contents: read
-  # Listing workflow runs, for the parked-ramp tripwire below and nothing else.
-  # It is the documented key for that endpoint rather than one that merely sounds
-  # right, which this file has been burned by once already (see the
-  # security-events note directly below). A read, on a public repo, of data the
-  # Actions tab shows anyone.
-  actions: read
-  # Deliberately NOT `security-events: read`. It was added on 2026-08-07 for
-  # infra:check's CodeQL default-setup assertion and measured to do nothing: that
-  # endpoint needs the repository *Administration* permission, which is not one of
-  # the keys a workflow may grant its GITHUB_TOKEN, so the call still returned 403.
-  # The assertion is workstation-only by construction. Do not re-add this line
-  # expecting it to turn the check on.
 
 concurrency:
   # A dispatch deliberately does NOT share the PR's group. The whole reason this
@@ -56,8 +44,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  site:
-    name: site validation
+  # ONE job, since 2026-09-28. It was eight (site, native photos, network,
+  # four contract legs crossing bun/node with real/symlinked temp dirs, and a
+  # join), which cost about 2 minutes of wall clock and a lot of YAML for a
+  # personal site. What stayed is what protects the thing that matters here,
+  # the bytes and speed of what ships: lint, types, the build with its perf
+  # budget, derived-artifact freshness, the route oracle, and the bun suite.
+  #
+  # What left, and where it went:
+  #   node + symlink contract legs  `bun run test:node` still exists locally
+  #   network (infra:check, osv, checkpoints:check)  workstation, by hand
+  #   native photos (zenc, histograms)  photos.yml, only when photo code moves
+  #   auxiliary Worker dry-runs  each Worker's own directory, before deploying it
+  #
+  # The job is named `validate` because the `main` ruleset requires a check of
+  # that name from the GitHub Actions app.
+  validate:
+    name: validate
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -66,512 +69,42 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up bun
-        # config/... no longer applies: the version lives in config/bun-pin.json and the
-        # action reads it, so there is one declaration of which bun this repo runs.
         uses: ./.github/actions/setup-bun
 
+      # wrangler and the route oracle run under node (gotcha 38).
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
 
-      - name: Install homepage dependencies
+      - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check deduplicated dependency graph
-        run: bun run deps:dedupe
-
-      - name: Check Wrangler versions and lockfiles
-        run: bun run check-wrangler
-
-      # Report source errors before building or installing the native toolchain.
       - name: Lint
         run: bun run lint
 
-      - name: Typecheck annotated JavaScript
+      - name: Typecheck
         run: bun run typecheck
 
-      # perf-budget owns the build and Worker dry-run. The route oracle below
-      # loads that exact bundle, so all checks exercise one build in this job.
-      - name: Build and validate site Worker and performance budget
+      # perf-budget owns the build and the Worker dry-run; the route oracle
+      # below loads that exact bundle.
+      - name: Build, with the performance budget
         run: bun run perf-budget
 
-      - name: Check photo asset invariants
-        run: bun run photos:check
-
-      # Does every committed derived artifact still describe the bytes it was made
-      # from? photos:check above cannot answer that for the histograms, because it
-      # compares histograms.json against images/meta/, which the build derives FROM
-      # histograms.json: two sides of one source agree whatever the pixels say. This
-      # hashes the INPUTS instead, so a re-encode that skips the bake is caught here
-      # rather than nine days later (gotcha 46). No generator runs and nothing is
-      # written, so it is safe on a shared tree and needs no photo toolchain.
+      # Hashes the INPUTS of every committed derived artifact, so a re-encode
+      # that skips a regeneration fails here (gotcha 46). No toolchain needed.
       - name: Check derived artifacts against their inputs
         run: bun run derive:check
 
-
-      # The route oracle, pre-merge. createTestHarness() boots the site Worker
-      # in-process from perf-budget's dry-run bundle and serves its minified
-      # .build/public tree; verify-routes.ts sweeps that same output. This is
-      # status + content-type + markers for real; it is NOT a data check, since
-      # local KV/R2/D1 come up empty. See MAINTENANCE.md "Verify the whole route
-      # surface" for what the `remote: true` rows sit out and why.
       - name: Verify route surface against a local Worker
         run: bun run routes:check --prebuilt .build/.perfbudget
 
-      - name: Validate LWE and Garage page contracts
-        run: bun run pages:check
-
-      # Only the DECLARATION tier gates here. It reads shell source and needs no
-      # binary present, so it runs anywhere. The presence tier prints what is
-      # absent and passes, because a hosted runner carries none of the photo
-      # toolchain and never runs the pipeline that wants it.
-      - name: Check system tool declaration
-        run: bun run tools:check
-
-      - name: Test coffee Worker
-        run: bun run --filter cal-aadhar-sh test
-
-      # cf-garage is the ONE project on wrangler's experimental TypeScript config
-      # (cf-garage/cloudflare.config.ts), so its dry-run differs from lwe-ask's
-      # below in two ways that go together. `--x-new-config` is required on every
-      # command that reads the file, and `-c` is REFUSED alongside it, because the
-      # loader reads the config from the working directory. That directory is
-      # already pinned by `working-directory` above, so dropping `-c` costs
-      # nothing. `bun x` is deliberately unchanged: it resolves the .bin shim,
-      # whose node shebang runs wrangler under node, which is what the TS config
-      # loader requires (it refuses bun by name). See the file's own header.
-      - name: Validate Cloudflare garage Worker config
-        working-directory: cf-garage
-        run: |
-          bun test
-          bun x --no-install wrangler deploy --dry-run --x-new-config
-
-      # lwe-ask and lens-reader moved to cloudflare.config.ts with `cf migrate`
-      # on 2026-09-28, so both take the same flag as cf-garage above, and the
-      # upload is byte-identical to the toml era. CI stays on wrangler rather
-      # than `cf`: the cf CLI is a workstation global, not a tree dependency.
-      - name: Validate LWE ask Worker config
-        working-directory: lwe-ask
-        run: bun x --no-install wrangler deploy --dry-run --x-new-config
-
-      # The Reader lens Worker. It installs its OWN deps rather than riding the
-      # root workspace: defuddle + linkedom are ~22 MB of node_modules that only
-      # this Worker bundles, and keeping them out of the root install is what
-      # stops them drifting onto the site Worker's dependency surface.
-      #
-      # pnpm needed --ignore-workspace here and bun needs NOTHING for the
-      # WORKSPACE half, measured on the parked branch: a bare `bun install` in
-      # this directory resolved this package.json alone and created
-      # lens-reader/node_modules locally. Do not go looking for a workspace flag
-      # for parity with the pnpm era; there is nothing left to preserve, and the
-      # flag pnpm wanted does not exist here.
-      #
-      # --frozen-lockfile is a DIFFERENT axis and was missing until 2026-08-27:
-      # this was the one install of nine in .github/workflows that let the
-      # resolver pick versions the committed bun.lock does not name, on a Worker
-      # that reaches production. lens-reader/bunfig.toml carries the release-age
-      # floor, since bun resolves bunfig from the CWD and never walks up.
-      - name: Validate Reader lens Worker config and run its tests
-        working-directory: lens-reader
-        run: |
-          bun install --frozen-lockfile
-          bun run typecheck
-          bun test
-          bun x --no-install wrangler deploy --dry-run --x-new-config
-
-      # Transfer the exact tree validated above, including hidden assets and
-      # symlinks. This artifact belongs to this run; no cross-run build cache.
-      - name: Archive the validated build
-        run: tar -cf "$RUNNER_TEMP/site-build.tar" .build
-
-      - name: Share the validated build with contract jobs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: site-build
-          path: ${{ runner.temp }}/site-build.tar
-          compression-level: 1
-          if-no-files-found: error
-          retention-days: 1
-
-  contracts:
-    name: contracts (${{ matrix.runtime }}, ${{ matrix.temp }})
-    needs: site
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        runtime: [bun, node]
-        temp: [real, symlink]
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up bun
-        uses: ./.github/actions/setup-bun
-
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Download this run's validated build
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: site-build
-          path: ${{ runner.temp }}/site-build
-
-      - name: Restore the validated build
-        run: tar -xf "$RUNNER_TEMP/site-build/site-build.tar"
-
-      # Sibling paths catch the macOS symlink case without substring matches.
-      # Both runtimes need it: Node and Bun canonicalize argv[1] differently.
-      - name: Select the temporary-directory shape
-        env:
-          TEMP_SHAPE: ${{ matrix.temp }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/real-tmp"
-          if [ "$TEMP_SHAPE" = symlink ]; then
-            ln -s "$RUNNER_TEMP/real-tmp" "$RUNNER_TEMP/link-tmp"
-            echo "TMPDIR=$RUNNER_TEMP/link-tmp" >> "$GITHUB_ENV"
-          else
-            echo "TMPDIR=$RUNNER_TEMP/real-tmp" >> "$GITHUB_ENV"
-          fi
-
-      # timbrado's watch engine is a cold cargo build here: rustup installs the
-      # pinned toolchain, cargo syncs the index, then compiles. Inside the
-      # suite that ran on one test's 30s clock against 4 parallel files and
-      # timed out intermittently (runs 36294774979, 36285475911). Built here,
-      # it has the job's clock, and a runner that cannot build it fails this
-      # step by name rather than reading watch rows as null.
+      # A cold cargo build; inside the suite it raced one test's 30s clock.
       - name: Build timbrado's watch engine
         run: bun -e 'import { ensureTimbradoEngine } from "./tools/lib/upstream-watches.ts"; console.log(ensureTimbradoEngine())'
 
-      - name: Run the full contract suite
-        env:
-          CONTRACT_SCRIPT: ${{ matrix.runtime == 'bun' && 'test' || 'test:node' }}
-        run: bun run "$CONTRACT_SCRIPT"
+      - name: Run the contract suite
+        run: bun run test
 
-  network:
-    name: network validation
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up bun
-        uses: ./.github/actions/setup-bun
-
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      # infra.json against reality. The tree and DNS tiers need no credential;
-      # the account tier runs only when the read-only token secret exists and
-      # skips cleanly otherwise. Everything this cannot reach (an unreachable
-      # resolver, a missing token) is an advisory, never a failure, so a network
-      # blip cannot redden a PR that only touched CSS.
-      #
-      # Run independently of code validation. A production drift incident must
-      # report its failure without skipping code checks, and network latency
-      # should overlap the tests. The required join still fails on confirmed
-      # drift. This replaces the old ordering rule that put infra last after
-      # an incident on 2026-07-31 skipped unrelated PRs' code checks.
-      #
-      # Still fatal, so drift cannot merge unnoticed. One consequence to know about:
-      # a PR whose whole purpose is to FIX production drift cannot turn its own check
-      # green before it deploys, because the thing it asserts against is the thing it
-      # repairs. That happened the same day (#195) and the documented way out is the
-      # local fallback, `bun run deploy`, followed by a re-run.
-      # The account id is read out of cloudflare.config.ts rather than from a repo
-      # variable. This step said `vars.CLOUDFLARE_ACCOUNT_ID` until 2026-08-12 and
-      # NO repository variable of that name has ever existed, so it expanded to the
-      # empty string on every run.
-      #
-      # HARDENING, not a repair, and worth saying so because the first version of
-      # this comment claimed otherwise. checkApi() falls back to `GET /accounts`
-      # and only degrades when the count is not exactly 1; the scoped CI token sees
-      # exactly one, so the account tier was asserting normally. Measured on either
-      # side of this change: `infra ok: 44 checks passed, 1 skipped or advisory`,
-      # the advisory being the CodeQL note, with no `token sees N accounts` warning
-      # in either run. The two-account fact belongs to the owner's interactive
-      # wrangler login, a DIFFERENT credential from this token.
-      #
-      # What it buys: a value that cannot be silently empty, cannot drift from the
-      # account the deploy targets (it IS that string), and one fewer API call.
-      # release-guard.mjs makes the same helper REQUIRED for ramp.yml, where the
-      # account id is not optional.
-      # Known vulnerabilities across EVERY lockfile in the tree, advisory by
-      # design. It reads osv.dev, which aggregates GHSA, NVD and the per-
-      # ecosystem databases, so it sees more than the GitHub advisories
-      # dependabot alone works from.
-      #
-      # WHAT IT ACTUALLY BUYS IS TIMING, and this block said something else
-      # until 2026-08-14. It claimed `lens-reader` was invisible to dependabot
-      # and that its three dependencies had NO vulnerability coverage at all.
-      # That is false, and the correction is worth keeping because it turns on a
-      # distinction between two dependabot features that read as one:
-      #
-      #   security ALERTS   come from GitHub's DEPENDENCY GRAPH, which indexes
-      #                     every manifest in the repository and does not read
-      #                     dependabot.yml at all. Measured 2026-08-14 against
-      #                     the manifest of THAT day: defuddle, linkedom,
-      #                     turndown and @mixmark-io/domino were all in this
-      #                     repo's SBOM. Read that as a dated record rather than
-      #                     a current package list, because lens-reader's
-      #                     dependency set has been turning over since (defuddle
-      #                     left the day this was written) and the bullet's claim
-      #                     is about the GRAPH, which no package change touches.
-      #                     Alert #13 (extract-zip) was the same finding this
-      #                     step reported until the Puppeteer chain left
-      #                     cf-garage, so the marginal FINDING count was zero.
-      #
-      #   version UPDATES   are scoped strictly to the directories dependabot.yml
-      #                     lists. lens-reader really was missing there, and the
-      #                     fix was five lines in that file rather than this step.
-      #
-      # What survives is the half that has nothing to do with coverage: a
-      # dependabot alert arrives AFTER a merge, and this runs at PR time. That is
-      # the whole justification now, and it is enough on its own. The other three
-      # lockfiles are scanned anyway, because listing them costs a line and
-      # omitting one is how a gap starts.
-      #
-      # NOT the google/osv-scanner-action: it defaults to `upload-sarif: true`
-      # and therefore wants `security-events: write`, which this workflow's
-      # permissions block exists to refuse. Downloading the pinned release binary
-      # also matches how pnpm is installed above — no action, and one version
-      # string rather than a digest to maintain.
-      #
-      # The checksum is pinned, so tampered or corrupted bytes FAIL rather than
-      # run. That is the same reasoning as pinning every action by digest, and it
-      # is deliberately a different case from a network blip, which warns and
-      # skips.
-      #
-      # ADVISORY on findings, FATAL on a broken scan, and the split is the point.
-      # Exit 1 means real findings, and blocking on those would be wrong here:
-      # until 2026-08-16 the one finding was the unfixed extract-zip advisory in
-      # cf-garage's Puppeteer chain. The Worker now uses the native Browser Run
-      # quick action and that entire chain is gone, but a future advisory must
-      # still be reported without training anyone to suppress the scanner. Exit
-      # 127 is different: it means the scan never ran, which is this tree's own
-      # lockfile paths being wrong, and a scanner that cannot tell "clean" from
-      # "did not run" is decoration.
-      #
-      # osv-scanner.toml at the root is the one ignore, by advisory id, with the
-      # measurement written at it: the pkg.pr.new wrangler pin is a tarball URL
-      # that the bun.lock extractor passes through as the version, so a 2023
-      # advisory fires against a 4.x wrangler. The scanner prints the ignore and
-      # its reason in this step's log, and contract-osv-ignore-names-a-url-pin
-      # fails the suite the day the pin is a registry version again and the
-      # entry has not been deleted.
-      - name: Scan lockfiles for known vulnerabilities
-        env:
-          OSV_VERSION: v2.5.0
-          OSV_SHA256: edcfc41d257db36148f065055655fe3fcfc434b0b423ea67468a84c207524e0c
-        run: |
-          url="https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"
-          if ! curl -sSfL --retry 2 --max-time 180 -o /tmp/osv-scanner "$url"; then
-            echo "::warning::could not download osv-scanner ${OSV_VERSION}; skipping the vulnerability scan"
-            exit 0
-          fi
-          if ! echo "${OSV_SHA256}  /tmp/osv-scanner" | sha256sum -c -; then
-            echo "::error::osv-scanner ${OSV_VERSION} did not match its pinned checksum"
-            exit 1
-          fi
-          chmod +x /tmp/osv-scanner
-          set +e
-          /tmp/osv-scanner scan source \
-            --lockfile bun.lock \
-            --lockfile lens-reader/bun.lock \
-            --lockfile tools/photos/zenc/Cargo.lock
-          status=$?
-          set -e
-          case "$status" in
-            0) echo "::notice::osv-scanner found no known vulnerabilities" ;;
-            1) echo "::warning::osv-scanner found known vulnerabilities; advisory, see the table above" ;;
-            *) echo "::error::osv-scanner exited ${status} without completing a scan; a lockfile path is probably wrong"
-               exit 1 ;;
-          esac
-
-      - name: Resolve the account id from cloudflare.config.ts
-        run: bun tools/print-account-id.ts >> "$GITHUB_ENV"
-
-      - name: Check infrastructure declaration
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # Rate-limit headroom for the repository-ruleset tier, nothing more.
-          # The repo is public, so that endpoint reads without a credential at
-          # all; what a token buys is 1000/hr instead of the 60/hr an unauthed
-          # read gets per IP, which shared Actions runners can exhaust. The
-          # workflow's `contents: read` is enough, and a rate-limited read is an
-          # advisory rather than a failure either way. It does NOT unlock the
-          # CodeQL assertion; see the permissions note at the top of this file.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bun run infra:check
-
-      # TRIPWIRE: a ramp parked on the reviewer gate. It lives HERE, outside
-      # ramp.yml's concurrency group, because a jam inside that group cannot be
-      # reported from inside it. That is not hypothetical: run 31644451923 sat
-      # `waiting` for two days and the only visible trace was a handful of
-      # cancelled runs that read as housekeeping.
-      #
-      # What it catches is now DIFFERENT from what it would have caught before
-      # 2026-08-14. `cancel-in-progress: true` stopped a parked ramp deleting
-      # later releases (ramp.yml's concurrency block has that story). It does
-      # nothing about the other half: a canary nobody ever decides on leaves
-      # production split 10/90 indefinitely, and no surface anywhere says so.
-      #
-      # ADVISORY, and deliberately so. Failing here would gate every merge on a
-      # state no PR caused, and would deadlock the one PR able to fix a stuck
-      # ramp, which is the trap infra:check's edge tier documents at length. It
-      # also swallows its own errors: a tripwire that reddens CI when the GitHub
-      # API hiccups gets muted, and a muted tripwire is worse than none.
-      - name: Warn on a ramp parked at the reviewer gate
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Hours before a parked ramp is worth saying something about. Minutes
-          # are the gate working. Overnight is production sitting on a split
-          # nobody is watching.
-          STALE_HOURS: "6"
-        run: |
-          set -uo pipefail
-          runs="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/ramp.yml/runs?status=waiting&per_page=20" \
-            --jq '.workflow_runs[] | "\(.id)\t\(.created_at)\t\(.head_sha[0:8])"' 2>/dev/null || true)"
-          if [ -z "${runs//[[:space:]]/}" ]; then
-            echo "no ramp is parked at the reviewer gate."
-            exit 0
-          fi
-          now="$(date -u +%s)"
-          header=0
-          while IFS="$(printf '\t')" read -r id created sha; do
-            [ -z "${id:-}" ] && continue
-            # GNU date, which ubuntu-latest has, parses the ISO-8601 Z form
-            # directly. If it ever cannot, fall STALE rather than fresh: an
-            # unparseable timestamp defaulting to age 0 would mute the tripwire
-            # permanently and look identical to a healthy repo.
-            started="$(date -u -d "$created" +%s 2>/dev/null || echo 0)"
-            if [ "$started" -eq 0 ]; then
-              age="$STALE_HOURS"
-              echo "::warning::could not parse ${created}; treating run ${id} as stale"
-            else
-              age="$(( (now - started) / 3600 ))"
-            fi
-            if [ "$header" -eq 0 ]; then
-              header=1
-              {
-                echo "## A ramp is parked at the reviewer gate"
-                echo ""
-                echo "Traffic is split until someone approves or cancels it."
-              } >> "$GITHUB_STEP_SUMMARY"
-            fi
-            echo "- run \`${id}\` (\`${sha}\`), waiting ${age}h" >> "$GITHUB_STEP_SUMMARY"
-            echo "ramp ${id} (${sha}) has been waiting ${age}h"
-            if [ "$age" -ge "$STALE_HOURS" ]; then
-              echo "::warning title=Ramp parked ${age}h at the reviewer gate::Run ${id} (${sha}) is still waiting on production-full. Production is on a split nobody has decided. Approve it, or cancel it to free the release path."
-            fi
-          done <<< "$runs"
-          exit 0
-
-      # Does the committed changelog projection still match D1? /updates and
-      # /restore are precomputed at BUILD time, so a stale projection ships the
-      # previous log and looks fine while being wrong.
-      #
-      # This was deliberately unwired ("NOT wired into the PR job by default", its
-      # own header) because it needs a D1 read. It does not need a NEW credential:
-      # `D1:Read` is already one of the six scopes on CLOUDFLARE_API_TOKEN, so this
-      # costs nothing but the call.
-      #
-      # Fatal on drift rather than advisory, which is safe because the script
-      # already tells a STAGED release apart from a rewrite: rows above D1's newest
-      # that form a contiguous tail are reported as pending, not as drift. So a PR
-      # whose whole job is staging v186 passes, and only a row rewritten below D1's
-      # newest, or a broken sequence, fails.
-      #
-      # Tiered on the credential the same way infra:check is. A fork PR cannot read
-      # repository secrets, and failing somebody's PR for not holding a token would
-      # be a worse check than no check.
-      - name: Check the changelog projection against D1
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
-            echo "::notice::no CLOUDFLARE_API_TOKEN (fork PR) — skipping the D1 changelog comparison"
-            exit 0
-          fi
-          bun run checkpoints:check
-
-  native-photos:
-    name: native photo validation
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up native photo toolchain
-        id: native
-        # Select the declared compiler BEFORE computing the Rust cache key.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libavif-dev libavif-bin pkg-config
-          rustup component add clippy
-          echo "cache-key=${ImageOS:?}-${ImageVersion:?}-$(dpkg-query --show --showformat='${Version}' libavif-dev)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore compiled Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: tools/photos/zenc -> target
-          # The action also keys by job, platform, compiler, flags and Cargo
-          # manifests/locks. Include the runner image and native library ABI.
-          key: ${{ steps.native.outputs.cache-key }}
-          cache-bin: false
-          # Rebuild our encoder/C adapter and execute all tests on every run.
-          cache-workspace-crates: false
-
-      - name: Test native photo processing
-        run: |
-          cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
-          cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
-
-      - name: Set up bun
-        uses: ./.github/actions/setup-bun
-
-      # Re-bake every photo's histogram with the zenc THIS tree builds and compare
-      # it byte for byte with the committed public/images/histograms.json. It is
-      # what lets config/derivations.json leave zenc's sources and Cargo.lock out
-      # of the histogram digest: a zenc bump is measured here, on the output,
-      # instead of reading STALE until somebody re-bakes by hand and re-locks
-      # (#871, #985). No credential, no install (the checker imports only node
-      # builtins), and the bumped crates already ran in this job's cargo test.
-      - name: Reproduce the committed histograms
-        run: bun run histograms:check
-
-  validate:
-    name: validate
-    needs: [site, native-photos, network, contracts]
-    # Run even when a dependency fails, is cancelled, or is skipped. GitHub
-    # treats a skipped required job as passing, so the join must fail explicitly.
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    steps:
-      - name: Require every validation job to succeed
-        env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$RESULTS"
-          if ! jq -e 'length > 0 and all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
-            echo "::error::Every validation job must succeed. Failed, cancelled, or skipped checks cannot satisfy validate."
-            exit 1
-          fi
+      - name: Test coffee Worker
+        run: bun run --filter cal-aadhar-sh test
