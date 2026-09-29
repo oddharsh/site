@@ -76,10 +76,18 @@
   // The site Worker's own config, named here for the reason
   // tsconfig.cf-garage.json gives: checked beside the Worker it configures, so a
   // misspelled binding option is a compile error (since 2026-09-28).
+  //
+  // counter/ is the aadhar-counter Worker, which hosts the Counter Durable
+  // Object the site binds by script_name. It is a separate deploy on the SAME
+  // runtime with the same compatibility settings, and its entry re-exports
+  // src/worker/counter.ts, so it belongs to this program rather than one of
+  // its own: a separate `tsc -p` would re-report that file's baselined
+  // diagnostics without the ratchet that tolerates them.
   "include": [
     "../cloudflare.config.ts",
     "../wrangler.config.ts",
     "../cal/src/**/*.ts",
+    "../counter/src/**/*.ts",
     "../src/worker/**/*.ts",
     "../serendipity/**/*.ts",
     "./.generated/workers-runtime.d.ts"

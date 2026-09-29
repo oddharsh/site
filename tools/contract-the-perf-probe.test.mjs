@@ -290,11 +290,18 @@ test("production binds the Durable Object the slot claim needs", async () => {
     assert.ok(counter, `${config} must bind COUNTER for the coffee slot claim`);
     assert.equal(counter.class_name, "Counter");
 
-    // The claim rides the EXISTING class on purpose: a second class needs a
-    // new_sqlite_classes migration, and `wrangler versions upload` cannot apply
-    // one. If someone adds that migration later this assertion should be
-    // revisited deliberately rather than silently outgrown.
-    const classes = (parsed.migrations ?? []).flatMap((m) => m.new_sqlite_classes ?? []);
+    // The claim rides the EXISTING class on purpose: a second class is a
+    // lifecycle change, and `wrangler versions upload` cannot apply one. If
+    // someone adds a class later this assertion should be revisited
+    // deliberately rather than silently outgrown. The class is declared in
+    // `exports` since the Counter move began (CLAUDE.md, "Moving Counter
+    // out"), and a Durable Object there is mutually exclusive with a
+    // `migrations` array, so a migration reappearing is refused as well.
+    assert.equal(parsed.migrations, undefined,
+      `${config} carries a migrations array beside a Durable Object in exports, which wrangler rejects`);
+    const classes = Object.entries(parsed.exports ?? {})
+      .filter(([, e]) => e?.type === "durable-object")
+      .map(([name]) => name);
     assert.deepEqual(classes, ["Counter"],
       `${config} declares Durable Object classes ${JSON.stringify(classes)}; the slot claim assumes Counter is the only one`);
   }

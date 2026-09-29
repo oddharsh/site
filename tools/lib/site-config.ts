@@ -107,17 +107,19 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
     }
   }
 
-  // Worker entrypoints carry their cache switch; DO and Workflow exports are
-  // declared in the legacy shape through bindings + migrations instead.
+  // Worker entrypoints carry their cache switch, and a DO carries its lifecycle
+  // state, which is the legacy `exports` form wrangler.jsonc took in #1004 (step
+  // 1 of moving Counter to its own Worker). A DO in `exports` cannot sit beside
+  // a `migrations` array, so none is emitted. Workflows stay in the legacy
+  // shape through `workflows`.
   const entrypoints: Record<string, unknown> = {};
-  const sqliteClasses: string[] = [];
   for (const [name, raw] of Object.entries(exportsDecl)) {
     const e = need(raw, `exports.${name}`);
     if (e.type === "worker") entrypoints[name] = { type: "worker", cache: { enabled: need(e.cache, `exports.${name}.cache`).enabled } };
     else if (e.type === "durable-object") {
       if (e.state !== undefined && e.state !== "created") throw new Error(`site-config: exports.${name} is a DO in state ${JSON.stringify(e.state)}; the projection only knows created classes`);
       if (e.storage !== "sqlite") throw new Error(`site-config: exports.${name} is a DO with storage ${JSON.stringify(e.storage)}; the projection only knows sqlite`);
-      sqliteClasses.push(name);
+      entrypoints[name] = { type: "durable-object", storage: "sqlite" };
     } else if (e.type !== "workflow") throw new Error(`site-config: exports.${name} has type ${JSON.stringify(e.type)}, which this projection does not know`);
   }
 
@@ -162,10 +164,6 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
   if (r2.length) out.r2_buckets = r2;
   if (d1.length) out.d1_databases = d1;
   if (doBindings.length) out.durable_objects = { bindings: doBindings };
-  // The legacy shape needs a migration to give a DO its sqlite storage (the
-  // harness and `wrangler dev` both read it). "v1" is the tag the class was
-  // created under in production, so a local boot and the account agree.
-  if (sqliteClasses.length) out.migrations = [{ tag: "v1", new_sqlite_classes: sqliteClasses }];
   if (workflows.length) out.workflows = workflows;
   if (browserBinding) out.browser = { binding: browserBinding };
   if (imagesBinding) out.images = { binding: imagesBinding };

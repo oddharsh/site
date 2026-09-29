@@ -1,0 +1,40 @@
+// aadhar-counter: hosts the Counter Durable Object for aadhar-sh.
+//
+// Deployed BY HAND from this directory, never by Workers Builds, and always with
+// `wrangler deploy`: a Durable Object lifecycle change is refused by `versions
+// upload` (error 10211), and every step of the transfer is one.
+//
+//   bun run wrangler deploy -c counter/wrangler.jsonc --x-provision=false --x-auto-create=false
+//
+// THE TRANSFER IS FIVE DEPLOYS, ALTERNATING, and this file is written for the
+// one it is at. CLAUDE.md "Moving Counter out" has the sequence and the
+// throwaway rehearsal that measured it (no failed request, no reset count):
+//   1. aadhar-sh declares Counter in `exports` (sqlite)      <- site PR
+//   2. THIS Worker: Counter "expecting-transfer"             <- this file, now
+//   3. aadhar-sh: Counter "transferred", COUNTER binds here  <- site PR
+//   4. THIS Worker: Counter back to plain sqlite
+//   5. aadhar-sh drops the class code and the tombstone      <- site PR
+// Step 2 must not run before step 1 is SERVING in production: the target names
+// a source class that has to exist in the exports form.
+{
+  "name": "aadhar-counter",
+  "account_id": "1c99acdb6141579023fb97d24261ea58",
+  "main": "src/index.ts",
+  // The class runs under THIS Worker's compatibility settings once the
+  // transfer commits, so they match aadhar-sh's exactly. A drift here changes
+  // the runtime the odometer and the slot claims run on without touching them.
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["enable_request_signal", "new_module_registry"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "exports": {
+    "default": { "type": "worker" },
+    "Counter": {
+      "type": "durable-object",
+      "storage": "sqlite",
+      "state": "expecting-transfer",
+      "transfer_from": "aadhar-sh"
+    }
+  }
+}
