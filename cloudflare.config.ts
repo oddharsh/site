@@ -125,12 +125,11 @@ const worker = defineWorker({
   // real bindings, before it is production. `wrangler deploy --dry-run` and the
   // in-process route harness both stop short of that.
   //
-  // STILL unservable, measured 2026-09-28: this Worker exports the `Counter`
-  // Durable Object, and Cloudflare mints no preview URL for a Worker that
-  // implements one. Every version reads `has_preview: false`. CLAUDE.md,
-  // "Preview URLs are configured ON and have NEVER SERVED", has the evidence,
-  // and "Moving Counter out" is the move that ends it. The line stays so
-  // previews switch on by themselves once the class leaves.
+  // They SERVE since 2026-09-29, and served nothing for the eight weeks before:
+  // this Worker exported the Counter Durable Object, and Cloudflare mints no
+  // preview URL for a Worker that implements one, whatever this line says.
+  // Counter moved to aadhar-counter; CLAUDE.md "Moving Counter out" has it. So
+  // this Worker must implement NO Durable Object, and a contract test holds it.
   //
   // A preview runs production bindings and secrets (Cloudflare has no
   // per-version override), so the Worker guards the host: writes refused,

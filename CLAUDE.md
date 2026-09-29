@@ -618,8 +618,9 @@ worktrees may edit freely, but a worktree is not a release surface.
 - **Reaching `production` deploys at 100%, since 2026-09-28.** Workers Builds
   runs `wrangler deploy` on the `production` branch, so a promoted commit serves
   everyone a few minutes after CI passes on `main`. Branch builds still run
-  `versions upload`, which mints a version and moves no traffic (it gets NO
-  servable preview URL; the Preview URLs entry below has why), and
+  `versions upload`, which mints a version and moves no traffic and, since
+  2026-09-29, a servable preview URL (the Preview URLs entry below has the
+  history), and
   `infra:check` fails if that ever changes, since every branch push builds
   against production's bindings.
 
@@ -874,9 +875,9 @@ worktrees may edit freely, but a worktree is not a release surface.
   account. That is the cheapest place to answer any "will the deploy accept
   this" question: push the branch and read `wrangler versions view` on the alias,
   which the dry run structurally cannot tell you.
-- **Moving Counter out: the `Counter` Durable Object is moving from aadhar-sh
-  to its own Worker, `aadhar-counter` (`counter/`), IN FIVE ALTERNATING
-  DEPLOYS.** Started 2026-09-28. The reason is preview URLs: Cloudflare mints
+- **Moving Counter out: the `Counter` Durable Object MOVED from aadhar-sh to
+  its own Worker, `aadhar-counter` (`counter/`), in five alternating deploys,
+  finished 2026-09-29.** The reason was preview URLs: Cloudflare mints
   no version URL for a Worker that implements a Durable Object, so every
   aadhar-sh version has carried `has_preview: false` since `Counter` moved in
   on 2026-07-01. Binding a class that ANOTHER Worker exports leaves previews
@@ -906,10 +907,33 @@ worktrees may edit freely, but a worktree is not a release surface.
   | 4 | aadhar-counter | `Counter` back to plain `storage: "sqlite"` | the same command |
   | 5 | aadhar-sh | the class code and the tombstone leave; the class moves into `counter/src` | merge a site PR |
 
-  **Progress: steps 1 and 2 are DONE (2026-09-29), step 3 is its PR.** Step 1
-  went live with #1004's release and step 2 is `aadhar-counter` version
-  `deaa1d2c`. The count read 4455 through both, the same number the KV mirror
-  held beforehand, so the format change kept the storage.
+  **All five steps are DONE (2026-09-29), and the count never reset.** It read
+  4455 before step 1 and 4456 after step 4, one real visit apart.
+
+  | step | what landed |
+  |---|---|
+  | 1 | #1004, live from its release; storage kept through the format change |
+  | 2 | `aadhar-counter` version `deaa1d2c` (second run; see the race below) |
+  | 3 | #1006, serving as `fc50de44`; the namespace, id `3dc4967b…`, now belongs to `aadhar-counter` under the SAME id |
+  | 4 | `aadhar-counter` version `3ac02b3b`; Cloudflare reported the transfer record cleared, "No further action required" |
+  | 5 | the class source moved to `counter/src/counter.ts`, and the site config declares no Durable Object |
+
+  **What it bought, measured on step 5's own branch build**, version `8acdb390`:
+  `has_preview: true`, the first aadhar-sh version ever to carry it. Both
+  `8acdb390-aadhar-sh.aadharsh2010.workers.dev` and the branch alias
+  `claude-counter-step5-aadhar-sh.aadharsh2010.workers.dev` answered 200 on
+  `/whoareyou.json` reporting that version, with `x-robots-tag: noindex`, and
+  lib/preview.ts refused `/hit?tick=1` ("writes production state and is
+  disabled on preview URLs") and a POST (403), the first real traffic that
+  guard has ever seen.
+
+  **The invariant it leaves behind: aadhar-sh implements NO Durable Object.** A
+  class reappearing in `cloudflare.config.ts` or `wrangler.dev.jsonc`, in
+  `exports` or through a `migrations` array, takes every preview URL away again
+  with no other symptom, so `contract-the-perf-probe` fails on one by name. A
+  new Durable Object belongs in `aadhar-counter`, or in another Worker, bound
+  here by `script_name`. And **never roll aadhar-sh back to a version older than
+  `fc50de44`**: those bind a class this Worker no longer owns. Roll forward.
 
   **The site steps edit `cloudflare.config.ts`, since #999 replaced
   `wrangler.jsonc` (gotcha 48).** Step 3 in that form is two lines:
@@ -967,8 +991,8 @@ worktrees may edit freely, but a worktree is not a release surface.
   after step 5 one printed a `Version Preview URL:` that answered 200 THROUGH
   the cross-Worker binding, which is the whole point of the exercise.
 
-  Four things the rehearsal did not settle, so treat them as unsafe until they
-  are measured:
+  While the move ran, these were treated as unsafe because no rehearsal
+  settled them. Only the first still applies:
 
   - **Rolling aadhar-sh back across step 1 or step 3.** `deploy:promote
     --rollback` redeploys an existing version, and a version from before step 3
@@ -996,10 +1020,9 @@ worktrees may edit freely, but a worktree is not a release surface.
   hit it, so it is a race. A Worker that already exists never takes that path,
   which is why step 4 cannot meet it.
 
-  Check after each site step: `/hit?peek=1` keeps counting from where it was,
-  and a coffee booking still claims its slot. After step 5, a branch build's
-  version should read `has_preview: true`. `counter/wrangler.jsonc` is written
-  for the step it is at and says which.
+  Local runs keep booting both Workers: `bun run dev`, `dev:remote`, the route
+  oracle and the cron contract test pass `counter/wrangler.jsonc` as a second
+  Worker, because workerd refuses a binding to a service nobody defined.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`
@@ -1049,8 +1072,13 @@ worktrees may edit freely, but a worktree is not a release surface.
   fields are two TRIGGERS in the API, separated by their branch filters, and
   both are declared and checked. Without the scope the section degrades to a
   note naming what is missing, exactly like the other five.
-- **Preview URLs are configured ON and have NEVER SERVED, because this Worker
-  exports a Durable Object.** Measured 2026-09-28. Cloudflare's Preview URLs page
+- **Preview URLs SERVE since 2026-09-29, after eight weeks configured ON and
+  serving nothing, because this Worker exported a Durable Object.** "Moving
+  Counter out" above is the fix and has the measurement that proves it. What
+  follows is the diagnosis as measured on 2026-09-28, kept because the trap
+  outlives the fix: every layer of config said yes while every version said no.
+
+  Measured 2026-09-28. Cloudflare's Preview URLs page
   lists it as a limitation: Workers implementing Durable Objects, Containers or
   Sandboxes get no version URLs. `Counter` moved into this Worker on 2026-07-01
   and previews were switched on in #211 on 2026-08-04, so there was never a
@@ -1088,10 +1116,10 @@ worktrees may edit freely, but a worktree is not a release surface.
   is in the deployment. What does not work is serving a branch at a real URL
   before it is in production, which is the whole thing #211 turned this on for.
 
-  Making previews real means `aadhar-sh` stops exporting `Counter`: host it in
-  another Worker and bind to it with `script_name`. That move is under way as a
-  five-step transfer that keeps the class's data; "Moving Counter out" above has
-  the sequence and the rehearsal. Note that commit 5af65648 moved `Counter` IN
+  Making previews real meant `aadhar-sh` stopping exporting `Counter`: hosting
+  it in another Worker and binding it by `script_name`. That landed on
+  2026-09-29 as a five-step transfer that kept the class's data; "Moving
+  Counter out" above has the sequence, both rehearsals and the result. Note that commit 5af65648 moved `Counter` IN
   from cf-garage, so this reverses a deliberate choice rather than tidying one.
 
   **Only the EXPORT blocks previews, measured 2026-09-28** with five throwaway
@@ -1118,9 +1146,10 @@ worktrees may edit freely, but a worktree is not a release surface.
   Workflow leaves the Workflow behind (it still showed in `wrangler workflows
   list`), so it needs its own `wrangler workflows delete`.
 
-  The setting stays in `cloudflare.config.ts` meanwhile, and so does the guard below:
-  `preview_urls` DEFAULTS to whatever `workers_dev` is, so the explicit line is
-  what makes previews switch on by themselves the day the DO leaves.
+  The setting stayed in `cloudflare.config.ts` throughout, and that is why no
+  config change was needed when the class left: `preview_urls` DEFAULTS to
+  whatever `workers_dev` is, so the explicit line is what switched previews on
+  by themselves the moment the site stopped implementing a DO.
 
   A preview runs **production bindings and secrets**. Cloudflare offers no
   per-version override, so the same RN_KV, the same photo bucket, the same three
