@@ -50,6 +50,17 @@
 // Re-test cheaply: prefetch a URL, navigate to it, and watch for a HEAD to
 // /ledger/prefetch. The absence of that HEAD is the whole signal.
 //
+// THE CLIENT HALF, since 2026-09-29, because the header beacon left the ledger's
+// numerator at exactly 0 for 30 days across 83 paths, which read in
+// speculation:report as a 0% activation rate rather than as no instrument. The
+// shell's rules only PRERENDER, and every Chromium since 108 fires
+// `prerenderingchange` when a prerendered document is activated, so nav.js now
+// listens on a prerendered page and HEADs this endpoint with `via=client` when
+// it happens. That lands as its own kind, `activated-client`, and the readback
+// takes the LARGER of the two per path, so the day Chrome ships the header
+// beacon the same activation is not counted twice. What the client half cannot
+// see is a prefetch-only activation, which no rule here produces.
+//
 // That asymmetry is deliberate rather than an oversight. Shipping the receiver
 // now means the only remaining step is a trial registration, which is a form
 // the owner submits rather than code anyone has to write, and the endpoint is
@@ -86,6 +97,14 @@ export function countSpeculativeLoad(env, request, response, pathname) {
     if (!env.SPECULATION || response.status >= 400) return;
     const purpose = request.headers.get("sec-purpose") || "";
     if (!SPECULATIVE.test(purpose)) return;
+    // Documents only. A prerendered page fetches its own scripts, styles and
+    // fragments with the same Sec-Purpose, and those were counted as prerenders
+    // of /a/notepad.<hash>.js or /photos/grid.html until 2026-09-29, a
+    // denominator no navigation could ever answer. An absent header is kept,
+    // since a client that sends Sec-Purpose without Sec-Fetch-Dest is rare and
+    // dropping it would hide real speculations.
+    const dest = request.headers.get("sec-fetch-dest");
+    if (dest && dest !== "document") return;
     // "prerender" is the stronger claim and the more expensive one, so when a
     // header says both (`prefetch;prerender`) it counts as a prerender.
     const kind = /prerender/i.test(purpose) ? "prerender" : "prefetch";
@@ -107,11 +126,14 @@ export function handlePrefetchActivation(request, env) {
   }
   try {
     if (env.SPECULATION) {
-      const p = new URL(request.url).searchParams.get("p") || "(unknown)";
+      const params = new URL(request.url).searchParams;
+      const p = params.get("p") || "(unknown)";
+      // nav.js's prerenderingchange listener says so; see THE CLIENT HALF above
+      const kind = params.get("via") === "client" ? "activated-client" : "activated";
       env.SPECULATION.writeDataPoint({
-        blobs: ["activated", p.slice(0, 96), versionBlob(env)],
+        blobs: [kind, p.slice(0, 96), versionBlob(env)],
         doubles: [1],
-        indexes: ["activated"],
+        indexes: [kind],
       });
     }
   } catch { /* as above */ }
@@ -146,21 +168,32 @@ export type SpeculationRow = {
   speculated: number; rate: number | null;
 };
 
+// the two activation sources, folded into `activated` by taking the larger
+const HEADER = "activated", CLIENT = "activated-client";
+
 // Pure over the SQL rows, so the contract test can pin the arithmetic without a
 // token. Unknown kinds are ignored rather than counted as anything.
 export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
   const byPath = new Map<string, SpeculationRow>();
+  const sources = new Map<string, { header: number; client: number }>();
   for (const r of rows) {
     const kind = text(r.kind, "");
-    if (kind !== "prefetch" && kind !== "prerender" && kind !== "activated") continue;
+    if (kind !== "prefetch" && kind !== "prerender" && kind !== HEADER && kind !== CLIENT) continue;
     const path = text(r.path, "(unknown)");
     const n = Math.round(Number(r.n) || 0);
     if (n <= 0) continue;
     const row = byPath.getOrInsertComputed(path, () => ({ path, prefetch: 0, prerender: 0, activated: 0, speculated: 0, rate: null }));
-    row[kind] += n;
+    if (kind === HEADER || kind === CLIENT) {
+      const src = sources.getOrInsertComputed(path, () => ({ header: 0, client: 0 }));
+      src[kind === HEADER ? "header" : "client"] += n;
+    } else row[kind] += n;
   }
   const out = [...byPath.values()];
   for (const row of out) {
+    // Both beacons can report one activation, so the larger is the count and
+    // the sum would double it.
+    const src = sources.get(row.path);
+    row.activated = src ? Math.max(src.header, src.client) : 0;
     row.speculated = row.prefetch + row.prerender;
     row.rate = row.speculated ? Math.min(1, row.activated / row.speculated) : null;
   }
@@ -183,7 +216,7 @@ export async function handleSpeculationJson(request, env) {
   const rows = summarizeSpeculation(read.data);
   return new Response(JSON.stringify({
     ok: true, window_days: SPECULATION_WINDOW_DAYS, dataset: SPECULATION_DATASET,
-    note: "speculations are Sec-Purpose prefetch/prerender requests that reached the origin; activations are the on-prefetch-activation beacon; rate orders paths and is not a strict conversion rate",
+    note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate",
     rows,
   }, null, 2) + "\n", { status: 200, headers });
 }

@@ -30,8 +30,15 @@ if (!report.ok) {
   console.error(`speculation:report — ${ORIGIN} answered ${res.status}: ${report.reason || "unreadable"}`);
   process.exit(1);
 }
-const rows = (report.rows || []).filter((r) => r.speculated >= MIN);
-console.log(`speculation ledger, last ${report.window_days} days, paths speculated ${MIN}+ times (${rows.length} of ${report.rows?.length || 0})\n`);
+// A document is served extensionless and outside /a/. Rows that are neither are
+// sub-resources a prerendered page fetched with the same Sec-Purpose, which the
+// denominator counted until 2026-09-29 and still holds for the rest of the
+// window. No navigation can activate them, so they are hidden rather than rated.
+const isDocument = (p: string) => !p.startsWith("/a/") && !/\.[a-z0-9]+$/i.test(p.split("/").pop() || "");
+const all = report.rows || [];
+const hidden = all.filter((r) => !isDocument(r.path)).length;
+const rows = all.filter((r) => isDocument(r.path) && r.speculated >= MIN);
+console.log(`speculation ledger, last ${report.window_days} days, document paths speculated ${MIN}+ times (${rows.length} of ${all.length}; ${hidden} sub-resource rows hidden)\n`);
 console.log("path".padEnd(34), "prefetch".padStart(9), "prerender".padStart(10), "activated".padStart(10), "rate".padStart(7));
 for (const r of rows) {
   console.log(r.path.slice(0, 34).padEnd(34), String(r.prefetch).padStart(9), String(r.prerender).padStart(10), String(r.activated).padStart(10), (r.rate === null ? "n/a" : `${(r.rate * 100).toFixed(0)}%`).padStart(7));
@@ -42,6 +49,19 @@ for (const r of rows) {
 // and costs one of Chrome's two concurrent prerender slots. A LOW rate is the
 // louder finding: it is a link the site is rendering for nobody, and the fix is
 // an exclusion, which costs nothing.
+// THE GRADER CHECK, before any recommendation. Until 2026-09-29 the numerator
+// had no working instrument (the header beacon never shipped; see
+// src/worker/speculation.ts), so every rate read 0% and the exclusion rule below
+// recommended dropping /, /writing and /garage, the most-visited links on the
+// site. A window with no activation anywhere is a missing instrument, never a
+// finding, so it gets no recommendation at all.
+const activations = all.reduce((n, r) => n + r.activated, 0);
+if (!activations) {
+  console.log(`\nno activations recorded on any of ${all.length} paths in ${report.window_days} days. That is a missing instrument, not a finding:`);
+  console.log("nav.js's prerenderingchange beacon started recording on 2026-09-29, and before it the numerator could not move.");
+  console.log("No promotion or exclusion follows from this window; re-run once activations appear.");
+  process.exit(0);
+}
 const hot = rows.filter((r) => r.rate !== null && r.rate >= 0.5);
 const cold = rows.filter((r) => r.rate !== null && r.rate <= 0.05 && r.speculated >= MIN * 3);
 console.log(`\ncandidates to promote (rate >= 50%): ${hot.length ? hot.map((r) => r.path).join(", ") : "none"}`);
