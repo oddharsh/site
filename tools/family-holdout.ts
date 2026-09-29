@@ -40,6 +40,7 @@ import { brotliCompressSync, brotliDecompressSync, zstdCompressSync, constants a
 import { createHash, randomBytes } from "node:crypto";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 import { FAMILY_DRIFT } from "./lib/page-family.ts";
+import { judge } from "./lib/hillclimb.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
@@ -318,7 +319,27 @@ for (const c of CONFIGS.slice(1)) {
   console.log(`  ${c.name.padEnd(10)}  train ${cmp(perConfig[c.name].train, cur.train).padEnd(26)} ${K.map((k) => `test k=${k} ${cmp(perConfig[c.name].test[k], cur.test[k])}`).join("  ")}`);
   console.log(`  ${"".padEnd(10)}  corpus pages excluded:     ${K.map((k) => `test k=${k} ${cmp(perConfig[c.name].testClean[k], cur.testClean[k])}`).join("  ")}`);
 }
+// The verdict, through the shared judge (tools/lib/hillclimb.ts): would
+// switching build.ts to this config be kept? Train is the in-sample column the
+// build sees, test the held-out one with corpus pages excluded, both paired per
+// window and negated, since a saved share is higher-is-better. zstd is
+// deterministic, so the band is zero and the win share carries the weight; 0.8
+// asks a switch to win in four windows of five, since one run of content edits
+// can move a handful of adjacent windows together.
+console.log("\nwould switching build.ts to it be kept? (hillclimb judge, test = corpus pages excluded)");
+const verdicts: Record<string, Record<number, string>> = {};
+for (const c of CONFIGS.slice(1)) {
+  verdicts[c.name] = {};
+  const cur = perConfig.current;
+  const neg = (a: number[], b: number[]) => a.map((x, n) => b[n] - x);
+  for (const k of K) {
+    const j = judge({ train: neg(perConfig[c.name].train, cur.train), test: neg(perConfig[c.name].testClean[k], cur.testClean[k]), minWins: 0.8 });
+    verdicts[c.name][k] = j.verdict;
+  }
+  console.log(`  ${c.name.padEnd(10)}  ${K.map((k) => `k=${k} ${verdicts[c.name][k].toUpperCase()}`).join("  ")}`);
+}
 report.configs = perConfig;
+report.verdicts = verdicts;
 
 // ── question 2: is the build's drift reading an in-sample artifact? ─────────
 // D_i is the stale committed dictionary, D_j the fresh derivation k rolls later.
