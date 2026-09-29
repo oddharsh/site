@@ -2465,10 +2465,7 @@ let freshFamily: Buffer | null = null;
   // while Chrome treats those same response bytes as raw content; the decoders
   // disagree and the navigation fails. Build one site-wide corpus from the final,
   // repointed bytes of two complementary pages: the compact LWE shell plus the
-  // Garage compression explainer. Then spend part of the fixed 64KB on the tails of
-  // the four layouts that corpus used to lose to plain q11 on. Measured 2026-08-11:
-  // the representative prefix moved family coverage from 42/46 to 46/46 and cut
-  // the preferred-family wire set from 450,321 B to 428,238 B (plain q11: 494,073 B).
+  // Garage compression explainer, with 4 KB of vigenere filling the window.
   //
   // The corpus is a LIST rather than a fixed pair, and it is read in order until the
   // 64KB is filled. Two pages happened to cover it with 1,656 bytes to spare, which
@@ -2476,82 +2473,46 @@ let freshFamily: Buffer | null = null;
   // deploy under a message naming the wrong cause. The trailing entries are slack:
   // they contribute nothing while the leading pages are long enough, and they keep a
   // content edit from becoming a release incident.
+  //
+  // THERE ARE NO REPRESENTATIVE TAILS, since 2026-09-28. From 2026-08-11 this block
+  // laid the tails of four outlier pages (horizon, vt-b, vt-check, access/index)
+  // over the start of the corpus, which evicted lwe/drivers from the window, and
+  // tuned their budgets (16 KiB, then 12, then 11/4/4/12) against the staged pages.
+  // Every one of those measurements was IN SAMPLE: the pages the tails were cut
+  // from were among the pages scored, and a page whose bytes sit in the dictionary
+  // compresses to almost nothing. The tails were kept for "a margin" on those four
+  // pages, which was their own tails being found in the dictionary.
+  //
+  // `bun tools/family-holdout.ts` asks the production question instead: rebuild
+  // this dictionary from the pages served at each dictionary roll, and score it
+  // on the pages served k rolls LATER, with every corpus page left out of the
+  // score. Over 34 rolls (2026-07-27 to 2026-09-28), no tails beat the 11/4/4/12
+  // set in every window: +1.80 points of plain q11 at k=1 (33 of 33), +1.78 at k=3
+  // (31 of 31), +1.64 at k=8 (26 of 26). The gain is the LWE shell drivers brings
+  // back, worth 300-740 B on each /lwe page. The margin also protected nothing: a
+  // delta that fails to beat q11 is skipped in step 8, so a losing page costs its
+  // q11 twin and not a byte more. The same tool found the budget RANKING did hold
+  // out of sample, so the tuning pointed the right way inside a choice that was
+  // wrong. Re-run it before re-adding a tail, and read it with the corpus pages
+  // excluded, since that column is the only one no config was cut from.
   {
-    // WHAT THE WINDOW ACTUALLY HOLDS, because the list below is not it. The
-    // representatives' tails are laid over the START of this concatenation
-    // (`base.subarray(prefix.length)`), and their 29 KB is longer than
-    // lwe/drivers, so drivers contributes nothing and the dictionary is
-    // garage/compression plus 2 KB of vigenere. That has been true since the
-    // tails were added and was measured on 2026-08-31 rather than reversed:
-    // putting the tails LAST keeps drivers and evicts compression, and it is
-    // 4,953 B worse over the 55 pages (home 25.9% -> 23.6%, /garage 22.0% ->
-    // 18.2%; only /lwe prefers drivers, 45.3% -> 48.3%). The Garage explainer
-    // is the better single exemplar of the shell every page shares, so the
-    // page this construction happens to drop is the right one to drop. Keep
-    // drivers first: it is what makes the prefix land on bytes that cost the
-    // least, and the throw below still needs the list to reach 64 KB.
     const BASE_CORPUS = [
-      "lwe/drivers.html",           // displaced by the tails; see above
-      "garage/compression.html",    // the Garage explainer: the window, in practice
-      "lwe/vigenere.html",          // slack, in corpus order
-      "garage/chunks.html",
-    ];
-    // Each representative carries its OWN tail budget, since 2026-08-31. They
-    // were a uniform 16 KiB, and that uniform number was the single most
-    // expensive setting in this block: four 16 KiB tails are 36.4 KB of the 64,
-    // laid over the START of the base corpus, so the pages with real traffic
-    // matched against 28 KB of corpus instead of 64. Measured over the 55
-    // staged pages, family delta as a share under plain q11:
-    //
-    //                          served    home   /garage   /lwe   worst outlier
-    //   16/16 + fixtures     480,138   16.4%    13.8%   41.7%   4.5% horizon
-    //   12/12 + fixtures     455,704   25.9%    22.1%   45.3%   3.9% access
-    //   no representatives   446,810   25.2%    22.3%   49.8%   0.0% access
-    //
-    // So the tails cost the homepage nine points and /garage eight, while what
-    // they buy is a margin on four pages almost nobody fetches. Not zero,
-    // though: with no tail at all access/index beats plain q11 by 17 BYTES, a
-    // coin flip that one content edit turns into a loss (and does, at a 4 KiB
-    // tail).
-    //
-    // The first pass stopped at 12 KiB each because it compared DELTAS while
-    // holding the dictionary's raw 64 KiB fixed. Raw is not what the relation
-    // downloads: the dictionary has its own q11 twin, and changing which corpus
-    // bytes occupy the window changes that twin. Measured 2026-09-01 over the
-    // current 55 pages, including the dictionary acquisition:
-    //
-    //                         family DCZ   dict q11   combined   worst outlier
-    //   horizon 12 / access 12   457,969     14,925    472,894    3.84% access
-    //   horizon 11 / access 12   457,959     14,754    472,713    3.41% horizon
-    //   horizon 12 / access 11   457,884     14,737    472,621    3.05% access
-    //
-    // Trimming Horizon alone is a strict wire win: 171 B less acquisition and
-    // 10 B less even if every page is fetched once. Trimming Access too buys 92
-    // more bytes across that whole-site sweep but spends a third of the outlier
-    // margin. The wider margin wins that flat frontier; ordinary content edits
-    // are larger than 92 bytes, while the dictionary is fetched as a unit.
-    //
-    // The two fixtures are under 3 KB apiece, so a 4 KiB budget takes the whole
-    // file and each compresses to 20 bytes. Keeping them COSTS nothing on the
-    // aggregate: their 4.4 KB displaces less base than the 1.7 KB they save.
-    const REPRESENTATIVES: Array<[string, number]> = [
-      ["garage/horizon.html", 11_264],   // very large standalone lab
-      ["garage/vt-b.html",     4_096],   // tiny browser fixture, whole file
-      ["garage/vt-check.html", 4_096],   // tiny browser fixture, whole file
-      ["access/index.html",   12_288],   // standalone device matrix
+      "lwe/drivers.html",           // the LWE shell every /lwe page shares
+      "garage/compression.html",    // the Garage explainer: the shell every other page shares
+      "lwe/vigenere.html",          // fills the last ~4 KB
+      "garage/chunks.html",         // slack, in corpus order
     ];
     const SIZE = 65_536;
     const parts = [];
     let total = 0;
-    // THROUGH minifiedPage(), the same as the representatives below. This block
-    // runs before step 7b reaches the staged files, so a bare read here returns
-    // the READABLE source: indentation, comments, none of it in any target. The
-    // note on minifiedPage already says a dictionary sampled that way "wastes
-    // its scarce 64KB on whitespace and comments absent from every target"; the
-    // fix had simply been applied to one of the two contributors. Measured
-    // 2026-08-31 over the 55 staged pages, family deltas against plain q11:
-    // 510,803 B from the readable corpus, 480,187 B from this one, 55/55 pages
-    // still beating brotli either way. 30,616 B for reading the right bytes.
+    // THROUGH minifiedPage(). This block runs before step 7b reaches the staged
+    // files, so a bare read here returns the READABLE source: indentation,
+    // comments, none of it in any target. The note on minifiedPage already says a
+    // dictionary sampled that way "wastes its scarce 64KB on whitespace and
+    // comments absent from every target". Measured 2026-08-31 over the 55 staged
+    // pages, family deltas against plain q11: 510,803 B from the readable corpus,
+    // 480,187 B from this one, 55/55 pages still beating brotli either way. 30,616
+    // B for reading the right bytes.
     //
     // The proof it was the readable source: the shipped dictionary carried a
     // distinctive indented line from garage/compression.src.html, and 370 of its
@@ -2569,18 +2530,7 @@ let freshFamily: Buffer | null = null;
         `Add another staged page to BASE_CORPUS in build.ts (order is load-bearing; append, do not reorder).`,
       );
     }
-    const base = Buffer.concat(parts).subarray(0, SIZE);
-    const representatives = [];
-    for (const [rel, tailBytes] of REPRESENTATIVES) {
-      const staged = await readFile(`${OUT}/public/${rel}`, "utf8");
-      const final = Buffer.from(minifiedPage(staged, rel));
-      representatives.push(final.subarray(Math.max(0, final.length - tailBytes)));
-    }
-    const prefix = Buffer.concat(representatives);
-    if (prefix.length >= SIZE) {
-      throw new Error(`page-family dictionary representatives consume ${prefix.length} B of ${SIZE} B; reduce a tail budget in REPRESENTATIVES`);
-    }
-    const dictionary = Buffer.concat([prefix, base.subarray(prefix.length)]);
+    const dictionary = Buffer.concat(parts).subarray(0, SIZE);
     if (dictionary.readUInt32LE(0) === 0xec30a437) {
       throw new Error("page-family dictionary starts with the zstd --train magic — dcz needs RAW bytes, not a trained dictionary");
     }
