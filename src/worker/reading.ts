@@ -5,6 +5,7 @@ import { cachedRender, deleteSWRKV, edgeKey, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { esc } from "./lib/http.ts";
+import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
 
 // ── /reading — a native, Luna-styled mirror of my Curius reading list ──
 // Curius (the social reading-list app) exposes a clean JSON API per user. We
@@ -112,19 +113,23 @@ export async function handleReading(request, env, ctx) {
 }
 
 async function renderReading(request, env, ctx) {
-  let payload;
-  try { payload = await getCuriusCached(request, env, ctx); }
-  catch (_e) { payload = { items: [], fetchedAt: new Date().toISOString() }; }
-  return renderReadingPage(payload);
+  // The HN map is joined here rather than written into the Curius payload, so
+  // the 6-hourly Curius rebuild and the :07/:37 HN job never overwrite each
+  // other. A missing or unreadable map renders the page without the badges.
+  const [payload, hn] = await Promise.all([
+    getCuriusCached(request, env, ctx).catch(() => ({ items: [], fetchedAt: new Date().toISOString() })),
+    (env?.RN_KV ? env.RN_KV.get(HN_MAP_KEY, { type: "json", cacheTtl: 900 }) : null).then(readHnMap, () => ({})),
+  ]);
+  return renderReadingPage(payload, hn);
 }
 
-export function renderReadingPage(payload) {
+export function renderReadingPage(payload, hn: HnMap = {}) {
   const items = Array.isArray(payload.items) ? payload.items : [];
   const count = items.length;
   const fetched = payload.fetchedAt ? esc(payload.fetchedAt.slice(0, 10)) : "";
   const profile = `https://curius.app/${CURIUS_HANDLE}`;
 
-  let listHtml;
+  let listHtml, discussed = 0;
   if (!count) {
     listHtml = `<div class="rd-empty">Couldn't reach Curius just now — the list refills on the next sync. It always lives at <a href="${esc(profile)}" rel="external" target="_blank">curius.app/${esc(CURIUS_HANDLE)}</a>.</div>`;
   } else {
@@ -142,10 +147,16 @@ export function renderReadingPage(payload) {
       const star = it.favorite ? ` <span class="rd-star" title="favorite">&#9733;</span>` : "";
       const snip = it.snippet ? `<div class="rd-snip">${esc(it.snippet)}</div>` : "";
       const hls = (it.highlights || []).map((h) => `<blockquote class="rd-hl">${esc(h)}</blockquote>`).join("");
+      const thread = hnThreadFor(it.link, hn);
+      if (thread) discussed++;
+      const noun = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
+      const hnLink = thread
+        ? `<a class="rd-hn" href="${esc(thread.href)}" target="_blank" rel="noopener noreferrer" title="Discuss on Hacker News: ${esc(noun(thread.points, "point"))}, ${esc(noun(thread.comments, "comment"))}"><span class="rd-y" aria-hidden="true">Y</span>${esc(noun(thread.comments, "comment"))}</a>`
+        : "";
       parts.push(
         `<div class="rd-item">` +
           `<div class="rd-head"><a class="rd-title" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">${esc(it.title)}</a>${star}</div>` +
-          `<div class="rd-meta"><span class="rd-dom">${esc(it.domain)}</span>${dateStr ? `<span class="rd-date">${esc(dateStr)}</span>` : ""}</div>` +
+          `<div class="rd-meta"><span class="rd-dom">${esc(it.domain)}</span>${dateStr ? `<span class="rd-date">${esc(dateStr)}</span>` : ""}${hnLink}</div>` +
           snip + hls +
         `</div>`
       );
@@ -173,6 +184,9 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:14pt; color
 .rd-meta { display:flex; align-items:center; gap:8px; margin:3px 0 0; }
 .rd-dom { font-family:"Courier New",Courier,monospace; font-size:8.5pt; color:var(--blue-40); background:var(--surface-desktop); border:1px solid oklch(82% 0.03 250); border-radius:2px; padding:0 5px; }
 .rd-date { font-size:9pt; color:var(--ink-faint); }
+.rd-hn { display:inline-flex; align-items:center; gap:4px; font-size:8.5pt; color:oklch(33% 0.09 263); text-decoration:none; }
+.rd-hn:hover { color:oklch(62.80% 0.2577 29.23); text-decoration:underline; }
+.rd-y { display:inline-block; width:11px; height:11px; line-height:11px; text-align:center; font:bold 8pt Verdana,Geneva,sans-serif; color:white; background:oklch(66% 0.19 42); border:1px solid oklch(56% 0.17 42); }
 .rd-snip { margin:5px 0 0; color:oklch(45% 0 0); font-size:9.5pt; line-height:1.5; }
 .rd-hl { margin:6px 0 0; padding:3px 0 3px 9px; border-left:3px solid oklch(72% 0.10 250); color:oklch(33% 0.02 255); font-size:9.5pt; font-style:italic; line-height:1.45; }
 .rd-empty { padding:16px 4px; color:oklch(45% 0 0); font-size:10pt; }
@@ -183,7 +197,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     body: unsafeHtml(`
     <h1>My Reading</h1>
     <p class="rd-lede">Things I've saved to read, pulled from my <a href="${esc(profile)}" rel="external me" target="_blank">Curius</a>. Newest first.</p>
-    <div class="rd-bar">${count} link${count === 1 ? "" : "s"}${fetched ? ` &middot; last synced ${fetched}` : ""} &middot; source: Curius, via AadharshBot</div>
+    <div class="rd-bar">${count} link${count === 1 ? "" : "s"}${discussed ? ` &middot; ${discussed} discussed on Hacker News` : ""}${fetched ? ` &middot; last synced ${fetched}` : ""} &middot; source: Curius, via AadharshBot</div>
     ${listHtml}
     <footer>&larr; <a href="/">aadhar.sh</a> &middot; saved on <a href="${esc(profile)}" rel="external" target="_blank">Curius</a> &middot; fetched by <a href="/bot">${esc(BOT_NAME)}</a></footer>
 `),

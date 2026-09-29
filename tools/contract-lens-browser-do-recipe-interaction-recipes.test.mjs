@@ -534,6 +534,10 @@ test("Lens comparison rejects invalid targets before any fetch", async () => {
 });
 
 test("site MCP exposes one read-only tool catalog and calls shared search", async () => {
+  // Its own reset, not a ride on the one above: this corpus happens to match
+  // the search test's, so it passed in file order and failed run alone after
+  // another corpus had loaded (measured 2026-09-29).
+  _resetSearchIndex();
   const env = { ASSETS: staticAssets({
     "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" }] },
   }) };

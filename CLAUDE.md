@@ -3452,6 +3452,7 @@ the existing layers structurally could not reach:
 | `census.host` | a time series with silently missing rows is worse than none; the per-host catch is correct AND is how a 16-site roster becomes 3 |
 | `webmention.send` | `webmention.capped` flags a run that stopped at MAX_SENDS_PER_RUN, which the summary log cannot express |
 | the speculation ledger | not a span: `aadhar_speculation` counts every `Sec-Purpose` prefetch/prerender that reached the origin and every activation beacon. **`/ledger/speculation.json` reads it back per path** (since 2026-09-02; nothing read it before), and `bun run speculation:report` prints the activation-rate table that decides which links earn an earlier eagerness. A promotion is an edit to `SPECULATION` in `tools/photos/shell-data.ts`, gated on `speculation:probe` showing the rule fetches, because an eager rule was measured fetching nothing twice. Chrome caps eager and moderate rules at 2 prefetches and 2 prerenders at a time; prerender is Chromium-only, and WebKit's same-origin prefetch is in trunk with its shipping default unknown. |
+| `reading.hn` | the /reading Hacker News lookup, 8 Algolia queries a tick on :07/:37. `reading.hn_pending` should reach 0 about 10 hours after a deploy and stay near it; `reading.hn_failed` against `reading.hn_capped` says whether Algolia or the subrequest cap stalled it |
 | `cal.busy` | `cal.source` (fresh/live/stale/none) + `cal.fail_closed`. The fail-closed 503 is a real person not getting a coffee slot, and it used to reach you only by them mentioning it |
 
 ### XP visual vocabulary (CSS)
@@ -5281,6 +5282,24 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     reading it as a runtime difference. `--isolate` was measured (it is what
     `--parallel` implies unless you say otherwise) and declined at about 35%
     more CPU; `comment:test-parallel` carries that table.
+
+    **The leaks it predicts live in ten module-level `let`s, and two of them
+    bit.** Swept 2026-09-29 across `src/worker`, `cal/src`, `serendipity` and
+    `counter/src`; nothing is written to a module constant after load, so the
+    `let` list is the whole set. A cache a test STUBS gets a `_reset…()` seam the
+    Worker never calls, and every test that stubs it calls the seam first:
+    `_resetPhotoCaches`, `_resetSearchIndex`, `_resetKitesurfProbe`. The signing
+    key memo is keyed by the secret's text and needs none, and the two tracer
+    holders are only ever set inside workerd (gotcha 16). The two webmention
+    `ensured` flags do pin across files, measured (a second fake DB never sees
+    the `CREATE`), and stay seamless because every fake answers `CREATE` as a
+    no-op. A fake that refuses a query on a missing table would need one.
+
+    To reproduce a suspected leak without depending on scheduling, warm the
+    cache with fixture A in a second `--preload` and run the one test after it:
+    `bun test --no-isolate --preload ./tools/lib/no-network.ts --preload warm.ts
+    <file> --test-name-pattern '<name>'`. That is how the MCP search test was
+    shown to pass only because the test above it had loaded an identical corpus.
 
 29. **Use the installed Wrangler under Node, without a package-manager lookup.**
     Tools call `wranglerCommand()` from `tools/lib/wrangler-bin.ts`; Workers

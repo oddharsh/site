@@ -101,6 +101,9 @@ export type SpanName =
   | "webmention.fetch_own_page"
   | "webmention.post"
 
+  // /reading's Hacker News lookup, a bounded batch on the :07/:37 tick.
+  | "reading.hn"
+
   | "nlweb.ask"
   | "dyno.fetch"
 
@@ -117,6 +120,7 @@ export type SpanName =
   // Crons. A cron has no response, no status, and no visitor to complain.
   | "cron.home_probe"
   | "cron.rn_enrich"
+  | "cron.reading_hn"
   | "cron.around"
   | "cron.census"
   | "cron.serendipity"
