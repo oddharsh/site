@@ -53,11 +53,17 @@
 //
 // About 3 KB per s2 point from q80 to q88, with no knee near q84, so nothing in
 // the curve itself picks q84 over a neighbour. The reference that could: the
-// AVIF tier most visitors get averages s2 78.96 at 29,822 B on the same tiles
-// (from the avif-knob-climb.ts cache), so the q84 fallback sits 0.93 s2 below
-// it, and q85 would reach about parity for roughly +5% JPEG bytes. Whether the
-// fallback should match the primary is a policy the owner has not set; this
-// records the price of either answer.
+// AVIF tier most visitors get, at 29,822 B on the same tiles, averages s2 78.96
+// decoded to 8 bits by Homebrew's avifdec and 79.13 at full depth (re-measured
+// 2026-09-29 over all 182 tiles). The 8-bit figure is closer to what an 8-bit
+// display shows after the browser's own conversion; the full-depth one is the
+// encode itself. So the q84 fallback sits 0.93 to 1.10 s2 below the primary,
+// and parity lands between about q85 and q85.5, roughly +5% to +7% JPEG bytes.
+// This line said "0.93" and "q85, +5%" alone until the AV2 climb found two
+// avifdec builds disagreeing at -d 8 (tools/photos/av2-knob-climb.ts, THE
+// DECODER TRAP): Homebrew's 8-bit path was not wrong, but it was one reading
+// of a range. Whether the fallback should match the primary is a policy the
+// owner has not set; this records the price of either answer.
 //
 // usage: bun tools/photos/jpeg-knob-climb.ts [--tiles dir] [--work dir] [--limit n] [--parallel n] [--ledger out.jsonl]
 import fs from "node:fs";
