@@ -7,14 +7,17 @@ import {
   readFileSync,
   test,
 } from "./contract-shared.ts";
+import { _resetSearchIndex } from "../src/worker/search.ts";
 
 // ── NLWeb ───────────────────────────────────────────────────────────────────
 // The endpoint half. These drive the real handler; where a specific record
 // matters they test the pure projections instead, because search.ts caches its
-// index in a MODULE-LEVEL singleton with no reset, so the first test in this
-// file to touch it pins the corpus for every test after. Stubbing a fourth one
-// here would quietly assert against somebody else's records.
-const nlwebEnv = () => ({ ASSETS: { fetch: async () => new Response(JSON.stringify({ version: 1, records: [
+// index in a MODULE-LEVEL singleton, so the first load pins the corpus. That
+// reaches across FILES too: bun test --no-isolate shares one process per
+// worker, and on 2026-09-29 this file read another file's corpus and found
+// nothing. So every stubbed env resets it first (_resetSearchIndex, the test
+// seam), which makes this file's corpus the one it asserts against.
+const nlwebEnv = () => (_resetSearchIndex(), { ASSETS: { fetch: async () => new Response(JSON.stringify({ version: 1, records: [
   { url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" },
 ] })) } });
 const NLWEB_HIT = "cloudflare";
