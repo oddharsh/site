@@ -183,7 +183,7 @@ jobs:
           BODY=$(cat <<BODY
           \`config/bun-pin.json\` moves **$BEFORE → $AFTER**.
 
-          This is a build change wearing a version string: \`wrangler.jsonc\` builds with \`bun tools/build.ts\`, so the pinned bun is the compiler that mints every content-addressed \`/a/\` and \`/i/\` URL. Nothing else in the repository updates it, which is why this job exists.
+          This is a build change wearing a version string: \`wrangler.config.ts\` builds with \`bun tools/build.ts\`, so the pinned bun is the compiler that mints every content-addressed \`/a/\` and \`/i/\` URL. Nothing else in the repository updates it, which is why this job exists.
 
           \`\`\`
           $EVIDENCE

@@ -12,7 +12,7 @@ import { join } from "node:path";
 const root = fileURLToPath(ROOT);
 
 // config/bun-pin.json is the one dependency version here that no updater owns, and
-// the one that compiles the site: wrangler.jsonc builds with `bun
+// the one that compiles the site: wrangler.config.ts builds with `bun
 // tools/build.ts`, so it decides every content-addressed /a/ and /i/ URL. Three
 // readers share it and none may carry a copy.
 

@@ -58,7 +58,7 @@
 // write types COUNTER and the two Workflows by importing `.build/src/worker/
 // index`, which is build output that does not exist in a fresh checkout;
 // src/worker/lib/env.ts's header has the long version of why the site's Env is
-// hand-written and checked against wrangler.jsonc instead.
+// hand-written and checked against cloudflare.config.ts instead.
 //
 // The output is NOT COMMITTED. It is a pure function of the wrangler pin and
 // the config, the same argument the Markdown twins and the search index won,
@@ -89,6 +89,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { parseJsonc } from "./lib/jsonc.ts";
+import { asList, asRecord, asText } from "../src/worker/lib/parse.ts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 export const OUT = join(REPO, "config", ".generated", "workers-runtime.d.ts");
@@ -96,9 +97,9 @@ const KEY_PREFIX = "// gen-runtime-types key ";
 
 // The site config is the one whose output ships; the others are the control.
 const CONFIGS = [
-  { name: "site", config: "wrangler.jsonc" },
-  { name: "lwe-ask", config: "lwe-ask/wrangler.toml" },
-  { name: "lens-reader", config: "lens-reader/wrangler.toml" },
+  { name: "site", config: "cloudflare.config.ts" },
+  { name: "lwe-ask", config: "lwe-ask/cloudflare.config.ts" },
+  { name: "lens-reader", config: "lens-reader/cloudflare.config.ts" },
 ];
 
 const MARKER = "// Begin runtime types";
@@ -176,6 +177,27 @@ if (!FORCE && existsSync(OUT) && readFileSync(OUT, "utf8").startsWith(KEY_PREFIX
   process.exit(0);
 }
 
+// The two auxiliary configs are cloudflare.config.ts since 2026-09-28 (`cf
+// migrate`), a program rather than data, so the runtime fields are read by
+// IMPORTING it: this script runs under bun, which runs TypeScript, and
+// `defineConfig` returns the object it was given. A regex over the source would
+// be a second parser of a format that is explicitly allowed to be a function.
+async function runtimeFields(config: string) {
+  const source = readFileSync(join(REPO, config), "utf8");
+  if (config.endsWith(".ts")) {
+    const worker = asRecord(asRecord((await import(join(REPO, config))).default)?.worker);
+    if (!worker) throw new Error(`gen-runtime-types: ${config} does not default-export a config object with a \`worker\``);
+    return { compatibility_date: asText(worker.compatibilityDate), compatibility_flags: asList(worker.compatibilityFlags) };
+  }
+  const parsed = config.endsWith(".toml") ? Bun.TOML.parse(source) : parseJsonc(source);
+  return { compatibility_date: parsed.compatibility_date, compatibility_flags: parsed.compatibility_flags ?? [] };
+}
+
+// Resolved before the loop so generate() stays synchronous: an import is the
+// only async step, and the configs are few.
+const FIELDS = new Map();
+for (const c of CONFIGS) FIELDS.set(c.config, await runtimeFields(c.config));
+
 function generate(config: string, out: string) {
   // Runtime declarations depend only on these two fields (Wrangler's
   // generateRuntimeTypes), but `types` still resolves `main` and runs its custom
@@ -183,13 +205,10 @@ function generate(config: string, out: string) {
   // site build and makes cold lint/typecheck safe alongside the contract suite.
   // The projection is disposable; the original configs still own every value
   // and the cache key above covers their complete bytes.
-  const source = readFileSync(join(REPO, config), "utf8");
-  const parsed = config.endsWith(".toml") ? Bun.TOML.parse(source) : parseJsonc(source);
   const runtimeConfig = out.replace(/\.d\.ts$/, ".json");
-  writeFileSync(runtimeConfig, JSON.stringify({
-    compatibility_date: parsed.compatibility_date,
-    compatibility_flags: parsed.compatibility_flags ?? [],
-  }));
+  const fields = FIELDS.get(config);
+  if (!fields.compatibility_date) throw new Error(`gen-runtime-types: no compatibility date read from ${config}`);
+  writeFileSync(runtimeConfig, JSON.stringify(fields));
   execFileSync(...wranglerCommand(["types", "-c", runtimeConfig, "--include-env=false", out]), {
     cwd: REPO, stdio: ["ignore", "ignore", "inherit"],
   });
@@ -206,7 +225,7 @@ try {
   for (const other of others) {
     if (other.body !== site.body) {
       throw new Error(
-        `gen-runtime-types: ${other.config} generates a different runtime surface from wrangler.jsonc ` +
+        `gen-runtime-types: ${other.config} generates a different runtime surface from cloudflare.config.ts ` +
         `(${other.body.length} vs ${site.body.length} bytes). The shared file no longer fits every Worker; ` +
         `give that program its own generated file rather than typing it against the site's runtime.`,
       );

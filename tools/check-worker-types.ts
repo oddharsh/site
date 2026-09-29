@@ -28,7 +28,9 @@ const TSC = join(REPO, "node_modules", "typescript", "bin", "tsc");
 
 // All three trees run in the site Worker, including transitively imported
 // Serendipity. cal/src is currently clean; its diagnostics remain in scope.
-const OWNED = ["src/worker/", "cal/", "serendipity/"];
+// counter/ is the fourth: the aadhar-counter Worker hosts the site's Counter
+// Durable Object and re-exports it from src/worker, on the same runtime.
+const OWNED = ["src/worker/", "cal/", "serendipity/", "counter/"];
 
 const { mine, ownedFiles, byFile } = runScopedTsc({
   repo: REPO, tsc: TSC, owns: OWNED, label: "check-worker-types",

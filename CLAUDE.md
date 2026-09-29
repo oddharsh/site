@@ -28,7 +28,7 @@ decides which one a given file belongs in:
 | **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …). They stage back to the ROOT of the served tree, so their public URLs are still `/nav.js` and `/luna.css`. Source layout and URL layout are different questions, and only the first one moved. |
 | **`src/dict/`** | `a-dict/`, `p-dict/` and `f-dict/`: the previously shipped bytes of the shell, of each page, and of the site-page family dictionary. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
-| `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. `lwe-ask` and `lens-reader` carry a `wrangler.toml`; **`cf-garage` carries a `cloudflare.config.ts`** and is the repository's one trial of wrangler's experimental TypeScript config, so every wrangler command in that directory needs `--x-new-config` (gotcha 41). |
+| `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. **All three carry a `cloudflare.config.ts`**, wrangler's experimental TypeScript config: cf-garage since 2026-08-23, and lwe-ask and lens-reader since 2026-09-28 through `cf migrate`. So every wrangler command in those directories that reads the config needs `--x-new-config` and runs from the directory itself (gotcha 41). The site Worker moved the same day BY HAND, because `cf migrate` drops its Workflow bindings (gotcha 48). |
 | **`tools/`** | **every developer tool.** The build (`build.ts`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
 | **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `derivations.json` (what each committed derived artifact was made FROM, plus its machine-owned `.lock.json`), `tools.json` (the external binaries), `tsconfig.json`. |
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
@@ -45,11 +45,14 @@ mapping names the directory the file actually authors in.
 Four things stay at the repository root because their tooling demands it, and
 moving any of them costs more than it buys:
 
-- `wrangler.jsonc` + `wrangler.dev.jsonc`. Workers Builds runs from the repo
-  root and wrangler resolves `main` and `assets.directory` relative to the
-  config file, so relocating these means editing the Cloudflare dashboard
-  FIRST (the deploy command is mirrored in `config/infra.json` and `infra:check`
-  fails on drift it would otherwise invent itself).
+- `cloudflare.config.ts` + `wrangler.config.ts` (the site Worker's config since
+  2026-09-28, replacing `wrangler.jsonc`; gotcha 48) + `wrangler.dev.jsonc`.
+  Workers Builds runs from the repo root, the TS loader reads the WORKING
+  DIRECTORY and refuses `-c`, and wrangler resolves the entrypoint and assets
+  directory relative to the config, so relocating these means editing the
+  Cloudflare dashboard FIRST (the deploy command is mirrored in
+  `config/infra.json` and `infra:check` fails on drift it would otherwise invent
+  itself).
 - `package.json` (which carries the four workspaces itself, so there is no
   separate workspace file), `bun.lock`, `.node-version`.
 - `CLAUDE.md` and its `AGENTS.md` symlink, plus `README.md`.
@@ -732,7 +735,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   Use the versions form, which mints a new version and moves no traffic:
 
   ```bash
-  bun run wrangler versions secret put -c wrangler.jsonc <NAME>
+  bun run wrangler:site versions secret put <NAME>
   ```
 
   Then put it live with `bun run deploy:promote --to 100`. Every secret
@@ -871,6 +874,89 @@ worktrees may edit freely, but a worktree is not a release surface.
   account. That is the cheapest place to answer any "will the deploy accept
   this" question: push the branch and read `wrangler versions view` on the alias,
   which the dry run structurally cannot tell you.
+- **Moving Counter out: the `Counter` Durable Object is moving from aadhar-sh
+  to its own Worker, `aadhar-counter` (`counter/`), IN FIVE ALTERNATING
+  DEPLOYS.** Started 2026-09-28. The reason is preview URLs: Cloudflare mints
+  no version URL for a Worker that implements a Durable Object, so every
+  aadhar-sh version has carried `has_preview: false` since `Counter` moved in
+  on 2026-07-01. Binding a class that ANOTHER Worker exports leaves previews
+  on, measured on throwaway Workers, so the site keeps its `COUNTER` binding
+  and only stops exporting the class.
+
+  **The data is why this is a transfer rather than a fresh class.** One class
+  holds two things: the odometer (`n` in instance `homepage-visits`) and the
+  live coffee-slot claims (`coffee-slot:<start>:<end>`, cal/src/reservation.ts).
+  Seeding a new class from the current count, the way the July move from
+  cf-garage did, would keep the odometer and drop every pending slot claim,
+  which is a double-booking window with nothing to say so.
+
+  A transfer is only expressible in the `exports` lifecycle form, and a Durable
+  Object in `exports` is mutually exclusive with a `migrations` array, so step 1
+  converts the site's class from `migrations: [{ tag: "v1", new_sqlite_classes }]`
+  to `exports.Counter: { type: "durable-object", storage: "sqlite" }`. Every
+  lifecycle step needs `wrangler deploy`: `versions upload` applies none of
+  them, which is also why each site step lands through the production build
+  (`wrangler deploy` since 2026-09-28) rather than a branch build.
+
+  | step | deploys | change | how |
+  |---|---|---|---|
+  | 1 | aadhar-sh | `Counter` declared in `exports`, `migrations` removed | merge a site PR |
+  | 2 | aadhar-counter | `Counter` `expecting-transfer` from `aadhar-sh` | `bun run wrangler deploy -c counter/wrangler.jsonc --x-provision=false --x-auto-create=false` |
+  | 3 | aadhar-sh | `Counter` `transferred` to `aadhar-counter`; `COUNTER` gains `script_name: "aadhar-counter"` | merge a site PR |
+  | 4 | aadhar-counter | `Counter` back to plain `storage: "sqlite"` | the same command |
+  | 5 | aadhar-sh | the class code and the tombstone leave; the class moves into `counter/src` | merge a site PR |
+
+  **The site steps edit `cloudflare.config.ts`, since #999 replaced
+  `wrangler.jsonc` (gotcha 48).** Step 1 is already in that file's form:
+  `Counter: exports.durableObject({ storage: "sqlite" })` under `exports`, and
+  no migrations anywhere. Step 3 is a `state` on that export plus
+  `worker: "aadhar-counter"` on the `COUNTER` binding. One thing to do before
+  step 3 merges: `tools/lib/site-config.ts`, which projects the TS config into
+  `.wrangler.site.jsonc` for the commands that refuse `--x-new-config`, knows
+  only created classes and throws on any other `state` by name. Teach it the
+  transferred form first, then check the projection against the legacy shape
+  the step table describes.
+
+  **Rehearsed end to end on 2026-09-28** with a throwaway pair built like this
+  one (the source started on a legacy `v1` migration beside worker-type
+  `exports`, same compatibility date and flags), deleted afterwards. Reading
+  the count through the SOURCE after each step:
+
+  | after step | count | answered by |
+  |---|--:|---|
+  | 0, baseline | 3 | source |
+  | 1 | 6 | source |
+  | 2 | 9 | source |
+  | 3 | 10 to 15 | target |
+  | 4 | 18 | target |
+  | 5 | 21 | target |
+
+  No request failed at any step and the count never reset. Step 3 is the
+  commit: the first request after that deploy was already answered by the
+  target's code. A `versions upload` was accepted in the step 1 state, and
+  after step 5 one printed a `Version Preview URL:` that answered 200 THROUGH
+  the cross-Worker binding, which is the whole point of the exercise.
+
+  Four things the rehearsal did not settle, so treat them as unsafe until they
+  are measured:
+
+  - **Rolling aadhar-sh back across step 1 or step 3.** `deploy:promote
+    --rollback` redeploys an existing version, and a version from before step 3
+    binds a class this Worker no longer owns. Roll forward instead.
+  - **Running step 2 before step 1 serves.** The target names a source class
+    that the docs show in the `exports` form; whether the legacy form is
+    accepted was not tried. Confirm step 1 with `bun run deploy:promote --status`
+    before running step 2.
+  - **Collapsing steps 3 and 5.** Cloudflare's own sequence keeps the class code
+    in the source through the commit, and the rehearsal followed it.
+  - **The branch build of the step 3 PR.** It runs `versions upload` on a
+    lifecycle change, so expect it to be refused. It is not a required check,
+    and the production build is `wrangler deploy`.
+
+  Check after each site step: `/hit?peek=1` keeps counting from where it was,
+  and a coffee booking still claims its slot. After step 5, a branch build's
+  version should read `has_preview: true`. `counter/wrangler.jsonc` is written
+  for the step it is at and says which.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`
@@ -928,7 +1014,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   window where the setting could work.
 
   Every layer of config says yes, which is why it went unnoticed for eight
-  weeks. `preview_urls: true` is in `wrangler.jsonc`, and the script's subdomain
+  weeks. `previewUrls: true` is in `cloudflare.config.ts`, and the script's subdomain
   endpoint answers `{ enabled: false, previews_enabled: true }`. The refusal
   lives one layer down, in the VERSION: each upload's metadata carries
   `has_preview`, and all 100 versions the API lists read `false`. Wrangler
@@ -960,14 +1046,10 @@ worktrees may edit freely, but a worktree is not a release surface.
   before it is in production, which is the whole thing #211 turned this on for.
 
   Making previews real means `aadhar-sh` stops exporting `Counter`: host it in
-  another Worker and bind to it with `script_name`. That is a DO lifecycle change
-  (`transferred_classes` to keep the counter's data). Since 2026-09-28 the
-  production build runs `wrangler deploy`, which the DO note above shows (from
-  wrangler's source) never meets error 10211, so the merge itself can carry the
-  migration; that PR's own branch build runs `versions upload` and should be
-  expected to refuse it with 10211, which is not a reason to stop. Note that
-  commit 5af65648 moved `Counter` IN from cf-garage, so this reverses a
-  deliberate choice rather than tidying one.
+  another Worker and bind to it with `script_name`. That move is under way as a
+  five-step transfer that keeps the class's data; "Moving Counter out" above has
+  the sequence and the rehearsal. Note that commit 5af65648 moved `Counter` IN
+  from cf-garage, so this reverses a deliberate choice rather than tidying one.
 
   **Only the EXPORT blocks previews, measured 2026-09-28** with five throwaway
   Workers (wrangler 4.142.0, this Worker's compatibility date and flags,
@@ -993,7 +1075,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   Workflow leaves the Workflow behind (it still showed in `wrangler workflows
   list`), so it needs its own `wrangler workflows delete`.
 
-  The setting stays in `wrangler.jsonc` meanwhile, and so does the guard below:
+  The setting stays in `cloudflare.config.ts` meanwhile, and so does the guard below:
   `preview_urls` DEFAULTS to whatever `workers_dev` is, so the explicit line is
   what makes previews switch on by themselves the day the DO leaves.
 
@@ -2415,7 +2497,7 @@ generic hex back.
   `/lens` rate-limit counters left KV 2026-08-04 for the Rate Limiting binding
   below — they were a WRITE per allowed request on the busiest route here, which
   had quietly made "we use a handful" false.)
-- **LENS_RL_\*** (Rate Limiting bindings, `ratelimits` in `wrangler.jsonc`) —
+- **LENS_RL_\*** (Rate Limiting bindings, `bindings.rateLimit` in `cloudflare.config.ts`) —
   the seven per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
   inspect 30/min, shot 3/min, compare 4/min, browser 3/min, wire 2/min, tools
   10/min, nlweb 4/min. An eighth, `LENS_RL_BROWSER_ALL` at 4/min, is keyed on a
@@ -2430,7 +2512,7 @@ generic hex back.
   `N/min` inside its own correction is still a greppable stale number.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 158 photos at FUJIFILM X-T50 + Leica resolution).
-- **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from public/.
+- **ASSETS** — the Workers static-assets binding (`bindings.assets()` in cloudflare.config.ts), serves files from public/.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
   the **single source of truth for the deploy log**. One row per logged deploy
   (written by the ramp at 100%, staged by bump-version.sh; the retired SW's
@@ -2439,7 +2521,7 @@ generic hex back.
   build) read this one `checkpoints` table, so they cannot drift apart. Schema:
   `checkpoints(vnum INTEGER PK, ts INTEGER, ymd TEXT, version TEXT, slug TEXT, title TEXT)`
   — `slug` is the version suffix / changelog tag, `title` is the human description.
-  **Configured in `wrangler.jsonc`** (d1_databases), like every other binding
+  **Configured in `cloudflare.config.ts`** (`bindings.d1`), like every other binding
   since the Workers migration.
   **Log a deploy** (so both pages stay current):
   `./tools/photos/bump-version.sh <slug> "<title>"`, run INSIDE the PR being
@@ -2470,7 +2552,7 @@ generic hex back.
   the binding, `/lens/shot` returns a clean 503 and the Human view falls back to
   the readable-text reader, so the live iframe + all machine lenses keep working
   regardless. (`CF_ACCOUNT_ID` is read by `/ledger`'s Analytics Engine SQL
-  alongside `ANALYTICS_READ_TOKEN`, and by the Kitesurf REST path below.)
+  alongside `ANALYTICS_READ_TOKEN`, and by the REST fallback below.)
 
   **Kitesurf rides the EXISTING `/lens/browser`, and there is no second route.**
   A `/lens/rendered` was built here on 2026-08-06 and deleted the same day: it
@@ -2479,19 +2561,51 @@ generic hex back.
   Action, and whose `deltaStrip` already computed the HTTP-versus-rendered word
   gap. Read `lens-browser.js` before adding a rendering surface.
 
-  What survives in `lens-render.ts` is the engine seam. **Kitesurf cannot be
-  reached from the binding**: probed 2026-08-06, passing `browser` to
-  `quickAction` returns `{"code":"unrecognized_keys","keys":["browser"]}`, and an
-  invented engine name returns the byte-identical error — the payload schema is
-  CLOSED, so it refuses the option rather than failing on an unknown value. REST
-  is the only door and it wants a `Browser Rendering - Edit` token in
-  `BROWSER_RUN_TOKEN`. That is an EDIT scope living as a Worker secret; it is not
-  in GitHub, so the no-write-token-in-CI rule is intact, but do not confuse it
-  for a read scope. `browser=kitesurf` is in Cloudflare's launch post and NOT in
-  the Quick Actions reference, so the code TRIES it and, on a 400, retries
-  without it and remembers for the isolate. Only the PARAMETER is conditional —
-  REST itself keeps serving, because gating the whole REST path on a dead beta
-  flag silently demoted every later render back to the binding.
+  What survives in `lens-render.ts` is the engine seam, and **since 2026-09-28
+  the BINDING is the Kitesurf door**: `quickAction(action, { ...payload,
+  browser: "kitesurf" })`. This paragraph said the opposite for seven weeks, and
+  it was true when written. Probed 2026-08-06, `browser` came back
+  `unrecognized_keys` for any value. Re-probed 2026-09-28 against the production
+  binding, each case with an invalid `url` so nothing rendered:
+
+  | extra key | errors |
+  |---|---|
+  | none | `Invalid URL` |
+  | `browser: "kitesurf"` | `Invalid URL` alone |
+  | `browser: "definitely-not-an-engine"` | `Invalid URL` + `invalid_value: expected "kitesurf"` |
+  | `definitely_not_a_key_xyz: 1` | `Invalid URL` + `unrecognized_keys` |
+
+  The last row is the control: the schema is still closed, so the second row is
+  acceptance rather than silence. The third row is the one the REST door never
+  gave: the engine name is VALIDATED, which is the bar the `kitesurf:check`
+  paragraph below sets for a bare `kitesurf` label, so the binding path reports
+  exactly that. A real render the same day agreed: example.com came back with
+  `window.chrome` undefined and no WebGL (Chromium has both), in 1118
+  browser-ms against Chromium's 2656, and `/garage` drew its layout, photos and
+  copy with a fallback font and without the SVG taskbar icons.
+
+  **Kitesurf refuses unimplemented options by name, and the refusal is free.**
+  The real `/lens/browser` payload came back 501, code 2000, `Unsupported
+  options: viewport.deviceScaleFactor`, in 790ms with no `x-browser-ms-used`
+  header. So `kitesurfPayload()` drops a `deviceScaleFactor` of exactly 1
+  (Chromium's default, so no pixel changes), and a 400 or 501 on the Kitesurf
+  attempt retries once on Chromium, labelled `chromium-binding`. A 429 or 5xx
+  does NOT retry: it would spend a render and a rate-limit slot to hide which
+  engine failed.
+
+  **Everything from here to the recipes note describes the REST FALLBACK**, which
+  now serves only a deployment with no binding. It wants a `Browser Rendering -
+  Edit` token in `BROWSER_RUN_TOKEN`. That is an EDIT scope living as a Worker
+  secret; it is not in GitHub, so the no-write-token-in-CI rule is intact, but do
+  not confuse it for a read scope. With the binding answering, production no
+  longer needs that secret, and deleting it (plus the REST branch of
+  `runBrowserAction`, per MAINTENANCE.md) is an open follow-up rather than part of the change that
+  moved the door, because a secret change mints a version (gotcha 25).
+  `browser=kitesurf` on REST is in Cloudflare's launch post and NOT in the Quick
+  Actions reference, so the code TRIES it and, on a 400, retries without it and
+  remembers for the isolate. Only the PARAMETER is conditional: REST itself keeps
+  serving, because gating the whole REST path on a dead beta flag silently
+  demoted every later render back to the binding.
 
   **The selector only works on `/browser-run/<action>`, and this posted to
   `/browser-rendering/<action>` until 2026-08-08.** Both spellings ROUTE, which
@@ -2541,6 +2655,10 @@ generic hex back.
   `--render` buys the certain answer for two renders of a 40-byte inline
   document. If the verdict is `enforced`, promote the label and record the date
   and the outputs at the control.
+
+  **The BINDING passed that control on 2026-09-28** (the table above), which is
+  why its label is a bare `kitesurf`. `kitesurf:check` tests the REST door alone
+  and stays the way to settle `kitesurf-requested`.
 
   Worth the effort because Kitesurf is FREE during its beta. The daily
   browser-minute ceiling is what makes `/lens/browser` fragile (and what blacks
@@ -3439,8 +3557,9 @@ how to recover the plans and their audit from git.
    TRUNCATED response no longer differs from a complete one at the last byte.
    Truncation is caught by `maxBytes` and the marker assertions instead.
 
-   `wrangler.jsonc` self-builds and points both `main` and `assets` at
-   `.build/public`, so no deploy path can ship the readable originals. Local
+   The site config self-builds (`build.command` in `wrangler.config.ts`) and
+   points both the entrypoint and the assets directory at `.build/`, so no deploy
+   path can ship the readable originals. Local
    development uses `wrangler.dev.jsonc` against a SYMLINK FARM at `.dev-assets`,
    staged by `tools/dev-stage.ts`, which `bun run dev` and `bun run dev:remote`
    run first. It reads "against readable `public/`" above this line until
@@ -3496,7 +3615,7 @@ are installed on macOS, so the fallback path doesn't hit Helvetica/Arial.
 ## cal/ — coffee booking module
 
 The root site Worker serves `cal/src/` at `aadhar.sh/coffee`. Its bindings and
-policy live in root `wrangler.jsonc`; `cal/wrangler.test.toml` is the local test
+policy live in root `cloudflare.config.ts`; `cal/wrangler.test.toml` is the local test
 fixture. The build stages the module beside the site Worker entrypoint.
 
 [cal/README.md](cal/README.md) describes the booking flow, Durable Object slot
@@ -4576,7 +4695,7 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     Two announced pieces are not shipped and nothing here should be built on them
     yet: **model-first routing** (ask for a model abstractly, let the gateway pick a
     provider and fail over) and **smart routing**. The first is worth watching,
-    since `lwe-ask/wrangler.toml` already carries a scar from `llama-3.1-8b` being
+    since `lwe-ask/cloudflare.config.ts` already carries a scar from `llama-3.1-8b` being
     deprecated out from under `GEN_MODEL` on 2026-05-30.
 
 24. **The ramp writes the changelog from YOUR WORKING TREE, so pull `main` before
@@ -6094,6 +6213,37 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     still better than a hand-kept list, because a list goes stale without failing
     anything.
 
+    **The `cf` CLI runs here since 2026-09-28, as a workstation global.** Cloudflare
+    launched it as wrangler's successor, and for a JavaScript Worker it DELEGATES
+    to wrangler ("Delegating to Wrangler"), so `cf build` wrote the same 3 files
+    to `.cloudflare/output/v0/` as `wrangler build --x-new-config
+    --x-cf-build-output`, sha256 for sha256, and `cf deploy --dry-run` needs no
+    credential. Install it with `bun add -g cf` and run it from `cf-garage/`.
+    Two things it needed, both recorded in `docs/DEPENDENCIES.md` under
+    `cf-garage/`: cf reads the dev server from the PROJECT'S manifest, so
+    cf-garage names the root's exact wrangler URL (check-wrangler went from an
+    absence test to an equality test to allow it); and cf stays OUT of the tree,
+    because its CLI half pins a second Miniflare and Workerd. The bun door is
+    the one this entry opened with: `cf` resolves to a `#!/usr/bin/env node` shim and runs,
+    while `bun run --bun cf build` puts bun in front of wrangler's config loader
+    and is refused by name.
+
+    **`cf migrate` moved lwe-ask and lens-reader onto this format the same day,
+    and refused the site Worker.** Each upload came out byte-identical to its
+    toml (`deploy --dry-run --outdir`, index.js sha256), with every comment
+    carried over by hand, since the generator drops them, and the import pointed
+    at `@cloudflare/config/public` like this file. Run it with `--no-install`,
+    because its default adds `cf` as a dependency. It REFUSED the site Worker:
+    `cf migrate --dry-run` reports that Workflow bindings "are not supported by
+    the new config and were not migrated", which would drop `BOOKING_WORKFLOW`
+    and `CENSUS_WORKFLOW` silently. That is the migrator's gap rather than the
+    format's (`exports.workflow` and `bindings.workflow` both exist), so the
+    site moved by hand the same day; gotcha 48. Two traps met on the way:
+    `wrangler tail` refuses `--x-new-config` (while `tail --x-new-config --help`
+    exits 0), so both tail scripts name the Worker instead; and
+    `gen-runtime-types` now reads the two configs by IMPORTING them, since a TS
+    config is a program rather than data.
+
 46. **A re-encode changes the pixels the HISTOGRAMS were computed from, and the
     check that should have caught that compares two files derived from each
     other.** Found 2026-08-23. #394 re-encoded 316 JPEG thumbnails on 2026-08-14,
@@ -6599,6 +6749,79 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     covers all of them. An `include.path` naming a missing file is SILENTLY
     IGNORED, so that script reads the driver back out afterwards and fails if it
     is not there.
+
+48. **The site config is TypeScript since 2026-09-28, and most wrangler
+    commands cannot read it.** `cloudflare.config.ts` (what the Worker is) and
+    `wrangler.config.ts` (how wrangler builds it) replaced `wrangler.jsonc`,
+    translated by hand because `cf migrate` drops Workflow bindings. Wrangler
+    reads the pair only behind `--x-new-config`, and only some commands take
+    that flag. Measured the same day, with a real invocation each rather than
+    `--help`, which exits 0 for a flag the command then refuses:
+
+    | accepts `--x-new-config` | refuses it as an unknown argument |
+    |---|---|
+    | `deploy`, `build`, `versions upload`, `versions deploy` | `versions list`, `versions view`, `deployments status`, `versions secret put`, `tail`, `check startup`, `types`, `d1`, `kv` |
+
+    A refusing command given no config loses what `wrangler.jsonc` used to
+    supply by being found: the Worker name, the pinned account (this login sees
+    two, so wrangler will not guess), and binding names like `d1 execute
+    RESTORE_DB`. And `createTestHarness`, which boots the route oracle, takes a
+    config path or an inline object in the LEGACY shape and has no new-config
+    door at all.
+
+    So there is ONE translation. `tools/lib/site-config.ts` projects the TS pair
+    into the legacy shape, and `.wrangler.site.jsonc` is that projection written
+    out: gitignored, regenerated, never edited. `siteWranglerArgs()` makes the
+    split for every tool (`--x-new-config` for a command that builds, `-c` on the
+    generated file for the rest), and `bun run wrangler:site <command>` is the
+    same split for a person: it is what `bun run wrangler <command> -c
+    wrangler.jsonc` was. Readers that want fields call `siteConfig()`; the
+    contract suite goes through `configText()` in `contract-shared.ts`.
+
+    **The release path needed no dashboard change**, and that is the design
+    choice worth defending. The declared deploy command never names a config, so
+    `.github/deploy-wrangler.sh` adds `--x-new-config` itself whenever
+    `cloudflare.config.ts` exists. Either order of the dashboard alternative
+    breaks releases for a window (dashboard first fails every build of a `main`
+    without the TS config; merge first fails every build of one without
+    `wrangler.jsonc`), while an in-repo switch lands atomically with the merge.
+    It is the one argument that script adds, conditioned on the FILE rather than
+    the command, and `contract-the-typescript-quarantine` pins exactly that, with
+    a control that smuggles a second flag and fails.
+
+    How it was proven before `wrangler.jsonc` was deleted, since each check
+    covers a different layer:
+
+    - the dry-run bundle through `--x-new-config` is byte-identical to the
+      jsonc's (`index.js` sha256, 771.75 KiB), with the same 48 bindings;
+    - `wrangler build --x-cf-build-output` resolved to the same name, date,
+      flags, account, 3 routes, 4 crons, 94 `run_worker_first` rows in order,
+      html handling, cache, entrypoint caches, workers.dev and preview settings,
+      observability, Workflows, 10 secrets and 17 vars;
+    - the projection deep-equals the parsed jsonc on all 30 top-level keys,
+      under bun and node, except `dependencies_instrumentation`, a no-op when
+      absent (gotcha 41 has the read);
+    - the route oracle, booted from the generated file, passed 194 of 194.
+
+    **The upload half of the export form is MEASURED; the deploy half is not.**
+    None of the checks above could say whether `versions upload` accepts the
+    Durable Object and Workflows in EXPORT form (`exports.durableObject`,
+    `exports.workflow`) for classes that already exist under the `v1`
+    migration tag, since cf-garage had proved that for `deploy` alone. A branch
+    build is the instrument, because both Workers Builds commands are `versions
+    upload` against the real Worker. It answered on 2026-09-28: version
+    `5c64677c` (alias `claude-site-worker-ts-config`) uploaded with all 48
+    bindings, `fetch` + `scheduled` handlers, the right date and flags, and both
+    Workflows annotated "(defined in aadhar-sh)", the new config's signature.
+
+    What is still unmeasured is `versions deploy`, the step that RECONCILES
+    declarative exports ("reconciled when the version is deployed", in
+    wrangler's own error text). That is precisely where #950's
+    `observability.issues` passed an upload and then failed every ramp, so the
+    first ramp after this lands is the measurement. A refusal there fails the
+    ramp's `versions deploy` before any traffic moves, which is the shape #950
+    had, and `bun run deploy:promote --rollback` is the exit if anything gets
+    further than that.
 
 ---
 

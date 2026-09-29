@@ -30,6 +30,8 @@
 # .build/ because wrangler resolves main + assets.directory relative to the config
 # file. Never commit it: its bindings point at PRODUCTION KV/R2/Browser.
 .wrangler.remote.jsonc
+# GENERATED from cloudflare.config.ts + wrangler.config.ts by tools/lib/site-config.ts
+.wrangler.site.jsonc
 
 # macOS
 .DS_Store

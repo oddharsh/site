@@ -1,8 +1,8 @@
 {
   "$comment": [
-    "Account- and zone-level infrastructure that wrangler.jsonc cannot reach.",
+    "Account- and zone-level infrastructure that cloudflare.config.ts cannot reach.",
     "",
-    "wrangler.jsonc already declares the compute layer (routes, crons, bindings,",
+    "cloudflare.config.ts already declares the compute layer (routes, crons, bindings,",
     "DO migrations) and CI dry-runs it on every PR. This file covers the rest: the",
     "DNS records, the resources those bindings point at, the Worker inventory, and",
     "the release wiring. Until this existed, all of that lived in prose in",
@@ -13,8 +13,8 @@
     "diffs against reality; nothing here mutates Cloudflare. Changing a value here",
     "does not change production, it changes what the check demands of production.",
     "",
-    "Resource IDs deliberately live in wrangler.jsonc alone. This file names what",
-    "must exist and why; the checker reads the IDs from wrangler.jsonc so the two",
+    "Resource IDs deliberately live in cloudflare.config.ts alone. This file names what",
+    "must exist and why; the checker reads the IDs from cloudflare.config.ts so the two",
     "cannot drift into two different answers."
   ],
 
@@ -49,8 +49,10 @@
       "The other three are the AUXILIARY Workers, pinned 2026-08-21 after a",
       "non-interactive deploy of lwe-ask failed on exactly the error this block",
       "was written about. cf-garage, lwe-ask and lens-reader each deploy from",
-      "their own directory with -c wrangler.toml, so wrangler resolves the",
-      "account from THAT file and never reads wrangler.jsonc at all. Until they",
+      "their own directory (with -c wrangler.toml then; all three read a",
+      "cloudflare.config.ts through --x-new-config since 2026-09-28), so",
+      "wrangler resolves the account from THAT file and never reads",
+      "the root config at all. Until they",
       "were pinned the answer came from ~/.wrangler/cache/wrangler-account.json,",
       "which only an interactive prompt writes, so whether a deploy worked",
       "depended on machine-local cache state rather than on anything in the",
@@ -58,12 +60,12 @@
       "and lwe-ask resolved fine while lens-reader still failed, which is the",
       "shape of a guarantee nobody has.",
       "",
-      "NO ID HERE, per this file's own rule: resource ids live in wrangler.jsonc",
+      "NO ID HERE, per this file's own rule: resource ids live in cloudflare.config.ts",
       "alone and the checker reads them from there, so the two can never drift",
-      "into two different answers. wrangler.jsonc's account_id is the source of",
+      "into two different answers. cloudflare.config.ts's accountId is the source of",
       "truth and the other three copies are checked against IT, not against a",
       "fifth copy written here. What this block declares is the invariant — all",
-      "four must agree — which is the part wrangler.jsonc cannot state about",
+      "four must agree — which is the part cloudflare.config.ts cannot state about",
       "itself.",
       "",
       "This is the TREE tier, so it is a string comparison with no credential",
@@ -74,14 +76,15 @@
       "that the answer stops depending on how many accounts a given login",
       "happens to see."
     ],
-    "source_of_truth": "wrangler.jsonc account_id",
+    "source_of_truth": "cloudflare.config.ts accountId",
     "must_agree": [
-      "wrangler.jsonc vars.CF_ACCOUNT_ID",
+      "cloudflare.config.ts env.CF_ACCOUNT_ID",
       "wrangler.dev.jsonc account_id",
       "wrangler.dev.jsonc vars.CF_ACCOUNT_ID",
       "cf-garage/cloudflare.config.ts accountId",
-      "lwe-ask/wrangler.toml account_id",
-      "lens-reader/wrangler.toml account_id"
+      "lwe-ask/cloudflare.config.ts accountId",
+      "lens-reader/cloudflare.config.ts accountId",
+      "counter/wrangler.jsonc account_id"
     ]
   },
   "zone": {
@@ -204,7 +207,7 @@
       "type": "A",
       "match": "sameAs",
       "expect": "aadhar.sh",
-      "why": "Backs the `cal.aadhar.sh/*` route in wrangler.jsonc. The route is declared in code but the hostname it needs is not, so without this entry the coffee module can lose its domain and every config in the repo still validates clean."
+      "why": "Backs the `cal.aadhar.sh/*` route in cloudflare.config.ts. The route is declared in code but the hostname it needs is not, so without this entry the coffee module can lose its domain and every config in the repo still validates clean."
     },
 
     {
@@ -270,7 +273,7 @@
   ],
 
   "resources": {
-    "$comment": "IDs live in wrangler.jsonc. This lists what must exist in the account and why, and the checker joins the two by binding name.",
+    "$comment": "IDs live in cloudflare.config.ts. This lists what must exist in the account and why, and the checker joins the two by binding name.",
     "kv_namespaces": [
       { "binding": "RN_KV", "title": "rn-cache", "why": "Playlist tracks, photo manifest, artist pics, Lens screenshots, the /around crawl snapshot." },
       { "binding": "BOOKINGS", "title": "cal-aadhar-sh-CAL_BOOKINGS", "why": "Pending and confirmed coffee bookings, plus the per-slot held: keys." }
@@ -284,23 +287,23 @@
       { "binding": "SOCIAL_DB", "database": "aadhar-social", "why": "Inbound webmentions behind /inbox, plus the outbound send ledger. Deliberately NOT aadhar-restore: this is moderated, mutable content written by strangers, where checkpoints is the site's own append-only history." }
     ],
     "vectorize_indexes": [
-      { "binding": "VECTORIZE", "index": "lwe-passages", "config": "lwe-ask/wrangler.toml", "why": "Passage index for the /lwe/ask RAG endpoint. Created once by hand; the create command survives only as a comment in that config." }
+      { "binding": "VECTORIZE", "index": "lwe-passages", "config": "lwe-ask/cloudflare.config.ts", "why": "Passage index for the /lwe/ask RAG endpoint. Created once by hand; the create command survives only as a comment in that config." }
     ]
   },
 
   "workers": {
     "$comment": "Worker inventory. `retired` is the interesting half: a Worker that should be gone but is not still holds its routes, and that is invisible from inside this repo.",
     "expected": [
-      { "name": "aadhar-sh", "config": "wrangler.jsonc", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
+      { "name": "aadhar-sh", "config": "cloudflare.config.ts", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
       { "name": "cf-garage", "config": "cf-garage/cloudflare.config.ts", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
-      { "name": "lwe-ask", "config": "lwe-ask/wrangler.toml", "why": "The /lwe/ask RAG endpoints." },
-      { "name": "lens-reader", "config": "lens-reader/wrangler.toml", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE because Readability needs a DOM Document, and linkedom supplying one costs 94.6 KB gzip on its own against a site bundle already over its 204.24 KiB budget. The second reason this note used to give, run_worker_first's 100-rule cap, EXPIRED when the eight exact /lens rows were folded to /lens + /lens/* and the config dropped to 94; the size reason is doing the work alone now. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
+      { "name": "lwe-ask", "config": "lwe-ask/cloudflare.config.ts", "why": "The /lwe/ask RAG endpoints." },
+      { "name": "lens-reader", "config": "lens-reader/cloudflare.config.ts", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE because Readability needs a DOM Document, and linkedom supplying one costs 94.6 KB gzip on its own against a site bundle already over its 204.24 KiB budget. The second reason this note used to give, run_worker_first's 100-rule cap, EXPIRED when the eight exact /lens rows were folded to /lens + /lens/* and the config dropped to 94; the size reason is doing the work alone now. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
     ],
     "retired": [
       {
         "name": "serendipity-collective",
         "deleted": "2026-07-25",
-        "why": "The former Serendipity Worker. wrangler.jsonc now serves /serendipity* from the site Worker, so CLAUDE.md called for removing this one after the first successful production deploy. It was still deployed months later, which is what the first real run of the account tier caught. Deleted 2026-07-25 after confirming /serendipity still served 200 from the site Worker. The entry stays so the check keeps asserting it is gone: two deployments claiming overlapping surface, with the older one unversioned by this repo, is the state worth never returning to."
+        "why": "The former Serendipity Worker. cloudflare.config.ts now serves /serendipity* from the site Worker, so CLAUDE.md called for removing this one after the first successful production deploy. It was still deployed months later, which is what the first real run of the account tier caught. Deleted 2026-07-25 after confirming /serendipity still served 200 from the site Worker. The entry stays so the check keeps asserting it is gone: two deployments claiming overlapping surface, with the older one unversioned by this repo, is the state worth never returning to."
       }
     ],
     "unmanaged": [
@@ -479,7 +482,7 @@
       "  match: sameAs    the Worker custom domain is attached, so a rebuild gets",
       "                   it from deploying the Worker, never from here.",
       "  resources        KV/R2/D1 creation mints NEW ids that would have to be",
-      "                   written back into wrangler.jsonc by hand. Wrangler",
+      "                   written back into cloudflare.config.ts by hand. Wrangler",
       "                   already creates these; see MAINTENANCE.md for the order.",
       "  the Worker       Workers Builds is the only publisher. Nothing here may",
       "                   ever deploy it, or the release backstop is gone.",
@@ -638,7 +641,7 @@
       "is the dashboard's \"Deploy command\", and the other is its \"Non-production",
       "branch deploy command\". Both are declared below.",
       "",
-      "The build_command MUST stay blank. wrangler.jsonc's build.command runs",
+      "The build_command MUST stay blank. wrangler.config.ts's build.command runs",
       "build.ts during `wrangler deploy`, so a non-empty field here builds twice,",
       "and a field that runs something other than build.ts is how production once",
       "ended up serving an unminified 78KB nav.js.",
@@ -647,7 +650,7 @@
       "TRUE: --x-provision and --x-auto-create let a deploy create real KV/R2/D1",
       "resources for any binding declared without an id. 4.114 relaxed the config",
       "schema so more binding types can ship id-less, which makes that easier to",
-      "trip into. Resource IDs live in wrangler.jsonc and resources are created by",
+      "trip into. Resource IDs live in cloudflare.config.ts and resources are created by",
       "`bun run infra:apply` alone, so every deploy path is pinned off and a",
       "missing id fails loudly instead of minting something nobody declared.",
       "",
@@ -1198,7 +1201,7 @@
         { "name": "area: tools", "color": "d4c5f9", "description": "Developer tooling and the contract suite", "paths": ["tools/**", "!tools/photos/**"] },
         { "name": "area: ci", "color": "d4c5f9", "description": "Workflows, actions, Dependabot", "paths": [".github/**"] },
         { "name": "area: docs", "color": "d4c5f9", "description": "Runbooks and repository prose", "paths": ["docs/**", "**/*.md"] },
-        { "name": "area: infra", "color": "d4c5f9", "description": "Declared Cloudflare state, wrangler config, pins", "paths": ["config/**", "wrangler.jsonc", "wrangler.dev.jsonc", "package.json", "bun.lock", ".node-version"] },
+        { "name": "area: infra", "color": "d4c5f9", "description": "Declared Cloudflare state, wrangler config, pins", "paths": ["config/**", "cloudflare.config.ts", "wrangler.config.ts", "wrangler.dev.jsonc", "package.json", "bun.lock", ".node-version"] },
 
         {
           "name": "hashed-asset",
@@ -1211,7 +1214,7 @@
           "name": "release-path",
           "color": "e99695",
           "description": "Touches what decides which commit reaches production",
-          "paths": [".github/workflows/promote-production.yml", ".github/deploy-wrangler.sh", "tools/deploy-promote.ts", "tools/lib/release-guard.ts", "wrangler.jsonc", "config/infra.json", "src/worker/checkpoints.json"],
+          "paths": [".github/workflows/promote-production.yml", ".github/deploy-wrangler.sh", "tools/deploy-promote.ts", "tools/lib/release-guard.ts", "cloudflare.config.ts", "wrangler.config.ts", "config/infra.json", "src/worker/checkpoints.json"],
           "why": "These files decide which commit becomes a release and how traffic reaches it. A mistake here is not caught by the page rendering correctly, so the label exists to make the review bar visible from the pull request list."
         },
 

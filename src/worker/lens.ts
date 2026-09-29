@@ -351,7 +351,7 @@ export function glossify(escaped, only?) {
 // counter is the whole point, because a second unmetered door (30 via
 // /lens/fetch AND unlimited via JSON-RPC) is not a rate limit.
 //
-// `max` is duplicated from wrangler.jsonc's `ratelimits` on purpose: it is the
+// `max` is duplicated from cloudflare.config.ts's rate-limit bindings on purpose: it is the
 // number the 429 message quotes, and a message that disagrees with the ceiling
 // is worse than no message. A contract test pins the two together so they cannot
 // drift, which is the only reason duplicating it is safe.
@@ -2054,9 +2054,10 @@ export async function handleLensBrowser(request, env, ctx) {
   let response;
   let engine = "chromium-binding";
   try {
-    // Routed through the engine seam so Kitesurf can serve this when a REST
-    // token is present. Still returns a Response, because the four distinct 502
-    // shapes below are the point and must not be flattened into one.
+    // Routed through the engine seam, which asks the binding for Kitesurf and
+    // falls back to Chromium on a refused option. Still returns a Response,
+    // because the four distinct 502 shapes below are the point and must not be
+    // flattened into one.
     const run = await span("lens.browser.quick_action", () => runBrowserAction("snapshot", payload, env));
     if (!run) {
       s.setAttribute("lens.outcome", "no_engine");
@@ -2464,7 +2465,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // the worst case without changing the common one: the median page is far
     // under this and is unaffected.
     // Overridable per deployment, so moving lens onto the free plan is a var
-    // flip rather than a code change: set LENS_PARSE_KB=64 in wrangler.jsonc.
+    // flip rather than a code change: set LENS_PARSE_KB: bindings.text("64") in cloudflare.config.ts.
     //
     // THE DEFAULT ARM HAS TO BE A REAL BRANCH, and writing it as a `||` fallback
     // silently pinned every scan to 8 KB from the day this was written. The old

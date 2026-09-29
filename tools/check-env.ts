@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// check-env.ts — src/worker/lib/env.ts agrees with wrangler.jsonc, in both
+// check-env.ts — src/worker/lib/env.ts agrees with cloudflare.config.ts, in both
 // directions, by NAME.
 //
 // env.ts is the site Worker's binding surface as one hand-written type, and
@@ -7,7 +7,7 @@
 // required/optional split (tiers 4 and 5) is the part that buys something and
 // is the part `wrangler types` cannot see. The cost of writing it by hand is
 // that it can drift from the config it describes, silently, in both
-// directions: a binding added to wrangler.jsonc and never typed is `undefined`
+// directions: a binding added to cloudflare.config.ts and never typed is `undefined`
 // at the first read with no diagnostic, and a binding removed from the config
 // while its type survives lets code read a thing wrangler no longer carries.
 // env.ts's header promised a `bun run env:check` that diffs the two. This is
@@ -39,10 +39,12 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseJsonc } from "./lib/jsonc.ts";
+import { siteConfig } from "./lib/site-config.ts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
-const config = parseJsonc(readFileSync(join(REPO, "wrangler.jsonc"), "utf8"));
+// cloudflare.config.ts, in the legacy shape this check was written against
+// (tools/lib/site-config.ts), since wrangler.jsonc went on 2026-09-28.
+const config = await siteConfig();
 const envSource = readFileSync(join(REPO, "src/worker/lib/env.ts"), "utf8");
 
 // ── what the config declares ─────────────────────────────────────────────
@@ -64,7 +66,7 @@ for (const b of config.durable_objects?.bindings ?? []) { const n = asName(b.nam
 for (const r of config.ratelimits ?? []) { const n = asName(r.name); if (n) bindings.add(n); }
 const vars = new Set(Object.keys(config.vars ?? {}));
 const required = new Set<string>(config.secrets?.required ?? []);
-if (bindings.size < 20) fail(`the binding walk found only ${bindings.size} names in wrangler.jsonc; the config carried 30+ when this was written`);
+if (bindings.size < 20) fail(`the binding walk found only ${bindings.size} names in cloudflare.config.ts; the config carried 30+ when this was written`);
 if (vars.size < 5 || required.size < 5) fail(`vars (${vars.size}) or secrets.required (${required.size}) read as nearly empty`);
 
 // ── what env.ts types ────────────────────────────────────────────────────
@@ -85,25 +87,25 @@ const t5 = tier("EnvInjected", 1);
 const diff = (a: Set<string>, b: Set<string>) => [...a].filter((x) => !b.has(x)).sort();
 const problems: string[] = [];
 const both = (label: string, typed: Set<string>, declared: Set<string>, where: string) => {
-  for (const n of diff(declared, typed)) problems.push(`${n} is in wrangler.jsonc ${where} but not typed in env.ts ${label}`);
-  for (const n of diff(typed, declared)) problems.push(`${n} is typed in env.ts ${label} but wrangler.jsonc ${where} does not declare it`);
+  for (const n of diff(declared, typed)) problems.push(`${n} is in cloudflare.config.ts ${where} but not typed in env.ts ${label}`);
+  for (const n of diff(typed, declared)) problems.push(`${n} is typed in env.ts ${label} but cloudflare.config.ts ${where} does not declare it`);
 };
 both("EnvBindings", t1, bindings, "as a binding");
 both("EnvVars", t2, vars, "vars");
 both("EnvSecrets", t3, required, "secrets.required");
-for (const n of [...t4].filter((x) => required.has(x))) problems.push(`${n} is optional in env.ts (EnvOptionalSecrets) but wrangler.jsonc gates the deploy on it in secrets.required: one of the two is wrong`);
-for (const n of [...t5].filter((x) => bindings.has(x) || vars.has(x) || required.has(x))) problems.push(`${n} is typed as injected (EnvInjected) but wrangler.jsonc declares it`);
+for (const n of [...t4].filter((x) => required.has(x))) problems.push(`${n} is optional in env.ts (EnvOptionalSecrets) but cloudflare.config.ts gates the deploy on it in secrets.required: one of the two is wrong`);
+for (const n of [...t5].filter((x) => bindings.has(x) || vars.has(x) || required.has(x))) problems.push(`${n} is typed as injected (EnvInjected) but cloudflare.config.ts declares it`);
 // A name typed in two tiers is a name whose optionality is ambiguous.
 const all = [t1, t2, t3, t4, t5];
 for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++)
   for (const n of [...all[i]].filter((x) => all[j].has(x))) problems.push(`${n} appears in two env.ts tiers`);
 
 if (problems.length) {
-  console.error(`env:check: env.ts and wrangler.jsonc disagree (${problems.length}):`);
+  console.error(`env:check: env.ts and cloudflare.config.ts disagree (${problems.length}):`);
   for (const p of problems) console.error(`  - ${p}`);
   process.exit(1);
 }
-console.log(`env:check: env.ts agrees with wrangler.jsonc (${bindings.size} bindings, ${vars.size} vars, ${required.size} required secrets, ${t4.size} degrading, ${t5.size} injected)`);
+console.log(`env:check: env.ts agrees with cloudflare.config.ts (${bindings.size} bindings, ${vars.size} vars, ${required.size} required secrets, ${t4.size} degrading, ${t5.size} injected)`);
 
 function fail(msg: string): never {
   console.error(`env:check: ${msg}`);

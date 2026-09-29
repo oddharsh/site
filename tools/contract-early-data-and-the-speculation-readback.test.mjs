@@ -1,6 +1,7 @@
 // ── 0-RTT early data, and the speculation ledger read back ───────────────────
 // Split-file convention: shared imports live in contract-shared.ts.
 import {
+  configText,
   assert,
   readFileSync,
   test,
@@ -104,7 +105,7 @@ test("speculation readback: the route is wired, allowlisted, and refuses writes"
 
   const idx = readFileSync("src/worker/index.ts", "utf8");
   assert.match(idx, /\["\/ledger\/speculation\.json", handleSpeculationJson\]/);
-  const wrangler = readFileSync("wrangler.jsonc", "utf8");
+  const wrangler = await configText("cloudflare.config.ts");
   assert.match(wrangler, /"\/ledger\/\*"/, "the ledger's sub-routes ride one run_worker_first glob");
   const pkg = JSON.parse(readFileSync("package.json", "utf8"));
   assert.equal(pkg.scripts["speculation:report"], "bun tools/speculation-report.ts");

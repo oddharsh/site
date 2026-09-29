@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Diff infra.json against reality.
 //
-// wrangler.jsonc declares the compute layer and CI dry-runs it, so a bad route
+// cloudflare.config.ts declares the compute layer and CI dry-runs it, so a bad route
 // or a missing binding fails a PR today. Everything one level out — the DNS
 // records, the resources those bindings point at, the Worker inventory — lived
 // only in the Cloudflare dashboard and in prose. This closes that gap without
@@ -11,7 +11,7 @@
 // Five tiers, by what they cost to run:
 //
 //   tree  no network.  infra.json against the repo. Binding names must line up
-//                      with wrangler.jsonc, and every declared `consumer` file
+//                      with cloudflare.config.ts, and every declared `consumer` file
 //                      must exist. Catches the bimi.svg class of bug, where the
 //                      only thing referencing a file is a DNS record.
 //   dns   no secrets.  Public DoH. Every declared record, checked against two
@@ -49,6 +49,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { parseJsonc } from "./lib/jsonc.ts";
+import { siteConfig } from "./lib/site-config.ts";
 import { auditActionPins } from "./lib/action-pins.ts";
 import { redactCredentials } from "./lib/redact.ts";
 
@@ -267,22 +268,32 @@ async function resolveWithFallback(name: string, type: string): Promise<DnsResol
 // matches every shape and asserts nothing about any of them.
 const AUX_CONFIGS = [
   { path: "cf-garage/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
-  { path: "lwe-ask/wrangler.toml", key: "account_id", pattern: /^\s*account_id\s*=\s*"([^"]+)"/m },
-  { path: "lens-reader/wrangler.toml", key: "account_id", pattern: /^\s*account_id\s*=\s*"([^"]+)"/m },
+  // lwe-ask and lens-reader joined cf-garage on 2026-09-28 (`cf migrate`), so all
+  // three rows share one shape today. They stay three rows rather than a loop
+  // over a directory list for the reason above: the next format is a row.
+  { path: "lwe-ask/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
+  { path: "lens-reader/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
+  // aadhar-counter hosts the site's Counter Durable Object (CLAUDE.md, "Moving
+  // Counter out"). It stays on JSONC deliberately: the transfer's lifecycle
+  // states were rehearsed in that form, and the key is quoted there.
+  { path: "counter/wrangler.jsonc", key: "account_id", pattern: /^\s*"account_id":\s*"([^"]+)"/m },
 ];
 
 async function checkTree(infra, wrangler, aux) {
-  const lwe = aux.get("lwe-ask/wrangler.toml");
+  const lwe = aux.get("lwe-ask/cloudflare.config.ts");
   // Binding names in infra.json must exist in the config that owns them. This
-  // is the join that lets infra.json stay ID-free: wrangler.jsonc remains the
+  // is the join that lets infra.json stay ID-free: cloudflare.config.ts remains the
   // single source for IDs, and this stops the two describing different worlds.
   const declared = new Map();
   for (const n of wrangler.kv_namespaces || []) declared.set(n.binding, { kind: "kv", id: n.id });
   for (const b of wrangler.r2_buckets || []) declared.set(b.binding, { kind: "r2", name: b.bucket_name });
   for (const d of wrangler.d1_databases || []) declared.set(d.binding, { kind: "d1", id: d.database_id, name: d.database_name });
-  if (/binding\s*=\s*"VECTORIZE"/.test(lwe)) {
-    declared.set("VECTORIZE", { kind: "vectorize", name: (lwe.match(/index_name\s*=\s*"([^"]+)"/) || [])[1] });
-  }
+  // The binding NAME is the env key and the index is `name:` on the helper,
+  // since lwe-ask moved to cloudflare.config.ts (2026-09-28). A match that stops
+  // finding it reports the binding as unbound below, so a format change fails
+  // loudly rather than skipping the join.
+  const vectorize = lwe.match(/^\s*VECTORIZE:\s*bindings\.vectorize\(\{\s*name:\s*"([^"]+)"/m);
+  if (vectorize) declared.set("VECTORIZE", { kind: "vectorize", name: vectorize[1] });
 
   const wanted = [
     ...(infra.resources.kv_namespaces || []).map((r) => [r.binding, "kv", r.title]),
@@ -322,13 +333,13 @@ async function checkTree(infra, wrangler, aux) {
   // and build.ts's drift warning compares binding sets only, so an account_id
   // that went missing from one of them would otherwise be caught by nothing.
   //
-  // wrangler.jsonc's account_id is the SOURCE OF TRUTH and the other three are
+  // cloudflare.config.ts's accountId is the SOURCE OF TRUTH and the other three are
   // compared against it, rather than against a copy in infra.json. That is this
   // file's existing rule for resource ids, and it is why infra.json's account
   // block declares the invariant without repeating the value.
   const declaredAccount = wrangler.account_id;
   if (!declaredAccount) {
-    fail(`wrangler.jsonc lost its account_id — wrangler picks an account by itself only while the login sees exactly one, so every non-interactive call fails the moment a second appears`);
+    fail(`cloudflare.config.ts lost its accountId — wrangler picks an account by itself only while the login sees exactly one, so every non-interactive call fails the moment a second appears`);
   } else {
     const devWrangler = await readJsonc("wrangler.dev.jsonc").catch(() => null);
     if (!devWrangler) {
@@ -345,7 +356,7 @@ async function checkTree(infra, wrangler, aux) {
     // Counted rather than assumed, so the ok line cannot claim everything is
     // pinned while one of these is the reason the run is failing.
     const sites = [
-      ["wrangler.jsonc vars.CF_ACCOUNT_ID", wrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
+      ["cloudflare.config.ts env.CF_ACCOUNT_ID", wrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
       ...(devWrangler ? [
         ["wrangler.dev.jsonc account_id", devWrangler.account_id, "dev:remote and routes:check:remote reach production bindings through this config"],
         ["wrangler.dev.jsonc vars.CF_ACCOUNT_ID", devWrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
@@ -353,7 +364,7 @@ async function checkTree(infra, wrangler, aux) {
       ...AUX_CONFIGS.map(({ path, key, pattern }) => [
         `${path} ${key}`,
         (aux.get(path).match(pattern) || [])[1],
-        "this Worker deploys from its own directory, so wrangler resolves the account from this file and never sees wrangler.jsonc",
+        "this Worker deploys from its own directory, so wrangler resolves the account from this file and never sees the root config",
       ]),
     ];
     // infra.json names the same six, so a copy added there without a check
@@ -368,7 +379,7 @@ async function checkTree(infra, wrangler, aux) {
       if (!value) {
         fail(`${where} is missing — ${why}`);
       } else if (value !== declaredAccount) {
-        fail(`${where} (${JSON.stringify(value)}) disagrees with wrangler.jsonc's account_id (${JSON.stringify(declaredAccount)})`);
+        fail(`${where} (${JSON.stringify(value)}) disagrees with cloudflare.config.ts's accountId (${JSON.stringify(declaredAccount)})`);
       } else {
         agreed++;
       }
@@ -381,13 +392,13 @@ async function checkTree(infra, wrangler, aux) {
   // The site Worker's name must match what the release config expects, or
   // Workers Builds refuses the build outright.
   if (wrangler.name !== infra.release.worker) {
-    fail(`wrangler.jsonc names the Worker ${JSON.stringify(wrangler.name)} but infra.json's release block expects ${JSON.stringify(infra.release.worker)}`);
+    fail(`cloudflare.config.ts names the Worker ${JSON.stringify(wrangler.name)} but infra.json's release block expects ${JSON.stringify(infra.release.worker)}`);
   }
   if (infra.release.build_command !== "") {
-    fail(`infra.json's release.build_command must stay empty (wrangler.jsonc's build.command owns the build); got ${JSON.stringify(infra.release.build_command)}`);
+    fail(`infra.json's release.build_command must stay empty (wrangler.config.ts's build.command owns the build); got ${JSON.stringify(infra.release.build_command)}`);
   }
   if (!wrangler.build?.command) {
-    fail(`wrangler.jsonc lost its build.command — the deploy would ship the readable originals`);
+    fail(`wrangler.config.ts lost its build.command — the deploy would ship the readable originals`);
   }
   // The provisioning flags, on whichever subcommand a deploy command names.
   // Both default to TRUE and both let a publish create real KV/R2/D1 for any
@@ -436,9 +447,9 @@ async function checkTree(infra, wrangler, aux) {
   // serves. `preview_urls` defaults to `workers_dev`, which is false here, so
   // dropping the explicit line silently turns every preview back off.
   if (infra.release.preview_urls !== wrangler.preview_urls) {
-    fail(`infra.json's release.preview_urls (${infra.release.preview_urls}) disagrees with wrangler.jsonc's (${wrangler.preview_urls}) — with workers_dev false, an unset value means OFF`);
+    fail(`infra.json's release.preview_urls (${infra.release.preview_urls}) disagrees with cloudflare.config.ts's previewUrls (${wrangler.preview_urls}) — with workers_dev false, an unset value means OFF`);
   }
-  pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler, production deploys and branches only upload, previews ${wrangler.preview_urls ? "on" : "off"})`);
+  pass(`release block agrees with cloudflare.config.ts (Worker ${wrangler.name}, build owned by Wrangler, production deploys and branches only upload, previews ${wrangler.preview_urls ? "on" : "off"})`);
 
   await checkCodeqlWorkflow(infra.repository);
   await checkTriageDeclaration(infra.repository);
@@ -1033,7 +1044,7 @@ async function section(label, scope, fn) {
 }
 
 async function checkApi(infra, wrangler, token) {
-  // The account id, in the order it should be trusted. wrangler.jsonc's pin is
+  // The account id, in the order it should be trusted. cloudflare.config.ts's accountId pin is
   // the SOURCE OF TRUTH per infra.json's account block, and checkTree has
   // already proven all 7 declarations agree by the time this runs.
   //
@@ -1057,12 +1068,12 @@ async function checkApi(infra, wrangler, token) {
   const pinned = wrangler.account_id;
   let accountId = process.env.CLOUDFLARE_ACCOUNT_ID || pinned;
   if (pinned && process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_ACCOUNT_ID !== pinned) {
-    warn(`CLOUDFLARE_ACCOUNT_ID (${process.env.CLOUDFLARE_ACCOUNT_ID}) overrides wrangler.jsonc's pin (${pinned}) — the account tier is checking an account this repo does not deploy to`);
+    warn(`CLOUDFLARE_ACCOUNT_ID (${process.env.CLOUDFLARE_ACCOUNT_ID}) overrides cloudflare.config.ts's accountId pin (${pinned}) — the account tier is checking an account this repo does not deploy to`);
   }
   if (!accountId) {
     const accounts = await cf(token, "/accounts");
     if (accounts.length !== 1) {
-      warn(`no account_id in wrangler.jsonc and the token sees ${accounts.length} accounts; set CLOUDFLARE_ACCOUNT_ID to pick one`);
+      warn(`no accountId in cloudflare.config.ts and the token sees ${accounts.length} accounts; set CLOUDFLARE_ACCOUNT_ID to pick one`);
       return;
     }
     accountId = accounts[0].id;
@@ -1971,7 +1982,10 @@ async function checkAgentMarkdown() {
 // ----------------------------------------------------------------- main ----
 
 const infra = JSON.parse(await readFile(join(ROOT, "config/infra.json"), "utf8"));
-const wrangler = await readJsonc("wrangler.jsonc");
+// The site config in its legacy shape (tools/lib/site-config.ts): every check
+// below reads wrangler.jsonc's field names, and cloudflare.config.ts replaced
+// that file on 2026-09-28.
+const wrangler = await siteConfig();
 const auxConfigs = new Map(
   await Promise.all(AUX_CONFIGS.map(
     async ({ path }): Promise<[string, string]> => [path, await readFile(join(ROOT, path), "utf8")],

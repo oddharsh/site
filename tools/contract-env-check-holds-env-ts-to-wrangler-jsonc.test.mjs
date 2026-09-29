@@ -1,5 +1,5 @@
 // env.ts is hand-written on purpose (its header says why) and check-env.ts is
-// what keeps it honest against wrangler.jsonc. A check that exists but is not
+// what keeps it honest against cloudflare.config.ts. A check that exists but is not
 // wired is the shape env.ts's header had for three weeks: it NAMED
 // `bun run env:check` while no such script existed. So this pins the wiring,
 // not the check's logic, which the script's own controls cover.

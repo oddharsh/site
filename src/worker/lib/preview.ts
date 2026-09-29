@@ -1,7 +1,7 @@
 // lib/preview.js — the guard that makes a Workers preview URL safe to hand out.
 //
 // Preview URLs are how a branch gets a real, servable address before it is
-// production (`preview_urls: true` in wrangler.jsonc). The thing to understand
+// production (`previewUrls: true` in cloudflare.config.ts). The thing to understand
 // about them, because it is not obvious and it is the whole reason this file
 // exists: a preview version runs the SAME BINDINGS AND SECRETS as production.
 // Not a copy, not a staging tier. The same RN_KV, the same BOOKINGS namespace,
