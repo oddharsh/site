@@ -34,21 +34,19 @@
 //
 // It reads git and writes nothing. Usage:
 //     bun tools/family-holdout.ts [--k 1,3,8] [--json out.json]
-import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { brotliCompressSync, brotliDecompressSync, zstdCompressSync, constants as zc } from "node:zlib";
+import { brotliCompressSync, zstdCompressSync, constants as zc } from "node:zlib";
 import { createHash, randomBytes } from "node:crypto";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 import { FAMILY_DRIFT } from "./lib/page-family.ts";
 import { judge } from "./lib/hillclimb.ts";
+import { deriveFamily, FAMILY_WINDOW, loadServedSeries, page, q11, type Snap, type State } from "./lib/served-pages.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
 const K = (flag("--k") ?? "1,3,8").split(",").map(Number);
 const JSON_OUT = flag("--json");
 
-const git = (a: string[]) => execFileSync("git", a, { encoding: "utf8", maxBuffer: 1 << 28 });
-const gitBytes = (a: string[]) => execFileSync("git", a, { maxBuffer: 1 << 28 });
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex").slice(0, 12);
 
 // ── build.ts's construction, read from build.ts ─────────────────────────────
@@ -68,7 +66,7 @@ if (BASE.length < 2) throw new Error("build.ts: BASE_CORPUS parsed empty");
 const CURRENT: Array<[string, number]> = /const REPRESENTATIVES\b/.test(buildSrc)
   ? [...listBlock("REPRESENTATIVES").matchAll(/\["([^"]+\.html)",\s*([\d_]+)\]/g)].map((m) => [slugOf(m[1]), Number(m[2].replaceAll("_", ""))])
   : [];
-const SIZE = 65_536;
+const SIZE = FAMILY_WINDOW;
 
 // The alternatives are the tail sets build.ts shipped or compared, 2026-08-11 to
 // 2026-09-28: horizon and access at the budget named, the two fixtures whole.
@@ -82,78 +80,9 @@ const CONFIGS: Array<{ name: string; reps: Array<[string, number]> }> = [
   { name: "tails 16", reps: tails(16_384, 16_384) },
 ];
 
-// ── the served-page series ──────────────────────────────────────────────────
-const PDICT = /(?:^|\/)p-dict\/([^/]+)\.([0-9a-f]{16})\.html\.br$/;
-type Snap = { slug: string; tag: string; order: number; path: string; commit: string };
-const firstSeen = new Map<string, Snap>();
-const checkpoints: Array<{ commit: string; date: string }> = [];
-{
-  let cur: { commit: string; date: string } | null = null;
-  for (const line of git(["log", "--reverse", "--no-renames", "--diff-filter=A", "--format=C %H %cs",
-    "--name-only", "--", ":(glob)**/p-dict/*.html.br"]).split("\n")) {
-    if (line.startsWith("C ")) { const [, c, d] = line.split(" "); cur = { commit: c, date: d }; checkpoints.push(cur); continue; }
-    const m = line.match(PDICT);
-    if (!m || !cur) continue;
-    const key = `${m[1]}.${m[2]}`;
-    if (!firstSeen.has(key)) firstSeen.set(key, { slug: m[1], tag: m[2], order: firstSeen.size, path: line, commit: cur.commit });
-  }
-}
-
-// The page set served at a checkpoint: per slug, the newest snapshot present in
-// the tree then. p-dict keeps up to three per page, so "present" alone is not it.
-type State = Map<string, Snap>;
-const states: State[] = checkpoints.map(({ commit }) => {
-  const s: State = new Map();
-  for (const path of git(["ls-tree", "-r", "--name-only", commit]).split("\n")) {
-    const m = path.match(PDICT);
-    if (!m) continue;
-    const snap = firstSeen.get(`${m[1]}.${m[2]}`);
-    if (!snap) continue;
-    const held = s.get(snap.slug);
-    if (!held || snap.order > held.order) s.set(snap.slug, snap);
-  }
-  return s;
-});
-
-const pageCache = new Map<string, Buffer>();
-const page = (s: Snap) => {
-  const key = `${s.slug}.${s.tag}`;
-  let b = pageCache.get(key);
-  if (!b) { b = brotliDecompressSync(gitBytes(["show", `${s.commit}:${s.path}`])); pageCache.set(key, b); }
-  return b;
-};
-const q11Cache = new Map<string, number>();
-const q11 = (s: Snap) => {
-  const key = `${s.slug}.${s.tag}`;
-  let n = q11Cache.get(key);
-  if (n === undefined) {
-    n = brotliCompressSync(page(s), { params: { [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_SIZE_HINT]: page(s).length } }).length;
-    q11Cache.set(key, n);
-  }
-  return n;
-};
-
-function derive(state: State, reps: Array<[string, number]>): Buffer | null {
-  const parts: Buffer[] = [];
-  let total = 0;
-  for (const slug of BASE) {
-    const s = state.get(slug);
-    if (!s) return null;
-    parts.push(page(s));
-    total += page(s).length;
-    if (total >= SIZE) break;
-  }
-  if (total < SIZE) return null;
-  const base = Buffer.concat(parts).subarray(0, SIZE);
-  const tails: Buffer[] = [];
-  for (const [slug, n] of reps) {
-    const s = state.get(slug);
-    if (!s) return null;
-    tails.push(page(s).subarray(Math.max(0, page(s).length - n)));
-  }
-  const prefix = Buffer.concat(tails);
-  return Buffer.concat([prefix, base.subarray(prefix.length)]);
-}
+// ── the served-page series (tools/lib/served-pages.ts) ─────────────────────
+const { checkpoints, states, versions } = loadServedSeries();
+const derive = (state: State, reps: Array<[string, number]>) => deriveFamily(state, BASE, reps, SIZE);
 
 // ── the grader's own control, before any score is believed ──────────────────
 // A zstd that silently ignores `dictionary` prints the same size three times
@@ -265,7 +194,7 @@ const stats = (xs: number[]) => {
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 const pts = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(2)}`;
 
-console.log(`\n${checkpoints.length} roll commits, ${firstSeen.size} served page versions, ${valid.length} checkpoints with every corpus page`);
+console.log(`\n${checkpoints.length} roll commits, ${versions} served page versions, ${valid.length} checkpoints with every corpus page`);
 console.log(`corpus (from build.ts): base ${BASE.join(", ")}; tails ${CURRENT.length ? CURRENT.map(([s, n]) => `${s} ${n}`).join(", ") : "none"}\n`);
 
 const report: Record<string, unknown> = { checkpoints: checkpoints.length, valid: valid.length, configs: {}, drift: {} };
