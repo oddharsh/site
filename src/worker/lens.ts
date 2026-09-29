@@ -2054,9 +2054,10 @@ export async function handleLensBrowser(request, env, ctx) {
   let response;
   let engine = "chromium-binding";
   try {
-    // Routed through the engine seam so Kitesurf can serve this when a REST
-    // token is present. Still returns a Response, because the four distinct 502
-    // shapes below are the point and must not be flattened into one.
+    // Routed through the engine seam, which asks the binding for Kitesurf and
+    // falls back to Chromium on a refused option. Still returns a Response,
+    // because the four distinct 502 shapes below are the point and must not be
+    // flattened into one.
     const run = await span("lens.browser.quick_action", () => runBrowserAction("snapshot", payload, env));
     if (!run) {
       s.setAttribute("lens.outcome", "no_engine");

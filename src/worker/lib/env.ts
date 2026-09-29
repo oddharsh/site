@@ -179,7 +179,7 @@ export interface EnvOptionalSecrets {
   ANALYTICS_READ_TOKEN?: string;
   /** Billing:Read and nothing else. Kept off the CI token on purpose. */
   BILLING_READ_TOKEN?: string;
-  /** Browser Rendering EDIT scope, for the Kitesurf REST path in lens-render.ts. */
+  /** Browser Rendering EDIT scope, for the REST fallback in lens-render.ts; unused while the BROWSER binding exists. */
   BROWSER_RUN_TOKEN?: string;
   /** Serendipity cover images; falls back to SYNC_SECRET. */
   COVER_SECRET?: string;
