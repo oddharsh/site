@@ -1856,7 +1856,7 @@ so pick variants rather than running the whole list.
 ## Regenerate the OG / Twitter cards
 
 Every garage + lwe page unfurls as a 1200x630 card showing its live demo floated
-on the Bliss desktop (`public/og/<section>-<name>.png`), wired via
+on the Bliss desktop (`public/og/<section>-<name>.jpg`), wired via
 `og:image`/`twitter:card` in each page's `<head>`. Regenerate when a demo's look
 changes or a new page lands:
 
@@ -1890,8 +1890,17 @@ bun tools/photos/inject-og-meta.ts   # add the meta to any page missing it (idem
 - A card that comes out weak (its hero grabbed prose): add/adjust the page's
   `HERO{}` selector, optionally a `preset` click to populate the demo, re-run.
 - The LWE + Garage generators emit the same `og:image` block, so a future
-  pipeline-authored page gets a card automatically (its PNG still needs one
-  `bun run og-cards` run before the URL resolves).
+  pipeline-authored page gets the META automatically, and its JPEG still needs
+  one `bun run og-cards` run before the URL resolves. Nothing about the page looks
+  wrong without it: the meta is correct and the unfurl is a 404.
+- **`contract-og-images-resolve` fails until the card exists**, so a page cannot
+  merge naming a card nobody made. It reads every `og:image` and `twitter:image`
+  in `src/pages/`, plus any `/og/` literal a Worker renderer emits, and requires
+  each to be a file in `public/`. It is a test and not a build invariant on
+  purpose: for a page not yet deployed, capture with
+  `OG_BASE=http://localhost:8787`, which serves `.build/public`, so the build has
+  to pass while the card is still missing. Five pages shipped without a card and
+  three more named the `.png` cards #841 had re-encoded, before it existed.
 - Worker-rendered routes (no static HTML for the generator to walk) live in
   `WORKER_PAGES{}` beside `HERO{}`, with their meta emitted from the page's own
   renderer instead of `inject-og-meta.ts`. `/lens` is one: its card captures a
