@@ -137,7 +137,9 @@ jobs:
           DIGEST=$(GITHUB_TOKEN="$GH_TOKEN" bun run timbrado digest --repo cloudflare/workers-sdk --from "$from" --to "$to" --prefer wrangler,miniflare)
 
           git checkout -B "$BRANCH"
-          git add package.json bun.lock
+          # Every TRACKED manifest, not just the root: cf-garage names the same
+          # pin for the cf CLI and bump-wrangler-pin.ts moves it in the same write.
+          git add -u -- package.json bun.lock '*/package.json'
           git commit -m "chore(wrangler): move the pin from $from to $to
 
           Every gate green on the candidate's own createTestHarness: the dry-run

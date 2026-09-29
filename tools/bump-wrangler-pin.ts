@@ -182,6 +182,18 @@ if (next === text) {
 }
 writeFileSync(join(ROOT, "package.json"), next);
 
+// A project may name wrangler too, by the root's exact string (cf-garage does,
+// for the `cf` CLI), and check-wrangler fails the moment the two disagree. So
+// every tracked manifest carrying the OLD pin moves with the root in the same
+// write, or this job would red its own PR every night.
+const manifests = spawnSync("git", ["ls-files", "-z", "--", ":(glob)**/package.json"], { cwd: ROOT, encoding: "utf8" })
+  .stdout.split("\0").filter((name) => name && name !== "package.json");
+for (const manifest of manifests) {
+  const body = readFileSync(join(ROOT, manifest), "utf8");
+  const moved = body.replace(`"wrangler": "${current}"`, `"wrangler": "${url}"`);
+  if (moved !== body) writeFileSync(join(ROOT, manifest), moved);
+}
+
 const relock = spawnSync(process.execPath, ["install"], { cwd: ROOT, encoding: "utf8" });
 if (relock.status !== 0) {
   console.error(`bun install failed after moving the pin: ${(relock.stderr || relock.stdout || "").trim().split("\n").slice(-3).join(" ")}`);
