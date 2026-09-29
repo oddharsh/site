@@ -618,7 +618,8 @@ worktrees may edit freely, but a worktree is not a release surface.
 - **Reaching `production` deploys at 100%, since 2026-09-28.** Workers Builds
   runs `wrangler deploy` on the `production` branch, so a promoted commit serves
   everyone a few minutes after CI passes on `main`. Branch builds still run
-  `versions upload`, which mints a preview version and moves no traffic, and
+  `versions upload`, which mints a version and moves no traffic (it gets NO
+  servable preview URL; the Preview URLs entry below has why), and
   `infra:check` fails if that ever changes, since every branch push builds
   against production's bindings.
 
@@ -1005,11 +1006,78 @@ worktrees may edit freely, but a worktree is not a release surface.
   fields are two TRIGGERS in the API, separated by their branch filters, and
   both are declared and checked. Without the scope the section degrades to a
   note naming what is missing, exactly like the other five.
-- **Preview URLs are on, and the Worker guards them.** `preview_urls: true` in
-  `cloudflare.config.ts` (`previewUrls: true`), with `workersDev: false` kept — production still has no
-  workers.dev address; what previews add is a per-VERSION one. The setting is
-  explicit because `preview_urls` DEFAULTS to whatever `workers_dev` is, so
-  deleting the line turns previews off again without a word.
+- **Preview URLs are configured ON and have NEVER SERVED, because this Worker
+  exports a Durable Object.** Measured 2026-09-28. Cloudflare's Preview URLs page
+  lists it as a limitation: Workers implementing Durable Objects, Containers or
+  Sandboxes get no version URLs. `Counter` moved into this Worker on 2026-07-01
+  and previews were switched on in #211 on 2026-08-04, so there was never a
+  window where the setting could work.
+
+  Every layer of config says yes, which is why it went unnoticed for eight
+  weeks. `previewUrls: true` is in `cloudflare.config.ts`, and the script's subdomain
+  endpoint answers `{ enabled: false, previews_enabled: true }`. The refusal
+  lives one layer down, in the VERSION: each upload's metadata carries
+  `has_preview`, and all 100 versions the API lists read `false`. Wrangler
+  prints `Version Preview URL:` only when that flag is true, so an upload says
+  nothing either way, and the silence reads as a quiet success.
+
+  The edge confirms it. `https://<prefix>-aadhar-sh.aadharsh2010.workers.dev`
+  answers 404 "There is nothing here yet" with `x-preview-user-error: true`,
+  for a real prefix, an alias (`production`, `main`, any branch alias) and an
+  invented one (`deadbeef`) alike. That identical answer is the tell: the
+  preview router has no version of this script registered at all, so the URL
+  shape is fine and no other shape would help. A hostname for a Worker that does
+  not exist 404s WITHOUT the header, which separates "no such Worker" from "no
+  previews for this Worker".
+
+  **The check is one read, and it needs no URL:**
+
+  ```bash
+  curl -s -H "Authorization: Bearer $(bun run wrangler auth token 2>/dev/null | tail -1)" \
+    "https://api.cloudflare.com/client/v4/accounts/<account>/workers/scripts/aadhar-sh/versions?per_page=5" \
+    | jq '[.result.items[].metadata.has_preview]'
+  ```
+
+  What still works is anything that reads a version through the API rather than
+  through a URL: `wrangler versions view <id>` shows its bindings and secrets
+  (the Workflow check further down), and `deploy:promote`'s probes reach a
+  version with `Cloudflare-Workers-Version-Overrides` on `aadhar.sh`, once it
+  is in the deployment. What does not work is serving a branch at a real URL
+  before it is in production, which is the whole thing #211 turned this on for.
+
+  Making previews real means `aadhar-sh` stops exporting `Counter`: host it in
+  another Worker and bind to it with `script_name`. That move is under way as a
+  five-step transfer that keeps the class's data; "Moving Counter out" above has
+  the sequence and the rehearsal. Note that commit 5af65648 moved `Counter` IN
+  from cf-garage, so this reverses a deliberate choice rather than tidying one.
+
+  **Only the EXPORT blocks previews, measured 2026-09-28** with five throwaway
+  Workers (wrangler 4.142.0, this Worker's compatibility date and flags,
+  `workers_dev: false`, `preview_urls: true`), each deployed once and then
+  deleted:
+
+  | shape | `has_preview` | preview URL |
+  |---|---|---|
+  | plain fetch handler (the control) | true | 200 |
+  | exports a DO class (`new_sqlite_classes`) | **false** | 404 + `x-preview-user-error` |
+  | binds another Worker's DO via `script_name` | true | 200 |
+  | exports a Workflow class | true | 200 |
+  | the `cache` + `exports` block this Worker runs Workers Cache through | true | 200 |
+
+  So `aadhar-sh`'s two Workflows and its Workers Cache entrypoints are all
+  compatible, and a `Counter` hosted elsewhere and bound by `script_name` leaves
+  previews on. A `versions upload --preview-alias` on the cross-bind shape
+  printed both `Version Preview URL:` and `Version Preview Alias URL:`, and both
+  answered 200, so the alias form the Workflow check below relies on works too.
+  The control reading true is what makes the other rows mean anything.
+
+  One cleanup trap from the run: `wrangler delete` on a Worker that owns a
+  Workflow leaves the Workflow behind (it still showed in `wrangler workflows
+  list`), so it needs its own `wrangler workflows delete`.
+
+  The setting stays in `cloudflare.config.ts` meanwhile, and so does the guard below:
+  `preview_urls` DEFAULTS to whatever `workers_dev` is, so the explicit line is
+  what makes previews switch on by themselves the day the DO leaves.
 
   A preview runs **production bindings and secrets**. Cloudflare offers no
   per-version override, so the same RN_KV, the same photo bucket, the same three
