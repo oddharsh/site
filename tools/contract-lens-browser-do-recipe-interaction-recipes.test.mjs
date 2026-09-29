@@ -325,6 +325,11 @@ test("the buildable utility shells preserve their no-JS forms", async () => {
 });
 
 test("photo query filters public metadata and never exposes unlisted fields", async () => {
+  // The hash and alt maps are memoised per process, and `bun test --parallel
+  // --no-isolate` shares one process across the files a worker draws, so
+  // without this the fixture below loses to whichever file loaded hashes.json
+  // first and thumb.small reads null (validate on #1008, 2026-09-29).
+  _resetPhotoCaches();
   const env = { ASSETS: staticAssets({
     "/images/metadata.json": { A: { camera: "X-T50", lens: "XF18mm", film: "Classic Chrome", date: "2026:01:02", gps: "secret" }, B: { camera: "Leica", film: "Monochrome", date: "2025:01:02" } },
     "/images/alt.json": { A: "a blue car", B: "a lamp" },
