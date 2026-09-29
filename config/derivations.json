@@ -331,6 +331,7 @@
       "tools/photos/codec-knob-probe.ts": "writes scratch encodes and an optional --json report while measuring cjxl, avifenc and AV2 (avifenc-avm) flags at matched bytes, and commits nothing",
       "tools/lib/hillclimb.ts": "writes only the JSONL ledger of a climb, to a path its caller names, and commits nothing",
       "tools/family-holdout.ts": "reads git history and writes only an optional --json report of its held-out scores, and commits nothing",
+      "tools/photos/jpeg-knob-climb.ts": "writes scratch encodes, an encode cache and an optional --ledger under the OS temp dir while climbing the JPEG tier settings at the shipped bytes, and commits nothing",
       "tools/photos/avif-knob-climb.ts": "writes scratch tiles, an encode cache and an optional --ledger under the OS temp dir while climbing AVIF knobs at the shipped bytes, and commits nothing",
       "tools/photos/avif-chroma-probe.ts": "writes scratch tiers, encodes and an optional --json report while comparing AVIF chroma layouts at the shipped bytes, and commits nothing",
       "tools/photos/experiments/bench-jpeg-search.ts": "writes JPEG search candidates only inside its own mkdtemp directory, removes them in finally, and reports measurements on stdout; it never regenerates a committed photo, manifest or histogram",
