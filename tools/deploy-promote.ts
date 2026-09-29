@@ -72,6 +72,7 @@ import { readFile } from "node:fs/promises";
 import { releaseCredentialError } from "./lib/release-guard.ts";
 import { promisify } from "node:util";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { siteWranglerArgs } from "./lib/site-config.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
 // The four version-reading probes, lifted out on 2026-09-22 so soak-canary.ts
 // can ask the same questions without this module's credentialed module-scope
@@ -112,7 +113,7 @@ if (credentialError) die(credentialError);
 
 async function wrangler(args, { json = false } = {}) {
   try {
-    const [cmd, argv] = wranglerCommand(args);
+    const [cmd, argv] = wranglerCommand(await siteWranglerArgs(args));
     const { stdout } = await exec(cmd, argv, {
       maxBuffer: 16 * 1024 * 1024,
       env: process.env,

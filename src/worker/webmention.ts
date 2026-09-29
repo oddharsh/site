@@ -38,7 +38,7 @@ import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
 
 // One bucket, one ceiling, matching the /lens posture. Fails OPEN without the
 // binding (dev): this is abuse control, and the SSRF guard is what enforces
-// safety. `max` is mirrored in wrangler.jsonc's ratelimits and a contract test
+// safety. `max` is mirrored in cloudflare.config.ts's rate-limit bindings and a contract test
 // pins the pair, the same as every /lens budget.
 export const WEBMENTION_BUDGET = { binding: "WEBMENTION_RL", max: 10 };
 const SOURCE_BYTE_CAP = 512 * 1024;   // a blog post that needs more isn't a mention

@@ -1,5 +1,5 @@
 // ── every configured cron, fired once in the pinned workerd ──────────────────
-// wrangler.jsonc declares Cron Triggers and nothing in this repo ever invoked
+// cloudflare.config.ts declares Cron Triggers and nothing in this repo ever invoked
 // `scheduled()`. The route oracle sweeps fetch routes, lib/cron.ts's matcher is
 // pinned in isolation, and every job behind the dispatcher is written to swallow
 // its own failures, because "a cron has no response, no status, and no visitor to
@@ -8,13 +8,13 @@
 // Worker through wrangler's createTestHarness, fires each configured cron once
 // through `worker.scheduled()`, and asks each job to show its work.
 //
-// THE CRON LIST IS READ FROM wrangler.jsonc, never copied here, so a fifth cron
+// THE CRON LIST IS READ FROM cloudflare.config.ts, never copied here, so a fifth cron
 // is fired by existing. A cron that reaches a job with no entry in JOB_EVIDENCE
 // fails by name, which is how the fifth one gets an observable written for it.
 // The floor of 4 stops a config reader that stops matching from passing over
 // zero crons.
 //
-// WHY A FIXTURE WORKER RATHER THAN wrangler.jsonc ITSELF. Three things have to
+// WHY A FIXTURE WORKER RATHER THAN cloudflare.config.ts ITSELF. Three things have to
 // be in the isolate before the first cron runs, and none of them can be done
 // from outside it:
 //   1. OUTBOUND fetch is replaced by a stub that answers every request locally
@@ -32,7 +32,7 @@
 // The fixture imports the real src/worker/index.ts (and re-exports its classes,
 // so the Durable Object and both Workflows bind), which is why gotcha 16 holds:
 // `cloudflare:workers` is still imported by index.ts alone. The generated config
-// is wrangler.jsonc with main, assets and the build step swapped, so bindings,
+// is cloudflare.config.ts with main, assets and the build step swapped, so bindings,
 // crons, flags and compatibility date stay production's.
 //
 // NOTHING LEAVES THE MACHINE. Bindings are the harness's local ones (KV, D1, the
@@ -70,7 +70,8 @@ import { CENSUS_ROSTER } from "../src/worker/census.ts";
 import { NEIGHBORS } from "../src/worker/around.ts";
 import { citationsIn } from "../src/worker/webmention-send.ts";
 import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
-import { ROOT, assert, readFileSync, test } from "./contract-shared.ts";
+import {
+  configText, ROOT, assert, test } from "./contract-shared.ts";
 
 const at = (rel) => fileURLToPath(new URL(rel, ROOT));
 const ORIGIN = "https://aadhar.sh";
@@ -260,9 +261,9 @@ const JOB_EVIDENCE = {
 };
 
 test("every configured cron reaches its job, completes, and makes no request no job accounts for", async () => {
-  const site = parseJsonc(readFileSync(new URL("wrangler.jsonc", ROOT), "utf8"));
+  const site = parseJsonc(await configText("cloudflare.config.ts"));
   const crons = site.triggers?.crons ?? [];
-  assert.ok(crons.length >= 4, `read ${crons.length} crons from wrangler.jsonc; the reader has stopped matching`);
+  assert.ok(crons.length >= 4, `read ${crons.length} crons from cloudflare.config.ts; the reader has stopped matching`);
 
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "crons-")));
   // The served tree for SELF_FETCH, which is how the webmention sender reads

@@ -34,13 +34,10 @@
 // The token wants `Browser Rendering - Edit`, the same one the Worker holds in
 // BROWSER_RUN_TOKEN. It is not in CI and must not go there.
 
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 
-import { parseJsonc } from "./lib/jsonc.ts";
+import { siteConfig } from "./lib/site-config.ts";
 import { restUrl } from "../src/worker/lens-render.ts";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const WANT_RENDER = process.argv.includes("--render");
 
 // An engine name no beta will ever ship. If this is accepted, nothing is being
@@ -74,16 +71,16 @@ async function main() {
     process.exit(2);
   }
 
-  // The account id is pinned in wrangler.jsonc and check-infra.mjs already
+  // The account id is pinned in cloudflare.config.ts and check-infra.mjs already
   // fails if the four declarations disagree, so reading it here adds no fifth
   // place to keep in sync.
-  const wrangler = parseJsonc(await readFile(path.join(ROOT, "wrangler.jsonc"), "utf8"));
+  const wrangler = await siteConfig();
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || wrangler.account_id;
   if (!accountId) {
-    bad("no account id: wrangler.jsonc has no account_id and CLOUDFLARE_ACCOUNT_ID is unset");
+    bad("no account id: cloudflare.config.ts has no accountId and CLOUDFLARE_ACCOUNT_ID is unset");
     process.exit(2);
   }
-  // The account is elided rather than printed. It is not a secret (wrangler.jsonc
+  // The account is elided rather than printed. It is not a secret (cloudflare.config.ts
   // carries it in a public repo), but it reaches here from process.env and
   // echoing an environment value into stdout is a shape worth not having in a
   // script anyone might pipe into a log. Nothing is lost: the PATH is the thing

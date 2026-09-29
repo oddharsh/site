@@ -3,7 +3,7 @@
 // so the rule lives here and contract-tests.mjs pins it.
 //
 // Match on the minute+hour signature, never the full expression. Cloudflare
-// normalizes cron strings between what wrangler.jsonc declares and what
+// normalizes cron strings between what cloudflare.config.ts declares and what
 // event.cron delivers (day-of-week tokens especially: a "1" can come back
 // "MON"), and an exact match against "17 8 * * 1" left the weekly census
 // branch unreachable while the else-chain quietly ran the /around crawl in

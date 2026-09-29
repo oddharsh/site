@@ -66,9 +66,11 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
   const root = new URL("./", ROOT).pathname;
 
   // A directory holding a wrangler config is a separately deployed Worker. The
-  // ROOT config is wrangler.jsonc, so it is excluded by extension rather than by
-  // name, and cal/ and serendipity/ are correctly absent: they carry no wrangler
-  // config because the site Worker bundles them.
+  // ROOT config is excluded because only SUBDIRECTORIES are walked, which
+  // matters since 2026-09-28: it was wrangler.jsonc and excluded by extension,
+  // and is cloudflare.config.ts now, which WOULD match the list below by name.
+  // cal/ and serendipity/ are correctly absent: they carry no wrangler config
+  // because the site Worker bundles them.
   //
   // TWO FILENAMES COUNT, since 2026-08-23. cf-garage moved to wrangler's
   // experimental TypeScript config and its wrangler.toml is gone, which dropped
@@ -399,8 +401,22 @@ test("the deploy bridge never resolves wrangler from the registry", async () => 
   }
   // The wrangler ARGUMENTS stay in the dashboard string, where check-infra.mjs
   // reads them; the script must not smuggle its own.
-  assert.ok(!/versions\s+upload/.test(script.replace(/^\s*#.*$/gm, "")),
+  const code = script.replace(/^\s*#.*$/gm, "");
+  assert.ok(!/versions\s+upload/.test(code),
     "the script takes no opinion on wrangler's arguments outside comments");
+  // ONE named exception since 2026-09-28: `--x-new-config`, the flag the site's
+  // cloudflare.config.ts needs, added here because only an in-repo switch lands
+  // atomically with the merge that adds the config. It is pinned rather than
+  // allowed: it must be the only flag the script writes, and it must be
+  // conditioned on the config FILE, never on which command runs.
+  // What can reach wrangler's argv is a `set --` rewrite of the positional
+  // arguments or the exec line itself; bun's own flags elsewhere never do.
+  const argvLines = code.split("\n").filter((line) => /^\s*set -- |exec node "\$entry"/.test(line));
+  const flags = [...new Set(argvLines.join("\n").match(/--[a-z][a-z-]*/g) ?? [])];
+  assert.deepEqual(flags, ["--x-new-config"], "the only wrangler flag the script may add is --x-new-config");
+  assert.ok(argvLines.some((line) => /exec node "\$entry" "\$@"\s*$/.test(line)), "the exec line must pass the arguments through unchanged");
+  assert.match(code, /if \[ -f cloudflare\.config\.ts \]; then\s+set -- "\$@" --x-new-config\s+fi/,
+    "--x-new-config must be added when, and only when, cloudflare.config.ts exists");
 });
 
 test("a ramp step hands the remainder to the LARGEST incumbent", () => {

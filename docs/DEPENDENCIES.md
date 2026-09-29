@@ -58,7 +58,7 @@ while dependabot-core pins `MAX_SUPPORTED_LOCKFILE_VERSION = 1` against our v2
 lockfiles.
 
 That is the worst version to leave unowned, because it is the one that compiles
-the site. `wrangler.jsonc`'s build command is `bun tools/build.ts`, so the pinned
+the site. `wrangler.config.ts`'s build command is `bun tools/build.ts`, so the pinned
 bun mints every content-addressed `/a/` and `/i/` URL production serves. A bump
 that changes one output byte is a dictionary roll and a CSP hash change wearing a
 version string.

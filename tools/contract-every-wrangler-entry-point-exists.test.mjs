@@ -90,7 +90,7 @@ test("every wrangler config's entry point resolves to a real file", async () => 
     checked++;
     const declared = match[1];
 
-    // wrangler.jsonc points at `.build/src/worker/index.ts`, which the build
+    // cloudflare.config.ts points at `.build/src/worker/index.ts`, which the build
     // STAGES rather than commits. CLAUDE.md records that build.ts mirrors the
     // source path there deliberately, so the staged path is checkable against
     // its source twin without running a build.

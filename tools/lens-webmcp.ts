@@ -9,6 +9,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { siteWranglerArgs } from "./lib/site-config.ts";
 
 const execFileAsync = promisify(execFile);
 const args = process.argv.slice(2);
@@ -44,15 +45,15 @@ try {
   fail(error && error.message ? error.message : String(error));
 } finally {
   if (sessionId && !keepOpen) {
-    try { await execFileAsync(...wranglerCommand(["browser", "close", sessionId]), { cwd: process.cwd(), maxBuffer: 2 * 1024 * 1024 }); }
+    try { await execFileAsync(...wranglerCommand(await siteWranglerArgs(["browser", "close", sessionId])), { cwd: process.cwd(), maxBuffer: 2 * 1024 * 1024 }); }
     catch (error) { process.stderr.write("Could not close Browser Run session " + sessionId + ": " + (error.message || error) + "\n"); }
   }
 }
 
 async function createSession(seconds) {
-  const { stdout } = await execFileAsync(...wranglerCommand([
+  const { stdout } = await execFileAsync(...wranglerCommand(await siteWranglerArgs([
     "browser", "create", "--lab", "--keepAlive", String(seconds), "--open", "false", "--json",
-  ]), { cwd: process.cwd(), maxBuffer: 8 * 1024 * 1024 });
+  ])), { cwd: process.cwd(), maxBuffer: 8 * 1024 * 1024 });
   const start = stdout.indexOf("{");
   const end = stdout.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("Wrangler did not return Browser Run session JSON.");

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  configText,
   testGlobals,
   assert,
   cronHomeProbe,
@@ -118,7 +119,7 @@ test("fragment probe preserves timings, missing values, cancellation and version
 
 test("cron dispatch survives Cloudflare's expression normalization", () => {
   // The dispatcher used to exact-match event.cron against the strings in
-  // wrangler.jsonc, but Cloudflare normalizes expressions between declaration
+  // cloudflare.config.ts, but Cloudflare normalizes expressions between declaration
   // and delivery (day-of-week tokens especially), and the census schedule is
   // the only one carrying a day-of-week token: three straight weekly sweeps
   // fell into the else-branch and ran the /around crawl with nothing logged.
@@ -282,8 +283,8 @@ test("redirect following validates every hop, not just the landing", async () =>
 // degraded path from quietly becoming the real one.
 test("production binds the Durable Object the slot claim needs", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
-    const parsed = parseJsonc(readFileSync(config, "utf8"));
+  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
+    const parsed = parseJsonc(await configText(config));
     const bindings = parsed.durable_objects?.bindings ?? [];
     const counter = bindings.find((b) => b.name === "COUNTER");
     assert.ok(counter, `${config} must bind COUNTER for the coffee slot claim`);
@@ -334,8 +335,8 @@ test("the census cron's weekday token and the prose about it agree", async () =>
   const CF_WEEKDAYS = { 1: "Sunday", 2: "Monday", 3: "Tuesday", 4: "Wednesday", 5: "Thursday", 6: "Friday", 7: "Saturday" };
 
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  const crons = parseJsonc(readFileSync("wrangler.jsonc", "utf8")).triggers?.crons ?? [];
-  assert.ok(crons.length >= 4, `read only ${crons.length} crons from wrangler.jsonc; the reader is broken`);
+  const crons = parseJsonc(await configText("cloudflare.config.ts")).triggers?.crons ?? [];
+  assert.ok(crons.length >= 4, `read only ${crons.length} crons from cloudflare.config.ts; the reader is broken`);
   const census = crons.find((expr) => expr.startsWith("17 8 "));
   assert.ok(census, `no census cron found among ${crons.length} expressions`);
 

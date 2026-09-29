@@ -34,7 +34,8 @@ import { fileURLToPath } from "node:url";
 import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "./lib/jsonc.ts";
-import { ROOT, assert, readFileSync, test } from "./contract-shared.ts";
+import {
+  configText, ROOT, assert, test } from "./contract-shared.ts";
 
 // Every shape the walker has an opinion about, plus production's own wrapper
 // down each of its three exits.
@@ -91,7 +92,7 @@ test("encodeBody survives every rebuild shape the walker allows, measured in the
   // Production's flags rather than a default: compatibility_flags carries
   // new_module_registry, and a runtime behaviour measured under different
   // flags would be a measurement of a different runtime.
-  const site = parseJsonc(readFileSync(new URL("wrangler.jsonc", ROOT), "utf8"));
+  const site = parseJsonc(await configText("cloudflare.config.ts"));
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "encodebody-")));
   writeFileSync(join(dir, "worker.js"),
     workerSource(fileURLToPath(new URL("src/worker/lib/security.ts", ROOT))));

@@ -1,6 +1,7 @@
-// ── the Env type matches wrangler.jsonc ─────────────────────────────
+// ── the Env type matches cloudflare.config.ts ─────────────────────────────
 // Shared imports live in contract-shared.ts.
 import {
+  configText,
   assert,
   readFileSync,
   test,
@@ -9,14 +10,14 @@ import {
 // src/worker/lib/env.ts is a DECLARATION of the Worker's binding surface, and a
 // declaration nothing diffs is a comment with extra syntax. This is the diff.
 // Same argument infra.json makes about dashboard state, one layer down: the
-// authority is wrangler.jsonc, the readable copy is the type, and drift in
+// authority is cloudflare.config.ts, the readable copy is the type, and drift in
 // EITHER direction is a failure.
 //
 // The two directions catch different bugs and both have happened here. A
-// binding in wrangler.jsonc with no member is a binding no handler can read
+// binding in cloudflare.config.ts with no member is a binding no handler can read
 // without an `any` cast, which is the state this type was written to end. A
 // member with no binding is worse: it type-checks every read of something that
-// will be `undefined` at runtime, which is precisely the wrangler.jsonc
+// will be `undefined` at runtime, which is precisely the cloudflare.config.ts
 // `secrets` comment naming EXA_API_KEY and PARALLEL_API_KEY while nothing set
 // or read either.
 //
@@ -43,9 +44,12 @@ import {
 // comparison passes over a file it never read.
 
 const ENV_TS = "src/worker/lib/env.ts";
-const WRANGLER = "wrangler.jsonc";
+// The site config, read through its legacy-shape projection (configText), so
+// the binding shapes below keep the names cloudflare.config.ts gave them.
+const WRANGLER = "cloudflare.config.ts";
 
-// The four wrangler.jsonc shapes that declare a binding, since the key naming
+// The four LEGACY-SHAPE keys that declare a binding (the projection lib/site-config.ts
+// makes of cloudflare.config.ts), since the key naming
 // the binding is not the same one in each. Anything not listed here is not a
 // binding (build config, routes, observability, compatibility flags).
 const BINDING_SOURCES = [
@@ -115,7 +119,7 @@ async function members() {
 
 async function wranglerBindings() {
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  const cfg = parseJsonc(readFileSync(WRANGLER, "utf8"));
+  const cfg = parseJsonc(await configText(WRANGLER));
   const names = new Set();
 
   for (const { key, name } of BINDING_SOURCES) {
@@ -130,7 +134,7 @@ async function wranglerBindings() {
   return { names, cfg };
 }
 
-test("every wrangler.jsonc binding, var and required secret has an Env member, and vice versa", async () => {
+test("every site config binding, var and required secret has an Env member, and vice versa", async () => {
   const byInterface = await members();
   const { names: declared, cfg } = await wranglerBindings();
 
@@ -141,7 +145,7 @@ test("every wrangler.jsonc binding, var and required secret has an Env member, a
   assert.ok(byInterface.size >= 5, `env.ts parsed to ${byInterface.size} interfaces — the parse broke, not the file`);
   const total = [...byInterface.values()].reduce((n, ms) => n + ms.length, 0);
   assert.ok(total >= 50, `env.ts parsed to ${total} members across ${byInterface.size} interfaces — the parse broke`);
-  assert.ok(declared.size >= 20, `wrangler.jsonc parsed to ${declared.size} bindings — the parse broke`);
+  assert.ok(declared.size >= 20, `cloudflare.config.ts parsed to ${declared.size} bindings — the parse broke`);
 
   const tier = (n) => new Set((byInterface.get(n) ?? []).map((m) => m.name));
   const bindings = tier("EnvBindings");
@@ -150,20 +154,20 @@ test("every wrangler.jsonc binding, var and required secret has an Env member, a
 
   // Tier 1, both directions.
   for (const name of declared) {
-    assert.ok(bindings.has(name), `wrangler.jsonc declares binding ${name}, EnvBindings has no member for it`);
+    assert.ok(bindings.has(name), `cloudflare.config.ts declares binding ${name}, EnvBindings has no member for it`);
   }
   for (const name of bindings) {
-    assert.ok(declared.has(name), `EnvBindings declares ${name}, wrangler.jsonc has no such binding`);
+    assert.ok(declared.has(name), `EnvBindings declares ${name}, cloudflare.config.ts has no such binding`);
   }
 
   // Tier 2 and tier 3, both directions.
   const declaredVars = new Set(Object.keys(cfg.vars ?? {}));
-  assert.ok(declaredVars.size >= 10, `wrangler.jsonc parsed to ${declaredVars.size} vars — the parse broke`);
-  assert.deepEqual([...vars].sort(), [...declaredVars].sort(), "EnvVars and wrangler.jsonc vars disagree");
+  assert.ok(declaredVars.size >= 10, `cloudflare.config.ts parsed to ${declaredVars.size} vars — the parse broke`);
+  assert.deepEqual([...vars].sort(), [...declaredVars].sort(), "EnvVars and cloudflare.config.ts vars disagree");
 
   const declaredSecrets = new Set(cfg.secrets?.required ?? []);
-  assert.ok(declaredSecrets.size >= 5, `wrangler.jsonc parsed to ${declaredSecrets.size} required secrets — the parse broke`);
-  assert.deepEqual([...secrets].sort(), [...declaredSecrets].sort(), "EnvSecrets and wrangler.jsonc secrets.required disagree");
+  assert.ok(declaredSecrets.size >= 5, `cloudflare.config.ts parsed to ${declaredSecrets.size} required secrets — the parse broke`);
+  assert.deepEqual([...secrets].sort(), [...declaredSecrets].sort(), "EnvSecrets and cloudflare.config.ts secrets.required disagree");
 });
 
 test("required Env members are non-optional and degrading ones are optional", async () => {
@@ -191,23 +195,23 @@ test("required Env members are non-optional and degrading ones are optional", as
   }
 });
 
-test("no degrading or injected Env member is declared in wrangler.jsonc", async () => {
+test("no degrading or injected Env member is declared in the site config", async () => {
   const byInterface = await members();
   const { names: declared, cfg } = await wranglerBindings();
   const configured = new Set([...declared, ...Object.keys(cfg.vars ?? {}), ...(cfg.secrets?.required ?? [])]);
-  assert.ok(configured.size >= 20, `wrangler.jsonc parsed to ${configured.size} configured names — the parse broke`);
+  assert.ok(configured.size >= 20, `the site config parsed to ${configured.size} configured names — the parse broke`);
 
   // The tiers are only meaningful if they are disjoint. A name that reaches
   // both lists is one whose optionality now depends on which file you read, and
   // the compiler would believe the looser of the two. Promoting a degrading
-  // secret to `secrets.required` is a real and expected change (wrangler.jsonc
+  // secret to `secrets.required` is a real and expected change (cloudflare.config.ts
   // says to make it the day one becomes load-bearing) — this fails until the
   // member moves tiers with it, which is the whole point.
   for (const iface of ["EnvOptionalSecrets", "EnvInjected"]) {
     for (const { name } of byInterface.get(iface) ?? []) {
       assert.ok(
         !configured.has(name),
-        `${name} is in ${iface} but wrangler.jsonc configures it — promote it to the matching required tier`,
+        `${name} is in ${iface} but cloudflare.config.ts configures it — promote it to the matching required tier`,
       );
     }
   }

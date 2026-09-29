@@ -44,7 +44,7 @@
 // NONDETERMINISTIC ones (0.96% apart across identical runs, against 0.003% for the
 // bench that builds none). So a bench calls the pure function a handler wraps, with
 // the module-cached maps loaded once from the built tree through a fake ASSETS
-// binding. It needs `.build/public` (any build, or a dev server on wrangler.jsonc,
+// binding. It needs `.build/public` (any build, or a dev server on cloudflare.config.ts,
 // leaves one).
 //
 // --repeat 2 records every count twice and stores the spread, which is the check

@@ -5,11 +5,11 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](../CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
+- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `cloudflare.config.ts` + `wrangler.config.ts` at the repo root (`wrangler.jsonc` until 2026-09-28; CLAUDE.md gotcha 48): it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `cloudflare.config.ts`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](../cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
-[`wrangler.jsonc`](../wrangler.jsonc) runs `bun tools/build.ts` before uploading
+[`wrangler.config.ts`](../wrangler.config.ts) runs `bun tools/build.ts` before uploading
 `.build/src/worker/index.ts` and `.build/public`. Local development uses
 [`wrangler.dev.jsonc`](../wrangler.dev.jsonc), with the source Worker and
 `.dev-assets` assembled by `tools/dev-stage.ts`.
@@ -34,7 +34,7 @@ cd site
 bun install --frozen-lockfile
 bun run --filter cal-aadhar-sh test
 bun run build
-bun run wrangler deploy --dry-run -c wrangler.jsonc
+bun run wrangler:site deploy --dry-run
 ```
 
 The following are deliberately not committed and should be recreated rather
@@ -43,7 +43,7 @@ than copied between checkouts:
 - `node_modules/`, `.build/`, `.wrangler/`, `.dev.vars`, and `.DS_Store` are
   local dependencies, build output, credentials, or caches covered by
   `.gitignore`.
-- Worker secret values live in Cloudflare, not GitHub: `wrangler.jsonc` names
+- Worker secret values live in Cloudflare, not GitHub: `cloudflare.config.ts` names
   them but does not contain them. The contents of KV/R2/D1 are external state
   too, as is Resend's domain verification.
 - DNS records, the account resources the bindings point at, the Worker
@@ -149,7 +149,7 @@ Before rotating, inspect that version's source and bindings. After the final
 secret update, inspect the returned version ID and promote that exact version:
 
 ```bash
-bun run wrangler versions view <version-id> -c wrangler.jsonc
+bun run wrangler:site versions view <version-id>
 bun run deploy:promote --version <version-id> --steps 100 --dry-run
 bun run deploy:promote --version <version-id> --steps 100
 ```
@@ -163,7 +163,7 @@ Create a new Google Calendar **secret address in iCal format** (or the
 equivalent read-only iCloud feed), then replace the secret:
 
 ```bash
-bun run wrangler versions secret put -c wrangler.jsonc ICAL_URL
+bun run wrangler:site versions secret put ICAL_URL
 ```
 
 Paste the new feed URL when prompted, then deploy the returned version as above.
@@ -188,8 +188,8 @@ only an `https://calendar.app.google/...` destination. Set the destination
 first, then the new random-looking path segment:
 
 ```bash
-bun run wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
-bun run wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
+bun run wrangler:site versions secret put WORK_CALENDAR_URL
+bun run wrangler:site versions secret put WORK_CALENDAR_SLUG
 ```
 
 Deploy the version returned by the second command; it carries both changes.
@@ -210,7 +210,7 @@ GitHub or in a public page.
 Generate a new value and replace the Worker secret:
 
 ```bash
-openssl rand -hex 32 | bun run wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
+openssl rand -hex 32 | bun run wrangler:site versions secret put SIGNING_SECRET
 ```
 
 Deploy the returned version to 100% as above. Once it serves all traffic,
@@ -315,7 +315,7 @@ For a workstation ramp, inspect the target first:
 ```bash
 bun run deploy:promote --dry-run
 bun run deploy:promote --status
-bun run wrangler versions list -c wrangler.jsonc
+bun run wrangler:site versions list
 bun run deploy:promote --version <version-id> --to 10
 # Inspect the canary and Workers Logs before continuing:
 bun run deploy:promote --version <version-id> --steps 50,100
@@ -414,7 +414,7 @@ is a workstation run, the same standing as `repository.code_scanning`.
 
 ### Preview URLs
 
-`preview_urls: true` in `wrangler.jsonc`, with `workers_dev: false` kept.
+`previewUrls: true` in `cloudflare.config.ts`, with `workersDev: false` kept.
 Production has no workers.dev address; each uploaded VERSION does, at
 `<version-prefix>-aadhar-sh.<subdomain>.workers.dev`. Wrangler prints it on
 upload, and `--preview-alias` gives a version a stable name instead of a prefix.
@@ -474,7 +474,7 @@ Three things the generator does on purpose:
 
 ### Infrastructure declaration
 
-`wrangler.jsonc` declares the compute layer and CI dry-runs it, so a bad route
+`cloudflare.config.ts` declares the compute layer and CI dry-runs it, so a bad route
 or a missing binding already fails a PR. [`infra.json`](../config/infra.json) covers the
 layer above that: DNS records, the account resources the bindings point at, the
 Worker inventory, and the Workers Build settings. `bun run infra:check` diffs
@@ -486,7 +486,7 @@ Three tiers, by what they cost to run:
 
 | tier | needs | covers |
 |---|---|---|
-| tree | nothing | binding names agree with `wrangler.jsonc`; every `consumer` file exists; the release block agrees with the Worker config |
+| tree | nothing | binding names agree with `cloudflare.config.ts`; every `consumer` file exists; the release block agrees with the Worker config |
 | dns | network | every declared record, via DoH against two independent resolvers, plus the nameservers and the DNSSEC `DS` |
 | edge | network | zone settings that are load-bearing for something this repo does, read as observed production responses |
 | account | a read-only token | the KV/R2/D1 IDs actually resolve; declared Workers are deployed and retired ones are gone |
@@ -497,7 +497,7 @@ unreachable, no token) and never fails the run, so a network blip cannot redden
 a PR that only touched CSS. Use `--strict` to promote advisories to failures
 when you want a real audit, and `--offline` for the no-network tier alone.
 
-Resource IDs live in `wrangler.jsonc` and nowhere else. `infra.json` names what
+Resource IDs live in `cloudflare.config.ts` and nowhere else. `infra.json` names what
 must exist and why, and the checker joins the two by binding name, so the two
 files cannot drift into describing different worlds.
 
@@ -733,7 +733,7 @@ third-party verification TXT than junk.
    then republish the DS record so `zone.dnssec.ds` matches again.
 2. Create the storage with wrangler (`kv namespace create`, `r2 bucket create`,
    `d1 create`, `vectorize create`). Each mints a NEW id; paste them into
-   `wrangler.jsonc`, which stays the only place ids live.
+   `cloudflare.config.ts`, which stays the only place ids live.
 3. Ship the Worker through the normal path (merge to `main`, CI promotes to
    `production`, Workers Builds deploys). This is what creates the proxied
    `aadhar.sh`, `www` and `cal` records, so do not hand-author them.
@@ -1255,7 +1255,7 @@ OG/Twitter card once the page is live with `bun run og-cards` (see below).
 
 Start with [`src/worker/index.ts`](../src/worker/index.ts). Its route tables,
 pattern handlers, and host dispatch select the handler; the imports lead to
-its implementation. [`wrangler.jsonc`](../wrangler.jsonc)'s
+its implementation. [`cloudflare.config.ts`](../cloudflare.config.ts)'s
 `assets.run_worker_first` decides which requests reach that dispatcher before
 static assets. Keep the two in sync when adding a Worker-owned route.
 
@@ -1266,7 +1266,7 @@ styles, and unchanged public assets into the served tree.
 
 ### Bindings the worker reads (`env.*`)
 
-[`wrangler.jsonc`](../wrangler.jsonc) declares bindings, vars, and required
+[`cloudflare.config.ts`](../cloudflare.config.ts) declares bindings, vars, and required
 secret names. [`src/worker/lib/env.ts`](../src/worker/lib/env.ts) documents their
 uses and distinguishes required, optional, and injected values.
 `bun run env:check` compares those declarations; it also runs in `typecheck`.
@@ -1276,7 +1276,7 @@ to degrade without its credential. Stage a secret with the versions command,
 then use the normal release path:
 
 ```bash
-bun run wrangler versions secret put -c wrangler.jsonc <NAME>
+bun run wrangler:site versions secret put <NAME>
 ```
 
 The versioned command avoids an immediate traffic change. The Cal rotation
@@ -1462,7 +1462,7 @@ $EDITOR src/worker/albums.ts
 # 2. register the page: path "/<slug>", section "photos", then project it
 $EDITOR config/site-manifest.json && bun run gen:manifest
 #    plus one Run-palette row in src/client/nav-run.js, a sitemap.xml <url>,
-#    "/<slug>" and "/<slug>/" in wrangler.jsonc run_worker_first (gotcha 26:
+#    "/<slug>" and "/<slug>/" in cloudflare.config.ts runWorkerFirst (gotcha 26:
 #    each album costs two rows), and a row in tools/verify-routes.ts
 # 3. ingest with the flags
 ALBUM=<slug> HEIF=1 bun run photos "/path/to/folder/"
@@ -1585,7 +1585,7 @@ outright — so it needs a token:
 ```bash
 # Cloudflare dashboard -> API Tokens -> Create Custom Token
 #   Permission: Account · Browser Rendering · Edit
-bun run wrangler versions secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
+bun run wrangler:site versions secret put BROWSER_RUN_TOKEN
 ```
 
 **That is an EDIT scope.** It lives as a Worker secret, never in GitHub, so the
@@ -1920,7 +1920,7 @@ curl -s "https://aadhar.sh/rn/tracks" >/dev/null                       # warms t
 
 The track cache stores its freshness stamp in the value's KV metadata. Delete
 one key to discard both, using the `RN_KV` namespace declared in
-[`wrangler.jsonc`](../wrangler.jsonc):
+[`cloudflare.config.ts`](../cloudflare.config.ts):
 
 ```bash
 NS="3cb8a107c58e47dc9244e75b33401f36"
@@ -1989,7 +1989,7 @@ curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_
 A gap means no datapoint was recorded; it does not identify which stage failed.
 
 ### Read a trace (Workers Traces)
-Enabled in `wrangler.jsonc` under `observability.traces`, 100% sampled. Read them
+Enabled in `cloudflare.config.ts` under `observability.traces`, 100% sampled. Read them
 in the dashboard: **Workers & Pages -> aadhar-sh -> Observability -> Traces**.
 Every outbound fetch, binding call, and handler invocation is auto-instrumented;
 the named spans on top come from `src/worker/lib/trace.ts` (vocabulary table in CLAUDE.md).

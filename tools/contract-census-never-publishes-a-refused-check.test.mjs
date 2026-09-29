@@ -1,7 +1,8 @@
 // ── the census never publishes a check the platform refused ──────────────────
 // Split-file suite; shared imports live in contract-shared.ts.
 import { execFileSync } from "node:child_process";
-import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import {
+  configText, ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { CENSUS_ROSTER, censusCapHit, censusInstanceId } from "../src/worker/census.ts";
 
 // THE BUG THIS PINS. Every probe in lens.ts catches its own error and returns
@@ -111,8 +112,8 @@ test("the Workflow class is exported from the entrypoint and bound in both confi
     "index.ts must re-export CensusWorkflow for the binding's class_name to resolve");
 
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
-    const parsed = parseJsonc(await readFile(new URL(config, ROOT), "utf8"));
+  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
+    const parsed = parseJsonc(await configText(config));
     const entry = (parsed.workflows ?? []).find((w) => w.binding === "CENSUS_WORKFLOW");
     assert.ok(entry, `${config} must bind CENSUS_WORKFLOW`);
     assert.equal(entry.class_name, "CensusWorkflow", `${config} must name the exported class`);

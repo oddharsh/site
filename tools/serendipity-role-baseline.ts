@@ -30,6 +30,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { roleTier } from "../serendipity/serendipity.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { siteWranglerArgs } from "./lib/site-config.ts";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const run = promisify(execFile);
@@ -78,9 +79,9 @@ function fnv(s: string): number {
 
 async function readBios(): Promise<Bio[]> {
   const sql = "SELECT id, bio_short AS bio FROM attendees WHERE bio_short IS NOT NULL AND trim(bio_short) <> ''";
-  const { stdout } = await run(...wranglerCommand([
-    "d1", "execute", "serendipity", "-c", "wrangler.jsonc", "--remote", "--json", "--command", sql,
-  ]), { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 });
+  const { stdout } = await run(...wranglerCommand(await siteWranglerArgs([
+    "d1", "execute", "serendipity", "--remote", "--json", "--command", sql,
+  ])), { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 });
   return JSON.parse(stdout)[0].results;
 }
 

@@ -43,6 +43,7 @@ import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:z
 import { transform as transformCss } from "lightningcss";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { siteWranglerArgs } from "./lib/site-config.ts";
 
 // Wire-size envelopes, not raw-source ceilings. These start from the current
 // built output with enough room for ordinary feature work; they are deliberately
@@ -245,7 +246,7 @@ try {
   // One dry-run writes index.js for the route harness's prebuiltWorkerDir and
   // the upload-format worker.bundle for `check startup`. They are different
   // formats; the profiler cannot consume the plain JavaScript entrypoint.
-  dryOut = execFileSync(...wranglerCommand(["deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"]), { encoding: "utf8" });
+  dryOut = execFileSync(...wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"])), { encoding: "utf8" });
 } catch (e) {
   dryOut = (e.stdout || "") + "\n" + (e.stderr || "");
   dryRunFailed = true;
@@ -289,11 +290,11 @@ if (gz) {
 //
 // Runs on the prebuilt bundle from the dry-run above, so it adds no build.
 try {
-  const startOut = execFileSync(...wranglerCommand([
+  const startOut = execFileSync(...wranglerCommand(await siteWranglerArgs([
     "check", "startup",
     "--workerBundle", ".build/.perfbudget/worker.bundle",
     "--outfile", ".build/.perfbudget/worker-startup.cpuprofile",
-  ]), { encoding: "utf8" });
+  ])), { encoding: "utf8" });
   // "│   Active: 9.6 ms (including 0.0 ms garbage collection)"
   const active = startOut.match(/Active:\s*([\d.]+)\s*ms/);
   if (active) {

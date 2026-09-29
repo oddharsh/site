@@ -37,7 +37,8 @@ on:
       - "serendipity/**"
       - "tools/**"
       - "config/site-manifest.json"
-      - "wrangler.jsonc"
+      - "cloudflare.config.ts"
+      - "wrangler.config.ts"
       - "bun.lock"
       - ".github/workflows/perf-diff.yml"
       # The photo tiers are content-addressed binaries served straight from the

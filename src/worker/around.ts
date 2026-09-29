@@ -49,7 +49,7 @@ export const NEIGHBORS = [
 // The request path only READS the snapshot: no visitor, crawler, or speculative
 // prerender can make this site fetch 20 third-party homepages, which is what
 // lets /around join the prerender set with every other page. The crawl runs on
-// the schedule in wrangler.jsonc (cronAround, via index.js's scheduled handler).
+// the schedule in cloudflare.config.ts (cronAround, via index.js's scheduled handler).
 // The page itself is a built file served by index.ts (routeAround); its crawl
 // half is renderAroundSnapshot below. The JSON twin keeps its own bust.
 export async function handleAroundJson(request, env, ctx) {
@@ -290,7 +290,7 @@ export async function handleAroundChangesJson(request, env) {
 
 // cron entry: crawl the neighborhood and persist the snapshot. Runs on the DAILY
 // outbound tick (41 5) alongside the webmention pass, not on a schedule of its
-// own; see lib/cron.js for why the two share one, and wrangler.jsonc for why the
+// own; see lib/cron.js for why the two share one, and cloudflare.config.ts for why the
 // crawl may never move back onto the request path.
 //
 // A crawl where EVERY neighbor errored stores nothing, so the last good snapshot
