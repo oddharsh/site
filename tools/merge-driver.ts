@@ -97,8 +97,14 @@ function mainlineIsOurs(): boolean {
   return !/^(merge|pull)\b/.test(process.env.GIT_REFLOG_ACTION ?? "");
 }
 
+// SITE_MERGE_LEDGER redirects the ledger for a merge that is a MEASUREMENT
+// rather than an integration. tools/conflict-triage.ts runs `git merge-tree`,
+// which calls this driver exactly as a real merge does, and without the override
+// every triage run parked phantom regenerations in the worktree's real ledger
+// for merge-finish to act on at the next unrelated commit.
 function pending(path: string, note: string) {
-  appendFileSync(join(gitDir(), "site-merge-pending"), `${path}\t${note}\n`);
+  const ledger = process.env.SITE_MERGE_LEDGER || join(gitDir(), "site-merge-pending");
+  appendFileSync(ledger, `${path}\t${note}\n`);
 }
 
 function say(line: string) {

@@ -854,13 +854,17 @@ const SHELLS = [
   // export NAME, which survives minification by construction, so losing it
   // means the module lost its public surface and the page's import would break.
   ["garage/pretext.lib.js", "/garage/pretext.lib.src.js", "prepareWithSegments"],
+  // the /dotfiles checklist. An ES module (tools/gen-dotfiles.ts imports its
+  // renderer to write the committed macos.sh), unhashed like ask.js: one page
+  // loads it and a hash would re-mint nothing worth re-minting.
+  ["dotfiles.js", "/dotfiles.src.js", "dotfiles-data"],
 ];
 
 // SHELLS rows that are ES MODULES rather than classic scripts. OXC_MINIFY_OPTIONS
 // parses as a script (module: false), which refuses `export`. A module's
 // top-level names are module-scoped rather than globals, so mangling them is
 // safe and is where most of this file's saving comes from.
-const MODULE_SHELLS = new Set(["garage/pretext.lib.js"]);
+const MODULE_SHELLS = new Set(["garage/pretext.lib.js", "dotfiles.js"]);
 
 // EVERY client script is a SHELLS row, or is sw.js. A file missing from the list
 // ships readable and unminified with no .src.js twin and, the sharper half, no

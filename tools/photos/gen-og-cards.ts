@@ -145,6 +145,12 @@ const HERO = {
   // /pixel-peeper/index.html under a plain static server. Locally the favicon
   // never gets set and the card's brand stamp silently falls back to blue.
   "pixel-peeper": { preset: "#go", presetWait: 2600, span: [".row", ".gb"], hero: [".gb", ".tiles"] },
+  // The checklist sheet alone: folders, ticked rows, the factory value on each,
+  // and the "N of N ticked" count. A span down through the generated script was
+  // tried (2026-09-29) and tells the whole story at 1200px, but it halves the
+  // type, and at the ~500px a timeline unfurls the card both sheets turn to
+  // noise. The script is what the click is for; the card only has to show the list.
+  "dotfiles": { hero: [".sheet:has(#df-list)"] },
 };
 
 // Selectors tried when a page has no HERO entry, or its listed heroes all miss.

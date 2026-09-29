@@ -379,6 +379,24 @@
       }
     },
     {
+      "path": "/dotfiles",
+      "title": "Dotfiles",
+      "section": "dotfiles",
+      "kind": "utility",
+      "description": "The macOS defaults i changed on my own Mac, read back off the machine: tick the ones you want and get the defaults write script that sets them.",
+      "hint": "folder options for a mac: tick the defaults you want, get the script that sets them",
+      "note": "A utility at the root, per the rule that only content nests. The page carries its option data inline; public/dotfiles/macos.sh is that data with every box ticked, projected by bun run gen:dotfiles and held equal by a contract test.",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": false,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": false
+      }
+    },
+    {
       "path": "/pixel-peeper",
       "title": "Pixel Peeper",
       "section": "pixel-peeper",
