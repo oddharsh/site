@@ -102,8 +102,8 @@ async function postBook(fields, overrides = {}) {
 // given instance run one at a time. Instances are keyed by name, so two slots
 // never contend, and each holds its own storage. The claim logic itself is the
 // real module — only the serialization is simulated, because the class lives in
-// the site tree (src/worker/counter.ts), and importing it from cal would make
-// cal untestable without the site tree.
+// counter/src/counter.ts, and importing it from cal would make
+// cal untestable without the aadhar-counter tree.
 function stubCounterNamespace() {
   const instances = new Map();
   return {

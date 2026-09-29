@@ -295,32 +295,30 @@ test("production binds the Durable Object the slot claim needs", async () => {
     assert.equal(counter.script_name, "aadhar-counter",
       `${config} must bind COUNTER in aadhar-counter, which owns the class since step 3`);
 
-    // The claim rides the EXISTING class on purpose: a second class is a
-    // lifecycle change, and `wrangler versions upload` cannot apply one. If
-    // someone adds a class later this assertion should be revisited
-    // deliberately rather than silently outgrown. The class is declared in
-    // `exports` since the Counter move began (CLAUDE.md, "Moving Counter
-    // out"), and a Durable Object there is mutually exclusive with a
-    // `migrations` array, so a migration reappearing is refused as well.
+    // THE SITE IMPLEMENTS NO DURABLE OBJECT, which is the invariant the whole
+    // "Moving Counter out" sequence (CLAUDE.md) bought: a Worker that implements
+    // one gets no preview URLs. Counter lives in aadhar-counter since 2026-09-29.
+    // A class reappearing here, in exports or through a migrations array, takes
+    // the previews away again without a single other symptom.
     assert.equal(parsed.migrations, undefined,
-      `${config} carries a migrations array beside a Durable Object in exports, which wrangler rejects`);
+      `${config} carries a migrations array, which would make this Worker implement a Durable Object`);
     const classes = Object.entries(parsed.exports ?? {})
       .filter(([, e]) => e?.type === "durable-object")
       .map(([name]) => name);
-    assert.deepEqual(classes, ["Counter"],
-      `${config} declares Durable Object classes ${JSON.stringify(classes)}; the slot claim assumes Counter is the only one`);
-    // What remains here is the transfer's TOMBSTONE, and step 5 deletes it.
-    assert.deepEqual(parsed.exports.Counter,
-      { type: "durable-object", state: "transferred", transferred_to: "aadhar-counter" },
-      `${config} must mark Counter transferred to aadhar-counter until step 5 removes it`);
+    assert.deepEqual(classes, [],
+      `${config} declares Durable Object classes ${JSON.stringify(classes)}; aadhar-sh must implement none, or it loses preview URLs`);
   }
 
   // The other end of the binding: aadhar-counter must actually implement the
-  // class, as a live sqlite class rather than still expecting the transfer.
+  // class, as a live sqlite class. It is also the ONE class the slot claim and
+  // the odometer share, on purpose: a second class is a lifecycle change.
   const target = parseJsonc(readFileSync("counter/wrangler.jsonc", "utf8"));
   assert.equal(target.name, "aadhar-counter");
   assert.deepEqual(target.exports?.Counter, { type: "durable-object", storage: "sqlite" },
-    "counter/wrangler.jsonc must implement Counter as a plain sqlite class once the transfer has committed");
+    "counter/wrangler.jsonc must implement Counter as a plain sqlite class");
+  const targetClasses = Object.entries(target.exports ?? {}).filter(([, e]) => e?.type === "durable-object").map(([n]) => n);
+  assert.deepEqual(targetClasses, ["Counter"],
+    `counter/wrangler.jsonc declares Durable Object classes ${JSON.stringify(targetClasses)}; the slot claim assumes Counter is the only one`);
 });
 
 // One instance per slot is the entire exclusivity argument: two different times

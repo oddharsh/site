@@ -62,10 +62,6 @@ import { scriptHashesFor } from "./lib/csp-hashes.ts";
 installTracing(tracing);
 installCalTracing(tracing);
 
-// the homepage visit-counter Durable Object, hosted in-house (see counter.js).
-// must be a named export of the entry so the COUNTER binding can resolve it.
-export { Counter } from "./counter.ts";
-
 
 // the coffee-booking expiry timer (Workflows). One durable instance per pending
 // booking replaces the old weekly cron sweep; its class_name must resolve on

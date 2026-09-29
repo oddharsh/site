@@ -414,19 +414,26 @@ is a workstation run, the same standing as `repository.code_scanning`.
 
 ### Preview URLs
 
-**They do not work for this Worker, and never have.** `aadhar-sh` exports the
-`Counter` Durable Object, and Cloudflare generates no version URLs for a Worker
-that implements one. Every uploaded version carries `has_preview: false` in its
-metadata, so `<version-prefix>-aadhar-sh.aadharsh2010.workers.dev` and every
-alias form answer 404 with `x-preview-user-error: true`. Wrangler prints a
-`Version Preview URL:` line only when that flag is true, so the upload is
-silent rather than wrong. CLAUDE.md, "Preview URLs are configured ON and have
-NEVER SERVED", has the measurement, and "Moving Counter out" is the move
-that ends it.
+**They work since 2026-09-29.** Every branch push uploads a version, and each
+one answers at `<version-prefix>-aadhar-sh.aadharsh2010.workers.dev` and at
+`<branch-alias>-aadhar-sh.aadharsh2010.workers.dev`; the Workers Builds
+comment on the PR links it. Wrangler prints a `Version Preview URL:` line on
+upload.
 
-To inspect an uploaded version without a URL, use `wrangler versions view <id>`
-(bindings, secrets) or `Cloudflare-Workers-Version-Overrides` once the version
-is in the deployment.
+For eight weeks before that they served nothing: `aadhar-sh` exported the
+`Counter` Durable Object, Cloudflare generates no version URLs for a Worker
+that implements one, and every version carried `has_preview: false` while
+every config said previews were on. Moving `Counter` to `aadhar-counter`
+fixed it. CLAUDE.md, "Preview URLs SERVE since 2026-09-29" and "Moving Counter
+out", have the diagnosis and the move. **Keep this Worker free of Durable
+Objects**, or every preview URL goes back to a 404 that says nothing about why.
+The one-read check is the version's `has_preview`:
+
+```bash
+curl -s -H "Authorization: Bearer $(bun run wrangler auth token 2>/dev/null | tail -1)" \
+  "https://api.cloudflare.com/client/v4/accounts/<account>/workers/scripts/aadhar-sh/versions?per_page=5" \
+  | jq '[.result.items[].metadata.has_preview]'
+```
 
 `previewUrls: true` in `cloudflare.config.ts`, with `workersDev: false` kept.
 Production has no workers.dev address; were previews possible, each uploaded
