@@ -62,7 +62,7 @@
     "default": { "type": "worker", "cache": { "enabled": false } },
     "CachedPages": { "type": "worker", "cache": { "enabled": false } },
     // MUST match cloudflare.config.ts, which carries the argument for this form.
-    "Counter": { "type": "durable-object", "storage": "sqlite" }
+    "Counter": { "type": "durable-object", "state": "transferred", "transferred_to": "aadhar-counter" }
   },
   "dependencies_instrumentation": { "enabled": true },
   "workers_dev": false,
@@ -209,7 +209,7 @@
   ],
   "durable_objects": {
     "bindings": [
-      { "name": "COUNTER", "class_name": "Counter" }
+      { "name": "COUNTER", "class_name": "Counter", "script_name": "aadhar-counter" }
     ]
   },
   // per-booking coffee expiry timer — MUST match cloudflare.config.ts (build.ts warns on drift).

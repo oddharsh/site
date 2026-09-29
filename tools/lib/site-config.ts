@@ -94,7 +94,17 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
       case "analytics-engine-dataset": ae.push({ binding: name, dataset: text(b.name, `env.${name}.name`) }); break;
       case "r2": r2.push({ binding: name, bucket_name: text(b.name, `env.${name}.name`) }); break;
       case "d1": d1.push({ binding: name, database_name: text(b.name, `env.${name}.name`), database_id: text(b.id, `env.${name}.id`) }); break;
-      case "durable-object": doBindings.push({ name, class_name: text(b.exportName, `env.${name}.exportName`) }); break;
+      case "durable-object": {
+        // A binding to ANOTHER Worker's class carries `script_name` in the legacy
+        // shape. Dropping it would project COUNTER, which binds aadhar-counter
+        // since step 3 of "Moving Counter out" (CLAUDE.md), as a class this
+        // Worker implements, which is the one thing it no longer does.
+        const owner = text(b.worker, `env.${name}.worker`);
+        const binding: Record<string, string> = { name, class_name: text(b.exportName, `env.${name}.exportName`) };
+        if (owner !== worker.name) binding.script_name = owner;
+        doBindings.push(binding);
+        break;
+      }
       case "workflow": workflows.push({ name: text(b.name, `env.${name}.name`), binding: name, class_name: text(b.exportName, `env.${name}.exportName`) }); break;
       case "rate-limit": {
         const simple = need(b.simple, `env.${name}.simple`);
@@ -117,7 +127,13 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
     const e = need(raw, `exports.${name}`);
     if (e.type === "worker") entrypoints[name] = { type: "worker", cache: { enabled: need(e.cache, `exports.${name}.cache`).enabled } };
     else if (e.type === "durable-object") {
-      if (e.state !== undefined && e.state !== "created") throw new Error(`site-config: exports.${name} is a DO in state ${JSON.stringify(e.state)}; the projection only knows created classes`);
+      // "transferred" is the tombstone step 3 of "Moving Counter out" leaves
+      // until step 5 removes it. It has no storage of its own to project.
+      if (e.state === "transferred") {
+        entrypoints[name] = { type: "durable-object", state: "transferred", transferred_to: text(e.transferredTo, `exports.${name}.transferredTo`) };
+        continue;
+      }
+      if (e.state !== undefined && e.state !== "created") throw new Error(`site-config: exports.${name} is a DO in state ${JSON.stringify(e.state)}; the projection knows created and transferred classes only`);
       if (e.storage !== "sqlite") throw new Error(`site-config: exports.${name} is a DO with storage ${JSON.stringify(e.storage)}; the projection only knows sqlite`);
       entrypoints[name] = { type: "durable-object", storage: "sqlite" };
     } else if (e.type !== "workflow") throw new Error(`site-config: exports.${name} has type ${JSON.stringify(e.type)}, which this projection does not know`);
