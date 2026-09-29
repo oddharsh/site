@@ -30,6 +30,7 @@ import {
   test,
 } from "./contract-shared.ts";
 import { imageCompare, photoRecipe } from "../src/worker/image-tools.ts";
+import { _resetSearchIndex } from "../src/worker/search.ts";
 import { buildImageFingerprints } from "./lib/photo-indexes.ts";
 import { createHash } from "node:crypto";
 
@@ -300,6 +301,7 @@ test("a recipe run bills against the same two buckets as a plain one", async () 
 
 
 test("site search and JSON contract share the generated corpus", async () => {
+  _resetSearchIndex(); // the corpus is memoised per process, like the photo maps
   const env = { ASSETS: staticAssets({
     "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" }] },
   }) };

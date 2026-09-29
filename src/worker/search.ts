@@ -24,6 +24,16 @@ type PreparedRecord = {
 
 let indexCache: PreparedRecord[] | null = null;
 
+// Test seam, never called by the worker, like _resetPhotoCaches in photos.ts.
+// The corpus is cached per ISOLATE, which is right in production and becomes
+// per-PROCESS under `bun test --no-isolate`: a worker running two files that
+// stub different corpora serves the second file the first one's. Found
+// 2026-09-29 when /ask's tests read an empty corpus after new test files
+// reshuffled which files share a worker.
+export function _resetSearchIndex() {
+  indexCache = null;
+}
+
 async function getSearchIndex(env): Promise<PreparedRecord[]> {
   if (indexCache) return indexCache;
   try {
