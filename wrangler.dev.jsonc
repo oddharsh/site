@@ -60,7 +60,9 @@
   "cache": { "enabled": false, "cross_version_cache": false },
   "exports": {
     "default": { "type": "worker", "cache": { "enabled": false } },
-    "CachedPages": { "type": "worker", "cache": { "enabled": false } }
+    "CachedPages": { "type": "worker", "cache": { "enabled": false } },
+    // MUST match wrangler.jsonc, which carries the argument for this form.
+    "Counter": { "type": "durable-object", "storage": "sqlite" }
   },
   "dependencies_instrumentation": { "enabled": true },
   "workers_dev": false,
@@ -210,9 +212,6 @@
       { "name": "COUNTER", "class_name": "Counter" }
     ]
   },
-  "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Counter"] }
-  ],
   // per-booking coffee expiry timer — MUST match wrangler.jsonc (build.ts warns on drift).
   "workflows": [
     { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" },

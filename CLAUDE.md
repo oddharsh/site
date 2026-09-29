@@ -870,6 +870,78 @@ worktrees may edit freely, but a worktree is not a release surface.
   account. That is the cheapest place to answer any "will the deploy accept
   this" question: push the branch and read `wrangler versions view` on the alias,
   which the dry run structurally cannot tell you.
+- **Moving Counter out: the `Counter` Durable Object is moving from aadhar-sh
+  to its own Worker, `aadhar-counter` (`counter/`), IN FIVE ALTERNATING
+  DEPLOYS.** Started 2026-09-28. The reason is preview URLs: Cloudflare mints
+  no version URL for a Worker that implements a Durable Object, so every
+  aadhar-sh version has carried `has_preview: false` since `Counter` moved in
+  on 2026-07-01. Binding a class that ANOTHER Worker exports leaves previews
+  on, measured on throwaway Workers, so the site keeps its `COUNTER` binding
+  and only stops exporting the class.
+
+  **The data is why this is a transfer rather than a fresh class.** One class
+  holds two things: the odometer (`n` in instance `homepage-visits`) and the
+  live coffee-slot claims (`coffee-slot:<start>:<end>`, cal/src/reservation.ts).
+  Seeding a new class from the current count, the way the July move from
+  cf-garage did, would keep the odometer and drop every pending slot claim,
+  which is a double-booking window with nothing to say so.
+
+  A transfer is only expressible in the `exports` lifecycle form, and a Durable
+  Object in `exports` is mutually exclusive with a `migrations` array, so step 1
+  converts the site's class from `migrations: [{ tag: "v1", new_sqlite_classes }]`
+  to `exports.Counter: { type: "durable-object", storage: "sqlite" }`. Every
+  lifecycle step needs `wrangler deploy`: `versions upload` applies none of
+  them, which is also why each site step lands through the production build
+  (`wrangler deploy` since 2026-09-28) rather than a branch build.
+
+  | step | deploys | change | how |
+  |---|---|---|---|
+  | 1 | aadhar-sh | `Counter` declared in `exports`, `migrations` removed | merge a site PR |
+  | 2 | aadhar-counter | `Counter` `expecting-transfer` from `aadhar-sh` | `bun run wrangler deploy -c counter/wrangler.jsonc --x-provision=false --x-auto-create=false` |
+  | 3 | aadhar-sh | `Counter` `transferred` to `aadhar-counter`; `COUNTER` gains `script_name: "aadhar-counter"` | merge a site PR |
+  | 4 | aadhar-counter | `Counter` back to plain `storage: "sqlite"` | the same command |
+  | 5 | aadhar-sh | the class code and the tombstone leave; the class moves into `counter/src` | merge a site PR |
+
+  **Rehearsed end to end on 2026-09-28** with a throwaway pair built like this
+  one (the source started on a legacy `v1` migration beside worker-type
+  `exports`, same compatibility date and flags), deleted afterwards. Reading
+  the count through the SOURCE after each step:
+
+  | after step | count | answered by |
+  |---|--:|---|
+  | 0, baseline | 3 | source |
+  | 1 | 6 | source |
+  | 2 | 9 | source |
+  | 3 | 10 to 15 | target |
+  | 4 | 18 | target |
+  | 5 | 21 | target |
+
+  No request failed at any step and the count never reset. Step 3 is the
+  commit: the first request after that deploy was already answered by the
+  target's code. A `versions upload` was accepted in the step 1 state, and
+  after step 5 one printed a `Version Preview URL:` that answered 200 THROUGH
+  the cross-Worker binding, which is the whole point of the exercise.
+
+  Four things the rehearsal did not settle, so treat them as unsafe until they
+  are measured:
+
+  - **Rolling aadhar-sh back across step 1 or step 3.** `deploy:promote
+    --rollback` redeploys an existing version, and a version from before step 3
+    binds a class this Worker no longer owns. Roll forward instead.
+  - **Running step 2 before step 1 serves.** The target names a source class
+    that the docs show in the `exports` form; whether the legacy form is
+    accepted was not tried. Confirm step 1 with `bun run deploy:promote --status`
+    before running step 2.
+  - **Collapsing steps 3 and 5.** Cloudflare's own sequence keeps the class code
+    in the source through the commit, and the rehearsal followed it.
+  - **The branch build of the step 3 PR.** It runs `versions upload` on a
+    lifecycle change, so expect it to be refused. It is not a required check,
+    and the production build is `wrangler deploy`.
+
+  Check after each site step: `/hit?peek=1` keeps counting from where it was,
+  and a coffee booking still claims its slot. After step 5, a branch build's
+  version should read `has_preview: true`. `counter/wrangler.jsonc` is written
+  for the step it is at and says which.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`
