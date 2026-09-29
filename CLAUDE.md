@@ -5271,6 +5271,24 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     `--parallel` implies unless you say otherwise) and declined at about 35%
     more CPU; `comment:test-parallel` carries that table.
 
+    **The leaks it predicts live in ten module-level `let`s, and two of them
+    bit.** Swept 2026-09-29 across `src/worker`, `cal/src`, `serendipity` and
+    `counter/src`; nothing is written to a module constant after load, so the
+    `let` list is the whole set. A cache a test STUBS gets a `_reset…()` seam the
+    Worker never calls, and every test that stubs it calls the seam first:
+    `_resetPhotoCaches`, `_resetSearchIndex`, `_resetKitesurfProbe`. The signing
+    key memo is keyed by the secret's text and needs none, and the two tracer
+    holders are only ever set inside workerd (gotcha 16). The two webmention
+    `ensured` flags do pin across files, measured (a second fake DB never sees
+    the `CREATE`), and stay seamless because every fake answers `CREATE` as a
+    no-op. A fake that refuses a query on a missing table would need one.
+
+    To reproduce a suspected leak without depending on scheduling, warm the
+    cache with fixture A in a second `--preload` and run the one test after it:
+    `bun test --no-isolate --preload ./tools/lib/no-network.ts --preload warm.ts
+    <file> --test-name-pattern '<name>'`. That is how the MCP search test was
+    shown to pass only because the test above it had loaded an identical corpus.
+
 29. **Use the installed Wrangler under Node, without a package-manager lookup.**
     Tools call `wranglerCommand()` from `tools/lib/wrangler-bin.ts`; Workers
     Builds calls `.github/deploy-wrangler.sh`. Both name the root's installed
