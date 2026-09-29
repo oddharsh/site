@@ -4045,6 +4045,30 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     the whole file and there is no long range to find. build.ts's pin at 19 is
     optimal; do not spend an afternoon re-checking it.
 
+    **The PAGE-family deltas are not byte-identical, and the verdict holds
+    anyway.** The paragraph above measured the shell. Measured 2026-09-29 on the
+    67 served pages from `src/dict/p-dict`, each compressed against the family
+    dictionary cut 16 rolls earlier (the served total counts each page at
+    `min(frame + 40, q11)`):
+
+    | level | served, 67 pages | frames identical to 19 |
+    |---|--:|--:|
+    | 15 | 528,312 B (+2,340) | 0 |
+    | 17 | 525,973 B (+1) | 64 |
+    | **19** | **525,972 B** | 67 |
+    | 20 | 525,977 B (+5) | 7 |
+    | 22 | 525,949 B (−23) | 4 |
+    | 22 + long-distance matching | 525,913 B (−59) | 4 |
+
+    So above 19 the bytes move on nearly every page and the total moves by at
+    most 59 B across all 67, under one byte a page and far below brotli's own
+    50-160 B edit noise on a single large page. Level 19 stays for pages too.
+    Read "byte-identical" in the paragraph above as a fact about the shell only:
+    a later check that finds differing page frames has found this table, not a
+    regression. The measurement reads the served pages out of the git history of
+    `src/dict/p-dict` and takes seconds, which is the argument for running it
+    before building anything larger around this knob.
+
     dcz's framing is also the tidier of the two: the dictionary hash rides in a
     Zstandard SKIPPABLE frame (magic `0x184D2A5E` LE, then a 4-byte LE length of
     32, then the raw SHA-256), so any conforming decoder skips it and
