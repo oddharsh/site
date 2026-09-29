@@ -4103,26 +4103,40 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     preferred dictionary whenever both are cached; this prevents an uncaptured old
     page snapshot from shadowing a usable family delta and forcing Brotli. The exact
     page remains the high-ratio fallback (93-97% in the measured set) before the
-    idle-loaded family dictionary arrives. The family corpus includes representative
-    tails from its four outlier layouts and now beats q11 on all 46 deterministic
-    pages (428,238 B vs 494,073 B across the set). Both candidates are emitted only
-    when they beat plain q11.
+    idle-loaded family dictionary arrives. Both candidates are emitted only when
+    they beat plain q11, so a page the family corpus loses on costs its q11 twin
+    and nothing more.
 
-    **Each representative tail carries its OWN budget as of 2026-08-31, and the
-    uniform 16 KiB it replaced was the most expensive number in that block.**
-    Four 16 KiB tails are 36 KB of the 64, laid over the START of the base
-    corpus, so the pages with real traffic were matching against 28 KB of
-    corpus. Measured over the 55 staged pages: the homepage's family delta went
-    from 16.4% under plain q11 to 25.9% once the two large tails dropped to 12
-    KiB, `/garage` from 13.8% to 22.1%, and the family tier from 482,386 B to
-    457,969 B. Dropping the tails entirely is 11 KB better still and is the
-    wrong move: `access/index` then beats q11 by 17 bytes, a coin flip that one
-    edit turns into a loss. 12 KiB keeps every outlier at 3.9% or better. The two
-    fixtures are under 3 KB and compress to 20 bytes with the whole file in;
-    keeping them costs nothing on the aggregate. One more fact the old comment
-    got backwards: the prefix displaces `lwe/drivers`, so the window is really
-    `garage/compression`, and that is the better of the two to keep (moving the
-    tails last to save drivers is 4,953 B worse).
+    **The family corpus carries NO representative tails, since 2026-09-28, and
+    the reason is the first held-out measurement this dictionary ever had.** From
+    2026-08-11 build.ts laid the tails of four outlier pages (horizon, vt-b,
+    vt-check, access/index) over the corpus and tuned their budgets against the
+    staged pages. Every one of those numbers was in sample: the tails were scored
+    on the pages they were cut from, and the "margin on the outliers" they were
+    kept for was those pages finding their own bytes in the dictionary. It was a
+    margin against nothing, too, since a delta that loses to q11 is never emitted.
+
+    `bun tools/family-holdout.ts` rebuilds the dictionary from the git series of
+    SERVED pages in `src/dict/p-dict` (one snapshot per page per roll, 34 usable
+    rolls from 2026-07-27) and scores it on the pages served k rolls later, with
+    every corpus page left out of the score. No tails beat the shipped 11/4/4/12
+    set in all 90 windows: +1.80 points of plain q11 at k=1, +1.78 at k=3, +1.64
+    at k=8. The win is `lwe/drivers` back in the window, 300-740 B on each /lwe
+    page. The tuning itself held up (12 and 16 KiB lose to 11/12 out of sample
+    too), which is the useful half of the lesson: **a knob can be tuned correctly
+    inside a choice that was never tested out of sample.** Two grader traps the
+    tool had to learn first: score SERVED bytes, `min(frame + 40, q11)`, rather
+    than raw frames, and drop the corpus pages from the held-out set, because an
+    unchanged corpus page stays in sample k rolls later.
+
+    **Removing them shipped zero bytes, and that is the committed-dictionary rule
+    working.** `src/dict/f-dict` ships until the fresh derivation beats it by
+    `FAMILY_DRIFT`; the fresh one moved 513,163 B to 507,282 B and the committed
+    one still ships at +5.3%. The same tool measured that drift reading at about
+    twice its held-out value, and it has never crossed 10% in 34 rolls (max
+    6.85%), so this lands at the next deliberate re-mint. Forcing one for it alone
+    was priced and declined: 385 B per page view against a 15,250 B dictionary
+    fetch.
 
     **The family dictionary is COMMITTED as of 2026-09-02, at `src/dict/f-dict`,
     and the build ships that copy until it drifts.** The URL is the hash of the
