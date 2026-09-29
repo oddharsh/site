@@ -152,6 +152,8 @@ const TRACKS = ["1111111111aaaaaaaaaaAA", "2222222222bbbbbbbbbbBB"];
 // the code under test would grow with it and could never catch a new host.
 const LUMA_HOST = "api2.luma.com";
 const SPOTIFY_HOST = "open.spotify.com";
+const ALGOLIA_HOST = "hn.algolia.com";
+const READING = ["https://example.org/first-essay", "https://example.org/second-essay"];
 const NEIGHBOR_HOSTS = new Set(NEIGHBORS.map((n) => new URL(n.url).hostname));
 
 /** What the fixture Worker hands back from RECORD_PATH for one fired cron.
@@ -195,6 +197,22 @@ const JOB_EVIDENCE = {
       }
     },
     explains: (o) => o.host === SPOTIFY_HOST,
+  },
+  "cron.reading_hn": {
+    async check({ run }) {
+      const hn = only(run.spans, "reading.hn");
+      assert.equal(hn["reading.links"], READING.length, "the HN job never reached the seeded reading list");
+      // The stub answers HTML, so every Algolia answer fails to parse, and it
+      // has to fail COUNTED rather than as a cap, a skip, or nothing.
+      assert.equal(hn["reading.hn_failed"], READING.length, "a failed lookup was not counted as one");
+      assert.equal(hn["reading.hn_capped"], false);
+      for (const link of READING) {
+        const path = new URL(link).pathname;
+        assert.ok(run.outbound.some((o) => o.host === ALGOLIA_HOST && new URL(o.url).searchParams.get("query")?.endsWith(path)),
+          `the HN job never asked about ${link}`);
+      }
+    },
+    explains: (o) => o.host === ALGOLIA_HOST,
   },
   "cron.census": {
     async check({ run, census }) {
@@ -314,6 +332,7 @@ test("every configured cron reaches its job, completes, and makes no request no 
     const env = await worker.getEnv();
     await env.RN_KV.put("playlist-id", PLAYLIST);
     await env.RN_KV.put(`tracks:${PLAYLIST}`, JSON.stringify({ tracks: TRACKS.map((id) => ({ id, name: id, artists: [] })) }));
+    await env.RN_KV.put("curius:links", JSON.stringify({ items: READING.map((link) => ({ link, title: link, created: "2026-09-28T00:00:00Z" })) }));
     await env.SERENDIPITY_DB.prepare("INSERT INTO user_cookies (user_key, cookies_json, label, enabled) VALUES (?, ?, ?, 1)")
       .bind("cron-test", JSON.stringify({ cookies: [{ name: "luma.auth-session-key", value: "cron-test" }] }), "cron-test").run();
     // Created before any cron fires, since it only sees instances created after

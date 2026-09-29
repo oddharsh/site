@@ -38,6 +38,7 @@ import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
 import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
 import { handleReading } from "./reading.ts";
+import { cronEnrichReadingHn } from "./reading-hn.ts";
 import { handleRun } from "./run.ts";
 import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.ts";
 import { cronHomeProbe } from "./perf-probe.ts";
@@ -316,6 +317,11 @@ export default {
       // Caught, so a Spotify wobble cannot cost the probe its measurement, and
       // ordered second for the same reason.
       await cron("cron.rn_enrich", () => cronEnrichTracks(env, ctx)).catch(() => {});
+      // Third on the same tick, for the same reason: /reading's Hacker News
+      // threads, a bounded batch per run (reading-hn.ts has the subrequest sum
+      // all three jobs share). Last, so an Algolia wobble costs neither of the
+      // other two.
+      await cron("cron.reading_hn", () => cronEnrichReadingHn(env)).catch(() => {});
     } else if (job === "census") {
       // SUNDAYS 08:17 UTC. Cloudflare numbers weekdays Quartz-style, 1 = Sunday
       // through 7 = Saturday, where most cron systems use 0 = Sunday, so the `1`
