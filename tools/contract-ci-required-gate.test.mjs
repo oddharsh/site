@@ -25,7 +25,7 @@ test("CI is one required job named validate that cannot be skipped or softened",
 
 test("validate still runs the checks that protect what ships", () => {
   const runs = workflow.jobs.validate.steps.map((step) => step.run ?? "").join("\n");
-  for (const command of ["bun run lint", "bun run typecheck", "bun run perf-budget", "bun run derive:check",
+  for (const command of ["bun run check-wrangler", "bun run lint", "bun run typecheck", "bun run perf-budget", "bun run derive:check",
     "bun run routes:check", "bun run test", "bun run --filter cal-aadhar-sh test"]) {
     assert.ok(runs.includes(command), `validate no longer runs ${command}`);
   }

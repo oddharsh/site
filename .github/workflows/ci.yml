@@ -48,8 +48,9 @@ jobs:
   # four contract legs crossing bun/node with real/symlinked temp dirs, and a
   # join), which cost about 2 minutes of wall clock and a lot of YAML for a
   # personal site. What stayed is what protects the thing that matters here,
-  # the bytes and speed of what ships: lint, types, the build with its perf
-  # budget, derived-artifact freshness, the route oracle, and the bun suite.
+  # the bytes and speed of what ships: the wrangler pin, lint, types, the build
+  # with its perf budget, derived-artifact freshness, the route oracle, and the
+  # bun suite.
   #
   # What left, and where it went:
   #   node + symlink contract legs  `bun run test:node` still exists locally
@@ -79,6 +80,13 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      # Every project that names wrangler must name the root pin and resolve the
+      # root install. Back in CI after one day out: #994 reached main still
+      # naming f96458c after #991 had moved the root to 3bdcd0d, and the job
+      # stayed green. Offline, and about 0.1s, so it runs right after install.
+      - name: Check every project uses the root wrangler
+        run: bun run check-wrangler
 
       - name: Lint
         run: bun run lint
