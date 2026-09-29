@@ -131,6 +131,32 @@ bun run merge:finish
 than guess, and a refusal writes ordinary conflict markers, so resolving one is
 what it always was.
 
+**GitHub runs none of this, so triage a PR's conflicts before opening its web
+editor.** The editor handles plain line conflicts, greys its Resolve button out
+for anything else, and never calls these drivers. So it shows conflicts a local
+merge clears for free, and it will let you hand-merge `bun.lock`. The triage
+merges each PR twice in memory, once as GitHub sees it (`--attr-source` on the
+empty tree, drivers off) and once as a local merge would, and grades every
+conflict and every hunk:
+
+```bash
+bun run conflicts -- 876            # one PR, conflict by conflict
+bun run conflicts -- --all          # every open PR that conflicts
+bun run conflicts -- 876 --markdown # the same, as a PR comment
+```
+
+Verdicts run `local-required` (not a line conflict), `regenerate` (a derived
+file), `local-free` (a driver here resolves it), `local-recommended` (too big,
+too many hunks, or owes a command), `web-ok`. One non-`web-ok` file sends the
+whole PR to one local merge. The first sweep, 2026-09-29, found 6 conflicting
+PRs, 2 of which GitHub still listed as `UNKNOWN` because it computes
+`mergeable` lazily. 3 could not use the web editor at all (#732, #800 and #801,
+modify/delete and file-location conflicts from the old `holding/` layout). The
+other 3 could, and each carried a file it should not touch: #799's `bun.lock`,
+and in #730 and #731 an 85-line hunk where the PR edits the CI jobs main deleted
+on 2026-09-28. The `conflict-triage` skill in `.claude/skills/` walks the report
+one conflict at a time.
+
 **If the drivers seem to have stopped working**, check that the file still
 reproduces through the serializer. `json` and `pin` rewrite the whole file from
 a parsed value and refuse anything they cannot reproduce byte for byte, so a
