@@ -19,7 +19,7 @@
 // One list rather than two: EXCLUDE already lives in both scripts held together
 // by a "must match gen-og-cards.mjs" comment, and that is the drift this avoids.
 //
-// Both page dirs on disk are registered. The per-page capture config (hero
+// Every page dir on disk is registered. The per-page capture config (hero
 // selectors, and the preset click /pixel-peeper needs to get off its intro
 // screen) lives in gen-og-cards.mjs's HERO table with every other page's, so
 // this file stays the roster and nothing else.
@@ -42,5 +42,13 @@ export const OG_PAGE_DIRS = [
     // number goes stale the next time someone regenerates it.
     alt: "A Windows XP window asking which looks best, showing the same photograph side by side "
        + "at different compression settings, with a hint to hover and pixel-peep.",
+  },
+  {
+    id: "dotfiles",
+    dir: "dotfiles",
+    // A checklist rather than a demo, so the synthesised "live demo" line would
+    // misdescribe it. Count-agnostic like the other two: options get added.
+    alt: "A Windows XP Advanced settings list of macOS defaults, grouped into folders for "
+       + "Keyboard, Trackpad and Appearance, every box ticked and each row showing its factory value.",
   },
 ];
