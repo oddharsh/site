@@ -116,3 +116,42 @@ export async function internalRefs(html) {
     .arrayBuffer();
   return out;
 }
+
+/**
+ * The paths this document hands a link-preview crawler as its card image.
+ *
+ * `internalRefs` above skips these twice over: they live in a `content`
+ * attribute, and they are written ABSOLUTE (`https://aadhar.sh/og/x.jpg`),
+ * because a crawler resolves them with no page URL in hand. So a card that was
+ * never generated, or was renamed, read as fine to every check in the tree.
+ * Measured 2026-09-29: five garage pages shipped pointing at cards nobody had
+ * made, and three more still named the `.png` cards that #841 had re-encoded
+ * to `.jpg` two weeks earlier.
+ *
+ * Returns the PATH of each same-origin image, whether written absolute on
+ * `origin` or root-relative. An off-origin image is not ours to vouch for, and
+ * the `og:image:width` family is metadata about the image rather than a URL.
+ */
+const META_IMAGE_KEYS = new Set([
+  "og:image", "og:image:url", "og:image:secure_url", "twitter:image", "twitter:image:src",
+]);
+
+export async function metaImageRefs(html: string, origin = "https://aadhar.sh"): Promise<string[]> {
+  const out: string[] = [];
+  const host = new URL(origin).host;
+  await new HTMLRewriter()
+    .on("meta", {
+      element(el) {
+        const key = el.getAttribute("property") || el.getAttribute("name");
+        const raw = el.getAttribute("content");
+        if (!key || !raw || !META_IMAGE_KEYS.has(key)) return;
+        if (raw.startsWith("/") && !raw.startsWith("//")) { out.push(raw.split(/[?#]/)[0]); return; }
+        let url: URL;
+        try { url = new URL(raw); } catch { return; }
+        if (url.host === host) out.push(url.pathname);
+      },
+    })
+    .transform(new Response(html))
+    .arrayBuffer();
+  return out;
+}
