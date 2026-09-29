@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  configText,
   testGlobals,
   assert,
   cronHomeProbe,
@@ -47,13 +48,13 @@ test("fragment probe preserves timings, missing values, cancellation and version
     await copyFile(new URL("../src/worker/perf-probe.ts", import.meta.url), join(root, "perf-probe.ts"));
     await writeFile(join(root, "lib/const.ts"), 'export const CANONICAL_HOST = "fixture.example";');
     await writeFile(join(root, "home.ts"), 'import { fragment } from "./fixture.mjs"; export const handlePhotoGrid = (...args) => fragment("grid", ...args);');
-    await writeFile(join(root, "rn.ts"), 'import { fragment } from "./fixture.mjs"; export const handleRnTracksHtml = (...args) => fragment("tracks", ...args);');
+    await writeFile(join(root, "rn.ts"), 'import { fragment } from "./fixture.mjs"; export const rnTracksHtml = (...args) => fragment("tracks", ...args);');
     await writeFile(join(root, "fixture.mjs"), `
       export const state = { clock: 100, phases: {}, events: [], requests: [] };
-      export async function fragment(kind, request, env, ctx) {
+      export async function fragment(kind, request, env, ctx, opts) {
         const phase = state.phases[kind];
         state.events.push(kind);
-        state.requests.push({ request, env, ctx });
+        state.requests.push({ request, env, ctx, opts });
         state.clock += phase.ms;
         if (phase.error) throw new Error(kind);
         return new Response(phase.noBody ? null : new ReadableStream({
@@ -93,6 +94,11 @@ test("fragment probe preserves timings, missing values, cancellation and version
         assert.equal(received, env);
       }
       assert.equal(state.requests[0].ctx, ctx);
+      // The probe runs in the :07/:37 tick that cronEnrichTracks shares, and the
+      // art warm fans out up to 40 Images fetches in whatever invocation asks
+      // for it. Asking for it here spent the tick's 50 subrequests on
+      // 2026-09-27 and stranded 3 covers and 6 artist photos.
+      assert.deepEqual(state.requests[0].opts, { warm: false }, `${label}: the probe must not warm the art cache`);
     }
     for (const id of [undefined, ""]) {
       const written = [];
@@ -113,7 +119,7 @@ test("fragment probe preserves timings, missing values, cancellation and version
 
 test("cron dispatch survives Cloudflare's expression normalization", () => {
   // The dispatcher used to exact-match event.cron against the strings in
-  // wrangler.jsonc, but Cloudflare normalizes expressions between declaration
+  // cloudflare.config.ts, but Cloudflare normalizes expressions between declaration
   // and delivery (day-of-week tokens especially), and the census schedule is
   // the only one carrying a day-of-week token: three straight weekly sweeps
   // fell into the else-branch and ran the /around crawl with nothing logged.
@@ -277,21 +283,42 @@ test("redirect following validates every hop, not just the landing", async () =>
 // degraded path from quietly becoming the real one.
 test("production binds the Durable Object the slot claim needs", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
-    const parsed = parseJsonc(readFileSync(config, "utf8"));
+  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
+    const parsed = parseJsonc(await configText(config));
     const bindings = parsed.durable_objects?.bindings ?? [];
     const counter = bindings.find((b) => b.name === "COUNTER");
     assert.ok(counter, `${config} must bind COUNTER for the coffee slot claim`);
     assert.equal(counter.class_name, "Counter");
+    // Since step 3 of "Moving Counter out" the class lives in aadhar-counter,
+    // and a binding without script_name would name a class this Worker no
+    // longer implements.
+    assert.equal(counter.script_name, "aadhar-counter",
+      `${config} must bind COUNTER in aadhar-counter, which owns the class since step 3`);
 
-    // The claim rides the EXISTING class on purpose: a second class needs a
-    // new_sqlite_classes migration, and `wrangler versions upload` cannot apply
-    // one. If someone adds that migration later this assertion should be
-    // revisited deliberately rather than silently outgrown.
-    const classes = (parsed.migrations ?? []).flatMap((m) => m.new_sqlite_classes ?? []);
-    assert.deepEqual(classes, ["Counter"],
-      `${config} declares Durable Object classes ${JSON.stringify(classes)}; the slot claim assumes Counter is the only one`);
+    // THE SITE IMPLEMENTS NO DURABLE OBJECT, which is the invariant the whole
+    // "Moving Counter out" sequence (CLAUDE.md) bought: a Worker that implements
+    // one gets no preview URLs. Counter lives in aadhar-counter since 2026-09-29.
+    // A class reappearing here, in exports or through a migrations array, takes
+    // the previews away again without a single other symptom.
+    assert.equal(parsed.migrations, undefined,
+      `${config} carries a migrations array, which would make this Worker implement a Durable Object`);
+    const classes = Object.entries(parsed.exports ?? {})
+      .filter(([, e]) => e?.type === "durable-object")
+      .map(([name]) => name);
+    assert.deepEqual(classes, [],
+      `${config} declares Durable Object classes ${JSON.stringify(classes)}; aadhar-sh must implement none, or it loses preview URLs`);
   }
+
+  // The other end of the binding: aadhar-counter must actually implement the
+  // class, as a live sqlite class. It is also the ONE class the slot claim and
+  // the odometer share, on purpose: a second class is a lifecycle change.
+  const target = parseJsonc(readFileSync("counter/wrangler.jsonc", "utf8"));
+  assert.equal(target.name, "aadhar-counter");
+  assert.deepEqual(target.exports?.Counter, { type: "durable-object", storage: "sqlite" },
+    "counter/wrangler.jsonc must implement Counter as a plain sqlite class");
+  const targetClasses = Object.entries(target.exports ?? {}).filter(([, e]) => e?.type === "durable-object").map(([n]) => n);
+  assert.deepEqual(targetClasses, ["Counter"],
+    `counter/wrangler.jsonc declares Durable Object classes ${JSON.stringify(targetClasses)}; the slot claim assumes Counter is the only one`);
 });
 
 // One instance per slot is the entire exclusivity argument: two different times
@@ -322,8 +349,8 @@ test("the census cron's weekday token and the prose about it agree", async () =>
   const CF_WEEKDAYS = { 1: "Sunday", 2: "Monday", 3: "Tuesday", 4: "Wednesday", 5: "Thursday", 6: "Friday", 7: "Saturday" };
 
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  const crons = parseJsonc(readFileSync("wrangler.jsonc", "utf8")).triggers?.crons ?? [];
-  assert.ok(crons.length >= 4, `read only ${crons.length} crons from wrangler.jsonc; the reader is broken`);
+  const crons = parseJsonc(await configText("cloudflare.config.ts")).triggers?.crons ?? [];
+  assert.ok(crons.length >= 4, `read only ${crons.length} crons from cloudflare.config.ts; the reader is broken`);
   const census = crons.find((expr) => expr.startsWith("17 8 "));
   assert.ok(census, `no census cron found among ${crons.length} expressions`);
 

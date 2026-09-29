@@ -1,5 +1,6 @@
 // x402.js — the /llms-full.txt bot paywall. The llms.txt MAP is free next
-// door; the FULL machine-readable corpus (map + every writing post inlined)
+// door; the FULL machine-readable corpus (map + every writing post + every Garage
+// and LWE explainer, inlined)
 // costs one cent, payable by machine, per the x402 protocol (x402.org):
 // no X-PAYMENT header → HTTP 402 with a machine-readable invoice (the
 // "accepts" envelope); a signed USDC payment in X-PAYMENT → verify + settle
@@ -15,7 +16,9 @@
 //   X402_FACILITATOR  verify/settle service; defaults to x402.org's hosted
 //                     one (base-sepolia only — mainnet needs e.g. Coinbase's).
 import type { Env, SiteRequest } from "./lib/env.ts";
+import { servePrecompressedText } from "./lib/assets.ts";
 import { jsonResponse } from "./lib/http.ts";
+import { renderLlmsFull, WRITING_HEADING, type LlmsFullDoc } from "./lib/llms-full.ts";
 
 const X402_VERSION = 1;
 const PRICE_ATOMIC = "10000"; // USDC has 6 decimals → $0.01
@@ -44,8 +47,9 @@ export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: Execu
       " in USDC (" + requirements.network + "). The llms.txt map next door is free.");
   }
 
+  // JSON is UTF-8, and atob's Latin-1 string turned any non-ASCII byte in it to mojibake
   let payload = null;
-  try { payload = JSON.parse(atob(paymentHeader)); } catch (_e) {
+  try { payload = JSON.parse(new TextDecoder().decode(Uint8Array.fromBase64(paymentHeader))); } catch (_e) {
     return deny(requirements, "X-PAYMENT did not decode as base64 JSON.");
   }
 
@@ -73,8 +77,11 @@ export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: Execu
       (settle.json && settle.json.error ? ": " + settle.json.error : "."));
   }
 
+  // UTF-8 before base64. btoa threw on anything above U+00FF, and this line runs after
+  // the payment settled, so one curly quote from the facilitator charged the payer for
+  // an error. Identical bytes to btoa for every ASCII receipt.
   return llmsFullResponse(request, env, {
-    "x-payment-response": btoa(JSON.stringify(settle.json)),
+    "x-payment-response": new TextEncoder().encode(JSON.stringify(settle.json)).toBase64(),
   });
 }
 
@@ -86,7 +93,7 @@ function paymentRequirements(env: Env, url: URL) {
     network: USDC[network] ? network : "base",
     maxAmountRequired: PRICE_ATOMIC,
     resource: url.origin + "/llms-full.txt",
-    description: "llms-full.txt for aadhar.sh: the llms.txt map plus the full text of every writing post, one cent, payable by machine. The map alone is free at /llms.txt.",
+    description: "llms-full.txt for aadhar.sh: the llms.txt map plus the full text of every writing post and every Garage and LWE explainer, one cent, payable by machine. The map alone is free at /llms.txt.",
     mimeType: "text/plain",
     payTo: env.X402_PAY_TO,
     maxTimeoutSeconds: 60,
@@ -113,32 +120,59 @@ async function facilitatorPost(url, body) {
   } finally { clearTimeout(to); }
 }
 
-// assemble the corpus on demand from the same static assets the site serves:
-// llms.txt + posts.json + each post's canonical .txt. no-store — the paid
-// response carries a per-payment receipt header, so it must never be shared
-// from a cache.
+// The corpus is BUILT (tools/build.ts step 1g3, lib/llms-full.ts): the map, every
+// writing post, and the Markdown twin of every Garage and LWE page, staged at the
+// asset path this route shadows. /llms-full.txt is run_worker_first, so the file is
+// reachable only through this handler and the paywall stays in front of it.
+// It goes out through the q11 twin, which is why this is no longer a `.text()`
+// read. The corpus is 516 KB and this route is `no-store`, so every agent fetch
+// re-paid the edge's on-the-fly compression at about q4: measured 2026-09-26
+// against production, 188,404 B on the wire where q11 is 156,709, a flat
+// 31,695 B (16.8%) off the largest text artifact this site serves. The gap was
+// worth about 1 KB when the twin allowlist was written (2026-09-01, #692, which
+// names llms.txt and not this file), and #903 took the corpus from 20.5 KB to
+// 516 KB three days before anyone looked. Nothing joins "a file grew" to "a
+// file has no twin", which is why no check caught it.
+//
+// The comment here used to say to read `.text()` rather than hand the asset's
+// body on, so as not to rebuild another response (gotcha 13). That reasoning is
+// intact and now lives one layer down: servePrecompressedText owns the
+// `encodeBody: "manual"` rebuild that 430 other twins already ship through, and
+// it falls back to the plain asset when no twin was built.
+//
+// With no staged file at all (`bun run dev` stages nothing derived) that helper
+// 404s, and the writing half is assembled live through the same renderer.
+//
+// no-store: the paid response carries a per-payment receipt header, so it must
+// never be shared from a cache.
 async function llmsFullResponse(request: SiteRequest, env: Env, extraHeaders) {
+  const headers = {
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "no-store",
+    ...extraHeaders,
+  };
+  const served = await servePrecompressedText(request, env, { headers });
+  if (served.status !== 404) return served;
+
   const base = new URL(request.url);
   const grab = async (path) => {
     const r = await env.ASSETS.fetch(new Request(new URL(path, base)));
     return r.ok ? await r.text() : null;
   };
+  return new Response(await assembleWritingOnly(grab), { headers });
+}
+
+async function assembleWritingOnly(grab: (path: string) => Promise<string | null>) {
   const [llms, postsRaw] = await Promise.all([grab("/llms.txt"), grab("/writing/posts.json")]);
   // Annotated because `let posts = []` infers `never[]`, which makes `p` below
   // `never` and every field read on it an error. The shape is the registry's,
   // src/content/writing/posts.json.
   let posts: Array<{ slug: string; title: string; date: string }> = [];
   try { posts = JSON.parse(postsRaw || "[]"); } catch (_e) {}
-  const texts = (await Promise.all(posts.map(async (p) => {
-    const t = await grab("/writing/" + p.slug + ".txt");
-    return t == null ? null : "## " + p.title + " (" + p.date + ")\n\n" + t.trim();
-  }))).filter(Boolean);
-  const body = (llms || "# aadhar.sh").trim() + "\n\n---\n\n# Writing — full text\n\n" + texts.join("\n\n---\n\n") + "\n";
-  return new Response(body, {
-    headers: {
-      "content-type": "text/plain; charset=utf-8",
-      "cache-control": "no-store",
-      ...extraHeaders,
-    },
-  });
+  const docs = (await Promise.all(posts.map(async (p): Promise<LlmsFullDoc | null> => {
+    const path = "/writing/" + p.slug + ".txt";
+    const body = await grab(path);
+    return body == null ? null : { title: p.title, date: p.date, path, body };
+  }))).filter((d): d is LlmsFullDoc => d !== null);
+  return renderLlmsFull(llms || "# aadhar.sh", [{ heading: WRITING_HEADING, docs }]);
 }

@@ -87,6 +87,23 @@ export type InputSpec = {
    * which is what every floor in this repo exists to refuse.
    */
   set?: string;
+  /**
+   * Files hashed BY CONTENT beside a set. Set mode only, since in path mode they
+   * would simply be more `paths`.
+   *
+   * The set premise above is true of the pixels and was false of the artifact it
+   * was written for. gen-photo-semantics.ts folds each photo's caption (alt.json)
+   * and Fuji recipe (metadata.json) into its terms, so re-captioning a photo
+   * leaves semantics.json describing the old caption while the stem set, and so
+   * the digest, never moves. Found by tracing the generator's file reads under
+   * strace on 2026-09-22, and proven the direct way: one changed caption changed
+   * semantics.json on regeneration while derive:check kept reporting it fresh.
+   *
+   * These are files a generator reads WHOLE, so they are hashed whole. Coverage
+   * never sees them: `covers` asks for an entry per KEY of the set, and a caption
+   * file is not a photo.
+   */
+  bytes?: string[];
 };
 
 export type Derivation = {
@@ -192,6 +209,8 @@ export type Projection = {
   /** Does a lock entry belong to this derivation? Used to name what was removed. */
   owns: (lockName: string) => boolean;
   count: number;
+  /** The keys `covers` must account for: the set's keys, never its `bytes` files. */
+  keys: string[];
 };
 
 export async function project(root: string, d: Derivation): Promise<Projection> {
@@ -200,11 +219,13 @@ export async function project(root: string, d: Derivation): Promise<Projection> 
   const files = await resolveInputs(root, spec);
 
   if (!spec.set) {
+    if (spec.bytes?.length) throw new Error(`${d.id}: \`bytes\` is set mode only; add those files to \`paths\``);
     return {
       entries: await hashInputs(root, files),
       lockName: (name) => name,
       owns: (name) => claims(spec, name),
       count: files.length,
+      keys: [],
     };
   }
 
@@ -219,13 +240,22 @@ export async function project(root: string, d: Derivation): Promise<Projection> 
   }
   // The digest is over the BARE keys, never over the namespaced lock names, so
   // renaming a derivation does not move its digest.
-  const entries = Object.fromEntries([...keys].sort().map((k) => [k, "set"]));
+  const setEntries = Object.fromEntries([...keys].sort().map((k) => [k, "set"]));
+  // `bytes` rows keep their repo path as their lock name, flat and shared with any
+  // path-mode derivation declaring the same file. A path always carries a slash
+  // and a key from this flat tree never does, which the check below holds.
+  const byteSpec: InputSpec = { paths: spec.bytes ?? [] };
+  const byteEntries = await hashInputs(root, await resolveInputs(root, byteSpec));
+  for (const k of keys) {
+    if (k.includes("/")) throw new Error(`${d.id}: set key ${k} contains a slash, so it could collide with a \`bytes\` path`);
+  }
   const prefix = `${d.id}#`;
   return {
-    entries,
-    lockName: (name) => prefix + name,
-    owns: (name) => name.startsWith(prefix),
-    count: keys.size,
+    entries: { ...setEntries, ...byteEntries },
+    lockName: (name) => (name in byteEntries ? name : prefix + name),
+    owns: (name) => name.startsWith(prefix) || claims(byteSpec, name),
+    count: keys.size + Object.keys(byteEntries).length,
+    keys: [...keys].sort(),
   };
 }
 
@@ -280,9 +310,9 @@ export async function verify(
   if (d.tier === "unverifiable") {
     return { id: d.id, state: "unverifiable", reason: d.unverifiable ?? "no reason declared" };
   }
-  const { entries, lockName, owns, count } = await project(root, d);
+  const { entries, lockName, owns, count, keys } = await project(root, d);
   const digest = digestOf(entries);
-  const { uncovered, orphaned } = await coverage(root, d, entries);
+  const { uncovered, orphaned } = await coverage(root, d, keys);
 
   if (!d.recorded) return { id: d.id, state: "unrecorded", count, digest };
 
@@ -334,15 +364,15 @@ export async function verify(
 async function coverage(
   root: string,
   d: Derivation,
-  entries: Record<string, string>,
+  keys: string[],
 ): Promise<{ uncovered: string[]; orphaned: string[] }> {
   if (!d.covers) return { uncovered: [], orphaned: [] };
   const parsed = JSON.parse(await readFile(path.join(root, d.covers), "utf8"));
   const have = new Set(Object.keys(parsed));
-  const want = Object.keys(entries);
+  const want = new Set(keys);
   return {
-    uncovered: want.filter((k) => !have.has(k)).sort(),
-    orphaned: [...have].filter((k) => !(k in entries)).sort(),
+    uncovered: keys.filter((k) => !have.has(k)).sort(),
+    orphaned: [...have].filter((k) => !want.has(k)).sort(),
   };
 }
 

@@ -10,7 +10,7 @@
 //   bun run routes:check                 # boot .build/public, sweep, exit non-zero on failure
 //   bun run perf-budget && bun run routes:check --prebuilt .build/.perfbudget
 //
-// It points at wrangler.jsonc, NOT wrangler.dev.jsonc, deliberately: that config
+// It points at cloudflare.config.ts, NOT wrangler.dev.jsonc, deliberately: that config
 // carries `build.command`, so the harness runs build.ts itself and serves the
 // minified tree with the /a/<hash8> shell — the bytes a deploy would ship. That
 // is also why VERIFY_BUILT=1 is set, which re-arms the build-output rows
@@ -30,6 +30,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { createTestHarness } from "wrangler";
+import { writeSiteConfigFile } from "./lib/site-config.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const { values, positionals } = parseArgs({
@@ -63,14 +64,18 @@ if (positionals.length > 1 || values.prebuilt === "") {
 const remote = values.remote;
 const [positional] = positionals;
 
-let config = positional || "./wrangler.jsonc";
+// The default is the site config projected into the legacy shape the harness
+// reads (tools/lib/site-config.ts): createTestHarness takes a config PATH or an
+// inline legacy object and has no door for cloudflare.config.ts, which replaced
+// wrangler.jsonc on 2026-09-28.
+let config = positional || "./" + (await writeSiteConfigFile());
 if (remote) {
   if (process.env.CI) {
     console.error("routes:check --remote cannot run in CI (remote bindings need a write-capable token).");
     process.exit(2);
   }
   // No --out: the generator's default is the repo root, which is where the twin
-  // has to live for wrangler.jsonc's relative `main` and `assets.directory` to
+  // has to live for the site config's relative `main` and `assets.directory` to
   // keep resolving (see gen-remote-config.mjs).
   const gen = spawnSync(
     process.execPath,
@@ -81,7 +86,16 @@ if (remote) {
   config = "./.wrangler.remote.jsonc";
 }
 
-const server = createTestHarness({ workers: [{ configPath: config, prebuiltWorkerDir: values.prebuilt }] });
+// The site's COUNTER binding names the aadhar-counter Worker since step 3 of
+// "Moving Counter out" (CLAUDE.md), and workerd refuses to start a Worker whose
+// binding names a service nobody defined. So the counter boots beside the site:
+// the site stays first, which is the one the harness URL serves.
+const server = createTestHarness({
+  workers: [
+    { configPath: config, prebuiltWorkerDir: values.prebuilt },
+    { configPath: `${root}counter/wrangler.jsonc` },
+  ],
+});
 
 let code = 1;
 try {

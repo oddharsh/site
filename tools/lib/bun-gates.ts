@@ -230,19 +230,39 @@ export function byteIdenticalBuildGate(candidate: string, pinned: string, root: 
   }
 }
 
-// The preload is not decoration: `bun run test` carries it, so a suite run
-// without it is a different suite from the one `validate` gates on.
+/**
+ * The arguments `bun run test` hands to `bun test`, read out of package.json
+ * rather than restated. A suite run with different flags is a different suite
+ * from the one `validate` gates on, and a restated copy is how the two drift.
+ */
+export function suiteArgs(root: string): string[] {
+  const script = String(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts?.test ?? "");
+  const [cmd, sub, ...args] = script.trim().split(/\s+/);
+  if (cmd !== "bun" || sub !== "test" || !args.length) throw new Error(`package.json's test script is ${JSON.stringify(script)}; the suite gate expects \`bun test <flags> <paths>\``);
+  return args;
+}
+
+// THE GATE RUNS `bun run test`'s OWN FLAGS, and restating them is what broke
+// it. It used to pass `--preload` alone, on the argument that a suite without
+// the preload is a different suite from `validate`'s. True, and the same holds
+// for `--timeout=30000`, which it dropped: the suite ran on bun's 5s per-test
+// default, so the one test that cargo-builds timbrado's engine cold was killed
+// at 5010ms every night from 2026-09-15, and the bumper proposed nothing while
+// exiting green. The notes carry the `error:` lines as well as the `(fail)`
+// ones, because a gate that names only the failing test leaves the reader to
+// reproduce it before they learn why.
 export function contractSuiteGate(exe: string, root: string, timeoutMs = 15 * 60_000): Gate {
-  const out = run(exe, ["test", "--preload", "./tools/lib/no-network.ts", "tools/"], { cwd: root, timeout: timeoutMs });
+  const out = run(exe, ["test", ...suiteArgs(root)], { cwd: root, timeout: timeoutMs });
   const text = `${out.stdout}\n${out.stderr}`;
   const pass = Number(text.match(/(\d+) pass/)?.[1] ?? 0);
   const fail = Number(text.match(/(\d+) fail/)?.[1] ?? -1);
   const timedOut = out.signal === "SIGTERM";
+  const telling = text.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("(fail)") || l.startsWith("error:"));
   return {
     name: "contract suite passes under the candidate",
     ok: !timedOut && fail === 0 && pass > 0,
     detail: timedOut ? `hung past ${timeoutMs / 1000}s` : `${pass} pass, ${fail} fail`,
-    notes: text.split("\n").filter((l) => l.includes("(fail)")).slice(0, 10).map((l) => l.trim()),
+    notes: [...new Set(telling)].slice(0, 10),
   };
 }
 

@@ -33,8 +33,7 @@ export const DOC_ALIASES = [
   { prose: "TypeScript", pkg: "typescript" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "smol-toml", pkg: "smol-toml" },
-  // The Reader pins this package independently; its prose uses "htmlparser2".
-  { prose: "Release-note parser", pkg: "htmlparser2" },
+  { prose: "@cloudflare/config", pkg: "@cloudflare/config" },
   // playwright-core left VERSIONLESS on 2026-09-10. Its exemption rested on two
   // claims and one had gone stale: "only gen-og-cards.ts uses it, no CI job and
   // no deploy path touches it" was true when written and had grown to nine
@@ -104,7 +103,9 @@ export const SUB_MANIFEST_POLICY = [
     manifest: "cf-garage/package.json",
     kind: "npm",
     aliases: [],
-    versionless: new Map(),
+    versionless: new Map([
+      ["wrangler", "the root's exact pkg.pr.new commit URL, restated so the `cf` CLI finds a dev server in cf-garage's own manifest; check-wrangler holds the two byte-equal and bump-wrangler-pin moves both, so the root line in DEPENDENCIES.md is its version"],
+    ]),
   },
   {
     manifest: "tools/photos/zenc/Cargo.toml",
@@ -371,8 +372,11 @@ export async function checkDependencyDocs(root = REPO_ROOT) {
 }
 
 // An exact pin is the only shape the prose can be wrong ABOUT: a range names a
-// set, and the doc states one number.
-const EXACT_PIN = /^\d+\.\d+\.\d+[\w.-]*$/;
+// set, and the doc states one number. EXPORTED because tools/lib/lockfile-pins.ts
+// asks the same question of the same manifests for a different reason, and two
+// spellings of "exact pin" is the drift that would let one checker cover a
+// declaration the other silently skips.
+export const EXACT_PIN = /^\d+\.\d+\.\d+[\w.-]*$/;
 
 type DocAlias = { prose: string; pkg: string };
 // What findClaims hands back: the prose name, the package it maps to, the version

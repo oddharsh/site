@@ -37,7 +37,7 @@
 // exactly the retention problem worth not having.
 //
 // `record` runs `wrangler deploy --dry-run`, which self-builds `.build/public`
-// through wrangler.jsonc's build.command, so it needs no prior `bun run build`.
+// through wrangler.config.ts's build.command, so it needs no prior `bun run build`.
 //
 // Everything measured here is DETERMINISTIC: identical source bytes produce an
 // identical snapshot, so an unchanged asset contributes no row. Sampled numbers
@@ -49,6 +49,7 @@ import { execFileSync } from "node:child_process";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { siteWranglerArgs } from "./lib/site-config.ts";
 
 const BUILD = ".build/public";
 const DRYRUN_OUT = ".build/.perfsnap";
@@ -113,10 +114,10 @@ async function record(outPath, label) {
   // builds two commits that can disagree about which manager exists.
   let dryOut = "";
   try {
-    dryOut = execFileSync(...wranglerCommand(["deploy", "--dry-run",
+    dryOut = execFileSync(...wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run",
       "--outdir", DRYRUN_OUT,
       "--metafile",
-    ]), { encoding: "utf8" });
+    ])), { encoding: "utf8" });
   } catch (e) {
     dryOut = `${e.stdout || ""}\n${e.stderr || ""}`;
   }

@@ -3,17 +3,17 @@ import type { Env, SiteRequest } from "./lib/env.ts";
 import type { SpanName } from "./lib/span-vocabulary.ts";
 import calWorker from "../../cal/src/index.ts";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.ts";
-import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.ts";
+import { cronAround, handleAroundChangesJson, handleAroundJson, handleAroundSnapshot, refreshAroundSnapshot, renderAroundPage, SNAPSHOT_URL as AROUND_SNAPSHOT_URL } from "./around.ts";
 import { handleBotPage } from "./bot.ts";
-import { cronCensus, handleCensus, handleCensusJson } from "./census.ts";
+import { cronCensus, handleCensus, handleCensusJson, handleCensusTable, renderCensusPage, TABLE_URL as CENSUS_TABLE_URL } from "./census.ts";
 import { shouldUseWorkersCache } from "./lib/cache.ts";
 import { handleCoffeeAvailability } from "./coffee.ts";
 import { handleHit } from "./counter.ts";
-import { handlePhotoGrid, serveMarkdown } from "./home.ts";
-import { handleInbox } from "./inbox.ts";
+import { handlePhotoGrid, serveMarkdown, warmGridData } from "./home.ts";
+import { handleInbox, handleInboxMail, MAIL_URL as INBOX_MAIL_URL } from "./inbox.ts";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.ts";
 import { cronSendWebmentions } from "./webmention-send.ts";
-import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.ts";
+import { countCrawlerHit, handleLedgerJson, handleLedgerLines, LINES_URL as LEDGER_LINES_URL, renderLedgerPage } from "./ledger.ts";
 import { countSpeculativeLoad, handlePrefetchActivation, handleSpeculationJson } from "./speculation.ts";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.ts";
 import { handleLensWire } from "./lens-wire.ts";
@@ -29,27 +29,29 @@ import { isPreviewHost, previewDenial } from "./lib/preview.ts";
 import { handleSiteMcp } from "./mcp.ts";
 import { withSecurityHeaders } from "./lib/security.ts";
 import { earlyDataDenial } from "./lib/early-data.ts";
+import { mcpEraOf } from "./lib/mcp-protocol.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { cronJob } from "./lib/cron.ts";
 import { isCallable } from "./lib/parse.ts";
 import { installTracing, span } from "./lib/trace.ts";
 import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
-import { getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
+import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
 import { handleReading } from "./reading.ts";
 import { handleRun } from "./run.ts";
 import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.ts";
 import { cronHomeProbe } from "./perf-probe.ts";
-import { handleDyno, handleDynoJson } from "./dyno.ts";
+import { handleDynoJson, handleDynoPulls, PULLS_URL as DYNO_PULLS_URL, renderDynoPage } from "./dyno.ts";
 import { handleAsk } from "./nlweb.ts";
 import { handleSearch, handleSearchJson } from "./search.ts";
 import { handleSecurityJson, renderSecurityCenter } from "./security.ts";
 import { handleTool } from "./terminal.ts";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.ts";
-import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.ts";
+import { handleWhoareyouJson, handleWhoareyouValues, renderWhoareyouPage, VALUES_URL as WHOAREYOU_VALUES_URL } from "./whoareyou.ts";
 import { handleWritingIndex, handleWritingPost } from "./writing.ts";
 import { handleLlmsFull } from "./x402.ts";
-import { cronSerendipity, handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
+import { cronSerendipity, handleSerendipity, MCP_INFO_PATH as SERENDIPITY_MCP_INFO, SERENDIPITY_SECURITY_HEADERS, serendipityCsp, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
+import { scriptHashesFor } from "./lib/csp-hashes.ts";
 
 // Hand the runtime's tracer to both span helpers. THIS is the only module that
 // may import it: the rest of the worker is also imported by contract-tests.mjs
@@ -59,10 +61,6 @@ import { cronSerendipity, handleSerendipity, withSerendipitySecurityHeaders } fr
 // exactly the behavior the tests and `wrangler dev` get.
 installTracing(tracing);
 installCalTracing(tracing);
-
-// the homepage visit-counter Durable Object, hosted in-house (see counter.js).
-// must be a named export of the entry so the COUNTER binding can resolve it.
-export { Counter } from "./counter.ts";
 
 
 // the coffee-booking expiry timer (Workflows). One durable instance per pending
@@ -200,7 +198,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // also the safer seam, because env is not caller-controllable and no external
   // request can ask production to stop serving its precompressed bodies.
   // Workers Logs: one structured line per worker-owned request (path, method,
-  // status, ms, version, country, bot), filterable in the dashboard. Edge-direct
+  // status, ms, version, country, bot, protocol), filterable in the dashboard. Edge-direct
   // traffic never reaches this code, so it never logs. Strippable: delete the
   // wrapper, keep `return withSecurityHeaders(await route(...))`.
   //
@@ -219,6 +217,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // the speculation ledger's denominator: every Sec-Purpose prefetch/prerender
   // request. Its numerator (the activation beacon) arrives at /ledger/prefetch.
   countSpeculativeLoad(env, request, response, url.pathname);
+  const mcpEra = mcpEraOf(request);
   try {
     console.log(JSON.stringify({
       p: url.pathname,
@@ -228,6 +227,21 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
       v: env.CF_VERSION_METADATA?.id?.slice(0, 8),
       co: request.cf?.country,
       bot: request.cf?.botManagement?.verifiedBot || undefined,
+      // `h` answers the SHARE question. infra:check asserts HTTP/3 is ON (alt-svc
+      // plus the HTTPS DNS record); nothing before 2026-09-21 said whether it was
+      // USED. Read it grouped over a tail. Expect a mix rather than a switch:
+      // Chrome learns h3 from Alt-Svc after the first response and keeps a healthy
+      // h2 connection, so a cold visit's document reads HTTP/2 by design and the
+      // assets it discovers a moment later read HTTP/3.
+      h: request.cf?.httpProtocol,
+      // The MCP era, set only on requests one of the two MCP servers parsed
+      // (lib/mcp-protocol.ts noteEra). `mcp` is modern, legacy or mixed; `mv`
+      // the revision it declared; `mc` the client a legacy `initialize` named.
+      // Group `mcp` over a window to see whether the legacy door still has
+      // callers, and `mv` to see which legacy revisions they speak.
+      mcp: mcpEra?.era,
+      mv: mcpEra?.version,
+      mc: mcpEra?.client,
     }));
   } catch {}
   // noindex EVERY hostname that is not the canonical site, not just previews.
@@ -256,7 +270,7 @@ export default {
     return serveWorkerRequest(request, env, ctx);
   },
 
-  // cron (wrangler.jsonc "triggers"): the /around crawl runs on the frequent
+  // cron (cloudflare.config.ts "triggers"): the /around crawl runs on the frequent
   // schedule so the request path stays a pure KV read and the page is safe to
   // prerender. The weekly schedule sweeps the /lens/census roster into D1.
   async scheduled(event, env, ctx) {
@@ -367,7 +381,7 @@ function withSelfFetchHandler(handle: RouteHandler): RouteHandler {
     handle(request, env.SELF_FETCH === null ? env : withSelfFetch(env, ctx), ctx, url);
 }
 
-// Exact worker-owned routes. This table mirrors wrangler.jsonc's
+// Exact worker-owned routes. This table mirrors cloudflare.config.ts's
 // assets.run_worker_first allowlist: static is the default, and each entry here
 // earns a Worker invocation because it renders, redirects, negotiates, proxies,
 // writes, or needs a deliberate cache-policy override.
@@ -403,15 +417,17 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
 
   ["/hit", handleHit],
 
-  ["/whoareyou", handleWhoareyou],
+  ["/whoareyou", routeWhoareyou],
   ["/whoareyou.json", handleWhoareyouJson],
+  [WHOAREYOU_VALUES_URL, handleWhoareyouValues],
   ["/security", routeSecurity],
   ["/security.json", handleSecurityJson],
   ["/reading", handleReading],
   ["/updates", routeUpdates],
   ["/updates.json", handleUpdatesJson],
   ["/restore", routeRestore],
-  ["/garage/dyno", handleDyno],
+  ["/garage/dyno", routeDyno],
+  [DYNO_PULLS_URL, handleDynoPulls],
   ["/garage/dyno.json", handleDynoJson],
   // /perf shipped as the original name and lived for about an hour. The 301s are
   // not for humans: `agents: true` puts a surface in the MCP resources projection,
@@ -431,7 +447,8 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/lens/nlweb", withSelfFetchHandler(handleLensNlweb)],
   ["/lens/markdown", withSelfFetchHandler(handleLensMarkdown)],
   ["/lens/compare.json", withSelfFetchHandler(handleLensCompare)],
-  ["/lens/census", handleCensus],
+  ["/lens/census", routeCensus],
+  [CENSUS_TABLE_URL, handleCensusTable],
   ["/lens/census.json", handleCensusJson],
 
   ["/mcp", withSelfFetchHandler(handleSiteMcp)],
@@ -477,7 +494,8 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
 
   // the crawl ledger: the month's AI-bot traffic as an invoice, issued
   // monthly, collected never.
-  ["/ledger", handleLedger],
+  ["/ledger", routeLedger],
+  [LEDGER_LINES_URL, handleLedgerLines],
   ["/ledger.json", handleLedgerJson],
 
   // the prefetch activation beacon's receiver (speculation.js). A credentialless
@@ -497,6 +515,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/webmention/approve", handleWebmentionDecision],
   ["/webmention/decline", handleWebmentionDecision],
   ["/inbox", handleInbox],
+  [INBOX_MAIL_URL, handleInboxMail],
 
   ["/rn", handleRn],
   // /rn has no page of its own to twin, so its Markdown is rendered live from
@@ -508,7 +527,8 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/rn/set", handleRnSet],
 
   ["/bot", routeBot],
-  ["/around", handleAround],
+  ["/around", routeAround],
+  [AROUND_SNAPSHOT_URL, handleAroundSnapshot],
   ["/around/json", handleAroundJson],
   ["/around/changes.json", handleAroundChangesJson],
 
@@ -532,7 +552,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/images/", routePhotosRedirect],
   ["/images/full", routePhotosRedirect],
   ["/images/full/", routePhotosRedirect],
-  ["/images/manifest.json", handleImagesManifest],
+  ["/images/manifest.json", routeImagesManifest],
   ["/images/metadata.json", routeImagesMetadata],
   // Three root-level text assets that were edge-compressed at ~q4 until
   // 2026-08-31, now served from their build-time q11 twin. search-index.json is
@@ -540,6 +560,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/search-index.json", routeTextTwin],
   ["/llms.txt", routeTextTwin],
   ["/sitemap.xml", routeTextTwin],
+  ["/resume.json", routeTextTwin],
 
   ["/index.html", routeIndexHtml],
   ["/", routeHomepage],
@@ -575,6 +596,13 @@ const PREFIX = [
     // the bare asset fetch at the end of route() and ship edge-compressed.
     label: "/writing/<file>.<ext>",
     match: (pathname) => /^\/writing\/[^/]+\.(json|txt|xml)$/i.test(pathname),
+    handle: routeTextTwin,
+  },
+  {
+    // The favicons. Each section's first-level route sets its tab icon from
+    // here, so these load on 12 pages, and until 2026-09-26 at the edge's q4.
+    label: "/section-icons/<name>.svg",
+    match: (pathname) => /^\/section-icons\/[^/]+\.svg$/i.test(pathname),
     handle: routeTextTwin,
   },
   {
@@ -622,8 +650,8 @@ const PREFIX = [
     // section, so they need a row of their own ("/*.src.*") and this match.
     // Measured 2026-09-16 over all 79 readable twins: 984 KiB at the edge's q4,
     // 819 KiB from the q11 twin.
-    label: "/<name>.src.<ext>",
-    match: (pathname) => /^\/[^/]+\.src\.(?:html|js|css)$/i.test(pathname),
+    label: "/<path>.src.<ext>",
+    match: (pathname) => /^\/(?:[^/]+\/)*[^/]+\.src\.(?:html|js|css)$/i.test(pathname),
     handle: routeTextTwin,
   },
   {
@@ -742,7 +770,7 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
     `route ${template}`,
     async (s) => {
       // DID THE VISITOR HANG UP WHILE WE WERE STILL WORKING? `route.aborted`
-      // answers that, and it is what wrangler.jsonc's `enable_request_signal`
+      // answers that, and it is what cloudflare.config.ts's `enable_request_signal`
       // was taken for: nothing on this origin can currently count an abandoned
       // request. /lens is the surface that wants the number and needs no
       // attribute of its own, since /lens is an exact ROUTES entry: its dispatch
@@ -790,7 +818,7 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
         //
         // EXPECT FALSE EVERYWHERE LOCALLY. The in-process harness never delivers
         // a hang-up to a Worker at all, measured across four flag settings on
-        // 2026-08-28 (the argument is at compatibility_flags in wrangler.jsonc),
+        // 2026-08-28 (the argument is at compatibility_flags in cloudflare.config.ts),
         // so a green routes:check says this line does not throw and says nothing
         // about the number. Production is the only place it can answer.
         if (listening) s.setAttribute("route.aborted", hungUp || signal?.aborted === true);
@@ -937,7 +965,36 @@ function isResolvedCalendarUrl(href) {
   }
 }
 
+// The dashboard's plain GET is a built document since 2026-09-25, with its
+// events as an island (serendipity.ts says why). It keeps serendipity's own CSP,
+// whose img-src admits the cover proxy's https fallback, with the build's hashes
+// in place of 'unsafe-inline', so withSecurityHeaders sees a bespoke policy and
+// leaves it. The headers go in through serveStaticPage rather than through
+// withSerendipitySecurityHeaders, because that REBUILDS the Response from an
+// object init, which drops encodeBody on a precompressed body and double-encodes
+// it (gotcha 13). A flash ?msg= view, a HEAD and every other path stay live, and so
+// does local dev, where no bake is staged and the build map has no entry.
 async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  const url = new URL(request.url);
+  // The readable twin of a built page here (/serendipity/mcp-info.src.html),
+  // which that page's own first line names as its View Source. This prefix wins
+  // before the generic "/<path>.src.<ext>" row, and handleSerendipity has no
+  // such file, so it answered 404 until 2026-09-26.
+  if (/^\/serendipity\/[^/]+\.src\.html$/i.test(url.pathname)) return servePrecompressedText(request, env);
+  // The dashboard's plain GET and the agents page, both built at deploy; a
+  // flash ?msg= belongs to the dashboard only.
+  const built = (url.pathname === "/serendipity" && !url.searchParams.has("msg")) || url.pathname === SERENDIPITY_MCP_INFO;
+  if (request.method === "GET" && built) {
+    const hashes = scriptHashesFor(url.pathname);
+    if (hashes) {
+      const scriptSrc = ["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" ");
+      const response = await serveStaticPage(request, env, {
+        headers: { ...SERENDIPITY_SECURITY_HEADERS, ...GENERATED_PAGE_HEADERS, "content-security-policy": serendipityCsp(scriptSrc) },
+      });
+      if (response.status !== 404) return response;
+      try { await response.body?.cancel(); } catch {}
+    }
+  }
   const response = await handleSerendipity(request, env, ctx);
   return withSerendipitySecurityHeaders(response);
 }
@@ -1067,6 +1124,98 @@ async function routeSecurity(request: SiteRequest, env: Env) {
   return live;
 }
 
+// /whoareyou is a built document since 2026-09-25, with its per-request values
+// as an island from /whoareyou/values.html (whoareyou.ts says why and what moved).
+// Same shape as routeSecurity above, down to the twin carrying the page's noindex.
+async function routeWhoareyou(request: SiteRequest, env: Env) {
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, "/whoareyou.md", { "x-robots-tag": "noindex" });
+    if (md) return md;
+  }
+  const headers = {
+    ...GENERATED_PAGE_HEADERS,
+    "x-robots-tag":    "noindex",
+    "referrer-policy": "strict-origin-when-cross-origin",
+  };
+  const response = await serveStaticPage(request, env, { headers });
+  if (response.status !== 404) return response;
+  // `bun run dev` stages no bake; render live so the page works there. The
+  // build refuses to ship without the file, so production never takes this arm.
+  try { await response.body?.cancel(); } catch {}
+  const live = renderWhoareyouPage();
+  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
+  return live;
+}
+
+// /garage/dyno is a built document since 2026-09-25, with its chart and table as
+// an island from /garage/dyno/pulls.html (dyno.ts says why). It takes the same
+// headers as the other garage pages, since the shell only moves on a deploy.
+// Markdown negotiation happens here because this exact route is matched before
+// the /garage prefix; before this, `Accept: text/markdown` got the HTML.
+async function routeDyno(request: SiteRequest, env: Env) {
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, "/garage/dyno.md");
+    if (md) return md;
+  }
+  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
+  if (response.status !== 404) return response;
+  // `bun run dev` stages no bake; render live so the page works there. The
+  // build refuses to ship without the file, so production never takes this arm.
+  try { await response.body?.cancel(); } catch {}
+  const live = renderDynoPage();
+  for (const [k, v] of Object.entries(GENERATED_PAGE_HEADERS)) live.headers.set(k, v);
+  return live;
+}
+
+// /ledger and /around are built documents since 2026-09-25, each with its live
+// half as an island (ledger.ts and around.ts say why). The dev fallback is the
+// same as routeDyno's.
+// /lens/census is a built document since 2026-09-25 (census.ts says why). The
+// owner's ?refresh=KEY view renders live and whole, because its banner belongs
+// to the request that asked for the sweep. /inbox is the same shape, and its
+// route lives in inbox.ts so the contract suite can call it (gotcha 16).
+async function routeCensus(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  if (new URL(request.url).searchParams.has("refresh")) return handleCensus(request, env, ctx);
+  const headers = { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "index" };
+  const response = await serveStaticPage(request, env, { headers });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  const live = renderCensusPage();
+  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
+  return live;
+}
+
+async function routeLedger(request: SiteRequest, env: Env) {
+  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  const live = renderLedgerPage();
+  for (const [k, v] of Object.entries(GENERATED_PAGE_HEADERS)) live.headers.set(k, v);
+  return live;
+}
+
+// The owner's ?bust=SECRET still works at the page URL: it re-crawls and
+// overwrites this colo's cached snapshot before the shell goes out, so the
+// island the shell then fetches is the new crawl. A wrong or absent secret does
+// nothing and the static page is served as usual.
+async function routeAround(request: SiteRequest, env: Env) {
+  if (new URL(request.url).searchParams.has("bust")) {
+    const busted = await refreshAroundSnapshot(request, env);
+    try { await busted?.body?.cancel(); } catch {}
+  }
+  const headers = { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "noindex" };
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, "/around.md", { "x-robots-tag": "noindex" });
+    if (md) return md;
+  }
+  const response = await serveStaticPage(request, env, { headers });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  const live = renderAroundPage();
+  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
+  return live;
+}
+
 function routeLens(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   // A target-bearing Lens response spends crawler/browser budget and contains
   // third-party data, so it remains the live no-store Worker path. The bare,
@@ -1149,6 +1298,17 @@ function serveGeneratedWriting(request: SiteRequest, env: Env) {
       "link": `${SHELL_PRELOAD_LINK}, </webmention>; rel="webmention"`,
     },
   });
+}
+
+// The staged manifest and its q11 twin (build.ts step 1e), with the live handler
+// as the 404 fallback for a tree that staged nothing, which is `bun run dev`.
+// IMAGES_MANIFEST_HEADERS overrides the one-year immutable cache _headers puts on
+// /images/*; photos.ts carries the measurement and the reason.
+async function routeImagesManifest(request: SiteRequest, env: Env) {
+  const response = await servePrecompressedText(request, env, { headers: IMAGES_MANIFEST_HEADERS });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  return handleImagesManifest();
 }
 
 function routeImagesMetadata(request: SiteRequest, env: Env) {
@@ -1293,5 +1453,7 @@ const HOMEPAGE_HEADERS = {
 // Both branches now take the GET's own code, which decides the header set once.
 function routeHomepage(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   if (wantsMarkdown(request)) return serveMarkdown(request, env);
+  // warm the grid fragment's two memoised maps behind the document (home.ts says why)
+  ctx.waitUntil(warmGridData(env));
   return serveStaticPage(request, env, { headers: HOMEPAGE_HEADERS });
 }

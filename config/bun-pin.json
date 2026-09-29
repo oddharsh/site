@@ -1,7 +1,7 @@
 {
   "$comment": [
     "THE ONE DECLARATION of which bun this repository runs: the compiler behind",
-    "every content-addressed /a/ and /i/ URL (wrangler.jsonc builds with `bun",
+    "every content-addressed /a/ and /i/ URL (wrangler.config.ts builds with `bun",
     "tools/build.ts`), and the runtime the contract suite runs under.",
     "",
     "It lived in package.json's packageManager until 2026-09-15, and it moved",
@@ -26,5 +26,5 @@
     "one back hands the image a field it will try to resolve, and the day it",
     "names a canary the production build stops."
   ],
-  "bun": "1.4.2-canary.20260913.1+09bb546"
+  "bun": "1.4.2-canary.20260927.1+a4f1429"
 }

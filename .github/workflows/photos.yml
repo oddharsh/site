@@ -1,0 +1,71 @@
+name: Photos
+
+# The native half of what CI used to run on every PR: zenc's tests and clippy,
+# then a byte-for-byte reproduction of the committed histograms. It only has
+# something to say when the encoder, its lockfile, or the published tiers move,
+# so it runs only then. Not a required check; a red run here is still a real
+# finding about bytes that ship.
+
+on:
+  pull_request:
+    paths:
+      - "tools/photos/**"
+      - "public/i/**"
+      - "public/images/**"
+      - ".github/workflows/photos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: photos-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  native-photos:
+    name: native photo validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up native photo toolchain
+        id: native
+        # Select the declared compiler BEFORE computing the Rust cache key.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libavif-dev libavif-bin pkg-config
+          rustup component add clippy
+          echo "cache-key=${ImageOS:?}-${ImageVersion:?}-$(dpkg-query --show --showformat='${Version}' libavif-dev)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore compiled Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: tools/photos/zenc -> target
+          # The action also keys by job, platform, compiler, flags and Cargo
+          # manifests/locks. Include the runner image and native library ABI.
+          key: ${{ steps.native.outputs.cache-key }}
+          cache-bin: false
+          # Rebuild our encoder/C adapter and execute all tests on every run.
+          cache-workspace-crates: false
+
+      - name: Test native photo processing
+        run: |
+          cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
+          cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      # Re-bake every photo's histogram with the zenc THIS tree builds and compare
+      # it byte for byte with the committed public/images/histograms.json. It is
+      # what lets config/derivations.json leave zenc's sources and Cargo.lock out
+      # of the histogram digest: a zenc bump is measured here, on the output,
+      # instead of reading STALE until somebody re-bakes by hand and re-locks
+      # (#871, #985). No credential, no install (the checker imports only node
+      # builtins), and the bumped crates already ran in this job's cargo test.
+      - name: Reproduce the committed histograms
+        run: bun run histograms:check
+

@@ -214,10 +214,11 @@ fi
 # at equal quality (see /garage/encoding). It builds from source with cargo, so
 # any machine with rust runs this pipeline; dependabot tracks the zenjpeg pin.
 # q84 is calibrated to match the old cjpegli q82 quality at fewer bytes. mozjpeg's
-# jpegtran survives ONLY for phase 3's progressive rearrangement of the R2 copies,
-# which reorders coefficients and has no alignment constraint. It did the
-# EXIF-orientation rotation until 2026-08-26; that is `zenc square --orient` now,
-# for the reason CLAUDE.md gotcha 3 measures.
+# jpegtran survives ONLY for phase 2's progressive rearrangement of the R2 copies
+# (every archive, HIF re-encode or JPG original), which reorders coefficients and
+# has no alignment constraint. It did the EXIF-orientation rotation until
+# 2026-08-26; that is `zenc square --orient` now, for the reason CLAUDE.md
+# gotcha 3 measures.
 ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
 ZENC_Q=84   # The linear-light geometry preserves high-frequency energy that sips'
@@ -383,13 +384,28 @@ prepare_one() {  # source, index, existing JPEG, object key, stem
     # (4:4:4 fabricates horizontal chroma the sensor never sampled; 4:2:0 drops the
     # vertical chroma it did record). By Butteraugli 4:2:2 ties/beats both; by
     # SSIMULACRA2 it gives up ~0.1-0.5 pt vs 4:4:4 for ~14% fewer bytes. /garage/encoding.
-    tmppng="$FULLS/${stem}.decode.png"
+    #
+    # jpegtran then rewrites zenc's scan script, losslessly, into one that opens
+    # with every channel's DC in a single interleaved scan. zenc's search keeps
+    # whichever of two scripts is smaller, and one of them sends ALL of luma before
+    # any chroma; Chromium paints nothing until every channel has begun a scan, so
+    # 53 of the first 207 HIF archives stayed blank until 66-99% of a ~20 MB
+    # download. After this pass the first paint lands ~5 KB in (0.02% of the
+    # file). Measured on all 207 HIF archives when they were rewritten the same
+    # way: +0.17% bytes in total, -0.70% to +0.98% per file, coefficients
+    # identical on every one. The files zenc had made luma-first came out 0.11%
+    # smaller; the ones it had made DC-first came out 0.27% larger, which buys
+    # a first paint ~800 KB sooner. Unlike the JPG branch
+    # above, a failure here fails the photo: falling back to zenc's own file
+    # would quietly ship the blank-until-done order again. /garage/encoding.
+    tmppng="$FULLS/${stem}.decode.png"; tmpjpg="$FULLS/${stem}.zenc.jpg"
     if ! sips -s format png "$f" --out "$tmppng" >/dev/null 2>&1 \
-       || ! "$ZENC" "$tmppng" "$out" -q 100 --yuv 422 >/dev/null 2>&1 \
+       || ! "$ZENC" "$tmppng" "$tmpjpg" -q 100 --yuv 422 >/dev/null 2>&1 \
+       || ! "$MOZ_JTRAN" -copy all -progressive -outfile "$out" "$tmpjpg" 2>/dev/null \
        || ! exif-sooc -TagsFromFile "$f" -all:all -overwrite_original "$out" >/dev/null 2>&1; then
-      rm -f "$tmppng"; mark fail "$idx"; printf "✗"; return
+      rm -f "$tmppng" "$tmpjpg" "$out"; mark fail "$idx"; printf "✗"; return
     fi
-    rm -f "$tmppng"
+    rm -f "$tmppng" "$tmpjpg"
   fi
   if [ ! -s "$out" ]; then mark fail "$idx"; printf "✗"; return; fi
   printf '%s' "$out" > "$RECEIPTS/$idx"

@@ -1,6 +1,7 @@
 // ── static text assets ship their q11 twin ───────────────────────────────────
 // Shared imports live in contract-shared.mjs.
-import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
+import {
+  configText, ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 import { existsSync } from "node:fs";
 import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { servePrecompressedText } from "../src/worker/lib/assets.ts";
@@ -50,8 +51,8 @@ const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").r
 
 test("every text twin sits on a path the Worker claims, in both configs", { skip: needsBuild }, async () => {
   const twins = (await textTwins()).map((rel) => `/${rel.slice(0, -3)}`);
-  for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
-    const allow = jsoncStringArray(await readFile(new URL(config, ROOT), "utf8"), "run_worker_first");
+  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
+    const allow = jsoncStringArray(await configText(config), "run_worker_first");
     assert.ok(allow.length >= 60, `${config}: scanned only ${allow.length} run_worker_first entries; the reader has lost the allowlist`);
     const covered = (p) => allow.includes(p) || allow.some((a) => a.includes("*") && globRe(a).test(p));
     const dead = twins.filter((p) => !covered(p));
@@ -63,7 +64,10 @@ test("every text twin sits on a path the Worker claims, in both configs", { skip
   // If somebody widens the walk without adding a rule, the assertion above goes
   // red; if somebody adds a rule without widening the walk, this one stays green
   // and the file is simply left at edge quality, which is the safe direction.
-  for (const unroutable of ["section-icons/around.svg", "robots.txt"]) {
+  // bimi.svg rather than a section icon since 2026-09-26: the icons got a rule
+  // and a twin ("q11 everywhere"). robots.txt stays untwinned on purpose, as
+  // q11:check's live control.
+  for (const unroutable of ["bimi.svg", "robots.txt"]) {
     assert.ok(existsSync(new URL(unroutable, BUILT)), `${unroutable} should be staged; the control needs a real file`);
     assert.ok(!existsSync(new URL(`${unroutable}.br`, BUILT)), `${unroutable} has a twin but no run_worker_first rule reaches it`);
   }

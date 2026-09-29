@@ -29,10 +29,10 @@ instead carry authored descriptions, which do not include their live state.
 The two largest sections
 carry their own indexes at [/garage/llms.txt](https://aadhar.sh/garage/llms.txt)
 and [/lwe/llms.txt](https://aadhar.sh/lwe/llms.txt), each a smaller fetch than
-this file when you already know where you are going. This map and the full text
-of the writing posts are combined at
-[/llms-full.txt](https://aadhar.sh/llms-full.txt); it does not inline the Garage
-or LWE explainers. That endpoint may require an x402 payment, as described below.
+this file when you already know where you are going. This map, the full text
+of the writing posts, and the Markdown of every Garage and LWE explainer are
+combined at [/llms-full.txt](https://aadhar.sh/llms-full.txt). That endpoint may
+require an x402 payment, as described below.
 
 ## Pages
 
@@ -227,11 +227,13 @@ on, which is the only arrangement where photographs never have to move.
 - [/robots.txt](https://aadhar.sh/robots.txt): Bot policy + Content Signals
   (search, AI input, and AI training all welcome).
 - [/llms-full.txt](https://aadhar.sh/llms-full.txt): This map plus the full
-  text of every writing post, inlined. Served behind an x402 micro-paywall
-  ($0.01 in USDC, x402.org protocol) as a working demo of machine-payable
-  content: expect HTTP 402 with a payment envelope until paid. Everything
-  in it is also reachable free (this file + `/writing/<slug>.txt`) — you
-  are paying for the convenience, which is the point of the demo.
+  text of every writing post and the Markdown twin of every Garage and LWE
+  page, inlined, each wrapped in a `<doc title path>` element. Served behind
+  an x402 micro-paywall ($0.01 in USDC, x402.org protocol) as a working demo
+  of machine-payable content: when the paywall is on, expect HTTP 402 with a
+  payment envelope until paid. Everything in it is also reachable free (this
+  file, `/writing/<slug>.txt`, and each page's `.md`), so you are paying for
+  the convenience, which is the point of the demo.
 - [/.well-known/http-message-signatures-directory](https://aadhar.sh/.well-known/http-message-signatures-directory):
   JWKS for Web Bot Auth (an Ed25519 public key the site can use to identify
   itself when making outbound requests).

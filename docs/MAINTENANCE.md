@@ -5,11 +5,11 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](../CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
+- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `cloudflare.config.ts` + `wrangler.config.ts` at the repo root (`wrangler.jsonc` until 2026-09-28; CLAUDE.md gotcha 48): it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `cloudflare.config.ts`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](../cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
-[`wrangler.jsonc`](../wrangler.jsonc) runs `bun tools/build.ts` before uploading
+[`wrangler.config.ts`](../wrangler.config.ts) runs `bun tools/build.ts` before uploading
 `.build/src/worker/index.ts` and `.build/public`. Local development uses
 [`wrangler.dev.jsonc`](../wrangler.dev.jsonc), with the source Worker and
 `.dev-assets` assembled by `tools/dev-stage.ts`.
@@ -34,7 +34,7 @@ cd site
 bun install --frozen-lockfile
 bun run --filter cal-aadhar-sh test
 bun run build
-bun run wrangler deploy --dry-run -c wrangler.jsonc
+bun run wrangler:site deploy --dry-run
 ```
 
 The following are deliberately not committed and should be recreated rather
@@ -43,7 +43,7 @@ than copied between checkouts:
 - `node_modules/`, `.build/`, `.wrangler/`, `.dev.vars`, and `.DS_Store` are
   local dependencies, build output, credentials, or caches covered by
   `.gitignore`.
-- Worker secret values live in Cloudflare, not GitHub: `wrangler.jsonc` names
+- Worker secret values live in Cloudflare, not GitHub: `cloudflare.config.ts` names
   them but does not contain them. The contents of KV/R2/D1 are external state
   too, as is Resend's domain verification.
 - DNS records, the account resources the bindings point at, the Worker
@@ -64,6 +64,80 @@ git ls-files --stage | awk '$1 == 120000 { print }'
 Before committing, `git status --short` should show only intentional source
 changes, and `git ls-files --others --exclude-standard` should be empty.
 
+## Merge drivers for the machine-owned files
+
+Several sessions work in this tree at once, so `main` moves under every open
+branch. Replaying the last 80 commits puts the conflict rate at about 14% of
+adjacent PR pairs, and the machine-owned share of that is resolvable without a
+human. `.gitattributes` routes those paths through `tools/merge-driver.ts`.
+
+**Wire it once per clone.** Worktrees share one `.git/config`, so a single run
+covers every worktree of this repository, including the codex ones:
+
+```bash
+bun run setup:merge
+```
+
+It adds an `include.path` for `config/gitconfig` (which holds the driver
+definitions, because git will only read an executable definition out of
+`.git/config` and that file is not tracked) and points `core.hooksPath` at
+`.githooks`. It refuses rather than clobbering an existing `core.hooksPath` or a
+hook already installed in `.git/hooks`, and it reads the drivers back out
+afterwards, since an `include.path` naming a missing file is silently ignored.
+
+What each class does:
+
+| path | driver | resolution |
+|---|---|---|
+| `package.json`, `config/derivations.json` | `json` | three-way merge over the parsed value; a key only one side moved is taken, a key both sides moved stays a conflict |
+| `config/bun-pin.json` | `pin` | the newer pin, with the gate it owes recorded |
+| `bun.lock`, `lens-reader/bun.lock`, `config/derivations.lock.json` | `regen` | parked, then regenerated by `tools/merge-finish.ts` |
+| `CLAUDE.md`, `docs/*.md` | `prose` | diff3 over paragraphs, list items, headings and table rows |
+
+`devDependencies.wrangler` is the one key where both sides moving still resolves:
+two pkg.pr.new shas carry no order, so the branch being integrated is taken as
+the proposal and `canary:wrangler` is recorded as owed.
+
+**The prose driver is a union only where unioning is safe.** Git's built-in
+`merge=union` works on lines, so it resolves a two-sided EDIT by keeping both
+versions of the sentence; measured on this repository's own history, that puts
+one sentence in CLAUDE.md twice, one character apart. `prose` works on blocks
+instead: a chunk one side moved is taken, a chunk both sides moved differently
+is declined, and both sides are emitted only where the base chunk is empty. When
+one side's change within a chunk is pure insertion, its blocks are laid back
+into the other side's text, which is what resolves a version bump sitting next
+to somebody else's new bullet.
+
+Measured against the eight real diverged branches here it resolves 2 of 4 prose
+conflicts, invents nothing, drops nothing both sides kept, and preserves every
+main-only line. The two it declines are genuine two-sided edits of one
+paragraph, and you resolve those the way you always did.
+
+
+**After a merge or rebase, read what it owes you.** The hooks drain the ledger
+automatically (`post-rewrite` for rebase, `post-merge` for a clean merge,
+`post-commit` for a conflicted one, which is the case `post-merge` does not
+cover). `bun.lock` is regenerated with `bun install` and staged. Everything else
+is reported and left alone on purpose: re-recording `config/derivations.lock.json`
+vouches for artifacts nobody looked at, and a pin owes its gate. To see the
+ledger without draining it, or to drain it by hand:
+
+```bash
+bun run merge:finish -- --check
+bun run merge:finish
+```
+
+**When a conflict still arrives, it is a real one.** The drivers refuse rather
+than guess, and a refusal writes ordinary conflict markers, so resolving one is
+what it always was.
+
+**If the drivers seem to have stopped working**, check that the file still
+reproduces through the serializer. `json` and `pin` rewrite the whole file from
+a parsed value and refuse anything they cannot reproduce byte for byte, so a
+reformat of `package.json` turns them into silent no-ops.
+`contract-merge-drivers-resolve-only-what-they-should.test.mjs` asserts this, and
+`git check-attr merge -- <path>` shows whether a path is routed at all.
+
 ## Rotate Cal's calendar or approval secret
 
 Run these from the repository root. `wrangler versions secret put` creates a
@@ -75,7 +149,7 @@ Before rotating, inspect that version's source and bindings. After the final
 secret update, inspect the returned version ID and promote that exact version:
 
 ```bash
-bun run wrangler versions view <version-id> -c wrangler.jsonc
+bun run wrangler:site versions view <version-id>
 bun run deploy:promote --version <version-id> --steps 100 --dry-run
 bun run deploy:promote --version <version-id> --steps 100
 ```
@@ -89,7 +163,7 @@ Create a new Google Calendar **secret address in iCal format** (or the
 equivalent read-only iCloud feed), then replace the secret:
 
 ```bash
-bun run wrangler versions secret put -c wrangler.jsonc ICAL_URL
+bun run wrangler:site versions secret put ICAL_URL
 ```
 
 Paste the new feed URL when prompted, then deploy the returned version as above.
@@ -114,8 +188,8 @@ only an `https://calendar.app.google/...` destination. Set the destination
 first, then the new random-looking path segment:
 
 ```bash
-bun run wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
-bun run wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
+bun run wrangler:site versions secret put WORK_CALENDAR_URL
+bun run wrangler:site versions secret put WORK_CALENDAR_SLUG
 ```
 
 Deploy the version returned by the second command; it carries both changes.
@@ -136,7 +210,7 @@ GitHub or in a public page.
 Generate a new value and replace the Worker secret:
 
 ```bash
-openssl rand -hex 32 | bun run wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
+openssl rand -hex 32 | bun run wrangler:site versions secret put SIGNING_SECRET
 ```
 
 Deploy the returned version to 100% as above. Once it serves all traffic,
@@ -150,19 +224,22 @@ rotation and treat all previously emailed links as compromised.
 
 ## CI/CD release path
 
-1. [CI](../.github/workflows/ci.yml) runs site, native photo, and network validation
-   in parallel. Site validation covers locked dependencies, build,
-   lint, typechecks, module tests, Worker dry-runs, performance gates and the local
-   route oracle. Its built tree is passed to four contract jobs: Bun and Node,
-   each with a real and symlinked temporary directory. The required `validate` job always runs and succeeds only when all
-   jobs succeed; failure, cancellation or skipping fails the gate. Cal and
-   Serendipity ship inside the site Worker.
+1. [CI](../.github/workflows/ci.yml) runs one required job, `validate`: lint,
+   typecheck, the build with its performance budget, `derive:check`, the local
+   route oracle, the bun contract suite, and Cal's tests. Cal and Serendipity
+   ship inside the site Worker. [Photos](../.github/workflows/photos.yml) runs
+   zenc's tests and the histogram reproduction only on PRs that touch photo
+   code or tiers. `infra:check`, `checkpoints:check`, the osv scan and the
+   auxiliary Worker dry-runs are workstation commands now.
 2. [Promote production](../.github/workflows/promote-production.yml) advances
    `production` after successful CI on current `main` and a merged PR.
    Manual dispatch also requires a merged PR.
-3. Cloudflare Workers Builds uploads that commit as a Worker version.
-4. [Ramp production](../.github/workflows/ramp.yml) waits for the upload, moves
-   10% of traffic, and waits for approval before moving 50% and then 100%.
+3. Cloudflare Workers Builds deploys that commit at 100% (`wrangler deploy`).
+   Branch builds only upload a preview version and move no traffic.
+4. The promote workflow's `after-release` job waits for `/whoareyou.json` to
+   report the new version, runs the advisory `dcz:check`, and dispatches
+   `dictionary-roll.yml`. There is no automatic ramp or rollback since
+   2026-09-28; roll back from a workstation with `bun run deploy:promote --rollback`.
 
 To run CI manually, select the desired branch in Actions, or run
 `gh workflow run ci.yml --ref <branch>`. All validation jobs check out the
@@ -227,31 +304,18 @@ GITHUB_TOKEN=$(gh auth token) bun run infra:check
 gh api repos/oddharsh/site/code-scanning/default-setup   # expect state not-configured
 ```
 
-### Ramp a release (`bun run deploy:promote`)
+### Ramp a release by hand (`bun run deploy:promote`)
 
-The Actions workflow uses these environments:
-
-| job | traffic | environment | operator action |
-|---|---|---|---|
-| canary | 10% | `production-canary` | Inspect the new version and Workers Logs. |
-| full | 50%, then 100% | `production-full` | Approve this job after reviewing the canary. |
-| verify | unchanged | none | Review the advisory dictionary check. |
-
-The two ramp jobs use the `CLOUDFLARE_API_TOKEN_RAMP` environment secret, whose
-scope is declared in `config/infra.json`. Keep it separate from CI's read token
-and the workstation-only DNS credential. The full job refuses a target that
-changed while it waited for approval.
-
-A newer release cancels an older ramp, including one awaiting approval. Inspect
-the latest run and `deploy:promote --status` before acting on an old canary.
-Cancellation or a failed probe leaves the current traffic split in place.
+Production deploys at 100% on its own. A manual ramp is for a version you
+uploaded without deploying (`bun run deploy:version`) and want to watch at 10%
+first, and `--rollback` is how any bad release is undone.
 
 For a workstation ramp, inspect the target first:
 
 ```bash
 bun run deploy:promote --dry-run
 bun run deploy:promote --status
-bun run wrangler versions list -c wrangler.jsonc
+bun run wrangler:site versions list
 bun run deploy:promote --version <version-id> --to 10
 # Inspect the canary and Workers Logs before continuing:
 bun run deploy:promote --version <version-id> --steps 50,100
@@ -350,10 +414,31 @@ is a workstation run, the same standing as `repository.code_scanning`.
 
 ### Preview URLs
 
-`preview_urls: true` in `wrangler.jsonc`, with `workers_dev: false` kept.
-Production has no workers.dev address; each uploaded VERSION does, at
-`<version-prefix>-aadhar-sh.<subdomain>.workers.dev`. Wrangler prints it on
-upload, and `--preview-alias` gives a version a stable name instead of a prefix.
+**They work since 2026-09-29.** Every branch push uploads a version, and each
+one answers at `<version-prefix>-aadhar-sh.aadharsh2010.workers.dev` and at
+`<branch-alias>-aadhar-sh.aadharsh2010.workers.dev`; the Workers Builds
+comment on the PR links it. Wrangler prints a `Version Preview URL:` line on
+upload.
+
+For eight weeks before that they served nothing: `aadhar-sh` exported the
+`Counter` Durable Object, Cloudflare generates no version URLs for a Worker
+that implements one, and every version carried `has_preview: false` while
+every config said previews were on. Moving `Counter` to `aadhar-counter`
+fixed it. CLAUDE.md, "Preview URLs SERVE since 2026-09-29" and "Moving Counter
+out", have the diagnosis and the move. **Keep this Worker free of Durable
+Objects**, or every preview URL goes back to a 404 that says nothing about why.
+The one-read check is the version's `has_preview`:
+
+```bash
+curl -s -H "Authorization: Bearer $(bun run wrangler auth token 2>/dev/null | tail -1)" \
+  "https://api.cloudflare.com/client/v4/accounts/<account>/workers/scripts/aadhar-sh/versions?per_page=5" \
+  | jq '[.result.items[].metadata.has_preview]'
+```
+
+`previewUrls: true` in `cloudflare.config.ts`, with `workersDev: false` kept.
+Production has no workers.dev address; were previews possible, each uploaded
+VERSION would get one at `<version-prefix>-aadhar-sh.<subdomain>.workers.dev`,
+and `--preview-alias` would give it a stable name instead of a prefix.
 
 The setting is explicit because `preview_urls` defaults to whatever
 `workers_dev` is. Deleting the line silently turns every preview back off, which
@@ -410,7 +495,7 @@ Three things the generator does on purpose:
 
 ### Infrastructure declaration
 
-`wrangler.jsonc` declares the compute layer and CI dry-runs it, so a bad route
+`cloudflare.config.ts` declares the compute layer and CI dry-runs it, so a bad route
 or a missing binding already fails a PR. [`infra.json`](../config/infra.json) covers the
 layer above that: DNS records, the account resources the bindings point at, the
 Worker inventory, and the Workers Build settings. `bun run infra:check` diffs
@@ -422,7 +507,7 @@ Three tiers, by what they cost to run:
 
 | tier | needs | covers |
 |---|---|---|
-| tree | nothing | binding names agree with `wrangler.jsonc`; every `consumer` file exists; the release block agrees with the Worker config |
+| tree | nothing | binding names agree with `cloudflare.config.ts`; every `consumer` file exists; the release block agrees with the Worker config |
 | dns | network | every declared record, via DoH against two independent resolvers, plus the nameservers and the DNSSEC `DS` |
 | edge | network | zone settings that are load-bearing for something this repo does, read as observed production responses |
 | account | a read-only token | the KV/R2/D1 IDs actually resolve; declared Workers are deployed and retired ones are gone |
@@ -433,7 +518,7 @@ unreachable, no token) and never fails the run, so a network blip cannot redden
 a PR that only touched CSS. Use `--strict` to promote advisories to failures
 when you want a real audit, and `--offline` for the no-network tier alone.
 
-Resource IDs live in `wrangler.jsonc` and nowhere else. `infra.json` names what
+Resource IDs live in `cloudflare.config.ts` and nowhere else. `infra.json` names what
 must exist and why, and the checker joins the two by binding name, so the two
 files cannot drift into describing different worlds.
 
@@ -669,7 +754,7 @@ third-party verification TXT than junk.
    then republish the DS record so `zone.dnssec.ds` matches again.
 2. Create the storage with wrangler (`kv namespace create`, `r2 bucket create`,
    `d1 create`, `vectorize create`). Each mints a NEW id; paste them into
-   `wrangler.jsonc`, which stays the only place ids live.
+   `cloudflare.config.ts`, which stays the only place ids live.
 3. Ship the Worker through the normal path (merge to `main`, CI promotes to
    `production`, Workers Builds deploys). This is what creates the proxied
    `aadhar.sh`, `www` and `cal` records, so do not hand-author them.
@@ -1010,7 +1095,7 @@ written, because a watch that reads true on its first run is watching nothing.
 | `css-minifier-knows-the-seven-pseudo-elements` | oven-sh/bun#41120 | no `Invalid selector` on `::scroll-marker` and friends |
 | `css-minifier-lowercases-target-current` | oven-sh/bun#42480 (fix #42484) | `:TARGET-CURRENT` is emitted lowercased |
 | `workerd-honours-zstd-dictionary` | cloudflare/workerd#7106 | `tools/workerd-zstd-probe.ts` compresses smaller with the right dictionary |
-| `wrangler-types-accepts-x-new-config` | gotcha 41, no upstream issue | `wrangler types --x-new-config` writes the file in `cf-garage/` |
+| `workerd-exposes-temporal` | cloudflare/workerd#6907 | `tools/workerd-temporal-probe.ts` finds Temporal under production's compat settings, with a clock within a minute of `Date.now()` |
 
 Each leg reads every watch under the PIN and under the candidate. A row that
 differs is a `changed` verdict whose signature names the watch and the
@@ -1022,6 +1107,13 @@ carries the fix, and the reporter marks it. A probe that could not run reads
 `fetch-honours-dispatcher` is the one to read first when it moves: it is the
 harness hang under bun, and the issue that decides whether node can leave
 `engines`.
+
+A watch can also retire WITHOUT landing, when the need it stood for arrives
+through another door. `wrangler-types-accepts-x-new-config` went that way on
+2026-09-26: `types --x-new-config` still exits 1 on the pin, and
+`wrangler build --x-new-config --x-cf-build-output` now writes cf-garage's
+generated Env and runtime types, which `bun run typecheck` requires. Gotcha 41
+has the measurement.
 
 **The nightly pin PRs say what they adopt.** `bun run timbrado digest --repo
 <owner/name> --from <sha> --to <sha>` renders the upstream commit range as
@@ -1184,7 +1276,7 @@ OG/Twitter card once the page is live with `bun run og-cards` (see below).
 
 Start with [`src/worker/index.ts`](../src/worker/index.ts). Its route tables,
 pattern handlers, and host dispatch select the handler; the imports lead to
-its implementation. [`wrangler.jsonc`](../wrangler.jsonc)'s
+its implementation. [`cloudflare.config.ts`](../cloudflare.config.ts)'s
 `assets.run_worker_first` decides which requests reach that dispatcher before
 static assets. Keep the two in sync when adding a Worker-owned route.
 
@@ -1195,7 +1287,7 @@ styles, and unchanged public assets into the served tree.
 
 ### Bindings the worker reads (`env.*`)
 
-[`wrangler.jsonc`](../wrangler.jsonc) declares bindings, vars, and required
+[`cloudflare.config.ts`](../cloudflare.config.ts) declares bindings, vars, and required
 secret names. [`src/worker/lib/env.ts`](../src/worker/lib/env.ts) documents their
 uses and distinguishes required, optional, and injected values.
 `bun run env:check` compares those declarations; it also runs in `typecheck`.
@@ -1205,7 +1297,7 @@ to degrade without its credential. Stage a secret with the versions command,
 then use the normal release path:
 
 ```bash
-bun run wrangler versions secret put -c wrangler.jsonc <NAME>
+bun run wrangler:site versions secret put <NAME>
 ```
 
 The versioned command avoids an immediate traffic change. The Cal rotation
@@ -1391,7 +1483,7 @@ $EDITOR src/worker/albums.ts
 # 2. register the page: path "/<slug>", section "photos", then project it
 $EDITOR config/site-manifest.json && bun run gen:manifest
 #    plus one Run-palette row in src/client/nav-run.js, a sitemap.xml <url>,
-#    "/<slug>" and "/<slug>/" in wrangler.jsonc run_worker_first (gotcha 26:
+#    "/<slug>" and "/<slug>/" in cloudflare.config.ts runWorkerFirst (gotcha 26:
 #    each album costs two rows), and a row in tools/verify-routes.ts
 # 3. ingest with the flags
 ALBUM=<slug> HEIF=1 bun run photos "/path/to/folder/"
@@ -1499,31 +1591,47 @@ checkpoints:check` therefore allows the projection to run AHEAD by a contiguous
 tail of unreleased entries, and fails on anything else: behind, mismatched, or a
 gap in the tail.
 
-Traffic moves either from a workstation (`bun run deploy:promote`) or through
-`.github/workflows/ramp.yml`, which canaries at 10% and then waits on a required
-reviewer before 50% and 100%.
+Production traffic moves when Workers Builds deploys a promoted commit at 100%.
+A workstation `bun run deploy:promote` is the only thing that splits it. Nothing
+writes the D1 changelog rows since the ramp was deleted on 2026-09-28, so
+`checkpoints:check` reports released entries as staged until that table is
+retired or written by hand.
 
-### Turn on Kitesurf for the Browser view
-`/lens/browser` (the Browser view) works out of the box on the Browser Run
-BINDING (Chromium, no credential). Kitesurf, Cloudflare's WASM browser engine for
-agents, is REST-only — the binding's payload schema rejects the `browser` key
-outright — so it needs a token:
+### Kitesurf for the Browser view
+`/lens/browser` (the Browser view) renders on Kitesurf, Cloudflare's WASM browser
+engine for agents, through the Browser Run BINDING, with no credential. Nothing
+needs turning on. It asks `quickAction` for `browser: "kitesurf"`, and the
+binding validates that name (measured 2026-09-28: an invented engine is
+rejected with `expected "kitesurf"`), so the view reports `engine: "kitesurf"`.
+
+Kitesurf refuses options it has not implemented, by name, with a 501. A
+`deviceScaleFactor` of 1 is dropped before the call because it is Chromium's
+default; any other refused option makes the call retry once on Chromium, and the
+view then reports `engine: "chromium-binding"`. If renders start reading
+`chromium-binding` in Workers Logs, look for that 501 before assuming Kitesurf
+went away.
+
+#### The REST fallback, for a deployment with no binding
+
+Before 2026-09-28 the binding rejected the `browser` key outright, so Kitesurf
+was REST-only and needed a token:
 
 ```bash
 # Cloudflare dashboard -> API Tokens -> Create Custom Token
 #   Permission: Account · Browser Rendering · Edit
-bun run wrangler versions secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
+bun run wrangler:site versions secret put BROWSER_RUN_TOKEN
 ```
 
 **That is an EDIT scope.** It lives as a Worker secret, never in GitHub, so the
 repo's no-write-token rule is untouched — but it is not a read token and should
-not be described as one. Without it the route silently uses the binding and
-reports `engine: "chromium-binding"`, so the view degrades rather than breaks.
+not be described as one. The binding now wins whenever it exists, so production
+no longer reads this secret. Deleting it and the REST branch of `runBrowserAction` is the open
+follow-up; do it with `versions secret delete` and read gotcha 25 first.
 
 `browser=kitesurf` is documented only on Cloudflare's Kitesurf page, not in the
 Quick Actions reference. The code therefore tries the parameter, falls back once
 on a 400, and remembers the answer for the isolate. If Cloudflare ships it into
-the binding, delete `renderOverRest` and the token with it.
+the binding, delete the REST branch and the token with it (it has; see above).
 
 **The selector rides `/browser-run/<action>`, not `/browser-rendering/<action>`.**
 Both spellings route, so the wrong one drops the opt-in without an error. Fixed
@@ -1702,6 +1810,21 @@ zero credentials and zero subrequests, and it still works on the free plan. Dele
 ```
 Prints byte counts + bytes-per-pixel so the figcaptions on `/garage/encoding` can be updated to match. The grayscale (`g-*`) set is generated separately and is not touched.
 
+### Measure AV2 stills against the shipped AVIF
+```bash
+tools/photos/libavif-avm/build.sh
+bun tools/photos/codec-knob-probe.ts --codec avm --variants base,s4
+```
+The build is `avifenc-avm` in `config/tools.json`: libavif pinned by commit with
+its experimental AV2 codec (AVM 1.0.0) on, plus the installed aom, so one binary
+writes both (`-c avm` / `-c aom`). No tagged libavif carries AVM 1.0.0 yet, which
+is why the pin is a commit. The probe arm scores AV2 at the byte budget of each
+shipped AVIF tile on the /pixel-peeper crops, train and holdout, and the table
+it prints is the answer to "where is AV2 now". Measurement only: no browser
+decodes AV2 and the `av02` image format is experimental, so none of this output
+can ship. The slow speeds are the expensive rows (`s3` is several times `s4`),
+so pick variants rather than running the whole list.
+
 ---
 
 ## Regenerate the OG / Twitter cards
@@ -1832,7 +1955,7 @@ curl -s "https://aadhar.sh/rn/tracks" >/dev/null                       # warms t
 
 The track cache stores its freshness stamp in the value's KV metadata. Delete
 one key to discard both, using the `RN_KV` namespace declared in
-[`wrangler.jsonc`](../wrangler.jsonc):
+[`cloudflare.config.ts`](../cloudflare.config.ts):
 
 ```bash
 NS="3cb8a107c58e47dc9244e75b33401f36"
@@ -1843,6 +1966,33 @@ There is no `tracks:<id>:fresh` key to clear. The old directory-listing indexes
 are also retired: `/images/` and `/images/full/` redirect to `/photos`. The
 photo index and hashes are bundled with the Worker, so publishing those changes
 replaces the manifest without a KV purge.
+
+### Overwrite a full-size archive in place (`ARCHIVE_VERSION`)
+
+`/images/full/<stem>.jpg` names a slot rather than its bytes, and it is cached
+three ways: the browser (`immutable`, one year), the CDN, and the Worker's own
+`caches.default`. A Cloudflare purge, by URL or Purge Everything, does NOT evict
+`caches.default`, so an in-place R2 overwrite stays invisible until the Worker's
+cache key moves. `ARCHIVE_VERSION` in `src/worker/lib/const.ts` is that key. The
+order, as run on 2026-09-27 for the 208 scan-order rewrites:
+
+1. Upload the new bytes, same key, same content type:
+
+   ```bash
+   bun run wrangler r2 object put "aadhar-photos/<stem>.jpg" --file=<new.jpg> --content-type=image/jpeg --remote
+   ```
+
+2. Merge a PR that bumps `ARCHIVE_VERSION` and updates each stem's `size` in
+   `src/worker/photo-index.json`, then ramp it to 100%.
+3. Purge Everything once, after the ramp, so no request mid-purge re-fills the
+   CDN tier from the old version's cache.
+4. Verify on the wire. `bun run archive:gate -- --stems <stems>` reads each
+   archive's scan order from production, and a bare `curl -sI` should show the
+   new `etag` (R2's MD5 of the new bytes).
+
+Browsers that already hold a copy keep it for up to a year. That is harmless
+when the rewrite is lossless, as a scan reorder is, and it is the reason to
+prefer a new filename over an overwrite whenever the pixels change.
 
 ### Bump THUMB_VERSION (retired — nothing to bump)
 
@@ -1874,7 +2024,7 @@ curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_
 A gap means no datapoint was recorded; it does not identify which stage failed.
 
 ### Read a trace (Workers Traces)
-Enabled in `wrangler.jsonc` under `observability.traces`, 100% sampled. Read them
+Enabled in `cloudflare.config.ts` under `observability.traces`, 100% sampled. Read them
 in the dashboard: **Workers & Pages -> aadhar-sh -> Observability -> Traces**.
 Every outbound fetch, binding call, and handler invocation is auto-instrumented;
 the named spans on top come from `src/worker/lib/trace.ts` (vocabulary table in CLAUDE.md).

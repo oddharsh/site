@@ -1,0 +1,35 @@
+// aadhar-counter: hosts the Counter Durable Object for aadhar-sh.
+//
+// Deployed BY HAND from this directory, never by Workers Builds, and always with
+// `wrangler deploy`: a Durable Object lifecycle change is refused by `versions
+// upload` (error 10211), and every step of the transfer is one.
+//
+//   bun run wrangler deploy -c counter/wrangler.jsonc --x-provision=false --x-auto-create=false
+//
+// THE TRANSFER IS DONE (2026-09-29), in five alternating deploys: the site
+// declared Counter in exports (#1004), this Worker expected it, the site marked
+// it transferred and bound it here (#1006), this Worker became a plain sqlite
+// class, and the site dropped the class code and tombstone (step 5). CLAUDE.md
+// "Moving Counter out" has the sequence and both rehearsals. The namespace kept
+// its id throughout, so the odometer and every coffee slot claim are the same
+// objects they were in aadhar-sh.
+//
+// A lifecycle change here from now on is an ordinary one for a Worker that owns
+// its class: `wrangler deploy`, never `versions upload`, which refuses them.
+{
+  "name": "aadhar-counter",
+  "account_id": "1c99acdb6141579023fb97d24261ea58",
+  "main": "src/index.ts",
+  // The class runs under THIS Worker's compatibility settings once the
+  // transfer commits, so they match aadhar-sh's exactly. A drift here changes
+  // the runtime the odometer and the slot claims run on without touching them.
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["enable_request_signal", "new_module_registry"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "exports": {
+    "default": { "type": "worker" },
+    "Counter": { "type": "durable-object", "storage": "sqlite" }
+  }
+}

@@ -27,7 +27,7 @@ fn run(args: &[String]) -> Result<(), String> {
             let src = pixels::orient(pixels::load_linear(&args[1], pixels::TransferOption::Auto)?, orientation);
             std::fs::create_dir_all(root).map_err(|e| e.to_string())?;
             for size in [600, 400, 200] {
-                let tier = square::tier(&src, size, halflight::Filter::Box);
+                let tier = square::tier(&src, pixels::Orientation::Upright, size, halflight::Filter::Box);
                 avif::write(&tier, &root.join(format!("{size}.avif")))?;
                 if size == 600 {
                     let encoded = jpeg::encode(&tier, 84, ChromaSubsampling::Quarter)?;

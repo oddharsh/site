@@ -37,13 +37,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
-      contents: write # only the chore/wrangler-pin branch; main and production carry rulesets with zero bypass actors
-      pull-requests: write
+      # read: the push and the PR go through the App token minted after every
+      # gate (.github/actions/bot-pr-token says why). It reaches only the
+      # chore/wrangler-pin branch; main and production carry rulesets with zero
+      # bypass actors.
+      contents: read
       issues: write # the same candidate report drives the Wrangler canary issue
 
     steps:
       - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The candidate wrangler runs its gates in this job, so nothing before
+          # the App token step holds a credential that can push.
+          persist-credentials: false
 
       - name: Set up bun
         uses: ./.github/actions/setup-bun
@@ -103,17 +110,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bun run timbrado report --target wrangler --json canary.json --exit "${{ steps.pin.outputs.report_status }}" --reproduce "bun run canary:wrangler"
 
+      - name: Mint the App token that opens the PR
+        if: github.ref == 'refs/heads/main' && steps.pin.outputs.before != steps.pin.outputs.after
+        id: bot
+        uses: ./.github/actions/bot-pr-token
+        with:
+          app-id: ${{ secrets.RELOCK_APP_ID }}
+          private-key: ${{ secrets.RELOCK_APP_PRIVATE_KEY }}
+
       - name: Open or update the pin PR
         if: github.ref == 'refs/heads/main' && steps.pin.outputs.before != steps.pin.outputs.after
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
           BRANCH: chore/wrangler-pin
           BEFORE: ${{ steps.pin.outputs.before }}
           AFTER: ${{ steps.pin.outputs.after }}
         run: |
           set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           EVIDENCE=$(sed -n '/^  ok  \|^ FAIL \|^ DIFF /p' pin.log)
           from="${BEFORE##*@}"
@@ -124,7 +137,9 @@ jobs:
           DIGEST=$(GITHUB_TOKEN="$GH_TOKEN" bun run timbrado digest --repo cloudflare/workers-sdk --from "$from" --to "$to" --prefer wrangler,miniflare)
 
           git checkout -B "$BRANCH"
-          git add package.json bun.lock
+          # Every TRACKED manifest, not just the root: cf-garage names the same
+          # pin for the cf CLI and bump-wrangler-pin.ts moves it in the same write.
+          git add -u -- package.json bun.lock '*/package.json'
           git commit -m "chore(wrangler): move the pin from $from to $to
 
           Every gate green on the candidate's own createTestHarness: the dry-run

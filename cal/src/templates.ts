@@ -3,6 +3,16 @@
 // page-specific rules live inline; shared Luna window chrome comes from the
 // cacheable /luna.css stylesheet.
 //
+// That link is RELATIVE, like the /nav.js one beside it. It was absolute
+// (https://aadhar.sh/luna.css) so that cal.aadhar.sh could reach it, and that
+// never worked: the site's CSP says style-src 'self', which on cal.aadhar.sh
+// means cal.aadhar.sh, so the browser refused the cross-origin sheet there too
+// (measured on production 2026-09-23). What the absolute URL did do was break
+// every other host. Under wrangler dev and on a preview URL /coffee fetched
+// PRODUCTION's luna.css, the CSP refused it, and the page painted with no shell
+// styling until nav.js booted: bun run cls read that as a 0.345 layout shift,
+// the worst on the site, and production could not reproduce it.
+//
 // design vocab:
 //   - .xp-window           outer panel, blue title bar + chrome buttons
 //   - .title-bar        title strip with glossy gel min/max/close controls
@@ -23,7 +33,7 @@
 // resolves in both. Emitted only under /coffee (see `onShell` in shell()): on
 // the bare cal.aadhar.sh fallback the shell's links would be cross-origin and
 // /nav.js 404s, so that host stays a standalone window, as it always has.
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 
 const STYLES = `
 * { box-sizing: border-box; }
@@ -375,8 +385,8 @@ function shell(title, body, env) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
-<link rel="preload" as="style" href="https://aadhar.sh/luna.css">
-<link rel="stylesheet" href="https://aadhar.sh/luna.css">
+<link rel="preload" as="style" href="/luna.css">
+<link rel="stylesheet" href="/luna.css">
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <link rel="icon" type="image/svg+xml" href="/section-icons/coffee.svg">
@@ -384,7 +394,7 @@ function shell(title, body, env) {
 </head>
 <body>${onShell ? DESKTOP_TOP : ""}
 <div class="window">
-  <div class="title-bar" aria-hidden="true">
+  <div class="title-bar" aria-hidden="true">${onShell ? DESKTOP_HISTNAV : ""}
     <span class="title-text"><span class="icon"></span>${esc(fullTitle)}</span>
     <span class="controls"
       ><span class="min" title="minimize"></span
@@ -405,6 +415,42 @@ function shell(title, body, env) {
 </body>
 </html>`;
 }
+
+// The slot picker, shipped PRE-MINIFIED because /coffee renders per request:
+// no build step ever sees this script, and esbuild's minify rewrites the
+// Worker's code but never the contents of a string. Same convention as
+// lib/island.ts's islandScript. The readable form, which is what to edit and
+// then re-minify with tools/lib/oxc-minify-options.ts:
+//
+//   (function () {
+//     const buttons    = document.querySelectorAll(".slot-btn");
+//     const startInput = document.getElementById("start");
+//     const submit     = document.getElementById("submit");
+//     const fmt = (ms) => new Date(parseInt(ms, 10)).toLocaleString("en-US", {
+//       timeZone: submit.dataset.tz,
+//       weekday: "short", month: "short", day: "numeric",
+//       hour: "numeric", minute: "2-digit"
+//     });
+//     buttons.forEach(b => b.addEventListener("click", () => {
+//       buttons.forEach(x => x.setAttribute("aria-pressed", "false"));
+//       b.setAttribute("aria-pressed", "true");
+//       startInput.value = b.dataset.start;
+//       submit.disabled = false;
+//       submit.textContent = "request " + fmt(b.dataset.start);
+//     }));
+//   })();
+//
+// oxc prints strings with backticks, and one of those here would end this
+// template literal (CLAUDE.md gotcha 19), so its output is carried over with
+// double quotes instead.
+//
+// The timezone arrives as `data-tz` on the submit button, escaped by esc(),
+// and the script reads it from there, so NOTHING is interpolated into script
+// text. It used to be `timeZone: ${JSON.stringify(tz)}`, which CodeQL flags
+// (js/bad-code-sanitization) and rightly: JSON.stringify escapes neither
+// `</script>` nor U+2028, so it is not a sanitizer for a script context. The
+// script is a constant now, the same on every render.
+const SLOT_PICKER_SCRIPT = `(function(){let e=document.querySelectorAll(".slot-btn"),t=document.getElementById("start"),n=document.getElementById("submit"),r=e=>new Date(parseInt(e,10)).toLocaleString("en-US",{timeZone:n.dataset.tz,weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});e.forEach(i=>i.addEventListener("click",()=>{e.forEach(e=>e.setAttribute("aria-pressed","false")),i.setAttribute("aria-pressed","true"),t.value=i.dataset.start,n.disabled=!1,n.textContent="request "+r(i.dataset.start)}))})();`;
 
 export function bookingPage(slots, env) {
   const base = env.BASE_PATH || "";
@@ -488,30 +534,12 @@ export function bookingPage(slots, env) {
         <input type="text" name="website" class="honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
 
         <div class="actions">
-          <button type="submit" class="xp-button primary" id="submit" disabled>pick a slot first</button>
+          <button type="submit" class="xp-button primary" id="submit" data-tz="${esc(env.HOST_TIMEZONE || "UTC")}" disabled>pick a slot first</button>
         </div>
       </div>
     </form>
 
-    <script>
-    (function () {
-      const buttons    = document.querySelectorAll(".slot-btn");
-      const startInput = document.getElementById("start");
-      const submit     = document.getElementById("submit");
-      const fmt = (ms) => new Date(parseInt(ms, 10)).toLocaleString("en-US", {
-        timeZone: ${JSON.stringify(env.HOST_TIMEZONE || "UTC")},
-        weekday: "short", month: "short", day: "numeric",
-        hour: "numeric", minute: "2-digit"
-      });
-      buttons.forEach(b => b.addEventListener("click", () => {
-        buttons.forEach(x => x.setAttribute("aria-pressed", "false"));
-        b.setAttribute("aria-pressed", "true");
-        startInput.value = b.dataset.start;
-        submit.disabled = false;
-        submit.textContent = "request " + fmt(b.dataset.start);
-      }));
-    })();
-    </script>
+    <script>${SLOT_PICKER_SCRIPT}</script>
   `;
 
   return shell("Coffee or a bagel", body, env);

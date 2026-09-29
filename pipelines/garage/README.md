@@ -23,7 +23,12 @@ node pipelines/garage/generate.mjs page <id>
 
 ```bash
 bun run gen:manifest
+bun run gen:shell
 ```
+
+`gen:shell` rewrites the desktop partial in every static page, because the
+taskbar's garage pin carries a page count. Skip it and the build stops on
+"static desktop partial drifted" for each of them.
 
 6. Add the entry in `public/sitemap.xml` and the card in
    `src/pages/garage/index.html` by hand.

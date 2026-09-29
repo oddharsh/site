@@ -61,11 +61,10 @@ function commandLines(source) {
 const INSTALL = /\bbun (?:install|i)\b/;
 
 // A GLOBAL install has no lockfile to freeze, so the floor it can obey is an
-// exact version: `bun install -g <name>@x.y.z`, nothing looser. One such line
-// exists (dependabot-site-review.yml installs the Claude Code CLI for its one
-// caller rather than adding a 200 KB launcher plus a native binary to every
-// `bun install` through package.json). A range, a tag or a bare name here
-// would let the registry pick, which is the exact thing the frozen rule
+// exact version: `bun install -g <name>@x.y.z`, nothing looser. No such line
+// exists today; the last one installed the Claude Code CLI for the Dependabot
+// model review, which was removed on 2026-09-26. A range, a tag or a bare name
+// here would let the registry pick, which is the exact thing the frozen rule
 // refuses, so it fails the same assertion.
 const PINNED_GLOBAL = /\bbun install -g (?:@[\w.-]+\/)?[\w.-]+@\d+\.\d+\.\d+(?:\s|$)/;
 

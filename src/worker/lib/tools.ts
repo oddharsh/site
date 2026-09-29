@@ -34,6 +34,7 @@ import { mcpTool } from "./mcp-tools.ts";
 // import appearing in either would take the whole suite down at link time
 // (gotcha 16).
 import { serendipityFindEvents } from "../../../serendipity/serendipity.ts";
+import { EVENT_FORMATS, EVENT_TOPICS } from "../../../serendipity/jev.ts";
 import { asRecord } from "./parse.ts";
 
 export function toolError(message) { return { _error: String(message).slice(0, 400) }; }
@@ -126,6 +127,8 @@ const DATA_TOOL_DEFINITIONS = [
       q: { type: "string", description: "optional keyword filter on event name, place, or contributor" },
       when: { type: "string", enum: ["upcoming", "past", "all"], description: "defaults to upcoming" },
       rsvp: { type: "string", enum: ["going", "all", "discovered"], description: "defaults to going (the events with real rosters)" },
+      topic: { type: "string", enum: [...EVENT_TOPICS], description: "optional: only events classified as this topic; unclassified events are counted in `untagged`" },
+      format: { type: "string", enum: [...EVENT_FORMATS], description: "optional: only events classified as this format (talks, meal, social, ...)" },
       limit: { type: "integer", minimum: 1, maximum: 200 },
     } },
   },

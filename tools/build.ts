@@ -15,7 +15,7 @@
 // still reads as hand-written CSS, and the line says where it came from.
 //
 //   bun run build                                         # stage .build/
-//   bun run deploy:direct                                   # build + wrangler deploy -c .build/wrangler.jsonc
+//   bun run deploy:direct                                   # build + wrangler deploy -c .build/cloudflare.config.ts
 //
 // THIS BUILD REQUIRES BUN. `lib/link-integrity.ts` parses each document with
 // HTMLRewriter, which bun and workerd have and node does not, so `node
@@ -40,6 +40,7 @@ import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
+import { siteConfig } from "./lib/site-config.ts";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -163,7 +164,7 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
 // link resolver in step 7b.
 //
 // These are JSONC files and the // COMMENTS INSIDE THESE BLOCKS QUOTE VALUES, so
-// a bare scan for quoted strings reads prose as data. wrangler.jsonc's fold note
+// a bare scan for quoted strings reads prose as data. cloudflare.config.ts's fold note
 // names all eight retired exact /lens rows that way, and the first version of the
 // dev-twin diff duly reported seven of them as drift — a false positive on the
 // one check whose job is telling real drift from none. That was harmless in
@@ -183,6 +184,13 @@ const jsoncStringArray = (configSrc: string, key: string): string[] => {
 // negation form and are left in; a caller wanting only positive patterns filters
 // them itself.
 const runWorkerFirst = (configSrc: string): string[] => jsoncStringArray(configSrc, "run_worker_first");
+
+// The site config as TEXT, for the readers above. cloudflare.config.ts replaced
+// wrangler.jsonc on 2026-09-28, and this is its legacy-shape projection
+// (tools/lib/site-config.ts) pretty-printed: formatted JSON is valid JSONC, so
+// jsoncStringArray and the binding-name scan read it exactly as they read the
+// hand-written file, with no second parser for the TypeScript.
+const siteConfigText = async (): Promise<string> => JSON.stringify(await siteConfig(), null, 2);
 
 // ── deploy-time invariant tripwires (explore-unknowns, phase A) ──────────────
 // Silent-failure classes this codebase has hit or is one careless edit from
@@ -230,7 +238,7 @@ async function checkInvariants() {
   // required literally (a symmetric diff would false-fire on the glob entries —
   // the exact disable-magnet).
   const idx = await read("src/worker/index.ts");
-  const wrangler = await read("wrangler.jsonc");
+  const wrangler = await siteConfigText();
   // Reads ROUTE_TABLE, which is where the dispatch keys live. This matched
   // `const ROUTES = new Map([...])` until 2026-08-19, and that form stopped
   // existing when the table was extracted into its own const so the @type
@@ -373,7 +381,7 @@ async function checkInvariants() {
   if (!clientEdgeDecl(await read("src/styles/luna.css"))) hard.push("luna.css: the client-edge declaration went missing (search \"THE CLIENT EDGE\") — build.ts injects it into every windowed page and has nothing to inject");
 
   // 6 (warn) — the local-dev twin (wrangler.dev.jsonc) must declare the same
-  // bindings as the deploy config (wrangler.jsonc), or local `wrangler dev`
+  // bindings as the deploy config (cloudflare.config.ts), or local `wrangler dev`
   // diverges from prod. Compare the set of binding identifiers by name; a
   // mismatch means a binding was added to one config but not the other.
   //
@@ -412,7 +420,7 @@ async function checkInvariants() {
     const names = (s) => new Set([...s.matchAll(/"(?:binding|name|database_name|bucket_name|dataset)"\s*:\s*"([^"]+)"/g)].map((m) => m[1]));
     const a = names(wrangler), b = names(dev);
     const diff = [...new Set([...a].filter((x) => !b.has(x)).concat([...b].filter((x) => !a.has(x))))];
-    if (diff.length) warn.push(`wrangler.jsonc and wrangler.dev.jsonc binding sets differ (${diff.join(", ")}) — keep the dev twin in sync`);
+    if (diff.length) warn.push(`cloudflare.config.ts and wrangler.dev.jsonc binding sets differ (${diff.join(", ")}) — keep the dev twin in sync`);
 
     const prodAllow = new Set(allow), devAllow = new Set(runWorkerFirst(dev));
     const prodOnly = [...prodAllow].filter((x) => !devAllow.has(x));
@@ -421,7 +429,7 @@ async function checkInvariants() {
       const parts: string[] = [];
       if (prodOnly.length) parts.push(`missing from wrangler.dev.jsonc: ${prodOnly.join(", ")}`);
       if (devOnly.length) parts.push(`only in wrangler.dev.jsonc: ${devOnly.join(", ")}`);
-      warn.push(`wrangler.jsonc and wrangler.dev.jsonc run_worker_first allowlists differ (${parts.join("; ")}) — the two configs disagree about which paths the Worker claims from the asset layer, so dev and prod diverge the moment a file is staged at one of them`);
+      warn.push(`cloudflare.config.ts and wrangler.dev.jsonc run_worker_first allowlists differ (${parts.join("; ")}) — the two configs disagree about which paths the Worker claims from the asset layer, so dev and prod diverge the moment a file is staged at one of them`);
     }
 
     // And the CRONS, which is the drift this file's own comment records: this
@@ -448,9 +456,9 @@ async function checkInvariants() {
     // Free caps an account at five, so zero means the extraction lost the block
     // rather than the site losing its jobs. Deleting every cron is a real edit
     // that should come here and say so, which is the point of failing loudly.
-    if (!prodCrons.length) hard.push("dev-twin drift check read 0 crons from wrangler.jsonc — the scanner has lost the triggers block, not the site its schedule");
+    if (!prodCrons.length) hard.push("dev-twin drift check read 0 crons from cloudflare.config.ts — the scanner has lost the triggers block, not the site its schedule");
     else if (sorted(prodCrons) !== sorted(devCrons)) {
-      warn.push(`wrangler.jsonc and wrangler.dev.jsonc crons differ (wrangler.jsonc: ${prodCrons.join(", ") || "none"}; wrangler.dev.jsonc: ${devCrons.join(", ") || "none"}) — the two schedules must match, or a job fires in one config and not the other`);
+      warn.push(`cloudflare.config.ts and wrangler.dev.jsonc crons differ (cloudflare.config.ts: ${prodCrons.join(", ") || "none"}; wrangler.dev.jsonc: ${devCrons.join(", ") || "none"}) — the two schedules must match, or a job fires in one config and not the other`);
     }
 
     // And the COMPATIBILITY FLAGS, added 2026-08-28 with the first one this repo
@@ -474,9 +482,9 @@ async function checkInvariants() {
     // key or a reformatted array reports a clean build over a config it never
     // read. Removing the last flag is a real edit that should come here and say
     // so, which is the point of failing rather than warning.
-    if (!prodFlags.length) hard.push("dev-twin drift check read 0 compatibility_flags from wrangler.jsonc — either the scanner lost the key or the last flag was dropped; both want a human here");
+    if (!prodFlags.length) hard.push("dev-twin drift check read 0 compatibility_flags from cloudflare.config.ts — either the scanner lost the key or the last flag was dropped; both want a human here");
     else if (sorted(prodFlags) !== sorted(devFlags)) {
-      warn.push(`wrangler.jsonc and wrangler.dev.jsonc compatibility_flags differ (wrangler.jsonc: ${prodFlags.join(", ") || "none"}; wrangler.dev.jsonc: ${devFlags.join(", ") || "none"}) — a flag changes what the runtime hands the Worker, so local dev exercises a different platform from the one that ships`);
+      warn.push(`cloudflare.config.ts and wrangler.dev.jsonc compatibility_flags differ (cloudflare.config.ts: ${prodFlags.join(", ") || "none"}; wrangler.dev.jsonc: ${devFlags.join(", ") || "none"}) — a flag changes what the runtime hands the Worker, so local dev exercises a different platform from the one that ships`);
     }
   } catch (e) { warn.push(`dev-config drift check could not run: ${e.message}`); }
 
@@ -505,7 +513,8 @@ async function checkInvariants() {
     const runtimeFiles = [
       "src/pages/index.html",
       "src/worker/index.ts",
-      "wrangler.jsonc",
+      "cloudflare.config.ts",
+      "wrangler.config.ts",
       "wrangler.dev.jsonc",
     ];
     const forbidden = ["/ledger/rum", "data-cf-beacon", "cloudflareinsights.com"];
@@ -809,6 +818,7 @@ const SHELLS = [
   ["nav.js",     "/nav.src.js",     "axp-histnav"],
   ["nav-run.js", "/nav-run.src.js", "axp-run"],
   ["nav-tray.js", "/nav-tray.src.js", "axp-balloon"],
+  ["nav-pipes.js", "/nav-pipes.src.js", "axp-pipes"],  // the idle screen saver
   ["notepad.js", "/notepad.src.js", "np-window"],
   ["lens-boot.js", "/lens-boot.src.js", "requestSubmit"],
   ["lens-webmcp.js", "/lens-webmcp.src.js", "LensWebMcp"],
@@ -823,13 +833,14 @@ const SHELLS = [
   ["tooltip.js", "/tooltip.src.js", "function start"],
   ["infotip.js", "/infotip.src.js", "axp-infotip"],   // the shell's own tooltips
   // the shared hover engine. tooltip.js imports it statically; the serendipity
-  // shell and nav.js import it dynamically. Deliberately NOT content-hashed:
-  // the /a/ repointer is attribute-scoped (src=/href= only) and would never
-  // rewrite an `import` specifier, so it stays a plain /hoist.js like its peers.
+  // shell and nav.js import it dynamically. Content-hashed in step 6 through
+  // STRING_ASSETS, which rewrites those `import` specifiers; the attribute-scoped
+  // /a/ repointer never could, which is what this comment used to say instead.
   ["hoist.js",   "/hoist.src.js",   "createHoist"],
-  // first-party WebMCP registration. Unhashed for hoist.js's reason: nav.js and
-  // lens-webmcp.js both reach it through an `import()` specifier, which the /a/
-  // repointer is attribute-scoped and would never rewrite.
+  // first-party WebMCP registration, loaded on idle from nav.js on every page and
+  // from lens-webmcp.js. Content-hashed through STRING_ASSETS like hoist.js since
+  // 2026-09-26; it had stayed a plain /webmcp.js on hoist's old, stale reason, and
+  // so shipped at the edge's q4 with no twin (2,436 B against 2,098 at q11).
   ["webmcp.js",  "/webmcp.src.js",  "registerSiteTools"],
   // the LWE pages' ask widget. Page-specific rather than shell, so it keeps its
   // /lwe/ URL (a subdirectory here stages to the same subdirectory served); it
@@ -837,11 +848,23 @@ const SHELLS = [
   // unchanged and this one is now minified. Measured: 4,305 B on the wire at the
   // edge's q4 against 2,833 minified with a q11 twin, on 12 pages.
   ["lwe/ask.js", "/lwe/ask.src.js", "lwe-q"],
+  // the vendored @chenglou/pretext 0.0.7 that /garage/pretext imports. It came
+  // prebuilt by its own bundler and shipped from public/ unchanged until
+  // 2026-09-28; oxc takes it 12,974 -> 12,564 B at q11 (-3.2%). The marker is an
+  // export NAME, which survives minification by construction, so losing it
+  // means the module lost its public surface and the page's import would break.
+  ["garage/pretext.lib.js", "/garage/pretext.lib.src.js", "prepareWithSegments"],
   // the /dotfiles checklist. An ES module (tools/gen-dotfiles.ts imports its
   // renderer to write the committed macos.sh), unhashed like ask.js: one page
   // loads it and a hash would re-mint nothing worth re-minting.
   ["dotfiles.js", "/dotfiles.src.js", "dotfiles-data"],
 ];
+
+// SHELLS rows that are ES MODULES rather than classic scripts. OXC_MINIFY_OPTIONS
+// parses as a script (module: false), which refuses `export`. A module's
+// top-level names are module-scoped rather than globals, so mangling them is
+// safe and is where most of this file's saving comes from.
+const MODULE_SHELLS = new Set(["garage/pretext.lib.js", "dotfiles.js"]);
 
 // EVERY client script is a SHELLS row, or is sw.js. A file missing from the list
 // ships readable and unminified with no .src.js twin and, the sharper half, no
@@ -854,7 +877,9 @@ const SHELLS = [
 // list is its reason.
 {
   const rows = new Map(SHELLS.map(([file, , marker]) => [file, marker]));
-  const missing = (await readdir("src/client")).filter((f) => f.endsWith(".js") && f !== "sw.js" && !rows.has(f));
+  // Recursive, because two rows (lwe/ask.js, garage/pretext.lib.js) live in a
+  // subdirectory, and a top-level read could not see a third one missing.
+  const missing = (await readdir("src/client", { recursive: true })).filter((f) => f.endsWith(".js") && f !== "sw.js" && !rows.has(f));
   if (missing.length) throw new Error(`SHELLS: ${missing.join(", ")} in src/client but not in the list, so it would ship unminified with no twin and no marker tripwire`);
   const unmarked = [...rows].filter(([, marker]) => !marker).map(([file]) => file);
   if (unmarked.length) throw new Error(`SHELLS: ${unmarked.join(", ")} carries no marker, so a minifier deleting it would pass the build`);
@@ -876,7 +901,7 @@ await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 
 // 1) stage: public/ verbatim (.assetsignore rides along). No wrangler config is
-// copied into .build anymore — the deploy config (wrangler.jsonc) points main +
+// copied into .build anymore — the deploy config (cloudflare.config.ts) points its entrypoint +
 // assets at .build/public and runs THIS script via its build.command, so the
 // build output never needs its own config. (Local dev uses wrangler.dev.jsonc.)
 //
@@ -937,7 +962,7 @@ await Promise.all([
   cp("src/pages", `${OUT}/public`, { recursive: true }),
 // The Worker is a PROGRAM, not a document, so its source lives in src/worker
 // beside cal/ and serendipity/ rather than inside the tree of things a browser
-// can fetch. Its STAGED position is unchanged: wrangler.jsonc still points main
+// can fetch. Its STAGED position is unchanged: cloudflare.config.ts still points its entrypoint
 // at .build/src/worker/index.ts, and every deploy path and content hash
 // downstream is therefore untouched by the move.
   cp("src/worker", `${OUT}/src/worker`, { recursive: true }),
@@ -955,7 +980,14 @@ await Promise.all([
   cp("src/client", `${OUT}/public`, { recursive: true }),
   cp("src/styles", `${OUT}/public`, { recursive: true }),
   cp("cal/src", `${OUT}/cal/src`, { recursive: true }),
-  cp("serendipity/serendipity.ts", `${OUT}/serendipity/serendipity.ts`),
+// Every module in serendipity/, rather than serendipity.ts by name. It was one
+// file until jev.ts arrived beside it, and the by-name copy left the staged
+// import dangling: the build passed and only the wrangler bundle failed, on
+// "Could not resolve ./jev.ts". Migrations and package.json are not modules.
+  cp("serendipity", `${OUT}/serendipity`, {
+    recursive: true,
+    filter: (source) => !source.includes(`${sep}migrations`) && (!/\.\w+$/.test(source) || source.endsWith(".ts")),
+  }),
 ]);
 
 // 1-svg) the icon sprite and the section favicons ship without their generator
@@ -977,6 +1009,32 @@ await Promise.all([
     if (out !== src) { await writeFile(path, out); stripped += src.length - out.length; }
   }
   console.log(`svg: generator comments stripped from ${svgs.length} files, ${stripped} bytes raw`);
+
+  // bimi.svg is the one HAND-authored SVG, so its comments explain the drawing
+  // rather than name a generator, and the source keeps them. The staged copy
+  // drops every comment and the whitespace between tags: 1,057 to 619 B raw,
+  // 497 to 338 B brotli. Safe here because its only text node is <title>, which
+  // `>\s+<` cannot reach, and nothing else is rewritten, so the Tiny-PS profile
+  // attributes BIMI validators check (version, baseProfile, <title>) ship as
+  // authored. No readable twin: the source is one click away in the repository,
+  // and the one reader of this URL is an inbox provider fetching a logo.
+  const bimi = `${OUT}/public/bimi.svg`;
+  const bimiSrc = await readFile(bimi, "utf8");
+  // Strip comments to a fixed point, because one pass is not a complete strip:
+  // `<!-<!-- x -->- y -->` becomes `<!-- y -->`, a comment the first pass built.
+  // An opener with no closer survives any number of passes, so that case throws.
+  let bimiOut = bimiSrc;
+  for (let prev = ""; prev !== bimiOut;) {
+    prev = bimiOut;
+    bimiOut = bimiOut.replace(/<!--[\s\S]*?-->/g, "");
+  }
+  if (bimiOut.includes("<!--")) throw new Error("bimi.svg: an unterminated <!-- survived the comment strip");
+  bimiOut = bimiOut.replace(/>\s+</g, "><").trim();
+  if (!bimiOut.includes('baseProfile="tiny-ps"') || !bimiOut.includes("<title>")) {
+    throw new Error("bimi.svg: minified copy lost the Tiny-PS profile or its <title>, which BIMI validators require");
+  }
+  await writeFile(bimi, bimiOut);
+  console.log(`svg: bimi.svg ${bimiSrc.length} -> ${bimiOut.length} bytes raw`);
 }
 // 1a) /images/exif.json and /images/fingerprints.json, DERIVED rather than copied.
 //
@@ -1119,8 +1177,8 @@ await Promise.all([
 // is exactly why /updates and /restore never got one. Moved below 1f, after the
 // deploy-time documents exist. See the block there.
 
-const minifyJavaScript = (filename, sourceText) => {
-  const result = minifySync(filename, sourceText, OXC_MINIFY_OPTIONS);
+const minifyJavaScript = (filename, sourceText, options: typeof OXC_MINIFY_OPTIONS | object = OXC_MINIFY_OPTIONS) => {
+  const result = minifySync(filename, sourceText, options);
   if (result.errors.length) {
     throw new Error(`${filename}: Oxc parse/minify failed: ${result.errors.map((e) => e.message).join("; ")}`);
   }
@@ -1330,7 +1388,8 @@ if (inlineProbe.includes("/* probe */") ||
   console.log(`homepage bake: 12 deterministic fallback tiles + last-modified ${new Date(newest).toISOString().slice(0, 10)}`);
 }
 
-// 1e) /photos and /bot as deploy-time documents.
+// 1e) /photos and /bot as deploy-time documents, and /images/manifest.json beside
+// them from the same pool.
 //
 // Both render from build-time inputs only, so their bytes are knowable here, and
 // emitting them as HTML buys the q11 twin plus both dcz delta tiers that step 8
@@ -1358,6 +1417,13 @@ if (inlineProbe.includes("/* probe */") ||
   const photosHtml = await photos.renderPhotosPage(pool, altMap).text();
   if (!photosHtml.includes("class=\"ph\"")) throw new Error("photos page: rendered document has no tiles — did the markup move?");
   await writeFile(`${OUT}/public/photos.html`, photosHtml);
+
+  // /images/manifest.json, from the same pool through the Worker's own serializer.
+  // Staged here, it picks up a q11 twin from the text-twin step below (its
+  // `images/*.json` glob already matches, and the path is already worker-first),
+  // plus an ETag the per-request handler never had. That handler stays as the
+  // route's 404 fallback, so this is the one place the static copy is made.
+  await writeFile(`${OUT}/public/images/manifest.json`, photos.imagesManifestJson(pool));
 
   // One document per album (src/worker/albums.ts), from the same pool. An album
   // with no members is a registry entry nobody ran the pipeline for, and a page
@@ -1616,6 +1682,54 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
   console.log(`explorer chrome: address bar + task pane on ${dressed} staged pages; ${linked} advertise a Markdown twin; ${twinPaths.length} twin paths handed to the Worker`);
 }
 
+// 1g3) /llms-full.txt, the map plus every writing post and every Garage and LWE
+// explainer, inlined.
+//
+// Build output on the twins' argument, and it reads the twins 1g just wrote
+// rather than re-extracting anything, so each explainer here is byte-for-byte
+// what its `.md` URL serves. The Worker used to assemble the writing half per
+// request, one ASSETS lookup per post; inlining 39 explainers that way would
+// spend most of Workers Free's 50-subrequest ceiling (gotcha 36) on one route.
+// Staged at the path the route shadows: /llms-full.txt is run_worker_first, so
+// the x402 handler is the only door to it.
+//
+// Floors, because every failure here is an absence: a post whose .txt did not
+// stage, or a section whose twins stopped generating, would otherwise ship a
+// shorter file that reads as complete.
+{
+  const { renderLlmsFull, WRITING_HEADING } = await import("../src/worker/lib/llms-full.ts");
+  const { INDEXED_SECTIONS, readManifest, twinPath } = await import("./gen-md-twins.ts");
+  const map = await readFile(`${OUT}/public/llms.txt`, "utf8");
+  const posts = JSON.parse(await readFile(`${OUT}/public/writing/posts.json`, "utf8"));
+  const writing = await Promise.all(posts.map(async (p) => ({
+    title: p.title, date: p.date, path: `/writing/${p.slug}.txt`,
+    body: await readFile(`${OUT}/public/writing/${p.slug}.txt`, "utf8"),
+  })));
+  if (!writing.length) throw new Error("llms-full: posts.json staged no writing posts");
+
+  const manifest = readManifest(".");
+  const sections = [{ heading: WRITING_HEADING, docs: writing }];
+  const counts: string[] = [];
+  for (const section of INDEXED_SECTIONS) {
+    // Same order as the section's own llms.txt: the section page, then the
+    // registry order. A surface with no twin (none today) is left out, exactly
+    // as that index lists it under "HTML only".
+    const own = manifest.surfaces.filter((s) => s.section === section);
+    const head = own.find((s) => s.kind === "section") || own[0];
+    const docs = [head, ...own.filter((s) => s !== head)].flatMap((s) => {
+      const body = twinFiles.get(twinPath(s.path));
+      return body ? [{ title: s.title, path: twinPath(s.path), body }] : [];
+    });
+    if (docs.length < 10) throw new Error(`llms-full: only ${docs.length} ${section} twins to inline (expected 10+) — did step 1g stop writing them?`);
+    sections.push({ heading: `${head.title}: full text`, docs });
+    counts.push(`${docs.length} ${section}`);
+  }
+
+  const body = renderLlmsFull(map, sections);
+  await writeFile(`${OUT}/public/llms-full.txt`, body);
+  console.log(`llms-full: ${writing.length} writing posts + ${counts.join(" + ")} explainers, ${Buffer.byteLength(body)} bytes`);
+}
+
 // 1h) RSS feeds for the three authored sections.
 //
 // Build output for the same reason the twins are: a feed is a pure function of
@@ -1725,7 +1839,9 @@ for (const [file, srcPath, marker] of SHELLS) {
   const src = await readFile(`src/client/${file}`, "utf8");
   await writeFile(`${OUT}/public/${srcPath.slice(1)}`, src);
 
-  const code = minifyJavaScript(`src/client/${file}`, src);
+  const code = MODULE_SHELLS.has(file)
+    ? minifyJavaScript(`src/client/${file}`, src, { ...OXC_MINIFY_OPTIONS, module: true, mangle: { toplevel: true } })
+    : minifyJavaScript(`src/client/${file}`, src);
   const banner = `/*! minified at deploy - readable source: ${srcPath} */\n`;
   const min = banner + code;
 
@@ -1879,6 +1995,88 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   }
   if (!securityHtml.includes('fetch("/security.json"')) throw new Error("static /security renderer lost the script that fills its connection values");
   await writeFile(`${OUT}/public/security.html`, securityHtml);
+  // /whoareyou, since 2026-09-25: the same move with an island (lib/island.ts)
+  // in place of three placeholders, since its live part is rows rather than
+  // scalars. The mount, its URL, the shared loader and the preload are asserted,
+  // and so is the absence of a per-request value: the build runs with no
+  // request, so a TLS version or an ISO timestamp in the bake could only be a
+  // fixture leaking into every visitor's copy.
+  const whoareyou = await import(pathToFileURL(resolve(OUT, "src/worker/whoareyou.ts")).href + nonce);
+  const whoareyouResponse = whoareyou.renderWhoareyouPage();
+  if (whoareyouResponse.status !== 200) throw new Error(`static /whoareyou renderer returned ${whoareyouResponse.status}`);
+  const whoareyouHtml = await whoareyouResponse.text();
+  const valuesUrl = whoareyou.VALUES_URL;
+  if (!whoareyouHtml.includes(`data-island="${valuesUrl}"`)) throw new Error("static /whoareyou renderer lost its values island");
+  if (!whoareyouHtml.includes(`rel="preload" as="fetch" href="${valuesUrl}" crossorigin`)) throw new Error("static /whoareyou renderer lost the preload for its values island");
+  if (!whoareyouHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /whoareyou renderer lost the island loader");
+  if (/TLSv1\.[23]|\d{4}-\d\d-\d\dT\d\d:/.test(whoareyouHtml)) throw new Error("static /whoareyou bake carries a per-request value");
+  await writeFile(`${OUT}/public/whoareyou.html`, whoareyouHtml);
+  // /garage/dyno, the same day and the same shape: the chart and table are the
+  // island. What must never reach the bake is a series point, since the build
+  // cannot read perf-history and a baked chart would be one build's snapshot
+  // served for a week: no <polyline>, and no sha cell.
+  const dyno = await import(pathToFileURL(resolve(OUT, "src/worker/dyno.ts")).href + nonce);
+  const dynoResponse = dyno.renderDynoPage();
+  if (dynoResponse.status !== 200) throw new Error(`static /garage/dyno renderer returned ${dynoResponse.status}`);
+  const dynoHtml = await dynoResponse.text();
+  const pullsUrl = dyno.PULLS_URL;
+  if (!dynoHtml.includes(`data-island="${pullsUrl}"`)) throw new Error("static /garage/dyno renderer lost its pulls island");
+  if (!dynoHtml.includes(`rel="preload" as="fetch" href="${pullsUrl}" crossorigin`)) throw new Error("static /garage/dyno renderer lost the preload for its pulls island");
+  if (!dynoHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /garage/dyno renderer lost the island loader");
+  if (/<polyline|<td class="mono sha">[0-9a-f]{7}/.test(dynoHtml)) throw new Error("static /garage/dyno bake carries a series point");
+  await writeFile(`${OUT}/public/garage/dyno.html`, dynoHtml);
+  // /ledger and /around, the same day and the same shape, so they take one loop
+  // with the same assertions. Each names what its bake must never carry: the
+  // build has no Analytics Engine token and no crawl snapshot, so a crawler row,
+  // a priced total, a neighbour's name or a latency in the bake could only be a
+  // fixture served to every visitor until the next deploy.
+  for (const page of [
+    { module: "ledger", render: "renderLedgerPage", url: "LINES_URL", out: "ledger.html",
+      live: /<td class="mono">[A-Za-z]|Total due<\/span> <b>\$\d/ },
+    { module: "around", render: "renderAroundPage", url: "SNAPSHOT_URL", out: "around.html",
+      live: /class="firm">[A-Za-z]|class="latency">\d|\d{4}-\d\d-\d\dT\d\d:/ },
+    // /inbox and /lens/census, the same day. A mention row carries an id and a
+    // ugc link, and a census row links a site through the lens.
+    { module: "inbox", render: "renderInboxPage", url: "MAIL_URL", out: "inbox.html",
+      live: /id="m-\d|rel="noopener ugc external"/ },
+    { module: "census", render: "renderCensusPage", url: "TABLE_URL", out: "lens/census.html",
+      live: /class="cx-site"><a |<span>\/100<\/span>/ },
+  ]) {
+    const mod = await import(pathToFileURL(resolve(OUT, `src/worker/${page.module}.ts`)).href + nonce);
+    const res = mod[page.render]();
+    if (res.status !== 200) throw new Error(`static /${page.module} renderer returned ${res.status}`);
+    const body = await res.text();
+    const url = mod[page.url];
+    if (!body.includes(`data-island="${url}"`)) throw new Error(`static /${page.module} renderer lost its island`);
+    if (!body.includes(`rel="preload" as="fetch" href="${url}" crossorigin`)) throw new Error(`static /${page.module} renderer lost the preload for its island`);
+    if (!body.includes('querySelectorAll("[data-island]")')) throw new Error(`static /${page.module} renderer lost the island loader`);
+    if (page.live.test(body)) throw new Error(`static /${page.module} bake carries a live value`);
+    // /lens/census stages below a directory nothing else writes to.
+    await mkdir(resolve(OUT, "public", page.out, ".."), { recursive: true });
+    await writeFile(`${OUT}/public/${page.out}`, body);
+  }
+  // /serendipity's dashboard, the same day. Staged beside src/, so it imports
+  // from .build/serendipity. The build has no D1, so an event card (always an
+  // <a class="ev"), a pool count, or a signed cover URL in the bake could only
+  // be a fixture every visitor would read as the pool.
+  const serendipity = await import(pathToFileURL(resolve(OUT, "serendipity/serendipity.ts")).href + nonce);
+  const serendipityResponse = serendipity.renderSerendipityPage();
+  if (serendipityResponse.status !== 200) throw new Error(`static /serendipity renderer returned ${serendipityResponse.status}`);
+  const serendipityHtml = await serendipityResponse.text();
+  const eventsUrl = serendipity.EVENTS_URL;
+  if (!serendipityHtml.includes(`data-island="${eventsUrl}"`)) throw new Error("static /serendipity renderer lost its events island");
+  if (!serendipityHtml.includes(`rel="preload" as="fetch" href="${eventsUrl}" crossorigin`)) throw new Error("static /serendipity renderer lost the preload for its events island");
+  if (!serendipityHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /serendipity renderer lost the island loader");
+  if (/<a class="ev|\d+ events? in the pool|data-cover=/.test(serendipityHtml)) throw new Error("static /serendipity bake carries a pool value");
+  await writeFile(`${OUT}/public/serendipity.html`, serendipityHtml);
+  // /serendipity/mcp-info, the same day: a plain bake with no island, since the
+  // page is a fixed tool list. Two renders must agree, or the build would bake
+  // whichever it got.
+  const mcpInfoHtml = await serendipity.renderMcpInfoPage().text();
+  if (mcpInfoHtml !== await serendipity.renderMcpInfoPage().text()) throw new Error("static /serendipity/mcp-info renderer is not deterministic");
+  if (!mcpInfoHtml.includes("list_events")) throw new Error("static /serendipity/mcp-info renderer lost its tool list");
+  await mkdir(`${OUT}/public/serendipity`, { recursive: true });
+  await writeFile(`${OUT}/public/serendipity/mcp-info.html`, mcpInfoHtml);
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);
@@ -1892,8 +2090,45 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
     await writeFile(`${OUT}/public/writing/${post.slug}.html`, await response.text());
   }
-  console.log(`static renders: /lens + blank /run + blank /search + /security + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  // THE RATCHET, since 2026-09-25. Every registered surface either has a built
+  // document by now or is named in config/per-request-pages.json with a reason.
+  // So a new Worker-rendered page cannot arrive per request by default: it fails
+  // here until it is built at deploy (lib/island.ts) or argues its case in the
+  // ledger. The ledger can only shrink, because an entry whose page is built, is
+  // unregistered, or carries no reason fails too. The registry floor stops a
+  // manifest that stopped parsing from passing over zero surfaces.
+  {
+    const manifest: { surfaces: { path: string }[] } = JSON.parse(await readFile("config/site-manifest.json", "utf8"));
+    const ledger: Record<string, string> = JSON.parse(await readFile("config/per-request-pages.json", "utf8")).pages ?? {};
+    const surfaces = new Set<string>(manifest.surfaces.map((s) => s.path));
+    if (surfaces.size < 60) throw new Error(`per-request ratchet read only ${surfaces.size} registered surfaces — the scanner has lost the registry`);
+    const built = (p: string) => existsSync(`${OUT}/public${p === "/" ? "/index" : p}.html`) || existsSync(`${OUT}/public${p}/index.html`);
+    const problems: string[] = [];
+    for (const p of surfaces) {
+      if (!built(p) && !(p in ledger)) problems.push(`${p} is rendered per request: build it at deploy (lib/island.ts), or add it to config/per-request-pages.json with the reason it cannot be`);
+    }
+    for (const [p, why] of Object.entries(ledger)) {
+      if (!surfaces.has(p)) problems.push(`${p} is in config/per-request-pages.json but is not a registered surface`);
+      else if (built(p)) problems.push(`${p} is built now: remove it from config/per-request-pages.json`);
+      // A reason is a sentence. The JSON is read as strings, so a missing or
+      // non-string value arrives here as something String() makes short.
+      if (String(why ?? "").trim().length < 20) problems.push(`${p} needs a reason in config/per-request-pages.json, not ${JSON.stringify(why)}`);
+    }
+    if (problems.length) throw new Error(`per-request ratchet:\n  ${problems.join("\n  ")}`);
+    console.log(`per-request ratchet: ${surfaces.size - Object.keys(ledger).length} of ${surfaces.size} registered surfaces are built documents; ${Object.keys(ledger).length} stay per request, each with a reason`);
+  }
+  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
+
+// Every staged file step 6 content-hashes into /a/. Step 5c reads it to keep
+// page edits out of these files' bytes, and step 6 fails if its two asset lists
+// and this one disagree, so an asset cannot join /a/ without joining this too.
+const CONTENT_HASHED = new Set([
+  "nav.js", "luna.css", "lens-boot.js", "icons.svg", "quiz.js", "notepad.js", "lwe-base.css",
+  "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js",
+  "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js",
+  "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js", "webmcp.js",
+].map((f) => `public/${f}`));
 
 // 5c) shorten every CSS custom property name, across the whole staged tree.
 //
@@ -1904,6 +2139,13 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // It runs HERE, after every document, stylesheet and Worker CSS literal is
 // staged and before step 6 hashes anything, so the content hashes, the CSP
 // hashes at 7c and the deltas at 8 all see final bytes.
+//
+// The names come in two tiers (planNames has the argument): a name a hashed
+// shell file defines is ranked by the shell's own uses, and everything else is
+// placed by a hash of its name. So an edit to one page's CSS cannot rename a
+// token inside luna.css and re-mint every page (gotcha 35), which one site-wide
+// ranking did on 2026-09-24. Comments in page CSS are still unminified here and
+// still count as uses, which no longer matters: no tier reads a page's counts.
 //
 // The `.src.*` twins are skipped on purpose: they are the readable copy, and
 // `--surface-window` is what makes them worth reading.
@@ -1928,7 +2170,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // follow, so it is a build failure rather than a silent miss.
   assertNoDynamicPropertyNames(before);
 
-  const map = planNames(before);
+  const map = planNames(before, CONTENT_HASHED);
   const after = new Map<string, string>();
   for (const [rel, text] of before) after.set(rel, applyMangle(text, map));
 
@@ -2040,6 +2282,10 @@ let freshFamily: Buffer | null = null;
     { file: "/hoist.js",        base: "hoist",        mk: (to) => [
       [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`],
       [/(\bfrom\s*)(["'`])\/hoist\.js\2/g, `$1$2${to}$2`] ] },
+    // The WebMCP core. A leaf: nav.js and lens-webmcp.js import it, so it is
+    // hashed before lens-webmcp below and before nav.js is hashed by ASSETS.
+    { file: "/webmcp.js",       base: "webmcp",       mk: (to) => [
+      [/import\((["'`])\/webmcp\.js\1\)/g, `import($1${to}$1)`] ] },
     // First-interaction shell islands. nav-run depends on hoist, so hoist must
     // be rewritten into its source before nav-run receives its own hash. Both
     // are then rewritten into nav.js before the shared shell is hashed below.
@@ -2047,6 +2293,10 @@ let freshFamily: Buffer | null = null;
       [/import\((["'`])\/nav-run\.js\1\)/g, `import($1${to}$1)`] ] },
     { file: "/nav-tray.js",     base: "nav-tray",     mk: (to) => [
       [/import\((["'`])\/nav-tray\.js\1\)/g, `import($1${to}$1)`] ] },
+    // The idle screen saver. A leaf with no imports, rewritten into nav.js before
+    // the shell is hashed, like the two islands above.
+    { file: "/nav-pipes.js",    base: "nav-pipes",    mk: (to) => [
+      [/import\((["'`])\/nav-pipes\.js\1\)/g, `import($1${to}$1)`] ] },
     { file: "/lens-browser.js", base: "lens-browser", mk: (to) => [
       [/(["'`])\/lens-browser\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/lens-reader.js",  base: "lens-reader",  mk: (to) => [
@@ -2075,6 +2325,13 @@ let freshFamily: Buffer | null = null;
     { file: "/infotip.js",      base: "infotip",      mk: (to) => [
       [/import\((["'`])\/infotip\.js\1\)/g, `import($1${to}$1)`] ] },
   ];
+  // 5c planned its short names with CONTENT_HASHED as the shell. An asset hashed
+  // here and missing there would take page-driven renames into an /a/ URL again.
+  {
+    const hashedHere = new Set([...ASSETS.map((a) => a.from), ...STRING_ASSETS.map((a) => a.file)].map((f) => `public${f}`));
+    const drift = [...hashedHere].filter((f) => !CONTENT_HASHED.has(f)).concat([...CONTENT_HASHED].filter((f) => !hashedHere.has(f)));
+    if (drift.length) throw new Error(`CONTENT_HASHED (step 5c) and step 6's asset lists disagree on: ${drift.join(", ")}`);
+  }
   {
     // Every staged surface that can carry a loader: HTML pages, the top-level shell
     // scripts themselves (nav.js imports hoist), worker modules, serendipity. NOT the
@@ -2114,7 +2371,7 @@ let freshFamily: Buffer | null = null;
     const run = await readFile(`${OUT}/public${hashedFor["nav-run"]}`, "utf8");
     if (!idx.includes(hashedFor.tooltip)) throw new Error("index.html was not repointed to hashed tooltip.js");
     if (!idx.includes(hashedFor.hoist) || !run.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav-run.js)");
-    if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"])) throw new Error("nav.js was not repointed to its first-interaction islands");
+    if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"]) || !nav.includes(hashedFor["nav-pipes"])) throw new Error("nav.js was not repointed to its first-interaction islands");
     for (const style of ["nav-run", "nav-tray", "infotip"]) {
       if (!nav.includes(hashedFor[`${style}.css`])) throw new Error(`nav.js was not repointed to hashed ${style}.css`);
     }
@@ -2127,6 +2384,9 @@ let freshFamily: Buffer | null = null;
     const lensBoot = await readFile(`${OUT}/public/lens-boot.js`, "utf8");
     if (!lensBoot.includes(hashedFor.lens)) throw new Error("lens-boot.js was not repointed to hashed lens.js");
     if (!lensBoot.includes(hashedFor["lens-webmcp"])) throw new Error("lens-boot.js was not repointed to hashed lens-webmcp.js");
+    const lensWebmcp = await readFile(`${OUT}/public${hashedFor["lens-webmcp"]}`, "utf8");
+    if (!nav.includes(hashedFor.webmcp)) throw new Error("nav.js was not repointed to hashed webmcp.js");
+    if (!lensWebmcp.includes(hashedFor.webmcp)) throw new Error(`${hashedFor["lens-webmcp"]} still imports an unhashed /webmcp.js (webmcp must be hashed before lens-webmcp)`);
     // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
     // and the one the old ordering left pointing at the unhashed duplicate.
     if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
@@ -2154,9 +2414,10 @@ let freshFamily: Buffer | null = null;
   // to src/pages/index.html for the perf-budget twin check — View Source is the
   // authoring source, which keeps the plain /nav.js the fallback still serves).
   // cal/src rides along: /coffee's SSR templates load the shell too, and were the
-  // whole reason the unhashed fallbacks existed. Their nav ref is attribute-shaped so
-  // the ordinary reps catch it; the luna refs are ABSOLUTE (cal.aadhar.sh serves the
-  // same templates, where a relative /luna.css would 404) and get their own pass below.
+  // whole reason the unhashed fallbacks existed. Their nav and luna refs are both
+  // relative and attribute-shaped, so the ordinary reps catch them (the luna ref was
+  // absolute until 2026-09-23 and had its own pass; cal/src/templates.ts says why
+  // that never worked).
   const targets = [`${OUT}/serendipity/serendipity.ts`];
   for (const rel of await readdir(`${OUT}/cal/src`).catch(() => [])) {
     if (rel.endsWith(".ts")) targets.push(`${OUT}/cal/src/${rel}`);
@@ -2186,16 +2447,13 @@ let freshFamily: Buffer | null = null;
   const refCount = rewriteHits.reduce((total, hits) => total + hits, 0);
   const filesTouched = rewriteHits.filter(Boolean).length;
 
-  // /coffee's absolute shell refs (https://aadhar.sh/luna.css) — the attr reps above
-  // only match leading-slash paths, so the absolute form is rewritten here, scoped to
-  // the staged cal modules alone.
+  // /coffee's shell refs ride the ordinary reps above. Assert they landed, since a
+  // cal page left on the unhashed /luna.css keeps working and only loses the
+  // immutable cache, which nothing else would notice.
   {
     const p = `${OUT}/cal/src/templates.ts`;
-    let t; try { t = await readFile(p, "utf8"); } catch { t = null; }
-    if (t !== null) {
-      const out = t.split("https://aadhar.sh/luna.css").join(`https://aadhar.sh${hashedFor.luna}`);
-      if (out !== t) await writeFile(p, out);
-      const now = await readFile(p, "utf8");
+    let now; try { now = await readFile(p, "utf8"); } catch { now = null; }
+    if (now !== null) {
       if (!now.includes(hashedFor.luna)) throw new Error("cal/src/templates.ts was not repointed to hashed luna.css");
       if (!now.includes(hashedFor.nav)) throw new Error("cal/src/templates.ts was not repointed to hashed nav.js");
       console.log(`cal: /coffee templates repointed to ${hashedFor.luna} + ${hashedFor.nav}`);
@@ -2508,10 +2766,8 @@ let freshFamily: Buffer | null = null;
     if (cands.length) await mkdir(`${OUT}/public/ad`, { recursive: true });
     let n = 0, deltaBytes = 0;
     for (const asset of shell) {
-      // Images sit out the dictionary path — see DICTIONARY_TYPES in lib/assets.js. The
-      // worker will never answer an svg with a dcz, so building one here would ship a
-      // delta nothing can ask for.
-      if (asset.ext === "svg") continue;
+      // An svg delta is built like any other and served like any other, since
+      // 2026-09-26 (DICTIONARY_TYPES in lib/assets.ts records why it sat out before).
       const targetBytes = await readFile(`${dir}/${asset.name}`);
       for (const d of cands) {
         if (d.base !== asset.base || d.ext !== asset.ext) continue;
@@ -2653,13 +2909,21 @@ let freshFamily: Buffer | null = null;
   for (const rel of await readdir(`${OUT}/public`, { recursive: true })) served.add("/" + rel);
 
   const idxSrc = await readFile("src/worker/index.ts", "utf8");
-  const wranglerSrc = await readFile("wrangler.jsonc", "utf8");
-  const routesSrc = (idxSrc.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [, ""])[1];
+  const wranglerSrc = await siteConfigText();
+  // The same pattern invariant #1 reads the table with, and the same floor. This
+  // matched `const ROUTES = new Map([...])` until 2026-09-25, a form that stopped
+  // existing on 2026-08-19, so for five weeks routeKeys was EMPTY and every Worker
+  // route resolved only by luck: through a run_worker_first glob, or not at all
+  // under a governed prefix. /garage/dyno.json was the first ref to land in the
+  // gap, when /garage/dyno became the first built page linking it.
+  const routesSrc = (idxSrc.match(/const ROUTE_TABLE(?::[^=]*)? = \[([\s\S]*?)\n\];/) || [, ""])[1];
+  const linkRouteKeys = new Set([...routesSrc.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]));
+  if (linkRouteKeys.size < 60) throw new Error(`link-integrity scanned only ${linkRouteKeys.size} ROUTE_TABLE keys — the scanner has lost the table`);
   const surfaceList = JSON.parse(await readFile("config/site-manifest.json", "utf8")).surfaces;
 
   const resolves = makeResolver({
     files: served,
-    routeKeys: new Set([...routesSrc.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1])),
+    routeKeys: linkRouteKeys,
     allow: runWorkerFirst(wranglerSrc).filter((a) => !a.startsWith("!")),
     surfaces: new Set(surfaceList.map((s) => s.path)),
   });
@@ -2785,7 +3049,7 @@ let freshFamily: Buffer | null = null;
     .sort();
 
   // Canonical request path for a staged asset path. Mirrors the html_handling
-  // rules in wrangler.jsonc (drop-trailing-slash, .html elided) and the
+  // rules in cloudflare.config.ts (drop-trailing-slash, .html elided) and the
   // canonicalPath() the worker applies to the incoming pathname. If these two
   // ever disagree the map silently misses and the page quietly stays loose, which
   // is why the coverage floor below is a HARD failure.
@@ -3050,9 +3314,15 @@ let freshFamily: Buffer | null = null;
 // the failure the contract test refuses: every twin written here must match a
 // run_worker_first rule. The globs below are therefore a declaration of what
 // servePrecompressedText can reach, kept beside the rules that make it true,
-// rather than "every text file". robots.txt, resume.json and the section icons
-// are deliberately absent: none is worth an allowlist rule. /.well-known/* joined
-// on 2026-09-16 when its five exact rows folded into one wildcard.
+// rather than "every text file". robots.txt is deliberately absent: it is
+// q11:check's live control precisely BECAUSE it has no twin, and 311 B to
+// crawlers is not worth giving that up. /.well-known/* joined on 2026-09-16 when
+// its five exact rows folded into one wildcard. The section icons (favicons on
+// 12 pages), /resume.json and the readable .src.html twins under /writing,
+// /lens and /serendipity joined on 2026-09-26, "q11 everywhere", owner call:
+// measured at the edge's q4 against q11, 5,742 B against 5,103 across the ten
+// icons, 2,041 against 1,599 for resume.json, and 6.8 KB over the seven
+// readable twins.
 //
 // Refuses a twin that is not smaller, the same guard the /a/ step carries, and
 // floors the count so a walk that quietly matched nothing reads as the failure
@@ -3072,7 +3342,14 @@ let freshFamily: Buffer | null = null;
     // api-catalog are exact routes through serveFreshAsset and would never read
     // a twin, so a twin for either would be the dead weight this block refuses.
     /^\.well-known\/(?!agent-card\.json$).+\.(?:json|md)$/,
-    /^(?:search-index\.json|llms\.txt|sitemap\.xml)$/,
+    // llms-full.txt joined 2026-09-26. It had been absent since this list was
+    // written, which was worth about 1 KB then and 31,695 B (16.8%) once #903
+    // inlined the explainers and took the corpus from 20.5 KB to 516 KB:
+    // production served 188,404 B against q11's 156,709, and the route is
+    // no-store, so every agent fetch paid it.
+    /^(?:search-index\.json|llms\.txt|llms-full\.txt|sitemap\.xml|resume\.json)$/,
+    /^section-icons\/[^/]+\.svg$/,                // favicons, "/section-icons/*"
+    /^(?:writing|lens|serendipity)\/.+\.src\.html$/, // readable twins, "/*.src.*" spans slashes
   ];
   // Two root-level .md files the Worker renders itself rather than serves from a
   // file, so a twin of the staged copy would describe bytes it never sends.

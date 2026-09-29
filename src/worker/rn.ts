@@ -17,7 +17,7 @@ import { span } from "./lib/trace.ts";
 // updating from a shortcut / curl:
 //   https://aadhar.sh/rn/set?secret=<RN_BUST_SECRET>&url=<new playlist url>
 //
-// required binding:  RN_KV (wrangler.jsonc kv_namespaces)
+// required binding:  RN_KV (cloudflare.config.ts kv_namespaces)
 // required env:      RN_BUST_SECRET (Worker secret)
 //
 // if KV is empty (first deploy, or you deliberately cleared it), the
@@ -537,10 +537,26 @@ export async function handleRnTracks(request, env, ctx) {
 // already on the wire — and it fires far less often than it looks. The fragment
 // is `s-maxage=600`, so the edge answers most requests without waking the worker
 // at all, and after the first warm the cache probe inside short-circuits.
-export async function handleRnTracksHtml(request, env, ctx) {
+//
+// The route calls handleRnTracksHtml. `rnTracksHtml(..., { warm: false })` is
+// for callers that are not a visitor, which today means the :07/:37 perf probe.
+// It is a separate export rather than a fourth parameter on the handler because
+// the router passes the request URL in that slot. The warm spends one Images fetch per cold URL, up to
+// WARM_MAX_URLS of them, in whatever invocation called this. From the probe
+// that invocation is the cron tick cronEnrichTracks runs in, so after a playlist
+// swap (every URL new, every URL cold) the warm spent the tick's 50 subrequests
+// before enrichment could, and enrichment's ledger could not see it. Measured on
+// the 2026-09-27 15:07 tick: `outcome: exception`, 14 x "Too many subrequests",
+// 3 tracks and 6 artists stuck pending. Warming the cron's colo also bought
+// nothing, since the warm exists for the colo about to serve a hover.
+export function handleRnTracksHtml(request, env, ctx) {
+  return rnTracksHtml(request, env, ctx, { warm: true });
+}
+
+export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }) {
   const result = await loadRnTracks(request, env, ctx);
   const res = trackResponse(result.payload, result.status, "html");
-  if (ctx && result.status === 200) {
+  if (ctx && result.status === 200 && opts.warm) {
     ctx.waitUntil(span("rn.art.warm", async (s) => {
       const { warmed, already } = await warmArtCache(result.payload, request, env, ctx);
       // BOTH numbers, because either one alone is ambiguous. `warmed` 0 with
@@ -769,7 +785,9 @@ function withTrackMeta(track, meta) {
   return {
     ...track,
     image_url: meta?.image_url || null,
-    artists:   Array.isArray(meta?.artists) ? meta.artists : [],
+    // `checked` is enrichment bookkeeping (see cronEnrichTracks), so it stays
+    // in the map and out of the payload /rn/tracks serves.
+    artists:   Array.isArray(meta?.artists) ? meta.artists.map(({ checked: _checked, ...a }) => a) : [],
   };
 }
 
@@ -940,13 +958,24 @@ export async function cronEnrichTracks(env, ctx) {
       }
     }));
 
-    // Artists, across the WHOLE map rather than only the tracks just added: an
+    // Artists on the LIVE tracks, including ones added before this tick: an
     // artist whose photo failed last tick is pending until it lands, and it is
     // the same bounded budget either way.
+    //
+    // Two things keep a slot from being spent on an answer we already have.
+    // Only live tracks are walked, because the map keeps a swapped-out
+    // playlist's entries for 30 days, and on 2026-09-27 24 of 38 entries were
+    // stale and their artists were taking slots ahead of the live ones. And an
+    // artist Spotify has NO photo for is marked `checked` once read: its image
+    // stays null, so `!a.image_url` alone made `scarletchoir` pending forever
+    // and cost one of the 6 slots on every tick. The mark lapses on the artist
+    // cache's own TTL, so an artist who uploads a photo is read again.
     const pendingArtists = new Map();
-    for (const id of Object.keys(meta)) {
-      for (const a of (meta[id].artists || [])) {
-        if (!a.image_url && !pendingArtists.has(a.id)) pendingArtists.set(a.id, a.name || "");
+    for (const id of liveSet) {
+      for (const a of (meta[id]?.artists || [])) {
+        const checked = asNumber(a.checked);
+        const settled = a.image_url || (checked !== null && now - checked < ARTIST_KV_TTL * 1000);
+        if (!settled && !pendingArtists.has(a.id)) pendingArtists.set(a.id, a.name || "");
         if (pendingArtists.size >= ENRICH_ARTIST_BUDGET) break;
       }
       if (pendingArtists.size >= ENRICH_ARTIST_BUDGET) break;
@@ -1008,7 +1037,7 @@ export async function cronEnrichTracks(env, ctx) {
     for (const id of Object.keys(meta)) {
       meta[id].artists = (meta[id].artists || []).map(a => {
         const hit = resolved.get(a.id);
-        return hit ? { ...a, image_url: hit.image_url || null, name: a.name || hit.name } : a;
+        return hit ? { ...a, image_url: hit.image_url || null, name: a.name || hit.name, checked: now } : a;
       });
     }
 
@@ -1185,7 +1214,7 @@ export async function handleRnSet(request, env) {
   const id = m[1];
 
   if (!env.RN_KV) {
-    return setPage(500, "no kv binding", "the worker can't see RN_KV — bind it in wrangler.jsonc.");
+    return setPage(500, "no kv binding", "the worker can't see RN_KV — bind it in cloudflare.config.ts.");
   }
   // The request-path readers hold this id for PLAYLIST_ID_CACHE_TTL, so a swap
   // takes up to 15 minutes to reach every colo. The confirmation below names the

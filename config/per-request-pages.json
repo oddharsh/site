@@ -1,0 +1,14 @@
+{
+  "$comment": "Registered surfaces the build does NOT bake, each with the reason it is still rendered per request. build.ts step 5b fails on a registered page with no built file that is missing from this list, and on an entry here that is built, unregistered, or has no reason, so the list can only shrink. Build a page at deploy with lib/island.ts rather than adding it here.",
+  "pages": {
+    "/rn": "a 302 to the Spotify playlist, so there is no document to build; /rn.md renders from the live payload",
+    "/coffee": "cal renders its own templates and cannot import lib/island.ts (gotcha 16), and its free slots move every 30 seconds",
+    "/reading": "the Curius items are nearly all of the page, so an island would carry almost every byte and the shell would save little",
+    "/finger": "a text/plain terminal frame answered per query and negotiated on Accept, not an HTML document",
+    "/radar": "a text/plain terminal frame answered per query and negotiated on Accept, not an HTML document",
+    "/dict": "a text/plain terminal frame answered per query and negotiated on Accept, not an HTML document",
+    "/cache": "a text/plain terminal frame answered per query and negotiated on Accept, not an HTML document",
+    "/encode": "a text/plain terminal frame answered per query and negotiated on Accept, not an HTML document",
+    "/agent-ready": "a text/plain terminal frame answered per query and negotiated on Accept, not an HTML document"
+  }
+}

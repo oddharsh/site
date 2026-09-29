@@ -54,7 +54,7 @@ test("derivations: the pinned set has not collapsed", () => {
 
 test("derivations: the lock covers every pinned input, so a stale result can name what moved", async () => {
   for (const d of graph.filter((x) => x.tier === "pinned")) {
-    const files = await resolveInputs(root, d.inputs);
+    const files = [...(await resolveInputs(root, d.inputs)), ...(d.inputs.bytes ?? [])];
     const missing = files.filter((f) => !(f in lock));
     assert.equal(missing.length, 0, `${d.id}: ${missing.length} inputs absent from the lock, e.g. ${missing[0]}`);
   }
@@ -204,6 +204,86 @@ test("derive: coverage reports an entry left behind by a deleted input", async (
   if (forced.state !== "stale") throw new Error("forced digest mismatch did not read as stale");
   assert.deepEqual(forced.orphaned, ["gone"]);
   await rm(dir, { recursive: true, force: true });
+});
+
+// ── `bytes`: whole-file inputs beside a set ──────────────────────────────────
+// semantics.json read fresh for as long as nobody re-captioned a photo, because
+// its captions and recipes were inputs the set could not see (2026-09-22).
+
+const SET_WITH_BYTES = { paths: ["in"], include: [".jpg"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$", bytes: ["cap.json"] };
+const withCaptions = async () => {
+  const dir = await scratch({ "a.11111111.jpg": "px", "b.22222222.jpg": "px" });
+  await writeFile(path.join(dir, "cap.json"), JSON.stringify({ a: "a dog", b: "a car" }));
+  await writeFile(path.join(dir, "out.json"), JSON.stringify({ a: "t", b: "t" }));
+  return dir;
+};
+
+test("derive: a changed `bytes` file makes a set-mode artifact stale, and names the file", async () => {
+  const dir = await withCaptions();
+  /** @type {Derivation} */
+  const d = { id: "t", tier: "pinned", why: "", outputs: ["out.json"], inputs: SET_WITH_BYTES, covers: "out.json" };
+  const made = await record(dir, d);
+  assert.ok(made, "record() returned nothing");
+  assert.equal((await verify(dir, { ...d, recorded: made.recorded }, made.hashes)).state, "fresh", "control: nothing moved yet");
+
+  await writeFile(path.join(dir, "cap.json"), JSON.stringify({ a: "a zebra", b: "a car" }));
+  const v = await verify(dir, { ...d, recorded: made.recorded }, made.hashes);
+  if (v.state !== "stale") throw new Error(`a re-captioned input read ${v.state}`);
+  assert.deepEqual(v.changed, ["cap.json"]);
+  assert.deepEqual(v.uncovered, [], "a `bytes` file was counted as a key the artifact must cover");
+  await rm(dir, { recursive: true, force: true });
+});
+
+// The reason set mode exists survives the new field: a re-encode still moves nothing.
+test("derive: `bytes` leaves a set-mode digest blind to a re-encode", async () => {
+  const dir = await withCaptions();
+  /** @type {Derivation} */
+  const d = { id: "t", tier: "pinned", why: "", outputs: [], inputs: SET_WITH_BYTES };
+  const before = digestOf((await project(dir, d)).entries);
+  const fs = await import("node:fs/promises");
+  await fs.rename(path.join(dir, "in/a.11111111.jpg"), path.join(dir, "in/a.33333333.jpg"));
+  assert.equal(digestOf((await project(dir, d)).entries), before, "a re-encode moved a set digest that carries `bytes`");
+  await rm(dir, { recursive: true, force: true });
+});
+
+// Lock rows for `bytes` are bare paths, so a re-record prunes one that left and
+// never touches another derivation's `#`-namespaced keys.
+test("derive: `bytes` rows are bare paths in the lock, owned by the derivation that declares them", async () => {
+  const dir = await withCaptions();
+  /** @type {Derivation} */
+  const d = { id: "t", tier: "pinned", why: "", outputs: [], inputs: SET_WITH_BYTES };
+  const made = await record(dir, d);
+  assert.ok(made, "record() returned nothing");
+  assert.ok("cap.json" in made.hashes, "the `bytes` file has no lock row");
+  assert.ok("t#a" in made.hashes && !("a" in made.hashes), "set keys lost their namespace");
+  assert.ok(made.owns("cap.json") && made.owns("t#b") && !made.owns("other#b"), "ownership is misattributed");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("derive: `bytes` outside set mode is refused, and a vanished `bytes` file is an error", async () => {
+  const dir = await withCaptions();
+  await assert.rejects(
+    () => project(dir, { id: "t", tier: "pinned", why: "", outputs: [], inputs: { paths: ["in"], bytes: ["cap.json"] } }),
+    /set mode only/,
+  );
+  await assert.rejects(
+    () => project(dir, { id: "t", tier: "pinned", why: "", outputs: [], inputs: { ...SET_WITH_BYTES, bytes: ["gone.json"] } }),
+    /declared input does not exist: gone.json/,
+  );
+  await rm(dir, { recursive: true, force: true });
+});
+
+// The declaration is only as good as its memory of what the generator reads. These
+// two are the reads strace found; hashes.json it also opens, and correctly stays
+// out, since it only locates the thumbnail for the --vision pass.
+test("derivations: images/semantics declares the caption and recipe files its generator folds in", async () => {
+  const d = graph.find((x) => x.id === "images/semantics");
+  assert.ok(d, "images/semantics left the graph");
+  const src = await readFile(new URL("tools/photos/gen-photo-semantics.ts", ROOT), "utf8");
+  for (const file of ["alt.json", "metadata.json"]) {
+    assert.match(src, new RegExp(`"${file.replace(".", "\\.")}"`), `control: the generator no longer names ${file}; re-trace it`);
+    assert.ok(d.inputs.bytes?.includes(`public/images/${file}`), `images/semantics does not declare public/images/${file}`);
+  }
 });
 
 // ── the lock is rewritten, not accumulated ───────────────────────────────────

@@ -373,6 +373,18 @@ export const AGENT_SURFACES = [
     "description": "Why this site moved from Cloudflare Pages advanced mode to Workers with static assets: an atomic deploy."
   },
   {
+    "path": "/garage/dictionary",
+    "title": "The dictionary the runtime dropped",
+    "mimeType": "text/html",
+    "description": "13 pages here are written per request and ship as plain brotli, because workerd's zstd dropped its dictionary option. What the fix would save, what it costs, and what it cannot reach."
+  },
+  {
+    "path": "/garage/av2",
+    "title": "AV2, before anyone can see it",
+    "mimeType": "text/html",
+    "description": "AV2 still images scored against the AVIF this site ships at matched bytes: ahead on whole-frame thumbnails, behind on dense detail, and why an AV2 file behind a picture fallback still breaks."
+  },
+  {
     "path": "/bot",
     "title": "AadharshBot",
     "mimeType": "text/html",
@@ -444,6 +456,8 @@ export const WEBMENTION_PATHS = [
   "/garage/tooltips",
   "/garage/wire",
   "/garage/workers",
+  "/garage/dictionary",
+  "/garage/av2",
   "/inbox"
 ];
 export const WEBMENTION_SECTIONS = [

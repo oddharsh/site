@@ -25,7 +25,9 @@
     "The 2026-08-28 pixel-tier rerender reproduced all 165 JPEGs byte-for-byte and",
     "reproduced three old AVIF tiles at --speed 4 before taking --speed 2. The same",
     "flag study found --jobs 1 differed from parallel encoding, while 2, 4, and 8",
-    "agreed on those inputs. Preserve these as scoped measurements, not a guarantee",
+    "agreed on those inputs. On 2026-09-27, aom 3.15.0 and 3.15.1 (swapped under one",
+    "zenc and one avifenc binary) reproduced 36 of 36 shipped 4:4:4 tiers on 9 stems",
+    "and 6 of 6 CLI encodes on macOS arm64. Preserve these as scoped measurements, not a guarantee",
     "for a different source, encoder, or configuration.",
     "",
     "Grid ingest and rerenders link the INSTALLED libavif through zenc. The",
@@ -41,7 +43,7 @@
     {
       "bin": "exif-sooc",
       "install": "cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc",
-      "why": "every EXIF read and write in the pipeline. It emits metadata.json's record shape directly and owns the merge, which retired the 50-line jq reshape and build-recipes.py, and on 2026-08-14 it took the last of exiftool's jobs too: orientation reads, -all= strips and -TagsFromFile copies, in ExifTool's own flag spellings. Pinned at 0.2.0 by the guards in the writing scripts: 0.1.0 could not write, and its -all= truncated progressive JPEGs at the first scan, which is every JPEG this pipeline produces",
+      "why": "every EXIF read and write in the pipeline. It emits metadata.json's record shape directly and owns the merge, which retired the 50-line jq reshape and build-recipes.py, and on 2026-08-14 it took the last of exiftool's jobs too: orientation reads, -all= strips and -TagsFromFile copies, in ExifTool's own flag spellings. Pinned at 0.3.0 by the guards in the writing scripts: 0.1.0 could not write, and its -all= truncated progressive JPEGs at the first scan, which is every JPEG this pipeline produces; 0.2.0's -TagsFromFile carried a HEIF's EXIF and silently dropped its XMP item, the only place an X-T50 records an in-camera star rating (oddharsh/exif-sooc#3)",
       "required_by": [
         "tools/photos/add-photos.sh",
         "tools/photos/download-remote-photos.sh",
@@ -53,13 +55,13 @@
         "tools/photos/require-exif-sooc.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
-      "min_version": "0.2.0",
+      "min_version": "0.3.0",
       "version": {
         "flag": "--version",
         "match": "exif-sooc (\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
-      "recorded": "0.2.0"
+      "recorded": "0.3.0"
     },
     {
       "bin": "sips",
@@ -118,6 +120,7 @@
       "install": "brew install cmake",
       "why": "configures and builds the pinned AVIF encoder and its libraries",
       "required_by": [
+        "tools/photos/libavif-avm/build.sh",
         "tools/photos/libavif/build.sh"
       ],
       "version": {
@@ -132,6 +135,7 @@
       "install": "brew install ninja",
       "why": "executes the CMake build for the pinned AVIF encoder",
       "required_by": [
+        "tools/photos/libavif-avm/build.sh",
         "tools/photos/libavif/build.sh"
       ],
       "version": {
@@ -146,8 +150,9 @@
       "install": "brew install git",
       "why": "fetches the pinned AVIF encoder sources; also supplies the tracked-script census for tools:check",
       "required_by": [
-        "tools/photos/libavif/build.sh",
-        "tools/check-tools.ts"
+        "tools/check-tools.ts",
+        "tools/photos/libavif-avm/build.sh",
+        "tools/photos/libavif/build.sh"
       ],
       "version": {
         "flag": "--version",
@@ -178,7 +183,7 @@
         "match": "zenc (?<zenc>\\d+\\.\\d+\\.\\d+) \\(zenjpeg (?<zenjpeg>\\d+\\.\\d+\\.\\d+)\\)"
       },
       "bytes": true,
-      "recorded": "zenc 0.1.0, zenjpeg 0.8.4"
+      "recorded": "zenc 0.2.0, zenjpeg 0.8.4"
     },
     {
       "bin": "timbrado",
@@ -245,7 +250,7 @@
         "match": "Version: (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:v?(?<aom>\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
-      "recorded": "libavif 1.4.2, aom 3.15.0"
+      "recorded": "libavif 1.4.2, aom 3.15.1"
     },
     {
       "bin": "cwebp",
@@ -310,6 +315,7 @@
       "install": "brew install pkgconf libavif",
       "why": "resolves installed libavif development headers and libraries for the native grid encoder",
       "required_by": [
+        "tools/photos/libavif-avm/build.sh",
         "tools/photos/require-zenc.sh"
       ],
       "version": {
@@ -334,7 +340,24 @@
         "match": "libavif (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:v?(?<aom>\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
-      "recorded": "libavif 1.4.2, aom 3.15.0"
+      "recorded": "libavif 1.4.2, aom 3.15.1"
+    },
+    {
+      "bin": "avifenc-avm",
+      "path": "tools/photos/libavif-avm/build/avifenc",
+      "install": "brew install aom cmake ninja pkgconf && tools/photos/libavif-avm/build.sh",
+      "optional": true,
+      "optional_why": "measurement only: codec-knob-probe.ts --codec avm is its one caller and refuses with the build command when it is missing. Nothing in the photo pipeline or the build needs it",
+      "why": "AV2 (AVM 1.0.0) still-image encoder, with avifdec beside it, for the --codec avm arm of codec-knob-probe.ts. libavif pinned by commit with its experimental AVIF_CODEC_AVM on",
+      "required_by": [
+        "tools/photos/codec-knob-probe.ts"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "Version: (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*avm \\[enc/dec\\]:v?(?<avm>\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "bytes_why": "writes scratch AV2 encodes for a probe and commits nothing; no browser decodes AV2, so none of its output can ship"
     }
   ]
 }

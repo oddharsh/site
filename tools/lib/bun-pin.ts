@@ -17,7 +17,7 @@
 // the next runtime control to want this probe is exactly when a second copy
 // gets pasted.
 //
-// WHY THE PIN MATTERS MORE THAN IT LOOKS. wrangler.jsonc's build command is
+// WHY THE PIN MATTERS MORE THAN IT LOOKS. wrangler.config.ts's build command is
 // `bun tools/build.ts`, so the bun this field names is the compiler that mints
 // every content-addressed `/a/` and `/i/` URL production serves. Changing it is
 // a build change wearing a version string.

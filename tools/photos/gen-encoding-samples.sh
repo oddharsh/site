@@ -62,7 +62,18 @@ cp "$base" "$DEST/c-png.png"                                                   #
 sips -s format jpeg --setProperty formatOptions 82 "$base" --out "$DEST/c-sips82.jpg" >/dev/null 2>&1
 # zenc quality ladder; q84 is the shipped thumbnail setting (≈ old jpegli q82).
 for q in 62 84 95; do "$ZENC" "$base" "$DEST/c-zc$q.jpg" -q "$q" >/dev/null 2>&1; done
-exif-sooc -all= -overwrite_original "$DEST"/c-sips82.jpg "$DEST"/c-zc*.jpg >/dev/null
+exif-sooc -all= -overwrite_original "$DEST"/c-sips82.jpg "$DEST"/c-zc62.jpg "$DEST"/c-zc84.jpg "$DEST"/c-zc95.jpg >/dev/null
+
+# Two scan-order twins of c-zc84.jpg for the progressive demos on /garage/encoding
+# and /lwe/encoding. jpegtran reorders the SAME quantized coefficients without
+# decoding them, so all three decode to identical pixels and only the order the
+# bytes arrive in differs: one baseline scan, and libjpeg's standard 10-scan
+# progressive script to set against the 7 scans zenc's search picked. -revert
+# drops mozjpeg's own defaults (it would otherwise write progressive for the
+# "baseline" twin); libjpeg-turbo's jpegtran writes the same bytes.
+MOZ_JTRAN="$(brew --prefix mozjpeg)/bin/jpegtran"
+"$MOZ_JTRAN" -revert -copy none -optimize    "$DEST/c-zc84.jpg" > "$DEST/c-zc84-baseline.jpg"
+"$MOZ_JTRAN" -revert -copy none -progressive "$DEST/c-zc84.jpg" > "$DEST/c-zc84-libjpeg.jpg"
 
 for q in 60 80; do cwebp -q "$q" "$base" -o "$DEST/c-wp$q.webp" >/dev/null 2>&1; done
 
@@ -79,7 +90,7 @@ avifenc -q 85 --yuv 420 $AV "$base" "$DEST/c-av85.avif" >/dev/null 2>&1
 avifenc -q 63 --yuv 444 $AV "$base" "$DEST/c-av63-444.avif" >/dev/null 2>&1
 
 echo ""; echo "COLOR set (${W}x${H}, ${PX}px):"
-for f in c-png.png c-sips82.jpg c-zc62.jpg c-zc84.jpg c-zc95.jpg c-wp60.webp c-wp80.webp c-av40.avif c-av63.avif c-av85.avif c-av63-444.avif; do report "$DEST/$f"; done
+for f in c-png.png c-sips82.jpg c-zc62.jpg c-zc84.jpg c-zc84-baseline.jpg c-zc84-libjpeg.jpg c-zc95.jpg c-wp60.webp c-wp80.webp c-av40.avif c-av63.avif c-av85.avif c-av63-444.avif; do report "$DEST/$f"; done
 
 # ── resolution table: avif q63 4:2:0 vs zenc q84 at 400 / 800 / 1200 ─────────
 echo ""; echo "RESOLUTION table (avif q63 4:2:0  ·  zenc q84):"

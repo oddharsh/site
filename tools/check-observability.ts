@@ -9,7 +9,7 @@
 // what would move spans off that quota, is documented as unavailable on Free.
 // So the lever is knowing the number.
 //
-// The number is not the request count. wrangler.jsonc's observability comment
+// The number is not the request count. cloudflare.config.ts's observability comment
 // budgets in SPANS and says so: one /lens scan is 33-46 spans, which puts the
 // ceiling at roughly 5,000 scans a day. That is the sentence this tool turns
 // into a measurement.
@@ -198,12 +198,9 @@
 // never exercised against an authorized call, because no credential on this
 // workstation carries the grant, so a tier built on them starts unverified.
 
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 
-import { parseJsonc } from "./lib/jsonc.ts";
+import { siteConfig } from "./lib/site-config.ts";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 
 // The published Workers Free ceiling. Printed in the output so the table still
 // explains itself a month from now, and named here so there is one copy.
@@ -232,7 +229,7 @@ const MAX_DAYS = 7;
 const DAY_MS = 86_400_000;
 const API = "https://api.cloudflare.com/client/v4";
 
-// wrangler.jsonc's observability comment records the per-scan span cost. Quoted
+// cloudflare.config.ts's observability comment records the per-scan span cost. Quoted
 // here to turn the ceiling into a number of scans.
 const SPANS_PER_LENS_SCAN = 40;
 
@@ -1037,7 +1034,7 @@ export function dailyTable(opts: {
 }
 
 async function readAccount(): Promise<string> {
-  const wrangler = parseJsonc(await readFile(path.join(ROOT, "wrangler.jsonc"), "utf8")) as Record<string, unknown>;
+  const wrangler = await siteConfig();
   return process.env.CLOUDFLARE_ACCOUNT_ID || (wrangler.account_id as string) || "";
 }
 
@@ -1313,7 +1310,7 @@ export async function main(): Promise<void> {
   }
   const account = await readAccount();
   if (!account) {
-    bad("no account id: wrangler.jsonc has no account_id and CLOUDFLARE_ACCOUNT_ID is unset");
+    bad("no account id: cloudflare.config.ts has no accountId and CLOUDFLARE_ACCOUNT_ID is unset");
     process.exit(2);
   }
 
@@ -1438,7 +1435,7 @@ export async function main(): Promise<void> {
   if (sampling.state === "unreadable") {
     bad(`this response says something about sampling that cannot be read: ${sampling.why}`);
     info("An interval that is not a positive integer leaves every count below scaled by an unknown factor.");
-    info("No table is printed. Read the Observability dashboard, and check head_sampling_rate in wrangler.jsonc.");
+    info("No table is printed. Read the Observability dashboard, and check headSamplingRate in cloudflare.config.ts.");
     process.exit(1);
   }
   const sample = sampling.state === "sampled" ? sampling.interval : 1;
@@ -1484,7 +1481,7 @@ export async function main(): Promise<void> {
     bad(`this dataset is sampled at 1 in ${sample}, so every count returned understates ingestion`);
     info("No table is printed: scaling by the interval would be an estimate, and this tool prints measurements.");
     info(`The window sampled to ${n(windowTotal)} events, which is a floor and not a reading.`);
-    info("Read the Observability dashboard for a sampled account, and check head_sampling_rate in wrangler.jsonc.");
+    info("Read the Observability dashboard for a sampled account, and check headSamplingRate in cloudflare.config.ts.");
     info("Sampling is NOT evidence of being over the daily quota: Cloudflare's own trigger is 5 billion");
     info("logs per account per day, 25,000x the ceiling above, after which 1% head-based sampling applies.");
     process.exit(1);

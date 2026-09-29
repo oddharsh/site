@@ -74,7 +74,8 @@ test("the AVIF parser reads bit depth and subsampling, and monochrome is real", 
     assert.ok(info, `${f} should parse`);
     assert.equal(info.bitDepth, 10, `${f} should be 10-bit — the measured free win`);
     if (info.monochrome) mono += 1; else colour += 1;
-    assert.ok(["4:2:0", "grayscale"].includes(info.subsampling), `${f} unexpected subsampling ${info.subsampling}`);
+    // Colour AVIF tiers are 4:4:4 since 2026-09-26 (zenc/src/avif.c has the why).
+    assert.ok(["4:4:4", "grayscale"].includes(info.subsampling), `${f} unexpected subsampling ${info.subsampling}`);
   }
   // A parser that always answered "monochrome" would still pass every assertion
   // above on a small enough sample. This is the one that catches it.
@@ -170,7 +171,16 @@ test("no ramp sample can hang, and a stall is never reported as an origin error"
   //
   // Source text for the same reason as the test above: the alternative is
   // spawning wrangler against production from the suite.
-  const src = await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8");
+  //
+  // The pair, since 2026-09-22: the sampler and the pinned probe moved to
+  // lib/version-probe.ts so `tools/soak-canary.ts` could reuse them without
+  // deploy-promote's credentialed module-scope setup. Every fetch on the ramp
+  // path is in the second file now, so reading only the first would count zero
+  // of each and pass by measuring nothing.
+  const src = [
+    await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8"),
+    await readFile(new URL("./tools/lib/version-probe.ts", ROOT), "utf8"),
+  ].join("\n");
 
   // Counted rather than matched once, so a SECOND fetch added later without a
   // timeout fails this instead of riding the first one's signal.

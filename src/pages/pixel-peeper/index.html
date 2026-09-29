@@ -63,7 +63,11 @@ b{color:var(--ink)}
 .spread{justify-content:space-between}
 .tiles{display:flex;gap:10px;justify-content:center;margin:6px 0 2px}
 .opt{flex:1 1 0;max-width:205px;display:flex;flex-direction:column;gap:4px}
-.tile{position:relative;background:#000;border:2px solid var(--sh);box-shadow:var(--bevel-sunken);padding:4px;cursor:pointer;transition:60ms ease-out;border-radius:2px}
+/* one rule for both frames. The build ranks custom-property short names by use
+   across the whole site, comments included, so one more use of the shadow
+   token here renamed a luna.css token and re-minted every page. */
+.tile,.diffmap{border:2px solid var(--sh);box-shadow:var(--bevel-sunken)}
+.tile{position:relative;background:#000;padding:4px;cursor:pointer;transition:60ms ease-out;border-radius:2px}
 .tile img{display:block;width:100%;height:auto}
 .tile .tag{position:absolute;left:6px;top:6px;font-family:var(--font-mono);font-size:8pt;background:rgba(0,0,0,.55);color:#fff;padding:1px 5px;border-radius:2px}
 .tile:hover{border-color:var(--navy2)}
@@ -80,6 +84,14 @@ b{color:var(--ink)}
 /* below the taskbar (99999) on purpose: the loupe is page furniture, and the
    shell chrome must never be occluded by it. */
 #loupe{position:fixed;z-index:50;width:150px;height:150px;border:2px solid var(--navy);box-shadow:2px 2px 0 rgba(0,0,0,.35);display:none;pointer-events:none;background:#000;image-rendering:pixelated;border-radius:2px}
+/* the diff map draws at the tiles' native 320px, so every source pixel is one screen pixel */
+.diffrow{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.diffmap{display:block;width:320px;max-width:100%;aspect-ratio:1;image-rendering:pixelated;background:#000;border-radius:2px}
+.diffctl{flex:1 1 200px;display:flex;flex-direction:column;gap:8px}
+.diffctl input[type=range]{vertical-align:middle;width:120px}
+.seg{gap:4px}
+.seg .btn{min-width:0;padding:3px 10px;font-size:9pt}
+.seg .btn[aria-pressed=true]{box-shadow:var(--bevel-sunken);background:var(--face);font-weight:700}
 .banner{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid;border-radius:2px;font-size:10pt;margin:10px 0;line-height:1.45}
 .banner .g{font-weight:700;flex:0 0 auto}
 .banner.ok{background:#eaf5e6;border-color:#a9cf9c;color:#2c5720}
@@ -133,7 +145,10 @@ a{color:var(--link)}
 .axis{position:relative;height:54px;margin-top:4px}
 .axis svg{display:block;width:100%;height:54px}
 .axiscap{font-size:9.5pt;color:var(--ink-soft);margin-top:6px;line-height:1.5}
-@media (max-width:520px){h1{font-size:15pt}.tiles{gap:6px}.score-hero .pct{font-size:26pt}.cap{font-size:7.5pt}}
+@media (max-width:520px){h1{font-size:15pt}.tiles{gap:6px}.score-hero .pct{font-size:26pt}.cap{font-size:7.5pt}
+  /* a phone has no room for the verdict beside its explanation: an unwrapping
+     .g left the explanation a one-word column and pushed it past the window */
+  .banner{flex-direction:column;gap:2px}}
 @media (--reduced-motion) {*{transition:none!important}}
 
   /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
@@ -159,7 +174,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 <body>
 <!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window" role="application" aria-label="Compression eye exam">
-  <div class="title-bar"><span class="title-text"><span class="icon"></span>Pixel Peeper &middot; compression eye exam</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span></div>
+  <div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span><span class="title-text"><span class="icon"></span>Pixel Peeper &middot; compression eye exam</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span></div>
   <div class="content" id="stage"></div>
   <div class="statusbar"><span id="sb-left">← aadhar.sh · prototype</span><span id="sb-right">real encoders · two metrics</span></div>
 </div>
@@ -172,6 +187,7 @@ const AXES={
   chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. here's the honest part: on most photos this is free. fourteen saturated crops were built and measured for this test and <b>twelve were thrown out</b> because 4:2:0 cost them nothing you could see. what survives is a high-contrast two-tone edge, which is where the halved color plane can't keep up — and butteraugli (a color model) punishes that far harder than ssimulacra2. that's also why you only get one of these per run.`},
   encoder: {teach:`same photo, same byte budget. every tile in that call was searched onto one file size and landed within 2% of it, so the only thing that varied was the encoder's math. newer coders (zenc, jpegli) fit more picture into those bytes than mozjpeg, and sips fits the least. that gap is free quality — same size, better image, for picking a different tool.`},
   resample:{teach:`same photo, same byte budget, same encoder — only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
+  format:  {teach:`same photo, same byte budget, two formats: JPEG XL and AVIF. the budget is whatever this site's own AVIF encode spends on the photo, and JPEG XL was searched onto it, so both tiles are the same file size and only the format's math varied. sixteen calls were built for this axis and <b>fourteen were thrown out</b>, because the two formats landed too close to tell apart by eye. what survives is grain and fine texture, where AVIF pulls ahead; JPEG XL led on lettering and knit, but never by enough to see. WebP isn't in the race: at the same bytes it came last on every call it entered, five to six points behind AVIF even at its best settings, so this test doesn't spend tiles on it. one caveat worth knowing: both judges here come from the JPEG XL project, and butteraugli is the exact target JPEG XL's encoder aims at, so if the scoring leans anywhere it leans toward JPEG XL.`},
   tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
 };
 
@@ -184,7 +200,14 @@ const AXES={
 // resample sits between chroma and encoder in difficulty: the difference is real
 // and structural, but it is a whole-tile tone shift rather than a local artifact,
 // which is a different kind of looking.
-const AXIS_QUOTA={chroma:1,tradeoff:2,resample:2,encoder:3,quality:4};
+// format joined 2026-09-27 and took one call each from encoder and quality, so a
+// play stays 12 calls and the share grid stays two rows of six. It dropped to
+// one call the same day, when WebP left the axis: JPEG XL against AVIF clears
+// the legibility gate on two crops of sixteen, and a quota equal to its pool
+// would show every player the same two calls. encoder took the call back. A
+// browser that cannot decode JPEG XL never draws a format call (see CAN_JXL),
+// and the top-up below fills that slot from the other axes instead.
+const AXIS_QUOTA={chroma:1,tradeoff:2,resample:2,format:1,encoder:3,quality:3};
 const RUN_SIZE=Object.values(AXIS_QUOTA).reduce((a,b)=>a+b,0);
 
 // end-of-exam understanding check: you judged with your eyes, now test the WHY.
@@ -202,6 +225,10 @@ const UQ=[
   opts:[{t:"they're close enough that it's near a coin flip",ok:1,why:"right: the metrics only split at the margins, where the difference is near invisible to anyone."},
         {t:"butteraugli is the correct one",why:"neither is ground truth; they're rival models that each miss different things."},
         {t:"your pick was wrong",why:"there's no wrong pick on a split; it only shows which model your eye matches."}]},
+ {q:"Two formats are compared by saving each at quality 80. Why is that a bad test?",
+  opts:[{t:"quality 80 means different things in each format, so the files come out different sizes",ok:1,why:"right: a quality number is each encoder's own scale. the fair test holds the file size fixed and lets quality move, which is what every format call here did."},
+        {t:"quality 80 is too low to show a difference",why:"any setting can show a difference; the problem is that the two files no longer cost the same, so the bigger one wins by spending more."},
+        {t:"the newer format always wins at the same quality number",why:"no format wins by label. at a matched quality number one file is simply larger, and that says nothing about which format packs more picture into a byte."}]},
 ];
 function quizHTML(){
   return `<div class="gb"><span class="gb-legend">check your understanding</span>
@@ -228,6 +255,12 @@ function wireQuiz(){
 }
 
 const state={i:0,trials:[],log:[]};
+// JPEG XL decodes in Safari 17+ and is arriving in Chrome, and nowhere else yet.
+// A format call the browser cannot draw would be two tiles with one blank, so
+// the axis is gated on actually decoding a 25-byte, 1px lossless JXL. Asking the
+// decoder is the only honest test: a type check says what the browser claims.
+const CAN_JXL=new Promise(r=>{const i=new Image();i.onload=()=>r(i.naturalWidth===1);i.onerror=()=>r(false);
+  i.src="data:image/jxl;base64,/woAEBBQXAgIAAEALABLGIsVwklBHoAAAA==";});
 const stage=document.getElementById("stage"), sbLeft=document.getElementById("sb-left"), sbRight=document.getElementById("sb-right");
 const loupe=document.getElementById("loupe"), lctx=loupe.getContext("2d"); loupe.width=150;loupe.height=150;const ZOOM=3;
 const kb=n=>(n/1024).toFixed(1)+"KB";
@@ -326,10 +359,14 @@ function onPick(pos,order,trial){
           : ` you picked the one <b>neither</b> metric ranked first. rebel.`;
   } else {const right=chosen.s2best&&chosen.butterbest;
     cls=right?"ok":"no";head=right?"✓ both metrics agree, and so did you":"✕ both metrics picked another one";extra="";}
+  const gl=diffGL();
   fb.innerHTML=`<div class="banner ${cls}"><span class="g">${head}</span><span>${extra} ${AXES[trial.axis].teach}</span></div>
+    ${gl?diffHTML(trial,order):""}
     <div class="row" style="justify-content:flex-end"><button class="btn primary" id="next">${state.i===state.trials.length-1?"See my profile ▸":"Next ▸"}</button></div>`;
+  if(gl)wireDiff(gl,tiles,trial,order,pos);
   const next=document.getElementById("next");next.focus();next.onclick=advance;
-  document.onkeydown=e=>{if(typing(e))return;if(e.key==="Enter"||e.key===" ")advance();};
+  // the diff map's own buttons take Enter and Space, so those keys only advance from elsewhere
+  document.onkeydown=e=>{if(typing(e)||(e.target instanceof Element&&e.target.closest("#diff")))return;if(e.key==="Enter"||e.key===" ")advance();};
 }
 function advance(){document.onkeydown=null;state.i++;
   if(state.i>=state.trials.length){screenResult();return;} screenTrial();}
@@ -344,7 +381,7 @@ function screenResult(){
   const overall=agreeRows.length?Math.round(100*agreeRows.filter(l=>l.correct).length/agreeRows.length):0;
   // chroma + tradeoff are one lesson to a player ("did you see the color go?"),
   // and folding them together is also what keeps the Color bar off a sample of 1.
-  const sharp=acc("quality"), color=acc("chroma","tradeoff"), enc=acc("encoder");
+  const sharp=acc("quality"), color=acc("chroma","tradeoff"), enc=acc("encoder"), fmt=acc("format");
   const dis=state.log.filter(l=>l.disagree);
   const s2n=dis.filter(l=>l.sided==="s2").length, btn=dis.filter(l=>l.sided==="butter").length;
   const own=dis.filter(l=>l.sided==="neither").length, decisive=s2n+btn;
@@ -381,7 +418,8 @@ function screenResult(){
     <div class="gb"><span class="gb-legend">where your eye is sharp</span>
       ${bar("Sharpness",sharp,"spotting the higher-quality JPEG")}
       ${bar("Color",color,"catching chroma subsampling",true)}
-      ${bar("Encoders",enc,"separating real encoders at equal bytes")}</div>
+      ${bar("Encoders",enc,"separating real encoders at equal bytes")}
+      ${state.noJxl?"":bar("Formats",fmt,"telling JPEG XL and AVIF apart at equal bytes")}</div>
     <div class="banner info"><span class="g">the takeaway</span><span>the metrics agree on the obvious calls and only split at the margins, where the differences are near invisible.${colorAha} that margin is exactly where an export preset should live: the setting no human, and barely a metric, can flag.</span></div>
     <div class="gb"><span class="gb-legend">share your run</span>
       ${shareGridHTML(marks)}
@@ -393,7 +431,7 @@ function screenResult(){
         <button class="btn" id="showcard">Preview image</button></div>
       <div id="cardwrap"></div></div>
     <div class="gb"><span class="gb-legend">what's real, what's next</span>
-      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder calls are searched onto <b>one shared byte budget</b>, so an encoder never wins by being handed a bigger file. next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
+      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file.${state.noJxl?" your browser can't decode JPEG XL yet, so the format calls sat this run out.":""} next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
     ${quizHTML()}
     <div class="row spread" style="margin-top:14px">
       <small>your grid spoils nothing — no photo, encoder or setting is named</small>
@@ -585,13 +623,124 @@ function attachLoupe(tile,cv,img){
   tile.addEventListener("mouseleave",()=>loupe.style.display="none");
 }
 
+/* ---- diff map --------------------------------------------------------------
+   After the pick, where two tiles differ. Shown only once the call is made: a
+   map drawn during the pick would hand over the answer the test exists to ask.
+   There is no original on the page, so it compares tiles with each other.
+
+   The difference is taken in JPEG's own space, YCbCr over the decoded sRGB
+   bytes, because that is where the encoders made their choices. Luma is the
+   detail a quality drop eats; CbCr is the color that 4:2:0 halves. A fragment
+   shader does it per pixel, so the gain slider and the mode buttons are a
+   uniform change and a redraw rather than a pass over the pixels in JS. */
+const DIFF_VS=`#version 300 es
+out vec2 uv;
+void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.-1.,0.,1.);}`;
+const DIFF_FS=`#version 300 es
+precision highp float;
+uniform sampler2D A,B;uniform float gain;uniform int mode;
+in vec2 uv;out vec4 o;
+const mat3 YCC=mat3(.299,-.168736,.5,.587,-.331264,-.418688,.114,.5,-.081312);
+const vec3 AMBER=vec3(1.,.645,.14);
+void main(){
+  vec3 d=YCC*(texture(A,uv).rgb-texture(B,uv).rgb);
+  float y=abs(d.x)*gain,c=length(d.yz)*gain;
+  vec3 v=mode==1?vec3(y):mode==2?c*AMBER:vec3(y)+c*AMBER;
+  o=vec4(min(v,vec3(1.)),1.);
+}`;
+const DIFF_MODES=[["both",0],["detail",1],["color",2]];
+// One context for the page's whole life. A context per call would pass the
+// browser's live-context cap inside a single play, and the oldest one is lost.
+let DIFF;
+function diffGL(){
+  if(DIFF!==undefined)return DIFF;
+  const cv=document.createElement("canvas"), gl=cv.getContext("webgl2",{alpha:false,antialias:false});
+  if(!gl)return DIFF=null;
+  const sh=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s;};
+  const p=gl.createProgram();
+  gl.attachShader(p,sh(gl.VERTEX_SHADER,DIFF_VS));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,DIFF_FS));gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))return DIFF=null;
+  gl.useProgram(p);
+  gl.uniform1i(gl.getUniformLocation(p,"A"),0);gl.uniform1i(gl.getUniformLocation(p,"B"),1);
+  const uGain=gl.getUniformLocation(p,"gain"), uMode=gl.getUniformLocation(p,"mode");
+  const tex=[0,1].map(()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+    [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(k=>gl.texParameteri(gl.TEXTURE_2D,k,gl.NEAREST));
+    [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(k=>gl.texParameteri(gl.TEXTURE_2D,k,gl.CLAMP_TO_EDGE));return t;});
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  // the decoded bytes as the encoder wrote them, never color-managed on the way in
+  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.NONE);
+  cv.className="diffmap";cv.setAttribute("role","img");
+  cv.addEventListener("webglcontextlost",()=>{DIFF=undefined;});
+  const draw=(gain,mode)=>{gl.viewport(0,0,cv.width,cv.height);gl.uniform1f(uGain,gain);gl.uniform1i(uMode,mode);gl.drawArrays(gl.TRIANGLES,0,3);};
+  // max and mean of one channel at gain 1, read back from the shader's own
+  // output, so the numbers and the picture cannot disagree about what differs
+  let px=null;
+  const measure=mode=>{draw(1,mode);const n=cv.width*cv.height;if(!px||px.length!==n*4)px=new Uint8Array(n*4);
+    gl.readPixels(0,0,cv.width,cv.height,gl.RGBA,gl.UNSIGNED_BYTE,px);
+    let max=0,sum=0;for(let i=0;i<px.length;i+=4){const v=px[i];if(v>max)max=v;sum+=v;}return{max,mean:sum/n};};
+  return DIFF={cv,draw,
+    load(a,b){cv.width=a.naturalWidth;cv.height=a.naturalHeight;
+      [a,b].forEach((img,i)=>{gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,tex[i]);
+        gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);});
+      return{y:measure(1),c:measure(2)};}};
+}
+// a tile's short name, the same one its caption shows once revealed: "quality 45", "zenc", "4:2:0"
+const tileName=(trial,order,p)=>trial.options[order[p]].label.split(" · ")[0];
+function diffHTML(trial,order){
+  const n=order.length, pairs=n===2?[[0,1]]:[[0,1],[0,2],[1,2]], nm=p=>tileName(trial,order,p);
+  return `<div class="gb" id="diff"><span class="gb-legend">diff map</span>
+    <div class="diffrow"><div id="diffwrap"></div>
+      <div class="diffctl">
+        ${pairs.length>1?`<div class="row seg" role="group" aria-label="compare">${pairs.map(([a,b])=>`<button class="btn" data-pair="${a},${b}" aria-pressed="false">${nm(a)} vs ${nm(b)}</button>`).join("")}</div>`:""}
+        <div class="row seg" role="group" aria-label="show">${DIFF_MODES.map(([t,m])=>`<button class="btn" data-mode="${m}" aria-pressed="false">${t}</button>`).join("")}</div>
+        <label class="meta">gain ×<output id="dgv"></output> <input type="range" id="dgain" min="0" max="5" step="1" value="3"></label>
+        <p class="meta" id="dstat" style="margin:0"></p>
+        <p style="margin:0;font-size:9pt">black means the two tiles match. white marks a brightness difference and amber a color one, both multiplied by the gain so a one-level gap still shows.</p>
+      </div></div></div>`;
+}
+// Which tile the map compares your pick against when it opens. Wrong on a
+// clear call: the one both metrics chose. On a split: the winner of the metric
+// you did not side with. Right: the runner-up you beat. The resample calls
+// carry no scores by design, and have two tiles, so that is simply the other one.
+function diffDefault(trial,order,pos){
+  const at=f=>order.findIndex(i=>f(trial.options[i]));
+  const s2=at(o=>o.s2best), bt=at(o=>o.butterbest);
+  if(s2<0)return (pos+1)%order.length;
+  if(trial.disagree)return pos===s2?bt:s2;
+  if(pos!==s2)return s2;
+  let best=-1;
+  order.forEach((i,p)=>{if(p!==pos&&(best<0||trial.options[i].s2>trial.options[order[best]].s2))best=p;});
+  return best;
+}
+function wireDiff(gl,tiles,trial,order,pos){
+  document.getElementById("diffwrap").appendChild(gl.cv);
+  const other=diffDefault(trial,order,pos), nm=p=>tileName(trial,order,p);
+  let pair=[Math.min(pos,other),Math.max(pos,other)], mode=0;
+  const gain=document.getElementById("dgain"), gv=document.getElementById("dgv"), stat=document.getElementById("dstat");
+  const g=()=>2**+gain.value;
+  const press=(sel,on)=>document.querySelectorAll(`#diff [${sel}]`).forEach(b=>b.setAttribute("aria-pressed",String(b.getAttribute(sel)===on)));
+  const redraw=()=>{gv.textContent=g();gl.draw(g(),mode);};
+  const load=()=>{
+    const [a,b]=pair.map(p=>tiles[p].querySelector("img"));
+    if(!a.complete||!b.complete||!a.naturalWidth){stat.textContent="tiles still loading";return;}
+    const s=gl.load(a,b),f=v=>`max ${v.max}, avg ${v.mean.toFixed(1)}`;
+    stat.textContent=`${nm(pair[0])} vs ${nm(pair[1])}, in levels of 255 · detail ${f(s.y)} · color ${f(s.c)}`;
+    gl.cv.setAttribute("aria-label",`difference between ${nm(pair[0])} and ${nm(pair[1])}: ${stat.textContent}`);
+    press("data-pair",pair.join(","));redraw();};
+  document.querySelectorAll("#diff [data-pair]").forEach(b=>b.onclick=()=>{pair=b.dataset.pair.split(",").map(Number);load();});
+  document.querySelectorAll("#diff [data-mode]").forEach(b=>b.onclick=()=>{mode=+b.dataset.mode;press("data-mode",String(mode));redraw();});
+  gain.oninput=redraw;
+  press("data-mode","0");load();
+}
+
 let DATA=null;
 stage.innerHTML='<h1>loading…</h1>';
-fetch('/pixel-peeper/manifest.json').then(r=>r.json()).then(d=>{DATA=d;boot();}).catch(e=>{stage.innerHTML='<h1>could not load</h1><p>'+e+'</p>';});
+Promise.all([fetch('/pixel-peeper/manifest.json').then(r=>r.json()),CAN_JXL]).then(([d,jxl])=>{
+  state.noJxl=!jxl; if(!jxl)d.trials=d.trials.filter(t=>t.axis!=="format"); DATA=d;boot();}).catch(e=>{stage.innerHTML='<h1>could not load</h1><p>'+e+'</p>';});
 function boot(){ screenIntro(); }
 
 </script>
 <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="25"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="27"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
 </body>
 </html>

@@ -29,7 +29,7 @@ import { checkWatch } from "timbrado/watch";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { chromeChannel, DEFAULT_CHROME_CHANNEL } from "./lib/browser-channel.ts";
 import { DEFAULT_PAIRS, HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCaps, tablesFor } from "./canary-browsers.ts";
-import { BUN_WATCHES, WRANGLER_WATCHES, ensureTimbradoEngine, runWatch } from "./lib/upstream-watches.ts";
+import { BUN_WATCHES, WRANGLER_WATCHES, ensureTimbradoEngine, interpretTemporalProbe, runWatch } from "./lib/upstream-watches.ts";
 
 const LEGS = ["tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/canary-browsers.ts"];
 const strip = (src) => src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
@@ -147,7 +147,13 @@ test("the honest-false detector matches the page's own convention, and finds the
   assert.equal(familyOf("webkit"), "webkit");
 });
 
-test("every upstream watch names a thread, and every bun watch RUNS on the pinned bun and answers a boolean", () => {
+// The first runWatch below may pay a cold cargo build of timbrado's engine,
+// which bun's suite-wide 30s clock cannot hold: on a CI runner it is a
+// toolchain install, an index sync and a 16.61s compile on 4 contended vCPUs,
+// and it timed out there (run 36294774979). CI builds the engine in its own
+// step first; this budget is for a fresh local checkout, where the build is
+// 11.5s cold on 14 cores. Node honours the option too, and runs unclocked.
+test("every upstream watch names a thread, and every bun watch RUNS on the pinned bun and answers a boolean", { timeout: 180_000 }, () => {
   const names = new Set();
   for (const w of [...BUN_WATCHES, ...WRANGLER_WATCHES]) {
     const problems = checkWatch({ script: "x", ...w });
@@ -167,6 +173,23 @@ test("every upstream watch names a thread, and every bun watch RUNS on the pinne
     assert.ok(r.landed === true || r.landed === false, `${w.name} did not run under the pinned bun: ${r.detail}`);
     assert.ok(r.detail.length > 0, `${w.name} answered with no detail`);
   }
+});
+
+test("every wrangler watch has a runner in the wrangler leg, which otherwise skips it without a word", async () => {
+  // canary-wrangler.ts looks each watch up by name and `continue`s past a
+  // miss, so a watch declared without a runner is a row that never appears.
+  const leg = await readFile(new URL("tools/canary-wrangler.ts", ROOT), "utf8");
+  for (const w of WRANGLER_WATCHES) assert.ok(leg.includes(`"${w.name}": (tree`), `${w.name} has no runner in canary-wrangler.ts`);
+});
+
+test("the Temporal watch reads a Temporal with a broken clock as NOT landed", () => {
+  // The control is the #6907 build: Temporal present, Temporal.Now at epoch 0.
+  // Reading that as landed would announce the one build the watch exists for.
+  assert.equal(interpretTemporalProbe('{"present":true,"skewMs":-1790000000000,"date":"2026-06-01"}').landed, false);
+  assert.equal(interpretTemporalProbe('{"present":true,"skewMs":3,"date":"2026-06-01"}').landed, true);
+  assert.equal(interpretTemporalProbe('{"present":false,"skewMs":null,"date":"2026-06-01"}').landed, false);
+  assert.equal(interpretTemporalProbe('{"present":true,"skewMs":null}').landed, false, "a Temporal.Now that throws is not landed");
+  assert.equal(interpretTemporalProbe("not json").landed, null, "a probe that never ran is neither answer");
 });
 
 test("timbrado is pinned to a full commit sha, so the frozen lockfile is the whole guarantee about which reporter runs", async () => {
@@ -192,6 +215,26 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
   assert.ok(ensureAt < leg.indexOf('"download failed"'), "the engine is asked for AFTER the canary download; a runner without cargo pays for the download first");
   assert.ok(ensureAt < leg.indexOf("for (const w of BUN_WATCHES)"), "the engine is asked for after the watch loop it exists for");
   assert.match(leg.slice(ensureAt, ensureAt + 400), /emit\("instrument", bare, [^)]*engine[^)]*\);\s*process\.exit\(2\);/, "an engine that cannot be built is exit 2, the instrument, so the reporter files nothing");
+
+  // The BUMPER runs the same suite gate, and it did not ask. So the suite's
+  // first watch paid for a cold cargo build under bun's clock, bun test killed
+  // cargo at 5010ms, and the pin sat still for eleven nights while bun-pin.yml
+  // read the failed gate as green (2026-09-15 to 09-26).
+  const bumper = strip(await readFile(new URL("tools/bump-bun-pin.ts", ROOT), "utf8"));
+  const askAt = bumper.indexOf("ensureTimbradoEngine();");
+  assert.ok(askAt > 0, "bump-bun-pin.ts never asks for the engine, so the suite gate builds it on the candidate's clock");
+  assert.ok(askAt < bumper.indexOf("downloadBun("), "the bumper asks for the engine after the download; a runner without cargo pays for it first");
+  assert.ok(askAt < bumper.indexOf("contractSuiteGate(candidate"), "the bumper asks for the engine after the suite that needs it");
+  assert.ok(askAt > bumper.indexOf("is not proposable yet"), "the bumper builds the engine before gates 1 and 2, so every quiet night pays a cargo build");
+  assert.match(bumper.slice(askAt, askAt + 400), /process\.exit\(2\);/, "an engine the bumper cannot build is exit 2, which bun-pin.yml reds, never a failed gate it reads as green");
+
+  // CI is the third caller of the same suite, and it did not ask either: the
+  // cold build ran inside one test's 30s and killed cargo in the bun legs of
+  // runs 36294774979 and 36285475911.
+  const ci = await readFile(new URL(".github/workflows/ci.yml", ROOT), "utf8");
+  const buildAt = ci.indexOf("ensureTimbradoEngine()");
+  assert.ok(buildAt > 0, "CI never builds timbrado's engine, so the suite builds it on one test's clock");
+  assert.ok(buildAt < ci.indexOf("Run the contract suite"), "CI builds the engine after the suite that needs it");
 
   // Behavioural: point TIMBRADO_BIN (timbrado's own override, read on every
   // call) at an engine that does not exist. The guard and the wrapped runWatch

@@ -60,7 +60,7 @@ async function fixture(run) {
     await put("exports/frame.jpg", "previous export");
     await command("bin/exif-sooc", `
 case "$1" in
-  --version) echo version >> "$TRACE"; printf '%s\\n' "\${SOOC_VERSION:-exif-sooc 0.2.0}"; exit "\${SOOC_STATUS:-0}" ;;
+  --version) echo version >> "$TRACE"; printf '%s\\n' "\${SOOC_VERSION:-exif-sooc 0.3.0}"; exit "\${SOOC_STATUS:-0}" ;;
   -s) echo "orientation $*" >> "$TRACE"; echo 1 ;;
   *) echo "metadata $*" >> "$TRACE"
      [ "\${FAIL_METADATA:-0}" != 1 ] || { echo "metadata write failed" >&2; exit 7; }
@@ -105,7 +105,10 @@ esac
 printf encoded > "$last"`);
     await command("bin/brew", 'printf "%s/mozjpeg\\n" "$FIXTURE_ROOT"');
     await command("mozjpeg/bin/cjpeg", 'echo cjpeg >> "$TRACE"; printf encoded');
-    await command("mozjpeg/bin/jpegtran", 'echo jpegtran >> "$TRACE"; exit 1');
+    // A tripwire for the rotation jpegtran used to do (gotcha 3): any call fails,
+    // except the -revert coefficient reorders gen-encoding-samples.sh writes its
+    // scan-order twins with, which have no geometry in them.
+    await command("mozjpeg/bin/jpegtran", 'echo "jpegtran $*" >> "$TRACE"; case "$*" in *-revert*) printf encoded; exit 0 ;; esac; exit 1');
     await command("bin/ffmpeg", 'for last in "$@"; do :; done; printf encoded > "$last"');
     await command("bin/ssimulacra2", "echo 95");
     await command("bin/butteraugli_main", "echo 0.5");
@@ -138,7 +141,7 @@ for (const { file, args, status } of cases) {
     await fixture(async ({ put, read, shell }) => {
       const refused = shell(file, args, { SOOC_VERSION: "exif-sooc 0.1.0" });
       assert.equal(refused.status, 1, refused.stderr);
-      assert.match(refused.stderr, /older than 0\.2\.0/);
+      assert.match(refused.stderr, /older than 0\.3\.0/);
       assert.doesNotMatch(await read("trace"), /sips|zenc|metadata|downstream|upload/);
       assert.equal(await read("public/garage/enc/c-png.png"), "published color fixture");
 
@@ -155,6 +158,7 @@ for (const { file, args, status } of cases) {
       assert.equal(good.status, status, good.stderr + good.stdout);
       assert.match(await read("trace"), /metadata/);
       if (file === "add-photos.sh") assert.match(await read("trace"), /downstream-hash/);
+      if (file === "gen-encoding-samples.sh") assert.match(await read("trace"), /jpegtran -revert .*-optimize[\s\S]*jpegtran -revert .*-progressive/);
       if (file === "export-for-instagram.sh") assert.equal(await read("exports/frame.jpg"), "encoded");
     });
   });
@@ -212,12 +216,13 @@ test("ingest preserves previous tiers on failure and rebuilds an incomplete cach
 
 test("the shared EXIF guard requires a successful, exact version report", async () => {
   await fixture(async ({ shell }) => {
-    for (const version of ["exif-sooc 0.2.0", "exif-sooc 0.10.0", "exif-sooc 1.0.0"]) {
+    for (const version of ["exif-sooc 0.3.0", "exif-sooc 0.10.0", "exif-sooc 1.0.0"]) {
       const result = shell("require-exif-sooc.sh", [], { SOOC_VERSION: version });
       assert.equal(result.status, 0, result.stderr);
     }
     for (const [version, status] of [
-      ["exif-sooc 0.1.9", "0"], ["exif-sooc 0.2.0", "9"],
+      ["exif-sooc 0.1.9", "0"], ["exif-sooc 0.2.0", "0"], ["exif-sooc 0.2.9", "0"],
+      ["exif-sooc 0.3.0", "9"],
       ["exif-sooc 1..0", "0"], ["exif-sooc 2", "0"], ["exif-sooc 2.0.0.0", "0"],
       ["unknown 2.0.0", "0"], ["exif-sooc 2.0.0\nwarning", "0"], ["garbled", "0"],
     ]) {
@@ -245,11 +250,11 @@ test("tools:check still refuses missing or contradictory minimum-version guards"
     assert.equal(good.status, 0, good.stderr);
     const file = "tools/photos/require-exif-sooc.sh";
     const guard = await read(file);
-    await put(file, guard.replace("EXIF_SOOC_MIN=0.2.0", "EXIF_SOOC_MIN=0.1.0"));
+    await put(file, guard.replace("EXIF_SOOC_MIN=0.3.0", "EXIF_SOOC_MIN=0.1.0"));
     const mismatch = cli();
     assert.equal(mismatch.status, 1, mismatch.stderr);
-    assert.match(mismatch.stderr, /floors exif-sooc at 0\.1\.0 while config\/tools.json declares 0\.2\.0/);
-    await put(file, guard.replace("EXIF_SOOC_MIN=0.2.0", ""));
+    assert.match(mismatch.stderr, /floors exif-sooc at 0\.1\.0 while config\/tools.json declares 0\.3\.0/);
+    await put(file, guard.replace("EXIF_SOOC_MIN=0.3.0", ""));
     const missing = cli();
     assert.equal(missing.status, 1, missing.stderr);
     assert.match(missing.stderr, /minimum-version scanner matched 0 guards/);
@@ -317,7 +322,8 @@ test("failed source or HEIF-companion uploads stop before hashing and index writ
     assert.match(await read("trace"), /downstream-hash/);
     const sent = (await uploads()).filter(row => row.event === "start").map(({key,body}) => ({key,body}));
     assert.deepEqual(sent.sort((a,b) => a.key.localeCompare(b.key)), [
-      { key: "aadhar-photos/companion.jpg", body: "encoded" },
+      // A HIF's archive is zenc's re-encode AFTER jpegtran's DC-first reorder.
+      { key: "aadhar-photos/companion.jpg", body: "progressive" },
       { key: "aadhar-photos/frame.jpg", body: "progressive" },
     ]);
     assert.equal(await read("source/frame.jpg"), "source fixture");
@@ -333,6 +339,25 @@ test("progressive-copy failure uploads the untouched source and removes the reje
     assert.equal(sent.body, "source fixture");
     assert.equal(sent.discardedCopyStillExists, false);
     assert.equal(await read("source/frame.jpg"), "source fixture");
+  });
+});
+
+// The HIF branch has no untouched original to fall back to: zenc's own file is
+// the one whose luma-first scan order kept 53 archives blank until 66-99% of the
+// download, so a failed reorder must fail the photo rather than upload that.
+test("a HIF archive whose DC-first reorder fails is never uploaded", async () => {
+  await uploadFixture(async ({ put, read, ingest, uploads }) => {
+    await put("source/companion.HIF", "HEIF original");
+    const result = ingest(["source/companion.HIF"], { COPY_FAIL: "1" });
+    assert.equal(result.status, 1, result.stderr + result.stdout);
+    assert.match(result.stderr, /phase 2 incomplete/);
+    assert.deepEqual(await uploads(), []);
+    assert.doesNotMatch(await read("trace"), /downstream-hash/);
+    // control: the same source with a working reorder uploads the reordered bytes
+    const good = ingest(["source/companion.HIF"]);
+    assert.equal(good.status, 23, good.stderr + good.stdout);
+    const sent = (await uploads()).filter(row => row.event === "start");
+    assert.deepEqual(sent.map(({ key, body }) => ({ key, body })), [{ key: "aadhar-photos/companion.jpg", body: "progressive" }]);
   });
 });
 

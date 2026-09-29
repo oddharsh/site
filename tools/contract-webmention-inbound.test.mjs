@@ -10,6 +10,8 @@ import {
   deferredContext,
   fakeD1,
   handleInbox,
+  handleInboxMail,
+  renderInboxPage,
   handleWebmention,
   handleWebmentionDecision,
   handleWritingIndex,
@@ -84,10 +86,12 @@ test("webmention verifies the source really links back, then moderates before pu
       "the verified path must not spend a second D1 call rereading moderation status");
 
     // 3. it stays out of /inbox until approved.
-    let inbox = await handleInbox(new Request("https://aadhar.sh/inbox"), env, context());
+    let inbox = await handleInboxMail(new Request("https://aadhar.sh/inbox/mail.html"), env, context());
     let html = await inbox.text();
     assert.ok(!html.includes("Resto-mod web"), "a pending mention must not render");
-    assert.match(inbox.headers.get("link") || "", /rel="webmention"/, "the inbox advertises the endpoint");
+    // The mail is an island since 2026-09-25; the built shell is what advertises
+    // the endpoint, with a relative target so one bake is right on every host.
+    assert.match(renderInboxPage().headers.get("link") || "", /<\/webmention>; rel="webmention"/, "the inbox advertises the endpoint");
 
     // 4. a forged approval is refused; only the HMAC-signed one works.
     const id = db.rows[0].id;
@@ -103,7 +107,7 @@ test("webmention verifies the source really links back, then moderates before pu
     assert.equal(db.rows[0].status, "approved");
 
     // 5. now it renders, links out to the source, and is filed under its page.
-    inbox = await handleInbox(new Request("https://aadhar.sh/inbox"), env, context());
+    inbox = await handleInboxMail(new Request("https://aadhar.sh/inbox/mail.html"), env, context());
     html = await inbox.text();
     assert.ok(html.includes("Resto-mod web"), "an approved mention renders");
     assert.ok(html.includes(source), "the row links out to the source");
@@ -114,7 +118,7 @@ test("webmention verifies the source really links back, then moderates before pu
     res = await handleWebmention(wmPost(source, target), env, ctx3);
     assert.equal(res.status, 202);
     await ctx3.settle();
-    inbox = await handleInbox(new Request("https://aadhar.sh/inbox"), env, context());
+    inbox = await handleInboxMail(new Request("https://aadhar.sh/inbox/mail.html"), env, context());
     html = await inbox.text();
     assert.ok(html.includes("Resto-mod web"), "the upsert must return and preserve approved status");
 
@@ -129,7 +133,7 @@ test("webmention verifies the source really links back, then moderates before pu
 });
 
 test("/inbox degrades honestly when the mention store is unbound", async () => {
-  const res = await handleInbox(new Request("https://aadhar.sh/inbox"), { ASSETS: staticAssets({}) }, context());
+  const res = await handleInboxMail(new Request("https://aadhar.sh/inbox/mail.html"), { ASSETS: staticAssets({}) }, context());
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.match(html, /not connected/i, "says the store is missing rather than pretending there is no mail");
@@ -157,7 +161,7 @@ test("every page that accepts a mention also advertises where to send it", async
   // whole point of this test is that the flag is not enough on its own.
   const workerRendered = {
     "/writing": () => handleWritingIndex(new Request("https://aadhar.sh/writing"), { ASSETS: staticAssets({}) }, context()),
-    "/inbox":   () => handleInbox(new Request("https://aadhar.sh/inbox"), { ASSETS: staticAssets({}) }, context()),
+    "/inbox":   () => handleInbox(new Request("https://aadhar.sh/inbox"), { ASSETS: staticAssets({}) }),
   };
 
   for (const path of WEBMENTION_PATHS) {

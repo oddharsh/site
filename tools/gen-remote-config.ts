@@ -2,7 +2,7 @@
 // gen-remote-config.mjs — derive a remote-bindings twin of a wrangler config.
 //
 //   node tools/gen-remote-config.ts wrangler.dev.jsonc            # dev twin
-//   node tools/gen-remote-config.ts wrangler.jsonc --out x.jsonc  # oracle twin
+//   node tools/gen-remote-config.ts .wrangler.site.jsonc --out x.jsonc  # oracle twin (a JSONC config; not the .ts)
 //   node tools/gen-remote-config.ts wrangler.dev.jsonc --d1       # opt into D1
 //
 // WHAT A REMOTE BINDING IS. Your Worker code still runs locally in workerd; the
@@ -11,7 +11,7 @@
 // actual Browser Run service — with your uncommitted edits in the handler.
 //
 // WHY THIS IS GENERATED AND NOT A THIRD COMMITTED CONFIG. There are already two
-// (wrangler.jsonc and wrangler.dev.jsonc), build.ts invariant #6 exists solely
+// (cloudflare.config.ts and wrangler.dev.jsonc), build.ts invariant #6 exists solely
 // to warn when their binding sets drift, and that warning is the evidence that a
 // third hand-maintained copy would rot. A twin derived at the moment of use is a
 // pure function of the config it came from, which is the same argument the
@@ -97,7 +97,7 @@ for (const [key, label] of Object.entries(REMOTABLE)) {
 // Browser Run is a single object rather than an array, and wrangler.dev.jsonc
 // already marks it remote by hand (Quick Actions have no local simulation at
 // all). Setting it here too makes the derived config self-sufficient, so the
-// oracle twin derived from wrangler.jsonc gets it without a second edit.
+// oracle twin derived from cloudflare.config.ts gets it without a second edit.
 if (config.browser && !config.browser.remote) {
   config.browser.remote = true;
   marked.push(`Browser ${config.browser.binding}`);

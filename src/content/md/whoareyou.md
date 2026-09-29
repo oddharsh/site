@@ -10,6 +10,13 @@ are no fixed values to publish here. For the machine-readable form of exactly
 what your request revealed, request
 <https://aadhar.sh/whoareyou.json>, which returns the same fields as JSON.
 
+The page itself is identical for every visitor and is built once at deploy.
+The values arrive in a second request, to
+<https://aadhar.sh/whoareyou/values.html>, an HTML fragment the edge renders
+for that request alone. So they describe the request that fetched them,
+normally the same connection as the page. The referrer is the exception, and
+the browser fills that row in from what it sent with the page.
+
 ## What the live page shows
 
 - **Network adapter**: the IP that connected, its ASN and network operator, and

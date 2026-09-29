@@ -22,8 +22,33 @@ test("every JSON script type the tree ships is recognised, and JavaScript is not
 test("whitespace outside strings goes, whitespace inside strings stays, values survive", () => {
   const body = '\n  {\n    "why": "two  spaces\\tand a tab",\n    "ok": [ 1, 2.50, true, null ],\n    "n": { "a": "b" }\n  }\n';
   const out = minifyJsonScript("probe", body);
-  assert.equal(out, '{"why":"two  spaces\\tand a tab","ok":[1,2.5,true,null],"n":{"a":"b"}}');
+  // `2.50` stays `2.50`. Shortening it would save a byte and is safe HERE,
+  // while the same rewrite on 2^53 + 1 changes the value, and the pass has no
+  // way to tell those apart after JSON.parse has already made both a double.
+  // So it deletes whitespace and touches nothing else; the test below is the
+  // case that argument is made for.
+  assert.equal(out, '{"why":"two  spaces\\tand a tab","ok":[1,2.50,true,null],"n":{"a":"b"}}');
   assert.deepEqual(JSON.parse(out), JSON.parse(body));
+});
+
+test("a number reaches the output exactly as it was authored", () => {
+  // 2^53 + 1 is the smallest integer a double cannot hold, so the canonical
+  // round trip silently renumbers it. A snowflake id, a chain amount and a
+  // nanosecond timestamp are all past that line.
+  const body = '{"id": 9007199254740993, "wei": 1000000000000000000001, "t": 1.7000000000000002e9, "z": -0}';
+  const out = minifyJsonScript("probe", body);
+  for (const literal of ["9007199254740993", "1000000000000000000001", "1.7000000000000002e9", "-0"]) {
+    assert.ok(out.includes(literal), `${literal} survived: ${out}`);
+  }
+  // The CONTROL, and the reason the deep-equal guard beside it cannot stand in
+  // for this one: the naive round trip changes the digits, and comparing two
+  // PARSED copies of that output reports them EQUAL, because both lost the same
+  // information. (`-0` above is the one drift that guard can see, since strict
+  // deep equality separates -0 from 0. Precision is the half it cannot.)
+  const precision = '{"id": 9007199254740993}';
+  const naive = JSON.stringify(JSON.parse(precision));
+  assert.ok(!naive.includes("9007199254740993"), `control: naive round trip renumbers it (${naive})`);
+  assert.deepEqual(JSON.parse(naive), JSON.parse(precision), "control: the value comparison cannot see the loss");
 });
 
 test("a string that would end the script element is re-escaped, and the value is unchanged", () => {

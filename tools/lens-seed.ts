@@ -46,6 +46,7 @@ import { join } from "node:path";
 import { chromium } from "playwright-core";
 import { chromeChannel } from "./lib/browser-channel.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { siteWranglerArgs } from "./lib/site-config.ts";
 import { lensChipTargets } from "./lib/lens-chips.ts";
 import { readDocument } from "./lib/html-to-md.ts";
 import { documentTally } from "../src/worker/lens-render.ts";
@@ -62,7 +63,7 @@ const valueOf = (name, fallback) => {
 
 const DRY = has("--dry-run");
 const ORIGIN = (valueOf("--origin", "https://aadhar.sh") || "").replace(/\/+$/, "");
-const NAMESPACE = valueOf("--namespace-id", "3cb8a107c58e47dc9244e75b33401f36"); // RN_KV, wrangler.jsonc
+const NAMESPACE = valueOf("--namespace-id", "3cb8a107c58e47dc9244e75b33401f36"); // RN_KV, cloudflare.config.ts
 const TTL = Number(valueOf("--ttl", "86400"));
 const SHOTS = !has("--no-shot");
 const WIRE = !has("--no-wire");
@@ -291,6 +292,10 @@ async function keyUrl(url) {
   return url;
 }
 
+// The site config for the account pin, resolved once: `kv key put` refuses
+// --x-new-config, so this is `-c` on the generated legacy file (lib/site-config.ts).
+const SITE_CONFIG_ARGS = await siteWranglerArgs([]);
+
 function kvPut(key, file, label) {
   // Through wranglerCommand, which names the RUNTIME rather than a package
   // manager. This spawned "pnpm" until 2026-08-23, three days after main became
@@ -300,7 +305,7 @@ function kvPut(key, file, label) {
   // its one recorded exception, on a reason that described driving a package
   // SCRIPT while the code reached through a manager to another binary.
   execFileSync(...wranglerCommand(["kv", "key", "put", key, "--path", file,
-    "--namespace-id", NAMESPACE, "--remote", "--ttl", String(TTL)]),
+    "--namespace-id", NAMESPACE, "--remote", "--ttl", String(TTL), ...SITE_CONFIG_ARGS]),
     { stdio: ["ignore", "ignore", "inherit"] });
   process.stdout.write(`      wrote ${label} -> ${key}\n`);
 }

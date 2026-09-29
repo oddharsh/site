@@ -20,7 +20,8 @@
 import type { Env, SiteRequest } from "./lib/env.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
-import { unsafeHtml } from "./lib/html.ts";
+import { html, unsafeHtml } from "./lib/html.ts";
+import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, jsonResp } from "./lib/http.ts";
 
 const RATE_USD = 0.01;      // the site's posted price (the /llms-full.txt cent), not a market quote
@@ -29,7 +30,7 @@ const DATASET = "aadhar_bot_ledger";
 
 // UA-substring → identity. Specific tokens before general ones. AadharshBot
 // is deliberately absent: lens self-scans would have us billing ourselves.
-const CRAWLERS = [
+export const CRAWLERS = [
   ["oai-searchbot",      "OAI-SearchBot",      "OpenAI",       "answers"],
   ["chatgpt-user",       "ChatGPT-User",       "OpenAI",       "answers"],
   ["gptbot",             "GPTBot",             "OpenAI",       "train"],
@@ -249,18 +250,44 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
 }
 
 // ── /ledger — the invoice ───────────────────────────────────────────
-export function handleLedger(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  return cachedRender(request, ctx, () => renderLedger(env), "/ledger", env);
+// /ledger is a BUILT document since 2026-09-25: build.ts step 5b bakes
+// renderLedgerPage() once, so the invoice paper, the terms and 4 KB of CSS ship
+// as a q11 twin with a dcz delta and an ETag. The part the bookkeeper reads
+// (the line items, the total and the cost line) is the island at LINES_URL,
+// edge-cached behind cachedRender for the five minutes the page used to take.
+export const LINES_URL = "/ledger/lines.html";
+
+export function handleLedgerLines(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  return cachedRender(request, ctx, async () => {
+    const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
+    return islandResponse(renderLedgerLines(q, cost), { "cache-control": "public, max-age=60, s-maxage=300" });
+  }, LINES_URL, env);
 }
+
+// The placeholder model: one unread line per crawler this ledger can name,
+// which is what the trailing window has held in production, and the one-line
+// cost note. No crawler is named, since the order is by hits and unknown here.
+const PENDING = { pending: true } as const;
 
 const KIND_LABEL = { search: "search indexing", train: "model training", answers: "AI answers (live retrieval)" };
 
-async function renderLedger(env: Env) {
-  const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
-  const { items, totalHits, totalUsd } = priced(q.ok ? q.rows : []);
+/** The island: line items, total and cost line, for a read or the placeholder. */
+export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: BillableRead | typeof PENDING) {
+  const dots = "…";
+  const pending = "pending" in q;
+  const { items, totalHits, totalUsd } = priced(!pending && q.ok ? q.rows : []);
 
   let tableRows;
-  if (q.ok && items.length) {
+  if (pending) {
+    tableRows = CRAWLERS.map(() => `
+      <tr>
+        <td class="mono">${dots}</td>
+        <td>${dots}<br><span class="dim">${dots}</span></td>
+        <td class="num">${dots}</td>
+        <td class="num">$${RATE_USD.toFixed(2)}</td>
+        <td class="num">${dots}</td>
+      </tr>`).join("");
+  } else if (q.ok && items.length) {
     tableRows = items.map((r) => `
       <tr>
         <td class="mono">${esc(r.bot)}</td>
@@ -281,7 +308,9 @@ async function renderLedger(env: Env) {
   // per-bot column, because the billing feed cannot attribute a cent to a
   // crawler and a modelled split would read as measured next to the real hits.
   let costLine;
-  if (cost.ok) {
+  if ("pending" in cost) {
+    costLine = `<div class="lg-cost"><span class="lg-cost-sub">${dots}</span></div>`;
+  } else if (cost.ok) {
     const families = cost.services.length ? cost.services.join(", ") : "no billed products";
     costLine = `<div class="lg-cost">Cost of actually running this account, same ${WINDOW_DAYS} days: <b>$${cost.totalUsd.toFixed(2)}</b> ${esc(cost.currency)}
       <span class="lg-cost-sub">Cloudflare's billing feed, account-wide (${esc(families)}) — not the crawlers' share, which nobody can compute.</span></div>`;
@@ -291,6 +320,17 @@ async function renderLedger(env: Env) {
     costLine = `<div class="lg-cost"><span class="lg-cost-sub">The cost side is unreachable right now (${esc(cost.reason)}).</span></div>`;
   }
 
+  return unsafeHtml(`
+      <table class="lg">
+        <tr><th>crawler</th><th>operator</th><th class="num">pages</th><th class="num">rate</th><th class="num">amount</th></tr>
+        ${tableRows}
+      </table>
+      <div class="lg-total"><span>Total due</span> <b>$${pending ? dots : totalUsd.toFixed(2)}</b> <span class="dim" style="font-size:8.6pt; align-self:center;">(${pending ? dots : totalHits.toLocaleString("en-US")} pages)</span></div>
+      ${costLine}`);
+}
+
+/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
+export function renderLedgerPage() {
   const css = `/*min*/
 h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:var(--blue-40); margin:0 0 2px; font-weight:bold; }
 .lg-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:10pt; }
@@ -330,9 +370,12 @@ table.lg .empty { color:oklch(50% 0 0); font-size:9pt; padding:14px 4px; text-al
 footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:14px; padding-top:11px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
 footer a { color:oklch(42.61% 0.2353 263.74); }
 @media (max-width:560px){ .lg-stamp{ font-size:14pt; top:110px; right:12px; } }
+/* the island's failure note, shown only if the line-items request failed */
+.lg-fail { display:none; color:oklch(50% 0 0); font-size:8.6pt; margin:8px 0 0; }
+#lg-lines[data-state="failed"] + .lg-fail { display:block; }
 `;
 
-  const body = `
+  const body = html`
     <h1>The Crawl Ledger</h1>
     <p class="lg-lede">AI crawlers read this site all month; nobody pays. Here's the arithmetic anyway — every identified crawler hit on a worker-served route, priced at the same one cent <a href="/llms-full.txt">/llms-full.txt</a> charges. The uncollected revenue of one small site on the open web, itemized. See any page's terms through <a href="/lens">the lens</a>.</p>
 
@@ -343,12 +386,8 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <div class="lg-invno"><b>INVOICE</b><div>period: trailing ${WINDOW_DAYS} days</div><div>issued monthly &middot; collected never</div></div>
       </div>
       <p class="lg-billto"><b>Bill to:</b> the operators below, per their own user-agent strings.</p>
-      <table class="lg">
-        <tr><th>crawler</th><th>operator</th><th class="num">pages</th><th class="num">rate</th><th class="num">amount</th></tr>
-        ${tableRows}
-      </table>
-      <div class="lg-total"><span>Total due</span> <b>$${totalUsd.toFixed(2)}</b> <span class="dim" style="font-size:8.6pt; align-self:center;">(${totalHits.toLocaleString("en-US")} pages)</span></div>
-      ${costLine}
+      ${islandMount("lg-lines", LINES_URL, renderLedgerLines(PENDING, PENDING), html`<p>The line items arrive in a second request after the page loads, and that needs a script. Without one, <a href="${LINES_URL}">${LINES_URL}</a> shows them as plain HTML, and <a href="/ledger.json">/ledger.json</a> as JSON.</p>`)}
+      <p class="lg-fail">The request for the line items failed, so the invoice stays blank rather than guessed. <a href="${LINES_URL}">${LINES_URL}</a> has them as plain HTML.</p>
     </div>
 
     <div class="lg-terms">
@@ -371,8 +410,9 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     width: 760,
     description: "An invoice for the AI crawlers that read aadhar.sh: every identified bot hit in the last 30 days, priced at one cent a page. Issued monthly, collected never.",
     robots: "index, nofollow",
+    head: islandPreload(LINES_URL),
     css,
-    body: unsafeHtml(body),
-    cache: "public, max-age=60, s-maxage=300",
+    body,
+    scripts: islandScript(),
   });
 }

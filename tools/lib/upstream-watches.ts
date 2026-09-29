@@ -66,6 +66,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Reading, runWatch as measureWatch, type Watch } from "timbrado/watch";
 
+import { asNumber, asRecord, asText } from "../../src/worker/lib/parse.ts";
 import { OXC_MINIFY_OPTIONS } from "./oxc-minify-options.ts";
 
 export type { Watch, WatchResult } from "timbrado/watch";
@@ -277,10 +278,58 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
     landed: "the workerd this wrangler ships compresses SMALLER with the right zstd dictionary than with none (tools/workerd-zstd-probe.ts), which is what a runtime dcz tier for the pages build.ts cannot precompress would need; cloudflare/workerd#7106 is this repository's fix for cloudflare/workerd#6967",
     measured: "2026-09-15, workerd 1.20260911.1 via wrangler 982b806: 73 none / 73 good / 73 wrong, the option is accepted and ignored",
   },
+  // RETIRED 2026-09-26: `wrangler-types-accepts-x-new-config`. It watched the
+  // COMMAND, and what it waited for was the NEED, an Env for cf-garage that
+  // follows cloudflare.config.ts. workers-sdk#15778 met the need through another
+  // door: `wrangler build --x-new-config --x-cf-build-output` writes
+  // cf-garage/.cloudflare/types/index.d.ts, and tools/gen-runtime-types.ts runs
+  // it before every typecheck. `types --x-new-config` still exits 1 on the pin
+  // (3572193, "Unknown arguments"), so the watch would have gone on reading
+  // false while the thing it stood for already shipped. The build door is a
+  // GATE now (typecheck fails without its file), which is the stronger form.
   {
-    name: "wrangler-types-accepts-x-new-config",
-    issue: "https://github.com/cloudflare/workers-sdk",
-    landed: "`wrangler types --x-new-config` runs in cf-garage/ and writes the file, so the generated Env types can follow cloudflare.config.ts instead of a snapshot from `wrangler dev` (gotcha 41 records the refusal; no upstream issue is filed for it)",
-    measured: "2026-09-15, wrangler 982b806 (main): exit 1, `Unknown arguments: x-new-config, xNewConfig`",
+    // The revisit for Vitest in the Worker suite. #703 took the pool out, and
+    // on 2026-09-22 the owner chose to hold the harness test in its place and
+    // come back to Vitest once the plugin can ride the SAME workers-sdk commit as
+    // the wrangler pin. It depends on `wrangler: workspace:*`, so any other
+    // commit's build puts a second wrangler, miniflare and workerd in the tree.
+    // The peer range is the behaviour here rather than a version string: per
+    // workers-sdk#15618 the plugin refuses to start a Vitest outside it.
+    name: "vitest-plugin-accepts-vitest-5",
+    issue: "https://github.com/cloudflare/workers-sdk/pull/15500",
+    landed: "the @cloudflare/vitest-plugin build published at the wrangler pin's own workers-sdk commit declares a vitest peer range that admits 5.0.0, so the Worker suite can move to Vitest 5 with one wrangler, one miniflare and one workerd in the tree (#703's property)",
+    measured: "2026-09-22, via pkg.pr.new: 6906bf0 (the pin) and cd7508c (main) both `^4.1.0`, false; the control is PR #15500's own build 7b89dc4, `^4.1.11 || ^5.0.0`, true",
+  },
+  {
+    // Not a fix this repository filed. It watches a vendor switch that already
+    // flipped once without notice: cloudflare/workerd#6907 exposed Temporal in
+    // production with `Temporal.Now` stuck at epoch 0, and every `typeof
+    // Temporal` guard in a Worker changed paths that week. The CLOCK is part of
+    // "landed", so a rerun of that build reads not-yet rather than landed.
+    name: "workerd-exposes-temporal",
+    issue: "https://github.com/cloudflare/workerd/issues/6907",
+    landed: "the workerd this wrangler ships exposes a Temporal under production's compatibility date and flags, and `Temporal.Now.instant()` agrees with Date.now() within a minute (tools/workerd-temporal-probe.ts); until then Worker code here uses Date and the client islands keep their typeof guard",
+    measured: "2026-09-23, workerd 1.20260921.1 via wrangler a1f05a3 at compatibility_date 2026-06-01: Temporal absent; V8's harmony_temporal is compiled in and no compat flag enables it",
   },
 ];
+
+/**
+ * Reads tools/workerd-temporal-probe.ts's one JSON line. Landed means present
+ * AND sane: a Temporal whose clock is more than a minute off Date.now() is the
+ * #6907 failure, and reading it as landed would announce the one build this
+ * watch exists to warn about. A line that does not parse is `null`, which by
+ * rule 3 moves nothing.
+ */
+export function interpretTemporalProbe(stdout: unknown): { landed: boolean | null; detail: string } {
+  let raw: unknown = null;
+  try { raw = JSON.parse(String(stdout).trim().split("\n").at(-1) ?? ""); } catch { /* left null on purpose */ }
+  const parsed = asRecord(raw);
+  if (!parsed || (parsed.present !== true && parsed.present !== false)) return { landed: null, detail: "probe did not run" };
+  const date = asText(parsed.date);
+  const at = date ? ` at ${date}` : "";
+  if (parsed.present === false) return { landed: false, detail: `Temporal absent${at}` };
+  const skew = asNumber(parsed.skewMs);
+  if (skew === null) return { landed: false, detail: `Temporal present${at} but Temporal.Now threw` };
+  const sane = Math.abs(skew) <= 60_000;
+  return { landed: sane, detail: `Temporal present${at}, clock ${sane ? "agrees" : "is off"} by ${skew} ms` };
+}

@@ -5,8 +5,10 @@ homepages, identified as `AadharshBot/1.0 (+https://aadhar.sh/bot)`, and reports
 what each one answered.
 
 **This twin describes the surface rather than mirroring it, because the contents
-change with every crawl.** The data already ships as JSON, so read that instead
-of scraping the page:
+change with every crawl.** The page itself is built once per deploy, and the
+crawl's rows arrive after load from `/around/snapshot.html`, an HTML fragment
+rendered from the last snapshot. The data already ships as JSON, so read that
+instead of scraping the page:
 
 - `https://aadhar.sh/around/json` is the current crawl
 - `https://aadhar.sh/around/changes.json` is what moved since the last one

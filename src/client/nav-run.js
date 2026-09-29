@@ -102,6 +102,8 @@ export function createRun(options) {
     { label: "garage · tooltips", path: "/garage/tooltips", hint: "tooltip experiments" },
     { label: "garage · wire", path: "/garage/wire", hint: "the first build step + the brotli rabbit hole" },
     { label: "garage · workers", path: "/garage/workers", hint: "off Pages, onto Workers" },
+    { label: "garage · dictionary", path: "/garage/dictionary", hint: "runtime dcz deltas, and the workerd fix they wait on" },
+    { label: "garage · av2", path: "/garage/av2", hint: "AV2 stills vs shipped AVIF, and the picture fallback trap" },
     // generated:garage-pages:end
     // Raycast deep-link easter eggs — fire built-in Raycast commands (every Raycast
     // user has these). kind "raycast" → location.href to the protocol URL: the OS
@@ -198,7 +200,7 @@ export function createRun(options) {
 
   function render() {
     var q = input.value.trim().toLowerCase();
-    var items = PAGES.concat(ACCESSORIES, WRITING || [], PROFILES, PHOTOS || []);
+    var items = PAGES.concat(ACCESSORIES, SAVERS, WRITING || [], PROFILES, PHOTOS || []);
     if (q) {
       items = items.map((it) => { return { it: it, s: score(it, q) }; })
         .filter((x) => { return x.s >= 0; })
@@ -207,7 +209,7 @@ export function createRun(options) {
         .slice(0, 40);
     } else {
       // empty: show pages + writing + profiles + a handful of photos as a "directory"
-      items = PAGES.concat(ACCESSORIES, WRITING || [], PROFILES, (PHOTOS || []).slice(0, 8));
+      items = PAGES.concat(ACCESSORIES, SAVERS, WRITING || [], PROFILES, (PHOTOS || []).slice(0, 8));
     }
     // Search Companion: semantic matches from the LWE index, prepended as their own
     // group. Debounced fetch; the results fold in on a later render with the same query.
@@ -234,9 +236,9 @@ export function createRun(options) {
       sel = items.length ? 0 : -1;
     }
     lastQuery = q;
-    var groups = { search: [], page: [], accessory: [], writing: [], profile: [], photo: [], raycast: [] };
-    var order  = ["search", "page", "accessory", "writing", "profile", "photo", "raycast"];
-    var names  = { search: "Search Companion", page: "Pages", accessory: "Accessories", writing: "Writing", profile: "Profiles", photo: "Photos", raycast: "Raycast" };
+    var groups = { search: [], page: [], accessory: [], saver: [], writing: [], profile: [], photo: [], raycast: [] };
+    var order  = ["search", "page", "accessory", "saver", "writing", "profile", "photo", "raycast"];
+    var names  = { search: "Search Companion", page: "Pages", accessory: "Accessories", saver: "Screen Savers", writing: "Writing", profile: "Profiles", photo: "Photos", raycast: "Raycast" };
     // defensive: a kind with no bucket must NOT throw and blank the whole palette.
     // that's the bug this fixes — the empty-query "directory" lists every PAGES
     // item incl. the kind:"raycast" easter eggs, and groups["raycast"] was
@@ -271,7 +273,7 @@ export function createRun(options) {
           ' aria-selected="' + (g.i === sel) + '">' +
           '<span class="nm">' + esc(g.it.label) + "</span>" +
           (g.it.hint ? '<span class="ht">' + esc(g.it.hint) + "</span>" : "") +
-          '<span class="pa">' + esc(g.it.kind === "profile" ? "↗" : g.it.kind === "raycast" ? "↗ raycast" : g.it.kind === "accessory" ? "↗ window" : g.it.path) + "</span>" +
+          '<span class="pa">' + esc(g.it.kind === "profile" ? "↗" : g.it.kind === "raycast" ? "↗ raycast" : g.it.kind === "accessory" ? "↗ window" : g.it.kind === "saver" ? "↗ preview" : g.it.path) + "</span>" +
           "</" + (navigable ? "a" : "div") + ">";
       });
     });
@@ -368,6 +370,7 @@ export function createRun(options) {
     if (!item) return;
     closeRun();
     if (item.kind === "accessory") openAccessory(item.accId);  // floating built-in app — opens here, no navigation
+    else if (item.kind === "saver") { if (options.saver) options.saver(); }  // previews the idle screen saver; the page stays
     else if (item.kind === "raycast") location.href = item.path;   // protocol deep link → OS hands it to Raycast; page stays
     else if (item.kind === "profile") window.open(item.url, "_blank", "noopener");
     else location.assign(item.path);
@@ -383,6 +386,13 @@ export function createRun(options) {
   /** @type {RunItem[]} */
   var ACCESSORIES = [
     { label: "Clock", hint: "the current time, ticking", kind: "accessory", accId: "clock", path: "", icon: "🕐", build: buildClock }
+  ];
+  // The screen saver nav.js starts on idle, previewed from here the way XP's
+  // Display Properties had a Preview button. The hint carries the .scr name so
+  // typing "sspipes" finds it, which is how you would have launched it from Run.
+  /** @type {RunItem[]} */
+  var SAVERS = [
+    { label: "3D Pipes", hint: "screen saver · sspipes.scr", kind: "saver", path: "" }
   ];
   function accFront(win) { front(win); }
   function openAccessory(id) {

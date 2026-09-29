@@ -70,10 +70,10 @@ function decodeBase64(value) {
   if (match) { mime = match[1].toLowerCase(); raw = match[2]; }
   if (!raw || raw.length > Math.ceil(INPUT_CAP / 3) * 4 + 64 || !/^[A-Za-z0-9+/\s]+=*$/.test(raw)) return null;
   try {
-    const binary = atob(raw.replace(/\s/g, ""));
-    if (binary.length > INPUT_CAP) return null;
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    // the strip stays: fromBase64 skips ASCII whitespace alone, and the check above
+    // admits all of \s, so dropping it would start refusing an NBSP it accepts today
+    const bytes = Uint8Array.fromBase64(raw.replace(/\s/g, ""));
+    if (bytes.length > INPUT_CAP) return null;
     return { bytes, mime };
   } catch { return null; }
 }

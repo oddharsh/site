@@ -267,7 +267,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 <!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div id="loupe" popover="manual" class="loupe" aria-hidden="true"><div class="bar"><span>loupe</span><span class="z">3.2&times;</span></div><div class="glass" id="loupe-glass"></div></div>
 <div class="window">
-  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/thumbnail encoding study</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="title-bar" aria-hidden="true"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span><span class="title-text"><span class="icon"></span>aadhar.sh/garage/thumbnail encoding study</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
     <h1>Thumbnail encoding study <span class="status shipped">shipped</span></h1>
     <p class="lede">
@@ -443,33 +443,106 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       perf.now() 2018</a>: the same bytes, reordered, show a recognisable picture at a quarter of the
       file, and it costs nothing because it is not an extra request or a placeholder tier.</p>
 
-    <p class="note">Every JPG this site ships is already progressive, thumbnails included: 158 of 158
-      parse as <code>SOF2</code>, and the scan search picks a good script. On a representative
-      31.3&nbsp;KB thumbnail the seven scans land at these points in the file, so the first three,
-      which is where an image becomes recognisable, are inside the first third:</p>
+    <h3>What a scan actually is</h3>
+    <p class="note">A JPEG stores each 8&times;8 block as 64 quantized DCT coefficients: one DC term, the
+      block&apos;s average, and 63 AC terms for finer and finer detail. Baseline writes every block
+      complete in a single pass, top to bottom, so half the file is the top half of the picture.
+      Progressive writes the same coefficients over several passes, each called a <em>scan</em> and
+      each covering the whole frame. A scan header names its channels, a band of coefficients
+      (<code>Ss</code>..<code>Se</code>: DC alone, then coarse AC, then fine) and a bit precision
+      (<code>Ah</code>/<code>Al</code>: the high bits first, the low bits in later refinement scans).
+      Nothing is quantized twice, so the finished pixels match.</p>
+    <p class="note">The <a href="/lwe/encoding#demo-progressive">/lwe/encoding demo</a> takes that last
+      claim off the honour system. <code>jpegtran</code> rewrote the shipped q84 fixture into a baseline
+      file and into libjpeg&apos;s standard 10-scan script without decoding it, all three decode to
+      byte-identical pixels, and a slider hands each cut-off file to <em>your</em> browser&apos;s decoder.
+      The shipped file&apos;s own scan headers read:</p>
     <table class="enc-table">
-      <thead><tr><th>scan</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr></thead>
+      <thead><tr><th>scan</th><th>channels</th><th>carries</th><th>starts at</th></tr></thead>
       <tbody>
-        <tr><td>byte offset</td><td class="num">0%</td><td class="num">15%</td><td class="num">34%</td>
-            <td class="num">85%</td><td class="num">87%</td><td class="num">90%</td><td class="num">94%</td></tr>
+        <tr><td>1</td><td>Y</td><td>DC (block averages)</td><td class="num">2%</td></tr>
+        <tr><td>2</td><td>Y</td><td>AC 1&ndash;2</td><td class="num">11%</td></tr>
+        <tr><td>3</td><td>Y</td><td>AC 3&ndash;63</td><td class="num">24%</td></tr>
+        <tr><td>4</td><td>Cb</td><td>DC (block averages)</td><td class="num">83%</td></tr>
+        <tr><td>5 &#9733;</td><td>Cr</td><td>DC (block averages)</td><td class="num">85%</td></tr>
+        <tr><td>6</td><td>Cb</td><td>AC 1&ndash;63</td><td class="num">86%</td></tr>
+        <tr><td>7</td><td>Cr</td><td>AC 1&ndash;63</td><td class="num">92%</td></tr>
       </tbody>
     </table>
 
-    <p class="note"><b>And you will never see it work on a thumbnail.</b> At a 32&nbsp;KB median, a
-      typical 10-packet initial congestion window (~14&nbsp;KB) already carries 45% of the file, so
-      those first three scans arrive in the opening flight and the tile paints once. The scan search
-      still earns its place at this size, purely for the bytes it saves. The rendering half of the
-      feature is dormant.</p>
+    <p class="note">The three files are also the byte half of the story. A progressive AC scan can code a
+      run of all-zero blocks as one symbol, and each scan carries Huffman tables fitted to its own
+      statistics; refinement scans give some of that back in correction bits. So the libjpeg script
+      lands <b>1.7% over</b> baseline (16,609 against 16,324 bytes) while zenc&apos;s searched order
+      lands <b>0.6% under</b> it (16,234). A smaller progressive file is a property of a good script.</p>
 
-    <p class="note">It wakes up at <a href="/photos">the full-size archive</a>. <code>/images/full/</code>
+    <h3>Chrome paints nothing until every channel has started <span class="status review">measured</span></h3>
+    <p class="note">Cut a progressive JPEG anywhere and Chromium draws what the coefficients so far
+      imply, missing rows and all, with one exception that decides everything: it paints nothing
+      until Y, Cb and Cr have each begun a scan. The gate is exact to the byte. On the fixture
+      the Cr DC scan header starts at byte 13,753 and its data at 13,763; a prefix ending anywhere up
+      to 13,760 fails to decode, and one ending at 13,765 paints. <code>ImageDecoder</code> fed the
+      same prefixes as a stream agrees, so this is the streaming path a visitor gets, and truncated
+      blobs are a faithful stand-in for it. Measured in Chromium 152; the starred row above is the
+      gate, and the LWE demo shows whether your engine keeps it.</p>
+    <p class="note">zenc&apos;s search scores bytes and nothing else, and at thumbnail size the winning
+      order often sends the whole luma plane before either chroma plane. On the fixture that puts
+      the gate at 84.8%, so the shipped file paints once, at the end, like a slow baseline. Across the
+      library&apos;s 255 colour JPG tiles the gate sits at a median 80% of the file: 99 paint within
+      their first quarter, and the other 156 wait past halfway.</p>
+    <p class="note"><b>On a thumbnail that barely matters.</b> The JPG tile is the fallback most
+      browsers never fetch, and it is small: a median 48.7&nbsp;KB, with the gate at a median
+      19.3&nbsp;KB. A 10-packet initial congestion window carries about 14&nbsp;KB, so 116 of the 255
+      reach their gate in the opening flight and the rest one round trip later. The scan search still earns its place
+      at this size, purely for the bytes it saves.</p>
+
+    <p class="note">It matters at <a href="/photos">the full-size archive</a>. <code>/images/full/</code>
       is the one image surface here with no AVIF tier and no <code>&lt;picture&gt;</code> around it:
-      the worker streams ~10&nbsp;MB from R2 as bare <code>image/jpeg</code>, and that single file is
-      the whole payload. That is also the awkward part of the format story, because <b>AVIF
+      the worker streams a median 21.6&nbsp;MB from R2 as bare <code>image/jpeg</code>, and that single
+      file is the whole payload. That is also the awkward part of the format story, because <b>AVIF
       structurally cannot do this</b>. Its layered mode caps at four stages, is effectively
       Chromium-only, and is staged rather than incremental the way a JPEG scan script is; nothing
       here emits layered AVIF anyway. So the format that wins every byte comparison on this page
       loses the one property that matters when a single large image <em>is</em> the page. Both are
       true at once, which is why the grid is AVIF and the archive is JPEG.</p>
+
+    <h3>A fifth of the archive had the order wrong <span class="status shipped">fixed</span></h3>
+    <p class="note">The gate applies to the archive too, where it costs seconds. Each of the 258 files
+      was streamed from R2 until every channel had started, giving up at 3&nbsp;MB, then again after
+      the repair below. Each cell is the group&apos;s median first paint, as a share of the file:</p>
+    <table class="enc-table">
+      <thead><tr><th>archive files</th><th>count</th><th>before</th><th>after</th></tr></thead>
+      <tbody>
+        <tr><td>colour, all of luma before any chroma</td><td class="num">53</td><td class="num">93.4%</td><td class="num">0.023%</td></tr>
+        <tr><td>colour, zenc&apos;s DC-first script</td><td class="num">154</td><td class="num">3.9%</td><td class="num">0.022%</td></tr>
+        <tr><td>colour, baseline, top rows down</td><td class="num">1</td><td class="num">0.080%</td><td class="num">0.084%</td></tr>
+        <tr><td>colour, JPG original through <code>jpegtran</code></td><td class="num">48</td><td class="num">0.53%</td><td class="num">unchanged</td></tr>
+        <tr><td>grayscale, one channel</td><td class="num">2</td><td class="num">0.34%</td><td class="num">unchanged</td></tr>
+      </tbody>
+    </table>
+    <p class="note">All 53 were HIF re-encodes, and the cause is narrower than &quot;the search picked
+      badly&quot;. zenjpeg trial-encodes two scripts and keeps the smaller: jpegli&apos;s default,
+      which opens with each channel&apos;s DC, and the winner of a mozjpeg-style search, which zenjpeg
+      serializes with luma&apos;s DC and every luma AC scan ahead of chroma&apos;s DC. On 53 of 207
+      40&nbsp;MP frames the second script won by bytes, and every one of them started colour between 66
+      and 99% of the file. XT508165 was the worst: 98.4% of 23.8&nbsp;MB, about nine seconds of blank
+      frame on a 20&nbsp;Mbps link before a finished picture appeared in one step, which is precisely
+      the experience the archive is progressive to avoid.</p>
+    <p class="note">The repair never decodes a pixel. <code>jpegtran -progressive</code> rewrote the
+      scan script of every HIF archive, all 207, around the same quantized coefficients: collapsing
+      old and new to one baseline encoding gives byte-identical files for every one, each metadata
+      segment survives byte for byte, and <code>djpeg</code> decodes both to the same pixels.
+      mozjpeg&apos;s own search is free to interleave DC, so each file now opens with one scan that
+      starts all three channels, and Chrome&apos;s first paint lands 4 to 6&nbsp;KB in.</p>
+    <p class="note">The bytes split by group. The 53 came out 0.11% smaller. The 154 that already
+      painted by 5% came out 0.27% larger, a median 74&nbsp;KB each, and that was a deliberate trade:
+      74&nbsp;KB more on a ~22&nbsp;MB download to start painting about 800&nbsp;KB sooner. Across all
+      207 the pass costs 0.17%, and <code>add-photos.sh</code> now runs it after zenc on every new
+      HIF.</p>
+    <p class="note">The one baseline file, XT508887, is the camera&apos;s own JPEG, kept on purpose when
+      the HIF archives were re-encoded in July. Fuji writes a single baseline scan with stock Huffman
+      tables, so the same lossless pass made it progressive and 7.4% smaller, 16.4 to 15.2&nbsp;MB,
+      with its first paint at 0.084%.</p>
 
     <h3>What the archive tier actually costs</h3>
     <p class="note">The archive is a second encode: a HIF is decoded to lossless PNG, then re-encoded
@@ -495,18 +568,141 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       anywhere else. Comparing a direct downscale of the HIF against a downscale of the archive JPEG,
       the same pair that reads 88.15 at full resolution reads <b>94.62 at 1080px</b>: averaging ~50
       source pixels into one washes most encoding artifacts out. Delivery scale forgives the second
-      encode. A 10&nbsp;MB download does not, which is the whole reason the archive is progressive.</p>
+      encode. A 20&nbsp;MB download does not, which is the whole reason the archive is progressive.</p>
+
+    <h2>Chroma: hold the bytes, then compare <span class="status shipped">shipped</span></h2>
+    <p class="note">The two AVIF q63 cards in the showdown put 4:4:4 at 11.3&nbsp;KB against 4:2:0&apos;s
+      10.4&nbsp;KB, and this page used to conclude from them that full chroma was a byte tax. Those cards
+      hold the <em>quality knob</em> fixed, so the 4:4:4 card also comes out better, and the two halves of
+      that conclusion were never measured at once. The fair comparison fixes the bytes and lets quality
+      move. Scored that way, on the tiles the grid actually serves, the call reverses:</p>
+    <table class="enc-table">
+      <thead><tr><th>tier</th><th>shipped 4:2:0</th><th>4:4:4, same bytes</th><th>4:4:4 ahead on</th></tr></thead>
+      <tbody>
+        <tr><td>600&times;600</td><td class="num">78.25</td><td class="num">+0.45</td><td class="num">18 of 24</td></tr>
+        <tr><td>400&times;400</td><td class="num">79.25</td><td class="num">+0.52</td><td class="num">16 of 24</td></tr>
+        <tr><td>200&times;200</td><td class="num">79.80</td><td class="num">+0.59</td><td class="num">15 of 24</td></tr>
+      </tbody>
+    </table>
+    <p class="note">SSIMULACRA2 over 24 photos from both cameras, and butteraugli agrees on every tier.
+      In bytes, 4:2:0 needs a median <b>2.2% more</b> on the 600 tile to reach 4:4:4&apos;s score.</p>
+    <p class="note"><b>Why more chroma helps when the camera recorded less.</b> Every color original here
+      is 4:2:2, but that describes the 7728&times;5152 frame. A 600px tile is the frame&apos;s centre square
+      reduced 8.6&times;, so each tile pixel averages about four color samples across and nine down, and
+      at its own size the tile carries full color. 4:2:0 then discards half of it in each direction.
+      With no compression at all, halving the color and restoring it scores 93.1 to 93.5 on the three
+      tiles against 96.3 on a crop at native resolution: the downscale is what makes subsampling expensive.
+      It barely costs bytes to keep, because full-resolution color in a reduced photo is smooth, and AV1
+      codes smooth planes for very little.</p>
+    <p class="note">It matters most under red light. Red carries only 0.299 of the brightness in the
+      BT.601 matrix these files signal, so fine detail in a red scene lives mostly in the color planes.
+      One night frame of bare branches against red windows needs <b>35% more bytes</b> at 4:2:0 to match
+      4:4:4.</p>
+    <p class="note">Each layout was scored at the shipped tile&apos;s exact byte count. avifenc&apos;s quality
+      knob moves in steps of a few percent, so every score is interpolated between the two steps on
+      either side of the budget, and the reproduced 4:2:0 tiles matched the shipped ones byte for byte
+      (72 of 72) before anything was compared. <code>tools/photos/avif-chroma-probe.ts</code> reruns it.</p>
+
+    <h2>JPEG XL: where it loses, and what it would buy</h2>
+    <p class="note">Safari has decoded JPEG XL since version 17, Chrome Canary turned it on by default at
+      155, and Firefox has it on the way. So the format this page never tested needs an answer. It
+      could help this site in three places: replacing the AVIF tiles, repacking the archive JPEGs
+      without loss, or decoding faster. All three were measured.</p>
+
+    <h3>The tiles: AVIF wins every one</h3>
+    <p class="note">24 photos from both cameras. Each shipped AVIF tile was first reproduced byte for
+      byte (72 of 72), then JPEG XL was searched onto exactly its byte count, at <code>-e 9</code> with
+      its gaborish and EPF filters off, the best of the settings tried:</p>
+    <table class="enc-table">
+      <thead><tr><th>tier</th><th>AVIF q63 4:4:4</th><th>JPEG XL, same bytes</th><th>JPEG XL ahead on</th></tr></thead>
+      <tbody>
+        <tr><td>600&times;600</td><td class="num">79.50</td><td class="num">73.65</td><td class="num">0 of 24</td></tr>
+        <tr><td>400&times;400</td><td class="num">80.70</td><td class="num">73.50</td><td class="num">0 of 24</td></tr>
+        <tr><td>200&times;200</td><td class="num">81.54</td><td class="num">74.24</td><td class="num">0 of 24</td></tr>
+      </tbody>
+    </table>
+    <p class="note">SSIMULACRA2, and butteraugli agrees on 70 of the 72. To match the 600 tile, JPEG XL
+      needs a median <b>36.6% more bytes</b> (11% to 58%, over the 22 photos where the search reached a
+      match). Every other setting trailed too: filters on by 6.09, <code>-e 7</code> by 6.53, and
+      modular mode by 4.08, ahead on 2 of 24 by SSIMULACRA2 and on none by butteraugli. Both metrics
+      came out of the JPEG XL project, so if the scoring leans anywhere, it leans toward JPEG XL.</p>
+    <p class="note">These tiles sit at 0.57 to 0.92 bits per pixel, which is AV1&apos;s home ground: its
+      video tools code smooth areas like sky and out-of-focus background for almost nothing. JPEG
+      XL&apos;s published advantage is at higher bitrates, which this page hasn&apos;t measured.</p>
+
+    <h3>The archive: an 8% lossless repack</h3>
+    <p class="note">JPEG XL can repack an existing JPEG and give back the identical file on decode.
+      Twelve archive originals from production (3 Leica Monochrom, 9 X-T50) went from 238.1&nbsp;MB to
+      218.7&nbsp;MB, <b>8.17% smaller</b> (4.45% to 11.27% per file), and all 12 decoded back to the
+      original bytes. <code>-e 9</code> buys about 0.3% more. That&apos;s well under the ~20% usually
+      quoted, probably because every file here already carries optimized Huffman tables and the X-T50
+      ones are <code>q100</code>. Which of the two matters hasn&apos;t been isolated.</p>
+
+    <h3>Decode time</h3>
+    <p class="note">Chrome Canary 156 on an M3 Max: <code>createImageBitmap</code> on a fresh Blob,
+      median of 40 runs per tile and 7 per frame, formats interleaved. The 40&nbsp;MP AVIF and lossy
+      JPEG XL files are matched to 3.37&nbsp;MB.</p>
+    <table class="enc-table">
+      <thead><tr><th>format</th><th>600 tile</th><th>40&nbsp;MP frame</th></tr></thead>
+      <tbody>
+        <tr><td>JPEG (zenc q84 tile, progressive archive)</td><td class="num">1.6 ms</td><td class="num">716 ms</td></tr>
+        <tr><td>AVIF q63 4:4:4</td><td class="num">4.1 ms</td><td class="num">228 ms</td></tr>
+        <tr><td>JPEG XL <code>-e 7</code></td><td class="num">4.6 ms</td><td class="num">151 ms</td></tr>
+        <tr><td>JPEG XL, filters off</td><td class="num">3.2 ms</td><td class="num">88 ms</td></tr>
+        <tr><td>JPEG XL, lossless copy of the JPEG</td><td class="num">n/a</td><td class="num">144 ms</td></tr>
+      </tbody>
+    </table>
+    <p class="note">On a tile everything lands under 5&nbsp;ms, so the format costs a visitor nothing
+      there. At 40&nbsp;MP JPEG XL is fastest because it decodes in parallel: the image is cut into
+      independent blocks. libjxl took 1.5 to 1.9&nbsp;s on one thread for the same frame and about
+      0.25&nbsp;s on all of them, so the lead is spare cores and should narrow on a machine with fewer.
+      The two filters run while decoding, which is why switching them off speeds it up. The archive
+      JPEG is slowest of all, since Chrome appears to decode a progressive JPEG on one thread.</p>
+    <p class="note">Hardware AV1 decoding doesn&apos;t change any of this. The color tiers are 4:4:4,
+      which is AV1&apos;s High profile, and most consumer hardware decoders implement only Main
+      (4:2:0). As far as I know, Chrome and Firefox decode AVIF in software with dav1d anyway.</p>
+
+    <h3>What paints before the download finishes</h3>
+    <p class="note">The progressive section above says AVIF can&apos;t render incrementally. Measured:
+      a server sent Chrome the first part of a 40&nbsp;MP file and held the connection open, and a
+      screenshot recorded what had painted.</p>
+    <table class="enc-table">
+      <thead><tr><th>format</th><th>first paint</th><th>after that</th></tr></thead>
+      <tbody>
+        <tr><td>progressive JPEG (the archive)</td><td>part at 2%, all at 5%</td><td>refines</td></tr>
+        <tr><td>JPEG XL, lossless copy of it</td><td>5%</td><td>refines</td></tr>
+        <tr><td>JPEG XL <code>-p</code> (+4.5% bytes)</td><td>2%</td><td>sharpens at every step</td></tr>
+        <tr><td>JPEG XL, default</td><td>between 10% and 25%</td><td>near-final at once</td></tr>
+        <tr><td>AVIF, layered</td><td>5%</td><td>unchanged until complete</td></tr>
+        <tr><td>AVIF (what the tiles ship)</td><td>only when complete</td><td></td></tr>
+      </tbody>
+    </table>
+    <p class="note">The screenshots were 400&times;600, where a 1:8 preview already looks nearly final, so
+      the early frames would read blurrier full-screen.</p>
+
+    <p class="note"><b>Where this lands: nothing changes.</b> The tiles stay AVIF. Every browser that
+      decodes JPEG XL also decodes AVIF, and AVIF wins at these sizes, so a JPEG XL
+      <code>&lt;source&gt;</code> would either never be picked or make the tiles worse. The JPG
+      fallback only reaches browsers without AVIF, which rules JPEG XL out there too. The archive is
+      the one real opening: a lossless copy would be 8% smaller, decode about 5&times; faster in
+      Chrome, and still paint early. It isn&apos;t shipped, because a visitor saving the original
+      would get JPEG XL bytes behind a <code>.jpg</code> link, and serving it means two R2 objects per
+      photo and a cache keyed on <code>Accept</code>.</p>
 
     <h2>What aadhar.sh actually ships</h2>
     <ul class="enc-ships">
-      <li><b>AVIF primary</b> (<code>q63</code>, <code>4:2:0</code> color / <code>4:0:0</code> gray) +
+      <li><b>AVIF primary</b> (<code>q63</code>, <code>4:4:4</code> color / <code>4:0:0</code> gray) +
         <b>zenc JPG q84</b> (zenjpeg hybrid+scan) as the universal fallback, via <code>&lt;picture&gt;</code>.</li>
-      <li><b>Pre-cropped 600/400 squares</b>, metadata-stripped: the file <em>holds exactly</em> the displayed
+      <li><b>Pre-cropped 600/400/200 squares</b>, metadata-stripped: the file <em>holds exactly</em> the displayed
         pixels, so no off-square or EXIF bytes ride along.</li>
-      <li><b>4:2:0 over 4:4:4</b> for color: storing the full chroma at 4:4:4 costs ~8% more
-        bytes (the two AVIF q63 cards above) and buys no visible gain at thumbnail size, so 4:2:0 hands you free quality.</li>
+      <li><b>4:4:4 over 4:2:0</b> for color, since 2026-09-26: at equal bytes it scores higher on every
+        tile size, because a downscaled photo has full color to keep (the chroma section above).
+        The tiles ship at the same <code>q63</code>, where 4:4:4 lands about 6% heavier across the library
+        (+5.6%, +6.5% and +7.0% on the 600, 400 and 200 tiles) and scores 1.3 to 1.7 higher: the
+        equal-bytes win, plus a deliberate spend on quality. Holding bytes flat would have meant
+        <code>q62</code>, at +0.4% to +1.7% and +0.5 to +1.0.</li>
       <li><b>Full-res share copies in R2 at JPEG <code>q100 4:2:2</code></b>, progressive: 4:2:2 matches
-        the HIF&apos;s native sensor chroma, and the scan order is the point at 10&nbsp;MB. The true HEIF
+        the HIF&apos;s native sensor chroma, and the scan order is the point at 20&nbsp;MB. The true HEIF
         originals stay on local disk. A JPG-source original is uploaded byte-for-byte from the camera,
         rearranged to progressive by <code>jpegtran</code> on the way up: a lossless coefficient
         reorder, never a re-encode.</li>
@@ -514,7 +710,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>shipped byte counts are real output from <code style="font-family:var(--font-mono);font-size:9pt">avifenc · zenc · cwebp · sips</code>; the corpus table is a reproducible <code style="font-family:var(--font-mono);font-size:9pt">zenjpeg 0.8.4</code> run.</small></p>
+      <p><small>shipped byte counts are real output from <code style="font-family:var(--font-mono);font-size:9pt">avifenc · zenc · cwebp · cjxl · sips</code>; the corpus table is a reproducible <code style="font-family:var(--font-mono);font-size:9pt">zenjpeg 0.8.4</code> run.</small></p>
     </footer>
 
     <hr>
@@ -666,24 +862,24 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       ]
     },
     {
-      "q": "Color thumbnails ship at 4:2:0 chroma subsampling instead of full 4:4:4. What tradeoff did the study measure?",
+      "q": "The camera records 4:2:2 color, yet the AVIF thumbnails ship at full 4:4:4. Why does keeping more chroma than the original had win?",
       "options": [
         {
-          "t": "4:4:4 costs about 8% more bytes and buys no visible gain at thumbnail size, so 4:2:0 is effectively free.",
+          "t": "A thumbnail is the frame reduced about 9x, so it carries full color at its own size; 4:2:0 would discard real detail, and 4:4:4 scores higher at the same bytes.",
           "ok": true,
-          "why": "Compare the two AVIF q63 cards: 10.4 KB against 11.3 KB, with no difference you can point at under the loupe. That's quality budget for free."
+          "why": "The chroma section scores every layout at the shipped tile's exact byte count: 4:4:4 comes out about 0.5 SSIMULACRA2 ahead on all three tile sizes, and 4:2:0 needs a median 2.2% more bytes to catch up."
         },
         {
-          "t": "4:2:0 halves the file size, which outweighs the visible color smearing it causes.",
-          "why": "Both halves of that overshoot: the measured gap is about 8%, and at 400px there's no smearing to see. Scroll back to the two q63 cards and check with the loupe."
+          "t": "It doesn't win per byte; the site simply chose to pay about 8% more for better color.",
+          "why": "It wins before any extra byte is spent: at equal bytes 4:4:4 scores 0.45 to 0.59 higher. The shipped tiles do run about 6% heavier at q63, and that buys more quality on top of the free part."
         },
         {
-          "t": "4:4:4 fails to decode in some browsers, so 4:2:0 is the compatibility floor.",
-          "why": "Every sampling mode here decodes anywhere the format itself does; format support is what the picture element's fallback handles. The choice is purely bytes versus visible gain."
+          "t": "4:4:4 restores the color detail the camera's 4:2:2 threw away.",
+          "why": "Nothing can restore what the sensor pipeline never kept. The gain comes from the downscale: averaging many source pixels into one tile pixel leaves full-resolution color at tile size, which 4:2:0 would then halve."
         },
         {
-          "t": "Subsampling only applies to the JPEG fallback; the AVIF primary always keeps full chroma.",
-          "why": "The AVIF cards are labeled 4:2:0 for a reason: the primary is subsampled too. Only the grayscale frames change mode, and that's to 4:0:0."
+          "t": "Browsers upsample 4:2:0 chroma badly, so any subsampled AVIF looks smeared.",
+          "why": "The scores come from the reference decoder, with no browser involved. Halving the color and restoring it with no compression at all already costs a tile 6.5 to 6.9 points, so the loss is in the halving itself."
         }
       ]
     },
@@ -713,9 +909,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       "q": "AVIF beats JPEG by ~34-36% at every resolution on this page, and the grid is AVIF-primary because of it. So why is the full-size archive at /images/full/ a JPEG?",
       "options": [
         {
-          "t": "A ~10 MB file is served as bare image/jpeg with no <picture> around it, so scan order IS the loading experience, and AVIF cannot render incrementally the way a progressive JPEG can.",
+          "t": "A ~20 MB file is served as bare image/jpeg with no <picture> around it, so scan order IS the loading experience, and AVIF cannot render incrementally the way a progressive JPEG can.",
           "ok": true,
-          "why": "Both facts hold at once. AVIF wins every byte comparison here, and it still loses the one property that matters when a single large image is the whole payload: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 32 KB; the archive is JPEG because rendering order dominates at 10 MB."
+          "why": "Both facts hold at once. AVIF wins every byte comparison here, and it still loses the one property that matters when a single large image is the whole payload: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is JPEG because rendering order dominates at 20 MB."
         },
         {
           "t": "AVIF loses its byte advantage at full resolution, so JPEG is simply smaller there.",
@@ -727,7 +923,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         },
         {
           "t": "The archive keeps the camera original untouched, and cameras cannot write AVIF.",
-          "why": "Half true and still not the reason. A JPG-source original does go up byte-for-byte, but 112 of the archive files are re-encoded from HIF and could have been AVIF. They are JPEG so a 10 MB download paints progressively."
+          "why": "Half true and still not the reason. A JPG-source original does go up byte-for-byte, but 207 of the 258 archive files are re-encoded from HIF and could have been AVIF. They are JPEG so a 20 MB download paints progressively."
         }
       ]
     }
@@ -736,6 +932,6 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </script>
 <script src="/quiz.js" defer></script>
   <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="25"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="27"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
 </body>
 </html>

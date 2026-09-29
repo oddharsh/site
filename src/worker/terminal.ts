@@ -956,7 +956,7 @@ export async function encodeFrame(env, request, state, ctx) {
         [s("  curl 'aadhar.sh/encode?url=https://example.com/photo.jpg'", "accent")],
         blank(),
         rule(INNER, "what it will tell you"),
-        kv("chroma", "4:4:4 is a byte tax at delivery sizes; 4:2:0 is usually free", INNER, { gutter: 12 }),
+        kv("chroma", "JPEG 4:4:4 is a byte tax; AVIF 4:4:4 wins at equal bytes", INNER, { gutter: 12 }),
         kv("scan", "baseline vs progressive, and how many scans", INNER, { gutter: 12 }),
         kv("quality", "estimated against the IJG Annex K table, with the deviation shown", INNER, { gutter: 12 }),
         kv("depth", "8-bit vs 10-bit AVIF — the latter measured ~6% smaller here, free", INNER, { gutter: 12 }),

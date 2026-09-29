@@ -1070,6 +1070,40 @@
       }
     },
     {
+      "path": "/garage/dictionary",
+      "title": "The dictionary the runtime dropped",
+      "section": "garage",
+      "kind": "content",
+      "description": "13 pages here are written per request and ship as plain brotli, because workerd's zstd dropped its dictionary option. What the fix would save, what it costs, and what it cannot reach.",
+      "hint": "runtime dcz deltas, and the workerd fix they wait on",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
+      "path": "/garage/av2",
+      "title": "AV2, before anyone can see it",
+      "section": "garage",
+      "kind": "content",
+      "description": "AV2 still images scored against the AVIF this site ships at matched bytes: ahead on whole-frame thumbnails, behind on dense detail, and why an AV2 file behind a picture fallback still breaks.",
+      "hint": "AV2 stills vs shipped AVIF, and the picture fallback trap",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
       "path": "/bot",
       "title": "AadharshBot",
       "section": "identity",

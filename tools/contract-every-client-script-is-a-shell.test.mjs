@@ -27,7 +27,7 @@ const shellRows = async () => {
 test("every src/client script except sw.js is a SHELLS row, so it ships minified, twinned, and under a marker", async () => {
   const rows = await shellRows();
   assert.ok(rows.length >= 15, `only ${rows.length} SHELLS rows parsed; the row shape changed and this test is reading nothing`);
-  const files = (await readdir(new URL("src/client/", ROOT))).filter((f) => f.endsWith(".js")).sort();
+  const files = (await readdir(new URL("src/client/", ROOT), { recursive: true })).filter((f) => f.endsWith(".js")).sort();
   const missing = files.filter((f) => f !== "sw.js" && !rows.some((r) => r.file === f));
   assert.deepEqual(missing, [], `${missing.join(", ")} would ship unminified with no twin and no marker tripwire`);
   assert.ok(files.includes("sw.js"), "sw.js is the documented exception; if it is gone, drop the exception here and in build.ts");

@@ -1,7 +1,8 @@
 // ── the census never publishes a check the platform refused ──────────────────
 // Split-file suite; shared imports live in contract-shared.ts.
 import { execFileSync } from "node:child_process";
-import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import {
+  configText, ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { CENSUS_ROSTER, censusCapHit, censusInstanceId } from "../src/worker/census.ts";
 
 // THE BUG THIS PINS. Every probe in lens.ts catches its own error and returns
@@ -64,12 +65,17 @@ test("censusInstanceId is deterministic, per host per day, and legal", () => {
   assert.notEqual(a, censusInstanceId("2026-09-06", first), "a new census day is a new instance");
   assert.notEqual(a, censusInstanceId("2026-08-30", CENSUS_ROSTER[1]), "two hosts never collide");
 
-  // Workflows cap an instance id at 100 characters and reject the exotic ones.
+  // Workflows cap an instance id at 100 characters and hold it to one pattern.
+  // This asserted /^[A-Za-z0-9._-]+$/ until 2026-09-26, a guess that let a dot
+  // through, while the binding's own ALLOWED_STRING_ID_PATTERN (miniflare's
+  // workflows binding, wrangler pin 3572193) refuses one. Every roster label is
+  // a hostname, so every id failed the real check and passed this one.
+  // contract-census-duplicate-id-in-workerd asks the binding itself.
   const ids = CENSUS_ROSTER.map((s) => censusInstanceId("2026-08-30", s));
   assert.equal(new Set(ids).size, CENSUS_ROSTER.length, "every roster host gets a distinct id");
   for (const id of ids) {
     assert.ok(id.length <= 100, `${id} is longer than the 100-character ceiling`);
-    assert.match(id, /^[A-Za-z0-9._-]+$/, `${id} carries a character an instance id may not`);
+    assert.match(id, /^[a-zA-Z0-9_][a-zA-Z0-9-_]*$/, `${id} carries a character an instance id may not`);
   }
 });
 
@@ -106,8 +112,8 @@ test("the Workflow class is exported from the entrypoint and bound in both confi
     "index.ts must re-export CensusWorkflow for the binding's class_name to resolve");
 
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
-    const parsed = parseJsonc(await readFile(new URL(config, ROOT), "utf8"));
+  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
+    const parsed = parseJsonc(await configText(config));
     const entry = (parsed.workflows ?? []).find((w) => w.binding === "CENSUS_WORKFLOW");
     assert.ok(entry, `${config} must bind CENSUS_WORKFLOW`);
     assert.equal(entry.class_name, "CensusWorkflow", `${config} must name the exported class`);

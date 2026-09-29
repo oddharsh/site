@@ -28,7 +28,7 @@ decides which one a given file belongs in:
 | **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …). They stage back to the ROOT of the served tree, so their public URLs are still `/nav.js` and `/luna.css`. Source layout and URL layout are different questions, and only the first one moved. |
 | **`src/dict/`** | `a-dict/`, `p-dict/` and `f-dict/`: the previously shipped bytes of the shell, of each page, and of the site-page family dictionary. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
-| `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. `lwe-ask` and `lens-reader` carry a `wrangler.toml`; **`cf-garage` carries a `cloudflare.config.ts`** and is the repository's one trial of wrangler's experimental TypeScript config, so every wrangler command in that directory needs `--x-new-config` (gotcha 41). |
+| `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. **All three carry a `cloudflare.config.ts`**, wrangler's experimental TypeScript config: cf-garage since 2026-08-23, and lwe-ask and lens-reader since 2026-09-28 through `cf migrate`. So every wrangler command in those directories that reads the config needs `--x-new-config` and runs from the directory itself (gotcha 41). The site Worker moved the same day BY HAND, because `cf migrate` drops its Workflow bindings (gotcha 48). |
 | **`tools/`** | **every developer tool.** The build (`build.ts`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
 | **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `derivations.json` (what each committed derived artifact was made FROM, plus its machine-owned `.lock.json`), `tools.json` (the external binaries), `tsconfig.json`. |
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
@@ -45,11 +45,14 @@ mapping names the directory the file actually authors in.
 Four things stay at the repository root because their tooling demands it, and
 moving any of them costs more than it buys:
 
-- `wrangler.jsonc` + `wrangler.dev.jsonc`. Workers Builds runs from the repo
-  root and wrangler resolves `main` and `assets.directory` relative to the
-  config file, so relocating these means editing the Cloudflare dashboard
-  FIRST (the deploy command is mirrored in `config/infra.json` and `infra:check`
-  fails on drift it would otherwise invent itself).
+- `cloudflare.config.ts` + `wrangler.config.ts` (the site Worker's config since
+  2026-09-28, replacing `wrangler.jsonc`; gotcha 48) + `wrangler.dev.jsonc`.
+  Workers Builds runs from the repo root, the TS loader reads the WORKING
+  DIRECTORY and refuses `-c`, and wrangler resolves the entrypoint and assets
+  directory relative to the config, so relocating these means editing the
+  Cloudflare dashboard FIRST (the deploy command is mirrored in
+  `config/infra.json` and `infra:check` fails on drift it would otherwise invent
+  itself).
 - `package.json` (which carries the four workspaces itself, so there is no
   separate workspace file), `bun.lock`, `.node-version`.
 - `CLAUDE.md` and its `AGENTS.md` symlink, plus `README.md`.
@@ -90,9 +93,9 @@ it is `public/`.
 ```bash
 # production, the normal path, and it needs NOTHING from you at a terminal:
 # merge to main; CI promotes the tested commit to production; Workers Builds
-# UPLOADS it as a version and moves no traffic; ramp.yml then takes it to 10% on
-# its own and WAITS for you to approve the `full` job in the Actions tab, which
-# is what carries it 50% -> 100%. Approve it there, or run the commands below.
+# DEPLOYS it at 100% (`wrangler deploy`, since 2026-09-28; the ramp is gone).
+# promote-production.yml then waits for the new version and rolls the
+# dictionaries onto it.
 #
 # By hand (still supported, and the only way to roll back):
 bun run deploy:promote --dry-run     # which version WOULD ramp. run this first
@@ -158,7 +161,8 @@ bun run lint
 # runtime this repo did not run on; the file is cached on wrangler's version
 # plus the config bytes, so `bun run types:gen` costs 3s cold and 0.02s warm),
 # the client islands get the DOM's, sw.js gets webworker's, the three auxiliary
-# Workers get Cloudflare's apiece, and the test suites get whichever runtime they
+# Workers get Cloudflare's apiece (cf-garage from a file wrangler writes out of
+# its OWN cloudflare.config.ts, Env included, gotcha 41), and the test suites get whichever runtime they
 # actually run on. Each config/tsconfig.*.json header argues its own case.
 # Three of the ten go through a WRAPPER instead of a bare `tsc -p`, because they
 # hold files from two runtimes at once and the imported half is checked against
@@ -191,6 +195,33 @@ bun run perf:snapshot compare base.json head.json
 # the machine-owned `perf-history` branch and /garage/dyno charts them.
 bun run perf:snapshot row base.json
 
+# DOES ANYTHING MOVE AFTER PAINT? The site collects no RUM, so this is the only
+# layout-shift reading there is. It holds each page's scripts, fetches and images
+# until first paint and then releases them, which turns a slow-network race into a
+# shift on every run (claude.ai's method, 2026-09-23), and names the REGION that
+# moved. A forced shift is the control and runs first. First sweep: every windowed
+# page on desktop slides its title 50-56px when nav.js injects Back/Forward after
+# paint (bootAfterStaticPaint waits two frames on purpose), and on a phone four
+# garage pages wrap the title bar and push content down 19px (CLS 0.0525).
+# /coffee read 0.35 LOCALLY ONLY until 2026-09-23: cal linked luna.css by absolute
+# https://aadhar.sh URL, which style-src 'self' refuses off that host, so localhost
+# and preview URLs painted it unstyled. The link is relative now and the local
+# reading matches production's.
+bun run cls --url http://localhost:8799            # every registered page, desktop + phone
+bun run cls --paths / --hold none --runs 20        # natural loads: how often, not whether
+
+# How many INSTRUCTIONS does a Worker hot path retire? A span reads 0ms by design
+# (frozen clock), so this is the CPU number the Workers Free clamp is about.
+# valgrind under `node --predictable`, differenced at N and 2N calls so node's
+# ~195M-instruction startup cancels; identical records agree within 0.05%.
+# LINUX ONLY: on a Mac, build tools/insn-count.Dockerfile under apple/container
+# (the tool prints the two lines). Node rather than bun because workerd is V8.
+# Diff two records made in the same image, never a record against a constant.
+# It found the search stopword gap on its first run: -21.4% instructions and
+# -22.2% wall clock on the same five queries, which is the correlation check.
+bun run insn record head.json    # refuses off Linux and says how to run it
+bun run insn compare base.json head.json
+
 # diff infra.json (DNS, zone/edge settings, account resources, Workers) against
 # reality. read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for
 # the account tier, or --offline for the no-network tier.
@@ -202,13 +233,28 @@ bun run infra:check
 bun run infra:apply
 
 # roll the shared-compression dictionaries onto what production is SERVING.
-# .github/workflows/dictionary-roll.yml does this nightly and opens a PR; this is
+# .github/workflows/dictionary-roll.yml does this after every release that reaches
+# 100% (promote-production.yml dispatches it) and nightly as a backstop, and opens a PR; this is
 # the manual form. Sourced from the wire, so it is correct from any checkout.
 bun run dict:roll
 
 # is the dictionary tier actually operational, per surface class, in production?
 # advisory: it reads production, so never make it a required check.
 bun run dcz:check
+
+# does every q11 twin the build writes (shell, pages, text; 522 on 2026-09-26)
+# reach a browser AT q11? Decodes what arrived, re-encodes it at build.ts's
+# settings, and passes it at q11 + max(1%, 8 B): judged on SIZE, since q11 is not
+# the same stream on every machine (macOS arm64 re-encoded /writing 6 B off the
+# Linux twin production serves), and a different stream at q11 size is named
+# rather than failed. The verdict holds from any checkout (it only supplies the
+# URL list, so run it from the deployed commit for a complete one). A header check cannot do
+# this: the local harness re-encodes an unencoded body to br by itself, which is
+# how /llms-full.txt shipped 31.7 KB over q11 a fetch until 2026-09-26. Advisory,
+# like dcz:check. Against a LOCAL Worker pass `-- --accept-encoding br`, because
+# miniflare turns a browser's Accept-Encoding into gzip for everything.
+bun run q11:check
+bun run q11:check -- --url http://localhost:8799 --accept-encoding br
 
 # THE CANARY TRIPWIRE: three moving targets through gates this repo already
 # holds its pins to, PROPOSING NOTHING. .github/workflows/canary.yml runs all
@@ -232,11 +278,15 @@ bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease eng
                           # with production; `-- --offline` skips the second. Their
                           # first run found JXL decoding by default in Canary 155.
 #
-# THE WATCHES (2026-09-15) are the inverse of a gate: nine probes that read
+# THE WATCHES (2026-09-15) are the inverse of a gate: eleven probes that read
 # FALSE on the pinned toolchain today, one per upstream fix this repo is
 # waiting on (tools/lib/upstream-watches.ts: seven bun issues from Bun.Image
-# option validation to fetch honouring `dispatcher`, plus workerd#7106's zstd
-# dictionary and `wrangler types --x-new-config`). Each leg reads every watch
+# option validation to fetch honouring `dispatcher`, oxc-minify reaching SWC
+# parity, workerd#7106's zstd dictionary, and
+# since 2026-09-22 the vitest-plugin at the wrangler pin's own commit admitting
+# Vitest 5, which is the cue to revisit #703, and since 2026-09-23 workerd
+# exposing a Temporal whose clock is sane, the switch workerd#6907 flipped
+# once with Temporal.Now at epoch 0). Each leg reads every watch
 # under the PIN and under the candidate; a row that differs is a `changed`
 # night naming the fix and the build it arrived in, and a row landed in both
 # is the cue to retire it. The nightly pin PRs also carry a DIGEST, the
@@ -274,7 +324,10 @@ CHROME_CHANNEL=chrome-canary bun run csp:sweep
 bun run bun:pin            # while the pin is a canary: the newest dated canary ALREADY older
                            # than bunfig's 24 h window, never the dist-tag (which names the
                            # newest daily publish, so it failed that window every night from
-                           # 2026-09-15 to 09-21 while the job exited green)
+                           # 2026-09-15 to 09-21 while the job exited green). A failed gate
+                           # files ONE `timbrado: bun-pin` issue since 2026-09-26, because a
+                           # green run hid a killed cargo build for eleven nights; the gate
+                           # runs `bun run test`'s own flags (DEPENDENCIES.md, timbrado)
 bun run wrangler:pin       # resolves main's sha from pkg.pr.new and runs canary:wrangler on it
 
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
@@ -283,6 +336,14 @@ bun run wrangler:pin       # resolves main's sha from pkg.pr.new and runs canary
 # build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
 # scripts auto-build it on first run; this is the explicit form.
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
+
+# is a zenc change FASTER with byte-identical output? builds the merge-base as
+# the baseline, gates every square output and histogram byte for byte (a
+# mismatch prints NO timing, since /i/ is content-addressed), then times both
+# binaries interleaved and prints how much of a photo is zenc's own code rather
+# than libavif's. `-- --parallel 8` measures throughput, which is how
+# add-photos.sh actually runs. Workstation-only: it reads the SOOC originals.
+bun run zenc:bench
 
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
 # NB: the photo manifest is NOT a cache anymore — the worker bundles
@@ -307,34 +368,62 @@ worktrees may edit freely, but a worktree is not a release surface.
   change to yourself, and never revert or commit a hunk you did not write. When
   the work is more than a couple of edits, take a worktree so nobody can move
   your branch out from under you.
+- **The machine-owned files resolve their own conflicts, after one setup run.**
+  `main` moves under every open branch here, and about 14% of adjacent PR pairs
+  collide. `.gitattributes` routes `package.json`, `config/derivations.json`,
+  `config/bun-pin.json` and the three lockfiles through
+  [`tools/merge-driver.ts`](tools/merge-driver.ts), which merges them
+  structurally, takes the newer pin, or parks a derived file for regeneration.
+  Run `bun run setup:merge` once per clone; worktrees share one `.git/config`,
+  so that covers all of them. A conflict that still arrives is a real one, and
+  a resolution can owe you something (a `bun install`, a pin's gate), which
+  `bun run merge:finish -- --check` prints. Gotcha 47 has the measurements and
+  [MAINTENANCE.md](docs/MAINTENANCE.md) the runbook.
 - Keep each change on its own branch, commit it, push it, and open a PR. Do
   not deploy from a dirty worktree or push agent work directly to `main`.
-- **A new issue or PR assigns and labels itself**, via
-  `.github/workflows/triage.yml`. It reads the title's conventional-commit
-  prefix for a `type:` label and the changed paths for `area:` labels, so
-  `fix(photos):` on a diff under `tools/photos/` arrives tagged without anyone
-  typing a label. Keep writing the title the way you already do; that IS the
-  input. Two labels are worth reacting to rather than filing: **`hashed-asset`**
-  says the diff remints an `/a/` URL and therefore every page and page
-  dictionary (gotcha 35), and **`release-path`** says it touches what decides
-  which commit reaches production.
+- **Turn on CI auto-fix as soon as a PR exists**, through the Claude Code
+  desktop app: call `ccd_pr set_monitor` with `auto_fix: true`,
+  `address_comments: true` and the PR's url as `get_status` reports it. A
+  standing instruction here, so nobody asks per PR. It earns a line because
+  the app has no global default for it: the switch is per SESSION and per PR,
+  stored on the session record, and enabling it REVOKES it from every other
+  session bound to that PR. So the session that opened the PR is the one that
+  claims it, and a second session claiming it silently takes over the first
+  one's watch. `address_comments` is the same switch as `auto_fix` on macOS
+  and has to carry the same value. It matters more here than in most repos,
+  since several agents work in this tree at once (the bullet above) and
+  `validate` is a required check, so a red run blocks the merge until somebody
+  goes looking.
+- **Labels are applied by hand or inline, since 2026-09-28.** `triage.yml`,
+  which labelled every new issue and PR from its title prefix and changed
+  paths, was deleted as CI overhead. Two labels are still worth applying when
+  they fit: **`hashed-asset`** says the diff remints an `/a/` URL and therefore
+  every page and page dictionary (gotcha 35), and **`release-path`** says it
+  touches what decides which commit reaches production.
 
-  The label set, the routing rules and the assignee are declared in
-  [`infra.json`](config/infra.json) under `repository.triage`, and
-  `bun run infra:check` fails on drift in both directions: a label the workflow
-  can emit but GitHub does not have, and a colour or description edited from the
-  web UI. `bun run labels:sync` plans, `-- --confirm` writes, and it refuses to
-  run in CI like `infra:apply`. **Sync BEFORE merging a label rename**, because
-  `infra:check` is inside the required `validate` check and reads live GitHub,
-  so a declaration that runs ahead of reality blocks its own PR.
+  The label set is still declared in [`infra.json`](config/infra.json) under
+  `repository.triage`, because the self-opening workflows and Dependabot pass
+  those names to `--label`, and `bun run infra:check` (a workstation command
+  now) fails on drift in both directions. `bun run labels:sync` plans,
+  `-- --confirm` writes, and it refuses to run in CI like `infra:apply`.
+  **Sync BEFORE merging a label rename**, or the nightly jobs fail on it.
 
   Four workflows label themselves inline instead (`dictionary-roll`, `bun-pin`,
-  `og-cards`, `node-support-window`), and that is a platform limit rather than a
-  style choice: an event created with the default `GITHUB_TOKEN` does not
-  trigger another workflow, so `triage.yml` never sees them. `gh pr create
-  --label` fails outright on an unknown label, so their flags are checked
-  against the same declaration; a rename without a sync stops the nightly roll
-  rather than mislabelling it.
+  `og-cards`, `node-support-window`). That was a platform limit when it was
+  written, since an event created with the default `GITHUB_TOKEN` triggers no
+  other workflow. `gh pr create --label` fails outright on an unknown label, so
+  their flags are checked against the same declaration; a rename without a sync
+  stops the nightly roll rather than mislabelling it.
+
+  **The PR-opening jobs push as an App since 2026-09-28**, through
+  `.github/actions/bot-pr-token`, and that is the fix for a newer limit. Since
+  GitHub's 2026-06-11 change, a PR pushed by `github-actions[bot]` runs CI only
+  after a human clicks "Approve and run", with no setting to turn it off: 20
+  CI and CodeQL runs sat `action_required` on the roll and pin branches in three
+  weeks, and `validate` is required, so none of those PRs could merge unattended.
+  The token is minted after every gate and each job checks out with
+  `persist-credentials: false`, so a candidate toolchain never shares a process
+  with a credential that can push.
 
   **Dependabot is the QUIET half of that, and it was unwatched until 2026-08-27.**
   A `labels:` key in `.github/dependabot.yml` REPLACES the defaults Dependabot
@@ -348,45 +437,38 @@ worktrees may edit freely, but a worktree is not a release surface.
   `package-ecosystem:` entries so a scanner that stops matching cannot report a
   clean pass over zero labels.
 
-  **A Dependabot PR gets its release notes READ, since 2026-09-15, and the
-  comment under `Dependabot site review` is a model's answer rather than a
-  checklist.** `.github/workflows/dependabot-site-review.yml` runs
-  `bun run deps:review <pr>` (`tools/review-dependency-bump.ts`), which
-  fetches the GitHub releases in `(prev, next]`, the commits between the two
-  tags (path-filtered in a monorepo), the CHANGELOG slice and the advisories
-  against the OLD version, puts them beside this tree's own `git grep` for the
-  package and the package's bullet in `docs/DEPENDENCIES.md`, and hands both to
-  Opus through `claude -p` with the boundary stated: the tree is trusted, the
-  release text is somebody else's. The answer is JSON against a schema, rendered here
-  with markup escaped, under four headings (security, performance, features,
-  behaviour changes that touch us) and a verdict. The model has NO tools, which
-  is the whole injection story.
+  **Dependabot PRs get no model review in CI any more, and it never ran once.**
+  `.github/workflows/dependabot-site-review.yml` (2026-09-15 to 2026-09-26)
+  fetched a bump's releases, commits and changelog, put them beside this
+  tree's `git grep` for the package, and asked `claude -p` for a verdict. It
+  needed a `CLAUDE_CODE_OAUTH_TOKEN` repository secret that was never added, so
+  every comment it posted, through #920 on the day it went, said "Not read". A job that posts
+  on every PR while reading nothing is the silent-green failure this file keeps
+  recording, so it was deleted with its CLI, its lib, its test and the root
+  `htmlparser2` it alone used, rather than fixed with a secret.
 
-  Three things to know before trusting one. **It reads the same
-  `Dependabot site review` marker the checklist used**, so an old PR's note is
-  replaced in place. **Without `CLAUDE_CODE_OAUTH_TOKEN` (a repository secret
-  from `claude setup-token`: a subscription seat rather than a metered API key,
-  chosen so a public repo's job can be rate-limited but never invoiced, and it
-  cannot touch Cloudflare) it posts a note saying nothing was read and exits
-  0**, so an unreviewed PR reads as unreviewed rather than clean; a refused
-  model call posts the same note and exits 1. And **a rebase costs nothing**: the comment carries the version
-  pairs it was written for and a `synchronize` with the same pairs exits before
-  the model, which is what made adding that event affordable. `--no-model`
-  prints what the model would have been handed and is the control for the fetch
-  half; oxc's `apps_v1.83.0` tags, whose version lives in the release TITLE, are
-  the spelling that first needed it.
-- PR CI lints (`bun run lint`, oxlint including its type-aware rules), builds
-  the site, enforces the performance budget, dry-runs the single
-  site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
-  runs the coffee tests, and sweeps the route oracle against a Worker booted
-  in-process (`bun run routes:check`, wrangler's `createTestHarness()`), so a
-  broken route fails the PR instead of the deploy. Site, native photo, and network
-  validation run in parallel. Four contract jobs consume the site job's built
-  tree: Bun/Node crossed with real/symlinked temporary directories. The required
-  `validate` job depends on the matrix and all three validation jobs
-  and always runs: any failed, cancelled or skipped dependency makes it fail.
-  Keep every validation job in its `needs`; the contract suite checks the census.
-  Production promotion still requires the entire CI workflow to succeed.
+  The reading moved to a LOCAL scheduled task on the owner's machine
+  (`dependency-leverage-digest`, Mondays), which already has `gh` auth and a
+  checkout, so it needs no credential in Actions. It reads what merged since its
+  last run (Dependabot PRs plus the wrangler and bun pin PRs, whose bodies carry
+  the upstream digests), checks each change against the tree and this file, and
+  posts ranked suggestions to one rolling issue, `chore(deps): dependency
+  leverage digest`, with its cursor in a comment marker. It lives outside the
+  repository, so nothing here can check it is still scheduled; the issue going
+  quiet for weeks is the tell.
+- **PR CI is ONE required job, `validate`, since 2026-09-28.** It lints
+  (oxlint including its type-aware rules), typechecks, builds the site under the
+  performance budget, runs `derive:check`, sweeps the route oracle against a
+  Worker booted in-process (`bun run routes:check`, wrangler's
+  `createTestHarness()`), and runs the bun contract suite and the coffee tests.
+  It was eight jobs until then: node and symlinked-temp-dir contract legs, a
+  network job (`infra:check`, the osv scan, `checkpoints:check`), a native photo
+  job, and a join. That cost about 2 minutes for a personal site whose stakes
+  are the bytes it ships, so what left went to a workstation command or to
+  `photos.yml`, which runs zenc's tests and the histogram reproduction only on
+  PRs touching photo code or tiers. Run `bun run test:node`, `infra:check`,
+  `checkpoints:check` and each auxiliary Worker's own dry-run by hand when a
+  change reaches them. Production promotion still requires CI to succeed.
 - **`.github/workflows/perf-diff.yml` is deliberately OUTSIDE that job**, and the
   separation is the whole design rather than tidiness. It builds the merge base
   and HEAD, diffs the wire sizes, and comments the delta on the PR; it fails on
@@ -533,150 +615,55 @@ worktrees may edit freely, but a worktree is not a release surface.
   rather than against a declared list, on purpose: a list invites someone to add
   an entry to `infra.json` to turn a red check green, which is the precise change
   the check exists to catch.
-- **Reaching `production` no longer moves traffic.** Workers Builds runs
-  `wrangler versions upload`, so a promotion builds the commit, uploads the
-  assets, checks the secrets, and mints a servable preview URL, while production
-  keeps serving the version it was already serving. Traffic moves when a human
-  ramps it:
+- **Reaching `production` deploys at 100%, since 2026-09-28.** Workers Builds
+  runs `wrangler deploy` on the `production` branch, so a promoted commit serves
+  everyone a few minutes after CI passes on `main`. Branch builds still run
+  `versions upload`, which mints a version and moves no traffic and, since
+  2026-09-29, a servable preview URL (the Preview URLs entry below has the
+  history), and
+  `infra:check` fails if that ever changes, since every branch push builds
+  against production's bindings.
+
+  **The ramp was deleted as overhead.** From 2026-08-12 to 2026-09-28,
+  `ramp.yml` put each release at 10%, soaked it for 20 minutes against pinned
+  probes, then finished or rolled back, with a reviewer-gated `full` job as a
+  fast path. On a personal site that bought an automatic rollback at the cost
+  of about 70 mostly-empty workflow runs a week, a Cloudflare write token in two
+  GitHub environments, a changelog that depended on a run not being cancelled,
+  and the split-release asset 404s described below. `git log -- .github/workflows/ramp.yml`
+  has the whole history; gotchas 22, 24, 25 and 36 record what it taught.
+
+  What replaced its last job: `promote-production.yml`'s `after-release` job
+  waits for `/whoareyou.json` to report a new "Serving version", then runs
+  `dcz:check` and dispatches `dictionary-roll.yml`, with no Cloudflare
+  credential. Nothing writes the D1 `checkpoints` changelog any more; the site
+  never read it at runtime (`/updates` and `/restore` render the bundled
+  `checkpoints.json`), so `checkpoints:check` will report released rows as
+  pending until that table is retired or written by hand.
+
+  `bun run deploy:promote` still works from a workstation, and it is the
+  rollback:
 
   ```bash
-  bun run deploy:promote
+  bun run deploy:promote --status      # what is serving
+  bun run deploy:promote --rollback    # 100% back to the previous version
   ```
 
-  That walks 10% → 50% → 100%, and between steps it samples `/whoareyou.json`
-  (the one route that reports which VERSION answered — both versions read the
-  same D1 changelog, so `/updates.json` structurally cannot tell them apart) and
-  aborts on a non-200 or on a step that never took. `--to`, `--steps`,
-  `--status`, and `--rollback` are the other modes. The old flat
-  `if (process.env.CI) die()` is gone: `tools/lib/release-guard.ts` asks
-  whether the process can authenticate instead, because a blanket CI ban refused
-  the gated pipeline it was meant to protect while doing nothing about a ramp
-  that starts unauthenticated and dies after traffic already moved.
-
-  **The ramp runs in Actions now, and it splits at the human.**
-  `.github/workflows/ramp.yml` (built 2026-08-12) fires off a successful
-  `Promote production`, waits for Workers Builds to finish uploading, and then:
-
-  | job | traffic | environment | gate |
-  |---|--:|---|---|
-  | `canary` | 10% | `production-canary` | none, runs on its own |
-  | `full` | 50% then 100% | `production-full` | REQUIRED REVIEWER |
-  | `verify` | none | (no environment, no credential) | runs `dcz:check` |
-
-  So a merge reaches a tenth of traffic by itself and stops. Approving the `full`
-  job is the same decision you were making at a terminal, minus the terminal, and
-  the pause is still the point. A workstation ramp keeps working exactly as
-  before; `release-guard.mjs` asks whether the process can authenticate rather
-  than whether it is CI, which is what made both paths possible.
-
-  **Expect more `Ramp production` runs in the Actions tab than releases, and most
-  of them doing nothing.** It fires on `Promote production` COMPLETING, and a
-  skipped promote completes, so every skipped promote spawns a ramp whose `canary`
-  declines to run. On the first real release there were three. They are no-ops, and
-  since 2026-08-12 they take a per-run concurrency group so they start, skip and
-  end rather than queueing behind a ramp parked on the reviewer gate, because
-  concurrency is evaluated BEFORE jobs and previously they could not even reach
-  their own guard.
-
-  **Real ramps do NOT queue, and believing they did cost every release between
-  2026-08-12 and 2026-08-14.** This note used to end "real ramps still share one
-  group and serialize." A concurrency group holds at most ONE pending run, and
-  each new arrival CANCELS the previously pending one. `cancel-in-progress`
-  governs IN-PROGRESS runs alone and does nothing about that, so a ramp parked on
-  the reviewer gate deleted its successors one at a time rather than delaying
-  them, silently, while production stayed on the stale 10/90 split that same
-  parked run had left. Run 31644451923 sat `waiting` two days and three real ramps
-  died behind it, each with ZERO jobs, the last cancelled one second after the
-  next entered the group. `cancel-in-progress: true` since 2026-08-14, so the
-  newest promoted commit wins and an unapproved canary expires instead of blocking
-  what follows. The long argument is at the concurrency block in `ramp.yml`.
-
-  That block shipped with one thing unmeasured, whether `cancel-in-progress`
-  reaches a run merely `waiting` on an environment gate, and **the very next
-  release answered it: yes.** Run 31820445866 entered the group at 16:40:27 on
-  2026-08-14 and the run parked since 15:32:04 was cancelled at 16:40:28. The
-  named fallback, moving `full` into its own workflow, is therefore not needed.
-
-  **`ci.yml` carries a TRIPWIRE for a parked ramp, and it lives there rather than
-  in `ramp.yml` on purpose.** A jam inside a concurrency group cannot be reported
-  from inside that group, which is why two days of stalled releases produced no
-  signal at all. It warns past 6 hours, names the run, and is ADVISORY: failing
-  would gate every merge on a state no PR caused and would deadlock the one PR
-  able to fix a stuck ramp, the same trap `infra:check`'s edge tier documents. It
-  swallows its own API errors for the same reason, since a tripwire that reddens
-  CI on a GitHub hiccup gets muted, and a muted tripwire is worse than none. An
-  unparseable timestamp falls STALE rather than fresh, because the alternative
-  reads as a healthy repo forever. It found a real parked ramp on its first run.
-
-  **The newest `Ramp production` run is usually the no-op rather than the
-  release.** A no-op finishes in seconds while a real ramp waits on Workers
-  Builds, so sorting by recency hands you the wrong run: on 2026-08-14 the two
-  fired six seconds apart and the no-op completed first, which reads as a release
-  that did nothing. Select by `headSha` matching the promoted commit, never by
-  `--limit 1`. **Raising the limit does not fix this**, which the wording here
-  implied for a day: `--limit 3` hid a parked run just as completely on
-  2026-08-16, because no-ops keep arriving and every one of them sorts above the
-  run you want. When the question is "is a ramp parked", filter on `status`
-  instead of on any count; the recipe is at the end of gotcha 36.
-
-  **A ramp waiting on approval is not stuck.** `waiting` is the environment gate
-  doing its job, and the way to tell it apart from a jam is to ask what it is
-  waiting for:
-
-  ```bash
-  gh api repos/oddharsh/site/actions/runs/<id>/pending_deployments \
-    --jq '.[] | {environment: .environment.name, current_user_can_approve}'
-  ```
-
-  An approvable row means click it. Note also that `gh run view --log` refuses a
-  run that has not finished, so the canary's own output is unreadable until the
-  `full` job resolves; `bun run deploy:promote -- --status` answers what is
-  serving regardless and does not depend on the run at all.
-
-  Three things about it that are load-bearing rather than incidental:
-
-  - **It checks out `production`, never `main`.** The ramp writes the D1 changelog
-    by diffing the checked-out `checkpoints.json` against D1, so the tree has to
-    be the one that was built and uploaded. This is gotcha 24 solved rather than
-    relocated: CI cannot ramp from a stale tree, and it cannot ramp from one
-    running AHEAD of what is serving either.
-  - **`full` refuses a version the canary never saw.** Approval is asynchronous
-    and Workers Builds uploads a version for every push, so re-resolving the
-    newest production build after an approval could put traffic on something
-    nothing canaried, silently, and every downstream check would pass because a
-    version that built returns 200s. It compares against the 8-char prefix the
-    canary actually put at 10% and fails if it moved.
-  - **The wrangler it runs is the pinned one, which was not true when this was
-    written.** `deploy-promote.mjs` shelled out to `npx wrangler`, and npx
-    resolves whatever it can find: measured 2026-08-12 in a tree with no
-    `node_modules`, `npx wrangler --version` answered **4.105.0** from its own
-    cache while this repo pins 4.120.0. So the wrangler that moved production
-    traffic depended on how the script happened to be invoked. It goes through
-    `wranglerCommand()` in `tools/lib/wrangler-bin.ts` now, which NAMES NO
-    PACKAGE MANAGER and runs the pinned entry file under node. The `pnpm exec`
-    that replaced npx was itself wrong the day the tree became bun, since pnpm
-    reads `packageManager` and refuses outright; read that module's header
-    before touching any spawn here. Ramp steps still go through `bun run` to
-    match the documented interface, but that is consistency now rather than the
-    guardrail it briefly was.
-
-  `--to`, `--steps`, `--status`, `--rollback` and `--dry-run` all still work by
-  hand, and a rollback is still a workstation command on purpose.
-
-  What the ramp buys is the ability to read a change before everyone gets it. The
-  script deliberately pauses between steps and tells you to go look at Workers
-  Logs; it checks status codes, and it cannot check whether the page is *right*.
+  It can still walk a version 10% to 50% to 100% by hand, sampling
+  `/whoareyou.json` between steps, when a change deserves a careful look. The
+  two paragraphs below apply to that manual ramp.
 
   **A SPLIT DEPLOYMENT SPLITS ASSET REQUESTS TOO, which is what version affinity
   is for.** Every document here references content-hashed shell assets
   (`/a/luna.<hash8>.css`, `/a/nav.<hash8>.js`), `build.ts` keeps exactly one hash
-  per asset, and during a ramp each request picks a version independently. So a
+  per asset, and during a split (a manual ramp now) each request picks a version independently. So a
   document from one version asks for an asset the other version has never built
   and gets a 404: `/a/*` is `run_worker_first` and is NOT in
   `WORKERS_CACHEABLE_PATHS`, so nothing bridges the two. At the 10% canary that is
   roughly 90% of the new-HTML cohort plus 10% of the old-HTML cohort, per changed
-  asset, on any release touching `nav.js` or `luna.css`. `ramp.yml`'s canary job
-  runs unattended, so it fires on its own. Cloudflare's docs name this exact
+  asset, on any release touching `nav.js` or `luna.css`. It fired on its own
+  while `ramp.yml` canaried every release; with direct deploys it only happens
+  during a manual ramp. Cloudflare's docs name this exact
   case. What keeps it from being permanent is the 404 cache-clamp, which was
   written for `/images/*` (gotcha 1) and has been quietly holding this line too.
 
@@ -729,9 +716,9 @@ worktrees may edit freely, but a worktree is not a release surface.
   looking for it. Cloudflare honours the override only for a version already in the
   deployment, so the probe runs after each step and never before.
 
-  `bun run deploy:direct` still exists and still goes straight to 100%. Keep it: the
-  `infra:check` deadlock below is exactly the case where a ramp's extra step is
-  a liability rather than a safety net.
+  `bun run deploy:direct` still exists and still goes straight to 100% from a
+  workstation, for the `infra:check` deadlock below and anything else that
+  cannot wait for CI.
 - **A SECRET is a version too, so `wrangler secret put` no longer works here.**
   Hit 2026-08-06 adding `BROWSER_RUN_TOKEN`:
 
@@ -749,17 +736,17 @@ worktrees may edit freely, but a worktree is not a release surface.
   Use the versions form, which mints a new version and moves no traffic:
 
   ```bash
-  bun run wrangler versions secret put -c wrangler.jsonc <NAME>
+  bun run wrangler:site versions secret put <NAME>
   ```
 
-  Then ramp it like any other version (`bun run deploy:promote`). Every secret
+  Then put it live with `bun run deploy:promote --to 100`. Every secret
   command in this file, MAINTENANCE.md and `cal/README.md` was the old form and
   is now the new one; they had been unrunnable since gradual deployments landed
   and nobody noticed, because secrets are set about once a year.
 
   **Order matters when the secret is FOR new code.** Merge first so Workers
   Builds uploads a version containing the feature, then set the secret on top of
-  it, then ramp. Setting it first attaches a credential to a version whose code
+  it, then deploy it. Setting it first attaches a credential to a version whose code
   predates the thing that reads it, which is harmless and pointless.
 - **A DURABLE OBJECT LIFECYCLE CHANGE is the thing `--dry-run` structurally
   cannot check.** Adding, renaming, transferring, or deleting a DO class needs a
@@ -888,6 +875,154 @@ worktrees may edit freely, but a worktree is not a release surface.
   account. That is the cheapest place to answer any "will the deploy accept
   this" question: push the branch and read `wrangler versions view` on the alias,
   which the dry run structurally cannot tell you.
+- **Moving Counter out: the `Counter` Durable Object MOVED from aadhar-sh to
+  its own Worker, `aadhar-counter` (`counter/`), in five alternating deploys,
+  finished 2026-09-29.** The reason was preview URLs: Cloudflare mints
+  no version URL for a Worker that implements a Durable Object, so every
+  aadhar-sh version has carried `has_preview: false` since `Counter` moved in
+  on 2026-07-01. Binding a class that ANOTHER Worker exports leaves previews
+  on, measured on throwaway Workers, so the site keeps its `COUNTER` binding
+  and only stops exporting the class.
+
+  **The data is why this is a transfer rather than a fresh class.** One class
+  holds two things: the odometer (`n` in instance `homepage-visits`) and the
+  live coffee-slot claims (`coffee-slot:<start>:<end>`, cal/src/reservation.ts).
+  Seeding a new class from the current count, the way the July move from
+  cf-garage did, would keep the odometer and drop every pending slot claim,
+  which is a double-booking window with nothing to say so.
+
+  A transfer is only expressible in the `exports` lifecycle form, and a Durable
+  Object in `exports` is mutually exclusive with a `migrations` array, so step 1
+  converts the site's class from `migrations: [{ tag: "v1", new_sqlite_classes }]`
+  to `exports.Counter: { type: "durable-object", storage: "sqlite" }`. Every
+  lifecycle step needs `wrangler deploy`: `versions upload` applies none of
+  them, which is also why each site step lands through the production build
+  (`wrangler deploy` since 2026-09-28) rather than a branch build.
+
+  | step | deploys | change | how |
+  |---|---|---|---|
+  | 1 | aadhar-sh | `Counter` declared in `exports`, `migrations` removed | merge a site PR |
+  | 2 | aadhar-counter | `Counter` `expecting-transfer` from `aadhar-sh` | `bun run wrangler deploy -c counter/wrangler.jsonc --x-provision=false --x-auto-create=false` |
+  | 3 | aadhar-sh | `Counter` `transferred` to `aadhar-counter`; `COUNTER` gains `script_name: "aadhar-counter"` | merge a site PR |
+  | 4 | aadhar-counter | `Counter` back to plain `storage: "sqlite"` | the same command |
+  | 5 | aadhar-sh | the class code and the tombstone leave; the class moves into `counter/src` | merge a site PR |
+
+  **All five steps are DONE (2026-09-29), and the count never reset.** It read
+  4455 before step 1 and 4456 after step 4, one real visit apart.
+
+  | step | what landed |
+  |---|---|
+  | 1 | #1004, live from its release; storage kept through the format change |
+  | 2 | `aadhar-counter` version `deaa1d2c` (second run; see the race below) |
+  | 3 | #1006, serving as `fc50de44`; the namespace, id `3dc4967b…`, now belongs to `aadhar-counter` under the SAME id |
+  | 4 | `aadhar-counter` version `3ac02b3b`; Cloudflare reported the transfer record cleared, "No further action required" |
+  | 5 | the class source moved to `counter/src/counter.ts`, and the site config declares no Durable Object |
+
+  **What it bought, measured on step 5's own branch build**, version `8acdb390`:
+  `has_preview: true`, the first aadhar-sh version ever to carry it. Both
+  `8acdb390-aadhar-sh.aadharsh2010.workers.dev` and the branch alias
+  `claude-counter-step5-aadhar-sh.aadharsh2010.workers.dev` answered 200 on
+  `/whoareyou.json` reporting that version, with `x-robots-tag: noindex`, and
+  lib/preview.ts refused `/hit?tick=1` ("writes production state and is
+  disabled on preview URLs") and a POST (403), the first real traffic that
+  guard has ever seen.
+
+  **The invariant it leaves behind: aadhar-sh implements NO Durable Object.** A
+  class reappearing in `cloudflare.config.ts` or `wrangler.dev.jsonc`, in
+  `exports` or through a `migrations` array, takes every preview URL away again
+  with no other symptom, so `contract-the-perf-probe` fails on one by name. A
+  new Durable Object belongs in `aadhar-counter`, or in another Worker, bound
+  here by `script_name`. And **never roll aadhar-sh back to a version older than
+  `fc50de44`**: those bind a class this Worker no longer owns. Roll forward.
+
+  **The site steps edit `cloudflare.config.ts`, since #999 replaced
+  `wrangler.jsonc` (gotcha 48).** Step 3 in that form is two lines:
+  `Counter: exports.durableObject({ state: "transferred", transferredTo:
+  "aadhar-counter" })` and `COUNTER: bindings.durableObject({ worker:
+  "aadhar-counter", exportName: "Counter" })`. `tools/lib/site-config.ts`
+  projects both into the legacy shape `wrangler.dev.jsonc` carries by hand:
+  `script_name` on the binding whenever `worker` names another Worker, and the
+  tombstone as `{ state: "transferred", transferred_to }`. It refused any state
+  but "created" until step 3 taught it this one, and it still refuses the rest
+  by name.
+
+  **Local dev and the route oracle boot BOTH Workers from step 3 on.** workerd
+  refuses to start a Worker whose binding names a service nobody defined, so
+  `bun run dev`, `dev:remote`, the route oracle and the cron contract test all
+  pass `counter/wrangler.jsonc` as a second Worker, with the site first. Locally
+  the binding works end to end: through the harness, `/hit` counted 0, 1, 2 and
+  a peek read 2 without bumping.
+
+  **Rehearsed end to end on 2026-09-28** with a throwaway pair built like this
+  one (the source started on a legacy `v1` migration beside worker-type
+  `exports`, same compatibility date and flags), deleted afterwards. Reading
+  the count through the SOURCE after each step:
+
+  | after step | count | answered by |
+  |---|--:|---|
+  | 0, baseline | 3 | source |
+  | 1 | 6 | source |
+  | 2 | 9 | source |
+  | 3 | 10 to 15 | target |
+  | 4 | 18 | target |
+  | 5 | 21 | target |
+
+  No request failed at any step and the count never reset. Step 3 is the
+  commit: the first request after that deploy was already answered by the
+  target's code.
+
+  **Rehearsed AGAIN on 2026-09-29 along production's real path**, because #999
+  landed between the two: the source went legacy migration, then JSONC
+  `exports` (#1004's shape), then `cloudflare.config.ts` (#999's), and steps 3
+  and 5 were written in the TS form above and deployed with `--x-new-config`,
+  the flag `.github/deploy-wrangler.sh` adds. The count ran 3, 6, 9 (TS
+  conversion), 12 (step 2), 16 to 21 through the step 3 deploy, then 24 and 27,
+  with no failed request and no reset. Two things differed from the JSONC run:
+
+  - **The source's code went on answering for about 20 seconds after the step 3
+    deploy** before the target's took over, which is the new version reaching
+    the edge. The count was continuous across the switch (the source wrote 19,
+    the target read 19 and wrote 20), so it is one object changing hands.
+  - **A `versions upload` of the step 3 config is REFUSED**, code 10061,
+    "Cannot create binding for class 'Probe' in script 'zz-xfer2-dst' because
+    it is not currently configured to implement Durable Objects", and it
+    changed nothing: the source kept counting. So the step 3 PR's branch build
+    goes red on production's real Worker and is harmless. A `versions upload` was accepted in the step 1 state, and
+  after step 5 one printed a `Version Preview URL:` that answered 200 THROUGH
+  the cross-Worker binding, which is the whole point of the exercise.
+
+  While the move ran, these were treated as unsafe because no rehearsal
+  settled them. Only the first still applies:
+
+  - **Rolling aadhar-sh back across step 1 or step 3.** `deploy:promote
+    --rollback` redeploys an existing version, and a version from before step 3
+    binds a class this Worker no longer owns. Roll forward instead.
+  - **Running step 2 before step 1 serves.** The target names a source class
+    that the docs show in the `exports` form; whether the legacy form is
+    accepted was not tried. Confirm step 1 with `bun run deploy:promote --status`
+    before running step 2.
+  - **Collapsing steps 3 and 5.** Cloudflare's own sequence keeps the class code
+    in the source through the commit, and the rehearsal followed it.
+  - **A branch build between steps 3 and 4.** The step 3 PR's own branch build
+    is measured (refused, harmless, above). Any OTHER branch pushed after step 3
+    serves and before step 4 runs was not tried, so run step 4 promptly.
+  - **Step 4 before step 3 serves.** `counter/wrangler.jsonc` holds step 4's
+    config as soon as the step 3 PR merges, and both rehearsals ran step 4 only
+    after step 3. Confirm with `bun run deploy:promote --status` first.
+
+  **The FIRST deploy of a new Worker can fail after it succeeds.** Step 2's
+  first run uploaded `aadhar-counter` and recorded the pending transfer, then
+  exited 1 on `10007 This Worker does not exist`: wrangler 4.143 reads the new
+  Worker back through `/workers/workers/<name>` two milliseconds after creating
+  it, to reconcile its workers.dev settings, and that API had not caught up.
+  Reading the account showed the Worker, its version at 100% and the intended
+  subdomain state, and a rerun exited 0. The rehearsal's own first deploy did not
+  hit it, so it is a race. A Worker that already exists never takes that path,
+  which is why step 4 cannot meet it.
+
+  Local runs keep booting both Workers: `bun run dev`, `dev:remote`, the route
+  oracle and the cron contract test pass `counter/wrangler.jsonc` as a second
+  Worker, because workerd refuses a binding to a service nobody defined.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`
@@ -937,11 +1072,84 @@ worktrees may edit freely, but a worktree is not a release surface.
   fields are two TRIGGERS in the API, separated by their branch filters, and
   both are declared and checked. Without the scope the section degrades to a
   note naming what is missing, exactly like the other five.
-- **Preview URLs are on, and the Worker guards them.** `preview_urls: true` in
-  `wrangler.jsonc`, with `workers_dev: false` kept — production still has no
-  workers.dev address; what previews add is a per-VERSION one. The setting is
-  explicit because `preview_urls` DEFAULTS to whatever `workers_dev` is, so
-  deleting the line turns previews off again without a word.
+- **Preview URLs SERVE since 2026-09-29, after eight weeks configured ON and
+  serving nothing, because this Worker exported a Durable Object.** "Moving
+  Counter out" above is the fix and has the measurement that proves it. What
+  follows is the diagnosis as measured on 2026-09-28, kept because the trap
+  outlives the fix: every layer of config said yes while every version said no.
+
+  Measured 2026-09-28. Cloudflare's Preview URLs page
+  lists it as a limitation: Workers implementing Durable Objects, Containers or
+  Sandboxes get no version URLs. `Counter` moved into this Worker on 2026-07-01
+  and previews were switched on in #211 on 2026-08-04, so there was never a
+  window where the setting could work.
+
+  Every layer of config says yes, which is why it went unnoticed for eight
+  weeks. `previewUrls: true` is in `cloudflare.config.ts`, and the script's subdomain
+  endpoint answers `{ enabled: false, previews_enabled: true }`. The refusal
+  lives one layer down, in the VERSION: each upload's metadata carries
+  `has_preview`, and all 100 versions the API lists read `false`. Wrangler
+  prints `Version Preview URL:` only when that flag is true, so an upload says
+  nothing either way, and the silence reads as a quiet success.
+
+  The edge confirms it. `https://<prefix>-aadhar-sh.aadharsh2010.workers.dev`
+  answers 404 "There is nothing here yet" with `x-preview-user-error: true`,
+  for a real prefix, an alias (`production`, `main`, any branch alias) and an
+  invented one (`deadbeef`) alike. That identical answer is the tell: the
+  preview router has no version of this script registered at all, so the URL
+  shape is fine and no other shape would help. A hostname for a Worker that does
+  not exist 404s WITHOUT the header, which separates "no such Worker" from "no
+  previews for this Worker".
+
+  **The check is one read, and it needs no URL:**
+
+  ```bash
+  curl -s -H "Authorization: Bearer $(bun run wrangler auth token 2>/dev/null | tail -1)" \
+    "https://api.cloudflare.com/client/v4/accounts/<account>/workers/scripts/aadhar-sh/versions?per_page=5" \
+    | jq '[.result.items[].metadata.has_preview]'
+  ```
+
+  What still works is anything that reads a version through the API rather than
+  through a URL: `wrangler versions view <id>` shows its bindings and secrets
+  (the Workflow check further down), and `deploy:promote`'s probes reach a
+  version with `Cloudflare-Workers-Version-Overrides` on `aadhar.sh`, once it
+  is in the deployment. What does not work is serving a branch at a real URL
+  before it is in production, which is the whole thing #211 turned this on for.
+
+  Making previews real meant `aadhar-sh` stopping exporting `Counter`: hosting
+  it in another Worker and binding it by `script_name`. That landed on
+  2026-09-29 as a five-step transfer that kept the class's data; "Moving
+  Counter out" above has the sequence, both rehearsals and the result. Note that commit 5af65648 moved `Counter` IN
+  from cf-garage, so this reverses a deliberate choice rather than tidying one.
+
+  **Only the EXPORT blocks previews, measured 2026-09-28** with five throwaway
+  Workers (wrangler 4.142.0, this Worker's compatibility date and flags,
+  `workers_dev: false`, `preview_urls: true`), each deployed once and then
+  deleted:
+
+  | shape | `has_preview` | preview URL |
+  |---|---|---|
+  | plain fetch handler (the control) | true | 200 |
+  | exports a DO class (`new_sqlite_classes`) | **false** | 404 + `x-preview-user-error` |
+  | binds another Worker's DO via `script_name` | true | 200 |
+  | exports a Workflow class | true | 200 |
+  | the `cache` + `exports` block this Worker runs Workers Cache through | true | 200 |
+
+  So `aadhar-sh`'s two Workflows and its Workers Cache entrypoints are all
+  compatible, and a `Counter` hosted elsewhere and bound by `script_name` leaves
+  previews on. A `versions upload --preview-alias` on the cross-bind shape
+  printed both `Version Preview URL:` and `Version Preview Alias URL:`, and both
+  answered 200, so the alias form the Workflow check below relies on works too.
+  The control reading true is what makes the other rows mean anything.
+
+  One cleanup trap from the run: `wrangler delete` on a Worker that owns a
+  Workflow leaves the Workflow behind (it still showed in `wrangler workflows
+  list`), so it needs its own `wrangler workflows delete`.
+
+  The setting stayed in `cloudflare.config.ts` throughout, and that is why no
+  config change was needed when the class left: `preview_urls` DEFAULTS to
+  whatever `workers_dev` is, so the explicit line is what switched previews on
+  by themselves the moment the site stopped implementing a DO.
 
   A preview runs **production bindings and secrets**. Cloudflare offers no
   per-version override, so the same RN_KV, the same photo bucket, the same three
@@ -1009,9 +1217,10 @@ worktrees may edit freely, but a worktree is not a release surface.
   **BUILT 2026-08-12, and this is now a description.** `CLOUDFLARE_API_TOKEN_RAMP`
   is an ENVIRONMENT secret on `production-canary` and `production-full`, never a
   repo secret, so a job that does not name those environments cannot see it and
-  fork PRs cannot reach it. `production-full` carries required reviewers, so
-  majority traffic cannot move without a human. `.github/workflows/ramp.yml` is
-  the only consumer.
+  fork PRs cannot reach it. **Since 2026-09-28 NOTHING consumes it**: `ramp.yml`
+  was its only consumer and is deleted. The two environments and the secret can
+  be removed in Settings > Environments, and the token revoked in Cloudflare; the
+  scope table below is kept as the recipe for a workstation ramp token.
 
   **The scope list, derived from what the ramp actually executes.** This note said
   `Workers Scripts:Edit` + `D1:Edit` "and nothing else" from 2026-08-06 while no
@@ -1120,7 +1329,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `src/client/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index, deliberately without touching the address bar (notes are `popover="manual"`, so several stay open at once and one URL couldn't honestly name three windows; Esc closes the topmost). The permalink stays real: each row is an `<a href="/writing/<slug>">` the worker serves standalone, and a modified click passes through to it. Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
 | `src/client/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
 | `src/client/infotip.js` | The same trick for every OTHER hover on the site. The rule is short: **any `[title]` is an infotip, wherever it lives** — taskbar app buttons, tray icons, the clock, desktop icons, title-bar controls, form fields, and titled links and controls in page bodies. All of them already bought the OS tooltip, so this is what that tooltip was hiding: a pin's page count (from nav.js's own destination table), the tray's live colo/build (the same JSON its click-balloon fetches), the clock's full date, a citation link's destination host. It re-draws `title` rather than replacing it: emptied on hover, restored on leave, so AT still reads it at focus and a page with no JS keeps the native tooltip. `[data-tip]` is the opt-in for a control that never had one. **Four richer surfaces are skipped by name** (`.lx-term`, `.photos a`, `.np-list li`, `.np-artist-link`, `.car-link`, `.ev[data-cover]`) because each already draws its own card from the same engine; `.lx-term` is the sharp one, since those ship a `title` as their no-JS fallback and `lens.ts` strips it once its own surface is live. **`nav.js` owns the matcher and passes the FUNCTION in**, not a selector each side keeps a copy of. Loads on the first hover that has a tip, never on a coarse pointer. Windows' two delays live in `hoist.js` now (`openMs` 400 cold-dwell, `autopopMs` 6s), both defaulting OFF so the content hover CARDS keep the instant show they were tuned for. |
-| `src/client/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles; icons drag freely within a visit but positions are DELIBERATELY not persisted, since the stored layout was read back in states that couldn't honour it and came back as a stack), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and Navigations hard-cut: the cross-document View Transition this file used to describe was removed 2026-07-30 (prerender already made navigation instant, so the animation was pure added latency). Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
+| `src/client/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles; icons drag freely within a visit but positions are DELIBERATELY not persisted, since the stored layout was read back in states that couldn't honour it and came back as a stack), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and Navigations hard-cut: the cross-document View Transition this file used to describe was removed 2026-07-30 (prerender already made navigation instant, so the animation was pure added latency). Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. Also arms the idle **screen saver**: one timestamp store per input event, and after one quiet minute on a visible tab (XP defaulted to ten) it imports `/nav-pipes.js` (3D Pipes in WebGL2, about 4 KB Brotli, never fetched by a visitor who stays active). Run's "3D Pipes" row (search `sspipes`) previews it. |
 | `src/client/quiz.js` | The **understanding-check** widget (deferred, shared, minified at deploy with a `/quiz.src.js` twin). Every garage + LWE content page ends with an active-recall quiz rendered by this one script from an inline `<script type="application/json" id="luq-data">` block: garage pages get an XP GroupBox self-test (`<section id="luq">` mount), LWE pages get the quiz as a continuation of the MSN chat (appended into `.log`, no mount). Misconception-based distractors, deterministic option shuffle, per-page best score in localStorage. The idea is Geoffrey Litt's "Understanding is the new bottleneck" (credited in the widget footer); /lens carries the same pedagogy in copy (predict-then-check mode notes, the Delta counterfactual lab as a Papert micro-world). |
 | `src/pages/dotfiles/index.html` + `src/client/dotfiles.js` | **`/dotfiles`: Folder Options for a Mac.** The macOS defaults the owner changed, read off the machine with `defaults read` on 2026-09-21 (29 options; text replacements deliberately left out), as an XP checklist that generates the `defaults write` script for whatever is ticked, plus the restart tail (`killall` for the Dock, Finder, the screenshot service and the clock; a logout reminder for the rest). The option data is INLINE in the page (`#dotfiles-data`), the renderer is the client module, and `public/dotfiles/macos.sh` is the same data with every box ticked, projected by `bun run gen:dotfiles` and held byte-equal by `contract-dotfiles-script-matches-the-page`. Edit the page's JSON, run the generator, commit both. The `.sh` is served `text/plain` through `_headers` so it opens in a tab rather than downloading as the `application/x-sh` the asset layer infers. |
 | `src/worker/wire.ts` (RETIRED 2026-09-16) | **Was `/terminal`: what an agent sees when it points at this site.** Deleted because it rendered per request (no q11 twin, no dcz delta, edge-compressed at about q4) to produce bytes that were identical every time, and the exchange it demonstrated reads better from `/mcp` itself. The route answers 410 with a body naming `/mcp`, the server card and the tool paths; one `/terminal*` `run_worker_first` row replaced two. The rest of this row and the window row below describe the page as it was. Server-rendered, with no client script and nothing to type into. It performs a real `POST /mcp` JSON-RPC exchange and shows the request beside the response, because that is what an agent does. It replaced a Windows PowerShell emulator in #266 and the reason is worth keeping: the console had grown to roughly 2,000 lines to explain an MCP server of 433, and it drew `[_][#][X]` window controls in ASCII inside a real XP window that already had them, which is the "terminal running inside Internet Explorer" mistake rebuilt one layer down. An agent never types, it POSTs JSON-RPC and reads JSON back, so emulating a shell faithfully made the demo LESS honest the better it got. `?plain=1` is inert rather than removed, so old links keep working. |
@@ -1155,8 +1364,9 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
    |      gotcha 3); --transfer names the SOURCE curve, g22 for the Monochrom.
    |   3. zenc -q 84 (zenjpeg hybrid trellis + progressive scan search; ~4%
    |      under the retired cjpegli at equal quality, q84 ≈ old cjpegli q82)
-   |   4. avifenc -q 63 -d 10 --speed 2 (10-bit AVIF, ~6% smaller at equal
-   |      quality than 8-bit; sips formatOptions 60 fallback) — primary
+   |   4. avifenc -q 63 -d 10 --speed 2, 4:4:4 colour / 4:0:0 gray (10-bit
+   |      AVIF, ~6% smaller at equal quality than 8-bit; libavif inside zenc
+   |      since the consolidation; sips formatOptions 60 fallback) — primary
    |
    v
 public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
@@ -1234,6 +1444,58 @@ it was that a full re-encode re-mints every URL either way, so once one was bein
 run the flag was free. The two `/garage/encoding` study generators keep
 their own efforts (6 and 4) and deliberately do NOT track this, because their
 byte counts are what that page prints.
+
+**The colour AVIF tiers are 4:4:4 since 2026-09-26, and the camera recording
+4:2:2 is not an argument against it.** 4:2:2 describes the 7728x5152 frame. A
+600px tier is that frame's square reduced ~8.6x, so every tier pixel averages ~4
+chroma samples across and ~9 down, and the tier carries FULL chroma at its own
+size. 4:2:0 then halves real information both ways. The no-compression round
+trip shows it: subsample and restore alone scores 93.1-93.5 ssimulacra2 on the
+three tiers against 96.3 on a native-resolution crop, so it is the downscale that
+makes subsampling expensive.
+
+At the SAME bytes, each layout bracketed between adjacent `-q` steps and
+interpolated to the shipped tier's exact size, 4:4:4 beat the shipped 4:2:0 by
++0.45 / +0.52 / +0.59 s2 on the 600 / 400 / 200 tiers over 24 photos (ahead on
+18, 16 and 15 of them), butteraugli agreeing at -0.03 to -0.08. 4:2:0 needs a
+median 2.2% more bytes to match it; 0 on 6 photos, 35% on XT508316, a red-lit
+night frame, because red is only 0.299 of BT.601 luma and its fine detail lives
+in Cr. 4:2:2 moved nothing. `tools/photos/avif-chroma-probe.ts` is the
+measurement and compares all three layouts against whatever ships, so it stays
+runnable after the change it justified.
+
+Three things about it worth keeping:
+
+- **The old verdict was measured at a fixed KNOB, and that is the whole
+  error.** `/garage/encoding` concluded "4:4:4 costs ~8% more and buys no
+  visible gain" from two cards at `-q 63`, where 4:4:4 is also the better
+  picture, so "costs more" and "buys nothing" were never measured at once. The
+  JPEG verdict in `src/worker/encode.ts` (4:4:4 is a byte tax) was never
+  re-measured and still stands; the AVIF one was rewritten with this change.
+- **`-q 63` stayed by owner call, and it is NOT byte-neutral.** The knob
+  probe's 320px crops put 4:4:4's equal-bytes point at a median fractional q of
+  62.79, which projected ~1%. The re-encoded library says otherwise: the colour
+  AVIF tiers grew +5.64% / +6.50% / +7.04% (600 / 400 / 200), 12.73 MB to 13.50 MB
+  in total, for +1.29 / +1.50 / +1.72 s2 on the 24-photo sample. The byte-flat
+  setting is q62 (+0.40% / +0.99% / +1.70%, +0.50 / +0.72 / +0.97 s2); q61 and
+  q60 are the same quantizer step and byte-identical to each other. So the
+  shipped change is the equal-bytes win PLUS a deliberate ~6% spend on quality,
+  and a projection from native crops did not survive contact with the tiers.
+- **The re-encode had a control first.** With the old 4:2:0 zenc, every tier of
+  all 258 photos was re-encoded and compared to the shipped `/i/` bytes
+  (1032 of 1032 files byte-identical, JPEG tier included), including the 93 `/cota-wec` album photos, whose originals were
+  fetched from R2 (`heif` in the photo index, else `full`) into a scratch
+  folder. Two traps on the way: `photo-inputs.ts` reads `Dirent.isFile()`, so a
+  SYMLINKED source folder reads as 165 missing photos and a partial rerender
+  silently skips them (clone with `cp -c` instead), and the remote
+  `reencode-thumbnails` workflow renders from the q100 share JPEGs rather than
+  the HEIF originals, so it cannot reproduce a HIF-sourced tier.
+
+Decoding: Apple's ImageIO decoded a 4:4:4 10-bit AVIF on macOS 27.2 (checked
+through `sips`); Chromium and Firefox decode through dav1d. AV1 needs its High
+profile for 4:4:4, and gotcha 7 is why that matters: a decode failure shows a
+broken image rather than falling back to the JPEG. If broken-image reports
+arrive from an older Apple device, this is the first suspect.
 
 **The ingest consolidated into `zenc square` on 2026-08-26, and the reason to
 read that entry is the INSTRUMENT rather than the pixels.** A note in
@@ -1333,6 +1595,18 @@ Two encoders + one transform tool, all built from source:
   `--sharpyuv`, which nothing passes. The two paragraphs below describe the
   vendored-first era and are kept for their measurements.
 
+  **Run again at the 3.15.1 bump, 2026-09-27: 42 of 42 identical.** This time
+  the bump got a sharper instrument. Build both tags from source with brew's
+  cmake flags, then point `DYLD_LIBRARY_PATH` at each one under the SAME zenc
+  binary, which confirms the swap through `--avif-version`, so libaom is the
+  only thing that differs. The result covers 9 stems (3 Leica JPG, 2 Fuji JPG
+  including the orientation-6 XT507876, 4 HIF) x 4 tiers at the 4:4:4 shipping
+  flags. Every tier matched across 3.15.0, the self-built 3.15.1, brew's
+  3.15.1 and the shipped `/i/` bytes. `avifenc` matched too, on 6 of 6 at
+  4:4:4 and 4:2:0. The source diff predicted it: the tag changes only
+  `av1/common/x86/convolve_2d_avx2.c`, which arm64 never compiles. So this
+  says nothing about an x86 runner, which is the one place that file runs.
+
   **Adopting it re-mints nothing**, verified 2026-08-26: at `-q 63 -d 10
   --speed 4 --yuv 420` the vendored and brew binaries produced BYTE-IDENTICAL
   output on a real 600px square, 26,594 bytes either way. That is the bar, since
@@ -1409,7 +1683,10 @@ Two encoders + one transform tool, all built from source:
   Do not chase it further, because 9.6ms of that is the I/O floor for opening
   those files at all, so the parse is ~0.3ms and no language or rewrite can
   reach it. The photo pipeline's real cost is the encode: the same run spends
-  ~19s in the zenc histogram bake.
+  ~19s in the zenc histogram bake. **Re-measured 2026-09-22, the bake takes
+  0.6 s for all 258 stems**, so the encode cost lives in `zenc square` now,
+  about three quarters of it inside libavif. `bun run zenc:bench` prints that
+  split on every run.
 - **exif-sooc** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked`).
   exiftool is GONE from this repository as of 2026-08-14:
   the six other scripts that still called it (encoding grids and samples,
@@ -1457,6 +1734,20 @@ Two encoders + one transform tool, all built from source:
   `requirements.txt`, `photos:env`, the pip dependabot lane, the osv-scanner
   requirements line and CI's `setup-python` all left with it; the ledger bans
   the interpreter and `contract-the-photo-pipeline-runs-no-python` holds it.
+
+  **That was false for a week, and TRUE only since 2026-09-22.** Two shell
+  scripts still piped a heredoc to `python3 -`: `hash-thumbnails.sh`, which
+  `add-photos.sh` runs on every photo add, and `bump-version.sh`, which stages
+  every release. The test's regex would have matched both. What it never did
+  was read them, because it scanned a hand-kept list of three files. Both
+  heredocs are `pipeline-json.ts` subcommands now (`hash-tiers`,
+  `checkpoint-add`), diffed byte for byte against the Python on the real
+  `hashes.json`, `public/i/` and `checkpoints.json`. The test now derives its
+  set from what the pipeline's entry points invoke, transitively, plus every
+  committed `.sh`. It found the second heredoc on its first run, which nobody
+  had gone looking for. Same lesson as gotcha 40: **a ban enforced over a list
+  is enforced over the list**, and the file that breaks it is the one nobody
+  thought to add.
 
 The four below serve the STUDY pages rather than the photo pipeline, and every
 one of them was undocumented until `tools:check` went looking (2026-08-14):
@@ -1833,6 +2124,18 @@ the generated `/lens` shell and `/search`. The farm derives nothing, so a hover
 in dev draws the photo frame with no EXIF lines, and `photo_recipe`'s byte-match
 arm degrades the same way. Build if you need either.
 
+**`/images/manifest.json` joined them on 2026-09-26, by a different road.** It
+is staged by build.ts step 1e from the bundled pool through `imagesManifestJson`
+in `photos.ts`, the same serializer the Worker falls back to, and the text-twin
+step gives it a q11 twin. Rendered per request, the edge compressed it on the
+fly: 13,082 B on the wire against 9,803 at q11 (+33.4%), measured in production.
+Unlike the two above it is NOT a build-only surface under `bun run dev`: the route
+falls back to the per-request handler on a 404, so dev still answers. Its route
+sets `IMAGES_MANIFEST_HEADERS` explicitly, and that is load-bearing, because
+`_headers` gives `/images/*` a one-year `immutable` cache that a staged file
+there would otherwise inherit. `contract-images-manifest-is-build-output` holds
+the byte identity, the twin, and that header, with a control showing the leak.
+
 ### AadharshBot — the branded crawler
 
 Lives in `src/worker/lib/botauth.ts`. Signs outbound HTTP reader requests
@@ -1998,6 +2301,23 @@ Two contract tests hold it together: one runs the conformance assertions against
 BOTH servers, and one fails if either file re-declares `MCP_SUPPORTED` or
 `MCP_PROTOCOL` locally instead of importing them — the drift that would pass on
 the day it was written and rot later.
+
+**The legacy half has an exit condition now, and it is a count.** Since
+2026-09-22 `mcpRequest` tags every well-formed message with its era
+(`noteEra` in `lib/mcp-protocol.ts`), and the per-request log line in
+`index.ts` carries it as `mcp` (`modern`, `legacy` or `mixed`), `mv` (the
+revision declared) and `mc` (the client a legacy `initialize` named). It rides
+the existing line rather than emitting its own, because every log line and span
+is an event on the 200K/day Free quota from 2026-10-01. Group `mcp` over the
+Observability dashboard's window to see whether legacy callers still exist, and
+`mv` to see which legacy revisions they speak, since `2024-11-05` can go before
+`2025-06-18` does. Both `mv` and `mc` are caller-controlled, so a revision must
+be date-shaped and a name keeps 40 printable ASCII characters, or the field is
+dropped. Self-dispatch (the `/lens` door probes against this origin) never
+reaches `serveWorkerRequest`, so this site's own calls are not counted.
+`contract-mcp-era-is-recorded-per-request` pins both servers and the log line.
+Retiring the legacy door stays an owner call made on those numbers, and Workers
+Logs keeps 3 days on Free, so read it more than once before deciding.
 
 **`/mcp` is also the browser's tool catalog, which is why `find_events` lives
 there.** `src/client/webmcp.js` reads `tools/list` from this ONE endpoint and
@@ -2250,7 +2570,7 @@ generic hex back.
   `/lens` rate-limit counters left KV 2026-08-04 for the Rate Limiting binding
   below — they were a WRITE per allowed request on the busiest route here, which
   had quietly made "we use a handful" false.)
-- **LENS_RL_\*** (Rate Limiting bindings, `ratelimits` in `wrangler.jsonc`) —
+- **LENS_RL_\*** (Rate Limiting bindings, `bindings.rateLimit` in `cloudflare.config.ts`) —
   the seven per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
   inspect 30/min, shot 3/min, compare 4/min, browser 3/min, wire 2/min, tools
   10/min, nlweb 4/min. An eighth, `LENS_RL_BROWSER_ALL` at 4/min, is keyed on a
@@ -2265,7 +2585,7 @@ generic hex back.
   `N/min` inside its own correction is still a greppable stale number.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 158 photos at FUJIFILM X-T50 + Leica resolution).
-- **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from public/.
+- **ASSETS** — the Workers static-assets binding (`bindings.assets()` in cloudflare.config.ts), serves files from public/.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
   the **single source of truth for the deploy log**. One row per logged deploy
   (written by the ramp at 100%, staged by bump-version.sh; the retired SW's
@@ -2274,7 +2594,7 @@ generic hex back.
   build) read this one `checkpoints` table, so they cannot drift apart. Schema:
   `checkpoints(vnum INTEGER PK, ts INTEGER, ymd TEXT, version TEXT, slug TEXT, title TEXT)`
   — `slug` is the version suffix / changelog tag, `title` is the human description.
-  **Configured in `wrangler.jsonc`** (d1_databases), like every other binding
+  **Configured in `cloudflare.config.ts`** (`bindings.d1`), like every other binding
   since the Workers migration.
   **Log a deploy** (so both pages stay current):
   `./tools/photos/bump-version.sh <slug> "<title>"`, run INSIDE the PR being
@@ -2305,7 +2625,7 @@ generic hex back.
   the binding, `/lens/shot` returns a clean 503 and the Human view falls back to
   the readable-text reader, so the live iframe + all machine lenses keep working
   regardless. (`CF_ACCOUNT_ID` is read by `/ledger`'s Analytics Engine SQL
-  alongside `ANALYTICS_READ_TOKEN`, and by the Kitesurf REST path below.)
+  alongside `ANALYTICS_READ_TOKEN`, and by the REST fallback below.)
 
   **Kitesurf rides the EXISTING `/lens/browser`, and there is no second route.**
   A `/lens/rendered` was built here on 2026-08-06 and deleted the same day: it
@@ -2314,19 +2634,51 @@ generic hex back.
   Action, and whose `deltaStrip` already computed the HTTP-versus-rendered word
   gap. Read `lens-browser.js` before adding a rendering surface.
 
-  What survives in `lens-render.ts` is the engine seam. **Kitesurf cannot be
-  reached from the binding**: probed 2026-08-06, passing `browser` to
-  `quickAction` returns `{"code":"unrecognized_keys","keys":["browser"]}`, and an
-  invented engine name returns the byte-identical error — the payload schema is
-  CLOSED, so it refuses the option rather than failing on an unknown value. REST
-  is the only door and it wants a `Browser Rendering - Edit` token in
-  `BROWSER_RUN_TOKEN`. That is an EDIT scope living as a Worker secret; it is not
-  in GitHub, so the no-write-token-in-CI rule is intact, but do not confuse it
-  for a read scope. `browser=kitesurf` is in Cloudflare's launch post and NOT in
-  the Quick Actions reference, so the code TRIES it and, on a 400, retries
-  without it and remembers for the isolate. Only the PARAMETER is conditional —
-  REST itself keeps serving, because gating the whole REST path on a dead beta
-  flag silently demoted every later render back to the binding.
+  What survives in `lens-render.ts` is the engine seam, and **since 2026-09-28
+  the BINDING is the Kitesurf door**: `quickAction(action, { ...payload,
+  browser: "kitesurf" })`. This paragraph said the opposite for seven weeks, and
+  it was true when written. Probed 2026-08-06, `browser` came back
+  `unrecognized_keys` for any value. Re-probed 2026-09-28 against the production
+  binding, each case with an invalid `url` so nothing rendered:
+
+  | extra key | errors |
+  |---|---|
+  | none | `Invalid URL` |
+  | `browser: "kitesurf"` | `Invalid URL` alone |
+  | `browser: "definitely-not-an-engine"` | `Invalid URL` + `invalid_value: expected "kitesurf"` |
+  | `definitely_not_a_key_xyz: 1` | `Invalid URL` + `unrecognized_keys` |
+
+  The last row is the control: the schema is still closed, so the second row is
+  acceptance rather than silence. The third row is the one the REST door never
+  gave: the engine name is VALIDATED, which is the bar the `kitesurf:check`
+  paragraph below sets for a bare `kitesurf` label, so the binding path reports
+  exactly that. A real render the same day agreed: example.com came back with
+  `window.chrome` undefined and no WebGL (Chromium has both), in 1118
+  browser-ms against Chromium's 2656, and `/garage` drew its layout, photos and
+  copy with a fallback font and without the SVG taskbar icons.
+
+  **Kitesurf refuses unimplemented options by name, and the refusal is free.**
+  The real `/lens/browser` payload came back 501, code 2000, `Unsupported
+  options: viewport.deviceScaleFactor`, in 790ms with no `x-browser-ms-used`
+  header. So `kitesurfPayload()` drops a `deviceScaleFactor` of exactly 1
+  (Chromium's default, so no pixel changes), and a 400 or 501 on the Kitesurf
+  attempt retries once on Chromium, labelled `chromium-binding`. A 429 or 5xx
+  does NOT retry: it would spend a render and a rate-limit slot to hide which
+  engine failed.
+
+  **Everything from here to the recipes note describes the REST FALLBACK**, which
+  now serves only a deployment with no binding. It wants a `Browser Rendering -
+  Edit` token in `BROWSER_RUN_TOKEN`. That is an EDIT scope living as a Worker
+  secret; it is not in GitHub, so the no-write-token-in-CI rule is intact, but do
+  not confuse it for a read scope. With the binding answering, production no
+  longer needs that secret, and deleting it (plus the REST branch of
+  `runBrowserAction`, per MAINTENANCE.md) is an open follow-up rather than part of the change that
+  moved the door, because a secret change mints a version (gotcha 25).
+  `browser=kitesurf` on REST is in Cloudflare's launch post and NOT in the Quick
+  Actions reference, so the code TRIES it and, on a 400, retries without it and
+  remembers for the isolate. Only the PARAMETER is conditional: REST itself keeps
+  serving, because gating the whole REST path on a dead beta flag silently
+  demoted every later render back to the binding.
 
   **The selector only works on `/browser-run/<action>`, and this posted to
   `/browser-rendering/<action>` until 2026-08-08.** Both spellings ROUTE, which
@@ -2376,6 +2728,10 @@ generic hex back.
   `--render` buys the certain answer for two renders of a 40-byte inline
   document. If the verdict is `enforced`, promote the label and record the date
   and the outputs at the control.
+
+  **The BINDING passed that control on 2026-09-28** (the table above), which is
+  why its label is a bare `kitesurf`. `kitesurf:check` tests the REST door alone
+  and stays the way to settle `kitesurf-requested`.
 
   Worth the effort because Kitesurf is FREE during its beta. The daily
   browser-minute ceiling is what makes `/lens/browser` fragile (and what blacks
@@ -3236,6 +3592,34 @@ how to recover the plans and their audit from git.
    tree. The `.src.*` twins are deliberately NOT mangled, since they are the
    readable copy.
 
+   **The short names come in TWO TIERS since 2026-09-24, because one site-wide
+   ranking let a page edit re-mint the shell.** On #915, one more `var(--sh)` in
+   /pixel-peeper's inline CSS made that page-local name (25 uses) outrank
+   luna.css's `--blue-65` (23). The two swapped letters inside luna.css,
+   `/a/luna.5e0c7979.css` became `/a/luna.5b20cdaa.css`, and 311 staged files
+   changed, which is gotcha 35's full bill for a one-line edit to one page. Now
+   `planNames` takes `CONTENT_HASHED`, the staged files step 6 hashes into `/a/`:
+
+   | tier | names | ranked by |
+   |---|---|---|
+   | shell | every name a hashed file DEFINES | uses inside the hashed files alone, `--a` first |
+   | rest | page-local names, and a name the shell only reads | a hash of the NAME into the two-character space |
+
+   No page count reaches either tier, so a page edit moves only that page. The
+   same edit on the fixed build changes 7 files, all pixel-peeper's (the page,
+   its `.src` twin, both `.br`, three page deltas). A CSS comment naming
+   `var(--sh)` changes only the `.src` twin and its `.br`, since minification
+   strips the comment later. Running 5c after minification was the other way to
+   fix comments counting, and it became unnecessary: page counts no longer
+   decide anything. Measured at q11 against the single ranking: `/a/` is -15 B
+   in total (luna.css -17 B, since its own repetition now decides its names),
+   and the 59 pages are +179 B in total, about 3 B each. The one remaining way
+   a page can move a shell name is to add a LITERAL short token (an authored
+   `--q`), because `taken` still seeds from every file. Step 6 fails if its
+   asset lists and `CONTENT_HASHED` disagree, and
+   `contract-mangle-keeps-page-edits-out-of-the-shell` pins the tiers with a
+   control showing the old ranking moves the shell on the same edit.
+
    **`keep_closing_tags` went false in the same change** (16,270 B raw across 55
    pages), which means served documents no longer carry `</html>`. That was
    measured and declined on 2026-09-02 because it re-mints every page and page
@@ -3246,8 +3630,9 @@ how to recover the plans and their audit from git.
    TRUNCATED response no longer differs from a complete one at the last byte.
    Truncation is caught by `maxBytes` and the marker assertions instead.
 
-   `wrangler.jsonc` self-builds and points both `main` and `assets` at
-   `.build/public`, so no deploy path can ship the readable originals. Local
+   The site config self-builds (`build.command` in `wrangler.config.ts`) and
+   points both the entrypoint and the assets directory at `.build/`, so no deploy
+   path can ship the readable originals. Local
    development uses `wrangler.dev.jsonc` against a SYMLINK FARM at `.dev-assets`,
    staged by `tools/dev-stage.ts`, which `bun run dev` and `bun run dev:remote`
    run first. It reads "against readable `public/`" above this line until
@@ -3303,7 +3688,7 @@ are installed on macOS, so the fallback path doesn't hit Helvetica/Arial.
 ## cal/ — coffee booking module
 
 The root site Worker serves `cal/src/` at `aadhar.sh/coffee`. Its bindings and
-policy live in root `wrangler.jsonc`; `cal/wrangler.test.toml` is the local test
+policy live in root `cloudflare.config.ts`; `cal/wrangler.test.toml` is the local test
 fixture. The build stages the module beside the site Worker entrypoint.
 
 [cal/README.md](cal/README.md) describes the booking flow, Durable Object slot
@@ -3532,6 +3917,31 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     every naive scanner in this file has failed: the init is an expression, and
     finding its end needs balanced parentheses.
 
+    **Since 2026-09-22 the RULES the walker applies are checked in workerd too.**
+    `contract-encodebody-survives-a-rebuild-in-workerd` writes a fixture Worker
+    that imports the real `lib/security.ts`, boots it through wrangler's
+    `createTestHarness` on the pinned workerd under production's compatibility
+    flags, and POSTs a brotli body through each rebuild shape. A client decoding
+    once gets the page back from `new Response(r.body, r)` and from both of
+    `withSecurityHeaders`'s carries, and one leftover brotli layer from an object
+    init, which is the control row that proves the instrument can see the bug. It
+    costs 1.2s and no dependency, runs under bun and node alike, and fails by name
+    when either carry in `security.ts` is deleted. A wrangler pin that moves the
+    asymmetry fails there rather than shipping. This was the case for bringing
+    back `@cloudflare/vitest-pool-workers`, which #703 removed, and the harness
+    turned out to answer it without Vitest.
+
+    **Writing it found the flag is read ONCE, at serialization.** Deleting the
+    carry on `withSecurityHeaders`'s early noindex rebuild left an HTML row
+    green, because the main rebuild after it sets the flag again and an
+    intermediate Response hands its body stream on untouched. So that carry
+    matters only on the paths where no later rebuild runs, the image and redirect
+    bails, and the test holds it with an `image/svg+xml` row. The walker is
+    therefore conservative in one direction: it flags an intermediate rebuild
+    that a later carry would rescue. Leave it that way, since proving a later
+    carry exists on every path is a control-flow analysis a brace matcher cannot
+    do.
+
     Three suspects were investigated and exonerated. Two of the three are real
     facts worth keeping, they just weren't the cause: (1) a worker cannot read the
     client's Accept-Encoding, so it genuinely cannot negotiate compression;
@@ -3669,8 +4079,17 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     A returning visitor was taking 13.7 KB on the render-blocking path where the
     deltas are 1.3 KB. `dcz:check` printed PASS the whole time (see below).
 
-    `.github/workflows/dictionary-roll.yml` runs the roll nightly against
-    production and opens a PR when anything moved. It cannot merge that PR:
+    `.github/workflows/dictionary-roll.yml` runs the roll against production
+    and opens a PR when anything moved. **It fires after every release that
+    reaches 100%, since 2026-09-26**: `promote-production.yml`'s `after-release`
+    job dispatches it once `/whoareyou.json` reports the new version (the ramp's
+    `verify` job did until 2026-09-28), and the nightly schedule stays as the backstop. A
+    nightly roll alone fell behind a repo that ships several releases a day: #921
+    rolled at 14:42Z, a later release re-minted luna, nav and nav-run, and
+    `dcz:check` reported all three uncovered hours later. It is a dispatch from
+    inside the ramp rather than a `workflow_run` on it because a ramp's
+    conclusion cannot say whether it shipped: of 40 runs, 25 were `skipped`
+    no-ops and 14 `cancelled`, some of those after reaching 100% (gotcha 36). It cannot merge that PR:
     `main` takes zero bypass actors, which is the property the release model rests
     on, so the last step stays a human one deliberately. `a-dict` is
     `.assetsignore`d (build input, not a public URL).
@@ -3758,8 +4177,17 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     unnegotiable server-side; the ONLY safe zstd trigger is `Available-Dictionary`,
     which doubles as proof the client speaks dcz. So "zstd where it wins" IS the
     delta path. Loader classes differ (#119): js/css dcz proven in production, html
-    server-side proven (149-byte page delta decodes to the live page), svg OFF by
-    design (Chromium's image loader chokes). `bun run dcz:check` asserts both page
+    server-side proven (149-byte page delta decodes to the live page), and svg ON
+    for everyone since 2026-09-26. The July diagnosis that kept svg off (Chromium's
+    image loader chokes on dcz) never reproduced, locally or in production: a cookie
+    canary (#940) and a sprite change (#943) put the first svg delta on the wire,
+    116 B against 2,424 B of br, and two profiles holding the previous sprite
+    (Chrome 154.0.8037.58, Canary 156.0.8074.0) took it over h2 and drew all 14
+    icons on first load and reload. A wrong-dictionary delta does break the image,
+    so the rig can see the failure. The rollback is taking `svg` out of
+    `DICTIONARY_TYPES` in `lib/assets.ts`; the symptom to watch for is the July
+    one, blank taskbar icons for returning Chromium visitors after a sprite change.
+    `bun run dcz:check` asserts both page
     tiers against production, reading the family dictionary out of the live `Link`
     header and the per-page candidate from `src/dict/p-dict`. With `bun run dict:roll`
     the source is production for both halves, so the old "roll only from the deployed
@@ -3933,11 +4361,22 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
 
     Hashes rather than a nonce because the staged documents are PRECOMPRESSED
     (gotcha 14): nothing can be injected per request into bytes brotli'd at build
-    time, and the runtime has no brotli encoder to redo them. The live
-    worker-rendered pages (`/whoareyou`, `/around`, `/coffee`, `/search`, `/ledger`,
-    `/rn/admin`, `/serendipity`) are NOT precompressed, so a per-response nonce is
-    the right mechanism there and is the open follow-up. They keep the loose policy
-    until then, which is no worse than before.
+    time, and the runtime has no brotli encoder to redo them. **Pages the Worker
+    renders at request time hash their own, since 2026-09-25**: `lunaPage` holds
+    the whole document as one string before building the Response, so
+    `lib/inline-csp.ts` hashes its inline scripts there (a synchronous SHA-256 in
+    `lib/sha256.ts`, because `crypto.subtle` is async and there is no
+    `nodejs_compat`) and sends the hashed policy with the bytes, which is also
+    what a cached render stores. It FAILS OPEN to the loose policy on anything a
+    hash cannot cover (an event-handler attribute, a `javascript:` URL, an
+    `srcdoc`). Three HTML surfaces stay loose because they do not come through
+    `lunaPage`: `/coffee` (cal renders its own templates and cannot import the
+    site tree, gotcha 16), the live `/serendipity` pages (they compose their own
+    policy; the built dashboard carries that policy with the build's hashes), and
+    the `/lens?url=` framed view (ditto). `/security` (2026-09-16), `/whoareyou`,
+    `/garage/dyno`, `/ledger`, `/around`, `/inbox`, `/lens/census` and the `/serendipity` dashboard (all 2026-09-25) are built documents with their live values fetched after load, and build step 5b now fails on a registered page that is neither built nor named with a reason in `config/per-request-pages.json`;
+    `src/worker/lib/island.ts` is that convention for rows, and its header says
+    when JSON slots fit better.
 
     Three things verified in a real browser rather than assumed, all on 2026-07-30:
     a HASHED `<script type="speculationrules">` is allowed and an unhashed one
@@ -4329,7 +4768,7 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     Two announced pieces are not shipped and nothing here should be built on them
     yet: **model-first routing** (ask for a model abstractly, let the gateway pick a
     provider and fail over) and **smart routing**. The first is worth watching,
-    since `lwe-ask/wrangler.toml` already carries a scar from `llama-3.1-8b` being
+    since `lwe-ask/cloudflare.config.ts` already carries a scar from `llama-3.1-8b` being
     deprecated out from under `GEN_MODEL` on 2026-05-30.
 
 24. **The ramp writes the changelog from YOUR WORKING TREE, so pull `main` before
@@ -5318,6 +5757,31 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     portable path can be forced where reproducibility has to be guaranteed
     rather than observed.
 
+    **THAT CORRECTION HOLDS FOR AN ENCODE AND BREAKS ON A RESIZE.** Re-measured
+    2026-09-23 on three shipped tiles (`L1000069_3`, `XT500010`, `XT507876`) at
+    q84 progressive. Each backend was forced in turn on one macOS host (bun
+    1.4.3), with `oven/bun:1.4` Linux arm64 (1.4.2) as the control:
+
+    | operation | macOS `system` vs `bun` | macOS `bun` vs Linux |
+    |---|---|---|
+    | encode only | identical, 3 of 3 | identical, 3 of 3 |
+    | `rotate(90)` | identical, 3 of 3 | identical, 3 of 3 |
+    | `resize(400, 400, { fit: "inside" })` | **differs, 3 of 3** (+18, +8, -5 B) | identical, 3 of 3 |
+
+    So the 2026-08-25 run was right about what it ran, an encode of a tile that
+    was already 600px, and the paragraph above generalised that to the backend.
+    Which resampler each backend calls is not verified here. What is measured is
+    that the two agree on the two exact operations and disagree on the one that
+    has to choose a filter. Every served tier here is a resize, so the original
+    argument stands for the job this pipeline would hand it: macOS and Linux
+    WOULD mint different `/i/` URLs. `Bun.Image.backend = "bun"` is the fix, and
+    it makes macOS match Linux on all nine cells above, across two bun releases.
+
+    Take the general shape past this API: **a byte-identity result is a claim
+    about the operations it exercised.** A backend difference can only show on
+    an operation where the backends do different work, and an encode of
+    pre-sized pixels exercised the shared encoder and nothing else.
+
     **The SIZE gap is real and is the whole case, and it is smaller than the
     numbers above.** `progressive: true` is documented and this note never tried
     it: on the shipped 600px `L1000069_3` tile it takes the q84 encode from
@@ -5753,9 +6217,31 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     - **Bindings live under `env`**, which is what pays for the format: the
       generated types read `InferEnv<typeof cloudflare.config.default>`, so the
       binding names ARE the type of `env` instead of a snapshot some earlier
-      `wrangler types` run happened to take. Nothing here reached that payoff
-      yet, because `wrangler types` does NOT accept `--x-new-config` (measured:
-      unknown argument) and the types are written by `wrangler dev`.
+      `wrangler types` run happened to take. **The payoff arrived on
+      2026-09-26, through `build` rather than `types`.** `wrangler types`
+      still refuses `--x-new-config` (exit 1, "Unknown arguments", on pin
+      3572193). What workers-sdk#15778 added is a writer inside the config
+      loader: `dev` and the BUILD-OUTPUT `build` each write
+      `.cloudflare/types/index.d.ts` in the working directory, the `Env`
+      inference above plus the runtime surface at this Worker's own date and
+      flags. `tools/gen-runtime-types.ts` runs `wrangler build --x-new-config
+      --x-cf-build-output` in `cf-garage/` before typecheck and lint (1.15 s
+      cold, no credential, offline; cached on the wrangler version plus the
+      config's bytes), and `tsconfig.cf-garage.json` includes that file in
+      place of the site's. `src/index.ts` types its handler as `env: Env`, so
+      renaming `COUNTER` in the config and not in the source fails typecheck
+      by name, with no regeneration, because the `Env` is a `typeof import`
+      of the config rather than a copy of it. Three traps on the way:
+      `deploy --dry-run --x-new-config` never reaches the writer; `build
+      --x-new-config` WITHOUT the output flag is a dry run with
+      `--outdir=dist` and leaves an unignored `cf-garage/dist/`; and the writer
+      SWALLOWS its own failure (logs, returns, exit 0), measured by denying it
+      loopback, so the generator deletes the file first and refuses when it
+      does not come back. The runtime half is byte-identical to the site's
+      today (604,981 B each): `nodejs_compat` adds nothing to workerd's
+      generated declarations, which leave `node:*` to @types/node. So this
+      bought the Env, and it buys a separate runtime the day cf-garage's date
+      or flags move where the site's cannot follow.
     - **`[[migrations]]` has no equivalent and needs none.** A DO class declares
       its lifecycle as state on its export (`{ storage: "sqlite" }` is the
       created form; `state` carries deleted / renamed / transferred /
@@ -5799,6 +6285,37 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     from a filename expires the day the vendor ships a second filename, and it is
     still better than a hand-kept list, because a list goes stale without failing
     anything.
+
+    **The `cf` CLI runs here since 2026-09-28, as a workstation global.** Cloudflare
+    launched it as wrangler's successor, and for a JavaScript Worker it DELEGATES
+    to wrangler ("Delegating to Wrangler"), so `cf build` wrote the same 3 files
+    to `.cloudflare/output/v0/` as `wrangler build --x-new-config
+    --x-cf-build-output`, sha256 for sha256, and `cf deploy --dry-run` needs no
+    credential. Install it with `bun add -g cf` and run it from `cf-garage/`.
+    Two things it needed, both recorded in `docs/DEPENDENCIES.md` under
+    `cf-garage/`: cf reads the dev server from the PROJECT'S manifest, so
+    cf-garage names the root's exact wrangler URL (check-wrangler went from an
+    absence test to an equality test to allow it); and cf stays OUT of the tree,
+    because its CLI half pins a second Miniflare and Workerd. The bun door is
+    the one this entry opened with: `cf` resolves to a `#!/usr/bin/env node` shim and runs,
+    while `bun run --bun cf build` puts bun in front of wrangler's config loader
+    and is refused by name.
+
+    **`cf migrate` moved lwe-ask and lens-reader onto this format the same day,
+    and refused the site Worker.** Each upload came out byte-identical to its
+    toml (`deploy --dry-run --outdir`, index.js sha256), with every comment
+    carried over by hand, since the generator drops them, and the import pointed
+    at `@cloudflare/config/public` like this file. Run it with `--no-install`,
+    because its default adds `cf` as a dependency. It REFUSED the site Worker:
+    `cf migrate --dry-run` reports that Workflow bindings "are not supported by
+    the new config and were not migrated", which would drop `BOOKING_WORKFLOW`
+    and `CENSUS_WORKFLOW` silently. That is the migrator's gap rather than the
+    format's (`exports.workflow` and `bindings.workflow` both exist), so the
+    site moved by hand the same day; gotcha 48. Two traps met on the way:
+    `wrangler tail` refuses `--x-new-config` (while `tail --x-new-config --help`
+    exits 0), so both tail scripts name the Worker instead; and
+    `gen-runtime-types` now reads the two configs by IMPORTING them, since a TS
+    config is a program rather than data.
 
 46. **A re-encode changes the pixels the HISTOGRAMS were computed from, and the
     check that should have caught that compares two files derived from each
@@ -5884,6 +6401,27 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     pinning them to bytes would invent staleness on every re-encode. And the MCP
     cards already have a contract test that deep-equals them against each server's
     live `tools/list`, which is stronger than a digest.
+
+    **The histogram digest no longer hashes zenc, since 2026-09-28, because CI
+    measures the output instead.** It used to include `histogram.rs`,
+    `pixels.rs` and `Cargo.lock`, so every zenc dependency bump read STALE and
+    was cleared by hand the same way each time: build zenc on both lockfiles,
+    bake 258 photos twice, diff, run a control, `--lock` (#871, #985, both 258
+    of 258 identical). `bun run histograms:check` does that in CI's native photo
+    validation job. It builds zenc from the tree, bakes every photo into a temp
+    root, and compares the packed result with the committed
+    `histograms.json` byte for byte, with a one-bin control on every run. A zenc
+    bump that moves no bar now passes with no commit, and one that does fails
+    naming the photos. `public/i` stays in the digest, so a re-encode that skips
+    the bake still fails on a machine with no cargo.
+
+    Two things worth knowing. The auto-relock route (`dependabot-relock.yml`
+    pushing a `--lock` commit) was the obvious build and is the wrong one: it
+    holds a write token and refuses to execute bumped code, and checking a cargo
+    bump means compiling it, `cc` being build-script code by definition. And a
+    full `--lock` now prunes rows that NO declaration collects. Before, an input
+    taken out of a declaration kept its row forever, while the contract test that
+    caught it recommended the full `--lock` that could not remove it.
 
 42. **A JSDoc TYPE in a `.ts` file is INERT, and this repo wrote them six times
     during one migration.** TypeScript ignores `@type`, `@param {T}`,
@@ -6015,6 +6553,28 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     (config/.generated/ was first proven from one), and it costs about 2s of
     install. Remove it with `git worktree remove --force` afterwards.
 
+    **A THIRD DOOR, found 2026-09-21, and it fails in the OTHER direction:
+    red on the workstation, green in CI.** `bun run typecheck` reported two
+    errors in `cal/test/*.js`, `"BOOKING_WORKFLOW"` not assignable to `never`,
+    and the detached control above answered 0. Wrangler's `cli.d.ts` imports
+    `Workflow` from its OPTIONAL peer `@cloudflare/workers-types`, so its
+    `BindingName<Env, Workflow>` compares that type against the generated
+    runtime's `Workflow` on `CalEnv`. In CI the peer is absent, the import is
+    `any` under `skipLibCheck`, and the generic degrades to `string`. On the
+    workstation `--traceResolution` found the peer at
+    `node_modules/.bun/node_modules/@cloudflare/workers-types`, bun's HOISTED
+    store links, pointing at a `5.20260825.1` entry the lockfile had not named
+    since the package left on 2026-09-02. Deleting `node_modules/@cloudflare`
+    changed nothing, because that is the first door and this was the third.
+    A frozen install never recreates any of it, so a tree that has only ever
+    been installed forward carries every version it ever held.
+
+    The rule is the one already stated, made sharper: **`rm -rf node_modules
+    && bun install --frozen-lockfile` is the only removal that removes**, and
+    a nested worktree needs it on the PARENT too (its store is on the walk).
+    Read a workstation-only typecheck failure on a wrangler pin bump as this
+    before reading it as the pin.
+
 45. **A fixture rooted at a bare `mkdtemp` of `tmpdir()` compares a tool's
     RESOLVED output against an UNRESOLVED path, and only macOS can see it.**
     `$TMPDIR` there reaches `/private/var/folders/...` through the `/var`
@@ -6140,6 +6700,201 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     workstation suite stops being a pre-push gate at all. Two of these three
     instances were sitting on `main` unreported. Treat a local-only failure as a
     real bug in the fixture rather than an environment quirk to route around.
+
+47. **A merge driver's `%A` and `%B` INVERT between merge and rebase, and the
+    marker files that would tell you which you are in do not exist yet.** The
+    drivers in `.gitattributes` exist because `main` moves under every open
+    branch here; what took the measuring was making them safe.
+
+    Replaying the last 80 commits (cherry-pick each onto the parent of the one
+    before, which is "my branch was cut before that landed") gives 11 conflicts
+    in 78 adjacent pairs, about 14%. **The class is not what it looks like**: 22
+    of the 44 conflicted regions are ADD/ADD, two branches each inserting a line
+    into the same block, and exactly ONE of the 11 is a version bump. With the
+    drivers in, `package.json` and `bun.lock` leave the conflict list entirely
+    and `config/derivations.json` goes 5 to 2, the 2 being genuine two-sided
+    edits. Conflicted PAIRS only go 11 to 10, because prose in `CLAUDE.md` and
+    `MAINTENANCE.md` co-occurs with nearly every one and nothing here touches it.
+
+    Four things were measured rather than reasoned about, and each one changed
+    the design:
+
+    - **`git rerere` does not help.** It keys on the conflict TEXT and every pin
+      bump carries a different sha, so recording a resolution for one and
+      replaying the next printed `Recorded preimage` and left the markers in.
+      Two entries in `rr-cache`, never a replay.
+    - **Orientation.** One driver, three verbs:
+
+      | verb | `GIT_REFLOG_ACTION` | markers | `%A` ours | `%B` theirs |
+      |---|---|---|---|---|
+      | merge | `merge upstream` | none | FEATURE | UPSTREAM |
+      | rebase | unset | `rebase-merge` | UPSTREAM | FEATURE |
+      | cherry-pick | unset | none | UPSTREAM | FEATURE |
+
+      So a driver written as "take theirs" takes the OPPOSITE side depending on
+      how the branch was integrated, and both verbs are used here. `MERGE_HEAD`
+      and `CHERRY_PICK_HEAD` are not written yet when the driver runs, so merge
+      and cherry-pick are indistinguishable by marker while being opposites;
+      merge is the one case carrying a positive signal, which is what
+      `mainlineIsOurs()` reads. Every mode is side-independent by construction
+      except the pin rule, which is loud about what it took.
+    - **A refusing driver writes NO conflict markers.** Exiting non-zero marks
+      the path unmerged and leaves `%A` exactly as it found it, so the working
+      file held the mainline side, clean, with nothing to see. Staging it would
+      have taken one side blind. `refuse()` runs `git merge-file` to put the
+      markers in, and the contract test that caught this fails without it.
+    - **`post-merge` does not fire when a merge had conflicts**, which is
+      precisely the case a driver creates. Measured: a conflicted merge resolved
+      and committed fires `post-commit`; a clean merge fires `post-merge`; a
+      rebase fires `post-rewrite` whether or not it stopped. All three drain the
+      ledger, and `bun install --frozen-lockfile` in CI is the backstop under
+      them.
+
+    **The round-trip guard is what makes refusing safe AND is a silent
+    no-op risk.** `json` and `pin` rewrite the whole file from a parsed value, so
+    each first re-serializes the untouched inputs and refuses anything it cannot
+    reproduce byte for byte. All three owned files reproduce exactly today. The
+    failure has no symptom: reformat one and the conflicts simply come back with
+    nothing connecting them to the reformat, so a contract test asserts the
+    committed bytes round-trip rather than asserting only the code.
+
+    Two smaller things this cost. `git clean -qfd $EXCLUDES` in a zsh harness
+    passed one literal argument and deleted the driver under test, which read as
+    "merge drivers do not work" for a while and is gotcha 2 arriving in a new
+    place. And splicing the new code in with `t.indexOf("}", ...)` found the
+    brace of a `${line}` inside a template literal rather than the function's,
+    which is gotcha 19 one layer up.
+
+    **THE PROSE HALF IS WHY `merge=union` IS NOT THE ANSWER, and the granularity
+    is the whole finding.** Git's built-in union resolves a conflicting hunk by
+    concatenating both sides, which is right for an insertion and wrong for an
+    edit, and it works on LINES so it cannot tell them apart. The case that
+    decided it, from this file's own history: one side had `# First run
+    (2026-09-14) found margin-trim live in Canary 155` and the other had that
+    sentence WITH a full stop plus 21 lines extending the section. Line union
+    keeps both, so the sentence lands here twice in a row one character apart.
+    **A duplicate-line counter scores that zero**, because the lines are not
+    identical, which is how the first attempt to measure it came back clean.
+
+    So `prose` is diff3 over BLOCKS: a chunk one side moved is taken, a chunk
+    both sides moved identically is taken once, a chunk both sides moved
+    differently is refused, and the one place both sides are emitted is a chunk
+    whose base is EMPTY, meaning neither side edited anything and both inserted.
+
+    Two refinements, each forced by a measurement against the eight real
+    diverged branches in this repository rather than against the replay, which
+    structurally cannot exercise this (its `ours` is the PARENT of base, so every
+    side reads as a deletion):
+
+    - **Blank-line paragraphs are too coarse.** Markdown puts no blank line
+      between bullets, so a 30-item list is ONE block and any two branches
+      touching that list collide. At that granularity the driver resolved 0 of 4.
+      Blocks now split per list item, heading and table row as well.
+    - **Plain diff3 is still too coarse**, because a chunk between two anchors
+      conflates independent changes. `docs/DEPENDENCIES.md` had main bumping
+      `Oxlint 1.83.0` to `1.84.0` inside one bullet while a branch added a
+      different bullet beside it, which is exactly the version-bump-next-to-an-
+      insertion shape this whole change is named after. When one side's change
+      within a chunk is pure INSERTION, its new blocks are laid back into the
+      other side's text at the same anchors.
+
+    That takes it to **2 of 4 real prose conflicts resolved**, and the two it
+    still refuses are genuine two-sided edits of one paragraph. Verified rather
+    than counted: across every resolution, 0 invented lines, 0 dropped lines that
+    both sides kept, and every main-only line preserved, including 3678 of 3678
+    on a branch 521 commits behind. A stale branch cannot silently revert main's
+    prose through this.
+
+    **THE EXPENSIVE MISTAKE HERE WAS RETURNING 1 FROM A REFUSAL.** A driver
+    REPLACES the default merge for every path it claims, including the many the
+    default resolves cleanly, so declining with a hard failure manufactures
+    conflicts rather than declining to help: claiming CLAUDE.md that way took the
+    replay from 11 conflicted pairs to **24**. `fallBackToTextMerge` runs
+    `git merge-file` and returns ITS exit code, so a decline is a true no-op when
+    the text merge is clean and carries ordinary markers when it is not. A
+    contract test pins that, because the failure looks like the driver working.
+
+    **The definitions cannot be committed**, which is git's decision rather than
+    an oversight: `.gitattributes` names a driver and `.git/config` defines the
+    COMMAND, and a repository you clone must not be able to run one at you. So
+    `config/gitconfig` is committed and `bun run setup:merge` wires it in with
+    `include.path`, once per clone. Worktrees share one `.git/config`, so one run
+    covers all of them. An `include.path` naming a missing file is SILENTLY
+    IGNORED, so that script reads the driver back out afterwards and fails if it
+    is not there.
+
+48. **The site config is TypeScript since 2026-09-28, and most wrangler
+    commands cannot read it.** `cloudflare.config.ts` (what the Worker is) and
+    `wrangler.config.ts` (how wrangler builds it) replaced `wrangler.jsonc`,
+    translated by hand because `cf migrate` drops Workflow bindings. Wrangler
+    reads the pair only behind `--x-new-config`, and only some commands take
+    that flag. Measured the same day, with a real invocation each rather than
+    `--help`, which exits 0 for a flag the command then refuses:
+
+    | accepts `--x-new-config` | refuses it as an unknown argument |
+    |---|---|
+    | `deploy`, `build`, `versions upload`, `versions deploy` | `versions list`, `versions view`, `deployments status`, `versions secret put`, `tail`, `check startup`, `types`, `d1`, `kv` |
+
+    A refusing command given no config loses what `wrangler.jsonc` used to
+    supply by being found: the Worker name, the pinned account (this login sees
+    two, so wrangler will not guess), and binding names like `d1 execute
+    RESTORE_DB`. And `createTestHarness`, which boots the route oracle, takes a
+    config path or an inline object in the LEGACY shape and has no new-config
+    door at all.
+
+    So there is ONE translation. `tools/lib/site-config.ts` projects the TS pair
+    into the legacy shape, and `.wrangler.site.jsonc` is that projection written
+    out: gitignored, regenerated, never edited. `siteWranglerArgs()` makes the
+    split for every tool (`--x-new-config` for a command that builds, `-c` on the
+    generated file for the rest), and `bun run wrangler:site <command>` is the
+    same split for a person: it is what `bun run wrangler <command> -c
+    wrangler.jsonc` was. Readers that want fields call `siteConfig()`; the
+    contract suite goes through `configText()` in `contract-shared.ts`.
+
+    **The release path needed no dashboard change**, and that is the design
+    choice worth defending. The declared deploy command never names a config, so
+    `.github/deploy-wrangler.sh` adds `--x-new-config` itself whenever
+    `cloudflare.config.ts` exists. Either order of the dashboard alternative
+    breaks releases for a window (dashboard first fails every build of a `main`
+    without the TS config; merge first fails every build of one without
+    `wrangler.jsonc`), while an in-repo switch lands atomically with the merge.
+    It is the one argument that script adds, conditioned on the FILE rather than
+    the command, and `contract-the-typescript-quarantine` pins exactly that, with
+    a control that smuggles a second flag and fails.
+
+    How it was proven before `wrangler.jsonc` was deleted, since each check
+    covers a different layer:
+
+    - the dry-run bundle through `--x-new-config` is byte-identical to the
+      jsonc's (`index.js` sha256, 771.75 KiB), with the same 48 bindings;
+    - `wrangler build --x-cf-build-output` resolved to the same name, date,
+      flags, account, 3 routes, 4 crons, 94 `run_worker_first` rows in order,
+      html handling, cache, entrypoint caches, workers.dev and preview settings,
+      observability, Workflows, 10 secrets and 17 vars;
+    - the projection deep-equals the parsed jsonc on all 30 top-level keys,
+      under bun and node, except `dependencies_instrumentation`, a no-op when
+      absent (gotcha 41 has the read);
+    - the route oracle, booted from the generated file, passed 194 of 194.
+
+    **The upload half of the export form is MEASURED; the deploy half is not.**
+    None of the checks above could say whether `versions upload` accepts the
+    Durable Object and Workflows in EXPORT form (`exports.durableObject`,
+    `exports.workflow`) for classes that already exist under the `v1`
+    migration tag, since cf-garage had proved that for `deploy` alone. A branch
+    build is the instrument, because both Workers Builds commands are `versions
+    upload` against the real Worker. It answered on 2026-09-28: version
+    `5c64677c` (alias `claude-site-worker-ts-config`) uploaded with all 48
+    bindings, `fetch` + `scheduled` handlers, the right date and flags, and both
+    Workflows annotated "(defined in aadhar-sh)", the new config's signature.
+
+    What is still unmeasured is `versions deploy`, the step that RECONCILES
+    declarative exports ("reconciled when the version is deployed", in
+    wrangler's own error text). That is precisely where #950's
+    `observability.issues` passed an upload and then failed every ramp, so the
+    first ramp after this lands is the measurement. A refusal there fails the
+    ramp's `versions deploy` before any traffic moves, which is the shape #950
+    had, and `bun run deploy:promote --rollback` is the exit if anything gets
+    further than that.
 
 ---
 

@@ -52,7 +52,7 @@ export default {
 async function hmac(secret, msg) {
   const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(msg));
-  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("");
+  return new Uint8Array(sig).toHex();
 }
 function timingSafeEq(a, b) {
   // Same reasoning as lib/http.js: asText treats "" as absent, which is right at

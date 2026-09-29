@@ -176,8 +176,8 @@ test("webmcp.js ships as a minified asset with a readable twin", () => {
 });
 
 test("both entry points reach webmcp.js through an import specifier", () => {
-  // Deliberately unhashed, for hoist.js's reason: the /a/ repointer is
-  // attribute-scoped (src=/href= only) and would never rewrite an import().
+  // The SOURCE keeps the plain specifier; build.ts STRING_ASSETS rewrites it to
+  // the hashed /a/ URL in the staged copies, and fails the build if it did not.
   for (const [file, source] of [["nav.js", NAV], ["lens-webmcp.js", LENS_WEBMCP]]) {
     assert.ok(/import\(\s*"\/webmcp\.js"\s*\)/.test(source),
       `${file} should load the WebMCP core with import("/webmcp.js")`);

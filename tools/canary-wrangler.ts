@@ -56,9 +56,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { asRecord, asText } from "../src/worker/lib/parse.ts";
 import { interpretZstdProbe } from "./lib/bun-pin.ts";
-import { WRANGLER_WATCHES, type WatchResult, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
+import { WRANGLER_WATCHES, type WatchResult, interpretTemporalProbe, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { siteWranglerArgs } from "./lib/site-config.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -191,10 +193,11 @@ try {
   // ------------------------------------------------------------------------
   // 1. the dry-run bundle, and whether it moved a byte
   // ------------------------------------------------------------------------
-  // Both dry-runs self-build through wrangler.jsonc's build command, so each
-  // one stages its own tree with the PINNED bun; only the bundler differs.
+  // Both dry-runs self-build through wrangler.config.ts's build command, so
+  // each one stages its own tree with the PINNED bun; only the bundler differs.
+  // Both pass --x-new-config, the flag the site config needs since 2026-09-28.
   {
-    const out = run(NODE, [candidateEntry, "deploy", "--dry-run", "--outdir", candidateOut], { cwd: wt, timeout: 10 * 60_000 });
+    const out = run(NODE, [candidateEntry, "deploy", "--dry-run", "--outdir", candidateOut, "--x-new-config"], { cwd: wt, timeout: 10 * 60_000 });
     const ok = out.status === 0 && existsSync(join(candidateOut, "index.js"));
     step({ name: "deploy --dry-run bundles", ok, hard: true, detail: ok ? `index.js ${statSync(join(candidateOut, "index.js")).size} B` : tail(out).join(" ") });
     if (!ok) {
@@ -203,7 +206,7 @@ try {
     }
   }
   {
-    const [cmd, args] = wranglerCommand(["deploy", "--dry-run", "--outdir", pinnedOut]);
+    const [cmd, args] = wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run", "--outdir", pinnedOut]));
     const out = run(cmd, args, { cwd: ROOT, timeout: 10 * 60_000 });
     if (out.status !== 0 || !existsSync(join(pinnedOut, "index.js"))) {
       console.error(`the PINNED dry-run failed: ${tail(out).join(" ")}`);
@@ -270,17 +273,32 @@ try {
         const read = interpretZstdProbe(out.stdout);
         return read.parsed ? { landed: read.honoured, detail: read.detail } : { landed: null, detail: `did not run: ${tail(out, 1).join(" ").slice(0, 120)}` };
       },
-      "wrangler-types-accepts-x-new-config": (tree, entry) => {
-        // cf-garage is the one config in the new format, and --path keeps the
-        // generated file out of either tree.
-        const target = join(scratch, `types-${tree === ROOT ? "pinned" : "candidate"}.d.ts`);
-        const out = run(NODE, [entry, "types", "--x-new-config", "--path", target], { cwd: join(tree, "cf-garage"), timeout: 2 * 60_000 });
-        const wrote = out.status === 0 && existsSync(target);
-        // wrangler colours its errors; the escape is built from its code point
-        // so the source carries no control character.
-        const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
-        const why = `${out.stderr || ""}${out.stdout || ""}`.replace(ansi, "").split("\n").find((l) => /Unknown argument|ERROR/.test(l))?.trim();
-        return { landed: wrote, detail: wrote ? `exit 0, wrote ${statSync(target).size} B` : `exit ${out.status}${why ? `: ${why.slice(0, 100)}` : ""}` };
+      "workerd-exposes-temporal": (tree) => {
+        const out = run(NODE, ["tools/workerd-temporal-probe.ts"], { cwd: tree, timeout: 3 * 60_000 });
+        const read = interpretTemporalProbe(out.stdout);
+        return read.landed === null ? { landed: null, detail: `did not run: ${tail(out, 1).join(" ").slice(0, 120)}` } : read;
+      },
+      "vitest-plugin-accepts-vitest-5": (tree) => {
+        // Each tree's own wrangler spec names the workers-sdk ref, and pkg.pr.new
+        // publishes the plugin from that same ref, so this reads the build that
+        // tree would install beside its wrangler. The ref is a sha on the pinned
+        // tree and whatever `--ref` said on the candidate, `main` on the nightly
+        // run, which pkg.pr.new resolves for the plugin exactly as it does for
+        // wrangler (measured 2026-09-22: main, a PR number and a short sha all
+        // answer 200). A hex-only match here read `null` on every nightly
+        // candidate, and `null` never moves a verdict, so it could never fire.
+        const spec = String(JSON.parse(readFileSync(join(tree, "package.json"), "utf8")).devDependencies?.wrangler ?? "");
+        const at = spec.match(/^https:\/\/pkg\.pr\.new\/cloudflare\/workers-sdk\/wrangler@([\w.-]+)$/)?.[1];
+        if (!at) return { landed: null, detail: `did not run: the wrangler spec is not a pkg.pr.new build (${spec.slice(0, 60)})` };
+        const tgz = join(scratch, `vitest-plugin-${tree === ROOT ? "pinned" : "candidate"}.tgz`);
+        const got = run("curl", ["-sfL", "-o", tgz, `${PKG_PR_NEW}/@cloudflare/vitest-plugin@${at}`], { timeout: 60_000 });
+        if (got.status !== 0) return { landed: null, detail: `did not run: no vitest-plugin build on pkg.pr.new at ${at} (curl exit ${got.status})` };
+        const manifest = run("tar", ["-xzOf", tgz, "package/package.json"], { timeout: 30_000 });
+        let parsed: unknown = null;
+        try { parsed = JSON.parse(manifest.stdout); } catch { parsed = null; }
+        const range = asText(asRecord(asRecord(parsed)?.peerDependencies)?.vitest);
+        if (!range) return { landed: null, detail: `did not run: the ${at} build declares no vitest peer range` };
+        return { landed: Bun.semver.satisfies("5.0.0", range), detail: `vitest-plugin@${at} peers vitest "${range}"` };
       },
     };
     const [pinnedCmd, pinnedArgs] = wranglerCommand([]);

@@ -83,8 +83,7 @@ export function summariseWire(events, pageUrl) {
     const p = ev.params || {};
     const id = p.requestId;
     if (!id) continue;
-    let row = byId.get(id);
-    if (!row) { row = { id, bytes: 0, status: null, cached: false, failed: false }; byId.set(id, row); }
+    const row = byId.getOrInsertComputed(id, () => ({ id, bytes: 0, status: null, cached: false, failed: false }));
 
     switch (ev.method) {
       case "Network.requestWillBeSent": {
@@ -166,9 +165,8 @@ export function summariseWire(events, pageUrl) {
     byType[t].count++;
     byType[t].bytes += r.bytes;
 
-    const h = hosts.get(host) || { host, count: 0, bytes: 0, third };
+    const h = hosts.getOrInsertComputed(host, () => ({ host, count: 0, bytes: 0, third }));
     h.count++; h.bytes += r.bytes;
-    hosts.set(host, h);
   }
 
   const hostList = [...hosts.values()].sort((a, b) => b.bytes - a.bytes || b.count - a.count);

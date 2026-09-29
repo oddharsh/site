@@ -32,6 +32,15 @@ export const STOPWORDS = new Set([
   "from", "by", "is", "are", "was", "were", "be", "it", "its", "that", "this",
   "these", "those", "as", "into", "over", "some", "any", "all", "me", "my",
   "you", "your", "i", "we", "us",
+  // How an agent phrases a question. searchSiteRanked's own comment used "what
+  // does he think about agents" as the example of a query stopwords rescue, and
+  // not one of its filler words was in this set until 2026-09-23, so it searched
+  // all six. Matching is SUBSTRING, so "he" hits nearly every page ("the",
+  // "when") and every term is one more scan of the whole corpus: 1.33ms for that
+  // query on a laptop against 30us for "zstd". Measured with tools/insn-count.ts.
+  "what", "which", "who", "how", "why", "when", "where", "does", "do", "did",
+  "has", "have", "had", "he", "him", "his", "she", "her", "they", "them",
+  "their", "about",
   // the photo-domain half
   "photo", "photos", "photograph", "photographs", "picture", "pictures",
   "image", "images", "shot", "shots", "pic", "pics", "show", "showing",

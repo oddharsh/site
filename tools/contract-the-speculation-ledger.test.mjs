@@ -188,6 +188,12 @@ test("every Response rebuilt from another response's body either preserves encod
   // to cover. workerd exposes no getter either (measured 2026-08-18:
   // `{encodeBody_own: false, in_prototype: false, keys: []}`), so the only place
   // this invariant can be checked without booting a Worker is the SOURCE.
+  // contract-encodebody-survives-a-rebuild-in-workerd.test.mjs does boot one,
+  // through wrangler's harness on the pinned workerd, and checks the RULES this
+  // walker applies; this test stays because only a scan reaches every call site.
+  // That file also found the walker is conservative in one direction: the flag
+  // is read once, at serialization, so an intermediate rebuild that drops it is
+  // harmless when a later one on the same path carries it.
   //
   // What makes it worth checking: the loss depends on the SHAPE of the init.
   // Measured on workerd 1.20260811.1, `new Response(r.body, r)` preserves the
@@ -220,11 +226,13 @@ test("every Response rebuilt from another response's body either preserves encod
          + "sets no content-encoding.",
     },
     "serendipity/serendipity.ts": {
-      count: 4,
-      why: "three rebuild locally-built HTML or add a cookie, and one is this file's own "
-         + "withSecurityHeaders twin. None of them is a precompressed path today. NOT "
-         + "measured the way the assets.ts entry was: if serendipity ever serves "
-         + "precompressed bytes, that twin needs the same conditional carry security.ts has.",
+      count: 3,
+      why: "two rebuild locally-built HTML or add a cookie, and one is this file's own "
+         + "withSecurityHeaders twin. None of them is a precompressed path. Since "
+         + "2026-09-25 serendipity DOES serve precompressed bytes, the built dashboard, "
+         + "and index.ts routeSerendipity returns that response WITHOUT the twin, passing "
+         + "its headers through serveStaticPage instead, which is what keeps it off this "
+         + "list. The fourth site was the old edge-cached dashboard, which the island replaced.",
     },
   };
 

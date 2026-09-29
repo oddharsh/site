@@ -1,66 +1,17 @@
-import { claimReservation, dropReservation } from "../../cal/src/reservation.ts";
 import { asNumber } from "./lib/parse.ts";
 
-// counter.js — the homepage visit counter: an in-house Durable Object, read by
-// the document and advanced out-of-band by /hit.
+// counter.ts — the homepage visit counter's HTTP side: /hit, and the KV mirror
+// the homepage reads instead of asking the Durable Object.
 //
-// Migrated off cf-garage's cross-script Counter (the old Pages setup couldn't host DOs;
-// can). Same wire protocol home.js already speaks: GET https://do/ increments and
-// returns {n}; ?peek=1 reads without bumping (bots/prerender). Storage is the
-// per-DO SQLite-backed KV (state.storage), one instance named "homepage-visits".
+// The Durable Object itself, Counter, lives in the aadhar-counter Worker
+// (counter/src/counter.ts) since 2026-09-29, and this Worker reaches it through
+// its COUNTER binding (`script_name: "aadhar-counter"`). It moved so that this
+// Worker implements no Durable Object, which is the one thing that denied it
+// preview URLs; CLAUDE.md "Moving Counter out" has the whole sequence.
 //
-// Continuity: an in-house DO is a fresh namespace, so it started at 0. A one-time
-// self-seed from env.COUNTER_SEED carried the count over from the old cf-garage DO
-// (~2375 at migration). That ran, the `seeded` storage flag is set, and the counter
-// is well past the seed, so the seed path and its once-per-instance storage read
-// came out on 2026-07-28. The `seeded` key stays in storage, harmless and unread.
-// This class also backs the coffee slot reservations, under instance names of
-// the form `coffee-slot:<start>:<end>`. Two jobs in one class is deliberate: a
-// second Durable Object class needs a `new_sqlite_classes` migration, and the
-// release path publishes with `wrangler versions upload`, which cannot apply
-// one. Instances are isolated by name, so a slot shares nothing with
-// "homepage-visits", and the storage keys differ as well ("reservation" vs "n").
-// The reservation logic itself lives in cal/src/reservation.ts, pure over a
-// storage interface, so it is tested without a runtime. See that file for why
-// the pair has to be atomic at all.
-export class Counter {
-  state: DurableObjectState;
-
-  constructor(state: DurableObjectState) {
-    this.state = state;
-  }
-
-  async fetch(request) {
-    const url = new URL(request.url);
-
-    // The reservation paths come first: they are addressed by pathname and must
-    // never fall through to the odometer, which would bump a visit count on a
-    // slot instance.
-    if (url.pathname === "/reserve" || url.pathname === "/release") {
-      let payload;
-      try { payload = await request.json(); } catch { return Response.json({ error: "invalid body" }, { status: 400 }); }
-      const bookingId = String(payload?.bookingId || "");
-      if (!bookingId) return Response.json({ error: "bookingId is required" }, { status: 400 });
-      if (url.pathname === "/release") {
-        return Response.json({ released: await dropReservation(this.state.storage, bookingId) });
-      }
-      const claimed = await claimReservation(
-        this.state.storage, bookingId, Number(payload.start), Number(payload.end),
-      );
-      return Response.json({ claimed });
-    }
-
-    let n = (await this.state.storage.get<number>("n")) || 0;
-
-    // read-only: bots + speculative prerenders see the value without bumping it
-    if (url.searchParams.has("peek")) return Response.json({ n });
-
-    // default: atomic increment (classic-90s-counter behavior, no session dedup)
-    n += 1;
-    await this.state.storage.put("n", n);
-    return Response.json({ n });
-  }
-}
+// Continuity: the count started at the ~2375 carried over from the old
+// cf-garage counter in July, and the transfer to aadhar-counter kept the same
+// namespace, so nothing about the number reset.
 
 // UAs that read the count without advancing it (mirrors the old home.js gate).
 const PEEK_UA = /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i;

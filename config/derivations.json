@@ -39,8 +39,12 @@
     "`tools` names entries in config/tools.json whose `recorded` version is part of",
     "an artifact's identity, so swapping encoders reads as staleness. A FIRST-PARTY",
     "tool needs no such entry, because its source is committed and goes straight",
-    "into `inputs`: zenc's decode and histogram sources are inputs to the histogram",
-    "bake for the same reason the JPEGs are.",
+    "into `inputs`, with ONE exception worth knowing before adding another. The",
+    "histogram bake's tool inputs (zenc's sources and Cargo.lock) are NOT in its",
+    "digest, because that artifact can be reproduced from committed bytes alone, and",
+    "CI does exactly that: `bun run histograms:check` re-bakes it and compares it to",
+    "the committed file. A measured output beats a hashed input, and the hash made",
+    "every zenc dependency bump read as stale until somebody re-baked by hand.",
     "",
     "WHAT IS DELIBERATELY NOT HERE, so the coverage claim stays honest:",
     "  - the MCP server cards, which a contract test already deep-equals against",
@@ -65,6 +69,13 @@
     "instead, so those artifacts go stale for the one reason they can be: a photo",
     "arrived or left.",
     "",
+    "That reason is not always the only one, and assuming it was cost a blind spot.",
+    "semantics.json also folds in each caption and recipe, so a re-captioned photo",
+    "left it stale while its stem set, and its digest, never moved. `bytes` hashes",
+    "such whole-file inputs beside a set (set mode only). The way to find them is to",
+    "read what the generator OPENS rather than what its declaration assumes: on",
+    "2026-09-22 strace over the regenerate commands found this one in one run.",
+    "",
     "The digest alone is still not enough for an artifact built one key at a time. A",
     "resumable generator that dies halfway leaves a file covering most of the set,",
     "and --lock afterwards would call it fresh forever. `covers` reads the output and",
@@ -87,34 +98,29 @@
       },
       "regenerate": "bash tools/photos/hash-thumbnails.sh",
       "recorded": {
-        "inputs": "192016df7a445a29d89a12bacaa88cf71bdde163e41176a8304a06b594e713ae",
+        "inputs": "8a8192fdcf91bf89b1dae39f0630f7fc35f9153801bb277c19e4935dee334830",
         "count": 1032
       }
     },
     {
       "id": "images/histograms",
       "tier": "pinned",
-      "why": "THE ONE THIS FILE WAS BUILT FOR. images/histograms.json holds four 64-bin channels per photo, baked by `zenc histogram` from the SHIPPED hashed JPG tier, and build.ts derives the served /images/meta/<stem>.json from it. #394 re-encoded 316 of those JPEGs on 2026-08-14 and re-baked nothing, so the bars described pixels nobody had been served for nine days. photos:check could not see it, because it compares histograms.json against images/meta/, which the build derives FROM histograms.json: two sides of one source agree no matter what the pixels say.",
+      "why": "THE ONE THIS FILE WAS BUILT FOR. images/histograms.json holds four 64-bin channels per photo, baked by `zenc histogram` from the SHIPPED hashed JPG tier, and build.ts derives the served /images/meta/<stem>.json from it. #394 re-encoded 316 of those JPEGs on 2026-08-14 and re-baked nothing, so the bars described pixels nobody had been served for nine days. photos:check could not see it, because it compares histograms.json against images/meta/, which the build derives FROM histograms.json: two sides of one source agree no matter what the pixels say. zenc's sources and Cargo.lock were inputs here until 2026-09-28 and are not now: CI's native photo validation job runs `bun run histograms:check`, which re-bakes every photo with the zenc the tree builds and compares the result to this file byte for byte. That measures the output a tool change could move, where the digest could only say it MIGHT have moved, and it cost a hand re-bake and --lock on every zenc bump (#871, #985). public/i stays, so a re-encode that skips the bake still fails here with no cargo.",
       "outputs": [
         "public/images/histograms.json"
       ],
       "inputs": {
         "paths": [
-          "public/i",
-          "tools/photos/zenc/src/histogram.rs",
-          "tools/photos/zenc/src/pixels.rs",
-          "tools/photos/zenc/Cargo.lock"
+          "public/i"
         ],
         "include": [
-          ".jpg",
-          ".rs",
-          ".lock"
+          ".jpg"
         ]
       },
-      "regenerate": "bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && bun tools/photos/build-histogram-index.ts",
+      "regenerate": "tools/photos/zenc/target/release/zenc histogram --root public && bun tools/photos/build-histogram-index.ts (inside a photo add: bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\")",
       "recorded": {
-        "inputs": "4746a033d773fd5efd135c8fd15204edc5903cb3ef0476d191e78c2adea63977",
-        "count": 261
+        "inputs": "1a7794939ed47f4c164f7a989edbf557589ef51846b672cfbd9e0d3615a8d0ca",
+        "count": 258
       }
     },
     {
@@ -143,7 +149,7 @@
     {
       "id": "images/semantics",
       "tier": "pinned",
-      "why": "images/semantics.json widens what queryPhotos can match beyond the one-sentence caption and the EXIF. A photo missing from it is still findable, one tier down, which is why it went unnoticed: the failure is a search result that is quietly worse rather than an error. FOUND STALE BY THIS CHECK at 158 of 165, because gen-photo-semantics.ts had been reading a www/ that the 2026-08-18 split deleted, so nobody had been able to run it since.",
+      "why": "images/semantics.json widens what queryPhotos can match beyond the one-sentence caption and the EXIF. A photo missing from it is still findable, one tier down, which is why it went unnoticed: the failure is a search result that is quietly worse rather than an error. FOUND STALE BY THIS CHECK at 158 of 165, because gen-photo-semantics.ts had been reading a www/ that the 2026-08-18 split deleted, so nobody had been able to run it since. The stem set is not its only input: the generator folds each caption (alt.json) and Fuji recipe (metadata.json) into the terms, so both are hashed whole under `bytes`. Until 2026-09-22 they were undeclared, and a re-captioned photo left semantics.json describing the old caption while this entry read fresh; strace found the reads and one changed caption proved the gap.",
       "outputs": [
         "public/images/semantics.json"
       ],
@@ -154,13 +160,17 @@
         "include": [
           ".jpg"
         ],
-        "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$"
+        "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$",
+        "bytes": [
+          "public/images/alt.json",
+          "public/images/metadata.json"
+        ]
       },
       "covers": "public/images/semantics.json",
       "regenerate": "bun tools/photos/gen-photo-semantics.ts   # add --vision for the model tier",
       "recorded": {
-        "inputs": "d457e90604ddd1fb8206e0c374a39c372596c678b116defb5cd4a84b973666fb",
-        "count": 258
+        "inputs": "5583c46f67eb93c81299b82f981539a1a814b682f2f617a0c03cffee7de10dbe",
+        "count": 260
       }
     },
     {
@@ -180,7 +190,7 @@
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "32e8c61f2f6410f2bbe60e8a23c0a07a6e6993af86483047e6dba4fc9546f75b",
+        "inputs": "466472ab03a3a90a40fbe362c45e012dc812cf0dee6c6ce6ab54b64116828735",
         "count": 2
       }
     },
@@ -285,10 +295,11 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/merge-driver.ts": "git calls it DURING a merge and it writes only to the temporary %A file git handed it, which never becomes a committed artifact on its own: what lands is whatever the merge is committed as. The one path it touches outside that is $GIT_DIR/site-merge-pending, inside .git, drained by tools/merge-finish.ts",
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
       "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
       "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",
-      "tools/gen-runtime-types.ts": "writes only config/.generated/workers-runtime.d.ts, which is gitignored: the Workers runtime declarations, a pure function of the wrangler pin (which pins workerd) and the config bytes, both of which its first line keys on so a stale file regenerates itself. Nothing committed can fall behind it, which is the same argument as the two build steps above, run at typecheck time instead of deploy time",
+      "tools/gen-runtime-types.ts": "writes only gitignored files: config/.generated/ (the shared runtime declarations and cf-garage's cache key) and, through `wrangler build --x-new-config --x-cf-build-output` in cf-garage/, cf-garage/.cloudflare/ (its generated Env plus runtime types, and the build output tree that comes with them, keyed on the wrangler version and cloudflare.config.ts). For config/.generated/workers-runtime.d.ts: the Workers runtime declarations, a pure function of the wrangler pin (which pins workerd) and the config bytes, both of which its first line keys on so a stale file regenerates itself. Nothing committed can fall behind it, which is the same argument as the two build steps above, run at typecheck time instead of deploy time",
       "tools/gen-mcp-cards.ts": "the cards ARE committed, and a contract test deep-equals each one against its server's live tools/list. That is stronger than a digest, and a second check over one artifact is a second thing to keep in agreement",
       "tools/gen-dotfiles.ts": "public/dotfiles/macos.sh IS committed, and contract-dotfiles-script-matches-the-page.test.mjs holds it byte-equal to the page data through the same renderer, the mcp-cards argument: a test over the artifact is stronger than a digest over its inputs",
       "tools/gen-manifest.ts": "writes the nav fences and the Worker's registry module, which build.ts invariant #8 verifies against config/site-manifest.json on every build",
@@ -302,24 +313,34 @@
       "tools/check-checkpoints.ts": "--sync writes src/worker/checkpoints.json, the deploy-log projection, which checkpoints:check already diffs against D1",
       "tools/lib/tsc-scope.ts": "writes the typecheck ratchet baseline, a machine-owned record of owed errors",
       "tools/perf-snapshot.ts": "writes a snapshot file named on the command line, never a fixed committed path",
+      "tools/insn-count.ts": "writes an instruction-count record named on the command line, never a fixed committed path; like perf-snapshot, two records are diffed and neither is committed",
+      "tools/layout-shift-lab.ts": "writes a --json report only when asked, to a path named on the command line; it measures a running server and commits nothing",
       "tools/gen-remote-config.ts": "writes .wrangler.remote.jsonc, which is gitignored",
       "tools/lib/bun-gates.ts": "the gates bump-bun-pin.ts and canary-bun.ts share: it unzips a candidate bun into a work directory, mirrors the manifests to resolve a lockfile with each runtime, and builds twice, parking the pinned `.build/` in `.build.pinned-baseline` while the candidate builds and putting it back in a finally. Nothing it writes is committed",
       "tools/bump-wrangler-pin.ts": "writes an optional canary JSON report to the caller's path and rewrites the wrangler line of the root package.json to a newer pkg.pr.new commit URL and relocks, the same maintenance edit to a hand-authored file that lib/bun-pin.ts makes for packageManager; check-wrangler.ts holds the URL, bun.lock and the installed version together after every move",
       "tools/canary-bun.ts": "writes the JSON report the canary workflow files an issue from, into a path the caller names; every other write is bun-gates.ts's and is listed there",
+      "tools/bump-bun-pin.ts": "writes the JSON report bun-pin.yml files its one issue from, into a path the caller names with --json; the pin itself goes through lib/bun-pin.ts's writePin and every gate's scratch writes are bun-gates.ts's, both listed here",
       "tools/canary-wrangler.ts": "writes into a detached worktree it creates in the temp directory and removes in a finally (the candidate wrangler's install, its dry-run bundle), plus the pinned dry-run's bundle beside it and the JSON report the caller names. Nothing under the repository moves except `.build/`, which the pinned dry-run re-stages with the pinned toolchain exactly as `validate` does",
       "tools/canary-browsers.ts": "writes the JSON report the canary workflow files an issue from, into a path the caller names, and nothing else; the page it reads is loaded over file://, and the two live probes beside it only READ production (a dictionary exchange and a data-URI decode)",
       "tools/lib/upstream-watches.ts": "the LIST of upstream watches, which is a record rather than an artifact; the two CSS watches carry `Bun.write` inside their probe scripts, which timbrado's runner executes in a mkdtemp directory it removes, so nothing under the repository is touched",
       "tools/workerd-zstd-probe.ts": "writes a two-file probe Worker into a mkdtemp directory, boots it through wrangler's createTestHarness, and removes the directory in a finally; its one output is a JSON line on stdout that canary-wrangler.ts reads",
+      "tools/workerd-temporal-probe.ts": "writes a two-file probe Worker into a mkdtemp directory, boots it through wrangler's createTestHarness under the site's compatibility date and flags, and removes the directory in a finally; its one output is a JSON line on stdout that canary-wrangler.ts reads",
       "tools/lib/bun-pin.ts": "writes config/bun-pin.json, rewriting ONLY its `bun` pin (it was package.json's packageManager until 2026-09-15), which is a maintenance edit to a hand-authored file rather than a derived artifact. contract-the-bun-pin-is-declared-once.test.mjs holds that pin and its three readers together. THIS ENTRY FIRST SAID IT WROTE A TEMP RELEASE ZIP, which is bump-bun-pin.ts and not this: the census caught the file correctly and the reason beside it was wrong, which is the failure mode an exemption list has",
       "tools/check-infra.ts": "writes one request line into a mkdtemp directory while probing the edge",
       "tools/lens-seed.ts": "writes seed captures into a scratch directory",
       "tools/photos/resample-probe.ts": "writes probe output while measuring the ingest geometry, and commits nothing",
+      "tools/photos/codec-knob-probe.ts": "writes scratch encodes and an optional --json report while measuring cjxl, avifenc and AV2 (avifenc-avm) flags at matched bytes, and commits nothing",
+      "tools/photos/avif-chroma-probe.ts": "writes scratch tiers, encodes and an optional --json report while comparing AVIF chroma layouts at the shipped bytes, and commits nothing",
       "tools/photos/experiments/bench-jpeg-search.ts": "writes JPEG search candidates only inside its own mkdtemp directory, removes them in finally, and reports measurements on stdout; it never regenerates a committed photo, manifest or histogram",
       "tools/relock-dependabot.ts": "rewrites the version pins inside docs/DEPENDENCIES.md to match the lockfile, in a throwaway worktree during a dependabot relock. The prose is edited in place rather than generated, and contract-docs-dependencies-md-states-version-pins-in-prose.test.mjs already holds those pins to the lockfile on every run, which is the check a digest here would duplicate",
-      "tools/photos/pipeline-json.ts": "the JSON writer the photo shells drive since 2026-09-15, where jaq was: it writes only what its callers' declarations already cover (src/worker/photo-index.json for add-photos.sh, public/images/metadata.json and the per-stem images/meta/ files for extract-photo-metadata.sh) and mints no artifact of its own, so a declaration here would name the orchestrators' outputs twice",
+      "tools/photos/pipeline-json.ts": "the JSON writer the photo shells drive since 2026-09-15, where jaq was: it writes only what its callers' declarations already cover (src/worker/photo-index.json for add-photos.sh, public/images/metadata.json and the per-stem images/meta/ files for extract-photo-metadata.sh; public/images/hashes.json and public/i/ for hash-thumbnails.sh, whose Python heredoc it replaced on 2026-09-22; src/worker/checkpoints.json for bump-version.sh, the same day and the same way) and mints no artifact of its own, so a declaration here would name the orchestrators' outputs twice",
       "tools/photos/add-photos.sh": "the ORCHESTRATOR rather than a generator: it drives zenc, exif-sooc, hash-thumbnails.sh and gen-alt-text.ts in order, and every artifact that comes out is declared by the script that actually produces it. It also re-bakes the whole library on every run, so it has never been the path that leaves derived data behind",
       "tools/photos/bump-version.sh": "appends one entry to src/worker/checkpoints.json, the deploy-log projection, and writes nothing else. checkpoints:check already diffs that projection against D1 in both directions, which is a stronger claim than a digest of its inputs would be",
-      "tools/photos/reencode-thumbnails.sh": "produces public/i/, which is an INPUT to images/histograms, images/fingerprints and images/hashes rather than an output of anything. It is also the exact script whose standalone use caused gotcha 46: it told you to re-run hash-thumbnails.sh and stopped there. derive:check is what now catches a run that re-encodes and skips the re-bake, and the script points at it"
+      "tools/photos/reencode-thumbnails.sh": "produces public/i/, which is an INPUT to images/histograms, images/fingerprints and images/hashes rather than an output of anything. It is also the exact script whose standalone use caused gotcha 46: it told you to re-run hash-thumbnails.sh and stopped there. derive:check is what now catches a run that re-encodes and skips the re-bake, and the script points at it",
+      "tools/photos/av2-tile-probe.ts": "writes 600px tiles, scratch encodes and an optional --json report under the OS temp dir while scoring AV2 against the shipped AVIF at matched bytes, and commits nothing",
+      "tools/photos/libavif-avm/build.sh": "READS public/i/ (one committed 600px tier is the input to its byte-identity gate) and writes only under tools/photos/libavif-avm/build/ and src/, the gitignored AV2 build trees. The shell scanner flags it for mentioning a committed path, which is the over-approximation working as designed",
+      "tools/photos/libavif-avm/simde.ts": "writes only under tools/photos/libavif-avm/build/, the gitignored AV2 build tree: rtcd headers, a SIMDe shim, compiled kernel objects, and the libavm.a it appends them to. build.sh --tuned runs it and then gates the result byte for byte against the pristine build, so nothing it writes is ever a committed artifact",
+      "tools/lib/site-config.ts": "writes .wrangler.site.jsonc, which is gitignored: the legacy-shape projection of cloudflare.config.ts + wrangler.config.ts for the wrangler commands and the test harness that cannot read the TypeScript config"
     },
     "shellRoots": [
       "tools",

@@ -125,7 +125,9 @@ const SHELL_TYPES = {
 };
 
 // Which of those may travel the SHARED-DICTIONARY path (the `use-as-dictionary` offer
-// and the dcz delta). Deliberately NOT svg.
+// and the dcz delta): js, css and, since 2026-09-26, svg. The family .dict stays off,
+// being the dictionary rather than something one compresses. svg sat out for two
+// months, and the history below is why it came back only once production showed it working.
 //
 // The icon sprite went onto /a/ as a <use> target, where a browser fetches it as a
 // document. #114 turned it into an <img>, and the very next deploy the 12 taskbar and
@@ -147,7 +149,30 @@ const SHELL_TYPES = {
 // site's most visible chrome for returning visitors. Re-extending this to images is
 // fine later, behind the ?br= canary the rest of this file was built with, which is how
 // this path is supposed to earn a default in the first place (gotcha 13).
-const DICTIONARY_TYPES = { js: 1, css: 1 };
+//
+// THAT CANARY EXISTS NOW, and the diagnosis above never reproduced. On 2026-09-25 a local
+// repro served the exact July bytes (the <symbol> sprite as dictionary, #114's <view>
+// sprite as target, the committed 301-byte .dcz verbatim) to Chrome 154 and Canary 156
+// with Sec-Fetch-Dest: image, and all 12 icons rendered on first load, a second document
+// and a reload. A delta built against the WRONG dictionary failed exactly the July way
+// (blank image, ERR_UNEXPECTED_CONTENT_DICTIONARY_HEADER), so the instrument could see
+// the failure. What the repro could not reach is production's own path (HTTP/2 and 3
+// through Cloudflare) and the Chrome that was stable in July, and only a canary on the
+// site can test the first.
+//
+// SO A COOKIE CANARY TESTED IT (#940), and production passed on 2026-09-26. #943
+// re-minted the sprite while a-dict held the one before it, so production served its
+// first svg delta: 116 B against 2,424 B of plain q11 brotli. Two Chrome profiles that
+// had stored the OLD sprite before that release, Chrome 154.0.8037.58 and Canary
+// 156.0.8074.0, sent Available-Dictionary from the image loader, took the dcz over h2
+// through Cloudflare and drew 14 of 14 icons on first load and reload; the delta also
+// decodes offline to the live sprite byte for byte. That is the July scenario on the
+// July path, and it no longer fails. The cookie came out with this default.
+//
+// If the July symptom ever returns, it will look exactly as it did then: icons blank
+// for returning Chromium visitors on the deploy after a sprite change, and a hard
+// reload fixing it. Taking svg out of this map is the whole rollback.
+const DICTIONARY_TYPES = { js: 1, css: 1, svg: 1 };
 
 // Offer the shell's own bytes as a compression dictionary for future /a/ requests
 // (RFC 9842). This is what makes a Chromium client send `Available-Dictionary` back, which
@@ -158,13 +183,12 @@ const DICTIONARY_TYPES = { js: 1, css: 1 };
 // match-dest scopes the offer to the fetch destinations we will actually answer with a
 // delta. RFC 9842 makes it optional and DEFAULTS IT TO EVERY DESTINATION, so the earlier
 // bare `match="/a/*"` told Chromium these bytes were a dictionary for any /a/ request —
-// including the icon sprite, fetched as an `image`. Nothing broke, because DICTIONARY_TYPES
-// stops the worker answering an svg with a dcz, but the offer promised more than the server
-// honours: the client stored state and sent Available-Dictionary on requests we ignore.
+// including the icon sprite, fetched as an `image`, back when the worker refused to answer
+// an svg with a dcz. The offer promised more than the server honoured: the client stored
+// state and sent Available-Dictionary on requests we ignored.
 //
-// This is #119's lesson moved into the protocol instead of living only in a JS gate. The
-// sprite stays out on purpose — see DICTIONARY_TYPES — and naming destinations is how the
-// wire says so.
+// So each offer names its own destination, and the sprite's names ("image") now that it
+// travels this path too (see DICTIONARY_TYPES). The wire says exactly what we answer.
 // PER-BASE, not a shared /a/* glob. Chrome DevTools reported "Found a matching dictionary,
 // but the dictionary is not used for the response" on tooltip.js and hoist.js, and the
 // pooled pattern is why: every js/css asset offered the SAME match, so Chromium keyed them
@@ -175,7 +199,7 @@ const DICTIONARY_TYPES = { js: 1, css: 1 };
 // Scoping match to the asset family makes the dictionary Chromium sends the one we can
 // actually diff against. match-dest narrows per type as well: a stylesheet is never fetched
 // as a script, and neither is ever fetched as an image (the #119 rule, in the protocol).
-const SHELL_DESTS = { js: '("script")', css: '("style")' };
+const SHELL_DESTS = { js: '("script")', css: '("style")', svg: '("image")' };
 const shellOffer = (pathname, ext) => {
   const base = pathname.slice("/a/".length).replace(/\.[0-9a-f]{8}\.(js|css|svg|dict)$/, "");
   return `match="/a/${base}.*", match-dest=${SHELL_DESTS[ext] || '("script" "style")'}`;
@@ -282,8 +306,8 @@ const variantEtag = (etag, suffix) => {
 
 
 // Available-Dictionary is a Structured Field Byte Sequence: `:<base64 sha256>:`. Returns
-// the first 16 hex chars of that hash, which is the tag gen-shell-deltas.mjs put in the
-// .dcb filename, or null if the header is absent or malformed.
+// the first 16 hex chars of that hash, which is the tag build.ts puts in each .dcz
+// filename, or null if the header is absent or malformed.
 //
 // Deliberately strict. This value selects a file path, so anything unexpected must become
 // null rather than something that could escape the /ad/ prefix: the base64 is length-
@@ -295,11 +319,9 @@ function dictionaryTag(request) {
   const m = raw.trim().match(/^:([A-Za-z0-9+/=]+):$/);
   if (!m) return null;
   try {
-    const bin = atob(m[1]);
-    if (bin.length !== 32) return null;          // not a SHA-256 digest
-    let hex = "";
-    for (let i = 0; i < 16; i++) hex += bin.charCodeAt(i).toString(16).padStart(2, "0");
-    return hex.slice(0, 16);
+    const digest = Uint8Array.fromBase64(m[1]);
+    if (digest.length !== 32) return null;       // not a SHA-256 digest
+    return digest.subarray(0, 8).toHex();
   } catch { return null; }
 }
 
@@ -309,7 +331,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
   const tag = dictionaryTag(request);
   if (!tag) return null;
 
-  // /a/<base>.<hash8>.<ext> -> /ad/<base>.<hash8>.<tag>.dcb
+  // /a/<base>.<hash8>.<ext> -> /ad/<base>.<hash8>.<tag>.dcz
   const stem = url.pathname.slice("/a/".length).replace(new RegExp(`\\.${ext}$`), "");
   let res;
   try {
@@ -385,8 +407,10 @@ export async function servePrecompressedShell(request, env) {
   // Any miss falls through to the br path below and then to identity, so a client whose
   // dictionary we have no delta for (skipped several deploys, or a hand-crafted header)
   // just gets the ordinary asset.
-  // DICTIONARY_TYPES gates this: images sit it out, for the reason recorded there.
-  if (DICTIONARY_TYPES[ext]) {
+  // DICTIONARY_TYPES gates this: the family dictionary (.dict) sits it out, since it is
+  // the dictionary rather than something a dictionary compresses.
+  const onDictionaryPath = Boolean(DICTIONARY_TYPES[ext]);
+  if (onDictionaryPath) {
     const delta = await serveDictionaryDelta(url, ext, request, env);
     if (delta) return delta;
   }
@@ -429,11 +453,12 @@ export async function servePrecompressedShell(request, env) {
   // Nothing on the wire reports whether the override took, so this is set on
   // the argument rather than on a measurement (roadmap, 2026-09-02).
   if (ext === "dict") headers.set("priority", "u=7");
-  // Only offer a type we are willing to answer with a delta. Offering the sprite would
-  // teach Chromium to send Available-Dictionary for it and then get plain br anyway:
-  // wasted storage on the client and a header we deliberately ignore.
-  if (DICTIONARY_TYPES[ext]) headers.set("use-as-dictionary", shellOffer(url.pathname, ext));
-  else {
+  // Only offer a type we are willing to answer with a delta. Offering anything else
+  // would teach Chromium to send Available-Dictionary for it and then get plain br
+  // anyway: wasted storage on the client and a header we deliberately ignore.
+  if (onDictionaryPath) {
+    headers.set("use-as-dictionary", shellOffer(url.pathname, ext));
+  } else {
     const familyOffer = pageFamilyOffer(url.pathname);
     if (familyOffer) headers.set("use-as-dictionary", familyOffer);
     else headers.delete("use-as-dictionary");

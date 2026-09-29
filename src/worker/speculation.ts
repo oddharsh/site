@@ -156,8 +156,7 @@ export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
     const path = text(r.path, "(unknown)");
     const n = Math.round(Number(r.n) || 0);
     if (n <= 0) continue;
-    let row = byPath.get(path);
-    if (!row) { row = { path, prefetch: 0, prerender: 0, activated: 0, speculated: 0, rate: null }; byPath.set(path, row); }
+    const row = byPath.getOrInsertComputed(path, () => ({ path, prefetch: 0, prerender: 0, activated: 0, speculated: 0, rate: null }));
     row[kind] += n;
   }
   const out = [...byPath.values()];

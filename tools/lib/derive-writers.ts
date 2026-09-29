@@ -57,14 +57,27 @@ const SKIP = new Set(["node_modules", ".git", ".build", ".wrangler", ".claude", 
  *
  * By path because the basenames are `src` and `build`, which are the two names
  * least safe to add to SKIP.
+ *
+ * tools/photos/libavif-avm/build.sh (the AV2 build) is the same shape and worse:
+ * CMake fetches AVM, TensorFlow Lite, XNNPACK and abseil under build/_deps, and
+ * the first run reported their Python as undeclared generators by the dozen.
  */
-const VENDORED = new Set(["tools/photos/libavif/src", "tools/photos/libavif/build"]);
+const VENDORED = new Set([
+  "tools/photos/libavif/src", "tools/photos/libavif/build",
+  "tools/photos/libavif-avm/src", "tools/photos/libavif-avm/build",
+]);
 
 const SCANNED = [".ts", ".mjs", ".js", ".py"];
 
 /** A write, per language. Exact calls, never a loose path match. */
 const WRITES = [
   /\bwriteFile(?:Sync)?\s*\(/,          // node
+  // APPENDING IS WRITING, and this list did not say so until 2026-09-22.
+  // tools/soak-canary.ts was the first file under these roots to reach for it,
+  // which is the only reason the gap surfaced; a generator that appended to a
+  // committed artifact would have been invisible to the census whose whole job
+  // is noticing an undeclared generator.
+  /\bappendFile(?:Sync)?\s*\(/,
   /\bBun\.write\s*\(/,                  // bun
   /\bopen\s*\([^)]*["']w[b+]?["']\s*\)/, // python
   /\bcreateWriteStream\s*\(/,

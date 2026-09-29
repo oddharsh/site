@@ -38,5 +38,16 @@
     "../tools/**/*.mjs",
     "../tools/**/*.ts",
     "../pipelines/**/*.mjs"
+  ],
+  // The two vendored encoder builds are gitignored third-party checkouts, and
+  // the AV2 one fetches FlatBuffers' own TypeScript under build/, which the glob
+  // above reads as tools of ours. Same reason tools/lib/derive-writers.ts skips
+  // them. Naming `exclude` replaces tsc's default, so node_modules is restated.
+  "exclude": [
+    "../**/node_modules",
+    "../tools/photos/libavif/src",
+    "../tools/photos/libavif/build",
+    "../tools/photos/libavif-avm/src",
+    "../tools/photos/libavif-avm/build"
   ]
 }

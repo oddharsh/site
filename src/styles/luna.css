@@ -309,6 +309,15 @@ body{text-wrap:pretty}
 /* is pinned: it never scrolls the page and can't slide under the taskbar. its */
 /* inner region scrolls instead. (:has gates this; old browsers fall back to the */
 /* scrolling body above. the fixed taskbar/desktop/icons/run sit outside this flow.) */
+/* THIS :has IS FREE, measured 2026-09-23 because claude.ai found a root-level :has
+   costing 24ms per DOM change. A/B in Chromium, 1500 rounds of the mutations this
+   site makes (tooltip insert/remove, fragment swap, class flip): as served against
+   plain `body`, style recalc was identical within noise on /, /garage/horizon,
+   /writing and /lwe/vigenere (2.5-3.9us per recalc either way). The control, a
+   root :has whose match restyles every descendant, cost 57x on / and 163x on
+   horizon, so the instrument sees the expensive shape. What makes this one cheap:
+   Chromium filters :has invalidation on the argument's classes, and body's own
+   declarations here inherit nothing that forces descendants to restyle. */
 body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
 /* window frame: bounded to the desktop, sized to content but never taller than it. */
 .window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
@@ -390,7 +399,18 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
 .window>.content::-webkit-scrollbar-corner,.window>.body::-webkit-scrollbar-corner,.window>.body>.content::-webkit-scrollbar-corner,.np-text::-webkit-scrollbar-corner{background:oklch(92% 0.015 250)}
 /* resize grip (bottom-right corner of every window) */
 .axp-resize{pointer-events:none;position:absolute;right:1px;bottom:1px;width:14px;height:14px;cursor:nwse-resize;z-index:4;background:linear-gradient(135deg,transparent 0 38%,oklch(72% 0.04 256) 38% 50%,transparent 50% 60%,oklch(72% 0.04 256) 60% 72%,transparent 72% 84%,oklch(72% 0.04 256) 84% 96%,transparent 96%)}
-#axp-desktop{position:fixed;inset:0;z-index:-1;transform:translateZ(0);background:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20120%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22s%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%233f7fcc%22%2F%3E%3Cstop%20offset%3D%22.42%22%20stop-color%3D%22%236ba3e0%22%2F%3E%3Cstop%20offset%3D%22.62%22%20stop-color%3D%22%23bcdcf4%22%2F%3E%3Cstop%20offset%3D%22.67%22%20stop-color%3D%22%23dfeefb%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2395c43d%22%2F%3E%3Cstop%20offset%3D%22.35%22%20stop-color%3D%22%2374af2d%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233c7d1a%22%2F%3E%3C%2FlinearGradient%3E%3CradialGradient%20id%3D%22sn%22%20cx%3D%22.5%22%20cy%3D%22.64%22%20r%3D%22.55%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23fffbe6%22%20stop-opacity%3D%22.5%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23fffbe6%22%20stop-opacity%3D%220%22%2F%3E%3C%2FradialGradient%3E%3Cfilter%20id%3D%22bl%22%20x%3D%22-30%25%22%20y%3D%22-30%25%22%20width%3D%22160%25%22%20height%3D%22160%25%22%3E%3CfeGaussianBlur%20stdDeviation%3D%221.1%22%2F%3E%3C%2Ffilter%3E%3C%2Fdefs%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22url(%23s)%22%2F%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22url(%23sn)%22%2F%3E%3Cg%20fill%3D%22%23fff%22%20filter%3D%22url(%23bl)%22%3E%3Cg%20opacity%3D%22.92%22%3E%3Cellipse%20cx%3D%2234%22%20cy%3D%2225%22%20rx%3D%2218%22%20ry%3D%224.6%22%2F%3E%3Cellipse%20cx%3D%2241%22%20cy%3D%2220%22%20rx%3D%2211%22%20ry%3D%224.2%22%2F%3E%3Cellipse%20cx%3D%2225%22%20cy%3D%2222%22%20rx%3D%228%22%20ry%3D%223.6%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.8%22%3E%3Cellipse%20cx%3D%22151%22%20cy%3D%2218%22%20rx%3D%2214%22%20ry%3D%223.8%22%2F%3E%3Cellipse%20cx%3D%22158%22%20cy%3D%2214%22%20rx%3D%227%22%20ry%3D%223.2%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.6%22%3E%3Cellipse%20cx%3D%2298%22%20cy%3D%2231%22%20rx%3D%2222%22%20ry%3D%223%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.75%22%3E%3Cellipse%20cx%3D%22123%22%20cy%3D%2242%22%20rx%3D%2211%22%20ry%3D%222.6%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3Cpath%20d%3D%22M0%2C79%20C36%2C69%2070%2C85%20104%2C76%20C140%2C67%20172%2C78%20200%2C72%20L200%2C120%20L0%2C120%20Z%22%20fill%3D%22url(%23g)%22%2F%3E%3Cpath%20d%3D%22M0%2C79%20C36%2C69%2070%2C85%20104%2C76%20C140%2C67%20172%2C78%20200%2C72%22%20fill%3D%22none%22%20stroke%3D%22%23bcde66%22%20stroke-width%3D%221.1%22%20opacity%3D%22.5%22%2F%3E%3C%2Fsvg%3E") center center/cover no-repeat}
+/* the Bliss wallpaper. both data URIs quote attributes with single quotes and */
+/* percent-encode only % # < >, which Lightning CSS passes through untouched. */
+/* full encoding (%20 for every space, %22 for every quote) cost 73 B brotli. */
+#axp-desktop{position:fixed;inset:0;z-index:-1;transform:translateZ(0);background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 120' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-color='%233f7fcc'/%3E%3Cstop offset='.42' stop-color='%236ba3e0'/%3E%3Cstop offset='.62' stop-color='%23bcdcf4'/%3E%3Cstop offset='.67' stop-color='%23dfeefb'/%3E%3C/linearGradient%3E%3ClinearGradient id='g' x2='0' y2='1'%3E%3Cstop stop-color='%2395c43d'/%3E%3Cstop offset='.35' stop-color='%2374af2d'/%3E%3Cstop offset='1' stop-color='%233c7d1a'/%3E%3C/linearGradient%3E%3CradialGradient id='sn' cy='.64' r='.55'%3E%3Cstop stop-color='%23fffbe6' stop-opacity='.5'/%3E%3Cstop offset='1' stop-color='%23fffbe6' stop-opacity='0'/%3E%3C/radialGradient%3E%3Cfilter id='bl' x='-30%25' y='-30%25' width='160%25' height='160%25'%3E%3CfeGaussianBlur stdDeviation='1.1'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='200' height='120' fill='url(%23s)'/%3E%3Crect width='200' height='120' fill='url(%23sn)'/%3E%3Cg fill='%23fff' filter='url(%23bl)'%3E%3Cg opacity='.92'%3E%3Cellipse cx='34' cy='25' rx='18' ry='4.6'/%3E%3Cellipse cx='41' cy='20' rx='11' ry='4.2'/%3E%3Cellipse cx='25' cy='22' rx='8' ry='3.6'/%3E%3C/g%3E%3Cg opacity='.8'%3E%3Cellipse cx='151' cy='18' rx='14' ry='3.8'/%3E%3Cellipse cx='158' cy='14' rx='7' ry='3.2'/%3E%3C/g%3E%3Cellipse opacity='.6' cx='98' cy='31' rx='22' ry='3'/%3E%3Cellipse opacity='.75' cx='123' cy='42' rx='11' ry='2.6'/%3E%3C/g%3E%3Cpath d='M0 79c36-10 70 6 104-3 36-9 68 2 96-4V120H0z' fill='url(%23g)'/%3E%3Cpath d='M0 79c36-10 70 6 104-3 36-9 68 2 96-4' fill='none' stroke='%23bcde66' stroke-width='1.1' opacity='.5'/%3E%3C/svg%3E") center center/cover no-repeat}
+/* a P3 display gets the same Bliss with a wider-gamut sky and hill. each sky and */
+/* grass stop keeps its OKLCH lightness and hue, and its chroma moves from where it */
+/* sat inside the sRGB gamut to the same share of the P3 gamut (deep sky 0.135 to */
+/* 0.172, the greens about +17%, the pale horizon barely at all). clouds and the sun */
+/* glow are untouched. it is a SECOND copy on purpose: an SVG stop-color an engine */
+/* cannot parse paints BLACK, while a CSS rule it cannot parse is simply dropped, */
+/* so the gate lives out here and the sRGB SVG above never depends on it. */
+@media (color-gamut: p3){@supports (color: oklch(0% 0 0)){#axp-desktop{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 120' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-color='oklch(59.1%25 0.172 254.5)'/%3E%3Cstop offset='.42' stop-color='oklch(70.2%25 0.117 251.5)'/%3E%3Cstop offset='.62' stop-color='oklch(87.9%25 0.052 240.5)'/%3E%3Cstop offset='.67' stop-color='oklch(94.2%25 0.026 244.1)'/%3E%3C/linearGradient%3E%3ClinearGradient id='g' x2='0' y2='1'%3E%3Cstop stop-color='oklch(76.1%25 0.197 126.8)'/%3E%3Cstop offset='.35' stop-color='oklch(68.9%25 0.198 131.2)'/%3E%3Cstop offset='1' stop-color='oklch(52.7%25 0.171 137.4)'/%3E%3C/linearGradient%3E%3CradialGradient id='sn' cy='.64' r='.55'%3E%3Cstop stop-color='%23fffbe6' stop-opacity='.5'/%3E%3Cstop offset='1' stop-color='%23fffbe6' stop-opacity='0'/%3E%3C/radialGradient%3E%3Cfilter id='bl' x='-30%25' y='-30%25' width='160%25' height='160%25'%3E%3CfeGaussianBlur stdDeviation='1.1'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='200' height='120' fill='url(%23s)'/%3E%3Crect width='200' height='120' fill='url(%23sn)'/%3E%3Cg fill='%23fff' filter='url(%23bl)'%3E%3Cg opacity='.92'%3E%3Cellipse cx='34' cy='25' rx='18' ry='4.6'/%3E%3Cellipse cx='41' cy='20' rx='11' ry='4.2'/%3E%3Cellipse cx='25' cy='22' rx='8' ry='3.6'/%3E%3C/g%3E%3Cg opacity='.8'%3E%3Cellipse cx='151' cy='18' rx='14' ry='3.8'/%3E%3Cellipse cx='158' cy='14' rx='7' ry='3.2'/%3E%3C/g%3E%3Cellipse opacity='.6' cx='98' cy='31' rx='22' ry='3'/%3E%3Cellipse opacity='.75' cx='123' cy='42' rx='11' ry='2.6'/%3E%3C/g%3E%3Cpath d='M0 79c36-10 70 6 104-3 36-9 68 2 96-4V120H0z' fill='url(%23g)'/%3E%3Cpath d='M0 79c36-10 70 6 104-3 36-9 68 2 96-4' fill='none' stroke='oklch(85.1%25 0.177 122.8)' stroke-width='1.1' opacity='.5'/%3E%3C/svg%3E")}}}
 /* accessory windows — small built-in apps (a Clock for now) that float over the */
 /* desktop, composite, drag, and click-to-front. plain DOM windows, no iframes. */
 .axp-acc{position:fixed;z-index:40;min-width:170px;background:var(--paper);border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
@@ -541,8 +561,8 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
     align-items: center; justify-content: space-between;
     text-box-trim: trim-both; text-box-edge: cap alphabetic;
   }
-  /* flex:1 keeps the title left-aligned: nav.js injects its back/forward cluster as a
-     third title-bar child, and space-between would center an un-flexed title span. */
+  /* flex:1 keeps the title left-aligned: the back/forward cluster is a third
+     title-bar child, and space-between would center an un-flexed title span. */
   :where(.title-bar .title-text) { display: flex; align-items: center; flex: 1; min-width: 0; }
   :where(.title-bar .icon) { display: inline-block; width: 16px; height: 16px; margin-right: 6px; background: oklch(69.58% 0.2043 43.49); position: relative; flex-shrink: 0; }
   :where(.title-bar .icon)::before { content: ""; position: absolute; inset: 2px 4px; background: oklch(87.82% 0.0877 66.27); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
@@ -605,6 +625,51 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 }
 :where(.title-bar .controls .close)::before, :where(.np-controls .close)::before { transform: rotate(45deg); }
 :where(.title-bar .controls .close)::after, :where(.np-controls .close)::after { transform: rotate(-45deg); }
+/* back / forward, at the head of the page window's title bar. The markup ships
+   in the HTML (gen-desktop-partial.ts HISTNAV_HTML) and nav.js only wires it.
+   Both used to arrive with nav.js's boot, two frames after the static paint, so
+   every windowed page painted its caption and then slid it right by the width
+   of this cluster. Same gel as the caption buttons above (21x21 lozenge,
+   traced-hex blue gradient, ::after gloss band, CSS-drawn ::before glyph), with
+   an arrow for the glyph. Plain selectors rather than :where(), because these
+   carried class specificity when nav.js injected them and page CSS was written
+   against that. */
+.axp-histnav { display: inline-flex; gap: 2px; margin-right: 6px; flex: 0 0 auto; align-items: center; }
+.axp-histnav button {
+  position: relative; box-sizing: border-box; width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font: 0/0 a; color: transparent; cursor: pointer;
+  border: 1px solid #6696eb; border-radius: 3px; background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter 60ms ease-out;
+}
+.axp-histnav button::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  border-radius: 2px 2px 5px 5px; pointer-events: none;
+}
+/* translate(-50%,-50%) centers against the triangle's real border box (5x10),
+   which margin guesses got wrong (back sat 3.5px left of center, fwd 1.5px) */
+.axp-histnav button::before {
+  content: ''; position: absolute; top: 50%; left: 50%; width: 0; height: 0;
+  border: 5px solid transparent; transform: translate(-50%,-50%);
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.axp-histnav .axp-back::before { border-right-color: #fff; border-left-width: 0; }
+.axp-histnav .axp-fwd::before { border-left-color: #fff; border-right-width: 0; }
+.axp-histnav button:hover:not([disabled]) {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
+  outline: none;
+}
+.axp-histnav button:active:not([disabled]) { filter: brightness(.9); }
+.axp-histnav button:focus-visible { outline: 1px dotted #fff; outline-offset: -4px; }
+.axp-histnav button[disabled] { opacity: .45; cursor: default; filter: none; }
+/* Two cases draw no pair. Without script the buttons would do nothing. And under
+   720px, the width at which windows stop resizing (below), a phone's own back
+   gesture already does the job while the pair costs 50px of a ~370px caption:
+   measured at 390px, four garage titles wrapped onto a second line and pushed
+   the document down 19px. */
+@media (scripting: none), (width < 720px) { .axp-histnav { display: none; } }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
 :where(.title-bar) { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
 :where(.window) {
@@ -717,7 +782,9 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 }
 .np-list a:hover { background: var(--row-hover); }
 .np-list a:hover .np-title { color: oklch(62.80% 0.2577 29.23); }
-.np-title {
+/* Scoped to the tracklist on purpose. The Notepad caption on /writing is also
+   a .np-title, inside a white title bar, and a bare selector painted it navy. */
+.np-list .np-title {
   font-weight: bold;
   color: var(--blue-40);
 }
@@ -921,6 +988,13 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
    drag; nav.js keeps only the dotted-grip decoration and the clamp lift
    (see initResize). Maximized windows and the content-hugging Notepad
    folder stay fixed; small screens never resize (same rule the JS had). */
+/* maximized: cover the whole desktop (wallpaper + icons), stop at the 30px
+   taskbar floor. nav.js toggles the class from the title bar's max button. */
+.window.axp-max, .np-window.axp-max {
+  position: fixed !important; inset: 0 0 30px 0 !important; width: auto !important; height: auto !important;
+  max-width: none !important; max-height: none !important; margin: 0 !important; border-radius: 0 !important;
+  transform: none !important; z-index: 9998 !important;
+}
 @media (min-width: 720px) {
   .window:not(.axp-max), .np-window:not(.axp-max):not(.np-folder) {
     resize: both;

@@ -339,6 +339,38 @@
             ],
             "description": "defaults to going (the events with real rosters)"
           },
+          "topic": {
+            "type": "string",
+            "enum": [
+              "crypto",
+              "ai",
+              "fintech",
+              "devtools",
+              "bio",
+              "climate",
+              "hardware",
+              "consumer",
+              "startups",
+              "culture",
+              "other"
+            ],
+            "description": "optional: only events classified as this topic; unclassified events are counted in `untagged`"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "talks",
+              "conference",
+              "hackathon",
+              "demo",
+              "workshop",
+              "meal",
+              "social",
+              "meetup",
+              "other"
+            ],
+            "description": "optional: only events classified as this format (talks, meal, social, ...)"
+          },
           "limit": {
             "type": "integer",
             "minimum": 1,

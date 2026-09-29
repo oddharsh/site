@@ -1,18 +1,18 @@
 {
   // LOCAL DEV ONLY — `wrangler dev -c wrangler.dev.jsonc` (see .claude/launch.json).
   //
-  // This is the twin of wrangler.jsonc. The two differ in exactly six places:
-  //   - main:             src/worker/... here vs .build/src/worker/... in wrangler.jsonc
-  //   - assets.directory: .dev-assets here vs .build/public in wrangler.jsonc
+  // This is the twin of cloudflare.config.ts. The two differ in exactly six places:
+  //   - main:             src/worker/... here vs .build/src/worker/... in cloudflare.config.ts
+  //   - assets.directory: .dev-assets here vs .build/public in cloudflare.config.ts
   //   - no "build" block here (dev serves READABLE source, so the fast
   //     edit->reload loop never pays the full minify/hash/precompress build)
   //   - no deploy-time minification here; local code stays readable
   //   - no uploaded source maps; local stack locations already point at source
   //   - Workers Cache is disabled for both local entrypoints, so edit->reload
   //     never observes a stale cached response; deploy enables it for CachedPages
-  // Everything else (bindings, crons, vars, migrations) MUST match wrangler.jsonc.
+  // Everything else (bindings, crons, vars, migrations) MUST match cloudflare.config.ts.
   // build.ts warns if a binding name drifts between the two. Deploys never use
-  // this file — wrangler.jsonc self-builds via its build.command and ships the
+  // this file — the production config self-builds via wrangler.config.ts's build.command and ships the
   // minified .build/public tree.
   //
   // assets.directory IS NOT A SOURCE DIRECTORY, and that changed on 2026-08-19.
@@ -32,19 +32,19 @@
   // restart dev and the new file is there. Anywhere deeper is free, because
   // those are whole-directory symlinks. dev-stage.mjs's header has the rule.
   "name": "aadhar-sh",
-  // Same pin as wrangler.jsonc, and NOT a fifth difference between the two —
+  // Same pin as cloudflare.config.ts, and NOT a fifth difference between the two —
   // it is one of the values that must match. Plain `bun run dev` is local and
   // never needs an account, but `bun run dev:remote` reaches production
   // bindings through this config, so it hits the same "more than one account
-  // available" wall that wrangler.jsonc's comment describes.
+  // available" wall that cloudflare.config.ts's comment describes.
   //
   // `bun run routes:check:remote` does NOT, and this comment said it did until
-  // 2026-08-19. check-routes-harness.mjs defaults its config to ./wrangler.jsonc
+  // 2026-08-19. check-routes-harness.ts defaults its config to ./.wrangler.site.jsonc (generated from cloudflare.config.ts)
   // and the package script passes no positional, so the remote oracle derives
   // its twin from the PRODUCTION config and self-builds. That is worth keeping
   // straight in both directions: it means the oracle is untouched by anything
   // done to this file, and it means a change meant to reach the oracle has to be
-  // made in wrangler.jsonc.
+  // made in cloudflare.config.ts.
   "account_id": "1c99acdb6141579023fb97d24261ea58",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-06-01",
@@ -53,7 +53,7 @@
   // hands the Worker, so a divergence here makes local dev a different platform
   // from the one that ships rather than merely a different route table.
   // tools/build.ts diffs this array between the two configs for that reason.
-  // wrangler.jsonc carries the argument, including why the sibling
+  // cloudflare.config.ts carries the argument, including why the sibling
   // `request_signal_passthrough` is absent and what local dev cannot measure,
   // and why `new_module_registry` is here at all.
   "compatibility_flags": ["enable_request_signal", "new_module_registry"],
@@ -72,7 +72,7 @@
   "assets": {
     "directory": ".dev-assets",
     "binding": "ASSETS",
-    // MUST match wrangler.jsonc: canonical URLs carry no trailing slash.
+    // MUST match cloudflare.config.ts: canonical URLs carry no trailing slash.
     "html_handling": "drop-trailing-slash",
     "run_worker_first": [
       "/", "/index.html", "/favicon.ico", "/hit",
@@ -83,14 +83,14 @@
       "/pixel-peeper", "/pixel-peeper/*",
       "/access", "/access/*",
       "/auth.md",
-      // Folded from five exact rows on 2026-09-16; see wrangler.jsonc.
+      // Folded from five exact rows on 2026-09-16; see cloudflare.config.ts.
       "/.well-known/*",
       "/agent/*", "/oauth2/*",
-      "/whoareyou", "/whoareyou.json", "/security*",
+      "/whoareyou*", "/security*",
       "/reading", "/updates", "/updates.json",
     "/perf",
     "/perf.json", "/restore",
-      // Folded to a wildcard alongside wrangler.jsonc — see the long note there.
+      // Folded to a wildcard alongside cloudflare.config.ts — see the long note there.
       // Nothing static lives under /lens/, and the production config had no room
       // for a ninth exact row.
       "/lens", "/lens/*",
@@ -108,7 +108,9 @@
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
-      "/ledger/prefetch",
+      // mirrors cloudflare.config.ts's one glob for the ledger's sub-routes, which
+      // since 2026-09-25 include the invoice's island at /ledger/lines.html.
+      "/ledger/*",
       "/writing", "/writing/*",
       // These four ("/ask" above, and the three here) were MISSING from this file
       // until 2026-08-27, against both headers' rule that the two allowlists match.
@@ -128,10 +130,15 @@
       // was a live round of ammunition rather than a wound. Same class as the
       // missing "41 5 * * *" cron (see the triggers note); build.ts invariant #6
       // diffs the two allowlists now, so the next one fails a check.
-      "/webmention", "/webmention/*", "/inbox",
+      // "/inbox*" covers the page and its island at /inbox/mail.html (2026-09-25);
+      // nothing static lives under it, and /inbox.md is "/*.md"'s anyway.
+      "/webmention", "/webmention/*", "/inbox*",
       "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
-      "/bot", "/around", "/around/json", "/around/changes.json",
-      // mirrors wrangler.jsonc: "/photos/*" folds the three exact sub-rows, and
+      // "/around*" folds "/around", "/around/json" and "/around/changes.json",
+      // and covers the page's island at /around/snapshot.html (2026-09-25).
+      // Nothing static lives under /around; /around.md is "/*.md"'s anyway.
+      "/bot", "/around*",
+      // mirrors cloudflare.config.ts: "/photos/*" folds the three exact sub-rows, and
       // each album (src/worker/albums.ts) is a root path plus its slashed twin
       "/photos", "/photos/*", "/run",
       "/cota-wec", "/cota-wec/",
@@ -150,10 +157,13 @@
       // the data indexes beside meta/. This puts the config at 98 of the 100
       // rules wrangler allows; the fold gotcha 26 names is the next step if a
       // 101st is ever needed.
-      "/images/*.json", "/*.md", "/*.src.*", "/search-index.json", "/llms.txt", "/sitemap.xml"
+      "/images/*.json", "/*.md", "/*.src.*", "/search-index.json", "/llms.txt", "/sitemap.xml",
+      // q11 everywhere, 2026-09-26: the section icons (favicons on 12 pages) and
+      // /resume.json, both at the edge's q4 until their twins had a route.
+      "/section-icons/*", "/resume.json"
     ]
   },
-  // matches wrangler.jsonc. Locally the spans open and record nothing
+  // matches cloudflare.config.ts. Locally the spans open and record nothing
   // (span.isTraced is false under `wrangler dev` — there is no trace backend to
   // ship them to), which is exactly the property lib/trace.js is built around:
   // instrumentation must never be the reason dev behaves differently from prod.
@@ -162,13 +172,13 @@
     "traces": { "enabled": true, "head_sampling_rate": 1 }
   },
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
-  // Matches wrangler.jsonc exactly. It did NOT before 2026-08-14: this list was
+  // Matches cloudflare.config.ts exactly. It did NOT before 2026-08-14: this list was
   // missing "41 5 * * *" entirely, so the daily outbound tick existed in
   // production and not in dev, against a comment at the top of this file saying
   // crons MUST match. Found while folding the /around crawl onto that tick.
   //
   // CHECKED since 2026-08-27 rather than remembered: build.ts invariant #6 diffs
-  // this list against wrangler.jsonc's and warns, alongside the run_worker_first
+  // this list against cloudflare.config.ts's and warns, alongside the run_worker_first
   // diff that landed with it. Order does not matter (index.ts dispatches on the
   // cron STRING), a duplicate does, and losing the block entirely fails the build
   // rather than reporting two empty lists as agreement.
@@ -190,20 +200,17 @@
   "d1_databases": [
     { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" },
     { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" },
-    // webmentions (see wrangler.jsonc). Local dev gets its own local D1 file from
+    // webmentions (see cloudflare.config.ts). Local dev gets its own local D1 file from
     // this name, so /inbox and the endpoint work end-to-end under `bun run dev`
     // without touching the remote database.
     { "binding": "SOCIAL_DB", "database_name": "aadhar-social", "database_id": "b3ab51c4-da04-40ec-9b36-c7e06611f4ab" }
   ],
   "durable_objects": {
     "bindings": [
-      { "name": "COUNTER", "class_name": "Counter" }
+      { "name": "COUNTER", "class_name": "Counter", "script_name": "aadhar-counter" }
     ]
   },
-  "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Counter"] }
-  ],
-  // per-booking coffee expiry timer — MUST match wrangler.jsonc (build.ts warns on drift).
+  // per-booking coffee expiry timer — MUST match cloudflare.config.ts (build.ts warns on drift).
   "workflows": [
     { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" },
     { "name": "lens-census-host", "binding": "CENSUS_WORKFLOW", "class_name": "CensusWorkflow" }
@@ -211,7 +218,7 @@
   // Quick Actions need remote mode during local Wrangler development.
   "browser": { "binding": "BROWSER", "remote": true },
   "images": { "binding": "IMAGES", "remote": true },
-  // /lens per-IP crawl budgets — MUST match wrangler.jsonc (build.ts warns on
+  // /lens per-IP crawl budgets — MUST match cloudflare.config.ts (build.ts warns on
   // drift). Local counters, deliberately: a dev session exercising /lens should
   // not spend the production limiter, and overLensBudget fails open anyway.
   "ratelimits": [
@@ -239,6 +246,7 @@
     // production, and the Kitesurf path in lens-render.js would have skipped
     // straight to the binding no matter how the token was set.
     "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
+    "AI_GATEWAY": "default",
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",
     "WORKING_HOURS_END": "18",

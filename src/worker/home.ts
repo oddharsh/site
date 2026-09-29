@@ -40,6 +40,20 @@ import { CURATED_POOL, getAltMap, getHistogramMap } from "./photos.ts";
 //
 // The manifest span now reads the bundled pool synchronously. Only captions and
 // histograms need ASSETS reads, each cached per isolate and traced separately.
+// The document always arrives before the fragment, in the same isolate: `/` is
+// Worker-served (dcz), and the fragment is a preload the document itself names.
+// So the two ASSETS reads the fragment's FIRST request per isolate pays (alt.json
+// 14 KB, histograms.json 70 KB, both memoised in photos.ts) can be spent while
+// the document is being served instead. Measured 2026-09-21 in a real window:
+// the fragment took 168 ms on a cold isolate against 44 ms warm, and the twelve
+// images cannot be discovered until it lands. Runs under ctx.waitUntil, so it
+// costs the document response nothing and a failed read is the same {} the
+// getters already fall back to. Bundling the two files was the other repair and
+// was declined once already (photos.ts, "22.9 KiB gzip of headroom").
+export function warmGridData(env) {
+  return Promise.all([getAltMap(env).catch(() => {}), getHistogramMap(env).catch(() => {})]);
+}
+
 export async function handlePhotoGrid(request, env) {
   const pool = span("home.grid.manifest", () => CURATED_POOL);
   const [altMap, histograms] = await Promise.all([

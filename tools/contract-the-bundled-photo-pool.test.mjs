@@ -1,6 +1,7 @@
 // ── the bundled photo pool ──────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  configText,
   testGlobals,
   ROOT,
   assert,
@@ -373,7 +374,9 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
 test("browser RUM and its ledger proxy stay fully removed", async () => {
   const page = await readFile(new URL("src/pages/index.html", ROOT), "utf8");
   const worker = await readFile(new URL("src/worker/index.ts", ROOT), "utf8");
-  const wrangler = await readFile(new URL("wrangler.jsonc", ROOT), "utf8");
+  // The authored site config (cloudflare.config.ts + wrangler.config.ts since
+  // 2026-09-28): a RUM marker would be written into the source, not the projection.
+  const wrangler = (await readFile(new URL("cloudflare.config.ts", ROOT), "utf8")) + (await readFile(new URL("wrangler.config.ts", ROOT), "utf8"));
   const wranglerDev = await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8");
   const headers = await readFile(new URL("public/_headers", ROOT), "utf8");
   const whoareyou = await readFile(new URL("src/worker/whoareyou.ts", ROOT), "utf8");
@@ -386,7 +389,7 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   for (const [name, source] of [
     ["index.html", page],
     ["_worker.js/index.js", worker],
-    ["wrangler.jsonc", wrangler],
+    ["cloudflare.config.ts + wrangler.config.ts", wrangler],
     ["wrangler.dev.jsonc", wranglerDev],
   ]) {
     assert.doesNotMatch(source, /\/ledger\/rum|data-cf-beacon|cloudflareinsights\.com/, `${name} must carry no browser RUM wiring`);
@@ -476,7 +479,7 @@ test("local dev composes the same served tree the build stages", async () => {
 
 test("production minifies the Worker without obscuring deployed stack traces", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  const production = parseJsonc(await readFile(new URL("wrangler.jsonc", ROOT), "utf8"));
+  const production = parseJsonc(await configText("cloudflare.config.ts"));
   const development = parseJsonc(await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8"));
 
   assert.equal(production.minify, true,

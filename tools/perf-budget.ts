@@ -43,6 +43,7 @@ import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:z
 import { transform as transformCss } from "lightningcss";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { siteWranglerArgs } from "./lib/site-config.ts";
 
 // Wire-size envelopes, not raw-source ceilings. These start from the current
 // built output with enough room for ordinary feature work; they are deliberately
@@ -51,6 +52,7 @@ const ASSET_ENVELOPES = {
   "nav.js":         { role: "shared deferred shell",       gzipKiB: 20, brotliKiB: 18 },
   "nav-run.js":     { role: "first-open Run island",       gzipKiB: 12, brotliKiB: 10 },
   "nav-tray.js":    { role: "first-click tray island",     gzipKiB: 5,  brotliKiB: 4 },
+  "nav-pipes.js":   { role: "idle screen-saver island",    gzipKiB: 6,  brotliKiB: 5 },
   "notepad.js":     { role: "writing-only island",         gzipKiB: 4,  brotliKiB: 3.5 },
   "lens-boot.js":   { role: "idle Lens bootstrap",         gzipKiB: 1,  brotliKiB: 1 },
   "lens-webmcp.js": { role: "idle WebMCP registrar",       gzipKiB: 5,  brotliKiB: 4 },
@@ -200,7 +202,7 @@ const WORKER_BASELINE_SOURCE_KIB = 1376.65;
 // profile at that resolution has no business failing a PR.
 const WORKER_STARTUP_ALERT_MS = 50;
 const TWINS = [
-  "nav.src.js", "nav-run.src.js", "nav-tray.src.js", "notepad.src.js", "lens-boot.src.js", "lens-webmcp.src.js", "lens.src.js", "lens-browser.src.js", "lens-tools.src.js",
+  "nav.src.js", "nav-run.src.js", "nav-tray.src.js", "nav-pipes.src.js", "notepad.src.js", "lens-boot.src.js", "lens-webmcp.src.js", "lens.src.js", "lens-browser.src.js", "lens-tools.src.js",
   "quiz.src.js", "tooltip.src.js", "infotip.src.js", "hoist.src.js", "luna.src.css",
   "lwe-base.src.css",
 ];
@@ -244,7 +246,7 @@ try {
   // One dry-run writes index.js for the route harness's prebuiltWorkerDir and
   // the upload-format worker.bundle for `check startup`. They are different
   // formats; the profiler cannot consume the plain JavaScript entrypoint.
-  dryOut = execFileSync(...wranglerCommand(["deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"]), { encoding: "utf8" });
+  dryOut = execFileSync(...wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"])), { encoding: "utf8" });
 } catch (e) {
   dryOut = (e.stdout || "") + "\n" + (e.stderr || "");
   dryRunFailed = true;
@@ -288,11 +290,11 @@ if (gz) {
 //
 // Runs on the prebuilt bundle from the dry-run above, so it adds no build.
 try {
-  const startOut = execFileSync(...wranglerCommand([
+  const startOut = execFileSync(...wranglerCommand(await siteWranglerArgs([
     "check", "startup",
     "--workerBundle", ".build/.perfbudget/worker.bundle",
     "--outfile", ".build/.perfbudget/worker-startup.cpuprofile",
-  ]), { encoding: "utf8" });
+  ])), { encoding: "utf8" });
   // "│   Active: 9.6 ms (including 0.0 ms garbage collection)"
   const active = startOut.match(/Active:\s*([\d.]+)\s*ms/);
   if (active) {

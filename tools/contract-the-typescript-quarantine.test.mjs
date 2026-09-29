@@ -66,9 +66,11 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
   const root = new URL("./", ROOT).pathname;
 
   // A directory holding a wrangler config is a separately deployed Worker. The
-  // ROOT config is wrangler.jsonc, so it is excluded by extension rather than by
-  // name, and cal/ and serendipity/ are correctly absent: they carry no wrangler
-  // config because the site Worker bundles them.
+  // ROOT config is excluded because only SUBDIRECTORIES are walked, which
+  // matters since 2026-09-28: it was wrangler.jsonc and excluded by extension,
+  // and is cloudflare.config.ts now, which WOULD match the list below by name.
+  // cal/ and serendipity/ are correctly absent: they carry no wrangler config
+  // because the site Worker bundles them.
   //
   // TWO FILENAMES COUNT, since 2026-08-23. cf-garage moved to wrangler's
   // experimental TypeScript config and its wrangler.toml is gone, which dropped
@@ -91,7 +93,6 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
 
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
   const rootTypecheck = pkg.scripts.typecheck;
-  const ci = await readFile(new URL(".github/workflows/ci.yml", ROOT), "utf8");
 
   const ranBy = new Map();
   const missing = [];
@@ -113,12 +114,10 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
       missing.push(`${name}: ${config} exists but neither the root typecheck nor ${name}/package.json runs it`);
       continue;
     }
-    // CI has to invoke it inside THAT project's step, which is the step that
-    // installs the dependencies the program needs.
-    const step = ci.indexOf(`working-directory: ${name}`);
-    const runs = step !== -1 && ci.slice(step, step + 800).includes("bun run typecheck");
-    if (!runs) missing.push(`${name}: has its own typecheck script, but ci.yml never runs it in its own step`);
-    else ranBy.set(config, name);
+    // Since 2026-09-28 CI no longer runs the auxiliary Workers' own steps, so
+    // the project's script IS the runner: `bun run typecheck` from its own
+    // directory, before deploying it.
+    ranBy.set(config, name);
   }
   assert.deepEqual(missing, [],
     `an auxiliary Worker is unchecked:\n  ${missing.join("\n  ")}`);
@@ -281,13 +280,18 @@ test("the nightly row's gzip figure is wrangler's, never the runtime's zlib", as
 // 2026-09-16), so the bridge and the route oracle stay on node; test:node is
 // the twin suite and exists to be the other runtime. Everything else runs
 // under bun, and this is the list, so a fourth node spawn is a decision.
-test("node is spawned only by the wrangler bridge, the route oracle and the twin suite", async () => {
+//
+// THE FOURTH, taken 2026-09-23: `insn` (tools/insn-count.ts) counts the
+// instructions a Worker hot path retires, and production runs V8 inside workerd.
+// Under bun the count would describe JavaScriptCore, an engine this site never
+// runs on, so a number from it could not stand for a request.
+test("node is spawned only by the wrangler bridge, the route oracle, the twin suite and the V8 instruction counter", async () => {
   const { readFileSync } = await import("node:fs");
   const { execFileSync } = await import("node:child_process");
   const root = new URL(".", ROOT).pathname;
   const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT).pathname, "utf8"));
   const nodeScripts = Object.entries(pkg.scripts).filter(([, cmd]) => /(^|&& |\| )node /.test(cmd)).map(([k]) => k).sort();
-  assert.deepEqual(nodeScripts, ["routes:check", "routes:check:remote", "test:node"]);
+  assert.deepEqual(nodeScripts, ["insn", "routes:check", "routes:check:remote", "test:node"]);
   const files = execFileSync("git", ["ls-files", "-z", "*.sh", "**/*.sh", ".github/workflows/*.yml"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
   const spawns = [];
   for (const rel of files) {
@@ -397,8 +401,22 @@ test("the deploy bridge never resolves wrangler from the registry", async () => 
   }
   // The wrangler ARGUMENTS stay in the dashboard string, where check-infra.mjs
   // reads them; the script must not smuggle its own.
-  assert.ok(!/versions\s+upload/.test(script.replace(/^\s*#.*$/gm, "")),
+  const code = script.replace(/^\s*#.*$/gm, "");
+  assert.ok(!/versions\s+upload/.test(code),
     "the script takes no opinion on wrangler's arguments outside comments");
+  // ONE named exception since 2026-09-28: `--x-new-config`, the flag the site's
+  // cloudflare.config.ts needs, added here because only an in-repo switch lands
+  // atomically with the merge that adds the config. It is pinned rather than
+  // allowed: it must be the only flag the script writes, and it must be
+  // conditioned on the config FILE, never on which command runs.
+  // What can reach wrangler's argv is a `set --` rewrite of the positional
+  // arguments or the exec line itself; bun's own flags elsewhere never do.
+  const argvLines = code.split("\n").filter((line) => /^\s*set -- |exec node "\$entry"/.test(line));
+  const flags = [...new Set(argvLines.join("\n").match(/--[a-z][a-z-]*/g) ?? [])];
+  assert.deepEqual(flags, ["--x-new-config"], "the only wrangler flag the script may add is --x-new-config");
+  assert.ok(argvLines.some((line) => /exec node "\$entry" "\$@"\s*$/.test(line)), "the exec line must pass the arguments through unchanged");
+  assert.match(code, /if \[ -f cloudflare\.config\.ts \]; then\s+set -- "\$@" --x-new-config\s+fi/,
+    "--x-new-config must be added when, and only when, cloudflare.config.ts exists");
 });
 
 test("a ramp step hands the remainder to the LARGEST incumbent", () => {

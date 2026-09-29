@@ -276,7 +276,7 @@ function errorResult(message) { return { _error: String(message).slice(0, 400) }
 // one end of that range.
 //
 // `what` lives here so the 429 quotes a ceiling it cannot disagree with; `max`
-// is mirrored in wrangler.jsonc's ratelimits and a contract test pins the pair.
+// is mirrored in cloudflare.config.ts's rate-limit bindings and a contract test pins the pair.
 export const MCP_BUDGETS = {
   imageInspect:   { binding: "MCP_RL_IMAGE_INSPECT",   max: 20, what: "Image inspections" },
   imageTransform: { binding: "MCP_RL_IMAGE_TRANSFORM", max: 8,  what: "Image transforms" },

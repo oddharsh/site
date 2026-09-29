@@ -58,7 +58,7 @@ while dependabot-core pins `MAX_SUPPORTED_LOCKFILE_VERSION = 1` against our v2
 lockfiles.
 
 That is the worst version to leave unowned, because it is the one that compiles
-the site. `wrangler.jsonc`'s build command is `bun tools/build.ts`, so the pinned
+the site. `wrangler.config.ts`'s build command is `bun tools/build.ts`, so the pinned
 bun mints every content-addressed `/a/` and `/i/` URL production serves. A bump
 that changes one output byte is a dictionary roll and a CSP hash change wearing a
 version string.
@@ -90,6 +90,41 @@ a day when the pin is already current proves only that the comparison ran.
 The baseline below already worked that through: the release-age policy once held
 the types pin a release behind the runtime and it caught up on its own, which is
 a wait rather than a fork.
+
+### what a frozen install does not check
+
+`bun install --frozen-lockfile` is the gate CI trusts to answer "does the
+installed tree match what this repository declares". It answers half of that
+question, and PR #880 was the half it misses.
+
+`bun.lock` records every direct dependency twice: in `workspaces[<dir>]` as a
+copy of the manifest's spec string, and in `packages` as the version that
+actually installs. Installs compare the manifest against the first copy alone.
+Measured 2026-09-22 on bun 1.4.2 (744846f84) and again on `oven/bun:1.4` Linux,
+one dependency and one hand-edited lockfile:
+
+| lockfile state | frozen install | installed |
+|---|---:|---|
+| the mirror disagrees with the manifest | exit 1 | nothing |
+| the mirror agrees, `packages` resolves something else | **exit 0** | **the resolution** |
+
+A plain `bun install` behaves the same way and rewrites nothing, and so does
+`bun ci`; `bun update <name>` is the only one of the four that repairs it, so
+the reflexive `rm -rf node_modules && bun install` leaves the drift in place.
+Filed as [oven-sh/bun#43795](https://github.com/oven-sh/bun/issues/43795).
+
+The state comes from version control rather than from bun. On #880 a merge of
+`main` into a dependabot branch resolved the `package.json` conflict in favour
+of the base, which reverted the bump and left the lockfile's resolution ahead of
+it, so every job on that PR built with a version the manifest denied. Every
+dependabot PR that needs a `main` merge is a candidate.
+
+`bun run test` holds it now, in
+[`tools/lib/lockfile-pins.ts`](../tools/lib/lockfile-pins.ts): every exact pin
+in every committed manifest must equal what its lockfile resolves. It is
+deliberately NOT an upstream-watch row, and that module's header says why — the
+guard is local, complete and cheap, so there is no workaround here waiting on
+the fix to be retired.
 
 ### the bun surface this repo actually uses
 
@@ -177,9 +212,23 @@ reading: its `runWatch` answers a missing engine as `landed: null`, and null
 never moves a verdict, so the bun leg would have printed GREEN over eight
 unmeasured rows. The wrapper THROWS instead and `canary-bun.ts` turns that
 into exit 2 before it downloads a canary. `TIMBRADO_BIN` names a built engine
-elsewhere and skips the build; only `canary:bun` needs one, since the wrangler
-leg runs its two watches through its own probe Worker and the reporter, the
-digest and the survey are still TypeScript. The bump adopted 0.2.0 at its
+elsewhere and skips the build. Three callers need the engine: `canary:bun`,
+`bun:pin`, and the contract suite, which RUNS every bun watch. The wrangler
+leg runs its two watches through its own probe Worker, and the reporter, the
+digest and the survey are still TypeScript.
+
+**The suite is the one that bit, and `bun:pin` is the one that paid.** A
+cold build takes about 5s on a laptop and longer on a runner, and it lands on
+whichever test asks first. `bun run test` gives each test 30s, so `validate`
+never noticed. The bumper's suite gate restated its flags and dropped
+`--timeout`, so candidates ran on bun's 5s default, and bun test kills a
+`spawnSync`'d child at the timeout: cargo was killed at 5010ms every night
+from 2026-09-15, the pin never moved, and `bun-pin.yml` read the failed gate
+as green. Fixed 2026-09-26 three ways. The gate takes `bun run test`'s own
+arguments out of package.json, the bumper builds the engine before it
+downloads anything (exit 2 without cargo, the same as the canary leg), and a
+failed gate files the `timbrado: bun-pin` issue rather than only a line in a
+green run's summary. The bump adopted 0.2.0 at its
 merge commit unchanged: every one of the eight bun watches reads the same
 boolean through the engine as it did through the JavaScript runner.
 
@@ -330,14 +379,7 @@ does not make a failed write safe to ignore.
 
 ## Current baseline
 
-- Release-note parser 12.0.0 is the root `htmlparser2` pin. It parses untrusted
-  Dependabot HTML in `tools/lib/dependency-review.ts` under both Bun and Node.
-  Its event parser replaces tag-stripping regexes and decodes entities once.
-  The returned text remains untrusted; the comment renderer escapes it before
-  publishing.
-  This root development dependency serves the review CLI; the Reader keeps
-  its own parser dependency below.
-- `smol-toml` 1.8.0 parses Cargo manifests for the dependency audit and relock
+- `smol-toml` 1.9.0 parses Cargo manifests for the dependency audit and relock
   writer under both Node and Bun. It is a development dependency with no
   transitive dependencies. The census retains Git and path dependencies without
   inventing semantic versions; each needs an explicit versionless policy.
@@ -356,12 +398,22 @@ does not make a failed write safe to ignore.
   clean installs) to cut median install time from 4.62 s to 3.03 s and
   `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
   rather than maintained.
-- Oxc Minify 0.150.0 and Lightning CSS 1.33.0 are exact root pins for the
+- @cloudflare/config 0.20.0 is the exact root pin for the helpers
+  `cf-garage/cloudflare.config.ts` authors with. workers-sdk#15914 moved them
+  out of `wrangler/experimental-config` and into the `cf` CLI as `cf/config`,
+  which is a one-line re-export of `@cloudflare/config/public`. Depending on
+  `cf` instead would break the one-Miniflare, one-Workerd property above: it
+  pins its own for the CLI half, measured at about 580 MB of `node_modules`
+  (two extra workerd binaries) on 2026-09-28. The generated types still name
+  `cf/config`, so `config/tsconfig.cf-garage.json` maps that specifier to this
+  package. Bump it with the wrangler pin when a new wrangler commit's generated
+  types need a newer version; `cf`'s own dependency on it shows which.
+- Oxc Minify 0.151.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
   target-browser, and native-install changes.
-- Oxlint 1.83.0 and oxlint-tsgolint 7.0.2002 are exact root pins for
+- Oxlint 1.85.0 and oxlint-tsgolint 7.0.2002 are exact root pins for
   `bun run lint`, a required step in `validate`. The tsgolint version tracks the
   TypeScript pin below on purpose: TypeScript 7.0 ships no stable programmatic
   API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint
@@ -370,7 +422,7 @@ does not make a failed write safe to ignore.
   unchanged code, and should treat any tsgolint release as paired with a
   TypeScript one. Every rule this repo turns off is turned off in
   `.oxlintrc.json` beside the measurement that decided it.
-- @oxlint/plugins 1.83.0 is the runtime for the three rules vendored from
+- @oxlint/plugins 1.85.0 is the runtime for the three rules vendored from
   anti-slop at `tools/oxlint/anti-slop`. **Bump it in lockstep with oxlint and
   never on its own**: it is the ABI between the linter and a JS plugin, the two
   ship one version number, and a mismatch would fail at plugin load rather than
@@ -435,6 +487,10 @@ does not make a failed write safe to ignore.
   produced identical diagnostics across the four Worker programs, while
   replacing a separately updated runtime description with the runtime used by
   local validation. Binding-type changes now arrive with Wrangler updates.
+  Since 2026-09-26 cf-garage is the exception: it includes
+  `cf-garage/.cloudflare/types/index.d.ts`, which Wrangler writes from
+  `cloudflare.config.ts` (its inferred `Env` plus the runtime at cf-garage's
+  own date and flags), and the same script runs the build that writes it.
 
   Wrangler still declares the package as an optional peer; its own `cli.d.ts`
   imports some names from it. Those resolve to `any` under `skipLibCheck` when
@@ -655,10 +711,29 @@ the reason, rather than written here with the caret quietly dropped.
   postcss, the `nanoid` override and a second esbuild: 68 lockfile entries for
   one runner, and one Dependabot lane that could split the miniflare stack.
 
-- **`cf-garage/`** declares no package dependencies. Its one browser operation
+- **`cf-garage/`** declares no runtime dependencies. Its one browser operation
   calls the native Browser Run `quickAction("screenshot", ...)` binding directly;
   pulling a general-purpose CDP client into this separately deployed demo Worker
   made a 146.26 KiB gzip bundle where the native action produces 2.77 KiB gzip.
+
+  It declares ONE dev dependency since 2026-09-28: `wrangler`, as the root's
+  exact pkg.pr.new URL, and that line exists for the `cf` CLI. `lwe-ask/`
+  carries the same line for the same reason; `lens-reader/` cannot, being
+  outside the workspace with its own lockfile, so cf does not run there. cf finds a
+  project's dev server by reading that project's own manifest and never walks
+  up to the workspace root, so without it `cf build` refuses with "No
+  Cloudflare dev-server is installed in this project." Under bun's isolated
+  linker the same URL resolves to the same store entry, so this adds 3 lines to
+  `bun.lock` and zero packages. `check-wrangler` holds it to the root pin byte
+  for byte, and `wrangler:pin` moves both in one write.
+
+  **`cf` itself is NOT a dependency here, and that is deliberate.** Installed
+  into the tree it pins its own Miniflare and Workerd for its CLI half
+  (`5.20260923.0-alpha` and `1.20260923.1` at beta.1, measured the same day),
+  which breaks the one-Miniflare, one-Workerd property the Wrangler line above
+  rests on. It is a workstation global instead, `bun add -g cf`, the bun form
+  of Cloudflare's `npm i -g cf`. cf-garage deploys by hand and CI stays on
+  wrangler, so nothing that gates a merge ever runs it.
 
 
 <a id="evaluated-and-declined-dmmulroyanti-slop"></a>

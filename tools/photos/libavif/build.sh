@@ -71,7 +71,7 @@ if [ "${1:-}" = "--force" ]; then rm -rf "$SRC" "$OUT"; fi
 
 if [ -x "$AVIFENC" ]; then
   echo "avifenc already built: $AVIFENC"
-  "$AVIFENC" --version | head -2
+  "$AVIFENC" --version | sed -n '1,2p'
   exit 0
 fi
 
@@ -108,10 +108,12 @@ cmake --build "$OUT" --parallel >&2
 # A build that produced a binary WITHOUT sharpyuv is the exact failure this
 # script exists to prevent, and it is silent: the encoder still works, and every
 # later --sharpyuv run just fails one photo at a time. Assert it here instead.
-if ! "$AVIFENC" --help 2>&1 | grep -q -- "--sharpyuv"; then
+# No -q: grep -q exits on the first match and --help keeps writing, so under
+# pipefail a SIGPIPE would read as "no --sharpyuv". Plain grep reads to EOF.
+if ! "$AVIFENC" --help 2>&1 | grep -- "--sharpyuv" >/dev/null; then
   echo "error: built avifenc has no --sharpyuv; libsharpyuv did not link" >&2
   exit 1
 fi
 
 echo "built: $AVIFENC"
-"$AVIFENC" --version | head -2
+"$AVIFENC" --version | sed -n '1,2p'

@@ -16,11 +16,33 @@
 // auxiliary Worker or test suite joins a program on the day it is written
 // instead of the day somebody thinks to look.
 //
-// IT ASKS "IS THIS FILE IN SOME PROGRAM", never "which one". A file can be
-// covered by an include glob or pulled in transitively — serendipity.ts is 2,546
-// lines reached entirely through the site Worker's imports — and both are real
-// coverage. Which program a file belongs in is the individual tsconfig headers'
-// argument to make.
+// IT ASKS TWO QUESTIONS, never "which program". Is this file REACHABLE by some
+// program, and is it NAMED by that program's include globs. Which program a file
+// belongs in is the individual tsconfig headers' argument to make.
+//
+// THE SECOND TIER EXISTS BECAUSE THE FIRST ONE PASSED THROUGH A REAL BUG. This
+// header used to say a file could be covered by a glob or pulled in
+// transitively and that "both are real coverage", naming serendipity.ts as the
+// transitive case. Both are real coverage FOR TSC and only the first is real
+// for tsgolint, which oxlint's type-aware pass runs on. tsgolint walks up from
+// each file looking for a config that NAMES it; finding none above
+// serendipity/, it built a default program with the DOM lib, so `bun run lint`
+// checked 2,546 lines against browser globals from the day type-aware linting
+// landed. Measured 2026-09-22 on an unchanged tree: `oxlint --type-aware
+// --type-check` reported 308 errors there against tsc's 0, and the plain lint
+// reported 0 findings where naming the tree reports 5. Fixed in #882.
+//
+// So reachable and named are separate properties and the gap between them is
+// silent in the worst direction: the symptom is a LINT REPORTING ZERO. Nothing
+// else in this repo can see it. `bun run typecheck` is happy because tsc
+// resolved the imports, this file's orphan tier was happy for the same reason,
+// and the lint is green because it has nothing to say about types it never had.
+//
+// It holds at ZERO with no exemption list, which is deliberate. Every one of the
+// 374 owned files is named today, so an exemption mechanism would only be a
+// place to record the next one instead of fixing it. If a file ever genuinely
+// cannot be named, that is an argument to make in a tsconfig header, and this
+// check should be the thing that forces the argument.
 //
 // `--listFilesOnly` rather than a full check, because this is a scope question
 // and not a correctness one: the other typecheck steps own correctness, and
@@ -33,6 +55,7 @@ import { execFileSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { programFileSets } from "./lib/tsc-scope.ts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const TSC = join(REPO, "node_modules", "typescript", "bin", "tsc");
@@ -67,15 +90,11 @@ if (configs.length < 5) {
   process.exit(1);
 }
 
-const covered = new Set();
-for (const config of configs) {
-  // tsc can print every owned path before rejecting the config. A failed
-  // census is not coverage evidence, even when another program holds the files.
-  const listing = execFileSync(process.execPath, [TSC, "-p", join(REPO, "config", config), "--listFilesOnly"], { encoding: "utf8", cwd: REPO });
-  for (const line of listing.split("\n")) {
-    if (line.startsWith(`${REPO}/`)) covered.add(line.slice(REPO.length + 1));
-  }
-}
+const { covered, named } = programFileSets({
+  repo: REPO,
+  tsc: TSC,
+  configs: configs.map((c) => join(REPO, "config", c)),
+});
 
 const orphans = owned.filter((f) => !covered.has(f));
 if (orphans.length) {
@@ -85,4 +104,18 @@ if (orphans.length) {
   process.exit(1);
 }
 
-console.log(`check-ts-coverage: ${owned.length} source files, all held by one of ${configs.length} programs`);
+// The second tier. Every file here is one tsc reaches and no include names, so
+// it type-checks correctly and lints against whatever globals tsgolint guesses.
+const unnamed = owned.filter((f) => covered.has(f) && !named.has(f));
+if (unnamed.length) {
+  console.error(`check-ts-coverage: ${unnamed.length} file(s) are reachable but NAMED BY NO INCLUDE GLOB:\n  ${unnamed.join("\n  ")}\n` +
+    `\nThese pass the orphan check above, because tsc reaches them through another file's imports. ` +
+    `oxlint's type-aware pass does not: tsgolint walks up from each file looking for a config that names it, ` +
+    `and builds a default DOM-lib program when it finds none. So the LINT on these files is running against ` +
+    `the wrong globals and reporting zero.\n` +
+    `\nAdd each to the include of the program that already reaches it. Confirm with ` +
+    `\`oxlint --type-aware --type-check\`, whose per-tree counts should match each \`tsc -p\`.`);
+  process.exit(1);
+}
+
+console.log(`check-ts-coverage: ${owned.length} source files, all held by one of ${configs.length} programs and all named by an include`);

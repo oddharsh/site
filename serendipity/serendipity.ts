@@ -13,12 +13,15 @@ const PREFIX = "/serendipity";
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { esc } from "../src/worker/lib/http.ts";
+import { html as htmlTag, unsafeHtml } from "../src/worker/lib/html.ts";
+import { islandMount, islandPreload, islandResponse, islandScript } from "../src/worker/lib/island.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit } from "../src/worker/lib/budget.ts";
 import type { Budget } from "../src/worker/lib/budget.ts";
 import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
+import { EVENT_FORMATS, EVENT_TAGS_DDL, EVENT_TOPICS, TAG_MIN_CONFIDENCE, askJev, buildTagRequest, tagInputHash } from "./jev.ts";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const html = (status, body) =>
@@ -37,19 +40,16 @@ function avatar(name, size = 30) {
   return `<span class="ava" style="--ab:oklch(72% 0.13 ${h});width:${size}px;height:${size}px;font-size:${Math.round(size*0.4)}px" aria-hidden="true">${esc(initials)}</span>`;
 }
 
+// Both helpers are Date-only on purpose. They carried a Temporal branch behind
+// `typeof Temporal !== "undefined"`, which never ran in production (workerd
+// ships V8's Temporal switched off, with no compat flag to turn it on) and
+// would have run the day Cloudflare flipped it. That already happened once:
+// cloudflare/workerd#6907 exposed a Temporal whose clock read epoch 0, which
+// would have put every past event here at "today". A vendor switch should not
+// be able to change which code path renders a page, so a watch reports the
+// flip instead (`workerd-exposes-temporal`, tools/lib/upstream-watches.ts).
 function relativeTime(date) {
-  // whole-days elapsed, via Temporal when the runtime ships it (enable_temporal
-  // compat flag), else the plain epoch-ms delta. same output either way.
-  let days;
-  try {
-    // Bare global: referencing an undeclared `Temporal` to hand it to a parser
-  // throws ReferenceError, so typeof is the only operator that can ask.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  if (typeof Temporal !== "undefined" && date.toTemporalInstant) {
-      days = Math.floor(Temporal.Now.instant().since(date.toTemporalInstant()).total({ unit: "hour" }) / 24);
-    }
-  } catch (e) {}
-  if (days === undefined) days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
   if (days < 7) return `${days}d ago`;
@@ -58,42 +58,71 @@ function relativeTime(date) {
   return `${Math.floor(days / 365)}y ago`;
 }
 
+// Pinned to UTC, which is this Worker's clock: an instant shows in UTC and a
+// zoneless wall-clock string shows as recorded. A zoneless string is read AS
+// UTC rather than as the host's local time, so the output is the same in
+// workerd and in a test on a workstation in any timezone. Matches what the
+// retired Temporal branch printed, byte for byte (checked on six shapes, two
+// host zones, 2026-09-23).
 function fmtDateTime(s) {
   if (!s) return "";
-  const opt: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" };
-  const topt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-  // Temporal when available: a wall-clock string shows as recorded; an instant
-  // shows in UTC (matching this Worker's clock). falls back to Date otherwise.
-  try {
-    // Bare global, same as above: only typeof can ask whether it exists.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  if (typeof Temporal !== "undefined") {
-      const z = s.replace(" ", "T");
-      const pdt = /[zZ]|[+-]\d{2}:?\d{2}$/.test(z)
-        ? Temporal.Instant.from(z).toZonedDateTimeISO("UTC").toPlainDateTime()
-        : Temporal.PlainDateTime.from(z);
-      return pdt.toLocaleString("en-US", opt) + " · " + pdt.toLocaleString("en-US", topt);
-    }
-  } catch (e) {}
-  const d = new Date(s);
+  const opt: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
+  const topt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit", timeZone: "UTC" };
+  const z = String(s).replace(" ", "T");
+  const d = new Date(/T\d/.test(z) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(z) ? z + "Z" : z);
   if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-US", opt) + " · " + d.toLocaleTimeString("en-US", topt);
 }
 
-// influence/seniority proxy — ported verbatim from the Next app's attendeeScore.
-function attendeeScore(a) {
-  let s = 0;
-  const r = (a.role || "").toLowerCase();
-  if (/\bfounder\b/.test(r)) s += 100;
-  else if (/\b(ceo|cto|coo|cfo|cpo|cmo|cro|chief)\b/.test(r)) s += 90;
-  else if (/\bpresident\b/.test(r)) s += 80;
-  else if (/\b(vp|vice\s+president)\b/.test(r)) s += 70;
-  else if (/\b(director|head)\b/.test(r)) s += 60;
-  else if (/\b(manager|lead)\b/.test(r)) s += 40;
-  else if (/\b(senior|staff|principal)\b/.test(r)) s += 30;
-  else if (/\b(engineer|developer|designer|analyst)\b/.test(r)) s += 20;
-  else if (/\b(intern|junior|student)\b/.test(r)) s += 5;
-  else if (r.length) s += 15;
+// influence/seniority proxy, first match wins. Exported as a table so a
+// classifier meant to replace it (tools/serendipity-role-baseline.ts) is
+// measured against exactly the regex the roster sorts by.
+//
+// The tiers came from the Next app's attendeeScore, which was written for a
+// job-title field. A Luma bio is how someone describes themselves, so two rules
+// joined on 2026-09-23 for how founders and investors actually write it, each
+// counted over all 5,116 bios before it went in:
+//   founder   "cofounder" as one word (+66), "building @x" (+21), and a bio that
+//             OPENS "Building <Name>" (+59). The capital is the signal there, so
+//             that one regex is case-sensitive; "building software" is a hobby.
+//   investor  a tier the old table did not have at all, on a pool fed by people
+//             at a venture firm: investor/investing/vc/angel, GP and the partner
+//             titles, and "Partner @x". Scored as c-level, and placed after it so
+//             "CTO & angel investor" still reads as the job.
+// "Entrepreneur" was measured and left out: about half of its 39 hits were
+// "entrepreneur mentor" or a network OF entrepreneurs, not a founder.
+// A tier is a LIST of regexes so one rule can keep its case: a single /i
+// regex would let `[A-Z0-9]` match lowercase and read "building software" as
+// a founder.
+export const ROLE_TIERS: readonly (readonly [tier: string, res: readonly RegExp[], points: number])[] = Object.freeze([
+  ["founder", [/\b(founder|cofounder)\b|\bbuilding\s+@\S/i, /^\s*[Bb]uilding\s+[A-Z0-9]/], 100],
+  ["c-level", [/\b(ceo|cto|coo|cfo|cpo|cmo|cro|chief)\b/i], 90],
+  ["investor", [/\b(investor|investing|vc|angel|gp|general\s+partner|managing\s+partner|venture\s+partner|venture\s+capital)\b|\bpartner\s+(@|at\b)/i], 90],
+  ["president", [/\bpresident\b/i], 80],
+  ["vp", [/\b(vp|vice\s+president)\b/i], 70],
+  ["director", [/\b(director|head)\b/i], 60],
+  ["lead", [/\b(manager|lead)\b/i], 40],
+  ["senior", [/\b(senior|staff|principal)\b/i], 30],
+  ["ic", [/\b(engineer|developer|designer|analyst)\b/i], 20],
+  ["junior", [/\b(intern|junior|student)\b/i], 5],
+] as const);
+
+/** The tier a role line falls in: `unmatched` for text no tier names, `none`
+ *  for no text at all. The two differ by 15 points, since saying anything about
+ *  yourself is a weak signal of its own. Tested against the text as written,
+ *  since one rule reads its capitals. */
+export function roleTier(text: string | null | undefined): { tier: string, points: number } {
+  const r = text || "";
+  for (const [tier, res, points] of ROLE_TIERS) if (res.some((re) => re.test(r))) return { tier, points };
+  return r.trim().length ? { tier: "unmatched", points: 15 } : { tier: "none", points: 0 };
+}
+
+// The enriched role when there is one, else the person's own Luma bio. On
+// 2026-09-23 the role existed for 15 of 19,733 people and a bio for 5,116, so
+// reading the role alone left the tiers dark for nearly everyone; read against a
+// 60-bio hand-labelled sample, the tiers were right on 24 of the 25 they matched.
+export function attendeeScore(a) {
+  let s = roleTier(a.role || a.bio_short).points;
   if (a.twitter_handle) s += 15;
   if (a.linkedin_handle || a.linkedin_url) s += 5;
   if (a.website) s += 5;
@@ -291,6 +320,9 @@ function shellCss() {
   .chip{font:8.5pt var(--font-ui);padding:3px 11px;border:1px solid #8e9dad;border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
   .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#2f6fde 60%,#2a60cc)}
   .ev[hidden],.grp[hidden]{display:none}
+  .toolbar:has(+ [data-island] .empty){display:none}
+  .sd-fail{display:none;color:oklch(50% 0.01 250);font-size:11px;margin:0 0 14px}
+  #sd-events[data-state="failed"] + .sd-fail{display:block}
   .empty-filter{display:none;color:oklch(50% 0.01 250);padding:24px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250);text-align:center;font-size:11px}
   /* cursor-following cover tooltip, driven by the shared engine in /hoist.js.
      --x/--y are typed <length> so the translate() positions it with no JS rAF; clamp
@@ -322,10 +354,10 @@ function shellCss() {
      letterboxing inside it (bg fills) rather than distorting. */
   #ev-tip img{display:block;width:300px;height:auto;max-height:340px;object-fit:contain;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid oklch(61% 0.061 253);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
   @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}
-}`;
+`;
 }
 
-function shell(title, currentPath, bodyHtml) {
+function shell(title, currentPath, bodyHtml, head = "") {
   const nav = (href, label) => {
     const full = PREFIX + href;
     const cur = currentPath === full || (href !== "" && currentPath.startsWith(full));
@@ -337,7 +369,7 @@ function shell(title, currentPath, bodyHtml) {
 <link rel="icon" type="image/svg+xml" href="/section-icons/serendipity.svg">
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style>
-<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css"></head><body>${DESKTOP_TOP}
+<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css">${head}</head><body>${DESKTOP_TOP}
 <div class="wrap"><div class="window">
   <div class="title-bar"><span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/serendipity</span>
     <span class="controls"><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
@@ -364,6 +396,13 @@ function shell(title, currentPath, bodyHtml) {
 
 // ── pages ────────────────────────────────────────────────────────────────────
 function eventCard(e, isPast) {
+  if (e.pending) {
+    return `<div class="ev" aria-hidden="true">
+    <div class="nm">…</div>
+    <div class="meta">…</div>
+    <div class="row"><span class="count">…</span></div>
+  </div>`;
+  }
   // split on the GROUP_CONCAT delimiter (char 31 / unit separator), which can't
   // occur in a label — a plain ", " split shredded any label containing a comma.
   const contributors = (e.contributors || "").split("\x1f").filter(Boolean);
@@ -389,15 +428,18 @@ function eventCard(e, isPast) {
 
 // client-side dashboard interactivity: live search, date-filter chips, and the
 // cursor-following cover tooltip (homepage idiom). all over the rendered cards —
-// no extra requests, works with the 60s edge-cached HTML.
+// no extra requests. On the built page the cards arrive with the island, so the
+// filter re-reads them on every apply and re-runs when the island lands.
 const DASHBOARD_JS = `
 (function(){
-  var cards=[].slice.call(document.querySelectorAll('.ev'));
-  var grps=[].slice.call(document.querySelectorAll('.grp[data-grp]'));
+  // Cards and group headers are read on every apply rather than once, because
+  // on the built page they arrive with the island after this runs. The toolbar
+  // is in the shell, so a search typed before the swap survives it.
   var search=document.getElementById('ev-search'), chips=document.getElementById('ev-chips');
   var none=document.getElementById('ev-none'), tip=document.getElementById('ev-tip'), when='all';
   function isWeekend(s,now){ if(s<now||s>now+8*864e5)return false; var w=new Date(s).getDay(); return w===0||w===6; }
   function apply(){
+    var cards=[].slice.call(document.querySelectorAll('.ev[href]')), grps=[].slice.call(document.querySelectorAll('.grp[data-grp]'));
     var q=((search&&search.value)||'').trim().toLowerCase(), now=Date.now(), wk=now+7*864e5, shown=0;
     cards.forEach(function(c){
       var okq=!q||c.textContent.toLowerCase().indexOf(q)!==-1;
@@ -411,8 +453,9 @@ const DASHBOARD_JS = `
       while(n&&!(n.classList&&n.classList.contains('grp'))){ if(n.classList&&n.classList.contains('ev')&&!n.hidden){any=true;break;} n=n.nextElementSibling; }
       g.hidden=!any;
     });
-    if(none)none.style.display=shown?'none':'block';
+    if(none)none.style.display=shown||!cards.length?'none':'block';
   }
+  document.addEventListener('island',apply);
   if(search)search.addEventListener('input',apply);
   if(chips)chips.addEventListener('click',function(e){
     var b=e.target.closest&&e.target.closest('.chip'); if(!b)return;
@@ -443,48 +486,96 @@ const DASHBOARD_JS = `
 })();
 `;
 
-async function renderDashboard(d, path, msg, env) {
-  const [events, contribCount] = await Promise.all([queryEvents(d), countContributors(d)]);
-  let body;
-  if (!events.length) {
-    body = `<h1 class="page">Events</h1>
-      <p class="lede">A public, collective database of events worth going to and who&apos;s showing up. Anyone can contribute their Luma feed into the shared pool.</p>
-      <div class="empty">
-        <p style="font-size:14px;margin:0 0 6px"><b>The pool is empty.</b></p>
-        <p class="note">No one has contributed events yet. <a href="${PREFIX}/contribute">Contribute your Luma feed</a> to seed it.</p>
-      </div>`;
-  } else {
-    const now = Date.now();
-    const PAST_CAP = 30;  // past-event cards were ~88% of the payload, mostly unscrolled
-    // stable: surface RSVP'd ('going') events first within each section, so the
-    // real events lead and a past one isn't buried below the cap by the browsed pile.
-    const goingFirst = (arr) => arr.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going"));
-    const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
-    const pastAll = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
-                          .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
-    const past = goingFirst(pastAll).slice(0, PAST_CAP);
-    // sign the cover-proxy URL for every card we actually render (upcoming + the
-    // capped past slice) — not all of pastAll. eventCard reads e._coverHref.
-    await Promise.all(
-      [...upcoming, ...past].filter((e) => e.cover_url).map(async (e) => { e._coverHref = await coverProxyUrl(e.cover_url, env); })
-    );
-    body = `<h1 class="page">Events</h1>
-      <p class="lede">${events.length} event${events.length == 1 ? "" : "s"} in the pool, fed by ${contribCount} contributor${contribCount == 1 ? "" : "s"}. Click any event to see who&apos;s going.</p>
-      <div class="toolbar">
+// ── the dashboard: a built shell and one island ──────────────────────────────
+// Since 2026-09-25 build.ts step 5b bakes renderSerendipityPage() once, so the
+// shell (12 KB of CSS, the toolbar and the filter script) ships as a q11 twin
+// with a dcz delta, an ETag and hashed script-src. The pool's half, the count
+// line and the cards, is the island at EVENTS_URL, cached at the edge for the
+// 60 s the whole dashboard used to take and evicted by every mutation below.
+// A view carrying a flash ?msg= still renders live, since that one belongs to
+// the person who just acted.
+export const EVENTS_URL = `${PREFIX}/events.html`;
+
+const DASHBOARD_LEDE = `<h1 class="page">Events</h1>
+      <p class="lede">A public, collective database of events worth going to and who&apos;s showing up, fed by anyone who contributes their Luma feed. Click any event to see who&apos;s going.</p>`;
+
+// The toolbar hides itself over an empty pool, on the built page (where the
+// island may say the pool is empty) as on the live one.
+const DASHBOARD_TOOLBAR = `<div class="toolbar">
         <input class="xp-field search" id="ev-search" type="search" placeholder="Search events, places, contributors…" autocomplete="off">
         <div class="chips" id="ev-chips">
           <button type="button" class="chip on" data-when="all">All</button>
           <button type="button" class="chip" data-when="week">This week</button>
           <button type="button" class="chip" data-when="weekend">This weekend</button>
         </div>
-      </div>
-      ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${goingFirst(upcoming).map((e) => eventCard(e, false)).join("")}` : ""}
-      ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}
-      <p class="empty-filter" id="ev-none">No events match — clear the search or pick a wider range.</p>
+      </div>`;
+
+const DASHBOARD_TAIL = `<p class="empty-filter" id="ev-none">No events match — clear the search or pick a wider range.</p>
       <div id="ev-tip" popover="manual" aria-hidden="true"></div>
       <script>${DASHBOARD_JS}</script>`;
+
+// The placeholder model: a count line and a screenful of unread cards. The
+// number of cards is not the live number, and it does not need to be: nothing
+// follows the island but the hidden no-match note and the popover.
+const PENDING_CARDS = 8;
+
+/** The island: the pool's count line and its cards, or the empty panel. */
+async function renderDashboardEvents(d, env) {
+  const [events, contribCount] = await Promise.all([queryEvents(d), countContributors(d)]);
+  if (!events.length) {
+    return `<div class="empty">
+        <p style="font-size:14px;margin:0 0 6px"><b>The pool is empty.</b></p>
+        <p class="note">No one has contributed events yet. <a href="${PREFIX}/contribute">Contribute your Luma feed</a> to seed it.</p>
+      </div>`;
   }
-  return html(200, shell("Events", path, banner(msg) + body));
+  const now = Date.now();
+  const PAST_CAP = 30;  // past-event cards were ~88% of the payload, mostly unscrolled
+  // stable: surface RSVP'd ('going') events first within each section, so the
+  // real events lead and a past one isn't buried below the cap by the browsed pile.
+  const goingFirst = (arr) => arr.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going"));
+  const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
+  const pastAll = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
+                        .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
+  const past = goingFirst(pastAll).slice(0, PAST_CAP);
+  // sign the cover-proxy URL for every card we actually render (upcoming + the
+  // capped past slice) — not all of pastAll. eventCard reads e._coverHref.
+  await Promise.all(
+    [...upcoming, ...past].filter((e) => e.cover_url).map(async (e) => { e._coverHref = await coverProxyUrl(e.cover_url, env); })
+  );
+  return `<p class="lede">${events.length} event${events.length == 1 ? "" : "s"} in the pool, fed by ${contribCount} contributor${contribCount == 1 ? "" : "s"}.</p>
+      ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${goingFirst(upcoming).map((e) => eventCard(e, false)).join("")}` : ""}
+      ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}`;
+}
+
+function pendingDashboardEvents() {
+  return `<p class="lede">… events in the pool, fed by … contributors.</p>
+      <div class="grp">Upcoming (…)</div>${Array.from({ length: PENDING_CARDS }, () => eventCard({ pending: true }, false)).join("")}`;
+}
+
+// The live dashboard, for a view carrying a flash message (and for local dev,
+// where no bake is staged).
+async function renderDashboard(d, path, msg, env) {
+  const events = await renderDashboardEvents(d, env);
+  const toolbar = events.startsWith(`<div class="empty">`) ? "" : DASHBOARD_TOOLBAR;
+  return html(200, shell("Events", path, banner(msg) + DASHBOARD_LEDE + toolbar + events + DASHBOARD_TAIL));
+}
+
+/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
+export function renderSerendipityPage() {
+  const mount = islandMount("sd-events", EVENTS_URL, unsafeHtml(pendingDashboardEvents()),
+    htmlTag`<p>The events arrive in a second request after the page loads, and that needs a script. Without one, <a href="${EVENTS_URL}">${EVENTS_URL}</a> shows them as plain HTML.</p>`);
+  const fail = `<p class="sd-fail">The request for the events failed, so the list stays empty rather than guessed. <a href="${EVENTS_URL}">${EVENTS_URL}</a> has it as plain HTML.</p>`;
+  return html(200, shell("Events", PREFIX, DASHBOARD_LEDE + DASHBOARD_TOOLBAR + mount.html + fail + DASHBOARD_TAIL + islandScript().html, islandPreload(EVENTS_URL).html));
+}
+
+// The island's response. Cookie-free and shared, so it may sit in the edge cache.
+async function handleDashboardEvents(env, d, ctx, cacheKey) {
+  let hit = await caches.default.match(cacheKey);
+  if (!hit) {
+    hit = islandResponse(unsafeHtml(await renderDashboardEvents(d, env)), { "cache-control": "public, max-age=60, s-maxage=60" });
+    ctx.waitUntil(caches.default.put(cacheKey, hit.clone()));
+  }
+  return hit;
 }
 
 function attendeeRow(a) {
@@ -616,6 +707,17 @@ async function handleCookies(request, env, d, uid) {
   const r = await syncEvents(d, uid, parsed.cookiesJson);
   if (r.error) return back("Saved, but the Luma sync failed: " + r.error);
   return back(`Synced ${r.synced} events — thanks for contributing!`, true);
+}
+
+// /serendipity/mcp-info is BAKED at deploy since 2026-09-25 (build.ts step 5b):
+// a fixed tool list and the endpoint URL, with nothing read per request, so it
+// ships as a q11 twin with a dcz delta and an ETag like any built page. The live
+// arm below stays for local dev, where no bake is staged.
+export const MCP_INFO_PATH = `${PREFIX}/mcp-info`;
+
+/** The page build.ts bakes. It takes no arguments, so every build agrees. */
+export function renderMcpInfoPage() {
+  return renderMcpInfo(MCP_INFO_PATH);
 }
 
 function renderMcpInfo(path) {
@@ -816,7 +918,7 @@ async function fetchMyEvents(auth, selfId) {
       page++;
       const p = new URLSearchParams({ pagination_limit: "50", period });
       if (cursor) p.set("pagination_cursor", cursor);
-      const data = asRecord(await (await lumaFetch(`${LUMA_API}/home/get-events?${p}`, auth)).json()) ?? {};
+      const data = asRecord(await (await lumaFetch(`${LUMA_API}/home/get-events?${p.toString()}`, auth)).json()) ?? {};
       all.push(...parseEvents(data, selfId));
       if (!data.has_more || !data.next_cursor) break;
       cursor = data.next_cursor;
@@ -850,7 +952,7 @@ export async function fetchEventGuests(
     if (ticketKey) p.set("ticket_key", ticketKey);
     if (cursor) p.set("pagination_cursor", cursor);
     if (budget) budget.charge(1);
-    const data = asRecord(await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p}`, auth)).json()) ?? {};
+    const data = asRecord(await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p.toString()}`, auth)).json()) ?? {};
     for (const e of (data.entries || [])) all.push(parseGuest(e.api_id, e.user || {}));
     if (!data.has_more || !data.next_cursor) return { guests: all, done: true, cursor: null };
     cursor = data.next_cursor;
@@ -875,7 +977,7 @@ async function fetchEventDescription(eventId, auth) {
   const p = new URLSearchParams({ event_api_id: eventId });
   let res;
   // deleted/private events 400/404 — lumaFetch throws; treat as "no description".
-  try { res = await lumaFetch(`${LUMA_API}/event/get?${p}`, auth); }
+  try { res = await lumaFetch(`${LUMA_API}/event/get?${p.toString()}`, auth); }
   catch { return null; }
   const data = await res.json();
   const e = data.event || {};
@@ -1003,7 +1105,7 @@ async function fetchCalendarEvents(calId, cap) {
       const p = new URLSearchParams({ calendar_api_id: calId, period, pagination_limit: "50" });
       if (cursor) p.set("pagination_cursor", cursor);
       let data;
-      try { data = await (await lumaFetch(`${LUMA_API}/calendar/get-items?${p}`, "")).json(); }
+      try { data = await (await lumaFetch(`${LUMA_API}/calendar/get-items?${p.toString()}`, "")).json(); }
       catch { break; }  // rate-limit / transient error: keep whatever we have
       all.push(...parseEvents(data, null));
       if (!data.has_more || !data.next_cursor) break;
@@ -1025,7 +1127,7 @@ async function fetchDiscoverEvents(slug, cap) {
     const p = new URLSearchParams({ slug, pagination_limit: "50" });
     if (cursor) p.set("pagination_cursor", cursor);
     let data;
-    try { data = await (await lumaFetch(`${LUMA_API}/discover/get-paginated-events?${p}&${DISCOVER_BOX}`, "")).json(); }
+    try { data = await (await lumaFetch(`${LUMA_API}/discover/get-paginated-events?${p.toString()}&${DISCOVER_BOX}`, "")).json(); }
     catch { break; }
     for (const e of parseEvents(data, null)) {
       if (!e.start_at || Date.parse(e.start_at) >= cutoff) all.push(e);
@@ -1325,6 +1427,109 @@ async function handleSyncDescriptions(request, env, d) {
   return new Response(JSON.stringify({ ok: !r.error, via: set.label, ...r }, null, 2), { headers: { "content-type": "application/json" } });
 }
 
+// ── event tags: Jev's topic + format, decided once and stored ───────────────
+// serendipity/jev.ts carries the argument. What lives here is the D1 half:
+// which events are owed a tag, and writing the answers down.
+//
+// An event is owed a tag when it has none, or when the hash of the request it
+// WOULD send differs from the hash stored beside its tag. Its description has
+// to have been attempted first (desc_synced_at), otherwise every event would be
+// tagged on its name alone and then re-tagged a tick later when the description
+// landed, paying twice for the worse answer.
+//
+// Soonest upcoming first, then most recent past: an upcoming event is what an
+// agent is filtering for right now, and a past one is backfill.
+const TAG_DEFAULT = 12;
+const TAG_MAX = 30;
+// Hashing is cheap and native, but the candidate scan is still bounded so a pool
+// of thousands cannot turn one tick into a CPU problem on Workers Free.
+const TAG_SCAN = 300;
+
+type TagFetch = Parameters<typeof askJev>[2];
+
+export async function tagEvents(d, env, limit, fetchImpl?: TagFetch) {
+  if (!env?.TYPESAFE_API_KEY) return { skipped: "TYPESAFE_API_KEY not set" };
+  await d.raw.prepare(EVENT_TAGS_DDL).run();
+  const rows = await d.prepare(
+    `SELECT e.id, e.name, e.description, e.location, t.input_hash
+       FROM events e LEFT JOIN event_tags t ON t.event_id = e.id
+      WHERE e.description IS NOT NULL OR e.desc_synced_at IS NOT NULL
+      ORDER BY (e.start_at IS NOT NULL AND datetime(e.start_at) >= datetime('now')) DESC,
+               CASE WHEN datetime(e.start_at) >= datetime('now') THEN datetime(e.start_at) END ASC,
+               datetime(e.start_at) DESC
+      LIMIT ?`
+  ).all(TAG_SCAN);
+  const owed: { id: string, request: ReturnType<typeof buildTagRequest>, hash: string }[] = [];
+  for (const r of rows) {
+    const request = buildTagRequest(r);
+    const hash = await tagInputHash(request);
+    if (hash !== r.input_hash) owed.push({ id: r.id, request, hash });
+  }
+  const batch = owed.slice(0, limit);
+  // Concurrent, one event per call (see buildTagRequest for why not one call
+  // for all of them). TypeSafe allows 1,200 requests a minute; this is at most 30.
+  const results = await Promise.all(batch.map((o) => askJev(o.request, env, fetchImpl)));
+  const S: any[] = [];
+  const failed: Record<string, number> = {};
+  results.forEach((r, i) => {
+    if ("error" in r) { failed[r.error] = (failed[r.error] || 0) + 1; return; }
+    const t = r.tag;
+    S.push(d.stmt(
+      `INSERT INTO event_tags (event_id, topic, topic_confidence, format, format_confidence, model, input_hash, probabilities, tagged_at)
+       VALUES (?,?,?,?,?,?,?,?,datetime('now'))
+       ON CONFLICT(event_id) DO UPDATE SET topic=excluded.topic, topic_confidence=excluded.topic_confidence,
+         format=excluded.format, format_confidence=excluded.format_confidence, model=excluded.model,
+         input_hash=excluded.input_hash, probabilities=excluded.probabilities, tagged_at=excluded.tagged_at`,
+      batch[i].id, t.topic, t.topic_confidence, t.format, t.format_confidence, t.model, batch[i].hash, JSON.stringify(t.probabilities),
+    ));
+  });
+  if (S.length) await d.batch(S);
+  // `remaining` is counted within the scan window, which is the honest bound:
+  // past TAG_SCAN rows this run did not look, so it cannot say.
+  return { scanned: rows.length, asked: batch.length, tagged: S.length, failed, remaining: owed.length - S.length };
+}
+
+// secret-gated: POST /serendipity/tag[?n=12], secret in x-sync-key. The cron
+// reaches it by self-dispatch so the tag pass gets its own subrequest ceiling.
+async function handleTag(request, env, d) {
+  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
+  const n = parseInt(new URL(request.url).searchParams.get("n") || "", 10);
+  const limit = Math.min(TAG_MAX, Math.max(1, Number.isFinite(n) ? n : TAG_DEFAULT));
+  const r = await tagEvents(d, env, limit);
+  return new Response(JSON.stringify({ ok: !("skipped" in r), ...r }, null, 2), { headers: { "content-type": "application/json" } });
+}
+
+// The stored tags for a set of events, keyed by id. Its own query rather than a
+// join inside queryEvents, for two reasons: that GROUP BY is the dashboard's
+// whole cost and stays untouched, and a database where event_tags does not exist
+// yet degrades to "no tags" here instead of failing every read of the pool.
+async function queryEventTags(d): Promise<Map<string, any>> {
+  try {
+    const rows = await d.prepare(`SELECT event_id, topic, topic_confidence, format, format_confidence FROM event_tags`).all();
+    return new Map(rows.map((r) => [r.event_id, r]));
+  } catch {
+    return new Map();
+  }
+}
+
+async function queryEventTag(d, id) {
+  try {
+    return await d.prepare(`SELECT topic, topic_confidence, format, format_confidence FROM event_tags WHERE event_id = ?`).get(id);
+  } catch {
+    return null;
+  }
+}
+
+/** The public shape of a stored tag. A label under TAG_MIN_CONFIDENCE is still
+ *  shown, with its confidence, but it does not satisfy a filter. */
+function mcpTags(t) {
+  if (!t) return null;
+  return {
+    topic: t.topic, topic_confidence: Math.round(Number(t.topic_confidence) * 100) / 100,
+    format: t.format, format_confidence: Math.round(Number(t.format_confidence) * 100) / 100,
+  };
+}
+
 // secret-gated trigger: POST /serendipity/sync?key=SECRET[&event=<id>]
 // The three admin triggers shared this gate by copy. It now also reads the
 // secret from a HEADER, because the cron dispatches to /enrich over the wire and
@@ -1394,7 +1599,9 @@ const CRON_DESC_LIMIT = 10;
 // typed out here as `const CRON_SUBREQUEST_CAP = 50` while rn.ts carried its own
 // copy of the same platform fact, which is how a limit gets updated in one place
 // and stays wrong in the other.
-const CRON_BUDGET_HEADROOM = 6;
+// Seven: the D1 batches plus the two self-dispatches (enrich, tag) at one
+// subrequest each. It was six before the tag pass took the second.
+const CRON_BUDGET_HEADROOM = 7;
 export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
   const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
   return Math.max(0, cap - (setCount * perSet) - CRON_DESC_LIMIT - CRON_BUDGET_HEADROOM);
@@ -1433,6 +1640,29 @@ export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
     const by = {};
     for (const r of rows) by[r.outcome || "unknown"] = (by[r.outcome || "unknown"] || 0) + 1;
     return { attempted: rows.length, outcomes: by };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// The tag pass rides the same door for the same reason: up to TAG_MAX Jev calls
+// plus the scan and the write would not fit beside the roster sweep, and in its
+// own invocation they fit with room to spare. One subrequest here, covered by
+// CRON_BUDGET_HEADROOM. Reported, never thrown, like enrichment: a tick whose
+// sweep succeeded must not go red because tagging could not run.
+export async function dispatchTag(env, fetchImpl: EnrichFetch = fetch) {
+  if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
+  if (!env.TYPESAFE_API_KEY) return { skipped: "TYPESAFE_API_KEY not set" };
+  const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
+  try {
+    const res = await fetchImpl(`${base}/serendipity/tag`, {
+      method: "POST", headers: { "x-sync-key": env.SYNC_SECRET },
+    });
+    if (!res.ok) return { error: `tag ${res.status}` };
+    const body = await res.json();
+    // Counts only, for the cron log line. `failed` is keyed by cause, so a
+    // missing gateway provider reads as "http 404" rather than as zero tags.
+    return { asked: body?.asked ?? null, tagged: body?.tagged ?? null, failed: body?.failed ?? null, remaining: body?.remaining ?? null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
@@ -1479,7 +1709,7 @@ export async function cronSerendipity(env) {
   // the literal in TypeScript, and this is the log line's whole schema.
   const out: {
     events: any[], guests: any[], skipped: any[],
-    descriptions: any, enrich?: any,
+    descriptions: any, enrich?: any, tag?: any,
   } = { events: [], guests: [], skipped: [], descriptions: null };
   // One budget for the whole sweep, so no single roster can spend the tick.
   const budget = createBudget(guestSweepBudget(sets.length));
@@ -1498,8 +1728,11 @@ export async function cronSerendipity(env) {
     else out.guests.push({ event: ev.id, ...r });
   }
   out.descriptions = await syncDescriptions(d, fresh[0].user_key, fresh[0].cookies_json, CRON_DESC_LIMIT);
-  // last, and in its own invocation: see dispatchEnrich.
+  // last, and each in its own invocation: see dispatchEnrich and dispatchTag.
   out.enrich = await dispatchEnrich(env);
+  // after descriptions on purpose: an event is only owed a tag once its
+  // description has been attempted, so this tick's backfill is taggable now.
+  out.tag = await dispatchTag(env);
   // fetches + budget_exhausted are the two numbers that were missing while the
   // sweep was silently overspending. An exhausted budget is normal on a tick
   // holding a large roster; it is a problem only when it never clears.
@@ -1760,7 +1993,7 @@ async function signCoverUrl(rawUrl, secret) {
 async function verifyCoverUrl(rawUrl, sig, secret) {
   if (!sig) return false;
   let bytes;
-  try { bytes = Uint8Array.from(atob(sig.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)); }
+  try { bytes = Uint8Array.fromBase64(sig, { alphabet: "base64url" }); }
   catch { return false; }
   return crypto.subtle.verify("HMAC", await coverKey(secret), bytes, _enc.encode(rawUrl));
 }
@@ -1904,8 +2137,8 @@ function mcpAttendee(a): McpAttendee {
   return o;
 }
 
-function mcpEventSummary(e) {
-  return {
+function mcpEventSummary(e, tags: Map<string, any> | null = null) {
+  const summary: Record<string, any> = {
     id: e.id,
     name: e.name,
     start_at: e.start_at || null,
@@ -1920,6 +2153,11 @@ function mcpEventSummary(e) {
     rsvp: e.user_status || "unknown",
     contributors: e.contributors || null,
   };
+  // Jev's stored topic + format (serendipity/jev.ts), or null when this event
+  // has not been tagged yet. Null means UNREAD, never "no topic", so the key is
+  // omitted entirely by callers that never read the tags at all.
+  if (tags) summary.tags = mcpTags(tags.get(e.id));
+  return summary;
 }
 
 // people search: one query for the matches, one IN(...) query for their events
@@ -1948,8 +2186,7 @@ async function mcpSearchPeople(d, q, limit) {
   ).all(...ids);
   const byPerson = new Map();
   for (const m of memberships) {
-    if (!byPerson.has(m.attendee_id)) byPerson.set(m.attendee_id, []);
-    byPerson.get(m.attendee_id).push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
+    byPerson.getOrInsertComputed(m.attendee_id, () => []).push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
   }
   const now = Date.now();
   return people.map((p) => {
@@ -1985,7 +2222,7 @@ async function mcpContributorEvents(d, contributor) {
       WHERE ec.user_key = ? ORDER BY e.start_at`
   ).all(c.user_key);
   const now = Date.now();
-  const summaries = rows.map(mcpEventSummary);
+  const summaries = rows.map((e) => mcpEventSummary(e));
   return {
     contributor: { label: c.label || null, id_prefix: String(c.user_key).slice(0, 8),
                    luma_user_id: c.luma_user_id || null, enabled: Number(c.enabled) === 1 },
@@ -2118,19 +2355,21 @@ async function mcpSharedEvents(d, qa, qb) {
         AND e.id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?2)
       ORDER BY e.start_at DESC`
   ).all(a.id, b.id);
-  return { a: mcpAttendee(a), b: mcpAttendee(b), shared_count: rows.length, shared_events: rows.map(mcpEventSummary) };
+  return { a: mcpAttendee(a), b: mcpAttendee(b), shared_count: rows.length, shared_events: rows.map((e) => mcpEventSummary(e)) };
 }
 
 const MCP_TOOL_DEFINITIONS = [
   {
     name: "list_events",
-    description: "List events in the Serendipity pool, each with a head count of who's going and an RSVP tier. The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
+    description: "List events in the Serendipity pool, each with a head count of who's going, an RSVP tier, and a classified topic and format with confidences (null until an event is tagged; filter with topic/format). The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
     inputSchema: {
       type: "object",
       properties: {
         when: { type: "string", enum: ["upcoming", "past", "all"], description: "which time slice to return (default \"upcoming\")" },
         rsvp: { type: "string", enum: ["going", "all", "discovered"], description: "RSVP tier: \"going\" = only events a contributor RSVP'd to / hosts (default); \"all\" = include browsed-but-not-RSVP'd events, first-class first; \"discovered\" = only the browsed ones" },
         q: { type: "string", description: "optional case-insensitive filter on event name, location, or contributor" },
+        topic: { type: "string", enum: [...EVENT_TOPICS], description: "optional: only events whose classified topic is this. Untagged or low-confidence events never match, and are counted in `untagged`" },
+        format: { type: "string", enum: [...EVENT_FORMATS], description: "optional: only events whose classified format is this (talks, meal, social, ...). Same untagged rule as topic" },
         limit: { type: "integer", minimum: 1, maximum: 200, description: "max events to return (default 50)" },
       },
     },
@@ -2257,22 +2496,41 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
     else if (when === "past") rows = rows.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
                                          .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
     if (q) rows = rows.filter((e) => [e.name, e.location, e.contributors].some((v) => v && String(v).toLowerCase().includes(q)));
+    const tags = await queryEventTags(d);
+    // A topic/format filter can only match what was classified with confidence,
+    // so it also reports how many events in the slice it could not judge. Without
+    // that count, "2 AI events" and "2 AI events out of the 9 we could read" are
+    // the same answer.
+    const topic = EVENT_TOPICS.includes(args.topic) ? args.topic : null;
+    const format = EVENT_FORMATS.includes(args.format) ? args.format : null;
+    let untagged: number | undefined;
+    if (topic || format) {
+      const judged = (e, field) => {
+        const t = tags.get(e.id);
+        return t && Number(t[`${field}_confidence`]) >= TAG_MIN_CONFIDENCE ? t[field] : null;
+      };
+      untagged = rows.filter((e) => (topic && judged(e, "topic") == null) || (format && judged(e, "format") == null)).length;
+      rows = rows.filter((e) => (!topic || judged(e, "topic") === topic) && (!format || judged(e, "format") === format));
+    }
     const matched = rows.length;                                            // after when + q, before rsvp tier
     const goingCount = rows.filter((e) => e.user_status === "going").length;
     if (rsvp === "going") rows = rows.filter((e) => e.user_status === "going");
     else if (rsvp === "discovered") rows = rows.filter((e) => e.user_status !== "going");
     else rows = rows.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going")); // stable: first-class first, date order kept within tier
     const total = rows.length;
-    const events = rows.slice(0, limit).map(mcpEventSummary);
-    const out: { when: any, rsvp: any, total: number, returned: number, events: any[], discovered_hidden?: number } =
+    const events = rows.slice(0, limit).map((e) => mcpEventSummary(e, tags));
+    const out: { when: any, rsvp: any, total: number, returned: number, events: any[], discovered_hidden?: number, topic?: string, format?: string, untagged?: number } =
       { when, rsvp, total, returned: events.length, events };
+    if (topic) out.topic = topic;
+    if (format) out.format = format;
+    if (untagged !== undefined) out.untagged = untagged;
     if (rsvp === "going") out.discovered_hidden = matched - goingCount;      // transparency: not-RSVP'd events omitted from this view
     return out;
   }
   if (name === "get_event") {
     const id = String(args.id || "").trim();
     if (!id) return { _error: "id is required" };
-    const [ev, rows, contributors] = await Promise.all([queryEvent(d, id), queryEventAttendees(d, id), queryContributors(d, id)]);
+    const [ev, rows, contributors, tags] = await Promise.all([queryEvent(d, id), queryEventAttendees(d, id), queryContributors(d, id), queryEventTag(d, id)]);
     if (!ev) return { _error: "no event with id \"" + id + "\" is in the pool" };
     const hosts = rows.filter((a) => a.is_host).map(mcpAttendee);
     const guests = rows.filter((a) => !a.is_host).map((a) => ({ ...a, _s: attendeeScore(a) }))
@@ -2283,6 +2541,7 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
         start_at: ev.start_at || null, end_at: ev.end_at || null,
         location: ev.location || null, url: ev.url || (ev.id ? "https://lu.ma/" + ev.id : null),
         status: ev.user_status || null,
+        tags: mcpTags(tags),
       },
       hosts, going: guests.length, attendees: guests,
       contributors: contributors.map((c) => c.label),
@@ -2450,47 +2709,39 @@ export async function handleSerendipity(request, env, ctx) {
   if (path === `${PREFIX}/mcp`) return handleMcp(request, env, d);
 
   const msg = url.searchParams.get("msg");
-  const dashKey = new Request(`${url.origin}${PREFIX}`);  // shared public-dashboard cache key
+  const eventsKey = new Request(`${url.origin}${EVENTS_URL}`);  // the dashboard island's shared cache key
 
   // any mutation (sync / enrich / contribute) invalidates the cached dashboard
   if (request.method === "POST" &&
       (path === `${PREFIX}/sync` || path === `${PREFIX}/sync-descriptions` ||
-       path === `${PREFIX}/enrich` || path === `${PREFIX}/cookies` || path === `${PREFIX}/add-event`)) {
-    ctx.waitUntil(caches.default.delete(dashKey));
+       path === `${PREFIX}/enrich` || path === `${PREFIX}/tag` ||
+       path === `${PREFIX}/cookies` || path === `${PREFIX}/add-event`)) {
+    ctx.waitUntil(caches.default.delete(eventsKey));
   }
 
   // secret-gated triggers (admin/cron): pull from cookies + Exa-enrich attendees
   if (request.method === "POST" && path === `${PREFIX}/sync`) return handleSync(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/sync-descriptions`) return handleSyncDescriptions(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/enrich`) return handleEnrich(request, env, d);
+  if (request.method === "POST" && path === `${PREFIX}/tag`) return handleTag(request, env, d);
 
   // same-origin cover proxy (resizes via cf.image) — early return, no uid cookie
   // so the response stays cacheable at the edge.
   if ((request.method === "GET" || request.method === "HEAD") && path === `${PREFIX}/cover`) return handleCover(request, env, ctx);
 
+  // the dashboard's island, early and cookie-free for the same reason
+  if ((request.method === "GET" || request.method === "HEAD") && path === EVENTS_URL) {
+    try { return await handleDashboardEvents(env, d, ctx, eventsKey); }
+    catch { return html(503, `<p class="note">The event pool hit a database error.</p>`); }
+  }
+
   let res;
   try {
   if (request.method === "POST" && path === `${PREFIX}/cookies`) res = await handleCookies(request, env, d, uid);
   else if (request.method === "POST" && path === `${PREFIX}/add-event`) res = await handleAddEvent(request, env, d, uid);
-  else if (path === PREFIX) {
-    // public pool — data changes only on sync/contribute (which bust above).
-    // cache the rendered HTML at the edge for 60s so repeat + agent hits skip
-    // the D1 GROUP BY. skip when a flash msg is present (just-acted view).
-    if (request.method === "GET" && !msg) {
-      let hit = await caches.default.match(dashKey);
-      if (!hit) {
-        const rendered = await renderDashboard(d, path, msg, env);
-        const h = new Headers(rendered.headers);
-        h.set("cache-control", "public, max-age=60, s-maxage=60");
-        h.delete("set-cookie");  // never store a per-visitor uid cookie in a shared cache
-        hit = new Response(rendered.body, { status: rendered.status, headers: h });
-        ctx.waitUntil(caches.default.put(dashKey, hit.clone()));
-      }
-      res = hit;
-    } else {
-      res = await renderDashboard(d, path, msg, env);
-    }
-  }
+  // The plain GET is a built file served by index.ts (routeSerendipity), so this
+  // arm renders a flash-message view, a HEAD, or local dev's missing bake.
+  else if (path === PREFIX) res = await renderDashboard(d, path, msg, env);
   else if (path === `${PREFIX}/contribute`) res = await renderContribute(d, path, uid, msg);
   else if (path === `${PREFIX}/mcp-info`) res = renderMcpInfo(path);
   else if (path.startsWith(`${PREFIX}/event/`)) res = await renderEvent(d, decodeURIComponent(path.slice(`${PREFIX}/event/`.length)), path);
@@ -2513,14 +2764,20 @@ export async function handleSerendipity(request, env, ctx) {
 // The root aadhar-sh Worker dispatches /serendipity/* here. These headers stay
 // local because this surface permits arbitrary HTTPS cover-image hosts while
 // the homepage CSP deliberately remains narrower.
+export function serendipityCsp(scriptSrc: string) {
+  return `default-src 'self'; style-src 'self' 'unsafe-inline'; script-src ${scriptSrc}; img-src 'self' data: https:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'`;
+}
+
 export const SERENDIPITY_SECURITY_HEADERS = {
   "content-security-policy":
+    // The one policy, with the loose script-src. The built dashboard gets the
+    // same string with its build-time hashes instead (serendipityCsp below).
     // img-src is `https:` (any host) because Luma lets organizers point covers
     // at arbitrary CDNs (lumacdn, unsplash, …); allow-listing hosts was whack-a-
     // mole and silently broke the odd external cover. Covers now route through the
     // same-origin /cover proxy anyway, so 'self' carries them — `https:` is the
     // belt-and-suspenders net for the proxy's full-size fallback redirect path.
-    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+    serendipityCsp("'self' 'unsafe-inline'"),
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",

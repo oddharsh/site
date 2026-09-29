@@ -125,8 +125,12 @@ const ROUTES = [
   // browser context still cannot read it, so every other column reads as a pass.
   { path: "/.well-known/ard.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
   { path: "/.well-known/ai-catalog.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
-  { path: "/whoareyou", status: 200, ct: "text/html" },
+  // A built document since 2026-09-25 (lib/island.ts): the marker is the island
+  // mount, and the row after the JSON is the fragment that fills it.
+  { path: "/whoareyou", status: 200, ct: "text/html", marker: "data-island=/whoareyou/values.html", fullPage: true },
   { path: "/whoareyou.json", status: 200, ct: "application/json" },
+  { path: "/whoareyou/values.html", status: 200, ct: "text/html", marker: "Cloudflare colo", fragment: true },
+  { path: "/whoareyou", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "System Properties" },
   // A built document since 2026-09-16, so the marker is the placeholder its
   // inline script fills, and the row beside it is the endpoint that fills it.
   { path: "/security", status: 200, ct: "text/html", marker: "data-sc=colo", fullPage: true },
@@ -162,7 +166,12 @@ const ROUTES = [
   // branch. The local harness has no KV and GitHub is unreachable from it, so
   // these rows assert the DEGRADED path on purpose: the seeded baseline history
   // is bundled, so the page must still render a chart with the fetch failing.
-  { path: "/garage/dyno", status: 200, ct: "text/html", marker: "Dyno" },
+  // A built document since 2026-09-25 (lib/island.ts): the marker is the island
+  // mount, the row after it the fragment that fills it, and the Markdown row
+  // pins the negotiation the exact route skipped until then.
+  { path: "/garage/dyno", status: 200, ct: "text/html", marker: "data-island=/garage/dyno/pulls.html", fullPage: true },
+  { path: "/garage/dyno/pulls.html", status: 200, ct: "text/html", marker: "Recent pulls", fragment: true },
+  { path: "/garage/dyno", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "on the rollers" },
   { path: "/garage/dyno.json", status: 200, ct: "application/json" },
   // The old names, kept because `agents: true` published them and the well-known
   // cards carrying that projection are cached 30 days. An exact ROUTES entry beats
@@ -201,6 +210,8 @@ const ROUTES = [
     { path: "/nav-run.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-run" },
     { path: "/nav-tray.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 10000 },
     { path: "/nav-tray.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-balloon" },
+    { path: "/nav-pipes.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 20000 },
+    { path: "/nav-pipes.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-pipes" },
     { path: "/notepad.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "np-window" },
     { path: "/lens-boot.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "requestSubmit" },
     { path: "/lens-webmcp.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensWebMcp" },
@@ -250,6 +261,14 @@ const ROUTES = [
     headers: { "content-type": "application/json" }, marker: "# Right now",
     body: JSON.stringify({ jsonrpc: "2.0", id: "music-resource", method: "resources/read", params: { uri: base + "/rn" } }) },
   // An empty batch is invalid, not an all-notification batch to accept silently.
+  // A built document since 2026-09-25 (lib/island.ts): the marker is the island
+  // mount. The fragment row only pins the shape, because the harness's local D1
+  // carries no serendipity schema, so the pool read fails and the fragment
+  // answers 503 without the island marker, which is the loader's failure arm.
+  { path: "/serendipity", status: 200, ct: "text/html", marker: "data-island=/serendipity/events.html", fullPage: true },
+  { path: "/serendipity/events.html", status: [200, 503], ct: "text/html" },
+  // The agents page is a plain bake since 2026-09-25: a fixed tool list, no island.
+  { path: "/serendipity/mcp-info", status: 200, ct: "text/html", marker: "list_events", fullPage: true },
   ...["/mcp", "/serendipity/mcp"].map((path) => ({ path, method: "POST", status: 200, ct: "application/json",
     headers: { "content-type": "application/json" }, body: "[]", marker: "Invalid Request" })),
 
@@ -337,9 +356,29 @@ const ROUTES = [
   // The SSRF guard on this route specifically, same reasoning as the nlweb row:
   // a blocked host is refused before any of the ten fetches leave.
   { path: "/lens/markdown?url=http://localhost", status: 400, ct: "application/json", marker: "no-fetch list" },
-  // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
+  // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set.
+  // NO `encoding` pin here, deliberately, and the reason generalises to the
+  // text/plain rows further down. Measured 2026-09-26 by booting the harness and
+  // probing this route while the Worker served NO twin: it still answered
+  // `content-encoding: br`, because miniflare re-encodes the types it deems
+  // compressible and production's edge compresses them on the fly too. So an
+  // encoding pin on a text/plain row passes whether or not a twin was served,
+  // which is the one thing it exists to catch. What does discriminate is the
+  // `vary` and the weakened `-br` etag servePrecompressedText adds, and
+  // contract-llms-full-ships-its-q11-twin asserts those against a fake asset
+  // layer instead.
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
-  { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },
+  // Built documents since 2026-09-25 (lib/island.ts): the marker is the island
+  // mount, and the row after it is the fragment that fills it. A local Worker has
+  // no read token, so the fragment is the meter-unreadable invoice.
+  { path: "/ledger", status: 200, ct: "text/html", marker: "data-island=/ledger/lines.html", fullPage: true },
+  { path: "/ledger/lines.html", status: 200, ct: "text/html", marker: "Total due", fragment: true },
+  // /inbox and /lens/census are built documents since 2026-09-25 too. A local D1
+  // holds no mentions and no census, so each island answers its empty panel.
+  { path: "/inbox", status: 200, ct: "text/html", marker: "data-island=/inbox/mail.html", fullPage: true },
+  { path: "/inbox/mail.html", status: 200, ct: "text/html", marker: "Local Folders", fragment: true },
+  { path: "/lens/census", status: 200, ct: "text/html", marker: "data-island=/lens/census/table.html", fullPage: true },
+  { path: "/lens/census/table.html", status: 200, ct: "text/html", fragment: true },
   { path: "/ledger.json", status: 200, ct: "application/json" },
   // Browser RUM is retired. Keep both old ledger paths dark so a stale loader
   // cannot silently reconnect to a proxy or collector added as a static asset.
@@ -363,9 +402,12 @@ const ROUTES = [
   { path: "/rn/tracks.html", status: 200, ct: "text/html", fragment: true },
   { path: "/rn/admin", status: 403 },
   { path: "/bot", status: 200, ct: "text/html" },
-  { path: "/around", status: 200, ct: "text/html" },
-  // serves the KV snapshot the */30 cron writes; a local KV has none, and the
-  // route says so ("no snapshot yet; the cron crawl hasn't run") with a 503.
+  // A local KV has no snapshot, so the island is the not-built-yet panel.
+  { path: "/around", status: 200, ct: "text/html", marker: "data-island=/around/snapshot.html", fullPage: true },
+  { path: "/around/snapshot.html", status: 200, ct: "text/html", marker: "snapshot isn", fragment: true },
+  { path: "/around", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "neighbourhood" },
+  // serves the KV snapshot the daily cron writes; a local KV has none, and the
+  // route says so ("no snapshot yet; the daily crawl hasn't run") with a 503.
   { path: "/around/json", status: 200, ct: "application/json", remote: true },
   { path: "/around/changes.json", status: 200, ct: "application/json" },
   { path: "/photos/query.json?q=XT", status: 200, ct: "application/json" },
@@ -377,7 +419,9 @@ const ROUTES = [
   { path: "/images/full/", status: 301 },
   // the archive page builds its manifest by LISTING the R2 bucket, so an empty
   // local bucket is a 503 ("photo manifest unavailable"). /images/manifest.json
-  // stays local-checkable because it can fall back to the committed hashes.json.
+  // stays local-checkable because it is built from the committed photo index, and
+  // since 2026-09-26 it is STAGED at deploy, so the row asserts the q11 twin: a
+  // plain body here means the route fell back to the per-request handler.
   { path: "/photos", status: 200, ct: "text/html", marker: "handwritten worker", remote: true },
   { path: "/photos/", status: 301 },
   // the first album (src/worker/albums.ts): generated at deploy like /photos,
@@ -387,7 +431,7 @@ const ROUTES = [
   { path: "/run", status: 200, ct: "text/html", marker: "datalist" },
   { path: "/run?cmd=garage", status: 302 },
   { path: "/run?cmd=xyzzy-not-a-page", status: 200, ct: "text/html", marker: "cannot find" },
-  { path: "/images/manifest.json", status: 200, ct: "application/json" },
+  { path: "/images/manifest.json", status: 200, ct: "application/json", encoding: "br" },
   { path: "/images/metadata.json", status: 200, ct: "application/json", encoding: "br" },
   { path: `/images/meta/${META}.json`, status: 200, ct: "application/json" },
   // the SOOC original: ~3GB of R2 that is deliberately not in the repo.
@@ -448,6 +492,14 @@ const ROUTES = [
   { path: "/index.src.html", status: 200, ct: "text/html", marker: "<!-- axp:desktop -->", encoding: "br" },
   { path: "/.well-known/mcp/server-card.json", status: 200, ct: "application/json", marker: '"tools"', encoding: "br" },
   { path: "/.well-known/ard.json", status: 200, ct: "application/json", encoding: "br", cors: "*" },
+  // "q11 everywhere", 2026-09-26: the favicons and /resume.json got a rule and a
+  // twin, and the readable twins under /writing, /lens and /serendipity got a
+  // route. The serendipity row is the one that was broken outright: the page's
+  // own banner names that URL as its View Source, and it answered 404.
+  { path: "/section-icons/lens.svg", status: 200, ct: "image/svg+xml", encoding: "br" },
+  { path: "/resume.json", status: 200, ct: "application/json", encoding: "br" },
+  { path: "/writing/in-flux.src.html", status: 200, ct: "text/html", marker: "<html lang", encoding: "br" },
+  { path: "/serendipity/mcp-info.src.html", status: 200, ct: "text/html", marker: "<html lang", encoding: "br" },
 ];
 
 function cacheBust(path) {

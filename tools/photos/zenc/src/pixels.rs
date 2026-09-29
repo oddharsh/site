@@ -23,7 +23,9 @@
 // at-the-end is the principled shape and the 16-bit path costs nothing extra.
 // It also fixes a real bug the 8-bit path had: a Luma16 TIFF missed the Luma8
 // arm and was silently promoted to RGB.
-use halflight::{g22_lut16, g22_to_linear, linear_to_g22, linear_to_srgb, resample, srgb_lut16, srgb_to_linear, Filter};
+use halflight::{g22_lut, g22_lut16, linear_to_g22, linear_to_srgb, resample, srgb_lut, srgb_lut16, Filter};
+#[cfg(test)]
+use halflight::{g22_to_linear, srgb_to_linear};
 use image::{DynamicImage, GrayImage, ImageBuffer, ImageDecoder, ImageReader, Luma, Rgb, RgbImage};
 use std::path::Path;
 
@@ -69,6 +71,20 @@ pub enum Orientation {
     Rotate90,
     Transverse,
     Rotate270,
+}
+
+impl Orientation {
+    /// Whether the upright frame's width is the stored frame's height.
+    pub fn swaps_axes(self) -> bool {
+        self as u8 >= 5
+    }
+
+    /// The same transform in halflight's terms. Both enums number the eight
+    /// cases as EXIF does and map a stored pixel identically, which zenc:bench
+    /// gates on real photos byte for byte.
+    fn halflight(self) -> halflight::Orientation {
+        halflight::Orientation::from_exif(self as u8).expect("Orientation admits exactly EXIF 1-8")
+    }
 }
 
 impl TryFrom<u8> for Orientation {
@@ -143,11 +159,15 @@ fn classify(icc: Option<&[u8]>) -> Transfer {
 }
 
 impl Transfer {
+    /// Resolve the curve once and hand back the 256-entry table. The per-sample
+    /// form (`srgb_to_linear(c)`) reads a `OnceLock` and matches on the curve for
+    /// every sample; indexing a table taken outside the loop does neither.
+    fn table8(self) -> &'static [f32; 256] {
+        match self { Self::Srgb => srgb_lut(), Self::G22 => g22_lut() }
+    }
+    #[cfg(test)]
     fn dec8(self, c: u8) -> f32 {
-        match self {
-            Transfer::G22 => g22_to_linear(c),
-            Transfer::Srgb => srgb_to_linear(c),
-        }
+        self.table8()[c as usize]
     }
     /// Resolve the source's curve once, then index halflight's exact table.
     fn table16(self) -> &'static [f32] {
@@ -228,9 +248,11 @@ pub fn from_decoded(img: DynamicImage, icc: Option<&[u8]>, t: TransferOption) ->
         return Err("source has a zero dimension".into());
     }
     Ok(match img {
-        DynamicImage::ImageLuma8(g) => Frame {
-            w, h, gray: true, transfer: t,
-            data: g.pixels().map(|p| t.dec8(p[0])).collect(),
+        DynamicImage::ImageLuma8(g) => {
+            let table = t.table8();
+            Frame { w, h, gray: true, transfer: t,
+                data: g.pixels().map(|p| table[p[0] as usize]).collect(),
+            }
         },
         DynamicImage::ImageLuma16(g) => {
             let table = t.table16();
@@ -238,9 +260,11 @@ pub fn from_decoded(img: DynamicImage, icc: Option<&[u8]>, t: TransferOption) ->
                 data: g.pixels().map(|p| table[p[0] as usize]).collect(),
             }
         },
-        DynamicImage::ImageLumaA8(g) => Frame {
-            w, h, gray: true, transfer: t,
-            data: g.pixels().map(|p| t.dec8(p[0])).collect(),
+        DynamicImage::ImageLumaA8(g) => {
+            let table = t.table8();
+            Frame { w, h, gray: true, transfer: t,
+                data: g.pixels().map(|p| table[p[0] as usize]).collect(),
+            }
         },
         DynamicImage::ImageLumaA16(g) => {
             let table = t.table16();
@@ -268,17 +292,18 @@ pub fn from_decoded(img: DynamicImage, icc: Option<&[u8]>, t: TransferOption) ->
         }
         other => {
             let rgb = other.to_rgb8();
+            let table = t.table8();
             if channel_equal(rgb.as_raw()) {
                 Frame {
                     w, h, gray: true, transfer: t,
-                    data: rgb.pixels().map(|p| t.dec8(p[0])).collect(),
+                    data: rgb.pixels().map(|p| table[p[0] as usize]).collect(),
                 }
             } else {
                 let mut data = Vec::with_capacity((w * h * 3) as usize);
                 for p in rgb.pixels() {
-                    data.push(t.dec8(p[0]));
-                    data.push(t.dec8(p[1]));
-                    data.push(t.dec8(p[2]));
+                    data.push(table[p[0] as usize]);
+                    data.push(table[p[1] as usize]);
+                    data.push(table[p[2] as usize]);
                 }
                 Frame { w, h, gray: false, data, transfer: t }
             }
@@ -298,30 +323,83 @@ pub fn orient(f: Frame, orientation: Orientation) -> Frame {
         return f;
     }
     let o = orientation as u8;
-    let ch = if f.gray { 1usize } else { 3 };
     let (sw, sh) = (f.w as usize, f.h as usize);
     let swapped = o >= 5;
     let (dw, dh) = if swapped { (sh, sw) } else { (sw, sh) };
-    let mut data = vec![0.0f32; dw * dh * ch];
-    for dy in 0..dh {
-        for dx in 0..dw {
-            // dst(dx,dy) reads src(sx,sy); the mapping is the INVERSE of the
-            // display transform each EXIF value names.
-            let (sx, sy) = match o {
-                2 => (sw - 1 - dx, dy),              // mirror horizontal
-                3 => (sw - 1 - dx, sh - 1 - dy),     // rotate 180
-                4 => (dx, sh - 1 - dy),              // mirror vertical
-                5 => (dy, dx),                       // transpose
-                6 => (dy, sh - 1 - dx),              // rotate 90 CW
-                7 => (sw - 1 - dy, sh - 1 - dx),     // transverse
-                _ => (sw - 1 - dy, dx),              // 8: rotate 270 CW
-            };
-            let s = (sy * sw + sx) * ch;
-            let d = (dy * dw + dx) * ch;
-            data[d..d + ch].copy_from_slice(&f.data[s..s + ch]);
+    // The per-pixel version this replaced (orient_reference, kept as the tests'
+    // oracle) re-ran the orientation match and a bounds-checked slice copy for
+    // every pixel, and read the source down a column for 5-8. On a 6240x4160
+    // JPEG, decode-to-resample alone, measured interleaved 2026-09-22:
+    //
+    //   orientation 3   731 -> 572 ms   (flip, rows reversed whole)
+    //   orientation 6   774 -> 577 ms   (tiled transpose)
+    //   orientation 8   859 -> 601 ms   (tiled transpose)
+    //
+    // The ingest no longer calls this: `square` reads the stored frame upright
+    // inside the resample (scale_oriented, halflight::resample_oriented), which
+    // skips the copy this still makes. `resize` and `frame` use it. Output is
+    // byte-identical, since this moves the same values to the same places, and
+    // zenc:bench gates that on real photos.
+    //
+    // The channel count is a const generic so each pixel copy compiles to a
+    // fixed-size move.
+    let data = match (f.gray, swapped) {
+        (true, false) => flip::<1>(&f.data, sw, sh, o),
+        (false, false) => flip::<3>(&f.data, sw, sh, o),
+        (true, true) => transpose::<1>(&f.data, sw, sh, o),
+        (false, true) => transpose::<3>(&f.data, sw, sh, o),
+    };
+    Frame { w: dw as u32, h: dh as u32, gray: f.gray, data, transfer: f.transfer }
+}
+
+/// Orientations 2, 3 and 4 keep the axes, so every destination row is one
+/// source row: copied whole for 4, pixel order reversed for 2 and 3.
+fn flip<const CH: usize>(src: &[f32], sw: usize, sh: usize, o: u8) -> Vec<f32> {
+    let row = sw * CH;
+    let mut out = vec![0.0f32; src.len()];
+    for (dy, dst) in out.chunks_exact_mut(row).enumerate() {
+        let sy = if o == 2 { dy } else { sh - 1 - dy };
+        let line = &src[sy * row..(sy + 1) * row];
+        if o == 4 {
+            dst.copy_from_slice(line);
+        } else {
+            for (d, p) in dst.chunks_exact_mut(CH).zip(line.chunks_exact(CH).rev()) {
+                d.copy_from_slice(p);
+            }
         }
     }
-    Frame { w: dw as u32, h: dh as u32, gray: f.gray, data, transfer: f.transfer }
+    out
+}
+
+/// Tile edge for `transpose`, in pixels.
+const TILE: usize = 64;
+
+/// Orientations 5-8 swap the axes, so a source COLUMN becomes a destination
+/// row. In all four, the source x depends on the destination y alone and the
+/// source y on the destination x alone, so the frame is walked in TILE x TILE
+/// tiles: each destination row inside a tile is written front to back, and the
+/// tile's source block stays in cache while all of its rows are read out.
+fn transpose<const CH: usize>(src: &[f32], sw: usize, sh: usize, o: u8) -> Vec<f32> {
+    let (dw, dh) = (sh, sw);
+    let rev_x = matches!(o, 7 | 8); // sx = sw - 1 - dy, else sx = dy
+    let rev_y = matches!(o, 6 | 7); // sy = sh - 1 - dx, else sy = dx
+    let row = sw * CH;
+    let mut out = vec![0.0f32; src.len()];
+    for ty in (0..dh).step_by(TILE) {
+        for tx in (0..dw).step_by(TILE) {
+            let cols = TILE.min(dw - tx);
+            for dy in ty..ty + TILE.min(dh - ty) {
+                let sx = (if rev_x { sw - 1 - dy } else { dy }) * CH;
+                let start = (dy * dw + tx) * CH;
+                for (k, d) in out[start..start + cols * CH].chunks_exact_mut(CH).enumerate() {
+                    let dx = tx + k;
+                    let s = (if rev_y { sh - 1 - dx } else { dx }) * row + sx;
+                    d.copy_from_slice(&src[s..s + CH]);
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Resample to an exact size, still in linear light.
@@ -333,6 +411,20 @@ pub fn scale(f: &Frame, dw: u32, dh: u32, filter: Filter) -> Frame {
         gray: f.gray,
         transfer: f.transfer,
         data: resample(&f.data, f.w as usize, f.h as usize, ch, dw as usize, dh as usize, filter),
+    }
+}
+
+/// Resample a STORED frame to an exact UPRIGHT size, reading it through the
+/// orientation inside the resample rather than orienting a full-frame copy
+/// first. halflight holds this bitwise equal to `scale(&orient(f, o), ..)`.
+pub fn scale_oriented(f: &Frame, o: Orientation, dw: u32, dh: u32, filter: Filter) -> Frame {
+    let ch = if f.gray { 1 } else { 3 };
+    Frame {
+        w: dw,
+        h: dh,
+        gray: f.gray,
+        transfer: f.transfer,
+        data: halflight::resample_oriented(&f.data, f.w as usize, f.h as usize, ch, o.halflight(), dw as usize, dh as usize, filter),
     }
 }
 
@@ -413,6 +505,69 @@ mod tests {
         assert_eq!(TransferOption::Auto.resolve(None), Transfer::Srgb);
         assert_eq!(TransferOption::G22.resolve(None), Transfer::G22);
         assert_eq!(TransferOption::Srgb.resolve(None), Transfer::Srgb);
+    }
+
+    /// The per-pixel orient this module shipped until 2026-09-22, kept verbatim
+    /// as the oracle for the tiled one. It is slow and obviously right, which
+    /// is the only property an oracle needs.
+    fn orient_reference(f: Frame, orientation: Orientation) -> Frame {
+        if orientation == Orientation::Upright {
+            return f;
+        }
+        let o = orientation as u8;
+        let ch = if f.gray { 1usize } else { 3 };
+        let (sw, sh) = (f.w as usize, f.h as usize);
+        let swapped = o >= 5;
+        let (dw, dh) = if swapped { (sh, sw) } else { (sw, sh) };
+        let mut data = vec![0.0f32; dw * dh * ch];
+        for dy in 0..dh {
+            for dx in 0..dw {
+                // dst(dx,dy) reads src(sx,sy); the mapping is the INVERSE of the
+                // display transform each EXIF value names.
+                let (sx, sy) = match o {
+                    2 => (sw - 1 - dx, dy),              // mirror horizontal
+                    3 => (sw - 1 - dx, sh - 1 - dy),     // rotate 180
+                    4 => (dx, sh - 1 - dy),              // mirror vertical
+                    5 => (dy, dx),                       // transpose
+                    6 => (dy, sh - 1 - dx),              // rotate 90 CW
+                    7 => (sw - 1 - dy, sh - 1 - dx),     // transverse
+                    _ => (sw - 1 - dy, dx),              // 8: rotate 270 CW
+                };
+                let s = (sy * sw + sx) * ch;
+                let d = (dy * dw + dx) * ch;
+                data[d..d + ch].copy_from_slice(&f.data[s..s + ch]);
+            }
+        }
+        Frame { w: dw as u32, h: dh as u32, gray: f.gray, data, transfer: f.transfer }
+    }
+
+    fn frame(w: u32, h: u32, gray: bool) -> Frame {
+        let ch = if gray { 1 } else { 3 };
+        // Every sample distinct, so a misplaced pixel or a torn triple shows.
+        let data = (0..w * h * ch).map(|i| i as f32 * 0.5 + 0.125).collect();
+        Frame { w, h, gray, data, transfer: Transfer::Srgb }
+    }
+
+    /// The hand-computed cases are 3x2, so none of them reaches a tile edge.
+    /// These sizes do: under one 64px tile, crossing one, crossing two, and
+    /// single-row and single-column frames that make one axis degenerate.
+    /// Every orientation, both channel counts, against the oracle. Verified to
+    /// fail on a wrong axis (1x5, orientation 7) and on a one-pixel tile-edge
+    /// error (33x65, orientation 5).
+    #[test]
+    fn tiled_orient_matches_the_per_pixel_oracle() {
+        let sizes = [(1, 1), (1, 5), (33, 1), (3, 2), (31, 7), (32, 32), (33, 65), (67, 45), (45, 67), (100, 31), (129, 96)];
+        for (w, h) in sizes {
+            for gray in [true, false] {
+                for o in 1..=8u8 {
+                    let orientation = Orientation::try_from(o).unwrap();
+                    let got = orient(frame(w, h, gray), orientation);
+                    let want = orient_reference(frame(w, h, gray), orientation);
+                    assert_eq!((got.w, got.h), (want.w, want.h), "{w}x{h} gray={gray} orient {o} dims");
+                    assert!(got.data == want.data, "{w}x{h} gray={gray} orient {o} samples differ");
+                }
+            }
+        }
     }
 
     fn tiny() -> Frame {
