@@ -1,9 +1,12 @@
 #!/usr/bin/env bun
 // bun run canary:wrangler [--ref main|<sha>|<pr>] [--json <path>] [--keep]
 //
-// Wrangler's MAIN, or any commit or pull request of it, run through the three
+// Wrangler's MAIN, or any commit or pull request of it, run through the four
 // gates this repository already holds a wrangler release to: the dry-run
-// bundle, the route oracle, and cal's suite on wrangler's own test harness.
+// bundle, the route oracle, cal's suite on wrangler's own test harness, and
+// the contract tests that boot that harness (lib/harness-tests.ts). The
+// fourth joined on 2026-09-30, after ddaa558 cleared the first three and
+// failed `validate` on the fourth's three files.
 //
 // WHERE THE BUILD COMES FROM. cloudflare/workers-sdk publishes every commit
 // and every PR to pkg.pr.new (their CONTRIBUTING.md, "PR Previews"), so
@@ -58,6 +61,7 @@ import { fileURLToPath } from "node:url";
 
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
 import { interpretZstdProbe } from "./lib/bun-pin.ts";
+import { HARNESS_TEST_FLOOR, harnessTests, testArgv } from "./lib/harness-tests.ts";
 import { WRANGLER_WATCHES, type WatchResult, interpretTemporalProbe, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { siteWranglerArgs } from "./lib/site-config.ts";
@@ -263,7 +267,48 @@ try {
   }
 
   // ------------------------------------------------------------------------
-  // 4. the watches, read on the pinned tree and on the candidate
+  // 4. the contract tests that boot that harness, run the way validate does
+  // ------------------------------------------------------------------------
+  // lib/harness-tests.ts says why: ddaa558 cleared gates 1 to 3 and broke all
+  // three of these, because they dispatch through worker.fetch(), a door the
+  // route oracle (node, over the socket) and cal (handlers called directly)
+  // never open. Discovered in the worktree, since that is the tree they run in.
+  {
+    const files = harnessTests(wt);
+    if (files.length < HARNESS_TEST_FLOOR) {
+      console.error(`found ${files.length} harness-booting contract tests, below the floor of ${HARNESS_TEST_FLOOR}; the collector has stopped matching`);
+      emit("instrument", subject, "the harness-test collector found too few files to gate on");
+      process.exit(2);
+    }
+    const script = String(JSON.parse(readFileSync(join(wt, "package.json"), "utf8")).scripts?.test ?? "");
+    const out = run(BUN, testArgv(script, files), { cwd: wt, timeout: 5 * 60_000 });
+    const text = `${out.stdout}\n${out.stderr}`;
+    const pass = Number(text.match(/^\s*(\d+) pass$/m)?.[1] ?? 0);
+    const fail = Number(text.match(/^\s*(\d+) fail$/m)?.[1] ?? -1);
+    const timedOut = out.signal === "SIGTERM";
+    // Each failure prints its error up to ~25 lines above its "(fail)" row (the
+    // stack sits between), and bun repeats every "(fail)" row in a summary at
+    // the end, so the FIRST occurrence is the one with its error above it. The
+    // error is the useful half: "ENOTFOUND census.test" names the door.
+    const lines = text.split("\n");
+    const seen = new Set<string>();
+    const notes = lines.flatMap((l, i) => {
+      if (!l.includes("(fail)") || seen.has(l.trim())) return [];
+      seen.add(l.trim());
+      const cause = lines.slice(Math.max(0, i - 30), i).reverse().find((c) => /^\s*(\w*Error|error)\b/.test(c));
+      return [l.trim(), ...(cause ? [`  ${cause.trim().slice(0, 200)}`] : [])];
+    });
+    step({
+      name: "harness contract tests pass on the candidate harness",
+      ok: !timedOut && out.status === 0 && fail === 0 && pass >= files.length,
+      hard: true,
+      detail: timedOut ? "hung past 5 minutes" : `${pass} pass, ${fail} fail across ${files.length} files`,
+      notes: notes.slice(0, 12),
+    });
+  }
+
+  // ------------------------------------------------------------------------
+  // 5. the watches, read on the pinned tree and on the candidate
   // ------------------------------------------------------------------------
   {
     type Reading = { landed: boolean | null; detail: string };

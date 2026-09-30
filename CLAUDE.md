@@ -271,7 +271,8 @@ bun run canary:bun        # the rolling `canary` release through the bun:pin gat
                           # build against the pinned bun, contract + cal suites)
 bun run canary:wrangler   # workers-sdk main from pkg.pr.new, installed into a
                           # detached worktree: dry-run bundle diffed against the
-                          # pinned wrangler's, route oracle, cal suite.
+                          # pinned wrangler's, route oracle, cal suite, and the
+                          # contract tests that boot the harness.
                           # `-- --ref <sha|PR#>` bisects or tests a PR before it merges
 bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease engines,
                           # diffed; on a Mac: `-- --pairs chrome:chrome-canary`.
@@ -6071,10 +6072,11 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     so the header never lands, the ProxyWorker reads `request.cf?.hostMetadata`
     as undefined and never flushes, and all 168 requests time out. The oracle
     takes that door, since `check-routes-harness.ts` spawns
-    `verify-routes.ts <url>` and it `fetch`es the URL; cal's suite takes the
-    OTHER door, `worker.fetch()` in-process, which dispatches to workerd's real
-    origin with the route on an `MF-Route-Override` header and no ProxyWorker
-    in the path, so it passes under bun. Proven by delivering the `play` by
+    `verify-routes.ts <url>` and it `fetch`es the URL; cal's suite opens no
+    door at all, since it calls cal's own fetch handler in this process with
+    the harness's `getEnv()` (this sentence said it dispatched through the
+    harness until 2026-09-30, when ddaa558 showed the difference), so there is
+    no ProxyWorker in its path and it passes under bun. Proven by delivering the `play` by
     hand under bun: without the blob the queue stays blocked, with it the same
     harness flushes and serves, and pointing cal's own config at the wire door
     hangs it too, so this is the door and not site-vs-cal. When that watch
@@ -6093,6 +6095,14 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     and requires exactly one pass. cal is unaffected: it calls its handlers
     directly with the harness's `getEnv()`, which never touches `dispatchFetch`.
     The same watch retires the wrapper.
+
+    **The nightly bumper proposed ddaa558 with every gate green**, because
+    none of its three gates opens that door: the route oracle runs under node
+    and cal never calls `worker.fetch()`. `canary-wrangler.ts` now runs every
+    contract test that boots the harness as a fourth, hard gate, found by what
+    each file imports (`tools/lib/harness-tests.ts`) and run with `bun run
+    test`'s own flags. Run against ddaa558 from a tree without `underNode()`,
+    it answered `1 pass, 3 fail` and named both ENOTFOUND hosts.
 
     **CI followed on the same day.** `setup-node` is in exactly the jobs that
     run wrangler (validate, the ramp's canary and full, perf-diff, perf-history,
