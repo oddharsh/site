@@ -559,7 +559,7 @@ export function renderAroundPage() {
     description: "Snapshot of crypto VC homepages I keep tabs on, crawled once a day by AadharshBot.",
     robots: "noindex",
     head: islandPreload(SNAPSHOT_URL),
-    css: `
+    css: `/*min*/
   h1 { font-size: 18pt; }
   .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
   .lede code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; font-size: 10pt; }

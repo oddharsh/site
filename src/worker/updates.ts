@@ -70,7 +70,7 @@ export async function renderWindowsUpdate(cp) {
     width: 620,
     description: "What has shipped to this site lately, in a Windows Update reskin. Read-only.",
     robots: "noindex",
-    css: `
+    css: `/*min*/
 .wu-ok{display:flex;align-items:center;gap:11px;border:1px solid #9cc97f;background:linear-gradient(180deg,#f0f8ea,#e2f1d6);border-radius:4px;padding:11px 13px;margin:0 0 13px}
 .wu-ok .ck{width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:linear-gradient(180deg,#62b043,#3c8f24);display:grid;place-items:center}
 .wu-ok .ck svg{width:20px;height:20px}
@@ -224,7 +224,7 @@ var POINTS = ${JSON.stringify(data)};
     width: 680,
     description: "Roll the site back through its real deploy history, in a Windows System Restore reskin backed by Cloudflare D1. Read-only.",
     robots: "noindex",
-    css: `
+    css: `/*min*/
 .sr-lede{font-size:9.5pt;color:#4a5568;margin:0 0 12px;line-height:1.5}
 .sr-now{display:flex;align-items:center;gap:11px;border:1px solid #9db8e0;background:linear-gradient(180deg,#eef5fe,#dceafe);border-radius:4px;padding:10px 13px;margin:0 0 13px}
 .sr-now .pin{width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:linear-gradient(180deg,#5b9bf0,#2f6fd0);box-shadow:inset 0 1px 0 rgba(255,255,255,.55);position:relative}

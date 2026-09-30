@@ -392,7 +392,7 @@ export function renderWhoareyouPage() {
     description: "what one HTTP request to aadhar.sh reveals about you. read-only, never stored.",
     robots: "noindex",
     head: islandPreload(VALUES_URL),
-    css: `
+    css: `/*min*/
 /* ─── /whoareyou, circa 2003 ──────────────────────────────────────────
    matches the holding page chrome: light-blue gradient body, white
    window panel, fake XP title bar, verdana body, trebuchet headings,

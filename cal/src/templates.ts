@@ -41,7 +41,7 @@ import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/l
 import { unsafeHtml } from "../../src/worker/lib/html.ts";
 import { islandMount, islandPreload, islandScript } from "../../src/worker/lib/island.ts";
 
-const STYLES = `
+const STYLES = `/*min*/
 * { box-sizing: border-box; }
 
 html {
@@ -384,11 +384,11 @@ form.book .actions {
 // On the standalone host the window keeps the right padding .content gives it
 // (18px, 10px on a phone) rather than luna's 12px gutter, so it names that
 // padding in --axp-gutter, which is how any page opts out of the default.
-const STANDALONE_GUTTER = `
+const STANDALONE_GUTTER = `/*min*/
 .window { --axp-gutter: 18px; }
 @media (max-width: 540px) { .window { --axp-gutter: 10px; } }
 `;
-const SHELL_GEOMETRY = `
+const SHELL_GEOMETRY = `/*min*/
 html { height: 100dvh; overflow: hidden; }
 body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
   overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
