@@ -224,9 +224,22 @@ export function createHoist(o) {
 
     // passive: the browser dispatches without waiting on us, and the work is
     // two custom-property writes.
-    if (followPointer) {
-      document.addEventListener("pointermove", (e) => { if (isOpen()) place(e); }, { passive: true });
-    }
+    //
+    // The cursor is recorded on EVERY move, open or not, because the scroll
+    // re-target below reads it. It used to be recorded only while a surface was
+    // open, so it froze at the first point past the last target the cursor
+    // left. A scroll then re-targeted whatever slid under that stale point, a
+    // card opened for a target nowhere near the cursor, and since the cursor
+    // was sitting on a non-target the whole time, no pointerout ever came to
+    // close it: it followed the cursor around empty space until the next
+    // target. Reproduced on the homepage grid and /access, 2026-09-30.
+    document.addEventListener("pointermove", (e) => {
+      if (followPointer && isOpen()) place(e);
+      else { lastX = e.clientX; lastY = e.clientY; }
+    }, { passive: true });
+    // A cursor that leaves the page leaves nothing to re-target under, so a
+    // keyboard scroll afterwards must not open a card at the old position.
+    document.documentElement.addEventListener("pointerleave", () => { lastX = lastY = 0; }, { passive: true });
 
     document.addEventListener("pointerout", (e) => {
       const from = findTarget(e.target);
