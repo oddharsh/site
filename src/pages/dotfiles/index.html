@@ -27,7 +27,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:var(--ink)}
-.window{--axp-maxw:760px;max-width:var(--axp-maxw);background:var(--window)}
+.window{--axp-maxw:760px;--axp-gutter:16px;max-width:var(--axp-maxw);background:var(--window)}
 .title-bar .df-icon{background:var(--face);border:1px solid var(--blue-40);position:relative}
 .title-bar .df-icon:before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--blue-40)}
 .title-bar .df-icon:after{content:"";position:absolute;left:3px;top:6px;width:4px;height:4px;background:#fff;border:1px solid var(--blue-40)}
@@ -59,7 +59,7 @@ code,.mono{font-family:var(--font-mono);font-size:9pt}
 .df-out:focus{outline:none;border-color:var(--blue-45)}
 .curl{background:var(--paper);border:1px solid var(--shadow);box-shadow:var(--bevel-sunken);padding:7px 9px;margin:6px 0 12px;font:9pt/1.5 var(--font-mono);overflow:auto;white-space:pre}
 dl{margin:0 0 12px}dt{font-weight:700;margin-top:6px}dd{margin:0 0 4px 0}
-.status{border-top:1px solid var(--rule);background:var(--face-light);padding:4px 10px;display:flex;gap:8px;flex-wrap:wrap;font-size:8.5pt;color:var(--ink-dim)}.status span:after{content:"·";margin-left:8px;color:var(--ink-faint)}.status span:last-child:after{content:""}
+
 @media(max-width:620px){.df-tree{height:280px}.df-row{white-space:normal;flex-wrap:wrap}.df-label{flex:1 1 0;min-width:0}.df-was{margin-left:0;flex-basis:100%;padding:0 0 0 18px}}
 </style>
 <link rel="stylesheet" href="/luna.css">
@@ -116,7 +116,7 @@ bash macos.sh</pre>
     </dl>
     <p class="fine">Made in the same spirit as <a href="https://github.com/mathiasbynens/dotfiles/blob/main/.macos" rel="noopener">mathiasbynens/dotfiles</a>, which is where most of the world learned these keys. The difference is the checklist: his is a script you edit, this is a list you tick.</p>
   </div>
-  <div class="status"><span>folder options, for a mac</span><span>nothing runs from this page</span><span>read off the machine 2026-09-21</span></div>
+  <div class="xp-statusbar"><span>folder options, for a mac</span><span>nothing runs from this page</span><span>read off the machine 2026-09-21</span></div>
 </div>
 <script type="application/json" id="dotfiles-data">
 {

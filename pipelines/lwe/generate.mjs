@@ -220,13 +220,13 @@ if (import.meta.main) {
     const out = join(PAGES, "lwe", `${arg}.html`);
     const next = pageHtml(spec);
     // REFUSE TO OVERWRITE A PAGE THAT HAS DRIFTED FROM ITS SPEC. Four of the
-    // five published pages carry work that exists only in the HTML — dac has a
-    // whole tube-distortion demo, ~15KB of it, that no spec field describes —
-    // and regenerating discards it silently, because the write succeeds and the
-    // page keeps rendering. check-page-contracts pins html === published only
-    // for a spec carrying a demoJsFile, which is encoding alone, so nothing
-    // else catches this. --force is the deliberate act, for when the spec is
-    // genuinely the newer of the two.
+    // five published pages once carried work that existed only in the HTML (dac
+    // had a whole tube-distortion demo, ~15KB, in no spec field), and
+    // regenerating discarded it silently. Since 2026-09-30 check-page-contracts
+    // pins html === published for every spec, so a drift fails there first and
+    // this refusal is the second line. --force is the deliberate act, for when
+    // the spec is genuinely the newer of the two (an edit to the spec, then a
+    // regeneration).
     const prev = existsSync(out) ? readFileSync(out, "utf8") : null;
     if (prev !== null && prev !== next && !process.argv.includes("--force")) {
       const delta = prev.length - next.length;

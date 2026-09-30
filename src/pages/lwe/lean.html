@@ -46,10 +46,7 @@
 .lean .ok { color: #15803d; }
 
 .demo .lead { margin: 0 0 9px; }
-.btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 11px; cursor: pointer; color: #1a2030; background: linear-gradient(to bottom, #fff 0%, #e9edf5 100%); border: 1px solid #7d8aa3; border-radius: 0; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #b9c2d4; }
-.btn:hover { border-color: var(--accent); background: linear-gradient(to bottom, #fff, #eceafa); }
-.btn:active { box-shadow: inset 1px 1px 0 #b9c2d4, inset -1px -1px 0 #fff; }
-.btn.on { font-weight: bold; background: linear-gradient(to bottom, #eceafa, #cfcaef); border-color: var(--accent); }
+.xp-button[aria-pressed=true] { font-weight: bold; }
 
 /* demo 1: the vacuous spec */
 .dials { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
@@ -79,7 +76,7 @@
 
 /* demo 2: the compiler */
 .exprs { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 9px; }
-.exprs .btn { font-family: var(--font-mono); font-size: 9pt; }
+.exprs .xp-button { font-family: var(--font-mono); }
 .pipes { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
 .pipe { border: 1px solid #c3cbdb; border-radius: 4px; background: #f7f9fc; overflow: hidden; }
 .pipe > h4 { margin: 0; font-family: var(--font-caption); font-size: 8.5pt; padding: 4px 8px; background: #edf1f7; border-bottom: 1px solid #c3cbdb; color: #15243f; }
@@ -98,7 +95,6 @@
 
 /* demo 3: the audit surface */
 .surf-pick { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
-.surf-pick .btn { font-size: 8.5pt; padding: 2px 8px; }
 .surf-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }
 .surf-stats .card { border: 1px solid #c3cbdb; border-radius: 4px; background: #f7f9fc; padding: 7px 9px; }
 .surf-stats .card.mine { border-color: #d9a300; background: #fffbea; }
@@ -274,8 +270,8 @@ where
               <p class="lead">Expressions compile to a stack machine. Environment is <span class="mono">x = 6, y = 4</span>. Pick one, then try the two optimizations:</p>
               <div class="exprs" id="cc-exprs"></div>
               <div class="dials">
-                <button class="btn" id="cc-fold">constant folding</button>
-                <button class="btn" id="cc-swap">emit cheaper side first</button>
+                <button class="xp-button compact" id="cc-fold" aria-pressed="false">constant folding</button>
+                <button class="xp-button compact" id="cc-swap" aria-pressed="false">emit cheaper side first</button>
               </div>
               <div class="pipes">
                 <div class="pipe" id="cc-p1"><h4>source meaning &middot; <span class="mono">eval</span></h4>
@@ -388,7 +384,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
               <div class="surf-scale">
                 <div class="surf-row"><span class="lab">proof</span><span class="surf-track"><span class="surf-fill" id="su-bp"></span></span><span class="amt" id="su-ap"></span></div>
                 <div class="surf-row"><span class="lab">statement</span><span class="surf-track"><span class="surf-fill mine" id="su-bc"></span></span><span class="amt" id="su-ac"></span></div>
-                <div class="surf-mag"><button class="btn" id="su-mag">magnify the statement bar 100&times;</button><span id="su-magnote"></span></div>
+                <div class="surf-mag"><button class="xp-button compact" id="su-mag" aria-pressed="false">magnify the statement bar 100&times;</button><span id="su-magnote"></span></div>
               </div>
               <div class="surf-ratio" id="su-ratio"></div>
             </div>
@@ -613,11 +609,11 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
   var bar = document.getElementById("cc-exprs");
   PRESETS.forEach(function (p, i) {
     var b = document.createElement("button");
-    b.className = "btn"; b.textContent = p.lab; b.dataset.i = i;
+    b.className = "xp-button compact"; b.textContent = p.lab; b.dataset.i = i;
     bar.appendChild(b);
   });
   bar.addEventListener("click", function (ev) {
-    var b = ev.target.closest(".btn"); if (!b) return;
+    var b = ev.target.closest("button"); if (!b) return;
     pick = +b.dataset.i; draw();
   });
   document.getElementById("cc-fold").addEventListener("click", function () { fold = !fold; draw(); });
@@ -625,10 +621,10 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
 
   function draw() {
     Array.prototype.forEach.call(bar.children, function (b, i) {
-      b.classList.toggle("on", i === pick);
+      b.setAttribute("aria-pressed", String(i === pick));
     });
-    document.getElementById("cc-fold").classList.toggle("on", fold);
-    document.getElementById("cc-swap").classList.toggle("on", swap);
+    document.getElementById("cc-fold").setAttribute("aria-pressed", String(fold));
+    document.getElementById("cc-swap").setAttribute("aria-pressed", String(swap));
 
     var src = PRESETS[pick].e, want = evalE(src);
     var target = fold ? foldE(src) : src;
@@ -691,18 +687,18 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
   var pickbar = document.getElementById("su-pick");
   R.forEach(function (r, i) {
     var b = document.createElement("button");
-    b.className = "btn"; b.textContent = r.k; b.dataset.i = i;
+    b.className = "xp-button compact"; b.textContent = r.k; b.dataset.i = i;
     pickbar.appendChild(b);
   });
   pickbar.addEventListener("click", function (ev) {
-    var b = ev.target.closest(".btn"); if (!b) return;
+    var b = ev.target.closest("button"); if (!b) return;
     pick = +b.dataset.i; draw();
   });
   document.getElementById("su-mag").addEventListener("click", function () { mag = !mag; draw(); });
 
   function draw() {
     Array.prototype.forEach.call(pickbar.children, function (b, i) {
-      b.classList.toggle("on", i === pick);
+      b.setAttribute("aria-pressed", String(i === pick));
     });
     var r = R[pick], ratio = Math.round(r.proof / r.stmt);
 
@@ -721,7 +717,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
     document.getElementById("su-ac").textContent = n(r.stmt);
 
     var magbtn = document.getElementById("su-mag");
-    magbtn.classList.toggle("on", mag);
+    magbtn.setAttribute("aria-pressed", String(mag));
     magbtn.textContent = mag ? "back to true scale" : "magnify the statement bar 100×";
     document.getElementById("su-magnote").textContent = mag
       ? "the yellow bar is now 100 times too long. it still fits inside the purple one on nine of the ten."

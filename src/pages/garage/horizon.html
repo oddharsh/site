@@ -197,17 +197,8 @@ footer {
   /* min-height so a flipped popover has somewhere to go */
   min-height: 120px;
 }
-/* the thing we tether TO: a raised XP button */
-.anc-btn {
-  anchor-name: --anc-btn;
-  font-family: var(--font-ui); font-size: 9.5pt;
-  padding: 5px 14px; cursor: pointer; color: var(--ink);
-  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 250) 100%);
-  border: 1px solid oklch(50% 0.02 250);
-  border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0);
-  box-shadow: 1px 1px 0 oklch(40% 0.03 250);
-}
-.anc-btn:active { box-shadow: inset 1px 1px 0 oklch(40% 0.03 250); }
+/* the thing we tether TO: luna's command button, named as an anchor */
+.anc-btn { anchor-name: --anc-btn; }
 
 /* the popover we tether, placed purely in CSS, no JS coordinate math */
 .anc-pop {
@@ -321,16 +312,6 @@ footer {
    `popover` attribute value (auto / hint / manual) changes the dismissal
    semantics. */
 .ph-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: flex-start; }
-.ph-btn {
-  font-family: var(--font-caption); font-size: 9.5pt; cursor: pointer;
-  padding: 4px 12px; color: var(--ink);
-  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 250) 100%);
-  border: 1px solid oklch(50% 0.02 250);
-  border-top-color: oklch(99% 0 0); border-left-color: oklch(97% 0 0);
-  box-shadow: 1px 1px 0 oklch(45% 0.05 250 / 0.4);
-}
-.ph-btn:active { border-top-color: oklch(50% 0.02 250); border-left-color: oklch(50% 0.02 250);
-  background: linear-gradient(180deg, oklch(86% 0.02 250) 0%, oklch(93% 0.01 250) 100%); }
 .ph-pop {
   margin: 0; padding: 0; inset: auto; position: fixed; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
@@ -605,9 +586,6 @@ placeholder
 .sy-dot { position: absolute; top: 3px; left: 0; width: 13px; height: 13px; border-radius: 50%; background: var(--grad-title); }
 .sy-meter { font-size: 8.5pt; color: oklch(45% 0 0); margin: 0; }
 .sy-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
-.sy-btn { font-family: var(--font-ui); font-size: 9pt; padding: 4px 12px; cursor: pointer; color: var(--ink); background: linear-gradient(180deg, oklch(99% 0 0), oklch(90% 0.01 250)); border: 1px solid oklch(50% 0.02 250); border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0); box-shadow: 1px 1px 0 oklch(40% 0.03 250); }
-.sy-btn:active { box-shadow: inset 1px 1px 0 oklch(40% 0.03 250); }
-.sy-btn:disabled { opacity: .5; cursor: default; }
 .sy-out { font-size: 8.5pt; color: oklch(38% 0 0); margin: 8px 0 0; min-height: 2.6em; }
 .sy-out .hi { color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
 .sy-out .lo { color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
@@ -802,8 +780,6 @@ placeholder
 .hq-table .hq-y { color: oklch(48% 0.13 145); font-weight: 700; }
 .hq-table .hq-n { color: oklch(52% 0.16 27); font-weight: 700; }
 .hq-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 8px 0 0; }
-/* the right gutter beside the 16px scrollbar; luna.css owns the rest of the window model */
-.window > .content { padding-right: 12px !important; }
 </style>
 <link rel="stylesheet" href="/luna.css">
 <script>
@@ -1264,8 +1240,8 @@ pointerout   -&gt; hidePopover()
       </p>
       <div class="anc-stage">
         <div class="anc-row">
-          <button class="anc-btn" popovertarget="anc-pop-a">tooltip &uarr;</button>
-          <button class="anc-btn" popovertarget="anc-pop-b">tooltip &rarr;</button>
+          <button class="xp-button compact anc-btn" popovertarget="anc-pop-a">tooltip &uarr;</button>
+          <button class="xp-button compact anc-btn" popovertarget="anc-pop-b">tooltip &rarr;</button>
         </div>
         <div id="anc-pop-a" popover class="anc-pop">
           <div class="hd">position-area: top</div>
@@ -1365,9 +1341,9 @@ pointerout   -&gt; hidePopover()
         difference:
       </p>
       <div class="ph-row">
-        <button class="ph-btn" popovertarget="ph-auto">popover=auto</button>
-        <button class="ph-btn" popovertarget="ph-hint">popover=hint</button>
-        <button class="ph-btn" popovertarget="ph-manual">popover=manual</button>
+        <button class="xp-button compact" popovertarget="ph-auto">popover=auto</button>
+        <button class="xp-button compact" popovertarget="ph-hint">popover=hint</button>
+        <button class="xp-button compact" popovertarget="ph-manual">popover=manual</button>
       </div>
       <div id="ph-auto" popover="auto" class="ph-pop">
         <div class="ph-bar">auto</div>
@@ -1734,8 +1710,8 @@ pointerout   -&gt; hidePopover()
         <div class="sy-rail"><span class="sy-dot" id="sy-dot"></span></div>
         <p class="sy-meter">live rAF dot, it freezes whenever the main thread is blocked &middot; frames: <output id="sy-frames">0</output></p>
         <div class="sy-btns">
-          <button class="sy-btn" id="sy-block">run one 600ms task</button>
-          <button class="sy-btn" id="sy-yield">run chunked + yield</button>
+          <button class="xp-button compact" id="sy-block">run one 600ms task</button>
+          <button class="xp-button compact" id="sy-yield">run chunked + yield</button>
         </div>
         <p class="sy-out" id="sy-out">Click a button and watch the dot. The single 600&nbsp;ms task freezes it; the chunked version yields every ~20&nbsp;ms so it keeps gliding, same total work, responsive throughout.</p>
       </div>
@@ -2290,10 +2266,6 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .cc-rail::scroll-button(left):disabled, .cc-rail::scroll-button(right):disabled { opacity: .35; cursor: default; box-shadow: none; }
       .cc-rail::scroll-button(left) { content: "\2039 prev"; }
       .cc-rail::scroll-button(right) { content: "next \203A"; }
-      /* --- shared mini XP button for the demos --- */
-      .xpb { font: 8pt/1.4 Tahoma, Verdana, sans-serif; padding: 3px 12px; border: 1px solid #8e9dad; border-radius: 3px; background: linear-gradient(180deg, #fff 0%, #fdfdfd 45%, #f4f3ee 55%, #eceae0 100%); cursor: pointer; }
-      .xpb:hover { border-color: #e9994a; box-shadow: 0 0 3px 1px rgba(255,199,60,.5); }
-      .xpb:active { background: linear-gradient(180deg, #e1e1d8, #f0efe8); padding: 4px 11px 2px 13px; }
       /* --- Invoker Commands --- */
       .ic-pop { max-width: 320px; padding: 12px 14px; font-size: 9.5pt; color: oklch(25% 0 0); background: oklch(99.5% 0.012 100); border: 1px solid oklch(40% 0 0); border-radius: 4px; box-shadow: 0 8px 24px -6px rgba(0,0,0,.4); }
       .ic-pop::backdrop { background: rgba(0,0,30,.12); }
@@ -2360,14 +2332,14 @@ navigation.addEventListener("navigate", (e) =&gt; {
         the sibling of <code>interestfor</code>, but for clicks instead of hover.
         Zero JavaScript wired below:
       </p>
-      <p style="margin:10px 0 0"><button class="xpb" commandfor="ic-pop" command="toggle-popover">Show details &#9662;</button></p>
+      <p style="margin:10px 0 0"><button class="xp-button" commandfor="ic-pop" command="toggle-popover">Show details &#9662;</button></p>
       <div id="ic-pop" popover class="ic-pop">
         <strong>No click handler ran.</strong> This panel toggled purely from
         <code>command="toggle-popover" commandfor="ic-pop"</code>. The same attributes
         cover <code>&lt;dialog&gt;</code> via <code>show-modal</code>/<code>close</code>,
         and you can author custom commands (<code>command="--like"</code>) handled by a
         single <code>commandEvent</code> listener.
-        <p style="margin:8px 0 0"><button class="xpb" commandfor="ic-pop" command="hide-popover">Close</button></p>
+        <p style="margin:8px 0 0"><button class="xp-button" commandfor="ic-pop" command="hide-popover">Close</button></p>
       </div>
       <p class="replaces">
         On the site: the caption-bar minimize/close and any future booking dialog in

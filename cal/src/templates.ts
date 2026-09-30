@@ -348,23 +348,10 @@ form.book .actions {
 }
 
 /* ── status bar (footer chrome) ─────────────────────────────────────── */
-.xp-statusbar {
-  margin-top: 14px;
-  font-size: 9pt;
-  color: var(--ink-dim);
-  border-top: 1px solid var(--shadow);
-  padding-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 4px 12px;
-}
-.xp-statusbar > span:nth-child(2) {
-  /* center span (credit) gets a soft middle position; wraps below on
-     narrow viewports where flex-wrap kicks in. */
-  flex: 0 1 auto;
-  text-align: center;
-}
+/* luna.css draws .xp-statusbar. This one sits at the foot of .content
+   rather than the window's bottom edge, so it only spaces itself off the
+   form and spreads its three facts across the width. */
+.xp-statusbar { margin-top: 14px; justify-content: space-between; }
 
 /* tighter on phones */
 @media (max-width: 540px) {
@@ -387,19 +374,27 @@ form.book .actions {
 // real DESKTOP_CHROME, so there is nothing to stand in for and nothing left to
 // keep in sync by hand.
 //
-// It looks redundant, since luna.css carries every rule here but the gutter and
-// this page links luna render-blocking. It still earns its place, measured
+// It looks redundant, since luna.css carries every rule here (the 12px right
+// gutter included, since 2026-09-30) and this page links luna render-blocking. It still earns its place, measured
 // 2026-09-30: with only the gutter kept,
 // `bun run cls --paths /coffee --hold none --runs 5` saw the form jump (0.0704,
 // dy -554 dx -306) on 3 of 5 desktop loads, and with the block in place it saw
 // none. Keep it until that reads clean without it.
+//
+// On the standalone host the window keeps the right padding .content gives it
+// (18px, 10px on a phone) rather than luna's 12px gutter, so it names that
+// padding in --axp-gutter, which is how any page opts out of the default.
+const STANDALONE_GUTTER = `
+.window { --axp-gutter: 18px; }
+@media (max-width: 540px) { .window { --axp-gutter: 10px; } }
+`;
 const SHELL_GEOMETRY = `
 html { height: 100dvh; overflow: hidden; }
 body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
   overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
 .window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
 .window > .title-bar { flex: 0 0 auto; }
-.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; }
 `;
 
 // the coffee section glyph — mirrors nav.js SECTION_ICONS.coffee + the taskbar
@@ -423,7 +418,7 @@ function shell(title, body, env, head = "") {
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <link rel="icon" type="image/svg+xml" href="/section-icons/coffee.svg">
-${head}<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}${onShell ? SHELL_GEOMETRY : ""}</style>
+${head}<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}${onShell ? SHELL_GEOMETRY : STANDALONE_GUTTER}</style>
 </head>
 <body>${onShell ? DESKTOP_TOP : ""}
 <div class="window">

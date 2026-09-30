@@ -140,7 +140,7 @@ export function createRun(options) {
           '<div class="prompt">Type the name of a page, photo, or profile, and <b>aadhar.sh</b> will open it for you.</div></div>' +
         '<div class="open-row"><label for="axp-run-in">Open:</label><input id="axp-run-in" type="text" autocomplete="off" spellcheck="false" placeholder="start typing… (e.g. garage, encoding, spotify, a photo)"></div>' +
         '<div class="list" id="axp-run-list" role="listbox" aria-label="destinations"></div>' +
-        '<div class="btns"><button class="btn def" type="button" data-act="ok">OK</button><button class="btn" type="button" data-act="cancel">Cancel</button></div>' +
+        '<div class="btns"><button class="xp-button default" type="button" data-act="ok">OK</button><button class="xp-button" type="button" data-act="cancel">Cancel</button></div>' +
       '</dialog>'
     );
     D.body.appendChild(run);

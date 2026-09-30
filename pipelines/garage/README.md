@@ -97,6 +97,12 @@ The retired Garage `wire` command now refuses before writing; use steps 5 and 6.
 }
 ```
 
+A spec may also carry `"favicon"`, an SVG `data:image/svg+xml,` URI that
+becomes the page's own tab icon (`/garage/octane` uses one). Edit the spec
+rather than the page: `bun run pages:check` fails when a published page differs
+from its spec by one byte, so a hand edit cannot be lost to the next
+regeneration.
+
 The shared contract also checks the LRS and voice rules: active sentences,
 concrete claims, no em dashes, no canned AI language, and no `not X, Y` move.
 It validates the page before writing HTML, so the generated document and the

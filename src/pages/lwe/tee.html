@@ -29,10 +29,6 @@
 .msg.ai-note .bubble { background: #f3f0fb; border: 1px solid #d7cdef; border-radius: 4px; padding: 7px 9px; }
 .msg.ai-note .tagai { display: inline-block; font-size: 7.5pt; font-weight: bold; color: #6b4ec2; background: #ece5fb; border: 1px solid #d0c3f0; border-radius: 9px; padding: 0 6px; margin-bottom: 4px; letter-spacing: .03em; }
 
-.btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 11px; cursor: pointer; color: #1a2030; background: linear-gradient(to bottom, #fff 0%, #e9edf5 100%); border: 1px solid #7d8aa3; border-radius: 0; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #b9c2d4; }
-.btn:hover { border-color: var(--accent); background: linear-gradient(to bottom, #fff, #eef1f5); }
-.btn:active { box-shadow: inset 1px 1px 0 #b9c2d4, inset -1px -1px 0 #fff; }
-.btn.on { font-weight: bold; background: linear-gradient(to bottom, #dfe5ee, #c3ccd9); border-color: var(--accent); }
 
 /* TEE side-channel demo */
 .enclave { border: 2px solid #44505f; border-radius: 6px; background: linear-gradient(180deg,#3a4453,#2a3340); color: #cfe3ff; padding: 12px; text-align: center; position: relative; }
@@ -107,11 +103,11 @@
                 <div class="lockline" id="tee-status">memory reads as encrypted ciphertext</div>
               </div>
               <div class="atk">
-                <button class="btn" data-atk="timing">⏱ timing</button>
-                <button class="btn" data-atk="cache">🗄 cache</button>
-                <button class="btn" data-atk="power">⚡ power</button>
-                <button class="btn" data-atk="thermal">🌡 thermal</button>
-                <button class="btn" id="tee-reset" style="margin-left:auto">re-seal</button>
+                <button class="xp-button compact" data-atk="timing">⏱ timing</button>
+                <button class="xp-button compact" data-atk="cache">🗄 cache</button>
+                <button class="xp-button compact" data-atk="power">⚡ power</button>
+                <button class="xp-button compact" data-atk="thermal">🌡 thermal</button>
+                <button class="xp-button compact" id="tee-reset" style="margin-left:auto">re-seal</button>
               </div>
               <div class="trace" id="tee-trace"><div class="t-title">no probe running, the enclave looks opaque.</div></div>
             </div>

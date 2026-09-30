@@ -304,7 +304,7 @@
             '<span class="np-controls"><button type="submit" class="close" aria-label="Close">✕</button></span></div>' +
           '<div class="np-about-body"><p><b>Notepad</b>, a resto-mod of the Windows&nbsp;XP app.</p>' +
           '<p>This is a real text field: edit it however you like. Nothing saves, so a reload restores my canonical version. The writing here is always in flux.</p>' +
-          '<div class="np-about-btns"><button type="submit" class="np-btn" autofocus>OK</button></div></div></form></dialog>'
+          '<div class="np-about-btns"><button type="submit" class="xp-button default" autofocus>OK</button></div></div></form></dialog>'
       ));
       Dialog(box);
     }

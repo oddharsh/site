@@ -64,7 +64,7 @@ body{font-family:var(--font-ui)}
    wallpaper either side and the graph rendering at 1:1 in an 1188px canvas, so
    half the pixels of a projector went to Bliss. A maximized MMC console is also
    what the title bar's box glyph has always claimed this window is. */
-.window{--axp-maxw:1880px; max-width:var(--axp-maxw);font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
+.window{--axp-maxw:1880px;--axp-gutter:16px; max-width:var(--axp-maxw);font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
 h1{font-family:var(--font-caption);font-size:17pt;font-weight:700;color:var(--navy);margin:0 0 2px;letter-spacing:-.01em;text-wrap:balance}
 h2{font-family:var(--font-caption);font-size:12.5pt;font-weight:700;color:var(--navy2);margin:22px 0 6px}
 h3{font-family:var(--font-caption);font-size:10.5pt;font-weight:700;color:var(--navy);margin:14px 0 4px}
@@ -88,7 +88,7 @@ small,.meta{font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
 .mmc-menu button:hover,.mmc-menu button[aria-expanded=true]{background:var(--sel);color:#fff;border-color:var(--sel)}
 .mmc-menu button:focus-visible{outline:1px dotted var(--navy);outline-offset:1px}
 /* the one real dropdown. XP menus really did drop a soft shadow. */
-.menu-pop{position:absolute;z-index:30;top:24px;left:96px;min-width:196px;background:var(--face-light);border:1px solid var(--dsh);box-shadow:2px 3px 7px rgba(0,20,90,.28);padding:2px}
+.menu-pop{position:fixed;inset:auto;margin:0;z-index:30;min-width:196px;background:var(--face-light);border:1px solid var(--dsh);box-shadow:2px 3px 7px rgba(0,20,90,.28);padding:2px}
 .menu-pop button{font:inherit;font-size:calc(9.5pt * var(--sc));display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:transparent;border:0;padding:4px 10px 4px 6px;cursor:pointer;color:var(--ink)}
 .menu-pop button:hover{background:var(--sel);color:#fff}
 .menu-pop .tick{width:13px;flex:0 0 13px;font-family:var(--font-ui);font-weight:700;font-size:10pt;line-height:1}
@@ -101,11 +101,10 @@ small,.meta{font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
 .seg button+button{border-left:1px solid var(--sh)}
 .seg button[aria-pressed=true]{background:linear-gradient(180deg,#c9d9f0,#e4ecf9);box-shadow:var(--bevel-sunken);font-weight:700}
 .seg button:hover{background:var(--grad-btn-hover)}
-.btn{font:inherit;font-size:calc(9.5pt * var(--sc));color:var(--ink);background:var(--grad-button);border:1px solid var(--dsh);box-shadow:var(--bevel-raised);padding:4px 11px;cursor:pointer;border-radius:2px}
-.btn:hover{background:var(--grad-btn-hover);border-color:var(--navy2)}
-.btn:active{box-shadow:var(--bevel-sunken)}
-.btn[aria-pressed=true]{background:linear-gradient(180deg,#f6d9d3,#fbeae6);box-shadow:var(--bevel-sunken);border-color:var(--danger);font-weight:700}
-.btn:focus-visible,.seg button:focus-visible{outline:1px dotted var(--navy);outline-offset:1px}
+/* luna's command button, scaled with the chrome like everything above */
+.xp-button{font-size:calc(8pt * var(--sc))}.xp-button.compact{font-size:calc(9pt * var(--sc))}
+.xp-button[aria-pressed=true]{background:linear-gradient(180deg,#f6d9d3,#fbeae6);border-color:var(--danger);font-weight:700}
+.seg button:focus-visible{outline:1px dotted var(--navy);outline-offset:1px}
 .bar-lab{font-size:calc(9pt * var(--sc));color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em}
 select{font:inherit;font-size:calc(9.5pt * var(--sc));border:1px solid var(--dsh);box-shadow:var(--bevel-sunken);background:var(--win);padding:3px 4px}
 
@@ -386,9 +385,9 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
         <button type="button" id="z-fit" aria-pressed="false" title="the whole board at once, small">Fit</button><button type="button" id="z-fill" aria-pressed="true" title="fill the width, which is the biggest the labels get">Fill</button><button type="button" id="z-100" aria-pressed="false" title="actual size">100%</button>
       </span>
     </span>
-    <button class="btn" type="button" id="tradeoff" aria-pressed="true">Zero-sum picks</button>
-    <button class="btn" type="button" id="inject" aria-pressed="false">Trace the injection path</button>
-    <button class="btn" type="button" id="reset">Reset</button>
+    <button class="xp-button compact" type="button" id="tradeoff" aria-pressed="true">Zero-sum picks</button>
+    <button class="xp-button compact" type="button" id="inject" aria-pressed="false">Trace the injection path</button>
+    <button class="xp-button compact" type="button" id="reset">Reset</button>
   </div>
   <div class="mmc-split">
     <div class="mmc-tree"><ul class="tree" id="tree"></ul></div>
@@ -957,7 +956,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <div id="pane-dep" role="tabpanel" aria-labelledby="tab-dep" hidden></div>
     <div id="pane-ex" role="tabpanel" aria-labelledby="tab-ex" hidden></div>
   </div>
-  <div class="foot"><button class="btn" type="button" id="props-ok">OK</button></div>
+  <div class="foot"><button class="xp-button default" type="button" id="props-ok">OK</button></div>
 </dialog>
 
 <script>
@@ -1638,14 +1637,53 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     draw();
   });
 
-  /* the View menu, the one real dropdown, and the reveal for the speculative tier */
+  /* the View menu, the one real dropdown, and the reveal for the speculative tier.
+     It is a popover="auto", the way nav-tray.js's balloon and notepad.js's menus
+     are, so light dismiss, Esc and the top layer are the platform's and the
+     document click listener is gone. The markup keeps `hidden`, so an engine
+     without the Popover API falls back to toggling it.
+     Two things stay ours. Esc and a picked item move focus back to View BEFORE
+     the popover hides: left to the platform, the hide restores focus
+     mid-operation, and a focusin that asks an infotip to showPopover then throws
+     InvalidStateError in Chrome 152 (#1032 met it on the tray). And a press on
+     View while the menu is open light-dismisses it before the click lands where
+     showPopover's `source` is unsupported, so the press is remembered and that
+     click closes instead of reopening. */
   var viewBtn = document.getElementById("m-view"), viewMenu = document.getElementById("view-menu"),
       hiddenItem = document.getElementById("m-hidden");
-  function openMenu(open){
-    viewMenu.hidden = !open;
-    viewBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  var HAS_POPOVER = "showPopover" in HTMLElement.prototype, pressedOpen = false;
+  function menuOpen(){ return HAS_POPOVER ? viewMenu.matches(":popover-open") : !viewMenu.hidden; }
+  if (HAS_POPOVER) {
+    viewMenu.hidden = false;
+    viewMenu.popover = "auto";
+    viewMenu.addEventListener("beforetoggle", function(ev){
+      viewBtn.setAttribute("aria-expanded", ev.newState === "open" ? "true" : "false");
+    });
+    viewBtn.addEventListener("pointerdown", function(){ pressedOpen = menuOpen(); });
   }
-  viewBtn.addEventListener("click", function(ev){ ev.stopPropagation(); openMenu(viewMenu.hidden); });
+  function openMenu(open, restore){
+    if (open) {
+      var r = viewBtn.getBoundingClientRect();
+      viewMenu.style.left = r.left + "px";
+      viewMenu.style.top = r.bottom + "px";
+    } else if (restore) viewBtn.focus();
+    if (!HAS_POPOVER) {
+      viewMenu.hidden = !open;
+      viewBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    } else if (open) viewMenu.showPopover({ source: viewBtn });
+    else if (menuOpen()) viewMenu.hidePopover();
+  }
+  viewBtn.addEventListener("click", function(ev){
+    ev.stopPropagation();
+    var wasOpen = pressedOpen || menuOpen();
+    pressedOpen = false;
+    openMenu(!wasOpen);
+  });
+  viewMenu.addEventListener("keydown", function(ev){
+    if (ev.key !== "Escape") return;
+    ev.preventDefault();
+    openMenu(false, true);
+  });
   var treeItem = document.getElementById("m-tree");
   function setTree(on){
     treeItem.setAttribute("aria-checked", on ? "true" : "false");
@@ -1655,11 +1693,11 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   }
   treeItem.addEventListener("click", function(){
     setTree(treeItem.getAttribute("aria-checked") !== "true");
-    openMenu(false);
+    openMenu(false, true);
   });
   hiddenItem.addEventListener("click", function(){
     setHidden(!showHidden);
-    openMenu(false);
+    openMenu(false, true);
   });
   function setHidden(on){
     showHidden = on;
@@ -1669,12 +1707,16 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     if (!on && selected && BY_ID[selected].status === "phantom") selected = null;
     draw();
   }
-  document.addEventListener("click", function(ev){
-    if (!viewMenu.hidden && !viewMenu.contains(ev.target) && ev.target !== viewBtn) openMenu(false);
-  });
-  document.addEventListener("keydown", function(ev){
-    if (ev.key === "Escape" && !viewMenu.hidden) { openMenu(false); viewBtn.focus(); }
-  });
+  // Without popover there is no light dismiss, so an outside press and Esc
+  // anywhere still close the fallback menu.
+  if (!HAS_POPOVER) {
+    document.addEventListener("click", function(ev){
+      if (!viewMenu.hidden && !viewMenu.contains(ev.target) && ev.target !== viewBtn) openMenu(false);
+    });
+    document.addEventListener("keydown", function(ev){
+      if (ev.key === "Escape" && !viewMenu.hidden) openMenu(false, true);
+    });
+  }
 
   document.getElementById("reset").addEventListener("click", function(){
     filter = "all"; injecting = false; selected = null; tradeoffs = true;

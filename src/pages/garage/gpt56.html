@@ -23,7 +23,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:var(--ink,#181818)}
-.window{--axp-maxw:760px;max-width:var(--axp-maxw)}
+.window{--axp-maxw:760px;--axp-gutter:16px;max-width:var(--axp-maxw)}
 .title-bar .sol-icon{background:#ffd36b;border-radius:2px;position:relative;overflow:hidden}
 .title-bar .sol-icon:before{content:"";position:absolute;inset:3px;border:2px solid #e45f3e;border-radius:50%}
 .title-bar .sol-icon:after{content:"";position:absolute;left:7px;right:7px;top:7px;bottom:7px;background:#e45f3e;clip-path:polygon(50% 0,63% 37%,100% 50%,63% 63%,50% 100%,37% 63%,0 50%,37% 37%)}
@@ -45,7 +45,7 @@ hr{border:0;border-top:2px groove #d5dce7;margin:16px 0;height:0}
 .modebar{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 10px}.modebar .xp-button[aria-pressed="true"]{background:linear-gradient(#d8eaff,#a9c9f1);border-color:#235ea8;box-shadow:inset 1px 1px 1px #8eaed8}.modebar .xp-button{min-width:72px}
 .mode-output{display:grid;grid-template-columns:minmax(0,1fr) 155px;gap:12px;align-items:start}.mode-output h3{color:#2f4a74}.mode-output p{font-size:10pt;margin:0;color:#3f4752}.readouts{border-left:1px solid #d6dde7;padding-left:10px;display:grid;gap:6px}.readout{display:flex;justify-content:space-between;gap:8px;font:8.5pt var(--font-mono);border-bottom:1px dotted #c4ccd7;padding-bottom:3px}.readout b{color:#1d4f99}.meter{height:8px;background:#e4e8ef;border:1px solid #8797ad;margin-top:9px;box-shadow:inset 1px 1px 0 #b4bdc9}.meter i{display:block;height:100%;width:68%;background:linear-gradient(90deg,#5a9de5,#2a55c4);transition:width 90ms ease-out}
 .ledger{width:100%;border-collapse:collapse;font-size:9.5pt;margin:4px 0 13px}.ledger th,.ledger td{text-align:left;padding:5px 7px;border:1px solid #ccd4df;vertical-align:top}.ledger th{font:700 8.5pt var(--font-mono);background:#eaf1fb;color:#435b7d}.ledger tr:nth-child(even) td{background:#f8fafc}.ledger td:first-child{font-family:var(--font-mono);white-space:nowrap;color:#2b4c80}
-.guard{border-left:4px solid #e2a62c;background:#fff9e7;padding:8px 10px;margin:0 0 14px;font-size:9.5pt}.guard strong{color:#8a5a00}.source{font-size:9pt;color:#56606e;margin:0}.status{border-top:1px solid #d1d9e4;background:#f1f4f8;padding:4px 10px;display:flex;gap:8px;flex-wrap:wrap;font-size:8.5pt;color:#586579}.status span:after{content:"·";margin-left:8px;color:#9ca8b8}.status span:last-child:after{content:""}
+.guard{border-left:4px solid #e2a62c;background:#fff9e7;padding:8px 10px;margin:0 0 14px;font-size:9.5pt}.guard strong{color:#8a5a00}.source{font-size:9pt;color:#56606e;margin:0}
 @media(max-width:620px){.hero-grid,.mode-output{grid-template-columns:1fr}.lcd{min-height:0}.bay-grid{grid-template-columns:1fr}.readouts{border-left:0;border-top:1px solid #d6dde7;padding:8px 0 0;grid-template-columns:repeat(3,1fr)}.readout{display:block}.readout b{display:block;margin-top:2px}}
 @media (--reduced-motion) {.meter i{transition:none}}
 </style>
@@ -114,7 +114,7 @@ hr{border:0;border-top:2px groove #d5dce7;margin:16px 0;height:0}
     <hr>
     <section id="luq" aria-label="understanding check"></section>
   </div>
-  <div class="status"><span>performance field note</span><span>local Chrome trace</span><span>no API calls</span><span>added 2026-07-10</span></div>
+  <div class="xp-statusbar"><span>performance field note</span><span>local Chrome trace</span><span>no API calls</span><span>added 2026-07-10</span></div>
 </div>
 <script type="application/json" id="luq-data">
 {

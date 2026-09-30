@@ -35,10 +35,6 @@
 #axp-run .opt[aria-selected=true] .nm,#axp-run .opt[aria-selected=true] .ht,#axp-run .opt[aria-selected=true] .pa{color:oklch(100% 0 0)}
 #axp-run .empty{padding:8px 10px;color:oklch(52% 0 0);font-style:italic}
 #axp-run .btns{display:flex;justify-content:flex-end;gap:7px;padding:11px 13px 13px}
-#axp-run .btn{min-width:74px;padding:3px 12px;font-family:inherit;font-size:12px;cursor:pointer;color:oklch(18% 0 0);background:linear-gradient(180deg,oklch(99% 0 0),oklch(92% 0.005 263));border:1px solid oklch(50% 0.04 263);border-radius:3px;box-shadow:inset 1px 1px 0 oklch(100% 0 0),inset -1px -1px 0 oklch(84% 0.02 90)}
-#axp-run .btn:hover{background:linear-gradient(180deg,oklch(99% 0.02 263),oklch(90% 0.03 263))}
-#axp-run .btn:active{box-shadow:inset 1px 1px 0 oklch(84% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
-#axp-run .btn.def{outline:1px dotted oklch(45% 0.10 263);outline-offset:-4px}
 @media (max-width:560px){#axp-run .body{padding-top:11px}}
 @media (--motion-ok) {#axp-run[open]{animation:axp-pop .09s ease-out}}
 @keyframes axp-pop{from{transform:translate(-50%,-50%) scale(.97);opacity:.4}to{transform:translate(-50%,-50%) scale(1);opacity:1}}

@@ -318,9 +318,9 @@ body{text-wrap:pretty}
    horizon, so the instrument sees the expensive shape. What makes this one cheap:
    Chromium filters :has invalidation on the argument's classes, and body's own
    declarations here inherit nothing that forces descendants to restyle. */
-body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
+body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
 /* window frame: bounded to the desktop, sized to content but never taller than it. */
-.window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
+.window,.np-window{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
 .window,.np-window{display:flex;flex-direction:column}
 .window>.title-bar,.np-window>.np-titlebar{flex:0 0 auto}
 /* the scrolling region inside the frame (Notepad's .np-text already scrolls) */
@@ -352,12 +352,19 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
      only 12px, so no page has to pad around the grip on its own.
    Colours are the Luna face and the same #7f9db9 field edge .xp-input uses. */
 .window>.content,.window>.body{border:6px solid #ece9d8;background-clip:padding-box;outline:1px solid #7f9db9;outline-offset:-6px}
+/* THE RIGHT GUTTER beside the 16px scrollbar, 12px unless a page declares its
+   own. It lived as a copy on 16 garage pages, pixel-peeper, lwe-base.css,
+   xpChromeCss and cal, each `!important` so it beat the page's padding
+   shorthand, which is why this one is too. The pages that never had it keep
+   the right padding they had by naming it in --axp-gutter (the generated
+   garage pages 20px, gpt56, dotfiles, /access and the homepage 16px), the way
+   every page names its measure in --axp-maxw. serendipity scrolls
+   .window>.body and has no gutter, so the rule names .content alone. */
+.window>.content{padding-right:var(--axp-gutter,12px) !important}
 /* an author outline beats the UA focus ring by origin, so hand keyboard focus a
    real one back (Firefox lets you tab to a scrollable region). */
 .window>.content:focus-visible,.window>.body:focus-visible{outline:2px solid #316ac5}
 .np-window .np-text{flex:1 1 auto;min-height:0}   /* textarea fills the window (so resizing a note grows the editor, not empty space) */
-/* serendipity nests its window in .wrap — make it a transparent flex pass-through */
-.wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
 /* native XP scrollbars (phase C follow-up): the JS widget retired; these
    rules dress the REAL bar. Styling any ::-webkit-scrollbar part opts the
    scroller out of macOS overlay bars, so Chromium/WebKit get a persistent
@@ -679,9 +686,10 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
 }
 /* THE Luna command button + sunken field. One component for every page and
-   client script: the /rn form, /dotfiles, the quiz, and (in a follow-up) the
-   dozen per-page button skins that each drew their own gradient and bevel.
-   The base is XP's 75px dialog button at 8pt. */
+   client script: the /rn form, /dotfiles, the quiz, the Run and Notepad
+   dialogs, and since 2026-09-30 the per-page buttons on the garage, lwe,
+   /access and pixel-peeper pages, which each drew their own gradient and
+   bevel until then. The base is XP's 75px dialog button at 8pt. */
 :where(.xp-button) {
   display: inline-block; min-width: 75px; padding: 3px 12px;
   font: 8pt/1.4 var(--font-ui); color: #000;
@@ -698,6 +706,15 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 :where(.xp-button:active:not(:disabled)) {
   background: linear-gradient(180deg, #e1e1d8 0%, #e9e8e0 50%, #f0efe8 100%);
   border-color: #7b9ebd; padding: 4px 11px 2px 13px;
+  box-shadow: inset 1px 1px 2px rgba(181,178,164,.9), inset -1px -1px 0 rgba(255,255,255,.5);
+}
+/* A toggle that is on stays pushed in, the face :active shows for a moment.
+   Pages say which toggles are on with aria-pressed (the /access injection
+   trace, pixel-peeper's diff modes, dac's play buttons, lean's presets), so
+   the state reaches assistive tech and the face comes from one rule. */
+:where(.xp-button[aria-pressed="true"]) {
+  background: linear-gradient(180deg, #e1e1d8 0%, #e9e8e0 50%, #f0efe8 100%);
+  border-color: #7b9ebd;
   box-shadow: inset 1px 1px 2px rgba(181,178,164,.9), inset -1px -1px 0 rgba(255,255,255,.5);
 }
 /* XP's greyed command button: flat face, grey label, no hover glow. */
@@ -722,12 +739,24 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
    inline pill on 7 other pages, so the component takes cal's unambiguous
    name. Modelled on the garage strip, the most used, with its colours on
    tokens: a chrome-face band under a hairline, short spans spaced apart and
-   wrapping on a narrow window. Pages move onto it in a follow-up. */
+   wrapping on a narrow window, a middle dot between two facts. Every one of
+   those pages is on it since 2026-09-30, and the pill is .badge now.
+
+   .panes is XP's own status bar, the one Notepad and Explorer draw: each
+   fact in its own sunken pane, no dots, and a .fill pane takes the slack.
+   Notepad and pixel-peeper use it. */
 :where(.xp-statusbar) {
   flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
   padding: 4px 10px; font: 8.5pt/1.4 var(--font-ui); color: var(--ink-dim);
   background: var(--face-light); border-top: 1px solid var(--rule);
 }
+:where(.xp-statusbar:not(.panes) > span:not(:last-child))::after { content: "·"; margin-left: 8px; color: var(--ink-faint); }
+:where(.xp-statusbar.panes) { flex-wrap: nowrap; gap: 3px; padding: 2px 3px; }
+:where(.xp-statusbar.panes > span) {
+  padding: 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: inset 1px 1px 0 var(--shadow), inset -1px -1px 0 var(--highlight);
+}
+:where(.xp-statusbar > .fill) { flex: 1 1 auto; min-width: 0; }
 
 /* ───────────────── homepage music island (below the fold) ─────────────────
    Kept in the immutable shared sheet so a dynamic homepage reload does not
@@ -1085,8 +1114,10 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
    disagree is off by exactly the amount nobody notices. */
 .window:has(>.axp-tasks),.np-window:has(>.axp-tasks){--axp-rail:186px;--axp-rail-gap:14px;display:grid;grid-template-columns:var(--axp-rail) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);column-gap:var(--axp-rail-gap);max-width:calc(var(--axp-maxw,720px) + var(--axp-rail) + var(--axp-rail-gap))}
 .window:has(>.axp-tasks)>.title-bar,.np-window:has(>.axp-tasks)>.np-titlebar,.window:has(>.axp-tasks)>.axp-address,.np-window:has(>.axp-tasks)>.axp-address{grid-column:1/-1}
-/* the writing folder also carries a status bar, which spans both columns under the rail. */
-.np-window:has(>.axp-tasks)>.np-status{grid-column:1/-1;grid-row:4}
+/* a status bar spans both columns under the rail. This named only the writing
+   folder's until 2026-09-30, so the garage strip on a paned window landed in
+   the rail's column, 186px wide, and wrapped its three facts onto two lines. */
+.window:has(>.axp-tasks)>.xp-statusbar,.np-window:has(>.axp-tasks)>.xp-statusbar{grid-column:1/-1;grid-row:4}
 .window:has(>.axp-tasks)>.axp-tasks,.np-window:has(>.axp-tasks)>.axp-tasks{grid-column:1;grid-row:3;min-height:0;overflow-y:auto;padding:2px 0 10px 10px}
 .window:has(>.axp-tasks)>.content,.np-window:has(>.axp-tasks)>.np-folder-body{grid-column:2;grid-row:3;min-height:0;overflow:auto}
 /* nav.js appends the resize grip last; keep it out of the row flow. */

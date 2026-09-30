@@ -54,12 +54,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 /* cloudflare features demo */
 .cf-feat { border: 1px solid var(--frame); background: oklch(98% 0.004 250); padding: 4px 14px 14px; margin: 14px 0; }
 .cf-feat h2 { margin-top: 12px; }
-.cf-btn { font: bold 10pt var(--font-ui); padding: 4px 14px; margin: 4px 0; cursor: pointer; color: var(--ink);
-  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); border: 1px solid oklch(50% 0.05 263);
-  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #aca899; }
-.cf-btn:hover { background: linear-gradient(180deg, oklch(99% 0.015 263), oklch(90% 0.03 263)); }
-.cf-btn:active { box-shadow: inset 1px 1px 0 #aca899, inset -1px -1px 0 #fff; }
-.cf-btn:disabled { opacity: .6; cursor: default; }
+.cf-feat > .xp-button { margin: 4px 0; }
 .cf-out { font: 10pt var(--font-mono); color: oklch(30% 0.02 250); background: #fff; border: 1px solid #aca899;
   box-shadow: inset 1px 1px 0 #d8d4c8; padding: 6px 8px; margin: 6px 0; min-height: 1.4em; word-break: break-word; }
 .cf-code { font: 9pt var(--font-mono); color: oklch(40% 0.04 145); background: oklch(95% 0.01 145); border: 1px solid oklch(80% 0.03 145);
@@ -74,8 +69,6 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
 .tr-bar { position: absolute; top: -1px; bottom: -1px; min-width: 2px; border-radius: 2px; background: linear-gradient(180deg, oklch(64% 0.18 255), oklch(50% 0.20 258)); }
 .tr-dur { text-align: right; color: oklch(40% 0 0); }
 
-/* the right gutter beside the 16px scrollbar; luna.css owns the rest of the window model */
-.window > .content { padding-right: 12px !important; }
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -102,7 +95,7 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
         so a busy day silently stalls it. A DO increments <em>exactly once</em>, no race,
         100k writes/day. It used to cost money; it&apos;s free now, and it fixes that counter
         cleanly.</p>
-      <button class="cf-btn" id="do-btn" type="button">increment the global counter</button>
+      <button class="xp-button compact" id="do-btn" type="button">increment the global counter</button>
       <div class="cf-out" id="do-out">&mdash;</div>
       <pre class="cf-code">env.COUNTER.get(id).fetch()  // SQLite-backed, atomic put</pre>
     </div>
@@ -113,7 +106,7 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
         <code class="m">@cf/llava-1.5-7b</code> over a real grid photo to generate alt-text.
         A small, fast vision model hallucinates charmingly now and then
         (it once called a cloudy sky a UFO). One binding call does it: no GPU, no key.</p>
-      <button class="cf-btn" id="ai-btn" type="button">caption a random grid photo</button>
+      <button class="xp-button compact" id="ai-btn" type="button">caption a random grid photo</button>
       <div class="cf-out" id="ai-out">&mdash;</div>
       <pre class="cf-code">env.AI.run("@cf/llava-1.5-7b", { image, prompt }, { gateway: { id } })</pre>
       <p>That third argument arrived in <b>Aug&nbsp;2026</b>, when Cloudflare folded Workers&nbsp;AI and
@@ -148,7 +141,7 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
         compute loop), each in its own span with attributes. The canonical trace lands in
         Observability; the waterfall below is reconstructed live from the same span timings. (Run it twice:
         a cold Durable&nbsp;Object shows up as a fat first bar, then the warm path collapses to a few ms.)</p>
-      <button class="cf-btn" id="tr-btn" type="button">run a traced request</button>
+      <button class="xp-button compact" id="tr-btn" type="button">run a traced request</button>
       <div class="cf-out" id="tr-out">&mdash;</div>
       <div class="tr-wf" id="tr-wf" aria-live="polite"></div>
       <pre class="cf-code">ctx.tracing.enterSpan("do.counter.peek", async (span) =&gt; { span.setAttribute("counter.value", n) })</pre>

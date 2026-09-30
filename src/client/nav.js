@@ -549,8 +549,15 @@
   // rendering). Styling any ::-webkit-scrollbar part also opts macOS out of
   // overlay bars, so the 16px XP bar is persistent exactly like the widget was.
   function initScrollbars() {
-    // native bars are pure CSS now; the one JS job left is the scroll memory
-    var main = D.querySelector("body > .window > .content, body > .window > .body");
+    // native bars are pure CSS now; the one JS job left is the scroll memory.
+    // It has to watch the element that actually scrolls. Every page scrolls
+    // .window>.content except serendipity, whose .body holds a fixed sidebar
+    // and scrolls its inner .content (luna.css names the same exception for
+    // the scrollbar), so that one is asked for first. A selector list alone
+    // would not do: querySelector returns the first match in DOCUMENT order,
+    // which is the .body around it.
+    var main = D.querySelector("body > .window > .body > .content") ||
+      D.querySelector("body > .window > .content, body > .window > .body");
     if (!main) { var npw = D.querySelector("body > .np-window"); if (npw) main = npw.querySelector(".np-text"); }
     if (main) rememberScroll(main);
   }
@@ -747,24 +754,23 @@
       addEventListener("pageshow", sync);               // re-sync after a bfcache restore
     }
 
-    // maximize / restore the page window
+    // maximize / restore the page window. Every page and Worker renderer
+    // authors the page window's .max as a native <button> since #1039, so
+    // Enter, Space, focus and the role are the platform's and this only wires
+    // the click. The two .max left as spans (a /writing popover note, and cal
+    // on its standalone host, where nav.js never loads) are the ones nothing
+    // wires, so a span is skipped rather than dressed up as a button.
     var maxBtn = bar.querySelector(".max");
-    if (maxBtn instanceof HTMLElement && !maxBtn.dataset.axpWired) {
+    if (maxBtn instanceof HTMLButtonElement && !maxBtn.dataset.axpWired) {
       var maximizeButton = maxBtn;
       maximizeButton.dataset.axpWired = "1";
-      maximizeButton.setAttribute("role", "button");
-      maximizeButton.setAttribute("tabindex", "0");
-      maximizeButton.removeAttribute("aria-hidden");
       maximizeButton.setAttribute("aria-label", "Maximize");
       maximizeButton.title = "Maximize";
-      maximizeButton.style.cursor = "pointer";
-      var toggle = () => {
+      maximizeButton.addEventListener("click", () => {
         var on = win.classList.toggle("axp-max");
         maximizeButton.setAttribute("aria-label", on ? "Restore" : "Maximize");
         maximizeButton.title = on ? "Restore" : "Maximize";
-      };
-      maximizeButton.addEventListener("click", toggle);
-      maximizeButton.addEventListener("keydown", (/** @type {KeyboardEvent} */ e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      });
     }
   }
 

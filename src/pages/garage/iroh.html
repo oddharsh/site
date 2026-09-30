@@ -51,8 +51,6 @@ a { color: var(--blue-40); }
 
 footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
 
-/* the right gutter beside the 16px scrollbar; luna.css owns the rest of the window model */
-.window > .content { padding-right: 12px !important; }
   /* ── iroh: native NodeId generator + article ─────────────────── */
   .content h2 { font-family: var(--font-caption); font-size: 13pt; color: var(--blue-40);
     margin: 24px 0 4px; font-weight: bold; }
@@ -61,11 +59,6 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
   .idbox { border: 1px solid oklch(61% 0.061 253); border-top-color: oklch(47% 0.055 254); border-left-color: oklch(47% 0.055 254);
     background: oklch(99% 0.005 250); padding: 14px; margin: 14px 0 18px; }
   .idbox .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .idbtn { font: bold 9.5pt var(--font-ui); padding: 4px 14px; cursor: pointer; color: oklch(18% 0 0);
-    border: 1px solid oklch(50% 0.04 263); border-radius: 3px;
-    background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263));
-    box-shadow: inset 1px 1px 0 oklch(100% 0 0), inset -1px -1px 0 oklch(84% 0.02 90); }
-  .idbtn:active { box-shadow: inset 1px 1px 0 oklch(84% 0.02 90), inset -1px -1px 0 oklch(100% 0 0); }
   .idmode { font-size: 9pt; color: oklch(46% 0 0); }
   .idout { display: none; margin: 12px 0 0; }
   .idout.on { display: block; }
@@ -99,7 +92,7 @@ const nodeId = base32(pub);   // this string is the address</pre>
 
     <div class="idbox">
       <div class="row">
-        <button class="idbtn" id="gen" type="button">Mint a NodeId</button>
+        <button class="xp-button compact" id="gen" type="button">Mint a NodeId</button>
         <span class="idmode" id="genmode"></span>
       </div>
       <div class="idout" id="out">

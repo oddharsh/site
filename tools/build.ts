@@ -1388,8 +1388,7 @@ if (inlineProbe.includes("/* probe */") ||
   let html = await readFile(`${OUT}/public/index.html`, "utf8");
   const section = /(<section class="photos"[^>]*>)([\s\S]*?)(<\/section>)/;
   if (!section.test(html)) throw new Error("homepage bake: no <section class=\"photos\"> to fill — did the grid markup move?");
-  html = html.replace(section, (_m, open, _inner, close) =>
-    open.replace(/\sdata-ssr="[^"]*"/, "") + slots + close);
+  html = html.replace(section, (_m, open, _inner, close) => open + slots + close);
 
   // Newest photo wins, floored by the hand-written date already in the file, so
   // a copy-only edit can still bump it by hand.

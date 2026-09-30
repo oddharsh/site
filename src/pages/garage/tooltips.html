@@ -65,7 +65,7 @@ h2 {
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
 
 /* status pills (match garage/index.html styling) */
-.status {
+.badge {
   display: inline-block;
   font-family: var(--font-mono);
   font-size: 8.5pt;
@@ -77,10 +77,10 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   text-transform: uppercase;
   vertical-align: middle;
 }
-.status.review  { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
-.status.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
-.status.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
-.status.ref     { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.badge.review  { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+.badge.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
+.badge.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
+.badge.ref     { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
 
 /* rejection callout: small box explaining why a variant didn't ship */
 .rejection {
@@ -612,8 +612,6 @@ footer {
   padding-top: 12px;
   border-top: 1px solid oklch(86.67% 0.0294 259.59);
 }
-/* the right gutter beside the 16px scrollbar; luna.css owns the rest of the window model */
-.window > .content { padding-right: 12px !important; }
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -632,7 +630,7 @@ footer {
 
     <h1>Tooltip Experiments</h1>
     <p class="lede">
-      Variants I tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. The two photo variants below (Fuji LCD and XP-skinned camera readout) carry the same content shape under different chrome; the third (vinyl) targets tracks only. Status pills: <span class="status review">in review</span> marks a live candidate, <span class="status shipped">shipped</span> reached the homepage, <span class="status dead">rejected</span> got tried and lost, <span class="status ref">reference</span> sits here as a comparison point.
+      Variants I tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. The two photo variants below (Fuji LCD and XP-skinned camera readout) carry the same content shape under different chrome; the third (vinyl) targets tracks only. Status pills: <span class="badge review">in review</span> marks a live candidate, <span class="badge shipped">shipped</span> reached the homepage, <span class="badge dead">rejected</span> got tried and lost, <span class="badge ref">reference</span> sits here as a comparison point.
     </p>
     <p class="lede" style="margin-top: 4px;">
       The live candidates share one architecture, and it fits in ten lines once you take the guards out:
@@ -664,7 +662,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 
     <hr>
 
-    <h2>Fuji X-T LCD readout (photos) <span class="status review">in review</span></h2>
+    <h2>Fuji X-T LCD readout (photos) <span class="badge review">in review</span></h2>
     <p class="note">
       Hover any slot. The floating panel mimics the camera's image-review screen: histogram band on top, filename, exposure trio, recipe grid, footer. It follows the cursor. The slot itself stays untouched (no in-tooltip thumbnail; you can already see the larger slot image).
     </p>
@@ -706,7 +704,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 
     <hr>
 
-    <h2>XP-skinned camera readout (photos) <span class="status shipped">shipped</span></h2>
+    <h2>XP-skinned camera readout (photos) <span class="badge shipped">shipped</span></h2>
     <p class="note">
       <b>This is the one that shipped.</b> It's the live photo-grid tooltip on <a href="/">the homepage</a> (the <code>.cam</code> markup out of <code>buildContent()</code>). Same content as the Fuji LCD above (histogram, exposure trio, recipe grid, date) but reskinned in XP visual vocabulary: cream panel, blue gradient title strip, sunken bevel around the histogram, Tahoma body with Courier numerics. Keeps the camera-back density without arguing visually with the surrounding XP shell. The Fuji LCD lost on exactly that (too dark a panel against the Luna page).
     </p>
@@ -745,7 +743,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 
     <hr>
 
-    <h2>Vinyl sleeve at cursor (tracks) <span class="status shipped">shipped</span></h2>
+    <h2>Vinyl sleeve at cursor (tracks) <span class="badge shipped">shipped</span></h2>
     <p class="note">
       <b>The cover-at-cursor idea shipped</b> as the live tracklist tooltip on <a href="/">the homepage</a>, in a contact-sheet-style raised frame rather than this paper-mat <code>-6&deg;</code> tilt, but it makes the same move: hover a row, and the square album cover floats at the cursor like a sleeve you pull out to read the front. Same architecture as the photo tooltip; the row text stays put.
     </p>
@@ -774,7 +772,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 
     <hr>
 
-    <h2>Luna balloon (tracks) <span class="status review">in review</span></h2>
+    <h2>Luna balloon (tracks) <span class="badge review">in review</span></h2>
     <p class="note">
       The authentic XP <em>balloon</em>: the rounded, pale-yellow info bubble with a pointer tail (the "Your files are ready to burn" taskbar popup). Cream <code>#FFFFE1</code> infotip fill, 1px outline, a CSS-drawn tail aimed back at the cursor. This is the period-correct shape for the <em>simple</em> track/artist tooltips; the camera readout stays a Fuji LCD on purpose, because an XP machine never had a tooltip that rich, so calling it XP would be dishonest.
     </p>
@@ -795,7 +793,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 
     <hr>
 
-    <h2>Polaroid flip (photos) <span class="status dead">rejected</span></h2>
+    <h2>Polaroid flip (photos) <span class="badge dead">rejected</span></h2>
     <div class="rejection">
       <strong>Rejected:</strong> hover flips the slot 180&deg; via <code>transform: rotateY</code>, so you see the metadata <em>or</em> the photo, never both. The grid exists to show the photos, so a tooltip should add to what you can see, not replace it. The same fault killed the first Fuji-LCD overlay (v1, painted on top of the slot). I kept this one as a record.
     </div>
@@ -843,7 +841,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 
     <hr>
 
-    <h2>CSS Anchor Positioning <span class="status shipped">shipped</span></h2>
+    <h2>CSS Anchor Positioning <span class="badge shipped">shipped</span></h2>
     <p class="note">
       Element-anchored rather than cursor-anchored. <b>This shipped.</b> It's the <a href="/">homepage</a>'s <em>keyboard-focus</em> tooltip path: mouse users get the cursor-follower, but a keyboard user tabbing to a slot has no cursor to track, so on <code>:focus-visible</code> the JS sets <code>anchor-name</code> on the focused element and the popover tethers to it via <code>position-anchor</code> / <code>position-area</code> (gated on <code>CSS.supports</code>, a clean no-op where unsupported).
     </p>
