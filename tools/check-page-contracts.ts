@@ -73,9 +73,12 @@ for (const file of lweSpecFiles) {
     const demo = (await readFile(join(ROOT, "pipelines/lwe/specs", spec.demoJsFile), "utf8")).trimEnd();
     assert.ok(html.includes(`<script>\n${demo}\n</script>`),
       `pipelines/lwe/specs/${file}: generator omitted its external demo program`);
-    const published = await readFile(join(ROOT, "src/pages/lwe", `${spec.id}.html`), "utf8");
-    assert.equal(html, published, `src/pages/lwe/${spec.id}.html: run node pipelines/lwe/generate.mjs page ${spec.id}`);
   }
+  // Every LWE spec page is its generator's output byte for byte, the same pin
+  // Garage carries. It held for encoding alone until 2026-09-30, while all six
+  // spec pages already matched.
+  const published = await readFile(join(ROOT, "src/pages/lwe", `${spec.id}.html`), "utf8");
+  assert.equal(html, published, `src/pages/lwe/${spec.id}.html: run node pipelines/lwe/generate.mjs page ${spec.id}`);
 }
 
 const garageSpecFiles = (await readdir(join(ROOT, "pipelines/garage/specs")))
