@@ -3361,7 +3361,7 @@ deliberately pins no verdict, since pinning `reach` would pin the artifact.
 
 ### Observability: Workers Traces + the span vocabulary
 
-Three layers, deliberately not redundant:
+Four layers, deliberately not redundant:
 
 1. **Workers Logs** (`observability.enabled`) — one structured line per
    worker-owned request from `serveWorkerRequest`: path, method, status, ms,
@@ -3379,6 +3379,23 @@ Three layers, deliberately not redundant:
    invocation; `lib/trace.ts` hangs named spans off that so the children have a
    parent worth grouping by. This is the layer for "why was it slow" and, more
    often here, "which quiet thing has been failing".
+4. **Workers Issues** (`observability.issues`, 2026-09-30, open beta and free
+   during it): groups uncaught exceptions, failed invocations, 5xx responses
+   and `console.error` lines into one record per bug, with occurrence counts and
+   the logs and trace around each one. The dashboard's Issues page reads it, and
+   an Automation there can hand an issue to a Claude Code routine or a webhook.
+   Automations are dashboard state with no config form, so nothing here declares
+   them. `cloudflare.config.ts` records the failed first attempt (#950, #961) and
+   the probe that cleared it.
+
+   **It only sees what RAISES, and this codebase is built not to.** Gotcha 36's
+   point is that the catches here degrade on purpose: a refused Spotify embed
+   becomes a null track, a failed /lens probe becomes an unread door. None of
+   those is an exception, a 5xx or an error log line, so none becomes an
+   occurrence. What Issues catches unaided is the loud class (a thrown handler,
+   a 5xx route, a cron that throws). To put a swallowed failure in front of it,
+   pass the caught value to `console.error()` inside the catch, and weigh that
+   against the 200K events/day, since every error line is an event.
 
 Spans go through `lib/trace.ts` (`span(name, fn, attrs)`), never
 `tracing.enterSpan` directly. Names are `<surface>.<phase>`, lowercase and

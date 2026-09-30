@@ -171,7 +171,11 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
   out.assets = assetsOut;
   if (obs) {
     const traces = need(obs.traces, "observability.traces");
-    out.observability = { enabled: obs.enabled, traces: { enabled: traces.enabled, head_sampling_rate: traces.headSamplingRate } };
+    const o: Record<string, unknown> = { enabled: obs.enabled, traces: { enabled: traces.enabled, head_sampling_rate: traces.headSamplingRate } };
+    // Carried so a `-c` command reads the same observability the TS config
+    // deploys: Workers Issues, whose history is in cloudflare.config.ts.
+    if (obs.issues !== undefined) o.issues = { enabled: need(obs.issues, "observability.issues").enabled };
+    out.observability = o;
   }
   if (versionBinding) out.version_metadata = { binding: versionBinding };
   out.triggers = { crons: triggers.filter((t) => t.type === "scheduled").map((t) => t.schedule) };

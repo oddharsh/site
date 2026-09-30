@@ -332,17 +332,33 @@ const worker = defineWorker({
   // so a burst of scans consumes the budget far faster than the page views do.
   // If the banner ever says events are being sampled, lower this rather than
   // deleting spans. Same if a span ever shows up ON the critical path.
-  // NO `issues` block (real-time error grouping, workers-sdk #15684). #950
-  // turned it on 2026-09-26 and it blocked every ramp for the next five
-  // releases: `versions upload` accepts the field, then `versions deploy`
-  // PATCHes script-settings and the API refuses it, "observability.issues
-  // requires the real-time issue detection feature to be enabled [code:
-  // 100344]". The feature is gated per ACCOUNT, and this one does not have it.
-  // Re-add it only after the account does, and prove it with a branch build
-  // plus a ramp, since a dry run and an upload both pass while the deploy fails.
+  // `issues` is Workers Issues: real-time grouping of uncaught exceptions,
+  // failed invocations, 5xx responses and console.error lines into one record
+  // per bug, with the logs and trace around each occurrence. Open beta and free
+  // since 2026-09-30 (blog.cloudflare.com/real-time-issue-detection).
+  //
+  // THIS IS THE SECOND ATTEMPT. #950 turned it on 2026-09-26 and blocked every
+  // ramp for five releases, because `versions upload` accepted the field and
+  // then `versions deploy` PATCHed script-settings and the API refused it:
+  // "observability.issues requires the real-time issue detection feature to be
+  // enabled [code: 100344]". #961 took it back out. The gate was per ACCOUNT.
+  //
+  // Re-proven 2026-09-30 on a throwaway Worker (zz-issues-probe, deleted after)
+  // through every door that refused before, since a dry run and an upload both
+  // passed while the deploy failed: `wrangler deploy` (the production path since
+  // 2026-09-28) set `issues.enabled: true` and it read back from script-settings;
+  // a direct script-settings PATCH toggled it false and true, both success; and
+  // `versions upload` + `versions deploy` (the manual ramp) exited 0.
+  //
+  // What it costs on Workers Free is not documented. Issues is assembled from
+  // the logs and traces this block already emits, but read `bun run obs:check`
+  // for a few days after it ships and turn it off if events/day moves.
+  // Automations (Claude Code routine, webhook) are dashboard state with no
+  // config form, so none are declared here.
   observability: {
     enabled: true,
     traces: { enabled: true, headSamplingRate: 1 },
+    issues: { enabled: true },
   },
 
   env: {
