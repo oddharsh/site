@@ -133,14 +133,14 @@ question too. Three are, and each earns its place with a number.
 
 `bun audit` reads the **committed lockfile** against npm's advisory database in
 under half a second, 184 packages, clean on 2026-09-10. `bun run deps:audit`
-runs it, and it is a LOCAL command rather than a CI step, because CI already has
-this covered and better: the pinned `osv-scanner` step in `validate` scans three
-lockfiles across two ecosystems (`bun.lock`, `lens-reader/bun.lock`, zenc's
-`Cargo.lock`; the photo pipeline's `requirements.txt` left with the last Python
-on 2026-09-15) and is advisory for the
-reason an added `bun audit` step would have had to argue from scratch. Reach for
-`deps:audit` when you want the npm half answered in the time it takes to read
-the question, and read the CI step for the whole tree.
+runs it, and it is a LOCAL command. So is the wider scan: `osv-scanner` covers
+three lockfiles across two ecosystems (`bun.lock`, `lens-reader/bun.lock`,
+zenc's `Cargo.lock`; the photo pipeline's `requirements.txt` left with the last
+Python on 2026-09-15). It ran as an advisory step in `validate` until #1001
+moved it to the workstation on 2026-09-28, and there is no package script for
+it; the header of [`osv-scanner.toml`](../osv-scanner.toml) carries the
+command. Reach for `deps:audit` when you want the npm half answered in the time
+it takes to read the question, and run the osv scan for the whole tree.
 
 `bun why <package>` answers the floor questions the manifest comments argue in
 prose. The `comment:undici` block spends a paragraph on where undici comes from
