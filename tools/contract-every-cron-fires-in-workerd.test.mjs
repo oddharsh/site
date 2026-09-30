@@ -66,6 +66,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "./lib/jsonc.ts";
+import { underNode } from "./lib/harness-dispatch.ts";
 import { CENSUS_ROSTER } from "../src/worker/census.ts";
 import { NEIGHBORS } from "../src/worker/around.ts";
 import { citationsIn } from "../src/worker/webmention-send.ts";
@@ -278,7 +279,9 @@ const JOB_EVIDENCE = {
   },
 };
 
-test("every configured cron reaches its job, completes, and makes no request no job accounts for", async () => {
+// Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.
+const DISPATCH = "every configured cron reaches its job, completes, and makes no request no job accounts for";
+test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   const site = parseJsonc(await configText("cloudflare.config.ts"));
   const crons = site.triggers?.crons ?? [];
   assert.ok(crons.length >= 4, `read ${crons.length} crons from cloudflare.config.ts; the reader has stopped matching`);
@@ -389,4 +392,4 @@ test("every configured cron reaches its job, completes, and makes no request no 
     await server.close();
     rmSync(dir, { recursive: true, force: true });
   }
-});
+}));

@@ -39,6 +39,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "./lib/jsonc.ts";
+import { underNode } from "./lib/harness-dispatch.ts";
 import { STALE_INSTALL_REMEDY, installedSha, pinnedSha } from "./lib/wrangler-provenance.ts";
 import { CENSUS_ROSTER, isDuplicateInstance } from "../src/worker/census.ts";
 import {
@@ -114,7 +115,9 @@ function wranglerProvenance() {
 /** cronCensus's return, as the fixture serialises it.
  *  @typedef {{ ok: boolean, created: number, duplicate: number, failed: number, ymd: string }} Sweep */
 
-test("a same-day census re-run counts every host as a duplicate, measured on the pinned workerd", async () => {
+// Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.
+const DISPATCH = "a same-day census re-run counts every host as a duplicate, measured on the pinned workerd";
+test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   // Production's flags, for the reason the encodeBody probe gives: a binding
   // measured under different flags is a measurement of a different runtime.
   const site = parseJsonc(await configText("cloudflare.config.ts"));
@@ -183,7 +186,7 @@ test("a same-day census re-run counts every host as a duplicate, measured on the
     await server.close();
     rmSync(dir, { recursive: true, force: true });
   }
-});
+}));
 
 test("isDuplicateInstance refuses errors that are not a duplicate id", () => {
   // Host-side, for the shapes the Worker above cannot easily produce. The

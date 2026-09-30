@@ -34,6 +34,7 @@ import { fileURLToPath } from "node:url";
 import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "./lib/jsonc.ts";
+import { underNode } from "./lib/harness-dispatch.ts";
 import {
   configText, ROOT, assert, test } from "./contract-shared.ts";
 
@@ -85,7 +86,9 @@ async function decodedOnce(response) {
   return response.headers.get("content-encoding") === "br" ? brotliDecompressSync(bytes) : bytes;
 }
 
-test("encodeBody survives every rebuild shape the walker allows, measured in the pinned workerd", async () => {
+// Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.
+const DISPATCH = "encodeBody survives every rebuild shape the walker allows, measured in the pinned workerd";
+test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   const PAGE = Buffer.from("<p>encodeBody, carried or lost</p>\n".repeat(500));
   const BROTLI = brotliCompressSync(PAGE);
 
@@ -161,4 +164,4 @@ test("encodeBody survives every rebuild shape the walker allows, measured in the
     await server.close();
     rmSync(dir, { recursive: true, force: true });
   }
-});
+}));
