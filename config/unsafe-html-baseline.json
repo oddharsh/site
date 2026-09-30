@@ -1,5 +1,7 @@
 {
   "files": {
+    "cal/src/templates.ts": 4,
+    "serendipity/serendipity.ts": 3,
     "src/worker/around.ts": 3,
     "src/worker/bot.ts": 2,
     "src/worker/census.ts": 2,
@@ -18,5 +20,5 @@
     "src/worker/updates.ts": 3,
     "src/worker/whoareyou.ts": 2
   },
-  "total": 42
+  "total": 49
 }
