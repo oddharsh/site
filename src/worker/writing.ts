@@ -43,10 +43,6 @@ font:11px var(--font-ui);color:oklch(20% 0 0);padding:4px 8px 4px 2px;text-align
 .np-text{flex:0 1 auto;field-sizing:content;min-height:8em;max-height:calc(100dvh - 150px);width:100%;box-sizing:border-box;border:0;outline:none;resize:none;padding:9px 11px;background:oklch(100% 0 0);
 color:oklch(16% 0 0);font-family:var(--font-mono);font-size:13px;line-height:1.55;white-space:pre-wrap;overflow:auto;tab-size:4}
 .np-text.nowrap{white-space:pre;overflow:auto}
-.np-status{flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:2px 3px;font-size:11px;color:oklch(28% 0 0);
-background:oklch(93% 0.012 90);border-top:1px solid oklch(80% 0.02 90)}
-.np-status>span:not(.np-flex){padding:1px 8px;box-shadow:inset 1px 1px 0 oklch(78% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
-.np-flex{flex:1;box-shadow:none}
 .np-edited{color:oklch(46% 0 0)}
 /* a note opened as a popover — floats over the folder ("selecting menu"),
    clears the taskbar, and keeps the window chrome (drag/resize/scrollbar). */
@@ -81,9 +77,6 @@ background:oklch(93% 0.012 90);border-top:1px solid oklch(80% 0.02 90)}
 border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,4px 4px 0 rgba(0,30,160,.35)}
 .np-about-body{padding:12px 14px}.np-about-body p{margin:0 0 9px;line-height:1.45}
 .np-about-btns{display:flex;justify-content:flex-end}
-.np-btn{min-width:72px;padding:3px 12px;font:12px var(--font-ui);cursor:pointer;color:oklch(18% 0 0);border:1px solid oklch(50% 0.04 263);border-radius:3px;
-background:linear-gradient(180deg,oklch(99% 0 0),oklch(92% 0.005 263));box-shadow:inset 1px 1px 0 oklch(100% 0 0),inset -1px -1px 0 oklch(84% 0.02 90)}
-.np-btn:active{box-shadow:inset 1px 1px 0 oklch(84% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
 @media print{body.np-page{padding:0;background:none}#axp-taskbar,.np-titlebar,.np-menubar,.np-status{display:none}
 .np-window{border:0;box-shadow:none;height:auto;max-width:none}.np-text{font-size:11pt;color:#000}}
 `;
@@ -165,7 +158,7 @@ export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: 
     // which is the honest HTML of a plain-text note. A second visible or hidden
     // copy would double the page to give parsers what they already get here.
     "<textarea class=\"np-text" + (entry ? " e-content" : "") + "\" spellcheck=\"false\" aria-label=\"" + escAttr(filename) + "\">" + escHtml(text) + "</textarea>" +
-    "<div class=\"np-status\"><span class=\"np-pos\">Ln 1, Col 1</span><span class=\"np-wc\"></span><span class=\"np-flex\"></span>" +
+    "<div class=\"xp-statusbar panes np-status\"><span class=\"np-pos\">Ln 1, Col 1</span><span class=\"np-wc fill\"></span>" +
       (date ? "<span class=\"np-edited\">last changed " + stamp + "</span>" : "") + "</div></div>";
 }
 
@@ -264,7 +257,7 @@ export async function renderWritingIndex(env) {
     })) +
     "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one: it's a real text field you can edit, though it reverts to my canonical version on reload.</p>" +
       "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
-    "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +
+    "<div class=\"xp-statusbar panes np-status\"><span class=\"fill\">" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +
       "<span>" + fmtNum(entries.reduce(function (a, e) { return a + e.chars; }, 0)) + " characters</span></div></div>" +
     notes;
   return new Response(writingShell({ title: "aadhar.sh/writing", path: "/writing", desc: "Notes in flux: an editable Notepad of writing that reverts to canonical on reload.", body: body }),

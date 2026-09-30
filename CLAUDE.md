@@ -3256,8 +3256,10 @@ reports is what noticed this, and a hard threshold at +0.2% would have been
 widened rather than read.
 
 `config/unsafe-html-baseline.json` is the ledger, checked by
-`contract-html-escapes-by-construction`: 45 uses across 18 files, and the number
-may only go down. Migrating a caller to `html` means editing it down, which is
+`contract-html-escapes-by-construction`: 49 mentions across 19 files, and the
+number may only go down. It scans `src/worker`, `cal/src` and `serendipity`,
+since the two bundled modules import `unsafeHtml` across the project boundary;
+until 2026-09-30 it read `src/worker` alone and cal's two calls went uncounted. Migrating a caller to `html` means editing it down, which is
 what keeps it a record instead of a stale file. The remaining `escHtml` call
 sites are the same debt seen from the other side.
 

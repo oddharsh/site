@@ -22,11 +22,11 @@
 <style>*{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
-.window{--axp-maxw:820px;max-width:var(--axp-maxw)}
+.window{--axp-maxw:820px;--axp-gutter:20px;max-width:var(--axp-maxw)}
 .title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
 .content{padding:18px 20px 8px;background:#fffdf6;border-top:1px solid #8d9bb0}.content h1,.content h2,.content h3{font-family:var(--font-caption);color:#0831d9;line-height:1.25}.content h1{font-size:18pt;margin:0 0 7px}.content h2{font-size:13pt;margin:18px 0 5px}.content h3{font-size:11pt;margin:13px 0 4px}.content p{margin:0 0 12px}.content a{color:#153eab}.content code,.content pre{font-family:var(--font-mono)}
-.garage-intro{font-size:11pt;color:#444;max-width:70ch}.garage-meta{font-size:8.5pt;color:#69758a;border-top:1px solid #d8dfeb;margin-top:18px;padding-top:6px}.status{border-top:1px solid #d1d9e4;background:#f1f4f8;padding:4px 10px;display:flex;gap:8px;flex-wrap:wrap;font-size:8.5pt;color:#586579}.status span:after{content:"·";margin-left:8px;color:#9ca8b8}.status span:last-child:after{content:""}
-@media(max-width:620px){.content{padding:14px 12px 6px}}
+.garage-intro{font-size:11pt;color:#444;max-width:70ch}.garage-meta{font-size:8.5pt;color:#69758a;border-top:1px solid #d8dfeb;margin-top:18px;padding-top:6px}
+@media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
 .oct-table{border-collapse:collapse;width:100%;margin:0 0 14px;font-size:9.5pt}
 .oct-table th{text-align:left;background:#eaf0f9;border:1px solid #c3ced0;padding:4px 7px;font-family:var(--font-caption)}
@@ -35,8 +35,6 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
 .oct-table tr.mine td{background:#fffbe8}
 .oct-demo{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;margin:0 0 14px}
 .oct-demo-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,#eaf0f9,#dbe4f1);border-bottom:1px solid #b6c2d4;padding:5px 9px;font-family:var(--font-caption);font-weight:bold;font-size:9.5pt;color:#20406e}
-.oct-reveal{font:inherit;font-size:8.5pt;font-weight:normal;font-family:var(--font-ui);padding:3px 11px;cursor:pointer;background:linear-gradient(180deg,#fff,#e4e9f2);border:1px solid #8c9ab0;border-radius:3px;color:#243}
-.oct-reveal:disabled{color:#8b96a6;cursor:default}
 .oct-bars{list-style:none;margin:0;padding:10px 12px 4px}
 .oct-bars li{display:grid;grid-template-columns:11em 1fr auto;align-items:center;gap:8px;margin:0 0 7px;font-size:9pt}
 .oct-bars .n{font-family:var(--font-mono);color:#33455f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -90,7 +88,7 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
 <div class="oct-demo" id="oct-demo">
   <div class="oct-demo-head">
     <span>Client JavaScript per page load, gzip</span>
-    <button type="button" class="oct-reveal">reveal the baseline</button>
+    <button type="button" class="xp-button compact oct-reveal">reveal the baseline</button>
   </div>
   <ol class="oct-bars"></ol>
   <p class="oct-read"></p>
@@ -127,7 +125,7 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
   </div>
-  <div class="status"><span>garage</span><span>shipped</span><span>2026-07-31</span></div>
+  <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-07-31</span></div>
 </div>
 
 <script>

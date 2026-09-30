@@ -13,7 +13,7 @@ import { twinFor } from "./twins.ts";
 // which lunaPage links render-blocking, so it is already applied at first paint
 // and a copy here would paint nothing. What stays is what luna does not set:
 // body type, the margin reset, the page's measure (--axp-maxw, from lunaPage's
-// `width`) and the 12px right gutter beside the 16px scrollbar. Page-specific
+// `width`). Page-specific
 // rules stay inline per page after the call. The /*min*/ sentinel lets build.ts
 // minify this static literal on the wire; the readable source remains in git.
 export function xpChromeCss() {
@@ -28,7 +28,6 @@ export function xpChromeCss() {
   /* the page heading. Zero-specificity :where() so a page's own h1 rule, which
      comes after this in the same <style>, still wins for a deliberate size. */
   :where(.content) h1 { font-family: var(--font-caption); font-size: var(--text-h1); color: var(--text-heading); margin: 0 0 4px; }
-  .window>.content,.window>.body{padding-right:12px!important}
 	`;
 }
 

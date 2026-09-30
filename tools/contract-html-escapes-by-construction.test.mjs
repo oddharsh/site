@@ -89,14 +89,29 @@ test("the unescaped door is counted, and the count may only go down", async () =
     await readFile(new URL("config/unsafe-html-baseline.json", ROOT), "utf8"),
   );
   const { readdir } = await import("node:fs/promises");
-  const files = (await readdir(new URL("src/worker", ROOT), { recursive: true }))
-    .filter((rel) => rel.endsWith(".ts") && rel !== "lib/html.ts");
+  // Every tree that renders HTML through lib/html.ts: the Worker, and the two
+  // modules it bundles. cal/src and serendipity import unsafeHtml across the
+  // project boundary (#1029 added cal's), and a scan of src/worker alone let
+  // their uses in uncounted.
+  const ROOTS = ["src/worker", "cal/src", "serendipity"];
+  const files = [];
+  for (const dir of ROOTS) {
+    for (const rel of await readdir(new URL(dir, ROOT), { recursive: true })) {
+      const file = `${dir}/${rel}`;
+      if (/\.(ts|js)$/.test(rel) && !rel.split("/").includes("node_modules") && file !== "src/worker/lib/html.ts") files.push(file);
+    }
+  }
+  // A floor per root, so a directory that moves or empties reads as a broken
+  // scan rather than as a tree with no unsafe doors in it.
+  for (const dir of ROOTS) {
+    assert.ok(files.some((f) => f.startsWith(`${dir}/`)), `the unsafeHtml scan found no sources under ${dir}`);
+  }
 
   const actual = {};
-  for (const rel of files) {
-    const source = await readFile(new URL(`src/worker/${rel}`, ROOT), "utf8");
+  for (const file of files) {
+    const source = await readFile(new URL(file, ROOT), "utf8");
     const n = source.match(/\bunsafeHtml\b/g)?.length ?? 0;
-    if (n) actual[`src/worker/${rel}`] = n;
+    if (n) actual[file] = n;
   }
 
   const problems = [];

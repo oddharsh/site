@@ -39,14 +39,12 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 a { color: var(--blue-40); }
 ul { margin: 0 0 14px; padding-left: 20px; font-size: 10pt; color: oklch(40% 0 0); }
 li { margin: 3px 0; }
-.status { display: inline-block; font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; vertical-align: middle; }
-.status.idle { color: oklch(45% 0.05 250); border-color: oklch(62% 0.06 250); background: oklch(96% 0.01 250); }
+.badge { display: inline-block; font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; vertical-align: middle; }
+.badge.idle { color: oklch(45% 0.05 250); border-color: oklch(62% 0.06 250); background: oklch(96% 0.01 250); }
 
 /* demo */
 .dm-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; font-size: 9.5pt; color: oklch(42% 0 0); }
 .dm-controls input[type=range] { flex: 1; min-width: 160px; accent-color: #0855dd; }
-.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
-.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
 .measure-wrap { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: oklch(98% 0.005 250); padding: 0; overflow: hidden; }
 /* the SAME text rendered two ways at the chosen width, for visual A/B + validation */
 .col { padding: 10px 12px; }
@@ -73,8 +71,6 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 .i18n-out .ln { white-space: nowrap; overflow: hidden; font-size: 15px; line-height: 22px; }
 .i18n-out.naive .ln.over { background: oklch(93% 0.07 30); color: oklch(46% 0.19 29); border-radius: 2px; }
 
-/* the right gutter beside the 16px scrollbar; luna.css owns the rest of the window model */
-.window > .content { padding-right: 12px !important; }
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -83,7 +79,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 <div class="window">
   <div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span><span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/pretext: DOM-free text measurement</span><span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
-    <h1>pretext: text measurement off the DOM <span class="status idle">watching</span></h1>
+    <h1>pretext: text measurement off the DOM <span class="badge idle">watching</span></h1>
     <p class="lede">
       <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
       measures &amp; lays out multiline text using the <strong>canvas</strong> as
@@ -180,7 +176,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       crunches arithmetic over the prepared widths (prepared <em>once</em>, outside the
       loop). Run it:
     </p>
-    <p><button class="xp-btn" id="race">Race 2,000 re-layouts</button></p>
+    <p><button class="xp-button compact" id="race">Race 2,000 re-layouts</button></p>
     <div class="race-out" id="race-out">press the button</div>
 
     <h2>6 · Where it&apos;d actually help aadhar.sh</h2>

@@ -1388,8 +1388,7 @@ if (inlineProbe.includes("/* probe */") ||
   let html = await readFile(`${OUT}/public/index.html`, "utf8");
   const section = /(<section class="photos"[^>]*>)([\s\S]*?)(<\/section>)/;
   if (!section.test(html)) throw new Error("homepage bake: no <section class=\"photos\"> to fill — did the grid markup move?");
-  html = html.replace(section, (_m, open, _inner, close) =>
-    open.replace(/\sdata-ssr="[^"]*"/, "") + slots + close);
+  html = html.replace(section, (_m, open, _inner, close) => open + slots + close);
 
   // Newest photo wins, floored by the hand-written date already in the file, so
   // a copy-only edit can still bump it by hand.
@@ -1988,10 +1987,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
   // above is fixed; the next rename, or an edit to the sentinel, is not.
   //
   // It is PER ROOT since the walk became three roots, because a total cannot see
-  // one tree falling out: cal and Serendipity carry 2 and 1 of the 22, so losing
+  // one tree falling out: cal and Serendipity carry 3 and 1 of the 23, so losing
   // either leaves a sum that still clears any floor set below it. Each root's
   // number is what it carries today.
-  const FLOORS = { [`${OUT}/src/worker`]: 19, [`${OUT}/cal/src`]: 2, [`${OUT}/serendipity`]: 1 };
+  const FLOORS = { [`${OUT}/src/worker`]: 19, [`${OUT}/cal/src`]: 3, [`${OUT}/serendipity`]: 1 };
   for (const [root, floor] of Object.entries(FLOORS)) {
     const found = perRoot.get(root) ?? 0;
     if (found < floor) throw new Error(`worker CSS: found only ${found} /*min*/ literals under ${root.slice(OUT.length + 1)} (expected ${floor}+) — did the sentinel change, or did the walk stop reaching that tree?`);

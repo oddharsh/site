@@ -55,12 +55,7 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
 /* feature blocks (shared skin with /garage/cloudflare) */
 .cf-feat { border: 1px solid var(--frame); background: oklch(98% 0.004 250); padding: 4px 14px 14px; margin: 14px 0; }
 .cf-feat h2 { margin-top: 12px; font-size: 12pt; }
-.cf-btn { font: bold 10pt var(--font-ui); padding: 4px 14px; margin: 4px 0; cursor: pointer; color: var(--ink);
-  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); border: 1px solid oklch(50% 0.05 263);
-  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #aca899; }
-.cf-btn:hover { background: linear-gradient(180deg, oklch(99% 0.015 263), oklch(90% 0.03 263)); }
-.cf-btn:active { box-shadow: inset 1px 1px 0 #aca899, inset -1px -1px 0 #fff; }
-.cf-btn:disabled { opacity: .6; cursor: default; }
+.cf-feat > .xp-button { margin: 4px 0; }
 .cf-out { margin: 6px 0 0; }
 .cf-code { font: 9pt var(--font-mono); color: oklch(40% 0.04 145); background: oklch(95% 0.01 145); border: 1px solid oklch(80% 0.03 145);
   padding: 5px 8px; margin: 8px 0 0; overflow-x: auto; white-space: pre; }
@@ -77,8 +72,6 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
 
 footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
 
-/* the right gutter beside the 16px scrollbar; luna.css owns the rest of the window model */
-.window > .content { padding-right: 12px !important; }
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -215,7 +208,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
         the worker. The homepage comes back <b>no-cache</b>: the worker renders it on every
         request (it re-randomizes the photo grid and reads the visit counter), so it can never be
         an edge-cached file. Nothing here is mocked; it is your browser hitting production.</p>
-      <button class="cf-btn" id="probe-btn" type="button">probe the routing</button>
+      <button class="xp-button compact" id="probe-btn" type="button">probe the routing</button>
       <div class="cf-out" id="probe-out"></div>
     </div>
 

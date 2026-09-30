@@ -73,7 +73,7 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
   @keyframes xp-fill { from { width: 0; } to { width: 100%; } }
 }
 @supports not (animation-timeline: scroll()) { .xp-progress-fill { width: 60%; } }
-.xp-btn { display: inline-block; margin-top: 12px; font-family: var(--font-ui); font-size: 9pt; padding: 3px 16px; background: linear-gradient(180deg, oklch(99% 0 0), oklch(90% 0.01 250)); border: 1px solid oklch(50% 0.02 250); border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0); box-shadow: 1px 1px 0 oklch(40% 0.03 250); cursor: not-allowed; color: oklch(40% 0 0); }
+.xp-dialog .xp-button { margin-top: 12px; }
 
 /* ── prototype 2: windows that maximize-open as they enter the viewport ── */
 .maxi-stack { display: grid; gap: 12px; margin-top: 4px; }
@@ -220,8 +220,6 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
 footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color: oklch(44.95% 0 0); margin: 18px 0 0; padding-top: 14px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
 /* spacer so there's room to actually scroll and watch the copy bar fill */
 .scroll-room { height: 60vh; display: flex; align-items: center; justify-content: center; color: oklch(60% 0 0); font-size: 9pt; font-style: italic; }
-/* the right gutter beside the 16px scrollbar; luna.css owns the rest of the window model */
-.window > .content { padding-right: 12px !important; }
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -264,7 +262,7 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
           <p class="xp-meta">Copying <strong>Tuthill_911K.jpg</strong> to <strong>/garage</strong></p>
           <p class="xp-meta">Time remaining: depends how fast you scroll</p>
           <div class="xp-progress"><div class="xp-progress-fill"></div></div>
-          <span class="xp-btn">Cancel</span>
+          <button type="button" class="xp-button" disabled>Cancel</button>
         </div>
       </div>
       <p class="how">
