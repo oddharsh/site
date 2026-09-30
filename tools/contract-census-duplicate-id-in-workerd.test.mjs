@@ -47,7 +47,7 @@ import {
 
 const workerSource = (census) => `
 import { WorkflowEntrypoint } from "cloudflare:workers";
-import { CENSUS_ROSTER, censusInstanceId, cronCensus, isDuplicateInstance } from ${JSON.stringify(census)};
+import { CENSUS_ROSTER, CENSUS_RUN_UPSERT, censusInstanceId, cronCensus, isDuplicateInstance } from ${JSON.stringify(census)};
 
 export class NoopCensus extends WorkflowEntrypoint {
   async run() { return null; }
@@ -79,6 +79,20 @@ export default {
       return Response.json({ id, first, second, invalid });
     }
     if (path === "/sweep") return Response.json(await cronCensus(env));
+    // The sweep's record, read back out of real D1 (census.ts, "WHY THE SWEEP
+    // KEEPS A RECORD OF ITSELF").
+    if (path === "/runs") {
+      const { results } = await env.RESTORE_DB.prepare(
+        "SELECT ymd, host, stage, outcome, detail FROM lens_census_runs ORDER BY host").all();
+      return Response.json(results);
+    }
+    // What a finished scan step writes, for the first roster host.
+    if (path === "/scan-written") {
+      const ymd = new URL(request.url).searchParams.get("ymd");
+      await env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT)
+        .bind(ymd, CENSUS_ROSTER[0].label, Date.now(), "scan", "written", null).run();
+      return Response.json({ ok: true });
+    }
     return new Response("unknown", { status: 404 });
   },
 };
@@ -175,6 +189,17 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
       { created: firstSweep.created, duplicate: firstSweep.duplicate, failed: firstSweep.failed },
       { created: CENSUS_ROSTER.length, duplicate: 0, failed: 0 },
       `the first sweep of the day should create one instance per host: ${JSON.stringify(firstSweep)}`);
+
+    // The record, in real SQLite: one `dispatched` row per host.
+    const dispatched = /** @type {{ ymd: string, host: string, stage: string, outcome: string, detail: string | null }[]} */ (await call("/runs"));
+    assert.deepEqual(dispatched.map((r) => [r.ymd, r.stage, r.outcome]),
+      CENSUS_ROSTER.map(() => [firstSweep.ymd, "dispatch", "dispatched"]),
+      `the first sweep's record is wrong: ${JSON.stringify(dispatched)}`);
+
+    // One host's instance finishes before the re-run. Its `written` has to
+    // survive the re-run's dispatch rows, which is the WHERE clause on
+    // CENSUS_RUN_UPSERT_DISPATCH, checked where SQLite actually parses it.
+    await call(`/scan-written?ymd=${firstSweep.ymd}`);
     const secondSweep = /** @type {Sweep} */ (await call("/sweep"));
     assert.equal(secondSweep.ymd, firstSweep.ymd,
       "the two sweeps straddled midnight UTC, so the second one is not a same-day re-run; run it again");
@@ -182,6 +207,13 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
       { created: secondSweep.created, duplicate: secondSweep.duplicate, failed: secondSweep.failed },
       { created: 0, duplicate: CENSUS_ROSTER.length, failed: 0 },
       `a same-day re-run should count every host as a duplicate: ${JSON.stringify(secondSweep)}`);
+    const after = /** @type {{ host: string, stage: string, outcome: string }[]} */ (await call("/runs"));
+    const byHost = new Map(after.map((r) => [r.host, r]));
+    assert.equal(byHost.get(CENSUS_ROSTER[0].label)?.outcome, "written",
+      "a dispatch row overwrote a finished scan, so a written host would read as unfinished");
+    for (const s of CENSUS_ROSTER.slice(1)) {
+      assert.equal(byHost.get(s.label)?.outcome, "duplicate", `${s.label} after the re-run`);
+    }
   } finally {
     await server.close();
     rmSync(dir, { recursive: true, force: true });
