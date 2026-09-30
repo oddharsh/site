@@ -500,18 +500,31 @@
     try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return String(u || ""); }
   }
 
-  function vsColumn(s) {
+  // `source` is the payload's discovery.left or .right: live, cached, shared,
+  // deferred, refused or none. A side whose discovery did not run carries null
+  // doors, surfaces and tier, and printing those as "0" or "no machine surfaces
+  // published" states facts about a site nobody asked. An older payload has no
+  // `source` and a numeric `doors`, so it renders exactly as it always did.
+  function vsColumn(s, source) {
     var host = vsHost(s.finalUrl || s.url);
     var levelKind = s.level >= 5 ? "ok" : s.level >= 3 ? "" : "warn";
+    var deferred = source === "deferred" || !!(s.phases && s.phases.discoveryDeferred);
+    var measured = !deferred && source !== "none" && !(s.phases && s.phases.discovery === false);
     var pub = VS_SURFACES.filter((x) => { return s.surfaces && s.surfaces[x[0]]; })
       .map((x) => { return '<span class="lx-tag">' + esc(x[1]) + "</span>"; }).join("");
+    var surfaces = pub
+      || (measured && s.surfaces
+        ? '<span class="lx-none">no machine surfaces published</span>'
+        : '<span class="lx-none">not measured in this comparison' + (deferred ? ", deferred to stay under the subrequest cap; compare again to fill it in" : "") + "</span>");
+    var refused = source === "refused" || !!(s.phases && s.phases.subrequestCap);
+    if (refused) surfaces += '<div class="lx-cap" style="margin-top:4px">The subrequest cap refused some of this side\'s probes, so those checks read as unknown rather than absent.</div>';
     var cost = s.cost
       ? "~" + fmtTok(s.cost.tokens) + " " + term("token", "tokens") + " &middot; " + fmtUsd(s.cost.usdPerRead) + "/read"
       : "no cost model (non-HTML)";
     var rows = [
       ["response", esc((s.status == null ? "?" : s.status) + " " + httpText(s.status || 0))],
-      ["terms", esc(s.tier || "unknown")],
-      ["agent doors", esc(String(s.doors || 0))],
+      ["terms", esc(measured ? s.tier || "unknown" : "not measured")],
+      ["agent doors", esc(measured && s.doors != null ? String(s.doors) : "not measured")],
       ["one model read", cost],
       ["payload", esc(bytes(s.bytes))],
       ["words", esc(String(s.wordCount || 0))],
@@ -520,7 +533,7 @@
       '<div class="lx-vs-body"><div class="lx-vs-score"><b>' + (s.readiness == null ? "?" : esc(s.readiness)) + "<span>/100</span></b>" +
       badge("Level " + (s.level == null ? "?" : s.level), levelKind, s.levelNote || "") + "<span>" + esc(s.levelName || "") + "</span></div>" +
       '<table class="lx-kv">' + rows + "</table>" +
-      '<div class="lx-tags" style="margin-top:6px">' + (pub || '<span class="lx-none">no machine surfaces published</span>') + "</div></div></div>";
+      '<div class="lx-tags" style="margin-top:6px">' + surfaces + "</div></div></div>";
   }
 
   function renderVs(payload) {
@@ -529,6 +542,7 @@
       return;
     }
     var L = payload.left, R = payload.right;
+    var src = payload.discovery || {};
     var headline = "";
     if (L && R && L.readiness != null && R.readiness != null) {
       var win = L.readiness >= R.readiness ? L : R;
@@ -544,7 +558,7 @@
         "</div>";
     }
     vsSection.innerHTML = '<div class="lx-vs-note">Two sites, one rubric, same evidence rules. Every number here links back to a full scan.</div>' +
-      '<div class="lx-vs-grid">' + vsColumn(L || {}) + vsColumn(R || {}) + "</div>" + headline;
+      '<div class="lx-vs-grid">' + vsColumn(L || {}, src.left) + vsColumn(R || {}, src.right) + "</div>" + headline;
   }
 
   function setVsChrome(on) {
@@ -1065,6 +1079,14 @@
     checks = checks || {};
     return !!(m && m.checks.some((n) => { return checks[n] && checks[n].status === "pass"; }));
   }
+  // A probe that never answered (a 5xx, a timeout, the subrequest cap) grades its
+  // check "unknown". Reading that as "missing" would claim the surface is absent
+  // when nobody got to look, so the Delta path says so instead.
+  function cfUnknown(key, checks) {
+    var m = CF_MAP[key];
+    checks = checks || {};
+    return !!(m && !cfObserved(key, checks) && m.checks.some((n) => { return checks[n] && checks[n].status === "unknown"; }));
+  }
 
   function deltaView() {
     var s = data.structured || {};
@@ -1091,8 +1113,8 @@
     var cf = [
       { key: "markdown", label: "Clean machine text", stage: "Read", observed: canRead, signal: cfObserved("markdown", checks), detail: "Serve a deliberate text/markdown representation from the same URL." },
       { key: "semantic", label: "Entity schema", stage: "Understand", observed: !!semantic, detail: "Publish stable entities and properties a parser can validate." },
-      { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), detail: "Describe callable operations, their parameters, and side effects. In 2026 this contract is landing as MCP servers and agent CLIs, not the OpenAPI files that mostly never shipped." },
-      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
+      { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), unknown: cfUnknown("contract", checks), detail: "Describe callable operations, their parameters, and side effects. In 2026 this contract is landing as MCP servers and agent CLIs, not the OpenAPI files that mostly never shipped." },
+      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), unknown: cfUnknown("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
       { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance. No probe measures this surface yet, so it is always shown as a projection, never as observed." },
     ];
     var controls = '<div class="lx-cf-grid">' + cf.map((x) => {
@@ -1127,6 +1149,9 @@
       } else if (counterfactuals[x.key]) {
         state = { text: "counterfactual", kind: "warn" };
         copy = x.detail;
+      } else if (x.unknown) {
+        state = { text: "unknown", kind: "warn" };
+        copy = "The probe for this surface did not answer, so Lens cannot say whether it is published.";
       } else {
         state = { text: "missing", kind: "off" };
         copy = x.key === "markdown"
@@ -1138,8 +1163,8 @@
       if (open) { if (satisfied) reached = x.stage; else { open = false; stopStage = x.stage; } }
       return '<div class="lx-stage"><div class="lx-stage-name">' + esc(x.stage) + '</div><div class="lx-stage-copy">' + badge(state.text, state.kind) + esc(copy) + '</div></div>';
     }).join("");
-    var intro = '<div class="lx-delta-intro"><b>Counterfactual lab.</b> Turn on one piece of web infrastructure and watch the route change. The stages compound: a machine that cannot read this page never gets as far as understanding it, so the route stops where the chain breaks. Green means Lens observed a signal. Amber means this page is simulating the addition locally.</div>';
-    var proof = '<div class="lx-proof"><b>Current evidence:</b> ' + esc((d.llmsTxt && d.llmsTxt.ok ? "llms.txt is present. " : "No llms.txt observed. ") + (action ? "An action surface answered. " : "No action surface answered. ") + (semantic ? "Structured data exists." : "Structured entity data is absent.")) + '</div>';
+    var intro = '<div class="lx-delta-intro"><b>Counterfactual lab.</b> Turn on one piece of web infrastructure and watch the route change. The stages compound: a machine that cannot read this page never gets as far as understanding it, so the route stops where the chain breaks. Green means Lens observed a signal. Amber means this page is simulating the addition locally, or that a probe never answered.</div>';
+    var proof = '<div class="lx-proof"><b>Current evidence:</b> ' + esc((d.llmsTxt && d.llmsTxt.ok ? "llms.txt is present. " : d.llmsTxt && d.llmsTxt.error ? "The llms.txt probe did not answer. " : "No llms.txt observed. ") + (action ? "An action surface answered. " : "No action surface answered. ") + (semantic ? "Structured data exists." : "Structured entity data is absent.")) + '</div>';
     var deltaText = cf.filter((x) => { return counterfactuals[x.key]; }).map((x) => { return "+ " + x.stage.toLowerCase() + " · " + x.label; }).join("\n");
 
     // The wire group: transport counterfactuals that sit under the same task path.
@@ -2044,10 +2069,34 @@
       "robots.txt is a request. Edges like Cloudflare can make it a wall.",
       enfInner);
 
-    // TDMRep
-    out += section("TDM Reservation Protocol", { text: t.tdmrep && t.tdmrep.present ? "found" : "absent", kind: t.tdmrep && t.tdmrep.present ? "ok" : "off" },
+    // TDMRep. A manifest can grant as well as reserve (tdm-reservation 0 says
+    // rights are NOT reserved), so the badge carries lensTdmrep's verdict for
+    // this path rather than the file's presence. The raw rules stay below it.
+    var tdm = t.tdmrep || {};
+    var tdmBadge, tdmInner;
+    if (!tdm.present) {
+      tdmBadge = { text: "absent", kind: "off" };
+      tdmInner = '<div class="lx-none">not present' + (tdm.invalid ? " (something answered at the path, but " + esc(tdm.invalid) + ")" : "") + "</div>";
+    } else {
+      var where = tdm.location ? ", by the rule at " + esc(tdm.location) : "";
+      if (tdm.reserved === false) {
+        tdmBadge = { text: "not reserved", kind: "ok" };
+        tdmInner = '<div class="lx-fallback-note">TDM rights not reserved (mining permitted)' + where + ".</div>";
+      } else if (tdm.reserved === true) {
+        var pol = tdm.policy && /^https?:\/\//i.test(tdm.policy)
+          ? ', with a <a href="' + esc(tdm.policy) + '" target="_blank" rel="noopener noreferrer">TDM policy</a>'
+          : tdm.policy ? ", with a TDM policy: " + esc(tdm.policy) : "";
+        tdmBadge = { text: "reserved", kind: "warn" };
+        tdmInner = '<div class="lx-fallback-note">TDM rights reserved for this path' + where + pol + ".</div>";
+      } else {
+        tdmBadge = { text: "unset", kind: "off" };
+        tdmInner = '<div class="lx-fallback-note">A manifest is published, with no rule for this path, so TDM reservation is unset.</div>';
+      }
+      tdmInner += pre(tdm.body, true);
+    }
+    out += section("TDM Reservation Protocol", tdmBadge,
       "W3C community spec: the EU text-and-data-mining opt-out, at /.well-known/tdmrep.json.",
-      t.tdmrep && t.tdmrep.present ? pre(t.tdmrep.body, true) : '<div class="lx-none">not present</div>');
+      tdmInner);
 
     return out;
   }
@@ -2064,8 +2113,8 @@
     }
     var mcp = ag.mcp || {};
     row("/mcp", "MCP endpoint (2024) — tools for models, at run time",
-      mcp.verdict === "yes" ? "found" : mcp.verdict === "likely" ? "likely" : mcp.verdict === "maybe" ? "maybe" : "absent",
-      mcp.verdict === "yes" || mcp.verdict === "likely" ? "ok" : mcp.verdict === "maybe" ? "warn" : "off", mcp.detail);
+      mcp.verdict === "yes" ? "found" : mcp.verdict === "likely" ? "likely" : mcp.verdict === "maybe" ? "maybe" : mcp.verdict === "unknown" ? "no answer" : "absent",
+      mcp.verdict === "yes" || mcp.verdict === "likely" ? "ok" : mcp.verdict === "maybe" || mcp.verdict === "unknown" ? "warn" : "off", mcp.detail);
     var nl = ag.nlweb || {};
     // Four verdicts, four readings. This row printed "absent" for everything
     // that was not "maybe", which folded an auth-gated door AND a probe that
@@ -2084,17 +2133,17 @@
       wm.kind === "bridge" ? "an injected loader proxies this origin's MCP server into the page — " + wm.marker : wm.marker);
     var card = ag.agentCard || {};
     row(".well-known/agent-card.json", "A2A agent card — who this agent is, what it offers",
-      card.present ? "found" : "absent", card.present ? "ok" : "off", card.detail || card.note);
+      card.present ? "found" : card.unknown ? "no answer" : "absent", card.present ? "ok" : card.unknown ? "warn" : "off", card.detail || card.note);
     var mn = ag.mdNegotiation || {};
     row("Accept: text/markdown", "content negotiation — the same URL, re-served for machines",
-      mn.supported ? "supported" : "no", mn.supported ? "ok" : "off",
+      mn.supported ? "supported" : mn.error ? "no answer" : "no", mn.supported ? "ok" : mn.error ? "warn" : "off",
       mn.supported ? "content-type flips to " + mn.contentType : (mn.note || (mn.contentType ? "stays " + mn.contentType : "")));
     var oa = ag.openapi || {};
     row("/openapi.json", "OpenAPI — the build-time API contract",
-      oa.present ? "found" : "absent", oa.present ? "ok" : "off", oa.detail || oa.note);
+      oa.present ? "found" : oa.unknown ? "no answer" : "absent", oa.present ? "ok" : oa.unknown ? "warn" : "off", oa.detail || oa.note);
     var cat = ag.apiCatalog || {};
     row(".well-known/api-catalog", "RFC 9264 linkset — a catalog of the site's APIs",
-      cat.present ? "found" : "absent", cat.present ? "ok" : "off", cat.detail || cat.note);
+      cat.present ? "found" : cat.unknown ? "no answer" : "absent", cat.present ? "ok" : cat.unknown ? "warn" : "off", cat.detail || cat.note);
     if (ag.aiPlugin && ag.aiPlugin.present) {
       row(".well-known/ai-plugin.json", "OpenAI plugin manifest (2023, retired) — the fossil record", "found", "ok", ag.aiPlugin.detail);
     }
