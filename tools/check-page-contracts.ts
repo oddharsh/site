@@ -85,7 +85,12 @@ assert.ok(garageSpecFiles.length > 0, "discover Garage specs before checking the
 for (const file of garageSpecFiles) {
   const spec = JSON.parse(await readFile(join(ROOT, "pipelines/garage/specs", file), "utf8"));
   assert.equal(spec.id, file.slice(0, -5), `${file}: spec id must match its filename`);
-  renderGaragePage(spec); // validates every spec, including a newly added file
+  const html = renderGaragePage(spec); // validates every spec, including a newly added file
+  // Every Garage spec page is the generator's output byte for byte, so a hand
+  // edit to the page (octane carried its own favicon and --axp-maxw for two
+  // months) fails here instead of being dropped by the next regeneration.
+  const published = await readFile(join(ROOT, "src/pages/garage", `${spec.id}.html`), "utf8");
+  assert.equal(html, published, `src/pages/garage/${spec.id}.html: run node pipelines/garage/generate.mjs page ${spec.id}`);
 }
 const garageFixture = {
   id: "contract-fixture",
