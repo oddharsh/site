@@ -352,6 +352,15 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
      only 12px, so no page has to pad around the grip on its own.
    Colours are the Luna face and the same #7f9db9 field edge .xp-input uses. */
 .window>.content,.window>.body{border:6px solid #ece9d8;background-clip:padding-box;outline:1px solid #7f9db9;outline-offset:-6px}
+/* THE RIGHT GUTTER beside the 16px scrollbar, 12px unless a page declares its
+   own. It lived as a copy on 16 garage pages, pixel-peeper, lwe-base.css,
+   xpChromeCss and cal, each `!important` so it beat the page's padding
+   shorthand, which is why this one is too. The pages that never had it keep
+   the right padding they had by naming it in --axp-gutter (the generated
+   garage pages 20px, gpt56, dotfiles, /access and the homepage 16px), the way
+   every page names its measure in --axp-maxw. serendipity scrolls
+   .window>.body and has no gutter, so the rule names .content alone. */
+.window>.content{padding-right:var(--axp-gutter,12px) !important}
 /* an author outline beats the UA focus ring by origin, so hand keyboard focus a
    real one back (Firefox lets you tab to a scrollable region). */
 .window>.content:focus-visible,.window>.body:focus-visible{outline:2px solid #316ac5}
