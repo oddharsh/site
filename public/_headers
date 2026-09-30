@@ -245,6 +245,7 @@
   Link: </.well-known/mcp/server-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site MCP server card"
   Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
   Link: </.well-known/ard.json>; rel="ard"; type="application/json"; title="ARD manifest (also at /.well-known/ai-catalog.json)"
+  Link: </webmention>; rel="webmention"
   Vary: Accept
 
 # discovery files: long cache. these all change rarely (sitemap when

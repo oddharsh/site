@@ -90,6 +90,12 @@ const HOMEPAGE_DISCOVERY_LINKS = [
   '</.well-known/mcp/server-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site MCP server card"',
   '</.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"',
   '</.well-known/ard.json>; rel="ard"; type="application/json"; title="ARD manifest (also at /.well-known/ai-catalog.json)"',
+  // Webmention discovery (W3C Webmention 3.1.2): a sender fetches the page it
+  // linked and follows this rel. /garage/* and /lwe/* carry it from _headers and
+  // /writing from its renderer, so the homepage was the one page a sender could
+  // reach without finding the endpoint. It's header only, because the body ships
+  // as a q11 twin and a dcz delta, and a <link> in <head> would re-mint both.
+  '</webmention>; rel="webmention"',
 ];
 
 export const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
