@@ -37,7 +37,7 @@ import { installTracing, span } from "./lib/trace.ts";
 import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
 import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
-import { handleReading } from "./reading.ts";
+import { handleReading, handleReadingList, LIST_URL as READING_LIST_URL } from "./reading.ts";
 import { cronEnrichReadingHn } from "./reading-hn.ts";
 import { handleRun } from "./run.ts";
 import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.ts";
@@ -429,6 +429,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/security", routeSecurity],
   ["/security.json", handleSecurityJson],
   ["/reading", handleReading],
+  [READING_LIST_URL, handleReadingList],
   ["/updates", routeUpdates],
   ["/updates.json", handleUpdatesJson],
   ["/restore", routeRestore],
@@ -727,7 +728,7 @@ const PREFIX = [
   },
   {
     label: "/a/<asset>",
-    match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg|dict)$/.test(pathname),
+    match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg|json|dict)$/.test(pathname),
     handle: routeShellAsset,
   },
 ];
@@ -847,7 +848,19 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
 // These two applications remain separate source modules, but the public route
 // boundary is now owned by this Worker. Keeping the delegation here means the
 // app-specific cache, auth, and persistence policies stay local to each module.
-function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+//
+// The one exception is the booking page itself. GET /coffee is a BUILT document
+// since 2026-09-30 (build.ts step 5b bakes cal's bookingPage), served here with
+// the page policy every generated document takes, and its slot list arrives
+// from /coffee/slots.html, which cal still renders per request. Where no bake is
+// staged (bun run dev serves the unbuilt tree) cal renders the same shell.
+async function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  if ((request.method === "GET" || request.method === "HEAD") && new URL(request.url).pathname === "/coffee") {
+    const headers = { "cache-control": PAGE_CACHE_CONTROL, link: SHELL_PRELOAD_LINK, "referrer-policy": "strict-origin-when-cross-origin" };
+    const response = await serveStaticPage(request, env, { headers });
+    if (response.status !== 404) return response;
+    try { await response.body?.cancel(); } catch {}
+  }
   return calWorker.fetch(request, env, ctx);
 }
 

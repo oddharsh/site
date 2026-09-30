@@ -1,10 +1,14 @@
 // reading.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, signedFetch } from "./lib/botauth.ts";
-import { cachedRender, deleteSWRKV, edgeKey, swrKV } from "./lib/cache.ts";
+import { serveStaticPage } from "./lib/assets.ts";
+import { cachedRender, deleteSWRKV, edgeKey, swrKV, withWeakEtag } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
-import { unsafeHtml } from "./lib/html.ts";
+import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
+import { html, unsafeHtml, type Html } from "./lib/html.ts";
 import { esc } from "./lib/http.ts";
+import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
 
 // ── /reading — a native, Luna-styled mirror of my Curius reading list ──
@@ -100,33 +104,99 @@ export async function getCuriusCached(request, env, ctx) {
   });
 }
 
-// shared-content render (no per-visitor bytes): was no-store out of conservatism,
-// now short public caching + the caches.default layer (owner call, 2026-07-01).
-// edge TTL = the max-age below (300s). a valid ?bust=SECRET evicts the edge entry
-// too, so the existing bust workflow still forces a full rebuild end to end.
-export async function handleReading(request, env, ctx) {
-  const url = new URL(request.url);
-  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    try { await caches.default.delete(edgeKey(url.origin, "/reading", env)); } catch {}
-  }
-  return cachedRender(request, ctx, () => renderReading(request, env, ctx), "/reading", env);
-}
+// /reading is a BUILT document since 2026-09-29: build.ts step 5b bakes
+// renderReadingPage() once, so the lede, the chrome and the 2 KB of CSS ship as
+// a q11 twin with a dcz delta, an ETag and hashed CSP. The list (its count bar,
+// the rows, and the footer under them) is the island at LIST_URL, rendered from
+// the Curius SWR payload and edge-cached for five minutes, the same cache the
+// whole page carried before. The footer rides in the island because nothing may
+// sit below an island whose height the list decides.
+//
+// It sat on config/per-request-pages.json because the items are most of the
+// page's bytes. That priced only the first visit: a returning reader already
+// holds the shell, so what they fetch shrinks to the dictionary delta plus the
+// list, and the list is the one part that could have changed.
+export const LIST_URL = "/reading/list.html";
 
-async function renderReading(request, env, ctx) {
-  // The HN map is joined here rather than written into the Curius payload, so
-  // the 6-hourly Curius rebuild and the :07/:37 HN job never overwrite each
-  // other. A missing or unreadable map renders the page without the badges.
+const LIST_CACHE = "public, max-age=300";
+
+// A screenful of rows for the placeholder, and the placeholder model the SAME
+// renderer draws them from (lib/island.ts, rule 1). The live list is ~150 rows
+// and does not need to match: nothing visible follows the island.
+const PENDING_ROWS = 6;
+const PENDING_MODEL = {
+  pending: true,
+  fetchedAt: null,
+  items: Array.from({ length: PENDING_ROWS }, () => ({ title: "…", link: "", domain: "…", snippet: "", highlights: [], created: null, favorite: false })),
+};
+
+// The HN map is joined here rather than written into the Curius payload, so the
+// 6-hourly Curius rebuild and the :07/:37 HN job never overwrite each other. A
+// missing or unreadable map renders the list without the badges. `ok` says
+// whether this read is worth caching: an empty list is a Curius failure with
+// nothing stale to fall back on, and it gets a minute rather than five.
+async function readReadingList(request, env, ctx): Promise<{ response: Response; ok: boolean }> {
   const [payload, hn] = await Promise.all([
     getCuriusCached(request, env, ctx).catch(() => ({ items: [], fetchedAt: new Date().toISOString() })),
-    (env?.RN_KV ? env.RN_KV.get(HN_MAP_KEY, { type: "json", cacheTtl: 900 }) : null).then(readHnMap, () => ({})),
+    // Promise.resolve, because with no store bound the ternary is a bare null
+    // and `.then` on it threw; the per-request page carried the same bug.
+    Promise.resolve(env?.RN_KV ? env.RN_KV.get(HN_MAP_KEY, { type: "json", cacheTtl: 900 }) : null).then(readHnMap, () => ({})),
   ]);
-  return renderReadingPage(payload, hn);
+  const ok = Array.isArray(payload?.items) && payload.items.length > 0;
+  return { ok, response: islandResponse(renderReadingList(payload, hn), { "cache-control": ok ? LIST_CACHE : "public, max-age=60" }) };
 }
 
-export function renderReadingPage(payload, hn: HnMap = {}) {
-  const items = Array.isArray(payload.items) ? payload.items : [];
+// The owner's force-refresh, on the island now because the page is a static file
+// and cannot take a query (around.ts's refreshAroundSnapshot is the same shape).
+// A valid ?bust=SECRET makes getCuriusCached drop the KV payload and re-crawl
+// inline, and the fresh fragment OVERWRITES this colo's cached copy, awaited, so
+// the owner's own next load reads the new list. Anything else is null.
+export async function refreshReadingList(request, env, ctx) {
+  const url = new URL(request.url);
+  if (!env.RN_BUST_SECRET || url.searchParams.get("bust") !== env.RN_BUST_SECRET) return null;
+  const { ok, response } = await readReadingList(request, env, ctx);
+  if (ok) {
+    try { await caches.default.put(edgeKey(url.origin, LIST_URL, env), await withWeakEtag(response.clone())); } catch {}
+  }
+  return response;
+}
+
+export async function handleReadingList(request, env, ctx) {
+  const busted = await refreshReadingList(request, env, ctx);
+  if (busted) return busted;
+  return cachedRender(request, ctx, async () => (await readReadingList(request, env, ctx)).response, LIST_URL, env);
+}
+
+// The route. ?bust=SECRET still works at the page URL: it refreshes the island's
+// cached copy before the shell goes out, so the island the shell then fetches is
+// the new list. It serves the built shell with the page policy every generated
+// document takes, and falls back to rendering the shell where no bake is staged
+// (bun run dev, and the contract suite, which is why it lives here rather than in
+// index.ts).
+export async function handleReading(request, env, ctx) {
+  if (new URL(request.url).searchParams.has("bust")) {
+    const busted = await refreshReadingList(request, env, ctx);
+    try { await busted?.body?.cancel(); } catch {}
+  }
+  const headers = {
+    "cache-control":   PAGE_CACHE_CONTROL,
+    "link":            SHELL_PRELOAD_LINK,
+    "referrer-policy": "strict-origin-when-cross-origin",
+  };
+  const response = await serveStaticPage(request, env, { headers });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  const live = renderReadingPage();
+  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
+  return live;
+}
+
+/** The island: the count bar, the rows and the footer, or the placeholder. */
+export function renderReadingList(payload, hn: HnMap = {}): Html {
+  const pending = payload?.pending === true;
+  const items = Array.isArray(payload?.items) ? payload.items : [];
   const count = items.length;
-  const fetched = payload.fetchedAt ? esc(payload.fetchedAt.slice(0, 10)) : "";
+  const fetched = payload?.fetchedAt ? esc(payload.fetchedAt.slice(0, 10)) : "";
   const profile = `https://curius.app/${CURIUS_HANDLE}`;
 
   let listHtml, discussed = 0;
@@ -140,7 +210,7 @@ export function renderReadingPage(payload, hn: HnMap = {}) {
       const key = valid ? `${d.getUTCFullYear()}-${d.getUTCMonth()}` : "x";
       if (key !== curMonth) {
         curMonth = key;
-        const label = valid ? d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) : "Undated";
+        const label = pending ? "…" : valid ? d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) : "Undated";
         parts.push(`<div class="rd-month">${esc(label)}</div>`);
       }
       const dateStr = valid ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "";
@@ -153,9 +223,13 @@ export function renderReadingPage(payload, hn: HnMap = {}) {
       const hnLink = thread
         ? `<a class="rd-hn" href="${esc(thread.href)}" target="_blank" rel="noopener noreferrer" title="Discuss on Hacker News: ${esc(noun(thread.points, "point"))}, ${esc(noun(thread.comments, "comment"))}"><span class="rd-y" aria-hidden="true">Y</span>${esc(noun(thread.comments, "comment"))}</a>`
         : "";
+      // A placeholder row links nowhere, so its title is a span in the same class.
+      const title = it.link
+        ? `<a class="rd-title" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">${esc(it.title)}</a>`
+        : `<span class="rd-title">${esc(it.title)}</span>`;
       parts.push(
         `<div class="rd-item">` +
-          `<div class="rd-head"><a class="rd-title" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">${esc(it.title)}</a>${star}</div>` +
+          `<div class="rd-head">${title}${star}</div>` +
           `<div class="rd-meta"><span class="rd-dom">${esc(it.domain)}</span>${dateStr ? `<span class="rd-date">${esc(dateStr)}</span>` : ""}${hnLink}</div>` +
           snip + hls +
         `</div>`
@@ -164,14 +238,28 @@ export function renderReadingPage(payload, hn: HnMap = {}) {
     listHtml = parts.join("");
   }
 
+  const bar = pending
+    ? "&hellip; links"
+    : `${count} link${count === 1 ? "" : "s"}${discussed ? ` &middot; ${discussed} discussed on Hacker News` : ""}${fetched ? ` &middot; last synced ${fetched}` : ""}`;
+  return unsafeHtml(
+    `<div class="rd-bar">${bar} &middot; source: Curius, via AadharshBot</div>` +
+    listHtml +
+    `<footer>&larr; <a href="/">aadhar.sh</a> &middot; saved on <a href="${esc(profile)}" rel="external" target="_blank">Curius</a> &middot; fetched by <a href="/bot">${esc(BOT_NAME)}</a></footer>`,
+  );
+}
+
+/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
+export function renderReadingPage() {
+  const profile = `https://curius.app/${CURIUS_HANDLE}`;
   return lunaPage({
     title: "My Reading · aadhar.sh",
     path: "My Reading",
     route: "/reading",
     width: 720,
-    description: `What I've been reading, saved to Curius and mirrored natively here. ${count} link${count === 1 ? "" : "s"}, newest first.`,
+    description: "What I've been reading, saved to Curius and mirrored natively here, newest first.",
+    head: islandPreload(LIST_URL),
+    headers: { "referrer-policy": "strict-origin-when-cross-origin" },
     css: `
-h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:14pt; color:var(--blue-40); margin:0 0 4px; font-weight:bold; }
 .rd-lede { margin:0 0 12px; color:var(--ink-soft); font-size:10.5pt; }
 .rd-lede a { color:oklch(42.61% 0.2353 263.74); }
 .rd-bar { font-size:9pt; color:var(--ink-dim); border:1px solid var(--frame); background:oklch(98.81% 0.0263 99.90); padding:5px 9px; margin:0 0 6px; }
@@ -193,15 +281,18 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:14pt; color
 .rd-empty a { color:oklch(42.61% 0.2353 263.74); }
 footer { text-align:center; font-size:9pt; color:oklch(44.95% 0 0); margin-top:16px; padding-top:12px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
 footer a { color:oklch(42.61% 0.2353 263.74); }
+#rd-list[data-state="pending"] { cursor:progress; }
+/* the island's failure note, shown only if the list request failed */
+.rd-fail { display:none; padding:12px 4px; color:var(--ink-faint); font-size:9pt; }
+.rd-fail a { color:oklch(42.61% 0.2353 263.74); }
+#rd-list[data-state="failed"] + .rd-fail { display:block; }
 `,
-    body: unsafeHtml(`
+    body: html`
     <h1>My Reading</h1>
-    <p class="rd-lede">Things I've saved to read, pulled from my <a href="${esc(profile)}" rel="external me" target="_blank">Curius</a>. Newest first.</p>
-    <div class="rd-bar">${count} link${count === 1 ? "" : "s"}${discussed ? ` &middot; ${discussed} discussed on Hacker News` : ""}${fetched ? ` &middot; last synced ${fetched}` : ""} &middot; source: Curius, via AadharshBot</div>
-    ${listHtml}
-    <footer>&larr; <a href="/">aadhar.sh</a> &middot; saved on <a href="${esc(profile)}" rel="external" target="_blank">Curius</a> &middot; fetched by <a href="/bot">${esc(BOT_NAME)}</a></footer>
-`),
-    cache: "public, max-age=300",
-    headers: { "referrer-policy": "strict-origin-when-cross-origin" },
+    <p class="rd-lede">Things I've saved to read, pulled from my <a href="${profile}" rel="external me" target="_blank">Curius</a>. Newest first.</p>
+    ${islandMount("rd-list", LIST_URL, renderReadingList(PENDING_MODEL), html`<p>The list arrives in a second request after the page loads, and that needs a script. Without one, <a href="${LIST_URL}">${LIST_URL}</a> shows it as plain HTML.</p>`)}
+    <p class="rd-fail">The request for the list failed, so it stays empty rather than guessed. <a href="${LIST_URL}">${LIST_URL}</a> has it as plain HTML, and it always lives at <a href="${profile}" rel="external" target="_blank">curius.app/${CURIUS_HANDLE}</a>.</p>
+`,
+    scripts: islandScript(),
   });
 }

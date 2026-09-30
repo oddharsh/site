@@ -101,8 +101,11 @@ test("the title-bar gradient is consumed as a token, not resolved by hand", asyn
   const luna = await read("src/styles/luna.css");
   assert.ok(/--grad-title:\s*linear-gradient/.test(luna), "the token is defined");
   assert.ok(luna.includes("var(--grad-title)"), "luna.css's own :where(.title-bar) consumes it");
-  const sources = ["src/pages/index.html", "src/pages/garage/index.html", "src/worker/writing.ts"];
+  // The two title bars luna.css does not draw: the homepage (luna loads without
+  // blocking its first paint) and Notepad's .np-titlebar. Every other window,
+  // garage/index included, takes luna's :where(.title-bar) and paints nothing itself.
+  const sources = ["src/pages/index.html", "src/worker/writing.ts"];
   for (const rel of sources) assert.ok((await read(rel)).includes("var(--grad-title)"), `${rel} should paint its title bar from the token`);
   const resolved = /linear-gradient\(180deg,\s*oklch\(70% 0\.15 258\)/;
-  for (const rel of [...sources, "src/styles/luna.css"]) assert.doesNotMatch(await read(rel), resolved, `${rel} carries the gradient resolved by hand`);
+  for (const rel of [...sources, "src/pages/garage/index.html", "src/styles/luna.css"]) assert.doesNotMatch(await read(rel), resolved, `${rel} carries the gradient resolved by hand`);
 });

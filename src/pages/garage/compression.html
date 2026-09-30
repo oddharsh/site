@@ -19,113 +19,16 @@
 <meta property="og:image:alt" content="aadhar.sh/garage/compression teardown, live demo screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-compression.jpg">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='3'%20y='6'%20width='7'%20height='20'%20rx='1'%20fill='%230855dd'/%3E%3Crect%20x='12'%20y='6'%20width='5'%20height='20'%20rx='1'%20fill='%23166aee'/%3E%3Crect%20x='19'%20y='6'%20width='10'%20height='20'%20rx='1'%20fill='%23003bda'/%3E%3C/svg%3E">
-<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
-html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
-body {
-  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
-  font-family: var(--font-ui);
-  font-size: 10.5pt;
-  line-height: 1.5;
-  color: var(--ink);
-  padding: 24px 12px 60px;
-  min-height: 100vh;
-}
-.window {
-  --axp-maxw: 720px; max-width: var(--axp-maxw);
-  margin: 0 auto;
-  background: oklch(100% 0 0);
-  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
-  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
-  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
-              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
-              4px 4px 0 rgba(0,30,160,.35);
-}
-.title-bar {
-  background: var(--grad-title);
-  color: oklch(100.00% 0 0);
-  font-family: var(--font-caption);
-  font-size: 10pt; font-weight: bold;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--blue-40);
-  display: flex; align-items: center; justify-content: space-between;
-}
-.title-bar .icon {
-  display: inline-block; width: 16px; height: 16px; margin-right: 6px;
-  vertical-align: middle; background: oklch(87.82% 0.0877 66.27);
-  position: relative; flex-shrink: 0;
-}
+<style>* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: var(--ink); }
+.window { --axp-maxw: 720px; max-width: var(--axp-maxw); }
+.title-bar .icon { background: oklch(87.82% 0.0877 66.27); }
 .title-bar .icon::before {
   content: ""; position: absolute; inset: 3px;
   background: oklch(69.58% 0.2043 43.49);
   clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
 }
-.title-bar .title-text { flex: 1; padding-left: 4px; }
-.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
-/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
-   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
-   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
-   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
-   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
-.title-bar .controls .min,
-.title-bar .controls .max,
-.title-bar .controls .close {
-  position: relative; box-sizing: border-box;
-  width: 21px; height: 21px; padding: 0; margin: 0;
-  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
-  border: 1px solid #6696eb; border-radius: 3px;
-  text-decoration: none; cursor: pointer;
-  background-color: #3e73f5;
-  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter 60ms ease-out;
-}
-/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
-.title-bar .controls .min::after,
-.title-bar .controls .max::after {
-  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
-  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
-  pointer-events: none; border-radius: 2px 2px 5px 5px;
-}
-.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
-.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
-  border-color: #8fb4ff; background-color: #4fa4ff;
-  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
-  outline: none;
-}
-/* CLOSE = red at rest */
-.title-bar .controls .close {
-  border-color: #d8401c; background-color: #e45f3e;
-  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
-}
-.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
-  border-color: #ff7a66; background-color: #ff957c;
-  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
-  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
-}
-.title-bar .controls .min:active,
-.title-bar .controls .max:active,
-.title-bar .controls .close:active { filter: brightness(.9); }
-/* white glyphs drawn with pseudo-elements */
-.title-bar .controls .min::before {
-  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
-  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
-}
-.title-bar .controls .max::before {
-  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
-  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
-  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
-}
-.title-bar .controls .close::before,
-.title-bar .controls .close::after {
-  content: ""; position: absolute; left: 50%; top: 50%;
-  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
-  box-shadow: 0 1px 0 rgba(0,0,0,.35);
-}
-.title-bar .controls .close::before { transform: rotate(45deg); }
-.title-bar .controls .close::after  { transform: rotate(-45deg); }
-/* --- Luna polish: caption text shadow (matches horizon/scroll) --- */
-.title-bar { text-shadow: 1px 1px #0f1089; }
 .content { padding: 12px 16px 18px; }
 h1 {
   font-family: var(--font-caption);
@@ -149,117 +52,13 @@ a { color: var(--blue-40); }
   font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
   border-radius: 2px; text-transform: uppercase; vertical-align: middle;
 }
-.status.review { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
 
-/* ── demo ── */
-.cas-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
-.cas-ta { width: 100%; min-height: 88px; font-family: var(--font-mono); font-size: 10pt; line-height: 1.45; padding: 8px; border: 2px solid; border-color: #808080 #fff #fff #808080; background: oklch(99% 0 0); field-sizing: content; max-height: 38vh; resize: vertical; }
-.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
-.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
-.method { margin: 16px 0; }
-.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: var(--font-caption); color: var(--blue-40); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: var(--font-ui); }
-.chunks { display: flex; flex-wrap: wrap; gap: 3px; padding: 8px; background: oklch(97% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 4px; min-height: 30px; }
-.chunk { height: 26px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font: 8px/1 "Courier New", monospace; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.45); padding: 0 3px; overflow: hidden; white-space: nowrap; cursor: default; transition: background .18s; }
-.chunk.shared { background: oklch(52% 0.13 150); }
-.chunk.changed { background: oklch(58% 0.19 38); }
-.chunk.neutral { background: oklch(53% 0.10 255); }
-.stats { font-size: 9.5pt; color: oklch(42% 0 0); margin: 6px 0 0; font-family: var(--font-mono); }
-.stats b { color: oklch(22% 0 0); }
-.delta-good { color: oklch(43% 0.16 150); font-weight: bold; }
-.delta-bad { color: oklch(50% 0.19 38); font-weight: bold; }
-.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 9pt; color: oklch(45% 0 0); margin: 8px 0 0; }
-.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
-.legend .sh::before { background: oklch(52% 0.13 150); }
-.legend .ch::before { background: oklch(58% 0.19 38); }
-.legend .nu::before { background: oklch(53% 0.10 255); }
-.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid var(--blue-65); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
 .replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
-.drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
-.drop.over { background: oklch(94% 0.04 255); border-color: var(--blue-65); }
 footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
-@media (--reduced-motion) { .chunk { transition: none; } }
 
-/* encoding study */
-.enc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 20px; }
-.enc-card { margin: 0; background: oklch(97% 0.004 250); border: 1px solid var(--frame); padding: 4px; }
-.enc-card img { display: block; width: 100%; height: auto; background: #fff; cursor: crosshair; }
-@media (--coarse) { .enc-card img { cursor: default; } }
+/* the right gutter beside the 16px scrollbar; luna.css owns the rest of the window model */
+.window > .content { padding-right: 12px !important; }
 
-/* ── loupe / magnifier ──────────────────────────────────────────────────────
-   Mouse over any sample to inspect compression artifacts at zoom. Reuses the
-   site's cursor-following tooltip architecture: a popover positioned off --lx/--ly
-   (cursor clientX/Y), shown on pointer enter / hidden on leave, hover-gated. Round
-   glass centred ON the cursor; image-rendering:pixelated so the actual encoded
-   pixels (JPEG 8×8 blocking vs AVIF's smoothing) read crisp instead of being
-   re-smoothed by the browser's upscaler. */
-/* squared XP "Luna" mini-window: blue double-bevel frame + 5-stop title strip,
-   the magnified image sunken in a 3D well below. matches the page's own .window /
-   .title-bar literals. fixed geometry (184 frame · 18 bar · 180 glass) so the glass
-   centre lands exactly on the cursor via the translate offset below. */
-.loupe {
-  position: fixed; margin: 0; inset: auto; top: 0; left: 0;
-  width: 184px;
-  background: oklch(100% 0 0);
-  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
-  box-shadow: inset 1px 1px 0 #166aee, inset -1px -1px 0 #00138c, 3px 3px 0 oklch(46% 0.16 263 / 0.35);
-  pointer-events: none; z-index: 10000;
-  opacity: 1; transition: opacity 90ms ease-out, display 90ms allow-discrete;
-  /* glass centre on the cursor: 2px border + 90px to glass mid (x); 2 + 18 bar + 90 (y) */
-  transform: translate(calc(var(--lx, 0px) - 92px), calc(var(--ly, 0px) - 110px));
-}
-.loupe .bar {
-  height: 18px; box-sizing: border-box; display: flex; align-items: center; gap: 5px;
-  padding: 0 6px; border-bottom: 1px solid var(--blue-40);
-  font: bold 8.5pt var(--font-caption); color: oklch(100% 0 0); text-shadow: 1px 1px #0f1089;
-  background: var(--grad-title);
-}
-.loupe .bar .z { margin-left: auto; font: bold 8pt var(--font-mono); text-shadow: none; color: oklch(96% 0.03 250); }
-.loupe .glass {
-  width: 180px; height: 180px; box-sizing: border-box; position: relative;
-  background-repeat: no-repeat; background-color: oklch(100% 0 0);
-  image-rendering: pixelated;
-  box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 oklch(100% 0 0);  /* sunken well */
-}
-/* squared centre reticle so you know exactly what's under the glass */
-.loupe .glass::after {
-  content: ""; position: absolute; left: 50%; top: 50%; width: 11px; height: 11px;
-  transform: translate(-50%, -50%); box-sizing: border-box;
-  border: 1px solid oklch(100% 0 0 / 0.85); box-shadow: 0 0 0 1px oklch(0% 0 0 / 0.55);
-}
-.loupe:not(:popover-open) { opacity: 0; }
-@starting-style { .loupe:popover-open { opacity: 0; } }
-.enc-card figcaption { font: 8.5pt var(--font-ui); color: oklch(30% 0.01 250); padding: 4px 2px 1px; line-height: 1.4; }
-.enc-card figcaption b { color: var(--blue-40); }
-.enc-sz { float: right; font-family: var(--font-mono); font-weight: bold; }
-.enc-bpp { display: block; font-family: var(--font-mono); color: oklch(54% 0 0); font-size: 8pt; }
-.enc-table { border-collapse: collapse; margin: 8px 0 20px; font-size: 10pt; width: 100%; max-width: 460px; }
-.enc-table th, .enc-table td { border: 1px solid oklch(80% 0.02 250); padding: 4px 10px; text-align: left; }
-.enc-table th { background: var(--face); font-family: var(--font-caption); }
-.enc-table td.num { font-family: var(--font-mono); text-align: right; }
-.enc-table-scroll { overflow-x: auto; margin: 8px 0 20px; }
-.zen-table { max-width: none; min-width: 650px; margin: 0; }
-.zen-table th:first-child, .zen-table td:first-child { width: 23%; }
-.zen-table td { vertical-align: top; }
-.zen-results { min-width: 480px; max-width: 620px; }
-.enc-ships { line-height: 1.6; }
-
-  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
-     when the deferred desktop arrives). keep in sync with nav.js (search
-     "app-shell"); degrades with JS off (.content scrolls natively). */
-  html { height: 100dvh; overflow: hidden; }
-  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
-    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
-    align-items: center; padding: 8px; }
-  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
-    display: flex; flex-direction: column; }
-  .window > .title-bar { flex: 0 0 auto; }
-  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
-  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
-    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
-    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
-
-body { text-wrap: pretty; } /* progressive; older engines ignore it */
 /* comparison tables + the winning-cell tint, matching the convention the other
    garage pages use (wire.html, workers.html). Kept inline per page: the garage HTML
    is never minified, so View Source stays the authoring source. */

@@ -148,7 +148,10 @@ const ROUTES = [
   { path: "/security.md", status: 200, ct: "text/markdown", marker: "Security Center" },
   { path: "/security", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" },
     marker: "http-message-signatures-directory" },
-  { path: "/reading", status: 200, ct: "text/html" },
+  // A built document since 2026-09-29. A local Worker holds no signing key, so
+  // the island answers the can't-reach-Curius panel; the footer rides in it.
+  { path: "/reading", status: 200, ct: "text/html", marker: "data-island=/reading/list.html", fullPage: true },
+  { path: "/reading/list.html", status: 200, ct: "text/html", marker: "fetched by", fragment: true },
   { path: "/updates", status: 200, ct: "text/html" },
   // The twins the generated tier earned. Both halves are asserted because they
   // fail independently: the .md URL proves the build staged a twin at all, and the
@@ -164,6 +167,13 @@ const ROUTES = [
   { path: "/writing.md", status: 200, ct: "text/markdown", marker: "plain text file" },
   { path: "/lens.md", status: 200, ct: "text/markdown", marker: "Execution checks stay neutral" },
   { path: "/coffee.md", status: 200, ct: "text/markdown", marker: "Booking fails closed" },
+  // A built document since 2026-09-30, its open slots an island cal renders. A
+  // local Worker holds no ICAL_URL, so every working-hours slot reads as free
+  // and the fragment always carries a day. /coffee/pick is the no-script page
+  // with the same list inline.
+  { path: "/coffee", status: 200, ct: "text/html", marker: "data-island=/coffee/slots.html", fullPage: true },
+  { path: "/coffee/slots.html", status: 200, ct: "text/html", marker: "xp-day-label", fragment: true },
+  { path: "/coffee/pick", status: 200, ct: "text/html", marker: 'id="bookform"' },
   { path: "/around.md", status: 200, ct: "text/markdown", marker: "Nothing here is an endorsement" },
   { path: "/updates", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/restore", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },

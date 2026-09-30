@@ -21,6 +21,7 @@ import { existsSync } from "node:fs";
 import { brotliCompressSync, brotliDecompressSync, constants as zc } from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily, writeCommittedFamily } from "./lib/page-family.ts";
+import { SHELL_DISCOVERY_ROOTS } from "./lib/shell-roots.ts";
 
 // ------------------------------------------------------- adoption order ----
 
@@ -124,7 +125,9 @@ if (!live && !existsSync(BUILT)) {
 
 // The live shell, read the way the page half reads pages. No single document references
 // every dictionary-carrying asset, so this walks a few: the homepage pulls nav + luna +
-// hoist + tooltip, /lens pulls lens-boot, an LWE page pulls lwe-base.css and quiz.js.
+// hoist + tooltip, /lens pulls lens-boot, an LWE page pulls lwe-base.css, quiz.js and
+// ask.js, and /dotfiles and /garage/pretext each pull the one page-scoped script only
+// they load (SHELL_DISCOVERY_ROOTS, shared with dcz:check).
 //
 // Walking DOCUMENTS alone is not enough, and the gap was silent for as long as --live has
 // been the nightly path. An asset loaded lazily from JavaScript appears in no document, so
@@ -153,7 +156,7 @@ async function fetchLive(path) {
 
 async function liveShell() {
   const names = new Set<string>();
-  for (const path of ["/", "/lens", "/lwe/utf8", "/writing"]) {
+  for (const path of SHELL_DISCOVERY_ROOTS) {
     const body = await fetchLive(path);
     if (body) for (const n of assetRefs(body)) names.add(n);
   }

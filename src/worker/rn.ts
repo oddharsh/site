@@ -1250,10 +1250,7 @@ export function setPage(status, title, bodyHtml) {
     width: 520,
     robots: "noindex",
     css: `
-  h1 {
-    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: var(--blue-40);
-    font-size: 16pt; margin: 0 0 8px;
-  }
+  h1 { font-size: 16pt; margin: 0 0 8px; }
   a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
   a:visited { color: oklch(42.09% 0.1935 328.36); }
   a:hover   { color: oklch(62.80% 0.2577 29.23); }

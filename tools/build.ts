@@ -8,11 +8,10 @@
 // gets a readable twin deployed alongside it, because View Source is part of the
 // product and minification must not cost it.
 //
-// The garage/ and lwe/ HTML and the worker modules are NOT minified, but they are
-// no longer byte-identical to git either: step 1b injects the client-edge CSS
-// mirror into every staged page that carries the window geometry, derived from
-// luna.css. It is one commented, readable line in a readable file — View Source
-// still reads as hand-written CSS, and the line says where it came from.
+// Step 1b also injects the client-edge CSS mirror, derived from luna.css, into
+// the staged pages that still carry their own window geometry: the homepage,
+// which loads luna without blocking first paint, and cal's templates. It is one
+// commented line, and the line says where it came from.
 //
 //   bun run build                                         # stage .build/
 //   bun run deploy:direct                                   # build + wrangler deploy -c .build/cloudflare.config.ts
@@ -359,16 +358,19 @@ async function checkInvariants() {
     }
   } catch (e) { hard.push(`desktop generator freshness check could not run: ${e.message}`); }
 
-  // 5 (warn) — the OS-window critical-CSS copies are divergent per-context
-  // subsets (cal carries almost none), so a full byte-guard would false-fire.
-  // The one value that drifts and hurts is the taskbar-floor height: every
-  // file that carries the calc must agree with luna.css, or first paint lands
-  // a different window height than the final.
+  // 5 (warn) — the taskbar floor. luna.css owns it, and every page that links
+  // luna render-blocking gets it at first paint with nothing inline. Two
+  // documents still carry their own copy of the geometry: the homepage, which
+  // loads luna non-blocking (the media=print flip), and cal's templates. A copy
+  // whose floor disagrees with luna.css lands a different window height at
+  // first paint than after luna applies, so every copy must match. A listed
+  // file with NO floor warns too, so this cannot pass by matching nothing.
   const floors = new Map();
-  for (const f of ["src/styles/luna.css", "src/worker/lib/chrome.ts", "src/worker/writing.ts", "serendipity/serendipity.ts"]) {
+  for (const f of ["src/styles/luna.css", "src/pages/index.html", "cal/src/templates.ts"]) {
     let s; try { s = await read(f); } catch { continue; }
     // the BODY floor only (`height:calc(...)`), not a window `max-height:calc(...)`
-    for (const m of s.matchAll(/(?<!max-)height:calc\(100dvh - (\d+)px\)/g)) floors.set(f, m[1]);
+    for (const m of s.matchAll(/(?<!max-)height:\s*calc\(100dvh\s*-\s*(\d+)px\)/g)) floors.set(f, m[1]);
+    if (!floors.has(f)) warn.push(`${f}: no taskbar-floor calc found; the geometry check has nothing to compare against luna.css`);
   }
   const floorVals = new Set(floors.values());
   if (floorVals.size > 1) warn.push(`taskbar-floor height disagrees across the critical-geometry copies (${[...floors].map(([f, v]) => `${f.split("/").pop()}:${v}px`).join(", ")}) — luna.css and the inline copies must match`);
@@ -778,16 +780,20 @@ async function checkInvariants() {
 // ── the client edge, authored once and mirrored at deploy ────────────────────
 // luna.css owns the rule (search "THE CLIENT EDGE") and every windowed page
 // inherits it at runtime, so the SOURCE is already correct with nothing to
-// remember on a new page. The mirror below exists purely for first paint: luna
-// loads non-render-blocking and the edge's 6px gutter is layout, so without a
-// copy in the page's own inline block the document lays out 12px wider and
-// re-wraps once when luna lands.
+// remember on a new page. Every page that links luna.css render-blocking (all
+// of them but the homepage) has the edge at first paint and needs no copy.
 //
-// Hand-maintaining that copy in ~30 files was the thing worth deleting: it is
-// derived data, it drifts, and forgetting it on a new page is invisible until
-// someone watches a reflow. So the build derives it instead, from luna.css, and
-// a page author never writes it. Local dev (wrangler.dev.jsonc) serves the
-// unbuilt tree, where the edge simply arrives with luna.css.
+// The mirror below exists for the pages that load luna WITHOUT blocking first
+// paint, which is the homepage alone (its media=print flip). The edge's 6px
+// gutter is layout, so without a copy in that page's inline block it lays out
+// 12px wider and re-wraps once when luna lands. The build derives the copy from
+// luna.css rather than anyone hand-maintaining it: it is derived data, and a
+// hand copy drifts. Local dev (wrangler.dev.jsonc) serves the unbuilt tree,
+// where the edge simply arrives with luna.css.
+//
+// The injection keys on a page's own geometry mirror (below), which only a
+// document that loads luna non-blocking should still carry. cal's templates
+// carry one too and get the edge the same way.
 //
 // This is the ONLY generated CSS in the build. It adds no new rule and changes
 // no cascade: the injected declaration is byte-identical to luna's, so when luna
@@ -799,7 +805,7 @@ const clientEdgeDecl = (luna) => {
   return m ? m[1] : null;
 };
 
-// the geometry mirror every windowed page already carries; the edge goes after it
+// the geometry mirror a non-blocking-luna page carries; the edge goes after it
 const GEOMETRY_MIRROR = /^([ \t]*)(\.window\s*>\s*\.content(?:\s*,\s*\.window\s*>\s*\.body)?\s*\{[^}]*overflow:\s*auto[^}]*\})[ \t]*$/m;
 
 // insert the edge right after the geometry mirror, matching the file's own
@@ -852,7 +858,8 @@ const SHELLS = [
   // /lwe/ URL (a subdirectory here stages to the same subdirectory served); it
   // moved out of public/ on 2026-09-16 because public/ is for bytes that ship
   // unchanged and this one is now minified. Measured: 4,305 B on the wire at the
-  // edge's q4 against 2,833 minified with a q11 twin, on 12 pages.
+  // edge's q4 against 2,833 minified with a q11 twin, on 12 pages. The pages load
+  // it from /a/ since 2026-09-30 (PAGE_SCOPED_HASHED); /lwe/ask.js stays served.
   ["lwe/ask.js", "/lwe/ask.src.js", "lwe-q"],
   // the vendored @chenglou/pretext 0.0.7 that /garage/pretext imports. It came
   // prebuilt by its own bundler and shipped from public/ unchanged until
@@ -861,8 +868,10 @@ const SHELLS = [
   // means the module lost its public surface and the page's import would break.
   ["garage/pretext.lib.js", "/garage/pretext.lib.src.js", "prepareWithSegments"],
   // the /dotfiles checklist. An ES module (tools/gen-dotfiles.ts imports its
-  // renderer to write the committed macos.sh), unhashed like ask.js: one page
-  // loads it and a hash would re-mint nothing worth re-minting.
+  // renderer to write the committed macos.sh). It shipped unhashed until
+  // 2026-09-30, on the argument that a hash re-mints nothing worth re-minting;
+  // that was true and beside the point, since the plain root URL had no
+  // _headers rule and no q11 twin, so every visit revalidated 1,483 B of q4.
   ["dotfiles.js", "/dotfiles.src.js", "dotfiles-data"],
 ];
 
@@ -1147,8 +1156,8 @@ await Promise.all([
 // 1b) inject the client edge into every staged page that carries the window
 // geometry mirror. Runs BEFORE minification so the injected CSS is minified with
 // the rest of the page rather than riding along as a readable line in a minified
-// file. Pages that load luna.css render-blocking (garage/gpt56.html) carry no
-// geometry mirror and correctly get nothing.
+// file. Pages that load luna.css render-blocking carry no geometry mirror and
+// correctly get nothing; that is every page except the homepage (and cal).
 {
   const decl = clientEdgeDecl(await readFile("src/styles/luna.css", "utf8"));
   const targets = (await readdir(`${OUT}/public`, { recursive: true }))
@@ -1173,9 +1182,11 @@ await Promise.all([
   }));
   const mirrored = outcomes.filter((outcome) => outcome === true).length;
   const skipped = outcomes.filter((outcome) => outcome === false).length;
-  // a rename in luna.css or in the geometry mirror would silently mirror nothing
-  // and cost every page a reflow, so the count is the tripwire.
-  if (mirrored < 32) throw new Error(`client edge: mirrored into only ${mirrored} pages (expected 32+) — did the geometry-mirror shape change, or did a walk stop reaching the Worker modules?`);
+  // The homepage is the one document that needs the mirror (luna loads without
+  // blocking its first paint), so it is the tripwire: a rename in luna.css or in
+  // the geometry mirror would silently skip it and cost / a reflow. The step-2
+  // assertion below checks the same thing on the minified bytes.
+  if (outcomes[targets.indexOf(`${OUT}/public/index.html`)] !== true) throw new Error(`client edge: the homepage was not mirrored (${mirrored} files were); did the geometry-mirror shape change in src/pages/index.html or luna.css?`);
   console.log(`client edge: mirrored into ${mirrored} staged pages from luna.css (${skipped} files carry no window geometry)`);
 }
 
@@ -1458,9 +1469,10 @@ if (inlineProbe.includes("/* probe */") ||
 //
 // The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
 // inserts the checkpoint row moments before `bun run deploy:direct`, and nothing else
-// writes that table. So baking them costs no freshness at all — unlike /reading
-// (6h Curius refresh) or /around (30m crawl), whose feeds move on their own and
-// which are deliberately left dynamic for exactly that reason.
+// writes that table. So baking them WHOLE costs no freshness at all — unlike
+// /reading (6h Curius refresh) or /around (daily crawl), whose feeds move on
+// their own, so only their shells are baked and the feed arrives as an island
+// (step 5b, lib/island.ts).
 //
 // D1 remains the source of truth. checkpoints.json is its committed projection,
 // written by bump-version.sh right after a successful insert, and
@@ -2047,6 +2059,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
       live: /id="m-\d|rel="noopener ugc external"/ },
     { module: "census", render: "renderCensusPage", url: "TABLE_URL", out: "lens/census.html",
       live: /class="cx-site"><a |<span>\/100<\/span>/ },
+    // /reading, 2026-09-29. The build has no Curius payload, so a linked title,
+    // a real link count or a sync date in the bake could only be a fixture.
+    { module: "reading", render: "renderReadingPage", url: "LIST_URL", out: "reading.html",
+      live: /<a class="rd-title" href=|\d+ links? &middot;|\d+ links? ·|last synced \d/ },
   ]) {
     const mod = await import(pathToFileURL(resolve(OUT, `src/worker/${page.module}.ts`)).href + nonce);
     const res = mod[page.render]();
@@ -2083,6 +2099,29 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
   if (!mcpInfoHtml.includes("list_events")) throw new Error("static /serendipity/mcp-info renderer lost its tool list");
   await mkdir(`${OUT}/public/serendipity`, { recursive: true });
   await writeFile(`${OUT}/public/serendipity/mcp-info.html`, mcpInfoHtml);
+  // /coffee, 2026-09-30. cal renders its own templates, staged beside src/ like
+  // serendipity, so it imports from .build/cal. Its env is the Worker's own vars
+  // from cloudflare.config.ts (HOST_*, MAX_LOOKAHEAD_DAYS), and BASE_PATH is the
+  // prefix the site serves it under, which is what joins the desktop shell. The
+  // build has no calendar, so a radio carrying a slot value, a day label with a
+  // date in it, or the no-slots note in the bake could only be one build's
+  // availability shown to every visitor until the next deploy.
+  {
+    const cal = await import(pathToFileURL(resolve(OUT, "cal/src/templates.ts")).href + nonce);
+    const vars = (await siteConfig()).vars as Record<string, string> | undefined;
+    if (!vars?.HOST_TIMEZONE || !vars.HOST_NAME) throw new Error("static /coffee: the site config carries no HOST_* vars");
+    const calEnv = { ...vars, BASE_PATH: "/coffee" };
+    const coffeeHtml = cal.bookingPage(calEnv);
+    if (coffeeHtml !== cal.bookingPage(calEnv)) throw new Error("static /coffee renderer is not deterministic");
+    const slotsUrl = `/coffee${cal.SLOTS_PATH}`;
+    if (!coffeeHtml.includes(`data-island="${slotsUrl}"`)) throw new Error("static /coffee renderer lost its slots island");
+    if (!coffeeHtml.includes(`rel="preload" as="fetch" href="${slotsUrl}" crossorigin`)) throw new Error("static /coffee renderer lost the preload for its slots island");
+    if (!coffeeHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /coffee renderer lost the island loader");
+    if (!coffeeHtml.includes('id="bookform" method="POST" action="/coffee/book"')) throw new Error("static /coffee renderer lost its booking form");
+    if (/name="start" value=|class="xp-day-label">[A-Z][a-z]+day,|no open slots in the next/.test(coffeeHtml)) throw new Error("static /coffee bake carries a live slot");
+    await writeFile(`${OUT}/public/coffee.html`, coffeeHtml);
+    console.log(`static render: /coffee shell (${coffeeHtml.length} bytes) with its slots at ${slotsUrl}`);
+  }
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);
@@ -2123,18 +2162,37 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
     if (problems.length) throw new Error(`per-request ratchet:\n  ${problems.join("\n  ")}`);
     console.log(`per-request ratchet: ${surfaces.size - Object.keys(ledger).length} of ${surfaces.size} registered surfaces are built documents; ${Object.keys(ledger).length} stay per request, each with a reason`);
   }
-  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /reading + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
-// Every staged file step 6 content-hashes into /a/. Step 5c reads it to keep
-// page edits out of these files' bytes, and step 6 fails if its two asset lists
-// and this one disagree, so an asset cannot join /a/ without joining this too.
-const CONTENT_HASHED = new Set([
-  "nav.js", "luna.css", "lens-boot.js", "icons.svg", "quiz.js", "notepad.js", "lwe-base.css",
-  "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js",
-  "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js",
-  "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js", "webmcp.js", "quiz.css",
+// Staged files step 6 content-hashes into /a/ that ONE page or one section
+// loads: the LWE ask widget, the vendored pretext library, the /dotfiles
+// checklist and the /pixel-peeper trial manifest. They were plain URLs that
+// every visit revalidated (max-age=0 under /lwe/*, /garage/*, the root default
+// and /pixel-peeper/manifest.json), so the hash is what buys the year.
+//
+// They are hashed like the shell and RANKED like pages in 5c. The shell tier
+// orders names by their uses inside the shell alone, so a page-scoped file in
+// that set would let an edit to ask.js (which reads three --font-* tokens)
+// reorder luna.css's short names and re-mint every page (gotcha 35).
+const PAGE_SCOPED_HASHED = new Set([
+  "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json",
 ].map((f) => `public/${f}`));
+
+// Every staged file step 6 content-hashes into /a/. Step 5c reads the shell
+// part of it to keep page edits out of these files' bytes, and step 6 fails if
+// its two asset lists and this one disagree, so an asset cannot join /a/
+// without joining this too.
+const CONTENT_HASHED = new Set([
+  ...[
+    "nav.js", "luna.css", "lens-boot.js", "icons.svg", "quiz.js", "notepad.js", "lwe-base.css",
+    "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js",
+    "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js",
+    "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js", "webmcp.js",
+  ].map((f) => `public/${f}`),
+  ...PAGE_SCOPED_HASHED,
+]);
+const SHELL_RANKED = new Set([...CONTENT_HASHED].filter((f) => !PAGE_SCOPED_HASHED.has(f)));
 
 // 5c) shorten every CSS custom property name, across the whole staged tree.
 //
@@ -2176,7 +2234,7 @@ const CONTENT_HASHED = new Set([
   // follow, so it is a build failure rather than a silent miss.
   assertNoDynamicPropertyNames(before);
 
-  const map = planNames(before, CONTENT_HASHED);
+  const map = planNames(before, SHELL_RANKED);
   const after = new Map<string, string>();
   for (const [rel, text] of before) after.set(rel, applyMangle(text, map));
 
@@ -2242,6 +2300,12 @@ let freshFamily: Buffer | null = null;
     { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "../src/worker/writing.ts" },
     // Shared LWE structure is a separate warm-cache object.
     { attr: "href", from: "/lwe-base.css", base: "lwe-base", ext: "css", witness: "lwe/vigenere.html" },
+    // The LWE ask widget, on 12 pages, joined 2026-09-30 (PAGE_SCOPED_HASHED).
+    // Under /lwe/* it revalidated on every view: a background conditional GET
+    // for a week, a blocking one after that. A subdirectory asset takes a flat
+    // base, because roll-shell-dictionary and dcz:check read /a/ names as
+    // [\w-]+, and it has no top-level copy for perf-snapshot's merge to pair.
+    { attr: "src", from: "/lwe/ask.js", base: "ask", ext: "js", witness: "lwe/vigenere.html" },
   ];
   const hashedFor: Record<string, string> = {};
   // ── phase 0: the three JS-STRING-loaded islands (tooltip, hoist, lens-browser) ──
@@ -2334,9 +2398,27 @@ let freshFamily: Buffer | null = null;
     // for the same reason, so it sits below hoist in this leaves-first list.
     { file: "/infotip.js",      base: "infotip",      mk: (to) => [
       [/import\((["'`])\/infotip\.js\1\)/g, `import($1${to}$1)`] ] },
+    // PAGE_SCOPED_HASHED: three leaves, each loaded from one page's inline
+    // script, joined 2026-09-30. /garage/pretext imports its library RELATIVELY
+    // ("./pretext.lib.js"), so the pattern takes that spelling and the absolute
+    // one; the page's prose names /garage/pretext.lib.js in <code> twice, and
+    // call syntax is what keeps those mentions out of reach.
+    { file: "/garage/pretext.lib.js", base: "pretext-lib", mk: (to) => [
+      [/import\((["'`])(?:\.\/|\/garage\/)pretext\.lib\.js\1\)/g, `import($1${to}$1)`] ] },
+    { file: "/dotfiles.js",     base: "dotfiles",     mk: (to) => [
+      [/(\bfrom\s*)(["'`])\/dotfiles\.js\2/g, `$1$2${to}$2`],
+      [/import\((["'`])\/dotfiles\.js\1\)/g, `import($1${to}$1)`] ] },
+    // The one DATA file here, fetched before /pixel-peeper can draw a trial. It
+    // sat at max-age=0, must-revalidate, so every visit paid a blocking
+    // round trip for 1,860 B that changed in 5 of the last 200 releases. It
+    // stays OFF the dictionary path (DICTIONARY_TYPES in lib/assets.ts says
+    // why), so it gets the year and the q11 twin and nothing else.
+    { file: "/pixel-peeper/manifest.json", base: "pixel-peeper-manifest", ext: "json", mk: (to) => [
+      [/fetch\((["'`])\/pixel-peeper\/manifest\.json\1\)/g, `fetch($1${to}$1)`] ] },
   ];
-  // 5c planned its short names with CONTENT_HASHED as the shell. An asset hashed
-  // here and missing there would take page-driven renames into an /a/ URL again.
+  // 5c planned its short names with CONTENT_HASHED's shell part as the shell. An
+  // asset hashed here and missing there would take page-driven renames into an
+  // /a/ URL again.
   {
     const hashedHere = new Set([...ASSETS.map((a) => a.from), ...STRING_ASSETS.map((a) => a.file)].map((f) => `public${f}`));
     const drift = [...hashedHere].filter((f) => !CONTENT_HASHED.has(f)).concat([...CONTENT_HASHED].filter((f) => !hashedHere.has(f)));
@@ -2356,7 +2438,17 @@ let freshFamily: Buffer | null = null;
     }
     let hits = 0;
     for (const a of STRING_ASSETS) {
-      const bytes = await readFile(`${OUT}/public${a.file}`);
+      let bytes = await readFile(`${OUT}/public${a.file}`);
+      // A JSON asset takes compact-data's canonical form HERE, before its hash,
+      // and the plain copy with it. compact-data runs long after this step and
+      // skips a/, so it can never rewrite bytes a hash already names.
+      if (a.ext === "json") {
+        const compact = Buffer.from(JSON.stringify(JSON.parse(bytes.toString("utf8"))));
+        if (compact.length < bytes.length) {
+          bytes = compact;
+          await writeFile(`${OUT}/public${a.file}`, bytes);
+        }
+      }
       const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.${a.ext || "js"}`;
       await writeFile(`${OUT}/public${to}`, bytes);
       hashedFor[hashKey(a)] = to;
@@ -2400,6 +2492,11 @@ let freshFamily: Buffer | null = null;
     // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
     // and the one the old ordering left pointing at the unhashed duplicate.
     if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
+    // The page-scoped three: each has exactly one loader, on one page.
+    for (const [page, key] of [["garage/pretext.html", "pretext-lib"], ["dotfiles/index.html", "dotfiles"], ["pixel-peeper/index.html", "pixel-peeper-manifest.json"]]) {
+      const body = await readFile(`${OUT}/public/${page}`, "utf8");
+      if (!body.includes(hashedFor[key])) throw new Error(`${page} was not repointed to ${hashedFor[key] ?? `a hashed ${key}`}`);
+    }
     console.log(`string-loaded islands: rewritten across ${hits} staged files`);
   }
 
@@ -2626,7 +2723,7 @@ let freshFamily: Buffer | null = null;
 // A skipped build step, or a client without brotli, gets the identity bytes.
 {
   const dir = `${OUT}/public/a`;
-  const files = (await readdir(dir)).filter((f) => /\.(js|css|svg|dict)$/.test(f));
+  const files = (await readdir(dir)).filter((f) => /\.(js|css|svg|json|dict)$/.test(f));
   if (!files.length) throw new Error("precompression found no /a/ shell assets — did step 6 stop emitting them?");
   let raw = 0, enc = 0;
   const compressed = await Promise.all(files.map(async (f) => {
@@ -3239,7 +3336,9 @@ let freshFamily: Buffer | null = null;
   const all = await readdir(`${OUT}/public`, { recursive: true });
   let files = 0, saved = 0;
   for (const rel of all) {
-    if (/\.src\./.test(rel) || rel.startsWith("md/")) continue;
+    // a/ is content-addressed: its bytes are final when step 6 names them, and
+    // a JSON asset there was compacted before it was hashed.
+    if (/\.src\./.test(rel) || rel.startsWith("md/") || rel.startsWith("a/")) continue;
     const path = `${OUT}/public/${rel}`;
     let out: string | null = null;
     if (rel.endsWith(".json")) {

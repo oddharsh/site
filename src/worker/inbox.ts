@@ -174,7 +174,6 @@ function slugOf(path) { return path.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/
 
 /*min*/
 const OE_CSS = `
-h1{margin:0 0 4px}
 .oe-sub{font-size:9pt;color:#4a5568;margin:0 0 12px;max-width:64ch;line-height:1.5}
 .oe-panes{display:grid;grid-template-columns:186px 1fr;gap:9px;align-items:start}
 .oe-tree{border:1px solid #7f9db9;background:#fff;padding:6px 4px;min-height:220px}

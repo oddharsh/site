@@ -426,11 +426,13 @@ footer .signature small { color: oklch(56.93% 0 0); }
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
 
   /* ── OS-window geometry, inlined so FIRST PAINT already matches the windowed
-     model nav.js produces — no two-stage "pop" when the deferred shell lands.
-     KEEP IN SYNC with the body/html/.window rules in nav.js (search "app-shell").
+     model luna.css produces, because this page loads luna without blocking
+     first paint (the media=print flip). KEEP IN SYNC with the body/html/.window
+     rules in luna.css (search "app-shell"); build.ts warns when the taskbar
+     floor drifts.
      Degrades with JS off: .content scrolls natively and ::after stands in for
-     the taskbar, so the page stays usable. nav.js's !important versions are
-     byte-identical, so when it runs nothing moves. ── */
+     the taskbar, so the page stays usable. luna.css's !important versions are
+     byte-identical, so when it applies nothing moves. ── */
   html { height: 100dvh; overflow: hidden; }
   body {
     min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);

@@ -161,12 +161,47 @@ const lastBookingId = () => {
 };
 
 describe("routing", () => {
-  it("GET / renders the booking page with browser revalidation", async () => {
-    const res = await dispatch("/");
+  it("GET / renders the booking shell, its slots an island", async () => {
+    const res = await dispatch("/coffee");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
     expect(res.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=30");
-    expect((await res.text()).length).toBeGreaterThan(100);
+    const html = await res.text();
+    expect(html).toContain('data-island="/coffee/slots.html"');
+    expect(html).toContain('<link rel="preload" as="fetch" href="/coffee/slots.html" crossorigin>');
+    expect(html).toContain('querySelectorAll("[data-island]")');
+    // the shell carries no slot: the placeholder radios are disabled and nameless
+    expect(html).not.toMatch(/<input[^>]*name="start"/);
+    expect(html).toContain('<input type="radio" disabled>');
+    // the no-script door, and a form the browser can validate
+    expect(html).toContain('href="/coffee/pick"');
+    expect(html).toMatch(/<form class="book" id="bookform" method="POST" action="\/coffee\/book">/);
+    expect(html).not.toMatch(/<form[^>]*novalidate/);
+    expect(html).not.toMatch(/<button[^>]*id="submit"[^>]*disabled/);
+  });
+
+  it("GET /slots.html is the island: radios bound to the form, marked, cached 30s", async () => {
+    const res = await dispatch("/coffee/slots.html");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-island")).toBe("1");
+    expect(res.headers.get("x-robots-tag")).toBe("noindex");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=30");
+    const html = await res.text();
+    expect(html).not.toMatch(/<html|<head|<form/i);
+    const { slots } = await slotsOf(await dispatch("/slots"));
+    const radios = [...html.matchAll(/<input type="radio" name="start" value="(\d+)" form="bookform" required/g)];
+    expect(radios.length).toBe(slots.length);
+    expect(radios.map((m) => Number(m[1]))).toEqual(slots.map((s) => s.start));
+  });
+
+  it("GET /pick renders the slots inline, so the page books with no script", async () => {
+    const res = await dispatch("/coffee/pick");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-robots-tag")).toBe("noindex");
+    const html = await res.text();
+    expect(html).not.toContain("data-island=\"");
+    expect(html).toMatch(/<input type="radio" name="start" value="\d+" form="bookform" required/);
+    expect(html).toContain('id="bookform"');
   });
 
   it("GET /slots returns a non-empty slots array", async () => {
@@ -265,6 +300,35 @@ describe("POST /book validation", () => {
     expect(res.status).toBe(200);
     expect(await listHeld(env)).toHaveLength(0);   // no slot held
     expect(mailCalls).toHaveLength(0);
+  });
+});
+
+describe("booking with no script", () => {
+  // What a browser with scripts off sends: it follows the noscript link to
+  // /pick, checks one radio, fills the form and submits it. The radio sits
+  // OUTSIDE the <form> and names it with form="bookform", so the POST is built
+  // here from the page's own markup rather than from a slot the test already
+  // knows, which is the property the old <button type="button"> list lacked.
+  it("a radio from /pick posts as start and books that slot", async () => {
+    const page = await (await dispatch("/coffee/pick")).text();
+    const values = [...page.matchAll(/<input type="radio" name="start" value="(\d+)" form="bookform"/g)].map((m) => m[1]);
+    expect(values.length).toBeGreaterThan(0);
+    const start = values[Math.floor(values.length / 2)];
+    const action = page.match(/<form class="book" id="bookform" method="POST" action="([^"]+)">/)?.[1];
+    expect(action).toBe("/coffee/book");
+
+    const form = new URLSearchParams({ start, name: "No Script", email: "ns@x.dev", area: "", topic: "hello", website: "" });
+    const res = await dispatch(action, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("Request sent");
+    expect(await getBooking(env, lastBookingId())).toMatchObject({ name: "No Script", status: "pending", start: Number(start) });
+    // and the island stops offering it
+    const island = await (await dispatch("/coffee/slots.html")).text();
+    expect(island).not.toContain(`value="${start}"`);
   });
 });
 
