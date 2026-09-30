@@ -40,42 +40,19 @@ const PAGES = join(ROOT, "src/pages");
 const REGISTRY = JSON.parse(readFileSync(join(HERE, "concepts.json"), "utf8")).concepts;
 const byId = (id) => REGISTRY.find((c) => c.id === id);
 
-// Shared structure lives in /lwe-base.css. Only concept colors, glyphs and the
-// few rules containing those values stay inline, beside the page that owns them.
+// Everything structural lives in /lwe-base.css, and the window chrome in
+// /luna.css, so a page says only which concept it is: its glyph and its colors,
+// as custom properties on :root that lwe-base.css's "per-concept chrome" rules
+// read. lwe-base's defaults are this generator's cream Messenger look, so a
+// generated page never restates them. The one inline rule is the code style in
+// a bubble, which lwe-base leaves out because a hand-written page (lean) styles
+// its bubble code differently and would inherit it.
 function chromeCss(c) {
   const soft = c.accentSoft || "#f6f1e6";
-  const glyphFont = c.glyphFont || 'var(--font-caption)';
   const [g0, g1] = c.picGrad;
-  // READABLE on purpose: src/pages is authored source and build.ts minifies it
-  // into .build, so a minified template here only made the generated pages
-  // differ from every hand-authored one. Values track the rest of the section
-  // (10pt title bar, 12px content gutter, #66707d timestamps); the minified
-  // version this replaced was stale on all three and encoding.html was the only
-  // page still wearing them, because its spec is the one pinned byte-exact.
-  return `:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:${c.accent}; --accent-soft:${soft}}
-.title-bar { background: var(--grad-title); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
-.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid ${c.picBorder}; position: relative; }
-.title-bar .icon::before { content: "${c.glyph}"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: var(--accent); font-weight: bold; text-shadow: none; }
-.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
-.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fffdf6, #f6edd6); border-bottom: 1px solid #e0cf9e; }
-.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid ${c.picBorder}; background: linear-gradient(180deg,${g0},${g1}); position: relative; }
-.msgr-head .ava::before { content: "${c.glyph}"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 19px; font-family: ${glyphFont}; }
-.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: ${c.nameColor}; }
-.disclosure b { color: ${c.nameColor}; } .disclosure a { color: #1a4fc4; }
-.msg.bot .pic { background: linear-gradient(180deg,${g0},${g1}); border-color:${c.picBorder}; }
-.msg.bot .pic::before { content: "${c.glyph}"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 13px; font-family: ${glyphFont}; }
-.msg.bot .who b { color: ${c.nameColor}; }
-.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
-.msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
-.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
-.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: ${c.nameColor}; background: linear-gradient(180deg,#f6edd6,#ecdfb8); border-bottom: 1px solid var(--accent); font-weight: bold; }
-.demo > .pad { padding: 11px 12px 13px; background:#fff; }
-.btn { font-family: var(--font-ui); font-size: 9pt; padding: 3px 9px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; border-radius: 2px; box-shadow: inset 1px 1px 0 #fff; }
-.btn:hover { border-color: var(--accent); }
-.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
-.compose { border-top: 1px solid #e0cf9e; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
-.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
-@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }`;
+  const glyphFont = c.glyphFont ? `;--glyph-font:${c.glyphFont}` : "";
+  return `:root{--accent:${c.accent};--accent-soft:${soft};--glyph:"${c.glyph}";--pic-g0:${g0};--pic-g1:${g1};--pic-border:${c.picBorder};--name-color:${c.nameColor}${glyphFont}}
+.msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }`;
 }
 
 // ---- message rendering ----

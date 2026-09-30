@@ -523,7 +523,11 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
 
 test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
   const base = await readFile(new URL("src/styles/lwe-base.css", ROOT), "utf8");
-  assert.match(base, /\.controls \{ display: inline-flex/);
+  // The concept chrome is drawn once, here, from custom properties each page sets
+  // on :root. The caption buttons are luna.css's: a `.controls .min` rule at class
+  // specificity beats luna's zero-specificity :where() and switches the hover off.
+  assert.match(base, /\.msgr-head \.ava::before \{ content: var\(--glyph\)/);
+  assert.doesNotMatch(base, /\.controls/);
   const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
   assert.match(build, /site-page corpus/);
   assert.match(build, /page-family\.\$\{hash8\(dictionary\)\}\.dict/);
@@ -548,7 +552,10 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
     const html = await readFile(new URL(`src/pages/lwe/${name}.html`, ROOT), "utf8");
     assert.match(html, /<link rel="stylesheet" href="\/lwe-base\.css">/);
     assert.doesNotMatch(html, /compression-dictionary/);
-    assert.doesNotMatch(html.match(/<style>([\s\S]*?)<\/style>/)?.[1] || "", /\.controls \{ display: inline-flex/);
+    const inline = html.match(/<style>([\s\S]*?)<\/style>/)?.[1] || "";
+    assert.doesNotMatch(inline, /\.controls/, `${name}: caption buttons are luna.css's`);
+    assert.doesNotMatch(inline, /^\.msgr-head \{/m, `${name}: the Messenger header is lwe-base.css's`);
+    assert.match(inline, /^(<style>)?:root\{[^}]*--(glyph|accent|icon-border):/m, `${name}: names its concept on :root`);
   }
 });
 
