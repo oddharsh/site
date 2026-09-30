@@ -25,6 +25,9 @@ export function xpChromeCss() {
     margin: 0;
   }
   .window { max-width: var(--axp-maxw, 720px); }
+  /* the page heading. Zero-specificity :where() so a page's own h1 rule, which
+     comes after this in the same <style>, still wins for a deliberate size. */
+  :where(.content) h1 { font-family: var(--font-caption); font-size: var(--text-h1); color: var(--text-heading); margin: 0 0 4px; }
   .window>.content,.window>.body{padding-right:12px!important}
 	`;
 }

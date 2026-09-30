@@ -403,14 +403,7 @@ export function renderWhoareyouPage() {
    more letter-spacing. (title flex comes from xpChromeCss site-wide.) */
 .title-bar .controls { letter-spacing: 2px; font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
 
-h1 {
-  font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
-  font-size: 14pt;
-  color: var(--blue-40);
-  margin: 0 0 4px;
-  font-weight: bold;
-  letter-spacing: -0.01em;
-}
+h1 { letter-spacing: -0.01em; }
 h2 {
   font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
   font-size: 12pt;

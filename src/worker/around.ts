@@ -560,10 +560,7 @@ export function renderAroundPage() {
     robots: "noindex",
     head: islandPreload(SNAPSHOT_URL),
     css: `
-  h1 {
-    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: var(--blue-40);
-    font-size: 18pt; margin: 0 0 4px; font-weight: bold;
-  }
+  h1 { font-size: 18pt; }
   .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
   .lede code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; font-size: 10pt; }
   table.scout {
