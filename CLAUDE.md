@@ -4397,6 +4397,15 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     suite boots from `cal/src` alone, so a cal -> holding import would make cal
     untestable without the site tree. Do not consolidate them.
 
+    That reason is broader than the code, measured 2026-09-30.
+    `cal/src/templates.ts` has imported `lib/desktop.ts` for weeks, and now
+    imports `lib/island.ts` and `lib/html.ts` too, with cal's suite green, because
+    the harness bundles relative specifiers from the source tree. So the line
+    that actually holds is this gotcha's own: nothing cal imports may reach
+    `cloudflare:workers`, directly or transitively. A pure module is safe to
+    share, and sharing it beats a copy held to the original by a test. Whether
+    the two trace helpers qualify is left open.
+
 17. **`script-src` is per-document sha256 hashes, and the committed map is EMPTY
     on purpose.** `lib/csp-hashes.ts` ships `PAGE_SCRIPT_HASHES = {}` with a
     `// build:csp-hashes` marker; build step 7c rewrites that line in the staged
@@ -4428,9 +4437,8 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     `src/worker/lib/island.ts` is that convention for rows, and its header says
     when JSON slots fit better. `/coffee` joined them on 2026-09-30: build step 5b
     bakes cal's own shell, the open slots arrive from `/coffee/slots.html`, and cal
-    carries a byte-identical copy of the island loader (`cal/src/island.ts`, held
-    to `lib/island.ts` by a contract test) because it imports nothing that brings
-    the site's module graph with it (gotcha 16).
+    imports `lib/island.ts` directly, the same way it already imported
+    `lib/desktop.ts` (gotcha 16 has why that direction is fine).
 
     Three things verified in a real browser rather than assumed, all on 2026-07-30:
     a HASHED `<script type="speculationrules">` is allowed and an unhashed one

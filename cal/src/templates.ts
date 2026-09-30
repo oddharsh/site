@@ -34,7 +34,12 @@
 // the bare cal.aadhar.sh fallback the shell's links would be cross-origin and
 // /nav.js 404s, so that host stays a standalone window, as it always has.
 import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
-import { ISLAND_SCRIPT, islandMount, islandPreload } from "./island.ts";
+// The site's island contract, imported the same way desktop.ts is: island.ts
+// and html.ts are pure modules that never reach cloudflare:workers (gotcha 16).
+// cal builds strings with its own esc(), so what it hands islandMount is
+// already escaped and goes in through unsafeHtml.
+import { unsafeHtml } from "../../src/worker/lib/html.ts";
+import { islandMount, islandPreload, islandScript } from "../../src/worker/lib/island.ts";
 
 const STYLES = `
 * { box-sizing: border-box; }
@@ -449,8 +454,9 @@ ${head}<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--fo
 // bookingPage(env) into coffee.html, so the shell (chrome, ~300 lines of CSS,
 // the lede, the whole form) ships as a q11 twin with a dcz delta, an ETag and
 // hashed CSP. The open slots are the one part that moves, and they arrive from
-// SLOTS_PATH as an island (island.ts), rendered per request by slotsFragment()
-// and edge-cached for 30 seconds the way the whole page used to be.
+// SLOTS_PATH as an island (src/worker/lib/island.ts), rendered per request by
+// slotsFragment() and edge-cached for 30 seconds the way the whole page used
+// to be.
 //
 // Slots are native radios. They sit OUTSIDE <form id="bookform"> (the island
 // mounts in the "Available slots" group above it), so each carries
@@ -534,8 +540,8 @@ export function bookingPage(env, opts: { slots?: { start: number, end: number }[
 
   const slotMarkup = slots
     ? `<div id="coffee-slots">${renderSlotList({ slots }, env)}</div>`
-    : `${islandMount("coffee-slots", slotsUrl, renderSlotList({ pending: true }, env),
-        `<p class="xp-meta">scripts are off, so the open slots can't load into this page. <a href="${esc(pickUrl)}">see them on a plain page</a>, where the form works without scripts.</p>`)}
+    : `${islandMount("coffee-slots", slotsUrl, unsafeHtml(renderSlotList({ pending: true }, env)),
+        unsafeHtml(`<p class="xp-meta">scripts are off, so the open slots can't load into this page. <a href="${esc(pickUrl)}">see them on a plain page</a>, where the form works without scripts.</p>`)).html}
       <p class="slot-failed">couldn't load the open slots just now. <a href="${esc(pickUrl)}">see them on a plain page</a>, or write to <a href="mailto:${esc(env.HOST_EMAIL)}">${esc(env.HOST_EMAIL)}</a>.</p>`;
 
   const body = `
@@ -602,10 +608,10 @@ export function bookingPage(env, opts: { slots?: { start: number, end: number }[
     </form>
 
     <script>${RELABEL_SCRIPT}</script>
-    ${inline ? "" : ISLAND_SCRIPT}
+    ${inline ? "" : islandScript().html}
   `;
 
-  return shell("Coffee or a bagel", body, env, inline ? "" : islandPreload(slotsUrl));
+  return shell("Coffee or a bagel", body, env, inline ? "" : islandPreload(slotsUrl).html);
 }
 
 export function successPage(env) {

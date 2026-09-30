@@ -46,7 +46,7 @@ import { bookingPage, slotsFragment, SLOTS_PATH, PICK_PATH, successPage,
          reschedulePage, rescheduledPage,
          cancelPage, cancelledPage,
          errorPage }                       from "./templates.ts";
-import { ISLAND_MARKER }                from "./island.ts";
+import { ISLAND_MARKER }                from "../../src/worker/lib/island.ts";
 
 // Re-export the expiry-timer Workflow so it resolves as a class_name both from
 // the root worker (which imports this module) and from the Vitest pool, whose

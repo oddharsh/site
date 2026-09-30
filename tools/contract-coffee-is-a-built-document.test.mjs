@@ -1,20 +1,18 @@
 // ── /coffee is a built document, with its open slots as an island ────────────
 // It rendered per request until 2026-09-30, on config/per-request-pages.json
-// with the reason that cal cannot import lib/island.ts. build.ts step 5b now
+// with the reason that cal could not import lib/island.ts. build.ts step 5b now
 // bakes cal's bookingPage() once (q11 twin, dcz delta, ETag, hashed CSP), and
 // the slots arrive from /coffee/slots.html, which cal renders and edge-caches
 // for 30 seconds. What this pins:
-//   - cal's copy of the island contract is byte-identical to lib/island.ts;
+//   - cal imports lib/island.ts and keeps no copy of it;
 //   - the shell is deterministic, carries its island, and bakes no live slot;
 //   - the placeholder is the slot renderer's own markup, fed a placeholder model;
 //   - a slot is a native radio bound to the form, so booking needs no script;
 //   - the route serves the bake, and the island stays out of Workers Cache.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { unsafeHtml } from "../src/worker/lib/html.ts";
 import * as site from "../src/worker/lib/island.ts";
-import * as cal from "../cal/src/island.ts";
 import { bookingPage, PICK_PATH, renderSlotList, slotsFragment, SLOTS_PATH } from "../cal/src/templates.ts";
 import { siteConfig } from "./lib/site-config.ts";
 import { configText } from "./contract-shared.ts";
@@ -35,17 +33,17 @@ const SLOTS = [
 // with a real weekday in it, or the no-slots note.
 const LIVE = /name="start" value=|class="xp-day-label">[A-Z][a-z]+day,|no open slots in the next/;
 
-test("cal's island contract is byte-identical to lib/island.ts", () => {
-  // One CSP hash covers the loader on every page that ships it, so a copy that
-  // drifted by one character would cost /coffee its hash rather than fail loudly.
-  assert.equal(cal.ISLAND_SCRIPT, site.islandScript().html);
-  assert.equal(cal.ISLAND_MARKER, site.ISLAND_MARKER);
-  assert.equal(cal.islandPreload(SLOTS_URL), site.islandPreload(SLOTS_URL).html);
-  const placeholder = "<p>…</p>", noscript = "<p>off</p>";
-  assert.equal(cal.islandMount("coffee-slots", SLOTS_URL, placeholder, noscript),
-    site.islandMount("coffee-slots", SLOTS_URL, unsafeHtml(placeholder), unsafeHtml(noscript)).html);
-  // and cal still reaches none of the site's modules for it (gotcha 16)
-  assert.doesNotMatch(read("cal/src/island.ts"), /from\s+["'][^"']*src\/worker/);
+test("cal imports the site's island contract rather than keeping a copy", async () => {
+  // It kept one (cal/src/island.ts) for a day, held byte-identical by this file.
+  // cal already imported lib/desktop.ts, and island.ts and html.ts never reach
+  // cloudflare:workers, which is the line gotcha 16 actually draws.
+  assert.ok(!existsSync(new URL("cal/src/island.ts", ROOT)), "cal/src/island.ts is back; import src/worker/lib/island.ts instead");
+  for (const file of ["cal/src/templates.ts", "cal/src/index.ts"]) {
+    assert.match(read(file), /from\s+"\.\.\/\.\.\/src\/worker\/lib\/island\.ts"/, `${file} must import lib/island.ts`);
+  }
+  // And the page ships the site's loader verbatim, so /coffee shares its CSP
+  // hash with every other island page.
+  assert.ok(bookingPage(await bakeEnv()).includes(site.islandScript().html));
 });
 
 test("/coffee's shell is deterministic and carries its island", async () => {
