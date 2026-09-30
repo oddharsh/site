@@ -655,9 +655,10 @@
 
   // ── boot ────────────────────────────────────────────────────────────────────
   // The shell's Speculation Rules used to be built here and appended at boot.
-  // They ship in the HTML now, projected from SPECULATION in shell-data.mjs into
-  // the generated chrome, so they reach static and worker-rendered pages alike
-  // and parse with the document instead of after first paint. See #338.
+  // Since 2026-09-30 they are a Speculation-Rules response header naming one
+  // /a/ file built from SPECULATION in shell-data.ts (lib/security.ts), so they
+  // reach every HTML response and arrive with the headers, before first paint.
+  // They were an inline block in the generated chrome before that. See #338.
 
   // Instant "close": the close glyph means "up to aadhar.sh". When the window
   // was opened directly FROM the homepage, going back restores it from bfcache —

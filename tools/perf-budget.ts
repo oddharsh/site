@@ -39,7 +39,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
-import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
+import { brotliCompressSync, constants as zlibConstants, gzipSync, zstdCompressSync } from "node:zlib";
 import { transform as transformCss } from "lightningcss";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
@@ -410,12 +410,33 @@ try {
   if (!familyName) throw new Error("page-family dictionary is missing");
   const family = await readFile(`.build/public/a/${familyName}`);
   const familyTag = createHash("sha256").update(family).digest("hex").slice(0, 16);
-  const missing = pages
-    .map((path) => path.replace(/\.html$/, "").replace(/\//g, "__"))
-    .filter((slug) => !deltas.includes(`${slug}.${familyTag}.dcz`));
+  const absent = pages
+    .filter((path) => !deltas.includes(`${path.replace(/\.html$/, "").replace(/\//g, "__")}.${familyTag}.dcz`));
+
+  // build.ts step 8 SKIPS a family delta that is not smaller than the page's q11
+  // twin, and it is right to: Chrome sends the family hash either way, so with no
+  // variant it gets the q11 bytes, which are the smaller answer. /garage/horizon is
+  // the first page this happened to (2026-09-30, once its quiz payload left the
+  // document: 66,660 B delta against 66,291 B q11). So an absent variant is a
+  // breach only when it would have been USEFUL, and that is recomputed here the
+  // way the build encodes it (zstd 19, raw dictionary, 40 B skippable header)
+  // rather than trusted, so a build that forgets a useful delta still fails.
+  const missing: string[] = [];
+  const notUseful: string[] = [];
+  for (const path of absent) {
+    const slug = path.replace(/\.html$/, "").replace(/\//g, "__");
+    const bytes = await readFile(`.build/public/${path}`);
+    const q11 = await readFile(`.build/public/${path}.br`).then((b) => b.length, () => Infinity);
+    const frame = zstdCompressSync(bytes, {
+      params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
+      dictionary: family,
+    });
+    if (frame.length + 40 < q11) missing.push(slug);
+    else notUseful.push(`${slug} (${frame.length + 40} B dcz >= ${q11} B q11)`);
+  }
 
   if (missing.length) bad(`preferred site-page dictionary: missing useful family DCZ variants for ${missing.join(", ")}`);
-  else ok(`preferred site-page dictionary: all ${pages.length} static/deterministic pages have family DCZ variants`);
+  else ok(`preferred site-page dictionary: ${pages.length - absent.length} of ${pages.length} static/deterministic pages have family DCZ variants${notUseful.length ? `; no variant where it loses to q11: ${notUseful.join(", ")}` : ""}`);
 } catch (e) {
   bad(`site-page dictionary: generated DCZ set unreadable (${e.message})`);
 }

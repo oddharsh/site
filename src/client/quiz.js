@@ -20,6 +20,9 @@
 //     "questions": [ { "q": "…", "options": [
 //       { "t": "…", "ok": true,  "why": "reinforce the right model" },
 //       { "t": "…",             "why": "name the misconception" } ] } ] }</script>
+// That is the AUTHORED form. The build moves the JSON into its own /a/ file and
+// leaves the element empty with a data-src, and this script fetches the file
+// as the reader nears the end of the page (see start() at the bottom).
 //
 // Option order is shuffled deterministically (seeded from the question text),
 // so positions are stable across visits and balanced across questions without
@@ -28,11 +31,12 @@
   var D = document;
   var dataEl = D.getElementById("luq-data");
   if (!dataEl) return;
-  var data;
-  try { data = JSON.parse(dataEl.textContent); } catch (e) { return; }
-  if (!data || !data.questions || !data.questions.length) return;
-  var skin = data.skin === "lwe" ? "lwe" : "garage";
-  var qs = data.questions;
+  // Filled in by start() once the payload is in hand. Every function below runs
+  // only after that, so they read these through the closure as before.
+  var data, skin, qs;
+  // The served reference, or the authored inline JSON (see start()).
+  var src = dataEl.getAttribute("data-src");
+  var inline = dataEl.textContent || "";
   var storeKey = "luq:" + location.pathname.replace(/\.html$/, "");
   var best = 0;
   try { best = parseInt(localStorage.getItem(storeKey) || "0", 10) || 0; } catch (e) {}
@@ -180,20 +184,69 @@
     ask();
   }
 
-  // Both skins' styles live in /quiz.css (content-hashed at deploy; the build
-  // rewrites this href). Render only once the sheet has loaded, so a quiz never
-  // paints unstyled. A failed sheet still renders: an unstyled quiz that works
-  // beats one that never appears.
-  var sheet = D.createElement("link");
-  var rendered = false;
-  var render = () => {
-    if (rendered) return;
-    rendered = true;
-    if (skin === "lwe") lweSkin(); else garageSkin();
-  };
-  sheet.rel = "stylesheet";
-  sheet.onload = render;
-  sheet.onerror = render;
-  sheet.href = "/quiz.css";
-  D.head.appendChild(sheet);
+  // The payload and the sheet load together, and only once the reader is near.
+  //
+  // The SERVED page carries an empty #luq-data whose data-src names
+  // /a/quiz-<page>.<hash8>.json (build.ts step 5d); the authored page, which is
+  // what `bun run dev` and the .src.html twin serve, still carries the JSON
+  // inline. Either way the quiz renders only when both it and /quiz.css are in:
+  // the sheet first so a quiz never paints unstyled, and a failed sheet still
+  // renders, since an unstyled quiz that works beats one that never appears. A
+  // failed payload renders nothing, which is the no-JS page.
+  var started = false;
+  function start() {
+    if (started) return;
+    started = true;
+    var payload = src && !inline.trim()
+      ? fetch(src).then((r) => (r.ok ? r.json() : null))
+      : Promise.resolve().then(() => JSON.parse(inline));
+    var styled = new Promise((done) => {
+      // The build rewrites this href to the hashed /a/ sheet.
+      var sheet = D.createElement("link");
+      sheet.rel = "stylesheet";
+      sheet.onload = done;
+      sheet.onerror = done;
+      sheet.href = "/quiz.css";
+      D.head.appendChild(sheet);
+    });
+    Promise.all([payload, styled]).then((got) => {
+      data = got[0];
+      if (!data || !data.questions || !data.questions.length) return;
+      skin = data.skin === "lwe" ? "lwe" : "garage";
+      qs = data.questions;
+      if (skin === "lwe") lweSkin(); else garageSkin();
+    }, () => {});
+  }
+
+  // WHEN: once the quiz's position is within about a screen and a half of what
+  // the reader can see, so it renders while still off screen. That matters for
+  // layout shift as well as bytes: a shift only counts when the content that
+  // moves is in the viewport, and rendering ahead of the reader moves nothing
+  // they are looking at. A page short enough that the quiz is already that
+  // close starts at once, since the first observation reports it intersecting.
+  //
+  // The sentinel is where the quiz will appear: the garage skin's #luq mount,
+  // or the last message in the LWE chat, which the quiz continues.
+  var sentinel = /** @type {Element | null} */ (D.getElementById("luq"));
+  if (!sentinel) {
+    var log = D.querySelector(".log");
+    sentinel = log && (log.lastElementChild || log);
+  }
+  if (!sentinel || !("IntersectionObserver" in window)) { start(); return; }
+  // The page never scrolls the viewport: luna.css makes .window > .content (or
+  // body, on a windowless page) the scroller, and an implicit-root observer
+  // clips the target to that box before rootMargin is applied, so the margin
+  // would buy nothing. Observe against the nearest scroller instead, where the
+  // margin extends the box the reader actually scrolls.
+  var root = /** @type {Element | null} */ (null);
+  for (var el = sentinel.parentElement; el && el !== D.documentElement; el = el.parentElement) {
+    var oy = getComputedStyle(el).overflowY;
+    if (oy === "auto" || oy === "scroll") { root = el; break; }
+  }
+  var io = new IntersectionObserver((entries) => {
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].isIntersecting) { io.disconnect(); start(); return; }
+    }
+  }, { root: root, rootMargin: "150% 0px" });
+  io.observe(sentinel);
 })();

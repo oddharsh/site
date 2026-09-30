@@ -127,6 +127,21 @@ const SHELL_TYPES = {
   dict: "application/octet-stream",
 };
 
+// One /a/ json is not plain JSON by CONTRACT: the speculation ruleset every HTML
+// response names in its Speculation-Rules header (lib/security.ts). Chrome
+// applies a header-delivered ruleset only when it arrives as
+// application/speculationrules+json and silently ignores it otherwise, so the
+// ordinary json type here would be a working file that speculates nothing.
+// Named by path because the extension is shared with the other /a/ json.
+const SPECULATION_RULES_FILE = /^\/a\/speculation\.[0-9a-f]{8}\.json$/;
+const SPECULATION_RULES_TYPE = "application/speculationrules+json";
+const shellType = (pathname: string, ext: string) =>
+  SPECULATION_RULES_FILE.test(pathname) ? SPECULATION_RULES_TYPE : SHELL_TYPES[ext];
+// The identity fallbacks below hand back the asset layer's response, which types
+// a .json as application/json, so the ruleset carries its type through them too.
+const identityOpts = (pathname: string): AssetOptions =>
+  SPECULATION_RULES_FILE.test(pathname) ? { headers: { "content-type": SPECULATION_RULES_TYPE } } : {};
+
 // Which of those may travel the SHARED-DICTIONARY path (the `use-as-dictionary` offer
 // and the dcz delta): js, css and, since 2026-09-26, svg. The family .dict stays off,
 // being the dictionary rather than something one compresses. svg sat out for two
@@ -414,7 +429,7 @@ export async function servePrecompressedShell(request, env) {
   // note in index.js. This is the only branch that can turn it off, so keep the
   // check at the top of the function rather than beside each emission below.
   if (request.method !== "GET" || !SHELL_TYPES[ext] || env.IDENTITY_BODY) {
-    return serveAssetWith404Clamp(request, env);
+    return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
   }
 
   // ── dcz: the delta path ────────────────────────────────────────────────────────
@@ -454,19 +469,19 @@ export async function servePrecompressedShell(request, env) {
     });
     br = await env.ASSETS.fetch(sub);
   } catch {
-    return serveAssetWith404Clamp(request, env);
+    return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
   }
 
   if (!br.ok || br.headers.get("content-encoding")) {
     try { await br.body?.cancel(); } catch {}
-    return serveAssetWith404Clamp(request, env);
+    return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
   }
 
   // Carry the asset layer's headers (so the _headers `/a/*` immutable rule still
   // applies — the .br twin matches that same glob), then correct the three things
   // that describe the encoded body rather than the file it came from.
   const headers = new Headers(br.headers);
-  headers.set("content-type", SHELL_TYPES[ext]);
+  headers.set("content-type", shellType(url.pathname, ext));
   headers.set("content-encoding", "br");
   // RFC 9218 Extensible Priorities: Cloudflare honours an origin `priority`
   // response header on HTTP/3 (unenhanced scheduler on Free), and this is the

@@ -1313,6 +1313,11 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
       out += minifyCss(`${label} inline <style>`, body);
     } else if (tag === "script" && isJavaScriptScript(token)) {
       out += minifyJavaScript(`${label} inline <script>`, body);
+    } else if (tag === "script" && isJsonScriptType(scriptType(token)) && !body.trim() && /\sdata-src=/i.test(token)) {
+      // An empty data block that names its payload elsewhere: the luq-data
+      // element after step 5d moved the quiz to /a/. Nothing to minify, and an
+      // empty body is not JSON, so it passes through rather than failing parse.
+      out += body;
     } else if (tag === "script" && isJsonScriptType(scriptType(token))) {
       out += minifyJsonScript(`${label} inline <script type=${scriptType(token)}>`, body);
     } else {
@@ -2153,6 +2158,66 @@ const SHELL_RANKED = new Set([...CONTENT_HASHED].filter((f) => !PAGE_SCOPED_HASH
   console.log(`custom properties: ${map.size} renamed across ${touched} staged files (${RESERVED.size} reserved for the DOM calls that name them)`);
 }
 
+// 5d) the understanding check's payload leaves the document.
+//
+// Each garage and LWE page authors its quiz as one inline luq-data JSON block,
+// and that stays the authoring form (pages:check lints it there, and `bun run
+// dev` serves it there). The SERVED page gets an empty luq-data element whose
+// data-src names /a/quiz-<page>.<hash8>.json, and quiz.js fetches that file as
+// the reader nears the end. Measured 2026-09-30: the 38 payloads were 66.3 KiB
+// of the 630.6 KiB first view across 70 pages at q11, unique per page so the
+// family dictionary could not discount them. tools/lib/quiz-data.ts has the
+// shape and why the element stays.
+//
+// HERE, after 5c renamed custom properties (so the file holds exactly the bytes
+// the page used to ship) and before step 6, whose family corpus samples four of
+// these pages and should sample what is served. Step 7 then gives each file its
+// q11 twin like every other /a/ asset. It stays off the dictionary path
+// (DICTIONARY_TYPES in lib/assets.ts): the name is per page, so there is no
+// earlier version of the same URL family for a delta to start from.
+//
+// The Markdown twins are untouched: step 1c/1g read the SOURCE, and html-to-md
+// never emits a script body either way.
+{
+  const { extractQuizData, quizReference } = await import("./lib/quiz-data.ts");
+  const hash8q = (bytes) => createHash("sha256").update(bytes).digest("hex").slice(0, 8);
+  await mkdir(`${OUT}/public/a`, { recursive: true });
+
+  // Which pages carry a quiz in SOURCE. The staged set is checked against this,
+  // so a page whose block a later edit made unmatchable fails here by name
+  // instead of shipping its answer key inline or shipping no quiz at all.
+  const sources = (await readdir("src/pages", { recursive: true }) as string[]).filter((rel) => rel.endsWith(".html"));
+  const authored = new Set<string>();
+  await Promise.all(sources.map(async (rel) => {
+    if (/\bid="luq-data"/.test(await readFile(`src/pages/${rel}`, "utf8"))) authored.add(rel);
+  }));
+
+  const staged = (await readdir(`${OUT}/public`, { recursive: true }) as string[])
+    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && !rel.startsWith("a/"))
+    .sort();
+  let files = 0, bytesOut = 0;
+  const extracted = new Set<string>();
+  for (const rel of staged) {
+    const html = await readFile(`${OUT}/public/${rel}`, "utf8");
+    const out = extractQuizData(html, rel, hash8q);
+    if (!out) continue;
+    await writeFile(`${OUT}/public${out.file.url}`, out.file.bytes);
+    await writeFile(`${OUT}/public/${rel}`, out.html);
+    const ref = quizReference(out.html);
+    if (!ref || ref.inline !== "" || ref.src !== out.file.url) throw new Error(`${rel}: the luq-data element did not come back as an empty reference to ${out.file.url}`);
+    extracted.add(rel);
+    files++;
+    bytesOut += out.file.bytes.length;
+  }
+  const missing = [...authored].filter((rel) => !extracted.has(rel));
+  if (missing.length) throw new Error(`quiz data: ${missing.length} page(s) carry a quiz in src/pages but none was extracted from the staged copy: ${missing.join(", ")}`);
+  // The floor: 38 today. A matcher that stops matching reads as "no page has a
+  // quiz", which the check above would also pass if the source scan broke the
+  // same way.
+  if (files < 30) throw new Error(`quiz data: only ${files} payloads extracted (expected 30+); did the luq-data shape change?`);
+  console.log(`quiz data: ${files} payloads moved to /a/quiz-*.json (${(bytesOut / 1024).toFixed(1)} KiB raw)`);
+}
+
 // The fresh family corpus step 6 derives. Whether it SHIPS is step 8's call, made
 // against the final page bytes and the committed src/dict/f-dict dictionary.
 let freshFamily: Buffer | null = null;
@@ -2572,6 +2637,29 @@ let freshFamily: Buffer | null = null;
     console.log(`shell-assets: Early-Hints -> ${hashedFor.luna} + ${hashedFor.nav}`);
   }
 
+  // The speculation ruleset leaves the documents for a header (2026-09-30). One
+  // file, derived here from SPECULATION rather than committed, content-hashed
+  // into /a/ so it is immutable, and named to the Worker through the same
+  // marker-line convention as SHELL_ASSETS; lib/security.ts sends
+  // `Speculation-Rules: "<url>"` on every HTML response and lib/assets.ts types
+  // it application/speculationrules+json, the one type Chrome accepts. Step 7
+  // gives it a q11 twin like everything else in /a/.
+  {
+    const { speculationRulesJson } = await import("./photos/gen-desktop-partial.ts");
+    const bytes = Buffer.from(speculationRulesJson());
+    const url = `/a/speculation.${hash8(bytes)}.json`;
+    await writeFile(`${OUT}/public${url}`, bytes);
+    const p = `${OUT}/src/worker/lib/shell-assets.ts`;
+    const src = await readFile(p, "utf8");
+    const out = src.replace(
+      /^export const SPECULATION_RULES: string = .*\/\/ build:speculation-rules$/m,
+      `export const SPECULATION_RULES: string = ${JSON.stringify(url)}; // build:speculation-rules`,
+    );
+    if (out === src) throw new Error("shell-assets.ts: the `// build:speculation-rules` marker line was not found");
+    await writeFile(p, out);
+    console.log(`speculation rules: ${url} (${bytes.length} bytes), sent as a Speculation-Rules header`);
+  }
+
   // same Early-Hints preload for the STATIC garage/lwe pages: rewrite the
   // angle-bracketed Link targets in the staged _headers to the hashed URLs. only
   // the `</luna.css>` / `</nav.js>` Link forms are touched; the bare `/nav.js` +
@@ -2792,15 +2880,12 @@ let freshFamily: Buffer | null = null;
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html")
     .sort();
 
-  // The understanding check's answer key rides in an application/json block.
-  // transformInlineHtmlBlocks leaves non-JavaScript scripts alone by design, but
-  // minify-html still walks the whole document, so prove the payload survived
-  // rather than assume it. contract-tests asserts over 1100+ of these strings,
-  // and a silently mangled block would take the answer key with it.
-  const quizPayload = (source) => {
-    const m = source.match(/<script[^>]*\bid=(?:"luq-data"|luq-data)[^>]*>([\s\S]*?)<\/script>/i);
-    return m ? m[1] : null;
-  };
+  // The understanding check's payload left the document at 5d, and what stays is
+  // an empty luq-data element whose data-src names the file. minify-html walks
+  // the whole document and unquotes attributes, so prove the reference survived
+  // with its URL intact, and that no body came back, rather than assume either.
+  // A lost data-src is a quiz that silently never appears.
+  const { quizReference } = await import("./lib/quiz-data.ts");
 
   let before = 0, after = 0, checked = 0, generated = 0;
   for (const rel of pages) {
@@ -2813,12 +2898,15 @@ let freshFamily: Buffer | null = null;
         throw new Error(`${rel}: HTML minifier lost required marker ${label}`);
       }
     }
-    const authored = quizPayload(staged);
+    const authored = quizReference(staged);
     if (authored) {
-      const shipped = quizPayload(min);
-      if (!shipped) throw new Error(`${rel}: HTML minifier dropped the understanding-check payload`);
-      if (JSON.stringify(JSON.parse(authored)) !== JSON.stringify(JSON.parse(shipped))) {
-        throw new Error(`${rel}: HTML minifier altered the understanding-check payload`);
+      const shipped = quizReference(min);
+      if (!shipped) throw new Error(`${rel}: HTML minifier dropped the understanding-check element`);
+      if (authored.inline.trim() || shipped.inline.trim()) {
+        throw new Error(`${rel}: the understanding-check payload is still inline (step 5d should have moved it to /a/)`);
+      }
+      if (!authored.src || shipped.src !== authored.src) {
+        throw new Error(`${rel}: HTML minifier altered the understanding-check reference (${authored.src} -> ${shipped.src})`);
       }
       checked++;
     }
@@ -2847,7 +2935,7 @@ let freshFamily: Buffer | null = null;
     before += staged.length;
     after += min.length;
   }
-  console.log(`pages(min): ${pages.length} documents ${before} -> ${after} bytes (${(((before - after) / before) * 100).toFixed(1)}% off raw), ${pages.length} .src.html twins (${generated} from staged, no authored source), ${checked} understanding-check payloads verified byte-equal`);
+  console.log(`pages(min): ${pages.length} documents ${before} -> ${after} bytes (${(((before - after) / before) * 100).toFixed(1)}% off raw), ${pages.length} .src.html twins (${generated} from staged, no authored source), ${checked} understanding-check references verified intact`);
 }
 
 // 7b-links) Does every internal href/src point at something this site serves?

@@ -3,6 +3,7 @@
 import {
   testGlobals,
   AGENT_SURFACES,
+  DESKTOP_CHROME,
   MODERN_META,
   ROOT,
   SECTION_FAVICONS,
@@ -26,12 +27,14 @@ import {
   readdir,
   runProfilesBody,
   sectionFavicons,
-  speculationHtml,
+  speculationRulesJson,
   test,
   wmEnv,
   wmPost,
   workerModule,
 } from "./contract-shared.ts";
+import { SPECULATION } from "./photos/shell-data.ts";
+import { existsSync, readFileSync } from "node:fs";
 
 // ── shell infotips ──────────────────────────────────────────────────────────
 // infotip.js cannot be imported here: it reaches /hoist.js by absolute
@@ -219,28 +222,35 @@ test("a section's favicon is in its own <head>, never set by script", async () =
 
 test("the speculation ruleset has exactly one author", async () => {
   // This block lived in 26 documents plus a runtime injector, and the copies had
-  // forked (#338). Two of the three ways it can fork again are structural, so
-  // they are asserted here rather than left to review.
+  // forked (#338). Since 2026-09-30 it is ONE file, /a/speculation.<hash8>.json,
+  // written by build.ts from SPECULATION and named on every HTML response by a
+  // Speculation-Rules header. The ways it can fork again are structural, so they
+  // are asserted here rather than left to review.
   //
-  // 1. A hand-written block anywhere in public/. The build already byte-compares
-  //    every static page against a fresh render, so a page that carries one fails
-  //    the deploy; this names the rule so the failure is legible.
+  // 1. An inline block anywhere in src/pages. The browser would union it with the
+  //    header's ruleset, so any copy is a second author. The build byte-compares
+  //    every static page against a fresh render too; this names the rule.
   const pages = (await readdir(new URL("src/pages", ROOT), { recursive: true }))
     .filter((relative) => relative.endsWith(".html"));
-  const canonical = speculationHtml();
-  let carrying = 0;
+  let scanned = 0;
   for (const relative of pages) {
     const html = await readFile(new URL(`src/pages/${relative}`, ROOT), "utf8");
     // Count real tags only. /garage/horizon discusses this very block in prose as
     // escaped `&lt;script type="speculationrules"&gt;`, and it is the fourth naive
     // scanner that page's demo content would have caught.
-    const blocks = html.match(/<script\b[^>]*\btype="speculationrules"[^>]*>/g) || [];
-    if (!blocks.length) continue;
-    carrying++;
-    assert.equal(blocks.length, 1, `${relative} carries ${blocks.length} rulesets; the browser unions them`);
-    assert.ok(html.includes(canonical), `${relative} has a ruleset that is not the projection of SPECULATION; run bun run gen:shell`);
+    const blocks = html.match(/<script\b[^>]*\btype=["']?speculationrules\b[^>]*>/g) || [];
+    assert.equal(blocks.length, 0, `${relative} carries an inline ruleset; the Speculation-Rules header is the one author`);
+    scanned++;
   }
-  assert.ok(carrying >= 30, `only ${carrying} pages carry the ruleset; the projection has collapsed`);
+  assert.ok(scanned >= 40, `only ${scanned} pages scanned; the walk has collapsed`);
+  // The shared chrome is what used to carry it to every surface, worker pages included.
+  assert.doesNotMatch(DESKTOP_CHROME, /speculationrules/, "lib/desktop.ts must not carry a ruleset");
+  // The file is the one serialization of SPECULATION, and the Worker is the one
+  // sender: security.ts names the build-patched URL and nothing else.
+  assert.equal(speculationRulesJson(), JSON.stringify(SPECULATION));
+  const security = await readFile(new URL("src/worker/lib/security.ts", ROOT), "utf8");
+  assert.match(security, /headers\.set\("speculation-rules", `"\$\{SPECULATION_RULES\}"`\)/,
+    "withSecurityHeaders names the ruleset file in a Speculation-Rules header");
 
   // 2. The lwe generator getting its own template back. It had one, it went stale
   //    when two commits removed exclusions site-wide, and regenerating a page then
@@ -259,6 +269,26 @@ test("the speculation ruleset has exactly one author", async () => {
   const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
   assert.doesNotMatch(nav, /type\s*=\s*["']speculationrules["']/,
     "nav.js must not inject a ruleset; it ships in the chrome now");
+});
+
+test("the staged Worker names the built ruleset on HTML and only on HTML", { skip: !existsSync(".build/src/worker/lib/shell-assets.ts") && "needs a build" }, async () => {
+  // The STAGED modules, because the ruleset URL exists only once build.ts has
+  // written the file and patched the marker line; source reads "" by design.
+  // Imported through a computed URL so the type checker leaves them alone:
+  // typecheck runs before any build in CI, and a literal specifier into
+  // .build/ is two unresolved-module errors against the tools baseline.
+  const { SPECULATION_RULES } = await import(new URL("../.build/src/worker/lib/shell-assets.ts", import.meta.url).href);
+  assert.match(SPECULATION_RULES, /^\/a\/speculation\.[0-9a-f]{8}\.json$/, "build.ts patched the ruleset URL in");
+  const bytes = readFileSync(`.build/public${SPECULATION_RULES}`, "utf8");
+  assert.equal(bytes, speculationRulesJson(), "the file is the projection of SPECULATION");
+  assert.ok(existsSync(`.build/public${SPECULATION_RULES}.br`), "the ruleset has its q11 twin");
+
+  const { withSecurityHeaders } = await import(new URL("../.build/src/worker/lib/security.ts", import.meta.url).href);
+  const html = withSecurityHeaders(new Response("<p>hi</p>", { headers: { "content-type": "text/html; charset=utf-8" } }), "/garage");
+  // A structured-field list of one string: the quotes are the syntax.
+  assert.equal(html.headers.get("speculation-rules"), `"${SPECULATION_RULES}"`);
+  const json = withSecurityHeaders(new Response("{}", { headers: { "content-type": "application/json" } }), "/rn/tracks");
+  assert.equal(json.headers.get("speculation-rules"), null, "a non-HTML response never carries it");
 });
 
 test("outbound endpoint discovery follows the spec's precedence", () => {

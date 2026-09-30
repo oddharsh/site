@@ -4,7 +4,7 @@
 // what's set on static assets via _headers — without this wrapper, the
 // worker-rendered pages (/whoareyou, /around, /bot, /rn/admin, etc.)
 // would skip _headers entirely and ship without CSP / Permissions-Policy.
-import { PAGE_DICTIONARY } from "./shell-assets.ts";
+import { PAGE_DICTIONARY, SPECULATION_RULES } from "./shell-assets.ts";
 import { scriptHashesFor } from "./csp-hashes.ts";
 import { CSP_LOOSE, cspHashed } from "./csp-policy.ts";
 import { prefetchActivationHeader } from "../speculation.ts";
@@ -44,8 +44,10 @@ import { PREVIEW_ROBOTS } from "./preview.ts";
 // Verified 2026-07-30 in a real browser, because it is the one thing here worth not
 // guessing at: under `script-src 'sha256-…'` with no 'unsafe-inline', a HASHED
 // `<script type="speculationrules">` is allowed and an unhashed one raises exactly
-// one script-src-elem violation. So the 25 speculation-rules blocks need no
-// 'inline-speculation-rules' keyword, just an ordinary hash. `application/json`
+// one script-src-elem violation. So the speculation-rules blocks needed no
+// 'inline-speculation-rules' keyword, just an ordinary hash. (There are none
+// since 2026-09-30: the ruleset is a same-origin file named by the
+// Speculation-Rules header below, which 'self' covers.) `application/json`
 // (the quiz data blocks) and `application/ld+json` are data blocks: never executed,
 // never CSP-checked, never hashed.
 // The policy strings (loose, hashed, and the shared tail) live in lib/csp-policy.ts,
@@ -175,6 +177,15 @@ export function withSecurityHeaders(response, pathname?, opts?) {
   // Chrome enables the feature for this origin.
   if (pathname && ct.startsWith("text/html") && !headers.has("on-prefetch-activation")) {
     headers.set("on-prefetch-activation", prefetchActivationHeader(pathname));
+  }
+  // The speculation ruleset, by reference. Every HTML response names the one
+  // content-hashed /a/speculation.<hash8>.json (lib/shell-assets.ts), and Chrome
+  // fetches and applies it as if it were an inline block, in parallel with the
+  // body rather than when the parser reaches the end of it. Same-origin, so
+  // script-src 'self' covers the fetch and no page needs a hash for it. Only on
+  // HTML: the header means nothing on any other response. Empty in readable dev.
+  if (SPECULATION_RULES && ct.startsWith("text/html") && !headers.has("speculation-rules")) {
+    headers.set("speculation-rules", `"${SPECULATION_RULES}"`);
   }
   // Every HTML surface—static, deterministically rendered, or live—teaches the
   // browser the same immutable page dictionary. Static/deterministic routes can

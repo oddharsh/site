@@ -177,7 +177,17 @@ async function record(outPath, label) {
   for (const name of await walk(`${BUILD}/a`, (f) => !f.endsWith(".br") && !f.endsWith(".dict"))) {
     let br = null;
     try { br = (await readFile(`${BUILD}/a/${name}.br`)).length; } catch {}
-    snapshot.wire[dehash(name)] = { raw: (await readFile(`${BUILD}/a/${name}`)).length, br };
+    const raw = (await readFile(`${BUILD}/a/${name}`)).length;
+    // The understanding-check payloads (build.ts step 5d) are one file per page,
+    // 38 of them. They fold into ONE row, because the nightly series keeps every
+    // asset key forever and a key per page would triple its width for a number a
+    // reader wants as a total: what a visitor who reaches the quiz pays.
+    if (/^quiz-[\w-]+\.[0-9a-f]{8}\.json$/.test(name)) {
+      const prev = snapshot.wire["quiz-data.json"];
+      snapshot.wire["quiz-data.json"] = { raw: (prev?.raw ?? 0) + raw, br: (prev?.br ?? 0) + (br ?? raw) };
+      continue;
+    }
+    snapshot.wire[dehash(name)] = { raw, br };
   }
 
   // Dictionary deltas are a count and a total, not a per-file table. Each name

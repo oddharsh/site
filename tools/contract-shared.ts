@@ -51,7 +51,7 @@ import { PAGE_FAMILY_MATCH, serveStaticPage } from "../src/worker/lib/assets.ts"
 import { serveMarkdown } from "../src/worker/home.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { PROFILES } from "../tools/photos/shell-data.ts";
-import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/gen-desktop-partial.ts";
+import { faviconHref, sectionFavicons, speculationRulesJson } from "../tools/photos/gen-desktop-partial.ts";
 import { TASKBAR } from "../tools/photos/shell-data.ts";
 import { DESKTOP_CHROME, SECTION_FAVICONS } from "../src/worker/lib/desktop.ts";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.ts";
@@ -512,7 +512,7 @@ export {
   serveMarkdown,
   serveStaticPage,
   sign,
-  speculationHtml,
+  speculationRulesJson,
   spotifyArtHash,
   adminGated,
   dispatchEnrich,
