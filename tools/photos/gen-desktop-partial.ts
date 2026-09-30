@@ -28,9 +28,11 @@ const esc = (value) => String(value)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 
 // Any speculationrules block, sentinel-wrapped or hand-written. patchStaticShell
-// strips whatever it finds before re-emitting the canonical one, so a page that
-// still carries its old inline copy converges on the first gen:shell run rather
-// than ending up with two rulesets, which the browser would union.
+// strips whatever it finds, so a page that still carries an old inline copy
+// converges on the first gen:shell run. None is re-emitted since 2026-09-30:
+// the ruleset is one /a/ file named by a Speculation-Rules response header
+// (build.ts writes it from speculationRulesJson, lib/security.ts sends it), so
+// an inline block anywhere would be a second ruleset the browser unions.
 const SPECULATION_BLOCK = /[ \t]*<script\b[^>]*\btype=["']speculationrules["'][^>]*>[\s\S]*?<\/script>\n?/gi;
 
 function stripSpeculationBlocks(input) {
@@ -43,8 +45,8 @@ function stripSpeculationBlocks(input) {
   return next;
 }
 
-export const speculationHtml = () =>
-  `<script type="speculationrules">${JSON.stringify(SPECULATION)}</script>`;
+// The ruleset's one serialization: the bytes of /a/speculation.<hash8>.json.
+export const speculationRulesJson = () => JSON.stringify(SPECULATION);
 
 function assertTaskbarContract(surfaces) {
   const declared = surfaces.filter((surface) => surface.flags.taskbar).map((surface) => surface.path).sort();
@@ -102,13 +104,13 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
   const taskbarHtml = '<div id="axp-taskbar" role="navigation" aria-label="taskbar">'
     + '<a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a>'
     + `<div id="axp-pins">${pinsHtml}</div><div id="axp-spacer"></div>${trayHtml}</div>`;
-  // The ruleset rides the chrome because the chrome is the one projection that
-  // reaches BOTH surfaces: patchStaticShell writes it into every static page and
-  // lib/desktop.js hands the same bytes to the worker-rendered ones. nav.js used
-  // to inject it at boot for the pages with no inline copy, which meant the
-  // rules landed after first paint and could not prerender anything the visitor
-  // hovered before that. In the HTML they parse with the document.
-  const chromeHtml = iconsHtml + taskbarHtml + speculationHtml();
+  // The speculation ruleset rode here until 2026-09-30, because the chrome was
+  // the one projection reaching both static and worker-rendered pages. It is a
+  // Speculation-Rules response header now, which reaches every HTML response
+  // through lib/security.ts and arrives with the response headers, earlier than
+  // an inline block at the end of <body> ever parsed. nav.js injecting it at
+  // boot was the version before the inline one, and landed after first paint.
+  const chromeHtml = iconsHtml + taskbarHtml;
   const histnavHtml = HISTNAV_HTML;
 
 

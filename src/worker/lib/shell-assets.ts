@@ -33,6 +33,17 @@ export const SHELL_ASSETS = { luna: "/luna.css", nav: "/nav.js" }; // build:shel
 // interpolation in security.ts. Declaring it `string` says what the build does.
 export const PAGE_DICTIONARY: string = ""; // build:page-dictionary
 
+// The speculation ruleset, as a content-hashed /a/speculation.<hash8>.json that
+// every HTML response names in a `Speculation-Rules` header (lib/security.ts).
+// It rode in each document as an inline <script type="speculationrules"> until
+// 2026-09-30: about 90 B of q11 on every page plus a CSP hash, for bytes that
+// were identical on all of them. As a header it is a few bytes after HPACK and
+// the file is fetched once a year. Empty in readable local development, like
+// PAGE_DICTIONARY: build.ts derives the file from SPECULATION in
+// tools/photos/shell-data.ts and replaces this marker with its URL, so `bun run
+// dev` speculates nothing.
+export const SPECULATION_RULES: string = ""; // build:speculation-rules
+
 // luna.css first: it is render-blocking style, so it outranks the deferred
 // nav.js script. Browsers dedupe a preload against the in-document <link
 // rel=preload> + the eventual request by URL, so this never double-fetches.

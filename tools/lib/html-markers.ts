@@ -18,7 +18,8 @@ export const HTML_MARKERS: Array<[label: string, marker: RegExp]> = [
   ["JSON-LD", /<script\b[^>]*\btype=(?:"application\/ld\+json"|application\/ld\+json)(?:\s|>)/i],
   ["photos", /<section\b[^>]*\bclass=(?:"[^"]*\bphotos\b"|'[^']*\bphotos\b'|photos)(?:\s|>)/i],
   ["playlist", /<(?:ol|ul)\b[^>]*\bid=(?:"np-list"|np-list)(?:\s|>)/i],
-  ["speculation rules", /<script\b[^>]*\btype=(?:"speculationrules"|speculationrules)(?:\s|>)/i],
+  // The speculation ruleset left this list on 2026-09-30, when it left the
+  // document for a Speculation-Rules response header (lib/security.ts).
   ["footer", /<footer\b/i],
 ];
 

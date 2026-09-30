@@ -2637,6 +2637,29 @@ let freshFamily: Buffer | null = null;
     console.log(`shell-assets: Early-Hints -> ${hashedFor.luna} + ${hashedFor.nav}`);
   }
 
+  // The speculation ruleset leaves the documents for a header (2026-09-30). One
+  // file, derived here from SPECULATION rather than committed, content-hashed
+  // into /a/ so it is immutable, and named to the Worker through the same
+  // marker-line convention as SHELL_ASSETS; lib/security.ts sends
+  // `Speculation-Rules: "<url>"` on every HTML response and lib/assets.ts types
+  // it application/speculationrules+json, the one type Chrome accepts. Step 7
+  // gives it a q11 twin like everything else in /a/.
+  {
+    const { speculationRulesJson } = await import("./photos/gen-desktop-partial.ts");
+    const bytes = Buffer.from(speculationRulesJson());
+    const url = `/a/speculation.${hash8(bytes)}.json`;
+    await writeFile(`${OUT}/public${url}`, bytes);
+    const p = `${OUT}/src/worker/lib/shell-assets.ts`;
+    const src = await readFile(p, "utf8");
+    const out = src.replace(
+      /^export const SPECULATION_RULES: string = .*\/\/ build:speculation-rules$/m,
+      `export const SPECULATION_RULES: string = ${JSON.stringify(url)}; // build:speculation-rules`,
+    );
+    if (out === src) throw new Error("shell-assets.ts: the `// build:speculation-rules` marker line was not found");
+    await writeFile(p, out);
+    console.log(`speculation rules: ${url} (${bytes.length} bytes), sent as a Speculation-Rules header`);
+  }
+
   // same Early-Hints preload for the STATIC garage/lwe pages: rewrite the
   // angle-bracketed Link targets in the staged _headers to the hashed URLs. only
   // the `</luna.css>` / `</nav.js>` Link forms are touched; the bare `/nav.js` +
