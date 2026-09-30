@@ -20,25 +20,9 @@
 <meta name="twitter:image" content="https://aadhar.sh/og/lwe-utf8.jpg">
 
 <link rel="stylesheet" href="/lwe-base.css">
-<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#9a6a16; --accent-soft:#fbf3dd}
-.title-bar { background: var(--grad-title); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
-.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #7a5410; position: relative; }
-.title-bar .icon::before { content: "字"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: var(--accent); font-weight: bold; text-shadow: none; }
-.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
-.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fffdf6, #f6edd6); border-bottom: 1px solid #e0cf9e; }
-.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #7a5410; background: linear-gradient(180deg,#d8a32e,#b8860b); position: relative; }
-.msgr-head .ava::before { content: "字"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 19px; font-family: Georgia, serif; }
-.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #7a5410; }
-.disclosure b { color: #7a6a16; } .disclosure a { color: #1a4fc4; }
-.msg.bot .pic { background: linear-gradient(180deg,#d8a32e,#b8860b); border-color:#7a5410; }
-.msg.bot .pic::before { content: "字"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 13px; font-family: Georgia, serif; }
-.msg.bot .who b { color: #7a5410; }
-.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+<style>:root{--accent:#9a6a16;--accent-soft:#fbf3dd;--glyph:"字";--glyph-font:Georgia,serif;--name-color:#7a5410;--disclosure-ink:#7a6a16;--pic-g0:#d8a32e;--pic-g1:#b8860b;--pic-border:#7a5410}
 .msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
 
-.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
-.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #7a5410; background: linear-gradient(180deg,#f6edd6,#ecdfb8); border-bottom: 1px solid var(--accent); font-weight: bold; }
-.demo > .pad { padding: 11px 12px 13px; background:#fff; }
 .enc-in { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
 .enc-in input { font-family: var(--font-mono); font-size: 13pt; padding: 4px 8px; width: 170px; border: 1px solid #7d8aa3; box-shadow: inset 1px 1px 0 #c3cbdb; }
 .enc-in .preset { font-family: var(--font-ui); font-size: 12pt; padding: 2px 8px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; }
@@ -61,12 +45,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
 .byte .lab { display: block; font-size: 7pt; color:#66707d; margin-top: 3px; font-family: var(--font-ui); text-align: center; }
 .reassemble { font-family: var(--font-mono); font-size: 9pt; color: #4a5568; margin-top: 6px; } .reassemble b { color: #15243f; } .reassemble .pay { color: #b8860b; font-weight: bold; }
 
-.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
-.compose { border-top: 1px solid #e0cf9e; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
-.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
-
-@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } .totals{grid-template-columns:repeat(2,1fr)} }
-body { text-wrap: pretty; } /* progressive; older engines ignore it */
+@media (max-width: 520px){ .totals{grid-template-columns:repeat(2,1fr)} }
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>

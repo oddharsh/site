@@ -20,30 +20,8 @@
 <meta name="twitter:image" content="https://aadhar.sh/og/lwe-knots.jpg">
 
 <link rel="stylesheet" href="/lwe-base.css">
-<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#3f7d52; --accent-soft:#e6f0e8}
-.title-bar { background: var(--grad-title); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
-.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #2c5c3b; position: relative; }
-.title-bar .icon::before { content: "∞"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: var(--accent); font-weight: bold; text-shadow: none; }
-.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
-.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fffdf6, #f6edd6); border-bottom: 1px solid #e0cf9e; }
-.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #2c5c3b; background: linear-gradient(180deg,#5fa372,#3f7d52); position: relative; }
-.msgr-head .ava::before { content: "∞"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 19px; font-family: var(--font-caption); }
-.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #2c5c3b; }
-.disclosure b { color: #2c5c3b; } .disclosure a { color: #1a4fc4; }
-.msg.bot .pic { background: linear-gradient(180deg,#5fa372,#3f7d52); border-color:#2c5c3b; }
-.msg.bot .pic::before { content: "∞"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 13px; font-family: var(--font-caption); }
-.msg.bot .who b { color: #2c5c3b; }
-.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+<style>:root{--accent:#3f7d52;--accent-soft:#e6f0e8;--glyph:"∞";--pic-g0:#5fa372;--pic-g1:#3f7d52;--pic-border:#2c5c3b;--name-color:#2c5c3b}
 .msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
-.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
-.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #2c5c3b; background: linear-gradient(180deg,#f6edd6,#ecdfb8); border-bottom: 1px solid var(--accent); font-weight: bold; }
-.demo > .pad { padding: 11px 12px 13px; background:#fff; }
-.btn { font-family: var(--font-ui); font-size: 9pt; padding: 3px 9px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; border-radius: 2px; box-shadow: inset 1px 1px 0 #fff; }
-.btn:hover { border-color: var(--accent); }
-.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
-.compose { border-top: 1px solid #e0cf9e; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
-.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
-@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }
 .lead{font-size:9.5pt;color:#3f5244;margin:0 0 9px;line-height:1.5}.knot-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 9px}.knot-btn{font:inherit;font-size:9pt;padding:4px 12px;cursor:pointer;border:1px solid #7aa888;border-radius:3px;background:linear-gradient(180deg,#f3f9f4,#dcebe0);box-shadow:inset 0 1px 0 #fff;color:#2c5c3b}.knot-btn:hover{background:linear-gradient(180deg,#fff,#e8f3eb)}canvas#knotCanvas{width:100%;max-width:560px;height:auto;border:1px solid #cfe0d4;border-radius:4px;background:#fbfdfb;display:block}.knot-verdict{font-size:8.5pt;color:#4a5a4f;margin:7px 0 0;line-height:1.5}.knot-verdict b{color:#2c5c3b}
 body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </style>
