@@ -343,11 +343,25 @@ test("Lens dialogs leave layout and hit testing when closed", async () => {
 
 
 test("track HTML renderer emits rows only", () => {
-  const html = renderTrackListHtml(TRACKS);
+  const html = renderTrackListHtml(TRACKS).html;
   assert.match(html, /^<li\b/);
   assert.match(html, /np-title/);
   assert.match(html, /A &lt;song&gt;/);
   assert.doesNotMatch(html, /<(?:!doctype|html|head|body)\b/i);
+});
+
+test("the tracks fragment answers as an island, marker and all, even in its error state", async () => {
+  // The homepage's island script swaps a body in only when it carries x-island,
+  // because an edge error page is also text/html. A missing KV binding is the
+  // cheapest way to reach the fragment's honest error state: it must still be
+  // an island response, and the script's r.ok check is what keeps it out.
+  const res = await handleRnTracksHtml(new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil() {} });
+  assert.equal(res.headers.get("x-island"), "1");
+  assert.equal(res.headers.get("x-rn-fragment"), null, "one marker, the island convention's");
+  assert.match(res.headers.get("content-type"), /^text\/html/);
+  assert.ok(res.status >= 400, "a failed read is not a 2xx, so the page keeps its placeholder");
+  assert.match(res.headers.get("cache-control"), /max-age=30/, "an error state caches briefly, not for the playlist's 5 minutes");
+  assert.match(await res.text(), /class="np-empty"/);
 });
 
 test("Spotify art collapses onto one host, and only where it is safe to", () => {
@@ -509,7 +523,7 @@ test("the art warm attempts every URL even when one is already cached", async ()
 });
 
 test("rendered track rows re-host recognized art and pass everything else through", () => {
-  const html = renderTrackListHtml({
+  const { html } = renderTrackListHtml({
     tracks: [{
       title: "t", song_link_url: "https://song.link/x", duration_ms: 1000,
       image_url: `https://image-cdn-ak.spotifycdn.com/image/${ART_HASH_A}`,
@@ -531,7 +545,7 @@ test("rendered track rows re-host recognized art and pass everything else throug
   const odd = renderTrackListHtml({
     tracks: [{ title: "t", song_link_url: "https://song.link/x",
                image_url: "https://mosaic.scdn.co/640/abc", artists: [] }],
-  });
+  }).html;
   assert.doesNotMatch(odd, /data-track-image/);
   assert.doesNotMatch(odd, /data-track-imageset/);
   assert.doesNotMatch(odd, /scdn\.co|spotifycdn\.com/);

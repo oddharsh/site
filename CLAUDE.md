@@ -1846,17 +1846,25 @@ yields anything but twelve or if one of them carries no histogram. Those twelve
 are what a script-off visitor keeps, and what stays on screen when
 `handlePhotoGrid` answers 503 because the manifest is unreachable.
 
-Both fragments are preloaded from `<head>` and fetched by inline scripts near the
-bottom of the document. **`crossorigin` on those preloads is load-bearing even
-same-origin**: without it the preload is mode `no-cors` and cannot match the
-hydrator's `cors` fetch, so the page requests each fragment twice.
+**Both halves are ISLANDS, since 2026-09-30, on the one convention in
+`lib/island.ts`.** Each mount carries `data-island="<url>"` and
+`data-state="pending"`, both fragments answer through `islandResponse` with the
+`x-island` marker, and one copy of `islandScript()` after the playlist fills
+both, byte-identical to every other island page so one CSP hash covers it. It
+replaced two hand-written hydrators with two conventions (the grid checked no
+marker at all, the playlist checked a private `x-rn-fragment`). A failed grid
+island (`data-state="failed"`) is what promotes the baked twelve's deferred URLs.
 
-**`data-ssr` survives on both mount points and is now ALWAYS `"0"` on arrival**,
-so neither hydrator's guard ever declines. Read a `data-ssr="0"` in a served
-response as the pre-hydration placeholder it is. The attribute used to mean the
-SSR deadline had been missed, so a `curl` of `/` showing `np-list data-ssr=0` and
-the words "The current playlist is unavailable" reads exactly like a broken
-playlist and is the page working correctly.
+Both fragments are preloaded from `<head>`. **`crossorigin` on those preloads is
+load-bearing even same-origin**: without it the preload is mode `no-cors` and
+cannot match the island script's `cors` fetch, so the page requests each
+fragment twice.
+
+Read `data-state="pending"` in a served response as the pre-hydration
+placeholder it is: a `curl` of `/` showing the words "The current playlist is
+unavailable" reads exactly like a broken playlist and is the page working
+correctly. (Until 2026-09-30 the same placeholder carried `data-ssr="0"`, a
+leftover of the SSR deadline era.)
 
 1. **`/rn/tracks` (Spotify playlist tracks)** — populated by a separate
    handler that scrapes `open.spotify.com/embed/playlist/<id>` for the ordered

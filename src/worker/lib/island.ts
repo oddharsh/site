@@ -12,8 +12,10 @@
 //
 // It is the homepage's shape (/photos/grid.html, /rn/tracks.html) and the shape
 // Topcoat calls a "shard", written down once so the next page takes it by
-// importing three functions rather than by copying a hydrator out of
-// index.html. A page whose live part is a handful of SCALARS wants /security's
+// importing three functions. The homepage itself runs on it since 2026-09-30:
+// src/pages/index.html is hand-authored rather than rendered, so it carries a
+// copy of islandScript() that a contract test holds byte-identical to this
+// one, and its two fragments answer through islandResponse. A page whose live part is a handful of SCALARS wants /security's
 // lighter form instead (JSON into data-attributes); an island is for rows.
 //
 // It is the DEFAULT for a registered page, enforced rather than suggested: build
@@ -37,9 +39,14 @@ import { html, type Html } from "./html.ts";
 // contract test holds the two together.
 export const ISLAND_MARKER = "x-island";
 
-/** The fragment response. `no-store` because the body is one request's. */
-export function islandResponse(body: Html, headers: Record<string, string> = {}): Response {
+/** The fragment response. `no-store` because the body is one request's; a
+ *  fragment everyone shares passes its own cache-control. A non-2xx `status`
+ *  still carries the marker and is still refused by the script, which requires
+ *  `r.ok`: the body is an honest error state for a reader who fetches it
+ *  directly, and the page keeps its placeholder. */
+export function islandResponse(body: Html, headers: Record<string, string> = {}, status = 200): Response {
   return new Response(body.html, {
+    status,
     headers: {
       "content-type":           "text/html; charset=utf-8",
       "cache-control":          "no-store, must-revalidate",
