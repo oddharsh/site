@@ -415,7 +415,7 @@ export function createRun(options) {
     ACC_OPEN[id] = { win: win, btn: btn };
     win.addEventListener("pointerdown", () => { accFront(win); });
     win.querySelector(".x").addEventListener("click", (ev) => {
-      ev.stopPropagation(); if (bd._iv) clearInterval(bd._iv); win.remove(); btn.remove(); delete ACC_OPEN[id];
+      ev.stopPropagation(); if (bd._iv) clearTimeout(bd._iv); win.remove(); btn.remove(); delete ACC_OPEN[id];
     });
     var tb = win.querySelector(".tb");
     if (!(tb instanceof HTMLElement)) throw new Error("Accessory window is missing its title bar");
@@ -455,16 +455,25 @@ export function createRun(options) {
       tb.addEventListener("pointercancel", up);
     });
   }
+  // Intl formats both lines; the formatters are built once per open clock. The
+  // time is fixed 24-hour HH:MM:SS (en-US with hourCycle h23, which is also what
+  // keeps midnight reading 00 rather than 24), and the date follows the
+  // visitor's locale as it always has. Each tick schedules itself for the next
+  // second boundary, so the seconds turn over with the system clock instead of
+  // drifting against it the way a free-running 1s interval does.
   function buildClock(bd) {
     bd.innerHTML = '<div class="clk"><div class="clk-t">--:--:--</div><div class="clk-d"></div></div>';
     var t = bd.querySelector(".clk-t"), dd = bd.querySelector(".clk-d");
-    function p2(n) { return (n < 10 ? "0" : "") + n; }
+    var timeFmt = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+    var dateFmt = new Intl.DateTimeFormat(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
     function tick() {
       var now = new Date();
-      t.textContent = p2(now.getHours()) + ":" + p2(now.getMinutes()) + ":" + p2(now.getSeconds());
-      dd.textContent = now.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      t.textContent = timeFmt.format(now);
+      var day = dateFmt.format(now);
+      if (dd.textContent !== day) dd.textContent = day;
+      bd._iv = setTimeout(tick, 1000 - now.getMilliseconds() + 5);
     }
-    tick(); bd._iv = setInterval(tick, 1000);
+    tick();
   }
 
   // ── open / close ──────────────────────────────────────────────────────────────

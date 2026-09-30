@@ -1,10 +1,16 @@
-/* nav-tray.css — first-interaction styles for XP notification balloons. */
-#axp-balloon{position:fixed;right:6px;bottom:38px;z-index:100000;width:min(300px,calc(100vw - 16px));display:none;
+/* nav-tray.css — first-interaction styles for XP notification balloons.
+   The balloon is a popover="auto" in the top layer, so it needs no z-index.
+   inset, margin, padding and overflow undo the UA's centred [popover] box, and
+   overflow must stay visible or the tail below the box is clipped. Hidden by
+   default and revealed only through :popover-open, so an engine without the
+   Popover API drops the reveal rule and never shows a balloon it cannot close
+   (nav-tray.js throws there and nav.js navigates to the full page instead). */
+#axp-balloon{position:fixed;inset:auto 6px 38px auto;margin:0;padding:0;overflow:visible;width:min(300px,calc(100vw - 16px));display:none;
 font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;color:oklch(28% 0.02 90);
 background:oklch(98.5% 0.035 95);border:1px solid oklch(72% 0.06 86);border-radius:4px;
 box-shadow:2px 3px 11px -3px oklch(40% 0.05 90 / .55)}
-#axp-balloon.open{display:block}
-@media (--motion-ok) {#axp-balloon.open{animation:axp-bln .12s ease-out}}
+#axp-balloon:popover-open{display:block}
+@media (--motion-ok) {#axp-balloon:popover-open{animation:axp-bln .12s ease-out}}
 @keyframes axp-bln{from{transform:translateY(7px);opacity:.3}to{transform:translateY(0);opacity:1}}
 #axp-balloon::before,#axp-balloon::after{content:'';position:absolute;top:100%;left:var(--tail,84%);width:0;height:0;border:9px solid transparent;border-bottom:0;margin-left:-9px}
 #axp-balloon::before{border-top-color:oklch(72% 0.06 86)}
