@@ -19,22 +19,29 @@ import {
 import { parseSource } from "../src/worker/webmention.ts";
 import { parseMf2 } from "../src/worker/lib/mf2.ts";
 import { renderInboxMail } from "../src/worker/inbox.ts";
+import { renderWritingPost } from "../src/worker/writing.ts";
+import { readFileSync } from "node:fs";
 
 const TARGET = "https://aadhar.sh/garage/chunks";
 
-// A standalone note as PR #1042 renders it (notepadWindow with an entry),
-// copied rather than rendered because that PR has not merged yet. The author is
-// two empty <data> elements, so there is no visible text to read at all. The
-// trailing paragraph carries the link, since a textarea's contents are inert to
-// linksTo.
-const NOTE = (target = TARGET) => `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<title>aadhar.sh/writing/a note on this notepad.txt</title></head><body class="np-page">
-<div class="np-window h-entry"><div class="np-titlebar"><span class="np-ico" aria-hidden="true"></span><span class="np-title"><span class="p-name">a note on this notepad</span>.txt<data class="u-url" value="https://aadhar.sh/writing/in-flux"></data><span class="p-author h-card"><data class="p-name" value="Aadharsh Pannirselvam"></data><data class="u-url" value="https://aadhar.sh/"></data></span> \u2014 Notepad</span><span class="np-controls"><span class="min" aria-hidden="true"></span><a class="close" href="/writing" title="back to writing" aria-label="Close">x</a></span></div>
-<div class="np-menubar" role="menubar" aria-label="menu"><span class="np-menu" role="menuitem">File</span></div>
-<textarea class="np-text e-content" spellcheck="false" aria-label="a note on this notepad.txt">This notepad is editable &amp; <b>ephemeral</b>.</textarea>
-<div class="np-status"><span class="np-pos">Ln 1, Col 1</span><span class="np-edited">last changed <time class="dt-published" datetime="2026-06-06">2026-06-06</time></span></div></div>
-<p>see <a href="${target}">chunks</a></p>
-</body></html>`;
+// A standalone note as the site really renders it (renderWritingPost, the
+// same path /writing/<slug> serves), so this pins the receiver against the
+// markup that ships rather than a copy of it. The author is two empty <data>
+// elements, so there is no visible text to read at all. A textarea's contents
+// are inert to linksTo, so a paragraph carrying the link goes in before </body>.
+const NOTE_SLUG = "in-flux";
+const noteEnv = {
+  ASSETS: {
+    fetch: async (url) => {
+      try { return new Response(readFileSync(`src/content${new URL(url).pathname}`, "utf8")); }
+      catch { return new Response("", { status: 404 }); }
+    },
+  },
+};
+const NOTE_TEXT = readFileSync(`src/content/writing/${NOTE_SLUG}.txt`, "utf8");
+const renderedNote = await (await renderWritingPost(NOTE_SLUG, noteEnv)).text();
+assert.ok(renderedNote.includes("</body>"), "the note render has a </body> to put the link before");
+const NOTE = (target = TARGET) => renderedNote.replace("</body>", `<p>see <a href="${target}">chunks</a></p></body>`);
 
 const page = (body) => `<!DOCTYPE html><html><head><title>Page title</title></head><body>${body}
 <p>see <a href="${TARGET}">chunks</a></p></body></html>`;
@@ -50,8 +57,9 @@ test("this site's own note parses to its real author, name, url and date", () =>
 
   const [entry] = parseMf2(NOTE(), "https://aadhar.sh/writing/in-flux").items;
   assert.deepEqual(entry.type, ["h-entry"]);
-  assert.deepEqual(entry.properties.content, [{ html: "This notepad is editable &amp; <b>ephemeral</b>.", value: "This notepad is editable & <b>ephemeral</b>." }],
-    "a textarea's children are one raw text run: the value is the text verbatim and the html is it as written");
+  const content = /** @type {{ value: string } | undefined} */ (entry.properties.content?.[0]);
+  assert.equal(content?.value, NOTE_TEXT.trim(),
+    "a textarea's children are one raw text run, so the value is the .txt verbatim, trimmed at the ends as mf2 trims every e-* value");
 });
 
 test("the note's author is what gets stored, where the hostname used to be", async () => {

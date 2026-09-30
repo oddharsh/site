@@ -249,6 +249,25 @@ test("two branches adding different paragraphs keep both", () => {
   assert.equal(text.match(/Last step\./g).length, 1, "a paragraph was duplicated");
 });
 
+// Measured 2026-09-30 on #1048: one commit reached main inside a squash (#1037)
+// that ALSO edited the paragraph beside it, and reached the branch as itself.
+// The branch side is then pure insertion and the main side an edit plus the
+// same insertion, so the chunk is combined rather than unioned, and the
+// combiner laid the branch's copy in beside main's. The gotcha 38 paragraph
+// came out twice and had to be deleted by hand.
+test("a paragraph both sides added is kept once when one side also edited beside it", () => {
+  const out = proseReplay({
+    base: { "docs/MAINTENANCE.md": doc("# Runbook", "First step.", "Last step.") },
+    mainline: { "docs/MAINTENANCE.md": doc("# Runbook", "First step, reworded.", "Shared note.", "Last step.") },
+    feature: { "docs/MAINTENANCE.md": doc("# Runbook", "First step.", "Shared note.", "Last step.") },
+  });
+  assert.deepEqual(out.unmerged, [], "an edit beside a shared insertion should merge");
+  const text = out.read("docs/MAINTENANCE.md");
+  assert.equal(text.match(/Shared note\./g)?.length, 1, "the paragraph both sides added was printed twice");
+  assert.match(text, /First step, reworded\./, "the mainline's edit was lost");
+  assert.ok(!text.includes("First step.\n"), "the pre-edit sentence survived the merge");
+});
+
 // The shape the whole change is named after, taken from the real history:
 // main bumps a version inside one bullet while a branch adds a different bullet
 // next to it. Markdown puts no blank line between bullets, so a blank-line
