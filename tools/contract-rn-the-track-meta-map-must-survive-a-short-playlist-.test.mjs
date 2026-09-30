@@ -358,9 +358,9 @@ test("the tracks fragment answers as an island, marker and all, even in its erro
   const res = await handleRnTracksHtml(new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil() {} });
   assert.equal(res.headers.get("x-island"), "1");
   assert.equal(res.headers.get("x-rn-fragment"), null, "one marker, the island convention's");
-  assert.match(res.headers.get("content-type"), /^text\/html/);
+  assert.match(res.headers.get("content-type") ?? "", /^text\/html/);
   assert.ok(res.status >= 400, "a failed read is not a 2xx, so the page keeps its placeholder");
-  assert.match(res.headers.get("cache-control"), /max-age=30/, "an error state caches briefly, not for the playlist's 5 minutes");
+  assert.match(res.headers.get("cache-control") ?? "", /max-age=30/, "an error state caches briefly, not for the playlist's 5 minutes");
   assert.match(await res.text(), /class="np-empty"/);
 });
 
