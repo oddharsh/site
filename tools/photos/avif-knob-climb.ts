@@ -72,17 +72,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { climb, ZERO_BAND, type Band, type Candidate } from "../lib/hillclimb.ts";
+import { cutTile, defaultParallel, fujiSources, limiter, sh, shippedTier, SOOC, type TileSource } from "../lib/photo-tiles.ts";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
 const arg = (name: string) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : undefined; };
-const SRC = arg("src") ?? "/Users/aadharsh/Downloads/to post (from ssd)";
+const SRC = arg("src") ?? SOOC;
 const WORK = arg("work") ?? path.join(os.tmpdir(), "avif-knob-climb");
-const ZENC = path.join(HERE, "zenc/target/release/zenc");
+const TILES = arg("tiles") ?? path.join(WORK, "tiles");
 // a 600px tile keeps under two cores busy whatever --jobs says, so overlap many
-const PARALLEL = Number(arg("parallel") ?? Math.max(2, os.availableParallelism() - 4));
+const PARALLEL = Number(arg("parallel") ?? defaultParallel());
+const slot = limiter(PARALLEL);
 const Q_SHIP = 63;
 
 // ── config: avifenc flags beyond -q, as an ordered list of [flag, value] ────
@@ -117,38 +117,9 @@ const CANDIDATES: Record<string, Candidate<Config>> = {
 };
 const CONTROL = (c: Config) => set(c, "--jobs", "1");
 
-// ── processes, with a limit on how many tiles encode at once ────────────────
-async function sh(cmd: string[]): Promise<string> {
-  const p = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
-  const [out, err] = [await new Response(p.stdout).text(), await new Response(p.stderr).text()];
-  if ((await p.exited) !== 0) throw new Error(`${path.basename(cmd[0])} failed: ${err.trim().slice(-300)}`);
-  return out;
-}
-let running = 0;
-const waiting: Array<() => void> = [];
-async function slot<T>(fn: () => Promise<T>): Promise<T> {
-  if (running >= PARALLEL) await new Promise<void>((r) => waiting.push(r));
-  running++;
-  try { return await fn(); } finally { running--; waiting.shift()?.(); }
-}
-
-// ── tiles ───────────────────────────────────────────────────────────────────
-type Item = { stem: string; file: string };
-async function tile(it: Item): Promise<string> {
-  const png = path.join(WORK, "tiles", `${it.stem}.png`);
-  if (fs.existsSync(png)) return png;
-  let input = it.file, tif: string | null = null;
-  if (/\.hif$/i.test(it.file)) {
-    tif = path.join(WORK, "tiles", `${it.stem}.tif`);
-    await sh(["sips", "-s", "format", "tiff", it.file, "--out", tif]);
-    input = tif;
-  }
-  const o = Number(/"Orientation":\s*(\d)/.exec(await sh(["exif-sooc", "-n", "-Orientation", it.file]))?.[1] ?? 1);
-  try {
-    await sh([ZENC, "square", input, "--orient", String(o >= 1 && o <= 8 ? o : 1), "--filter", "box", "--size", "600", "--out", png]);
-  } finally { if (tif) fs.rmSync(tif, { force: true }); }
-  return png;
-}
+// Tiles are cut by tools/lib/photo-tiles.ts, the path the JPEG climb shares.
+type Item = TileSource;
+const tile = (it: Item) => cutTile(it, TILES);
 
 // ── encodes, cached across runs ─────────────────────────────────────────────
 type Enc = { bytes: number; ms: number; s2?: number };
@@ -202,16 +173,8 @@ async function atBudget(it: Item, c: Config): Promise<{ s2: number; ms: number }
 
 // ── the run ─────────────────────────────────────────────────────────────────
 const main = async () => {
-  fs.mkdirSync(path.join(WORK, "tiles"), { recursive: true });
   fs.mkdirSync(path.join(WORK, "enc"), { recursive: true });
-  const names = fs.readdirSync(SRC).filter((f) => /^XT\d+\.(HIF|JPG)$/i.test(f)).sort();
-  // one item per stem; a HIF outranks a JPG of the same frame, as add-photos.sh reads it
-  const byStem = new Map<string, Item>();
-  for (const f of names) {
-    const stem = f.replace(/\.[^.]+$/, "");
-    if (!byStem.has(stem) || /\.hif$/i.test(f)) byStem.set(stem, { stem, file: path.join(SRC, f) });
-  }
-  let items = [...byStem.values()];
+  let items = fujiSources(SRC);
   if (arg("limit")) items = items.slice(0, Number(arg("limit")));
   const pick = (arg("candidates") ?? Object.keys(CANDIDATES).join(",")).split(",");
   for (const p of pick) if (!CANDIDATES[p]) throw new Error(`unknown candidate ${p}; have ${Object.keys(CANDIDATES).join(", ")}`);
@@ -246,11 +209,10 @@ const main = async () => {
   });
   persist(true);
   // The alignment control: is the budget the bytes that actually ship?
-  const hashes = JSON.parse(fs.readFileSync(path.join(HERE, "../../public/images/hashes.json"), "utf8"));
   let same = 0, checked = 0;
   for (const it of items) {
-    const h = hashes[it.stem]?.a, f = path.join(HERE, "../../public/i", `${it.stem}.${h}.avif`);
-    if (!h || !fs.existsSync(f) || !budgets.has(it.stem)) continue;
+    const f = shippedTier(it.stem, "a");
+    if (!f || !budgets.has(it.stem)) continue;
     checked++;
     if (fs.statSync(f).size === budgets.get(it.stem)) same++;
   }
