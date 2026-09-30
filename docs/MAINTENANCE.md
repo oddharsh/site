@@ -2078,9 +2078,14 @@ The queries worth knowing, because each one used to be unanswerable:
   `cal.fail_closed = true` (or `cal.source = "none"`). That is a 503 on `/book`.
 - **"did the webmention run finish"** — `webmention.send`, attribute
   `webmention.capped`.
-- **"is the serendipity pool still syncing"** — `cron.serendipity` (fires
-  00/06/12/18:23 UTC), then the run's summary log line: per-contributor
-  `{synced}` or `{error}`. A `Luma 401` there means the stored session finally
+- **"is the serendipity pool still syncing"** — the /serendipity dashboard's
+  count line answers first ("Last Luma sync 3h ago: ok, 42 events", or
+  **Stale** once the last success is older than two ticks), read from the
+  `serendipity_sync_last_attempt` and `serendipity_sync_last_ok` rows in
+  `settings`. For detail, the `serendipity.sync` span under `cron.serendipity`
+  (fires 00/06/12/18:23 UTC) carries `serendipity.ok`, `serendipity.session`,
+  `serendipity.error` and the event, guest and budget counts, and the run's
+  summary log line still carries per-contributor `{synced}` or `{error}`. A `Luma 401` there means the stored session finally
   died and the fix is a cookie re-paste at `/serendipity/contribute`; the cron
   plus the Set-Cookie capture in `serendipity/serendipity.ts` (`cookieJar`) exist to make
   that rare, since every sync both keeps the session warm and persists any

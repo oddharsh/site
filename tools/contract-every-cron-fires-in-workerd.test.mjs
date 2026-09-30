@@ -263,7 +263,16 @@ const JOB_EVIDENCE = {
     explains: (o) => NEIGHBOR_HOSTS.has(o.host),
   },
   "cron.serendipity": {
-    async check({ run, logs }) {
+    async check({ run, logs, env }) {
+      // The error the stub provokes returns rather than throws, which is the
+      // case sync health exists for: the span and the D1 record must both say
+      // the tick failed while the cron wrapper completes normally.
+      const sync = only(run.spans, "serendipity.sync");
+      assert.equal(sync["serendipity.ok"], false, "a sync whose every set failed read as ok");
+      assert.equal(sync["serendipity.sets"], 1);
+      const row = await env.SERENDIPITY_DB.prepare("SELECT value FROM settings WHERE key = 'serendipity_sync_last_attempt'").first();
+      assert.ok(row, "the tick wrote no last-attempt record");
+      assert.equal(JSON.parse(row.value).ok, false);
       const luma = run.outbound.filter((o) => o.host === LUMA_HOST);
       assert.ok(luma.length >= 1 && luma.every((o) => o.cookie), "the sync never asked Luma with the seeded session");
       // The summary line is the LAST thing cronSerendipity does, so it proves

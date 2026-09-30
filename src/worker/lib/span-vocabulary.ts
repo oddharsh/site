@@ -104,6 +104,12 @@ export type SpanName =
   // /reading's Hacker News lookup, a bounded batch on the :07/:37 tick.
   | "reading.hn"
 
+  // The Luma re-sync inside cron.serendipity. A broken session and a quiet week
+  // wrote the same log line until this existed. `serendipity.ok` and
+  // `serendipity.session` are what tell them apart (and a semicolon anywhere
+  // in this union ends the registry parse in contract-the-span-vocabulary).
+  | "serendipity.sync"
+
   | "nlweb.ask"
   | "dyno.fetch"
 

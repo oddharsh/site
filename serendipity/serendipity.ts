@@ -15,8 +15,10 @@ import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { esc } from "../src/worker/lib/http.ts";
 import { html as htmlTag, unsafeHtml } from "../src/worker/lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "../src/worker/lib/island.ts";
-import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit } from "../src/worker/lib/budget.ts";
+import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit, recordBudget } from "../src/worker/lib/budget.ts";
 import type { Budget } from "../src/worker/lib/budget.ts";
+import { setAttributes, span } from "../src/worker/lib/trace.ts";
+import type { SpanAttrs } from "../src/worker/lib/span-vocabulary.ts";
 import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
@@ -155,9 +157,16 @@ function db(env) {
     // build a bound statement (for batching) without executing
     stmt: (sql, ...a) => D.prepare(sql).bind(...norm(a)),
     // run an array of bound statements in chunks (each chunk = ONE subrequest;
-    // Cloudflare caps subrequests per invocation, so bulk writes MUST batch)
+    // Cloudflare caps subrequests per invocation, so bulk writes MUST batch).
+    // Returns every statement's result in order, so a SELECT riding a write
+    // batch costs no subrequest of its own (syncEvents counts the pool that way).
     async batch(stmts, size = 50) {
-      for (let i = 0; i < stmts.length; i += size) await D.batch(stmts.slice(i, i + size));
+      const results: any[] = [];
+      for (let i = 0; i < stmts.length; i += size) {
+        const r = await D.batch(stmts.slice(i, i + size));
+        if (Array.isArray(r)) results.push(...r);
+      }
+      return results;
     },
     prepare(sql) {
       const st = D.prepare(sql);
@@ -526,11 +535,18 @@ const PENDING_CARDS = 8;
 
 /** The island: the pool's count line and its cards, or the empty panel. */
 async function renderDashboardEvents(d, env) {
-  const [events, contribCount] = await Promise.all([queryEvents(d), countContributors(d)]);
+  // The sync line rides the island rather than the baked shell, so a new
+  // reading costs no page re-mint, and a failed read of it costs the line
+  // alone rather than the whole list.
+  const [events, contribCount, health] = await Promise.all([
+    queryEvents(d), countContributors(d), readSyncHealth(d).catch(() => null),
+  ]);
+  const sync = health ? syncHealthLine(health) : "";
   if (!events.length) {
     return `<div class="empty">
         <p style="font-size:14px;margin:0 0 6px"><b>The pool is empty.</b></p>
         <p class="note">No one has contributed events yet. <a href="${PREFIX}/contribute">Contribute your Luma feed</a> to seed it.</p>
+        ${sync ? `<p class="note">${sync}</p>` : ""}
       </div>`;
   }
   const now = Date.now();
@@ -547,7 +563,7 @@ async function renderDashboardEvents(d, env) {
   await Promise.all(
     [...upcoming, ...past].filter((e) => e.cover_url).map(async (e) => { e._coverHref = await coverProxyUrl(e.cover_url, env); })
   );
-  return `<p class="lede">${events.length} event${events.length == 1 ? "" : "s"} in the pool, fed by ${contribCount} contributor${contribCount == 1 ? "" : "s"}.</p>
+  return `<p class="lede">${events.length} event${events.length == 1 ? "" : "s"} in the pool, fed by ${contribCount} contributor${contribCount == 1 ? "" : "s"}.${sync ? `<br>${sync}` : ""}</p>
       ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${goingFirst(upcoming).map((e) => eventCard(e, false)).join("")}` : ""}
       ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}`;
 }
@@ -910,7 +926,7 @@ function parseEvents(data, selfId) {
 }
 export const SERENDIPITY_SYNC_LIMITS = Object.freeze({ futurePages: 6, pastPages: 4, pastGuestEvents: 4 });
 
-async function fetchMyEvents(auth, selfId) {
+async function fetchMyEvents(auth, selfId, walked: { pages: number } | null = null) {
   const all: any[] = [];
   for (const period of ["future", "past"]) {
     // page caps kept low: Cloudflare limits subrequests (fetch calls) per Worker
@@ -921,6 +937,7 @@ async function fetchMyEvents(auth, selfId) {
     const max = period === "past" ? SERENDIPITY_SYNC_LIMITS.pastPages : SERENDIPITY_SYNC_LIMITS.futurePages;
     while (page < max) {
       page++;
+      if (walked) walked.pages++;
       const p = new URLSearchParams({ pagination_limit: "50", period });
       if (cursor) p.set("pagination_cursor", cursor);
       const data = asRecord(await (await lumaFetch(`${LUMA_API}/home/get-events?${p.toString()}`, auth)).json()) ?? {};
@@ -1167,13 +1184,20 @@ const UPSERT_EVENT = `INSERT INTO events (id,name,description,start_at,end_at,lo
 // sync one contributor's events into the pool. All writes are collected then
 // run via d.batch() (one subrequest per 50 statements) to stay under the
 // Cloudflare per-invocation subrequest cap. Returns {synced} or {error}.
+//
+// The pool is counted before and after INSIDE the write batch, so how many of
+// the fetched events were new costs no extra subrequest. `jarWritten` says the
+// stored jar changed: Luma rotated a key (the session staying warm) or a legacy
+// row shed its non-luma cookies on load.
 async function syncEvents(d, userKey, cookiesJson) {
   const jar = cookieJar(cookiesJson);
   if (!jar || !jar.header()) return { error: "bad cookie json" };
+  const walked = { pages: 0 };
   try {
     const selfId = selfIdFrom(cookiesJson);
-    const events = await fetchMyEvents(jar, selfId);
-    const S: any[] = [];
+    const events = await fetchMyEvents(jar, selfId, walked);
+    const count = () => d.stmt(`SELECT COUNT(*) AS n FROM events`);
+    const S: any[] = [count()];
     if (selfId) {
       S.push(d.stmt(`INSERT INTO settings (key,value,updated_at) VALUES (?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')`, `luma_user_id_${userKey}`, selfId));
       S.push(d.stmt(`INSERT INTO contributors (luma_user_id,first_seen_at,last_seen_at) VALUES (?,datetime('now'),datetime('now')) ON CONFLICT(luma_user_id) DO UPDATE SET last_seen_at=datetime('now')`, selfId));
@@ -1184,13 +1208,24 @@ async function syncEvents(d, userKey, cookiesJson) {
       for (const h of e.hosts) { if (!h.id || h.id === selfId) continue; S.push(attendeeStmt(d, h)); S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id,is_host) VALUES (?,?,1) ON CONFLICT(event_id,attendee_id) DO UPDATE SET is_host=1`, e.id, h.id)); }
       for (const g of e.preview_guests) { if (!g.id || g.id === selfId) continue; S.push(attendeeStmt(d, g)); S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id) VALUES (?,?) ON CONFLICT(event_id,attendee_id) DO NOTHING`, e.id, g.id)); }
     }
-    await d.batch(S);
+    S.push(count());
+    const results = await d.batch(S);
     await persistJar(d, userKey, jar);
-    return { synced: events.length, statements: S.length };
+    const before = poolCount(results[0]), after = poolCount(results[results.length - 1]);
+    // Undefined rather than guessed when either count is unreadable: a span
+    // saying nothing about new events is honest, one saying 0 is not. Clamped
+    // to what this pass fetched, since a link-add landing between the two
+    // counts would otherwise be credited to the sync.
+    const added = before === null || after === null ? undefined : Math.min(events.length, Math.max(0, after - before));
+    return { synced: events.length, new: added, pages: walked.pages, jarWritten: jar.dirty, statements: S.length };
   } catch (err) {
     await persistJar(d, userKey, jar).catch(() => {});
-    return { error: err instanceof Error ? err.message : String(err) };
+    return { error: err instanceof Error ? err.message : String(err), pages: walked.pages, jarWritten: jar.dirty };
   }
+}
+function poolCount(result): number | null {
+  const n = Number(result?.results?.[0]?.n);
+  return Number.isFinite(n) ? n : null;
 }
 
 // add events to the pool from pasted Luma links (no cookies needed). Each URL is
@@ -1604,9 +1639,10 @@ const CRON_DESC_LIMIT = 10;
 // typed out here as `const CRON_SUBREQUEST_CAP = 50` while rn.ts carried its own
 // copy of the same platform fact, which is how a limit gets updated in one place
 // and stays wrong in the other.
-// Seven: the D1 batches plus the two self-dispatches (enrich, tag) at one
-// subrequest each. It was six before the tag pass took the second.
-const CRON_BUDGET_HEADROOM = 7;
+// Eight: the D1 batches, the two self-dispatches (enrich, tag) at one
+// subrequest each, and the sync-health record's one write. It was six before
+// the tag pass took the seventh, and seven before the record took the eighth.
+const CRON_BUDGET_HEADROOM = 8;
 export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
   const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
   return Math.max(0, cap - (setCount * perSet) - CRON_DESC_LIMIT - CRON_BUDGET_HEADROOM);
@@ -1712,45 +1748,294 @@ export async function selectCronGuestEvents(D) {
   return [...soon, ...past];
 }
 
-export async function cronSerendipity(env) {
-  const d = db(env);
-  const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
-  if (!sets.length) { console.log(JSON.stringify({ cron: "serendipity", skipped: "no enabled cookie sets" })); return; }
-  // `descriptions` and `enrich` are filled after the roster loop, so both are
-  // declared here rather than bolted on: an object literal's shape is fixed at
-  // the literal in TypeScript, and this is the log line's whole schema.
-  const out: {
-    events: any[], guests: any[], skipped: any[],
-    descriptions: any, enrich?: any, tag?: any,
-  } = { events: [], guests: [], skipped: [], descriptions: null };
-  // One budget for the whole sweep, so no single roster can spend the tick.
-  const budget = createBudget(guestSweepBudget(sets.length));
-  for (const s of sets) out.events.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
-  // Re-read the sets before the guest pass: if syncEvents absorbed a rotation,
-  // the pass after it must send what Luma just issued, never the old snapshot.
-  const fresh = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
-  if (!fresh.length) return;
-  for (const ev of await selectCronGuestEvents(d.raw)) {
-    if (budget.left <= 0) { out.skipped.push(ev.id); continue; }
-    // first set that can read this list wins; with one contributor that is one
-    // try, and a restricted list falls through to the next set rather than dying.
-    let r: { error?: string, synced?: number, skipped?: string } = { error: "no readable cookie set" };
-    for (const s of fresh) { r = await syncGuests(d, ev.id, s.user_key, s.cookies_json, budget); if (!r.error) break; }
-    if (r.skipped) out.skipped.push(ev.id);
-    else out.guests.push({ event: ev.id, ...r });
+// ── sync health ──────────────────────────────────────────────────────────────
+// Until 2026-09-30 a broken Luma sync and a quiet week looked identical: the
+// tick wrote one log line, Workers Logs keeps three days of it, and the only
+// span was the cron wrapper, which reads green whenever nothing throws. A Luma
+// 401 never throws (syncEvents returns it), so a dead session was a green span
+// four times a day. Three things close that:
+//
+//   1. `serendipity.sync`, a span carrying what the tick did and whether the
+//      session still works, with every unknown number left off rather than 0.
+//   2. A record of the last attempt and the last success in `settings`,
+//      written on every run including one that throws, so the state outlives
+//      the log retention window.
+//   3. A line on the dashboard reading that record, flagged stale once the
+//      last success is older than two ticks.
+
+// The schedule this job runs on. cloudflare.config.ts declares the trigger and
+// a contract test holds the two equal, since a Worker cannot read its own cron
+// list at runtime and a stale threshold built on the wrong interval would cry
+// wolf (or stay quiet) for the whole difference.
+export const SYNC_SCHEDULE = "23 */6 * * *";
+
+/** The gap between fires of a cron expression's hour field, in ms. */
+export function scheduleIntervalMs(expr: string): number {
+  const hour = String(expr).trim().split(/\s+/)[1] ?? "";
+  const step = /^\*\/(\d+)$/.exec(hour);
+  if (step) return Number(step[1]) * 3_600_000;
+  if (hour === "*") return 3_600_000;
+  return 24 * 3_600_000;
+}
+
+/** Twice the interval: one missed tick is a wobble, two is a broken sync. */
+export const SYNC_STALE_MS = 2 * scheduleIntervalMs(SYNC_SCHEDULE);
+
+export const SYNC_ATTEMPT_KEY = "serendipity_sync_last_attempt";
+export const SYNC_OK_KEY = "serendipity_sync_last_ok";
+
+/** What one tick did, in the shape both the span and the settings record use. */
+export type SyncRecord = {
+  at: string,
+  ok: boolean,
+  error?: string,
+  // "ok" every set synced, "rejected" Luma answered 401/403 to a stored
+  // session, "error" anything else failed, "none" no set was enabled.
+  session: "ok" | "rejected" | "error" | "none",
+  sets?: number,
+  jar_written?: boolean,
+  events_fetched?: number,
+  events_new?: number,
+  events_updated?: number,
+  event_pages?: number,
+  guest_events?: number,
+  guests_synced?: number,
+  guest_errors?: number,
+  guest_partial?: number,
+  guest_skipped?: number,
+  fetches?: number,
+  budget?: number,
+  budget_exhausted?: boolean,
+  descriptions_filled?: number,
+  descriptions_remaining?: number,
+  enrich?: string,
+  tag?: string,
+};
+
+const SYNC_ERROR_MAX = 200;
+const truncate = (m: string) => (m.length > SYNC_ERROR_MAX ? `${m.slice(0, SYNC_ERROR_MAX - 1)}…` : m);
+const errorText = (err: unknown) => truncate(err instanceof Error ? err.message : String(err));
+const sumOf = (rows: any[], key: string): number | undefined => {
+  const vals = rows.map((r) => r?.[key]).filter((v) => Number.isFinite(v));
+  return vals.length ? vals.reduce((a, b) => a + b, 0) : undefined;
+};
+
+// A dispatch result in a few words, for a span attribute and the record.
+function dispatchText(r): string | undefined {
+  if (!r) return undefined;
+  if (r.skipped) return `skipped: ${r.skipped}`;
+  if (r.error) return truncate(`error: ${r.error}`);
+  if (Number.isFinite(r.attempted)) return `attempted ${r.attempted}`;
+  if (Number.isFinite(r.tagged)) return `tagged ${r.tagged}`;
+  return undefined;
+}
+
+/**
+ * Fold one tick's working state into its record. Pure, so the ok and session
+ * rules are testable without a D1.
+ *
+ * `ok` means the pool refreshed: at least one enabled set synced its events and
+ * nothing threw. A restricted guest list or a failed description fetch leaves
+ * it true, since those are per-event and already recorded per event.
+ */
+export function summarizeSync(input: {
+  at: string, out: any, sets: number | null, budget: Budget | null, thrown: unknown, halt?: string,
+}): SyncRecord {
+  const { at, out, sets, budget, thrown, halt } = input;
+  const events: any[] = out?.events ?? [];
+  const failed = events.filter((e) => e.error);
+  const synced = events.filter((e) => !e.error);
+  const rejected = failed.some((e) => /^Luma (401|403)\b/.test(String(e.error)));
+  let session: SyncRecord["session"];
+  if (sets === 0) session = "none";
+  else if (rejected) session = "rejected";
+  else if (failed.length || thrown || sets === null) session = "error";
+  else session = "ok";
+
+  const fetched = sumOf(synced, "synced");
+  const added = synced.length && synced.every((e) => Number.isFinite(e.new)) ? sumOf(synced, "new") : undefined;
+  const guests: any[] = out?.guests ?? [];
+  let error: string | undefined;
+  if (thrown) error = errorText(thrown);
+  else if (halt) error = halt;
+  else if (failed.length) error = truncate(`${failed.length} of ${events.length} set(s) failed: ${failed[0].error}`);
+
+  // A tick that never reached the roster pass says nothing about guests, so
+  // those stay undefined rather than reading as a sweep that found nothing.
+  const swept = budget !== null && !thrown && !halt;
+  const desc = out?.descriptions;
+  return {
+    at,
+    ok: !thrown && !halt && synced.length > 0,
+    error,
+    session,
+    sets: sets ?? undefined,
+    jar_written: events.length ? events.some((e) => e.jarWritten) : undefined,
+    events_fetched: fetched,
+    events_new: added,
+    events_updated: fetched !== undefined && added !== undefined ? Math.max(0, fetched - added) : undefined,
+    event_pages: sumOf(events, "pages"),
+    guest_events: swept ? guests.length : undefined,
+    guests_synced: swept ? sumOf(guests.filter((g) => !g.error), "synced") ?? 0 : undefined,
+    guest_errors: swept ? guests.filter((g) => g.error).length : undefined,
+    guest_partial: swept ? guests.filter((g) => g.partial).length : undefined,
+    guest_skipped: swept ? out.skipped.length : undefined,
+    fetches: budget ? budget.spent : undefined,
+    budget: budget ? budget.limit : undefined,
+    budget_exhausted: budget ? budget.exhausted : undefined,
+    descriptions_filled: desc && !desc.error ? desc.filled : undefined,
+    descriptions_remaining: desc && !desc.error ? desc.remaining : undefined,
+    enrich: dispatchText(out?.enrich),
+    tag: dispatchText(out?.tag),
+  };
+}
+
+/** The record as span attributes under `serendipity.`; undefined stays off the span. */
+export function syncSpanAttrs(r: SyncRecord): SpanAttrs<"serendipity.sync"> {
+  const attrs: SpanAttrs<"serendipity.sync"> = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (k !== "at") attrs[`serendipity.${k}`] = v;
   }
-  out.descriptions = await syncDescriptions(d, fresh[0].user_key, fresh[0].cookies_json, CRON_DESC_LIMIT);
-  // last, and each in its own invocation: see dispatchEnrich and dispatchTag.
-  out.enrich = await dispatchEnrich(env);
-  // after descriptions on purpose: an event is only owed a tag once its
-  // description has been attempted, so this tick's backfill is taggable now.
-  out.tag = await dispatchTag(env);
-  // fetches + budget_exhausted are the two numbers that were missing while the
-  // sweep was silently overspending. An exhausted budget is normal on a tick
-  // holding a large roster; it is a problem only when it never clears.
-  console.log(JSON.stringify({
-    cron: "serendipity", ...out, fetches: budget.spent, budget_exhausted: budget.exhausted, budget_overrun: budget.overrun,
-  }));
+  return attrs;
+}
+
+// Both keys in ONE batch, so the record costs one subrequest. The success key is
+// written only on success, which is what lets the dashboard tell "the last run
+// failed" from "nothing has worked for two days".
+async function writeSyncRecord(d, r: SyncRecord) {
+  const upsert = `INSERT INTO settings (key,value,updated_at) VALUES (?,?,datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')`;
+  const value = JSON.stringify(r);
+  const S = [d.stmt(upsert, SYNC_ATTEMPT_KEY, value)];
+  if (r.ok) S.push(d.stmt(upsert, SYNC_OK_KEY, value));
+  await d.batch(S);
+}
+
+/** Both records, or nulls. Unparseable JSON reads as missing. */
+export async function readSyncHealth(d): Promise<{ attempt: SyncRecord | null, lastOk: SyncRecord | null }> {
+  const rows = await d.prepare(`SELECT key, value FROM settings WHERE key IN (?, ?)`).all(SYNC_ATTEMPT_KEY, SYNC_OK_KEY);
+  const parse = (key: string): SyncRecord | null => {
+    const row = rows.find((x) => x.key === key);
+    if (!row) return null;
+    try {
+      const rec = asRecord(JSON.parse(row.value));
+      return rec && asText(rec.at) ? rec as SyncRecord : null;
+    } catch { return null; }
+  };
+  return { attempt: parse(SYNC_ATTEMPT_KEY), lastOk: parse(SYNC_OK_KEY) };
+}
+
+function agoText(ms: number): string {
+  const min = Math.max(0, Math.floor(ms / 60_000));
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+// The public reason, never the raw message: a Luma error carries 200 bytes of
+// its response body, which belongs in the record and the span and not on a page.
+function publicSyncError(r: SyncRecord): string {
+  if (r.session === "rejected") return "Luma refused the stored session";
+  if (r.session === "none") return "no contributor feed is enabled";
+  return "the sync failed";
+}
+
+/**
+ * The dashboard's sync line. `data-sync` is ok, error, stale or none, so the
+ * state is one attribute for anything reading the island. Stale wins over a
+ * single failed tick, because stale is the state that needs a person.
+ */
+export function syncHealthLine(h: { attempt: SyncRecord | null, lastOk: SyncRecord | null }, now = Date.now()): string {
+  const { attempt, lastOk } = h;
+  if (!attempt) return `<span class="sd-sync" data-sync="none">No Luma sync recorded yet.</span>`;
+  const attemptAt = Date.parse(attempt.at);
+  const okAt = lastOk ? Date.parse(lastOk.at) : NaN;
+  const stale = !Number.isFinite(okAt) || now - okAt > SYNC_STALE_MS;
+  const when = Number.isFinite(attemptAt) ? agoText(now - attemptAt) : "at an unknown time";
+  const n = attempt.events_fetched;
+  const count = Number.isFinite(n) ? `, ${n} event${n === 1 ? "" : "s"}` : "";
+  const result = attempt.ok ? `ok${count}` : `error (${publicSyncError(attempt)})`;
+  let tail = "";
+  if (stale) {
+    tail = Number.isFinite(okAt)
+      ? ` <b>Stale:</b> the last good sync was ${esc(agoText(now - okAt))}.`
+      : ` <b>Stale:</b> no sync has succeeded yet.`;
+  }
+  const state = stale ? "stale" : attempt.ok ? "ok" : "error";
+  return `<span class="sd-sync" data-sync="${state}">Last Luma sync ${esc(when)}: ${esc(result)}.${tail}</span>`;
+}
+
+// The whole tick runs inside `serendipity.sync` and returns its record. Every
+// early exit sets `halt` instead of returning, so the record and the span are
+// written on each path, and a throw is caught only to be recorded and rethrown.
+export async function cronSerendipity(env) {
+  return span("serendipity.sync", async (s) => {
+    const d = db(env);
+    const at = new Date().toISOString();
+    // `descriptions` and `enrich` are filled after the roster loop, so both are
+    // declared here rather than bolted on: an object literal's shape is fixed at
+    // the literal in TypeScript, and this is the log line's whole schema.
+    const out: {
+      events: any[], guests: any[], skipped: any[],
+      descriptions: any, enrich?: any, tag?: any,
+    } = { events: [], guests: [], skipped: [], descriptions: null };
+    let sets: number | null = null;
+    let budget: Budget | null = null;
+    let halt: string | undefined;
+    let thrown: unknown = null;
+    try {
+      const enabled = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
+      sets = enabled.length;
+      if (!enabled.length) {
+        halt = "no enabled cookie sets";
+        console.log(JSON.stringify({ cron: "serendipity", skipped: halt }));
+      } else {
+        // One budget for the whole sweep, so no single roster can spend the tick.
+        const sweep = createBudget(guestSweepBudget(enabled.length));
+        for (const c of enabled) out.events.push({ label: c.label, ...(await syncEvents(d, c.user_key, c.cookies_json)) });
+        // Re-read the sets before the guest pass: if syncEvents absorbed a rotation,
+        // the pass after it must send what Luma just issued, never the old snapshot.
+        const fresh = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
+        if (!fresh.length) halt = "cookie sets were disabled mid-sync";
+        else {
+          budget = sweep;
+          for (const ev of await selectCronGuestEvents(d.raw)) {
+            if (sweep.left <= 0) { out.skipped.push(ev.id); continue; }
+            // first set that can read this list wins; with one contributor that is one
+            // try, and a restricted list falls through to the next set rather than dying.
+            let r: { error?: string, synced?: number, skipped?: string } = { error: "no readable cookie set" };
+            for (const c of fresh) { r = await syncGuests(d, ev.id, c.user_key, c.cookies_json, sweep); if (!r.error) break; }
+            if (r.skipped) out.skipped.push(ev.id);
+            else out.guests.push({ event: ev.id, ...r });
+          }
+          out.descriptions = await syncDescriptions(d, fresh[0].user_key, fresh[0].cookies_json, CRON_DESC_LIMIT);
+          // last, and each in its own invocation: see dispatchEnrich and dispatchTag.
+          out.enrich = await dispatchEnrich(env);
+          // after descriptions on purpose: an event is only owed a tag once its
+          // description has been attempted, so this tick's backfill is taggable now.
+          out.tag = await dispatchTag(env);
+          // fetches + budget_exhausted are the two numbers that were missing while the
+          // sweep was silently overspending. An exhausted budget is normal on a tick
+          // holding a large roster; it is a problem only when it never clears.
+          console.log(JSON.stringify({
+            cron: "serendipity", ...out, fetches: sweep.spent, budget_exhausted: sweep.exhausted, budget_overrun: sweep.overrun,
+          }));
+        }
+      }
+    } catch (err) {
+      thrown = err;
+    }
+    const record = summarizeSync({ at, out, sets, budget, thrown, halt });
+    setAttributes(s, syncSpanAttrs(record));
+    if (budget) recordBudget(s, budget);
+    // A failure to WRITE is logged and never replaces the error that got here.
+    try { await writeSyncRecord(d, record); }
+    catch (err) { console.log(JSON.stringify({ cron: "serendipity", record_write_failed: errorText(err) })); }
+    if (thrown) throw thrown;
+    return record;
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
