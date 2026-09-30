@@ -225,6 +225,16 @@ async function sectionIcon(section) {
   return `data:image/svg+xml,${encodeURIComponent(await readFile(file, "utf8"))}`;
 }
 
+// A `data:` href passes through. A root-relative `.svg` href naming a file in
+// public/ comes back inlined, since the card document has no base URL (see
+// capture()). Anything else is returned as-is.
+async function inlineRootRelative(href) {
+  if (!/^\/[^/].*\.svg$/.test(href)) return href;
+  const file = path.join(PUBLIC, href.slice(1));
+  if (!file.startsWith(PUBLIC + path.sep) || !existsSync(file)) return href;
+  return `data:image/svg+xml,${encodeURIComponent(await readFile(file, "utf8"))}`;
+}
+
 function cardHtml({ bliss, shot, favicon }) {
   // shot: data URI of the demo screenshot (captured at DSF 2, downscaled by the
   // browser to fit). Top-anchor so the grabbiest part (title bar + controls +
@@ -309,8 +319,13 @@ async function capture(page, cardPage, p, bliss) {
   // document has no base URL and a root-relative path resolves against nothing.
   // Every page whose icon works declares it as `data:image/svg+xml,...` for the
   // same reason. Measured 2026-08-24, twice, because the first fix looked right.
+  //
+  // A DECLARED icon can be root-relative too, and /lens is: #346 moved it to
+  // `/section-icons/lens.svg`, so its 2026-09-30 recapture stamped the same empty
+  // box. A root-relative href that names a file in public/ is inlined from that
+  // file here, the same bytes the page serves.
   const declared = await page.getAttribute('link[rel="icon"]', "href").catch(() => null);
-  const favicon = declared || (p.section ? await sectionIcon(p.section) : null);
+  const favicon = (declared ? await inlineRootRelative(declared) : null) || (p.section ? await sectionIcon(p.section) : null);
 
   // pick the crop: a span (top of A to bottom of B) beats single-hero sweeps,
   // because pages like /lens tell their story across stacked rows — address
