@@ -330,6 +330,7 @@
       "tools/lens-seed.ts": "writes seed captures into a scratch directory",
       "tools/photos/resample-probe.ts": "writes probe output while measuring the ingest geometry, and commits nothing",
       "tools/photos/codec-knob-probe.ts": "writes scratch encodes and an optional --json report while measuring cjxl, avifenc and AV2 (avifenc-avm) flags at matched bytes, and commits nothing",
+      "tools/lib/hillclimb.ts": "writes only the JSONL ledger of a climb, to a path its caller names, and commits nothing",
       "tools/family-holdout.ts": "reads git history and writes only an optional --json report of its held-out scores, and commits nothing",
       "tools/photos/avif-chroma-probe.ts": "writes scratch tiers, encodes and an optional --json report while comparing AVIF chroma layouts at the shipped bytes, and commits nothing",
       "tools/photos/experiments/bench-jpeg-search.ts": "writes JPEG search candidates only inside its own mkdtemp directory, removes them in finally, and reports measurements on stdout; it never regenerates a committed photo, manifest or histogram",
