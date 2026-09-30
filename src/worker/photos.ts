@@ -634,7 +634,7 @@ function renderTile(p, altMap, i: number, extra: Html = EMPTY): Html {
 }
 
 const SHEET_CSS = `
-  h1 { font-family: var(--font-caption); color: var(--blue-40); font-size: 18pt; margin: 0 0 4px; font-weight: bold; }
+  h1 { font-size: 18pt; }
   .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
   .sheet {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
