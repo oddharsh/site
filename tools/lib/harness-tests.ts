@@ -1,4 +1,4 @@
-// harness-tests.ts — which contract tests boot wrangler's createTestHarness,
+// harness-tests.ts: which contract tests boot wrangler's createTestHarness,
 // and the one command the wrangler gate runs them with.
 //
 // WHY THE GATE NEEDS THEM. canary-wrangler.ts held a candidate wrangler to the
