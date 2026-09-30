@@ -5,7 +5,7 @@
 // story on that host (measured 2026-09-29: danluu.com answered 554 hits, the
 // top one a 777-comment thread about a different page). A badge built from the
 // first hit would put that count on the homepage link and read as true.
-import { CURIUS_CACHE_KEY, renderReadingPage } from "../src/worker/reading.ts";
+import { CURIUS_CACHE_KEY, renderReadingList } from "../src/worker/reading.ts";
 import { HN_MAP_KEY, hnInterval, hnKey, hnThreadFor, pickPending, pickThread, readHnMap } from "../src/worker/reading-hn.ts";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
@@ -97,14 +97,14 @@ test("/reading shows a thread only where it has comments, and says how many link
     "a.com/x": { id: 4242, c: 1, p: 9, n: 1, checked: NOW },
     "a.com/quiet": { id: 99, c: 0, p: 2, n: 1, checked: NOW },
   });
-  const html = await (renderReadingPage({ items, fetchedAt: "2026-09-29T00:00:00Z" }, hn)).text();
+  const html = renderReadingList({ items, fetchedAt: "2026-09-29T00:00:00Z" }, hn).html;
   assert.match(html, /news\.ycombinator\.com\/item\?id=4242/);
   assert.match(html, /1 comment</, "the count reads in the singular for one comment");
   assert.doesNotMatch(html, /item\?id=99/, "a thread with no comments earned a badge");
   assert.match(html, /1 discussed on Hacker News/);
   assert.equal(hnThreadFor("https://b.com/", hn), null);
-  // The control: with no map the page renders exactly as it did before.
-  const bare = await (renderReadingPage({ items, fetchedAt: "2026-09-29T00:00:00Z" })).text();
+  // The control: with no map the list renders exactly as it did before.
+  const bare = renderReadingList({ items, fetchedAt: "2026-09-29T00:00:00Z" }).html;
   assert.doesNotMatch(bare, /Hacker News|rd-hn"/);
 });
 

@@ -228,7 +228,9 @@ const worker = defineWorker({
       // /security and /security.json (the page is built, the JSON is its three
       // live connection values). /security.md is already claimed by "/*.md" below.
       "/security*",
-      "/reading", "/updates", "/updates.json",
+      // "/reading*" covers the page and its island at /reading/list.html
+      // (2026-09-29); nothing static lives under /reading.
+      "/reading*", "/updates", "/updates.json",
       "/perf",
       "/perf.json", "/restore",
       // FOLDED onto a wildcard 2026-08-11, from eight exact rows ("/lens",
