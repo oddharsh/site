@@ -31,6 +31,7 @@ import { validateLensTarget } from "./lens.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "./lib/public-fetch.ts";
 import { readResponseCapped } from "./lib/crawl.ts";
 import { esc, extractMeta, extractTitle } from "./lib/http.ts";
+import { mf2All, mf2First, mf2Strings, mf2Values, parseMf2 } from "./lib/mf2.ts";
 import { overBudget } from "./lib/ratelimit.ts";
 import { sign, verify } from "../../cal/src/sign.ts";
 import { resendSend } from "../../cal/src/email.ts";
@@ -292,18 +293,46 @@ export function linksTo(html, target, sourceUrl) {
 }
 
 // ── parsing ────────────────────────────────────────────────────────────────
-// Deliberately minimal: microformats2 where it's cheap to read, standard meta as
-// the fallback, the domain as the floor. Never fabricate an author — an unknown
-// author renders as the site it came from, which is honest and still useful.
-function parseSource(html, sourceUrl, target) {
-  const title = (extractTitle(html) || "").slice(0, 200) || new URL(sourceUrl).hostname;
+// microformats2 first (lib/mf2.ts), standard meta as the fallback, the domain as
+// the floor. Never fabricate an author: an unknown author renders as the site it
+// came from, which is honest and still useful.
+//
+// `name`, `url` and `published` are the h-entry's own. Only `title` and the
+// author reach D1; `published` rides along to the moderation email, and the
+// three are returned so a test can see what the parser read.
+export function parseSource(html, sourceUrl, target) {
+  const doc = parseMf2(html, sourceUrl);
+  const entry = entryOf(doc, sourceUrl);
+  const author = authorOf(html, sourceUrl, doc, entry);
+  const name = squash(explicit(entry, "name")).slice(0, 200);
+  const title = name || clean((extractTitle(html) || "").slice(0, 200)) || new URL(sourceUrl).hostname;
   return {
     kind: mentionKind(html, target),
-    author: authorOf(html, sourceUrl),
-    authorUrl: new URL(sourceUrl).origin,
-    title: clean(title),
+    author: author.name,
+    authorUrl: author.url,
+    authorPhoto: author.photo,
+    title,
     excerpt: excerptAround(html, target),
+    name,
+    url: httpUrl(mf2First(entry, "url")),
+    published: squash(mf2First(entry, "published")).slice(0, 64),
   };
+}
+
+// The post the mention came from. A source page is usually one h-entry; when it
+// carries several (a feed, a thread), the one whose u-url is the page itself is
+// the post, and the first is the fallback.
+function entryOf(doc, sourceUrl) {
+  const entries = mf2All(doc).filter((i) => i.type.includes("h-entry"));
+  const self = sameUrl(sourceUrl);
+  return entries.find((e) => mf2Strings(e, "url").some((u) => sameUrl(u) === self)) || entries[0];
+}
+
+// A name the page SAID, rather than one mf2 implied. An implied name on an entry
+// is its whole text, which is a fine name for a note and a bad title for a row.
+function explicit(entry, prop) {
+  if (!entry || entry.implied?.includes(prop)) return "";
+  return mf2First(entry, prop);
 }
 
 // Who sent it. The floor is the hostname, which is honest and still useful, and
@@ -332,49 +361,113 @@ function parseSource(html, sourceUrl, target) {
 //      see which parent it is under picks up the title. On this very document
 //      that fallback would have called the author "Receiver Test #1".
 //
-// So: read the p-author ELEMENT (bounded by its own closing tag, not by a
-// character window, because the post title sits a few hundred characters past
-// this one's end), take its text, then a p-name nested INSIDE it, then the alt
-// of its photo, which mf2 says contributes the name for a p-* property. Every
-// candidate has to survive clean() as a non-empty string to win.
-function authorOf(html, sourceUrl) {
-  const host = new URL(sourceUrl).hostname.replace(/^www\./, "");
-  for (const candidate of [() => authorFromCard(html), () => extractMeta(html, "author"), () => host]) {
-    const value = clean(candidate() || "").slice(0, 120);
-    if (value) return value;
+// That regex reader was replaced on 2026-09-30 by a real mf2 parse (lib/mf2.ts),
+// because it read visible text only. This site's own notes name their author
+// as <data class="p-name" value="Aadharsh Pannirselvam">, which draws nothing,
+// and the regex reported the hostname for them. XRay, mf2py and
+// microformats-parser all read the name.
+//
+// The rungs, in order. The first four are the IndieWeb authorship algorithm
+// (https://indieweb.org/authorship-spec) without its one network step: we never
+// fetch an author page, because this runs on a stranger's say-so.
+//
+//   1. the h-entry's author property
+//   2. the author of an h-feed the entry sits in
+//   3. rel=author
+//   4. the page's representative h-card (uid = url = page, or url is a rel=me)
+//   5. a top-level h-card whose url is the source site's home page, which is how
+//      a personal site marks up its owner in a sidebar
+//   6. <meta name="author">, then the host of any author URL found above, then
+//      the source's host
+//
+// An author given as a URL is matched against the h-cards on the same page for
+// its name, since that is where a site puts the card its u-author points at.
+// Every candidate has to survive squash() as a non-empty string to win, and the
+// photo is read but not stored (inbox.ts shows no avatars, by choice).
+function authorOf(html, sourceUrl, doc, entry) {
+  const all = mf2All(doc);
+  const cards = all.filter((i) => i.type.includes("h-card"));
+  const feed = entry && all.find((i) => i.type.includes("h-feed") && (i.children || []).includes(entry));
+  const asItems = (card) => (card ? [{ item: card }] : []);
+  const rungs = [
+    () => mf2Values(entry, "author"),
+    () => mf2Values(feed, "author"),
+    () => (doc.rels.author || []).map((text) => ({ text })),
+    () => asItems(representativeCard(doc, sourceUrl)),
+    () => asItems(homeCard(doc, sourceUrl)),
+  ];
+
+  let found: { name: string; url: string; photo: string } | null = null;
+  for (const rung of rungs) {
+    for (const v of rung()) {
+      found = resolveAuthor(v, cards);
+      if (found) break;
+    }
+    if (found) break;
   }
-  return host;
+
+  const url = httpUrl(found?.url) || new URL(sourceUrl).origin;
+  const hostOf = (u) => new URL(u).hostname.replace(/^www\./, "");
+  const name = [found?.name, extractMeta(html, "author"), found?.url && httpUrl(found.url) ? hostOf(found.url) : "", hostOf(sourceUrl)]
+    .map((n) => squash(n || "").slice(0, 120))
+    .find(Boolean) ?? hostOf(sourceUrl);
+  return { name, url: url.slice(0, 500), photo: httpUrl(found?.photo) };
 }
 
-function authorFromCard(html) {
-  const open = String(html).match(/<(\w+)\b[^>]*class="[^"]*\bp-author\b[^"]*"[^>]*>/i);
-  // `index` is always set on a non-global match; the checker cannot know that.
-  if (!open || open.index === undefined) return "";
-  const inner = elementInner(html, open.index + open[0].length, open[1]);
-  const nested = firstMatch(inner, /class="[^"]*\bp-name\b[^"]*"[^>]*>([\s\S]{0,200}?)</i);
-  const alt = firstMatch(inner, /<img\b[^>]*\balt\s*=\s*"([^"]{1,120})"/i);
-  return clean(nested) || clean(stripTags(inner)) || clean(alt);
-}
-
-/** The inner HTML of an element whose opening tag ended at `from`, found by
- *  counting its own tag's nesting rather than by taking a fixed window. A window
- *  is what would run past the h-card's end and into the entry title. An element
- *  that is never closed yields the rest of the document, which is the safe
- *  direction here: it can only make an author emptier or longer, never wrong. */
-function elementInner(html, from, tag) {
-  const s = String(html);
-  const scan = new RegExp(`<(/?)${tag}\\b`, "gi");
-  scan.lastIndex = from;
-  let depth = 1;
-  for (let m = scan.exec(s); m; m = scan.exec(s)) {
-    depth += m[1] ? -1 : 1;
-    if (depth === 0) return s.slice(from, m.index);
+/** One author value to a {name, url, photo}, or null when it says nothing. An
+ *  h-card is read directly; a URL looks for the h-card it names on this page;
+ *  any other string is a name. */
+function resolveAuthor(v, cards) {
+  if ("item" in v) {
+    const it = v.item;
+    if (it.type.includes("h-card")) {
+      const card = { name: mf2First(it, "name"), url: mf2First(it, "url"), photo: mf2First(it, "photo") };
+      return squash(card.name) || httpUrl(card.url) ? card : null;
+    }
+    return squash(it.value) ? { name: it.value, url: "", photo: "" } : null;
   }
-  return s.slice(from);
+  const s = v.text.trim();
+  if (!s) return null;
+  if (!httpUrl(s)) return { name: s, url: "", photo: "" };
+  const card = cards.find((c) => mf2Strings(c, "url").some((u) => sameUrl(u) === sameUrl(s)));
+  return card
+    ? { name: mf2First(card, "name"), url: s, photo: mf2First(card, "photo") }
+    : { name: "", url: s, photo: "" };
 }
 
-function stripTags(html) {
-  return String(html).replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, " ");
+// https://microformats.org/wiki/representative-h-card-parsing, over top-level
+// cards only, as the spec says.
+function representativeCard(doc, pageUrl) {
+  const page = sameUrl(pageUrl);
+  const top = doc.items.filter((i) => i.type.includes("h-card"));
+  const urls = (c, p) => mf2Strings(c, p).map(sameUrl);
+  const me = (doc.rels.me || []).map(sameUrl);
+  const byUid = top.find((c) => urls(c, "uid").includes(page) && urls(c, "url").includes(page));
+  if (byUid) return byUid;
+  const byMe = top.find((c) => urls(c, "url").some((u) => me.includes(u)));
+  if (byMe) return byMe;
+  const byUrl = top.filter((c) => urls(c, "url").includes(page));
+  return byUrl.length === 1 ? byUrl[0] : null;
+}
+
+function homeCard(doc, pageUrl) {
+  const home = sameUrl(new URL("/", pageUrl).href);
+  return doc.items.find((c) => c.type.includes("h-card") &&
+    mf2Strings(c, "url").some((u) => sameUrl(u) === home)) || null;
+}
+
+/** A URL comparable across spellings (host case, trailing slash, query), or ""
+ *  when it does not parse. */
+function sameUrl(raw) {
+  try { return canonicalForCompare(new URL(raw)); } catch { return ""; }
+}
+
+/** The value itself when it is an absolute http(s) URL, else "". Anything
+ *  stored as a URL is a stranger's string, and only these two schemes may be
+ *  rendered as a link later. */
+function httpUrl(raw) {
+  const s = String(raw || "").trim();
+  return absoluteHttpUrl(s) ? s.slice(0, 500) : "";
 }
 
 // The microformats2 class on the link that points at me decides how this reads
@@ -434,6 +527,9 @@ function clean(s) {
     .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, (m) => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " " }[m] || " "))
     .replace(/\s+/g, " ").trim();
 }
+// For values lib/mf2.ts already decoded: a second decode would turn a page's
+// literal "&amp;lt;" into "<".
+function squash(s) { return String(s || "").replace(/\s+/g, " ").trim(); }
 
 // ── moderation ─────────────────────────────────────────────────────────────
 // The exact HMAC construction cal uses for booking approvals: only the holder of
@@ -449,7 +545,7 @@ async function emailHost(env, request, m) {
   const decline = `${origin}/webmention/decline?t=${m.id}&sig=${await sign(`${m.id}|decline`, env.SIGNING_SECRET)}`;
   const html = `
     <p><strong>${esc(m.author)}</strong> ${esc(kindPhrase(m.kind))} <a href="${esc(m.target)}">${esc(m.target.replace(origin, ""))}</a></p>
-    <p><a href="${esc(m.source)}">${esc(m.title)}</a></p>
+    <p><a href="${esc(m.source)}">${esc(m.title)}</a>${m.published ? ` <span style="color:#888">published ${esc(m.published)}</span>` : ""}</p>
     ${m.excerpt ? `<blockquote style="border-left:3px solid #888;padding-left:.8em;margin-left:0;color:#333">${esc(m.excerpt)}</blockquote>` : ""}
     <p>
       <a href="${approve}" style="display:inline-block;padding:8px 14px;background:#0a0;color:#fff;text-decoration:none;border-radius:3px">approve &amp; publish</a>
