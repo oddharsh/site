@@ -6020,6 +6020,18 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     them asserts the structural fact instead: the row builder takes
     `worker_gzip` from the dry-run's line and never a per-asset `.gzip`.
 
+    **The in-process door closed under bun on 2026-09-30**, at the wrangler
+    pin ddaa558 (#1037). workers-sdk#15906 moved `dispatchFetch`'s URL rewrite
+    out of miniflare and INTO the same `Dispatcher`, so `worker.fetch()` now
+    reaches workerd only if fetch honours `{ dispatcher }`. Under bun a made-up
+    host is ENOTFOUND and a path answers 404 "No entrypoint worker found";
+    under node both answer 200. Three contract tests dispatch through the
+    harness, so each one wraps its body in `underNode()`
+    (`tools/lib/harness-dispatch.ts`), which re-runs that test in a node child
+    and requires exactly one pass. cal is unaffected: it calls its handlers
+    directly with the harness's `getEnv()`, which never touches `dispatchFetch`.
+    The same watch retires the wrapper.
+
     What a node MAJOR still owns is that one column, since wrangler gzips with
     the node it runs under; `node-support-window.yml`'s PR body says so in
     those words. And the route oracle stays on node for a reason measured the
