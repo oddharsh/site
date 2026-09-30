@@ -87,6 +87,51 @@ test("every workflow reads .node-version rather than naming a version", async ()
   assert.ok(checked >= 5, `expected several setup-node steps, matched ${checked}`);
 });
 
+// The commands whose run includes the contract suite. Three harness tests in it
+// re-run under node through underNode() (tools/lib/harness-dispatch.ts), so the
+// SUITE needs the pinned node even in a job that otherwise never touches it.
+const RUNS_THE_SUITE = /\bbun run (?:test|bun:pin|canary:bun|canary:wrangler|wrangler:pin)(?![\w:-])/;
+
+function workflowJobs(body) {
+  const at = body.search(/^jobs:\s*$/m);
+  if (at < 0) return [];
+  const heads = [...body.matchAll(/^ {2}([A-Za-z0-9_-]+):\s*$/gm)].filter((m) => m.index > at);
+  return heads.map((m, k) => ({ name: m[1], body: body.slice(m.index, heads[k + 1]?.index ?? body.length) }));
+}
+
+test("every job that runs the contract suite sets up the pinned node", async () => {
+  // #1058 and #1061: bun-pin and the canary bun leg ran the suite with no
+  // setup-node, so underNode() spawned the RUNNER's node (22.23, which only
+  // knows --experimental-test-isolation), the child exited 9, and every
+  // candidate bun read red for a reason that had nothing to do with bun. This is
+  // per JOB rather than per file on purpose: canary.yml already set node up in
+  // its wrangler job, so a per-file check passed on the very file that broke.
+  const dir = new URL(".github/workflows/", ROOT);
+  const files = (await readdir(dir)).filter((n) => n.endsWith(".yml"));
+  const missing = [];
+  let checked = 0;
+  for (const file of files) {
+    const body = await readFile(new URL(file, dir), "utf8");
+    for (const job of workflowJobs(body)) {
+      if (!RUNS_THE_SUITE.test(job.body)) continue;
+      checked++;
+      if (!/uses: actions\/setup-node@/.test(job.body)) missing.push(`${file}#${job.name}`);
+    }
+  }
+  assert.deepEqual(missing, [], `jobs that run the contract suite without setting up node: ${missing.join(", ")}`);
+  // validate, bun-pin, canary bun, canary wrangler, wrangler-pin
+  assert.ok(checked >= 5, `expected at least 5 suite-running jobs, matched ${checked}`);
+});
+
+test("the job splitter is per job, which is what the node check rests on", () => {
+  // The control: node set up in one job, the suite run in another.
+  const body = "on: push\njobs:\n  a:\n    steps:\n      - uses: actions/setup-node@x\n  b:\n    steps:\n      - run: bun run canary:bun\n";
+  const jobs = workflowJobs(body);
+  assert.deepEqual(jobs.map((j) => j.name), ["a", "b"]);
+  const b = jobs[1];
+  assert.ok(RUNS_THE_SUITE.test(b.body) && !/setup-node/.test(b.body), "job b must read as running the suite without node");
+});
+
 test("node:pin refuses to double as a bumper", async () => {
   const body = await readFile(new URL("tools/check-node-pin.ts", ROOT), "utf8");
 

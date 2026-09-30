@@ -81,6 +81,17 @@ jobs:
         # byte-identical build that says nothing about what production ships.
         uses: ./.github/actions/setup-bun
 
+      - name: Set up Node.js
+        # The contract suite runs three harness tests through underNode()
+        # (tools/lib/harness-dispatch.ts), which spawns node with
+        # --test-isolation=none. The runner ships node 22.23, where that flag
+        # is still --experimental-test-isolation, so the child exits 9 and
+        # every candidate reads red (#1058, #1061). Node is a dependency of
+        # the SUITE here, not of the candidate bun.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
