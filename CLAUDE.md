@@ -6160,13 +6160,22 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     test`'s own flags. Run against ddaa558 from a tree without `underNode()`,
     it answered `1 pass, 3 fail` and named both ENOTFOUND hosts.
 
-    **CI followed on the same day.** `setup-node` is in exactly the jobs that
-    run wrangler (validate, the ramp's canary and full, perf-diff, perf-history,
-    wrangler-pin, canary's wrangler leg, node-support-window, which measures
-    node itself) and nowhere else: the photo pipeline, og-cards, the dictionary
-    roll, bun-pin, the ramp's verify job and canary's bun and browsers legs run
-    with no node step, and the whole contract suite passes with node absent
-    from PATH (763 of 763). Two caveats keep that honest. Every `uses:` action
+    **CI followed on the same day.** `setup-node` is in the jobs that run
+    wrangler (validate, perf-diff, perf-history, wrangler-pin, canary's
+    wrangler leg) and nowhere else: the photo pipeline, og-cards, the
+    dictionary roll, node-support-window and canary's browsers leg run with no
+    node step. **Since 2026-09-30 it is also in every job that runs the
+    contract suite**, which added bun-pin and canary's bun leg: the suite's
+    three `underNode()` harness tests spawn node with `--test-isolation=none`,
+    and the runner's own node (22.23) knows only
+    `--experimental-test-isolation`, so the child exited 9 and every bun
+    candidate read red for a reason unrelated to bun (#1058, #1061).
+    `contract-the-node-pin-is-declared-once` checks this per JOB, since
+    canary.yml already set node up in its wrangler job and a per-file check
+    passed on the file that broke. The paragraph's original claim, that the
+    whole contract suite passes with node absent from PATH (763 of 763), was
+    true until `underNode()` landed the same morning. Two caveats keep the
+    rest honest. Every `uses:` action
     written in JavaScript (checkout, github-script, codeql, fetch-metadata, the
     app-token) runs on the RUNNER's bundled node whatever we set up, so "off
     node" means no step of ours invokes it, never that the job has none. And
