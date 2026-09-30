@@ -1,7 +1,9 @@
 // cal.aadhar.sh — coffee booking worker.
 //
 // flow:
-//   1. visitor GET /         → renders booking page, slots injected from ICS
+//   1. visitor GET /         → the booking page (built on aadhar.sh), whose
+//                              slot list loads from /slots.html, an island
+//                              rendered from the ICS feed
 //   2. visitor POST /book    → creates pending booking in KV, emails host
 //                              with signed approve/decline links
 //   3. host clicks /approve  → marks confirmed, emails requester an .ics invite
@@ -38,12 +40,13 @@ import { releaseSlotClaim, reserveSlot }  from "./reservation.ts";
 import { sendApprovalRequest, sendInvite, sendHostCopy,
          sendDecline, sendUpdate, sendCancel } from "./email.ts";
 import { sign, verify }                    from "./sign.ts";
-import { bookingPage, successPage,
+import { bookingPage, slotsFragment, SLOTS_PATH, PICK_PATH, successPage,
          confirmedPage, declinedPage,
          locationPage, locationSavedPage,
          reschedulePage, rescheduledPage,
          cancelPage, cancelledPage,
          errorPage }                       from "./templates.ts";
+import { ISLAND_MARKER }                from "./island.ts";
 
 // Re-export the expiry-timer Workflow so it resolves as a class_name both from
 // the root worker (which imports this module) and from the Vitest pool, whose
@@ -66,6 +69,8 @@ export default {
       // routing — small enough not to need a router lib
       if (req.method === "GET"  && (path === "/" || path === ""))  return route_index(req, env, ctx);
       if (req.method === "GET"  && path === "/slots")              return route_slots(req, env, ctx);
+      if (req.method === "GET"  && path === SLOTS_PATH)            return route_slots_html(req, env, ctx);
+      if (req.method === "GET"  && path === PICK_PATH)             return route_pick(req, env, ctx);
       if (req.method === "POST" && path === "/book")               return route_book(req, env, ctx);
       if (req.method === "GET"  && path === "/approve")            return route_approve(req, env, ctx, url);
       if (req.method === "GET"  && path === "/decline")            return route_decline(req, env, ctx, url);
@@ -95,34 +100,50 @@ export default {
 };
 
 async function route_index(req, env, ctx) {
-  // initial page is server-rendered with the next ~14 days of slots embedded
-  // so the page works without JS for screen readers / scrapers / no-JS humans.
-  // the form posts to /book; if JS is on, the page replaces the listing with
-  // a live-updating slot view that re-fetches /slots after a booking.
-  //
-  // Cached 30s at the edge (caches.default). Safe because the live /slots JSON
-  // is uncached AND /book re-validates the slot, so a briefly stale SSR listing
-  // can never confirm a taken slot. Invalidated on book/approve/decline.
+  // The booking SHELL, with the slot list as an island at SLOTS_PATH. On
+  // aadhar.sh the root Worker serves GET /coffee from the copy build.ts baked
+  // (src/worker/index.ts, routeCoffee), so this render is the fallback: bun run
+  // dev, cal's own suite, and any host without a bake. It reads nothing, so it
+  // is not cached here; the slots it lacks are what route_slots_html caches.
+  const html = bookingPage(env);
+  return new Response(html, {
+    headers: { ...htmlHeaders(), "cache-control": "public, max-age=0, s-maxage=30" },
+  });
+}
+
+async function route_slots_html(req, env, ctx) {
+  // The island: the next ~14 days of open slots as radios, a fragment and never
+  // a document. Cached 30s at the edge (caches.default), which is what the whole
+  // page carried before it was built. Safe because /book re-validates the slot
+  // against a fresh calendar read, so a briefly stale list can offer a taken
+  // slot (one 409 and a retry) but can never confirm one. Every action that
+  // moves a slot (book, approve, decline, reschedule, cancel) deletes the entry.
   const cache = caches.default;
-  const key = calIndexKey(req, env);
+  const key = calSlotsKey(req, env);
   const hit = await cache.match(key);
   if (hit) { const r = new Response(hit.body, hit); r.headers.set("x-cal-cache", "hit"); return r; }
 
-  // Filled phase by phase as the page is assembled (render, total, and the
+  // Filled phase by phase as the fragment is assembled (render, total, and the
   // fetch timings listOpenSlots adds), so the key set is not knowable here.
   const timings: Record<string, number> = {};
   const t0 = Date.now();
   const { slots, cal } = await listOpenSlots(env, ctx, timings, { allowStale: true });
   const rs = Date.now();
-  const html = bookingPage(slots, env);
+  const html = slotsFragment(slots, env);
   timings.render = Date.now() - rs;
   timings.total = Date.now() - t0;
 
   const headers = {
-    ...htmlHeaders(),
+    "content-type": "text/html; charset=utf-8",
+    "x-content-type-options": "nosniff",
     // edge-cache 30s (caches.default keys on s-maxage), browser always
     // revalidates (max-age=0) so a returning visitor never sees a stale slot list.
     "cache-control": "public, max-age=0, s-maxage=30",
+    // Worth fetching, worthless in an index: a bare fragment is not a page.
+    "x-robots-tag": "noindex",
+    // The page's loader injects only a response carrying this (island rule 3):
+    // a 5xx from the edge is text/html too.
+    [ISLAND_MARKER]: "1",
     "server-timing": fmtServerTiming(timings),
     "x-cal-source": cal.source,   // fresh | live | stale | none
   };
@@ -131,8 +152,20 @@ async function route_index(req, env, ctx) {
   return new Response(html, { headers: { ...headers, "x-cal-cache": "miss" } });
 }
 
+async function route_pick(req, env, ctx) {
+  // The page for a reader without scripts, linked from the island's noscript:
+  // the whole booking page with the live slots rendered inline, so a radio and
+  // the form it names sit in one document and post with no script at all. Per
+  // request and never stored, and noindex, since /coffee is the page to find.
+  const { slots } = await listOpenSlots(env, ctx, null, { allowStale: true });
+  return new Response(bookingPage(env, { slots }), {
+    headers: { ...htmlHeaders(), "x-robots-tag": "noindex" },
+  });
+}
+
 async function route_slots(req, env, ctx) {
-  // live path — never cached, so the JS view always reflects the latest slots.
+  // the JSON view, for scripts and the runbook: never cached, so it always
+  // reflects the latest slots.
   const { slots } = await listOpenSlots(env, ctx);
   return Response.json({ slots });
 }
@@ -245,7 +278,7 @@ async function route_book(req, env, ctx) {
   const locationUrl = `${base}/location?t=${booking.id}&sig=${locationSig}`;
 
   ctx.waitUntil(sendApprovalRequest(env, booking, approveUrl, declineUrl, locationUrl));
-  ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // slot now held: drop the stale SSR page
+  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env)));  // slot now held: drop the stale slot list
 
   return new Response(successPage(env), { headers: htmlHeaders() });
 }
@@ -289,7 +322,7 @@ async function route_approve(req, env, ctx, url) {
   // The links ride that mail because it is the one the host keeps.
   ctx.waitUntil(sendHostCopy(env, booking, { links }));
   cancelExpiry(env, ctx, id);                                   // end the durable timer early
-  ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // pending slot resolved
+  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env)));  // pending slot resolved
   return new Response(confirmedPage({ ...booking, status: "confirmed" }, env, /*already=*/false, links.location, links),
                       { headers: htmlHeaders() });
 }
@@ -448,7 +481,7 @@ async function route_reschedule_save(req, env, ctx) {
     ctx.waitUntil(sendHostCopy(env, moved.booking, { updated: true, links: await hostLinks(req, env, id) }));
   }
   // Both slots changed state, so the cached index is wrong in two directions.
-  ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));
+  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env)));
   return new Response(rescheduledPage(moved.booking, env, mailed), { headers: htmlHeaders() });
 }
 
@@ -480,7 +513,7 @@ async function route_cancel_apply(req, env, ctx) {
   cancelExpiry(env, ctx, id);
   ctx.waitUntil(sendCancel(env, cancelled));
   ctx.waitUntil(sendHostCopy(env, cancelled, { cancelled: true }));
-  ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));
+  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env)));
   return new Response(cancelledPage(cancelled, env), { headers: htmlHeaders() });
 }
 
@@ -505,17 +538,18 @@ async function route_decline(req, env, ctx, url) {
   await releaseSlotClaim(env, booking);   // and give up the atomic claim, so the next booker can take it
   ctx.waitUntil(sendDecline(env, booking));
   cancelExpiry(env, ctx, id);                                   // end the durable timer early
-  ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // slot freed again
+  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env)));  // slot freed again
   return new Response(declinedPage(booking, env, /*already=*/false),
                       { headers: htmlHeaders() });
 }
 
-// one edge-cache entry per (origin, basePath): aadhar.sh/coffee and
-// cal.aadhar.sh render different form actions, so they must not share a cached
-// body; query strings and trailing slashes normalize away.
-function calIndexKey(req, env) {
+// one edge-cache entry per (origin, basePath) for the slots island. Every action
+// that moves a slot deletes it through this same key, whichever route it came in
+// on, so the key is the prefix and never the request path; query strings
+// normalize away. It was /__cal_index while the whole page was the cached thing.
+function calSlotsKey(req, env) {
   const url = new URL(req.url);
-  return new Request(`${url.origin}${env.BASE_PATH || ""}/__cal_index`, { method: "GET" });
+  return new Request(`${url.origin}${env.BASE_PATH || ""}/__cal_slots`, { method: "GET" });
 }
 
 // Typed because the values are interpolated into a Server-Timing header, and

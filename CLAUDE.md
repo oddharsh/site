@@ -4420,14 +4420,17 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     `nodejs_compat`) and sends the hashed policy with the bytes, which is also
     what a cached render stores. It FAILS OPEN to the loose policy on anything a
     hash cannot cover (an event-handler attribute, a `javascript:` URL, an
-    `srcdoc`). Three HTML surfaces stay loose because they do not come through
-    `lunaPage`: `/coffee` (cal renders its own templates and cannot import the
-    site tree, gotcha 16), the live `/serendipity` pages (they compose their own
+    `srcdoc`). Two HTML surfaces stay loose because they do not come through
+    `lunaPage`: the live `/serendipity` pages (they compose their own
     policy; the built dashboard carries that policy with the build's hashes), and
     the `/lens?url=` framed view (ditto). `/security` (2026-09-16), `/whoareyou`,
     `/garage/dyno`, `/ledger`, `/around`, `/inbox`, `/lens/census` and the `/serendipity` dashboard (all 2026-09-25) are built documents with their live values fetched after load, and build step 5b now fails on a registered page that is neither built nor named with a reason in `config/per-request-pages.json`;
     `src/worker/lib/island.ts` is that convention for rows, and its header says
-    when JSON slots fit better.
+    when JSON slots fit better. `/coffee` joined them on 2026-09-30: build step 5b
+    bakes cal's own shell, the open slots arrive from `/coffee/slots.html`, and cal
+    carries a byte-identical copy of the island loader (`cal/src/island.ts`, held
+    to `lib/island.ts` by a contract test) because it imports nothing that brings
+    the site's module graph with it (gotcha 16).
 
     Three things verified in a real browser rather than assumed, all on 2026-07-30:
     a HASHED `<script type="speculationrules">` is allowed and an unhashed one

@@ -158,6 +158,13 @@ const ROUTES = [
   { path: "/writing.md", status: 200, ct: "text/markdown", marker: "plain text file" },
   { path: "/lens.md", status: 200, ct: "text/markdown", marker: "Execution checks stay neutral" },
   { path: "/coffee.md", status: 200, ct: "text/markdown", marker: "Booking fails closed" },
+  // A built document since 2026-09-30, its open slots an island cal renders. A
+  // local Worker holds no ICAL_URL, so every working-hours slot reads as free
+  // and the fragment always carries a day. /coffee/pick is the no-script page
+  // with the same list inline.
+  { path: "/coffee", status: 200, ct: "text/html", marker: "data-island=/coffee/slots.html", fullPage: true },
+  { path: "/coffee/slots.html", status: 200, ct: "text/html", marker: "xp-day-label", fragment: true },
+  { path: "/coffee/pick", status: 200, ct: "text/html", marker: 'id="bookform"' },
   { path: "/around.md", status: 200, ct: "text/markdown", marker: "Nothing here is an endorsement" },
   { path: "/updates", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/restore", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },

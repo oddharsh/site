@@ -5,8 +5,12 @@ booking policy live in [cloudflare.config.ts](../cloudflare.config.ts).
 
 ## Booking flow
 
-- `GET /coffee` renders slots from the host's iCal feed and existing booking holds.
-  The page caches for 30 seconds; `/coffee/slots` reads availability on each request.
+- `GET /coffee` is a built page: `tools/build.ts` bakes `bookingPage(env)` from
+  `src/templates.ts` with the Worker's vars. Its open slots arrive from
+  `/coffee/slots.html`, a fragment of radio inputs rendered from the host's iCal
+  feed and existing holds and edge-cached for 30 seconds. Every booking action
+  deletes that cache entry. `/coffee/pick` renders the same list inline for
+  readers without scripts, and `/coffee/slots` returns it as JSON on each request.
 - `POST /coffee/book` requires a calendar snapshot no older than 15 minutes.
   A per-slot Durable Object claims the slot before its KV hold and approval email
   are created. Booking IDs remain 32 hexadecimal characters.
@@ -33,7 +37,7 @@ bun run --filter cal-aadhar-sh test
 The suite runs route code in Bun and uses `wrangler.test.toml` for real local
 KV and Workflow bindings. [test/harness.ts](test/harness.ts) explains that split;
 [test/preload.ts](test/preload.ts) supplies the host shims. The cache shim always
-misses, so these tests do not exercise the booking page's edge-cache hit path.
+misses, so these tests do not exercise the slot list's edge-cache hit path.
 
 ## Operations
 
