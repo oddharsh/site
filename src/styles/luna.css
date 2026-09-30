@@ -739,12 +739,24 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
    inline pill on 7 other pages, so the component takes cal's unambiguous
    name. Modelled on the garage strip, the most used, with its colours on
    tokens: a chrome-face band under a hairline, short spans spaced apart and
-   wrapping on a narrow window. Pages move onto it in a follow-up. */
+   wrapping on a narrow window, a middle dot between two facts. Every one of
+   those pages is on it since 2026-09-30, and the pill is .badge now.
+
+   .panes is XP's own status bar, the one Notepad and Explorer draw: each
+   fact in its own sunken pane, no dots, and a .fill pane takes the slack.
+   Notepad and pixel-peeper use it. */
 :where(.xp-statusbar) {
   flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
   padding: 4px 10px; font: 8.5pt/1.4 var(--font-ui); color: var(--ink-dim);
   background: var(--face-light); border-top: 1px solid var(--rule);
 }
+:where(.xp-statusbar:not(.panes) > span:not(:last-child))::after { content: "·"; margin-left: 8px; color: var(--ink-faint); }
+:where(.xp-statusbar.panes) { flex-wrap: nowrap; gap: 3px; padding: 2px 3px; }
+:where(.xp-statusbar.panes > span) {
+  padding: 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: inset 1px 1px 0 var(--shadow), inset -1px -1px 0 var(--highlight);
+}
+:where(.xp-statusbar > .fill) { flex: 1 1 auto; min-width: 0; }
 
 /* ───────────────── homepage music island (below the fold) ─────────────────
    Kept in the immutable shared sheet so a dynamic homepage reload does not

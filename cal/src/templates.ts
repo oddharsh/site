@@ -348,23 +348,10 @@ form.book .actions {
 }
 
 /* ── status bar (footer chrome) ─────────────────────────────────────── */
-.xp-statusbar {
-  margin-top: 14px;
-  font-size: 9pt;
-  color: var(--ink-dim);
-  border-top: 1px solid var(--shadow);
-  padding-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 4px 12px;
-}
-.xp-statusbar > span:nth-child(2) {
-  /* center span (credit) gets a soft middle position; wraps below on
-     narrow viewports where flex-wrap kicks in. */
-  flex: 0 1 auto;
-  text-align: center;
-}
+/* luna.css draws .xp-statusbar. This one sits at the foot of .content
+   rather than the window's bottom edge, so it only spaces itself off the
+   form and spreads its three facts across the width. */
+.xp-statusbar { margin-top: 14px; justify-content: space-between; }
 
 /* tighter on phones */
 @media (max-width: 540px) {

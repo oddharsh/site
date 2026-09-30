@@ -91,9 +91,8 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
 .s27-headings { border: 1px dashed oklch(72% 0.02 250); padding: 6px 12px; }
 .s27-headings h3, .s27-headings h4 { margin: 6px 0; font-family: var(--font-caption); }
 
-.status { font-family: var(--font-ui); font-size: 8.5pt; color: oklch(45% 0 0); border-top: 1px solid oklch(86% 0.02 259); background: oklch(96.5% 0.006 255);
-  padding: 4px 10px; display: flex; gap: 8px; flex-wrap: wrap; }
-.status span::after { content: "·"; margin-left: 8px; color: oklch(72% 0 0); } .status span:last-child::after { content: ""; }
+
+
 
 </style>
 <link rel="stylesheet" href="/luna.css">
@@ -205,7 +204,7 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
     <hr>
     <section id="luq" aria-label="understanding check"></section>
   </div>
-  <div class="status" aria-hidden="true">
+  <div class="xp-statusbar" aria-hidden="true">
     <span>safari 27 / macOS 27</span>
     <span>WWDC26</span>
     <span>octane + fallback</span>

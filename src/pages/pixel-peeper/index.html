@@ -103,8 +103,6 @@ b{color:var(--ink)}
 .score-hero .grade{font-family:var(--font-caption);font-size:12.5pt;font-weight:700;color:var(--go);margin-top:2px}
 .hint{font-size:9pt;color:var(--ink-dim);text-align:center;margin:4px 0 0;font-family:var(--font-mono)}
 kbd{font-family:var(--font-mono);font-size:8.5pt;background:var(--face);border:1px solid var(--sh);box-shadow:var(--bevel-raised);padding:0 4px;border-radius:2px}
-.statusbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:3px;padding:3px 8px;border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--face);font-size:8.5pt;color:var(--ink-dim);font-family:var(--font-mono)}
-.statusbar span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 a{color:var(--link)}
 /* understanding check (predict-then-check quiz, per the /garage convention) */
 .uq{margin:9px 0 2px}
@@ -143,7 +141,6 @@ a{color:var(--link)}
 @media (--reduced-motion) {*{transition:none!important}}
 
   body { margin: 0; }
-  .window > .statusbar { flex: 0 0 auto; }
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -152,7 +149,7 @@ a{color:var(--link)}
 <div class="window" role="application" aria-label="Compression eye exam">
   <div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span><span class="title-text"><span class="icon" aria-hidden="true"></span>Pixel Peeper &middot; compression eye exam</span><span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span></div>
   <div class="content" id="stage"></div>
-  <div class="statusbar"><span id="sb-left">← aadhar.sh · prototype</span><span id="sb-right">real encoders · two metrics</span></div>
+  <div class="xp-statusbar panes"><span class="fill" id="sb-left">← aadhar.sh · prototype</span><span id="sb-right">real encoders · two metrics</span></div>
 </div>
 <canvas id="loupe"></canvas>
 

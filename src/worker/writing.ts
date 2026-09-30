@@ -43,10 +43,6 @@ font:11px var(--font-ui);color:oklch(20% 0 0);padding:4px 8px 4px 2px;text-align
 .np-text{flex:0 1 auto;field-sizing:content;min-height:8em;max-height:calc(100dvh - 150px);width:100%;box-sizing:border-box;border:0;outline:none;resize:none;padding:9px 11px;background:oklch(100% 0 0);
 color:oklch(16% 0 0);font-family:var(--font-mono);font-size:13px;line-height:1.55;white-space:pre-wrap;overflow:auto;tab-size:4}
 .np-text.nowrap{white-space:pre;overflow:auto}
-.np-status{flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:2px 3px;font-size:11px;color:oklch(28% 0 0);
-background:oklch(93% 0.012 90);border-top:1px solid oklch(80% 0.02 90)}
-.np-status>span:not(.np-flex){padding:1px 8px;box-shadow:inset 1px 1px 0 oklch(78% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
-.np-flex{flex:1;box-shadow:none}
 .np-edited{color:oklch(46% 0 0)}
 /* a note opened as a popover — floats over the folder ("selecting menu"),
    clears the taskbar, and keeps the window chrome (drag/resize/scrollbar). */
@@ -162,7 +158,7 @@ export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: 
     // which is the honest HTML of a plain-text note. A second visible or hidden
     // copy would double the page to give parsers what they already get here.
     "<textarea class=\"np-text" + (entry ? " e-content" : "") + "\" spellcheck=\"false\" aria-label=\"" + escAttr(filename) + "\">" + escHtml(text) + "</textarea>" +
-    "<div class=\"np-status\"><span class=\"np-pos\">Ln 1, Col 1</span><span class=\"np-wc\"></span><span class=\"np-flex\"></span>" +
+    "<div class=\"xp-statusbar panes np-status\"><span class=\"np-pos\">Ln 1, Col 1</span><span class=\"np-wc fill\"></span>" +
       (date ? "<span class=\"np-edited\">last changed " + stamp + "</span>" : "") + "</div></div>";
 }
 
@@ -261,7 +257,7 @@ export async function renderWritingIndex(env) {
     })) +
     "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one: it's a real text field you can edit, though it reverts to my canonical version on reload.</p>" +
       "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
-    "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +
+    "<div class=\"xp-statusbar panes np-status\"><span class=\"fill\">" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +
       "<span>" + fmtNum(entries.reduce(function (a, e) { return a + e.chars; }, 0)) + " characters</span></div></div>" +
     notes;
   return new Response(writingShell({ title: "aadhar.sh/writing", path: "/writing", desc: "Notes in flux: an editable Notepad of writing that reverts to canonical on reload.", body: body }),

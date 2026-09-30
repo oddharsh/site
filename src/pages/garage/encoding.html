@@ -47,12 +47,12 @@ h2 {
 .note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
 a { color: var(--blue-40); }
-.status {
+.badge {
   display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
   font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
   border-radius: 2px; text-transform: uppercase; vertical-align: middle;
 }
-.status.review { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+.badge.review { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
 
 .callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid var(--blue-65); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
 .drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
@@ -132,7 +132,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 <div class="window">
   <div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span><span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/thumbnail encoding study</span><span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
-    <h1>Thumbnail encoding study <span class="status shipped">shipped</span></h1>
+    <h1>Thumbnail encoding study <span class="badge shipped">shipped</span></h1>
     <p class="lede">
       Every grid thumbnail ends a chain of choices: <em>format,
       quality, chroma subsampling, resolution</em>. Here I run one photo through all
@@ -176,7 +176,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       builds on any machine, no cmake/ninja toolchain. AVIF beats both, but JPEG still backs up
       every <code>&lt;img&gt;</code> as the universal fallback, so shrinking it still pays off.</p>
 
-    <h2>Zenjpeg won and shipped <span class="status shipped">shipped</span></h2>
+    <h2>Zenjpeg won and shipped <span class="badge shipped">shipped</span></h2>
     <p>“Zenjpg” is a good shorthand, but the crate is published as
       <a href="https://docs.rs/crate/zenjpeg/latest" rel="external"><code>zenjpeg</code></a>
       (<a href="https://github.com/imazen/zenjpeg" rel="external">imazen/zenjpeg</a>).
@@ -339,7 +339,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       lands <b>1.7% over</b> baseline (16,609 against 16,324 bytes) while zenc&apos;s searched order
       lands <b>0.6% under</b> it (16,234). A smaller progressive file is a property of a good script.</p>
 
-    <h3>Chrome paints nothing until every channel has started <span class="status review">measured</span></h3>
+    <h3>Chrome paints nothing until every channel has started <span class="badge review">measured</span></h3>
     <p class="note">Cut a progressive JPEG anywhere and Chromium draws what the coefficients so far
       imply, missing rows and all, with one exception that decides everything: it paints nothing
       until Y, Cb and Cr have each begun a scan. The gate is exact to the byte. On the fixture
@@ -369,7 +369,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       loses the one property that matters when a single large image <em>is</em> the page. Both are
       true at once, which is why the grid is AVIF and the archive is JPEG.</p>
 
-    <h3>A fifth of the archive had the order wrong <span class="status shipped">fixed</span></h3>
+    <h3>A fifth of the archive had the order wrong <span class="badge shipped">fixed</span></h3>
     <p class="note">The gate applies to the archive too, where it costs seconds. Each of the 258 files
       was streamed from R2 until every channel had started, giving up at 3&nbsp;MB, then again after
       the repair below. Each cell is the group&apos;s median first paint, as a share of the file:</p>
@@ -433,7 +433,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       source pixels into one washes most encoding artifacts out. Delivery scale forgives the second
       encode. A 20&nbsp;MB download does not, which is the whole reason the archive is progressive.</p>
 
-    <h2>Chroma: hold the bytes, then compare <span class="status shipped">shipped</span></h2>
+    <h2>Chroma: hold the bytes, then compare <span class="badge shipped">shipped</span></h2>
     <p class="note">The two AVIF q63 cards in the showdown put 4:4:4 at 11.3&nbsp;KB against 4:2:0&apos;s
       10.4&nbsp;KB, and this page used to conclude from them that full chroma was a byte tax. Those cards
       hold the <em>quality knob</em> fixed, so the 4:4:4 card also comes out better, and the two halves of

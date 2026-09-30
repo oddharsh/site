@@ -98,7 +98,7 @@ hr {
 }
 .shelf .name a { text-decoration: none; }
 .shelf .name a:hover { text-decoration: underline; }
-.shelf .status {
+.shelf .badge {
   font-family: var(--font-mono);
   font-size: 8.5pt;
   font-weight: bold;
@@ -109,10 +109,10 @@ hr {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.shelf .status.review  { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
-.shelf .status.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
-.shelf .status.idle    { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
-.shelf .status.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
+.shelf .badge.review  { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+.shelf .badge.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
+.shelf .badge.idle    { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.shelf .badge.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
 .shelf .desc {
   font-size: 10.5pt;
   color: oklch(28% 0 0);
@@ -231,7 +231,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/av2">AV2, before anyone can see it</a></span>
-          <span class="status watching">watching</span>
+          <span class="badge watching">watching</span>
         </div>
         <div class="desc">
           AV2&apos;s reference encoder <a href="https://github.com/AOMediaCodec/avm" rel="external">shipped 1.0.0 in May</a>,
@@ -251,7 +251,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/dictionary">The dictionary the runtime dropped</a></span>
-          <span class="status watching">watching</span>
+          <span class="badge watching">watching</span>
         </div>
         <div class="desc">
           In workerd, <code style="font-family: var(--font-mono);font-size:9pt">node:zlib</code>&apos;s
@@ -273,7 +273,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/htmx">Break-even at three submits</a></span>
-          <span class="status watching">watching</span>
+          <span class="badge watching">watching</span>
         </div>
         <div class="desc">
           <a href="https://github.com/bigskysoftware/htmx" rel="external">htmx</a> shipped
@@ -295,7 +295,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/typed-config">The config that types itself</a></span>
-          <span class="status watching">watching</span>
+          <span class="badge watching">watching</span>
         </div>
         <div class="desc">
           A Worker config is data, so every binding name in it is a string nothing checks, and
@@ -321,7 +321,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/hidden-flags">Flags the docs don't list</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           Nineteen flags in one CLI are marked hidden, so they appear in no help output. Reading
@@ -342,7 +342,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/useragent">What a crawler name is worth</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           A user-agent string costs nothing to type and nothing verifies it. Sixteen identities
@@ -363,7 +363,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/dyno">Dyno</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           A dyno tells you what an engine actually puts down. This one straps the
@@ -384,7 +384,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/octane">Octane, priced against no framework</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           <a href="https://github.com/southpolesteve/nextane" rel="external">Nextane</a>
@@ -405,7 +405,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/compression">Compression teardown</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           The edge was handing browsers <em>more</em> bytes than its own second choice, and
@@ -425,7 +425,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/pqc">Post-quantum signatures, priced</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           This site's TLS key agreement went post-quantum on its own; its signatures did not.
@@ -446,7 +446,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/pixel-peeper">Pixel Peeper: whose eye do you have?</a></span>
-          <span class="status review">prototype</span>
+          <span class="badge review">prototype</span>
         </div>
         <div class="desc">
           <a href="https://ismy.blue" rel="external">ismy.blue</a> keeps asking where green
@@ -468,7 +468,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/gpt56">5.6 Sol&apos;s performance pass</a></span>
-          <span class="status review">field note</span>
+          <span class="badge review">field note</span>
         </div>
         <div class="desc">
           The performance pass outlined with 5.6 Sol this morning, translated into the
@@ -485,7 +485,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/blueprint">Blueprint: how Fable 5 would rebuild it</a></span>
-          <span class="status idle">sketch</span>
+          <span class="badge idle">sketch</span>
         </div>
         <div class="desc">
           The <a href="/garage/teardown">teardown</a>'s sequel. Fable 5 read every file in
@@ -504,7 +504,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/wire">Bytes on the wire</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           The site's first build step, and the brotli rabbit hole that led there. Where
@@ -527,7 +527,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/workers">Off Pages, onto Workers</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           Why this site left Cloudflare Pages for Workers with static assets: same bytes,
@@ -545,7 +545,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/iroh">iroh, and why it stays across the room</a></span>
-          <span class="status idle">watching</span>
+          <span class="badge idle">watching</span>
         </div>
         <div class="desc">
           <a href="https://github.com/n0-computer/iroh" rel="external">iroh</a> hit 1.0: you
@@ -563,7 +563,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/teardown">Teardown: what Fable 5 found</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           A multi-agent audit, eight finders sweeping in parallel with one adversarial
@@ -581,7 +581,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/masonry">A masonry contact sheet</a></span>
-          <span class="status idle">prototype</span>
+          <span class="badge idle">prototype</span>
         </div>
         <div class="desc">
           <a href="https://drafts.csswg.org/css-grid-3/" rel="external">CSS Grid Lanes</a>
@@ -600,7 +600,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/safari27">Safari 27, through this site&apos;s lens</a></span>
-          <span class="status idle">watching</span>
+          <span class="badge idle">watching</span>
         </div>
         <div class="desc">
           <a href="https://webkit.org/blog/17967/news-from-wwdc26-webkit-in-safari-27-beta/" rel="external">WebKit&apos;s
@@ -618,7 +618,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/cloudflare">Three free Cloudflare features, live</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           Durable Objects (an atomic counter), Workers AI (it captions a real grid
@@ -636,7 +636,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/resample">Half the light</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           A one pixel checkerboard reduces to sRGB 188, and <code>sips</code>, ffmpeg, the Rust
@@ -657,7 +657,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/ig-prep">Pixels Instagram has no reason to resample</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           <a href="https://github.com/oddharsh/ig-prep" rel="external">ig-prep</a> does the
@@ -677,7 +677,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/encoding">Thumbnail encoding study</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           <a href="https://github.com/google/jpegli" rel="external">jpegli</a> and
@@ -697,7 +697,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/pretext">pretext: text measurement off the DOM</a></span>
-          <span class="status idle">watching</span>
+          <span class="badge idle">watching</span>
         </div>
         <div class="desc">
           <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
@@ -716,7 +716,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/chunks">Content-addressed chunking</a></span>
-          <span class="status review">in review</span>
+          <span class="badge review">in review</span>
         </div>
         <div class="desc">
           <a href="https://github.com/officialunofficial/mkit" rel="external">mkit</a> names
@@ -736,7 +736,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/scroll">Scroll, the XP way</a></span>
-          <span class="status review">in review</span>
+          <span class="badge review">in review</span>
         </div>
         <div class="desc">
           <a href="https://drafts.csswg.org/scroll-animations-1/" rel="external">Scroll-driven
@@ -755,7 +755,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/horizon">Horizon: upcoming web platform</a></span>
-          <span class="status idle">watching</span>
+          <span class="badge idle">watching</span>
         </div>
         <div class="desc">
           Test-driving features before they touch the homepage: <code style="font-family: var(--font-mono);font-size:9pt">text-box-trim</code>
@@ -773,7 +773,7 @@ footer {
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/tooltips">Tooltip experiments</a></span>
-          <span class="status shipped">shipped</span>
+          <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           Cursor-following tooltips for the photo grid and tracklist. The
@@ -792,7 +792,7 @@ footer {
     </ul>
 
     <p style="margin-top: 18px; font-size: 9.5pt; color: oklch(51.03% 0 0); font-style: italic;">
-      More to come. Mules that graduate get the <span class="status shipped" style="display: inline-block; font-style: normal;">shipped</span> tag; the ones that don&apos;t stay parked here tagged <span class="status dead" style="display: inline-block; font-style: normal;">rejected</span>. Scrapping a rig still leaves a data point; I never delete one. This is a motor pool, so the failures stay parked next to the wins.
+      More to come. Mules that graduate get the <span class="badge shipped" style="display: inline-block; font-style: normal;">shipped</span> tag; the ones that don&apos;t stay parked here tagged <span class="badge dead" style="display: inline-block; font-style: normal;">rejected</span>. Scrapping a rig still leaves a data point; I never delete one. This is a motor pool, so the failures stay parked next to the wins.
     </p>
 
     <footer>
