@@ -47,9 +47,6 @@
     "sharp",
     "workerd",
   ],
-  "overrides": {
-    "sharp": "0.35.4",
-  },
   "packages": {
     "@cloudflare/config": ["@cloudflare/config@0.20.0", "", { "dependencies": { "zod": "4.4.3" } }, "sha512-Dv/UDLkqsmvW95+CmM2nE55pdkLPWnJ63KDMjAFe/5KW1hc2SzJW4f8CUagqarivQugf5+oJMWYlHSmtA4KVlA=="],
 
