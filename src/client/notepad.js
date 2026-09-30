@@ -105,9 +105,12 @@
       var previous = opened;
       if (!previous) return;
       settle(previous);
+      // Focus leaves the drop before it hides, so the platform has no focus to
+      // restore mid-operation (the same InvalidStateError trap nav-tray.js
+      // documents for the tray balloon).
+      if (restore) previous.btn.focus();
       if (HAS_POPOVER && previous.drop.matches(":popover-open")) previous.drop.hidePopover();
       previous.drop.remove();
-      if (restore) previous.btn.focus();
     }
     function outside() { close(); }
     /** @param {number} index */

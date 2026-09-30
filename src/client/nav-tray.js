@@ -131,14 +131,20 @@ export function createTray(options) {
     b.addEventListener("beforetoggle", (e) => {
       if (/** @type {ToggleEvent} */ (e).newState !== "closed") return;
       sound.play("close");
-      var ic = balloonKind && D.querySelector('.axp-trayico[data-kind="' + balloonKind + '"]');
-      if (ic instanceof HTMLElement) {
-        ic.setAttribute("aria-expanded", "false");
-        // Hand focus back only when it was inside the balloon. An outside press
-        // is taking focus somewhere on purpose.
-        if (b.contains(D.activeElement)) try { ic.focus(); } catch (_) {}
-      }
+      var ic = iconFor(balloonKind);
+      if (ic) ic.setAttribute("aria-expanded", "false");
       balloonKind = null;
+    });
+    // Esc is taken before the platform's close request so that focus goes back
+    // to the icon BEFORE the popover hides. Left to the platform, the hide
+    // restores focus itself, the icon's focusin asks the infotip to
+    // showPopover in the middle of this popover's operation, and Chrome throws
+    // InvalidStateError (measured on Chrome 152). An outside press never
+    // needs this: it has already taken focus somewhere on purpose.
+    b.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      close();
     });
     [].forEach.call(D.querySelectorAll(".axp-trayico"), (ic) => {
       ic.addEventListener("pointerdown", () => {
@@ -172,8 +178,16 @@ export function createTray(options) {
     var x = b.querySelector(".x"); if (x instanceof HTMLElement) try { x.focus(); } catch (_) {}
     cfg.load((data) => { if (isOpen() && balloonKind === kind) cfg.render(data); });
   }
+  /** @param {string | null} kind */
+  function iconFor(kind) {
+    var ic = kind && D.querySelector('.axp-trayico[data-kind="' + kind + '"]');
+    return ic instanceof HTMLElement ? ic : null;
+  }
   function close() {
-    if (balloon && isOpen()) balloon.hidePopover();
+    if (!balloon || !isOpen()) return;
+    var ic = iconFor(balloonKind);
+    if (ic && balloon.contains(D.activeElement)) try { ic.focus(); } catch (_) {}
+    balloon.hidePopover();
   }
   function toggle(kind, ic) {
     var pressed = pressedOpen;
