@@ -106,28 +106,64 @@ export function writingShell(o) {
     DESKTOP_CHROME + "<script src=\"/notepad.js\" defer></script><script src=\"/nav.js\" defer></script></body></html>";
 }
 
+// The site owner as a microformats2 h-card, for p-author on a note and on the
+// folder's h-feed. It names the same identity the homepage's representative
+// h-card and its schema.org Person do (u-url and u-uid https://aadhar.sh/), so
+// the authorship algorithm lands on one person whichever it reads first. Built
+// from empty <data> elements: mf2 reads a <data>'s value attribute, and an empty
+// inline element draws nothing, so the Luna chrome is untouched.
+export const OWNER_NAME = "Aadharsh Pannirselvam";
+export const OWNER_URL = "https://aadhar.sh/";
+const AUTHOR_CARD = "<span class=\"p-author h-card\"><data class=\"p-name\" value=\"" + OWNER_NAME + "\"></data>" +
+  "<data class=\"u-url\" value=\"" + OWNER_URL + "\"></data></span>";
+
+const permalink = (slug) => "https://aadhar.sh/writing/" + slug;
+
 // The page window's maximize control: a native button nav.js wires, so it is
 // reachable and announced (the title bar itself is not aria-hidden).
 const MAX_BUTTON = "<button type=\"button\" class=\"max\" title=\"maximize\" aria-label=\"maximize\"></button>";
 
 // popId (optional): render the window as an inline popover (id + popover="auto")
 // so it can composite over the folder index instead of being its own page.
-export function notepadWindow(filename, text, closeHref, date?, popId?) {
+// entry (optional): mark the window up as an h-entry. Only the standalone note
+// page passes it. The folder's popovers repeat the same notes, and there the
+// h-feed's list rows are the entries, so a second copy would publish each one
+// twice. `name` is the post title without the .txt a filename carries, and
+// `url` is its canonical permalink.
+export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: { name: string; url: string }) {
   var open = popId
     ? "<div class=\"np-window np-note\" id=\"" + escAttr(popId) + "\" popover=\"manual\">"
-    : "<div class=\"np-window\">";
+    : "<div class=\"np-window" + (entry ? " h-entry" : "") + "\">";
+  // p-name wraps the title inside the caption text, so the caption reads exactly
+  // as before and the parsed name is the title alone, without the file
+  // extension or the Notepad suffix.
+  const title = entry
+    ? "<span class=\"p-name\">" + escHtml(entry.name) + "</span>" +
+      escHtml(filename.startsWith(entry.name) ? filename.slice(entry.name.length) : "") +
+      "<data class=\"u-url\" value=\"" + escAttr(entry.url) + "\"></data>" + AUTHOR_CARD
+    : escHtml(filename);
+  // dt-published reads the ISO date off datetime. posts.json's date is also what
+  // the RSS feed sends as pubDate, so the two cannot name different days.
+  const stamp = entry && date
+    ? "<time class=\"dt-published\" datetime=\"" + escAttr(date) + "\">" + escHtml(date) + "</time>"
+    : escHtml(date);
   return open +
     "<div class=\"np-titlebar\">" + (popId ? "" : DESKTOP_HISTNAV) + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-title\">" + escHtml(filename) + " — Notepad</span>" +
+      "<span class=\"np-title\">" + title + " — Notepad</span>" +
       // A popover note is never the body-level window nav.js wires, so its max
       // stays an inert decoration; the standalone window's is a real button.
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + (popId ? "<span class=\"max\" aria-hidden=\"true\"></span>" : MAX_BUTTON) +
       "<a class=\"close\" href=\"" + escAttr(closeHref) + "\"" + (popId ? " data-pop" : "") + " title=\"back to writing\" aria-label=\"Close\">✕</a></span></div>" +
     "<div class=\"np-menubar\" role=\"menubar\" aria-label=\"menu\">" +
       "<span class=\"np-menu\" role=\"menuitem\">File</span><span class=\"np-menu\" role=\"menuitem\">Edit</span><span class=\"np-menu\" role=\"menuitem\">Format</span><span class=\"np-menu\" role=\"menuitem\">View</span><span class=\"np-menu\" role=\"menuitem\">Help</span></div>" +
-    "<textarea class=\"np-text\" spellcheck=\"false\" aria-label=\"" + escAttr(filename) + "\">" + escHtml(text) + "</textarea>" +
+    // e-content goes on the textarea itself, which holds the canonical text and
+    // nothing else. A textarea's children parse as one raw text node, so an mf2
+    // parser reads value as the post verbatim and html as that text escaped,
+    // which is the honest HTML of a plain-text note. A second visible or hidden
+    // copy would double the page to give parsers what they already get here.
+    "<textarea class=\"np-text" + (entry ? " e-content" : "") + "\" spellcheck=\"false\" aria-label=\"" + escAttr(filename) + "\">" + escHtml(text) + "</textarea>" +
     "<div class=\"np-status\"><span class=\"np-pos\">Ln 1, Col 1</span><span class=\"np-wc\"></span><span class=\"np-flex\"></span>" +
-      (date ? "<span class=\"np-edited\">last changed " + escHtml(date) + "</span>" : "") + "</div></div>";
+      (date ? "<span class=\"np-edited\">last changed " + stamp + "</span>" : "") + "</div></div>";
 }
 
 export async function readPosts(env) {
@@ -160,7 +196,7 @@ export async function renderWritingPost(slug, env) {
   }
   const title = post.title || safe;
   const desc = text.replace(/\s+/g, " ").trim().slice(0, 155);
-  const body = notepadWindow(title + ".txt", text, "/writing", post.date);
+  const body = notepadWindow(title + ".txt", text, "/writing", post.date, undefined, { name: title, url: permalink(safe) });
   return new Response(writingShell({ title: "aadhar.sh/writing/" + title + ".txt", path: "/writing/" + safe, desc: desc, body: body }),
     // the webmention Link tells other sites where to say "I linked to you"; the
     // garage/lwe statics carry the same header from _headers. A note qualifies
@@ -188,18 +224,25 @@ export async function renderWritingIndex(env) {
   }));
   const files = entries.map(function (e) {
     const size = fmtNum(e.chars) + (e.chars === 1 ? " character" : " characters");
-    return "<li><a href=\"/writing/" + escAttr(e.p.slug) + "\" data-note=\"" + escAttr(e.safe) + "\"><span class=\"np-file-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-file-name\">" + escHtml(e.p.title || e.p.slug) + ".txt</span>" +
-      "<span class=\"np-file-meta\">Text Document · " + size + (e.p.date ? " · " + escHtml(e.p.date) : "") + "</span></a></li>";
+    // each row is an h-entry of the folder's h-feed: the link is its u-url, the
+    // name without ".txt" its p-name, the listed date its dt-published. The
+    // author comes from the feed, which the authorship algorithm allows.
+    return "<li class=\"h-entry\"><a class=\"u-url\" href=\"/writing/" + escAttr(e.p.slug) + "\" data-note=\"" + escAttr(e.safe) + "\"><span class=\"np-file-ico\" aria-hidden=\"true\"></span>" +
+      "<span class=\"np-file-name\"><span class=\"p-name\">" + escHtml(e.p.title || e.p.slug) + "</span>.txt</span>" +
+      "<span class=\"np-file-meta\">Text Document · " + size +
+        (e.p.date ? " · <time class=\"dt-published\" datetime=\"" + escAttr(e.p.date) + "\">" + escHtml(e.p.date) + "</time>" : "") + "</span></a></li>";
   }).join("");
   // the list <a>'s real href is the no-JS / permalink path; opening one composites
   // its popover Notepad over the folder (the "selecting menu") with no navigation.
   const notes = entries.map(function (e) {
     return notepadWindow((e.p.title || e.safe) + ".txt", e.text, "/writing", e.p.date, "note-" + e.safe);
   }).join("");
-  const body = "<div class=\"np-window np-folder\">" +
+  // the folder window is the h-feed. Its caption is the feed's name, and the
+  // u-url and author ride along as empty <data>, the same as on a note.
+  const body = "<div class=\"np-window np-folder h-feed\">" +
     "<div class=\"np-titlebar\">" + DESKTOP_HISTNAV + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-title\">aadhar.sh/writing</span>" +
+      "<span class=\"np-title\"><span class=\"p-name\">aadhar.sh/writing</span>" +
+        "<data class=\"u-url\" value=\"https://aadhar.sh/writing\"></data>" + AUTHOR_CARD + "</span>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + MAX_BUTTON +
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
     // The folder view is the one place on this site that was already a complete
