@@ -14,10 +14,13 @@ test("each Chromium veto is caught on its own, and a clean dictionary passes", a
   const { auditDictionary } = await import("../src/worker/dict.ts");
   const base = { "use-as-dictionary": 'match="/a/*"' };
 
-  // must-revalidate and no-cache are the two that surprise people: neither means
-  // "do not store" anywhere else in HTTP, and each kills registration outright.
+  // no-cache is the one that surprises people: it never means "do not store"
+  // anywhere else in HTTP, and it kills registration outright. must-revalidate
+  // kills it only beside max-age=0, because it cancels the swr window that would
+  // otherwise carry the lifetime.
   for (const [cc, expected] of [
-    ["public, max-age=600, must-revalidate", "must-revalidate"],
+    ["public, max-age=0, must-revalidate", "must-revalidate"],
+    ["max-age=0, must-revalidate, stale-while-revalidate=60", "must-revalidate"],
     ["public, max-age=600, no-cache", "no-cache"],
     ["no-store", "no-store"],
   ]) {
@@ -25,6 +28,17 @@ test("each Chromium veto is caught on its own, and a clean dictionary passes", a
     assert.equal(audit.registers, false, `${cc} should not register`);
     assert.ok(audit.vetoes.some((v) => v.id === expected), `${cc} should be vetoed by ${expected}`);
   }
+
+  // Measured 2026-09-23 in Chrome 152: must-revalidate beside a positive max-age
+  // registers, for the max-age. The July table only ever paired it with max-age=0,
+  // which is how it read as a veto for two months.
+  const fresh = auditDictionary({ ...base, "cache-control": "max-age=3600, must-revalidate" });
+  assert.equal(fresh.registers, true, "max-age=3600, must-revalidate registers for the hour");
+  assert.equal(fresh.results.find((r) => r.id === "must-revalidate")?.verdict, "ok");
+  const cancelled = auditDictionary({ ...base, "cache-control": "max-age=3600, must-revalidate, stale-while-revalidate=86400" });
+  assert.equal(cancelled.registers, true);
+  assert.ok(cancelled.warns.some((w) => w.id === "must-revalidate"), "the cancelled swr window is worth a warning");
+  assert.ok(cancelled.warns.some((w) => w.id === "lifetime"));
 
   // Missing the header at all is its own veto, not a pass by omission.
   assert.equal(auditDictionary({ "cache-control": "public, max-age=600" }).registers, false);
@@ -38,7 +52,7 @@ test("each Chromium veto is caught on its own, and a clean dictionary passes", a
   assert.ok(good.results.every((r) => r.detail));
 });
 
-test("the lint knows the dictionary's life is the SWR window, not max-age", async () => {
+test("the lint knows the dictionary's life is max-age plus the SWR window", async () => {
   // The non-obvious rule, and the one that reads as "it worked yesterday": a
   // dictionary with a year of max-age and no stale-while-revalidate is usable
   // for zero seconds past freshness.

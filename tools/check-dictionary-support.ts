@@ -317,17 +317,22 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   //   max-age=0, must-revalidate, stale-while-revalidate=604800          no
   //   private, no-cache, must-revalidate                                 no
   //   private, no-cache, stale-while-revalidate=604800                   no
+  //   max-age=3600, must-revalidate          (2026-09-23)  REGISTERED, for the max-age
+  //   max-age=3600, no-cache                 (2026-09-23)  no
+  //   max-age=3600, no-store                 (2026-09-23)  no
   //
-  // So must-revalidate and no-cache each veto it outright, s-maxage is invisible (a
-  // browser is a private cache), and the swr window doubles as the dictionary's
-  // lifetime. This mirrors canRegisterAsDictionary in _worker.js/lib/assets.js; the
-  // point of checking it HERE is that production's cache-control for these pages comes
-  // from _headers, which that function never sees.
+  // So no-cache and no-store each veto it outright, and must-revalidate only cancels
+  // the swr window: the lifetime is max-age plus swr, or max-age alone under
+  // must-revalidate. s-maxage is invisible (a browser is a private cache). This
+  // mirrors canRegisterAsDictionary in src/worker/lib/assets.ts; the point of checking
+  // it HERE is that production's cache-control for these pages comes from _headers,
+  // which that function never sees.
   const canRegister = (cc) => {
     const v = (cc || "").toLowerCase();
-    if (/\b(?:no-store|no-cache|must-revalidate)\b/.test(v)) return false;
+    if (/\b(?:no-store|no-cache)\b/.test(v)) return false;
     const secs = (n) => Number(v.match(new RegExp(`\\b${n}=(\\d+)`))?.[1] || 0);
-    return secs("max-age") > 0 || secs("stale-while-revalidate") > 0;
+    const stale = /\bmust-revalidate\b/.test(v) ? 0 : secs("stale-while-revalidate");
+    return secs("max-age") + stale > 0;
   };
   const p = await get("https://aadhar.sh/garage/pretext");
   const puad = p.headers.get("use-as-dictionary");
