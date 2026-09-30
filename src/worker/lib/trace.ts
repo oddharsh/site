@@ -78,6 +78,13 @@ function apply(span: Span, attrs: SpanAttrs<string> | undefined) {
   }
 }
 
+// Set a batch of attributes on an open span under the same rule as `attrs` at
+// open: undefined is skipped. For a span whose numbers are only known once the
+// work is done, which is most cron spans.
+export function setAttributes<N extends SpanName>(span: Span<N>, attrs: SpanAttrs<N>): void {
+  apply(span, attrs);
+}
+
 // span(name, fn, attrs?) — run fn inside a span that ends when fn settles.
 // Returns whatever fn returns (a promise stays a promise), so this can be
 // dropped around an existing expression without changing its shape.
