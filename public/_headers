@@ -343,6 +343,17 @@
   Cache-Control: public, max-age=3600, s-maxage=86400
   Link: </.well-known/ard.json>; rel="ard"; type="application/json"
 
+# The W3C TDM Reservation Protocol file (Community Group Final Report,
+# 2024-05-10). One site-wide rule, location "/" with tdm-reservation 0, which
+# says text and data mining rights are not reserved: a TDM agent may mine
+# anything here without asking. CORS for the ARD manifest's reason, since a
+# checker running in a browser has to be able to read it. There is no
+# /.well-known/* glob above, so this rule combines with /* alone (gotcha 31).
+/.well-known/tdmrep.json
+  Content-Type: application/json; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600, s-maxage=86400
+
 # (security.txt is served by Cloudflare's managed Security Center now —
 # no local file, no _headers rule needed. the Link header on / and the
 # llms.txt entry still resolve because the URL responds.)

@@ -2402,6 +2402,15 @@ homepage `Link` set, `robots.txt` (`Agentmap:`), `llms.txt`, the api-catalog
 and the agent card's `discovery` block, and the same test fails if any of those
 five drops it. Added 2026-09-11.
 
+**`.well-known/tdmrep.json` ALLOWS text and data mining, since 2026-09-30.** It
+is the W3C TDM Reservation Protocol file (CG Final Report, 2024-05-10), one
+site-wide rule `{"location": "/", "tdm-reservation": 0}`, where 0 means rights
+are NOT reserved. It says in the EU's TDM vocabulary what robots.txt's
+`ai-train=yes` Content-Signal already says. The route oracle asserts its JSON
+type and `Access-Control-Allow-Origin: *`. The /lens Terms tier reads the
+VALUE through `lensTdmrep`: it counted any 200 at that path as an opt-out until
+the same day, which would have filed this grant as a reservation.
+
 **Tool annotations are a CLAIM, and the default is read-only.** `lib/mcp-tools.ts`
 decorates every tool with a title, an object output schema, and
 `readOnlyHint/destructiveHint/idempotentHint/openWorldHint`. Its defaults describe

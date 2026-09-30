@@ -3329,6 +3329,32 @@ export function lensParseContentSignal(raw) {
   return out;
 }
 
+// /.well-known/tdmrep.json → the rule governing `path`. The W3C TDMRep CG Final
+// Report makes the file an ARRAY of rules, each a `location` (robots.txt-style
+// path matching, "/" is site-wide) plus `tdm-reservation`, where 1 reserves
+// text and data mining rights and 0 says they are NOT reserved. The first rule
+// whose location matches wins. So presence alone says nothing about which way
+// the site went: a 0 is an explicit grant, and reading every manifest as an
+// opt-out turns an open site into a "signaled" one. A 200 that does not parse
+// as an array (an SPA fallback serving HTML at the path) is not a manifest.
+export function lensTdmrep(probe, path) {
+  if (!probe || !probe.ok) return { present: false };
+  const body = String(probe.body || "");
+  let rules;
+  try { rules = JSON.parse(body); } catch (_e) { return { present: false, invalid: "not JSON" }; }
+  if (!Array.isArray(rules)) return { present: false, invalid: "not a JSON array of rules" };
+  const out: Record<string, any> = { present: true, body: body.slice(0, 4000), rules: rules.length, reserved: null, location: null, policy: null };
+  const rule = rules.map(asRecord).find((r) => r && asText(r.location) !== null && lensPathMatch(r.location, path || "/"));
+  if (!rule) return out;
+  const v = rule["tdm-reservation"];
+  out.location = rule.location;
+  if (v === 1 || v === "1" || v === true) out.reserved = true;
+  else if (v === 0 || v === "0" || v === false) out.reserved = false;
+  const policy = asText(rule["tdm-policy"]);
+  if (out.reserved === true && policy) out.policy = policy.slice(0, 500);
+  return out;
+}
+
 // assemble the whole terms envelope: scoreboard + signals + price + enforcement
 // + the open → signaled → enforced → paid spectrum.
 export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, metaRobots }) {
@@ -3370,12 +3396,12 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
 
   const xRobotsTag = headers["x-robots-tag"] || null;
   t.directives = { metaRobots: metaRobots || null, xRobotsTag, noai: /noai|noimageai/i.test((metaRobots || "") + " " + (xRobotsTag || "")) };
-  t.tdmrep = tdmrep && tdmrep.ok ? { present: true, body: String(tdmrep.body || "").slice(0, 4000) } : { present: false };
+  t.tdmrep = lensTdmrep(tdmrep, path);
 
   // the spectrum: strongest tier present wins; reasons list everything found.
   // Nuance: an all-yes Content-Signal (or naming bots only to allow them) is an
   // explicit GRANT — that keeps the site at "open", just deliberately so.
-  const reasons: string[] = [];
+  const reasons: { tier: string; why: string }[] = [];
   const named = t.scoreboard.filter((b) => b.matchedUa && b.matchedUa !== "*");
   const blocked = t.scoreboard.filter((b) => b.verdict === "block");
   const restrictiveSignals = t.signals.some((s) => Object.values(s.parsed).some((v) => v !== "yes"));
@@ -3389,7 +3415,9 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
     ? { tier: "signaled", why: "declares restrictive Content-Signal preferences in robots.txt" }
     : { tier: "open", why: "declares Content-Signal preferences, all yes — explicitly open, in writing" });
   if (t.directives.noai) reasons.push({ tier: "signaled", why: "sets a noai directive (meta robots / X-Robots-Tag)" });
-  if (t.tdmrep.present) reasons.push({ tier: "signaled", why: "publishes a TDM Reservation Protocol manifest" });
+  if (t.tdmrep.reserved === true) reasons.push({ tier: "signaled", why: "reserves text and data mining rights for this path (TDMRep tdm-reservation 1" + (t.tdmrep.policy ? ", with a TDM policy" : "") + ")" });
+  else if (t.tdmrep.reserved === false) reasons.push({ tier: "open", why: "declares text and data mining rights not reserved for this path (TDMRep tdm-reservation 0), explicitly open, in writing" });
+  else if (t.tdmrep.present) reasons.push({ tier: "open", why: "publishes a TDMRep manifest with no rule for this path, so TDM reservation is unset" });
   if (t.robotsUnknown) reasons.push({ tier: "open", why: "robots.txt could not be read (" + t.robotsError + ") — robots terms unknown, not absent" });
   const order = ["open", "signaled", "enforced", "paid"];
   t.spectrum = {
