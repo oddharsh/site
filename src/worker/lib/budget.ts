@@ -86,6 +86,31 @@ export function isSubrequestLimit(error: unknown): boolean {
   return SUBREQUEST_LIMIT_PATTERN.test(message);
 }
 
+/**
+ * Whether the platform's ceiling is buried anywhere in a result tree.
+ *
+ * A fan-out that catches per item stores the refusal as `{ ok: false, error }`
+ * on whichever item it landed on, so the question "did the platform refuse to
+ * look" has to be asked of the whole tree rather than of one field. census.ts
+ * asks it before publishing a row, and lens.ts before caching a discovery blob.
+ *
+ * A GENERIC WALK rather than a list of fields, because a list of fields is the
+ * thing that rots: the next probe is covered by existing. Only an `error`
+ * property is read, so a body string that happens to contain the words is
+ * never mistaken for a refusal, and strings are never descended into.
+ */
+export function subrequestLimitIn(result: unknown, maxDepth = 6): boolean {
+  const isObj = (v: unknown) => v !== null && Object(v) === v;
+  const stack: Array<[any, number]> = [[result, 0]];
+  for (let next = stack.pop(); next; next = stack.pop()) {
+    const [node, depth] = next;
+    if (!isObj(node) || depth > maxDepth) continue;
+    if (isSubrequestLimit(node.error)) return true;
+    for (const value of Object.values(node)) if (isObj(value)) stack.push([value, depth + 1]);
+  }
+  return false;
+}
+
 /** Who a failure belongs to. `cap` is the platform refusing; `item` is the work being wrong. */
 export type Fault = "cap" | "item";
 

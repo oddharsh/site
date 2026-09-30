@@ -14,6 +14,7 @@ import { EXECUTION_META, executionChecks } from "./lib/agent-execution.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";
 import { overBudget } from "./lib/ratelimit.ts";
 import { parseMcpBody } from "./lib/mcp-protocol.ts";
+import { subrequestLimitIn } from "./lib/budget.ts";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -355,6 +356,14 @@ export function glossify(escaped, only?) {
 // number the 429 message quotes, and a message that disagrees with the ceiling
 // is worse than no message. A contract test pins the two together so they cannot
 // drift, which is the only reason duplicating it is safe.
+//
+// A rate limit counts INVOCATIONS; the subrequest cap counts what one invocation
+// spends, and on Workers Free that is 50, KV and Cache API included (gotcha 36).
+// Measured with counting stubs (contract-lens-compare-stays-under-the-
+// subrequest-cap): a cold single scan is 46 (robots gate 3, page 1, doors cache
+// 2, fan-out 29, Markdown negotiation 1, bot views 10), so four redirect hops
+// are all the slack it has. A cold compare was 72 until discoveryBoard let one
+// side run live per invocation; it is 41 now, and 42 when one side is cached.
 // How many bytes of a document lens will PARSE, as distinct from how many it
 // will fetch (2MB, above). See the measured table at the parse phase: the
 // regex chains run ~32ms/MB, so this constant is the single knob that decides
@@ -656,15 +665,22 @@ function lensVsBytes(n) {
 function lensVsColumn(s) {
   const host = lensVsHost(s.finalUrl || s.url);
   const levelKind = s.level >= 5 ? "ok" : s.level >= 3 ? "" : "warn";
+  // A side whose discovery did not run carries null doors and null surfaces.
+  // Printing them as "0" and "no machine surfaces published" would state two
+  // facts about a site nobody asked.
+  const measured = !(s.phases && s.phases.discovery === false);
   const pub = LENS_VS_SURFACES.filter(([key]) => s.surfaces && s.surfaces[key])
     .map(([, label]) => '<span class="lx-tag">' + escHtml(label) + "</span>").join("");
+  const surfaces = pub || (measured
+    ? '<span class="lx-none">no machine surfaces published</span>'
+    : '<span class="lx-none">not measured in this comparison' + (s.phases && s.phases.discoveryDeferred ? ", deferred to stay under the subrequest cap; compare again to fill it in" : "") + "</span>");
   const cost = s.cost
     ? "~" + (s.cost.tokens >= 1000 ? (s.cost.tokens / 1000).toFixed(1) + "k" : s.cost.tokens) + " tokens &middot; $" + s.cost.usdPerRead.toFixed(s.cost.usdPerRead >= 0.1 ? 2 : 4) + "/read"
     : "no cost model (non-HTML)";
   const rows = [
     ["response", (s.status == null ? "?" : s.status) + " " + lensHttpText(s.status || 0)],
     ["terms", s.tier || "unknown"],
-    ["agent doors", String(s.doors || 0)],
+    ["agent doors", measured ? String(s.doors || 0) : "not measured"],
     ["one model read", null],   // placeholder; cost carries markup, rendered below
     ["payload", lensVsBytes(s.bytes)],
     ["words", String(s.wordCount || 0)],
@@ -673,7 +689,7 @@ function lensVsColumn(s) {
     '<div class="lx-vs-body"><div class="lx-vs-score"><b>' + (s.readiness == null ? "?" : escHtml(s.readiness)) + "<span>/100</span></b>" +
     '<span class="lx-badge ' + levelKind + '"' + (s.levelNote ? ' title="' + escAttr(s.levelNote) + '"' : "") + ">Level " + (s.level == null ? "?" : escHtml(s.level)) + "</span> <span>" + escHtml(s.levelName || "") + "</span></div>" +
     '<table class="lx-kv">' + rows + "</table>" +
-    '<div class="lx-tags" style="margin-top:6px">' + (pub || '<span class="lx-none">no machine surfaces published</span>') + "</div></div></div>";
+    '<div class="lx-tags" style="margin-top:6px">' + surfaces + "</div></div></div>";
 }
 
 export function lensVsFragment(payload) {
@@ -2228,7 +2244,13 @@ export function lensObservationSummary(result) {
   const anatomy = result?.anatomy || {};
   const structured = result?.structured || {};
   const title = structured.title || result?.title || "";
-  return {
+  const phases = result?.phases || { page: true, discovery: true, botViews: true };
+  // A side whose discovery did not run has no score, no doors and no surfaces.
+  // They are NULL rather than 0 and false, because "0 agent doors" and "no
+  // machine surfaces published" are claims about the site, and nobody looked.
+  // lens_page promised this in its description and the summary emitted zeros.
+  const measured = phases.discovery !== false;
+  const summary = {
     url: result?.url || "",
     finalUrl: result?.finalUrl || result?.url || "",
     redirected: !!result?.redirected,
@@ -2263,7 +2285,7 @@ export function lensObservationSummary(result) {
     // Carried so a caller can tell a zero from an absence. Without it a
     // page-only scan reports `doors: 0` and `readiness: null`, which reads as a
     // verdict rather than as "that phase did not run".
-    phases: result?.phases || { page: true, discovery: true, botViews: true },
+    phases,
     surfaces: {
       llms: !!result?.discovery?.llmsTxt?.ok,
       markdown: !!result?.agent?.mdNegotiation?.supported,
@@ -2272,18 +2294,37 @@ export function lensObservationSummary(result) {
       apiCatalog: !!(result?.agent?.apiCatalog?.present || result?.agent?.apiCatalog?.found),
     },
   };
+  if (measured) return summary;
+  // On an unmeasured side the level's NAME carries the reason. It is the one
+  // free-text field both compare renderers already print beside the score (the
+  // SSR fragment here and the hashed lens.js client), so the reason reaches a
+  // reader without re-minting a content-hashed asset.
+  return {
+    ...summary,
+    readiness: null, fieldScore: null, level: null, tier: null, doors: null, surfaces: null,
+    levelName: phases.discoveryDeferred ? "discovery deferred" : "discovery not run",
+    levelNote: phases.discoveryDeferred ? LENS_DEFERRED_NOTE : null,
+  };
 }
 
+const LENS_DEFERRED_NOTE = "This side's origin discovery was deferred so the comparison stays inside the 50 subrequests one Workers Free invocation allows. Compare again and it runs live or comes from cache.";
+
+// The fields a side only has once its discovery ran. Comparing them across a
+// side that never measured them would report "doors 3 -> null" as a change.
+const LENS_DISCOVERY_FIELDS = new Set(["readiness", "level", "tier", "doors"]);
+
 export function compareLensObservations(left, right) {
+  const bothMeasured = left?.phases?.discovery !== false && right?.phases?.discovery !== false;
   const fields = [
     ["status", "status"], ["finalUrl", "final URL"], ["contentType", "content type"],
     ["title", "title"], ["wordCount", "word count"], ["bytes", "bytes"],
     ["readiness", "readiness"], ["level", "readiness level"], ["tier", "spectrum tier"],
     ["doors", "agent doors"],
-  ];
+  ].filter(([key]) => bothMeasured || !LENS_DISCOVERY_FIELDS.has(key));
   const changes = fields.filter(([key]) => left?.[key] !== right?.[key]).map(([key, label]) => ({
     field: key, label, before: left?.[key] ?? null, after: right?.[key] ?? null,
   }));
+  if (!bothMeasured) return changes;
   for (const key of ["llms", "markdown", "mcp", "agentCard", "apiCatalog"]) {
     if (left?.surfaces?.[key] !== right?.surfaces?.[key]) changes.push({
       field: `surfaces.${key}`, label: `surface: ${key}`,
@@ -2293,14 +2334,34 @@ export function compareLensObservations(left, right) {
   return changes;
 }
 
+// How each side's discovery was obtained, named for a reader of the payload.
+function lensDiscoverySource(phases) {
+  if (!phases || phases.discovery === false) return phases?.discoveryDeferred ? "deferred" : "none";
+  if (phases.discoveryCached) return "cached";
+  if (phases.discoveryShared) return "shared";
+  return phases.subrequestCap ? "refused" : "live";
+}
+
+// A cold compare used to run two live discoveries in one invocation: 72
+// subrequests against Workers Free's 50, with the loser's probes refused and
+// read as absent. The board (see discoveryBoard) lets at most one side run live;
+// a cold pair now costs 41, and a repeat compare hands the live run to the side
+// that is still cold, so the second compare of a pair is complete.
 export async function compareLensTargets(leftUrl, rightUrl, env, opts: { skipBotViews?: boolean } = {}) {
-  const [left, right] = await Promise.all([
-    lensInspect(leftUrl, env, { skipBotViews: opts.skipBotViews !== false }),
-    lensInspect(rightUrl, env, { skipBotViews: opts.skipBotViews !== false }),
-  ]);
+  const board = discoveryBoard(["left", "right"]);
+  const inspect = (url, side) => lensInspect(url, env, { skipBotViews: opts.skipBotViews !== false, board, side })
+    // A side that ends before discovery (a fetch error, a non-HTML body, a
+    // blocked host) never reports on its own, and the other side would wait on
+    // it forever. Passing on settle releases the board on every exit path.
+    .finally(() => board.pass(side));
+  const [left, right] = await Promise.all([inspect(leftUrl, "left"), inspect(rightUrl, "right")]);
   const leftSummary = lensObservationSummary(left);
   const rightSummary = lensObservationSummary(right);
-  return { left: leftSummary, right: rightSummary, changes: compareLensObservations(leftSummary, rightSummary) };
+  return {
+    left: leftSummary, right: rightSummary,
+    changes: compareLensObservations(leftSummary, rightSummary),
+    discovery: { left: lensDiscoverySource(leftSummary.phases), right: lensDiscoverySource(rightSummary.phases) },
+  };
 }
 
 // One validate + budget + inspect path for every compare caller: the JSON
@@ -2589,7 +2650,14 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // the genuinely per-URL pair stays live: Markdown negotiation, which is a
     // property of the document rather than the site, and the bot-view sampling,
     // which refetches THIS url as ten identities (eight crawlers, two controls).
-    const disco = await originDiscovery(origin, new URL(finalUrl).hostname, env, { selfLens });
+    const disco = await originDiscovery(origin, new URL(finalUrl).hostname, env, { selfLens, board: opts.board, side: opts.side });
+    // Only a board can defer, and only compareLensTargets passes one. The page
+    // phase is complete, so this returns exactly what a page-only scan returns,
+    // with the reason on it: discovery was not measured in this invocation.
+    if (!disco) {
+      out.phases.discoveryDeferred = true;
+      return out;
+    }
     const {
       robots, sitemap, sitemapDeclared, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
       apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
@@ -2616,6 +2684,11 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     out.phases.discovery = true;
     out.phases.botViews = Array.isArray(botViews) && botViews.length > 0;
     out.phases.discoveryCached = !!disco.cached;
+    if (disco.shared) out.phases.discoveryShared = true;
+    // The platform's ceiling refused some of this scan's probes. Each one reads
+    // as unknown on its own (never as absent), and this flag says why so a
+    // caller can tell "the site did not answer" from "we ran out of budget".
+    if (disco.refused || subrequestLimitIn({ mdNego, botViews })) out.phases.subrequestCap = true;
 
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
@@ -2886,9 +2959,86 @@ export type DiscoveryPayload = {
   agentSkills: any; ucp: any; acp: any; ap2: any; agentsMd: any; dnsAid: any; ech: any;
 };
 
+// ── one live discovery per invocation, when two scans share one ────────────
+// Workers Free allows 50 subrequests per invocation, and a cold discovery is 36
+// of them once its side's robots gate, page fetch, cache and Markdown probe are
+// counted. So two cold sides in one compare were 72, and whichever side the
+// ceiling landed on had most of its probes refused. Each probe caught its own
+// error, so the refusal read as absence: two byte-identical origins compared
+// as readiness 27 against 7, and which side lost was a race.
+//
+// The board is the arbitration. Each side peeks the doors cache first (one
+// subrequest) and a hit needs nothing further. Sides that MISS wait until every
+// side has either reported or finished, then exactly one of them runs live:
+// the first missing side in `sides` order, so the choice is deterministic and a
+// repeat compare gives the live run to whichever side is still cold. A second
+// side on the SAME origin shares that run instead of repeating it, and any
+// other missing side is deferred, which lensInspect reports as discovery not
+// measured (phases.discoveryDeferred) rather than as zero.
+//
+// Deferral beats a partial fan-out because a partial fan-out is the bug: a
+// deferred side says "not measured" and the next compare fills it in, while a
+// refused side reports unknown on every probe it lost, and the rubric counts
+// each unknown against the score.
+export type DiscoveryMode = "live" | "defer" | "share";
+export type DiscoveryBoard = ReturnType<typeof discoveryBoard>;
+
+export function discoveryBoard(sides: readonly string[]) {
+  const reports = new Map<string, string | null>();
+  const runs = new Map<string, { promise: Promise<any>; resolve: (value: any) => void }>();
+  let decide: (modes: Map<string, DiscoveryMode>) => void = () => {};
+  const decided = new Promise<Map<string, DiscoveryMode>>((resolve) => { decide = resolve; });
+  const settle = () => {
+    if (!sides.every((side) => reports.has(side))) return;
+    const modes = new Map<string, DiscoveryMode>();
+    let liveKey: string | null = null;
+    for (const side of sides) {
+      const key = reports.get(side) ?? null;
+      if (key === null) { modes.set(side, "live"); continue; }
+      if (liveKey === null) {
+        liveKey = key;
+        modes.set(side, "live");
+        let resolve: (value: any) => void = () => {};
+        const promise = new Promise((r) => { resolve = r; });
+        runs.set(key, { promise, resolve });
+      } else {
+        modes.set(side, key === liveKey ? "share" : "defer");
+      }
+    }
+    decide(modes);
+  };
+  const report = (side: string, key: string | null) => {
+    if (reports.has(side)) return;
+    reports.set(side, key);
+    settle();
+  };
+  return {
+    /** This side needs no live run: a cache hit, a free origin, or a scan that ended early. Idempotent. */
+    pass(side: string) { report(side, null); },
+    /** This side missed the cache on `key`. Resolves once every side has reported. */
+    async claim(side: string, key: string): Promise<DiscoveryMode> {
+      report(side, key);
+      return (await decided).get(side) || "defer";
+    },
+    /** The live side publishes its result, or null when it failed, for a sharer to reuse. */
+    publish(key: string, result: any) { runs.get(key)?.resolve(result); },
+    shared(key: string): Promise<any> { return runs.get(key)?.promise || Promise.resolve(null); },
+  };
+}
+
+export type OriginDiscovery = DiscoveryPayload & { cached: boolean; shared?: boolean; refused?: boolean };
+type DiscoveryOpts = { fresh?: boolean; selfLens?: boolean };
+
+// Two signatures, because only a board can defer: every caller that passes no
+// board (doors.ts, the single scan) always gets a payload back, and the type
+// says so rather than making each of them handle a null they cannot receive.
+export async function originDiscovery(origin, hostname, env, opts?: DiscoveryOpts): Promise<OriginDiscovery>;
 export async function originDiscovery(
-  origin, hostname, env, opts: { fresh?: boolean; selfLens?: boolean } = {},
-): Promise<DiscoveryPayload & { cached: boolean }> {
+  origin, hostname, env, opts: DiscoveryOpts & { board?: DiscoveryBoard; side?: string },
+): Promise<OriginDiscovery | null>;
+export async function originDiscovery(
+  origin, hostname, env, opts: DiscoveryOpts & { board?: DiscoveryBoard; side?: string } = {},
+): Promise<OriginDiscovery | null> {
   // `caches` is a Workers global and does not exist under plain node, where the
   // contract tests import this module. Absent cache means every call is a live
   // fan-out, which is exactly the previous behaviour.
@@ -2908,12 +3058,61 @@ export async function originDiscovery(
         // exactly `JSON.stringify(result)` from the live path below, written by
         // this same function. Nothing else writes this key.
         const cached = await hit.json() as DiscoveryPayload;
+        opts.board?.pass(opts.side || "");
         return { ...cached, cached: true };
       }
     } catch { /* a cache read must never cost the scan */ }
   }
 
-  const result = await span("lens.discovery", async (s) => {
+  // A miss under a board waits its turn (see discoveryBoard). Our own origin
+  // never takes the turn: its probes self-dispatch in-process, so all it spends
+  // is the four DNS-over-HTTPS reads and its cache put.
+  const board = opts.board;
+  const side = opts.side || "";
+  let claimed = false;
+  if (board) {
+    const free = String(hostname || "").toLowerCase() === CANONICAL_HOST && !!(env?.SELF_FETCH || env?.ASSETS);
+    if (free) board.pass(side);
+    else {
+      const mode = await board.claim(side, key.url);
+      if (mode === "defer") return null;
+      if (mode === "share") {
+        const run = await board.shared(key.url);
+        return run ? { ...run, cached: false, shared: true } : null;
+      }
+      claimed = true;
+    }
+  }
+
+  let result: DiscoveryPayload | null = null;
+  try {
+    result = await discoveryFanOut(origin, hostname, env);
+  } finally {
+    // Published even on a throw (as null), so a side sharing this run is
+    // released rather than left waiting on a promise nothing will resolve.
+    if (claimed) board?.publish(key.url, result);
+  }
+
+  // A blob with a refusal in it describes this invocation's budget, and caching
+  // it would serve that refusal as the origin's answer for six hours. Only a
+  // fan-out the platform let finish is written; a refused one is returned for
+  // this scan alone, flagged, and re-asked next time.
+  const refused = subrequestLimitIn(result);
+  if (cache && cacheable && !refused) {
+    try {
+      const body = JSON.stringify(result);
+      if (body.length <= DISCOVERY_MAX_BYTES) {
+        await cache.put(key, new Response(body, {
+          headers: { "content-type": "application/json", "cache-control": `max-age=${DISCOVERY_TTL}` },
+        }));
+      }
+    } catch { /* a cache write must never cost the scan either */ }
+  }
+  return refused ? { ...result, cached: false, refused: true } : { ...result, cached: false };
+}
+
+async function discoveryFanOut(origin, hostname, env): Promise<DiscoveryPayload> {
+  return span("lens.discovery", async (s) => {
     s.setAttribute("lens.origin_host", safeHost(origin));
     s.setAttribute("lens.discovery_cached", false);
     const [
@@ -2974,18 +3173,6 @@ export async function originDiscovery(
       mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
     };
   });
-
-  if (cache && cacheable) {
-    try {
-      const body = JSON.stringify(result);
-      if (body.length <= DISCOVERY_MAX_BYTES) {
-        await cache.put(key, new Response(body, {
-          headers: { "content-type": "application/json", "cache-control": `max-age=${DISCOVERY_TTL}` },
-        }));
-      }
-    } catch { /* a cache write must never cost the scan either */ }
-  }
-  return { ...result, cached: false };
 }
 
 export async function lensProbeDnsAid(hostname) {
@@ -3136,12 +3323,21 @@ export async function lensProbe(url, env, accept?) {
 // repo form. `present` requires a non-trivial body, not just a 200, so an SPA
 // catch-all serving HTML for everything doesn't read as a real AGENTS.md.
 export async function lensProbeAgentsMd(origin, env) {
+  // A variant that never answered (a thrown fetch, a 5xx, the platform's
+  // subrequest ceiling) is not evidence the file is missing. Both variants have
+  // to be ASKED before "not found" is a claim, so an unanswered one makes the
+  // whole result unknown and carries its error forward.
+  let unanswered: { error?: string; status?: number } | null = null;
   for (const name of ["/agents.md", "/AGENTS.md"]) {
     const p = await lensProbe(origin + name, env);
     const body = (p && p.body || "").trim();
     const looksMd = body.length > 40 && !/^\s*<(?:!doctype|html)/i.test(body);
     if (p && p.ok && looksMd) return { ok: true, present: true, variant: name, status: p.status, body, truncated: p.truncated };
     if (p && p.ok && !looksMd) return { ok: true, present: false, variant: name, status: p.status, note: "answered, but the body looks like a catch-all HTML page, not Markdown instructions" };
+    if (!unanswered && lensProbeUnanswered(p)) unanswered = p;
+  }
+  if (unanswered) {
+    return { ok: false, present: false, unknown: true, note: "probe did not answer", ...(unanswered.error ? { error: unanswered.error } : { status: unanswered.status }) };
   }
   return { ok: false, present: false, note: "no /agents.md or /AGENTS.md found" };
 }
@@ -3477,6 +3673,16 @@ export function lensCost({ html, text, markdown, headings, raw }: {
 // human page? The research question behind the whole machine-internet thread
 // (publish-for-agents vs drive-the-human-web), probed live per site.
 
+// The reason a probe never answered, kept on the result as `error`. Three probes
+// below dropped it and said only "probe failed", which is honest to a reader and
+// blind to the one caller that matters: subrequestLimitIn (lib/budget.ts) walks
+// a result for an `error` naming the platform's ceiling, and a refusal with no
+// error on it is a refusal nothing can tell from a timeout. That is how a
+// discovery blob full of refused probes could be cached as an origin's answer.
+function probeErrorText(e) {
+  return (e && e.message) || String(e);
+}
+
 // /mcp — Streamable HTTP MCP servers answer a GET with SSE, a JSON-RPC error,
 // 401 + WWW-Authenticate (OAuth-protected), or a POST-only 4xx in JSON. A SPA
 // answering 200 text/html is a router fallback, not a server.
@@ -3495,7 +3701,7 @@ export async function lensProbeMcp(origin, env) {
     if (res.status === 401 && www) return { verdict: "likely", detail: "401 + WWW-Authenticate at /mcp (OAuth-protected server)" };
     if ([400, 405, 406].includes(res.status) && /json/i.test(ct)) return { verdict: "maybe", detail: "HTTP " + res.status + " " + ct + " at /mcp (POST-only server?)" };
     return { verdict: "no", detail: res.status === 404 ? "no /mcp" : "HTTP " + res.status + (ct ? " " + ct : "") };
-  } catch (_e) { return { verdict: "unknown", detail: "probe failed" }; }
+  } catch (e) { return { verdict: "unknown", detail: "probe failed", error: probeErrorText(e) }; }
 }
 
 // /ask — NLWeb's REST convention. A real instance answers JSON (usually an
@@ -3546,7 +3752,7 @@ export async function lensProbeNlweb(origin, env) {
     // `unknown` is what the doors tier already renders as "never answered".
     if (res.status >= 500) return { verdict: "unknown", detail: "HTTP " + res.status + " at /ask — origin did not answer" };
     return { verdict: "no", detail: "HTTP " + res.status + (ct ? " " + ct : "") };
-  } catch (_e) { return { verdict: "unknown", detail: "probe failed" }; }
+  } catch (e) { return { verdict: "unknown", detail: "probe failed", error: probeErrorText(e) }; }
 }
 
 // Accept: text/markdown — Cloudflare-style content negotiation: the same URL,
@@ -3561,7 +3767,7 @@ export async function lensProbeMdNego(pageUrl, env) {
     const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
     try { await res.body?.cancel(); } catch (_e) {}
     return { supported: /^text\/markdown$/i.test(ct), contentType: ct, status: res.status };
-  } catch (_e) { return { supported: false, note: "probe failed" }; }
+  } catch (e) { return { supported: false, note: "probe failed", error: probeErrorText(e) }; }
 }
 
 // WebMCP is a page-level JS API, so the marker lives in the HTML we already
@@ -3948,7 +4154,10 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   items.oauthProtectedResource = lensReadinessItem("oauthProtectedResource", oauthResource.status, oauthResource.detail);
   items.authMd = lensReadinessItem("authMd", discovery && discovery.authMd && discovery.authMd.ok && String(discovery.authMd.body || "").trim() ? "pass" : discovery && discovery.authMd && discovery.authMd.error ? "unknown" : "fail", discovery && discovery.authMd && discovery.authMd.ok ? "auth.md answered" : "no auth.md registration guide");
   items.mcpServerCard = lensReadinessItem("mcpServerCard", mcpCard.status, mcpCard.detail);
-  items.a2aAgentCard = lensReadinessItem("a2aAgentCard", agent && agent.agentCard && agent.agentCard.present ? "pass" : "fail", agent && agent.agentCard && agent.agentCard.present ? agent.agentCard.detail : "no valid A2A Agent Card");
+  // Same unknown arm as apiCatalog above. lensJsonDoor has always marked an
+  // unanswered agent-card probe `unknown`, and this check read only `present`,
+  // so a refused probe was graded as a site with no card.
+  items.a2aAgentCard = lensReadinessItem("a2aAgentCard", agent && agent.agentCard && agent.agentCard.present ? "pass" : agent && agent.agentCard && agent.agentCard.unknown ? "unknown" : "fail", agent && agent.agentCard && agent.agentCard.present ? agent.agentCard.detail : agent && agent.agentCard && agent.agentCard.unknown ? "the agent card probe did not answer" : "no valid A2A Agent Card");
   items.agentSkills = lensReadinessItem("agentSkills", skills.status, skills.detail);
   items.webMcp = lensReadinessItem("webMcp", agent && agent.webmcp && agent.webmcp.found ? "pass" : "fail",
     agent && agent.webmcp && agent.webmcp.found

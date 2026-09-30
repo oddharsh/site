@@ -5733,6 +5733,20 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
       and compare the CPU of requests that PASSED against ones that died before
       believing any published ceiling is what you are hitting.
 
+    **`/lens?url=A&vs=B` was the third instance, found 2026-09-30.** Counted
+    with stubs for fetch, KV and the Cache API: a cold compare spent **72**
+    (64 fetch, 4 KV, 4 cache), two full discoveries in one invocation. Every
+    probe caught its own refusal, so with the cap enforced two byte-identical
+    origins compared as readiness 27 against 7, and which side lost was a race.
+    `discoveryBoard` in `lens.ts` now lets one side run discovery live per
+    invocation: a cold pair is **41**, the other side reports
+    `phases.discoveryDeferred` (rendered as not measured, never as zero), and a
+    repeat compare gives the live run to whichever side is still cold. A single
+    cold scan is 46, so four redirect hops are all its slack. A refused probe
+    now carries its `error`, reads as unknown, and keeps its blob out of the
+    doors cache. `contract-lens-compare-stays-under-the-subrequest-cap` pins
+    all three numbers, with the unarbitrated 72 as its control.
+
     **APPROVE A PARKED RAMP BEFORE MERGING ANYTHING ELSE.** Shipping this fix
     found a race the concurrency block does not describe. That block explains
     that a newer ramp cancels a pending one, which reads as a queueing rule about
