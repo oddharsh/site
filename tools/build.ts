@@ -1877,7 +1877,7 @@ for (const [file, srcPath, marker] of SHELLS) {
   console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
 }
 
-for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
+for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
   const src = await readFile(`src/styles/${file}`, "utf8");
   await writeFile(`${OUT}/public/${file.replace(".css", ".src.css")}`, src);
   const code = minifyCss(`src/styles/${file}`, src);
@@ -2133,7 +2133,7 @@ const CONTENT_HASHED = new Set([
   "nav.js", "luna.css", "lens-boot.js", "icons.svg", "quiz.js", "notepad.js", "lwe-base.css",
   "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js",
   "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js",
-  "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js", "webmcp.js",
+  "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js", "webmcp.js", "quiz.css",
 ].map((f) => `public/${f}`));
 
 // 5c) shorten every CSS custom property name, across the whole staged tree.
@@ -2285,6 +2285,10 @@ let freshFamily: Buffer | null = null;
       [/("nav-tray"\s*:\s*)(["'`])\/nav-tray\.css\2/g, `$1$2${to}$2`] ] },
     { file: "/infotip.css",     base: "infotip",           ext: "css", mk: (to) => [
       [/(\binfotip\b\s*:\s*)(["'`])\/infotip\.css\2/g, `$1$2${to}$2`] ] },
+    // quiz.js's stylesheet. A leaf rewritten into quiz.js before ASSETS hashes
+    // quiz.js below, so the quiz's /a/ URL covers the sheet's.
+    { file: "/quiz.css",        base: "quiz",              ext: "css", mk: (to) => [
+      [/(\.href\s*=\s*)(["'`])\/quiz\.css\2/g, `$1$2${to}$2`] ] },
     { file: "/hoist.js",        base: "hoist",        mk: (to) => [
       [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`],
       [/(\bfrom\s*)(["'`])\/hoist\.js\2/g, `$1$2${to}$2`] ] },
