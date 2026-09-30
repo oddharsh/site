@@ -226,6 +226,9 @@ on, which is the only arrangement where photographs never have to move.
 - [/sitemap.xml](https://aadhar.sh/sitemap.xml): XML sitemap.
 - [/robots.txt](https://aadhar.sh/robots.txt): Bot policy + Content Signals
   (search, AI input, and AI training all welcome).
+- [/.well-known/tdmrep.json](https://aadhar.sh/.well-known/tdmrep.json): W3C
+  TDM Reservation Protocol file. One site-wide rule, `tdm-reservation: 0`:
+  text and data mining rights are not reserved, so mine freely.
 - [/llms-full.txt](https://aadhar.sh/llms-full.txt): This map plus the full
   text of every writing post and the Markdown twin of every Garage and LWE
   page, inlined, each wrapped in a `<doc title path>` element. Served behind

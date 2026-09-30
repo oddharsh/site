@@ -131,6 +131,10 @@ const ROUTES = [
   // browser context still cannot read it, so every other column reads as a pass.
   { path: "/.well-known/ard.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
   { path: "/.well-known/ai-catalog.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
+  // The TDMRep file (W3C CG Final Report), which says text and data mining is
+  // allowed site-wide. The marker is the reservation key, and `cors` holds for
+  // the same reason as the ARD rows: a browser-side checker must read it.
+  { path: "/.well-known/tdmrep.json", status: 200, ct: "application/json", marker: '"tdm-reservation"', cors: "*" },
   // A built document since 2026-09-25 (lib/island.ts): the marker is the island
   // mount, and the row after the JSON is the fragment that fills it.
   { path: "/whoareyou", status: 200, ct: "text/html", marker: "data-island=/whoareyou/values.html", fullPage: true },

@@ -10,7 +10,7 @@
     "src/worker/image-tools.ts": 7,
     "src/worker/lens-nlweb.ts": 1,
     "src/worker/lens-wire.ts": 14,
-    "src/worker/lens.ts": 26,
+    "src/worker/lens.ts": 13,
     "src/worker/lib/assets.ts": 1,
     "src/worker/lib/doors.ts": 2,
     "src/worker/lib/photo-grid.ts": 1,
