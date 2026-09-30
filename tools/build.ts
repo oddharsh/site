@@ -1527,12 +1527,22 @@ let twinFiles;
 let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean; addedChrome: boolean } =
   () => { throw new Error("explorer: dressPage used before 1g2 defined it"); };
 {
-  const { buildTwins, checkTwinFacts } = await import("./gen-md-twins.ts");
+  const { agentSurfacesWithoutTwin, buildTwins, checkTwinFacts, readManifest } = await import("./gen-md-twins.ts");
   const drift = checkTwinFacts(".");
   if (drift.length) {
     throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
   }
-  const { files, skipped, generated } = buildTwins(".", { generatedRoot: OUT });
+  const { files, skipped, generated, committed } = buildTwins(".", { generatedRoot: OUT });
+  // The registry advertises every agents:true surface to agents (MCP
+  // resources/list), so each one owes a Markdown twin unless it declares the
+  // representation its route renders live (`mimeType`, as /rn and the terminal
+  // tools do). The skipped list above used to be the only record of a miss, and
+  // it only ever reached a log line: six pages baked at 5b sat on it answering
+  // agents in HTML. tools/lib/agent-representation.ts has the rule.
+  const untwinned = agentSurfacesWithoutTwin(readManifest(".").surfaces, [...files.keys(), ...committed]);
+  if (untwinned.length) {
+    throw new Error(`md twins: agents:true surfaces with no Markdown twin: ${untwinned.join(", ")}. Give each a hand twin in src/content/md/ (a page baked after this step cannot be generated), declare the representation its route serves with mimeType, or drop flags.agents`);
+  }
   twinFiles = files;
   await Promise.all([...files].map(async ([rel, body]) => {
     const dest = `${OUT}/public${rel}`;

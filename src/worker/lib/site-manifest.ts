@@ -99,37 +99,37 @@ export const AGENT_SURFACES = [
   {
     "path": "/finger",
     "title": "Finger",
-    "mimeType": "text/html",
+    "mimeType": "text/plain",
     "description": "Look up who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search across all of it."
   },
   {
     "path": "/radar",
     "title": "Radar",
-    "mimeType": "text/html",
+    "mimeType": "text/plain",
     "description": "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends."
   },
   {
     "path": "/dict",
     "title": "Dict",
-    "mimeType": "text/html",
+    "mimeType": "text/plain",
     "description": "Will a browser ever actually use the compression dictionary you are serving? The registration rules fail in total silence; this encodes them, measured."
   },
   {
     "path": "/cache",
     "title": "Cache",
-    "mimeType": "text/html",
+    "mimeType": "text/plain",
     "description": "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header graders cannot see."
   },
   {
     "path": "/encode",
     "title": "Encode",
-    "mimeType": "text/html",
+    "mimeType": "text/plain",
     "description": "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, chroma subsampling, bit depth — and says where bytes are being left on the table. No pixels are decoded."
   },
   {
     "path": "/agent-ready",
     "title": "Agent Ready",
-    "mimeType": "text/html",
+    "mimeType": "text/plain",
     "description": "How much of an origin a machine can actually use — the agent doors, counted rather than scored — and, for this origin, what building all of it cost in files and lines."
   },
   {

@@ -407,7 +407,23 @@ test("site MCP lists the agent surfaces as resources", async () => {
   assert.equal(home.uri, "https://aadhar.sh/", "uri is absolute against the request origin");
   assert.equal(home.mimeType, "text/html");
   assert.equal(resources.find((r) => r.name === "/rn").mimeType, "text/markdown", "music advertises its on-site representation");
-  assert.ok(resources.filter((r) => r.name !== "/rn").every((r) => r.mimeType === "text/html"));
+  // The terminal tools advertise the 80-column frame they answer anything but a
+  // browser with, so resources/read asks for it rather than the page around it.
+  const frames = ["/finger", "/radar", "/dict", "/cache", "/encode", "/agent-ready"];
+  for (const name of frames) assert.equal(resources.find((r) => r.name === name).mimeType, "text/plain", `${name} advertises its frame`);
+  assert.ok(resources.filter((r) => r.name !== "/rn" && !frames.includes(r.name)).every((r) => r.mimeType === "text/html"));
+});
+
+test("MCP reads a terminal tool's URI as its text/plain frame", async () => {
+  let asked = "";
+  const env = { SELF_FETCH: async (req) => {
+    asked = req.headers.get("accept");
+    return new Response("finger — aadharsh@aadhar.sh\n", { headers: { "content-type": "text/plain; charset=utf-8" } });
+  } };
+  const out = await readMcpResource("https://aadhar.sh/finger", env);
+  assert.equal(asked, "text/plain", "the read asks for the representation the listing advertised");
+  assert.equal(out.result.contents[0].mimeType, "text/plain");
+  assert.match(out.result.contents[0].text, /aadharsh@aadhar\.sh/);
 });
 
 // Direct handler tests inject the same local dispatcher that /mcp receives.
