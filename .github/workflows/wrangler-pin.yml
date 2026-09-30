@@ -4,9 +4,10 @@ name: Wrangler pin
 # tarball URL naming the sha, since 2026-09-14. Dependabot cannot bump a URL,
 # so nothing else moves it; this job asks nightly whether main has moved, runs
 # the canary leg's gates against the new commit (dry-run bundle, route oracle,
-# cal's suite, all on the candidate's own createTestHarness), and opens a PR
-# carrying the evidence when they pass. That same evaluation now supplies the
-# nightly Wrangler canary report, even when the pin is unchanged. The shape, for the
+# cal's suite, and the contract tests that boot the harness, all on the
+# candidate's own createTestHarness), and opens a PR carrying the evidence
+# when they pass. That same evaluation now supplies the nightly Wrangler
+# canary report, even when the pin is unchanged. The shape, for the
 # same reasons: one long-lived branch force-pushed, never a push to a
 # protected ref, a human merge because `main` takes no bypass actors.
 #
@@ -143,7 +144,7 @@ jobs:
           git commit -m "chore(wrangler): move the pin from $from to $to
 
           Every gate green on the candidate's own createTestHarness: the dry-run
-          bundle, the route oracle, and cal's suite.
+          bundle, the route oracle, cal's suite, and the harness contract tests.
 
           Opened by .github/workflows/wrangler-pin.yml."
           git push --force origin "$BRANCH"

@@ -1101,7 +1101,7 @@ without writing a pin, issue or PR. No cached test result is reused.
 | leg | target | gates | script |
 |---|---|---|---|
 | bun | the rolling `canary` release (oven-sh/bun) | zstd honours `dictionary`, lockfile read and format, byte-identical build against the pinned bun, contract suite, cal suite on wrangler's harness | `canary-bun.ts` |
-| wrangler | workers-sdk `main` from pkg.pr.new, installed into a detached worktree | `deploy --dry-run` bundles, bundle byte-identical to the pinned wrangler's (a DIFF, never a failure), route oracle on the candidate's own `createTestHarness`, cal suite | `canary-wrangler.ts` |
+| wrangler | workers-sdk `main` from pkg.pr.new, installed into a detached worktree | `deploy --dry-run` bundles, bundle byte-identical to the pinned wrangler's (a DIFF, never a failure), route oracle on the candidate's own `createTestHarness`, cal suite, the contract tests that boot that harness (`lib/harness-tests.ts`) | `canary-wrangler.ts` |
 | browsers | `/garage/horizon`'s probes in bundled chromium, firefox and webkit, with Chrome Beta diffed against chromium and Edge Dev against Edge (the prerelease channels the pinned playwright can install on Linux), plus two live probes (a JXL data-URI decode, and the `Available-Dictionary` exchange with production) | every honest probe answers the same in stable and prerelease; every card marked shipped is true in two stable engines | `canary-browsers.ts` |
 
 **Every leg also runs the WATCHES, since 2026-09-15.** A watch is a gate

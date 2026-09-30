@@ -14,10 +14,10 @@
 //
 // THE GATES ARE THE CANARY LEG'S. canary-wrangler.ts already installs a
 // pkg.pr.new ref into a detached worktree and runs the dry-run bundle, the
-// route oracle and cal's suite against it, so this spawns that script with
-// the resolved sha and reads its JSON. A `changed` verdict (the bundle moved
-// while every gate passed) is still proposable, and the PR body says by how
-// many bytes; a `red` is not.
+// route oracle, cal's suite and the harness-booting contract tests against
+// it, so this spawns that script with the resolved sha and reads its JSON. A
+// `changed` verdict (the bundle moved while every gate passed) is still
+// proposable, and the PR body says by how many bytes; a `red` is not.
 //
 // --json keeps the canary's report for the nightly issue reporter. It also
 // evaluates an unchanged pin, so the watches still run every night. Reporting
