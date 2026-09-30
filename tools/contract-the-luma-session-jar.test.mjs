@@ -264,8 +264,9 @@ test("the cron enrich dispatch never puts the secret in the URL", async () => {
 });
 
 test("the cron enrich dispatch skips cleanly when it is not configured", async () => {
-  // This is production's state until EXA_API_KEY is set, so the skip has to be
-  // quiet and self-describing rather than an error on every tick.
+  // This is production's state, and dormant by owner call (2026-09-30, see
+  // dispatchEnrich), so the skip has to stay quiet and self-describing rather
+  // than become an error on every tick.
   let called = false;
   const spy = async () => { called = true; return { ok: true, json: async () => ({}) }; };
   assert.deepEqual(await dispatchEnrich({ SYNC_SECRET: "s" }, spy), { skipped: "EXA_API_KEY not set" });

@@ -1630,6 +1630,13 @@ type EnrichFetch = (url: string, init?: any) =>
 
 export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
   if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
+  // DORMANT ON PURPOSE, owner call 2026-09-30. Production has never had
+  // EXA_API_KEY, so every tick lands here and enrichment has produced nothing.
+  // The owner chose to keep the path wired and switched off, over setting the
+  // key or deleting the code. That makes this skip the expected production
+  // state: an audit that reads it as a dropped fix should stop here. To turn it
+  // on, set the secret (`bun run wrangler:site versions secret put
+  // EXA_API_KEY`), declare it in cloudflare.config.ts, and deploy.
   if (!env.EXA_API_KEY) return { skipped: "EXA_API_KEY not set" };
   const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
   const limit = enrichBatchLimit(env.ENRICH_CRON_BATCH);
