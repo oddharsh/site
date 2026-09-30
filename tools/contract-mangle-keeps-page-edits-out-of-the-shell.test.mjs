@@ -105,8 +105,8 @@ test("the rename still passes the dangling-reference invariant", () => {
   assert.doesNotThrow(() => assertIntegrity(files, out, map, 3));
 });
 
-// The page-scoped hashed files (ask.js, the pretext library, dotfiles.js) are
-// content-hashed and still ranked as PAGES: ask.js
+// The page-scoped hashed files (ask.js, the pretext library, dotfiles.js, the
+// pixel-peeper manifest) are content-hashed and still ranked as PAGES: ask.js
 // reads three --font-* tokens, and in the shell set its edits would reorder
 // luna.css's names. "more page uses of a SHELL token" above is that case, so
 // what is left to pin is that 5c actually hands them over on the page side.

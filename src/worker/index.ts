@@ -728,7 +728,7 @@ const PREFIX = [
   },
   {
     label: "/a/<asset>",
-    match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg|dict)$/.test(pathname),
+    match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg|json|dict)$/.test(pathname),
     handle: routeShellAsset,
   },
 ];

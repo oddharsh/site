@@ -121,6 +121,9 @@ const SHELL_TYPES = {
   js:  "text/javascript; charset=utf-8",
   css: "text/css; charset=utf-8",
   svg: "image/svg+xml; charset=utf-8",
+  // /a/pixel-peeper-manifest.<hash8>.json, since 2026-09-30: the year and the
+  // q11 twin, and deliberately NOT the dictionary path (see DICTIONARY_TYPES).
+  json: "application/json; charset=utf-8",
   dict: "application/octet-stream",
 };
 
@@ -172,6 +175,19 @@ const SHELL_TYPES = {
 // If the July symptom ever returns, it will look exactly as it did then: icons blank
 // for returning Chromium visitors on the deploy after a sprite change, and a hard
 // reload fixing it. Taking svg out of this map is the whole rollback.
+//
+// json is on /a/ and OFF this map, and that is a measurement rather than caution.
+// The one hashed json (the /pixel-peeper trial manifest, 1,860 B at q11) changed
+// in 5 of the 200 releases to 2026-09-30, and its delta against the previous
+// version is 148 B, so the tier would save about 1.7 KB on one visit in forty
+// while adding a content type to the path gotcha 14 had to earn svg back onto.
+// The path WOULD work: Chrome 154 sends Available-Dictionary on a fetch() whose
+// URL matches a registration made by an earlier fetch(), with no match-dest or
+// with match-dest=("") (a fetch's destination is the empty string), and not
+// with match-dest=("script"). Measured locally on 2026-09-30, over
+// http://localhost rather than production's h2/h3 through Cloudflare, so a json
+// entry here would still owe the canary svg got. The number to revisit is a
+// hashed json that changes most releases with a small delta.
 const DICTIONARY_TYPES = { js: 1, css: 1, svg: 1 };
 
 // Offer the shell's own bytes as a compression dictionary for future /a/ requests

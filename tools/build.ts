@@ -2135,17 +2135,17 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 }
 
 // Staged files step 6 content-hashes into /a/ that ONE page or one section
-// loads: the LWE ask widget, the vendored pretext library and the /dotfiles
-// checklist. They were plain URLs that every visit revalidated (max-age=0
-// under /lwe/*, /garage/* and the root default), so the hash is what buys the
-// year.
+// loads: the LWE ask widget, the vendored pretext library, the /dotfiles
+// checklist and the /pixel-peeper trial manifest. They were plain URLs that
+// every visit revalidated (max-age=0 under /lwe/*, /garage/*, the root default
+// and /pixel-peeper/manifest.json), so the hash is what buys the year.
 //
 // They are hashed like the shell and RANKED like pages in 5c. The shell tier
 // orders names by their uses inside the shell alone, so a page-scoped file in
 // that set would let an edit to ask.js (which reads three --font-* tokens)
 // reorder luna.css's short names and re-mint every page (gotcha 35).
 const PAGE_SCOPED_HASHED = new Set([
-  "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js",
+  "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json",
 ].map((f) => `public/${f}`));
 
 // Every staged file step 6 content-hashes into /a/. Step 5c reads the shell
@@ -2373,6 +2373,13 @@ let freshFamily: Buffer | null = null;
     { file: "/dotfiles.js",     base: "dotfiles",     mk: (to) => [
       [/(\bfrom\s*)(["'`])\/dotfiles\.js\2/g, `$1$2${to}$2`],
       [/import\((["'`])\/dotfiles\.js\1\)/g, `import($1${to}$1)`] ] },
+    // The one DATA file here, fetched before /pixel-peeper can draw a trial. It
+    // sat at max-age=0, must-revalidate, so every visit paid a blocking
+    // round trip for 1,860 B that changed in 5 of the last 200 releases. It
+    // stays OFF the dictionary path (DICTIONARY_TYPES in lib/assets.ts says
+    // why), so it gets the year and the q11 twin and nothing else.
+    { file: "/pixel-peeper/manifest.json", base: "pixel-peeper-manifest", ext: "json", mk: (to) => [
+      [/fetch\((["'`])\/pixel-peeper\/manifest\.json\1\)/g, `fetch($1${to}$1)`] ] },
   ];
   // 5c planned its short names with CONTENT_HASHED's shell part as the shell. An
   // asset hashed here and missing there would take page-driven renames into an
@@ -2396,7 +2403,17 @@ let freshFamily: Buffer | null = null;
     }
     let hits = 0;
     for (const a of STRING_ASSETS) {
-      const bytes = await readFile(`${OUT}/public${a.file}`);
+      let bytes = await readFile(`${OUT}/public${a.file}`);
+      // A JSON asset takes compact-data's canonical form HERE, before its hash,
+      // and the plain copy with it. compact-data runs long after this step and
+      // skips a/, so it can never rewrite bytes a hash already names.
+      if (a.ext === "json") {
+        const compact = Buffer.from(JSON.stringify(JSON.parse(bytes.toString("utf8"))));
+        if (compact.length < bytes.length) {
+          bytes = compact;
+          await writeFile(`${OUT}/public${a.file}`, bytes);
+        }
+      }
       const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.${a.ext || "js"}`;
       await writeFile(`${OUT}/public${to}`, bytes);
       hashedFor[hashKey(a)] = to;
@@ -2441,7 +2458,7 @@ let freshFamily: Buffer | null = null;
     // and the one the old ordering left pointing at the unhashed duplicate.
     if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
     // The page-scoped three: each has exactly one loader, on one page.
-    for (const [page, key] of [["garage/pretext.html", "pretext-lib"], ["dotfiles/index.html", "dotfiles"]]) {
+    for (const [page, key] of [["garage/pretext.html", "pretext-lib"], ["dotfiles/index.html", "dotfiles"], ["pixel-peeper/index.html", "pixel-peeper-manifest.json"]]) {
       const body = await readFile(`${OUT}/public/${page}`, "utf8");
       if (!body.includes(hashedFor[key])) throw new Error(`${page} was not repointed to ${hashedFor[key] ?? `a hashed ${key}`}`);
     }
@@ -2671,7 +2688,7 @@ let freshFamily: Buffer | null = null;
 // A skipped build step, or a client without brotli, gets the identity bytes.
 {
   const dir = `${OUT}/public/a`;
-  const files = (await readdir(dir)).filter((f) => /\.(js|css|svg|dict)$/.test(f));
+  const files = (await readdir(dir)).filter((f) => /\.(js|css|svg|json|dict)$/.test(f));
   if (!files.length) throw new Error("precompression found no /a/ shell assets — did step 6 stop emitting them?");
   let raw = 0, enc = 0;
   const compressed = await Promise.all(files.map(async (f) => {
@@ -3284,7 +3301,9 @@ let freshFamily: Buffer | null = null;
   const all = await readdir(`${OUT}/public`, { recursive: true });
   let files = 0, saved = 0;
   for (const rel of all) {
-    if (/\.src\./.test(rel) || rel.startsWith("md/")) continue;
+    // a/ is content-addressed: its bytes are final when step 6 names them, and
+    // a JSON asset there was compacted before it was hashed.
+    if (/\.src\./.test(rel) || rel.startsWith("md/") || rel.startsWith("a/")) continue;
     const path = `${OUT}/public/${rel}`;
     let out: string | null = null;
     if (rel.endsWith(".json")) {

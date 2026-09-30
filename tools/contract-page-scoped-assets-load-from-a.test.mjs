@@ -1,18 +1,21 @@
 // ── page-scoped assets load from /a/, and the plain URLs keep serving ────────
-// Three scripts one page (or one section) loads joined the content-hashed tier
-// on 2026-09-30: /lwe/ask.js on 12 LWE pages, /garage/pretext.lib.js and
-// /dotfiles.js. Each was a plain URL a returning visitor revalidated on every
-// view. build.ts step 6 copies each into /a/ and rewrites its one loader; the
-// plain file stays, because agents, old HTML and the .src.html twins still
-// name it.
+// Four files one page (or one section) loads joined the content-hashed tier on
+// 2026-09-30: /lwe/ask.js on 12 LWE pages, /garage/pretext.lib.js, /dotfiles.js
+// and /pixel-peeper/manifest.json. Each was a plain URL a returning visitor
+// revalidated on every view. build.ts step 6 copies each into /a/ and rewrites
+// its one loader; the plain file stays, because agents, old HTML and the
+// .src.html twins still name it.
 //
 // What can quietly undo it: a loader whose spelling moves out from under the
-// rewrite, a hashed copy whose bytes are not the plain file's, and a roll that
-// cannot see the page-scoped scripts and so never gives them a dictionary.
+// rewrite (the page keeps the plain URL and nothing fails), a hashed copy whose
+// bytes are not the plain file's (compact-data used to run after step 6 and
+// would have rewritten the json), and the one new content type on /a/ drifting
+// onto the dictionary path it was measured off.
 import { brotliDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
+import { servePrecompressedShell } from "../src/worker/lib/assets.ts";
 import { SHELL_DISCOVERY_ROOTS } from "./lib/shell-roots.ts";
 
 const BUILT = new URL(".build/public/", ROOT);
@@ -24,6 +27,7 @@ const ASSETS = [
   { plain: "lwe/ask.js", base: "ask", ext: "js", loader: /src=["']?\/lwe\/ask\.js/, pages: lwePages },
   { plain: "garage/pretext.lib.js", base: "pretext-lib", ext: "js", loader: /import\(\s*["'`](?:\.\/|\/garage\/)pretext\.lib\.js/, pages: ["garage/pretext.html"] },
   { plain: "dotfiles.js", base: "dotfiles", ext: "js", loader: /from\s*["'`]\/dotfiles\.js/, pages: ["dotfiles/index.html"] },
+  { plain: "pixel-peeper/manifest.json", base: "pixel-peeper-manifest", ext: "json", loader: /fetch\(\s*["'`]\/pixel-peeper\/manifest\.json/, pages: ["pixel-peeper/index.html"] },
 ];
 
 test("each page-scoped asset has one /a/ copy, byte-identical to the plain file, with a q11 twin", { skip: needsBuild }, async () => {
@@ -60,6 +64,36 @@ test("the loaders in SOURCE still name the plain URL, which is what the rewrite 
       const html = await readFile(new URL(`src/pages/${page}`, ROOT), "utf8");
       assert.match(html, a.loader, `src/pages/${page} no longer loads /${a.plain} the way build.ts step 6 rewrites it`);
     }
+  }
+});
+
+// A fake ASSETS binding holding the manifest and its twin, recording every path asked for.
+const MANIFEST = "/a/pixel-peeper-manifest.0123abcd.json";
+function fakeAssets() {
+  const asked = [];
+  const files = new Map([[MANIFEST, "plain json"], [`${MANIFEST}.br`, "brotli json"]]);
+  return {
+    asked,
+    fetch: async (request) => {
+      const path = new URL(request.url).pathname;
+      asked.push(path);
+      return files.has(path)
+        ? new Response(files.get(path), { status: 200, headers: { "cache-control": "public, max-age=31536000, immutable" } })
+        : new Response("missing", { status: 404 });
+    },
+  };
+}
+
+test("an /a/ json is served as the q11 twin, typed as json, and stays off the dictionary path", async () => {
+  const available = `:${createHash("sha256").update("a manifest this browser holds").digest("base64")}:`;
+  for (const headers of [new Headers(), new Headers({ "available-dictionary": available })]) {
+    const ASSETS = fakeAssets();
+    const res = await servePrecompressedShell(new Request(`https://aadhar.sh${MANIFEST}`, { headers }), { ASSETS });
+    assert.equal(await res.text(), "brotli json");
+    assert.equal(res.headers.get("content-encoding"), "br");
+    assert.equal(res.headers.get("content-type"), "application/json; charset=utf-8");
+    assert.equal(res.headers.get("use-as-dictionary"), null, "json is not on the dictionary path, so it must not offer itself as one");
+    assert.ok(!ASSETS.asked.some((p) => p.startsWith("/ad/")), `a json request looked for a delta: ${ASSETS.asked.join(", ")}`);
   }
 });
 
