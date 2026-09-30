@@ -1060,7 +1060,8 @@ window.__horizonCaps = (function () {
       and Edge Dev, and files one issue per leg naming any probe that answers
       differently in the prerelease. Its first two findings moved the
       <code>margin-trim</code> and JPEG&nbsp;XL cards on 2026-09-17: both flip on in
-      Chrome&nbsp;155, three weeks before stable. That catches the direction a sweep
+      Chrome&nbsp;155, three weeks before stable, and a third moved the CSS
+      <code>random()</code> card on 2026-09-30, the day Chrome&nbsp;156 reached beta. That catches the direction a sweep
       structurally cannot, a feature that ships between sweeps, and it catches it
       before the release rather than after. It reads only what a probe can measure,
       so a card whose status lives in a standards position or a flag description
@@ -3074,14 +3075,18 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="css-random">
       <h2>
         <span>CSS <span class="mono">random()</span></span>
-        <span class="stat trial">Safari 26.2 &middot; Chrome flag &middot; FF no</span>
+        <span class="stat trial">Safari 26.2 &middot; Chrome 156 beta &middot; FF no</span>
       </h2>
       <p class="note">
         A random value straight in CSS: <code>random(25%, 100%)</code> resolves to a
         number in that range at computed-value time, with an element-scoped keyword so
-        each element can draw its own. Shipped in <strong>Safari&nbsp;26.2</strong>;
-        behind the experimental flag in Chrome (~148+) and nothing in Firefox, so it
-        reads as a Safari-first CSS Values&nbsp;5 feature for now.
+        each element can draw its own. Shipped in <strong>Safari&nbsp;26.2</strong>,
+        and nothing in Firefox. Chrome kept it behind the experimental flag from about
+        148 until chromestatus named milestone&nbsp;156 (stable 2026-10-20), and the
+        nightly browser canary measured the flip on 2026-09-30: this card&apos;s
+        <code>CSS.supports("width: random(1px, 2px)")</code> probe reads false in
+        Chromium&nbsp;153 and true in Chrome Beta&nbsp;156. So it is two engines in
+        three weeks, and a Safari-first CSS Values&nbsp;5 feature until then.
       </p>
       <p class="replaces">
         On the site: pure decoration, filed next to WebGPU under &quot;because we can.&quot;
