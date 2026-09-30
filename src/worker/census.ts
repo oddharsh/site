@@ -36,6 +36,50 @@ async function ensureCensusTable(env) {
   await env.RESTORE_DB.exec(
     "CREATE TABLE IF NOT EXISTS lens_census (ts INTEGER, ymd TEXT, host TEXT, url TEXT, tier TEXT, score INTEGER, level INTEGER, doors INTEGER, verdict TEXT, surfaces TEXT, PRIMARY KEY (host, ymd))"
   );
+  // The sweep's own record: one row per roster host per census day, saying how
+  // far that host got. See CENSUS_RUN_UPSERT for why it exists.
+  await env.RESTORE_DB.exec(
+    "CREATE TABLE IF NOT EXISTS lens_census_runs (ymd TEXT, host TEXT, ts INTEGER, stage TEXT, outcome TEXT, detail TEXT, PRIMARY KEY (ymd, host))"
+  );
+}
+
+// WHY THE SWEEP KEEPS A RECORD OF ITSELF. Five Sundays wrote nothing to
+// lens_census, and every one of them left no trace a person could read a day
+// later. The dispatcher counted its failures on a span, spans live in Workers
+// Logs, and Workers Logs keep 3 days on Free, so by the time anyone noticed the
+// table had stopped moving the only evidence had expired. The failure that did
+// it on 2026-09-27 was `workflows.api.error.workflow.not_found`: the Workflow
+// this dispatches into did not exist in the account until 2026-09-28T21:10:36Z,
+// because nothing on the ramped release path ever registered it (see
+// census-workflow.ts). The dot in the instance id (#952) was real too, and was
+// never the only thing standing between a Sunday and a row.
+//
+// So each host gets one row a day in D1, which keeps it as long as the census
+// itself. The dispatcher writes stage `dispatch` (dispatched, duplicate,
+// dispatch_failed) and the Workflow step overwrites it with stage `scan`
+// (written, cap, failed). A row still at `dispatched` hours later names an
+// instance that never reported. /lens/census.json publishes the latest day as
+// `lastSweep`, so the question "did Sunday's sweep work, and if not where did
+// each host stop" is one curl from anywhere, forever.
+export const CENSUS_RUN_UPSERT =
+  "INSERT INTO lens_census_runs (ymd, host, ts, stage, outcome, detail) VALUES (?,?,?,?,?,?) " +
+  "ON CONFLICT(ymd, host) DO UPDATE SET ts=excluded.ts, stage=excluded.stage, outcome=excluded.outcome, detail=excluded.detail";
+
+// The dispatcher's form. It writes AFTER all sixteen creates, and an instance
+// can finish its scan before that, so a plain upsert would overwrite `written`
+// with `dispatched` and report a finished host as unfinished. The WHERE clause
+// lets a dispatch row replace only another dispatch row.
+export const CENSUS_RUN_UPSERT_DISPATCH = CENSUS_RUN_UPSERT + " WHERE lens_census_runs.stage = 'dispatch'";
+
+const detailOf = (e) => ((e && e.message) || (e == null ? null : String(e)))?.slice(0, 300) ?? null;
+
+/** Record one host's scan outcome. Never throws: the record must not be the
+ *  thing that turns a written row into a retried step, and on the cap path the
+ *  write can itself be refused. */
+async function recordScan(env, ymd, host, outcome, detail) {
+  try {
+    await env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, host, Date.now(), "scan", outcome, detail).run();
+  } catch (_e) { /* the span still carries the outcome */ }
 }
 
 // Pull the metrics the census tracks out of a full lens envelope.
@@ -152,14 +196,20 @@ export async function censusScanOne(env, site, ts, ymd) {
       // one day, which is the point of having it as well as the split.
       if (censusCapHit(r)) {
         s.setAttribute("census.outcome", "cap");
+        await recordScan(env, ymd, site.label, "cap", "subrequest cap reached; not published");
         return { ok: false, host: site.label, reason: "subrequest cap reached; not published" };
       }
 
       const m = censusMetrics(site, r, ts, ymd);
-      await env.RESTORE_DB.prepare(
-        "INSERT INTO lens_census (ts, ymd, host, url, tier, score, level, doors, verdict, surfaces) VALUES (?,?,?,?,?,?,?,?,?,?) " +
-        "ON CONFLICT(host, ymd) DO UPDATE SET ts=excluded.ts, url=excluded.url, tier=excluded.tier, score=excluded.score, level=excluded.level, doors=excluded.doors, verdict=excluded.verdict, surfaces=excluded.surfaces"
-      ).bind(m.ts, m.ymd, m.host, m.url, m.tier, m.score, m.level, m.doors, m.verdict, m.surfaces).run();
+      // One batch, so the row and its record land together and cost one
+      // subrequest between them.
+      await env.RESTORE_DB.batch([
+        env.RESTORE_DB.prepare(
+          "INSERT INTO lens_census (ts, ymd, host, url, tier, score, level, doors, verdict, surfaces) VALUES (?,?,?,?,?,?,?,?,?,?) " +
+          "ON CONFLICT(host, ymd) DO UPDATE SET ts=excluded.ts, url=excluded.url, tier=excluded.tier, score=excluded.score, level=excluded.level, doors=excluded.doors, verdict=excluded.verdict, surfaces=excluded.surfaces"
+        ).bind(m.ts, m.ymd, m.host, m.url, m.tier, m.score, m.level, m.doors, m.verdict, m.surfaces),
+        env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, site.label, Date.now(), "scan", "written", null),
+      ]);
 
       s.setAttribute("census.outcome", "written");
       s.setAttribute("census.tier", m.tier);
@@ -169,6 +219,9 @@ export async function censusScanOne(env, site, ts, ymd) {
     } catch (e) {
       s.setAttribute("census.outcome", "failed");
       s.setAttribute("census.error", (e && e.message) || String(e));
+      // Recorded per attempt, so a retry that succeeds overwrites it and one
+      // that never does leaves the last error standing in D1.
+      await recordScan(env, ymd, site.label, "failed", detailOf(e));
       // RETHROW, so the Workflow step records the failure and retries it. The
       // old code swallowed here, which is how twelve hosts a week disappeared
       // without a single number moving.
@@ -187,10 +240,16 @@ export async function censusScanOne(env, site, ts, ymd) {
  *  pattern miniflare's Workflows binding enforces, and this kept `.` from
  *  #656 until 2026-09-26. Every roster label is a hostname, so the local
  *  binding refuses all sixteen creates with "Workflow instance has invalid
- *  id", which the sweep counts as `failed`. Production agrees as far as it can
- *  be read from outside: /lens/census.json's lastYmd is 2026-08-23, the
- *  Sunday before #656 shipped, and four Sunday sweeps since wrote nothing.
- *  contract-census-duplicate-id-in-workerd holds it against the real binding. */
+ *  id", which the sweep counts as `failed`. contract-census-duplicate-id-in-workerd
+ *  holds it against the real binding.
+ *
+ *  THE DOT WAS HALF OF IT, and this comment used to say it was the whole. The
+ *  first Sunday after #952 (2026-09-27) wrote nothing either, because the
+ *  `lens-census-host` Workflow did not exist in the account: `wrangler
+ *  workflows list` reports it created 2026-09-28T21:10:36Z, seven seconds after
+ *  the first production `wrangler deploy`, with `triggered_on: null` and zero
+ *  instances ever. Every create before that met `workflow.not_found`, whatever
+ *  the id. census-workflow.ts has the mechanism. */
 export function censusInstanceId(ymd, site) {
   return `census-${ymd}-${String(site.label || site.url).replace(/[^a-z0-9-]/gi, "-")}`.slice(0, 100);
 }
@@ -223,8 +282,8 @@ export function isDuplicateInstance(error) {
 // allows 100,000 Workflow executions a day and 100 concurrent instances, and
 // this spends 16 a week.
 //
-// The dispatch is 1 D1 call plus 16 creates, so the invocation that used to
-// demand ~512 subrequests against a ceiling of 50 now spends 17.
+// The dispatch is 2 D1 calls (the two CREATEs), 16 creates and 1 batch for the
+// record, so the invocation that used to demand ~512 subrequests now spends 19.
 export async function cronCensus(env) {
   return span("census.sweep", (s) => cronCensusInner(env, s), { "census.roster": CENSUS_ROSTER.length });
 }
@@ -249,6 +308,7 @@ async function cronCensusInner(env, sSweep) {
   const ymd = new Date(ts).toISOString().slice(0, 10);
 
   let created = 0, duplicate = 0, failed = 0;
+  const record: Array<[string, string, string | null]> = [];
   for (const site of CENSUS_ROSTER) {
     try {
       await env.CENSUS_WORKFLOW.create({
@@ -256,11 +316,23 @@ async function cronCensusInner(env, sSweep) {
         params: { url: site.url, label: site.label, ts, ymd },
       });
       created++;
+      record.push([site.label, "dispatched", null]);
     } catch (e) {
-      if (isDuplicateInstance(e)) { duplicate++; continue; }
+      if (isDuplicateInstance(e)) { duplicate++; record.push([site.label, "duplicate", null]); continue; }
       failed++;
       sSweep.setAttribute("census.error", (e && e.message) || String(e));
+      record.push([site.label, "dispatch_failed", detailOf(e)]);
     }
+  }
+
+  // One batch for all sixteen rows, so the invocation spends 2 + 16 + 1
+  // subrequests. A refused record costs the record and never the sweep.
+  try {
+    await env.RESTORE_DB.batch(record.map(([host, outcome, detail]) =>
+      env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT_DISPATCH).bind(ymd, host, ts, "dispatch", outcome, detail)));
+    sSweep.setAttribute("census.recorded", record.length);
+  } catch (e) {
+    sSweep.setAttribute("census.record_error", (e && e.message) || String(e));
   }
 
   sSweep.setAttribute("census.outcome", failed ? "partial" : "dispatched");
@@ -309,6 +381,39 @@ export async function fetchCensusGrouped(env) {
     return order.indexOf(a.host) - order.indexOf(b.host);
   });
   return { hosts, snapshots: days.size, firstYmd, lastYmd };
+}
+
+/** The latest census day's record, summarised. Pure, so the contract suite can
+ *  hold its shape without a database. `null` when nothing has been recorded,
+ *  which is every day before this table existed. */
+export function summarizeCensusRuns(rows) {
+  if (!rows || !rows.length) return null;
+  const ymd = rows.reduce((max, r) => (r.ymd > max ? r.ymd : max), rows[0].ymd);
+  const day = rows.filter((r) => r.ymd === ymd).sort((a, b) => a.host.localeCompare(b.host));
+  const outcomes: Record<string, number> = {};
+  for (const r of day) outcomes[r.outcome] = (outcomes[r.outcome] || 0) + 1;
+  return {
+    ymd,
+    roster: CENSUS_ROSTER.length,
+    recorded: day.length,
+    written: outcomes.written || 0,
+    outcomes,
+    // Dispatched and never heard from: the instance is still running, still
+    // retrying, or died without reaching its catch.
+    unfinished: day.filter((r) => r.stage === "dispatch" && r.outcome !== "dispatch_failed").map((r) => r.host),
+    problems: day
+      .filter((r) => r.outcome === "dispatch_failed" || r.outcome === "cap" || r.outcome === "failed")
+      .map((r) => ({ host: r.host, outcome: r.outcome, detail: r.detail })),
+  };
+}
+
+export async function fetchCensusLastSweep(env) {
+  if (!env.RESTORE_DB) return null;
+  // No ensure here: handleCensusJson reads fetchCensusGrouped first, which does.
+  const { results } = await env.RESTORE_DB.prepare(
+    "SELECT ymd, host, ts, stage, outcome, detail FROM lens_census_runs WHERE ymd = (SELECT MAX(ymd) FROM lens_census_runs)"
+  ).all();
+  return summarizeCensusRuns(results || []);
 }
 
 const SPARK = "▁▂▃▄▅▆▇█";
@@ -404,7 +509,7 @@ export async function handleCensus(request, env, ctx) {
       // ONE sweep path now. This used to run its own cursor-and-batch variant
       // because a fetch invocation's waitUntil gets only ~30s past the
       // response, and a 16-host in-line sweep blows through that. Dispatching
-      // costs 17 subrequests and no crawling, so it fits inside the grace with
+      // costs 19 subrequests and no crawling, so it fits inside the grace with
       // room to spare, and the owner's manual pass and the cron are the same
       // code. Two sweep implementations is how the roster quietly became four.
       ctx.waitUntil(cronCensus(env));
@@ -488,12 +593,17 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 export async function handleCensusJson(request, env) {
   const grouped = await fetchCensusGrouped(env);
   if (!grouped) return jsonResponse({ ok: false, error: "census storage is unavailable" }, 503);
+  // Read beside the series: `lastYmd` says when a
+  // row last landed, and `lastSweep` says what the latest sweep did, including
+  // a sweep that landed nothing.
+  const lastSweep = await fetchCensusLastSweep(env).catch((e) => ({ error: detailOf(e) }));
   return jsonResponse({
     ok: true,
     roster: CENSUS_ROSTER.length,
     snapshots: grouped.snapshots,
     firstYmd: grouped.firstYmd,
     lastYmd: grouped.lastYmd,
+    lastSweep,
     sites: grouped.hosts.map((h) => ({
       host: h.host, url: h.url,
       tier: h.last.tier, score: h.last.score, level: h.last.level,

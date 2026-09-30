@@ -28,8 +28,25 @@
 // the natural inference is that a new Workflow class needs a `deploy:direct`.
 // It does not: this class uploaded through the ordinary non-production deploy
 // command on its own PR branch, and `wrangler versions view` on that version
-// lists env.CENSUS_WORKFLOW (CensusWorkflow) beside the booking one. It ships
-// through the normal merge and ramp.
+// lists env.CENSUS_WORKFLOW (CensusWorkflow) beside the booking one.
+//
+// THAT PROVED THE BINDING AND NOT THE WORKFLOW, and the gap cost five Sundays.
+// A Workflow is an ACCOUNT resource (`wrangler workflows list`), separate from
+// the script version that binds it, and wrangler registers it in one place:
+// triggersDeploy() PUTs /accounts/<id>/workflows/<name>, and only `wrangler
+// deploy` and `wrangler triggers deploy` call triggersDeploy(). Neither
+// `versions upload` nor `versions deploy` does. This class shipped on
+// 2026-08-28, inside the ramp era, when production reached traffic through
+// exactly those two commands, so every version carried a binding to a Workflow
+// that did not exist and every create() met `workflow.not_found`. The account
+// says so: lens-census-host was created 2026-09-28T21:10:36Z, seven seconds
+// after the first production `wrangler deploy`, with `triggered_on: null`.
+// cal-booking-expiry dates from 2026-07-21, before the ramp, which is why the
+// booking flow never met this.
+//
+// The production deploy command is `wrangler deploy` again, so a new Workflow
+// class registers on its first release. contract-census-records-every-dispatch
+// fails if that command stops being one that registers Workflows.
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { censusScanOne } from "./census.ts";

@@ -879,17 +879,43 @@ worktrees may edit freely, but a worktree is not a release surface.
     env.CENSUS_WORKFLOW  (CensusWorkflow)    Workflow
   ```
 
-  So a new Workflow class ships through the normal merge and ramp, and reaching
-  for `deploy:direct` costs a needless straight-to-100% release. `BookingWorkflow`
-  had been the only precedent and it proved nothing on its own, since nobody
-  recorded how it first shipped.
+  **That listing proved the BINDING, and the conclusion drawn from it was wrong
+  about the WORKFLOW, which cost five Sundays of census rows (2026-08-30 to
+  2026-09-27).** A Workflow is an ACCOUNT resource (`bun run wrangler:site
+  workflows list`), separate from the version that binds it, and wrangler
+  registers it in one function: `triggersDeploy()` PUTs
+  `/accounts/<id>/workflows/<name>`, and only `wrangler deploy` and `wrangler
+  triggers deploy` call it. `versions upload` and `versions deploy` never do.
+  So through the whole ramp era every aadhar-sh version bound a
+  `lens-census-host` that did not exist, and every `create()` met
+  `workflows.api.error.workflow.not_found`. The account is the evidence:
 
-  What makes this checkable at all rather than a guess is that **both** Workers
-  Builds commands are `versions upload` (`config/infra.json`, `release`), so a
-  branch build exercises the same API call a release does against the real
-  account. That is the cheapest place to answer any "will the deploy accept
-  this" question: push the branch and read `wrangler versions view` on the alias,
-  which the dry run structurally cannot tell you.
+  ```
+  lens-census-host    created_on 2026-09-28T21:10:36Z  triggered_on null  instances 0
+  cal-booking-expiry  created_on 2026-07-21T15:44:09Z
+  first production `wrangler deploy` (1f49a3f0@100)  2026-09-28T21:10:29Z
+  ```
+
+  `BookingWorkflow` shipped on 2026-07-21, before the ramp, under `wrangler
+  deploy`, which is why it never met this. The census dispatcher counted the
+  refusal on a span, and Workers Logs keep 3 days, so it left nothing to read.
+
+  **The rule now: a Workflow ships when a `wrangler deploy` runs.** The
+  production Workers Builds command is `deploy` again since 2026-09-28, so a new
+  class registers on its first release and needs no migration and no
+  `deploy:direct`. If the release path ever returns to `versions upload` plus a
+  ramp, a new Workflow needs one `wrangler triggers deploy` (the other caller of
+  `triggersDeploy()`; not yet run against this config), or it binds nothing.
+  Confirm with `workflows list` either way. `contract-census-records-every-dispatch` fails if the
+  declared production command stops being one that registers Workflows, and
+  `/lens/census.json` publishes `lastSweep`, the census's own per-host record in
+  D1, so a sweep that writes nothing now says why for as long as the table
+  exists.
+
+  A branch build is still the cheapest place to answer "will the upload accept
+  this": push the branch and read `wrangler versions view` on the alias, which
+  the dry run structurally cannot tell you. Read `workflows list` beside it,
+  because the version answers for the binding alone.
 - **Moving Counter out: the `Counter` Durable Object MOVED from aadhar-sh to
   its own Worker, `aadhar-counter` (`counter/`), in five alternating deploys,
   finished 2026-09-29.** The reason was preview URLs: Cloudflare mints
