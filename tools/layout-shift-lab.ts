@@ -92,7 +92,7 @@ function collector() {
   w.__ls = { fcp: null, released: null, shifts: [] };
   // The window model's own names first, so a shift reads as the thing a person
   // would point at. Then any id, then a landmark, then the node itself.
-  const REGION_CLASSES = ["np-list", "photos", "title-bar", "np-titlebar", "np-status", "axp-tasks", "axp-address", "content", "window", "np-window", "wrap"];
+  const REGION_CLASSES = ["np-list", "photos", "title-bar", "np-titlebar", "np-status", "axp-tasks", "axp-address", "content", "window", "np-window"];
   const describe = (node: Node | null): string => {
     let el: Element | null = node instanceof Element ? node : node?.parentElement ?? null;
     const self = el;

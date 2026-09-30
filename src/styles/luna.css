@@ -318,9 +318,9 @@ body{text-wrap:pretty}
    horizon, so the instrument sees the expensive shape. What makes this one cheap:
    Chromium filters :has invalidation on the argument's classes, and body's own
    declarations here inherit nothing that forces descendants to restyle. */
-body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
+body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
 /* window frame: bounded to the desktop, sized to content but never taller than it. */
-.window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
+.window,.np-window{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
 .window,.np-window{display:flex;flex-direction:column}
 .window>.title-bar,.np-window>.np-titlebar{flex:0 0 auto}
 /* the scrolling region inside the frame (Notepad's .np-text already scrolls) */
@@ -356,8 +356,6 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
    real one back (Firefox lets you tab to a scrollable region). */
 .window>.content:focus-visible,.window>.body:focus-visible{outline:2px solid #316ac5}
 .np-window .np-text{flex:1 1 auto;min-height:0}   /* textarea fills the window (so resizing a note grows the editor, not empty space) */
-/* serendipity nests its window in .wrap — make it a transparent flex pass-through */
-.wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
 /* native XP scrollbars (phase C follow-up): the JS widget retired; these
    rules dress the REAL bar. Styling any ::-webkit-scrollbar part opts the
    scroller out of macOS overlay bars, so Chromium/WebKit get a persistent
