@@ -518,7 +518,7 @@
     D.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "touch") return;                       // let touch scroll the page, not drag
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      var b = e.target instanceof Element && e.target.closest(".title-bar,.np-titlebar,.titlebar,#axp-run .tb");
+      var b = e.target instanceof Element && e.target.closest(".title-bar,.np-titlebar,#axp-run .tb");
       if (!b || (e.target instanceof Element && e.target.closest("a,button,.controls,.np-controls,.x"))) return;
       var w = b.closest(".window,.np-window,#axp-run");
       if (!w) return;
@@ -656,7 +656,7 @@
   function initWindowControls() {
     var win = D.querySelector("body > .window, body > .np-window");
     if (!win) return;
-    var bar = win.querySelector(":scope > .title-bar, :scope > .np-titlebar, :scope > .titlebar");
+    var bar = win.querySelector(":scope > .title-bar, :scope > .np-titlebar");
     if (!bar) return;
     var home = (location.pathname.replace(/\/+$/, "") || "/") === "/";
 
