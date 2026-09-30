@@ -273,7 +273,7 @@ function screenIntro(){
    </div>
    <div class="row spread" style="margin-top:12px">
      <small>hover any tile to pixel-peep · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> or click</small>
-     <button class="xp-button default" id="go">Start the exam ▸</button></div>`;
+     <button class="xp-button compact default" id="go">Start the exam ▸</button></div>`;
   document.getElementById("go").onclick=()=>{buildRun();screenTrial();};
 }
 const pips=()=>state.trials.map((_,i)=>`<span class="dot ${i<state.i?'done':i===state.i?'on':''}"></span>`).join("");
@@ -335,7 +335,7 @@ function onPick(pos,order,trial){
   const gl=diffGL();
   fb.innerHTML=`<div class="banner ${cls}"><span class="g">${head}</span><span>${extra} ${AXES[trial.axis].teach}</span></div>
     ${gl?diffHTML(trial,order):""}
-    <div class="row" style="justify-content:flex-end"><button class="xp-button default" id="next">${state.i===state.trials.length-1?"See my profile ▸":"Next ▸"}</button></div>`;
+    <div class="row" style="justify-content:flex-end"><button class="xp-button compact default" id="next">${state.i===state.trials.length-1?"See my profile ▸":"Next ▸"}</button></div>`;
   if(gl)wireDiff(gl,tiles,trial,order,pos);
   const next=document.getElementById("next");next.focus();next.onclick=advance;
   // the diff map's own buttons take Enter and Space, so those keys only advance from elsewhere
@@ -398,17 +398,17 @@ function screenResult(){
       ${shareGridHTML(marks)}
       <div class="sharekey">${shareKeyHTML(marks)}</div>
       <div class="row" style="margin-top:10px;justify-content:center">
-        <button class="xp-button" id="copytext">Copy result</button>
-        <button class="xp-button" id="copyimg">Copy image</button>
-        <a class="xp-button" id="dlimg" download="pixel-peeper.png">Save PNG</a>
-        <button class="xp-button" id="showcard">Preview image</button></div>
+        <button class="xp-button compact" id="copytext">Copy result</button>
+        <button class="xp-button compact" id="copyimg">Copy image</button>
+        <a class="xp-button compact" id="dlimg" download="pixel-peeper.png">Save PNG</a>
+        <button class="xp-button compact" id="showcard">Preview image</button></div>
       <div id="cardwrap"></div></div>
     <div class="gb"><span class="gb-legend">what's real, what's next</span>
       <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file.${state.noJxl?" your browser can't decode JPEG XL yet, so the format calls sat this run out.":""} next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
     ${quizHTML()}
     <div class="row spread" style="margin-top:14px">
       <small>your grid spoils nothing — no photo, encoder or setting is named</small>
-      <button class="xp-button default" id="again">Play again ▸</button></div>`;
+      <button class="xp-button compact default" id="again">Play again ▸</button></div>`;
   requestAnimationFrame(()=>document.querySelectorAll(".fill").forEach(f=>f.style.width=(f.dataset.w||0)+"%"));
   wireQuiz();
   wireShare(marks,overall,grade,clearLine,leanLine,lean,decisive);
