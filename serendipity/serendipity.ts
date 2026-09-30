@@ -10,10 +10,11 @@ const PREFIX = "/serendipity";
 // it CONSTRUCT the desktop after load: curl and JS-off visitors got no desktop
 // at all, and everyone else got a shell pop. Now the markup is in the document
 // and nav.js only wires behavior, same as every other page.
-import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { esc } from "../src/worker/lib/http.ts";
 import { twinFor } from "../src/worker/lib/twins.ts";
+import { titleBar } from "../src/worker/lib/window.ts";
 import { html as htmlTag, unsafeHtml } from "../src/worker/lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "../src/worker/lib/island.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit, recordBudget } from "../src/worker/lib/budget.ts";
@@ -389,10 +390,7 @@ function shell(title, currentPath, bodyHtml, head = "") {
 <style>${shellCss()}</style>
 <link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css">${head}</head><body>${DESKTOP_TOP}
 <div class="window">
-  <div class="title-bar">${DESKTOP_HISTNAV}
-    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/serendipity</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
-  </div>
+  ${String(titleBar({ caption: "aadhar.sh/serendipity", closeHref: "/", closeTitle: "back to aadhar.sh" }))}
   <div class="body">
     <nav class="pane">
       <a class="brand" href="${PREFIX}"><b>Serendipity</b><span>collective edition</span></a>

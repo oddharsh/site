@@ -32,7 +32,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { renderUnderstanding, validatePageSpec } from "../content/page-contract.mjs";
-import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { unsafeHtml } from "../../src/worker/lib/html.ts";
+import { titleBar } from "../../src/worker/lib/window.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
@@ -121,10 +123,7 @@ ${spec.demoCss ? spec.demoCss + "\n" : ""}</style>
 <body>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
-  <div class="title-bar">${DESKTOP_HISTNAV}
-    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/lwe &middot; ${titleSuffix}</span>
-    <span class="controls"><span class="min" title="minimize" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
-  </div>
+  <!-- axp:window -->${titleBar({ caption: unsafeHtml(`aadhar.sh/lwe &middot; ${titleSuffix}`), closeHref: "/lwe", closeTitle: "back to Learning With Errors" })}<!-- /axp:window -->
   <div class="content">
     <div class="msgr">
 

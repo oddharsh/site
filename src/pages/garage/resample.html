@@ -44,10 +44,10 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
 <body>
 <!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
-  <div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
+  <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/resample</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
-  </div>
+  </div><!-- /axp:window -->
   <div class="content">
 <h1>Half the light</h1>
 <p class="garage-intro">A one pixel black and white checkerboard is exactly half black and half white, so any honest downscale has to average it. The right answer is sRGB 188, because the average is over light. Every resizer I measured returns about 128: <code>sips</code>, ffmpeg, the Rust <a href="https://github.com/image-rs/image">image</a> crate, <a href="https://github.com/cykooz/fast_image_resize">fast_image_resize</a>, <code>Bun.Image</code>, and the canvas in whatever browser is rendering this sentence. Their kernels agree with each other to seven decimal places. All of them average in the wrong space, which <a href="http://www.ericbrasseur.org/gamma.html">Eric Brasseur wrote up in 2007</a> and the defaults have outlived.</p>

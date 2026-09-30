@@ -16,6 +16,8 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { readManifest } from "../../tools/gen-manifest.ts";
 import { DESKTOP, PROFILES, SECTION_ICONS, SPECULATION, TASKBAR, TRAY_ITEMS } from "./shell-data.ts";
+import { unsafeHtml } from "../../src/worker/lib/html.ts";
+import { titleBar } from "../../src/worker/lib/window.ts";
 
 const TOP_OPEN = "<!-- axp:desktop -->";
 const TOP_CLOSE = "<!-- /axp:desktop -->";
@@ -219,6 +221,78 @@ export function bakeHistnav(source, histnavHtml = HISTNAV_HTML) {
   return stripped.slice(0, at) + histnavHtml + stripped.slice(at);
 }
 
+// ── the page window's title bar, from lib/window.ts (#1026) ─────────────────
+// A static page's bar is rewritten from titleBar(), the function lunaPage and
+// serendipity call, so the 44 copies in src/pages are generated rather than
+// hand-kept. The per-page FIELDS (caption, close target) are read back out of
+// the page's own bar, which keeps the page the place an author edits them.
+//
+// Reading fields back is only safe if nothing else in the bar gets thrown away
+// on the way through, so the old bar and the new one are compared with the
+// differences the template is ALLOWED to make taken out: whitespace between
+// tags, the Back/Forward pair (bakeHistnav's), and the lwe pages' old
+// `title="minimize"` on a control that does nothing. Anything left over is
+// markup the template has no field for, and the page is named rather than
+// silently rewritten.
+export const WINDOW_OPEN = "<!-- axp:window -->";
+export const WINDOW_CLOSE = "<!-- /axp:window -->";
+
+const decodeAttr = (value: string) => value
+  .replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'")
+  .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
+const comparable = (bar: string) => bar
+  .replace(HISTNAV_BLOCK, "")
+  .replace(/ title="minimize"/g, "")
+  .replace(/\s+>/g, ">")
+  .replace(/>\s+</g, "><")
+  .trim();
+
+function divEnd(source: string, start: number) {
+  const tag = /<\/?div\b[^>]*>/g;
+  tag.lastIndex = start;
+  let depth = 0;
+  for (let m = tag.exec(source); m; m = tag.exec(source)) {
+    depth += m[0][1] === "/" ? -1 : 1;
+    if (depth === 0) return tag.lastIndex;
+  }
+  throw new Error("title bar never closes");
+}
+
+export function bakeTitleBar(source: string, label = "page") {
+  const plain = source.replaceAll(WINDOW_OPEN, "").replaceAll(WINDOW_CLOSE, "");
+  const match = plain.match(WINDOW_TITLE_BAR);
+  if (!match || !/^<div class="window[\s"]/.test(match[1])) return plain;
+  const start = (match.index ?? 0) + match[1].lastIndexOf("<div class=\"title-bar");
+  if (!plain.startsWith("<div class=\"title-bar\">", start)) {
+    throw new Error(`${label}: the title bar carries attributes the template has no field for`);
+  }
+  const end = divEnd(plain, start);
+  const old = plain.slice(start, end);
+
+  const text = old.match(/<span class="title-text( [^"]+)?"><span class="icon( [^"]+)?" aria-hidden="true"><\/span>([^<]*)<\/span>/);
+  const close = old.match(/<a class="close" href="([^"]*)" title="([^"]*)" aria-label="([^"]*)"\s*><\/a\s*>/);
+  if (!text || !close) throw new Error(`${label}: no caption or close control the template can read`);
+  const lineStart = plain.lastIndexOf("\n", start) + 1;
+  const indent = plain.slice(lineStart, start);
+  if (!/^[ \t]*$/.test(indent)) throw new Error(`${label}: the title bar does not start its own line`);
+
+  const next = String(titleBar({
+    caption: unsafeHtml(text[3]),
+    titleClass: text[1]?.trim() ?? "",
+    iconClass: text[2]?.trim() ?? "",
+    histnav: !/\bdata-no-histnav\b/.test(match[2]),
+    closeHref: decodeAttr(close[1]),
+    closeTitle: decodeAttr(close[2]),
+    closeLabel: decodeAttr(close[3]),
+    indent,
+  }));
+  if (comparable(next) !== comparable(old)) {
+    throw new Error(`${label}: the title bar carries markup the template would drop:\n  had  ${comparable(old)}\n  made ${comparable(next)}`);
+  }
+  return plain.slice(0, start) + WINDOW_OPEN + next + WINDOW_CLOSE + plain.slice(end);
+}
+
 // The sprite is ONE document, so a paint-server id is document-wide, and the
 // fourteen cells had been carrying their own copies: ten section tiles each
 // defined the same gloss gradient and the same drop-shadow filter, and four tray
@@ -264,7 +338,7 @@ export const sectionFavicons = () =>
 
 const navScript = /<script\b[^>]*\bsrc=["']\/nav\.js["'][^>]*><\/script>/i;
 
-export function patchStaticShell(source, artifacts) {
+export function patchStaticShell(source, artifacts, label = "page") {
   const hasShell = source.includes(TOP_OPEN) || source.includes(CHROME_OPEN);
   if (!hasShell && !navScript.test(source)) return null;
   let next = source
@@ -276,7 +350,7 @@ export function patchStaticShell(source, artifacts) {
   if (!next.includes("</body>")) throw new Error("shell page has no </body>");
   next = next.replace(body[0], `${body[0]}\n${TOP_OPEN}${artifacts.desktopHtml}${TOP_CLOSE}`);
   next = next.replace("</body>", `${CHROME_OPEN}${artifacts.chromeHtml}${CHROME_CLOSE}\n</body>`);
-  return bakeHistnav(next, artifacts.histnavHtml);
+  return bakeTitleBar(bakeHistnav(next, artifacts.histnavHtml), label);
 }
 
 export function staticShellPages() {
@@ -304,8 +378,8 @@ function main() {
   let patched = 0;
   for (const file of staticShellPages()) {
     const source = readFileSync(file, "utf8");
-    const next = patchStaticShell(source, artifacts);
-    if (next !== source) writeFileSync(file, next);
+    const next = patchStaticShell(source, artifacts, file);
+    if (next !== null && next !== source) writeFileSync(file, next);
     patched++;
   }
   console.log(`lib/desktop.js: top ${artifacts.desktopHtml.length}B, chrome ${artifacts.chromeHtml.length}B`);
