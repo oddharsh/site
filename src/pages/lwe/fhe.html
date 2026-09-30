@@ -24,43 +24,13 @@
 <meta name="twitter:image" content="https://aadhar.sh/og/lwe-fhe.jpg">
 
 <link rel="stylesheet" href="/lwe-base.css">
-<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+<style>:root{--icon-border:#2a4bbf;--glyph:"≈";--icon-ink:#4b53c9;--head-g0:#fbfdff;--head-g1:#e8f0fb;--head-rule:#b9cbe6;--ava-border:#4b53c9;--ava-glyph-size:18px;--glyph-font:var(--font-ui);--name-color:#1d3a8a;--disclosure-ink:#7a6a16;--pic-g0:#6d74e0;--pic-g1:#4b53c9;--pic-border:#3a40a8;--pic-glyph-size:14px;--accent:#9fb4d6;--accent-soft:#f4f8fe;--bar-g0:#e9f1fc;--bar-g1:#d6e4f7;--pad-bg:transparent;--compose-rule:#b9cbe6;--compose-g0:#f3f8ff;--compose-g1:#e3edfb}
 
-/* ── window chrome (mirrors the site-wide Luna shell) ─────────────────── */
-.title-bar {
-  background: var(--grad-title);
-  color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt;
-  padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px;
-  text-shadow: 1px 1px #0f1089; user-select: none;
-}
-.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #2a4bbf; position: relative; }
-.title-bar .icon::before { content: "≈"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: #4b53c9; font-weight: bold; text-shadow: none; }
 
-/* OS-window geometry — first paint matches nav.js (no shell pop). */
-.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
-
-/* ── MSN-Messenger conversation ───────────────────────────────────────── */
-.msgr-head {
-  display: flex; align-items: center; gap: 9px; padding: 8px 12px;
-  background: linear-gradient(180deg, #fbfdff, #e8f0fb); border-bottom: 1px solid #b9cbe6;
-}
-.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #4b53c9; background: linear-gradient(180deg,#6d74e0,#4b53c9); position: relative; }
-.msgr-head .ava::before { content: "≈"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 18px; }
-.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #1d3a8a; }
-.disclosure b { color: #7a6a16; }
 .disclosure a { color: var(--xp-link, #1a4fc4); }
-.msg.bot .pic { background: linear-gradient(180deg,#6d74e0,#4b53c9); border-color:#3a40a8; }
-.msg.bot .pic::before { content: "≈"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 14px; }
-.msg.bot .who b { color: #1d3a8a; }
-.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
 .msg .cite { display: inline-block; margin-top: 4px; font-size: 8pt; color: #6b7280; text-decoration: none; border-bottom: 1px dotted #9aa3b2; }
 .msg .cite::before { content: "▸ "; }
 .msg .cite:hover { color: #b5560c; border-color: #b5560c; }
-
-/* a "shared a demo" inline applet */
-.demo { grid-column: 1 / -1; border: 1px solid #9fb4d6; border-radius: 4px; background: #f4f8fe; margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
-.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #1d3a8a; background: linear-gradient(180deg,#e9f1fc,#d6e4f7); border-bottom: 1px solid #9fb4d6; font-weight: bold; }
-.demo > .pad { padding: 11px 12px 13px; }
 
 /* generic demo bits */
 .btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 11px; cursor: pointer; color: #1a2030;
@@ -107,22 +77,14 @@
 .dc-decode .dc-rec { font-size: 14pt; font-family: var(--font-mono); }
 .dc-decode .ok { color: #2c7a36; font-weight: bold; } .dc-decode .no { color: #c43636; font-weight: bold; }
 
-/* compose bar (decorative, period-correct) */
-.compose { border-top: 1px solid #b9cbe6; background: linear-gradient(180deg,#f3f8ff,#e3edfb); padding: 7px 10px; }
 .compose .fmt { display: flex; gap: 6px; margin-bottom: 5px; font-size: 9pt; color: #6b7280; }
 .compose .fmt span { width: 19px; height: 18px; display: grid; place-items: center; border: 1px solid #bcccea; background: #fff; border-radius: 2px; }
-.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
 .compose .send { align-self: stretch; }
 
-.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
-
 @media (max-width: 520px) {
-  body { padding: 8px 4px 32px; }
-  .msgr-head .pets { display: none; }
   .he-row { grid-template-columns: 1fr; }
   .he-row .lbl { text-align: left; }
 }
-body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>

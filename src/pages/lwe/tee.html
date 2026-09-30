@@ -20,28 +20,15 @@
 <meta name="twitter:image" content="https://aadhar.sh/og/lwe-tee.jpg">
 
 <link rel="stylesheet" href="/lwe-base.css">
-<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#475569; --accent-soft:#eef1f5}
-.title-bar { background: var(--grad-title); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
-.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #44505f; position: relative; }
-.title-bar .icon::before { content: "🔒"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 9px; text-shadow: none; filter: grayscale(.3); }
-.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
-.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fbfdff, #eaedf2); border-bottom: 1px solid #c0c8d2; }
-.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #44505f; background: linear-gradient(180deg,#6b7889,#475569); position: relative; }
-.msgr-head .ava::before { content: "🔒"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; }
-.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #334155; }
-.disclosure b { color: #7a6a16; } .disclosure a { color: #1a4fc4; }
-.msg.bot .pic { background: linear-gradient(180deg,#6b7889,#475569); border-color:#334155; }
-.msg.bot .pic::before { content: "🔒"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; }
-.msg.bot .who b { color: #334155; }
-.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+<style>:root{--accent:#475569;--accent-soft:#eef1f5;--glyph:"🔒";--icon-glyph-size:9px;--ava-glyph-size:15px;--pic-glyph-size:12px;--icon-border:#44505f;--head-g0:#fbfdff;--head-g1:#eaedf2;--head-rule:#c0c8d2;--ava-border:#44505f;--name-color:#334155;--disclosure-ink:#7a6a16;--pic-g0:#6b7889;--pic-g1:#475569;--pic-border:#334155;--bar-g0:#eaedf2;--bar-g1:#d8dee6;--compose-rule:#c0c8d2;--compose-g0:#f5f7fa;--compose-g1:#e6eaef}
+/* the lock is a color emoji, so it keeps its own ink and weight rather than the concept's white bold glyph */
+.title-bar .icon::before { color: #fff; filter: grayscale(.3); }
+.msgr-head .ava::before, .msg.bot .pic::before { color: inherit; font-weight: normal; font-family: inherit; }
 .msg .cite { display: inline-block; margin-top: 4px; font-size: 8pt; color: #6b7280; text-decoration: none; border-bottom: 1px dotted #9aa3b2; }
 .msg .cite::before { content: "▸ "; } .msg .cite:hover { color: #334155; border-color: #334155; }
 .msg.ai-note .bubble { background: #f3f0fb; border: 1px solid #d7cdef; border-radius: 4px; padding: 7px 9px; }
 .msg.ai-note .tagai { display: inline-block; font-size: 7.5pt; font-weight: bold; color: #6b4ec2; background: #ece5fb; border: 1px solid #d0c3f0; border-radius: 9px; padding: 0 6px; margin-bottom: 4px; letter-spacing: .03em; }
 
-.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
-.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #334155; background: linear-gradient(180deg,#eaedf2,#d8dee6); border-bottom: 1px solid var(--accent); font-weight: bold; }
-.demo > .pad { padding: 11px 12px 13px; background:#fff; }
 .btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 11px; cursor: pointer; color: #1a2030; background: linear-gradient(to bottom, #fff 0%, #e9edf5 100%); border: 1px solid #7d8aa3; border-radius: 0; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #b9c2d4; }
 .btn:hover { border-color: var(--accent); background: linear-gradient(to bottom, #fff, #eef1f5); }
 .btn:active { box-shadow: inset 1px 1px 0 #b9c2d4, inset -1px -1px 0 #fff; }
@@ -59,12 +46,6 @@
 .trace .bars i { display: block; width: 6px; background: #4fd1a0; }
 .note { font-size: 8.5pt; color: #4a5568; margin-top: 8px; } .note b { color:#15243f }
 
-.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
-.compose { border-top: 1px solid #c0c8d2; background: linear-gradient(180deg,#f5f7fa,#e6eaef); padding: 7px 10px; }
-.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
-
-@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }
-body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
