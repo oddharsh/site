@@ -13,6 +13,7 @@ const PREFIX = "/serendipity";
 import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { esc } from "../src/worker/lib/http.ts";
+import { twinFor } from "../src/worker/lib/twins.ts";
 import { html as htmlTag, unsafeHtml } from "../src/worker/lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "../src/worker/lib/island.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit } from "../src/worker/lib/budget.ts";
@@ -367,11 +368,15 @@ function shell(title, currentPath, bodyHtml, head = "") {
     const cur = currentPath === full || (href !== "" && currentPath.startsWith(full));
     return `<a href="${full || PREFIX}"${cur ? ' class="current"' : ""}>${label}</a>`;
   };
+  // The Markdown twin, where the build wrote one: the same lookup lunaPage makes,
+  // since this shell has its own <head>.
+  const twin = twinFor(currentPath);
+  const twinLink = twin ? `\n<link rel="alternate" type="text/markdown" title="markdown source" href="${esc(twin)}">` : "";
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#2D78BD">
 <title>${currentPath === PREFIX ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <link rel="icon" type="image/svg+xml" href="/section-icons/serendipity.svg">
-<meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
+<meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">${twinLink}
 <style>${shellCss()}</style>
 <link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css">${head}</head><body>${DESKTOP_TOP}
 <div class="window">
