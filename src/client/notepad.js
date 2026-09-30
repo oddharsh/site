@@ -38,6 +38,22 @@
   // in an attribute even though today's callers only use it in text.
   /** @param {string} s */
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  // Notepad's F5 stamp. Intl does the formatting and the two formatters are
+  // built on the first F5 rather than per keystroke. ICU writes a narrow no-break
+  // space before AM/PM, so whitespace is normalised to a plain space and the
+  // stamp stays byte-identical to the hand-rolled one it replaced. Date rather
+  // than Temporal: both read the same wall clock, and Date is the primitive
+  // every engine agrees on.
+  /** @type {Intl.DateTimeFormat[] | null} */
+  var f5Fmts = null;
+  /** @param {Date} d */
+  function f5Stamp(d) {
+    f5Fmts = f5Fmts || [
+      new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }),
+      new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric", year: "numeric" })
+    ];
+    return (f5Fmts[0].format(d) + " " + f5Fmts[1].format(d)).replace(/\s/g, " ");
+  }
   // Note popovers used to show and hide inside a same-document View Transition,
   // each one given its own `axp-note-<id>` transition name. That came out with the
   // rest of the View Transition machinery (2026-07-30): a popover is a top-layer
@@ -223,23 +239,9 @@
     function toggleStatus() { statusOn = !statusOn; if (statusEl) statusEl.style.display = statusOn ? "" : "none"; }
     function selectAll() { ta.focus(); ta.select(); }
     function insertDate() {
-      // classic Notepad F5: "h:mm AM/PM M/D/YYYY". Prefer Temporal where the
-      // browser ships it; fall back to Date everywhere else.
-      var Y, Mo, Da, H, Mi;
-      try {
-  // Bare global: an undeclared `Temporal` cannot be handed to a parser without
-  // throwing ReferenceError, so typeof is the only operator that can ask.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-        if (typeof Temporal !== "undefined" && Temporal.Now && Temporal.Now.plainDateTimeISO) {
-          var z = Temporal.Now.plainDateTimeISO();
-          Y = z.year; Mo = z.month; Da = z.day; H = z.hour; Mi = z.minute;
-        }
-      } catch (e) {}
-      if (Y === undefined) {
-        var d = new Date(); Y = d.getFullYear(); Mo = d.getMonth() + 1; Da = d.getDate(); H = d.getHours(); Mi = d.getMinutes();
-      }
-      var ap = H < 12 ? "AM" : "PM", hh = H % 12 || 12;
-      var stamp = hh + ":" + String(Mi).padStart(2, "0") + " " + ap + " " + Mo + "/" + Da + "/" + Y;
+      // classic Notepad F5: "h:mm AM/PM M/D/YYYY", in en-US whatever the
+      // visitor's locale, because that is the string Notepad typed.
+      var stamp = f5Stamp(new Date());
       var s = ta.selectionStart, e = ta.selectionEnd;
       ta.value = ta.value.slice(0, s) + stamp + ta.value.slice(e);
       ta.selectionStart = ta.selectionEnd = s + stamp.length;

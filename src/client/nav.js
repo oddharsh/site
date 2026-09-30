@@ -308,7 +308,9 @@
       }, { passive: true });
     });
     tickClock();
-    setInterval(tickClock, 15000);
+    // A hidden tab's timers are throttled, so the one pending for the next
+    // minute can land late. Coming back into view re-reads the time at once.
+    D.addEventListener("visibilitychange", () => { if (!D.hidden) tickClock(); });
   }
 
 
@@ -367,23 +369,25 @@
     }, true);
   }
 
-  // local wall-clock parts via Temporal when the browser ships it, else Date.
-  function nowHM() {
-    try {
-    // Bare global, only typeof can ask whether it is declared.
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof
-      if (typeof Temporal !== "undefined" && Temporal.Now && Temporal.Now.plainTimeISO) {
-        var t = Temporal.Now.plainTimeISO();
-        return { h: t.hour, m: t.minute };
-      }
-    } catch (e) {}
-    var d = new Date(); return { h: d.getHours(), m: d.getMinutes() };
-  }
+  // The taskbar clock. Intl owns the formatting, and the formatter is built once
+  // on first use rather than per tick. en-US on purpose: XP's taskbar read
+  // "3:07 PM" and this is that clock, whatever the visitor's locale. ICU puts a
+  // narrow no-break space before the day period, so every whitespace becomes a
+  // plain space and the text stays byte-identical to what the hand-rolled
+  // version printed. Date rather than Temporal: they read the same wall clock,
+  // and Date is the primitive every engine agrees on (a workerd build once
+  // shipped a Temporal whose clock read epoch 0).
+  //
+  // Scheduled for the next minute boundary instead of polled: a 15s interval let
+  // the taskbar sit up to 15s behind the minute it was showing.
+  var clockFmt = /** @type {Intl.DateTimeFormat | null} */ (null), clockTimer = 0;
   function tickClock() {
     var c = D.getElementById("axp-clock"); if (!c) return;
-    var t = nowHM(), h = t.h, m = t.m;
-    var ap = h < 12 ? "AM" : "PM", hh = h % 12; if (hh === 0) hh = 12;
-    c.textContent = hh + ":" + (m < 10 ? "0" + m : m) + " " + ap;
+    clockFmt = clockFmt || new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
+    var now = new Date();
+    c.textContent = clockFmt.format(now).replace(/\s/g, " ");
+    clearTimeout(clockTimer);
+    clockTimer = W.setTimeout(tickClock, 60000 - now.getSeconds() * 1000 - now.getMilliseconds() + 20);
   }
 
   // Run palette and accessory implementation moved to /nav-run.js.
