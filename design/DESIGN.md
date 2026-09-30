@@ -160,8 +160,16 @@ A "depressed/active button" swaps to sunken while held. Selected slot buttons
 ## DO
 
 - ✅ Pull every color/font/bevel from `tokens.css`; don't re-hardcode literals.
-- ✅ Keep CSS **inline per page** (CSP + the one-request perf design) — tokens
-  get inlined into each page's `:root`, not loaded as an external sheet.
+- ✅ Link `/luna.css` render-blocking on every page and inline only what is
+  page-specific. luna.css is the OS: the tokens, the desktop and taskbar, the
+  window model, and the window chrome (frame, title bar, gel caption buttons
+  with their hover glow, `.xp-button`, `.xp-input`), with the chrome written in
+  zero-specificity `:where()`. Because it blocks first paint, an inline copy of
+  any of that paints nothing, and at class specificity it beats the `:where()`
+  rules, which is how 25 pages lost their caption-button hover. A page's own
+  `<style>` holds its measure (`.window { --axp-maxw: 720px; }`), its title-bar
+  icon glyph, and its content. The homepage is the one exception: it loads
+  luna without blocking first paint and carries its own first-paint geometry.
 - ✅ Reuse the `.title-bar` / `.window` / `.content` / `.xp-tooltip` vocabulary.
 - ✅ Saturated, vivid, slightly-plasticky is correct. Luna was never subtle.
 
