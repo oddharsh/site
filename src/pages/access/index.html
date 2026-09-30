@@ -237,7 +237,14 @@ svg.graph{margin:0 auto}
 .gl-ghost circle{fill:none;stroke:#a9a9a0;stroke-width:1;stroke-dasharray:2 2}
 
 /* tooltip */
-#tip{position:fixed;z-index:60;max-width:calc(342px * var(--sc));display:none;background:#ffffe1;border:1px solid #000;box-shadow:2px 2px 4px rgba(0,0,0,.3);padding:6px 8px;font-size:calc(9.5pt * var(--sc));line-height:1.42;color:#1a1a1a;pointer-events:none}
+/* the shared hover engine (/hoist.js) shows it as a manual popover and writes the
+   cursor to --x/--y; the clamp keeps it on screen. The resets undo the UA popover
+   box (inset:0, a border, a Canvas background, overflow:auto). */
+#tip{position:fixed;z-index:60;top:0;left:0;right:auto;bottom:auto;margin:0;overflow:visible;width:auto;height:auto;max-width:calc(342px * var(--sc));display:none;background:#ffffe1;border:1px solid #000;box-shadow:2px 2px 4px rgba(0,0,0,.3);padding:6px 8px;font-size:calc(9.5pt * var(--sc));line-height:1.42;color:#1a1a1a;pointer-events:none;
+  transform:translate(clamp(8px,calc(var(--x) + 14px),calc(100vw - 100% - 8px)),clamp(8px,calc(var(--y) + 18px),calc(100vh - 100% - 8px)))}
+#tip:popover-open{display:block}
+/* keyboard focus tethers under the device instead (there is no cursor to follow) */
+#tip.anchored{position-anchor:--xp-tip;position-area:bottom span-right;top:auto;left:auto;transform:none;margin:6px 0 0}
 #tip .t{font-weight:700;color:var(--navy);display:block;margin-bottom:2px}
 #tip .st{display:block;font-family:var(--font-mono);font-size:calc(8.5pt * var(--sc));color:#5a5a52;margin-bottom:4px}
 #tip .x{display:block;margin-top:4px;font-family:var(--font-mono);font-size:calc(8.5pt * var(--sc));color:#4a4a4a}
@@ -936,7 +943,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   </div>
 </div>
 
-<div id="tip" role="tooltip" aria-hidden="true"></div>
+<div id="tip" role="tooltip" aria-hidden="true" popover="manual"></div>
 
 <dialog class="props" id="props" aria-labelledby="props-title">
   <div class="tb"><span class="t" id="props-title">Properties</span><button class="x" type="button" id="props-x" aria-label="Close">&#10005;</button></div>
@@ -1438,17 +1445,19 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
       "<span>" + (filter === "all" ? "" : shownCount + " shown · ") + esc(tail) + "</span>";
   }
 
-  /* --- tooltip. hover-only, so a long-press on a phone can't fire it ---- */
+  /* --- tooltip. The shared hover engine (/hoist.js) owns when it shows, that
+     it follows the cursor, the keyboard path, scroll, and bailing on touch, so a
+     long-press on a phone can't fire it. This page owns only what it says. The
+     plain /hoist.js specifier is what the build repoints at the hashed URL. ---- */
   var tip = document.getElementById("tip");
-  var canHover = !(window.matchMedia && window.matchMedia("(hover: none)").matches);
-  function showTip(n, ev){
-    if (!canHover) return;
+  var hoist = { hide: function(){} };
+  function tipHtml(n){
     /* Every node shows an upside AND a downside, the way a skill-tree tooltip
        does. A shipped node carries an authored Costs clause; an unfinished one
        falls back to whatever is blocking it, so no device ever previews as pure
        upside. That was the actual defect in the first version of this page. */
     var con = n.costs || n.blocker;
-    tip.innerHTML = '<span class="t">' + esc(n.name) + "</span>" +
+    return '<span class="t">' + esc(n.name) + "</span>" +
       '<span class="st">' + esc(n.state) + " · " + esc(n.seenLab) + (n.approx ? " (year only)" : "") + "</span>" +
       '<span class="pro"><b>Buys:</b> ' + esc(n.why) + "</span>" +
       (con ? '<span class="con"><b>Costs:</b> ' + esc(sentence(con)) + "</span>" : "") +
@@ -1457,17 +1466,18 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
         return BY_ID[r] ? BY_ID[r].name : r; }).join(", ")) + ". Points spent here are points not spent there.</span>" : "") +
       (n.bet ? '<span class="bet"><b>Bet' + (n.conf ? " (" + esc(n.conf) + " confidence)" : "") + ':</b> ' + esc(sentence(n.bet)) + "</span>" : "") +
       '<span class="x">' + esc(n.exText) + "</span>";
-    tip.style.display = "block";
-    place(ev);
   }
-  function place(ev){
-    var r = tip.getBoundingClientRect();
-    var x = Math.min(ev.clientX + 14, window.innerWidth - r.width - 8);
-    var y = ev.clientY + 18;
-    if (y + r.height > window.innerHeight - 8) y = Math.max(8, ev.clientY - r.height - 12);
-    tip.style.left = x + "px"; tip.style.top = y + "px";
-  }
-  function hideTip(){ tip.style.display = "none"; }
+  import("/hoist.js").then(function(m){
+    hoist = m.createHoist({
+      node: tip,
+      findTarget: function(el){
+        var g = el && el.closest ? el.closest(".dev") : null;
+        return g && canvas.contains(g) ? g : null;
+      },
+      contentFor: function(g){ var n = BY_ID[g.dataset.id]; return n ? tipHtml(n) : ""; },
+    });
+  }).catch(function(){});
+  function hideTip(){ hoist.hide(); }
 
   /* --- properties ------------------------------------------------------- */
   var dlg = document.getElementById("props");
@@ -1576,9 +1586,6 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   function wire(){
     Array.prototype.forEach.call(canvas.querySelectorAll(".dev"), function(g){
       var n = BY_ID[g.dataset.id];
-      g.addEventListener("mouseenter", function(ev){ showTip(n, ev); });
-      g.addEventListener("mousemove", place);
-      g.addEventListener("mouseleave", hideTip);
       g.addEventListener("click", function(){ hideTip(); select(n.id, false); openProps(n); });
       g.addEventListener("keydown", function(ev){
         if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select(n.id, false); openProps(n); }
@@ -1679,9 +1686,6 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     setZoom("fill");
     setMode("blast");
   });
-  // scroll does not bubble and the scroller is .window>.content, so a listener on
-  // window never heard it; capture on document hears every scroller's (as hoist.js does)
-  document.addEventListener("scroll", hideTip, { capture: true, passive: true });
 
   buildTree();
   draw();
