@@ -12,10 +12,11 @@ import { twinFor } from "./lib/twins.ts";
 // canonical text: editable by nature, ephemeral by nature (no save → reload restores
 // the canonical copy). The prose ships in the HTML, so it's readable/crawlable with
 // JS off; notepad.js only adds the menus + Ln/Col status + the F5 date stamp.
+// The desktop, the taskbar floor and the OS-window flex model are luna.css's,
+// linked render-blocking below, so they are applied at first paint and this
+// sheet carries only the Notepad window itself.
 export const NOTEPAD_CSS = `/*min*/
-html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
-body.np-page{margin:0;min-height:100vh;padding:16px 12px 54px;color:oklch(21% 0 0);font-family:var(--font-ui);font-size:12px;
-background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body.np-page{margin:0;color:oklch(21% 0 0);font-family:var(--font-ui);font-size:12px}
 .np-window{max-width:860px;margin:0 auto;max-height:calc(100dvh - 78px);display:flex;flex-direction:column;background:oklch(100% 0 0);
 border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;
 box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35)}
@@ -85,20 +86,6 @@ background:linear-gradient(180deg,oklch(99% 0 0),oklch(92% 0.005 263));box-shado
 .np-btn:active{box-shadow:inset 1px 1px 0 oklch(84% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
 @media print{body.np-page{padding:0;background:none}#axp-taskbar,.np-titlebar,.np-menubar,.np-status{display:none}
 .np-window{border:0;box-shadow:none;height:auto;max-width:none}.np-text{font-size:11pt;color:#000}}
-/* OS-window geometry inlined as the first-paint critical subset (no shell
-   "pop" before the linked luna.css lands; luna.css holds the canonical set).
-   !important beats body.np-page's own padding/min-height; degrades with JS
-   off. The build's geometry tripwire checks the taskbar floor matches luna.css. */
-html{height:100dvh;overflow:hidden}
-body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
-body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
-.window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
-.window,.np-window{display:flex;flex-direction:column}
-.window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
-.window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto;padding-right:12px!important}
-.np-window .np-text{flex:1 1 auto;min-height:0}
-.wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
-body.np-page::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}
 `;
 
 export function writingShell(o) {
@@ -115,7 +102,6 @@ export function writingShell(o) {
     // is where a reader's "subscribe" button actually looks.
     "<link rel=\"alternate\" type=\"application/rss+xml\" title=\"aadhar.sh — writing\" href=\"/writing/feed.xml\">" +
     "<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='7'%20y='3'%20width='18'%20height='26'%20rx='1'%20fill='%23ffffff'%20stroke='%230855dd'%20stroke-width='2'/%3E%3Crect%20x='10'%20y='9'%20width='12'%20height='1.6'%20fill='%23166aee'/%3E%3Crect%20x='10'%20y='14'%20width='12'%20height='1.6'%20fill='%23166aee'/%3E%3Crect%20x='10'%20y='19'%20width='8'%20height='1.6'%20fill='%23166aee'/%3E%3C/svg%3E\">" +
-    "<style>:root{--font-caption:\"Trebuchet MS\",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:\"Courier New\",Courier,monospace}</style>" +
     "<style>" + NOTEPAD_CSS + "</style><link rel=\"stylesheet\" href=\"/luna.css\"></head><body class=\"np-page\">" + DESKTOP_TOP +
     o.body +
     DESKTOP_CHROME + "<script src=\"/notepad.js\" defer></script><script src=\"/nav.js\" defer></script></body></html>";
