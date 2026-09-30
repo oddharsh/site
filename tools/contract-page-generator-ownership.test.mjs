@@ -25,7 +25,7 @@ async function fixture(run) {
     { cwd: tmpdir(), encoding: "utf8" });
   const files = ["pipelines/garage/generate.mjs", "pipelines/lwe/generate.mjs", "pipelines/lwe/concepts.json",
     "pipelines/content/page-contract.mjs", "tools/gen-manifest.ts", "tools/photos/shell-data.ts", "tools/lib/html-raw-text.ts",
-    "src/worker/lib/desktop.ts", "src/worker/lib/site-manifest.ts", "src/client/nav-run.js",
+    "src/worker/lib/desktop.ts", "src/worker/lib/window.ts", "src/worker/lib/html.ts", "src/worker/lib/site-manifest.ts", "src/client/nav-run.js",
     "config/site-manifest.json", "public/sitemap.xml", "src/pages/lwe/index.html", "src/client/lwe/ask.js"];
   try {
     for (const file of files) await put(file, await readFile(new URL(file, ROOT), "utf8"));

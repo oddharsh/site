@@ -57,10 +57,10 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
 <body>
 <!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
-  <div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
+  <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/pqc</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
-  </div>
+  </div><!-- /axp:window -->
   <div class="content">
 <h1>Post-quantum signatures, priced</h1>
 <p class="garage-intro">Half of this site's TLS handshake is already post-quantum and I did nothing to make that happen. The other half, authentication, moves on a completely different schedule, because signatures live in certificates and registries that a personal site does not control. So I went looking for the signature I <em>do</em> control, and measured what it would cost to migrate it.</p>

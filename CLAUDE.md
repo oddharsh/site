@@ -3766,7 +3766,16 @@ how to recover the plans and their audit from git.
 
 Reusable classes that show up across the site (homepage + future `/coffee`):
 
-- `.title-bar` — blue gradient strip with icon + title + boxed `_ □ ×` controls
+- `.title-bar` — blue gradient strip with icon + title + boxed `_ □ ×` controls.
+  **Written ONCE, by `titleBar()` in `src/worker/lib/window.ts`, since
+  2026-09-30 (#1026).** `lunaPage` and serendipity call it, the garage and lwe
+  generators call it, and `bun run gen:shell` writes its output into every
+  static page between `<!-- axp:window -->` markers. It writes the output
+  rather than a marker the build expands, because `bun run dev` serves source
+  bytes. Edit a page's caption or close link in place and re-run gen:shell.
+  It reads those fields back out, and it refuses (naming the page) a bar
+  carrying markup it has no field for. cal is the one renderer outside it, since
+  its standalone host keeps an inert `.max` span.
 - `.controls span/a` — the small minimize/maximize/close glyphs (boxed,
   hover-tinted red on the close one)
 - `.window` — outer card with the title-bar + content

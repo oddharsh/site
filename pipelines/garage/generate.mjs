@@ -10,7 +10,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { renderUnderstanding, validatePageSpec } from "../content/page-contract.mjs";
-import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { titleBar } from "../../src/worker/lib/window.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
@@ -96,10 +97,7 @@ export function pageHtml(spec) {
 <body>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
-  <div class="title-bar">${DESKTOP_HISTNAV}
-    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh${html(path)}</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
-  </div>
+  <!-- axp:window -->${titleBar({ caption: `aadhar.sh${path}`, closeHref: "/garage", closeTitle: "back to the garage" })}<!-- /axp:window -->
   <div class="content">
 ${spec.bodyHtml}
     <section id="luq" aria-label="understanding check"></section>
