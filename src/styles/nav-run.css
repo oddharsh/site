@@ -1,5 +1,5 @@
-/* nav-run.css — first-interaction styles for the native Run dialog. */
-#axp-run .tb{cursor:move}#axp-run.axp-dragging .tb{cursor:grabbing}
+/* nav-run.css — first-interaction styles for the native Run dialog, and for the Tip of the Day window that borrows its frame. */
+:is(#axp-run,#axp-tips) .tb{cursor:move}:is(#axp-run,#axp-tips).axp-dragging .tb{cursor:grabbing}
 #axp-run .tb .axp-kbd{margin-left:6px}
 #axp-run .list{scrollbar-color:oklch(62% 0.14 255) oklch(90% 0.02 250)}
 #axp-run-preview{position:fixed;margin:0;padding:0;border:0;background:none;overflow:visible;width:auto;height:auto;inset:auto;display:none;pointer-events:none;z-index:10001}
@@ -8,13 +8,13 @@
 #axp-run-preview.anchored{position-anchor:--axp-run-preview;position-area:inline-end;margin:0 0 0 10px;position-try-fallbacks:flip-inline,flip-block}
 @media (--reduced-motion) {#axp-run-preview.anchored:popover-open{transition:none}}
 #axp-run::backdrop{background:transparent}
-#axp-run{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);margin:0;padding:0;width:min(440px,calc(100vw - 24px));font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:12px;color:oklch(21% 0 0);background:oklch(100% 0 0);border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35),2px 3px 12px -2px oklch(30% 0.12 263 / .55)}
-#axp-run .tb{display:flex;align-items:center;gap:6px;padding:3px 4px 4px 7px;color:oklch(100% 0 0);font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-weight:bold;font-size:10pt;text-shadow:1px 1px oklch(28% 0.12 263);border-radius:3px 3px 0 0;border-bottom:1px solid oklch(41% 0.10 251);background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
-#axp-run .tb .x{position:relative;box-sizing:border-box;margin-left:auto;width:21px;height:21px;padding:0;overflow:hidden;font-size:0;color:transparent;cursor:pointer;border:1px solid #d8401c;border-radius:3px;background-color:#e45f3e;background-image:linear-gradient(180deg,#e8795f 0%,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110 100%);transition:filter 60ms ease-out}
-#axp-run .tb .x:hover,#axp-run .tb .x:focus-visible{border-color:#ff7a66;background-color:#ff957c;background-image:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7);outline:none}
-#axp-run .tb .x:active{filter:brightness(.9)}
-#axp-run .tb .x::before,#axp-run .tb .x::after{content:'';position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
-#axp-run .tb .x::before{transform:rotate(45deg)}#axp-run .tb .x::after{transform:rotate(-45deg)}
+#axp-run,#axp-tips{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);margin:0;padding:0;width:min(440px,calc(100vw - 24px));font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:12px;color:oklch(21% 0 0);background:oklch(100% 0 0);border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35),2px 3px 12px -2px oklch(30% 0.12 263 / .55)}
+:is(#axp-run,#axp-tips) .tb{display:flex;align-items:center;gap:6px;padding:3px 4px 4px 7px;color:oklch(100% 0 0);font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-weight:bold;font-size:10pt;text-shadow:1px 1px oklch(28% 0.12 263);border-radius:3px 3px 0 0;border-bottom:1px solid oklch(41% 0.10 251);background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
+:is(#axp-run,#axp-tips) .tb .x{position:relative;box-sizing:border-box;margin-left:auto;width:21px;height:21px;padding:0;overflow:hidden;font-size:0;color:transparent;cursor:pointer;border:1px solid #d8401c;border-radius:3px;background-color:#e45f3e;background-image:linear-gradient(180deg,#e8795f 0%,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110 100%);transition:filter 60ms ease-out}
+:is(#axp-run,#axp-tips) .tb .x:hover,:is(#axp-run,#axp-tips) .tb .x:focus-visible{border-color:#ff7a66;background-color:#ff957c;background-image:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7);outline:none}
+:is(#axp-run,#axp-tips) .tb .x:active{filter:brightness(.9)}
+:is(#axp-run,#axp-tips) .tb .x::before,:is(#axp-run,#axp-tips) .tb .x::after{content:'';position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
+:is(#axp-run,#axp-tips) .tb .x::before{transform:rotate(45deg)}:is(#axp-run,#axp-tips) .tb .x::after{transform:rotate(-45deg)}
 #axp-run .body{display:flex;gap:11px;padding:14px 13px 6px}
 #axp-run .ico{flex:0 0 auto;width:34px;height:34px;position:relative;margin-top:2px}
 #axp-run .ico .doc{position:absolute;inset:0 6px 0 2px;background:oklch(99% 0 0);border:1px solid oklch(55% 0 0);border-radius:1px}
@@ -38,3 +38,17 @@
 @media (max-width:560px){#axp-run .body{padding-top:11px}}
 @media (--motion-ok) {#axp-run[open]{animation:axp-pop .09s ease-out}}
 @keyframes axp-pop{from{transform:translate(-50%,-50%) scale(.97);opacity:.4}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+/* Tip of the Day (nav-tips.js) wears the Run frame above. It is a popover, so it
+   resets the UA's inset:0 (which would stretch it to the viewport's height) and
+   sits a little lower than Run, where Office put it. */
+#axp-tips{inset:auto;left:50%;top:42%;height:auto;overflow:visible;width:min(420px,calc(100vw - 24px))}
+#axp-tips .well{display:flex;margin:12px 13px 0;background:oklch(100% 0 0);border:1px solid;border-color:oklch(55% 0 0) oklch(86% 0 0) oklch(86% 0 0) oklch(55% 0 0);min-height:118px}
+#axp-tips .bulb{flex:0 0 56px;display:flex;justify-content:center;padding-top:14px;background:oklch(94% 0.012 250);border-right:1px solid oklch(86% 0.01 250)}
+#axp-tips .txt{flex:1;padding:12px 14px 14px;line-height:1.5}
+#axp-tips .txt b{display:block;margin-bottom:6px;font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-size:13px;color:oklch(30% 0.10 263)}
+#axp-tips .txt p{margin:0;color:oklch(24% 0 0)}
+#axp-tips .txt code,#axp-tips .txt kbd{font-family:var(--font-mono,'Courier New',monospace);font-size:11px}
+#axp-tips .txt kbd{padding:0 3px;border:1px solid oklch(72% 0 0);border-bottom-width:2px;border-radius:2px;background:oklch(97% 0 0)}
+#axp-tips .btns{display:flex;align-items:center;gap:7px;padding:11px 13px 13px}
+#axp-tips .chk{display:flex;align-items:center;gap:5px;margin-right:auto}
+@media (--motion-ok) {#axp-tips:popover-open{animation:axp-pop .09s ease-out}}

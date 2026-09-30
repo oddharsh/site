@@ -215,7 +215,8 @@
           loadPhotos: loadPhotos,
           loadWriting: loadWriting,
           front: front,
-          saver: runSaver
+          saver: runSaver,
+          tips: () => { openTips(false).catch(() => {}); }
         });
         return runApi;
       });
@@ -478,6 +479,41 @@
     saverPoke(); saverArm(SAVER_WAIT);
   }
 
+  // ── Tip of the Day ──────────────────────────────────────────────────────────
+  // Opens by itself on a visitor's first page view of each local day. The key
+  // holds the day it last opened, or "off" once "Show tips at startup" is
+  // unticked, so a visitor who has seen today's tip pays for this one read and
+  // never fetches /nav-tips.js. It borrows the Run dialog's frame, hence the
+  // shared stylesheet. Automation reports navigator.webdriver, so the OG card
+  // captures and the perf probes never photograph a tip over the page.
+  var TIPS_KEY = "axp-tips";
+  var tipsPromise = /** @type {Promise<any> | null} */ (null);
+  function openTips(auto) {
+    if (!tipsPromise) {
+      tipsPromise = Promise.all([loadStyle("nav-run"), import("/nav-tips.js")])
+        .then((loaded) => { return loaded[1].createTips({ key: TIPS_KEY, kbd: KBD, sound: AXP_SND }); })
+        .catch((e) => { tipsPromise = null; throw e; });
+    }
+    return tipsPromise.then((tips) => { tips.open(auto); });
+  }
+  function initTips() {
+    var seen = /** @type {string | null} */ (null);
+    try { seen = localStorage.getItem(TIPS_KEY); } catch (_) { return; }   // no storage: it would open on every page
+    if (seen === "off" || seen === new Date().toDateString() || navigator.webdriver) return;
+    var show = () => {
+      // a prerendered or background page is not a visit yet, and marking the
+      // day seen there would spend the tip on a page nobody looked at
+      if (/** @type {Document & {prerendering?: boolean}} */ (D).prerendering || D.hidden) {
+        D.addEventListener("visibilitychange", show, { once: true });
+        return;
+      }
+      var run = () => { if (!D.querySelector("dialog:modal")) openTips(true).catch(() => {}); };
+      if ("requestIdleCallback" in window) requestIdleCallback(run, { timeout: 3000 });
+      else setTimeout(run, 1500);
+    };
+    show();
+  }
+
   // ⌘K / Ctrl-K anywhere
   D.addEventListener("keydown", (e) => {
     if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
@@ -522,9 +558,9 @@
     D.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "touch") return;                       // let touch scroll the page, not drag
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      var b = e.target instanceof Element && e.target.closest(".title-bar,.np-titlebar,#axp-run .tb");
+      var b = e.target instanceof Element && e.target.closest(".title-bar,.np-titlebar,#axp-run .tb,#axp-tips .tb");
       if (!b || (e.target instanceof Element && e.target.closest("a,button,.controls,.np-controls,.x"))) return;
-      var w = b.closest(".window,.np-window,#axp-run");
+      var w = b.closest(".window,.np-window,#axp-run,#axp-tips");
       if (!w) return;
       if (w.classList.contains("axp-max")) return;   // a maximized window is pinned, not draggable
       var t = getComputedStyle(w).transform;
@@ -875,7 +911,7 @@
   function boot() {
     var bar = D.getElementById("axp-taskbar");
     if (!bar || !D.getElementById("axp-desktop")) return;
-    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize();  initCloseBack(); initWindowControls(); initInfotips(); initSaver();
+    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize();  initCloseBack(); initWindowControls(); initInfotips(); initSaver(); initTips();
   }
   function bootAfterStaticPaint() {
     // Generated/static pages and Worker-rendered shells already carry the desktop

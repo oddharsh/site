@@ -233,6 +233,8 @@ const ROUTES = [
     { path: "/nav-tray.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-balloon" },
     { path: "/nav-pipes.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 20000 },
     { path: "/nav-pipes.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-pipes" },
+    { path: "/nav-tips.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 10000 },
+    { path: "/nav-tips.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-tips" },
     { path: "/notepad.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "np-window" },
     { path: "/lens-boot.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "requestSubmit" },
     { path: "/lens-webmcp.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensWebMcp" },
