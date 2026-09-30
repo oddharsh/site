@@ -832,6 +832,7 @@ const SHELLS = [
   ["nav-run.js", "/nav-run.src.js", "axp-run"],
   ["nav-tray.js", "/nav-tray.src.js", "axp-balloon"],
   ["nav-pipes.js", "/nav-pipes.src.js", "axp-pipes"],  // the idle screen saver
+  ["nav-tips.js", "/nav-tips.src.js", "axp-tips"],  // Tip of the Day, once a day
   ["notepad.js", "/notepad.src.js", "np-window"],
   ["lens-boot.js", "/lens-boot.src.js", "requestSubmit"],
   ["lens-webmcp.js", "/lens-webmcp.src.js", "LensWebMcp"],
@@ -2087,7 +2088,7 @@ const PAGE_SCOPED_HASHED = new Set([
 const CONTENT_HASHED = new Set([
   ...[
     "nav.js", "luna.css", "lens-boot.js", "icons.svg", "quiz.js", "notepad.js", "lwe-base.css",
-    "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js",
+    "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js", "nav-tips.js",
     "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js",
     "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js", "webmcp.js",
   ].map((f) => `public/${f}`),
@@ -2272,6 +2273,10 @@ let freshFamily: Buffer | null = null;
     // the shell is hashed, like the two islands above.
     { file: "/nav-pipes.js",    base: "nav-pipes",    mk: (to) => [
       [/import\((["'`])\/nav-pipes\.js\1\)/g, `import($1${to}$1)`] ] },
+    // Tip of the Day. A leaf like the saver; its stylesheet is nav-run.css, which
+    // nav.js already repoints.
+    { file: "/nav-tips.js",     base: "nav-tips",     mk: (to) => [
+      [/import\((["'`])\/nav-tips\.js\1\)/g, `import($1${to}$1)`] ] },
     { file: "/lens-browser.js", base: "lens-browser", mk: (to) => [
       [/(["'`])\/lens-browser\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/lens-reader.js",  base: "lens-reader",  mk: (to) => [
@@ -2374,7 +2379,7 @@ let freshFamily: Buffer | null = null;
     const run = await readFile(`${OUT}/public${hashedFor["nav-run"]}`, "utf8");
     if (!idx.includes(hashedFor.tooltip)) throw new Error("index.html was not repointed to hashed tooltip.js");
     if (!idx.includes(hashedFor.hoist) || !run.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav-run.js)");
-    if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"]) || !nav.includes(hashedFor["nav-pipes"])) throw new Error("nav.js was not repointed to its first-interaction islands");
+    if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"]) || !nav.includes(hashedFor["nav-pipes"]) || !nav.includes(hashedFor["nav-tips"])) throw new Error("nav.js was not repointed to its first-interaction islands");
     for (const style of ["nav-run", "nav-tray", "infotip"]) {
       if (!nav.includes(hashedFor[`${style}.css`])) throw new Error(`nav.js was not repointed to hashed ${style}.css`);
     }

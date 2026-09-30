@@ -369,7 +369,8 @@ export function createRun(options) {
   function go(item) {
     if (!item) return;
     closeRun();
-    if (item.kind === "accessory") openAccessory(item.accId);  // floating built-in app — opens here, no navigation
+    if (item.kind === "accessory" && item.accId === "tips") { if (options.tips) options.tips(); }  // nav.js owns Tip of the Day; this row just asks for it
+    else if (item.kind === "accessory") openAccessory(item.accId);  // floating built-in app — opens here, no navigation
     else if (item.kind === "saver") { if (options.saver) options.saver(); }  // previews the idle screen saver; the page stays
     else if (item.kind === "raycast") location.href = item.path;   // protocol deep link → OS hands it to Raycast; page stays
     else if (item.kind === "profile") window.open(item.url, "_blank", "noopener");
@@ -385,7 +386,8 @@ export function createRun(options) {
 
   /** @type {RunItem[]} */
   var ACCESSORIES = [
-    { label: "Clock", hint: "the current time, ticking", kind: "accessory", accId: "clock", path: "", icon: "🕐", build: buildClock }
+    { label: "Clock", hint: "the current time, ticking", kind: "accessory", accId: "clock", path: "", icon: "🕐", build: buildClock },
+    { label: "Tip of the Day", hint: "did you know · a new tip each day", kind: "accessory", accId: "tips", path: "" }
   ];
   // The screen saver nav.js starts on idle, previewed from here the way XP's
   // Display Properties had a Preview button. The hint carries the .scr name so
