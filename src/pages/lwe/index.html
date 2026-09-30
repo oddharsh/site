@@ -18,21 +18,13 @@
 <meta property="og:url" content="https://aadhar.sh/lwe">
 
 <link rel="stylesheet" href="/lwe-base.css">
-<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+<style>:root{--icon-border:#2a4bbf;--glyph:"≈";--icon-ink:#4b53c9}
 .window {
   --axp-maxw: 560px; max-width: var(--axp-maxw); margin: 0 auto; background: oklch(100% 0 0);
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
   box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
 }
-.title-bar {
-  background: var(--grad-title);
-  color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt;
-  padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none;
-}
-.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #2a4bbf; position: relative; }
-.title-bar .icon::before { content: "≈"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: #4b53c9; font-weight: bold; text-shadow: none; }
-.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
 
 /* ── "my account" header (MSN-style) ──────────────────────────────────── */
 .me { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: linear-gradient(180deg,#fbfdff,#e8f0fb); border-bottom: 1px solid #b9cbe6; }
@@ -84,8 +76,7 @@ a.buddy:hover { background: #e9f1fc; outline: 1px solid #bcd3f3; }
 .footnote a { color: #1a4fc4; }
 .footnote .why { color: #15243f; font-weight: bold; }
 
-@media (max-width: 520px) { body { padding: 8px 4px 32px; } .buddy .nm .pm { white-space: normal; } }
-body { text-wrap: pretty; } /* progressive; older engines ignore it */
+@media (max-width: 520px) { .buddy .nm .pm { white-space: normal; } }
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>

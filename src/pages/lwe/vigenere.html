@@ -20,27 +20,11 @@
 <meta name="twitter:image" content="https://aadhar.sh/og/lwe-vigenere.jpg">
 
 <link rel="stylesheet" href="/lwe-base.css">
-<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#7a5c1e; --accent-soft:#f6efdc}
-.title-bar { background: var(--grad-title); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
-.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #5e4716; position: relative; }
-.title-bar .icon::before { content: "⚷"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; color: var(--accent); font-weight: bold; text-shadow: none; }
-.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
-.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fffdf6, #f3ead0); border-bottom: 1px solid #ddca97; }
-.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #5e4716; background: linear-gradient(180deg,#b4912e,#7a5c1e); position: relative; }
-.msgr-head .ava::before { content: "⚷"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 18px; }
-.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #5e4716; }
-.disclosure b { color: #7a6a16; } .disclosure a { color: #1a4fc4; }
-.msg.bot .pic { background: linear-gradient(180deg,#b4912e,#7a5c1e); border-color:#5e4716; }
-.msg.bot .pic::before { content: "⚷"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 13px; }
-.msg.bot .who b { color: #5e4716; }
-.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+<style>:root{--accent:#7a5c1e;--accent-soft:#f6efdc;--glyph:"⚷";--icon-glyph-size:11px;--head-g1:#f3ead0;--head-rule:#ddca97;--ava-glyph-size:18px;--glyph-font:var(--font-ui);--name-color:#5e4716;--disclosure-ink:#7a6a16;--pic-g0:#b4912e;--pic-g1:#7a5c1e;--pic-border:#5e4716;--bar-g0:#f3ead0;--bar-g1:#e7d6a8;--compose-rule:#ddca97}
 .msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
 .msg.ai-note .bubble { background: #f3f0fb; border: 1px solid #d7cdef; border-radius: 4px; padding: 7px 9px; }
 .msg.ai-note .tagai { display: inline-block; font-size: 7.5pt; font-weight: bold; color: #6b4ec2; background: #ece5fb; border: 1px solid #d0c3f0; border-radius: 9px; padding: 0 6px; margin-bottom: 4px; letter-spacing: .03em; }
 
-.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
-.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #5e4716; background: linear-gradient(180deg,#f3ead0,#e7d6a8); border-bottom: 1px solid var(--accent); font-weight: bold; }
-.demo > .pad { padding: 11px 12px 13px; background:#fff; }
 .field { display: flex; align-items: center; gap: 7px; margin: 5px 0; font-size: 9pt; flex-wrap: wrap; }
 .field label { color: #4a5568; width: 70px; flex: 0 0 70px; text-align: right; }
 .field input, .field select, .field textarea { font-family: var(--font-mono); font-size: 9.5pt; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 3px 6px; }
@@ -124,12 +108,7 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
 .ct-grid .ct-key td { background: #fffdf6; color: #5e4716; font-weight: bold; border-top: none; }
 .ct-read { font-size: 8pt; color: #9a6a16; margin-top: 4px; font-family: var(--font-mono); }
 
-.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
-.compose { border-top: 1px solid #ddca97; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
-.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
-
-@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } .st-row{grid-template-columns:1fr} .field label{width:auto;text-align:left;flex:0 0 auto} }
-body { text-wrap: pretty; } /* progressive; older engines ignore it */
+@media (max-width: 520px){ .st-row{grid-template-columns:1fr} .field label{width:auto;text-align:left;flex:0 0 auto} }
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>

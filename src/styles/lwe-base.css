@@ -1,25 +1,14 @@
 /* Shared structural CSS for the Learning With Errors conversation pages.
- * Page-specific color, icon, demo, and content rules stay inline beside their markup. */
+ * The window chrome (frame, title bar, caption buttons and their hover glow),
+ * the desktop and the OS-window geometry are luna.css's, linked render-blocking
+ * on every page, so nothing here restates them. Each page names its concept on
+ * :root (see "per-concept chrome" at the bottom); the rules that draw it live
+ * here once. Page-only demo and content rules stay inline beside their markup. */
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
-html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
-body { background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%); font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0); padding: 24px 12px 60px; min-height: 100vh; }
-.window { --axp-maxw: 640px; max-width: var(--axp-maxw); margin: 0 auto; background: oklch(100% 0 0); border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0; border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden; box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35); }
-.title-bar .title-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.controls { display: inline-flex; align-items: center; gap: 2px; }
-.controls .min, .controls .max, .controls .close { position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden; font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer; background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%); }
-.controls .close { border-color: #d8401c; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
-.controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; }
-.controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; }
-.controls .close::before, .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; }
-.controls .close::before { transform: rotate(45deg); }
-.controls .close::after { transform: rotate(-45deg); }
+body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0); }
+.window { --axp-maxw: 640px; max-width: var(--axp-maxw); }
 .content { background: oklch(99% 0.005 95); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
-html { height: 100dvh; overflow: hidden; }
-body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px); overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
-.window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
-.window > .title-bar { flex: 0 0 auto; }
-body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%, oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
 .msgr { display: flex; flex-direction: column; }
 .msgr-head .who { flex: 1; min-width: 0; }
 .msgr-head .who .stat { display: block; font-size: 8.5pt; color: oklch(46% 0.02 145); }
@@ -53,3 +42,33 @@ body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height
 .demo .lead b { color: #15243f; }
 .mono { font-family: var(--font-mono); }
 .compose .box { display: flex; gap: 7px; }
+
+/* ── per-concept chrome ─────────────────────────────────────────────────────
+ * Every page sets --glyph, --accent, --pic-g0/--pic-g1, --pic-border and
+ * --name-color on :root. The rest have defaults, which are the generator's
+ * cream Messenger look (pipelines/lwe/generate.mjs), so a generated page sets
+ * only what its concept owns and a hand-written page overrides the handful of
+ * colors it chose differently. */
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: var(--icon-bg, #fff); border: 1px solid var(--icon-border, var(--pic-border)); }
+.title-bar .icon::before { content: var(--glyph); position: absolute; inset: 0; display: grid; place-items: center; font-size: var(--icon-glyph-size, 10px); color: var(--icon-ink, var(--accent)); font-weight: bold; text-shadow: none; }
+/* the right gutter beside the 16px scrollbar; luna.css owns the rest of the window model */
+.window > .content { padding-right: 12px; }
+.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, var(--head-g0, #fffdf6), var(--head-g1, #f6edd6)); border-bottom: 1px solid var(--head-rule, #e0cf9e); }
+.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid var(--ava-border, var(--pic-border)); background: linear-gradient(180deg, var(--ava-g0, var(--pic-g0)), var(--ava-g1, var(--pic-g1))); position: relative; }
+.msgr-head .ava::before { content: var(--glyph); position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: var(--ava-glyph-size, 19px); font-family: var(--glyph-font, var(--font-caption)); }
+.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: var(--name-color); }
+.disclosure b { color: var(--disclosure-ink, var(--name-color)); }
+.disclosure a { color: #1a4fc4; }
+.msg.bot .pic { background: linear-gradient(180deg, var(--pic-g0), var(--pic-g1)); border-color: var(--pic-border); }
+.msg.bot .pic::before { content: var(--glyph); position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: var(--pic-glyph-size, 13px); font-family: var(--glyph-font, var(--font-caption)); }
+.msg.bot .who b { color: var(--name-color); }
+.msg .who time { color: #66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft, #f6f1e6); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: var(--bar-ink, var(--name-color)); background: linear-gradient(180deg, var(--bar-g0, #f6edd6), var(--bar-g1, #ecdfb8)); border-bottom: 1px solid var(--accent); font-weight: bold; }
+.demo > .pad { padding: 11px 12px 13px; background: var(--pad-bg, #fff); }
+.btn { font-family: var(--font-ui); font-size: 9pt; padding: 3px 9px; cursor: pointer; background: linear-gradient(to bottom, #fff, #e9edf5); border: 1px solid #7d8aa3; border-radius: 2px; box-shadow: inset 1px 1px 0 #fff; }
+.btn:hover { border-color: var(--accent); }
+.scrollnote { text-align: center; font-size: 8pt; color: #66707d; padding: 3px 0 9px; }
+.compose { border-top: 1px solid var(--compose-rule, #e0cf9e); background: linear-gradient(180deg, var(--compose-g0, #fffdf6), var(--compose-g1, #f3ead0)); padding: 7px 10px; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #66707d; }
+@media (max-width: 520px) { .msgr-head .pets { display: none; } }

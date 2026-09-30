@@ -8,11 +8,10 @@
 // gets a readable twin deployed alongside it, because View Source is part of the
 // product and minification must not cost it.
 //
-// The garage/ and lwe/ HTML and the worker modules are NOT minified, but they are
-// no longer byte-identical to git either: step 1b injects the client-edge CSS
-// mirror into every staged page that carries the window geometry, derived from
-// luna.css. It is one commented, readable line in a readable file — View Source
-// still reads as hand-written CSS, and the line says where it came from.
+// Step 1b also injects the client-edge CSS mirror, derived from luna.css, into
+// the staged pages that still carry their own window geometry: the homepage,
+// which loads luna without blocking first paint, and cal's templates. It is one
+// commented line, and the line says where it came from.
 //
 //   bun run build                                         # stage .build/
 //   bun run deploy:direct                                   # build + wrangler deploy -c .build/cloudflare.config.ts
@@ -359,16 +358,19 @@ async function checkInvariants() {
     }
   } catch (e) { hard.push(`desktop generator freshness check could not run: ${e.message}`); }
 
-  // 5 (warn) — the OS-window critical-CSS copies are divergent per-context
-  // subsets (cal carries almost none), so a full byte-guard would false-fire.
-  // The one value that drifts and hurts is the taskbar-floor height: every
-  // file that carries the calc must agree with luna.css, or first paint lands
-  // a different window height than the final.
+  // 5 (warn) — the taskbar floor. luna.css owns it, and every page that links
+  // luna render-blocking gets it at first paint with nothing inline. Two
+  // documents still carry their own copy of the geometry: the homepage, which
+  // loads luna non-blocking (the media=print flip), and cal's templates. A copy
+  // whose floor disagrees with luna.css lands a different window height at
+  // first paint than after luna applies, so every copy must match. A listed
+  // file with NO floor warns too, so this cannot pass by matching nothing.
   const floors = new Map();
-  for (const f of ["src/styles/luna.css", "src/worker/lib/chrome.ts", "src/worker/writing.ts", "serendipity/serendipity.ts"]) {
+  for (const f of ["src/styles/luna.css", "src/pages/index.html", "cal/src/templates.ts"]) {
     let s; try { s = await read(f); } catch { continue; }
     // the BODY floor only (`height:calc(...)`), not a window `max-height:calc(...)`
-    for (const m of s.matchAll(/(?<!max-)height:calc\(100dvh - (\d+)px\)/g)) floors.set(f, m[1]);
+    for (const m of s.matchAll(/(?<!max-)height:\s*calc\(100dvh\s*-\s*(\d+)px\)/g)) floors.set(f, m[1]);
+    if (!floors.has(f)) warn.push(`${f}: no taskbar-floor calc found; the geometry check has nothing to compare against luna.css`);
   }
   const floorVals = new Set(floors.values());
   if (floorVals.size > 1) warn.push(`taskbar-floor height disagrees across the critical-geometry copies (${[...floors].map(([f, v]) => `${f.split("/").pop()}:${v}px`).join(", ")}) — luna.css and the inline copies must match`);
@@ -778,16 +780,20 @@ async function checkInvariants() {
 // ── the client edge, authored once and mirrored at deploy ────────────────────
 // luna.css owns the rule (search "THE CLIENT EDGE") and every windowed page
 // inherits it at runtime, so the SOURCE is already correct with nothing to
-// remember on a new page. The mirror below exists purely for first paint: luna
-// loads non-render-blocking and the edge's 6px gutter is layout, so without a
-// copy in the page's own inline block the document lays out 12px wider and
-// re-wraps once when luna lands.
+// remember on a new page. Every page that links luna.css render-blocking (all
+// of them but the homepage) has the edge at first paint and needs no copy.
 //
-// Hand-maintaining that copy in ~30 files was the thing worth deleting: it is
-// derived data, it drifts, and forgetting it on a new page is invisible until
-// someone watches a reflow. So the build derives it instead, from luna.css, and
-// a page author never writes it. Local dev (wrangler.dev.jsonc) serves the
-// unbuilt tree, where the edge simply arrives with luna.css.
+// The mirror below exists for the pages that load luna WITHOUT blocking first
+// paint, which is the homepage alone (its media=print flip). The edge's 6px
+// gutter is layout, so without a copy in that page's inline block it lays out
+// 12px wider and re-wraps once when luna lands. The build derives the copy from
+// luna.css rather than anyone hand-maintaining it: it is derived data, and a
+// hand copy drifts. Local dev (wrangler.dev.jsonc) serves the unbuilt tree,
+// where the edge simply arrives with luna.css.
+//
+// The injection keys on a page's own geometry mirror (below), which only a
+// document that loads luna non-blocking should still carry. cal's templates
+// carry one too and get the edge the same way.
 //
 // This is the ONLY generated CSS in the build. It adds no new rule and changes
 // no cascade: the injected declaration is byte-identical to luna's, so when luna
@@ -799,7 +805,7 @@ const clientEdgeDecl = (luna) => {
   return m ? m[1] : null;
 };
 
-// the geometry mirror every windowed page already carries; the edge goes after it
+// the geometry mirror a non-blocking-luna page carries; the edge goes after it
 const GEOMETRY_MIRROR = /^([ \t]*)(\.window\s*>\s*\.content(?:\s*,\s*\.window\s*>\s*\.body)?\s*\{[^}]*overflow:\s*auto[^}]*\})[ \t]*$/m;
 
 // insert the edge right after the geometry mirror, matching the file's own
@@ -1150,8 +1156,8 @@ await Promise.all([
 // 1b) inject the client edge into every staged page that carries the window
 // geometry mirror. Runs BEFORE minification so the injected CSS is minified with
 // the rest of the page rather than riding along as a readable line in a minified
-// file. Pages that load luna.css render-blocking (garage/gpt56.html) carry no
-// geometry mirror and correctly get nothing.
+// file. Pages that load luna.css render-blocking carry no geometry mirror and
+// correctly get nothing; that is every page except the homepage (and cal).
 {
   const decl = clientEdgeDecl(await readFile("src/styles/luna.css", "utf8"));
   const targets = (await readdir(`${OUT}/public`, { recursive: true }))
@@ -1176,9 +1182,11 @@ await Promise.all([
   }));
   const mirrored = outcomes.filter((outcome) => outcome === true).length;
   const skipped = outcomes.filter((outcome) => outcome === false).length;
-  // a rename in luna.css or in the geometry mirror would silently mirror nothing
-  // and cost every page a reflow, so the count is the tripwire.
-  if (mirrored < 32) throw new Error(`client edge: mirrored into only ${mirrored} pages (expected 32+) — did the geometry-mirror shape change, or did a walk stop reaching the Worker modules?`);
+  // The homepage is the one document that needs the mirror (luna loads without
+  // blocking its first paint), so it is the tripwire: a rename in luna.css or in
+  // the geometry mirror would silently skip it and cost / a reflow. The step-2
+  // assertion below checks the same thing on the minified bytes.
+  if (outcomes[targets.indexOf(`${OUT}/public/index.html`)] !== true) throw new Error(`client edge: the homepage was not mirrored (${mirrored} files were); did the geometry-mirror shape change in src/pages/index.html or luna.css?`);
   console.log(`client edge: mirrored into ${mirrored} staged pages from luna.css (${skipped} files carry no window geometry)`);
 }
 
