@@ -262,7 +262,17 @@ if (only === "shell" || only === "family") console.log(`pages:roll — --${only}
 else {
   const BUILT_PAGES = ".build/public";
   const PDICTS = "src/dict/p-dict";
-  const KEEP_PAGES = 2;
+  // 4, since 2026-09-29; it was 2. A shell re-mint changes the /a/ URL every page
+  // embeds, and 26 of the 39 rolls from 2026-07-27 to 09-28 re-versioned over
+  // 90% of pages at once, so N snapshots cover a returning visitor for about
+  // N-1 rolls (1.6 days a roll). Measured over those rolls, a visitor returning
+  // to a changed page 3 rolls later was covered 20% of the time at 2 and 100%
+  // at 4, saving about 10 KB against the q11 twin. That visitor is one who holds
+  // the page but not the family dictionary, which wins whenever it is held. Each
+  // extra level costs 67 more deltas per build and about 0.8 MB of committed
+  // snapshots; past 4 the curve is flat (a 16-roll return is covered 4% at 4
+  // and 4% at 6).
+  const KEEP_PAGES = 4;
   const FETCH_CONCURRENCY = 6;
   const parse = (n) => {
     const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/);
