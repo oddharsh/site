@@ -11,7 +11,8 @@
   //   - Workers Cache is disabled for both local entrypoints, so edit->reload
   //     never observes a stale cached response; deploy enables it for CachedPages
   // Everything else (bindings, crons, vars, migrations) MUST match cloudflare.config.ts.
-  // build.ts warns if a binding name drifts between the two. Deploys never use
+  // build.ts warns on drift, and contract-the-dev-twin-matches-production fails
+  // `validate` on it (bindings, run_worker_first, crons, compatibility_flags). Deploys never use
   // this file — the production config self-builds via wrangler.config.ts's build.command and ships the
   // minified .build/public tree.
   //
@@ -82,6 +83,7 @@
       "/garage", "/garage/*", "/lwe", "/lwe/*",
       "/pixel-peeper", "/pixel-peeper/*",
       "/access", "/access/*",
+      "/dotfiles", "/dotfiles/*",
       "/auth.md",
       // Folded from five exact rows on 2026-09-16; see cloudflare.config.ts.
       "/.well-known/*",
