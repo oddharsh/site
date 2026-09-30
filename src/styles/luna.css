@@ -1114,8 +1114,10 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
    disagree is off by exactly the amount nobody notices. */
 .window:has(>.axp-tasks),.np-window:has(>.axp-tasks){--axp-rail:186px;--axp-rail-gap:14px;display:grid;grid-template-columns:var(--axp-rail) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);column-gap:var(--axp-rail-gap);max-width:calc(var(--axp-maxw,720px) + var(--axp-rail) + var(--axp-rail-gap))}
 .window:has(>.axp-tasks)>.title-bar,.np-window:has(>.axp-tasks)>.np-titlebar,.window:has(>.axp-tasks)>.axp-address,.np-window:has(>.axp-tasks)>.axp-address{grid-column:1/-1}
-/* the writing folder also carries a status bar, which spans both columns under the rail. */
-.np-window:has(>.axp-tasks)>.np-status{grid-column:1/-1;grid-row:4}
+/* a status bar spans both columns under the rail. This named only the writing
+   folder's until 2026-09-30, so the garage strip on a paned window landed in
+   the rail's column, 186px wide, and wrapped its three facts onto two lines. */
+.window:has(>.axp-tasks)>.xp-statusbar,.np-window:has(>.axp-tasks)>.xp-statusbar{grid-column:1/-1;grid-row:4}
 .window:has(>.axp-tasks)>.axp-tasks,.np-window:has(>.axp-tasks)>.axp-tasks{grid-column:1;grid-row:3;min-height:0;overflow-y:auto;padding:2px 0 10px 10px}
 .window:has(>.axp-tasks)>.content,.np-window:has(>.axp-tasks)>.np-folder-body{grid-column:2;grid-row:3;min-height:0;overflow:auto}
 /* nav.js appends the resize grip last; keep it out of the row flow. */
