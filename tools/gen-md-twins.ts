@@ -14,14 +14,20 @@
 // WHAT IS AUTHORED BY HAND
 // A page that renders from the Worker keeps its prose in template literals
 // rather than in a file this script can read, so its twin is authored in
-// src/content/md/ instead. EIGHT are today: /around, /bot, /coffee, /lens,
-// /security, /whoareyou, /garage/dyno (and /terminal until 2026-09-16). The set is not declared
-// anywhere; buildTwins looks for <path>.md per surface, so a page joins by
-// someone dropping a file in and nothing announces it. checkTwinFacts() below
-// pins FOUR of them (bot, whoareyou, security, garage/dyno) so those twins
-// cannot quietly disagree with the page. The other four are unpinned, which is
-// a real gap rather than a decision: they are pinnable the same way whenever
+// src/content/md/ instead. THIRTEEN are today: /around, /bot, /coffee, /lens,
+// /security, /whoareyou, /garage/dyno, and since 2026-09-30 /ledger, /inbox,
+// /reading, /lens/census, /serendipity and /search (and /terminal until
+// 2026-09-16). The set is not declared anywhere; buildTwins looks for <path>.md
+// per surface, so a page joins by someone dropping a file in and nothing
+// announces it. checkTwinFacts() below pins TEN of them so those twins cannot
+// quietly disagree with the page. /around, /coffee and /lens are unpinned, which
+// is a real gap rather than a decision: they are pinnable the same way whenever
 // someone writes the facts down.
+//
+// The six that joined on 2026-09-30 are baked by build.ts at step 5b, after the
+// twin step, so the generated tier below cannot see them; a generated twin would
+// also mirror each island's placeholder rows. agentSurfacesWithoutTwin() is the
+// check that found them, and build.ts now fails on it.
 //
 // A hand twin is also what a Worker-rendered page in an INDEXED section owes,
 // because the section index lists it. /garage/dyno sat in that state from the
@@ -36,6 +42,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { agentSurfaces, needsBuiltTwin, type AgentSurface } from "./lib/agent-representation.ts";
 import { readDocument } from "./lib/html-to-md.ts";
 
 export const ORIGIN = "https://aadhar.sh";
@@ -219,6 +226,9 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
   const descriptions = {};
   const skipped = [];
   const generated = [];
+  // Twins that ship as committed files (/index.md), which this function never
+  // writes but which are twins all the same.
+  const committed: string[] = [];
 
   for (const surface of manifest.surfaces) {
     const rel = htmlFileFor(surface, root);
@@ -237,6 +247,7 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
     // overwritten by a generated one that is 472 bytes shorter.
     if (existsSync(join(root, "src/content", twinPath(surface.path).replace(/^\//, "")))) {
       descriptions[surface.path] = surface.description || "";
+      committed.push(twinPath(surface.path));
       continue;
     }
 
@@ -288,7 +299,25 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
     files.set(`/${section}/llms.txt`, renderSectionIndex(section, manifest.surfaces, { descriptions, twins: new Set(files.keys()) }));
   }
 
-  return { files, skipped, generated };
+  return { files, skipped, generated, committed };
+}
+
+/**
+ * The agents:true surfaces that owe a built twin and did not get one. Pure, so
+ * build.ts can fail on it and a contract test can run it with a control.
+ *
+ * Six pages sat in this state until 2026-09-30 (/ledger, /inbox, /reading,
+ * /lens/census, /serendipity, /search): build.ts bakes them at step 5b, after
+ * the twin step, so they landed on the skipped list, which only feeds a log
+ * line. Each kept `flags.agents` and answered an agent's `Accept:
+ * text/markdown` with HTML while every check here stayed green. The skipped
+ * list was the right signal pointed at nobody.
+ */
+export function agentSurfacesWithoutTwin(surfaces: AgentSurface[], twins: Iterable<string>): string[] {
+  const have = new Set(twins);
+  return agentSurfaces(surfaces)
+    .filter((s) => needsBuiltTwin(s) && !have.has(twinPath(s.path)))
+    .map((s) => s.path);
 }
 
 /**
@@ -386,6 +415,134 @@ export const TWIN_FACTS = [
           const hours = /KV_TTL\s*=\s*(\d+)\s*\*\s*3600/.exec(src)?.[1] ?? "";
           const word = ({ 1: "one", 2: "two", 3: "three", 4: "four", 6: "six", 12: "twelve", 24: "twenty-four" } as Record<string, string>)[hours];
           return word ? `${word} hours` : null;
+        },
+      },
+    ],
+  },
+  // The six below are pages build.ts bakes at step 5b, AFTER the twin step, so
+  // the generated tier cannot reach them, and a generated twin would mirror an
+  // island's placeholder rows anyway. Each hand twin names the fragment its
+  // island loads and the JSON door where one exists, and each of those is
+  // pinned here to the module that serves it.
+  {
+    twin: "src/content/md/ledger.md",
+    facts: [
+      { label: "island URL", source: "src/worker/ledger.ts", string: "/ledger/lines.html" },
+      { label: "JSON endpoint", source: "src/worker/index.ts", string: "/ledger.json" },
+      { label: "line-item key", source: "src/worker/ledger.ts", string: "line_items" },
+      {
+        label: "window",
+        source: "src/worker/ledger.ts",
+        derive: (src) => {
+          const days = /WINDOW_DAYS\s*=\s*(\d+)/.exec(src)?.[1];
+          return days ? `${days} days` : null;
+        },
+      },
+      {
+        label: "rate",
+        source: "src/worker/ledger.ts",
+        derive: (src) => {
+          const rate = /RATE_USD\s*=\s*([\d.]+)/.exec(src)?.[1];
+          return rate ? `$${rate}` : null;
+        },
+      },
+    ],
+  },
+  {
+    twin: "src/content/md/inbox.md",
+    facts: [
+      { label: "island URL", source: "src/worker/inbox.ts", string: "/inbox/mail.html" },
+      { label: "endpoint", source: "src/worker/index.ts", string: "/webmention" },
+      { label: "encoding", source: "src/worker/webmention.ts", string: "application/x-www-form-urlencoded" },
+    ],
+  },
+  {
+    twin: "src/content/md/reading.md",
+    facts: [
+      { label: "island URL", source: "src/worker/reading.ts", string: "/reading/list.html" },
+      {
+        label: "Curius profile",
+        source: "src/worker/reading.ts",
+        derive: (src) => {
+          const handle = /CURIUS_HANDLE\s*=\s*"([^"]+)"/.exec(src)?.[1];
+          return handle ? `https://curius.app/${handle}` : null;
+        },
+      },
+      {
+        label: "cache window",
+        source: "src/worker/reading.ts",
+        derive: (src) => {
+          const secs = Number(/CURIUS_TTL\s*=\s*(\d+)/.exec(src)?.[1] ?? NaN);
+          const word = ({ 1: "one", 2: "two", 3: "three", 6: "six", 12: "twelve", 24: "twenty-four" } as Record<number, string>)[secs / 3600];
+          return word ? `${word} hours` : null;
+        },
+      },
+    ],
+  },
+  {
+    twin: "src/content/md/lens-census.md",
+    facts: [
+      { label: "island URL", source: "src/worker/census.ts", string: "/lens/census/table.html" },
+      { label: "JSON endpoint", source: "src/worker/index.ts", string: "/lens/census.json" },
+      { label: "newest-sweep key", source: "src/worker/census.ts", string: "lastYmd" },
+      { label: "roster size", source: "src/worker/census.ts", string: "16 representative sites" },
+    ],
+  },
+  {
+    twin: "src/content/md/serendipity.md",
+    facts: [
+      {
+        label: "island URL",
+        source: "serendipity/serendipity.ts",
+        derive: (src) => {
+          const prefix = /const PREFIX\s*=\s*"([^"]+)"/.exec(src)?.[1];
+          return prefix && src.includes("EVENTS_URL = `${PREFIX}/events.html`") ? `${prefix}/events.html` : null;
+        },
+      },
+      {
+        label: "MCP endpoint",
+        source: "serendipity/serendipity.ts",
+        derive: (src) => {
+          const prefix = /const PREFIX\s*=\s*"([^"]+)"/.exec(src)?.[1];
+          return prefix && src.includes("path === `${PREFIX}/mcp`") ? `https://aadhar.sh${prefix}/mcp` : null;
+        },
+      },
+      {
+        // Read from the generated card, which a contract test deep-equals against
+        // the server's own tools/list, so a tool added there fails here until the
+        // twin names it too.
+        label: "tool list",
+        source: "public/.well-known/mcp/serendipity.json",
+        derive: (src) => {
+          let names: string[];
+          try { names = JSON.parse(src).tools.map((t) => `\`${t.name}\``); } catch { return null; }
+          if (names.length < 2) return null;
+          return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+        },
+      },
+    ],
+  },
+  {
+    twin: "src/content/md/search.md",
+    facts: [
+      { label: "JSON endpoint", source: "src/worker/index.ts", string: "/search.json" },
+      { label: "NLWeb endpoint", source: "src/worker/index.ts", string: "/ask" },
+      { label: "MCP tool", source: "src/worker/lib/tools.ts", string: "search_site" },
+      { label: "corpus", source: "tools/generate-search-index.ts", string: "search-index.json" },
+      {
+        label: "default limit",
+        source: "src/worker/search.ts",
+        derive: (src) => {
+          const d = /Number\(limit\)\s*\|\|\s*(\d+)/.exec(src)?.[1];
+          return d ? `defaults to ${d}` : null;
+        },
+      },
+      {
+        label: "limit ceiling",
+        source: "src/worker/search.ts",
+        derive: (src) => {
+          const max = /Math\.min\((\d+),\s*Math\.max\(1,\s*Number\(limit\)/.exec(src)?.[1];
+          return max ? `tops out at ${max}` : null;
         },
       },
     ],

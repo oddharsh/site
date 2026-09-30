@@ -20,6 +20,7 @@
 // `remote` (see below); everything else is asserted identically.
 
 import { readFileSync } from "node:fs";
+import { agentRepresentation, agentSurfaces, needsBuiltTwin } from "./lib/agent-representation.ts";
 
 // Every path lookup below is relative to the REPO ROOT, not to this file.
 // Naming it means moving this script again costs one line instead of 57.
@@ -518,6 +519,36 @@ const ROUTES = [
   { path: "/serendipity/mcp-info.src.html", status: 200, ct: "text/html", marker: "<html lang", encoding: "br" },
 ];
 
+// One negotiation row per agents:true surface, DERIVED from the registry rather
+// than listed, so a surface flagged tomorrow is swept the day it is flagged. Six
+// of them (/ledger, /inbox, /reading, /lens/census, /serendipity, /search)
+// answered an agent's `Accept: text/markdown` with HTML until 2026-09-30, and no
+// row here asked. The expected type is agent-representation.ts's rule: Markdown,
+// or the mimeType a surface declares for the form its route renders live.
+// Twins are build output, so only a built tree can answer these; paths that
+// already carry a hand-written Markdown row above are left to that row.
+const AGENT_ROWS = (() => {
+  if (!builtOutput) return [];
+  const { surfaces } = JSON.parse(readFileSync(new URL("config/site-manifest.json", ROOT), "utf8"));
+  const covered = new Set(ROUTES
+    .filter((r) => /text\/markdown/.test(r.headers?.accept ?? "") && !/q=0(?![.\d])/.test(r.headers?.accept ?? ""))
+    .map((r) => r.path));
+  const rows = agentSurfaces(surfaces)
+    .filter((s) => !covered.has(s.path))
+    .map((s) => ({ path: s.path, status: 200, ct: agentRepresentation(s), headers: { accept: "text/markdown" }, remote: false }));
+  // And the twin at its own URL, which is the cacheable form and the one a
+  // page's rel=alternate names. /lens/census.md, for one, lives under a
+  // run_worker_first prefix, so the Worker has to hand it through.
+  const listed = new Set(ROUTES.map((r) => r.path));
+  for (const s of agentSurfaces(surfaces).filter(needsBuiltTwin)) {
+    const md = s.path === "/" ? "/index.md" : `${s.path}.md`;
+    if (!listed.has(md)) rows.push({ path: md, status: 200, ct: "text/markdown", headers: { accept: "*/*" }, remote: false });
+  }
+  // A registry that stopped parsing would sweep nothing and pass.
+  if (agentSurfaces(surfaces).length < 40) throw new Error("verify-routes: read fewer than 40 agents:true surfaces from site-manifest.json");
+  return rows;
+})();
+
 function cacheBust(path) {
   const sep = path.includes("?") ? "&" : "?";
   return base + path + sep + "cb=" + Math.floor(Math.random() * 1e9);
@@ -613,8 +644,9 @@ async function probe(r) {
 }
 
 async function main() {
-  const routes = ROUTES.filter(r => !(r.remote && !remoteRows));
-  const skipped = ROUTES.length - routes.length;
+  const all = [...ROUTES, ...AGENT_ROWS];
+  const routes = all.filter(r => !(r.remote && !remoteRows));
+  const skipped = all.length - routes.length;
   console.log(`\nRoute oracle vs ${base}` +
     (skipped ? `  (${skipped} remote-only route(s) skipped)` : "") +
     (isLocal && remoteRows ? "  (remote bindings: production KV/R2/Browser)" : "") +

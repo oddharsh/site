@@ -1111,8 +1111,15 @@ function routeRun(request: SiteRequest, env: Env, ctx: ExecutionContext, url: UR
   });
 }
 
-function routeSearch(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
+// The bare form's Markdown twin carries the page's noindex, the same way
+// routeSecurity's does. A query still answers HTML: the twin describes the form
+// and names /search.json for results, and it has no rendering of one query.
+async function routeSearch(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   if (url.searchParams.get("q")) return handleSearch(request, env, ctx);
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, "/search.md", { "x-robots-tag": "noindex" });
+    if (md) return md;
+  }
   return serveStaticPage(request, env, { headers: UTILITY_SHELL_HEADERS });
 }
 

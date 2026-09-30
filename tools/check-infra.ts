@@ -52,6 +52,7 @@ import { parseJsonc } from "./lib/jsonc.ts";
 import { siteConfig } from "./lib/site-config.ts";
 import { auditActionPins } from "./lib/action-pins.ts";
 import { redactCredentials } from "./lib/redact.ts";
+import { agentRepresentation, agentSurfaces } from "./lib/agent-representation.ts";
 
 const execFileP = promisify(execFile);
 
@@ -1941,6 +1942,14 @@ async function checkCodeScanning(repo, slug, token) {
 // agent-facing catalog, so it is the right denominator: an agents:true page that hands
 // back HTML is a page the registry advertises to agents and then serves for humans.
 //
+// EVERY agents:true surface, whatever its kind, since 2026-09-30. This read
+// `kind === "page"` alone until then, which left 60 of the 68 outside it (39
+// content, 17 utility, 4 section), and six of those were answering HTML
+// (/ledger, /inbox, /reading, /lens/census, /serendipity, /search) while the
+// tier printed a clean pass. The
+// expected type is agent-representation.ts's rule, so the terminal tools pass on
+// the text/plain frame they declare and /rn on its live Markdown.
+//
 // WARN, not fail. Which pages deserve a twin is a content judgement (a Markdown
 // rendering of /rn's live playlist is obviously useful; one of /lens, an interactive
 // tool, mostly is not), and this check has no business turning a taste call into a red
@@ -1953,7 +1962,11 @@ async function checkAgentMarkdown() {
     warn(`agent markdown coverage could not run: ${e.message}`);
     return;
   }
-  const pages = surfaces.filter((s) => s.kind === "page" && s.flags?.agents);
+  const pages = agentSurfaces(surfaces);
+  if (pages.length < 40) {
+    warn(`agent markdown coverage read only ${pages.length} agents:true surfaces. Has the registry stopped parsing?`);
+    return;
+  }
   const gaps = [];
   for (const p of pages) {
     try {
@@ -1969,14 +1982,14 @@ async function checkAgentMarkdown() {
         continue;
       }
       const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
-      if (ct !== "text/markdown") gaps.push(`${p.path} (${ct || "no content-type"})`);
+      if (ct !== agentRepresentation(p)) gaps.push(`${p.path} (${ct || "no content-type"})`);
     } catch (e) {
       warn(`agent markdown probe failed for ${p.path}: ${e.message}`);
     }
   }
   gaps.length
-    ? warn(`agent markdown coverage: ${pages.length - gaps.length}/${pages.length} agents:true pages answer Accept: text/markdown. No twin: ${gaps.join(", ")} — give each one a twin or drop flags.agents so the registry stops advertising it`)
-    : pass(`agent markdown coverage: all ${pages.length} agents:true pages answer in Markdown`);
+    ? warn(`agent markdown coverage: ${pages.length - gaps.length}/${pages.length} agents:true surfaces answer Accept: text/markdown in their declared representation. No twin: ${gaps.join(", ")}. Give each one a twin, declare the representation its route serves (mimeType), or drop flags.agents so the registry stops advertising it`)
+    : pass(`agent markdown coverage: all ${pages.length} agents:true surfaces answer an agent in their declared representation`);
 }
 
 // ----------------------------------------------------------------- main ----
