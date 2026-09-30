@@ -484,7 +484,9 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
     "public, max-age=0, s-maxage=86400",                       // today's page policy
     "public, max-age=0, must-revalidate, s-maxage=86400",
     "max-age=0, must-revalidate, stale-while-revalidate=604800", // must-revalidate wins
+    "max-age=0, must-revalidate, stale-while-revalidate=60",   // ...at any window
     "private, no-cache, must-revalidate",                      // `/` until 2026-07-31
+    "max-age=3600, no-cache",                                  // no-cache vetoes a live max-age
     "no-store",
   ]) {
     const res = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
@@ -494,8 +496,10 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   }
   // ...and it comes back on its own if a page is ever given a policy that survives to the
   // moment of use. stale-while-revalidate is RFC 5861's permission to serve stale, which
-  // is the second arm of RFC 9842's "fresh or allowed to be served stale".
-  for (const cc of ["public, max-age=600", "public, max-age=0, stale-while-revalidate=604800"]) {
+  // is the second arm of RFC 9842's "fresh or allowed to be served stale". must-revalidate
+  // cancels only that second arm, so a positive max-age still registers under it
+  // (measured in Chrome 152, 2026-09-23).
+  for (const cc of ["public, max-age=600", "public, max-age=0, stale-while-revalidate=604800", "max-age=3600, must-revalidate"]) {
     const res = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
       headers: { "available-dictionary": available },
     }), makeEnv(cc));

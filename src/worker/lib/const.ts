@@ -68,9 +68,11 @@ export const ARCHIVE_VERSION = 3;
 //                   the per-page dcz tier keeps working. Measured 2026-07-29; the
 //                   full policy table is in lib/assets.js.
 //
-// It must also survive canRegisterAsDictionary (same file): no-store, no-cache, and
-// must-revalidate each veto dictionary registration outright, which is what kept `/`
-// out of the per-page tier while it carried `private, no-cache, must-revalidate`.
+// It must also survive canRegisterAsDictionary (lib/assets.ts): no-store and no-cache
+// each veto dictionary registration outright, which is what kept `/` out of the
+// per-page tier while it carried `private, no-cache, must-revalidate`. must-revalidate
+// is the quieter trap here: it cancels the swr window, and with max-age=0 that leaves
+// the dictionary no lifetime at all.
 //
 // Lives here rather than in index.js because home.js's HEAD path has to ship the
 // identical string. A HEAD advertising a different freshness contract than the GET

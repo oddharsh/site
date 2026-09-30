@@ -265,10 +265,19 @@ const pageOffer = (pathname) => pathname.length < PAGE_FAMILY_MATCH.length
 //   public, max-age=0, must-revalidate, s-maxage=86400 (this site's old pages)  no
 //   public, max-age=0, s-maxage=86400, swr=604800      (PAGE_CACHE_CONTROL)     REGISTERED
 //
-// That is RFC 9842 section 2.2.1 exactly — a dictionary "MUST be either fresh or allowed
-// to be served stale". stale-while-revalidate is the RFC 5861 permission to serve stale;
-// must-revalidate is the explicit withdrawal of it, and it wins wherever both appear.
-// no-cache never qualifies, because it bars reuse without revalidation. s-maxage is
+// Re-measured 2026-09-23 in Chrome 152, because every must-revalidate row above pairs it
+// with max-age=0 and so could not separate "vetoes" from "leaves no lifetime":
+//
+//   max-age=3600, must-revalidate                                 REGISTERED, for the max-age
+//   max-age=3600, no-cache                                        no
+//   max-age=3600, no-store                                        no
+//
+// That is RFC 9842 section 2.2.1 exactly: a dictionary "MUST be either fresh or allowed
+// to be served stale". So the lifetime is max-age plus the stale-while-revalidate window,
+// the RFC 5861 permission to serve stale. must-revalidate is the explicit withdrawal of
+// that permission, so it cancels the swr window and leaves max-age standing; it only
+// reads as a veto when max-age is 0. no-cache and no-store veto outright, whatever else
+// the header says, because no-cache bars reuse without revalidation. s-maxage is
 // invisible to this decision: a browser is a private cache.
 //
 // Gating the offer on the header, rather than deleting it, keeps the coupling honest in
@@ -281,9 +290,10 @@ const pageOffer = (pathname) => pathname.length < PAGE_FAMILY_MATCH.length
 // stack without letting an uncaptured exact hash force an avoidable Brotli response.
 const canRegisterAsDictionary = (cacheControl) => {
   const cc = (cacheControl || "").toLowerCase();
-  if (/\b(?:no-store|no-cache|must-revalidate)\b/.test(cc)) return false;
+  if (/\b(?:no-store|no-cache)\b/.test(cc)) return false;
   const seconds = (name) => Number(cc.match(new RegExp(`\\b${name}=(\\d+)`))?.[1] || 0);
-  return seconds("max-age") > 0 || seconds("stale-while-revalidate") > 0;
+  const stale = /\bmust-revalidate\b/.test(cc) ? 0 : seconds("stale-while-revalidate");
+  return seconds("max-age") + stale > 0;
 };
 
 const variantEtag = (etag, suffix) => {
