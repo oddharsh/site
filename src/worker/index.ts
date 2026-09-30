@@ -848,7 +848,19 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
 // These two applications remain separate source modules, but the public route
 // boundary is now owned by this Worker. Keeping the delegation here means the
 // app-specific cache, auth, and persistence policies stay local to each module.
-function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+//
+// The one exception is the booking page itself. GET /coffee is a BUILT document
+// since 2026-09-30 (build.ts step 5b bakes cal's bookingPage), served here with
+// the page policy every generated document takes, and its slot list arrives
+// from /coffee/slots.html, which cal still renders per request. Where no bake is
+// staged (bun run dev serves the unbuilt tree) cal renders the same shell.
+async function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  if ((request.method === "GET" || request.method === "HEAD") && new URL(request.url).pathname === "/coffee") {
+    const headers = { "cache-control": PAGE_CACHE_CONTROL, link: SHELL_PRELOAD_LINK, "referrer-policy": "strict-origin-when-cross-origin" };
+    const response = await serveStaticPage(request, env, { headers });
+    if (response.status !== 404) return response;
+    try { await response.body?.cancel(); } catch {}
+  }
   return calWorker.fetch(request, env, ctx);
 }
 

@@ -18,13 +18,13 @@
 //    in for a runtime scheme rather than a dependency seam being faked, which
 //    is the distinction .oxlintrc.json's no-module-mocking rule draws.
 //
-// 2. `caches`. cal/src/index.ts edge-caches the booking page for 30s through
-//    `caches.default` and deletes the entry on every booking action. Bun has
-//    no CacheStorage global at all (`typeof caches` is "undefined", measured
-//    2026-09-02 on 1.4.0), so a stand-in that always misses is installed.
-//    What that costs is stated rather than hidden: the cache HIT path on GET /
-//    is not exercised by this suite. It never was asserted under the pool
-//    either, where miniflare's cache was real but no test read the same page
+// 2. `caches`. cal/src/index.ts edge-caches the slot list (/slots.html) for
+//    30s through `caches.default` and deletes the entry on every booking
+//    action. Bun has no CacheStorage global at all (`typeof caches` is
+//    "undefined", measured 2026-09-02 on 1.4.0), so a stand-in that always
+//    misses is installed. What that costs is stated rather than hidden: the
+//    cache HIT path on GET /slots.html is not exercised by this suite. It never
+//    was asserted under the pool either, where miniflare's cache was real but no test read the same page
 //    twice; the loss is potential coverage, not a regression in what is
 //    checked. The DELETE calls sit inside ctx.waitUntil and resolve false.
 import { mock } from "bun:test";

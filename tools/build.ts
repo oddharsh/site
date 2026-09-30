@@ -2088,6 +2088,29 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   if (!mcpInfoHtml.includes("list_events")) throw new Error("static /serendipity/mcp-info renderer lost its tool list");
   await mkdir(`${OUT}/public/serendipity`, { recursive: true });
   await writeFile(`${OUT}/public/serendipity/mcp-info.html`, mcpInfoHtml);
+  // /coffee, 2026-09-30. cal renders its own templates, staged beside src/ like
+  // serendipity, so it imports from .build/cal. Its env is the Worker's own vars
+  // from cloudflare.config.ts (HOST_*, MAX_LOOKAHEAD_DAYS), and BASE_PATH is the
+  // prefix the site serves it under, which is what joins the desktop shell. The
+  // build has no calendar, so a radio carrying a slot value, a day label with a
+  // date in it, or the no-slots note in the bake could only be one build's
+  // availability shown to every visitor until the next deploy.
+  {
+    const cal = await import(pathToFileURL(resolve(OUT, "cal/src/templates.ts")).href + nonce);
+    const vars = (await siteConfig()).vars as Record<string, string> | undefined;
+    if (!vars?.HOST_TIMEZONE || !vars.HOST_NAME) throw new Error("static /coffee: the site config carries no HOST_* vars");
+    const calEnv = { ...vars, BASE_PATH: "/coffee" };
+    const coffeeHtml = cal.bookingPage(calEnv);
+    if (coffeeHtml !== cal.bookingPage(calEnv)) throw new Error("static /coffee renderer is not deterministic");
+    const slotsUrl = `/coffee${cal.SLOTS_PATH}`;
+    if (!coffeeHtml.includes(`data-island="${slotsUrl}"`)) throw new Error("static /coffee renderer lost its slots island");
+    if (!coffeeHtml.includes(`rel="preload" as="fetch" href="${slotsUrl}" crossorigin`)) throw new Error("static /coffee renderer lost the preload for its slots island");
+    if (!coffeeHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /coffee renderer lost the island loader");
+    if (!coffeeHtml.includes('id="bookform" method="POST" action="/coffee/book"')) throw new Error("static /coffee renderer lost its booking form");
+    if (/name="start" value=|class="xp-day-label">[A-Z][a-z]+day,|no open slots in the next/.test(coffeeHtml)) throw new Error("static /coffee bake carries a live slot");
+    await writeFile(`${OUT}/public/coffee.html`, coffeeHtml);
+    console.log(`static render: /coffee shell (${coffeeHtml.length} bytes) with its slots at ${slotsUrl}`);
+  }
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);

@@ -34,6 +34,12 @@
 // the bare cal.aadhar.sh fallback the shell's links would be cross-origin and
 // /nav.js 404s, so that host stays a standalone window, as it always has.
 import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+// The site's island contract, imported the same way desktop.ts is: island.ts
+// and html.ts are pure modules that never reach cloudflare:workers (gotcha 16).
+// cal builds strings with its own esc(), so what it hands islandMount is
+// already escaped and goes in through unsafeHtml.
+import { unsafeHtml } from "../../src/worker/lib/html.ts";
+import { islandMount, islandPreload, islandScript } from "../../src/worker/lib/island.ts";
 
 const STYLES = `
 * { box-sizing: border-box; }
@@ -166,10 +172,9 @@ a:hover { color: var(--link-hover); }
   gap: 4px 4px;
 }
 .slots li { margin: 0; }
-/* The host's reschedule picker. A LABEL wrapping a real radio rather than the
-   .slot-btn treatment beside it, because that button is driven by script and
-   the host pages ship none: the sunken well is the affordance, and :has() gives
-   the selected one the same pressed reading without a line of JS. */
+/* The host's reschedule picker: a LABEL wrapping a real radio, like the public
+   .slot-btn list below, in a plainer sunken well that marks it as the host's
+   form. :has() gives the selected one the pressed reading without a line of JS. */
 .slot-radio {
   display: inline-flex;
   align-items: center;
@@ -215,7 +220,28 @@ button.xp-button:active {
     inset 1px 1px 0 var(--shadow),
     inset -1px -1px 0 var(--highlight);
 }
-.slot-btn[aria-pressed="true"] {
+/* A slot is a LABEL around a native radio: the radio is the control (keyboard,
+   form submission, required), the label wears the raised button. The radio stays
+   in the accessibility tree and focusable, only visually collapsed. */
+.slot-btn { position: relative; text-align: center; }
+.slot-btn input {
+  position: absolute; inset: 0; margin: 0;
+  opacity: 0; pointer-events: none;
+}
+.slot-btn:has(input:focus-visible) { outline: 1px dotted var(--ink); outline-offset: -4px; }
+/* the placeholder the build bakes: same markup, nothing to pick yet */
+.slot-btn:has(input:disabled) {
+  color: var(--ink-faint);
+  cursor: default;
+}
+/* an island that could not load leaves its placeholder and says so */
+.slot-failed { display: none; margin: 8px 0 0; font-size: 10pt; }
+[data-state="failed"] + .slot-failed { display: block; }
+/* No scripts, no swap: hide the placeholder and keep only the noscript note. */
+@media (scripting: none) {
+  #coffee-slots[data-island] > :not(noscript) { display: none; }
+}
+.slot-btn:has(input:checked) {
   background: linear-gradient(to bottom, var(--blue-95), var(--blue-65));
   color: oklch(100% 0 0);
   border-color: var(--blue-40);
@@ -360,6 +386,13 @@ form.book .actions {
 // gradient, hand-kept "in sync with nav.js") is GONE: the page now ships the
 // real DESKTOP_CHROME, so there is nothing to stand in for and nothing left to
 // keep in sync by hand.
+//
+// It looks redundant, since luna.css carries every rule here but the gutter and
+// this page links luna render-blocking. It still earns its place, measured
+// 2026-09-30: with only the gutter kept,
+// `bun run cls --paths /coffee --hold none --runs 5` saw the form jump (0.0704,
+// dy -554 dx -306) on 3 of 5 desktop loads, and with the block in place it saw
+// none. Keep it until that reads clean without it.
 const SHELL_GEOMETRY = `
 html { height: 100dvh; overflow: hidden; }
 body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
@@ -373,7 +406,7 @@ body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
 // app button, so the tab favicon is right on first paint (and on cal.aadhar.sh,
 // where nav.js never loads to set it). hex colors %23-encoded for the data URI.
 
-function shell(title, body, env) {
+function shell(title, body, env, head = "") {
   const home = env.HOST_PUBLIC_URL || "https://aadhar.sh";
   // Under aadhar.sh/coffee, /nav.js is same-origin → join the desktop shell.
   // On the bare cal.aadhar.sh fallback it isn't, so stay a standalone window.
@@ -390,7 +423,7 @@ function shell(title, body, env) {
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <link rel="icon" type="image/svg+xml" href="/section-icons/coffee.svg">
-<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}${onShell ? SHELL_GEOMETRY : ""}</style>
+${head}<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}${onShell ? SHELL_GEOMETRY : ""}</style>
 </head>
 <body>${onShell ? DESKTOP_TOP : ""}
 <div class="window">
@@ -416,68 +449,100 @@ function shell(title, body, env) {
 </html>`;
 }
 
-// The slot picker, shipped PRE-MINIFIED because /coffee renders per request:
-// no build step ever sees this script, and esbuild's minify rewrites the
-// Worker's code but never the contents of a string. Same convention as
-// lib/island.ts's islandScript. The readable form, which is what to edit and
-// then re-minify with tools/lib/oxc-minify-options.ts:
+// ── the booking page: a built shell plus a slots island ─────────────────────
+// Since 2026-09-30 GET /coffee is a BUILT document: build.ts step 5b bakes
+// bookingPage(env) into coffee.html, so the shell (chrome, ~300 lines of CSS,
+// the lede, the whole form) ships as a q11 twin with a dcz delta, an ETag and
+// hashed CSP. The open slots are the one part that moves, and they arrive from
+// SLOTS_PATH as an island (src/worker/lib/island.ts), rendered per request by
+// slotsFragment() and edge-cached for 30 seconds the way the whole page used
+// to be.
 //
-//   (function () {
-//     const buttons    = document.querySelectorAll(".slot-btn");
-//     const startInput = document.getElementById("start");
-//     const submit     = document.getElementById("submit");
-//     const fmt = (ms) => new Date(parseInt(ms, 10)).toLocaleString("en-US", {
-//       timeZone: submit.dataset.tz,
-//       weekday: "short", month: "short", day: "numeric",
-//       hour: "numeric", minute: "2-digit"
-//     });
-//     buttons.forEach(b => b.addEventListener("click", () => {
-//       buttons.forEach(x => x.setAttribute("aria-pressed", "false"));
-//       b.setAttribute("aria-pressed", "true");
-//       startInput.value = b.dataset.start;
-//       submit.disabled = false;
-//       submit.textContent = "request " + fmt(b.dataset.start);
-//     }));
-//   })();
-//
-// oxc prints strings with backticks, and one of those here would end this
-// template literal (CLAUDE.md gotcha 19), so its output is carried over with
-// double quotes instead.
-//
-// The timezone arrives as `data-tz` on the submit button, escaped by esc(),
-// and the script reads it from there, so NOTHING is interpolated into script
-// text. It used to be `timeZone: ${JSON.stringify(tz)}`, which CodeQL flags
-// (js/bad-code-sanitization) and rightly: JSON.stringify escapes neither
-// `</script>` nor U+2028, so it is not a sanitizer for a script context. The
-// script is a constant now, the same on every render.
-const SLOT_PICKER_SCRIPT = `(function(){let e=document.querySelectorAll(".slot-btn"),t=document.getElementById("start"),n=document.getElementById("submit"),r=e=>new Date(parseInt(e,10)).toLocaleString("en-US",{timeZone:n.dataset.tz,weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});e.forEach(i=>i.addEventListener("click",()=>{e.forEach(e=>e.setAttribute("aria-pressed","false")),i.setAttribute("aria-pressed","true"),t.value=i.dataset.start,n.disabled=!1,n.textContent="request "+r(i.dataset.start)}))})();`;
+// Slots are native radios. They sit OUTSIDE <form id="bookform"> (the island
+// mounts in the "Available slots" group above it), so each carries
+// form="bookform", and a checked one posts as `start` with no script at all.
+// They used to be <button type="button">s wired by a script that copied the
+// pick into a hidden input, which meant no booking without JavaScript and a
+// click handler that could never reach buttons arriving after load.
+export const SLOTS_PATH = "/slots.html";
+// The no-script door: the same page with the live slots rendered inline, since
+// a reader without scripts never gets the island swapped in.
+export const PICK_PATH = "/pick";
 
-export function bookingPage(slots, env) {
-  const base = env.BASE_PATH || "";
+// Optional sugar, and the page books without it: relabel the submit button
+// "request Tue, Oct 6, 10:00 AM" when a slot is picked. Delegated on document,
+// so it reaches radios the island injects after this script ran, and re-read on
+// pageshow, so a back-navigation that restores a checked radio relabels too.
+//
+// It stays a CONSTANT. The timezone arrives as `data-tz` on the submit button,
+// escaped by esc(), and the script reads it from there, so nothing is ever
+// interpolated into script text. It used to be `timeZone: ${JSON.stringify(tz)}`,
+// which CodeQL flags (js/bad-code-sanitization) and rightly: JSON.stringify
+// escapes neither `</script>` nor U+2028, so it is not a sanitizer for a script
+// context. It is written compact because the cal.aadhar.sh fallback and the
+// no-script page ship it unbuilt; the baked page is minified again anyway. No
+// backticks inside, because one would end this template literal (gotcha 19).
+const RELABEL_SCRIPT = `(function(){function u(t){var b=document.getElementById("submit");if(!b||!t||t.name!=="start"||t.type!=="radio"||!t.checked)return;b.textContent="request "+new Date(parseInt(t.value,10)).toLocaleString("en-US",{timeZone:b.dataset.tz,weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}document.addEventListener("change",function(e){u(e.target)});addEventListener("pageshow",function(){u(document.querySelector('input[name="start"]:checked'))})})()`;
 
-  // group slots by local day (long weekday + month/day)
+// The placeholder model (island rule 1): the SAME renderer draws it, so the
+// swap changes values rather than markup. Five days of eight is about what a
+// real fortnight shows above the fold; the form below scrolls inside the window.
+const PENDING_DAYS = 5;
+const PENDING_PER_DAY = 8;
+
+type SlotModel = { pending: true } | { slots: { start: number, end: number }[] };
+
+/** The slot listing, live or placeholder. The island body, and the inline list
+ *  on the no-script page. */
+export function renderSlotList(model: SlotModel, env) {
+  if ("pending" in model) {
+    const day = `
+        <div class="xp-day-label">…</div>
+        <ul class="slots">${`<li><label class="slot-btn"><input type="radio" disabled><span>…</span></label></li>`.repeat(PENDING_PER_DAY)}</ul>`;
+    return day.repeat(PENDING_DAYS);
+  }
   // Slots bucketed by day label, so the keys are dates the feed supplied.
   const groups: Record<string, any[]> = {};
-  for (const s of slots) {
+  for (const s of model.slots) {
     const dayKey = new Date(s.start).toLocaleDateString("en-US", {
       timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
     });
     (groups[dayKey] = groups[dayKey] || []).push(s);
   }
-
-  const slotMarkup = Object.keys(groups).length === 0
-    ? `<p class="empty">no open slots in the next ${esc(env.MAX_LOOKAHEAD_DAYS)} days. try again next week, or write to <a href="mailto:${esc(env.HOST_EMAIL)}">${esc(env.HOST_EMAIL)}</a>.</p>`
-    : Object.entries(groups).map(([day, list]) => `
+  if (Object.keys(groups).length === 0) {
+    return `<p class="empty">no open slots in the next ${esc(env.MAX_LOOKAHEAD_DAYS)} days. try again next week, or write to <a href="mailto:${esc(env.HOST_EMAIL)}">${esc(env.HOST_EMAIL)}</a>.</p>`;
+  }
+  return Object.entries(groups).map(([day, list]) => `
         <div class="xp-day-label">${esc(day)}</div>
-        <ul class="slots">
-          ${list.map(s => {
-            const t = new Date(s.start).toLocaleTimeString("en-US", {
-              timeZone: env.HOST_TIMEZONE, hour: "numeric", minute: "2-digit",
-            });
-            return `<li><button class="slot-btn" type="button" data-start="${s.start}" data-end="${s.end}" aria-pressed="false">${esc(t)}</button></li>`;
-          }).join("")}
-        </ul>
-      `).join("");
+        <ul class="slots">${list.map(s => {
+          const t = new Date(s.start).toLocaleTimeString("en-US", {
+            timeZone: env.HOST_TIMEZONE, hour: "numeric", minute: "2-digit",
+          });
+          // `required` on the group is what the browser checks on submit; the
+          // aria-label names the day too, since the visible label is only the time.
+          return `<li><label class="slot-btn"><input type="radio" name="start" value="${esc(s.start)}" form="bookform" required aria-label="${esc(day)}, ${esc(t)}"><span>${esc(t)}</span></label></li>`;
+        }).join("")}</ul>`).join("");
+}
+
+/** The island body at SLOTS_PATH: a fragment, never a document. */
+export function slotsFragment(slots, env) {
+  return renderSlotList({ slots }, env);
+}
+
+/** The booking page. With no slots it is the shell build.ts bakes, the slot
+ *  list an island; with slots (the no-script page) they render inline. */
+export function bookingPage(env, opts: { slots?: { start: number, end: number }[] } = {}) {
+  const base = env.BASE_PATH || "";
+  const slotsUrl = `${base}${SLOTS_PATH}`;
+  const pickUrl = `${base}${PICK_PATH}`;
+  const slots = Array.isArray(opts.slots) ? opts.slots : null;
+  const inline = slots !== null;
+
+  const slotMarkup = slots
+    ? `<div id="coffee-slots">${renderSlotList({ slots }, env)}</div>`
+    : `${islandMount("coffee-slots", slotsUrl, unsafeHtml(renderSlotList({ pending: true }, env)),
+        unsafeHtml(`<p class="xp-meta">scripts are off, so the open slots can't load into this page. <a href="${esc(pickUrl)}">see them on a plain page</a>, where the form works without scripts.</p>`)).html}
+      <p class="slot-failed">couldn't load the open slots just now. <a href="${esc(pickUrl)}">see them on a plain page</a>, or write to <a href="mailto:${esc(env.HOST_EMAIL)}">${esc(env.HOST_EMAIL)}</a>.</p>`;
 
   const body = `
     <h1>Let's grab coffee or a bagel</h1>
@@ -489,10 +554,13 @@ export function bookingPage(slots, env) {
       ${slotMarkup}
     </div>
 
-    <form class="book" id="bookform" method="POST" action="${esc(base)}/book" novalidate>
+    <!-- No novalidate: the slot radios carry required, so the browser refuses a
+         submit with no slot picked and points at the list, with or without
+         scripts. The server re-checks every field and the slot itself either way,
+         so the browser check only saves a round trip. -->
+    <form class="book" id="bookform" method="POST" action="${esc(base)}/book">
       <div class="xp-group">
         <span class="legend">Your info</span>
-        <input type="hidden" name="start" id="start" value="">
 
         <!-- Field tips, the XP ToolTip-control shape: what the box wants, said
              before you get it wrong. /nav.js re-draws these in Luna on hover and
@@ -534,15 +602,16 @@ export function bookingPage(slots, env) {
         <input type="text" name="website" class="honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
 
         <div class="actions">
-          <button type="submit" class="xp-button primary" id="submit" data-tz="${esc(env.HOST_TIMEZONE || "UTC")}" disabled>pick a slot first</button>
+          <button type="submit" class="xp-button primary" id="submit" data-tz="${esc(env.HOST_TIMEZONE || "UTC")}">send request</button>
         </div>
       </div>
     </form>
 
-    <script>${SLOT_PICKER_SCRIPT}</script>
+    <script>${RELABEL_SCRIPT}</script>
+    ${inline ? "" : islandScript().html}
   `;
 
-  return shell("Coffee or a bagel", body, env);
+  return shell("Coffee or a bagel", body, env, inline ? "" : islandPreload(slotsUrl).html);
 }
 
 export function successPage(env) {
@@ -659,11 +728,10 @@ export function locationSavedPage(booking, env, mailed) {
   return shell("Saved", body, env);
 }
 
-// The host's form for MOVING a confirmed booking. Radios rather than the public
-// page's slot-btn grid, and the difference is deliberate: that grid is driven by
-// /nav.js and a hidden input, and this page ships no script, so a picker that
-// needed one would render as a list of dead buttons in the one place the host is
-// least able to debug it.
+// The host's form for MOVING a confirmed booking. Native radios, which the public
+// page adopted on 2026-09-30 for the same reason this page had them first: it
+// ships no script, and a picker that needed one would render as a list of dead
+// buttons in the one place the host is least able to debug it.
 export function reschedulePage(booking, env, action, sig, slots) {
   const when = new Date(booking.start).toLocaleString("en-US", {
     timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
