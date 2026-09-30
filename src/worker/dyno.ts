@@ -273,7 +273,7 @@ export function renderDynoPage() {
     description: "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time.",
     explorerName: "Dyno",
     head: islandPreload(PULLS_URL),
-    css: `
+    css: `/*min*/
 h1{margin:0 0 3px}
 .lede{font-size:9pt;color:#4a5568;margin:0 0 13px;line-height:1.5}
 .chart{width:100%;height:auto;display:block;margin:2px 0 4px;overflow:visible}
@@ -282,7 +282,7 @@ h1{margin:0 0 3px}
 .chart .ytick,.chart .xtick,.chart .yunit{font-family:var(--font-mono);font-size:7.5px;fill:#7a8798}
 .chart .ytick{text-anchor:end}
 /* Element-qualified on purpose. A bare .s-worker setting both stroke and fill
-   outranks a plain \`polyline{fill:none}\` on specificity, which fills every line
+   outranks a plain "polyline{fill:none}" on specificity, which fills every line
    down to the axis and draws three coloured blobs instead of a chart. Splitting
    by element keeps one colour per series without an !important. */
 .chart polyline{stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}

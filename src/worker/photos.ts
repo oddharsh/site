@@ -633,7 +633,7 @@ function renderTile(p, altMap, i: number, extra: Html = EMPTY): Html {
 </div>`;
 }
 
-const SHEET_CSS = `
+const SHEET_CSS = `/*min*/
   h1 { font-size: 18pt; }
   .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
   .sheet {

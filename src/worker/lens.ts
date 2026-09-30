@@ -948,7 +948,7 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
     // targeted ?url= scan gets x-robots-tag: noindex (handleLens sets it), since
     // that response spends the crawl budget and carries third-party data.
     robots: "index, follow",
-    css: `
+    css: `/*min*/
 h1 { font-size:13pt; margin:0 0 2px; }
 .lx-lede { margin:0 0 10px; color:oklch(40% 0 0); font-size:10pt; }
 .lx-lede a { color:oklch(42.61% 0.2353 263.74); }

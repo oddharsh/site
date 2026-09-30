@@ -259,7 +259,7 @@ export function renderReadingPage() {
     description: "What I've been reading, saved to Curius and mirrored natively here, newest first.",
     head: islandPreload(LIST_URL),
     headers: { "referrer-policy": "strict-origin-when-cross-origin" },
-    css: `
+    css: `/*min*/
 .rd-lede { margin:0 0 12px; color:var(--ink-soft); font-size:10.5pt; }
 .rd-lede a { color:oklch(42.61% 0.2353 263.74); }
 .rd-bar { font-size:9pt; color:var(--ink-dim); border:1px solid var(--frame); background:oklch(98.81% 0.0263 99.90); padding:5px 9px; margin:0 0 6px; }

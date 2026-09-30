@@ -41,7 +41,7 @@ import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/l
 import { unsafeHtml } from "../../src/worker/lib/html.ts";
 import { islandMount, islandPreload, islandScript } from "../../src/worker/lib/island.ts";
 
-const STYLES = `
+const STYLES = `/*min*/
 * { box-sizing: border-box; }
 
 html {
@@ -393,7 +393,7 @@ form.book .actions {
 // `bun run cls --paths /coffee --hold none --runs 5` saw the form jump (0.0704,
 // dy -554 dx -306) on 3 of 5 desktop loads, and with the block in place it saw
 // none. Keep it until that reads clean without it.
-const SHELL_GEOMETRY = `
+const SHELL_GEOMETRY = `/*min*/
 html { height: 100dvh; overflow: hidden; }
 body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
   overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }

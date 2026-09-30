@@ -1932,15 +1932,27 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
 }
 
 // 5) worker-module CSS: minify static CSS template literals marked with a
-// leading /*min*/ sentinel. Dynamic page CSS stays unmarked; readable source
-// remains in public/ while only the staged worker bytes shrink on the wire.
+// leading /*min*/ sentinel. Only a literal with an interpolation stays unmarked
+// (the pass refuses one); readable source stays in the tree while only the
+// staged Worker bytes shrink, in the bundle AND on the wire.
+//
+// It walks all three trees the site Worker bundles. It walked src/worker alone
+// until 2026-09-30, and by then 16 static literals sat unmarked, 106 KB of CSS
+// that shipped as authored: /lens alone was 57.8 KB, re-sent on every ?url= scan
+// (no-store, so compressed by the edge at about q4: 14.9 KB there, 9.2 KB
+// minified), and cal's and Serendipity's page CSS was out of the walk's reach
+// entirely. inbox.ts carried a sentinel on the line ABOVE its literal, which
+// the pass cannot see; the sentinel has to open the literal.
 {
-  const dir = `${OUT}/src/worker`;
-  const jsFiles = (await readdir(dir, { recursive: true })).filter((f) => f.endsWith(".js") || f.endsWith(".ts"));
+  const roots = [`${OUT}/src/worker`, `${OUT}/cal/src`, `${OUT}/serendipity`];
+  const jsFiles = (await Promise.all(roots.map(async (dir) =>
+    (await readdir(dir, { recursive: true })).filter((f) => f.endsWith(".js") || f.endsWith(".ts")).map((rel) => `${dir}/${rel}`),
+  ))).flat();
   const marker = /`(\/\*min\*\/[^`]*)`/g;
   let litCount = 0, saved = 0, fileCount = 0;
-  for (const rel of jsFiles) {
-    const path = `${dir}/${rel}`;
+  const perRoot = new Map<string, number>();
+  for (const path of jsFiles) {
+    const rel = path.slice(OUT.length + 1);
     const src = await readFile(path, "utf8");
     const matches = [...src.matchAll(marker)];
     if (!matches.length) continue;
@@ -1948,14 +1960,16 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
     for (const m of matches) {
       const cssLiteral = m[1];
       if (cssLiteral.includes("${")) throw new Error(`${rel}: a /*min*/ CSS literal carries interpolation`);
-      const min = minifyCss(`src/worker/${rel}`, cssLiteral).replace(/\n+$/, "");
+      const min = minifyCss(rel, cssLiteral).replace(/\n+$/, "");
       out += src.slice(last, m.index) + "`" + min + "`";
       last = m.index + m[0].length;
       saved += m[0].length - (min.length + 2);
       litCount++;
+      const root = roots.find((r) => path.startsWith(r + "/"))!;
+      perRoot.set(root, (perRoot.get(root) ?? 0) + 1);
     }
     out += src.slice(last);
-    const parsed = minifySync(`src/worker/${rel}`, out, {
+    const parsed = minifySync(rel, out, {
       module: false,
       compress: false,
       mangle: false,
@@ -1971,10 +1985,17 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
   // scan matched nothing at all after the Worker moved from .js to .ts, and with
   // no floor it printed "0 literals" and shipped unminified CSS on every
   // Worker-rendered page for as long as nobody read the line. The extension list
-  // above is fixed; the next rename, or an edit to the sentinel, is not. The floor
-  // was 7 until wire.ts (the /terminal console) retired on 2026-09-16 and took its
-  // literal with it; 6 are left and the floor sits at that number on purpose.
-  if (litCount < 6) throw new Error(`worker CSS: found only ${litCount} /*min*/ literals (expected 6+) — did the sentinel change, or did the walk stop reaching the staged Worker modules?`);
+  // above is fixed; the next rename, or an edit to the sentinel, is not.
+  //
+  // It is PER ROOT since the walk became three roots, because a total cannot see
+  // one tree falling out: cal and Serendipity carry 2 and 1 of the 22, so losing
+  // either leaves a sum that still clears any floor set below it. Each root's
+  // number is what it carries today.
+  const FLOORS = { [`${OUT}/src/worker`]: 19, [`${OUT}/cal/src`]: 2, [`${OUT}/serendipity`]: 1 };
+  for (const [root, floor] of Object.entries(FLOORS)) {
+    const found = perRoot.get(root) ?? 0;
+    if (found < floor) throw new Error(`worker CSS: found only ${found} /*min*/ literals under ${root.slice(OUT.length + 1)} (expected ${floor}+) — did the sentinel change, or did the walk stop reaching that tree?`);
+  }
   console.log(`worker CSS: minified ${litCount} /*min*/ literals across ${fileCount} modules, ~${(saved / 1024).toFixed(1)}KB raw saved`);
 }
 

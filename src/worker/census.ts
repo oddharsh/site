@@ -472,7 +472,7 @@ export function censusExhibitHtml(grouped) {
     '<div class="cx-foot">Readiness is the same transparent rubric the <a href="/lens">Readiness lens</a> runs, minus bot-view sampling. Score trend is one mark per weekly snapshot. Machine-readable twin: <a href="/lens/census.json">/lens/census.json</a>.</div>';
 }
 
-export const CENSUS_CSS = `
+export const CENSUS_CSS = `/*min*/
 .cx-meta { font-size:8.6pt; color:oklch(50% 0 0); font-style:italic; margin:0 0 8px; }
 .cx-scroll { overflow-x:auto; }
 .cx-table { width:100%; border-collapse:collapse; font-size:9pt; min-width:640px; }
@@ -559,7 +559,7 @@ function censusPage(exhibit, extra = {}) {
     width: 900,
     description: "A weekly, longitudinal record of how agent-ready 16 representative websites are — spectrum tier, readiness score, and agent doors, tracked over time.",
     robots: "index, follow",
-    css: CENSUS_CSS + `
+    css: CENSUS_CSS + `/*min*/
 .cx-fail { display:none; font-size:8.6pt; color:oklch(50% 0 0); margin:8px 0 0; }
 #cx-island[data-state="failed"] + .cx-fail { display:block; }
 .cx-banner { margin:0 0 12px; padding:7px 10px; border-radius:3px; font-size:9pt; }

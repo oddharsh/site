@@ -233,7 +233,7 @@ async function countContributors(d) {
 
 // ── page shell: shared Luna chrome plus serendipity-specific layout ─────────
 function shellCss() {
-  return `
+  return `/*min*/
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;min-height:100%}
   /* NO -webkit-font-smoothing: the rest of the site renders at the browser
