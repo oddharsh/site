@@ -1679,7 +1679,9 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     setZoom("fill");
     setMode("blast");
   });
-  window.addEventListener("scroll", hideTip, { passive: true });
+  // scroll does not bubble and the scroller is .window>.content, so a listener on
+  // window never heard it; capture on document hears every scroller's (as hoist.js does)
+  document.addEventListener("scroll", hideTip, { capture: true, passive: true });
 
   buildTree();
   draw();
