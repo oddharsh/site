@@ -99,56 +99,88 @@ export function createTray(options) {
       load: loadWebmcp, render: renderWebmcp }
   };
 
+  // The balloon is a popover="auto", so the platform owns what this file used
+  // to hand-roll with two always-attached document listeners: light dismiss on
+  // an outside press, Esc, and the top layer (no z-index to out-bid). Opening
+  // it closes any other auto popover, which is XP's behaviour too (a Notepad
+  // menu collapses when the tray is clicked), and leaves the manual popovers
+  // alone (the /writing notes, the hover cards).
+  //
+  // The icons are <a href> so a modified click still opens the full page, and
+  // popovertarget only works on buttons, so the popover is driven from script.
+  // showPopover({ source }) makes the icon part of the balloon's light-dismiss
+  // tree where the engine supports it. Where it does not, pressing the open
+  // icon light-dismisses the balloon before its click lands, and the click
+  // would open it again; pressedOpen remembers the press so that click closes.
+  var pressedOpen = /** @type {string | null} */ (null);
+  function isOpen() { return !!balloon && balloon.matches(":popover-open"); }
+  /** @returns {HTMLElement} */
   function build() {
-    if (balloon) return;
-    balloon = el(
-      '<div id="axp-balloon" role="dialog" aria-label="notification">' +
+    if (balloon) return balloon;
+    var b = el(
+      '<div id="axp-balloon" popover="auto" role="dialog" aria-label="notification">' +
         '<div class="tb"><span class="ic" aria-hidden="true"></span><span class="t"></span><button class="x" type="button" title="Close" aria-label="Close">✕</button></div>' +
         '<div class="bd"></div><div class="ft"></div>' +
       '</div>'
     );
-    D.body.appendChild(balloon);
-    balloon.querySelector(".x").addEventListener("click", close);
+    balloon = b;
+    D.body.appendChild(b);
+    b.querySelector(".x").addEventListener("click", close);
+    // Every close path (the ✕, Esc, an outside press, another auto popover
+    // opening) lands here, so the bookkeeping lives in one place.
+    b.addEventListener("beforetoggle", (e) => {
+      if (/** @type {ToggleEvent} */ (e).newState !== "closed") return;
+      sound.play("close");
+      var ic = balloonKind && D.querySelector('.axp-trayico[data-kind="' + balloonKind + '"]');
+      if (ic instanceof HTMLElement) {
+        ic.setAttribute("aria-expanded", "false");
+        // Hand focus back only when it was inside the balloon. An outside press
+        // is taking focus somewhere on purpose.
+        if (b.contains(D.activeElement)) try { ic.focus(); } catch (_) {}
+      }
+      balloonKind = null;
+    });
+    [].forEach.call(D.querySelectorAll(".axp-trayico"), (ic) => {
+      ic.addEventListener("pointerdown", () => {
+        pressedOpen = isOpen() ? balloonKind : null;
+      });
+    });
+    return b;
   }
-  function placeTail(ic) {
+  /** @param {HTMLElement} b @param {HTMLElement} ic */
+  function placeTail(b, ic) {
     try {
-      var ir = ic.getBoundingClientRect(), br = balloon.getBoundingClientRect();
+      var ir = ic.getBoundingClientRect(), br = b.getBoundingClientRect();
       var x = Math.max(14, Math.min(br.width - 14, (ir.left + ir.width / 2) - br.left));
-      balloon.style.setProperty("--tail", x + "px");
+      b.style.setProperty("--tail", x + "px");
     } catch (_) {}
   }
   function open(kind, ic) {
     var cfg = BALLOON[kind]; if (!cfg) return;
-    build();
-    balloonKind = kind;
-    balloon.querySelector(".ic").innerHTML = cfg.icon;
-    balloon.querySelector(".t").textContent = cfg.title;
-    balloon.querySelector(".ft").innerHTML = '<a href="' + cfg.href + '">full page</a>';
+    var b = build();
+    if (isOpen()) b.hidePopover();
+    b.querySelector(".ic").innerHTML = cfg.icon;
+    b.querySelector(".t").textContent = cfg.title;
+    b.querySelector(".ft").innerHTML = '<a href="' + cfg.href + '">full page</a>';
     body().innerHTML = '<div class="load">reading…</div>';
-    balloon.classList.add("open"); sound.play("open");
-    if (ic) { ic.setAttribute("aria-expanded", "true"); placeTail(ic); }
-    var x = balloon.querySelector(".x"); if (x) try { x.focus(); } catch (_) {}
-    cfg.load((data) => { if (balloon.classList.contains("open") && balloonKind === kind) cfg.render(data); });
+    // No try: an engine without the Popover API throws here, which rejects
+    // nav.js's toggleTray promise and falls back to navigating to the page.
+    b.showPopover(ic ? { source: ic } : undefined);
+    balloonKind = kind;
+    sound.play("open");
+    if (ic) { ic.setAttribute("aria-expanded", "true"); placeTail(b, ic); }
+    var x = b.querySelector(".x"); if (x instanceof HTMLElement) try { x.focus(); } catch (_) {}
+    cfg.load((data) => { if (isOpen() && balloonKind === kind) cfg.render(data); });
   }
   function close() {
-    if (!balloon || !balloon.classList.contains("open")) return;
-    balloon.classList.remove("open"); sound.play("close");
-    var ic = balloonKind && D.querySelector('.axp-trayico[data-kind="' + balloonKind + '"]');
-    if (ic instanceof HTMLElement) { ic.setAttribute("aria-expanded", "false"); try { ic.focus(); } catch (_) {} }
-    balloonKind = null;
+    if (balloon && isOpen()) balloon.hidePopover();
   }
   function toggle(kind, ic) {
-    build();
-    if (balloon.classList.contains("open") && balloonKind === kind) close();
+    var pressed = pressedOpen;
+    pressedOpen = null;
+    if (pressed === kind || (isOpen() && balloonKind === kind)) close();
     else open(kind, ic);
   }
-
-  D.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
-  D.addEventListener("pointerdown", (e) => {
-    if (!balloon || !balloon.classList.contains("open")) return;
-    if (e.target instanceof Element && (e.target.closest("#axp-balloon") || e.target.closest(".axp-trayico"))) return;
-    close();
-  }, true);
 
   return { toggle: toggle, close: close };
 }

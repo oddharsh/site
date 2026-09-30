@@ -62,24 +62,50 @@
 
   // Menu owns interaction; the caller owns actions and checkbox state. Keeping
   // it in this classic script costs no extra request or cross-script global.
+  //
+  // Each dropdown is a popover="auto", so light dismiss (a press anywhere
+  // outside), Esc and the top layer are the platform's. That replaced a document
+  // click listener, and the top layer is what lets a menu inside a /writing note
+  // (itself a manual popover) draw over the note. Opening a menu closes other
+  // auto popovers (a tray balloon) and never a manual one (the notes). The
+  // keyboard model below stays ours: the ARIA menubar pattern, arrow keys,
+  // typeahead and focus return are not something popover provides.
+  //
+  // The drop stays in the menubar's DOM (after its button), so focusout and the
+  // keydown handler see its rows as inside the composite. The top layer ignores
+  // the menubar's own positioning, so the drop is placed from the button's
+  // rect. An engine without popover keeps writing.ts's absolute .np-drop and
+  // closes on focusout, Esc or a second press.
   /** @type {(() => void) | null} */
   var closeActiveMenu = null;
+  var HAS_POPOVER = "showPopover" in HTMLElement.prototype;
   /** @param {HTMLElement} menubar @param {MenuDefinition[]} definitions */
   function Menu(menubar, definitions) {
     /** @type {OpenMenu | null} */
     var opened = null;
     /** @type {HTMLElement[]} */
     var buttons = [];
+    // Which button's menu was open when the pointer went down. Pressing the open
+    // menu's own button light-dismisses the drop before the click arrives (where
+    // showPopover's `source` is unsupported), and without this the click would
+    // open it again instead of closing it.
+    /** @type {HTMLElement | null} */
+    var pressedOpen = null;
     menubar.replaceChildren();
 
+    /** @param {OpenMenu} menu */
+    function settle(menu) {
+      if (opened !== menu) return;
+      opened = null;
+      closeActiveMenu = null;
+      menu.btn.setAttribute("aria-expanded", "false");
+    }
     /** @param {boolean} [restore] */
     function close(restore) {
       var previous = opened;
       if (!previous) return;
-      opened = null;
-      closeActiveMenu = null;
-      D.removeEventListener("click", outside);
-      previous.btn.setAttribute("aria-expanded", "false");
+      settle(previous);
+      if (HAS_POPOVER && previous.drop.matches(":popover-open")) previous.drop.hidePopover();
       previous.drop.remove();
       if (restore) previous.btn.focus();
     }
@@ -113,10 +139,22 @@
       focusButton(index);
       btn.setAttribute("aria-expanded", "true");
       btn.after(drop);
-      drop.style.left = btn.offsetLeft + "px";
-      opened = { btn: btn, drop: drop, rows: rows };
+      /** @type {OpenMenu} */
+      var menu = { btn: btn, drop: drop, rows: rows };
+      opened = menu;
       closeActiveMenu = outside;
-      D.addEventListener("click", outside);
+      if (HAS_POPOVER) {
+        var r = btn.getBoundingClientRect();
+        drop.popover = "auto";
+        drop.style.cssText = "position:fixed;inset:auto;margin:0;left:" + r.left + "px;top:" + menubar.getBoundingClientRect().bottom + "px";
+        // Light dismiss and a native Esc both close from outside this code, so
+        // the bookkeeping follows the popover rather than the other way round.
+        drop.addEventListener("beforetoggle", (e) => { if (/** @type {ToggleEvent} */ (e).newState === "closed") settle(menu); });
+        drop.addEventListener("toggle", (e) => { if (/** @type {ToggleEvent} */ (e).newState === "closed") drop.remove(); });
+        drop.showPopover(/** @type {ShowPopoverOptions} */ ({ source: btn }));
+      } else {
+        drop.style.left = btn.offsetLeft + "px";
+      }
       if (rows.length) rows[last ? rows.length - 1 : 0].focus();
     }
     definitions.forEach((definition, index) => {
@@ -124,13 +162,16 @@
       btn.tabIndex = index === 0 ? 0 : -1;
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (opened && opened.btn === btn) close(true);
+        var pressed = pressedOpen;
+        pressedOpen = null;
+        if (pressed === btn || (opened && opened.btn === btn)) close(true);
         else open(index);
       });
       btn.addEventListener("mouseenter", () => { if (opened && opened.btn !== btn) open(index); });
       buttons.push(btn);
       menubar.appendChild(btn);
     });
+    menubar.addEventListener("pointerdown", () => { pressedOpen = opened ? opened.btn : null; });
     menubar.addEventListener("focusout", (e) => {
       if (!menubar.contains(/** @type {Node | null} */ (e.relatedTarget))) close();
     });
@@ -294,7 +335,7 @@
     if (menubar) {
       var closeMenu = Menu(menubar, MENUS);
       // A manually closed note must not retain a detached menu or document listener.
-      win.addEventListener("beforetoggle", (e) => { if (e.newState === "closed") closeMenu(); });
+      win.addEventListener("beforetoggle", (e) => { if (e.target === win && e.newState === "closed") closeMenu(); });
     }
     status();
   }
@@ -323,7 +364,7 @@
     // menu, so leave the note alone (a second Escape then closes the note).
     D.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
-      if (D.querySelector(".np-drop, dialog:modal")) return;
+      if (D.querySelector(".np-drop:popover-open, dialog:modal")) return;
       var open = /** @type {NodeListOf<HTMLElement>} */ (D.querySelectorAll(".np-note:popover-open"));
       if (open.length) {
         e.preventDefault();
