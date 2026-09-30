@@ -106,6 +106,19 @@ export function writingShell(o) {
     DESKTOP_CHROME + "<script src=\"/notepad.js\" defer></script><script src=\"/nav.js\" defer></script></body></html>";
 }
 
+// The site owner as a microformats2 h-card, for p-author on a note and on the
+// folder's h-feed. It names the same identity the homepage's representative
+// h-card and its schema.org Person do (u-url and u-uid https://aadhar.sh/), so
+// the authorship algorithm lands on one person whichever it reads first. Built
+// from empty <data> elements: mf2 reads a <data>'s value attribute, and an empty
+// inline element draws nothing, so the Luna chrome is untouched.
+export const OWNER_NAME = "Aadharsh Pannirselvam";
+export const OWNER_URL = "https://aadhar.sh/";
+const AUTHOR_CARD = "<span class=\"p-author h-card\"><data class=\"p-name\" value=\"" + OWNER_NAME + "\"></data>" +
+  "<data class=\"u-url\" value=\"" + OWNER_URL + "\"></data></span>";
+
+const permalink = (slug) => "https://aadhar.sh/writing/" + slug;
+
 // The page window's maximize control: a native button nav.js wires, so it is
 // reachable and announced (the title bar itself is not aria-hidden).
 const MAX_BUTTON = "<button type=\"button\" class=\"max\" title=\"maximize\" aria-label=\"maximize\"></button>";
@@ -136,7 +149,7 @@ export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: 
     : escHtml(date);
   return open +
     "<div class=\"np-titlebar\">" + (popId ? "" : DESKTOP_HISTNAV) + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-title\">" + escHtml(filename) + " — Notepad</span>" +
+      "<span class=\"np-title\">" + title + " — Notepad</span>" +
       // A popover note is never the body-level window nav.js wires, so its max
       // stays an inert decoration; the standalone window's is a real button.
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + (popId ? "<span class=\"max\" aria-hidden=\"true\"></span>" : MAX_BUTTON) +
@@ -228,7 +241,8 @@ export async function renderWritingIndex(env) {
   // u-url and author ride along as empty <data>, the same as on a note.
   const body = "<div class=\"np-window np-folder h-feed\">" +
     "<div class=\"np-titlebar\">" + DESKTOP_HISTNAV + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-title\">aadhar.sh/writing</span>" +
+      "<span class=\"np-title\"><span class=\"p-name\">aadhar.sh/writing</span>" +
+        "<data class=\"u-url\" value=\"https://aadhar.sh/writing\"></data>" + AUTHOR_CARD + "</span>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + MAX_BUTTON +
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
     // The folder view is the one place on this site that was already a complete
