@@ -89,7 +89,7 @@
       "/.well-known/*",
       "/agent/*", "/oauth2/*",
       "/whoareyou*", "/security*",
-      "/reading", "/updates", "/updates.json",
+      "/reading*", "/updates", "/updates.json",
     "/perf",
     "/perf.json", "/restore",
       // Folded to a wildcard alongside cloudflare.config.ts — see the long note there.

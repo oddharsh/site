@@ -4435,7 +4435,8 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     the `/lens?url=` framed view (ditto). `/security` (2026-09-16), `/whoareyou`,
     `/garage/dyno`, `/ledger`, `/around`, `/inbox`, `/lens/census` and the `/serendipity` dashboard (all 2026-09-25) are built documents with their live values fetched after load, and build step 5b now fails on a registered page that is neither built nor named with a reason in `config/per-request-pages.json`;
     `src/worker/lib/island.ts` is that convention for rows, and its header says
-    when JSON slots fit better. `/coffee` joined them on 2026-09-30: build step 5b
+    when JSON slots fit better. `/reading` joined them on 2026-09-29, its list
+    arriving from `/reading/list.html`. `/coffee` followed on 2026-09-30: build step 5b
     bakes cal's own shell, the open slots arrive from `/coffee/slots.html`, and cal
     imports `lib/island.ts` directly, the same way it already imported
     `lib/desktop.ts` (gotcha 16 has why that direction is fine).

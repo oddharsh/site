@@ -37,7 +37,7 @@ import { installTracing, span } from "./lib/trace.ts";
 import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
 import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
-import { handleReading } from "./reading.ts";
+import { handleReading, handleReadingList, LIST_URL as READING_LIST_URL } from "./reading.ts";
 import { cronEnrichReadingHn } from "./reading-hn.ts";
 import { handleRun } from "./run.ts";
 import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.ts";
@@ -429,6 +429,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/security", routeSecurity],
   ["/security.json", handleSecurityJson],
   ["/reading", handleReading],
+  [READING_LIST_URL, handleReadingList],
   ["/updates", routeUpdates],
   ["/updates.json", handleUpdatesJson],
   ["/restore", routeRestore],
