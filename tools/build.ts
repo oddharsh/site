@@ -2175,8 +2175,12 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
 // orders names by their uses inside the shell alone, so a page-scoped file in
 // that set would let an edit to ask.js (which reads three --font-* tokens)
 // reorder luna.css's short names and re-mint every page (gotcha 35).
+//
+// quiz.css joins them for the same reason: it is loaded beside quiz.js on the
+// garage and lwe pages, reads --font-ui and --font-caption, and defines no
+// custom property of its own.
 const PAGE_SCOPED_HASHED = new Set([
-  "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json",
+  "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json", "quiz.css",
 ].map((f) => `public/${f}`));
 
 // Every staged file step 6 content-hashes into /a/. Step 5c reads the shell
