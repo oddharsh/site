@@ -1,4 +1,4 @@
-/* nav-run.css — first-interaction styles for the native Run dialog, and for the Tip of the Day window that borrows its frame. */
+/* nav-run.css — first-interaction styles for the native Run dialog. */
 :is(#axp-run,#axp-tips) .tb{cursor:move}:is(#axp-run,#axp-tips).axp-dragging .tb{cursor:grabbing}
 #axp-run .tb .axp-kbd{margin-left:6px}
 #axp-run .list{scrollbar-color:oklch(62% 0.14 255) oklch(90% 0.02 250)}
@@ -38,17 +38,3 @@
 @media (max-width:560px){#axp-run .body{padding-top:11px}}
 @media (--motion-ok) {#axp-run[open]{animation:axp-pop .09s ease-out}}
 @keyframes axp-pop{from{transform:translate(-50%,-50%) scale(.97);opacity:.4}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
-/* Tip of the Day (nav-tips.js) wears the Run frame above. It is a popover, so it
-   resets the UA's inset:0 (which would stretch it to the viewport's height) and
-   sits a little lower than Run, where Office put it. */
-#axp-tips{inset:auto;left:50%;top:42%;height:auto;overflow:visible;width:min(420px,calc(100vw - 24px))}
-#axp-tips .well{display:flex;margin:12px 13px 0;background:oklch(100% 0 0);border:1px solid;border-color:oklch(55% 0 0) oklch(86% 0 0) oklch(86% 0 0) oklch(55% 0 0);min-height:118px}
-#axp-tips .bulb{flex:0 0 56px;display:flex;justify-content:center;padding-top:14px;background:oklch(94% 0.012 250);border-right:1px solid oklch(86% 0.01 250)}
-#axp-tips .txt{flex:1;padding:12px 14px 14px;line-height:1.5}
-#axp-tips .txt b{display:block;margin-bottom:6px;font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-size:13px;color:oklch(30% 0.10 263)}
-#axp-tips .txt p{margin:0;color:oklch(24% 0 0)}
-#axp-tips .txt code,#axp-tips .txt kbd{font-family:var(--font-mono,'Courier New',monospace);font-size:11px}
-#axp-tips .txt kbd{padding:0 3px;border:1px solid oklch(72% 0 0);border-bottom-width:2px;border-radius:2px;background:oklch(97% 0 0)}
-#axp-tips .btns{display:flex;align-items:center;gap:7px;padding:11px 13px 13px}
-#axp-tips .chk{display:flex;align-items:center;gap:5px;margin-right:auto}
-@media (--motion-ok) {#axp-tips:popover-open{animation:axp-pop .09s ease-out}}

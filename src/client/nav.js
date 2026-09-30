@@ -483,14 +483,14 @@
   // Opens by itself on a visitor's first page view of each local day. The key
   // holds the day it last opened, or "off" once "Show tips at startup" is
   // unticked, so a visitor who has seen today's tip pays for this one read and
-  // never fetches /nav-tips.js. It borrows the Run dialog's frame, hence the
-  // shared stylesheet. Automation reports navigator.webdriver, so the OG card
+  // never fetches /nav-tips.js. It is a tray balloon, so it shares the tray's
+  // stylesheet. Automation reports navigator.webdriver, so the OG card
   // captures and the perf probes never photograph a tip over the page.
   var TIPS_KEY = "axp-tips";
   var tipsPromise = /** @type {Promise<any> | null} */ (null);
   function openTips(auto) {
     if (!tipsPromise) {
-      tipsPromise = Promise.all([loadStyle("nav-run"), import("/nav-tips.js")])
+      tipsPromise = Promise.all([loadStyle("nav-tray"), import("/nav-tips.js")])
         .then((loaded) => { return loaded[1].createTips({ key: TIPS_KEY, kbd: KBD, sound: AXP_SND }); })
         .catch((e) => { tipsPromise = null; throw e; });
     }
