@@ -94,10 +94,10 @@ test("a slot is a native radio that names the form, so booking needs no script",
   assert.match(shell, /<button type="submit" class="xp-button primary" id="submit" data-tz="America\/New_York">send request<\/button>/,
     "the submit is enabled from the start, since only a script could enable a disabled one");
   // The relabel script is a constant: nothing caller-supplied reaches script text.
-  const scripts = [...shell.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  const scripts = [...shell.matchAll(/<script>([\s\S]*?)<\/script>/gi)].map((m) => m[1]);
   const relabel = scripts.find((s) => s.includes('addEventListener("change"'));
   assert.ok(relabel, "the relabel script is still shipped");
-  assert.equal(relabel, [...bookingPage({ ...env, HOST_TIMEZONE: "</script>" }).matchAll(/<script>([\s\S]*?)<\/script>/g)]
+  assert.equal(relabel, [...bookingPage({ ...env, HOST_TIMEZONE: "</script>" }).matchAll(/<script>([\s\S]*?)<\/script>/gi)]
     .map((m) => m[1]).find((s) => s.includes('addEventListener("change"')), "the script text moved with the env");
   assert.equal(PICK_PATH, "/pick");
 });
