@@ -415,6 +415,12 @@ async function checkInvariants() {
   // otherwise share with every other text scraper here — invariant #1 floors the
   // same extraction at 60 entries and hard-fails, so a regex that has stopped
   // matching reddens the build before it can quietly agree with itself.
+  //
+  // The HARD half of this block lives in the contract suite since 2026-09-29:
+  // contract-the-dev-twin-matches-production fails `validate` on the same four
+  // comparisons, so drift reddens the PR that makes it rather than the release
+  // that ships it. #876 left "/dotfiles" out of the twin and this warning printed
+  // on every build for a day with nothing red anywhere.
   try {
     const dev = await read("wrangler.dev.jsonc");
     const names = (s) => new Set([...s.matchAll(/"(?:binding|name|database_name|bucket_name|dataset)"\s*:\s*"([^"]+)"/g)].map((m) => m[1]));
