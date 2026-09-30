@@ -4,20 +4,25 @@
 // this module on idle, and Run's "Tip of the Day" row imports it on demand. A
 // visitor who has already seen today's tip pays for one localStorage read in
 // nav.js and never fetches this file. This module owns WHAT: the tips, the
-// dialog, and the "Show tips at startup" checkbox.
+// balloon, and the "Show tips at startup" checkbox.
 //
-// The dialog is the one Office and Windows 95 shipped (a lightbulb, "Did you
-// know...", Next Tip and Close) in the Run dialog's Luna frame, whose rules it
-// shares in nav-run.css. It is a popover="auto" rather than a modal <dialog>:
-// a tip is something to glance at, so a click anywhere else or Esc dismisses it,
-// and it never traps focus or makes the page inert on arrival.
+// The tip is an XP notification balloon rising out of the tray, the way XP
+// announced "Tour Windows XP" and "Your computer might be at risk". It wears the
+// tray balloon's look (nav-tray.css styles #axp-tips beside #axp-balloon) and
+// its tail points at the clock, since the tip belongs to the day. It is a
+// popover="auto": a click anywhere else or Esc dismisses it, it never takes
+// focus on arrival, and opening a tray balloon replaces it, since XP showed one
+// balloon at a time. An automatic one also times out like XP's did, unless the
+// pointer or focus is resting in it.
 //
 // Storage, one key shared with nav.js (TIPS_KEY there):
 //   "off"            the visitor unticked "Show tips at startup"
 //   Date#toDateString  the local day a tip was last shown; nav.js skips that day
 //
-// The tip is picked by the LOCAL calendar day, so every visitor sees the same
-// tip on the same date and it turns over at their own midnight.
+// There is ONE tip a day and no way to page through the rest. The day's tip is
+// dealt from a shuffled deck keyed on the LOCAL date (dayIndex below), so it
+// holds all day (Run's row reopens the same one), turns over at the visitor's
+// own midnight, and every tip comes round before any repeats.
 
 // Tips are trusted static markup. {kbd} becomes the platform's Run shortcut.
 var TIPS = [
@@ -45,8 +50,9 @@ var TIPS = [
   "Want to talk in person? <a href=\"/coffee\">/coffee</a> books a coffee or a bagel with me."
 ];
 
-// A 32px bulb in the Luna icon idiom: a lit glass with a highlight, and a
-// banded brass screw base. Inline because it is the only artwork this needs.
+// The bulb in the Luna icon idiom: a lit glass with a highlight, and a banded
+// brass screw base. Drawn on a 32 grid and shown at the balloon's 16px icon
+// size. Inline because it is the only artwork this needs.
 var BULB = '<svg viewBox="0 0 32 32" width="32" height="32"><defs>' +
   '<radialGradient id="axpTipG" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#fffbe0"/><stop offset=".55" stop-color="#ffe45c"/><stop offset="1" stop-color="#e9a800"/></radialGradient>' +
   '<linearGradient id="axpTipB" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8a8a8a"/><stop offset=".45" stop-color="#e2e2e2"/><stop offset="1" stop-color="#7a7a7a"/></linearGradient></defs>' +
@@ -59,11 +65,33 @@ var BULB = '<svg viewBox="0 0 32 32" width="32" height="32"><defs>' +
 /** The local day, as the string nav.js compares against. */
 function today() { return new Date().toDateString(); }
 
-/** Index of today's tip, by local calendar day. */
-function dayIndex() {
-  var d = new Date();
-  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5) % TIPS.length;
+/** One deck: every tip once, in an order shuffled from the deck's number. */
+function deck(n) {
+  var s = Math.imul(n + 1, 2654435761) >>> 0, order = TIPS.map((_, i) => i);
+  for (var i = order.length - 1; i > 0; i--) {
+    s = (Math.imul(s ^ (s >>> 15), 1 | s) + 0x6d2b79f5) >>> 0;   // a small xorshift-multiply step
+    var j = s % (i + 1), t = order[i]; order[i] = order[j]; order[j] = t;
+  }
+  return order;
 }
+
+/**
+ * Today's tip. Days are dealt from shuffled decks of TIPS.length, so the draw
+ * is random but every tip comes round before any repeats. Where one deck ends
+ * on the tip the next begins with, the next one's first two swap, so no tip is
+ * ever shown two days running. Keyed on the LOCAL date, as a day count.
+ */
+function dayIndex() {
+  var d = new Date(), n = TIPS.length;
+  var day = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
+  var k = Math.floor(day / n), cards = deck(k);
+  if (cards[0] === deck(k - 1)[n - 1]) { var t = cards[0]; cards[0] = cards[1]; cards[1] = t; }
+  return cards[day % n];
+}
+
+// XP held a balloon for about ten seconds of user activity. Twenty is generous
+// for a paragraph, and the clock pauses while the balloon is being read.
+var AUTO_CLOSE_MS = 20000;
 
 export function createTips(options) {
   var D = document;
@@ -71,63 +99,75 @@ export function createTips(options) {
   var kbd = options.kbd;
   var sound = options.sound;
   var box = /** @type {HTMLElement | null} */ (null), text = /** @type {HTMLElement | null} */ (null), check = /** @type {HTMLInputElement | null} */ (null);
-  var idx = dayIndex();
+  var timer = 0, held = false;
 
   function read() { try { return localStorage.getItem(key); } catch (_) { return "off"; } }
   function write(v) { try { localStorage.setItem(key, v); } catch (_) {} }
+
+  function disarm() { if (timer) { clearTimeout(timer); timer = 0; } }
+  function arm() {
+    disarm();
+    timer = setTimeout(() => { timer = 0; if (box && !held && box.matches(":popover-open")) box.hidePopover(); }, AUTO_CLOSE_MS);
+  }
 
   function build() {
     var t = D.createElement("template");
     t.innerHTML =
       '<div id="axp-tips" popover="auto" role="dialog" aria-labelledby="axp-tips-t">' +
-        '<div class="tb"><span id="axp-tips-t">Tip of the Day</span><button class="x" type="button" title="Close" aria-label="Close">✕</button></div>' +
-        '<div class="well"><div class="bulb" aria-hidden="true">' + BULB + '</div>' +
-          '<div class="txt"><b>Did you know...</b><p aria-live="polite"></p></div></div>' +
-        '<div class="btns"><label class="chk"><input type="checkbox"> Show tips at startup</label>' +
-          '<button class="xp-button" type="button" data-act="next">Next Tip</button>' +
-          '<button class="xp-button default" type="button" data-act="close">Close</button></div>' +
+        '<div class="tb"><span class="ic" aria-hidden="true">' + BULB + '</span><span class="t" id="axp-tips-t">Tip of the Day</span><button class="x" type="button" title="Close" aria-label="Close">✕</button></div>' +
+        '<div class="bd"><p class="ln" aria-live="polite"></p></div>' +
+        '<div class="ft"><label class="chk"><input type="checkbox"> Show tips at startup</label></div>' +
       '</div>';
     const node = t.content.firstElementChild;
     if (!(node instanceof HTMLElement)) throw new Error("Tip of the Day template must produce an element");
-    const p = node.querySelector(".txt p"), cb = node.querySelector(".chk input");
-    if (!(p instanceof HTMLElement) || !(cb instanceof HTMLInputElement)) throw new Error("Tip of the Day template lost its parts");
+    const p = node.querySelector(".bd p"), cb = node.querySelector(".chk input"), x = node.querySelector(".x");
+    if (!(p instanceof HTMLElement) || !(cb instanceof HTMLInputElement) || !x) throw new Error("Tip of the Day template lost its parts");
     box = node; text = p; check = cb;
     D.body.appendChild(node);
 
-    // One listener for the three buttons. The title bar's ✕ carries no data-act
-    // so it matches Run's markup, and it closes like Close does.
-    node.addEventListener("click", (e) => {
-      var b = e.target instanceof Element && e.target.closest("button");
-      if (!b) return;
-      if (b.dataset.act === "next") { idx = (idx + 1) % TIPS.length; render(); }
-      else if (b.dataset.act === "close" || b.classList.contains("x")) node.hidePopover();
-    });
+    x.addEventListener("click", () => { node.hidePopover(); });
     // Ticked keeps today's stamp, so the next tip arrives tomorrow; unticked
     // stops the automatic one for good. Run can still open it either way.
     cb.addEventListener("change", () => { write(cb.checked ? today() : "off"); });
-    node.addEventListener("toggle", (e) => { if (/** @type {ToggleEvent} */ (e).newState === "closed") sound.play("close"); });
+    // A balloon being read does not time out: the pointer over it or focus in
+    // it holds it open, and leaving restarts the clock.
+    var hold = (on) => () => { held = on; if (on) disarm(); else if (node.matches(":popover-open")) arm(); };
+    node.addEventListener("pointerenter", hold(true));
+    node.addEventListener("pointerleave", hold(false));
+    node.addEventListener("focusin", hold(true));
+    node.addEventListener("focusout", (e) => { if (!node.contains(/** @type {Node | null} */ (e.relatedTarget))) hold(false)(); });
+    node.addEventListener("toggle", (e) => {
+      if (/** @type {ToggleEvent} */ (e).newState !== "closed") return;
+      disarm(); held = false;
+      sound.play("close");
+    });
   }
 
-  function render() {
-    if (text) text.innerHTML = TIPS[idx].replace("{kbd}", kbd);
+  /** Point the tail at the clock, which is where this balloon comes from. */
+  function placeTail() {
+    var clock = D.getElementById("axp-clock");
+    if (!box || !clock) return;
+    var cr = clock.getBoundingClientRect(), br = box.getBoundingClientRect();
+    box.style.setProperty("--tail", Math.max(14, Math.min(br.width - 14, cr.left + cr.width / 2 - br.left)) + "px");
   }
 
   /** @param {boolean} [auto] opened by nav.js on the day's first visit */
   function open(auto) {
     if (!box) build();
     if (!box || box.matches(":popover-open")) return;
-    idx = dayIndex();
-    render();
+    if (text) text.innerHTML = TIPS[dayIndex()].replace("{kbd}", kbd);
     var state = read();
     if (state !== "off") write(today());
     if (check) check.checked = state !== "off";
     box.showPopover();
-    // An automatic tip leaves focus where the visitor put it; one they asked
-    // for from Run takes it, on the button XP made the default.
-    if (!auto) {
+    placeTail();
+    // An automatic tip leaves focus where the visitor put it and times out; one
+    // they asked for from Run takes focus and stays until they close it.
+    if (auto) arm();
+    else {
       sound.play("open");
-      var c = box.querySelector('[data-act=close]');
-      if (c instanceof HTMLElement) c.focus();
+      var x = box.querySelector(".x");
+      if (x instanceof HTMLElement) x.focus();
     }
   }
 

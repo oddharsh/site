@@ -2273,7 +2273,7 @@ let freshFamily: Buffer | null = null;
     // the shell is hashed, like the two islands above.
     { file: "/nav-pipes.js",    base: "nav-pipes",    mk: (to) => [
       [/import\((["'`])\/nav-pipes\.js\1\)/g, `import($1${to}$1)`] ] },
-    // Tip of the Day. A leaf like the saver; its stylesheet is nav-run.css, which
+    // Tip of the Day. A leaf like the saver; its stylesheet is nav-tray.css, which
     // nav.js already repoints.
     { file: "/nav-tips.js",     base: "nav-tips",     mk: (to) => [
       [/import\((["'`])\/nav-tips\.js\1\)/g, `import($1${to}$1)`] ] },
