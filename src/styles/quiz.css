@@ -24,10 +24,6 @@
 #luq .luq-why.hit{color:#215c2b;background:#eaf6ec;border-color:#9ccba5}#luq .luq-why.miss{color:#7a2c2c;background:#fbeeee;border-color:#dcaaaa}
 #luq .luq-why b{display:block;margin-bottom:2px}
 #luq .luq-row{display:flex;align-items:center;gap:8px}
-#luq .luq-btn{font-family:var(--font-ui);font-size:9.5pt;padding:3px 14px;cursor:pointer;color:#1a2030;background:linear-gradient(to bottom,#fff 0%,#e9edf5 100%);border:1px solid #7d8aa3;border-radius:3px;box-shadow:inset 1px 1px 0 #fff,inset -1px -1px 0 #b9c2d4}
-#luq .luq-btn:hover{border-color:#3a71f5;background:linear-gradient(to bottom,#fff,#dce8fb)}
-#luq .luq-btn:active{box-shadow:inset 1px 1px 0 #b9c2d4,inset -1px -1px 0 #fff}
-#luq .luq-btn:disabled{color:#aab;background:linear-gradient(to bottom,#f3f3f3,#e6e6e6);border-color:#bbb;cursor:not-allowed;box-shadow:none}
 #luq .luq-score{font-size:10pt;color:#15243f;margin:0 0 7px}#luq .luq-score b{font-size:13pt;color:#1d3a8a}
 #luq .luq-list{margin:0 0 10px;padding-left:18px;font-size:9pt;color:#3a4255}#luq .luq-list li{margin:3px 0}
 #luq .luq-list .ok{color:#2c7a36}#luq .luq-list .no{color:#c43636}

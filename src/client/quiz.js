@@ -84,7 +84,7 @@
       for (var i = 0; i < opts.length; i++) {
         html += '<label class="luq-opt"><input type="radio" name="luq-q' + idx + '" value="' + i + '"><span>' + esc(opts[i].t) + "</span></label>";
       }
-      html += '</div><div class="luq-fb" aria-live="polite"></div><div class="luq-row"><button type="button" class="luq-btn luq-check" disabled>Check</button></div>';
+      html += '</div><div class="luq-fb" aria-live="polite"></div><div class="luq-row"><button type="button" class="xp-button luq-check" disabled>Check</button></div>';
       qwrap.innerHTML = html;
       var check = /** @type {HTMLButtonElement} */ (qwrap.querySelector(".luq-check")),
           fb = qwrap.querySelector(".luq-fb");
@@ -102,7 +102,7 @@
           else if (inputs[i] === picked) /** @type {HTMLElement} */ (inputs[i].parentNode).classList.add("miss");
         }
         fb.innerHTML = '<p class="luq-why ' + (hit ? "hit" : "miss") + '"><b>' + (hit ? "Right." : "Close, and the miss is the useful part.") + "</b>" + esc(pick.why || "") + "</p>";
-        /** @type {HTMLElement} */ (check.parentNode).innerHTML = '<button type="button" class="luq-btn luq-next">' + (idx + 1 < qs.length ? "Next &gt;" : "Finish") + "</button>";
+        /** @type {HTMLElement} */ (check.parentNode).innerHTML = '<button type="button" class="xp-button default luq-next">' + (idx + 1 < qs.length ? "Next &gt;" : "Finish") + "</button>";
         qwrap.querySelector(".luq-next").addEventListener("click", () => {
           idx++;
           if (idx < qs.length) renderQ(); else renderEnd();
@@ -122,7 +122,7 @@
       qwrap.innerHTML =
         '<p class="luq-score"><b>' + score + "/" + qs.length + "</b> &middot; " + esc(word) + "</p>" +
         '<ul class="luq-list">' + list + "</ul>" +
-        '<div class="luq-row"><button type="button" class="luq-btn luq-again">Retake</button></div>' +
+        '<div class="luq-row"><button type="button" class="xp-button luq-again">Retake</button></div>' +
         '<p class="luq-credit">' + CREDIT + "</p>";
       qwrap.querySelector(".luq-again").addEventListener("click", () => { idx = 0; score = 0; results = []; renderQ(); });
     }
