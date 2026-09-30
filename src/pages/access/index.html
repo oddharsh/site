@@ -88,7 +88,7 @@ small,.meta{font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
 .mmc-menu button:hover,.mmc-menu button[aria-expanded=true]{background:var(--sel);color:#fff;border-color:var(--sel)}
 .mmc-menu button:focus-visible{outline:1px dotted var(--navy);outline-offset:1px}
 /* the one real dropdown. XP menus really did drop a soft shadow. */
-.menu-pop{position:absolute;z-index:30;top:24px;left:96px;min-width:196px;background:var(--face-light);border:1px solid var(--dsh);box-shadow:2px 3px 7px rgba(0,20,90,.28);padding:2px}
+.menu-pop{position:fixed;inset:auto;margin:0;z-index:30;min-width:196px;background:var(--face-light);border:1px solid var(--dsh);box-shadow:2px 3px 7px rgba(0,20,90,.28);padding:2px}
 .menu-pop button{font:inherit;font-size:calc(9.5pt * var(--sc));display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:transparent;border:0;padding:4px 10px 4px 6px;cursor:pointer;color:var(--ink)}
 .menu-pop button:hover{background:var(--sel);color:#fff}
 .menu-pop .tick{width:13px;flex:0 0 13px;font-family:var(--font-ui);font-weight:700;font-size:10pt;line-height:1}
@@ -1637,14 +1637,53 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     draw();
   });
 
-  /* the View menu, the one real dropdown, and the reveal for the speculative tier */
+  /* the View menu, the one real dropdown, and the reveal for the speculative tier.
+     It is a popover="auto", the way nav-tray.js's balloon and notepad.js's menus
+     are, so light dismiss, Esc and the top layer are the platform's and the
+     document click listener is gone. The markup keeps `hidden`, so an engine
+     without the Popover API falls back to toggling it.
+     Two things stay ours. Esc and a picked item move focus back to View BEFORE
+     the popover hides: left to the platform, the hide restores focus
+     mid-operation, and a focusin that asks an infotip to showPopover then throws
+     InvalidStateError in Chrome 152 (#1032 met it on the tray). And a press on
+     View while the menu is open light-dismisses it before the click lands where
+     showPopover's `source` is unsupported, so the press is remembered and that
+     click closes instead of reopening. */
   var viewBtn = document.getElementById("m-view"), viewMenu = document.getElementById("view-menu"),
       hiddenItem = document.getElementById("m-hidden");
-  function openMenu(open){
-    viewMenu.hidden = !open;
-    viewBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  var HAS_POPOVER = "showPopover" in HTMLElement.prototype, pressedOpen = false;
+  function menuOpen(){ return HAS_POPOVER ? viewMenu.matches(":popover-open") : !viewMenu.hidden; }
+  if (HAS_POPOVER) {
+    viewMenu.hidden = false;
+    viewMenu.popover = "auto";
+    viewMenu.addEventListener("beforetoggle", function(ev){
+      viewBtn.setAttribute("aria-expanded", ev.newState === "open" ? "true" : "false");
+    });
+    viewBtn.addEventListener("pointerdown", function(){ pressedOpen = menuOpen(); });
   }
-  viewBtn.addEventListener("click", function(ev){ ev.stopPropagation(); openMenu(viewMenu.hidden); });
+  function openMenu(open, restore){
+    if (open) {
+      var r = viewBtn.getBoundingClientRect();
+      viewMenu.style.left = r.left + "px";
+      viewMenu.style.top = r.bottom + "px";
+    } else if (restore) viewBtn.focus();
+    if (!HAS_POPOVER) {
+      viewMenu.hidden = !open;
+      viewBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    } else if (open) viewMenu.showPopover({ source: viewBtn });
+    else if (menuOpen()) viewMenu.hidePopover();
+  }
+  viewBtn.addEventListener("click", function(ev){
+    ev.stopPropagation();
+    var wasOpen = pressedOpen || menuOpen();
+    pressedOpen = false;
+    openMenu(!wasOpen);
+  });
+  viewMenu.addEventListener("keydown", function(ev){
+    if (ev.key !== "Escape") return;
+    ev.preventDefault();
+    openMenu(false, true);
+  });
   var treeItem = document.getElementById("m-tree");
   function setTree(on){
     treeItem.setAttribute("aria-checked", on ? "true" : "false");
@@ -1654,11 +1693,11 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   }
   treeItem.addEventListener("click", function(){
     setTree(treeItem.getAttribute("aria-checked") !== "true");
-    openMenu(false);
+    openMenu(false, true);
   });
   hiddenItem.addEventListener("click", function(){
     setHidden(!showHidden);
-    openMenu(false);
+    openMenu(false, true);
   });
   function setHidden(on){
     showHidden = on;
@@ -1668,12 +1707,16 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     if (!on && selected && BY_ID[selected].status === "phantom") selected = null;
     draw();
   }
-  document.addEventListener("click", function(ev){
-    if (!viewMenu.hidden && !viewMenu.contains(ev.target) && ev.target !== viewBtn) openMenu(false);
-  });
-  document.addEventListener("keydown", function(ev){
-    if (ev.key === "Escape" && !viewMenu.hidden) { openMenu(false); viewBtn.focus(); }
-  });
+  // Without popover there is no light dismiss, so an outside press and Esc
+  // anywhere still close the fallback menu.
+  if (!HAS_POPOVER) {
+    document.addEventListener("click", function(ev){
+      if (!viewMenu.hidden && !viewMenu.contains(ev.target) && ev.target !== viewBtn) openMenu(false);
+    });
+    document.addEventListener("keydown", function(ev){
+      if (ev.key === "Escape" && !viewMenu.hidden) openMenu(false, true);
+    });
+  }
 
   document.getElementById("reset").addEventListener("click", function(){
     filter = "all"; injecting = false; selected = null; tradeoffs = true;
