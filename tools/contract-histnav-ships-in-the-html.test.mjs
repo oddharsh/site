@@ -12,11 +12,12 @@
 // gets working buttons from nav.js's fallback, and pays with the layout shift.
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
-import { DESKTOP_HISTNAV } from "../src/worker/lib/desktop.ts";
+import { DESKTOP_HISTNAV, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { lunaPage } from "../src/worker/lib/chrome.ts";
 import { unsafeHtml } from "../src/worker/lib/html.ts";
 import { notepadWindow } from "../src/worker/writing.ts";
 import { successPage } from "../cal/src/templates.ts";
+import { renderMcpInfoPage, renderSerendipityPage } from "../serendipity/serendipity.ts";
 import { HISTNAV_HTML, bakeHistnav, staticShellPages } from "./photos/gen-desktop-partial.ts";
 
 const count = (haystack) => haystack.split(DESKTOP_HISTNAV).length - 1;
@@ -107,6 +108,20 @@ test("cal bakes the pair under /coffee and not on the standalone cal host", () =
   assert.equal(count(successPage({ ...env, BASE_PATH: "" })), 0);
   assertAccessibleTitleBar(successPage({ ...env, BASE_PATH: "/coffee" }), "cal under /coffee");
   assertAccessibleTitleBar(successPage({ ...env, BASE_PATH: "" }), "standalone cal", { maxButton: false });
+});
+
+test("serendipity's window is body-level, so nav.js wires it like every other", async () => {
+  // It sat inside a .wrap until 2026-09-30, and nav.js only wires `body > .window`,
+  // so /serendipity had no Back/Forward, no maximize and no close-to-home. Every
+  // view goes through one shell(), so the two built pages stand for all of them.
+  const views = [{ label: "/serendipity", response: renderSerendipityPage() }, { label: "/serendipity/mcp-info", response: renderMcpInfoPage() }];
+  for (const { label, response } of views) {
+    const page = await response.text();
+    assert.ok(page.includes(`<body>${DESKTOP_TOP}\n<div class="window">`), `${label}: the window is not the body's own child`);
+    assert.doesNotMatch(page, /class="wrap"/, `${label}: the .wrap nesting came back`);
+    assert.equal(count(page), 1, `${label}: expected the Back/Forward pair baked once, or nav.js injects it after paint`);
+    assertAccessibleTitleBar(page, label);
+  }
 });
 
 test("the pair's rules are in luna.css at first paint, and nav.js injects none", () => {
