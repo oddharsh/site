@@ -45,8 +45,6 @@ li { margin: 3px 0; }
 /* demo */
 .dm-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; font-size: 9.5pt; color: oklch(42% 0 0); }
 .dm-controls input[type=range] { flex: 1; min-width: 160px; accent-color: #0855dd; }
-.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
-.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
 .measure-wrap { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: oklch(98% 0.005 250); padding: 0; overflow: hidden; }
 /* the SAME text rendered two ways at the chosen width, for visual A/B + validation */
 .col { padding: 10px 12px; }
@@ -178,7 +176,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       crunches arithmetic over the prepared widths (prepared <em>once</em>, outside the
       loop). Run it:
     </p>
-    <p><button class="xp-btn" id="race">Race 2,000 re-layouts</button></p>
+    <p><button class="xp-button compact" id="race">Race 2,000 re-layouts</button></p>
     <div class="race-out" id="race-out">press the button</div>
 
     <h2>6 · Where it&apos;d actually help aadhar.sh</h2>

@@ -58,8 +58,6 @@ a { color: var(--blue-40); }
 /* ── demo ── */
 .cas-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
 .cas-ta { width: 100%; min-height: 88px; font-family: var(--font-mono); font-size: 10pt; line-height: 1.45; padding: 8px; border: 2px solid; border-color: #808080 #fff #fff #808080; background: oklch(99% 0 0); field-sizing: content; max-height: 38vh; resize: vertical; }
-.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
-.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
 .method { margin: 16px 0; }
 .method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: var(--font-caption); color: var(--blue-40); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: var(--font-ui); }
@@ -125,9 +123,9 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     </p>
 
     <div class="cas-controls">
-      <button class="xp-btn" id="snap">Snapshot as v1</button>
-      <button class="xp-btn" id="insert">Insert a line at the top</button>
-      <button class="xp-btn" id="reset">Reset text</button>
+      <button class="xp-button compact" id="snap">Snapshot as v1</button>
+      <button class="xp-button compact" id="insert">Insert a line at the top</button>
+      <button class="xp-button compact" id="reset">Reset text</button>
     </div>
     <textarea class="cas-ta" id="ta" aria-label="Text to split into content-addressed chunks" spellcheck="false"></textarea>
 

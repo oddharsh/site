@@ -43,8 +43,7 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
 .hb-controls label{font-size:9pt;color:#3a4657;display:flex;justify-content:space-between;align-items:baseline}
 .hb-controls output{font-family:var(--font-mono);font-weight:bold;color:#0831d9}
 .hb-controls input[type=range]{width:100%;margin:0 0 6px}
-.hb-btn{font-family:var(--font-ui);font-size:8.5pt;padding:3px 10px;justify-self:start;background:linear-gradient(180deg,#fff,#eceef3 45%,#dfe3ea);border:1px solid #7f8ea3;border-radius:3px;cursor:pointer}
-.hb-btn:active{background:linear-gradient(180deg,#dfe3ea,#eceef3)}
+#hb-reset{justify-self:start}
 .hb-bars{display:grid;gap:5px;margin-bottom:8px}
 .hb-bar-row{display:grid;grid-template-columns:56px 1fr 92px;align-items:center;gap:8px;font-size:9pt}
 .hb-bar-label{color:#3a4657}
@@ -126,7 +125,7 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
     <input type="range" id="hb-book" min="0" max="100" value="4" step="1">
     <label for="hb-repeat">visits that are repeat visits <output id="hb-repeat-out">15%</output></label>
     <input type="range" id="hb-repeat" min="0" max="100" value="15" step="1">
-    <button type="button" id="hb-reset" class="hb-btn">reset to this page's guess</button>
+    <button type="button" id="hb-reset" class="xp-button compact">reset to this page's guess</button>
   </div>
   <div class="hb-readout">
     <div class="hb-bars">

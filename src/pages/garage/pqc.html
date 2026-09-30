@@ -43,8 +43,6 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
 .pqc-bars li.native .t{background:linear-gradient(180deg,#e6b45c,#c8880f);border-color:#9a6a08}
 .pqc-native{border-top:1px solid #ccd6e4;padding:8px 12px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .pqc-native-note{font-size:8.5pt;color:#5b6879;flex:1;min-width:14em}
-.pqc-run{font:inherit;font-size:8.5pt;font-family:var(--font-ui);padding:3px 11px;cursor:pointer;background:linear-gradient(180deg,#fff,#e4e9f2);border:1px solid #8c9ab0;border-radius:3px}
-.pqc-run:disabled{color:#8b96a6;cursor:default}
 .pqc-bars .v{font-family:var(--font-mono);font-size:8.5pt;color:#4a5870;white-space:nowrap}
 .pqc-read{margin:0;padding:2px 12px 10px;font-size:8.5pt;color:#5b6879}
 .pqc-live-body{padding:8px 10px;font-family:var(--font-mono);font-size:8.5pt;color:#33455f;word-break:break-all;line-height:1.6}
@@ -222,7 +220,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
   function show(msg) { nativeBox.hidden = false; nativeBox.innerHTML = msg; }
 
   crypto.subtle.generateKey({ name: "ML-DSA-44" }, true, ["sign", "verify"]).then(function (key) {
-    show('<button type="button" class="pqc-run">Run ML-DSA-44 natively, here</button>' +
+    show('<button type="button" class="xp-button compact pqc-run">Run ML-DSA-44 natively, here</button>' +
          '<span class="pqc-native-note">Your browser has native ML-DSA. 200 signatures, on your hardware.</span>');
     nativeBox.querySelector(".pqc-run").addEventListener("click", function (e) {
       e.target.disabled = true;

@@ -686,9 +686,10 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
 }
 /* THE Luna command button + sunken field. One component for every page and
-   client script: the /rn form, /dotfiles, the quiz, and (in a follow-up) the
-   dozen per-page button skins that each drew their own gradient and bevel.
-   The base is XP's 75px dialog button at 8pt. */
+   client script: the /rn form, /dotfiles, the quiz, the Run and Notepad
+   dialogs, and since 2026-09-30 the per-page buttons on the garage, lwe,
+   /access and pixel-peeper pages, which each drew their own gradient and
+   bevel until then. The base is XP's 75px dialog button at 8pt. */
 :where(.xp-button) {
   display: inline-block; min-width: 75px; padding: 3px 12px;
   font: 8pt/1.4 var(--font-ui); color: #000;
@@ -705,6 +706,15 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 :where(.xp-button:active:not(:disabled)) {
   background: linear-gradient(180deg, #e1e1d8 0%, #e9e8e0 50%, #f0efe8 100%);
   border-color: #7b9ebd; padding: 4px 11px 2px 13px;
+  box-shadow: inset 1px 1px 2px rgba(181,178,164,.9), inset -1px -1px 0 rgba(255,255,255,.5);
+}
+/* A toggle that is on stays pushed in, the face :active shows for a moment.
+   Pages say which toggles are on with aria-pressed (the /access injection
+   trace, pixel-peeper's diff modes, dac's play buttons, lean's presets), so
+   the state reaches assistive tech and the face comes from one rule. */
+:where(.xp-button[aria-pressed="true"]) {
+  background: linear-gradient(180deg, #e1e1d8 0%, #e9e8e0 50%, #f0efe8 100%);
+  border-color: #7b9ebd;
   box-shadow: inset 1px 1px 2px rgba(181,178,164,.9), inset -1px -1px 0 rgba(255,255,255,.5);
 }
 /* XP's greyed command button: flat face, grey label, no hover glow. */

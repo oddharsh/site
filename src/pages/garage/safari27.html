@@ -79,8 +79,7 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
 .s27-sel option:checked::before { content: "\2713 "; color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
 
 /* anchor-positioning demo */
-.s27-anchor-btn { anchor-name: --s27a; font: inherit; padding: 4px 10px; cursor: pointer; border: 1px solid oklch(50% 0.04 263);
-  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); border-radius: 3px; box-shadow: inset 1px 1px 0 oklch(100% 0 0); }
+.s27-anchor-btn { anchor-name: --s27a; }
 .s27-note { position: absolute; position-anchor: --s27a; top: anchor(bottom); left: anchor(left); margin-top: 6px;
   background: oklch(99% 0.02 95); border: 1px solid oklch(60% 0.13 90); padding: 6px 9px; font-size: 9.5pt; max-width: 240px; box-shadow: 2px 2px 0 oklch(60% 0.13 90 / .3); }
 .s27-anchor-wrap { position: relative; }
@@ -134,7 +133,7 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
     <section class="demo">
       <h2><span>Anchor positioning upgrades</span> <span class="stat" data-feat="anchor">Safari 27</span></h2>
       <p class="sub">Safari&nbsp;27 makes anchored elements follow <em>transformed</em> positions, and adds <code>position-anchor: normal | none</code> plus refined <code>anchor-valid</code> / <code>anchor-visible</code> matching.</p>
-      <p class="s27-anchor-wrap"><button type="button" class="s27-anchor-btn">hover me</button><span class="s27-note" role="note">I&apos;m pinned to that button with <code>position-anchor</code> + <code>anchor()</code>, no JS measuring. In Safari&nbsp;27 I&apos;d track it even through CSS transforms.</span></p>
+      <p class="s27-anchor-wrap"><button type="button" class="xp-button compact s27-anchor-btn">hover me</button><span class="s27-note" role="note">I&apos;m pinned to that button with <code>position-anchor</code> + <code>anchor()</code>, no JS measuring. In Safari&nbsp;27 I&apos;d track it even through CSS transforms.</span></p>
       <p class="ours">On this site: the photo and track tooltips use CSS anchor positioning as the JS-free keyboard fallback. Transform-aware anchoring matters here because windows move via <code>transform</code> when you drag them, so an anchored popover can stay glued to a window mid-drag.</p>
     </section>
 

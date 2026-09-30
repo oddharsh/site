@@ -35,8 +35,6 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
 .oct-table tr.mine td{background:#fffbe8}
 .oct-demo{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;margin:0 0 14px}
 .oct-demo-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,#eaf0f9,#dbe4f1);border-bottom:1px solid #b6c2d4;padding:5px 9px;font-family:var(--font-caption);font-weight:bold;font-size:9.5pt;color:#20406e}
-.oct-reveal{font:inherit;font-size:8.5pt;font-weight:normal;font-family:var(--font-ui);padding:3px 11px;cursor:pointer;background:linear-gradient(180deg,#fff,#e4e9f2);border:1px solid #8c9ab0;border-radius:3px;color:#243}
-.oct-reveal:disabled{color:#8b96a6;cursor:default}
 .oct-bars{list-style:none;margin:0;padding:10px 12px 4px}
 .oct-bars li{display:grid;grid-template-columns:11em 1fr auto;align-items:center;gap:8px;margin:0 0 7px;font-size:9pt}
 .oct-bars .n{font-family:var(--font-mono);color:#33455f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -90,7 +88,7 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
 <div class="oct-demo" id="oct-demo">
   <div class="oct-demo-head">
     <span>Client JavaScript per page load, gzip</span>
-    <button type="button" class="oct-reveal">reveal the baseline</button>
+    <button type="button" class="xp-button compact oct-reveal">reveal the baseline</button>
   </div>
   <ol class="oct-bars"></ol>
   <p class="oct-read"></p>

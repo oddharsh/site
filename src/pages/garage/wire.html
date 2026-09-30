@@ -45,12 +45,7 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
 
 .cf-feat { border: 1px solid var(--frame); background: oklch(98% 0.004 250); padding: 4px 14px 14px; margin: 14px 0; }
 .cf-feat h2 { margin-top: 12px; font-size: 12pt; }
-.cf-btn { font: bold 10pt var(--font-ui); padding: 4px 14px; margin: 4px 0; cursor: pointer; color: var(--ink);
-  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); border: 1px solid oklch(50% 0.05 263);
-  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #aca899; }
-.cf-btn:hover { background: linear-gradient(180deg, oklch(99% 0.015 263), oklch(90% 0.03 263)); }
-.cf-btn:active { box-shadow: inset 1px 1px 0 #aca899, inset -1px -1px 0 #fff; }
-.cf-btn:disabled { opacity: .6; cursor: default; }
+.cf-feat > .xp-button { margin: 4px 0; }
 .cf-code { font: 9pt var(--font-mono); color: oklch(40% 0.04 145); background: oklch(95% 0.01 145); border: 1px solid oklch(80% 0.03 145);
   padding: 5px 8px; margin: 8px 0 0; overflow-x: auto; white-space: pre; }
 .callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid var(--blue-65); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
@@ -441,7 +436,7 @@ transition:filter 60ms ease-out}</pre></figure>
         then <code class="m">hit</code>; a warm one may say
         <code class="m">hit</code> twice. Your browser hitting production, nothing
         mocked.</p>
-      <button class="cf-btn" id="probe-btn" type="button">probe the edge cache</button>
+      <button class="xp-button compact" id="probe-btn" type="button">probe the edge cache</button>
       <div id="probe-out"></div>
     </div>
 

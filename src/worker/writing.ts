@@ -81,9 +81,6 @@ background:oklch(93% 0.012 90);border-top:1px solid oklch(80% 0.02 90)}
 border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,4px 4px 0 rgba(0,30,160,.35)}
 .np-about-body{padding:12px 14px}.np-about-body p{margin:0 0 9px;line-height:1.45}
 .np-about-btns{display:flex;justify-content:flex-end}
-.np-btn{min-width:72px;padding:3px 12px;font:12px var(--font-ui);cursor:pointer;color:oklch(18% 0 0);border:1px solid oklch(50% 0.04 263);border-radius:3px;
-background:linear-gradient(180deg,oklch(99% 0 0),oklch(92% 0.005 263));box-shadow:inset 1px 1px 0 oklch(100% 0 0),inset -1px -1px 0 oklch(84% 0.02 90)}
-.np-btn:active{box-shadow:inset 1px 1px 0 oklch(84% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
 @media print{body.np-page{padding:0;background:none}#axp-taskbar,.np-titlebar,.np-menubar,.np-status{display:none}
 .np-window{border:0;box-shadow:none;height:auto;max-width:none}.np-text{font-size:11pt;color:#000}}
 `;

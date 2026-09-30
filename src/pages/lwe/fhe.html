@@ -33,13 +33,6 @@
 .msg .cite:hover { color: #b5560c; border-color: #b5560c; }
 
 /* generic demo bits */
-.btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 11px; cursor: pointer; color: #1a2030;
-  background: linear-gradient(to bottom, #fff 0%, #e9edf5 100%); border: 1px solid #7d8aa3; border-radius: 0;
-  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #b9c2d4; }
-.btn:hover { border-color: #3a71f5; background: linear-gradient(to bottom, #fff, #dce8fb); }
-.btn:active { box-shadow: inset 1px 1px 0 #b9c2d4, inset -1px -1px 0 #fff; }
-.btn.go { font-weight: bold; background: linear-gradient(to bottom, #eaf6ec 0%, #cdeccf 100%); border-color: #4a9a52; }
-.btn:disabled { color: #aab; background: linear-gradient(to bottom,#f3f3f3,#e6e6e6); border-color:#bbb; cursor: not-allowed; }
 .kbd-step { display: inline-flex; align-items: center; border: 1px solid #7d8aa3; background: #fff; }
 .kbd-step button { border: 0; background: linear-gradient(to bottom,#fff,#e3e8f1); width: 22px; height: 22px; cursor: pointer; font-weight: bold; color: #1a2030; }
 .kbd-step button:active { background: linear-gradient(to bottom,#dfe5ef,#fff); }
@@ -145,7 +138,7 @@
                 <span><span class="kbd-step"><button data-add-a="-1">&minus;</button><span class="v" id="add-a">5</span><button data-add-a="1">+</button></span>
                 &nbsp;and&nbsp;
                 <span class="kbd-step"><button data-add-b="-1">&minus;</button><span class="v" id="add-b">8</span><button data-add-b="1">+</button></span>
-                <button class="btn" id="add-reroll" style="margin-left:8px">re-roll noise</button></span>
+                <button class="xp-button compact" id="add-reroll" style="margin-left:8px">re-roll noise</button></span>
               </div>
               <div class="he-row"><span class="lbl">Enc(a)</span><span class="he-ct" id="ct-a">—</span></div>
               <div class="he-row"><span class="lbl">Enc(b)</span><span class="he-ct" id="ct-b">—</span></div>
@@ -208,10 +201,10 @@
               <div class="dc-decode">🔑 <b>decode</b>: round(<span class="mono" id="dc-ctn">2307</span> &divide; 256) = <b class="dc-rec" id="dc-rec">9</b> &nbsp;<span id="dc-verdict" class="ok">✓ matches the secret</span></div>
               <div class="nz-meta" id="nz-meta">noise 3 / 128 &middot; ops 0 &middot; bootstraps 0</div>
               <div class="nz-ops">
-                <button class="btn" id="nz-add">+ add &nbsp;<span class="mono" style="font-size:8pt">(+noise)</span></button>
-                <button class="btn" id="nz-mul">&times; multiply &nbsp;<span class="mono" style="font-size:8pt">(&times;noise, faster)</span></button>
-                <button class="btn go" id="nz-boot">⟳ bootstrap</button>
-                <button class="btn" id="nz-reset" style="margin-left:auto">reset</button>
+                <button class="xp-button compact" id="nz-add">+ add &nbsp;<span class="mono" style="font-size:8pt">(+noise)</span></button>
+                <button class="xp-button compact" id="nz-mul">&times; multiply &nbsp;<span class="mono" style="font-size:8pt">(&times;noise, faster)</span></button>
+                <button class="xp-button compact default" id="nz-boot">⟳ bootstrap</button>
+                <button class="xp-button compact" id="nz-reset" style="margin-left:auto">reset</button>
               </div>
             </div>
           </div></div>
@@ -271,7 +264,7 @@
         <div class="fmt" aria-hidden="true"><span style="font-style:italic">A</span><span style="font-weight:bold">B</span><span>😊</span><span>🔒</span></div>
         <div class="box">
           <div class="ta">This is a recorded conversation. Start your own with the demos above.</div>
-          <button class="btn send" disabled>Send</button>
+          <button class="xp-button compact send" disabled>Send</button>
         </div>
       </div>
 

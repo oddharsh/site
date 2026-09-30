@@ -27,11 +27,6 @@
 .msg.ai-note .bubble { background: #f3f0fb; border: 1px solid #d7cdef; border-radius: 4px; padding: 7px 9px; }
 .msg.ai-note .tagai { display: inline-block; font-size: 7.5pt; font-weight: bold; color: #6b4ec2; background: #ece5fb; border: 1px solid #d0c3f0; border-radius: 9px; padding: 0 6px; margin-bottom: 4px; letter-spacing: .03em; }
 
-.btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 11px; cursor: pointer; color: #1a2030; background: linear-gradient(to bottom, #fff 0%, #e9edf5 100%); border: 1px solid #7d8aa3; border-radius: 0; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #b9c2d4; }
-.btn:hover { border-color: var(--accent); background: linear-gradient(to bottom, #fff, #e0f2ef); }
-.btn:active { box-shadow: inset 1px 1px 0 #b9c2d4, inset -1px -1px 0 #fff; }
-.btn.on { font-weight: bold; background: linear-gradient(to bottom, #e0f2ef, #b8e3da); border-color: var(--accent); }
-.btn:disabled { color: #aab; background: linear-gradient(to bottom,#f3f3f3,#e6e6e6); border-color: #bbb; cursor: not-allowed; }
 
 /* MPC demo */
 .nodes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 6px 0 12px; }
@@ -115,8 +110,8 @@
                 <label><input type="checkbox" id="mpc-collude"> the traitors are <b>colluding</b> 🤝</label><span id="mpc-collude-hint" style="font-size:7.5pt;color:#9a6a16"></span>
               </div>
               <div class="ops">
-                <button class="btn" id="mpc-trace">🔍 trace the leak</button>
-                <button class="btn" id="mpc-reset" style="margin-left:auto">reset (all honest)</button>
+                <button class="xp-button compact" id="mpc-trace">🔍 trace the leak</button>
+                <button class="xp-button compact" id="mpc-reset" style="margin-left:auto">reset (all honest)</button>
               </div>
               <div class="trace-out" id="mpc-trace-out">Each share is watermarked. When a key leaks, the watermark says <b>who</b> leaked it: that's traitor tracing. Make a node a traitor, then hit trace.</div>
             </div>
