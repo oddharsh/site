@@ -2,7 +2,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { escHtml, escAttr, jsonResponse, timingSafeEqual } from "./lib/http.ts";
-import { isSubrequestLimit } from "./lib/budget.ts";
+import { subrequestLimitIn } from "./lib/budget.ts";
 import { lensInspect } from "./lens.ts";
 import { span } from "./lib/trace.ts";
 
@@ -114,17 +114,14 @@ function censusMetrics(site, r, ts, ymd) {
  * existing. `Object(v) === v` is the object test that needs no `typeof`, and
  * `isSubrequestLimit` takes `unknown` safely, so a body string or a null is
  * simply skipped. Bodies are strings and are never descended into.
+ *
+ * The walk itself lives in lib/budget.ts as `subrequestLimitIn`, since
+ * 2026-09-30, because lens.ts needs the same question answered before it
+ * writes a discovery blob to cache, and two copies of a walker disagree
+ * about depth the day somebody edits one.
  */
 export function censusCapHit(result: unknown, maxDepth = 6): boolean {
-  const isObj = (v: unknown) => v !== null && Object(v) === v;
-  const stack: Array<[any, number]> = [[result, 0]];
-  while (stack.length) {
-    const [node, depth] = stack.pop();
-    if (!isObj(node) || depth > maxDepth) continue;
-    if (isSubrequestLimit(node.error)) return true;
-    for (const value of Object.values(node)) if (isObj(value)) stack.push([value, depth + 1]);
-  }
-  return false;
+  return subrequestLimitIn(result, maxDepth);
 }
 
 /**

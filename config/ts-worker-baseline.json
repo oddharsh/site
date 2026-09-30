@@ -3,7 +3,6 @@
     "src/worker/agent-ready.ts": 1,
     "src/worker/around.ts": 5,
     "src/worker/cache-lint.ts": 2,
-    "src/worker/census.ts": 1,
     "src/worker/counter.ts": 1,
     "src/worker/dyno.ts": 1,
     "src/worker/encode.ts": 25,
