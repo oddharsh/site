@@ -1458,9 +1458,10 @@ if (inlineProbe.includes("/* probe */") ||
 //
 // The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
 // inserts the checkpoint row moments before `bun run deploy:direct`, and nothing else
-// writes that table. So baking them costs no freshness at all — unlike /reading
-// (6h Curius refresh) or /around (30m crawl), whose feeds move on their own and
-// which are deliberately left dynamic for exactly that reason.
+// writes that table. So baking them WHOLE costs no freshness at all — unlike
+// /reading (6h Curius refresh) or /around (daily crawl), whose feeds move on
+// their own, so only their shells are baked and the feed arrives as an island
+// (step 5b, lib/island.ts).
 //
 // D1 remains the source of truth. checkpoints.json is its committed projection,
 // written by bump-version.sh right after a successful insert, and
@@ -2047,6 +2048,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       live: /id="m-\d|rel="noopener ugc external"/ },
     { module: "census", render: "renderCensusPage", url: "TABLE_URL", out: "lens/census.html",
       live: /class="cx-site"><a |<span>\/100<\/span>/ },
+    // /reading, 2026-09-29. The build has no Curius payload, so a linked title,
+    // a real link count or a sync date in the bake could only be a fixture.
+    { module: "reading", render: "renderReadingPage", url: "LIST_URL", out: "reading.html",
+      live: /<a class="rd-title" href=|\d+ links? &middot;|\d+ links? ·|last synced \d/ },
   ]) {
     const mod = await import(pathToFileURL(resolve(OUT, `src/worker/${page.module}.ts`)).href + nonce);
     const res = mod[page.render]();
@@ -2123,7 +2128,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (problems.length) throw new Error(`per-request ratchet:\n  ${problems.join("\n  ")}`);
     console.log(`per-request ratchet: ${surfaces.size - Object.keys(ledger).length} of ${surfaces.size} registered surfaces are built documents; ${Object.keys(ledger).length} stay per request, each with a reason`);
   }
-  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /reading + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
 // Every staged file step 6 content-hashes into /a/. Step 5c reads it to keep

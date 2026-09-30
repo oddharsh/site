@@ -142,7 +142,10 @@ const ROUTES = [
   { path: "/security.md", status: 200, ct: "text/markdown", marker: "Security Center" },
   { path: "/security", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" },
     marker: "http-message-signatures-directory" },
-  { path: "/reading", status: 200, ct: "text/html" },
+  // A built document since 2026-09-29. A local Worker holds no signing key, so
+  // the island answers the can't-reach-Curius panel; the footer rides in it.
+  { path: "/reading", status: 200, ct: "text/html", marker: "data-island=/reading/list.html", fullPage: true },
+  { path: "/reading/list.html", status: 200, ct: "text/html", marker: "fetched by", fragment: true },
   { path: "/updates", status: 200, ct: "text/html" },
   // The twins the generated tier earned. Both halves are asserted because they
   // fail independently: the .md URL proves the build staged a twin at all, and the
