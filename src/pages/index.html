@@ -29,15 +29,13 @@
      "cors" — the two would not dedupe and the page would make the request
      TWICE. verify in devtools that exactly one /photos/grid.html appears.
 
-     /rn/tracks.html gets the same treatment, and the reason it used to be
-     excluded is GONE. this comment read "NOT done for /rn/tracks.html: that
-     hydrator is guarded on data-ssr='0', so a response the worker managed to
-     SSR would pay for a fragment nobody fetches." the worker no longer SSRs the
-     playlist at all — serveHomepageWithPrerenderedTracks and SSR_DEADLINE_MS
-     are both gone, `/` is a deterministic static document now — so data-ssr is
-     ALWAYS "0", the guard never once declines, and the fetch is exactly as
-     unconditional as the grid's. neither preload can be wasted; both just move
-     discovery off a <script> the parser has to reach ~800 lines down. -->
+     /rn/tracks.html gets the same treatment. it was once excluded because its
+     hydrator declined when the worker had server-rendered the playlist, and
+     the worker no longer does that at all: `/` is a deterministic static
+     document, both halves are islands (lib/island.ts), and the one island
+     script fetches every mount unconditionally. neither preload can be wasted;
+     both just move discovery off a <script> the parser has to reach ~800 lines
+     down. -->
 <link rel="preload" as="fetch" href="/photos/grid.html" crossorigin>
 <link rel="preload" as="fetch" href="/rn/tracks.html" crossorigin>
 <title>Aadharsh Pannirselvam</title>
@@ -658,7 +656,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
          the photos section so it can fixed-position over anything. -->
     <div id="xp-tooltip" class="xp-tooltip" popover="manual" aria-hidden="true"></div>
 
-    <section class="photos" aria-label="photographs" data-ssr="0">
+    <section class="photos" aria-label="photographs" data-island="/photos/grid.html" data-state="pending">
       <a>
         <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
@@ -735,10 +733,9 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
     <script>
     (() => {
-      // Only ever finds tiles when the fetch failed: on success the fragment
+      // Only ever finds tiles when the island failed: on success the fragment
       // replaced them with live-URL tiles that need no promotion. That is the
-      // fallback path, and it is why boot() runs either way. The grid is never
-      // empty.
+      // fallback path. The grid is never empty.
       const boot = () => {
         for (const image of document.querySelectorAll(".photos img[data-photo-deferred][data-src]")) {
           // srcset and sizes go on BEFORE src. The browser selects a candidate
@@ -787,14 +784,16 @@ footer .signature small { color: oklch(56.93% 0 0); }
         image.src = "/images/" + stem[1] + ".jpg";
       }, true);   // capture: `error` on an <img> does not bubble
 
-      fetch("/photos/grid.html")
-        .then((r) => (r.ok ? r.text() : null))
-        .then((html) => {
-          const section = document.querySelector(".photos");
-          if (html && section) section.innerHTML = html;
-        })
-        .catch(() => {})
-        .then(boot);
+      // The swap itself is the site's one island script (lib/island.ts), below
+      // the playlist: it fetches data-island, requires the x-island marker, and
+      // sets data-state to "live" or "failed". A failure keeps the baked twelve,
+      // and this is where their deferred URLs are promoted so they load.
+      const section = document.querySelector(".photos");
+      if (section) {
+        new MutationObserver(() => {
+          if (section.getAttribute("data-state") === "failed") boot();
+        }).observe(section, { attributes: true, attributeFilter: ["data-state"] });
+      }
     })();
     </script>
 
@@ -806,46 +805,33 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
     <section class="now-playing" aria-label="music">
       <h2><a href="/rn" title="open this playlist on Spotify">Music I'm listening to right now <span class="np-open">&#x2197;&#xFE0E; the playlist</span></a></h2>
-      <ol class="np-list" id="np-list" data-ssr="0">
+      <ol class="np-list" id="np-list" data-island="/rn/tracks.html" data-state="pending">
         <li class="np-empty">The current playlist is unavailable. <a href="/rn">Open on Spotify &#x2197;&#xFE0E;</a></li>
       </ol>
       <noscript><p class="np-nojs">The playlist loads with JavaScript, and it moves too fast to bake into the page. <a href="/rn">Open it on Spotify &#x2197;&#xFE0E;</a></p></noscript>
     </section>
 
-    <!-- This is the ONLY path that fills the playlist. The comment here used to
-         open "The Worker fills the playlist in the first HTML response — but
-         only if its KV read answers inside a ~25ms budget (home.js
-         SSR_DEADLINE_MS)", which described a world that no longer exists:
-         serveHomepageWithPrerenderedTracks and that deadline are both gone, and
-         `/` is a deterministic static document whose dynamic halves all leave
-         by fetch. So data-ssr is always "0" on arrival, this fetch always runs,
-         and a <link rel=preload> up in <head> gives the parser the URL ~800
-         lines before it reaches this script.
+    <!-- Both halves of the homepage that change per visit are ISLANDS, filled
+         by the one script below, the same bytes lib/island.ts's islandScript()
+         emits on every island page (so one CSP hash covers it everywhere, and a
+         contract test holds the copy here to that function). It finds each
+         [data-island] mount above, fetches its URL, and swaps the fragment in
+         only when the response carries the x-island marker: a 5xx interstitial
+         from the edge is also text/html and also resolves fine, and neither the
+         grid nor the playlist may be replaced by one. On failure the mount
+         keeps its placeholder and reads data-state="failed".
 
-         The x-rn-fragment check is load-bearing: a 5xx interstitial is also
-         text/html and also resolves fine, so only a response that proves it is
-         our fragment may replace the honest empty state. The fragment renders
-         its own honest states for "no playlist" / "scrape broke", so swapping it
-         in is safe in every case, and /rn stays the no-JS destination.
+         `/` is a deterministic static document, so these fetches always run,
+         and the two preloads in <head> give the parser both URLs ~800 lines
+         before it reaches this script. The playlist fragment renders its own
+         honest states for "no playlist" and "scrape broke", so swapping it in
+         is safe in every case, and /rn stays the no-JS destination.
 
-         Serving this fragment is also what warms the album art for the colo
-         that just served it (rn.js, warmArtCache), so the tooltip's first hover
-         does not pay a ~600ms cold Images transform. That happens entirely in
-         waitUntil: nothing here waits on it, and the browser never sees it. -->
-    <script>
-    (() => {
-      const list = document.getElementById("np-list");
-      if (!list || list.getAttribute("data-ssr") !== "0") return;
-      fetch("/rn/tracks.html")
-        .then((r) => (r.ok && r.headers.get("x-rn-fragment") === "1" ? r.text() : null))
-        .then((html) => {
-          if (!html || list.getAttribute("data-ssr") !== "0") return;
-          list.innerHTML = html;
-          list.setAttribute("data-ssr", "client");
-        })
-        .catch(() => {});
-    })();
-    </script>
+         Serving the playlist fragment is also what warms the album art for the
+         colo that just served it (rn.js, warmArtCache), so the tooltip's first
+         hover does not pay a ~600ms cold Images transform. That happens
+         entirely in waitUntil: nothing here waits on it. -->
+    <script>(function(){if(!window.fetch)return;var ms=document.querySelectorAll("[data-island]");for(var k=0;k<ms.length;k++)(function(m){fetch(m.getAttribute("data-island")).then(function(r){if(!r.ok||r.headers.get("x-island")!=="1")throw 0;return r.text()}).then(function(t){m.innerHTML=t;m.setAttribute("data-state","live");m.dispatchEvent(new Event("island",{bubbles:true}))}).catch(function(){m.setAttribute("data-state","failed")})})(ms[k])})()</script>
 
     <!--
       delegated click + keyboard handler for .np-artist-link spans. these

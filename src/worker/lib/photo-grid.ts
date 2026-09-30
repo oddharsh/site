@@ -14,7 +14,7 @@
 // ever thrown away). This module deliberately imports nothing that touches a
 // Worker global, so Node can import it straight out of the staged tree at
 // build time.
-import { escAttr } from "./http.ts";
+import { EMPTY, html, joinHtml, type Html } from "./html.ts";
 import { asNumber } from "./parse.ts";
 
 // WHICH tiles carry a real `src` depends on which caller is rendering, and the
@@ -87,11 +87,15 @@ import { asNumber } from "./parse.ts";
 // whatever the wrap, which is the property that makes this safe to hardcode.
 const PRIORITISED_TILES = 6;
 
-export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histograms = {} } = {}) {
-  return pick.map((p, index) => {
+// Returns Html built by the `html` tag, so /photos/grid.html can answer through
+// lib/island.ts's islandResponse, whose body parameter only takes Html. Every
+// interpolation is escaped by the tag; build.ts's bake concatenates the result
+// into index.html, which reads it through Html's toString().
+export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histograms = {} } = {}): Html {
+  return joinHtml(pick.map((p, index) => {
     // Omitted rather than spelled `auto` because they mean the same thing to the
     // browser and one of them costs bytes on every tile.
-    const pri = index < PRIORITISED_TILES ? "" : ` fetchpriority="low"`;
+    const pri = index < PRIORITISED_TILES ? EMPTY : html` fetchpriority="low"`;
     // Current photo artifacts always have thumb_small. The larger AVIF and then
     // JPEG are recovery paths for an old/incomplete manifest entry, not alternate
     // candidates emitted beside it: even that degraded row still names one URL.
@@ -116,12 +120,10 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     ].filter(Boolean);
     // One candidate is what `src` already says, so the attribute would be pure
     // bytes. This is also the degraded path for a stem the pipeline half-ran.
-    const srcset = cands.length > 1
-      ? ` srcset="${escAttr(cands.join(", "))}" sizes="184px"`
-      : "";
+    const srcsetValue = cands.length > 1 ? cands.join(", ") : "";
     // Fall back to the stem rather than alt="": the tile IS the link, so an
     // empty alt makes the <a> nameless for screen readers and agents.
-    const alt = escAttr(altMap[p.stem] || p.stem);
+    const alt = altMap[p.stem] || p.stem;
     // The tooltip's four histogram channels, packed to 256 bytes and riding with
     // the tile that owns them. This used to arrive on the hover that needed it,
     // one /images/meta/<stem>.json per photo: measured on production at 135ms and
@@ -139,7 +141,7 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     // tile against base64's 344, and 36% smaller after brotli because base64
     // destroys the byte alignment brotli exploits on smooth data.
     //
-    // The range holds no character needing escaping, so escAttr is a no-op here
+    // The range holds no character needing escaping, so the escape is a no-op here
     // by construction rather than by luck. It DOES hold a backtick (96), one of
     // the characters that forces minify-html to keep the quotes: measured on the
     // staged document, 7 of 12 tiles quoted and 5 unquoted, all 12 intact at 256
@@ -159,9 +161,9 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     // tooltip, so those attributes would be dead bytes in the page and its dcz
     // dictionary. Absent remains legal: tooltip.js fetches meta/<stem>.json.
     const hist = !deferred && index < PRIORITISED_TILES ? histograms[p.stem] : null;
-    const histAttr = hist ? ` data-hist="${escAttr(hist)}"` : "";
-    const sizeAttr = (asNumber(p.size) > 0) ? ` data-size="${p.size}"` : "";
-    const upAttr = p.uploaded ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
+    const histAttr = hist ? html` data-hist="${hist}"` : EMPTY;
+    const sizeAttr = (asNumber(p.size) > 0) ? html` data-size="${p.size}"` : EMPTY;
+    const upAttr = p.uploaded ? html` data-uploaded="${p.uploaded}"` : EMPTY;
 
     // In a scripting browser <noscript> is inert text, so these real URLs never
     // enter the preload scanner and cannot undo the deferral above. Without JS
@@ -188,21 +190,18 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     // representation there at 195 bytes a tile against 130 to serve a client
     // that must be no-JS AND no-AVIF at once.
     const noScript = deferred
-      ? `<noscript><img alt="${alt}" width="184" height="184" src="${escAttr(thumb)}" loading="lazy"${pri} decoding="async"></noscript>`
-      : "";
+      ? html`<noscript><img alt="${alt}" width="184" height="184" src="${thumb}" loading="lazy"${pri} decoding="async"></noscript>`
+      : EMPTY;
 
     // data-srcset rides with data-src for the deferred set, for the same reason
     // data-src does: a real srcset here starts a fetch the hydrator is about to
     // throw away, which is the double-download #156 removed.
     const image = deferred
-      ? `<img data-photo-deferred alt="${alt}" width="184" height="184" data-src="${escAttr(thumb)}"${srcset.replace(" srcset=", " data-srcset=")} loading="eager"${pri} decoding="async">`
-      : `<img alt="${alt}" width="184" height="184" src="${escAttr(thumb)}"${srcset} loading="eager"${pri} decoding="async">`;
+      ? html`<img data-photo-deferred alt="${alt}" width="184" height="184" data-src="${thumb}"${srcsetValue ? html` data-srcset="${srcsetValue}" sizes="184px"` : EMPTY} loading="eager"${pri} decoding="async">`
+      : html`<img alt="${alt}" width="184" height="184" src="${thumb}"${srcsetValue ? html` srcset="${srcsetValue}" sizes="184px"` : EMPTY} loading="eager"${pri} decoding="async">`;
 
-    return `<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener"` +
-           ` data-full="${escAttr(p.full)}"${sizeAttr}${upAttr}${histAttr}>` +
-      image + noScript +
-    `</a>`;
-  }).join("");
+    return html`<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener" data-full="${p.full}"${sizeAttr}${upAttr}${histAttr}>${image}${noScript}</a>`;
+  }));
 }
 
 // The deterministic twelve for the baked fallback. Sorting by stem makes the

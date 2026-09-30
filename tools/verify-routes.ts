@@ -85,6 +85,12 @@ const ROUTES = [
   { path: "/.well-known/http-message-signatures-directory", status: 200,
     ct: "application/http-message-signatures-directory+json", marker: '"keys"', remote: true },
   { path: "/", status: 200, ct: "text/html", marker: "Aadharsh" },
+  // The homepage's two per-visit halves are islands (lib/island.ts). These rows
+  // pin both mounts in the served document, and the fragment rows pin what
+  // fills them (/rn/tracks.html sits with the other /rn rows).
+  { path: "/", status: 200, ct: "text/html", marker: "data-island=/photos/grid.html", fullPage: true },
+  { path: "/", status: 200, ct: "text/html", marker: "data-island=/rn/tracks.html", fullPage: true },
+  { path: "/photos/grid.html", status: 200, ct: "text/html", marker: "/images/full/", fragment: true },
   // The front door answers agents in Markdown at its own URL. Two checks cover that
   // and they are not redundant: this row exercises the worker's own negotiation,
   // while infra.json's markdown-for-agents-off reads production and so covers

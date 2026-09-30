@@ -77,13 +77,18 @@ test("both homepage fragments are preloaded, and the reason that is free still h
   }
 
   // A preload can only ever be free while the fetch it names is UNCONDITIONAL.
-  // The tracks hydrator is guarded on data-ssr="0", which is currently vacuous
-  // because the worker no longer server-renders the playlist at all. If SSR ever
-  // comes back, the guard starts declining and this preload starts paying for a
-  // fragment nobody fetches, so pin the premise rather than trust the comment:
-  // the last two times this stopped being true, only the comments knew.
-  assert.match(page, /<ol class="np-list" id="np-list" data-ssr="0">/,
-    "the document must ship data-ssr='0', or the preloaded fragment goes unfetched");
+  // Both halves are islands now, and the one island script fetches every
+  // [data-island] mount it finds, so the premise is that both mounts ship in
+  // the document naming exactly the URLs the preloads name. If SSR ever comes
+  // back and a mount disappears, a preload starts paying for a fragment nobody
+  // fetches, so pin the premise rather than trust the comment: the last two
+  // times this stopped being true, only the comments knew.
+  assert.match(page, /<section class="photos" aria-label="photographs" data-island="\/photos\/grid\.html" data-state="pending">/,
+    "the grid must ship as an island mount, or the preloaded fragment goes unfetched");
+  assert.match(page, /<ol class="np-list" id="np-list" data-island="\/rn\/tracks\.html" data-state="pending">/,
+    "the playlist must ship as an island mount, or the preloaded fragment goes unfetched");
+  assert.doesNotMatch(page, /data-ssr=|x-rn-fragment/,
+    "the homepage runs on the one island convention, with no second marker or guard");
   const workerDir = new URL("src/worker/", ROOT);
   for (const file of await readdir(workerDir)) {
     if (!file.endsWith(".js")) continue;
@@ -107,8 +112,10 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // The two renderings differ in exactly one way, so assert on the OUTPUT
   // rather than on the source that produces it.
   const photo = [{ stem: "X1", full: "X1.jpg", thumb_jpg: "/i/X1.aaaaaaaa.jpg", thumb_avif: "/i/X1.aaaaaaaa.avif", thumb_small: "/i/X1-400.aaaaaaaa.avif", thumb_xs: "/i/X1-200.aaaaaaaa.avif", size: 1, uploaded: "2026-01-01" }];
-  const baked = renderPhotoSlots(photo, {});
-  const fragment = renderPhotoSlots(photo, {}, { deferred: false });
+  // The renderer returns Html (lib/html.ts) so the fragment can go through
+  // islandResponse; .html is the markup it carries.
+  const baked = renderPhotoSlots(photo, {}).html;
+  const fragment = renderPhotoSlots(photo, {}, { deferred: false }).html;
 
   // Baked: a fallback the hydrator replaces, so a real src outside the
   // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
@@ -159,14 +166,14 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // per-photo fallback rather than making every fragment pay for every possible
   // first hover.
   const packed = "?".repeat(128) + "~".repeat(128);   // 256 chars, both ends of the safe range
-  const withHist = renderPhotoSlots(photo, {}, { deferred: false, histograms: { X1: packed } });
+  const withHist = renderPhotoSlots(photo, {}, { deferred: false, histograms: { X1: packed } }).html;
   assert.match(withHist, /data-hist="/, "a tile whose histogram is known carries it");
   assert.equal(/data-hist="([^"]*)"/.exec(withHist)[1], packed, "the packed histogram ships verbatim");
-  assert.doesNotMatch(renderPhotoSlots(photo, {}, { histograms: { X1: packed } }), /data-hist=/,
+  assert.doesNotMatch(renderPhotoSlots(photo, {}, { histograms: { X1: packed } }).html, /data-hist=/,
     "the disposable baked grid must not carry histogram bytes a scripting browser replaces");
   // Absent is a LEGAL state, not a failure: tooltip.js falls back to the per-photo
   // fetch, which is what a stem baked before this existed gets.
-  assert.doesNotMatch(renderPhotoSlots(photo, {}, { deferred: false }), /data-hist=/,
+  assert.doesNotMatch(renderPhotoSlots(photo, {}, { deferred: false }).html, /data-hist=/,
     "a tile with no known histogram omits the attribute rather than shipping an empty one");
   assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
     "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab");
@@ -178,7 +185,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // on an <img> does not bubble, and the stem is parsed back out of the failing
   // URL so the repair costs no bytes on a tile that will never use it.
   const home = await readFile(new URL("src/pages/index.html", ROOT), "utf8");
-  const repair = home.slice(home.indexOf("AVIF DECODE REPAIR"), home.indexOf("fetch(\"/photos/grid.html\")"));
+  const repair = home.slice(home.indexOf("AVIF DECODE REPAIR"), home.indexOf("new MutationObserver("));
   assert.ok(repair.length > 0, "the homepage must carry the AVIF decode repair");
   assert.match(repair, /addEventListener\("error"[\s\S]*\}, true\)/, "the repair must listen in the CAPTURE phase or it never fires");
   assert.match(repair, /\(\?:-\(\?:200\|400\)\)\?/, "both minted tier suffixes must be matched literally rather than as -\\d+");
@@ -199,7 +206,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // it is whole. Assert the exact PARTITION rather than a count, because six
   // low tiles in the wrong six is the same bug wearing the right total.
   const twelve = Array.from({ length: 12 }, (_, i) => ({ ...photo[0], stem: `X${i}`, full: `X${i}.jpg` }));
-  const grid12 = renderPhotoSlots(twelve, {}, { deferred: false });
+  const grid12 = renderPhotoSlots(twelve, {}, { deferred: false }).html;
   const tiles = grid12.split("<a href=").slice(1);
   assert.equal(tiles.length, 12, "the fragment must render all twelve tiles");
   assert.deepEqual(
@@ -210,7 +217,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   const histogramGrid = renderPhotoSlots(twelve, {}, {
     deferred: false,
     histograms: Object.fromEntries(twelve.map((p) => [p.stem, packed])),
-  }).split("<a href=").slice(1);
+  }).html.split("<a href=").slice(1);
   assert.deepEqual(
     histogramGrid.map((tile) => /data-hist=/.test(tile)),
     [true, true, true, true, true, true, false, false, false, false, false, false],
@@ -235,8 +242,19 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(luna, /\.np-list li\[data-track-title\]\s*\{\s*cursor:\s*pointer;\s*\}/);
 
   assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
-  assert.match(page, /fetch\("\/photos\/grid\.html"\)/, "the homepage must hydrate its random twelve");
-  assert.match(page, /\.catch\(\(\) => \{\}\)\s*\.then\(boot\)/, "a failed grid fetch must still hydrate the baked tiles");
+  // The random twelve arrive through the one island script, byte-identical to
+  // islandScript() so a single CSP hash covers it on every island page, and a
+  // failed island (data-state="failed") must still promote the baked tiles.
+  const { islandScript, islandResponse, ISLAND_MARKER } = await import("../src/worker/lib/island.ts");
+  assert.ok(page.includes(islandScript().html), "the homepage must carry islandScript() byte for byte");
+  assert.equal(page.split(islandScript().html).length, 2, "one island script fills both mounts");
+  assert.ok(page.indexOf(islandScript().html) > page.indexOf('id="np-list"'),
+    "the island script must come after both mounts, or it finds neither");
+  assert.match(page, /getAttribute\("data-state"\) === "failed"\) boot\(\)/, "a failed grid island must still hydrate the baked tiles");
+  assert.match(worker, /islandResponse\(renderPhotoSlots\(/, "/photos/grid.html must answer through islandResponse, which carries the marker");
+  const res = islandResponse(renderPhotoSlots(photo, {}, { deferred: false }));
+  assert.equal(res.headers.get(ISLAND_MARKER), "1");
+  assert.equal(res.headers.get("cache-control"), "no-store, must-revalidate", "the random twelve are one request's");
   // Removed 2026-07-29. It withheld 3 of 12 tiles to save ~34 KB out of ~136 KB,
   // and the 9 it allowed finished 48ms apart, so the row it held back showed up
   // as white squares on the first scroll for no measurable gain.
