@@ -93,9 +93,13 @@ function group(title: string, inner: Html): Html {
   return html`<section class="axp-group"><h2>${title}</h2>${inner}</section>`;
 }
 
+/** One task row. Exported so build step 1g2 can add a twin to a pane it did not render. */
+export function taskRow(item: Task): Html {
+  return html`<li><span class="axp-glyph" aria-hidden="true">${item.glyph || "›"}</span><a href="${item.href}">${item.label}</a></li>`;
+}
+
 function taskList(items: Task[]): Html {
-  const rows = items.map((item) => html`<li><span class="axp-glyph" aria-hidden="true">${item.glyph || "›"}</span><a href="${item.href}">${item.label}</a></li>`);
-  return html`<ul>${rows}</ul>`;
+  return html`<ul>${items.map(taskRow)}</ul>`;
 }
 
 /**

@@ -89,6 +89,8 @@ background:linear-gradient(180deg,oklch(99% 0 0),oklch(92% 0.005 263));box-shado
 `;
 
 export function writingShell(o) {
+  // The Markdown twin, where the build wrote one: the lookup lunaPage makes.
+  const twin = twinFor(o.path);
   return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
     "<meta name=\"theme-color\" content=\"#2D78BD\">" +
@@ -98,6 +100,7 @@ export function writingShell(o) {
     "<link rel=\"icon\" type=\"image/svg+xml\" href=\"/section-icons/writing.svg\">" +
     "<meta name=\"description\" content=\"" + escAttr(o.desc) + "\">" +
     "<link rel=\"canonical\" href=\"https://aadhar.sh" + escAttr(o.path) + "\">" +
+    (twin ? "<link rel=\"alternate\" type=\"text/markdown\" title=\"markdown source\" href=\"" + escAttr(twin) + "\">" : "") +
     // Feed discovery for the whole section, on the index and on every post, which
     // is where a reader's "subscribe" button actually looks.
     "<link rel=\"alternate\" type=\"application/rss+xml\" title=\"aadhar.sh — writing\" href=\"/writing/feed.xml\">" +
