@@ -716,6 +716,18 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   border: 1px solid #7f9db9; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff;
 }
 :where(.xp-input:focus) { outline: none; border-color: #316ac5; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff, 0 0 0 1px #316ac5; }
+/* THE status bar: the strip of short facts along a window's bottom edge. Four
+   variants grew separately (garage's .status on 14 pages, cal's .xp-statusbar,
+   pixel-peeper's .statusbar, Notepad's .np-status), and .status also names an
+   inline pill on 7 other pages, so the component takes cal's unambiguous
+   name. Modelled on the garage strip, the most used, with its colours on
+   tokens: a chrome-face band under a hairline, short spans spaced apart and
+   wrapping on a narrow window. Pages move onto it in a follow-up. */
+:where(.xp-statusbar) {
+  flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  padding: 4px 10px; font: 8.5pt/1.4 var(--font-ui); color: var(--ink-dim);
+  background: var(--face-light); border-top: 1px solid var(--rule);
+}
 
 /* ───────────────── homepage music island (below the fold) ─────────────────
    Kept in the immutable shared sheet so a dynamic homepage reload does not
