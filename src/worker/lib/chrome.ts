@@ -200,8 +200,8 @@ ${unsafeHtml(css || "")}
 ${unsafeHtml(DESKTOP_TOP)}
 <div class="window${windowClass ? " " + windowClass : ""}"${windowAttrs === EMPTY ? EMPTY : html` ${windowAttrs}`}>
   <div class="title-bar">${histnavHtml}
-    <span class="title-text${titleClass ? " " + titleClass : ""}"><span class="icon"></span>${windowTitle}</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="${closeHref}" title="${closeTitle}" aria-label="${closeLabel}"></a></span>
+    <span class="title-text${titleClass ? " " + titleClass : ""}"><span class="icon" aria-hidden="true"></span>${windowTitle}</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="${closeHref}" title="${closeTitle}" aria-label="${closeLabel}"></a></span>
   </div>${addressHtml}
   ${paneHtml}<div class="content${contentClass ? " " + contentClass : ""}">
 ${body}

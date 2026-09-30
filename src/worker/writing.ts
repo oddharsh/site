@@ -106,6 +106,10 @@ export function writingShell(o) {
     DESKTOP_CHROME + "<script src=\"/notepad.js\" defer></script><script src=\"/nav.js\" defer></script></body></html>";
 }
 
+// The page window's maximize control: a native button nav.js wires, so it is
+// reachable and announced (the title bar itself is not aria-hidden).
+const MAX_BUTTON = "<button type=\"button\" class=\"max\" title=\"maximize\" aria-label=\"maximize\"></button>";
+
 // popId (optional): render the window as an inline popover (id + popover="auto")
 // so it can composite over the folder index instead of being its own page.
 export function notepadWindow(filename, text, closeHref, date?, popId?) {
@@ -115,7 +119,9 @@ export function notepadWindow(filename, text, closeHref, date?, popId?) {
   return open +
     "<div class=\"np-titlebar\">" + (popId ? "" : DESKTOP_HISTNAV) + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
       "<span class=\"np-title\">" + escHtml(filename) + " — Notepad</span>" +
-      "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
+      // A popover note is never the body-level window nav.js wires, so its max
+      // stays an inert decoration; the standalone window's is a real button.
+      "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + (popId ? "<span class=\"max\" aria-hidden=\"true\"></span>" : MAX_BUTTON) +
       "<a class=\"close\" href=\"" + escAttr(closeHref) + "\"" + (popId ? " data-pop" : "") + " title=\"back to writing\" aria-label=\"Close\">✕</a></span></div>" +
     "<div class=\"np-menubar\" role=\"menubar\" aria-label=\"menu\">" +
       "<span class=\"np-menu\" role=\"menuitem\">File</span><span class=\"np-menu\" role=\"menuitem\">Edit</span><span class=\"np-menu\" role=\"menuitem\">Format</span><span class=\"np-menu\" role=\"menuitem\">View</span><span class=\"np-menu\" role=\"menuitem\">Help</span></div>" +
@@ -194,7 +200,7 @@ export async function renderWritingIndex(env) {
   const body = "<div class=\"np-window np-folder\">" +
     "<div class=\"np-titlebar\">" + DESKTOP_HISTNAV + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
       "<span class=\"np-title\">aadhar.sh/writing</span>" +
-      "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
+      "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + MAX_BUTTON +
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
     // The folder view is the one place on this site that was already a complete
     // Explorer window bar the chrome: caption, listing, status bar. The counts

@@ -121,9 +121,9 @@ ${spec.demoCss ? spec.demoCss + "\n" : ""}</style>
 <body>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
-  <div class="title-bar" aria-hidden="true">${DESKTOP_HISTNAV}
-    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe &middot; ${titleSuffix}</span>
-    <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
+  <div class="title-bar">${DESKTOP_HISTNAV}
+    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/lwe &middot; ${titleSuffix}</span>
+    <span class="controls"><span class="min" title="minimize" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
   </div>
   <div class="content">
     <div class="msgr">
