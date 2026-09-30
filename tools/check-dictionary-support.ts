@@ -16,6 +16,7 @@ import { brotliDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { PAGE_FAMILY_MATCH } from "../src/worker/lib/assets.ts";
 import { FAMILY_DICT_DIR, readCommittedFamily, type CommittedFamily } from "./lib/page-family.ts";
+import { SHELL_DISCOVERY_ROOTS } from "./lib/shell-roots.ts";
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
 const get = (url, dict?, extra: Record<string, string> = {}) => {
@@ -69,8 +70,9 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const bases = new Set(committed.map((n) => n.replace(/\.[0-9a-f]{8}\.(js|css)$/, "")));
 
   // Discovery has to match the ROLL's, or this assertion grades a different set from the
-  // one the nightly job adopts. It walks the same four documents and then closes over the
-  // /a/ graph, because an asset loaded lazily from JavaScript appears in no document.
+  // one the nightly job adopts. It walks the same documents (SHELL_DISCOVERY_ROOTS, one
+  // list the two import) and then closes over the /a/ graph, because an asset loaded
+  // lazily from JavaScript appears in no document.
   //
   // This check shipped with an HTML-only scan of two pages, and that is the same gap the
   // roll had until it grew `liveShell()`; the fix landed there and was never mirrored
@@ -94,7 +96,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 
   const refs = new Map();
   const see = (name) => refs.set(name, name.replace(/\.[0-9a-f]{8}\.(js|css)$/, ""));
-  for (const path of ["/", "/lens", "/lwe/utf8", "/writing"]) {
+  for (const path of SHELL_DISCOVERY_ROOTS) {
     const doc = await fetchLive(path);
     if (doc) for (const n of assetRefs(doc)) see(n);
   }

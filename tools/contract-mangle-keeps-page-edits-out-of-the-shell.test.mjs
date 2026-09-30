@@ -105,8 +105,19 @@ test("the rename still passes the dangling-reference invariant", () => {
   assert.doesNotThrow(() => assertIntegrity(files, out, map, 3));
 });
 
+// The page-scoped hashed files (ask.js, the pretext library, dotfiles.js) are
+// content-hashed and still ranked as PAGES: ask.js
+// reads three --font-* tokens, and in the shell set its edits would reorder
+// luna.css's names. "more page uses of a SHELL token" above is that case, so
+// what is left to pin is that 5c actually hands them over on the page side.
 test("step 5c hands planNames the shell set, and step 6 holds that set to its own asset lists", () => {
   const build = readFileSync(new URL("./build.ts", import.meta.url), "utf8");
-  assert.ok(build.includes("planNames(before, CONTENT_HASHED)"), "5c must plan with the content-hashed set");
+  assert.ok(build.includes("planNames(before, SHELL_RANKED)"), "5c must plan with the shell part of the content-hashed set");
+  assert.match(
+    build,
+    /const SHELL_RANKED = new Set\(\[\.\.\.CONTENT_HASHED\]\.filter\(\(f\) => !PAGE_SCOPED_HASHED\.has\(f\)\)\)/,
+    "SHELL_RANKED must be CONTENT_HASHED minus the page-scoped files",
+  );
+  assert.match(build, /\.\.\.PAGE_SCOPED_HASHED,\n\]\);/, "the page-scoped files must still be in CONTENT_HASHED, which the drift check holds to step 6");
   assert.match(build, /CONTENT_HASHED \(step 5c\) and step 6's asset lists disagree/, "the drift check between the two lists is gone");
 });

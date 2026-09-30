@@ -852,7 +852,8 @@ const SHELLS = [
   // /lwe/ URL (a subdirectory here stages to the same subdirectory served); it
   // moved out of public/ on 2026-09-16 because public/ is for bytes that ship
   // unchanged and this one is now minified. Measured: 4,305 B on the wire at the
-  // edge's q4 against 2,833 minified with a q11 twin, on 12 pages.
+  // edge's q4 against 2,833 minified with a q11 twin, on 12 pages. The pages load
+  // it from /a/ since 2026-09-30 (PAGE_SCOPED_HASHED); /lwe/ask.js stays served.
   ["lwe/ask.js", "/lwe/ask.src.js", "lwe-q"],
   // the vendored @chenglou/pretext 0.0.7 that /garage/pretext imports. It came
   // prebuilt by its own bundler and shipped from public/ unchanged until
@@ -861,8 +862,10 @@ const SHELLS = [
   // means the module lost its public surface and the page's import would break.
   ["garage/pretext.lib.js", "/garage/pretext.lib.src.js", "prepareWithSegments"],
   // the /dotfiles checklist. An ES module (tools/gen-dotfiles.ts imports its
-  // renderer to write the committed macos.sh), unhashed like ask.js: one page
-  // loads it and a hash would re-mint nothing worth re-minting.
+  // renderer to write the committed macos.sh). It shipped unhashed until
+  // 2026-09-30, on the argument that a hash re-mints nothing worth re-minting;
+  // that was true and beside the point, since the plain root URL had no
+  // _headers rule and no q11 twin, so every visit revalidated 1,483 B of q4.
   ["dotfiles.js", "/dotfiles.src.js", "dotfiles-data"],
 ];
 
@@ -2131,15 +2134,34 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /reading + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
-// Every staged file step 6 content-hashes into /a/. Step 5c reads it to keep
-// page edits out of these files' bytes, and step 6 fails if its two asset lists
-// and this one disagree, so an asset cannot join /a/ without joining this too.
-const CONTENT_HASHED = new Set([
-  "nav.js", "luna.css", "lens-boot.js", "icons.svg", "quiz.js", "notepad.js", "lwe-base.css",
-  "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js",
-  "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js",
-  "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js", "webmcp.js",
+// Staged files step 6 content-hashes into /a/ that ONE page or one section
+// loads: the LWE ask widget, the vendored pretext library and the /dotfiles
+// checklist. They were plain URLs that every visit revalidated (max-age=0
+// under /lwe/*, /garage/* and the root default), so the hash is what buys the
+// year.
+//
+// They are hashed like the shell and RANKED like pages in 5c. The shell tier
+// orders names by their uses inside the shell alone, so a page-scoped file in
+// that set would let an edit to ask.js (which reads three --font-* tokens)
+// reorder luna.css's short names and re-mint every page (gotcha 35).
+const PAGE_SCOPED_HASHED = new Set([
+  "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js",
 ].map((f) => `public/${f}`));
+
+// Every staged file step 6 content-hashes into /a/. Step 5c reads the shell
+// part of it to keep page edits out of these files' bytes, and step 6 fails if
+// its two asset lists and this one disagree, so an asset cannot join /a/
+// without joining this too.
+const CONTENT_HASHED = new Set([
+  ...[
+    "nav.js", "luna.css", "lens-boot.js", "icons.svg", "quiz.js", "notepad.js", "lwe-base.css",
+    "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js",
+    "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js",
+    "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js", "webmcp.js",
+  ].map((f) => `public/${f}`),
+  ...PAGE_SCOPED_HASHED,
+]);
+const SHELL_RANKED = new Set([...CONTENT_HASHED].filter((f) => !PAGE_SCOPED_HASHED.has(f)));
 
 // 5c) shorten every CSS custom property name, across the whole staged tree.
 //
@@ -2181,7 +2203,7 @@ const CONTENT_HASHED = new Set([
   // follow, so it is a build failure rather than a silent miss.
   assertNoDynamicPropertyNames(before);
 
-  const map = planNames(before, CONTENT_HASHED);
+  const map = planNames(before, SHELL_RANKED);
   const after = new Map<string, string>();
   for (const [rel, text] of before) after.set(rel, applyMangle(text, map));
 
@@ -2247,6 +2269,12 @@ let freshFamily: Buffer | null = null;
     { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "../src/worker/writing.ts" },
     // Shared LWE structure is a separate warm-cache object.
     { attr: "href", from: "/lwe-base.css", base: "lwe-base", ext: "css", witness: "lwe/vigenere.html" },
+    // The LWE ask widget, on 12 pages, joined 2026-09-30 (PAGE_SCOPED_HASHED).
+    // Under /lwe/* it revalidated on every view: a background conditional GET
+    // for a week, a blocking one after that. A subdirectory asset takes a flat
+    // base, because roll-shell-dictionary and dcz:check read /a/ names as
+    // [\w-]+, and it has no top-level copy for perf-snapshot's merge to pair.
+    { attr: "src", from: "/lwe/ask.js", base: "ask", ext: "js", witness: "lwe/vigenere.html" },
   ];
   const hashedFor: Record<string, string> = {};
   // ── phase 0: the three JS-STRING-loaded islands (tooltip, hoist, lens-browser) ──
@@ -2335,9 +2363,20 @@ let freshFamily: Buffer | null = null;
     // for the same reason, so it sits below hoist in this leaves-first list.
     { file: "/infotip.js",      base: "infotip",      mk: (to) => [
       [/import\((["'`])\/infotip\.js\1\)/g, `import($1${to}$1)`] ] },
+    // PAGE_SCOPED_HASHED: three leaves, each loaded from one page's inline
+    // script, joined 2026-09-30. /garage/pretext imports its library RELATIVELY
+    // ("./pretext.lib.js"), so the pattern takes that spelling and the absolute
+    // one; the page's prose names /garage/pretext.lib.js in <code> twice, and
+    // call syntax is what keeps those mentions out of reach.
+    { file: "/garage/pretext.lib.js", base: "pretext-lib", mk: (to) => [
+      [/import\((["'`])(?:\.\/|\/garage\/)pretext\.lib\.js\1\)/g, `import($1${to}$1)`] ] },
+    { file: "/dotfiles.js",     base: "dotfiles",     mk: (to) => [
+      [/(\bfrom\s*)(["'`])\/dotfiles\.js\2/g, `$1$2${to}$2`],
+      [/import\((["'`])\/dotfiles\.js\1\)/g, `import($1${to}$1)`] ] },
   ];
-  // 5c planned its short names with CONTENT_HASHED as the shell. An asset hashed
-  // here and missing there would take page-driven renames into an /a/ URL again.
+  // 5c planned its short names with CONTENT_HASHED's shell part as the shell. An
+  // asset hashed here and missing there would take page-driven renames into an
+  // /a/ URL again.
   {
     const hashedHere = new Set([...ASSETS.map((a) => a.from), ...STRING_ASSETS.map((a) => a.file)].map((f) => `public${f}`));
     const drift = [...hashedHere].filter((f) => !CONTENT_HASHED.has(f)).concat([...CONTENT_HASHED].filter((f) => !hashedHere.has(f)));
@@ -2401,6 +2440,11 @@ let freshFamily: Buffer | null = null;
     // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
     // and the one the old ordering left pointing at the unhashed duplicate.
     if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
+    // The page-scoped three: each has exactly one loader, on one page.
+    for (const [page, key] of [["garage/pretext.html", "pretext-lib"], ["dotfiles/index.html", "dotfiles"]]) {
+      const body = await readFile(`${OUT}/public/${page}`, "utf8");
+      if (!body.includes(hashedFor[key])) throw new Error(`${page} was not repointed to ${hashedFor[key] ?? `a hashed ${key}`}`);
+    }
     console.log(`string-loaded islands: rewritten across ${hits} staged files`);
   }
 
