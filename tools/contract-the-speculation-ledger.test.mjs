@@ -718,3 +718,59 @@ test("only the canonical hostname may be served from Workers Cache", async () =>
     assert.equal(isCanonicalHost(host), false, `${host} is not the canonical host`);
   }
 });
+
+// ── the client half of the numerator, since 2026-09-29 ──────────────────────
+// The header beacon never shipped, so for 30 days the numerator read 0 on all
+// 83 paths and speculation:report rated every link 0%. These pin the three
+// pieces that fixed the grader: the denominator counts documents only, the
+// endpoint records nav.js's beacon as its own kind, and the readback takes the
+// larger of the two sources so one activation is never counted twice.
+test("the denominator counts speculated DOCUMENTS, not a prerender's own sub-resources", async () => {
+  const { countSpeculativeLoad } = await import("../src/worker/speculation.ts");
+  const ok = new Response("", { status: 200 });
+  for (const [dest, expected] of [["document", 1], ["script", 0], ["style", 0], ["empty", 0], [null, 1]]) {
+    const { env, points } = speculationEnv();
+    /** @type {Record<string, string>} */
+    const headers = { "sec-purpose": "prefetch;prerender" };
+    if (dest) headers["sec-fetch-dest"] = String(dest);
+    countSpeculativeLoad(env, new Request("https://aadhar.sh/garage", { headers }), ok, "/garage");
+    assert.equal(points.length, expected, `sec-fetch-dest: ${dest} should write ${expected}`);
+  }
+});
+
+test("nav.js's beacon lands as activated-client, and the header beacon stays activated", async () => {
+  const { handlePrefetchActivation } = await import("../src/worker/speculation.ts");
+  const { env, points } = speculationEnv();
+  assert.equal(handlePrefetchActivation(new Request("https://aadhar.sh/ledger/prefetch?via=client&p=%2Fgarage", { method: "HEAD" }), env).status, 204);
+  assert.equal(handlePrefetchActivation(new Request("https://aadhar.sh/ledger/prefetch?p=%2Fgarage", { method: "HEAD" }), env).status, 204);
+  assert.deepEqual(points.map((p) => [p.blobs[0], p.blobs[1]]), [["activated-client", "/garage"], ["activated", "/garage"]]);
+  assert.deepEqual(points.map((p) => p.indexes), [["activated-client"], ["activated"]]);
+});
+
+test("the readback takes the larger activation source per path and never sums them", async () => {
+  const { summarizeSpeculation } = await import("../src/worker/speculation.ts");
+  const rows = summarizeSpeculation([
+    { kind: "prerender", path: "/garage", n: 20 },
+    { kind: "activated", path: "/garage", n: 3 },          // the header beacon, once it ships
+    { kind: "activated-client", path: "/garage", n: 5 },   // nav.js, for the same activations
+    { kind: "prerender", path: "/lwe", n: 10 },
+    { kind: "activated-client", path: "/lwe", n: 4 },
+  ]);
+  assert.equal(rows.find((r) => r.path === "/garage")?.activated, 5, "max(3, 5), not 8");
+  assert.equal(rows.find((r) => r.path === "/garage")?.rate, 0.25);
+  assert.equal(rows.find((r) => r.path === "/lwe")?.activated, 4);
+});
+
+test("nav.js beacons both shapes of a paid-off speculation, before anything waits on paint", () => {
+  const nav = readFileSync(new URL("../src/client/nav.js", import.meta.url), "utf8");
+  const head = nav.indexOf("var activated = () =>");
+  assert.ok(head > 0, "nav.js must define the activation beacon");
+  const block = nav.slice(head, head + 900);
+  assert.match(block, /\/ledger\/prefetch\?via=client&p=" \+ encodeURIComponent\(location\.pathname\)/);
+  assert.match(block, /method: "HEAD"/, "the endpoint answers GET and HEAD only");
+  // a prerender activates later, so it waits for the event, once
+  assert.match(block, /\.prerendering\) \{\s*D\.addEventListener\("prerenderingchange", activated, \{ once: true \}\)/);
+  // a navigation served from a prefetch says so in its timing entry, and only that one beacons at load
+  assert.match(block, /deliveryType === "navigational-prefetch"\) activated\(\)/);
+  assert.ok(head < nav.indexOf("bootAfterStaticPaint"), "registered before the paint-gated boot, since a prerender is not painted until activated");
+});

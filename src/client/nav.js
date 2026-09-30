@@ -21,6 +21,28 @@
   var W = /** @type {Window & typeof globalThis & {__axpNav?: boolean, webkitAudioContext?: typeof AudioContext}} */ (window);
   if (W.__axpNav) return; W.__axpNav = true;
   var D = document;
+  // The speculation ledger's numerator (src/worker/speculation.ts, THE CLIENT
+  // HALF); the header beacon the ledger was built around never shipped, so this
+  // HEAD is the only activation it can count. A speculation pays off in two
+  // shapes. A prerendered document becoming the page fires prerenderingchange,
+  // so that case is registered here, before anything that waits on paint,
+  // since a prerender is not painted until activated. And a navigation served
+  // from a prefetch says so in its timing entry: in a headful Chrome run on
+  // 2026-09-29 the shell's moderate PRERENDER rule was satisfied as a prefetch
+  // (deliveryType "navigational-prefetch", activationStart 0), which the
+  // prerender event alone would never have seen.
+  var activated = () => {
+    try {
+      fetch("/ledger/prefetch?via=client&p=" + encodeURIComponent(location.pathname),
+        { method: "HEAD", keepalive: true, credentials: "omit" }).catch(() => {});
+    } catch { /* a metric must never break a page */ }
+  };
+  if (/** @type {Document & {prerendering?: boolean}} */ (D).prerendering) {
+    D.addEventListener("prerenderingchange", activated, { once: true });
+  } else {
+    var navEntry = /** @type {PerformanceNavigationTiming & {deliveryType?: string} | undefined} */ (performance.getEntriesByType("navigation")[0]);
+    if (navEntry && navEntry.deliveryType === "navigational-prefetch") activated();
+  }
   // The Run palette used to open and close inside a same-document View Transition.
   // It applies its DOM change directly now (2026-07-30), for the same reason the
   // cross-document transition came out of luna.css: the palette is already on
