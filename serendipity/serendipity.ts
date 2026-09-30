@@ -10,7 +10,7 @@ const PREFIX = "/serendipity";
 // it CONSTRUCT the desktop after load: curl and JS-off visitors got no desktop
 // at all, and everyone else got a shell pop. Now the markup is in the document
 // and nav.js only wires behavior, same as every other page.
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { esc } from "../src/worker/lib/http.ts";
 import { html as htmlTag, unsafeHtml } from "../src/worker/lib/html.ts";
@@ -237,11 +237,15 @@ function shellCss() {
   a{color:oklch(42% 0.235 264);text-decoration:underline}
   a:hover{color:oklch(60% 0.25 29)}
   h1,h2,h3{font-family:var(--font-caption);margin:0}
-  .wrap{max-width:980px;padding:22px 12px 48px}
+  /* the window is body-level, like every lunaPage window, so nav.js wires it
+     (drag, maximize, Back/Forward, close-to-home). It sat inside a .wrap until
+     2026-09-30, which put it outside that model; the wrap's 980px less its 12px
+     side padding is the measure it keeps here. */
+  :root{--axp-maxw:956px}
   /* windows are resizable now, so stack the master-detail on WINDOW width, not
      just viewport. container query keys on .window; the @media below stays as the
      viewport / no-container-support fallback. */
-  .window{container:serendipity-win / inline-size}
+  .window{max-width:var(--axp-maxw);container:serendipity-win / inline-size}
   .body{display:flex;min-height:520px}
   @container serendipity-win (max-width:560px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}
   /* under the shared OS-window model nav.js scrolls .window>.body; for this
@@ -370,9 +374,10 @@ function shell(title, currentPath, bodyHtml, head = "") {
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
 <style>${shellCss()}</style>
 <link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css">${head}</head><body>${DESKTOP_TOP}
-<div class="wrap"><div class="window">
-  <div class="title-bar"><span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/serendipity</span>
-    <span class="controls"><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
+<div class="window">
+  <div class="title-bar">${DESKTOP_HISTNAV}
+    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/serendipity</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>
   <div class="body">
     <nav class="pane">
@@ -389,7 +394,7 @@ function shell(title, currentPath, bodyHtml, head = "") {
     </nav>
     <main class="content">${bodyHtml}</main>
   </div>
-</div></div>${DESKTOP_CHROME}
+</div>${DESKTOP_CHROME}
   <script src="/nav.js" defer></script>
 </body></html>`;
 }

@@ -332,7 +332,7 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderLedgerPage() {
   const css = `/*min*/
-h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:var(--blue-40); margin:0 0 2px; font-weight:bold; }
+h1 { font-size:13pt; margin:0 0 2px; }
 .lg-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:10pt; }
 .lg-lede a { color:oklch(42.61% 0.2353 263.74); }
 

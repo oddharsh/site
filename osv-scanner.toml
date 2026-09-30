@@ -1,6 +1,16 @@
 # osv-scanner's config for the root bun.lock (the scanner reads the
-# osv-scanner.toml beside each lockfile it is handed; ci.yml runs it under
-# "Scan lockfiles for known vulnerabilities").
+# osv-scanner.toml beside each lockfile it is handed). CI stopped running it
+# on 2026-09-28 (#1001, ci.yml's "What left" list), so the scan is a
+# workstation command now, run by hand from the repository root. It is the
+# invocation the retired CI step used:
+#
+#   osv-scanner scan source \
+#     --lockfile bun.lock \
+#     --lockfile lens-reader/bun.lock \
+#     --lockfile tools/photos/zenc/Cargo.lock
+#
+# Exit 0 is clean, 1 is findings (advisory), and anything else means the scan
+# never ran, usually a wrong lockfile path.
 #
 # ONE ignore, by advisory id, and it is a MISREAD rather than a risk accepted.
 # wrangler is pinned to a pkg.pr.new tarball URL (package.json, the
@@ -13,8 +23,9 @@
 # the matcher. A string that is not semver cannot sit above any fix, so it
 # lands inside every `introduced: 0` range the package has ever had.
 #
-# Measured 2026-09-16 against osv-scanner v2.5.0, the CI pin. The installed
-# wrangler was 4.131.2 and the advisory below is fixed in 2.20.1; sending the
+# Measured 2026-09-16 against osv-scanner v2.5.0, CI's pin while CI ran it.
+# The installed wrangler was 4.131.2 and the advisory below is fixed in
+# 2.20.1; sending the
 # URL to api.osv.dev/v1/query returns the advisory and sending 4.131.2 returns
 # nothing. So the number being compared is the pin's SHAPE and never its
 # contents, and the same line follows every sha `wrangler:pin` advances to.
@@ -30,6 +41,14 @@
 # treat a tarball URL the way it already treats `file:`, version unknown and
 # the package reported as unscannable. When a release carries that, this
 # entry is dead weight and can go, whatever the pin looks like.
+#
+# The fix EXISTS and is not in a scanner release yet. osv-scalibr#2444 closed
+# #2441 on 2026-09-17 and shipped in osv-scalibr v0.5.3 (2026-09-22).
+# osv-scanner v2.6.0, the newest release as of 2026-09-30, bundles a
+# pseudo-version cut 2026-09-11, before the fix; its main branch already
+# carries a later one. So remove this ignore once an osv-scanner release after
+# v2.6.0 bundles osv-scalibr v0.5.3 or later. Check it first: delete the
+# ignore, scan, and confirm GHSA-8c93-4hch-xgxp no longer fires on wrangler.
 [[IgnoredVulns]]
 id = "GHSA-8c93-4hch-xgxp"
 reason = "false positive: wrangler is pinned to a pkg.pr.new tarball URL, which the bun.lock extractor passes through as the version; the installed wrangler is 4.x and the fix is 2.20.1"

@@ -1,6 +1,7 @@
 import { serveMarkdownTwin } from "./lib/assets.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
 import { renderPhotoSlots } from "./lib/photo-grid.ts";
+import { islandResponse } from "./lib/island.ts";
 import { span } from "./lib/trace.ts";
 import { CURATED_POOL, getAltMap, getHistogramMap } from "./photos.ts";
 
@@ -80,14 +81,9 @@ export async function handlePhotoGrid(request, env) {
     s.setAttribute("home.grid.hist_known", Object.keys(histograms || {}).length);
     // deferred:false — these twelve are the real grid, not a placeholder, so
     // they carry live URLs and start the moment innerHTML lands.
-    return new Response(renderPhotoSlots(pickRandom(pool, 12), altMap || {}, { deferred: false, histograms }), {
-      status: 200,
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "no-store, must-revalidate",
-        "x-content-type-options": "nosniff",
-      },
-    });
+    // An island fragment (lib/island.ts): the x-island marker is what lets the
+    // homepage's one island script tell this body from an edge error page.
+    return islandResponse(renderPhotoSlots(pickRandom(pool, 12), altMap || {}, { deferred: false, histograms }));
   });
 }
 

@@ -38,6 +38,22 @@
   // in an attribute even though today's callers only use it in text.
   /** @param {string} s */
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  // Notepad's F5 stamp. Intl does the formatting and the two formatters are
+  // built on the first F5 rather than per keystroke. ICU writes a narrow no-break
+  // space before AM/PM, so whitespace is normalised to a plain space and the
+  // stamp stays byte-identical to the hand-rolled one it replaced. Date rather
+  // than Temporal: both read the same wall clock, and Date is the primitive
+  // every engine agrees on.
+  /** @type {Intl.DateTimeFormat[] | null} */
+  var f5Fmts = null;
+  /** @param {Date} d */
+  function f5Stamp(d) {
+    f5Fmts = f5Fmts || [
+      new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }),
+      new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric", year: "numeric" })
+    ];
+    return (f5Fmts[0].format(d) + " " + f5Fmts[1].format(d)).replace(/\s/g, " ");
+  }
   // Note popovers used to show and hide inside a same-document View Transition,
   // each one given its own `axp-note-<id>` transition name. That came out with the
   // rest of the View Transition machinery (2026-07-30): a popover is a top-layer
@@ -46,26 +62,55 @@
 
   // Menu owns interaction; the caller owns actions and checkbox state. Keeping
   // it in this classic script costs no extra request or cross-script global.
+  //
+  // Each dropdown is a popover="auto", so light dismiss (a press anywhere
+  // outside), Esc and the top layer are the platform's. That replaced a document
+  // click listener, and the top layer is what lets a menu inside a /writing note
+  // (itself a manual popover) draw over the note. Opening a menu closes other
+  // auto popovers (a tray balloon) and never a manual one (the notes). The
+  // keyboard model below stays ours: the ARIA menubar pattern, arrow keys,
+  // typeahead and focus return are not something popover provides.
+  //
+  // The drop stays in the menubar's DOM (after its button), so focusout and the
+  // keydown handler see its rows as inside the composite. The top layer ignores
+  // the menubar's own positioning, so the drop is placed from the button's
+  // rect. An engine without popover keeps writing.ts's absolute .np-drop and
+  // closes on focusout, Esc or a second press.
   /** @type {(() => void) | null} */
   var closeActiveMenu = null;
+  var HAS_POPOVER = "showPopover" in HTMLElement.prototype;
   /** @param {HTMLElement} menubar @param {MenuDefinition[]} definitions */
   function Menu(menubar, definitions) {
     /** @type {OpenMenu | null} */
     var opened = null;
     /** @type {HTMLElement[]} */
     var buttons = [];
+    // Which button's menu was open when the pointer went down. Pressing the open
+    // menu's own button light-dismisses the drop before the click arrives (where
+    // showPopover's `source` is unsupported), and without this the click would
+    // open it again instead of closing it.
+    /** @type {HTMLElement | null} */
+    var pressedOpen = null;
     menubar.replaceChildren();
 
+    /** @param {OpenMenu} menu */
+    function settle(menu) {
+      if (opened !== menu) return;
+      opened = null;
+      closeActiveMenu = null;
+      menu.btn.setAttribute("aria-expanded", "false");
+    }
     /** @param {boolean} [restore] */
     function close(restore) {
       var previous = opened;
       if (!previous) return;
-      opened = null;
-      closeActiveMenu = null;
-      D.removeEventListener("click", outside);
-      previous.btn.setAttribute("aria-expanded", "false");
-      previous.drop.remove();
+      settle(previous);
+      // Focus leaves the drop before it hides, so the platform has no focus to
+      // restore mid-operation (the same InvalidStateError trap nav-tray.js
+      // documents for the tray balloon).
       if (restore) previous.btn.focus();
+      if (HAS_POPOVER && previous.drop.matches(":popover-open")) previous.drop.hidePopover();
+      previous.drop.remove();
     }
     function outside() { close(); }
     /** @param {number} index */
@@ -97,10 +142,22 @@
       focusButton(index);
       btn.setAttribute("aria-expanded", "true");
       btn.after(drop);
-      drop.style.left = btn.offsetLeft + "px";
-      opened = { btn: btn, drop: drop, rows: rows };
+      /** @type {OpenMenu} */
+      var menu = { btn: btn, drop: drop, rows: rows };
+      opened = menu;
       closeActiveMenu = outside;
-      D.addEventListener("click", outside);
+      if (HAS_POPOVER) {
+        var r = btn.getBoundingClientRect();
+        drop.popover = "auto";
+        drop.style.cssText = "position:fixed;inset:auto;margin:0;left:" + r.left + "px;top:" + menubar.getBoundingClientRect().bottom + "px";
+        // Light dismiss and a native Esc both close from outside this code, so
+        // the bookkeeping follows the popover rather than the other way round.
+        drop.addEventListener("beforetoggle", (e) => { if (/** @type {ToggleEvent} */ (e).newState === "closed") settle(menu); });
+        drop.addEventListener("toggle", (e) => { if (/** @type {ToggleEvent} */ (e).newState === "closed") drop.remove(); });
+        drop.showPopover(/** @type {ShowPopoverOptions} */ ({ source: btn }));
+      } else {
+        drop.style.left = btn.offsetLeft + "px";
+      }
       if (rows.length) rows[last ? rows.length - 1 : 0].focus();
     }
     definitions.forEach((definition, index) => {
@@ -108,13 +165,16 @@
       btn.tabIndex = index === 0 ? 0 : -1;
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (opened && opened.btn === btn) close(true);
+        var pressed = pressedOpen;
+        pressedOpen = null;
+        if (pressed === btn || (opened && opened.btn === btn)) close(true);
         else open(index);
       });
       btn.addEventListener("mouseenter", () => { if (opened && opened.btn !== btn) open(index); });
       buttons.push(btn);
       menubar.appendChild(btn);
     });
+    menubar.addEventListener("pointerdown", () => { pressedOpen = opened ? opened.btn : null; });
     menubar.addEventListener("focusout", (e) => {
       if (!menubar.contains(/** @type {Node | null} */ (e.relatedTarget))) close();
     });
@@ -223,23 +283,9 @@
     function toggleStatus() { statusOn = !statusOn; if (statusEl) statusEl.style.display = statusOn ? "" : "none"; }
     function selectAll() { ta.focus(); ta.select(); }
     function insertDate() {
-      // classic Notepad F5: "h:mm AM/PM M/D/YYYY". Prefer Temporal where the
-      // browser ships it; fall back to Date everywhere else.
-      var Y, Mo, Da, H, Mi;
-      try {
-  // Bare global: an undeclared `Temporal` cannot be handed to a parser without
-  // throwing ReferenceError, so typeof is the only operator that can ask.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-        if (typeof Temporal !== "undefined" && Temporal.Now && Temporal.Now.plainDateTimeISO) {
-          var z = Temporal.Now.plainDateTimeISO();
-          Y = z.year; Mo = z.month; Da = z.day; H = z.hour; Mi = z.minute;
-        }
-      } catch (e) {}
-      if (Y === undefined) {
-        var d = new Date(); Y = d.getFullYear(); Mo = d.getMonth() + 1; Da = d.getDate(); H = d.getHours(); Mi = d.getMinutes();
-      }
-      var ap = H < 12 ? "AM" : "PM", hh = H % 12 || 12;
-      var stamp = hh + ":" + String(Mi).padStart(2, "0") + " " + ap + " " + Mo + "/" + Da + "/" + Y;
+      // classic Notepad F5: "h:mm AM/PM M/D/YYYY", in en-US whatever the
+      // visitor's locale, because that is the string Notepad typed.
+      var stamp = f5Stamp(new Date());
       var s = ta.selectionStart, e = ta.selectionEnd;
       ta.value = ta.value.slice(0, s) + stamp + ta.value.slice(e);
       ta.selectionStart = ta.selectionEnd = s + stamp.length;
@@ -292,7 +338,7 @@
     if (menubar) {
       var closeMenu = Menu(menubar, MENUS);
       // A manually closed note must not retain a detached menu or document listener.
-      win.addEventListener("beforetoggle", (e) => { if (e.newState === "closed") closeMenu(); });
+      win.addEventListener("beforetoggle", (e) => { if (e.target === win && e.newState === "closed") closeMenu(); });
     }
     status();
   }
@@ -321,7 +367,7 @@
     // menu, so leave the note alone (a second Escape then closes the note).
     D.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
-      if (D.querySelector(".np-drop, dialog:modal")) return;
+      if (D.querySelector(".np-drop:popover-open, dialog:modal")) return;
       var open = /** @type {NodeListOf<HTMLElement>} */ (D.querySelectorAll(".np-note:popover-open"));
       if (open.length) {
         e.preventDefault();

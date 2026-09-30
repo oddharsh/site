@@ -68,24 +68,40 @@ export const RULES = [
   {
     id: "must-revalidate",
     title: "must-revalidate",
-    check: (cc) => (cc.has("must-revalidate")
-      ? { verdict: VETO, detail: "vetoes registration outright — the single most common cause of a dictionary that never loads" }
-      : { verdict: OK, detail: "absent" }),
+    // Measured 2026-09-23 in Chrome 152: must-revalidate withdraws the permission to
+    // serve stale, so it cancels the stale-while-revalidate window and leaves max-age
+    // standing. `max-age=3600, must-revalidate` registers for an hour. It reads as a
+    // veto only beside max-age=0, which is the pairing that makes it the most common
+    // cause of a dictionary that never loads.
+    check: (cc) => {
+      if (!cc.has("must-revalidate")) return { verdict: OK, detail: "absent" };
+      const maxAge = Number(cc.get("max-age"));
+      if (!(maxAge > 0)) {
+        return { verdict: VETO, detail: "cancels the stale-while-revalidate window, and with no positive max-age the dictionary is expired on arrival" };
+      }
+      return cc.has("stale-while-revalidate")
+        ? { verdict: WARN, detail: `cancels stale-while-revalidate, so the dictionary lives only its max-age=${maxAge}s` }
+        : { verdict: OK, detail: `the dictionary lives its max-age=${maxAge}s` };
+    },
   },
   {
     id: "lifetime",
     title: "lifetime (stale-while-revalidate)",
-    // THE non-obvious one: the dictionary lives for the SWR window, not max-age.
-    // A dictionary with a year of max-age and no SWR is usable for zero seconds
-    // past freshness, which reads as "it worked yesterday and not today".
+    // THE non-obvious one: the dictionary lives for max-age plus the SWR window, and
+    // a policy tuned for freshness usually has a max-age of 0. A dictionary with no
+    // SWR is usable for zero seconds past freshness, which reads as "it worked
+    // yesterday and not today". must-revalidate cancels the window outright.
     check: (cc) => {
       const swr = cc.get("stale-while-revalidate");
+      if (swr !== undefined && cc.has("must-revalidate")) {
+        return { verdict: WARN, detail: `stale-while-revalidate=${swr} is cancelled by must-revalidate` };
+      }
       if (swr === undefined) {
         return { verdict: WARN, detail: "no stale-while-revalidate: the dictionary's usable life is only its freshness window" };
       }
       const seconds = Number(swr);
       if (!Number.isFinite(seconds) || seconds <= 0) return { verdict: WARN, detail: `stale-while-revalidate=${swr} is not a usable window` };
-      return { verdict: OK, detail: `${seconds}s — this, not max-age, is how long the dictionary stays usable` };
+      return { verdict: OK, detail: `${seconds}s of stale window on top of max-age, and usually most of the dictionary's life` };
     },
   },
   {

@@ -2,9 +2,10 @@ import { signedFetch } from "./lib/botauth.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, recordBudget } from "./lib/budget.ts";
 import { deleteSWRKV, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
-import { unsafeHtml } from "./lib/html.ts";
+import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
+import { islandResponse } from "./lib/island.ts";
 import { asNumber, asRecord, asText } from "./lib/parse.ts";
-import { esc, escAttr, escHtml, jsonResp, timingSafeEqual, wantsMarkdown } from "./lib/http.ts";
+import { esc, jsonResp, timingSafeEqual, wantsMarkdown } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 
 // ── /rn redirect target ─────────────────────────────────────────────
@@ -237,11 +238,11 @@ export function artUrls(raw) {
 // mosaic.scdn.co collage covers, and anything Spotify ships that this file has
 // not learned yet. Loud enough to find in the logs, quiet enough not to break a
 // page over.
-function artAttrs(kind, rawUrl) {
-  if (!rawUrl) return "";
+function artAttrs(kind: "track" | "artist", rawUrl): Html {
+  if (!rawUrl) return EMPTY;
   const art = artUrls(rawUrl);
-  if (!art) return "";
-  return ` data-${kind}-image="${escAttr(art.src)}"`;
+  if (!art) return EMPTY;
+  return kind === "track" ? html` data-track-image="${art.src}"` : html` data-artist-image="${art.src}"`;
 }
 
 export async function handleRnArt(request, env, ctx) {
@@ -447,19 +448,15 @@ export async function warmArtCache(payload, request, env, ctx) {
 // header is the one that expresses the actual intent.
 function trackResponse(payload, status = 200, format = "json") {
   if (format === "html") {
-    return new Response(renderTrackListHtml(payload), {
-      status,
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
-        "x-content-type-options": "nosniff",
-        "x-robots-tag": "noindex",
-        // positive proof this body is OUR fragment. A 500/522/1101 from the edge is
-        // also text/html and also resolves fine, so the homepage requires this marker
-        // before injecting the response into the track list.
-        "x-rn-fragment": "1",
-      },
-    });
+    // The homepage's tracks island (lib/island.ts): islandResponse carries the
+    // x-island marker that proves this body is OUR fragment, since a 500, 522 or
+    // 1101 from the edge is also text/html and also resolves fine. It was a
+    // private x-rn-fragment marker checked by a hand-written hydrator until the
+    // homepage moved onto the one island convention. Unlike the default island
+    // this fragment is cacheable, because the playlist is shared by everyone.
+    return islandResponse(renderTrackListHtml(payload), {
+      "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
+    }, status);
   }
   const res = jsonResp(payload, status);
   res.headers.set("x-robots-tag", "noindex");
@@ -573,32 +570,27 @@ export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }) {
 // The HTML representation is intentionally the same row shape used by the
 // homepage rewriter. JSON remains the machine-facing contract; HTML is the
 // browser-facing hypermedia representation.
-export function renderTrackListHtml(payload) {
+export function renderTrackListHtml(payload): Html {
   const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];
   // A failure and an empty playlist are different stories. The JSON twin keeps them
   // apart via payload.error; without this branch all three states (scrape failed,
   // no KV binding, no playlist set) serialized to a byte-identical "No tracks yet",
   // so the two representations disagreed and a client reading the fragment alone
   // was told the playlist is empty when the scrape actually broke.
-  if (payload?.error) return '<li class="np-empty">Couldn&#39;t load tracks right now. <a href="/rn">Open on Spotify</a>.</li>';
-  if (!tracks.length) return '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
-  return tracks.map(t => {
+  if (payload?.error) return html`<li class="np-empty">Couldn&#39;t load tracks right now. <a href="/rn">Open on Spotify</a>.</li>`;
+  if (!tracks.length) return html`<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>`;
+  return joinHtml(tracks.map(t => {
     const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";
     const artistsText = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
-    const dataAttrs =
-      ` data-track-title="${escAttr(t.title)}"` +
-      ` data-track-artists="${escAttr(artistsText)}"` +
-      artAttrs("track", t.image_url) +
-      (t.duration_ms ? ` data-track-duration="${dur}"`               : "") +
-      (t.is_explicit ? ` data-track-explicit="1"`                    : "");
-    return `<li${dataAttrs}>
-      <a href="${escAttr(t.song_link_url)}" target="_blank" rel="noopener">${
-        dur ? `<span class="np-duration">${dur}</span>` : ""
-      }<span class="np-title">${escHtml(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
-        t.is_explicit ? '<span class="np-explicit">E</span>' : ""
+    return html`<li data-track-title="${t.title}" data-track-artists="${artistsText}"${artAttrs("track", t.image_url)}${
+      t.duration_ms ? html` data-track-duration="${dur}"` : EMPTY}${t.is_explicit ? html` data-track-explicit="1"` : EMPTY}>
+      <a href="${t.song_link_url}" target="_blank" rel="noopener">${
+        dur ? html`<span class="np-duration">${dur}</span>` : EMPTY
+      }<span class="np-title">${t.title}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
+        t.is_explicit ? html`<span class="np-explicit">E</span>` : EMPTY
       }</a>
     </li>`;
-  }).join("");
+  }));
 }
 
 // The Markdown representation, served at /rn.md and at /rn under
@@ -674,20 +666,19 @@ export async function handleRnMarkdown(request, env, ctx) {
   });
 }
 
-function linkifyArtists(artists, fallbackText) {
+function linkifyArtists(artists, fallbackText): Html {
   if (Array.isArray(artists) && artists.length) {
-    return artists.map(a => {
+    return joinHtml(artists.map(a => {
       const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-      const img = artAttrs("artist", a.image_url);
-      return `<span class="np-artist-link" data-href="${escAttr(href)}" data-artist-name="${escAttr(a.name)}"${img} role="link" tabindex="0">${escHtml(a.name)}</span>`;
-    }).join(", ");
+      return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${a.name}"${artAttrs("artist", a.image_url)} role="link" tabindex="0">${a.name}</span>`;
+    }), ", ");
   }
   const raw = fallbackText || asText(artists, "");
-  if (!raw) return "";
-  return String(raw).split(/,\s*/).filter(Boolean).map(name => {
+  if (!raw) return EMPTY;
+  return joinHtml(String(raw).split(/,\s*/).filter(Boolean).map(name => {
     const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
-    return `<span class="np-artist-link" data-href="${escAttr(href)}" data-artist-name="${escAttr(name)}" role="link" tabindex="0">${escHtml(name)}</span>`;
-  }).join(", ");
+    return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${name}" role="link" tabindex="0">${name}</span>`;
+  }), ", ");
 }
 
 function fmtDuration(ms) {
@@ -1259,10 +1250,7 @@ export function setPage(status, title, bodyHtml) {
     width: 520,
     robots: "noindex",
     css: `
-  h1 {
-    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: var(--blue-40);
-    font-size: 16pt; margin: 0 0 8px;
-  }
+  h1 { font-size: 16pt; margin: 0 0 8px; }
   a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
   a:visited { color: oklch(42.09% 0.1935 328.36); }
   a:hover   { color: oklch(62.80% 0.2577 29.23); }

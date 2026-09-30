@@ -315,7 +315,7 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   assert.match(block[0], /\.\.\.GENERATED_PAGE_HEADERS/,
     "the homepage must take the shared generated-page policy, not a hand-written one");
   assert.doesNotMatch(block[0], /no-cache|must-revalidate|private/,
-    "no-cache/must-revalidate/private each veto dictionary registration; `/` cannot carry them");
+    "no-cache vetoes dictionary registration, must-revalidate cancels the swr window a max-age=0 page lives on, and private keeps shared caches out; `/` cannot carry them");
   assert.match(index, /WORKERS_CACHEABLE_PATHS = new Set\("\/ /,
     "`/` must be in WORKERS_CACHEABLE_PATHS, or a cacheable homepage still invokes the worker every hit");
 
@@ -353,12 +353,12 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
 //
 // That failed quietly in production for as long as /pixel-peeper had been a page. Two
 // costs, and the second is the one nothing reports: no s-maxage means no shared cache
-// entry, and must-revalidate VETOES dictionary registration (canRegisterAsDictionary in
-// lib/assets.js), so the page drops out of the per-page dcz tier while still
-// advertising `vary: available-dictionary`. /garage/* and /lwe/* were always fine
-// because a glob covers the twin, the plain .html, and a section index's
-// `<base>/index.html.br` alike, which is exactly why one hand-written exact rule could
-// sit wrong next to them without ever looking wrong.
+// entry, and must-revalidate beside max-age=0 leaves the offer no lifetime, so no browser
+// registers it (canRegisterAsDictionary in lib/assets.ts) and the page drops out of the
+// per-page dcz tier while still advertising `vary: available-dictionary`. /garage/* and
+// /lwe/* were always fine because a glob covers the twin, the plain .html, and a section
+// index's `<base>/index.html.br` alike, which is exactly why one hand-written exact rule
+// could sit wrong next to them without ever looking wrong.
 test("_headers page rules match the twin the worker fetches, not the request path", async () => {
   const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.ts");
   const { readdir } = await import("node:fs/promises");

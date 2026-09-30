@@ -199,10 +199,13 @@ bun run perf:snapshot row base.json
 # layout-shift reading there is. It holds each page's scripts, fetches and images
 # until first paint and then releases them, which turns a slow-network race into a
 # shift on every run (claude.ai's method, 2026-09-23), and names the REGION that
-# moved. A forced shift is the control and runs first. First sweep: every windowed
-# page on desktop slides its title 50-56px when nav.js injects Back/Forward after
-# paint (bootAfterStaticPaint waits two frames on purpose), and on a phone four
-# garage pages wrap the title bar and push content down 19px (CLS 0.0525).
+# moved. A forced shift is the control and runs first. The first sweep found every
+# windowed page on desktop sliding its title 50-56px when nav.js injected
+# Back/Forward after paint (bootAfterStaticPaint waits two frames on purpose), and
+# on a phone four garage pages wrapping the title bar and pushing content down 19px
+# (CLS 0.0525). #909 FIXED both by baking the pair into the HTML: 65 shifted pages
+# went to 4, none on a title bar (/coffee, /garage/pretext's demo, /lwe/encoding's
+# #demo-bpp, a /security content shift), and those phone title bars 49px to 30px.
 # /coffee read 0.35 LOCALLY ONLY until 2026-09-23: cal linked luna.css by absolute
 # https://aadhar.sh URL, which style-src 'self' refuses off that host, so localhost
 # and preview URLs painted it unstyled. The link is relative now and the local
@@ -1846,17 +1849,25 @@ yields anything but twelve or if one of them carries no histogram. Those twelve
 are what a script-off visitor keeps, and what stays on screen when
 `handlePhotoGrid` answers 503 because the manifest is unreachable.
 
-Both fragments are preloaded from `<head>` and fetched by inline scripts near the
-bottom of the document. **`crossorigin` on those preloads is load-bearing even
-same-origin**: without it the preload is mode `no-cors` and cannot match the
-hydrator's `cors` fetch, so the page requests each fragment twice.
+**Both halves are ISLANDS, since 2026-09-30, on the one convention in
+`lib/island.ts`.** Each mount carries `data-island="<url>"` and
+`data-state="pending"`, both fragments answer through `islandResponse` with the
+`x-island` marker, and one copy of `islandScript()` after the playlist fills
+both, byte-identical to every other island page so one CSP hash covers it. It
+replaced two hand-written hydrators with two conventions (the grid checked no
+marker at all, the playlist checked a private `x-rn-fragment`). A failed grid
+island (`data-state="failed"`) is what promotes the baked twelve's deferred URLs.
 
-**`data-ssr` survives on both mount points and is now ALWAYS `"0"` on arrival**,
-so neither hydrator's guard ever declines. Read a `data-ssr="0"` in a served
-response as the pre-hydration placeholder it is. The attribute used to mean the
-SSR deadline had been missed, so a `curl` of `/` showing `np-list data-ssr=0` and
-the words "The current playlist is unavailable" reads exactly like a broken
-playlist and is the page working correctly.
+Both fragments are preloaded from `<head>`. **`crossorigin` on those preloads is
+load-bearing even same-origin**: without it the preload is mode `no-cors` and
+cannot match the island script's `cors` fetch, so the page requests each
+fragment twice.
+
+Read `data-state="pending"` in a served response as the pre-hydration
+placeholder it is: a `curl` of `/` showing the words "The current playlist is
+unavailable" reads exactly like a broken playlist and is the page working
+correctly. (Until 2026-09-30 the same placeholder carried `data-ssr="0"`, a
+leftover of the SSR deadline era.)
 
 1. **`/rn/tracks` (Spotify playlist tracks)** — populated by a separate
    handler that scrapes `open.spotify.com/embed/playlist/<id>` for the ordered
@@ -4626,20 +4637,29 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     never trusted from source, because this minifier's job is to normalize
     exactly the prefix the query depends on.
 
-    **The trigger is the COMPOUND condition, and that is why a minimal repro
-    reads as fixed.** Measured on the pinned 1.33.0, 2026-08-18: `@supports
-    (-moz-appearance:none)` on its own comes back untouched, while the same
-    condition as an operand of `and` or `or` comes back as `(appearance:none)`.
-    A lone condition appears to round-trip as an opaque blob, since it gains a
-    second pair of parens, and each operand of a compound goes through the parser
-    that applies prefix handling. So reducing this to one condition to check
-    whether it still happens answers NO on a build that is still broken. The
-    six-candidate survey above found it only because the real shape was compound,
-    which is luck rather than method.
+    **The trigger is the operand's POSITION, and that is why a minimal repro
+    reads as fixed.** This said "the COMPOUND condition" until 2026-09-30, which
+    is half right: only a NON-FIRST operand of `and` or `or` loses its prefix.
+    Re-measured that day on the pinned 1.33.0, identical with `minify` on and
+    off:
+
+    | input | output |
+    |---|---|
+    | `(-moz-appearance:none)` alone | `((-moz-appearance:none))`, kept |
+    | `(-moz-appearance:none) or (display:grid)` | prefix kept |
+    | `(display:grid) or (-moz-appearance:none)` | `(appearance:none)`, stripped |
+    | `(display:grid) and (-moz-appearance:none)` | stripped |
+    | `not (-moz-appearance:none)` | kept |
+
+    So reducing this to one condition answers NO on a build that is still
+    broken, and so does moving the prefixed condition to the front of a compound.
+    The six-candidate survey above found it only because the real shape put the
+    Firefox arm second, after `(not selector(::-webkit-scrollbar))`, which is
+    luck rather than method.
 
     Upstream is [parcel-bundler/lightningcss#710](https://github.com/parcel-bundler/lightningcss/issues/710),
     open since 2024-04-03 and reproducing on 1.33.0. The compound trigger and the
-    survey live in a comment there. Worth knowing that the two failure directions
+    survey live in a comment there, written before the position was measured. Worth knowing that the two failure directions
     differ in how loud they are: `-webkit-box-orient` becomes `box-orient`, which
     no browser implements, so the styles never apply and somebody notices;
     `-moz-appearance` becomes `appearance`, which Chromium implements, so a
@@ -4653,11 +4673,12 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     120/120 of their lib tests pass and the three added regression tests fail
     without it.
 
-    That also explains the compound trigger this note reports as a bare
-    observation: a lone condition takes the `conditions.push(in_parens.clone())`
-    path and is never handed to the merge at all. The mechanism was one commit
-    away the whole time, which is worth remembering the next time an entry here
-    records a reproduction without going to look at the source.
+    That also explains the position rule the table above measures: a lone
+    condition, and the FIRST operand of a compound, take the
+    `conditions.push(in_parens.clone())` path and are never handed to the merge
+    at all. Only a later operand meets it. The mechanism was one commit away the
+    whole time, which is worth remembering the next time an entry here records a
+    reproduction without going to look at the source.
 
     **The `:-moz-focusring` arm above is therefore a workaround with an expiry.**
     When a release carrying the fix lands, `@supports (-moz-appearance:none)`
@@ -5102,10 +5123,17 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
 
     **Pull the run id with that sed rather than off the end of the URL.**
     `details_url` ends `/actions/runs/<run-id>/job/<job-id>`, so the trailing
-    number is the JOB, and `gh run view <job-id>` exits 0 and prints NOTHING.
-    An empty grep is supposed to mean "a real finding, no crash", so handing it
-    the wrong id inverts the verdict without erroring. Cost one step on #370,
-    which is the PR that added this line.
+    number is the JOB. Run bare, `gh run view <job-id>` fails loudly: exit 1 and
+    `failed to get run: HTTP 404: Not Found` on stderr. The grep is what buries
+    it. The pipeline's status is grep's, and grep's 1 for "no match" is the same
+    code the honest empty result returns. The 404 goes to stderr, where the grep
+    never reads it, so it survives only as one stray line beside an empty
+    result; add `2>&1` and the grep swallows even that, printing nothing. An empty grep is supposed to mean "a real finding, no
+    crash", so handing it the wrong id inverts the verdict. Measured on gh
+    2.102.0, 2026-09-30; this sentence said the bare command "exits 0 and prints
+    NOTHING" until then, which blamed gh for what the pipe did. Gotcha 40 is the
+    same lesson from `tail -1`. Cost one step on #370, which is the PR that
+    added the sed.
 
     A crashed agent prints the error. A real finding prints an inline review
     comment on a source line and leaves this grep empty. Prefer it to the

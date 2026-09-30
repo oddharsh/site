@@ -64,33 +64,6 @@
   function garageSkin() {
     var mount = D.getElementById("luq");
     if (!mount) return;
-    var CSS =
-      "#luq{margin:18px 0 6px;border:1px solid #92a0b8;border-radius:4px;background:#fdfdf8;box-shadow:inset 0 1px 0 #fff;font-family:var(--font-ui)}" +
-      "#luq .luq-cap{display:flex;align-items:center;gap:7px;padding:5px 10px;font-family:var(--font-caption);font-weight:bold;font-size:10pt;color:#1d3a8a;background:linear-gradient(180deg,#f4f7fc,#dde7f6);border-bottom:1px solid #b9c8de;border-radius:3px 3px 0 0}" +
-      "#luq .luq-cap .n{font-weight:normal;font-size:8.5pt;color:#5a6679;margin-left:auto;font-family:var(--font-ui)}" +
-      "#luq .luq-bd{padding:11px 13px 13px}" +
-      "#luq .luq-q{font-size:10pt;color:#15243f;margin:0 0 9px;font-weight:bold}" +
-      "#luq .luq-opts{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}" +
-      "#luq label.luq-opt{display:flex;gap:8px;align-items:baseline;font-size:9.5pt;color:#2a3346;cursor:pointer;padding:4px 7px;border:1px solid transparent;border-radius:3px}" +
-      "#luq label.luq-opt:hover{background:#eef3fb;border-color:#c8d6ec}" +
-      "#luq .luq-done label.luq-opt{cursor:default}#luq .luq-done label.luq-opt:hover{background:none;border-color:transparent}" +
-      "#luq .luq-opt input{margin:0;flex:0 0 auto;position:relative;top:1px}" +
-      "#luq .luq-opt.hit{background:#eaf6ec;border-color:#7fbb8a}#luq .luq-opt.miss{background:#fbeeee;border-color:#d89a9a}" +
-      "#luq .luq-why{font-size:9pt;line-height:1.5;margin:0 0 10px;padding:7px 10px;border-radius:3px;border:1px solid}" +
-      "#luq .luq-why.hit{color:#215c2b;background:#eaf6ec;border-color:#9ccba5}#luq .luq-why.miss{color:#7a2c2c;background:#fbeeee;border-color:#dcaaaa}" +
-      "#luq .luq-why b{display:block;margin-bottom:2px}" +
-      "#luq .luq-row{display:flex;align-items:center;gap:8px}" +
-      "#luq .luq-btn{font-family:var(--font-ui);font-size:9.5pt;padding:3px 14px;cursor:pointer;color:#1a2030;background:linear-gradient(to bottom,#fff 0%,#e9edf5 100%);border:1px solid #7d8aa3;border-radius:3px;box-shadow:inset 1px 1px 0 #fff,inset -1px -1px 0 #b9c2d4}" +
-      "#luq .luq-btn:hover{border-color:#3a71f5;background:linear-gradient(to bottom,#fff,#dce8fb)}" +
-      "#luq .luq-btn:active{box-shadow:inset 1px 1px 0 #b9c2d4,inset -1px -1px 0 #fff}" +
-      "#luq .luq-btn:disabled{color:#aab;background:linear-gradient(to bottom,#f3f3f3,#e6e6e6);border-color:#bbb;cursor:not-allowed;box-shadow:none}" +
-      "#luq .luq-score{font-size:10pt;color:#15243f;margin:0 0 7px}#luq .luq-score b{font-size:13pt;color:#1d3a8a}" +
-      "#luq .luq-list{margin:0 0 10px;padding-left:18px;font-size:9pt;color:#3a4255}#luq .luq-list li{margin:3px 0}" +
-      "#luq .luq-list .ok{color:#2c7a36}#luq .luq-list .no{color:#c43636}" +
-      "#luq .luq-credit{font-size:8pt;color:#8a93a5;border-top:1px solid #e2e8f3;margin-top:11px;padding-top:7px;line-height:1.5}" +
-      "#luq .luq-credit a{color:#1a4fc4}";
-    var st = D.createElement("style"); st.textContent = CSS; D.head.appendChild(st);
-
     var idx = 0, score = 0, results = [];
     mount.innerHTML =
       '<div class="luq-cap"><span aria-hidden="true">&#9997;</span>' + esc(data.title || "Before you close the hood") +
@@ -99,7 +72,7 @@
     var bd = mount.querySelector(".luq-bd");
     if (data.intro !== "") {
       var lead = D.createElement("p");
-      lead.className = "luq-q"; lead.style.fontWeight = "normal"; lead.style.fontSize = "9.5pt"; lead.style.color = "#3a4255";
+      lead.className = "luq-q luq-lead";
       lead.textContent = data.intro || "If the page did its job, this is quick. If it didn't, the misses will say which section to reopen.";
       bd.appendChild(lead);
     }
@@ -111,7 +84,7 @@
       for (var i = 0; i < opts.length; i++) {
         html += '<label class="luq-opt"><input type="radio" name="luq-q' + idx + '" value="' + i + '"><span>' + esc(opts[i].t) + "</span></label>";
       }
-      html += '</div><div class="luq-fb" aria-live="polite"></div><div class="luq-row"><button type="button" class="luq-btn luq-check" disabled>Check</button></div>';
+      html += '</div><div class="luq-fb" aria-live="polite"></div><div class="luq-row"><button type="button" class="xp-button luq-check" disabled>Check</button></div>';
       qwrap.innerHTML = html;
       var check = /** @type {HTMLButtonElement} */ (qwrap.querySelector(".luq-check")),
           fb = qwrap.querySelector(".luq-fb");
@@ -129,7 +102,7 @@
           else if (inputs[i] === picked) /** @type {HTMLElement} */ (inputs[i].parentNode).classList.add("miss");
         }
         fb.innerHTML = '<p class="luq-why ' + (hit ? "hit" : "miss") + '"><b>' + (hit ? "Right." : "Close, and the miss is the useful part.") + "</b>" + esc(pick.why || "") + "</p>";
-        /** @type {HTMLElement} */ (check.parentNode).innerHTML = '<button type="button" class="luq-btn luq-next">' + (idx + 1 < qs.length ? "Next &gt;" : "Finish") + "</button>";
+        /** @type {HTMLElement} */ (check.parentNode).innerHTML = '<button type="button" class="xp-button default luq-next">' + (idx + 1 < qs.length ? "Next &gt;" : "Finish") + "</button>";
         qwrap.querySelector(".luq-next").addEventListener("click", () => {
           idx++;
           if (idx < qs.length) renderQ(); else renderEnd();
@@ -149,7 +122,7 @@
       qwrap.innerHTML =
         '<p class="luq-score"><b>' + score + "/" + qs.length + "</b> &middot; " + esc(word) + "</p>" +
         '<ul class="luq-list">' + list + "</ul>" +
-        '<div class="luq-row"><button type="button" class="luq-btn luq-again">Retake</button></div>' +
+        '<div class="luq-row"><button type="button" class="xp-button luq-again">Retake</button></div>' +
         '<p class="luq-credit">' + CREDIT + "</p>";
       qwrap.querySelector(".luq-again").addEventListener("click", () => { idx = 0; score = 0; results = []; renderQ(); });
     }
@@ -162,16 +135,6 @@
     var log = D.querySelector(".log");
     if (!log) return;
     var BOT = (D.querySelector(".msgr-head .who b") || {}).textContent || "quiz";
-    var CSS =
-      ".luq-opts{display:flex;flex-direction:column;gap:5px;margin-top:7px}" +
-      ".luq-opt{font-family:var(--font-ui);font-size:9.5pt;text-align:left;padding:4px 10px;cursor:pointer;color:#1a2030;background:linear-gradient(to bottom,#fff,#e9edf5);border:1px solid #7d8aa3;border-radius:3px;box-shadow:inset 1px 1px 0 #fff}" +
-      ".luq-opt:hover{border-color:var(--accent,#3a71f5);background:linear-gradient(to bottom,#fff,#e6efe8)}" +
-      ".luq-opt:disabled{cursor:default;color:#66707d;background:#f4f4f0;box-shadow:none}" +
-      ".luq-opt.was-pick:disabled{color:#1a2030;border-color:var(--accent,#3a71f5)}" +
-      ".luq-verdict b.hit{color:#2c7a36}.luq-verdict b.miss{color:#c43636}" +
-      ".luq-credit{font-size:8pt;color:#8a93a5;margin-top:6px;line-height:1.5}.luq-credit a{color:#1a4fc4}";
-    var st = D.createElement("style"); st.textContent = CSS; D.head.appendChild(st);
-
     var idx = 0, score = 0;
     function msg(who, html) {
       var d = D.createElement("div"); d.className = "msg " + who;
@@ -217,5 +180,20 @@
     ask();
   }
 
-  if (skin === "lwe") lweSkin(); else garageSkin();
+  // Both skins' styles live in /quiz.css (content-hashed at deploy; the build
+  // rewrites this href). Render only once the sheet has loaded, so a quiz never
+  // paints unstyled. A failed sheet still renders: an unstyled quiz that works
+  // beats one that never appears.
+  var sheet = D.createElement("link");
+  var rendered = false;
+  var render = () => {
+    if (rendered) return;
+    rendered = true;
+    if (skin === "lwe") lweSkin(); else garageSkin();
+  };
+  sheet.rel = "stylesheet";
+  sheet.onload = render;
+  sheet.onerror = render;
+  sheet.href = "/quiz.css";
+  D.head.appendChild(sheet);
 })();

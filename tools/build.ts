@@ -1889,7 +1889,7 @@ for (const [file, srcPath, marker] of SHELLS) {
   console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
 }
 
-for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
+for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
   const src = await readFile(`src/styles/${file}`, "utf8");
   await writeFile(`${OUT}/public/${file.replace(".css", ".src.css")}`, src);
   const code = minifyCss(`src/styles/${file}`, src);
@@ -2175,8 +2175,12 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // orders names by their uses inside the shell alone, so a page-scoped file in
 // that set would let an edit to ask.js (which reads three --font-* tokens)
 // reorder luna.css's short names and re-mint every page (gotcha 35).
+//
+// quiz.css joins them for the same reason: it is loaded beside quiz.js on the
+// garage and lwe pages, reads --font-ui and --font-caption, and defines no
+// custom property of its own.
 const PAGE_SCOPED_HASHED = new Set([
-  "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json",
+  "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json", "quiz.css",
 ].map((f) => `public/${f}`));
 
 // Every staged file step 6 content-hashes into /a/. Step 5c reads the shell
@@ -2349,6 +2353,10 @@ let freshFamily: Buffer | null = null;
       [/("nav-tray"\s*:\s*)(["'`])\/nav-tray\.css\2/g, `$1$2${to}$2`] ] },
     { file: "/infotip.css",     base: "infotip",           ext: "css", mk: (to) => [
       [/(\binfotip\b\s*:\s*)(["'`])\/infotip\.css\2/g, `$1$2${to}$2`] ] },
+    // quiz.js's stylesheet. A leaf rewritten into quiz.js before ASSETS hashes
+    // quiz.js below, so the quiz's /a/ URL covers the sheet's.
+    { file: "/quiz.css",        base: "quiz",              ext: "css", mk: (to) => [
+      [/(\.href\s*=\s*)(["'`])\/quiz\.css\2/g, `$1$2${to}$2`] ] },
     { file: "/hoist.js",        base: "hoist",        mk: (to) => [
       [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`],
       [/(\bfrom\s*)(["'`])\/hoist\.js\2/g, `$1$2${to}$2`] ] },
