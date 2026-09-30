@@ -90,9 +90,9 @@ export function pageHtml(spec) {
 <body>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
-  <div class="title-bar" aria-hidden="true">${DESKTOP_HISTNAV}
-    <span class="title-text"><span class="icon"></span>aadhar.sh${html(path)}</span>
-    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  <div class="title-bar">${DESKTOP_HISTNAV}
+    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh${html(path)}</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div>
   <div class="content">
 ${spec.bodyHtml}

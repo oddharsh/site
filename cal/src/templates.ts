@@ -394,11 +394,15 @@ function shell(title, body, env) {
 </head>
 <body>${onShell ? DESKTOP_TOP : ""}
 <div class="window">
-  <div class="title-bar" aria-hidden="true">${onShell ? DESKTOP_HISTNAV : ""}
-    <span class="title-text"><span class="icon"></span>${esc(fullTitle)}</span>
+  <div class="title-bar">${onShell ? DESKTOP_HISTNAV : ""}
+    <span class="title-text"><span class="icon" aria-hidden="true"></span>${esc(fullTitle)}</span>
     <span class="controls"
-      ><span class="min" title="minimize"></span
-      ><span class="max" title="maximize"></span
+      ><span class="min" title="minimize" aria-hidden="true"></span
+      >${onShell
+        // nav.js wires max under /coffee; the standalone cal host loads no nav.js,
+        // so there it stays an inert decoration rather than a dead button
+        ? `<button type="button" class="max" title="maximize" aria-label="maximize"></button`
+        : `<span class="max" title="maximize" aria-hidden="true"></span`}
       ><a class="close" href="${esc(home)}" title="close" aria-label="close, up to ${esc(env.HOST_NAME)}"></a
     ></span>
   </div>
