@@ -274,13 +274,16 @@ test("the speculation ruleset has exactly one author", async () => {
 test("the staged Worker names the built ruleset on HTML and only on HTML", { skip: !existsSync(".build/src/worker/lib/shell-assets.ts") && "needs a build" }, async () => {
   // The STAGED modules, because the ruleset URL exists only once build.ts has
   // written the file and patched the marker line; source reads "" by design.
-  const { SPECULATION_RULES } = await import("../.build/src/worker/lib/shell-assets.ts");
+  // Imported through a computed URL so the type checker leaves them alone:
+  // typecheck runs before any build in CI, and a literal specifier into
+  // .build/ is two unresolved-module errors against the tools baseline.
+  const { SPECULATION_RULES } = await import(new URL("../.build/src/worker/lib/shell-assets.ts", import.meta.url).href);
   assert.match(SPECULATION_RULES, /^\/a\/speculation\.[0-9a-f]{8}\.json$/, "build.ts patched the ruleset URL in");
   const bytes = readFileSync(`.build/public${SPECULATION_RULES}`, "utf8");
   assert.equal(bytes, speculationRulesJson(), "the file is the projection of SPECULATION");
   assert.ok(existsSync(`.build/public${SPECULATION_RULES}.br`), "the ruleset has its q11 twin");
 
-  const { withSecurityHeaders } = await import("../.build/src/worker/lib/security.ts");
+  const { withSecurityHeaders } = await import(new URL("../.build/src/worker/lib/security.ts", import.meta.url).href);
   const html = withSecurityHeaders(new Response("<p>hi</p>", { headers: { "content-type": "text/html; charset=utf-8" } }), "/garage");
   // A structured-field list of one string: the quotes are the syntax.
   assert.equal(html.headers.get("speculation-rules"), `"${SPECULATION_RULES}"`);
