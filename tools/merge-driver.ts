@@ -564,10 +564,28 @@ function combineChunk(base: string[], inserter: string[], editor: string[]): str
   const inserts = insertionsWithin(base, inserter);
   if (!inserts) return null;
   const kept = matchMap(base, editor);
+  // A block the editor ALSO added is already in its text, so laying the
+  // inserter's copy back in would print it twice. That happened on 2026-09-30:
+  // a commit landed on main inside a squash (#1037) and on a branch as itself,
+  // the squash edited the neighbouring paragraph too, and the merge doubled
+  // the gotcha 38 paragraph. Counted as a multiset, the way the empty-base arm
+  // dedupes by string, so a block both sides added once is taken once.
+  const keptTargets = new Set(kept.values());
+  const editorAdded = new Map<string, number>();
+  editor.forEach((block, idx) => {
+    if (!keptTargets.has(idx)) editorAdded.set(block, (editorAdded.get(block) ?? 0) + 1);
+  });
   const out: string[] = [];
   let e = 0;
   for (let i = 0; i <= base.length; i += 1) {
-    for (const block of inserts.get(i) ?? []) out.push(block);
+    for (const block of inserts.get(i) ?? []) {
+      const already = editorAdded.get(block) ?? 0;
+      if (already > 0) {
+        editorAdded.set(block, already - 1);
+        continue;
+      }
+      out.push(block);
+    }
     if (i === base.length) break;
     const target = kept.get(i);
     if (target === undefined) continue;

@@ -5682,7 +5682,17 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     | `scripts/**` | nothing |
     | `src/worker/**`, `cal/src/**`, `serendipity/` | that module alone |
     | an unhashed client asset (`src/client/lwe/ask.js`, in `public/lwe/` until 2026-09-16) | that asset alone |
-    | a HASHED client asset (`nav`, `nav-run`, `tooltip`, `lens*`, `hoist`, `quiz`, `notepad`, `luna.css`, …) | itself, every page, every page dictionary, `_headers` |
+    | a HASHED shell asset every page links (`nav`, `luna.css`, …) | itself, every page, every page dictionary, `_headers` |
+    | a HASHED page-scoped asset (`lens*`, `quiz`, `notepad`, …) | itself, and only the pages whose bytes carry its URL, with their dictionaries |
+
+    **The cost follows the REFERENCES, and this table said every hashed asset
+    cost every page until 2026-09-30.** A new `/a/` URL re-mints exactly the
+    documents that contain the old one, directly or through another hashed asset
+    that does. So `nav.js` and `luna.css` do cost the whole tree, and an island
+    only one page loads costs that page. Measured on #1050, a real edit to
+    `lens.js`: `perf-diff` reported 1 of 70 pages changed and the page deltas
+    moved 0.01 KiB. Before labelling a PR `hashed-asset` as expensive, grep the
+    built pages for the asset's current URL; the count is the bill.
 
     **A comment is free on all of them**, because oxc-minify strips it and the
     hash holds (verified: the hash stayed `e943e545` through a comment-only
@@ -6997,7 +7007,11 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
       different bullet beside it, which is exactly the version-bump-next-to-an-
       insertion shape this whole change is named after. When one side's change
       within a chunk is pure INSERTION, its new blocks are laid back into the
-      other side's text at the same anchors.
+      other side's text at the same anchors. A block the other side ALSO added
+      is skipped rather than laid in twice. That case is real and common here:
+      a commit that reaches `main` inside a squash that also edits nearby, and
+      the branch as itself. It doubled a gotcha 38 paragraph on 2026-09-30,
+      before the combiner counted the editor's own new blocks.
 
     That takes it to **2 of 4 real prose conflicts resolved**, and the two it
     still refuses are genuine two-sided edits of one paragraph. Verified rather
