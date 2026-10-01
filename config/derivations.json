@@ -234,8 +234,8 @@
       "outputs": [
         "public/lwe/quadgrams.txt"
       ],
-      "unverifiable": "The input is an english_quadgrams.txt corpus passed as argv[2], which is not in this repository and is not small. What IS checkable is that the table still parses and still has 4000 rows, which the page contract owns. FOUND BROKEN while taking this census: the generator wrote to `../lwe/quadgrams.txt` relative to tools/photos/, which is tools/lwe/, a directory that has never existed. Gotcha 40 again, third instance in one afternoon.",
-      "regenerate": "bun tools/photos/gen-quadgram-table.ts <english_quadgrams.txt>"
+      "unverifiable": "The input is buttcrack's english_quadgrams.txt (MIT), pinned at commit c398ef10, the one commit that has touched that file: 46,040 rows, 369,469 bytes, sha256 10970728a2367936eb70532b7013593e214cc195b97026fc38d5ddf9c0707704. It is not in this repository because derive:check reads no network, so this stays unverifiable HERE and verifiable on demand: the regenerate command fetches that pinned file, refuses it unless the sha256 matches, and rebuilds the table. Run 2026-10-01, it reproduced the committed public/lwe/quadgrams.txt byte for byte. What derive:check cannot see is a regeneration from some other corpus, which is what the hash in the command is for. FOUND BROKEN while taking this census: the generator wrote to `../lwe/quadgrams.txt` relative to tools/photos/, which is tools/lwe/, a directory that has never existed. Gotcha 40 again, third instance in one afternoon.",
+      "regenerate": "f=\"${TMPDIR:-/tmp}/english_quadgrams.txt\" && curl -sfL https://raw.githubusercontent.com/0xdiid/buttcrack/c398ef10b5810f14e3065f9addea871bce028ffe/src/buttcrack/data/english_quadgrams.txt -o \"$f\" && echo \"10970728a2367936eb70532b7013593e214cc195b97026fc38d5ddf9c0707704  $f\" | shasum -a 256 -c && bun tools/photos/gen-quadgram-table.ts \"$f\""
     },
     {
       "id": "repo/card",
