@@ -170,6 +170,9 @@ test("served-manifest: CI cuts and signs it, and every release and night checks 
   const checker = await readFile(new URL("tools/check-served.ts", ROOT), "utf8");
   assert.match(checker, /SIGNER = `\$\{values\.repo\}\/\.github\/workflows\/ci\.yml`/, "the signature must be pinned to ci.yml");
   assert.match(checker, /"--source-ref", "refs\/heads\/main"/);
+  // An empty scope verified the commit and signature and compared no bytes, and
+  // must say so rather than print "0 of 0 URLs" under a passing headline.
+  assert.match(checker, /if \(!results\.length\) \{\n  console\.log\(`served:check: nothing to compare/);
 
   const promote = await readFile(new URL(".github/workflows/promote-production.yml", ROOT), "utf8");
   assert.match(promote, /run: bun run served:check \$\{SINCE:\+--since "\$SINCE"\}/, "each release checks the URLs it changed");

@@ -112,4 +112,11 @@ if (findings.length) {
   console.log(`served:check: FINDING: ${findings.join("; ")}`);
   process.exit(1);
 }
+// A scoped run over a release that changed no static file compares nothing, and
+// "0 of 0 URLs" read as a pass (first seen on #1075's release, 2026-10-01).
+// What such a run DID verify is the commit and the signature, so say exactly that.
+if (!results.length) {
+  console.log(`served:check: nothing to compare, no static URL changed since ${values.since?.slice(0, 12)}; verified only the commit${values["no-attest"] ? "" : " and the signature"}`);
+  process.exit(0);
+}
 console.log(`served:check: ${values.origin} serves what CI built, ${results.length} of ${results.length} URLs`);
