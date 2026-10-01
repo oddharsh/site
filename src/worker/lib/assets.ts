@@ -98,7 +98,11 @@ export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {
 // 1-year immutable rule and pin itself at the edge. This one clamp is all that
 // survives of the Pages-era content sniffing; Workers 404s are honest now.
 export async function serveAssetWith404Clamp(request, env, opts: AssetOptions = {}) {
-  const res = await env.ASSETS.fetch(request);
+  // The binding can encode a text fallback itself. Always request the plain
+  // representation here; the gateway owns the client's encoding negotiation.
+  const headersForAsset = new Headers(request.headers);
+  headersForAsset.set("accept-encoding", "identity");
+  const res = await env.ASSETS.fetch(new Request(request, { headers: headersForAsset }));
   if (res.status === 404) {
     try { await res.body?.cancel(); } catch {}
     return new Response(opts.notFoundBody || "not found", {

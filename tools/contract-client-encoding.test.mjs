@@ -1,7 +1,7 @@
 import { assert, test } from "./contract-shared.ts";
 import { gunzipSync } from "node:zlib";
 import { clientEncodingRequest, encodeClientResponse, preferredEncoding } from "../src/worker/lib/encoding.ts";
-import { servePrecompressedShell, servePrecompressedText, serveStaticPage } from "../src/worker/lib/assets.ts";
+import { serveAssetWith404Clamp, servePrecompressedShell, servePrecompressedText, serveStaticPage } from "../src/worker/lib/assets.ts";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -64,6 +64,20 @@ test("gzip fallback decodes exactly and keeps cache policy and a weak logical va
   assert.equal(out.headers.get("content-length"), null);
   assert.match(out.headers.get("cache-control") ?? "", /max-age=300.*no-transform/);
   assert.match(out.headers.get("vary") ?? "", /accept-encoding/);
+});
+
+test("plain asset lookups prevent binding compression and preserve conditional and range headers", async () => {
+  const req = request("gzip, br;q=0", "/llms.txt");
+  req.headers.set("range", "bytes=0-3");
+  req.headers.set("if-none-match", '"same"');
+  const response = await serveAssetWith404Clamp(req, {ASSETS: {fetch: async (sub) => {
+    assert.equal(sub.headers.get("accept-encoding"), "identity");
+    assert.equal(sub.headers.get("range"), "bytes=0-3");
+    assert.equal(sub.headers.get("if-none-match"), '"same"');
+    return new Response("plain", {headers: {"content-type": "text/plain"}});
+  }}});
+  assert.equal(await response.text(), "plain");
+  assert.equal(req.headers.get("accept-encoding"), "gzip, br;q=0");
 });
 
 test("identity stays unencoded and bodiless responses keep their contracts", async () => {
