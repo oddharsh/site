@@ -58,8 +58,7 @@ export const READER_NOTE =
 // fetch() resolves leaves a server that sends headers and stalls holding the
 // Reader request indefinitely.
 async function fetchSource(targetUrl) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const deadline = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   try {
     const followed = await fetchFollowingPublicRedirects(targetUrl, () => ({
       headers: {
@@ -67,7 +66,7 @@ async function fetchSource(targetUrl) {
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.9",
       },
-      signal: controller.signal,
+      signal: deadline,
     }), validateLensTarget, 20); // Preserve native fetch's redirect allowance.
     if (!followed.ok) {
       throw new ReaderError("That URL redirected somewhere this reader will not follow.");
@@ -78,12 +77,10 @@ async function fetchSource(targetUrl) {
   } catch (error) {
     if (error instanceof ReaderError) throw error;
     // The two failures a visitor can actually cause, named rather than leaked.
-    if (error && error.name === "AbortError") {
+    if (error && error.name === "TimeoutError") {
       throw new ReaderError(`That page did not respond within ${FETCH_TIMEOUT_MS / 1000}s.`);
     }
     throw new ReaderError("That URL could not be fetched (DNS, TLS, or the host refused the connection).");
-  } finally {
-    clearTimeout(timer);
   }
 }
 

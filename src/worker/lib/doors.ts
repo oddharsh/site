@@ -168,8 +168,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
       [META_CLIENT_CAPS]: {},
     } },
   });
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const deadline = AbortSignal.timeout(8000);
   // Pointing this at aadhar.sh is the first thing anybody will try, and over the
   // network that request loops back into this same Worker — which Cloudflare
   // kills with a 522, so a self-scan would report its own MCP server as down.
@@ -193,7 +192,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
       },
       method: "POST",
       sign: !isSelf,
-      signal: controller.signal,
+      signal: deadline,
     });
     if (isSelf) {
       const selfReq = new Request(url, { method: "POST", headers: await headersFor(url), body });
@@ -207,7 +206,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
     // an unreachable target, which is what it is.
     const followed = await fetchFollowingPublicRedirects(
       url,
-      async (candidate) => ({ method: "POST", headers: await headersFor(candidate), body, signal: controller.signal, cf: { cacheTtl: 0 } }),
+      async (candidate) => ({ method: "POST", headers: await headersFor(candidate), body, signal: deadline, cf: { cacheTtl: 0 } }),
       (candidate) => validateLensTarget(candidate),
     );
     if (!followed.ok) return { blocked: true };
@@ -308,7 +307,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
     // DID receive and could not parse is a finding about them, not about us,
     // and is reported as a shut door above rather than as an unreadable one.
     return { ok: false, unreadable: true, detail: String(error?.message || error).slice(0, 80) };
-  } finally { clearTimeout(timer); }
+  }
 }
 
 
@@ -355,8 +354,7 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
   const query = String(opts.query || "").trim().slice(0, 200) || "what is this site about";
   const url = `${base}?query=${encodeURIComponent(query)}&streaming=0&mode=list`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const deadline = AbortSignal.timeout(8000);
 
   // Same loopback escape as the catalogue read: over the network a request to
   // our own hostname is killed with a 522, so a self-scan would report this
@@ -371,7 +369,7 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
       headers: { accept: "application/json, text/event-stream" },
       method: "GET",
       sign: !isSelf,
-      signal: controller.signal,
+      signal: deadline,
     });
 
     let res;
@@ -381,7 +379,7 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
     } else {
       const followed = await fetchFollowingPublicRedirects(
         url,
-        async (candidate) => ({ method: "GET", headers: await headersFor(candidate), signal: controller.signal, cf: { cacheTtl: 0 } }),
+        async (candidate) => ({ method: "GET", headers: await headersFor(candidate), signal: deadline, cf: { cacheTtl: 0 } }),
         (candidate) => validateLensTarget(candidate),
       );
       if (!followed.ok) return { ok: false, unreadable: true, detail: "redirected somewhere this reader will not follow" };
@@ -413,7 +411,7 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
     return { ok: true, endpoint: base, query, framing, dialect: parsed.dialect, ...gradeAskResults(parsed) };
   } catch (error) {
     return { ok: false, unreadable: true, detail: String(error?.message || error).slice(0, 80) };
-  } finally { clearTimeout(timer); }
+  }
 }
 
 /** The single-body answer: `{query_id, ...attrs, results:[...]}`. */

@@ -37,8 +37,7 @@ type HeaderProbe =
 
 /** One bounded, signed fetch that reads only headers (body cancelled). */
 async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  const deadline = AbortSignal.timeout(FETCH_TIMEOUT);
   try {
     const base = {
       "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)",
@@ -53,7 +52,7 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
       const req = new Request(url, { headers, redirect: "follow" });
       res = await (env.SELF_FETCH ? env.SELF_FETCH(req) : env.ASSETS.fetch(req));
     } else {
-      res = await signedFetch(url, env, { headers: base, signal: controller.signal });
+      res = await signedFetch(url, env, { headers: base, signal: deadline });
     }
     const responseHeaders: Record<string, string> = {};
     for (const [key, value] of res.headers) responseHeaders[key.toLowerCase()] = value;
@@ -61,7 +60,7 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
     return { status: res.status, headers: responseHeaders };
   } catch (error) {
     return { error: String(error?.message || error).slice(0, 80) };
-  } finally { clearTimeout(timer); }
+  }
 }
 
 /**

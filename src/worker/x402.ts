@@ -112,12 +112,9 @@ function deny(requirements, error) {
 }
 
 async function facilitatorPost(url, body) {
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 10000);
-  try {
-    const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body, signal: ctrl.signal });
-    return { ok: r.ok, status: r.status, json: await r.json().catch(() => null) };
-  } finally { clearTimeout(to); }
+  const deadline = AbortSignal.timeout(10000);
+  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body, signal: deadline });
+  return { ok: r.ok, status: r.status, json: await r.json().catch(() => null) };
 }
 
 // The corpus is BUILT (tools/build.ts step 1g3, lib/llms-full.ts): the map, every

@@ -193,18 +193,20 @@ test("Reader validates redirect hops before fetching and preserves the final URL
 
 test("the network deadline aborts a body that stalls after successful headers", async () => {
   const originalFetch = globalThis.fetch;
-  const originalSetTimeout = globalThis.setTimeout;
+  const originalTimeout = AbortSignal.timeout;
   let aborted = false;
   let deadlineScheduled = false;
   /** @type {ReadableStreamDefaultController<Uint8Array> | undefined} */
   let body;
   try {
-    // Run the production timer on a short test clock. Only the Reader's exact
-    // deadline is accelerated; the watchdog keeps its own real-time budget.
-    globalThis.setTimeout = /** @type {typeof setTimeout} */ ((callback, ms, ...args) => {
+    // Run the production deadline on a short test clock. Only the Reader's exact
+    // deadline is accelerated, and it stays a REAL AbortSignal.timeout, so the
+    // rejection is the TimeoutError the runtime raises; the watchdog keeps its own
+    // real-time budget.
+    AbortSignal.timeout = (ms) => {
       if (ms === FETCH_TIMEOUT_MS) deadlineScheduled = true;
-      return originalSetTimeout(callback, ms === FETCH_TIMEOUT_MS ? 10 : ms, ...args);
-    });
+      return originalTimeout.call(AbortSignal, ms === FETCH_TIMEOUT_MS ? 10 : ms);
+    };
     globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (
       async (_url, { signal }) => new Response(new ReadableStream({
         start(controller) {
@@ -224,7 +226,7 @@ test("the network deadline aborts a body that stalls after successful headers", 
       await assert.rejects(Promise.race([
         read("https://example.com/slow-body"),
         new Promise((_resolve, reject) => {
-          watchdog = originalSetTimeout(() => reject(new Error("Reader exceeded its network deadline")), 500);
+          watchdog = setTimeout(() => reject(new Error("Reader exceeded its network deadline")), 500);
         }),
       ]), (error) => error instanceof ReaderError && /within 8s/.test(error.message));
       assert.equal(aborted, true, "the upstream stream must be aborted, not left running");
@@ -234,7 +236,7 @@ test("the network deadline aborts a body that stalls after successful headers", 
     }
   } finally {
     if (!aborted) body?.error(new Error("test cleanup"));
-    globalThis.setTimeout = originalSetTimeout;
+    AbortSignal.timeout = originalTimeout;
     globalThis.fetch = originalFetch;
   }
 });

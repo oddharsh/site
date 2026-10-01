@@ -115,17 +115,13 @@ export type AnalyticsRead =
 export async function analyticsSql(env: Env, sql: string): Promise<AnalyticsRead> {
   if (!env.ANALYTICS_READ_TOKEN || !env.CF_ACCOUNT_ID) return { ok: false, reason: "unconfigured" };
   try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 8000);
-    let r;
-    try {
-      r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/analytics_engine/sql`, {
-        method: "POST",
-        headers: { authorization: "Bearer " + env.ANALYTICS_READ_TOKEN },
-        body: sql,
-        signal: ctrl.signal,
-      });
-    } finally { clearTimeout(to); }
+    const deadline = AbortSignal.timeout(8000);
+    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/analytics_engine/sql`, {
+      method: "POST",
+      headers: { authorization: "Bearer " + env.ANALYTICS_READ_TOKEN },
+      body: sql,
+      signal: deadline,
+    });
     if (!r.ok) {
       const detail = (await r.text().catch(() => "")).slice(0, 200);
       // a dataset with zero writes ever doesn't exist yet — that's an empty
@@ -133,7 +129,7 @@ export async function analyticsSql(env: Env, sql: string): Promise<AnalyticsRead
       if (/no such table|does not exist|unknown table/i.test(detail)) return { ok: true, data: [] };
       return { ok: false, reason: "SQL API " + r.status + ": " + detail };
     }
-    const j = await r.json().catch(() => null);
+    const j = await r.json<{ data?: AnalyticsRow[] }>().catch(() => null);
     return { ok: true, data: j && Array.isArray(j.data) ? j.data : [] };
   } catch (e) {
     return { ok: false, reason: (e && e.message) || String(e) };
@@ -180,21 +176,17 @@ async function queryBillableUsage(env: Env): Promise<BillableRead> {
   const start = new Date(end.getTime() - WINDOW_DAYS * 86400000);
   const ymd = (d) => d.toISOString().slice(0, 10);
   try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 8000);
-    let r;
-    try {
-      r = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/billable-usage` +
-        `?from=${ymd(start)}&to=${ymd(end)}`,
-        { headers: { authorization: "Bearer " + env.BILLING_READ_TOKEN }, signal: ctrl.signal },
-      );
-    } finally { clearTimeout(to); }
+    const deadline = AbortSignal.timeout(8000);
+    const r = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/billable-usage` +
+      `?from=${ymd(start)}&to=${ymd(end)}`,
+      { headers: { authorization: "Bearer " + env.BILLING_READ_TOKEN }, signal: deadline },
+    );
     if (!r.ok) {
       const detail = (await r.text().catch(() => "")).slice(0, 200);
       return { ok: false, reason: "billing API " + r.status + ": " + detail };
     }
-    const j = await r.json().catch(() => null);
+    const j = await r.json<{ success?: boolean; result?: Array<{ ContractedCost?: number | string; BillingCurrency?: string; ServiceFamilyName?: string }> }>().catch(() => null);
     if (!j || j.success !== true || !Array.isArray(j.result)) return { ok: false, reason: "unexpected envelope" };
     // Sum ContractedCost, NEVER CumulatedContractedCost. The latter is a
     // running total carried on every row, so adding it up bills each charge
