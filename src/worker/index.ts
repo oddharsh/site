@@ -1,3 +1,4 @@
+import { clientEncodingRequest, encodeClientResponse } from "./lib/encoding.ts";
 import { WorkerEntrypoint, tracing } from "cloudflare:workers";
 import type { Env, SiteRequest } from "./lib/env.ts";
 import type { SpanName } from "./lib/span-vocabulary.ts";
@@ -193,11 +194,9 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // rather than a name it did not recognise. Same control idiom as the
   // `--x-bogus-flag` check on wrangler. So the body has to arrive uncompressed.
   //
-  // Asking via `accept-encoding: identity` would NOT work: the precompressed page
-  // path deliberately never consults that header (gotcha 13 — the edge rewrites it
-  // to a constant, so branching on it is dead code). A flag on the child env is
-  // also the safer seam, because env is not caller-controllable and no external
-  // request can ask production to stop serving its precompressed bodies.
+  // IDENTITY_BODY is the explicit boundary for an internal reader. Client
+  // negotiation now uses cf.clientAcceptEncoding, but an in-process child must
+  // remain readable regardless of the originating browser's encoding offer.
   // Workers Logs: one structured line per worker-owned request (path, method,
   // status, ms, version, country, bot, protocol), filterable in the dashboard. Edge-direct
   // traffic never reaches this code, so it never logs. Strippable: delete the
@@ -251,7 +250,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // booking page was publishable at two hostnames. Keying on "is this aadhar.sh"
   // rather than listing the hosts that are not means the next alias is covered by
   // arriving, which is the same argument the preview guard's default-deny wins on.
-  return withSecurityHeaders(response, url.pathname, { noindex: !isCanonicalHost(url.hostname) });
+  return withSecurityHeaders(encodeClientResponse(request, response), url.pathname, { noindex: !isCanonicalHost(url.hostname) });
 }
 
 // The named entrypoint is the only one configured to consult Workers Cache in
@@ -265,6 +264,7 @@ export class CachedPages extends WorkerEntrypoint<Env> {
 
 export default {
   async fetch(request, env, ctx) {
+    request = clientEncodingRequest(request);
     if (shouldUseWorkersCache(request, WORKERS_CACHEABLE_PATHS) && ctx.exports?.CachedPages) {
       return ctx.exports.CachedPages.fetch(request);
     }

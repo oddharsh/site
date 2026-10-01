@@ -2,6 +2,7 @@
 // asset path would lie.
 import { wantsMarkdown } from "./http.ts";
 import { notModifiedIfFresh } from "./cache.ts";
+import { preferredEncoding } from "./encoding.ts";
 //
 
 type AssetOptions = {
@@ -318,33 +319,10 @@ const variantEtag = (etag, suffix) => {
   return `W/"${base}-${suffix}"`;
 };
 
-// A WORKER CANNOT NEGOTIATE COMPRESSION. Measured in wrangler dev 2026-07-26: the
-// runtime rewrites the request's Accept-Encoding to a constant before the worker sees
-// it. Four probes sending `identity`, `br`, `gzip`, and `br;q=0, gzip` ALL arrived as
-// "br, gzip". That value describes what the EDGE can handle, never what the client
-// asked for, so any `if (acceptsBrotli(request))` branch in a worker is dead code that
-// always takes the true arm.
-//
-// What that header is really saying is "the edge will re-encode for the client," which
-// is the documented "serve Brotli from origin" contract: hand the edge br and it
-// down-converts for a client that can't take it. wrangler dev does NOT emulate that
-// layer, and its raw output is mangled three ways out of four (identity got raw brotli
-// with the content-encoding stripped; br got brotli-in-brotli; gzip got gzip-of-brotli).
-// So local testing can tell us the negotiation is impossible, but it CANNOT tell us
-// whether production is correct.
-//
-// Both paths are ON, each verified in production on 2026-07-27 before its gate came out,
-// and the canaries that proved them are gone now that the default paths exercise the same
-// code. CLAUDE.md gotchas 13 and 14 record how to rebuild them if a regression ever needs
-// bisecting.
-//
-//   precompression: /encoding-test returned 30 bytes in ONE brotli layer (34 in two before
-//   the withSecurityHeaders fix), and the shell twin measured 13,047 decoding to 46,268
-//   bytes of valid JS. About 19% under the edge's ~q4 fly-compression, for every browser.
-//
-//   dcz deltas: luna.css served as 116 bytes against its previous version, round-tripping
-//   byte-exact. 65x under the plain response for a returning Chromium visitor.
-
+// cf.clientAcceptEncoding retains the client offer before the edge normalizes
+// Accept-Encoding. Never serve a precompressed representation the client refused;
+// the gateway streams gzip or preserves identity when no accepted twin exists.
+// encodeBody: "manual" keeps the runtime from encoding these bytes a second time.
 
 // Available-Dictionary is a Structured Field Byte Sequence: `:<base64 sha256>:`. Returns
 // the first 16 hex chars of that hash, which is the tag build.ts puts in each .dcz
@@ -369,6 +347,7 @@ function dictionaryTag(request) {
 // serveDictionaryDelta: hand back the precomputed dcz for the dictionary this client
 // says it holds, or null to let the caller fall through.
 async function serveDictionaryDelta(url, ext, request, env) {
+  if (preferredEncoding(request, ["dcz", "br", "gzip", "identity"]) !== "dcz") return null;
   const tag = dictionaryTag(request);
   if (!tag) return null;
 
@@ -458,6 +437,10 @@ export async function servePrecompressedShell(request, env) {
 
   // No Available-Dictionary, or no delta for the dictionary this client holds: fall through
   // to the brotli q11 twin below, which carries the dictionary offer itself.
+
+  if (preferredEncoding(request, ["br", "gzip", "identity"]) !== "br") {
+    return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
+  }
 
   let br;
   try {
@@ -577,7 +560,8 @@ export function hasTextTwin(pathname: string): boolean {
 
 export async function servePrecompressedText(request, env, opts: AssetOptions = {}) {
   const url = new URL(request.url);
-  if (request.method !== "GET" || !hasTextTwin(url.pathname) || env.IDENTITY_BODY) {
+  if (request.method !== "GET" || !hasTextTwin(url.pathname) || env.IDENTITY_BODY
+    || preferredEncoding(request, ["br", "gzip", "identity"]) !== "br") {
     return serveAssetWith404Clamp(request, env, opts);
   }
 
@@ -723,6 +707,7 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   const bases = [rel, `${rel}/index`];
 
   const findDelta = async () => {
+    if (preferredEncoding(request, ["dcz", "br", "gzip", "identity"]) !== "dcz") return null;
     const tag = dictionaryTag(request);
     if (!tag) return null;
     for (const base of bases) {
@@ -784,10 +769,12 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   // Skipping is content-preserving here rather than a different answer: the twin
   // is a compression of the very asset `plain` returns, so the document is the
   // same one, and the two lookups it avoids are pure cost on this path.
-  const [br, delta] = env.IDENTITY_BODY
+  const wantsBr = preferredEncoding(request, ["br", "gzip", "identity"]) === "br";
+  const wantsDelta = preferredEncoding(request, ["dcz", "br", "gzip", "identity"]) === "dcz";
+  const [br, delta] = env.IDENTITY_BODY || (!wantsBr && !wantsDelta)
     ? [null, null]
     : await Promise.all([findBrotli(), findDelta()]);
-  if (br) {
+  if (br && wantsBr) {
     const fresh = notModifiedIfFresh(request, br);
     if (fresh.status === 304) {
       try { await delta?.body?.cancel(); } catch {}
@@ -815,7 +802,8 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
     if (fresh.status === 304) return fresh;
     return delta;
   }
-  if (br) return br;
+  if (br && wantsBr) return br;
+  try { await br?.body?.cancel(); } catch {}
 
   const plain = await serveAssetWith404Clamp(request, env, {
     headers: {
