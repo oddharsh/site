@@ -123,7 +123,11 @@ jobs:
           PROD: ${{ steps.check.outputs.prod }}
         run: |
           case "$CODE" in
-            0) verdict="**PASS.** The preview serves exactly what this commit builds." ;;
+            0) if grep -q "nothing to compare" "$RUNNER_TEMP/served.txt"; then
+                 verdict="**NOTHING TO COMPARE.** No static file differs from production, so no bytes were checked."
+               else
+                 verdict="**PASS.** The preview serves exactly what this commit builds."
+               fi ;;
             1) verdict="**FINDING.** The preview and this commit's build disagree; the lines below name each URL." ;;
             *) verdict="**NOT MEASURED** (exit ${CODE}). The check could not run, so this says nothing about the preview." ;;
           esac
