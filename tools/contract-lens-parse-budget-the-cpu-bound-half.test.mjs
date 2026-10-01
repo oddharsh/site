@@ -2,7 +2,6 @@
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   assert,
-  readFileSync,
   test,
 } from "./contract-shared.ts";
 
@@ -34,8 +33,19 @@ test("the parse is capped, and a prefix parse says so instead of under-reporting
 
 test("the parse cap is a deployment knob, not a code change", async () => {
   // "Move lens onto the free plan" should be a var flip. The floor keeps a
-  // typo (LENS_PARSE_KB=0 or 1) from disabling parsing entirely.
-  const src = readFileSync("src/worker/lens.ts", "utf8");
-  assert.match(src, /Number\(env\?\.LENS_PARSE_KB\)/, "the cap must be env-overridable");
-  assert.match(src, /Math\.max\(8, Number\(env\?\.LENS_PARSE_KB\) \|\| 0\)/, "a floor must guard against a zero or tiny override");
+  // typo (LENS_PARSE_KB=1) from disabling parsing entirely.
+  //
+  // Asserted through lensParseCap rather than over lens.ts's source text, which
+  // is what this test did until 2026-10-01: its floor regex matched only the
+  // COMMENT quoting the old `||` bug, so it would have stayed green with the
+  // floor deleted from the code. And the case that bug got wrong (unset reads
+  // the 256 KB default, never the 8 KB floor) is the first assertion here.
+  const { LENS_PARSE_CAP, lensParseCap } = await import("../src/worker/lens.ts");
+  const KB = 1024;
+  assert.equal(lensParseCap(undefined), LENS_PARSE_CAP, "no env must read the default");
+  assert.equal(lensParseCap({}), LENS_PARSE_CAP, "an unset var must read the default, not the 8 KB floor");
+  assert.equal(lensParseCap({ LENS_PARSE_KB: "64" }), 64 * KB, "the free-plan flip");
+  assert.equal(lensParseCap({ LENS_PARSE_KB: "1" }), 8 * KB, "a tiny override hits the floor");
+  assert.equal(lensParseCap({ LENS_PARSE_KB: "0" }), LENS_PARSE_CAP, "zero means unset");
+  assert.equal(lensParseCap({ LENS_PARSE_KB: "lots" }), LENS_PARSE_CAP, "a non-number means unset");
 });

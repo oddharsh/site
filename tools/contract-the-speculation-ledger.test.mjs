@@ -532,16 +532,24 @@ test("the hashed policy is well-formed and keeps 'self' for the external scripts
   }
 });
 
-test("every inline script in the STAGED tree is covered by the emitted hash map", async () => {
+// Where build.ts step 7c writes the map: the Worker stages to a path that
+// mirrors its source. This read .build/public/_worker.js/lib/csp-hashes.js until
+// 2026-10-01, a path nothing has written since the Worker moved out of the
+// served tree, and an early `return` on the missing file made the test pass
+// without checking anything. #827 fixed csp:sweep for the same move and missed
+// this reader. A missing build is a SKIP now, so it says so in the report.
+const STAGED_CSP_HASHES = "./.build/src/worker/lib/csp-hashes.ts";
+const needsStagedHashes = !existsSync(STAGED_CSP_HASHES) && "needs a built tree: bun run build";
+
+test("every inline script in the STAGED tree is covered by the emitted hash map", { skip: needsStagedHashes }, async () => {
   // The build derives the map from the staged bytes; this re-derives it with a
   // deliberately different parser and compares. Same-code-twice would prove
   // nothing, and the failure this guards against (a blocked script leaves the
   // page rendering and merely dead) is invisible without it.
-  if (!existsSync("./.build/public/_worker.js/lib/csp-hashes.js")) return; // no staged tree; `bun run build` first
   const { createHash } = await import("node:crypto");
   const { readdir } = await import("node:fs/promises");
 
-  const emitted = readFileSync("./.build/public/_worker.js/lib/csp-hashes.js", "utf8")
+  const emitted = readFileSync(STAGED_CSP_HASHES, "utf8")
     .match(/^export const PAGE_SCRIPT_HASHES = (.*); \/\/ build:csp-hashes$/m);
   assert.ok(emitted, "the build did not rewrite the build:csp-hashes marker");
   const map = JSON.parse(emitted[1]);
@@ -624,7 +632,7 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
       if (!EXECUTABLE.test(type)) continue;
       const digest = createHash("sha256").update(m.body, "utf8").digest("base64");
       assert.ok(map[path].includes(digest),
-        `${page}: an inline <script${type ? ` type="${type}"` : ""}> is not in the hash map — it would be BLOCKED once the flag flips`);
+        `${page}: an inline <script${type ? ` type="${type}"` : ""}> is not in the hash map, so the enforcing CSP BLOCKS it`);
       checked++;
     }
   }
