@@ -159,12 +159,12 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <p>Signing got 72 times faster, and the header didn't lose a single byte. That's the asymmetry this page bet on in July. Natively, one ML-DSA-44 signature costs about as much as 10 Ed25519 signatures (11.3&micro;s each on the same rig), where the JavaScript version cost as much as 170.</p>
 <p>Here is the table that retired <code>sig2</code>, repriced:</p>
 <table class="pqc-tiers">
-  <tr><th>Surface</th><th>Signatures per request</th><th>JavaScript</th><th>Native</th></tr>
+  <tr><th>Surface</th><th>Signatures per request</th><th>JavaScript</th><th>Native, on the laptop</th></tr>
   <tr><td>A single crawl of one origin</td><td>1</td><td>~8.5ms</td><td>~0.12ms</td></tr>
   <tr class="mine"><td>The <a href="/rn">/rn</a> playlist scrape</td><td>21</td><td>~180ms</td><td><strong>~2.5ms</strong></td></tr>
   <tr class="mine"><td><a href="/lens">/lens</a> discovery</td><td>28</td><td>~240ms</td><td><strong>~3.4ms</strong></td></tr>
 </table>
-<p>One signature used to eat most of a 10ms request budget. Now it takes about 1% of one, and the worst fan-out on the site signs everything it needs in about a third of a single budget.</p>
+<p>On the laptop, one signature takes about 1% of a 10ms request budget, and the worst fan-out on the site would sign everything it needs in about a third of a single budget. Hold that projection loosely; production priced it at 3 times that.</p>
 
 <h3>How I checked it</h3>
 <p>A 72x speedup deserves a control, so I ran three.</p>
@@ -174,8 +174,17 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <h3>What it leaves open</h3>
 <p>The objection I think is right survives intact. Nothing on the internet verifies <code>sig2</code>, the IANA registry still lists six classical algorithms, and every signed request would still carry 3.2KB more header for a signature with no harvest-now clock behind it.</p>
 <p>The retirement section also promised <code>sig2</code> could return "with no code to write." That was wrong. The library left with the label, so bringing it back means a compatibility flag on the whole Worker plus a signing path through <code>crypto.subtle</code>. It's a small change, and a real one.</p>
-<p>And these are laptop numbers. Production bills CPU on different hardware, under a clamp that tightens with load, which is exactly where this page went wrong the first time. So <code>sig2</code> stays off until a production version with the flag on shows its <code>cpuTime</code> on <code>/lens</code>, pinned and compared against a version without it.</p>
-<p>The flag carries its own risk, since Cloudflare gates it "while the specification is still moving." If the API breaks, the plan is to lose the second label and nothing else: a revived <code>sig2</code> keeps the old rule that any ML-DSA failure degrades to Ed25519 alone.</p>
+<h3>What production said</h3>
+<p>Those were laptop numbers, and production bills CPU on different hardware, under a clamp that tightens with load. That is exactly where this page went wrong the first time. So before <code>sig2</code> came back, I deployed it at 0% beside the live version and pinned six <code>/lens</code> scans to it, each against a fresh origin so no cache could skip the signing.</p>
+<table class="pqc-tiers">
+  <tr><th>Version</th><th>/lens scan CPU, median of 6</th></tr>
+  <tr><td>Live, sig1 only</td><td>22ms</td></tr>
+  <tr class="mine"><td>sig2 on every request</td><td><strong>32ms</strong></td></tr>
+  <tr><td>sig2 on primary fetches only</td><td>22ms (live read 20ms in the same run)</td></tr>
+</table>
+<p>Signing everything cost 10ms a scan, about 0.33ms a signature, which is 3 times the laptop figure. August's lesson applied a second time: the per-signature price was right, and the price that mattered was that number on production's CPU, multiplied by fan-out.</p>
+<p>So <code>sig2</code> now rides on the requests that are this crawler's identity (the page being scanned, <a href="/around">/around</a>, the playlist) and skips the 28 discovery probes and the <code>robots.txt</code> reads that only look around. That costs about 2ms a scan, inside the noise between two runs of the live version.</p>
+<p>The flag carries its own risk, since Cloudflare gates it "while the specification is still moving." If the API breaks, this site loses the second label and nothing else: any ML-DSA failure drops <code>sig2</code>, logs once, and <code>sig1</code> ships alone.</p>
 <p>In July this page priced three costs: CPU, bundle size, and header bytes. Two belonged to the runtime, and the runtime has now paid them. The 3,228 bytes belong to FIPS 204, so they're the only number left to decide on. That's the rule I'd hand anyone timing a post-quantum migration: decide on the sizes, because the speeds come down on someone else's schedule.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
@@ -432,12 +441,12 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
       ]
     },
     {
-      "q": "Native ML-DSA-44 signs in 0.12ms on a laptop. Why does sig2 stay off until there is a production measurement?",
+      "q": "Native ML-DSA-44 signed in 0.12ms on a laptop. Why did sig2 wait for a production measurement before coming back?",
       "options": [
         {
           "t": "Laptop wall-clock time and production CPU differ, and this page already missed a cost once by pricing it in isolation from fan-out and load.",
           "ok": true,
-          "why": "Right. The 8.58ms was accurate and still sank the label, because the page never multiplied it by 28 probes under a clamp that tightens with load. The cure is cpuTime on the real surface."
+          "why": "Right, and the wait paid for itself. Signing every request took a /lens scan from 22ms to 32ms of CPU, 3 times the laptop projection, so sig2 now skips the fan-out and costs about 2ms a scan."
         },
         {
           "t": "A native signature is a different size, so headers could break where the JavaScript ones did fine.",

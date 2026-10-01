@@ -20,6 +20,7 @@ import { handleLensWire } from "./lens-wire.ts";
 import { handleLensNlweb } from "./lens-nlweb.ts";
 import { handleLensTools } from "./lens-tools.ts";
 import { handleLensMarkdown } from "./lens-markdown.ts";
+import { countMiss, recoverNotFound } from "./lib/not-found.ts";
 import { serveAssetWith404Clamp, serveFreshAsset, serveMarkdownTwin, servePrecompressedShell, servePrecompressedText, serveStaticPage } from "./lib/assets.ts";
 import { BOT_UA, handleSignatureDirectory, withBotPolicyCache } from "./lib/botauth.ts";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.ts";
@@ -211,7 +212,17 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // line is emitted on every worker-owned request; the prefix is unique across any
   // two versions that will ever be live together.
   const t0 = Date.now();
-  const response = await route(request, env, ctx);
+  let response = await route(request, env, ctx);
+  // A 404 gets one more look before it leaves (lib/not-found.ts): a redirect
+  // where one URL is unambiguously meant, otherwise a 404 that names the
+  // sitemap and the closest real pages. cal.aadhar.sh is skipped because its
+  // misses would be pointed at paths on a different host. The miss ledger
+  // counts every one, recovered or not, by caller class and path bucket.
+  if (response.status === 404 && (request.method === "GET" || request.method === "HEAD") && url.hostname !== "cal.aadhar.sh") {
+    const miss = await recoverNotFound(request, env, response);
+    countMiss(env, request, url.pathname, miss);
+    response = miss.response;
+  }
   // the bot ledger: identified AI-crawler hits tick into Analytics Engine
   // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
   countCrawlerHit(env, request, response, url.pathname);

@@ -36,6 +36,8 @@ import { overBudget } from "./lib/ratelimit.ts";
 import { sign, verify } from "../../cal/src/sign.ts";
 import { resendSend } from "../../cal/src/email.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
+import { span } from "./lib/trace.ts";
+import { sortLine, sortMention, sortSubjectTag } from "./webmention-sort.ts";
 
 // One bucket, one ceiling, matching the /lens posture. Fails OPEN without the
 // binding (dev): this is abuse control, and the SSRF guard is what enforces
@@ -541,12 +543,24 @@ async function emailHost(env, request, m) {
     return;
   }
   const origin = new URL(request.url).origin;
+  // Sorted only once an email will go out, so an unconfigured host spends no
+  // Workers AI. The verdict labels the email and decides nothing.
+  const sort = await span("webmention.sort", async (s) => {
+    const r = await sortMention(env, m);
+    s.setAttribute("webmention.sort_outcome", "error" in r ? r.error : "clef");
+    if (!("error" in r)) {
+      s.setAttribute("webmention.sort_verdict", r.verdict);
+      s.setAttribute("webmention.sort_p_spam", r.probabilities.spam);
+    }
+    return r;
+  });
   const approve = `${origin}/webmention/approve?t=${m.id}&sig=${await sign(`${m.id}|approve`, env.SIGNING_SECRET)}`;
   const decline = `${origin}/webmention/decline?t=${m.id}&sig=${await sign(`${m.id}|decline`, env.SIGNING_SECRET)}`;
   const html = `
     <p><strong>${esc(m.author)}</strong> ${esc(kindPhrase(m.kind))} <a href="${esc(m.target)}">${esc(m.target.replace(origin, ""))}</a></p>
     <p><a href="${esc(m.source)}">${esc(m.title)}</a>${m.published ? ` <span style="color:#888">published ${esc(m.published)}</span>` : ""}</p>
     ${m.excerpt ? `<blockquote style="border-left:3px solid #888;padding-left:.8em;margin-left:0;color:#333">${esc(m.excerpt)}</blockquote>` : ""}
+    <p style="color:#555">${esc(sortLine(sort))}</p>
     <p>
       <a href="${approve}" style="display:inline-block;padding:8px 14px;background:#0a0;color:#fff;text-decoration:none;border-radius:3px">approve &amp; publish</a>
       &nbsp;&nbsp;
@@ -557,7 +571,7 @@ async function emailHost(env, request, m) {
   await resendSend(env, {
     from: "aadhar.sh <noreply@aadhar.sh>",
     to: [env.HOST_EMAIL],
-    subject: `✉ ${m.author} ${kindPhrase(m.kind)} ${m.target.replace(origin, "")}`,
+    subject: `${sortSubjectTag(sort)}✉ ${m.author} ${kindPhrase(m.kind)} ${m.target.replace(origin, "")}`,
     html,
   });
 }

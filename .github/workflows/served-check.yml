@@ -1,0 +1,59 @@
+name: Served check
+
+# Does production serve what CI built, URL for URL?
+#
+# ci.yml cuts a served manifest from its own build of every main commit (each
+# static URL and the sha256 of its bytes) and signs it with a build-provenance
+# attestation. Workers Builds rebuilds the same commit and ships it. This job
+# reads the commit production reports in /whoareyou.json, fetches that commit's
+# manifest, verifies ci.yml signed it, and GETs every URL in it from production.
+#
+# The per-release check in promote-production.yml covers only the URLs a release
+# CHANGED. This one sweeps all of them, because some failures change no manifest
+# at all: an edge feature that rewrites HTML after the Worker (gotcha 20), a
+# routing change that sends a URL somewhere new, a twin the build stopped
+# writing. The first run against a hand-built manifest (2026-10-01) found one of
+# the last kind, /dotfiles/index.src.html answering 307.
+#
+# It covers the static tree and nothing the Worker renders per request, and it
+# cannot see the Worker bundle itself. It gates nothing.
+#
+# Cost: about 716 Worker invocations a run (the other ~1,130 URLs never reach the
+# Worker), once a day, against the 200K/day observability quota. No Cloudflare
+# credential.
+
+on:
+  schedule:
+    - cron: "15 10 * * *" # after the canary at 10:05, clear of the 09:xx PR-opening jobs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: served-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: production serves what CI built
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read       # download the manifest artifact from ci.yml's run
+      attestations: read  # verify ci.yml signed it
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      # No install: check-served.ts imports node built-ins and its own lib only.
+      - name: Every served URL against CI's signed manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun run served:check
