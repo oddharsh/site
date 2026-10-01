@@ -5,7 +5,8 @@
 // that the tier order (first match wins) survived being turned into a table.
 import { assert, test } from "./contract-shared.ts";
 import { ROLE_TIERS, attendeeScore, roleTier } from "../serendipity/serendipity.ts";
-import { LABELS, scoreTiers } from "./serendipity-role-baseline.ts";
+import { LABELS, confidenceQuantiles, scoreClef, scoreTiers, tierRecallOnTierable } from "./serendipity-role-baseline.ts";
+import { ROLE_CRITERIA, ROLE_MODEL, buildRoleRequest, parseRoleAnswer } from "../serendipity/roles.ts";
 
 test("a person with only a Luma bio is ranked by it", () => {
   assert.equal(attendeeScore({ bio_short: "Co-Founder of EasyA" }), 100);
@@ -63,4 +64,63 @@ test("the baseline scores precision over matches and recall over stated roles", 
   assert.deepEqual(s.missed, { other: 1, operator: 1 });
   assert.ok(LABELS.includes("investor") && LABELS.includes("not_stated"));
   assert.throws(() => scoreTiers(bios, { a: "ceo" }), /not one of/);
+});
+
+// ── the Clef role classifier (serendipity/roles.ts) ──────────────────────────
+test("the classifier's options are the label vocabulary every label file uses", () => {
+  // Pinned by value: a renamed option would silently score every old label as a miss.
+  assert.deepEqual([...LABELS], ["founder", "investor", "operator", "engineer", "researcher", "student", "creator", "other", "not_stated"]);
+  assert.deepEqual(Object.keys(ROLE_CRITERIA), [...LABELS]);
+});
+
+test("one bio per request, a model the binding accepts, and a bounded state", () => {
+  const req = buildRoleRequest("  Growth   @ Corgi \n ".concat("x".repeat(5000)));
+  assert.match(ROLE_MODEL, /^(clef|clef-flash)$/);
+  assert.equal(req.model, ROLE_MODEL);
+  assert.deepEqual(Object.keys(req.state), ["bio"]);
+  assert.ok(req.state.bio.startsWith("Growth @ Corgi x"), "whitespace collapsed");
+  assert.ok(req.state.bio.length <= 1000);
+  assert.deepEqual(Object.keys(req.questions), ["role"]);
+  assert.equal(req.questions.role.type, "choice");
+});
+
+test("an answer outside the labels, or without a confidence, is no answer", () => {
+  const ok = { answers: { role: { type: "choice", choice: "operator", confidence: 0.8, probabilities: { operator: 0.8, founder: 0.2 } } } };
+  assert.deepEqual(parseRoleAnswer(ok), { role: "operator", confidence: 0.8, probabilities: { operator: 0.8, founder: 0.2 } });
+  assert.equal(parseRoleAnswer({ answers: { role: { ...ok.answers.role, choice: "ceo" } } }), null);
+  assert.equal(parseRoleAnswer({ answers: { role: { ...ok.answers.role, confidence: undefined } } }), null);
+  assert.equal(parseRoleAnswer(null), null);
+});
+
+test("Clef is scored like the regex: abstentions cost recall, never precision", () => {
+  const bios = ["a", "b", "c", "d", "e", "f"].map((id) => ({ id, bio: id === "a" ? "Founder of X" : "Growth at Corgi" }));
+  const labels = { a: "founder", b: "operator", c: "operator", d: "creator", e: "not_stated", f: "investor" };
+  const p = (role, confidence) => ({ role, confidence, probabilities: {} });
+  const predictions = {
+    a: p("founder", 0.95),   // claimed, right
+    b: p("operator", 0.6),   // claimed at 0, abstains at 0.7
+    c: p("founder", 0.9),    // claimed, wrong
+    d: p("creator", 0.9),    // right, on a label no tier can fit
+    e: p("not_stated", 0.99), // an abstention whatever its confidence
+    f: null,                 // the call failed
+  };
+  const at0 = scoreClef(bios, labels, predictions, 0);
+  assert.deepEqual(
+    { matched: at0.matched, right: at0.right, stated: at0.stated, found: at0.found, tierable: at0.tierable, tierFound: at0.tierFound, failed: at0.failed },
+    { matched: 4, right: 3, stated: 5, found: 3, tierable: 4, tierFound: 2, failed: 1 },
+  );
+  const at7 = scoreClef(bios, labels, predictions, 0.7);
+  assert.equal(at7.matched, 3);
+  assert.equal(at7.found, 2, "a below-threshold right answer is a miss, not a hit");
+  assert.deepEqual(at7.missed, { operator: 2, investor: 1 });
+  assert.throws(() => scoreClef(bios, { a: "ceo" }, predictions), /not one of/);
+  // The regex's like-for-like recall: founder hit, operators missed, creator excluded.
+  assert.deepEqual(tierRecallOnTierable(bios, labels), { tierable: 4, found: 1 });
+});
+
+test("the sweep's thresholds come from the confidence Clef actually returned", () => {
+  const p = (role, confidence) => ({ role, confidence, probabilities: {} });
+  const predictions = { a: p("founder", 0.2), b: p("founder", 0.4), c: null, d: p("founder", 0.6), e: p("founder", 0.8) };
+  assert.deepEqual(confidenceQuantiles(predictions, [0, 0.5, 0.99]), [0.2, 0.6, 0.8], "a failed call is not a confidence of zero");
+  assert.deepEqual(confidenceQuantiles({ x: null }, [0.5]), [null]);
 });

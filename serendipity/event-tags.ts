@@ -137,7 +137,9 @@ export type EventTag = {
   model: string, probabilities: { topic: Record<string, number>, format: Record<string, number> },
 };
 
-function readChoice<K extends string>(answer: any, valid: readonly K[]) {
+/** One Choice answer, or null when it names an option outside `valid` or carries
+ *  no usable confidence. Shared with serendipity/roles.ts. */
+export function readChoice<K extends string>(answer: any, valid: readonly K[]) {
   if (!answer || answer.type !== "choice" || !valid.includes(answer.choice)) return null;
   const confidence = Number(answer.confidence);
   if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) return null;
