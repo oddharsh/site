@@ -435,6 +435,17 @@ const ROUTES = [
   { path: "/around/changes.json", status: 200, ct: "application/json" },
   { path: "/photos/query.json?q=XT", status: 200, ct: "application/json" },
   { path: "/coffee/availability.json", status: [200, 503], ct: "application/json", flaky: true },
+  // A 404 gets one more look (lib/not-found.ts). Each redirect rule, once,
+  // through the real Worker on the built tree: a superseded /a/ hash, a share
+  // card asked for as .png, a terminal tool asked for as .md, an MCP card
+  // probe. Then the two 404 shapes: a page miss names its closest sitemap
+  // pages, and a probe gets the sitemap pointer and no suggestions.
+  { path: "/a/icons.00000000.svg", status: 301 },
+  { path: "/og/garage-pqc.png", status: 301 },
+  { path: "/finger.md", status: 301 },
+  { path: "/.well-known/mcp", status: 301 },
+  { path: "/garage/resampe", status: 404, ct: "text/plain", marker: "/garage/resample" },
+  { path: "/openapi.json", status: 404, ct: "text/plain", marker: "/sitemap.xml" },
   // the listings are retired: every listing URL 301s to the /photos archive
   { path: "/images", status: 301 },
   { path: "/images/", status: 301 },

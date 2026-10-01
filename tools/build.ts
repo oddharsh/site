@@ -2672,6 +2672,35 @@ let freshFamily: Buffer | null = null;
     console.log(`speculation rules: ${url} (${bytes.length} bytes), sent as a Speculation-Rules header`);
   }
 
+  // Name every content-hashed file in /a/ for lib/not-found.ts, which sends a
+  // superseded hash to the current one. Runs after the last /a/ file of this
+  // step is written (the speculation ruleset just above); the q11 twins (.br)
+  // and the family dictionary arrive later and are excluded on purpose, since a
+  // twin is never requested by name and a dictionary has its own protocol.
+  {
+    const files = (await readdir(`${OUT}/public/a`)).filter((f) => !f.endsWith(".br") && !f.endsWith(".dict"));
+    const map: Record<string, string> = {};
+    for (const f of files) {
+      const m = /^(.+)\.([0-9a-f]{8})\.([a-z0-9]+)$/.exec(f);
+      if (!m) continue;
+      const key = `${m[1]}.${m[3]}`;
+      if (map[key]) throw new Error(`hashed-assets: two hashes of ${key} in /a/ (${map[key]}, /a/${f}); a stale name cannot know which is current`);
+      map[key] = `/a/${f}`;
+    }
+    // A floor, because an empty map is silent: every stale request would just
+    // keep 404ing. 142 files staged on 2026-10-01, about half of them twins.
+    if (Object.keys(map).length < 40) throw new Error(`hashed-assets: only ${Object.keys(map).length} hashed files in /a/; the walk or the name pattern broke`);
+    const p = `${OUT}/src/worker/lib/shell-assets.ts`;
+    const src = await readFile(p, "utf8");
+    const out = src.replace(
+      /^export const HASHED_ASSETS: Record<string, string> = .*\/\/ build:hashed-assets$/m,
+      `export const HASHED_ASSETS: Record<string, string> = ${JSON.stringify(map)}; // build:hashed-assets`,
+    );
+    if (out === src) throw new Error("shell-assets.ts: the `// build:hashed-assets` marker line was not found");
+    await writeFile(p, out);
+    console.log(`hashed assets: ${Object.keys(map).length} names mapped to their current /a/ URL`);
+  }
+
   // same Early-Hints preload for the STATIC garage/lwe pages: rewrite the
   // angle-bracketed Link targets in the staged _headers to the hashed URLs. only
   // the `</luna.css>` / `</nav.js>` Link forms are touched; the bare `/nav.js` +
