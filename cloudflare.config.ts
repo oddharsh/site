@@ -94,7 +94,15 @@ const worker = defineWorker({
   // auxiliaries. The pinned workerd (1.20260908.1 behind wrangler 4.130.0)
   // knows the flag, and `bun run routes:check` boots the real Worker on it,
   // which is the gate the paragraph above says makes acceptance mean anything.
-  compatibilityFlags: ["enable_request_signal", "new_module_registry"],
+  //
+  // webcrypto_modern_algorithms (2026-10-01) puts ML-DSA and ML-KEM in
+  // crypto.subtle, on BoringSSL. AadharshBot's sig2 is the one consumer: it
+  // signs ML-DSA-44 natively at ~0.12ms, where the pure-JS version that was
+  // retired on 2026-08-15 took ~8.5ms. Without the flag the runtime refuses the
+  // algorithm by name and botauth.ts drops sig2, logging once per isolate, so
+  // losing this flag degrades to sig1 alone rather than failing a request.
+  // Cloudflare gates it "while the specification is still moving".
+  compatibilityFlags: ["enable_request_signal", "new_module_registry", "webcrypto_modern_algorithms"],
 
   // Workers Cache sits in front of the public-response entrypoint below. The
   // default dispatcher stays uncached because it owns mutations, per-visitor

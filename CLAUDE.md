@@ -2224,6 +2224,20 @@ The directory is Worker-first: `lib/botauth.ts` signs its response over
 Its committed JWK Set must match `RN_SIGNING_KEY_JWK`; missing or mismatched
 material returns 503, so rotate the public file and private secret together.
 
+**Every request carries a second label, `sig2`, ML-DSA-44, since 2026-10-01.**
+It signs natively through `crypto.subtle`, which needs the
+`webcrypto_modern_algorithms` compatibility flag (about 0.12ms a signature;
+the pure-JS run of 2026-07-27 to 2026-08-15 took 8.5ms and was retired on CPU,
+gotcha 36). Three rules in `lib/botauth.ts` keep it from costing `sig1`
+anything. It is OPTIONAL: an unset, malformed or unimportable
+`RN_SIGNING_KEY_MLDSA_JWK` drops the label and logs once per isolate.
+Its `keyid` is the RFC 9964 thumbprint (`alg`, `kty`, `pub`) of the public key
+`getPublicKey` derives, so the secret may be a bare 32-byte seed, which workerd
+accepts and bun and node refuse. And the directory carries the AKP entry only
+while `sig2` can sign: unavailable filters it out of the served copy, and a
+usable key that differs from the published one 503s like ed25519 drift. The
+directory response carries one signature per key, as directory-05 recommends.
+
 All signed content reads use `botRequestHeaders`, which checks the destination's
 robots.txt before each hop by default. RN explicitly selects `robots: "spotify-embed"`
 for the owner's public playlist, track and artist embed reads: the 2026-09-16

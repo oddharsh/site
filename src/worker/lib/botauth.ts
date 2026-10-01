@@ -7,32 +7,39 @@
 // can fetch the JWKS at https://aadhar.sh/.well-known/http-message-signatures-directory
 // and verify against the published public keys.
 //
-// Every request carries ONE signature: sig1, ed25519, the one verifiers check.
+// Every request carries sig1, ed25519, the one verifiers check. When
+// RN_SIGNING_KEY_MLDSA_JWK is set it also carries sig2, an ML-DSA-44
+// post-quantum label over the same covered components. A verifier that only
+// knows ed25519 reads sig1 and skips sig2, because Signature-Input and
+// Signature are structured-field Dictionaries.
 //
-// It used to carry a second, sig2, an ML-DSA-44 post-quantum label riding
-// alongside. That shipped 2026-07-27 as a live example (the numbers are still
-// at /garage/pqc) and came back out on 2026-08-15, because the thing that made
-// it "additive" was never true of its CPU.
+// sig2 has been here twice, and the CPU is why the second time is different.
+// The first run (2026-07-27 to 2026-08-15) signed in pure JS, because workerd
+// had no ML-DSA, at ~8.5ms a signature. On Workers Free, where a busy account
+// clamps near 10ms of CPU per invocation, ONE signature spent most of a request
+// and every fan-out spent several: rn's playlist scrape signed once per track
+// (~180ms, every album cover came back null) and /lens discovery signed 28
+// probes (31 of 51 sampled requests died `exceededCpu`). /garage/pqc has the
+// whole story.
 //
-// workerd has no ML-DSA in WebCrypto, so signing was pure JS at ~8.5ms per
-// request. This account is on Workers Free, which allows 10ms of CPU per
-// invocation, so ONE signature spent most of a request's entire budget and any
-// fan-out spent several budgets. Two surfaces were dark because of it:
+// workerd now ships ML-DSA in WebCrypto behind the `webcrypto_modern_algorithms`
+// compatibility flag, on BoringSSL. Measured 2026-10-01 on the pinned workerd:
+// 0.12ms per signature, 72x the JS figure, and 0.03ms to turn the seed into a
+// key. So the same fan-out now spends ~3.4ms where it spent ~240ms.
 //
-//   - rn's Spotify scrape signs once per track. 21 tracks = ~180ms of signing,
-//     so tier 2 never completed and every album cover came back null.
-//   - /lens signs every foreign fetch, and discovery fans out to 28 probes.
-//     Measured 2026-08-15 in production: 31 of 51 sampled requests died
-//     `exceededCpu`, nearly all of them /lens/fetch and /lens/tools.
-//
-// Nothing on the internet verified sig2, so removing it costs no verifier
-// anything and buys back the CPU both surfaces needed. The key is also gone
-// from the published JWKS: advertising a key we no longer sign with is the
-// dangling-pointer problem the DNS-AID note refuses for `_a2a`.
-//
-// Reviving it needs a runtime with native ML-DSA, or a plan that is not
-// "sign on the request path". Do not re-add it to botHeaders
-// without one, and read the CPU note above first.
+// Three rules keep sig2 from ever costing sig1 anything:
+//   - sig2 is OPTIONAL. A missing, malformed or unimportable ML-DSA key drops
+//     the label and logs once per isolate; it never throws, and sig1 still ships.
+//   - its keyid is the RFC 9964 thumbprint of the public key DERIVED from the
+//     secret with getPublicKey, so the secret may be the bare 32-byte seed
+//     (workerd accepts that; node and bun want `pub` too) and keyid still
+//     cannot disagree with the key that signed.
+//   - the directory publishes exactly the keys the Worker signs with. When sig2
+//     is unavailable, its AKP entry is filtered out of the served directory, so
+//     nothing points at a key we are not signing with (the DNS-AID note's
+//     `_a2a` rule) and sig1's directory keeps serving. When sig2 IS available
+//     but its key differs from the published one, that is rotation drift, and
+//     it 503s exactly like a drifted ed25519 key always has.
 import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./public-fetch.ts";
 import { lensParseRobots, lensRobotsVerdict } from "./robots.ts";
 import { isSubrequestLimit } from "./budget.ts";
@@ -54,10 +61,15 @@ const DIRECTORY_TYPE = "application/http-message-signatures-directory+json";
 // Cloudflare recommends a minute: signatures remain usable in transit without
 // leaving a long replay window. Each signature, including redirect hops, gets
 // its own 256-bit nonce. Only key material is memoized below.
-function signatureParams(components: string, keyId: string, tag: string) {
+//
+// `alg` is "ed25519" for sig1 and "ml-dsa-44" for sig2. The second is this
+// site's spelling, since the IANA HTTP Signature Algorithms registry has no
+// post-quantum entry yet; it follows the registry's lowercase-hyphen convention
+// so a real registration is a no-op if it lands on the same token.
+function signatureParams(components: string, keyId: string, tag: string, alg = "ed25519") {
   const created = Math.floor(Date.now() / 1000);
   const nonce = crypto.getRandomValues(new Uint8Array(32)).toBase64();
-  return `(${components});created=${created};expires=${created + 60};nonce="${nonce}";keyid="${keyId}";alg="ed25519";tag="${tag}"`;
+  return `(${components});created=${created};expires=${created + 60};nonce="${nonce}";keyid="${keyId}";alg="${alg}";tag="${tag}"`;
 }
 
 export type BotRequestOptions = {
@@ -91,27 +103,67 @@ export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
     throw new Error("AadharshBot signing key is unavailable");
   }
   const host = new URL(targetUrl).host;
-  const { keyId, key } = await signingMaterial(env.RN_SIGNING_KEY_JWK);
-  const params = signatureParams('"@authority" "signature-agent"', keyId, "web-bot-auth");
-  // RFC 9421: one covered component per line, then the signed parameters.
-  const base = ENCODER.encode([
+  // RFC 9421: one covered component per line, then the signed parameters. Each
+  // label signs its OWN base, because the base ends in that label's parameters.
+  const signed = await signLabels(await activeSigners(env), '"@authority" "signature-agent"', "web-bot-auth", (params) => [
     `"@authority": ${host}`,
     `"signature-agent": "${SIG_AGENT}"`,
     `"@signature-params": ${params}`,
   ].join("\n"));
-  const signature = new Uint8Array(await crypto.subtle.sign("Ed25519", key, base)).toBase64();
   headers.set("Signature-Agent", `"${SIG_AGENT}"`);
-  headers.set("Signature-Input", `sig1=${params}`);
-  headers.set("Signature", `sig1=:${signature}:`);
+  headers.set("Signature-Input", signed.input);
+  headers.set("Signature", signed.signature);
   return headers;
 }
 
+type Signer = { keyId: string; alg: string; sign: (base: Uint8Array) => Promise<ArrayBuffer> };
+// The ML-DSA secret is OPTIONAL to every caller, which is the whole of sig2's
+// failure policy written as a type: env.ts declares it required because the
+// production deploy gate asks for it, and nothing here may depend on that.
+type SigningEnv = Pick<Env, "RN_SIGNING_KEY_JWK"> & Partial<Pick<Env, "RN_SIGNING_KEY_MLDSA_JWK">>;
+
+// sig1 always; sig2 only when the ML-DSA key is configured AND usable. The
+// ed25519 half throws like it always has, since without it there is no bot
+// identity at all, while the ML-DSA half resolves to nothing on any failure.
+async function activeSigners(env: SigningEnv): Promise<Signer[]> {
+  const [ed, pq] = await Promise.all([
+    signingMaterial(env.RN_SIGNING_KEY_JWK),
+    env.RN_SIGNING_KEY_MLDSA_JWK ? pqSigningMaterial(env.RN_SIGNING_KEY_MLDSA_JWK) : null,
+  ]);
+  const signers: Signer[] = [{ keyId: ed.keyId, alg: "ed25519", sign: (base) => crypto.subtle.sign("Ed25519", ed.key, base) }];
+  if (pq) signers.push({ keyId: pq.keyId, alg: "ml-dsa-44", sign: (base) => crypto.subtle.sign({ name: "ML-DSA-44" }, pq.key, base) });
+  return signers;
+}
+
+// One Dictionary member per signer, labelled by position: sig1 is ed25519 and
+// sig2 is ML-DSA-44, which is the order a verifier that stops at the first
+// label it knows wants to meet them in. The signatures run concurrently.
+async function signLabels(signers: Signer[], components: string, tag: string, base: (params: string) => string) {
+  const parts = await Promise.all(signers.map(async (signer, i) => {
+    const label = `sig${i + 1}`;
+    const params = signatureParams(components, signer.keyId, tag, signer.alg);
+    const signature = new Uint8Array(await signer.sign(ENCODER.encode(base(params)))).toBase64();
+    return { input: `${label}=${params}`, signature: `${label}=:${signature}:` };
+  }));
+  return {
+    input: parts.map((p) => p.input).join(", "),
+    signature: parts.map((p) => p.signature).join(", "),
+  };
+}
+
 // The committed JWK Set stays the public-key source of truth. Its response is
-// Worker-owned so it can prove possession of that key for the requesting host
-// (Cloudflare's directory-03 profile). Never serve an unsigned success, or sign
-// a directory that drifted from the configured secret. This site has one active
-// key; a rotation must update the public directory and secret together.
-export async function handleSignatureDirectory(request: Request, env: Pick<Env, "ASSETS" | "RN_SIGNING_KEY_JWK">) {
+// Worker-owned so it can prove possession of each key for the requesting host
+// (Cloudflare's directory-03 profile; directory-05 recommends one signature per
+// key, so sig2 signs the directory too). Never serve an unsigned success, or
+// sign a directory that drifted from the configured secrets: the ed25519 key
+// must be published, and so must the ML-DSA key whenever sig2 is active. A
+// rotation must update the public directory and the secret together.
+//
+// One asymmetry, on purpose. An AKP entry whose secret is unset or unusable is
+// FILTERED out of the served copy instead of failing the request, because a
+// 503 here also blinds every verifier of sig1, and sig2 must never cost sig1
+// anything. Only real drift, a usable key that is not the published one, 503s.
+export async function handleSignatureDirectory(request: Request, env: Pick<Env, "ASSETS"> & SigningEnv) {
   const headers = new Headers({ "cache-control": "no-store" });
   if (request.method !== "GET" && request.method !== "HEAD") {
     headers.set("allow", "GET, HEAD");
@@ -119,23 +171,29 @@ export async function handleSignatureDirectory(request: Request, env: Pick<Env, 
   }
   try {
     if (!env.RN_SIGNING_KEY_JWK) throw new Error("Signing key unavailable");
-    const { keyId, key } = await signingMaterial(env.RN_SIGNING_KEY_JWK);
+    const signers = await activeSigners(env);
     // A fresh GET excludes client conditionals, ranges, and HEAD: every success
     // needs the full directory and a new proof, even when its bytes are unchanged.
     const asset = await env.ASSETS.fetch(new Request(new URL(DIRECTORY_PATH, request.url)));
     if (asset.status !== 200) throw new Error("Directory unavailable");
-    const body = await asset.text();
+    let body = await asset.text();
     const directory = JSON.parse(body);
-    if (!Array.isArray(directory.keys) || directory.keys.length !== 1
-      || await jwkThumbprint(directory.keys[0]) !== keyId) {
+    if (!Array.isArray(directory.keys)) throw new Error("Directory has no keys");
+    const ed = directory.keys.filter((k) => k.kty !== "AKP");
+    const akp = directory.keys.filter((k) => k.kty === "AKP");
+    if (ed.length !== 1 || await jwkThumbprint(ed[0]) !== signers[0].keyId || akp.length > 1) {
       throw new Error("Directory does not match signing key");
     }
-    const params = signatureParams('"@authority";req', keyId, "http-message-signatures-directory");
-    const base = ENCODER.encode(`"@authority";req: ${new URL(request.url).host}\n"@signature-params": ${params}`);
-    const signature = new Uint8Array(await crypto.subtle.sign("Ed25519", key, base)).toBase64();
+    const pq = signers[1];
+    if (pq && (akp.length !== 1 || await jwkThumbprint(akp[0]) !== pq.keyId)) {
+      throw new Error("Directory does not publish the ML-DSA key sig2 signs with");
+    }
+    if (!pq && akp.length) body = JSON.stringify({ ...directory, keys: ed });
+    const signed = await signLabels(signers, '"@authority";req', "http-message-signatures-directory",
+      (params) => `"@authority";req: ${new URL(request.url).host}\n"@signature-params": ${params}`);
     headers.set("content-type", DIRECTORY_TYPE);
-    headers.set("signature-input", `sig1=${params}`);
-    headers.set("signature", `sig1=:${signature}:`);
+    headers.set("signature-input", signed.input);
+    headers.set("signature", signed.signature);
     return new Response(request.method === "HEAD" ? null : body, { headers });
   } catch {
     return new Response(request.method === "HEAD" ? null : "Signing directory unavailable", { status: 503, headers });
@@ -193,6 +251,37 @@ function signingMaterial(jwkText: string) {
     return { keyId, key };
   })();
   signingKey = { jwkText, material };
+  return material;
+}
+
+// The same memo for sig2, with the opposite failure policy: it resolves to null
+// instead of rejecting, so a bad ML-DSA key costs the label and never the
+// request. The null is cached like any answer, for the reason above, which also
+// means the console.error fires once per isolate rather than once per signature
+// (an error log is an Issues occurrence and an observability event, and 28 a
+// /lens scan would be noise). Only the error's NAME is logged: V8's JSON.parse
+// messages quote the start of their input, which here is the secret.
+//
+// keyid comes from the public key getPublicKey derives, never from a `pub` the
+// secret may or may not carry. workerd imports a bare seed JWK, and when `pub`
+// IS present it refuses one that does not match `priv`, so the derived key is
+// the only value that is right in every shape the secret can take.
+let pqSigningKey: { jwkText: string; material: Promise<{ keyId: string; key: CryptoKey } | null> } | null = null;
+
+function pqSigningMaterial(jwkText: string) {
+  const cached = pqSigningKey;
+  if (cached && cached.jwkText === jwkText) return cached.material;
+  const material = (async () => {
+    try {
+      const key = await crypto.subtle.importKey("jwk", JSON.parse(jwkText), { name: "ML-DSA-44" }, false, ["sign"]);
+      const publicJwk = await crypto.subtle.exportKey("jwk", await crypto.subtle.getPublicKey(key, ["verify"]));
+      return { keyId: await jwkThumbprint(publicJwk), key };
+    } catch (error) {
+      console.error(`AadharshBot: sig2 disabled, the ML-DSA-44 key is unusable (${error?.name || "Error"})`);
+      return null;
+    }
+  })();
+  pqSigningKey = { jwkText, material };
   return material;
 }
 
@@ -314,9 +403,10 @@ export async function signedFetch(targetUrl, env, opts: BotRequestOptions = {}) 
 
 // RFC 7638: SHA-256 over the JSON of the REQUIRED members alone, in lexicographic
 // order, with no whitespace, base64url without padding. For an OKP key those are
-// crv, kty, x. Exported so the contract suite can pin it to RFC 8037's vector.
+// crv, kty, x; for an AKP (ML-DSA) key RFC 9964 section 6 makes them alg, kty,
+// pub. Exported so the contract suite can pin it to RFC 8037's vector.
 export async function jwkThumbprint(jwk) {
-  const required = { OKP: ["crv", "kty", "x"], EC: ["crv", "kty", "x", "y"], RSA: ["e", "kty", "n"] }[jwk.kty];
+  const required = { OKP: ["crv", "kty", "x"], EC: ["crv", "kty", "x", "y"], RSA: ["e", "kty", "n"], AKP: ["alg", "kty", "pub"] }[jwk.kty];
   if (!required) throw new Error(`jwkThumbprint: unsupported kty ${jwk.kty}`);
   const canonical = "{" + required.map((k) => `${JSON.stringify(k)}:${JSON.stringify(jwk[k])}`).join(",") + "}";
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", ENCODER.encode(canonical)));
