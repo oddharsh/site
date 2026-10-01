@@ -90,29 +90,36 @@ export function renderBotPage() {
       Bot Auth signatures. They are outside the signed identity described here.
     </p>
 
-    <h2>The second signature, retired</h2>
+    <h2>The second signature</h2>
     <p>
-      Between 2026-07-27 and 2026-08-15 every request carried a second label,
-      <code>sig2</code>, a post-quantum
+      Requests that fetch a page also carry a second label, <code>sig2</code>, a post-quantum
       <a href="https://csrc.nist.gov/pubs/fips/204/final" target="_blank" rel="noopener">ML-DSA-44</a>
-      signature over the same covered components. It is gone, and its public key has been
-      removed from the JWKS, so a request from this bot now carries <code>sig1</code> alone.
+      signature over the same covered components. Verify <code>sig1</code>. A verifier that
+      only knows Ed25519 reads <code>sig1</code> and skips the label it does not recognise,
+      which is what makes a second one safe to send.
     </p>
     <p>
-      It was removed for its CPU cost. At the time, Cloudflare's runtime had no ML-DSA in
-      WebCrypto, so signing ran in pure JavaScript at roughly 8.5ms per request, against a
-      10ms per-invocation budget. One signature spent most of a request, and anything that
-      fans out spent several requests' worth: the playlist scrape signs once per track, and
-      the <a href="/lens">/lens</a> discovery pass signs 28 probes. Both were failing because
-      of it. Nothing on the internet verified <code>sig2</code>, so dropping it costs no
-      verifier anything.
+      Probes carry <code>sig1</code> alone: <code>robots.txt</code> reads, and the 28 discovery
+      checks a <a href="/lens">/lens</a> scan makes for well-known files. Signing all of them
+      took a scan from 22ms to 32ms of CPU in production, so the post-quantum label rides on
+      the requests that are this crawler's identity and skips the ones that only look around.
     </p>
     <p>
-      Cloudflare has since added ML-DSA to WebCrypto on Workers, and it signs in about 0.12ms,
-      72 times faster than the JavaScript did. That removes the reason <code>sig2</code> left,
-      so it can come back once the price holds up in production. Until then, verify
-      <code>sig1</code>. <a href="/garage/pqc">/garage/pqc</a> has the measurements and the
-      full argument.
+      Its <code>alg</code> token, <code>ml-dsa-44</code>, is this site's spelling, because the
+      IANA HTTP Signature Algorithms registry has no post-quantum entry yet. Its public key sits
+      in the same JWKS as an <code>AKP</code> key
+      (<a href="https://www.rfc-editor.org/rfc/rfc9964.html" target="_blank" rel="noopener">RFC 9964</a>),
+      and its <code>keyid</code> is that key's thumbprint, the same rule <code>sig1</code> follows.
+      The directory response carries both signatures too, one per key.
+    </p>
+    <p>
+      This is its second run. The first, from 2026-07-27 to 2026-08-15, signed in pure
+      JavaScript, because Cloudflare's runtime had no ML-DSA in WebCrypto: roughly 8.5ms a
+      signature against a 10ms per-invocation budget, so the playlist scrape and the
+      <a href="/lens">/lens</a> discovery pass, which sign many times per request, failed because
+      of it. Cloudflare has since added ML-DSA to WebCrypto on Workers, where it signs in about
+      0.12ms. If that ever stops working, the label drops and <code>sig1</code> ships alone.
+      <a href="/garage/pqc">/garage/pqc</a> has the measurements and the full argument.
     </p>
 
     <h2>How to opt out</h2>

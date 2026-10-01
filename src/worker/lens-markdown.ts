@@ -42,7 +42,7 @@ import { validateLensTarget } from "./lib/public-fetch.ts";
 import { mapWithConcurrency } from "./lib/crawl.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
-import { LENS_BUDGETS, lensFetch, lensSha256Hex, overLensBudget } from "./lens.ts";
+import { FAN_OUT, LENS_BUDGETS, lensFetch, lensSha256Hex, overLensBudget } from "./lens.ts";
 
 const MARKDOWN_CACHE_SECONDS = 3600;
 const BODY_SAMPLE = 4096;
@@ -252,7 +252,7 @@ async function probeOnce(targetUrl, env, accept) {
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS);
   try {
-    const res = await lensFetch(targetUrl, env, ctrl.signal, accept);
+    const res = await lensFetch(targetUrl, env, ctrl.signal, accept, FAN_OUT);
     const body = await readCounting(res, BODY_SAMPLE, MAX_BODY_BYTES);
     return {
       ok: true,

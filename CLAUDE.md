@@ -2280,6 +2280,25 @@ The directory is Worker-first: `lib/botauth.ts` signs its response over
 Its committed JWK Set must match `RN_SIGNING_KEY_JWK`; missing or mismatched
 material returns 503, so rotate the public file and private secret together.
 
+**Primary fetches carry a second label, `sig2`, ML-DSA-44, since 2026-10-01.**
+The fan-out passes `postQuantum: false` and carries `sig1` alone: the /lens
+discovery probes (`FAN_OUT` in lens.ts), its Markdown replay, and the robots.txt
+bootstrap. Measured in production with `sig2` on every request, a /lens scan
+went from a 22ms to a 32ms CPU median, ~0.33ms a signature against the laptop's
+0.12ms. That is gotcha 36 again: multiply by fan-out on production's CPU.
+It signs natively through `crypto.subtle`, which needs the
+`webcrypto_modern_algorithms` compatibility flag (about 0.12ms a signature;
+the pure-JS run of 2026-07-27 to 2026-08-15 took 8.5ms and was retired on CPU,
+gotcha 36). Three rules in `lib/botauth.ts` keep it from costing `sig1`
+anything. It is OPTIONAL: an unset, malformed or unimportable
+`RN_SIGNING_KEY_MLDSA_JWK` drops the label and logs once per isolate.
+Its `keyid` is the RFC 9964 thumbprint (`alg`, `kty`, `pub`) of the public key
+`getPublicKey` derives, so the secret may be a bare 32-byte seed, which workerd
+accepts and bun and node refuse. And the directory carries the AKP entry only
+while `sig2` can sign: unavailable filters it out of the served copy, and a
+usable key that differs from the published one 503s like ed25519 drift. The
+directory response carries one signature per key, as directory-05 recommends.
+
 All signed content reads use `botRequestHeaders`, which checks the destination's
 robots.txt before each hop by default. RN explicitly selects `robots: "spotify-embed"`
 for the owner's public playlist, track and artist embed reads: the 2026-09-16
@@ -3570,8 +3589,15 @@ nothing about spans (introspected 2026-08-29).
 **The token wants `Workers Observability : Read`, a SEVENTH read scope, and it
 must NOT join the CI token's six.** This is workstation-only, wired into no
 workflow, and gates nothing. wrangler's own OAuth token does not carry it and
-answers 403, measured the same day; wrangler 4.127.0 does request the scope at
-login, so `wrangler login` is the alternative to minting a token.
+answers 403, measured the same day. **`wrangler login` is NOT an alternative,
+and this said it was until 2026-10-01.** The pinned wrangler (4.144.0) cannot
+request the scope at all: `wrangler login --scopes-list` has no observability
+entry, and a fresh login holds 28 scopes and still answers 403. Whatever 4.127.0
+did, it does not survive here. The two working doors are a minted token
+carrying `Workers Observability : Read`, and the dashboard's own session, which
+posts the same `telemetry/query` route from the browser (the `atok` cookie
+travels as an `x-atok` header). The second is how sig2's CPU was read on
+2026-10-01.
 
 **Lowering `head_sampling_rate` is the wrong fix when that number gets tight**,
 for the reason the paragraph above already gives. Cut spans on the surface

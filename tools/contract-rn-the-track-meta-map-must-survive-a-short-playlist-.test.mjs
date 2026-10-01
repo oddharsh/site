@@ -206,8 +206,13 @@ test("the published key directory advertises only what the bot signs with", asyn
   const dir = JSON.parse(await readFile(new URL("./public/.well-known/http-message-signatures-directory", ROOT), "utf8"));
   // Advertising a key we no longer sign with is the dangling-pointer problem
   // the DNS-AID note refuses for `_a2a`: it passes a scanner and misleads a
-  // verifier that goes looking for the label.
-  assert.equal(dir.keys.some((k) => k.kty === "AKP"), false, "the retired ML-DSA key must not be published");
+  // verifier that goes looking for the label. This used to forbid the AKP key
+  // in the committed file outright, while sig2 was retired. Since sig2 came
+  // back (2026-10-01) the rule is enforced per request instead: the Worker
+  // serves the AKP entry only while it can sign with that key, and filters it
+  // out otherwise. contract-web-bot-auth-sig2-signs-ml-dsa-natively pins both
+  // halves; what is left here is that no published key carries private material.
+  for (const key of dir.keys) assert.equal(key.d ?? key.priv, undefined, `the published ${key.kty} key must never carry its private half`);
   const ed = dir.keys.find((k) => k.kty === "OKP" && k.crv === "Ed25519");
   assert.ok(ed, "directory must publish the ed25519 key the bot signs sig1 with");
   assert.equal(ed.alg, "EdDSA");
