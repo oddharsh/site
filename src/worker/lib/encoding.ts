@@ -3,8 +3,8 @@ import type { SiteRequest } from "./env.ts";
 // The edge normalizes Accept-Encoding. Its original client value is retained
 // in cf.clientAcceptEncoding; restore it before Workers Cache keys a response.
 export function clientEncodingRequest(request: SiteRequest): SiteRequest {
-  const original = request.cf?.clientAcceptEncoding;
-  if (original === undefined || original === request.headers.get("accept-encoding")) return request;
+  const original = request.cf?.clientAcceptEncoding ?? null;
+  if (original === null || original === request.headers.get("accept-encoding")) return request;
   const headers = new Headers(request.headers);
   headers.set("accept-encoding", original);
   return new Request<unknown, IncomingRequestCfProperties>(request, { headers });

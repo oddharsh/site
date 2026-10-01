@@ -32,6 +32,12 @@ test("the original Cloudflare offer is restored before cache admission", () => {
   const restored = clientEncodingRequest(req);
   assert.equal(restored.headers.get("accept-encoding"), "gzip, br;q=0");
   assert.equal(req.headers.get("accept-encoding"), "br, gzip", "does not mutate the platform request");
+  const absent = request("br, gzip");
+  Object.defineProperty(absent, "cf", {value: {clientAcceptEncoding: null}});
+  assert.equal(clientEncodingRequest(absent), absent, "null means the platform did not retain a different offer");
+  const empty = request("br, gzip");
+  Object.defineProperty(empty, "cf", {value: {clientAcceptEncoding: ""}});
+  assert.equal(clientEncodingRequest(empty).headers.get("accept-encoding"), "", "an explicitly empty offer accepts only identity");
 });
 
 test("shell, text and page twins never answer a refused encoding", async () => {
