@@ -375,6 +375,16 @@ export function glossify(escaped, only?) {
 // which leaves headroom for everything else in the request.
 export const LENS_PARSE_CAP = 256 * 1024;
 
+// The cap a scan actually uses. LENS_PARSE_KB overrides it per deployment, so
+// moving lens onto the free plan is a var flip (LENS_PARSE_KB: "64"), and the
+// 8 KB floor keeps a typo like "1" from disabling parsing. Unset, zero, or not a
+// number means the default, and that arm is a real branch on purpose: the parse
+// phase's note records the `||` version that pinned every scan to 8 KB.
+export function lensParseCap(env: { LENS_PARSE_KB?: unknown } | undefined): number {
+  const overrideKb = Number(env?.LENS_PARSE_KB) || 0;
+  return overrideKb > 0 ? Math.max(8, overrideKb) * 1024 : LENS_PARSE_CAP;
+}
+
 // Browser Run's FREE plan allows one Quick Action every 10 seconds ACCOUNT-WIDE
 // (6/min), 3 concurrent browsers, and 10 minutes of browser time a day.
 // Measured 2026-08-06: two Quick Actions ~2s apart, and the second came back
@@ -1818,7 +1828,11 @@ const LENS_GOTO = { waitUntil: "networkidle2", timeout: 18000 };
 export async function handleLensShot(request, env, ctx) {
   const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
   if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-  if (!env.BROWSER || !isCallable(env.BROWSER.quickAction)) return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
+  // Either Browser Run door counts, the same guard /lens/browser uses. This
+  // demanded the BINDING until 2026-10-01, so a deployment holding only a REST
+  // token rendered /lens/browser and answered 503 here, two routes disagreeing
+  // about one configuration.
+  if (!hasRenderEngine(env)) return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
   // THE CACHE IS READ BEFORE THE BUDGETS, and the order is the point rather than
   // a micro-optimization. Every limit below exists to ration Browser Run: 6 calls
@@ -1878,7 +1892,17 @@ export async function handleLensShot(request, env, ctx) {
     };
     let r;
     try {
-      r = await span("lens.shot.quick_action", () => env.BROWSER.quickAction("screenshot", payload));
+      // Through lens-render's seam, so the REST door works here too. CHROMIUM
+      // on purpose: this is the faithful picture of the page for the Human
+      // view, and Kitesurf was measured drawing /garage with a fallback font and
+      // no SVG icons (2026-09-28). The Browser view is where Kitesurf belongs.
+      const ran = await span("lens.shot.quick_action", () => runBrowserAction("screenshot", payload, env, { engine: "chromium" }));
+      if (!ran) {
+        s.setAttribute("lens.outcome", "no_engine");
+        return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
+      }
+      r = ran.response;
+      s.setAttribute("lens.render_engine", ran.engine);
     } catch (e) {
       // the binding threw rather than answering: a 502 to the visitor, and until
       // now the reason existed only inside this string.
@@ -2526,8 +2550,8 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // reads past the first screen of. Capping the PARSE (not the fetch) bounds
     // the worst case without changing the common one: the median page is far
     // under this and is unaffected.
-    // Overridable per deployment, so moving lens onto the free plan is a var
-    // flip rather than a code change: set LENS_PARSE_KB: bindings.text("64") in cloudflare.config.ts.
+    // Overridable per deployment through lensParseCap, so moving lens onto the
+    // free plan is a var flip: set LENS_PARSE_KB: bindings.text("64") in cloudflare.config.ts.
     //
     // THE DEFAULT ARM HAS TO BE A REAL BRANCH, and writing it as a `||` fallback
     // silently pinned every scan to 8 KB from the day this was written. The old
@@ -2546,8 +2570,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // own homepage as its `:root{--font-caption:...` block. Measured against
     // production 2026-08-09: every target reported parsedBytes 8192, including a
     // 1.3 MB cloudflare.com and a 572 KB github.com.
-    const overrideKb = Number(env?.LENS_PARSE_KB) || 0;
-    const cap = overrideKb > 0 ? Math.max(8, overrideKb) * 1024 : LENS_PARSE_CAP;
+    const cap = lensParseCap(env);
     const parseable = body.length > cap ? body.slice(0, cap) : body;
     const parseTruncated = parseable.length < body.length;
     s.setAttribute("lens.parsed_bytes", parseable.length);

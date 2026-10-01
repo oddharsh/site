@@ -11,7 +11,8 @@ const PREFIX = "/serendipity";
 // at all, and everyone else got a shell pop. Now the markup is in the document
 // and nav.js only wires behavior, same as every other page.
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
-import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
+import { BOT_UA } from "../src/worker/lib/botauth.ts";
 import { esc } from "../src/worker/lib/http.ts";
 import { twinFor } from "../src/worker/lib/twins.ts";
 import { titleBar } from "../src/worker/lib/window.ts";
@@ -2334,22 +2335,38 @@ async function handleCover(request, env, ctx) {
   const hit = await caches.default.match(request);
   if (hit) return hit;
 
-  const ua = { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)" };
-  let upstream;
+  // EVERY hop meets the rules the first one did. Until 2026-10-01 this checked
+  // the host floor on the URL it was handed and then let fetch() follow
+  // redirects by default, so a public host that 302'd to a private address was
+  // followed: the one outbound door on the site that bypassed the per-hop walk
+  // lib/public-fetch.ts exists for. A refused hop answers like a refused first
+  // hop, 400, and the request to it is never made.
+  const coverHop = (raw) => {
+    let hop;
+    try { hop = new URL(raw); } catch { return { ok: false, error: "bad redirect" }; }
+    if (hop.protocol !== "https:" || (hop.port && hop.port !== "443")) return { ok: false, error: "https only" };
+    if (privateHostBlocked(hop.hostname.toLowerCase())) return { ok: false, error: "blocked host" };
+    return { ok: true };
+  };
+  const ua = { "user-agent": BOT_UA };
+  const fetchCover = (init) => fetchFollowingPublicRedirects(target.toString(), () => init, coverHop);
+  let walked;
   try {
-    upstream = await fetch(target.toString(), {
+    walked = await fetchCover({
       headers: ua,
       // format:'webp' (not 'auto') so every client gets one format — keeps the
       // shared edge cache key correct without a Vary:Accept dance. webp is
       // supported everywhere the site targets (Safari 16+, all evergreen).
       cf: { image: { width: 520, quality: 72, fit: "scale-down", format: "webp" } },
     });
-    if (!upstream.ok) throw new Error("upstream " + upstream.status);
+    if (walked.ok && !walked.response.ok) throw new Error("upstream " + walked.response.status);
   } catch {
     // Transformations off / transform error → plain fetch, original bytes.
-    try { upstream = await fetch(target.toString(), { headers: ua }); }
+    try { walked = await fetchCover({ headers: ua }); }
     catch { return new Response("upstream fetch failed", { status: 502 }); }
   }
+  if (!walked.ok) return new Response(walked.error, { status: 400 });
+  const upstream = walked.response;
   const ct = upstream.headers.get("content-type") || "";
   if (!upstream.ok || !ct.startsWith("image/")) return new Response("not an image", { status: 415 });
 
