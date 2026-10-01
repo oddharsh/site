@@ -17,7 +17,7 @@
 //   + founder phrasing, investor 2,575 (50%)  94% P, 73% R    90% P, 64% R
 //
 // The second row's rules were written after reading the first sample's misses,
-// so its 73% is fitted and the held-out 64% is the number to beat. A Jev role
+// so its 73% is fitted and the held-out 64% is the number to beat. A Clef role
 // classifier has to clear 64% recall at about 90% precision. Of the 15 held-out
 // misses 9 are job functions no tier names (growth, BD, sales, GTM), which is
 // the gap a model is for; 3 are founder spellings left unfixed so the held-out

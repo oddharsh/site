@@ -25,7 +25,7 @@ import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcp
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
-import { EVENT_FORMATS, EVENT_TAGS_DDL, EVENT_TOPICS, TAG_MIN_CONFIDENCE, askJev, buildTagRequest, tagInputHash } from "./jev.ts";
+import { EVENT_FORMATS, EVENT_TAGS_DDL, EVENT_TOPICS, TAG_MIN_CONFIDENCE, askClef, buildTagRequest, tagInputHash } from "./event-tags.ts";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const html = (status, body) =>
@@ -1470,8 +1470,8 @@ async function handleSyncDescriptions(request, env, d) {
   return new Response(JSON.stringify({ ok: !r.error, via: set.label, ...r }, null, 2), { headers: { "content-type": "application/json" } });
 }
 
-// ── event tags: Jev's topic + format, decided once and stored ───────────────
-// serendipity/jev.ts carries the argument. What lives here is the D1 half:
+// ── event tags: Clef's topic + format, decided once and stored ──────────────
+// serendipity/event-tags.ts carries the argument. What lives here is the D1 half:
 // which events are owed a tag, and writing the answers down.
 //
 // An event is owed a tag when it has none, or when the hash of the request it
@@ -1488,10 +1488,8 @@ const TAG_MAX = 30;
 // of thousands cannot turn one tick into a CPU problem on Workers Free.
 const TAG_SCAN = 300;
 
-type TagFetch = Parameters<typeof askJev>[2];
-
-export async function tagEvents(d, env, limit, fetchImpl?: TagFetch) {
-  if (!env?.TYPESAFE_API_KEY) return { skipped: "TYPESAFE_API_KEY not set" };
+export async function tagEvents(d, env, limit) {
+  if (!env?.AI) return { skipped: "no AI binding" };
   await d.raw.prepare(EVENT_TAGS_DDL).run();
   const rows = await d.prepare(
     `SELECT e.id, e.name, e.description, e.location, t.input_hash
@@ -1510,8 +1508,8 @@ export async function tagEvents(d, env, limit, fetchImpl?: TagFetch) {
   }
   const batch = owed.slice(0, limit);
   // Concurrent, one event per call (see buildTagRequest for why not one call
-  // for all of them). TypeSafe allows 1,200 requests a minute; this is at most 30.
-  const results = await Promise.all(batch.map((o) => askJev(o.request, env, fetchImpl)));
+  // for all of them). At most TAG_MAX, well inside Workers AI's rate limits.
+  const results = await Promise.all(batch.map((o) => askClef(o.request, env)));
   const S: any[] = [];
   const failed: Record<string, number> = {};
   results.forEach((r, i) => {
@@ -1696,14 +1694,14 @@ export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
   }
 }
 
-// The tag pass rides the same door for the same reason: up to TAG_MAX Jev calls
+// The tag pass rides the same door for the same reason: up to TAG_MAX Clef calls
 // plus the scan and the write would not fit beside the roster sweep, and in its
 // own invocation they fit with room to spare. One subrequest here, covered by
 // CRON_BUDGET_HEADROOM. Reported, never thrown, like enrichment: a tick whose
 // sweep succeeded must not go red because tagging could not run.
 export async function dispatchTag(env, fetchImpl: EnrichFetch = fetch) {
   if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
-  if (!env.TYPESAFE_API_KEY) return { skipped: "TYPESAFE_API_KEY not set" };
+  if (!env.AI) return { skipped: "no AI binding" };
   const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
   try {
     const res = await fetchImpl(`${base}/serendipity/tag`, {
@@ -1712,7 +1710,7 @@ export async function dispatchTag(env, fetchImpl: EnrichFetch = fetch) {
     if (!res.ok) return { error: `tag ${res.status}` };
     const body = await res.json();
     // Counts only, for the cron log line. `failed` is keyed by cause, so a
-    // missing gateway provider reads as "http 404" rather than as zero tags.
+    // missing gateway or a spent allocation reads by its code rather than as zero tags.
     return { asked: body?.asked ?? null, tagged: body?.tagged ?? null, failed: body?.failed ?? null, remaining: body?.remaining ?? null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
@@ -2453,7 +2451,7 @@ function mcpEventSummary(e, tags: Map<string, any> | null = null) {
     rsvp: e.user_status || "unknown",
     contributors: e.contributors || null,
   };
-  // Jev's stored topic + format (serendipity/jev.ts), or null when this event
+  // Clef's stored topic + format (serendipity/event-tags.ts), or null when this event
   // has not been tagged yet. Null means UNREAD, never "no topic", so the key is
   // omitted entirely by callers that never read the tags at all.
   if (tags) summary.tags = mcpTags(tags.get(e.id));

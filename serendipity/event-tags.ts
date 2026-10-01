@@ -1,53 +1,50 @@
-// Event tags for the Serendipity pool, decided by TypeSafe's Jev.
+// Event tags for the Serendipity pool, decided by Cloudflare's Clef.
 //
-// Jev takes a state and typed questions and returns typed answers with
-// calibrated probabilities. It can never answer outside the options below, so
-// there is no string to parse and no label to validate against a list the model
-// might have ignored. It is NOT promised to be deterministic: TypeSafe says it
-// "returns similar answers for similar inputs", and a pinned model version is
-// as far as that goes. So the determinism lives here rather than in the model.
-// A tag is decided ONCE, stored in D1 beside the hash of the exact request that
+// Clef is a decision model: it takes a state and typed questions and returns
+// typed answers with calibrated probabilities. It can never answer outside the
+// options below, so there is no string to parse and no label to validate
+// against a list the model might have ignored. It speaks TypeSafe's System One
+// API byte for byte, which is why this file was TypeSafe's Jev until
+// 2026-10-01: the request and the answers did not change, only the door. Clef
+// runs on Workers AI through the AI binding, so the TYPESAFE_API_KEY secret
+// and the gateway's `custom-typesafe` provider both left with Jev.
+//
+// It is NOT promised to be deterministic, and it is also NOT pinnable: Workers
+// AI names the model `@cf/cloudflare/clef` with no version, where Jev offered
+// `jev-1.13.0`. So the determinism lives here rather than in the model. A tag
+// is decided ONCE, stored in D1 beside the hash of the exact request that
 // produced it, and asked again only when that hash moves: the event text
-// changed, the taxonomy below changed, or JEV_MODEL did. Every read serves the
-// stored answer, so two readers of one event can never see two tags.
+// changed, the taxonomy below changed, or TAG_MODEL did. Every read serves the
+// stored answer, so two readers of one event can never see two tags. What the
+// missing pin costs is narrower than it sounds: a weight update Cloudflare
+// ships changes the answers for events asked AFTER it, and leaves every stored
+// tag alone. The row keeps the `model` string the answer came back with, which
+// is where a version would show if Workers AI ever reports one.
 //
-// Pure except for askJev's fetch, and node-safe, because the contract suite
-// imports it outside workerd (gotcha 16).
+// Pure except for askClef's binding call, and node-safe, because the contract
+// suite imports it outside workerd (gotcha 16).
 
 import { asNumber, asText } from "../src/worker/lib/parse.ts";
 
-// PINNED rather than `jev-latest`: TypeSafe's models page warns that an alias
-// moves when a release ships, "so the answers behind it can change without a
-// change on your side". Moving this string is a deliberate re-tag of the whole
-// pool, since it is part of every input hash.
-export const JEV_MODEL = "jev-1.13.0";
-
-// The custom-provider slug registered in AI Gateway. TypeSafe is not a native
-// gateway provider, so the account carries a custom provider with this slug and
-// base_url https://api.typesafe.ai, and the gateway prefixes it `custom-`.
-// That provider is ACCOUNT STATE this repo cannot create (no path here mints
-// Cloudflare resources), and a missing one answers 404, which tagEvents reports
-// by status rather than reading as "no tags".
-export const TYPESAFE_GATEWAY_SLUG = "typesafe";
-const TYPESAFE_DIRECT = "https://api.typesafe.ai/v1/systemone";
-
-/** Gateway when both halves of its URL are configured, TypeSafe directly
- *  otherwise. An empty AI_GATEWAY is the off-switch, the same one cf-garage's
- *  caption demo uses (gotcha 23). */
-export function jevEndpoint(env: { AI_GATEWAY?: string, CF_ACCOUNT_ID?: string } | null | undefined): string {
-  const gw = env?.AI_GATEWAY?.trim();
-  const acct = env?.CF_ACCOUNT_ID?.trim();
-  if (!gw || !acct) return TYPESAFE_DIRECT;
-  return `https://gateway.ai.cloudflare.com/v1/${encodeURIComponent(acct)}/${encodeURIComponent(gw)}/custom-${TYPESAFE_GATEWAY_SLUG}/v1/systemone`;
-}
+// "clef" rather than "clef-flash", on the benchmarks closest to this job.
+// Topic and format are intent classification over short text, and on the two
+// intent sets Cloudflare published Clef scores 94.2 and 97.4 macro-F1 where
+// flash scores 90.9 and 66.8 (BANKING77, CLINC150+OOS; the second is the one
+// with an out-of-scope class, which is what `other` is here). Flash's win is
+// latency, 39ms median against 209ms, and this runs on a cron where nobody
+// waits. Moving this string re-tags the whole pool, since it is part of every
+// input hash; the move from `jev-1.13.0` did exactly that, once.
+export const TAG_MODEL = "clef";
+const WORKERS_AI_MODEL = `@cf/cloudflare/${TAG_MODEL}`;
 
 // ── the taxonomy ─────────────────────────────────────────────────────────────
 // Two Choice questions, both objective, both with a no-match option so the
 // model can say nothing fits instead of forcing the nearest wrong label.
 // Topic is what the event is ABOUT and format is what you would be DOING there,
 // which keeps the two independent: a crypto dinner is topic crypto, format meal.
-// Criteria describe situations rather than keywords, because Jev reads
-// literally and an event that says "AI" once in a sponsor line is not an AI event.
+// Criteria describe situations rather than keywords, because a decision model
+// reads literally and an event that says "AI" once in a sponsor line is not an
+// AI event.
 export const TOPIC_CRITERIA = Object.freeze({
   crypto: "Crypto, blockchains, web3, DeFi, stablecoins, tokens, onchain apps, or the people and funds building them.",
   ai: "Artificial intelligence as the main subject: models, agents, ML research, AI products or AI infrastructure.",
@@ -80,16 +77,18 @@ export const EVENT_TOPICS = Object.freeze(Object.keys(TOPIC_CRITERIA)) as readon
 export const EVENT_FORMATS = Object.freeze(Object.keys(FORMAT_CRITERIA)) as readonly EventFormat[];
 
 // Below this, a stored tag is kept but does not satisfy a filter, so an event
-// Jev was unsure about is reported as untagged rather than as the wrong topic.
-// Choice confidence is derived from the probability spread, so 0.5 means the
-// model put real weight elsewhere. A first guess, and the stored probabilities
-// are there to tune it against.
+// the model was unsure about is reported as untagged rather than as the wrong
+// topic. Choice confidence is derived from the probability spread, so 0.5 means
+// the model put real weight elsewhere. A first guess, and the stored
+// probabilities are there to tune it against.
 export const TAG_MIN_CONFIDENCE = 0.5;
 
-// Jev's accuracy falls as the state fills with detail unrelated to the question
-// (its 1.13 jaggedness notes, "Large state full of irrelevant detail"), and Luma
-// descriptions run to sponsor lists and logistics. The opening of a description
-// is where an event says what it is.
+// Decision-model accuracy falls as the state fills with detail unrelated to the
+// question (Jev 1.13's jaggedness notes, "Large state full of irrelevant
+// detail"), and Luma descriptions run to sponsor lists and logistics. Clef's
+// window is 64k tokens against Jev's 32k, and that does not change this: the
+// cut is about distraction, not room. The opening of a description is where an
+// event says what it is.
 const DESCRIPTION_CHARS = 2000;
 
 export type TagInput = { name: string, description?: string | null, location?: string | null };
@@ -105,7 +104,7 @@ export function buildTagRequest(ev: TagInput) {
   const loc = ev.location ? String(ev.location).trim() : "";
   if (loc) state.location = loc;
   return {
-    model: JEV_MODEL,
+    model: TAG_MODEL,
     state,
     questions: {
       topic: {
@@ -160,37 +159,60 @@ export function parseTagAnswers(body: any): EventTag | null {
   return {
     topic: topic.choice, topic_confidence: topic.confidence,
     format: format.choice, format_confidence: format.confidence,
-    model: asText(body.model) || JEV_MODEL,
+    model: asText(body.model) || TAG_MODEL,
     probabilities: { topic: topic.probabilities, format: format.probabilities },
   };
 }
 
-type JevFetch = (url: string, init?: any) => Promise<{ ok: boolean, status: number, json: () => Promise<any> }>;
-const JEV_TIMEOUT_MS = 5000;
+/** The slice of the Workers AI binding this file calls. Narrower than `Ai`,
+ *  whose `run` is typed by a model catalog that may not name Clef yet, and it
+ *  is what a test hands in instead of a fetch. */
+export type AiRunner = { run: (model: string, input: unknown, options?: unknown) => Promise<unknown> };
+export type TagEnv = { AI?: AiRunner | null, AI_GATEWAY?: string };
 
-/** One call. Never throws: the caller counts outcomes by status, because "the
- *  gateway has no custom-typesafe provider" (404) and "TypeSafe is rate-limiting
- *  us" (429) need different fixes and must not blur into one "failed". */
-export async function askJev(request: ReturnType<typeof buildTagRequest>, env: { TYPESAFE_API_KEY?: string, AI_GATEWAY?: string, CF_ACCOUNT_ID?: string }, fetchImpl: JevFetch = fetch):
+/** The binding's third argument: through the named gateway, uncached, or no
+ *  gateway at all when AI_GATEWAY is empty. A wrong or deleted gateway FAILS
+ *  the call rather than falling back (gotcha 23), and the tag pass reports it
+ *  by cause. No gateway cache, because the stored tag is the memo and a cache
+ *  hit would make the gateway's log disagree with what this run asked. */
+export function clefRunOptions(env: { AI_GATEWAY?: string } | null | undefined) {
+  const id = env?.AI_GATEWAY?.trim();
+  return id ? { gateway: { id, skipCache: true } } : {};
+}
+
+// Clef's published p95 is 239ms. Five seconds is for a cold isolate or a slow
+// gateway, and an answer later than that is retried next tick rather than
+// waited on inside a cron invocation.
+const CLEF_TIMEOUT_MS = 5000;
+
+/** The binding THROWS where a fetch returned a status, so the cause is read off
+ *  the error: Workers AI messages carry a four-digit error code, and "the
+ *  gateway is missing" and "Free's daily neurons ran out" need different fixes.
+ *  Which code means which is deliberately not hardcoded here; the count keyed
+ *  by code is what to read when the pass stalls. */
+function classifyAiError(err: unknown): string {
+  if (err instanceof Error && err.name === "TimeoutError") return "timeout";
+  const message = err instanceof Error ? err.message : String(err);
+  const code = /\b(\d{4})\b/.exec(message)?.[1];
+  return code ? `ai ${code}` : "ai error";
+}
+
+/** One call. Never throws: the caller counts outcomes by cause. */
+export async function askClef(request: ReturnType<typeof buildTagRequest>, env: TagEnv):
   Promise<{ tag: EventTag } | { error: string }> {
+  if (!env.AI) return { error: "no AI binding" };
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error("Clef did not answer in time"), { name: "TimeoutError" })), CLEF_TIMEOUT_MS);
+  });
   try {
-    const res = await fetchImpl(jevEndpoint(env), {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.TYPESAFE_API_KEY}`,
-        "content-type": "application/json",
-        // No gateway cache. The stored tag is the memo, and a cache hit would
-        // make the gateway's log disagree with what this run actually asked.
-        "cf-aig-skip-cache": "true",
-      },
-      body: JSON.stringify(request),
-      signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
-    });
-    if (!res.ok) return { error: `http ${res.status}` };
-    const tag = parseTagAnswers(await res.json());
+    const body = await Promise.race([env.AI.run(WORKERS_AI_MODEL, request, clefRunOptions(env)), timeout]);
+    const tag = parseTagAnswers(body);
     return tag ? { tag } : { error: "unparseable" };
   } catch (err) {
-    return { error: err instanceof Error && err.name === "TimeoutError" ? "timeout" : "network" };
+    return { error: classifyAiError(err) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -998,9 +998,9 @@ await Promise.all([
   cp("src/styles", `${OUT}/public`, { recursive: true }),
   cp("cal/src", `${OUT}/cal/src`, { recursive: true }),
 // Every module in serendipity/, rather than serendipity.ts by name. It was one
-// file until jev.ts arrived beside it, and the by-name copy left the staged
-// import dangling: the build passed and only the wrangler bundle failed, on
-// "Could not resolve ./jev.ts". Migrations and package.json are not modules.
+// file until jev.ts (event-tags.ts since 2026-10-01) arrived beside it, and the
+// by-name copy left the staged import dangling: the build passed and only the
+// wrangler bundle failed, on "Could not resolve ./jev.ts". Migrations and package.json are not modules.
   cp("serendipity", `${OUT}/serendipity`, {
     recursive: true,
     filter: (source) => !source.includes(`${sep}migrations`) && (!/\.\w+$/.test(source) || source.endsWith(".ts")),

@@ -32,6 +32,7 @@
 .wrangler.remote.jsonc
 # GENERATED from cloudflare.config.ts + wrangler.config.ts by tools/lib/site-config.ts
 .wrangler.site.jsonc
+.wrangler.site.local.jsonc
 
 # macOS
 .DS_Store

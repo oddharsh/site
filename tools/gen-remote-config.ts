@@ -86,7 +86,7 @@ function main() {
 const { source, withD1, out } = main();
 const config = parseJsonc(await readFile(resolve(ROOT, source), "utf8"));
 
-const marked = [];
+const marked: string[] = [];
 for (const [key, label] of Object.entries(REMOTABLE)) {
   if (key === "d1_databases" && !withD1) continue;
   for (const binding of config[key] || []) {
@@ -101,6 +101,12 @@ for (const [key, label] of Object.entries(REMOTABLE)) {
 if (config.browser && !config.browser.remote) {
   config.browser.remote = true;
   marked.push(`Browser ${config.browser.binding}`);
+}
+// Workers AI has no local mode at all, so it is remote whatever the flag says;
+// marking it states that rather than leaving it implied.
+if (config.ai && !config.ai.remote) {
+  config.ai.remote = true;
+  marked.push(`AI ${config.ai.binding}`);
 }
 
 // Crons are stripped. A remote-bindings session is a debugging tool pointed at

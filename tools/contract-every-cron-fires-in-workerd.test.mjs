@@ -66,6 +66,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "./lib/jsonc.ts";
+import { REMOTE_ONLY_KEYS } from "./lib/site-config.ts";
 import { underNode } from "./lib/harness-dispatch.ts";
 import { CENSUS_ROSTER } from "../src/worker/census.ts";
 import { NEIGHBORS } from "../src/worker/around.ts";
@@ -320,6 +321,9 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   };
   delete config.build;
   delete config.secrets;
+  // CI holds no Cloudflare credential, and a Workers AI binding cannot boot
+  // without one (REMOTE_ONLY_KEYS in tools/lib/site-config.ts has the measurement).
+  for (const key of REMOTE_ONLY_KEYS) delete config[key];
   writeFileSync(join(dir, "wrangler.jsonc"), JSON.stringify(config));
 
   // workerd refuses the `alg: "Ed25519"` a current WebCrypto exports ("does not

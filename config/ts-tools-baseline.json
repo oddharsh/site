@@ -27,7 +27,6 @@
     "tools/csp-sweep.ts": 8,
     "tools/gen-manifest.ts": 1,
     "tools/gen-md-twins.ts": 12,
-    "tools/gen-remote-config.ts": 2,
     "tools/inp-lab.ts": 26,
     "tools/lens-inject-probe.ts": 15,
     "tools/lens-seed.ts": 8,

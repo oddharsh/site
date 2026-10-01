@@ -34,7 +34,7 @@ import { mcpTool } from "./mcp-tools.ts";
 // import appearing in either would take the whole suite down at link time
 // (gotcha 16).
 import { serendipityFindEvents } from "../../../serendipity/serendipity.ts";
-import { EVENT_FORMATS, EVENT_TOPICS } from "../../../serendipity/jev.ts";
+import { EVENT_FORMATS, EVENT_TOPICS } from "../../../serendipity/event-tags.ts";
 import { asRecord } from "./parse.ts";
 
 export function toolError(message) { return { _error: String(message).slice(0, 400) }; }
