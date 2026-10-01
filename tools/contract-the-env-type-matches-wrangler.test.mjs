@@ -126,7 +126,7 @@ async function wranglerBindings() {
     for (const entry of cfg[key] ?? []) names.add(entry[name]);
   }
   // The five singletons, each declared as its own object rather than in a list.
-  for (const key of ["assets", "browser", "images", "version_metadata"]) {
+  for (const key of ["assets", "browser", "images", "ai", "version_metadata"]) {
     if (cfg[key]?.binding) names.add(cfg[key].binding);
   }
   for (const c of cfg.durable_objects?.bindings ?? []) names.add(c.name);

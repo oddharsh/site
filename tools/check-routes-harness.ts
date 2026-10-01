@@ -67,8 +67,10 @@ const [positional] = positionals;
 // The default is the site config projected into the legacy shape the harness
 // reads (tools/lib/site-config.ts): createTestHarness takes a config PATH or an
 // inline legacy object and has no door for cloudflare.config.ts, which replaced
-// wrangler.jsonc on 2026-09-28.
-let config = positional || "./" + (await writeSiteConfigFile());
+// wrangler.jsonc on 2026-09-28. A local run takes the credential-free twin,
+// which drops the bindings that only exist remotely (REMOTE_ONLY_KEYS, the AI
+// binding); --remote takes the full projection, since it has a credential.
+let config = positional || "./" + (await writeSiteConfigFile({ localOnly: !values.remote }));
 if (remote) {
   if (process.env.CI) {
     console.error("routes:check --remote cannot run in CI (remote bindings need a write-capable token).");

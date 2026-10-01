@@ -92,6 +92,11 @@ export interface EnvBindings {
 
   BROWSER: BrowserRun;
   IMAGES: ImagesBinding;
+  /** Workers AI, for Serendipity's event tags (serendipity/event-tags.ts).
+   *  Guaranteed in production like every member here. The credential-free
+   *  harnesses strip it (REMOTE_ONLY_KEYS in tools/lib/site-config.ts), which
+   *  is why the tag pass still checks for it, the way /lens checks BROWSER. */
+  AI: Ai;
   /** Read straight off the binding by /whoareyou.json; the ramp's read-out. */
   CF_VERSION_METADATA: WorkerVersionMetadata;
   /** The static-assets binding. Hands the Worker DECODED bytes: see gotcha 13. */
@@ -126,7 +131,7 @@ export interface EnvBindings {
 export interface EnvVars {
   /** An identifier rather than a secret, and committed as such. */
   CF_ACCOUNT_ID: string;
-  /** AI Gateway id Serendipity's Jev calls route through; "" calls TypeSafe directly. */
+  /** AI Gateway id Serendipity's Clef calls route through; "" calls Workers AI with no gateway. */
   AI_GATEWAY: string;
   HOST_TIMEZONE: string;
   WORKING_HOURS_START: string;
@@ -190,10 +195,6 @@ export interface EnvOptionalSecrets {
   X402_PAY_TO?: string;
   X402_FACILITATOR?: string;
   X402_NETWORK?: string;
-  /** Serendipity event tags (serendipity/jev.ts). Absent means the tag pass
-   *  reports itself skipped and every event stays untagged, which reads as
-   *  unread rather than as "no topic". */
-  TYPESAFE_API_KEY?: string;
   /** Bounded per-tick enrichment batch. Parsed, so a string; absent takes the default. */
   ENRICH_CRON_BATCH?: string;
 }

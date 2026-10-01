@@ -429,6 +429,10 @@ const worker = defineWorker({
     // Image Workbench uses the managed Images transformation binding; outputs
     // are returned inline and are not written to PHOTOS_R2.
     IMAGES: bindings.images(),
+    // Workers AI, for Serendipity's event tags (serendipity/event-tags.ts), which
+    // ask Clef. The binding is authenticated by Workers like BROWSER above, which
+    // is what retired the TYPESAFE_API_KEY secret the Jev calls needed.
+    AI: bindings.ai(),
 
     // Per-IP budgets for every public route that spends something on a caller's
     // say-so: /lens and the /mcp tools that share its crawler, the five /mcp
@@ -500,11 +504,10 @@ const worker = defineWorker({
     // Kitesurf path in lens-render.ts would have skipped straight to the binding
     // no matter how the token was set.
     CF_ACCOUNT_ID: bindings.text("1c99acdb6141579023fb97d24261ea58"),
-    // Serendipity's Jev calls go through this gateway, to the account's
-    // `custom-typesafe` provider (base_url https://api.typesafe.ai). A missing
-    // gateway or provider FAILS those calls rather than bypassing the gateway
-    // (gotcha 23), and the tag pass reports the status. "" is the off-switch:
-    // TypeSafe directly, no code change.
+    // Serendipity's Clef calls (the AI binding above) go through this gateway.
+    // A missing gateway FAILS those calls rather than bypassing it (gotcha 23),
+    // and the tag pass reports the cause. "" is the off-switch: Workers AI with
+    // no gateway, no code change.
     AI_GATEWAY: bindings.text("default"),
     HOST_TIMEZONE: bindings.text("America/New_York"),
     WORKING_HOURS_START: bindings.text("9"),
