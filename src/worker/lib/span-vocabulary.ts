@@ -102,6 +102,7 @@ export type SpanName =
   | "webmention.own_pages"
   | "webmention.fetch_own_page"
   | "webmention.post"
+  | "webmention.sort"
 
   // /reading's Hacker News lookup, a bounded batch on the :07/:37 tick.
   | "reading.hn"
