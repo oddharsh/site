@@ -225,21 +225,72 @@ test("the wire lens shares the SSRF guard and reaches the browser with nothing b
   assert.match(src, /Page\.navigate", \{ url \}/, "the navigation must use the validated URL");
 });
 
-test("a CDP session is deleted on every exit path", () => {
-  const src = readFileSync("./src/worker/lens-wire.ts", "utf8");
-  // Structural, and it has to be: exercising this needs workerd and a real
-  // browser binding, so `node --test` can only read the shape. A leaked session
-  // holds one of the free plan's three concurrent browsers until it times out,
-  // which blacks out /lens/shot and /lens/browser as well as this route.
-  const body = src.slice(src.indexOf("async function runWireSession"));
-  const finallyAt = body.indexOf("} finally {");
-  assert.ok(finallyAt > 0, "runWireSession must clean up in a finally, not on the happy path");
-  assert.match(body.slice(finallyAt), /method: "DELETE"/, "the finally block must DELETE the session");
-  // The create's own 429 returns BEFORE a session exists, so it must sit outside
-  // the try — deleting a session that was never minted is a wasted subrequest on
-  // the exact path where the budget is already exhausted.
-  assert.ok(body.indexOf("if (created.status === 429)") < body.indexOf("try {"),
-    "the budget bail must return before the session is entered");
+// A fake Browser Run binding. Every call lands in `log` as a short tag, so a
+// test reads the order of effects instead of a count of them. `upgrade` decides
+// what the WebSocket fetch does, which is where each exit path diverges.
+function fakeBrowser({ create = 200, upgrade = "none", deleteThrows = false } = {}) {
+  const log = [];
+  const ws = {
+    accept() { log.push("accept"); },
+    addEventListener() {},
+    send() { throw new Error("socket refused the frame"); },
+    close(code) { log.push(`close ${code}`); },
+  };
+  const BROWSER = {
+    async fetch(url, init = {}) {
+      if (init.method === "POST") {
+        log.push("POST");
+        return create === 200 ? Response.json({ sessionId: "s1" }) : new Response("no", { status: create });
+      }
+      if (init.method === "DELETE") {
+        log.push(`DELETE ${url.split("/").pop()}`);
+        if (deleteThrows) throw new Error("DELETE failed");
+        return new Response(null, { status: 204 });
+      }
+      log.push("UPGRADE");
+      if (upgrade === "throws") throw new Error("upgrade failed");
+      return { status: 101, webSocket: upgrade === "socket" ? ws : null };
+    },
+  };
+  return { env: { BROWSER }, log };
+}
+
+test("a CDP session is deleted on every exit path, after its socket closes", async () => {
+  // Behavioural since the session became an `await using` resource: the
+  // teardown is a disposer, so bun and node run the real function against a
+  // fake binding instead of reading the source for a finally block. A leaked
+  // session holds one of the free plan's three concurrent browsers until it
+  // times out, which blacks out /lens/shot and /lens/browser as well as this route.
+  const { runWireSession } = await import("../src/worker/lens-wire.ts");
+
+  // The create's own 429 returns BEFORE a session exists. Deleting a session
+  // that was never minted is a wasted subrequest on the exact path where the
+  // budget is already exhausted.
+  let f = fakeBrowser({ create: 429 });
+  assert.deepEqual(await runWireSession(f.env, "https://example.com/"), { budget: true });
+  assert.deepEqual(f.log, ["POST"]);
+
+  // An early return after the session exists.
+  f = fakeBrowser({ upgrade: "none" });
+  const r = await runWireSession(f.env, "https://example.com/");
+  assert.match(r.error ?? "", /did not upgrade/);
+  assert.deepEqual(f.log, ["POST", "UPGRADE", "DELETE s1"]);
+
+  // A throw before the socket exists.
+  f = fakeBrowser({ upgrade: "throws" });
+  await assert.rejects(runWireSession(f.env, "https://example.com/"), /upgrade failed/);
+  assert.deepEqual(f.log, ["POST", "UPGRADE", "DELETE s1"]);
+
+  // A throw with both resources held: the socket closes FIRST, then the
+  // session goes. Reverse declaration order is the whole reason to declare them.
+  f = fakeBrowser({ upgrade: "socket" });
+  await assert.rejects(runWireSession(f.env, "https://example.com/"), /socket refused the frame/);
+  assert.deepEqual(f.log, ["POST", "UPGRADE", "accept", "close 1000", "DELETE s1"]);
+
+  // A DELETE that fails must not replace the run's own outcome with a cleanup error.
+  f = fakeBrowser({ upgrade: "none", deleteThrows: true });
+  assert.match((await runWireSession(f.env, "https://example.com/")).error ?? "", /did not upgrade/);
+  assert.deepEqual(f.log, ["POST", "UPGRADE", "DELETE s1"]);
 });
 
 test("the wire lens reports a spent browser budget as ours, not as the target failing", () => {

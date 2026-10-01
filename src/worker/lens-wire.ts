@@ -294,9 +294,24 @@ export async function enableWireDomains(send: PageCdpSend) {
   return execution.every((result) => result.status === "fulfilled");
 }
 
+// A minted CDP session as a resource, so `await using` owns its teardown. The
+// DELETE is awaited rather than fired and forgotten: a leaked session holds one
+// of three concurrent slots and blacks out every browser lens on the site.
+// A failed DELETE is swallowed, because a disposer that throws would replace
+// the run's own result or error with a cleanup failure.
+function cdpSession(env, sessionId: string) {
+  return {
+    async [Symbol.asyncDispose]() {
+      try { await env.BROWSER.fetch(`${CDP_BASE}/${sessionId}`, { method: "DELETE" }); } catch (_e) {}
+    },
+  };
+}
+
 // Open a session, drive one navigation, return the raw events. Every exit path
-// runs the DELETE.
-async function runWireSession(env, url) {
+// after the session exists runs the DELETE, and the socket closes before it.
+// Disposal runs in reverse declaration order, so the order is written once,
+// in the order the two resources were acquired.
+export async function runWireSession(env, url) {
   const created = await env.BROWSER.fetch(CDP_BASE, { method: "POST" });
   if (created.status === 429) return { budget: true };
   if (!created.ok) {
@@ -305,117 +320,115 @@ async function runWireSession(env, url) {
   }
   const { sessionId } = await created.json();
   if (!sessionId) return { error: "Browser Run returned no sessionId." };
+  await using _session = cdpSession(env, sessionId);
 
+  const wsRes = await env.BROWSER.fetch(`${CDP_BASE}/${sessionId}`, { headers: { Upgrade: "websocket" } });
+  const ws = wsRes.webSocket;
+  if (!ws) return { error: `Browser Run did not upgrade to a CDP WebSocket (status ${wsRes.status}).` };
+  ws.accept();
+  // workerd's WebSocket carries no Symbol.dispose of its own (checked
+  // 2026-10-01 on workerd 2026-09-26), so the close is wrapped here.
+  using _socket = { [Symbol.dispose]() { try { ws.close(1000, "done"); } catch (_e) {} } };
+  const cdp = cdpClient(ws);
+
+  const { targetInfos } = await cdp.send("Target.getTargets");
+  const page = (targetInfos || []).find((t) => t.type === "page");
+  if (!page) return { error: "The CDP session exposed no page target." };
+  const { sessionId: pageSession } = await cdp.send("Target.attachToTarget", { targetId: page.targetId, flatten: true });
+
+  // Identify honestly, exactly like every other outbound fetch on this site.
+  // A page that wants to refuse AadharshBot must be able to see it is
+  // AadharshBot; a stealth crawl would make this lens a lie about itself.
+  //
+  // Tolerated rather than awaited-or-die: the override is deprecated in favour
+  // of Emulation.setUserAgentOverride and the two have swapped primacy before,
+  // so a binding that drops it should cost the honest UA string and not the
+  // whole observation. `uaApplied` carries the fact into the payload instead of
+  // letting the page silently claim an identity it did not send.
+  let uaApplied = true;
   try {
-    const wsRes = await env.BROWSER.fetch(`${CDP_BASE}/${sessionId}`, { headers: { Upgrade: "websocket" } });
-    const ws = wsRes.webSocket;
-    if (!ws) return { error: `Browser Run did not upgrade to a CDP WebSocket (status ${wsRes.status}).` };
-    ws.accept();
-    const cdp = cdpClient(ws);
-
-    const { targetInfos } = await cdp.send("Target.getTargets");
-    const page = (targetInfos || []).find((t) => t.type === "page");
-    if (!page) return { error: "The CDP session exposed no page target." };
-    const { sessionId: pageSession } = await cdp.send("Target.attachToTarget", { targetId: page.targetId, flatten: true });
-
-    // Identify honestly, exactly like every other outbound fetch on this site.
-    // A page that wants to refuse AadharshBot must be able to see it is
-    // AadharshBot; a stealth crawl would make this lens a lie about itself.
-    //
-    // Tolerated rather than awaited-or-die: the override is deprecated in favour
-    // of Emulation.setUserAgentOverride and the two have swapped primacy before,
-    // so a binding that drops it should cost the honest UA string and not the
-    // whole observation. `uaApplied` carries the fact into the payload instead of
-    // letting the page silently claim an identity it did not send.
-    let uaApplied = true;
-    try {
-      await cdp.send("Network.setUserAgentOverride", { userAgent: BOT_UA }, pageSession);
-    } catch (_e) {
-      try { await cdp.send("Emulation.setUserAgentOverride", { userAgent: BOT_UA }, pageSession); }
-      catch (_e2) { uaApplied = false; }
-    }
-    // Runtime and Log carry the EXECUTION evidence, and both are enabled before
-    // the navigation because an exception thrown during load is the interesting
-    // case. This costs no extra browser instance and no extra minute: it is the
-    // session this lens already opens, answering two more questions on the way
-    // past. `agentScripts` and `agentMedia` in the readiness rubric are fed from
-    // here, and they are the two questions a declaration audit structurally
-    // cannot answer.
-    //
-    // Tolerated rather than awaited-or-die, exactly like the UA override above.
-    // A binding that refuses either domain should cost the execution checks and
-    // leave them neutral, not lose the whole request waterfall this route
-    // exists for.
-    const execDomains = await enableWireDomains((method, params) =>
-      cdp.send(method, params, pageSession));
-
-    const t0 = Date.now();
-    await cdp.send("Page.navigate", { url }, pageSession);
-    const loaded = await cdp.waitFor("Page.loadEventFired", WIRE_TIMING.navigateMs);
-    // The settle window is where the third parties this lens exists to count
-    // actually show up: beacons and tag managers fire ON load, so stopping at
-    // the load event would systematically under-report the thing being measured.
-    await sleep(Math.min(WIRE_TIMING.settleAfterLoadMs, Math.max(0, WIRE_TIMING.hardCapMs - (Date.now() - t0))));
-
-    // The census runs AFTER the settle window on purpose: an image that has not
-    // finished loading yet reports naturalWidth 0 and is not broken, so probing
-    // at the load event would invent failures. EXECUTION_PROBE only counts an
-    // image once `complete` is true.
-    let execution = null;
-    if (execDomains) {
-      try {
-        const r = await cdp.send("Runtime.evaluate", { expression: EXECUTION_PROBE, returnByValue: true, awaitPromise: false }, pageSession);
-        const raw = r && r.result && asText(r.result.value) !== null ? JSON.parse(r.result.value) : null;
-        if (raw && !raw.probeError) {
-          // Uncaught errors, counted off the events this session already
-          // collected. Runtime.exceptionThrown is the page's own throw;
-          // Log.entryAdded at error level catches what the console reports
-          // without an exception object, which is how Kitesurf reports a
-          // callback that threw inside requestAnimationFrame.
-          const thrown = cdp.events.filter((e) => e.method === "Runtime.exceptionThrown");
-          const logged = cdp.events.filter((e) => e.method === "Log.entryAdded" && e.params && e.params.entry && e.params.entry.level === "error");
-          const first = thrown[0]
-            ? String((thrown[0].params && thrown[0].params.exceptionDetails && thrown[0].params.exceptionDetails.text) || "").slice(0, 120)
-            : logged[0] ? String((logged[0].params.entry.text) || "").slice(0, 120) : "";
-          execution = { ran: true, engine: "chromium-cdp", pageErrors: thrown.length, consoleErrors: logged.length, firstError: first || undefined, ...raw };
-        }
-      } catch (_e) { execution = null; }
-    }
-
-    // The browser-local tool catalog, read from the SAME session. A page's
-    // WebMCP tools exist only once its own script has run, so this is the one
-    // place on the site that can see them at all; every other tool reading here
-    // fetches /mcp, which is a different catalog belonging to the server.
-    //
-    // awaitPromise is the load-bearing option: getTools() is async, and without
-    // it the evaluate resolves to a pending Promise handle and the catalog reads
-    // as empty on every origin, which is indistinguishable from a site that has
-    // no tools.
-    let webmcp: ReturnType<typeof readWebmcpProbe> = null;
-    if (execDomains) {
-      try {
-        const w = await cdp.send("Runtime.evaluate", { expression: WEBMCP_PROBE, returnByValue: true, awaitPromise: true }, pageSession);
-        const value = w && w.result ? asText(w.result.value) : null;
-        webmcp = value === null ? null : readWebmcpProbe(JSON.parse(value));
-        // The engine label has to come from CDP rather than from the page. This
-        // route overrides navigator.userAgent to AadharshBot, so the in-page
-        // value is our own mask and would report the browser as a crawler.
-        if (webmcp) {
-          try {
-            const ver = await cdp.send("Browser.getVersion");
-            const product = ver && asText(ver.product);
-            if (product) webmcp = { ...webmcp, engine: product.slice(0, 120) };
-          } catch (_e) { /* an engine we cannot name is still a result */ }
-        }
-      } catch (_e) { webmcp = null; }
-    }
-
-    return { events: cdp.events, navMs: Date.now() - t0, loadFired: Boolean(loaded), uaApplied, execution, webmcp, sessionId };
-  } finally {
-    // Fire and forget would be wrong: a leaked session holds one of three
-    // concurrent slots and blacks out every browser lens on the site.
-    try { await env.BROWSER.fetch(`${CDP_BASE}/${sessionId}`, { method: "DELETE" }); } catch (_e) {}
+    await cdp.send("Network.setUserAgentOverride", { userAgent: BOT_UA }, pageSession);
+  } catch (_e) {
+    try { await cdp.send("Emulation.setUserAgentOverride", { userAgent: BOT_UA }, pageSession); }
+    catch (_e2) { uaApplied = false; }
   }
+  // Runtime and Log carry the EXECUTION evidence, and both are enabled before
+  // the navigation because an exception thrown during load is the interesting
+  // case. This costs no extra browser instance and no extra minute: it is the
+  // session this lens already opens, answering two more questions on the way
+  // past. `agentScripts` and `agentMedia` in the readiness rubric are fed from
+  // here, and they are the two questions a declaration audit structurally
+  // cannot answer.
+  //
+  // Tolerated rather than awaited-or-die, exactly like the UA override above.
+  // A binding that refuses either domain should cost the execution checks and
+  // leave them neutral, not lose the whole request waterfall this route
+  // exists for.
+  const execDomains = await enableWireDomains((method, params) =>
+    cdp.send(method, params, pageSession));
+
+  const t0 = Date.now();
+  await cdp.send("Page.navigate", { url }, pageSession);
+  const loaded = await cdp.waitFor("Page.loadEventFired", WIRE_TIMING.navigateMs);
+  // The settle window is where the third parties this lens exists to count
+  // actually show up: beacons and tag managers fire ON load, so stopping at
+  // the load event would systematically under-report the thing being measured.
+  await sleep(Math.min(WIRE_TIMING.settleAfterLoadMs, Math.max(0, WIRE_TIMING.hardCapMs - (Date.now() - t0))));
+
+  // The census runs AFTER the settle window on purpose: an image that has not
+  // finished loading yet reports naturalWidth 0 and is not broken, so probing
+  // at the load event would invent failures. EXECUTION_PROBE only counts an
+  // image once `complete` is true.
+  let execution = null;
+  if (execDomains) {
+    try {
+      const r = await cdp.send("Runtime.evaluate", { expression: EXECUTION_PROBE, returnByValue: true, awaitPromise: false }, pageSession);
+      const raw = r && r.result && asText(r.result.value) !== null ? JSON.parse(r.result.value) : null;
+      if (raw && !raw.probeError) {
+        // Uncaught errors, counted off the events this session already
+        // collected. Runtime.exceptionThrown is the page's own throw;
+        // Log.entryAdded at error level catches what the console reports
+        // without an exception object, which is how Kitesurf reports a
+        // callback that threw inside requestAnimationFrame.
+        const thrown = cdp.events.filter((e) => e.method === "Runtime.exceptionThrown");
+        const logged = cdp.events.filter((e) => e.method === "Log.entryAdded" && e.params && e.params.entry && e.params.entry.level === "error");
+        const first = thrown[0]
+          ? String((thrown[0].params && thrown[0].params.exceptionDetails && thrown[0].params.exceptionDetails.text) || "").slice(0, 120)
+          : logged[0] ? String((logged[0].params.entry.text) || "").slice(0, 120) : "";
+        execution = { ran: true, engine: "chromium-cdp", pageErrors: thrown.length, consoleErrors: logged.length, firstError: first || undefined, ...raw };
+      }
+    } catch (_e) { execution = null; }
+  }
+
+  // The browser-local tool catalog, read from the SAME session. A page's
+  // WebMCP tools exist only once its own script has run, so this is the one
+  // place on the site that can see them at all; every other tool reading here
+  // fetches /mcp, which is a different catalog belonging to the server.
+  //
+  // awaitPromise is the load-bearing option: getTools() is async, and without
+  // it the evaluate resolves to a pending Promise handle and the catalog reads
+  // as empty on every origin, which is indistinguishable from a site that has
+  // no tools.
+  let webmcp: ReturnType<typeof readWebmcpProbe> = null;
+  if (execDomains) {
+    try {
+      const w = await cdp.send("Runtime.evaluate", { expression: WEBMCP_PROBE, returnByValue: true, awaitPromise: true }, pageSession);
+      const value = w && w.result ? asText(w.result.value) : null;
+      webmcp = value === null ? null : readWebmcpProbe(JSON.parse(value));
+      // The engine label has to come from CDP rather than from the page. This
+      // route overrides navigator.userAgent to AadharshBot, so the in-page
+      // value is our own mask and would report the browser as a crawler.
+      if (webmcp) {
+        try {
+          const ver = await cdp.send("Browser.getVersion");
+          const product = ver && asText(ver.product);
+          if (product) webmcp = { ...webmcp, engine: product.slice(0, 120) };
+        } catch (_e) { /* an engine we cannot name is still a result */ }
+      }
+    } catch (_e) { webmcp = null; }
+  }
+
+  return { events: cdp.events, navMs: Date.now() - t0, loadFired: Boolean(loaded), uaApplied, execution, webmcp, sessionId };
 }
 
 // ── route ──────────────────────────────────────────────────────────────────
