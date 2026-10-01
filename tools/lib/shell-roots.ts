@@ -7,3 +7,10 @@
 // before: dcz:check shipped reading two pages while the roll read four, and
 // graded a different set from the one the roll adopts (2026-08-19).
 export const SHELL_DISCOVERY_ROOTS = ["/", "/lens", "/lwe/utf8", "/writing", "/dotfiles", "/garage/pretext"] as const;
+
+// Both discovery walks adopt the same dictionary-carrying asset types. The
+// extension must be complete: .json is not a .js URL, nor is .js.map a script.
+// Query strings and SVG fragments sit outside the filename.
+export function shellAssetRefs(body: string): string[] {
+  return [...body.matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css|svg))(?![\w.])/g)].map(([, name]) => name);
+}
