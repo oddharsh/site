@@ -523,6 +523,10 @@ const ROUTES = [
   { path: "/resume.json", status: 200, ct: "application/json", encoding: "br" },
   { path: "/writing/in-flux.src.html", status: 200, ct: "text/html", marker: "<html lang", encoding: "br" },
   { path: "/serendipity/mcp-info.src.html", status: 200, ct: "text/html", marker: "<html lang", encoding: "br" },
+  // The same failure a section later, found by served:check on its first run
+  // (2026-10-01): /dotfiles postdated the text-twin allowlist, so its readable
+  // twin had no .br, fell through to the asset layer and answered 307.
+  { path: "/dotfiles/index.src.html", status: 200, ct: "text/html", marker: "<html lang", encoding: "br" },
 ];
 
 // One negotiation row per agents:true surface, DERIVED from the registry rather

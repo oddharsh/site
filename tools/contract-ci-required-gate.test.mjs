@@ -11,7 +11,10 @@ const workflow = JSON.parse(execFileSync("bun", [
 ], { encoding: "utf8" }));
 
 test("CI is one required job named validate that cannot be skipped or softened", () => {
-  assert.deepEqual(Object.keys(workflow.jobs), ["validate"]);
+  // `attest` (2026-10-01) signs the served manifest on a push to main. It is
+  // not a check anybody requires, it needs validate, and it cannot fail the run;
+  // contract-production-serves-what-ci-built holds its shape.
+  assert.deepEqual(Object.keys(workflow.jobs), ["validate", "attest"]);
   const { validate } = workflow.jobs;
   // The `main` ruleset requires a check with exactly this name.
   assert.equal(validate.name, "validate");
