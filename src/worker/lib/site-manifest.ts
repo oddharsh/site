@@ -310,7 +310,7 @@ export const AGENT_SURFACES = [
     "path": "/garage/pqc",
     "title": "Post-quantum signatures, priced",
     "mimeType": "text/html",
-    "description": "What ML-DSA-44 and the hash-based alternatives cost on the one signature this site controls: its crawler's RFC 9421 request signing, which now carries two."
+    "description": "What ML-DSA-44 and the hash-based alternatives cost on the one signature this site controls: its crawler's RFC 9421 request signing, priced in JavaScript and again natively in workerd."
   },
   {
     "path": "/garage/useragent",
