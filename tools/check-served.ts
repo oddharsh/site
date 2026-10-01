@@ -3,7 +3,8 @@
 //   bun run served:check                          # every URL, production's own commit
 //   bun run served:check -- --since <commit>      # only URLs that changed since that commit
 //   bun run served:check -- --manifest m.json     # a manifest in hand (skips the download)
-//   bun run served:check -- --commit <sha>        # when production cannot say (before build-info shipped)
+//   bun run served:check -- --commit <sha>        # expect this commit (stands in when the origin cannot say)
+//   bun run served:check -- --origin <preview URL> --manifest m.json --no-attest   # a PR preview
 //
 // 1. Read the commit production reports (/whoareyou.json `build.commit`, baked in
 //    by build.ts step 5e from Workers Builds' WORKERS_CI_COMMIT_SHA).
@@ -82,15 +83,17 @@ function attested(path: string): boolean {
 const live = await productionCommit();
 const commit = (values.commit ?? live.commit)?.toLowerCase() ?? null;
 if (!commit) instrument(`${values.origin} reports no build commit and no --commit was given (production predates build-info, or this is not a Workers Builds build)`);
-if (values.commit && live.commit && live.commit !== commit) {
-  console.log(`served:check: --commit ${commit.slice(0, 12)} overrides the ${live.commit.slice(0, 12)} production reports`);
-}
 
 const path = values.manifest ?? downloadManifest(commit) ?? instrument(`no served-manifest artifact for ${commit.slice(0, 12)} in ${values.repo}'s ci.yml push runs`);
 const manifest: ServedManifest = parseManifest(readFileSync(path, "utf8"));
 console.log(`served:check: ${values.origin} version ${live.version?.slice(0, 8) ?? "?"}, commit ${commit.slice(0, 12)}, ${Object.keys(manifest.files).length} URLs in the manifest`);
 
 const findings: string[] = [];
+// --commit is an EXPECTATION when the origin names a commit of its own: a
+// preview that already moved to a newer push, or a release that never landed,
+// would otherwise be compared against the wrong manifest and every changed URL
+// would read as a mismatch. It only stands in for the origin when that is silent.
+if (values.commit && live.commit && live.commit !== commit) findings.push(`${values.origin} serves ${live.commit.slice(0, 12)}, not the expected ${commit.slice(0, 12)}`);
 if (manifest.commit && manifest.commit !== commit) findings.push(`the manifest is for ${manifest.commit.slice(0, 12)}, not the ${commit.slice(0, 12)} being checked`);
 if (!values["no-attest"]) {
   if (attested(path)) console.log(`  attestation: verified, signed by ${SIGNER}`);

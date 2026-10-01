@@ -297,6 +297,7 @@
     "exempt": {
       "tools/merge-driver.ts": "git calls it DURING a merge and it writes only to the temporary %A file git handed it, which never becomes a committed artifact on its own: what lands is whatever the merge is committed as. The one path it touches outside that is $GIT_DIR/site-merge-pending, inside .git, drained by tools/merge-finish.ts",
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
+      "tools/preview-target.ts": "its only write is two lines to $GITHUB_OUTPUT under GitHub Actions (the preview URL and version it read off a check run), which is a step output and never a file in this tree",
       "tools/served-manifest.ts": "writes served-manifest.json, a CI artifact cut from .build/public on each push to main and signed there; it is never committed, and tools/check-served.ts is what compares it against production",
       "tools/bake-worker-pages.ts": "build step 5b, spawned by build.ts in its own process: writes only the baked Worker pages into .build/public, the staged tree",
       "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
