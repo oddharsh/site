@@ -3493,8 +3493,15 @@ nothing about spans (introspected 2026-08-29).
 **The token wants `Workers Observability : Read`, a SEVENTH read scope, and it
 must NOT join the CI token's six.** This is workstation-only, wired into no
 workflow, and gates nothing. wrangler's own OAuth token does not carry it and
-answers 403, measured the same day; wrangler 4.127.0 does request the scope at
-login, so `wrangler login` is the alternative to minting a token.
+answers 403, measured the same day. **`wrangler login` is NOT an alternative,
+and this said it was until 2026-10-01.** The pinned wrangler (4.144.0) cannot
+request the scope at all: `wrangler login --scopes-list` has no observability
+entry, and a fresh login holds 28 scopes and still answers 403. Whatever 4.127.0
+did, it does not survive here. The two working doors are a minted token
+carrying `Workers Observability : Read`, and the dashboard's own session, which
+posts the same `telemetry/query` route from the browser (the `atok` cookie
+travels as an `x-atok` header). The second is how sig2's CPU was read on
+2026-10-01.
 
 **Lowering `head_sampling_rate` is the wrong fix when that number gets tight**,
 for the reason the paragraph above already gives. Cut spans on the surface
