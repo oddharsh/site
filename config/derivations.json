@@ -190,7 +190,7 @@
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "5229398b14e8a44ceb499f48e415e0b2ea767fcf3f3ac6b5b0c61e8c6386ab02",
+        "inputs": "305095d8f2bd50dd5d490f12e8963ccb386ccd5f62799a5dd3a9df62bed0b6f0",
         "count": 2
       }
     },
@@ -297,8 +297,6 @@
     "exempt": {
       "tools/merge-driver.ts": "git calls it DURING a merge and it writes only to the temporary %A file git handed it, which never becomes a committed artifact on its own: what lands is whatever the merge is committed as. The one path it touches outside that is $GIT_DIR/site-merge-pending, inside .git, drained by tools/merge-finish.ts",
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
-      "tools/preview-target.ts": "its only write is two lines to $GITHUB_OUTPUT under GitHub Actions (the preview URL and version it read off a check run), which is a step output and never a file in this tree",
-      "tools/served-manifest.ts": "writes served-manifest.json, a CI artifact cut from .build/public on each push to main and signed there; it is never committed, and tools/check-served.ts is what compares it against production",
       "tools/bake-worker-pages.ts": "build step 5b, spawned by build.ts in its own process: writes only the baked Worker pages into .build/public, the staged tree",
       "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
       "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",
@@ -347,7 +345,9 @@
       "tools/lib/site-config.ts": "writes .wrangler.site.jsonc, which is gitignored: the legacy-shape projection of cloudflare.config.ts + wrangler.config.ts for the wrangler commands and the test harness that cannot read the TypeScript config",
       "tools/lib/hillclimb.ts": "writes only the JSONL ledger of a climb, to a path its caller names, and commits nothing",
       "tools/photos/avif-knob-climb.ts": "writes scratch tiles, an encode cache and an optional --ledger under the OS temp dir while climbing AVIF knobs at the shipped bytes, and commits nothing",
-      "tools/photos/jpeg-knob-climb.ts": "writes scratch encodes, an encode cache and an optional --ledger under the OS temp dir while climbing the JPEG tier settings at the shipped bytes, and commits nothing"
+      "tools/photos/jpeg-knob-climb.ts": "writes scratch encodes, an encode cache and an optional --ledger under the OS temp dir while climbing the JPEG tier settings at the shipped bytes, and commits nothing",
+      "tools/served-manifest.ts": "writes served-manifest.json, a CI artifact cut from .build/public on each push to main and signed there; it is never committed, and tools/check-served.ts is what compares it against production",
+      "tools/preview-target.ts": "its only write is two lines to $GITHUB_OUTPUT under GitHub Actions (the preview URL and version it read off a check run), which is a step output and never a file in this tree"
     },
     "shellRoots": [
       "tools",

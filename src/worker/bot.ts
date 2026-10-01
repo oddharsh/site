@@ -99,13 +99,20 @@ export function renderBotPage() {
       removed from the JWKS, so a request from this bot now carries <code>sig1</code> alone.
     </p>
     <p>
-      It was removed for its CPU cost. Cloudflare's runtime has no ML-DSA in WebCrypto, so
-      signing ran in pure JavaScript at roughly 8.5ms per request, against a 10ms
-      per-invocation budget. One signature spent most of a request, and anything that fans
-      out spent several requests' worth: the playlist scrape signs once per track, and the
-      <a href="/lens">/lens</a> discovery pass signs 28 probes. Both were failing because of it.
-      Nothing on the internet verified <code>sig2</code>, so dropping it costs no verifier
-      anything. <a href="/garage/pqc">/garage/pqc</a> has the measurements and the full argument.
+      It was removed for its CPU cost. At the time, Cloudflare's runtime had no ML-DSA in
+      WebCrypto, so signing ran in pure JavaScript at roughly 8.5ms per request, against a
+      10ms per-invocation budget. One signature spent most of a request, and anything that
+      fans out spent several requests' worth: the playlist scrape signs once per track, and
+      the <a href="/lens">/lens</a> discovery pass signs 28 probes. Both were failing because
+      of it. Nothing on the internet verified <code>sig2</code>, so dropping it costs no
+      verifier anything.
+    </p>
+    <p>
+      Cloudflare has since added ML-DSA to WebCrypto on Workers, and it signs in about 0.12ms,
+      72 times faster than the JavaScript did. That removes the reason <code>sig2</code> left,
+      so it can come back once the price holds up in production. Until then, verify
+      <code>sig1</code>. <a href="/garage/pqc">/garage/pqc</a> has the measurements and the
+      full argument.
     </p>
 
     <h2>How to opt out</h2>

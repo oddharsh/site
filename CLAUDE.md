@@ -3467,6 +3467,46 @@ Four layers, deliberately not redundant:
    pass the caught value to `console.error()` inside the catch, and weigh that
    against the 200K events/day, since every error line is an event.
 
+   **An issue becomes ONE GitHub issue through a Claude Code routine
+   (2026-10-01).** The automation's destination is the routine, and the
+   routine's prompt is committed at `docs/routines/workers-issue-triage.md`:
+   it treats the payload as untrusted data, redacts IPs, tokens and
+   user-agents, dedupes on a `<!-- workers-issue: ID -->` marker line under the
+   `workers-issue` label (comment on an open one, reopen a closed one as a
+   regression), and only then reads the code and opens an issue. Edit that
+   file first and paste it into the routine, so the prompt that runs is one a
+   pull request reviewed.
+
+   Three facts decided the shape, all read 2026-10-01:
+
+   | path | why not, or why |
+   |---|---|
+   | generic webhook | Issues sends it as a Cloudflare Notifications webhook, and those need at least one zone on Pro or above. aadhar.sh is Free. |
+   | a Worker route that files issues | the webhook above is the only way to reach one, and it would park a GitHub write token in a Worker secret |
+   | Claude Code routine | a prebuilt destination on every plan: Cloudflare fires the routine's API trigger with the issue as text, and the routine runs with this repository checked out |
+
+   **Setup is two web UIs and cannot be scripted.** A routine's API trigger is
+   created at claude.ai/code/routines and nowhere else (the routines API takes
+   a cron or a one-shot time, never an API-only trigger), its token is shown
+   once, and the automation that holds it lives in the Cloudflare dashboard
+   with no config form or API to declare it from. So:
+
+   1. At claude.ai/code/routines, create a routine on `oddharsh/site` with no
+      schedule, and paste the prompt in.
+   2. Add an API trigger to it and generate the token. Copy the routine id
+      (`trig_…`) and the token.
+   3. In Cloudflare, Workers & Pages, Observability, Issues, Automations: a
+      Claude Code destination with that routine id and token. Trigger it on an
+      occurrence threshold of 1 and on recurrence after 7 days quiet.
+   4. Check the routine can open an issue at all. It needs GitHub access in
+      its cloud session (an authenticated `gh` or a GitHub connector on
+      claude.ai). Without it the prompt makes the run end with the issue text
+      as its final message rather than lose it, so read the run log.
+
+   The `workers-issue` label is declared in `infra.json` and has to exist on
+   GitHub before the first run, or the routine's first issue mints it with a
+   random colour: `bun run labels:sync -- --confirm`.
+
 Spans go through `lib/trace.ts` (`span(name, fn, attrs)`), never
 `tracing.enterSpan` directly. Names are `<surface>.<phase>`, lowercase and
 dot-separated; the dispatcher is the one exception, naming its spans
