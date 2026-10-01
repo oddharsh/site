@@ -271,6 +271,16 @@ bun run served:check
 bun run served:check -- --since <commit>     # the per-release scope
 bun run served:check -- --manifest m.json --commit <sha> --no-attest   # a hand-cut manifest
 
+# INDEXNOW: tell search engines which pages a release changed. Diffs the two
+# signed served manifests on each page's CONTENT (its Markdown twin, a writing
+# post's .txt, or the file itself), never its HTML bytes: a shell-only release
+# (#1063) moved the bytes of 53 of 56 sitemap pages and the content of none.
+# One POST to api.indexnow.org reaches Bing, Yandex, Naver, Seznam and Yep
+# (Google is not a participant). The key is public by design and served at
+# /<key>.txt; the route oracle holds it at 200. The after-release job runs it
+# per release; with no previous manifest it submits nothing.
+bun run indexnow -- --since <previous release commit> --dry-run
+
 # THE CANARY TRIPWIRE: three moving targets through gates this repo already
 # holds its pins to, PROPOSING NOTHING. .github/workflows/canary.yml runs all
 # three nightly and keeps at most one open issue per leg (canary-report.ts
@@ -1260,6 +1270,20 @@ worktrees may edit freely, but a worktree is not a release surface.
   half: the next POST route anyone adds is guarded on the day it is written.
   Reads all pass, which is the point of the surface. Do not enable previews with
   that guard removed.
+
+  **Something reads them now: `preview-check.yml`, on every PR touching served
+  code (2026-10-01).** It builds the PR's HEAD commit, waits for Workers Builds
+  to publish the same commit, and runs `served:check` against the preview, over
+  the URLs whose bytes differ from production. The URL comes off Workers Builds'
+  own check run ("Workers Builds: aadhar-sh", `Preview URL:` in its summary)
+  through `bun run preview:target`, never derived from the branch name:
+  Cloudflare documents no rule for folding a branch into an alias, and the
+  VERSION URL names one upload where the alias moves on the next push. The first
+  run against #1073's preview matched 1850 of 1850 URLs, the `/dotfiles` twin
+  fix included, which is that fix verified on Cloudflare rather than miniflare.
+  It is advisory, posts one comment that updates in place, and reds only on a
+  finding. What it cannot show is anything the ZONE does: a preview is
+  workers.dev, so Transform Rules, 0-RTT and Early Hints never touch it.
 - **0-RTT is declared ON in `infra.json` (`zone.zero_rtt`), and the Worker's
   early-data guard is what makes that safe.** A resumed TLS 1.3 or QUIC client
   sends its first request inside the handshake, one round trip sooner, on the one

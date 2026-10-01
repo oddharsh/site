@@ -207,6 +207,20 @@ jobs:
           SINCE: ${{ needs.promote.outputs.before_commit }}
         run: bun run served:check ${SINCE:+--since "$SINCE"}
 
+      # Tells search engines which pages this release changed. CONTENT changed,
+      # read off the pages' Markdown twins in the two signed manifests, never
+      # their HTML bytes: a shell-only release (#1063) moved the bytes of 53 of
+      # 56 sitemap pages and the content of none. One POST reaches every
+      # IndexNow engine; Google is not one. Advisory, and it submits nothing
+      # when there is no previous manifest to diff against.
+      - name: Submit changed pages to IndexNow
+        if: steps.live.outputs.deployed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SINCE: ${{ needs.promote.outputs.before_commit }}
+        run: bun run indexnow ${SINCE:+--since "$SINCE"}
+
       # Advisory: a stale dictionary tier is a lost optimisation, not an outage.
       - name: Dictionary tiers against live production
         if: steps.live.outputs.deployed == 'true'

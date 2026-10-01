@@ -16,7 +16,7 @@ import { brotliDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { PAGE_FAMILY_MATCH } from "../src/worker/lib/assets.ts";
 import { FAMILY_DICT_DIR, readCommittedFamily, type CommittedFamily } from "./lib/page-family.ts";
-import { SHELL_DISCOVERY_ROOTS } from "./lib/shell-roots.ts";
+import { SHELL_DISCOVERY_ROOTS, shellAssetRefs } from "./lib/shell-roots.ts";
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
 const get = (url, dict?, extra: Record<string, string> = {}) => {
@@ -66,8 +66,8 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 // until a deploy fixes it. Do NOT make dcz:check a required check or it deadlocks the very
 // release that would clear it.
 {
-  const committed = (await readdir("src/dict/a-dict")).filter((n) => /\.[0-9a-f]{8}\.(js|css)$/.test(n));
-  const bases = new Set(committed.map((n) => n.replace(/\.[0-9a-f]{8}\.(js|css)$/, "")));
+  const committed = (await readdir("src/dict/a-dict")).filter((n) => /\.[0-9a-f]{8}\.(js|css|svg)$/.test(n));
+  const bases = new Set(committed.map((n) => n.replace(/\.[0-9a-f]{8}\.(js|css|svg)$/, "")));
 
   // Discovery has to match the ROLL's, or this assertion grades a different set from the
   // one the nightly job adopts. It walks the same documents (SHELL_DISCOVERY_ROOTS, one
@@ -86,7 +86,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   // is not only a saved request: re-fetching opens a window for a deploy to land between
   // the scan and the compare, which would grade bytes this run never saw.
   const body = new Map();
-  const assetRefs = (buf) => [...buf.toString("utf8").matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css))/g)].map(([, n]) => n);
+  const assetRefs = (buf) => shellAssetRefs(buf.toString("utf8"));
   const fetchLive = async (path) => {
     let r;
     try { r = await fetch(`https://aadhar.sh${path}`, { headers: { "accept-encoding": "identity" } }); }
@@ -95,7 +95,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   };
 
   const refs = new Map();
-  const see = (name) => refs.set(name, name.replace(/\.[0-9a-f]{8}\.(js|css)$/, ""));
+  const see = (name) => refs.set(name, name.replace(/\.[0-9a-f]{8}\.(js|css|svg)$/, ""));
   for (const path of SHELL_DISCOVERY_ROOTS) {
     const doc = await fetchLive(path);
     if (doc) for (const n of assetRefs(doc)) see(n);
