@@ -271,6 +271,16 @@ bun run served:check
 bun run served:check -- --since <commit>     # the per-release scope
 bun run served:check -- --manifest m.json --commit <sha> --no-attest   # a hand-cut manifest
 
+# INDEXNOW: tell search engines which pages a release changed. Diffs the two
+# signed served manifests on each page's CONTENT (its Markdown twin, a writing
+# post's .txt, or the file itself), never its HTML bytes: a shell-only release
+# (#1063) moved the bytes of 53 of 56 sitemap pages and the content of none.
+# One POST to api.indexnow.org reaches Bing, Yandex, Naver, Seznam and Yep
+# (Google is not a participant). The key is public by design and served at
+# /<key>.txt; the route oracle holds it at 200. The after-release job runs it
+# per release; with no previous manifest it submits nothing.
+bun run indexnow -- --since <previous release commit> --dry-run
+
 # THE CANARY TRIPWIRE: three moving targets through gates this repo already
 # holds its pins to, PROPOSING NOTHING. .github/workflows/canary.yml runs all
 # three nightly and keeps at most one open issue per leg (canary-report.ts

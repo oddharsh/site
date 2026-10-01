@@ -24,10 +24,9 @@
 // check passes --since and the full one runs nightly.
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
+import { downloadManifest as fetchManifest, originBuild } from "./lib/ci-manifest.ts";
 import { changedUrls, checkOrigin, parseManifest, type ServedManifest, type UrlResult } from "./lib/served-manifest.ts";
 
 const { values } = parseArgs({
@@ -47,25 +46,10 @@ function instrument(msg: string): never { console.error(`served:check: ${msg}`);
 const gh = (args: string[]) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
 async function productionCommit(): Promise<{ commit: string | null; version: string | null }> {
-  const r = await fetch(new URL("/whoareyou.json", values.origin), { headers: { accept: "application/json" } });
-  if (!r.ok) instrument(`${values.origin}/whoareyou.json answered ${r.status}`);
-  const j = await r.json();
-  return { commit: j?.build?.commit ?? null, version: j?.build?.version ?? null };
+  try { return await originBuild(values.origin); } catch (e) { instrument((e as Error).message); }
 }
 
-/** The CI push run for a commit, and its signed manifest, downloaded to a temp dir. */
-function downloadManifest(commit: string): string | null {
-  const runs = JSON.parse(gh(["run", "list", "--repo", values.repo, "--workflow", "ci.yml", "--commit", commit, "--event", "push", "--json", "databaseId,conclusion", "--limit", "5"]));
-  const run = runs.find((r: { conclusion: string }) => r.conclusion === "success") ?? runs[0];
-  if (!run) return null;
-  const dir = mkdtempSync(join(tmpdir(), "served-manifest-"));
-  try {
-    gh(["run", "download", String(run.databaseId), "--repo", values.repo, "--name", "served-manifest", "--dir", dir]);
-  } catch {
-    return null;
-  }
-  return join(dir, "served-manifest.json");
-}
+const downloadManifest = (commit: string) => fetchManifest(values.repo, commit);
 
 function attested(path: string): boolean {
   try {
