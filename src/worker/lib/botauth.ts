@@ -8,8 +8,9 @@
 // and verify against the published public keys.
 //
 // Every request carries sig1, ed25519, the one verifiers check. When
-// RN_SIGNING_KEY_MLDSA_JWK is set it also carries sig2, an ML-DSA-44
-// post-quantum label over the same covered components. A verifier that only
+// RN_SIGNING_KEY_MLDSA_JWK is set, primary fetches also carry sig2, an
+// ML-DSA-44 post-quantum label over the same covered components; the fan-out
+// opts out per request (see `postQuantum` on BotRequestOptions). A verifier that only
 // knows ed25519 reads sig1 and skips sig2, because Signature-Input and
 // Signature are structured-field Dictionaries.
 //
@@ -82,6 +83,15 @@ export type BotRequestOptions = {
   // RN alone opts into the operator-approved exception for Spotify embeds.
   // Every other URL, including redirect destinations, keeps the default policy.
   robots?: "respect" | "spotify-embed";
+  // false drops sig2 for this one request, and leaves sig1 exactly as it was.
+  // The callers that pass it are the FAN-OUT: /lens discovery (28 probes per
+  // scan), its Markdown replay (10), and the robots.txt bootstrap. Measured in
+  // production on 2026-10-01 with sig2 on every request, a /lens scan went from
+  // a 22ms to a 32ms CPU median, ~0.33ms a signature, which is 3x the laptop
+  // figure. Primary fetches (the page being scanned, /around, rn, reading)
+  // keep both labels, so every request that IS the crawler's identity carries
+  // the post-quantum one too.
+  postQuantum?: boolean;
 };
 
 // Build the headers for an identified outbound request. AadharshBot's public
@@ -105,7 +115,7 @@ export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
   const host = new URL(targetUrl).host;
   // RFC 9421: one covered component per line, then the signed parameters. Each
   // label signs its OWN base, because the base ends in that label's parameters.
-  const signed = await signLabels(await activeSigners(env), '"@authority" "signature-agent"', "web-bot-auth", (params) => [
+  const signed = await signLabels(await activeSigners(env, opts.postQuantum !== false), '"@authority" "signature-agent"', "web-bot-auth", (params) => [
     `"@authority": ${host}`,
     `"signature-agent": "${SIG_AGENT}"`,
     `"@signature-params": ${params}`,
@@ -125,10 +135,10 @@ type SigningEnv = Pick<Env, "RN_SIGNING_KEY_JWK"> & Partial<Pick<Env, "RN_SIGNIN
 // sig1 always; sig2 only when the ML-DSA key is configured AND usable. The
 // ed25519 half throws like it always has, since without it there is no bot
 // identity at all, while the ML-DSA half resolves to nothing on any failure.
-async function activeSigners(env: SigningEnv): Promise<Signer[]> {
+async function activeSigners(env: SigningEnv, postQuantum = true): Promise<Signer[]> {
   const [ed, pq] = await Promise.all([
     signingMaterial(env.RN_SIGNING_KEY_JWK),
-    env.RN_SIGNING_KEY_MLDSA_JWK ? pqSigningMaterial(env.RN_SIGNING_KEY_MLDSA_JWK) : null,
+    postQuantum && env.RN_SIGNING_KEY_MLDSA_JWK ? pqSigningMaterial(env.RN_SIGNING_KEY_MLDSA_JWK) : null,
   ]);
   const signers: Signer[] = [{ keyId: ed.keyId, alg: "ed25519", sign: (base) => crypto.subtle.sign("Ed25519", ed.key, base) }];
   if (pq) signers.push({ keyId: pq.keyId, alg: "ml-dsa-44", sign: (base) => crypto.subtle.sign({ name: "ML-DSA-44" }, pq.key, base) });
@@ -338,7 +348,7 @@ async function readBotRobots(origin: string, env: Pick<Env, "RN_KV" | "RN_SIGNIN
     const policySignal = AbortSignal.timeout(3000);
     try {
       const followed = await fetchFollowingPublicRedirects(origin + "/robots.txt", async (candidate) => ({
-        headers: await botHeaders(candidate, env, { headers: { accept: "text/plain" } }),
+        headers: await botHeaders(candidate, env, { headers: { accept: "text/plain" }, postQuantum: false }),
         signal: policySignal,
         cf: { cacheTtl: 0 },
       }), validateLensTarget, 5);

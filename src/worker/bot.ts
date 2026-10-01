@@ -92,11 +92,17 @@ export function renderBotPage() {
 
     <h2>The second signature</h2>
     <p>
-      Every request also carries a second label, <code>sig2</code>, a post-quantum
+      Requests that fetch a page also carry a second label, <code>sig2</code>, a post-quantum
       <a href="https://csrc.nist.gov/pubs/fips/204/final" target="_blank" rel="noopener">ML-DSA-44</a>
       signature over the same covered components. Verify <code>sig1</code>. A verifier that
       only knows Ed25519 reads <code>sig1</code> and skips the label it does not recognise,
       which is what makes a second one safe to send.
+    </p>
+    <p>
+      Probes carry <code>sig1</code> alone: <code>robots.txt</code> reads, and the 28 discovery
+      checks a <a href="/lens">/lens</a> scan makes for well-known files. Signing all of them
+      took a scan from 22ms to 32ms of CPU in production, so the post-quantum label rides on
+      the requests that are this crawler's identity and skips the ones that only look around.
     </p>
     <p>
       Its <code>alg</code> token, <code>ml-dsa-44</code>, is this site's spelling, because the

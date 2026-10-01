@@ -2747,7 +2747,9 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
 // signature for external targets, the same identity the rest of the site
 // crawls under. Self-dispatch stays local and therefore has no wire signature.
 // `accept` override: the md-negotiation and MCP probes speak different Accepts.
-export async function lensFetch(targetUrl, env, signal?, accept?) {
+// `opts.postQuantum: false` drops sig2 on fan-out probes (botauth.ts has the
+// measurement); the page being scanned keeps both labels.
+export async function lensFetch(targetUrl, env, signal?, accept?, opts: { postQuantum?: boolean } = {}) {
   env = env || {};
   const baseHeaders = {
     "user-agent": BOT_UA,
@@ -2765,7 +2767,7 @@ export async function lensFetch(targetUrl, env, signal?, accept?) {
   }
   const followed = await fetchFollowingPublicRedirects(
     targetUrl,
-    async (candidate) => ({ method: "GET", headers: await botRequestHeaders(candidate, env, { headers: baseHeaders, signal }), signal, cf: { cacheTtl: 0 } }),
+    async (candidate) => ({ method: "GET", headers: await botRequestHeaders(candidate, env, { headers: baseHeaders, signal, postQuantum: opts.postQuantum }), signal, cf: { cacheTtl: 0 } }),
     (candidate) => validateLensTarget(candidate),
   );
   if (!followed.ok) return new Response(null, { status: 502, statusText: "Blocked redirect" });
@@ -3291,6 +3293,10 @@ export function lensProbeBotViews(targetUrl, env) {
   return Promise.all(LENS_BOT_VIEWS.map((profile) => lensProbeBotView(targetUrl, env, profile)));
 }
 
+// The discovery probes are the fan-out: one scan signs ~28 of them, so they
+// carry sig1 alone. Exported so lens-markdown's replay can say the same.
+export const FAN_OUT = { postQuantum: false } as const;
+
 // small, forgiving probe for a single site-level file.
 // `accept` is optional and forwards to lensFetch, which has always taken one.
 // lib/doors.js needs it to ask a page for its Markdown twin at the page's own
@@ -3300,7 +3306,7 @@ export async function lensProbe(url, env, accept?) {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 5000);
     let res;
-    try { res = await lensFetch(url, env, ctrl.signal, accept); } finally { clearTimeout(to); }
+    try { res = await lensFetch(url, env, ctrl.signal, accept, FAN_OUT); } finally { clearTimeout(to); }
     if (!res.ok) {
       try { await res.body?.cancel(); } catch (_e) {}
       const headers = {};
@@ -3691,7 +3697,7 @@ export async function lensProbeMcp(origin, env) {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 5000);
     let res;
-    try { res = await lensFetch(origin + "/mcp", env, ctrl.signal, "application/json, text/event-stream"); }
+    try { res = await lensFetch(origin + "/mcp", env, ctrl.signal, "application/json, text/event-stream", FAN_OUT); }
     finally { clearTimeout(to); }
     const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
     const www = res.headers.get("www-authenticate") || "";
@@ -3711,7 +3717,7 @@ export async function lensProbeNlweb(origin, env) {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 5000);
     let res;
-    try { res = await lensFetch(origin + "/ask", env, ctrl.signal, "application/json"); }
+    try { res = await lensFetch(origin + "/ask", env, ctrl.signal, "application/json", FAN_OUT); }
     finally { clearTimeout(to); }
     const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
     const head = (await lensReadCapped(res, 1024)).text.trim();
@@ -3762,7 +3768,7 @@ export async function lensProbeMdNego(pageUrl, env) {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 5000);
     let res;
-    try { res = await lensFetch(pageUrl, env, ctrl.signal, "text/markdown"); }
+    try { res = await lensFetch(pageUrl, env, ctrl.signal, "text/markdown", FAN_OUT); }
     finally { clearTimeout(to); }
     const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
     try { await res.body?.cancel(); } catch (_e) {}

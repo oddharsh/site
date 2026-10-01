@@ -301,3 +301,48 @@ test(WORKERD, underNode(import.meta.url, WORKERD, async () => {
   assert.equal(bare.errors.length, 1);
   assert.match(bare.errors[0], /sig2 disabled.*NotSupportedError/);
 }));
+
+// ── fan-out carries sig1 alone ─────────────────────────────────────────
+//
+// Measured in production on 2026-10-01 with sig2 on EVERY request: a /lens
+// scan's CPU median went from 22ms to 32ms, ~0.33ms a signature, 3x the laptop
+// figure. So the fan-out (discovery probes, the Markdown replay, the robots.txt
+// bootstrap) passes `postQuantum: false`, and only primary fetches carry sig2.
+
+test("postQuantum: false drops sig2 for that request and leaves sig1 untouched", async () => {
+  const ed = await edKey(), pq = await pqKey();
+  const env = { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(pq.priv) };
+  const scoped = await botHeaders("https://example.com/", env, { postQuantum: false });
+  assert.deepEqual(labels(scoped), ["sig1"]);
+  assert.match(scoped.get("signature-input") ?? "", new RegExp(`;keyid="${ed.pub.kid}";alg="ed25519";`));
+  // Control: the same env without the option still signs both.
+  assert.deepEqual(labels(await botHeaders("https://example.com/", env)), ["sig1", "sig2"]);
+});
+
+test("a /lens scan's primary fetch carries sig2; its discovery probes and robots read do not", async () => {
+  const { lensFetch, lensProbe, lensProbeMcp } = await import("../src/worker/lens.ts");
+  const ed = await edKey(), pq = await pqKey();
+  const env = { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(pq.priv) };
+  const seen = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = Object.assign(async (input, init) => {
+    const url = typeof input === "string" ? input : input.url;
+    const headers = new Headers(init?.headers ?? (typeof input === "string" ? undefined : input.headers));
+    seen.push({ path: new URL(url).pathname, labels: headers.get("signature-input") ? labels(headers) : [] });
+    return new Response(new URL(url).pathname === "/robots.txt" ? "" : "{}", { status: new URL(url).pathname === "/robots.txt" ? 404 : 200 });
+  }, { preconnect: realFetch.preconnect });
+  try {
+    // A fresh origin per call, so the robots read is a real miss each time.
+    await lensFetch("https://scan-target.example/", { ...env });
+    await lensProbe("https://probe-target.example/llms.txt", { ...env });
+    await lensProbeMcp("https://mcp-target.example", { ...env });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  const by = (path) => seen.filter((s) => s.path === path).map((s) => s.labels);
+  assert.deepEqual(by("/"), [["sig1", "sig2"]], "the page being scanned is the crawler's identity, so it carries both");
+  assert.deepEqual(by("/llms.txt"), [["sig1"]], "a discovery probe is fan-out and carries sig1 alone");
+  assert.deepEqual(by("/mcp"), [["sig1"]], "the MCP probe too");
+  assert.equal(by("/robots.txt").length, 3, "each fresh origin's robots policy was read");
+  for (const l of by("/robots.txt")) assert.deepEqual(l, ["sig1"], "the robots.txt bootstrap carries sig1 alone");
+});

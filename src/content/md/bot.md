@@ -45,11 +45,17 @@ signatures. They are outside the signed identity described here.
 
 ## The second signature
 
-Every request also carries a second label, `sig2`, a post-quantum
+Requests that fetch a page also carry a second label, `sig2`, a post-quantum
 [ML-DSA-44](https://csrc.nist.gov/pubs/fips/204/final) signature over the same
 covered components. Verify `sig1`. A verifier that only knows Ed25519 reads
 `sig1` and skips the label it does not recognise, which is what makes a second
 one safe to send.
+
+Probes carry `sig1` alone: `robots.txt` reads, and the 28 discovery checks a
+[/lens](https://aadhar.sh/lens) scan makes for well-known files. Signing all of
+them took a scan from 22ms to 32ms of CPU in production, so the post-quantum
+label rides on the requests that are this crawler's identity and skips the ones
+that only look around.
 
 Its `alg` token, `ml-dsa-44`, is this site's spelling, because the IANA HTTP
 Signature Algorithms registry has no post-quantum entry yet. Its public key sits in

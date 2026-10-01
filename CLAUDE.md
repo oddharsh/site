@@ -2224,7 +2224,12 @@ The directory is Worker-first: `lib/botauth.ts` signs its response over
 Its committed JWK Set must match `RN_SIGNING_KEY_JWK`; missing or mismatched
 material returns 503, so rotate the public file and private secret together.
 
-**Every request carries a second label, `sig2`, ML-DSA-44, since 2026-10-01.**
+**Primary fetches carry a second label, `sig2`, ML-DSA-44, since 2026-10-01.**
+The fan-out passes `postQuantum: false` and carries `sig1` alone: the /lens
+discovery probes (`FAN_OUT` in lens.ts), its Markdown replay, and the robots.txt
+bootstrap. Measured in production with `sig2` on every request, a /lens scan
+went from a 22ms to a 32ms CPU median, ~0.33ms a signature against the laptop's
+0.12ms. That is gotcha 36 again: multiply by fan-out on production's CPU.
 It signs natively through `crypto.subtle`, which needs the
 `webcrypto_modern_algorithms` compatibility flag (about 0.12ms a signature;
 the pure-JS run of 2026-07-27 to 2026-08-15 took 8.5ms and was retired on CPU,
