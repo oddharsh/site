@@ -13,6 +13,9 @@
 //          L = (R*19595 + G*38470 + B*7471 + 0x8000) >> 16
 //      Measured against Pillow 12.2.0 over one 360,000-pixel photo: this form
 //      mismatches 0 pixels, `(R*299 + G*587 + B*114) / 1000` mismatches 169,740.
+//      It is the L24 macro, which sits at a different line in 12.3.0, so the
+//      link is to the tag measured against:
+//      https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L44
 //
 //   2. NORMALISATION rounds HALF TO EVEN, because the python was `int(round(x))`
 //      and python 3's round() is banker's. `round_ties_even`, never `round`.

@@ -17,7 +17,9 @@
 // that arrives as an OBJECT flags the structured request and sets the protocol
 // version to 0.55. Nothing else does. So a header, an Accept, or a query
 // parameter cannot select v0.55, and a server that emits named events to a
-// legacy GET is talking to nobody.
+// legacy GET is talking to nobody. Read at microsoft/NLWeb b423f15d
+// (2026-06-10), where the same function also defaults streaming to "True":
+// https://github.com/microsoft/NLWeb/blob/b423f15d9aeaa023ce75993ac9deed2354597043/AskAgent/python/webserver/routes/api.py#L49-L82
 //
 // STREAMING DEFAULTS TO TRUE. A bare GET /ask?query=x is an event stream, not a
 // JSON body, which reads as a bug the first time you curl it. `streaming=0`

@@ -43,6 +43,13 @@
 // is an area average where Pillow's was lanczos, since at a 20x reduction only
 // the big regions survive either way and that is the whole point of it.
 //
+// The port is of Pillow 12.3.0 (MIT-CMU), the version requirements.txt pinned
+// when the Python left, and each function below links the exact lines it
+// follows at that tag. Checked against the tag on 2026-10-01. A link pinned to
+// a tag still reads the same source a year on, so a later Pillow change is a
+// diff against these lines rather than an argument about what "Pillow's
+// FIND_EDGES" used to mean.
+//
 // Two things changed on purpose with the port. cjpegli left the encoder
 // lineup: config/retired.json banned it in July and the Python went on calling
 // an unmanaged copy in ~/.local/bin that tools:check could not see, because
@@ -282,7 +289,9 @@ function readPpm(file: string): Rgb {
   return { w, h, px: new Uint8Array(buf.buffer, buf.byteOffset + m[0].length, w * h * 3) };
 }
 
-/** Pillow's RGB to L: ITU-R 601-2 luma in its fixed-point form. */
+/** Pillow's RGB to L: ITU-R 601-2 luma in its fixed-point form, the L24 macro
+ *  shifted right by 16.
+ *  https://github.com/python-pillow/Pillow/blob/12.3.0/src/libImaging/Convert.c#L42 */
 function toGray(im: Rgb): Uint8Array {
   const out = new Uint8Array(im.w * im.h);
   for (let i = 0, p = 0; i < out.length; i += 1, p += 3) out[i] = (im.px[p] * 19595 + im.px[p + 1] * 38470 + im.px[p + 2] * 7471 + 0x8000) >> 16;
@@ -290,7 +299,9 @@ function toGray(im: Rgb): Uint8Array {
 }
 
 /** Pillow's FIND_EDGES: the 3x3 kernel (-1 all round, 8 in the centre),
- *  clipped to 0..255, with the one-pixel border copied from the input. */
+ *  clipped to 0..255, with the one-pixel border copied from the input.
+ *  Kernel: https://github.com/python-pillow/Pillow/blob/12.3.0/src/PIL/ImageFilter.py#L337-L345
+ *  Border: https://github.com/python-pillow/Pillow/blob/12.3.0/src/libImaging/Filter.c#L124-L272 */
 function findEdges(src: Uint8Array, w: number, h: number): Uint8Array {
   const out = new Uint8Array(src);
   for (let y = 1; y < h - 1; y += 1) {
@@ -303,7 +314,9 @@ function findEdges(src: Uint8Array, w: number, h: number): Uint8Array {
   return out;
 }
 
-/** Pillow's ImageStat: population mean and stddev over one band. */
+/** Pillow's ImageStat: population mean and stddev over one band, the
+ *  (sum2 - sum^2/n)/n form.
+ *  https://github.com/python-pillow/Pillow/blob/12.3.0/src/PIL/ImageStat.py#L149-L159 */
 function stats(band: Uint8Array): { mean: number; stddev: number } {
   let sum = 0, sq = 0;
   for (let i = 0; i < band.length; i += 1) { sum += band[i]; sq += band[i] * band[i]; }
@@ -311,7 +324,8 @@ function stats(band: Uint8Array): { mean: number; stddev: number } {
   return { mean, stddev: Math.sqrt(Math.max(0, sq / n - mean * mean)) };
 }
 
-/** max(r,g,b) - min(r,g,b) per pixel: Pillow's lighter/darker chain. */
+/** max(r,g,b) - min(r,g,b) per pixel: Pillow's lighter/darker chain.
+ *  https://github.com/python-pillow/Pillow/blob/12.3.0/src/libImaging/Chops.c#L88-L95 */
 function saturation(im: Rgb): Uint8Array {
   const out = new Uint8Array(im.w * im.h);
   for (let i = 0, p = 0; i < out.length; i += 1, p += 3) {
