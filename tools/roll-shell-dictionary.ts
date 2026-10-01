@@ -21,7 +21,7 @@ import { existsSync } from "node:fs";
 import { brotliCompressSync, brotliDecompressSync, constants as zc } from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily, writeCommittedFamily } from "./lib/page-family.ts";
-import { SHELL_DISCOVERY_ROOTS } from "./lib/shell-roots.ts";
+import { SHELL_DISCOVERY_ROOTS, shellAssetRefs } from "./lib/shell-roots.ts";
 
 // ------------------------------------------------------- adoption order ----
 
@@ -144,7 +144,7 @@ if (!live && !existsSync(BUILT)) {
 const liveBody = new Map();
 // The sprite is referenced as /a/icons.<hash8>.svg#pin-garage; the fragment falls
 // outside the match, which is what the name needs.
-const assetRefs = (body) => [...body.toString("utf8").matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css|svg))/g)].map(([, n]) => n);
+const assetRefs = (body) => shellAssetRefs(body.toString("utf8"));
 
 async function fetchLive(path) {
   let r;

@@ -77,8 +77,6 @@
     "early-hints:probe": "bun tools/early-hints-probe.ts",
     "speculation:probe": "bun tools/speculation-probe.ts",
     "speculation:report": "bun tools/speculation-report.ts",
-    "ask:eval": "bun tools/ask-rank-eval.ts",
-    "webmention:eval": "bun tools/webmention-sort-eval.ts",
     "serendipity:roles": "bun tools/serendipity-role-baseline.ts",
     "csp:sweep": "bun tools/csp-sweep.ts",
     "checkpoints:check": "bun tools/check-checkpoints.ts",
@@ -88,7 +86,14 @@
     "insn": "node tools/insn-count.ts",
     "release": "bun tools/release-status.ts",
     "zenc:bench": "bun tools/photos/zenc-bench.ts",
-    "zenc:reproducible": "bun tools/photos/zenc-reproducible.ts"
+    "zenc:reproducible": "bun tools/photos/zenc-reproducible.ts",
+    "served:manifest": "bun tools/served-manifest.ts",
+    "served:check": "bun tools/check-served.ts",
+    "preview:target": "bun tools/preview-target.ts",
+    "indexnow": "bun tools/indexnow.ts",
+    "misses": "bun tools/miss-report.ts",
+    "ask:eval": "bun tools/ask-rank-eval.ts",
+    "webmention:eval": "bun tools/webmention-sort-eval.ts"
   },
   "comment:lint": "gen-runtime-types runs FIRST because tsgolint reads the real programs now (root tsconfig.json), and those programs include config/.generated/workers-runtime.d.ts. Without it every Workers global is an error type acting as `any`, which is a different lint from the one that passes locally: CI runs lint before typecheck, typecheck was the only thing generating the file, and #709 went red on 6 `error type` findings that no workstation could reproduce. 0.02s warm, 3s on a cold checkout.",
   "comment:typecheck-runtime": "THE FIVE WRAPPERS RUN UNDER BUN, moved 2026-09-10, and nothing about node was ever measured here: they said `node` from the day they were written, and every one of them spawns `tsc`, which is node either way, so the runtime chosen here only decides who parses the wrapper. Measured on all five, one run each after `types:gen`: stdout and stderr BYTE-IDENTICAL between the two runtimes, same exit codes, and identical again on a tree where config/.generated is missing (both exit 1 with the same text). `bun run typecheck` goes 2.71s to 1.82s, best of three on a 14-core laptop. Do not read this as a precedent for the rest: `routes:check` and the two perf tools stay on node for reasons that WERE measured, and both are written down at comment:node-pinned-scripts. One trap met while taking these numbers, and it is the older lesson in new clothes: wrapping each run in `/usr/bin/time -p` while redirecting stderr into the captured file puts the timing lines INTO the comparison, so the first reading said all five differed between runtimes. The instrument was the difference. Diff the outputs in one command and time them in another.",
@@ -106,7 +111,7 @@
     "smol-toml": "1.9.0",
     "timbrado": "github:oddharsh/timbrado#c110b3091a42162af54287b869578ea1579e54a9",
     "typescript": "7.0.2",
-    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@89061a4"
+    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@b4954c1"
   },
   "comment:engines-node-floor": "TWO node floors exist and this field is the HIGHER one: the highest version any constraint in this repo demands. It is NOT the zstd dictionary floor, which is 24, lives beside the check that enforces it as ZSTD_DICTIONARY_NODE_FLOOR in tools/build.ts, and is measured there. Welding the two was right when zstd was the only constraint and went wrong silently the moment source used something newer. What set 26 is Map.prototype.getOrInsertComputed, used in src/worker/inbox.ts, around.ts and census.ts; probed 2026-08-31, it is undefined on node 24.20.0 and 25.4.0 and a function on 26.8.1. PRODUCTION IS UNAFFECTED, which is why nothing caught this: workerd has the method (probed through createTestHarness, and the call works) and /around and /inbox both answer 200. What broke was the repo's own suite under node 24, with 2 failures that read like defects. Note also that 26 EQUALS .node-version, so the floor is now the version CI exercises on every run rather than a claim about a version nothing tests. Raise this whenever a new constraint measures higher, and lower it only with a measurement.",
   "engines": {

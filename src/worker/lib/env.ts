@@ -64,6 +64,8 @@ export interface EnvBindings {
   SPECULATION: AnalyticsEngineDataset;
   /** The :07/:37 homepage-fragment latency series. */
   PERF_PROBE: AnalyticsEngineDataset;
+  /** 404s answered or recovered, by caller class and path bucket. */
+  MISS_LEDGER: AnalyticsEngineDataset;
 
   // The eight per-IP /lens budgets plus the one account-wide browser bucket.
   // LENS_BUDGETS in lens.ts mirrors these ceilings because that is what the 429

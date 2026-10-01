@@ -491,6 +491,11 @@ does not make a failed write safe to ignore.
   `cf-garage/.cloudflare/types/index.d.ts`, which Wrangler writes from
   `cloudflare.config.ts` (its inferred `Env` plus the runtime at cf-garage's
   own date and flags), and the same script runs the build that writes it.
+  Since 2026-10-01 lwe-ask and lens-reader include
+  `config/.generated/workers-runtime-aux.d.ts` instead, because the site took
+  `webcrypto_modern_algorithms` (AadharshBot's ML-DSA signature) and its
+  runtime surface grew past theirs. The script still fails if the two
+  auxiliaries ever diverge from each other.
 
   Wrangler still declares the package as an optional peer; its own `cli.d.ts`
   imports some names from it. Those resolve to `any` under `skipLibCheck` when
