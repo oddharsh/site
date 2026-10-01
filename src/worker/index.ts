@@ -1,4 +1,5 @@
 import { clientEncodingRequest, encodeClientResponse } from "./lib/encoding.ts";
+import { compressFragment } from "./lib/fragment-compression.ts";
 import { WorkerEntrypoint, tracing } from "cloudflare:workers";
 import type { Env, SiteRequest } from "./lib/env.ts";
 import type { SpanName } from "./lib/span-vocabulary.ts";
@@ -187,16 +188,9 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // including the featured "Try: aadhar.sh" example, while every third-party URL
   // looked perfect — which is why it survived.
   //
-  // The worker cannot decode its way out. Probed against workerd at this repo's
-  // compatibility_date (2026-08-09): `new DecompressionStream("br")` throws "the
-  // compression format must be either 'deflate', 'deflate-raw' or 'gzip'", and an
-  // invented format throws the byte-identical error, so that is a real refusal
-  // rather than a name it did not recognise. Same control idiom as the
-  // `--x-bogus-flag` check on wrangler. So the body has to arrive uncompressed.
-  //
-  // IDENTITY_BODY is the explicit boundary for an internal reader. Client
-  // negotiation now uses cf.clientAcceptEncoding, but an in-process child must
-  // remain readable regardless of the originating browser's encoding offer.
+  // The internal reader bypasses the gateway's transport compression entirely.
+  // IDENTITY_BODY also skips precomputed asset twins, so lens reads decoded
+  // document bytes without paying for an encode/decode round trip.
   // Workers Logs: one structured line per worker-owned request (path, method,
   // status, ms, version, country, bot, protocol), filterable in the dashboard. Edge-direct
   // traffic never reaches this code, so it never logs. Strippable: delete the
@@ -210,7 +204,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // line is emitted on every worker-owned request; the prefix is unique across any
   // two versions that will ever be live together.
   const t0 = Date.now();
-  const response = encodeClientResponse(request, await route(request, env, ctx));
+  const response = encodeClientResponse(request, await compressFragment(request, await route(request, env, ctx)));
   // the bot ledger: identified AI-crawler hits tick into Analytics Engine
   // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
   countCrawlerHit(env, request, response, url.pathname);

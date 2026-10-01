@@ -7,7 +7,7 @@
 // scripts. The per-request part is an ISLAND: a placeholder in the built bytes,
 // and one same-origin fetch after load that swaps in an HTML fragment the Worker
 // renders for that request. Precompressed bytes cannot take a per-request
-// injection (the runtime ships no brotli encoder), so this split is what a
+// injection, so this split is what a
 // per-request page has to become to earn any of those.
 //
 // It is the homepage's shape (/photos/grid.html, /rn/tracks.html) and the shape

@@ -3938,28 +3938,31 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     that differs from the plain URL's response, you are looking at cache
     state, not missing bytes.
 
-13. **A Worker cannot read the client's `Accept-Encoding`, so it cannot
-    negotiate compression.** The runtime rewrites the header to a constant
-    before the worker sees it. Measured 2026-07-26 in `wrangler dev`: four
-    requests sending `identity`, `br`, `gzip`, and `br;q=0, gzip` ALL arrived
-    as `"br, gzip"`. That value describes what the EDGE can accept, never what
-    the client asked for, so `if (acceptsBrotli(request))` is dead code that
-    always takes the true arm. Serving precompressed bytes therefore relies on
-    the edge down-converting for clients that can't take br ("serve Brotli from
-    origin"), and `encodeBody: "manual"` is mandatory or the runtime
-    re-compresses your already-compressed body.
+13. **Negotiate using `cf.clientAcceptEncoding`, before Workers Cache.**
+    The edge rewrites `Accept-Encoding` to a constant; the original client offer
+    is retained in `request.cf.clientAcceptEncoding`. `lib/encoding.ts` restores
+    it before cache admission and grades explicit coding weights, including
+    `q=0` refusals. Precomputed q11/dcz bodies are selected only when accepted;
+    gzip/identity fallbacks use `no-transform` to keep the edge from choosing a
+    refused coding. ASSETS fallbacks request identity so only the gateway owns
+    that choice. Verify the commit preview as well as local contracts: the
+    local runtime cannot model every edge/cache behavior.
 
-    **`wrangler dev` does not emulate that edge layer**, so it cannot validate
-    the design — it only proves the negotiation is impossible. Locally, three
-    of four client cases came back mangled (identity got raw brotli with the
-    content-encoding stripped, br got brotli-in-brotli at 13,051 bytes, gzip
-    got gzip-of-brotli). Anything touching response encoding on a
-    render-blocking path (`/a/*` is nav.js + luna.css) must be verified against
-    production behind a canary before it becomes the default, because the
-    failure mode is a white screen rather than a slow page. Shell precompression
-    was shipped that way, behind a `?br=1` canary, and once production confirmed
-    it the canary and its `SHELL_PRECOMPRESS_DEFAULT_ON` flag came out; `/a/*` is
-    q11 brotli unconditionally now. Earn the default the same way next time.
+    **Platform limit measured 2026-10-01:** a version-preview request offering
+    `gzip, br;q=0` arrived as `gzip, br` in BOTH the header and the retained cf
+    property. An independent non-Cloudflare header-echo control retained q=0.
+    So the parser honors weights it receives, but cannot recover a refusal
+    Cloudflare removed. Do not claim that production q=0 negotiation is fixed
+    without a real edge probe; this requires preserved request metadata or an
+    upstream correction. No production Transform Rule was changed by this fix.
+
+    `nodejs_compat` enables native `node:zlib` at this site's compatibility date.
+    Bounded HTML islands and JSON use q5; full documents retain their streaming
+    paths and build-time q11 twins. q11 on the 85 KiB reading fragment took
+    about 77 ms in pinned workerd versus about 3.5 ms for q5 including harness
+    overhead. The native encode is limited to 128 KiB and keeps logical weak
+    ETags, cache policy and decoded bytes. This is not runtime DCZ: workerd's
+    ignored zstd dictionary option remains a separate upstream blocker.
 
     **ROOT CAUSE (2026-07-26), after three wrong suspects.** The double
     compression was OURS, not the platform's. `encodeBody` is **write-only**
@@ -4051,21 +4054,10 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     carry exists on every path is a control-flow analysis a brace matcher cannot
     do.
 
-    Three suspects were investigated and exonerated. Two of the three are real
-    facts worth keeping, they just weren't the cause: (1) a worker cannot read the
-    client's Accept-Encoding, so it genuinely cannot negotiate compression;
-    (2) the edge does NOT down-convert, so an `identity` client handed br gets raw
-    brotli, which is why negotiation can't be faked either; (3) the static-assets
-    layer was innocent — `/abr/` had been built only to bypass a suspect that
-    turned out not to matter, so it was deleted.
-
-    What this unlocks: q11 precompression (~19% off nav.js + luna.css), and
-    `Content-Encoding: dcb` from a worker, since `Available-Dictionary` demonstrably
-    reaches it in production (cf-ray a2174bfc). Shell deltas measured 93-97%
-    across a real deploy, and a dictionary 11 days stale still gave 87-93%, so
-    build-time deltas against a committed dictionary work and need NO wasm. Only
-    the SSR'd homepage would need a runtime compressor, because the runtime ships
-    no brotli encoder at all (CompressionStream is gzip/deflate only).
+    The original July investigation treated the normalized header as proof that
+    negotiation was impossible. The October correction uses the retained cf
+    property instead. The measured encodeBody rules above still apply: raw
+    compressed bytes must survive every Response wrapper exactly once.
 
 14. **The shell ships dcz (zstd) deltas, not dcb (brotli), and the reason is
     latency rather than bytes.** Cloudflare passes both through identically on all

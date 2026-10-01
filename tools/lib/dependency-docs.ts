@@ -32,6 +32,7 @@ export const DOC_ALIASES = [
   { prose: "minify-html", pkg: "@minify-html/node" },
   { prose: "TypeScript", pkg: "typescript" },
   { prose: "@types/bun", pkg: "@types/bun" },
+  { prose: "@types/node", pkg: "@types/node" },
   { prose: "smol-toml", pkg: "smol-toml" },
   { prose: "@cloudflare/config", pkg: "@cloudflare/config" },
   // playwright-core left VERSIONLESS on 2026-09-10. Its exemption rested on two

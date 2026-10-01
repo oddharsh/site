@@ -454,6 +454,10 @@ does not make a failed write safe to ignore.
   removal as the disk saving, the vitest removal is.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
+- @types/node 26.2.0 types the native `node:zlib` Brotli API used by the site
+  Worker's bounded fragment compressor. `nodejs_compat` enables that API at
+  the existing compatibility date; generated workerd declarations still type
+  the Workers globals. This is a development dependency and ships no bytes.
 - TypeScript 7.0.2 is the exact root pin for the no-emit programs in
   `config/`. `tsc` checks source without producing JavaScript; Node and Bun load
   the authored TypeScript, and Wrangler erases types when bundling Workers.

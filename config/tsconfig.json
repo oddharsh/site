@@ -35,13 +35,10 @@
     // Workers globals only. With the DOM lib loaded, its CacheStorage shadows
     // Cloudflare's and every `caches.default` reads as an error.
     "lib": ["esnext"],
-    // EMPTY on purpose, and load-bearing: an omitted `types` pulls in every
-    // @types/* package, which here means bun's globals landing in the Worker's
-    // scope. The Workers runtime declarations arrive through `include` below
-    // instead, as a file tools/gen-runtime-types.ts writes from the pinned
-    // workerd; that file's header says why it replaced @cloudflare/workers-types
-    // on 2026-09-02 and what was measured before it did.
-    "types": [],
+    // Node module declarations type the native node:zlib Brotli API enabled by
+    // nodejs_compat. Explicitly naming node keeps bun globals out; the Workers
+    // runtime declarations still arrive through include below.
+    "types": ["node"],
     "resolveJsonModule": true,
     "skipLibCheck": true,
     // All programs enable null checks separately from full strictness. The

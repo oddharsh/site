@@ -768,7 +768,7 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   //
   // env.IDENTITY_BODY skips both lookups outright and falls through to the plain
   // asset below. An in-process caller (SELF_FETCH, i.e. /lens reading this host)
-  // gets no transport decode and the runtime has no brotli decoder, so either of
+  // gets no automatic transport decode, so either of
   // these bodies would reach it as mojibake — see the flag's note in index.js.
   // Skipping is content-preserving here rather than a different answer: the twin
   // is a compression of the very asset `plain` returns, so the document is the

@@ -94,7 +94,7 @@ const worker = defineWorker({
   // auxiliaries. The pinned workerd (1.20260908.1 behind wrangler 4.130.0)
   // knows the flag, and `bun run routes:check` boots the real Worker on it,
   // which is the gate the paragraph above says makes acceptance mean anything.
-  compatibilityFlags: ["enable_request_signal", "new_module_registry"],
+  compatibilityFlags: ["enable_request_signal", "new_module_registry", "nodejs_compat"],
 
   // Workers Cache sits in front of the public-response entrypoint below. The
   // default dispatcher stays uncached because it owns mutations, per-visitor
