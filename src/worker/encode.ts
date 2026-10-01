@@ -293,10 +293,9 @@ export function encodeReadout(info, byteLength) {
  * confident wrong verdict rather than an error.
  */
 export async function fetchImageBytes(url, env, lensFetch) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const deadline = AbortSignal.timeout(8000);
   try {
-    const res = await lensFetch(url, env, controller.signal, "image/avif,image/jpeg,image/*;q=0.8");
+    const res = await lensFetch(url, env, deadline, "image/avif,image/jpeg,image/*;q=0.8");
     if (!res.ok) return { ok: false, why: `HTTP ${res.status}` };
     const type = (res.headers.get("content-type") || "").split(";")[0].trim();
     const reader = res.body?.getReader();
@@ -316,7 +315,7 @@ export async function fetchImageBytes(url, env, lensFetch) {
     return { ok: true, bytes, type, truncated, declaredLength: Number(res.headers.get("content-length")) || total };
   } catch (error) {
     return { ok: false, unreadable: true, why: String(error?.message || error).slice(0, 80) };
-  } finally { clearTimeout(timer); }
+  }
 }
 
 /** Sniff the container from magic bytes rather than trusting content-type. */

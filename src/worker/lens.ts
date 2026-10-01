@@ -735,7 +735,7 @@ async function inspectLensRequest(request, env, ctx) {
   try {
     return { status: 200, payload: await lensInspect(v.url, env, phases ? { phases } : {}) };
   } catch (e) {
-    const msg = e && e.name === "AbortError" ? "The site took too long to answer (8s timeout)." : (e && e.message) || String(e);
+    const msg = e && e.name === "TimeoutError" ? "The site took too long to answer (8s timeout)." : (e && e.message) || String(e);
     return { status: 502, payload: { ok: false, error: msg } };
   }
 }
@@ -1745,8 +1745,7 @@ export async function handleLensCloudflareScore(request, env, ctx) {
     } catch (_e) { /* an advisory source must not fail because its cache did */ }
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CLOUDFLARE_SCORE_TIMEOUT_MS);
+  const deadline = AbortSignal.timeout(CLOUDFLARE_SCORE_TIMEOUT_MS);
   try {
     const response = await fetch(CLOUDFLARE_AGENT_READINESS_MCP, {
       method: "POST",
@@ -1759,7 +1758,7 @@ export async function handleLensCloudflareScore(request, env, ctx) {
         jsonrpc: "2.0", id: CLOUDFLARE_SCORE_REQUEST_ID, method: "tools/call",
         params: { name: "scan_site", arguments: { url: v.url, profile: "all" } },
       }),
-      signal: controller.signal,
+      signal: deadline,
     });
     const capped = await lensReadCapped(response, CLOUDFLARE_SCORE_BODY_CAP);
     const parsed = response.ok && !capped.truncated ? lensParseCloudflareAgentScore(capped.text, response.headers.get("content-type") || "") : null;
@@ -1777,8 +1776,6 @@ export async function handleLensCloudflareScore(request, env, ctx) {
     return jsonResponse({ ok: true, cached: false, ...parsed });
   } catch (_e) {
     return jsonResponse({ ok: true, available: false, error: "Cloudflare's scanner is unavailable right now." });
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -2426,44 +2423,42 @@ function safeHost(raw) {
 
 async function lensInspectInner(targetUrl, env, opts, sInspect) {
   const started = Date.now();
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 8000);
+  const deadline = AbortSignal.timeout(8000);
   let res, body = "", truncated = false, ct = "", isTextual = false, isHtml = false, undecodable = "";
-  try {
-    ({ res, body, truncated, ct, isTextual, isHtml, undecodable } = await span("lens.inspect.fetch", async (s) => {
-      const r0 = await lensFetch(targetUrl, env, ctrl.signal);
-      const ct0 = r0.headers.get("content-type") || "";
-      // A SURVIVING content-encoding means nobody decoded this body, and we cannot.
-      // The runtime decodes what it fetches over the wire and strips the header on
-      // the way in, so for an external target this is always absent — which is why
-      // it is a reliable tripwire rather than a routine case. What it catches is an
-      // in-process response (SELF_FETCH) that came back still compressed: the
-      // runtime has no brotli decoder, so reading those bytes as UTF-8 yields
-      // mojibake that renders as a real page full of garbage.
-      //
-      // index.js's IDENTITY_BODY is the actual fix and this should never fire. It
-      // is here because the failure it guards is SILENT — the bug it was written
-      // for shipped mojibake on this site's own front page while every third-party
-      // URL looked perfect. Refusing to parse says so; decoding anyway does not.
-      const enc0 = (r0.headers.get("content-encoding") || "").trim().toLowerCase();
-      const undecodable0 = enc0 && enc0 !== "identity" ? enc0 : "";
-      const ct0Textual = ct0 === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct0);
-      const isTextual0 = ct0Textual && !undecodable0;
-      const isHtml0 = /html/i.test(ct0) && !undecodable0;
-      let body0 = "", truncated0 = false;
-      // read the body while the abort timer is still armed. clearing it before the
-      // read (as this used to) left a slow-drip response unbounded in wall time.
-      if (isTextual0) { const r = await lensReadCapped(r0, 2 * 1024 * 1024); body0 = r.text; truncated0 = r.truncated; }
-      else if (undecodable0) { try { await r0.body?.cancel(); } catch (_e) {} }
-      if (undecodable0) s.setAttribute("lens.undecodable_encoding", undecodable0);
-      s.setAttribute("http.response.status_code", r0.status);
-      s.setAttribute("lens.content_type", ct0 || undefined);
-      s.setAttribute("lens.body_bytes", body0.length);
-      s.setAttribute("lens.body_truncated", truncated0);
-      s.setAttribute("lens.redirected", (r0.url || targetUrl) !== targetUrl);
-      return { res: r0, body: body0, truncated: truncated0, ct: ct0, isTextual: isTextual0, isHtml: isHtml0, undecodable: undecodable0 };
-    }));
-  } finally { clearTimeout(to); }
+  ({ res, body, truncated, ct, isTextual, isHtml, undecodable } = await span("lens.inspect.fetch", async (s) => {
+    const r0 = await lensFetch(targetUrl, env, deadline);
+    const ct0 = r0.headers.get("content-type") || "";
+    // A SURVIVING content-encoding means nobody decoded this body, and we cannot.
+    // The runtime decodes what it fetches over the wire and strips the header on
+    // the way in, so for an external target this is always absent — which is why
+    // it is a reliable tripwire rather than a routine case. What it catches is an
+    // in-process response (SELF_FETCH) that came back still compressed: the
+    // runtime has no brotli decoder, so reading those bytes as UTF-8 yields
+    // mojibake that renders as a real page full of garbage.
+    //
+    // index.js's IDENTITY_BODY is the actual fix and this should never fire. It
+    // is here because the failure it guards is SILENT — the bug it was written
+    // for shipped mojibake on this site's own front page while every third-party
+    // URL looked perfect. Refusing to parse says so; decoding anyway does not.
+    const enc0 = (r0.headers.get("content-encoding") || "").trim().toLowerCase();
+    const undecodable0 = enc0 && enc0 !== "identity" ? enc0 : "";
+    const ct0Textual = ct0 === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct0);
+    const isTextual0 = ct0Textual && !undecodable0;
+    const isHtml0 = /html/i.test(ct0) && !undecodable0;
+    let body0 = "", truncated0 = false;
+    // read the body inside the same deadline. Clearing a timer before the read
+    // (as this once did) left a slow-drip response unbounded in wall time, and
+    // AbortSignal.timeout covers headers and body by construction.
+    if (isTextual0) { const r = await lensReadCapped(r0, 2 * 1024 * 1024); body0 = r.text; truncated0 = r.truncated; }
+    else if (undecodable0) { try { await r0.body?.cancel(); } catch (_e) {} }
+    if (undecodable0) s.setAttribute("lens.undecodable_encoding", undecodable0);
+    s.setAttribute("http.response.status_code", r0.status);
+    s.setAttribute("lens.content_type", ct0 || undefined);
+    s.setAttribute("lens.body_bytes", body0.length);
+    s.setAttribute("lens.body_truncated", truncated0);
+    s.setAttribute("lens.redirected", (r0.url || targetUrl) !== targetUrl);
+    return { res: r0, body: body0, truncated: truncated0, ct: ct0, isTextual: isTextual0, isHtml: isHtml0, undecodable: undecodable0 };
+  }));
   sInspect.setAttribute("http.response.status_code", res.status);
   sInspect.setAttribute("lens.is_html", isHtml);
 
@@ -2855,11 +2850,10 @@ export function svcbHasEch(dataStr) {
   return { ech: false, parsed: true };
 }
 async function lensProbeEch(hostname) {
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 4500);
+  const deadline = AbortSignal.timeout(4500);
   try {
     const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(hostname) + "&type=HTTPS&do=1";
-    const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: ctrl.signal, cf: { cacheTtl: 0 } });
+    const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: deadline, cf: { cacheTtl: 0 } });
     const body = await res.json() as { Answer?: any[]; AD?: boolean };
     const answers = Array.isArray(body.Answer) ? body.Answer : [];
     const https = answers.filter((a) => a.type === 65).map((a) => svcbHasEch(a.data));
@@ -2871,7 +2865,7 @@ async function lensProbeEch(hostname) {
     };
   } catch (e) {
     return { observed: false, recordPresent: false, parsed: false, error: (e && e.message) || String(e) };
-  } finally { clearTimeout(to); }
+  }
 }
 
 // DNS-AID is a DNS surface, not an HTTP file. Query the three discovery names
@@ -3199,15 +3193,12 @@ export async function lensProbeDnsAid(hostname) {
   const names = ["_index._agents.", "_a2a._agents.", "_mcp._agents."].map((prefix) => prefix + hostname);
   try {
     const rows = await Promise.all(names.map(async (name) => {
-      const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 4500);
-      try {
-        const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=SVCB&do=1";
-        const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: ctrl.signal, cf: { cacheTtl: 0 } });
-        const body = await res.json() as { Answer?: any[]; AD?: boolean };
-        const answers = Array.isArray(body.Answer) ? body.Answer : [];
-        return { name, status: res.status, dnssecValidated: body.AD === true, answers: answers.filter((a) => a.type === 64 || a.type === 65).length };
-      } finally { clearTimeout(to); }
+      const deadline = AbortSignal.timeout(4500);
+      const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=SVCB&do=1";
+      const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: deadline, cf: { cacheTtl: 0 } });
+      const body = await res.json() as { Answer?: any[]; AD?: boolean };
+      const answers = Array.isArray(body.Answer) ? body.Answer : [];
+      return { name, status: res.status, dnssecValidated: body.AD === true, answers: answers.filter((a) => a.type === 64 || a.type === 65).length };
     }));
     const records = rows.filter((r) => r.answers > 0);
     return { ok: true, found: records.length > 0, dnssecValidated: records.some((r) => r.dnssecValidated), names, records: rows };
@@ -3286,10 +3277,9 @@ export async function lensFetchAsBot(targetUrl, env, signal, userAgent, accept =
 }
 
 export async function lensProbeBotView(targetUrl, env, profile) {
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 4500);
+  const deadline = AbortSignal.timeout(4500);
   try {
-    const res = await lensFetchAsBot(targetUrl, env, ctrl.signal, profile.ua);
+    const res = await lensFetchAsBot(targetUrl, env, deadline, profile.ua);
     const contentType = (res.headers.get("content-type") || "").split(";")[0].trim();
     const cap = await lensReadCapped(res, 2048);
     const challenge = res.headers.get("cf-mitigated") === "challenge" || /challenge-platform|<title>Just a moment/i.test(cap.text);
@@ -3308,7 +3298,7 @@ export async function lensProbeBotView(targetUrl, env, profile) {
     return view;
   } catch (e) {
     return { key: profile.key, label: profile.label, owner: profile.owner, role: profile.role || "train", userAgent: profile.ua, status: null, contentType: "", sampleBytes: 0, blocked: false, challenge: false, error: (e && e.message) || String(e) };
-  } finally { clearTimeout(to); }
+  }
 }
 
 export function lensProbeBotViews(targetUrl, env) {
@@ -3325,10 +3315,8 @@ export const FAN_OUT = { postQuantum: false } as const;
 // URL; every existing caller omits it and gets the previous default.
 export async function lensProbe(url, env, accept?) {
   try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 5000);
-    let res;
-    try { res = await lensFetch(url, env, ctrl.signal, accept, FAN_OUT); } finally { clearTimeout(to); }
+    const deadline = AbortSignal.timeout(5000);
+    const res = await lensFetch(url, env, deadline, accept, FAN_OUT);
     if (!res.ok) {
       try { await res.body?.cancel(); } catch (_e) {}
       const headers = {};
@@ -3716,11 +3704,8 @@ function probeErrorText(e) {
 // answering 200 text/html is a router fallback, not a server.
 export async function lensProbeMcp(origin, env) {
   try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 5000);
-    let res;
-    try { res = await lensFetch(origin + "/mcp", env, ctrl.signal, "application/json, text/event-stream", FAN_OUT); }
-    finally { clearTimeout(to); }
+    const deadline = AbortSignal.timeout(5000);
+    const res = await lensFetch(origin + "/mcp", env, deadline, "application/json, text/event-stream", FAN_OUT);
     const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
     const www = res.headers.get("www-authenticate") || "";
     const head = (await lensReadCapped(res, 2048)).text;
@@ -3736,11 +3721,8 @@ export async function lensProbeMcp(origin, env) {
 // error asking for a query); we never send one, so nothing runs on their side.
 export async function lensProbeNlweb(origin, env) {
   try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 5000);
-    let res;
-    try { res = await lensFetch(origin + "/ask", env, ctrl.signal, "application/json", FAN_OUT); }
-    finally { clearTimeout(to); }
+    const deadline = AbortSignal.timeout(5000);
+    const res = await lensFetch(origin + "/ask", env, deadline, "application/json", FAN_OUT);
     const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
     const head = (await lensReadCapped(res, 1024)).text.trim();
     if (res.status === 404 || /html/i.test(ct)) return { verdict: "no", detail: res.status === 404 ? "no /ask" : "HTML at /ask (a page, not an endpoint)" };
@@ -3787,11 +3769,8 @@ export async function lensProbeNlweb(origin, env) {
 // re-served for machines. Supported iff the content-type actually flips.
 export async function lensProbeMdNego(pageUrl, env) {
   try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 5000);
-    let res;
-    try { res = await lensFetch(pageUrl, env, ctrl.signal, "text/markdown", FAN_OUT); }
-    finally { clearTimeout(to); }
+    const deadline = AbortSignal.timeout(5000);
+    const res = await lensFetch(pageUrl, env, deadline, "text/markdown", FAN_OUT);
     const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
     try { await res.body?.cancel(); } catch (_e) {}
     return { supported: /^text\/markdown$/i.test(ct), contentType: ct, status: res.status };

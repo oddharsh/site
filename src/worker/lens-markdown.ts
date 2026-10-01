@@ -249,10 +249,9 @@ async function readCounting(res, keepBytes, maxBytes) {
 }
 
 async function probeOnce(targetUrl, env, accept) {
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS);
+  const deadline = AbortSignal.timeout(PROBE_TIMEOUT_MS);
   try {
-    const res = await lensFetch(targetUrl, env, ctrl.signal, accept, FAN_OUT);
+    const res = await lensFetch(targetUrl, env, deadline, accept, FAN_OUT);
     const body = await readCounting(res, BODY_SAMPLE, MAX_BODY_BYTES);
     return {
       ok: true,
@@ -269,7 +268,7 @@ async function probeOnce(targetUrl, env, accept) {
     };
   } catch (e) {
     return { ok: false, accept, error: (e && e.message) || String(e) };
-  } finally { clearTimeout(to); }
+  }
 }
 
 export async function handleLensMarkdown(request, env) {
