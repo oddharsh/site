@@ -20,7 +20,10 @@
 //
 // Source table: buttcrack (github.com/0xdiid/buttcrack, MIT, Copyright 2026
 // diid), src/buttcrack/data/english_quadgrams.txt, itself the standard
-// practicalcryptography.com English quadgram counts.
+// practicalcryptography.com English quadgram counts. Pinned to the one commit
+// that has touched that file, and regenerating from it reproduces the committed
+// public/lwe/quadgrams.txt byte for byte (checked 2026-10-01):
+// https://raw.githubusercontent.com/0xdiid/buttcrack/c398ef10b5810f14e3065f9addea871bce028ffe/src/buttcrack/data/english_quadgrams.txt
 //
 // Usage: node tools/photos/gen-quadgram-table.ts <path-to-english_quadgrams.txt>
 
