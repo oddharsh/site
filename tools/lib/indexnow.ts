@@ -21,10 +21,20 @@ import type { ServedManifest } from "./served-manifest.ts";
 export const INDEXNOW_KEY = "57f3182c72aa0d0075d7128bf27cb016";
 export const INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow";
 
-/** The sitemap's page paths, `/` included. */
+/**
+ * The sitemap's page paths on `host`, `/` included. Each <loc> is parsed as a
+ * URL and its host compared exactly, rather than building a regex out of the
+ * host name: a host is input, and escaping it into a pattern is one missed
+ * metacharacter from matching somebody else's domain.
+ */
 export function sitemapPaths(xml: string, host: string): string[] {
-  const re = new RegExp(`<loc>https://${host.replace(/\./g, "\\.")}([^<]*)</loc>`, "g");
-  return [...xml.matchAll(re)].map((m) => m[1] || "/");
+  const paths: string[] = [];
+  for (const [, loc] of xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/g)) {
+    let url: URL;
+    try { url = new URL(loc); } catch { continue; }
+    if (url.protocol === "https:" && url.host === host) paths.push(url.pathname || "/");
+  }
+  return paths;
 }
 
 /**

@@ -44,9 +44,19 @@ test("indexnow: a shell re-mint submits nothing, a prose edit or a new page subm
   assert.deepEqual(changedPages(prev, edited, paths, "aadhar.sh"), ["https://aadhar.sh/garage/x", "https://aadhar.sh/garage/new"]);
 });
 
+test("indexnow: the real sitemap parses to every page", async () => {
+  const xml = await readFile(new URL("public/sitemap.xml", ROOT), "utf8");
+  const paths = sitemapPaths(xml, "aadhar.sh");
+  assert.equal(paths.length, (xml.match(/<loc>/g) ?? []).length, "every <loc> is on aadhar.sh, so every one must parse");
+  assert.ok(paths.includes("/"));
+});
+
 test("indexnow: the sitemap parse and every protocol status", () => {
   const xml = "<urlset><url><loc>https://aadhar.sh</loc></url><url><loc>https://aadhar.sh/garage</loc></url><url><loc>https://elsewhere.test/x</loc></url></urlset>";
   assert.deepEqual(sitemapPaths(xml, "aadhar.sh"), ["/", "/garage"]);
+  // Hosts are compared parsed and exact, never pattern-matched.
+  const tricky = "<loc>https://aadhar.sh.evil.test/x</loc><loc>https://aadharXsh/y</loc><loc>http://aadhar.sh/z</loc><loc>not a url</loc><loc> https://aadhar.sh/ok </loc>";
+  assert.deepEqual(sitemapPaths(tricky, "aadhar.sh"), ["/ok"]);
   assert.equal(readStatus(200).ok, true);
   assert.equal(readStatus(202).ok, true, "202 is accepted with key validation still pending");
   for (const s of [400, 403, 422, 429, 500]) assert.equal(readStatus(s).ok, false, String(s));
