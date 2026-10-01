@@ -46,7 +46,8 @@ Four things stay at the repository root because their tooling demands it, and
 moving any of them costs more than it buys:
 
 - `cloudflare.config.ts` + `wrangler.config.ts` (the site Worker's config since
-  2026-09-28, replacing `wrangler.jsonc`; gotcha 48) + `wrangler.dev.jsonc`.
+  2026-09-28, replacing `wrangler.jsonc`; gotcha 48). Local dev's pair lives
+  in `config/dev/` and is projected to a gitignored `.wrangler.dev.jsonc`.
   Workers Builds runs from the repo root, the TS loader reads the WORKING
   DIRECTORY and refuses `-c`, and wrangler resolves the entrypoint and assets
   directory relative to the config, so relocating these means editing the
@@ -1036,7 +1037,8 @@ worktrees may edit freely, but a worktree is not a release surface.
   guard has ever seen.
 
   **The invariant it leaves behind: aadhar-sh implements NO Durable Object.** A
-  class reappearing in `cloudflare.config.ts` or `wrangler.dev.jsonc`, in
+  class reappearing in `cloudflare.config.ts` (local dev inherits it through
+  `config/dev/`), in
   `exports` or through a `migrations` array, takes every preview URL away again
   with no other symptom, so `contract-the-perf-probe` fails on one by name. A
   new Durable Object belongs in `aadhar-counter`, or in another Worker, bound
@@ -1048,7 +1050,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   `Counter: exports.durableObject({ state: "transferred", transferredTo:
   "aadhar-counter" })` and `COUNTER: bindings.durableObject({ worker:
   "aadhar-counter", exportName: "Counter" })`. `tools/lib/site-config.ts`
-  projects both into the legacy shape `wrangler.dev.jsonc` carries by hand:
+  projects both into the legacy shape the generated configs carry:
   `script_name` on the binding whenever `worker` names another Worker, and the
   tombstone as `{ state: "transferred", transferred_to }`. It refused any state
   but "created" until step 3 taught it this one, and it still refuses the rest
@@ -3879,7 +3881,8 @@ how to recover the plans and their audit from git.
    The site config self-builds (`build.command` in `wrangler.config.ts`) and
    points both the entrypoint and the assets directory at `.build/`, so no deploy
    path can ship the readable originals. Local
-   development uses `wrangler.dev.jsonc` against a SYMLINK FARM at `.dev-assets`,
+   development uses `config/dev/` (projected to `.wrangler.dev.jsonc`, gotcha
+   48) against a SYMLINK FARM at `.dev-assets`,
    staged by `tools/dev-stage.ts`, which `bun run dev` and `bun run dev:remote`
    run first. It reads "against readable `public/`" above this line until
    2026-08-19, and by then that was two errors rather than one: the field named
@@ -7331,6 +7334,55 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     ramp's `versions deploy` before any traffic moves, which is the shape #950
     had, and `bun run deploy:promote --rollback` is the exit if anything gets
     further than that.
+
+    **LOCAL DEV is a second value at the same seam since 2026-10-01**, and the
+    hand-kept `wrangler.dev.jsonc` is gone. Its replacement is the **dev
+    overlay**: `config/dev/cloudflare.config.ts` spreads the production config
+    and overrides only the entrypoint (production's minus `.build/`, derived
+    rather than typed), Workers Cache (off on every entrypoint), and
+    `config/dev/wrangler.config.ts` names `.dev-assets` with no build and no
+    minification. Bindings with no local mode say so on their own declaration,
+    `dev: { remote: true }` on BROWSER, IMAGES and AI, which only local
+    development reads. `tools/dev-stage.ts` projects the pair to a gitignored
+    `.wrangler.dev.jsonc` (`writeDevConfigFile()`, paths rebased to the root)
+    on every `bun run dev`.
+
+    The old file copied about 165 values, and four checks existed to keep it
+    honest: build invariant #6 (warn-only), a contract test, a dev pin in
+    check-infra, and a dev arm in eight more tests. It drifted anyway (the
+    "41 5 * * *" cron for two weeks, #876's `/dotfiles` for a day). All four
+    went with it. `contract-the-dev-config-only-overrides-the-overlay` replaces
+    them with the narrower question a spread leaves: every leaf where the two
+    projections differ must be an overlay key, so a binding or route forked
+    inside `config/dev/` fails by name. Proven the day it landed:
+
+    - the generated dev config matched the hand-kept one on 246 leaves, all 96
+      `run_worker_first` rows in order, and differed only in the inherits the
+      design chose (`preview_urls`, `observability.issues`, `secrets.required`)
+      plus an explicit `minify: false` / `upload_source_maps: false`;
+    - the production projection stayed byte-identical, and so did the
+      `wrangler build --x-cf-build-output` bundle. The resolved worker config
+      gains `dev.remote` on three bindings, and wrangler's upload metadata for
+      browser, AI and images carries only name, type and raw, so `remote` never
+      reaches a deploy;
+    - `bun run dev` booted with COUNTER bound (`/hit?peek=1` reads digits) and
+      readable `/nav.js`. Inheriting `secrets.required` makes wrangler WARN about
+      ten missing secrets when there is no `.dev.vars`; it boots regardless.
+
+    **Why it is projected rather than read natively, and what would change
+    that.** The pair is written in the shape wrangler's own loader reads, and
+    `cd config/dev && wrangler dev --x-new-config` boots it (measured on
+    4.146.0: ready in about 4s, readable source, no build). What it cannot do is
+    boot `counter/wrangler.jsonc` beside it, because under `--x-new-config`
+    wrangler refuses `-c` outright, and COUNTER binds that Worker's class. The
+    watch `new-config-dev-boots-auxiliary-workers` (`WRANGLER_WATCHES`, probe
+    `tools/dev-aux-worker-probe.ts`) reads the day that changes; then the
+    projection step goes and the files stay put.
+
+    A FULL move off the legacy shape needs two more things, so "eventually" has
+    a checklist: `createTestHarness` growing a new-config door (the route oracle
+    and the workerd probes boot through it), and the commands in the table above
+    accepting `--x-new-config`.
 
 ---
 

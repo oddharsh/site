@@ -395,7 +395,8 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   // The authored site config (cloudflare.config.ts + wrangler.config.ts since
   // 2026-09-28): a RUM marker would be written into the source, not the projection.
   const wrangler = (await readFile(new URL("cloudflare.config.ts", ROOT), "utf8")) + (await readFile(new URL("wrangler.config.ts", ROOT), "utf8"));
-  const wranglerDev = await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8");
+  // Local dev's overlay is authored source too, so it is scanned as text.
+  const wranglerDev = (await readFile(new URL("config/dev/cloudflare.config.ts", ROOT), "utf8")) + (await readFile(new URL("config/dev/wrangler.config.ts", ROOT), "utf8"));
   const headers = await readFile(new URL("public/_headers", ROOT), "utf8");
   const whoareyou = await readFile(new URL("src/worker/whoareyou.ts", ROOT), "utf8");
   const whoareyouMd = await readFile(new URL("src/content/md/whoareyou.md", ROOT), "utf8");
@@ -408,7 +409,7 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
     ["index.html", page],
     ["_worker.js/index.js", worker],
     ["cloudflare.config.ts + wrangler.config.ts", wrangler],
-    ["wrangler.dev.jsonc", wranglerDev],
+    ["config/dev/", wranglerDev],
   ]) {
     assert.doesNotMatch(source, /\/ledger\/rum|data-cf-beacon|cloudflareinsights\.com/, `${name} must carry no browser RUM wiring`);
   }
@@ -459,7 +460,7 @@ test("local dev composes the same served tree the build stages", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
   const { ASSET_ROOTS, FARM } = await import("./dev-stage.ts");
   const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
-  const devConfig = parseJsonc(await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8"));
+  const devConfig = parseJsonc(await configText("config/dev"));
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
 
   // Step 1's cp calls into .build/public ARE the production definition of the
@@ -476,7 +477,7 @@ test("local dev composes the same served tree the build stages", async () => {
     "dev-stage.mjs's roots must equal build.ts step 1's, in the same canonical order");
 
   assert.equal(devConfig.assets.directory, FARM,
-    "wrangler.dev.jsonc must serve the farm, not one authored root (pointing it at any single root 404s every document the others hold)");
+    "local dev must serve the farm, not one authored root (pointing it at any single root 404s every document the others hold)");
 
   // The farm is BUILD OUTPUT with no watcher: nothing regenerates it except the
   // dev scripts, so a script that skips the stager serves whatever the last run
@@ -498,15 +499,15 @@ test("local dev composes the same served tree the build stages", async () => {
 test("production minifies the Worker without obscuring deployed stack traces", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
   const production = parseJsonc(await configText("cloudflare.config.ts"));
-  const development = parseJsonc(await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8"));
+  const development = parseJsonc(await configText("config/dev"));
 
   assert.equal(production.minify, true,
     "production should upload the smaller minified Worker bundle");
   assert.equal(production.upload_source_maps, true,
     "production minification must keep original stack locations available to Workers Logs");
-  assert.equal(development.minify, undefined,
+  assert.ok(!development.minify,
     "local development should keep readable code and its faster edit/reload loop");
-  assert.equal(development.upload_source_maps, undefined,
+  assert.ok(!development.upload_source_maps,
     "local source locations need no separately uploaded map");
 
   // Minifying moved the worker-bundle advisory from firing to silent WITHOUT the

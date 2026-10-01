@@ -48,7 +48,6 @@ import { mkdtemp, readFile, readdir, rm, writeFile, access } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { parseJsonc } from "./lib/jsonc.ts";
 import { siteConfig } from "./lib/site-config.ts";
 import { auditActionPins } from "./lib/action-pins.ts";
 import { redactCredentials } from "./lib/redact.ts";
@@ -144,13 +143,6 @@ const ok: string[] = [];
 const fail = (m: string) => hard.push(redactCredentials(m));
 const warn = (m: string) => advisory.push(redactCredentials(m));
 const pass = (m: string) => ok.push(redactCredentials(m));
-
-// ---------------------------------------------------------------- JSONC ----
-
-// Share the reader with gen-remote-config.ts so both see the same config values.
-async function readJsonc(rel) {
-  return parseJsonc(await readFile(join(ROOT, rel), "utf8"));
-}
 
 const exists = (rel) => access(join(ROOT, rel)).then(() => true, () => false);
 
@@ -325,16 +317,15 @@ async function checkTree(infra, wrangler, aux) {
   }
   pass(`${consumers} DNS-referenced files present in the tree`);
 
-  // The account pin. Both wrangler configs must name the account infra.json
+  // The account pin. The site config must name the account infra.json
   // declares, because wrangler only auto-selects while the login can see
   // exactly one and that is not a property this repo controls — a second
   // account appearing on the login is enough to break every non-interactive
-  // wrangler call at once (2026-08-07). Checking BOTH configs matters: the dev
-  // twin is what dev:remote and routes:check:remote reach production through,
-  // and build.ts's drift warning compares binding sets only, so an account_id
-  // that went missing from one of them would otherwise be caught by nothing.
+  // wrangler call at once (2026-08-07). Local dev needs the same pin (dev:remote
+  // reaches production bindings) and INHERITS it: config/dev/ spreads
+  // cloudflare.config.ts, so since 2026-10-01 there is no dev copy to check.
   //
-  // cloudflare.config.ts's accountId is the SOURCE OF TRUTH and the other three are
+  // cloudflare.config.ts's accountId is the SOURCE OF TRUTH and every copy below is
   // compared against it, rather than against a copy in infra.json. That is this
   // file's existing rule for resource ids, and it is why infra.json's account
   // block declares the invariant without repeating the value.
@@ -342,33 +333,25 @@ async function checkTree(infra, wrangler, aux) {
   if (!declaredAccount) {
     fail(`cloudflare.config.ts lost its accountId — wrangler picks an account by itself only while the login sees exactly one, so every non-interactive call fails the moment a second appears`);
   } else {
-    const devWrangler = await readJsonc("wrangler.dev.jsonc").catch(() => null);
-    if (!devWrangler) {
-      fail(`wrangler.dev.jsonc is missing or unparseable, so its account_id pin cannot be checked`);
-    }
-    // FOUR copies of this id ship, not two. Both configs carry it as the
-    // deploy-time `account_id` pin AND as the runtime var CF_ACCOUNT_ID, which
-    // /ledger uses to query this account's own Analytics Engine. The var
-    // predates the pin. Check all four against one declaration so the string
-    // cannot be half-updated: an account_id and a CF_ACCOUNT_ID that disagree
-    // would deploy to one account and read analytics from another, and both
-    // halves would look fine on their own.
+    // TWO copies ship in the site config, not one: the deploy-time
+    // `account_id` pin AND the runtime var CF_ACCOUNT_ID, which /ledger uses
+    // to query this account's own Analytics Engine. The var predates the pin.
+    // Check both against one declaration so the string cannot be half-updated:
+    // an account_id and a CF_ACCOUNT_ID that disagree would deploy to one
+    // account and read analytics from another, and both halves would look fine
+    // on their own.
     //
     // Counted rather than assumed, so the ok line cannot claim everything is
     // pinned while one of these is the reason the run is failing.
     const sites = [
       ["cloudflare.config.ts env.CF_ACCOUNT_ID", wrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
-      ...(devWrangler ? [
-        ["wrangler.dev.jsonc account_id", devWrangler.account_id, "dev:remote and routes:check:remote reach production bindings through this config"],
-        ["wrangler.dev.jsonc vars.CF_ACCOUNT_ID", devWrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
-      ] : []),
       ...AUX_CONFIGS.map(({ path, key, pattern }) => [
         `${path} ${key}`,
         (aux.get(path).match(pattern) || [])[1],
         "this Worker deploys from its own directory, so wrangler resolves the account from this file and never sees the root config",
       ]),
     ];
-    // infra.json names the same six, so a copy added there without a check
+    // infra.json names the same five, so a copy added there without a check
     // here (or the reverse) is itself drift.
     const declared = infra.account?.must_agree || [];
     const named = sites.map(([where]) => where);

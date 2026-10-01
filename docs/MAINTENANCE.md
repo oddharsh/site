@@ -5,14 +5,18 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](../CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `cloudflare.config.ts` + `wrangler.config.ts` at the repo root (`wrangler.jsonc` until 2026-09-28; CLAUDE.md gotcha 48): it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `cloudflare.config.ts`; secrets via `wrangler versions secret put`.
+- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `cloudflare.config.ts` + `wrangler.config.ts` at the repo root (`wrangler.jsonc` until 2026-09-28; CLAUDE.md gotcha 48): it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `config/dev/`, production plus a dev overlay, projected to a gitignored `.wrangler.dev.jsonc` (readable source, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `cloudflare.config.ts`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](../cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
 [`wrangler.config.ts`](../wrangler.config.ts) runs `bun tools/build.ts` before uploading
 `.build/src/worker/index.ts` and `.build/public`. Local development uses
-[`wrangler.dev.jsonc`](../wrangler.dev.jsonc), with the source Worker and
-`.dev-assets` assembled by `tools/dev-stage.ts`.
+[`config/dev/`](../config/dev/cloudflare.config.ts), which spreads the production
+config and overrides only the entrypoint, the assets directory, the build and
+the cache. `tools/dev-stage.ts` assembles `.dev-assets` and writes the
+projection to a gitignored `.wrangler.dev.jsonc` on every `bun run dev`, so a
+binding, route or cron added to `cloudflare.config.ts` reaches dev with no
+second edit.
 
 A merge passes through CI, branch promotion, version upload, and a traffic ramp.
 Follow the [release path](#cicd-release-path) below; an uploaded version alone
@@ -2114,7 +2118,7 @@ records nothing. Cloudflare shipped OpenTelemetry traces in local dev that day;
 Wrangler 4.118.0 already has it, and there is nothing to install, enable, or bump.
 
 ```bash
-bun run dev            # or: bun run wrangler dev -c wrangler.dev.jsonc --port 8799
+bun run dev -- --port 8799
 curl -s localhost:8799/photos/grid.html > /dev/null      # make some spans
 
 # the named spans, newest first

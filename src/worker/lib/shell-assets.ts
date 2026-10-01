@@ -19,7 +19,7 @@
 //
 // build.ts OVERWRITES the SHELL_ASSETS line below in the staged .build/ copy
 // with the immutable /a/<name>.<hash8> URLs (matching the refs it rewrites into
-// the HTML). The values here are the readable-dev fallbacks: wrangler.dev.jsonc
+// the HTML). The values here are the readable-dev fallbacks: local dev (config/dev/)
 // serves the unhashed files, so `bun run dev` preloads exactly the URLs its
 // (un-rewritten) HTML references. Keep the `// build:shell-assets` marker.
 export const SHELL_ASSETS = { luna: "/luna.css", nav: "/nav.js" }; // build:shell-assets

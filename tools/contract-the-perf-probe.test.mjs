@@ -283,31 +283,30 @@ test("redirect following validates every hop, not just the landing", async () =>
 // degraded path from quietly becoming the real one.
 test("production binds the Durable Object the slot claim needs", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
-    const parsed = parseJsonc(await configText(config));
-    const bindings = parsed.durable_objects?.bindings ?? [];
-    const counter = bindings.find((b) => b.name === "COUNTER");
-    assert.ok(counter, `${config} must bind COUNTER for the coffee slot claim`);
-    assert.equal(counter.class_name, "Counter");
-    // Since step 3 of "Moving Counter out" the class lives in aadhar-counter,
-    // and a binding without script_name would name a class this Worker no
-    // longer implements.
-    assert.equal(counter.script_name, "aadhar-counter",
-      `${config} must bind COUNTER in aadhar-counter, which owns the class since step 3`);
+  const config = "cloudflare.config.ts";
+  const parsed = parseJsonc(await configText(config));
+  const bindings = parsed.durable_objects?.bindings ?? [];
+  const counter = bindings.find((b) => b.name === "COUNTER");
+  assert.ok(counter, `${config} must bind COUNTER for the coffee slot claim`);
+  assert.equal(counter.class_name, "Counter");
+  // Since step 3 of "Moving Counter out" the class lives in aadhar-counter,
+  // and a binding without script_name would name a class this Worker no
+  // longer implements.
+  assert.equal(counter.script_name, "aadhar-counter",
+    `${config} must bind COUNTER in aadhar-counter, which owns the class since step 3`);
 
-    // THE SITE IMPLEMENTS NO DURABLE OBJECT, which is the invariant the whole
-    // "Moving Counter out" sequence (CLAUDE.md) bought: a Worker that implements
-    // one gets no preview URLs. Counter lives in aadhar-counter since 2026-09-29.
-    // A class reappearing here, in exports or through a migrations array, takes
-    // the previews away again without a single other symptom.
-    assert.equal(parsed.migrations, undefined,
-      `${config} carries a migrations array, which would make this Worker implement a Durable Object`);
-    const classes = Object.entries(parsed.exports ?? {})
-      .filter(([, e]) => e?.type === "durable-object")
-      .map(([name]) => name);
-    assert.deepEqual(classes, [],
-      `${config} declares Durable Object classes ${JSON.stringify(classes)}; aadhar-sh must implement none, or it loses preview URLs`);
-  }
+  // THE SITE IMPLEMENTS NO DURABLE OBJECT, which is the invariant the whole
+  // "Moving Counter out" sequence (CLAUDE.md) bought: a Worker that implements
+  // one gets no preview URLs. Counter lives in aadhar-counter since 2026-09-29.
+  // A class reappearing here, in exports or through a migrations array, takes
+  // the previews away again without a single other symptom.
+  assert.equal(parsed.migrations, undefined,
+    `${config} carries a migrations array, which would make this Worker implement a Durable Object`);
+  const classes = Object.entries(parsed.exports ?? {})
+    .filter(([, e]) => e?.type === "durable-object")
+    .map(([name]) => name);
+  assert.deepEqual(classes, [],
+    `${config} declares Durable Object classes ${JSON.stringify(classes)}; aadhar-sh must implement none, or it loses preview URLs`);
 
   // The other end of the binding: aadhar-counter must actually implement the
   // class, as a live sqlite class. It is also the ONE class the slot claim and

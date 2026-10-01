@@ -196,8 +196,8 @@ const worker = defineWorker({
     // Canonical URLs carry NO trailing slash (sitemap.xml, both rel=canonical
     // tags, llms.txt and nav.js's own normalization all say so).
     // drop-trailing-slash makes the asset layer agree: /garage + /lwe serve
-    // directly, /garage/ + /lwe/ 301 to the slashless form. MUST match
-    // wrangler.dev.jsonc, or dev diverges from prod.
+    // directly, /garage/ + /lwe/ 301 to the slashless form. Local dev inherits
+    // it (config/dev/ spreads this config), so the two cannot diverge.
     htmlHandling: "drop-trailing-slash",
     // Worker-owned routes only. New static files do not cost invocations unless
     // they are added here and to the ROUTES/PREFIX tables in index.ts.
@@ -419,20 +419,26 @@ const worker = defineWorker({
 
     // One durable expiry timer per pending coffee booking (cal/src/workflow.ts,
     // re-exported from src/worker/index.ts). Replaced the weekly cron sweep.
-    // Must match wrangler.dev.jsonc + cal/wrangler.test.toml.
+    // Must match cal/wrangler.test.toml. (Local dev inherits it: config/dev/.)
     BOOKING_WORKFLOW: bindings.workflow({ name: "cal-booking-expiry", worker: "aadhar-sh", exportName: "BookingWorkflow" }),
     CENSUS_WORKFLOW: bindings.workflow({ name: "lens-census-host", worker: "aadhar-sh", exportName: "CensusWorkflow" }),
 
+    // `dev: { remote: true }` on the next three says these have NO useful
+    // local simulation, so `bun run dev` reaches the real service. It applies
+    // only during local development (the schema's own wording), so it changes
+    // nothing that deploys; the credential-free route-oracle harness ignores it,
+    // and tools/lib/site-config.ts's REMOTE_ONLY_KEYS strips AI there instead.
+    //
     // Browser Run Quick Actions. The binding is authenticated by Workers, so
     // Lens no longer needs a Browser Run API token for snapshots.
-    BROWSER: bindings.browser(),
+    BROWSER: bindings.browser({ dev: { remote: true } }),
     // Image Workbench uses the managed Images transformation binding; outputs
     // are returned inline and are not written to PHOTOS_R2.
-    IMAGES: bindings.images(),
+    IMAGES: bindings.images({ dev: { remote: true } }),
     // Workers AI, for Serendipity's event tags (serendipity/event-tags.ts), which
     // ask Clef. The binding is authenticated by Workers like BROWSER above, which
     // is what retired the TYPESAFE_API_KEY secret the Jev calls needed.
-    AI: bindings.ai(),
+    AI: bindings.ai({ dev: { remote: true } }),
 
     // Per-IP budgets for every public route that spends something on a caller's
     // say-so: /lens and the /mcp tools that share its crawler, the five /mcp
@@ -449,7 +455,7 @@ const worker = defineWorker({
     // contract test pins the two together so the message cannot drift from the
     // ceiling. The namespace is an opaque integer-as-string and only has to be
     // unique within this Worker: it is not a resource id and infra:apply has
-    // nothing to provision. MUST match wrangler.dev.jsonc.
+    // nothing to provision. Local dev inherits these (config/dev/).
     LENS_RL_INSPECT: bindings.rateLimit({ namespace: "1001", simple: { limit: 30, period: 60 } }),
     LENS_RL_SHOT: bindings.rateLimit({ namespace: "1002", simple: { limit: 3, period: 60 } }),
     LENS_RL_COMPARE: bindings.rateLimit({ namespace: "1003", simple: { limit: 4, period: 60 } }),

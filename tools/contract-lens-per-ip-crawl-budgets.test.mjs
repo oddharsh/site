@@ -14,7 +14,7 @@ import {
 // Run, so "fails open when the binding is missing" and "the 429 quotes the real
 // ceiling" are both worth pinning.
 
-test("every rate-limit ceiling matches the ratelimits declared in both wrangler configs", async () => {
+test("every rate-limit ceiling matches the ratelimits declared in the site config", async () => {
   const { LENS_BUDGETS } = await import("../src/worker/lens.ts");
   const { MCP_BUDGETS } = await import("../src/worker/mcp.ts");
   const { WEBMENTION_BUDGET } = await import("../src/worker/webmention.ts");
@@ -44,24 +44,23 @@ test("every rate-limit ceiling matches the ratelimits declared in both wrangler 
   // The number in LENS_BUDGETS is what the 429 message quotes; the number in
   // cloudflare.config.ts is what actually limits. A message that disagrees with the
   // ceiling is worse than no message, and nothing else would catch the drift.
-  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
-    const declared = parseJsonc(await configText(config)).ratelimits;
-    assert.ok(Array.isArray(declared) && declared.length, `${config} declares no ratelimits`);
-    const byName = new Map(declared.map((r) => [r.name, r]));
+  const config = "cloudflare.config.ts";
+  const declared = parseJsonc(await configText(config)).ratelimits;
+  assert.ok(Array.isArray(declared) && declared.length, `${config} declares no ratelimits`);
+  const byName = new Map(declared.map((r) => [r.name, r]));
 
-    for (const [budget, { binding, max }] of Object.entries(BUDGETS)) {
-      const rule = byName.get(binding);
-      assert.ok(rule, `${config} has no ratelimit named ${binding} for budget ${budget}`);
-      assert.equal(rule.simple?.limit, max,
-        `${config} limits ${binding} to ${rule.simple?.limit} but the 429 message says ${max}`);
-      // The binding supports 10 or 60 only, and every budget here is per-minute.
-      assert.equal(rule.simple?.period, 60, `${binding} must use the 60s period`);
-    }
-    // No orphans: a declared limiter nothing reads is a limit nobody enforces.
-    const used = new Set(Object.values(BUDGETS).map((b) => b.binding));
-    for (const name of byName.keys()) {
-      assert.ok(used.has(name), `${config} declares ${name} but no budget in this test uses it`);
-    }
+  for (const [budget, { binding, max }] of Object.entries(BUDGETS)) {
+    const rule = byName.get(binding);
+    assert.ok(rule, `${config} has no ratelimit named ${binding} for budget ${budget}`);
+    assert.equal(rule.simple?.limit, max,
+      `${config} limits ${binding} to ${rule.simple?.limit} but the 429 message says ${max}`);
+    // The binding supports 10 or 60 only, and every budget here is per-minute.
+    assert.equal(rule.simple?.period, 60, `${binding} must use the 60s period`);
+  }
+  // No orphans: a declared limiter nothing reads is a limit nobody enforces.
+  const used = new Set(Object.values(BUDGETS).map((b) => b.binding));
+  for (const name of byName.keys()) {
+    assert.ok(used.has(name), `${config} declares ${name} but no budget in this test uses it`);
   }
 });
 

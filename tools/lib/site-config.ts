@@ -17,7 +17,9 @@
 //   - the contract tests that read a field by its legacy name.
 //
 // So this module is the ONE translation, and `writeSiteConfigFile()` puts its
-// output at .wrangler.site.jsonc, gitignored and regenerated, never edited. It
+// output at .wrangler.site.jsonc, gitignored and regenerated, never edited.
+// Local dev is the same translation of a second pair, config/dev/, which
+// `writeDevConfigFile()` puts at .wrangler.dev.jsonc for `bun run dev`. It
 // was proven against the deleted wrangler.jsonc before that file went: the
 // projection deep-equalled the parsed jsonc on every key except the no-op
 // `dependencies_instrumentation` (see the note at `project`).
@@ -27,7 +29,7 @@
 // has reads as a route bug, not a config bug.
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { asList, asRecord, asText } from "../../src/worker/lib/parse.ts";
 
@@ -39,6 +41,14 @@ export const SITE_CONFIG_FILES = ["cloudflare.config.ts", "wrangler.config.ts"];
 // accident; it is only ever read through an explicit `-c`.
 export const SITE_CONFIG_JSON = ".wrangler.site.jsonc";
 export const SITE_CONFIG_LOCAL_JSON = ".wrangler.site.local.jsonc";
+
+// LOCAL DEV is the same Worker with a second tooling value and a small worker
+// overlay, authored as a native-shaped pair in config/dev/ (its header has the
+// why). Wrangler's TS loader resolves paths against the files' own directory,
+// so the projection rebases `main` and `assets.directory` back to the root,
+// where the generated file sits beside the others.
+export const DEV_CONFIG_DIR = "config/dev";
+export const DEV_CONFIG_JSON = ".wrangler.dev.jsonc";
 
 // Bindings with NO local mode. A Workers AI binding starts wrangler's remote
 // proxy whether or not it says `remote: false`, and the proxy needs a credential,
@@ -71,20 +81,55 @@ const text = (value: unknown, what: string): string => {
 // Imported by a file URL keyed on the file's bytes: both runtimes cache a
 // module by specifier, so the query is what lets a long-lived process (the
 // contract suite, which runs under bun AND node) see an edit without a restart.
+// The dev pair imports production's config by a plain specifier, which neither
+// runtime will re-read, so an edit to cloudflare.config.ts reaches the DEV
+// projection only in a fresh process. Nothing here edits a config mid-run.
 async function load(file: string) {
   const key = createHash("sha256").update(readFileSync(join(REPO, file))).digest("hex").slice(0, 12);
   return asRecord((await import(`${pathToFileURL(join(REPO, file)).href}?v=${key}`)).default);
 }
 
+async function loadPair(dir: string) {
+  const at = (file: string) => (dir === "." ? file : `${dir}/${file}`);
+  const top = need(await load(at("cloudflare.config.ts")), `${at("cloudflare.config.ts")} default export`);
+  const tooling = need(await load(at("wrangler.config.ts")), `${at("wrangler.config.ts")} default export`);
+  return { top, tooling };
+}
+
 // Round-tripped through JSON, so a caller gets exactly what parseJsonc handed
 // it when this was a file: plain data, typed the way JSON.parse types it.
 export async function siteConfig() {
-  const top = need(await load("cloudflare.config.ts"), "cloudflare.config.ts default export");
-  const tooling = need(await load("wrangler.config.ts"), "wrangler.config.ts default export");
+  const { top, tooling } = await loadPair(".");
   return JSON.parse(JSON.stringify(project(top, tooling)));
 }
 
-export function project(top: Record<string, unknown>, tooling: Record<string, unknown>): Record<string, unknown> {
+/** The local-dev config: config/dev's pair, projected with root-relative paths. */
+export async function devSiteConfig() {
+  const { top, tooling } = await loadPair(DEV_CONFIG_DIR);
+  return JSON.parse(JSON.stringify(project(top, tooling, { baseDir: DEV_CONFIG_DIR, dev: true })));
+}
+
+type ProjectOptions = {
+  // The directory the pair was authored in, relative to the repository root.
+  // Wrangler resolves `entrypoint` and `assetsDirectory` against it, and the
+  // projection writes them relative to the root, where its output sits.
+  baseDir?: string;
+  // Honour each binding's `dev: { remote }`. The TS schema documents those as
+  // options that "only apply during local development", so only the dev
+  // projection reads them. The production projection also boots the route
+  // oracle's harness, which holds no credential, and a remote binding there
+  // would need one.
+  dev?: boolean;
+};
+
+export function project(top: Record<string, unknown>, tooling: Record<string, unknown>, opts: ProjectOptions = {}): Record<string, unknown> {
+  const rebase = (p: string) => (opts.baseDir ? posix.join(opts.baseDir, p) : p);
+  // Only the binding types below have a legacy `remote` key wired here. A
+  // `dev.remote` on any other type throws rather than vanishing, because a
+  // binding silently running local is the failure this module exists to stop.
+  const REMOTE_WIRED = new Set(["browser", "images", "ai"]);
+  const devRemote = new Set<string>();
+  const remote = (name: string) => (opts.dev && devRemote.has(name) ? { remote: true } : {});
   const worker = need(top.worker, "config.worker");
   const env = need(worker.env ?? {}, "worker.env");
   const exportsDecl = need(worker.exports ?? {}, "worker.exports");
@@ -103,6 +148,13 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
 
   for (const [name, raw] of Object.entries(env)) {
     const b = need(raw, `env.${name}`);
+    // Checked in BOTH projections, so a dev option the dev projection would
+    // drop fails the first time anything reads the config, not only under dev.
+    const devOpts = asRecord(b.dev);
+    if (devOpts?.remote !== undefined) {
+      if (!REMOTE_WIRED.has(String(b.type))) throw new Error(`site-config: env.${name} sets dev.remote on a ${JSON.stringify(b.type)} binding, which this projection has no remote key wired for; teach it rather than letting dev run it locally`);
+      if (devOpts.remote === true) devRemote.add(name);
+    }
     switch (b.type) {
       case "assets": assetsBinding = name; break;
       case "version-metadata": versionBinding = name; break;
@@ -167,7 +219,7 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
   const out: Record<string, unknown> = {};
   out.name = text(worker.name, "worker.name");
   out.account_id = text(top.accountId, "accountId");
-  out.main = text(worker.entrypoint, "worker.entrypoint");
+  out.main = rebase(text(worker.entrypoint, "worker.entrypoint"));
   if (build?.command) out.build = { command: text(build.command, "build.command") };
   out.compatibility_date = text(worker.compatibilityDate, "worker.compatibilityDate");
   out.compatibility_flags = asList(worker.compatibilityFlags);
@@ -183,7 +235,7 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
   out.workers_dev = worker.workersDev;
   out.preview_urls = worker.previewUrls;
   out.routes = triggers.filter((t) => t.type === "fetch").map((t) => ({ pattern: t.pattern, zone_name: t.zone }));
-  const assetsOut: Record<string, unknown> = { directory: text(tooling.assetsDirectory, "wrangler.config.ts assetsDirectory") };
+  const assetsOut: Record<string, unknown> = { directory: rebase(text(tooling.assetsDirectory, "wrangler.config.ts assetsDirectory")) };
   if (assetsBinding) assetsOut.binding = assetsBinding;
   assetsOut.html_handling = assets.htmlHandling;
   assetsOut.run_worker_first = asList(assets.runWorkerFirst);
@@ -204,30 +256,44 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
   if (d1.length) out.d1_databases = d1;
   if (doBindings.length) out.durable_objects = { bindings: doBindings };
   if (workflows.length) out.workflows = workflows;
-  if (browserBinding) out.browser = { binding: browserBinding };
-  if (imagesBinding) out.images = { binding: imagesBinding };
-  if (aiBinding) out.ai = { binding: aiBinding };
+  if (browserBinding) out.browser = { binding: browserBinding, ...remote(browserBinding) };
+  if (imagesBinding) out.images = { binding: imagesBinding, ...remote(imagesBinding) };
+  if (aiBinding) out.ai = { binding: aiBinding, ...remote(aiBinding) };
   if (ratelimits.length) out.ratelimits = ratelimits;
   if (Object.keys(vars).length) out.vars = vars;
   if (secrets.length) out.secrets = { required: secrets };
   return out;
 }
 
-const HEADER = "// GENERATED by tools/lib/site-config.ts from cloudflare.config.ts + wrangler.config.ts.\n// Do not edit: edit those two files. Gitignored, and rewritten whenever it is stale.\n";
+const header = (from: string) => `// GENERATED by tools/lib/site-config.ts from ${from}.\n// Do not edit: edit those files. Gitignored, and rewritten whenever it is stale.\n`;
 
-// Writes .wrangler.site.jsonc and returns its path relative to the repo, for a
-// `-c`. Writes only when the bytes would change, so a caller in a hot loop does
-// not churn wrangler's config watcher. `localOnly` writes the credential-free
-// twin beside it instead, for a harness that boots where no token exists.
-export async function writeSiteConfigFile(opts: { localOnly?: boolean } = {}): Promise<string> {
-  const config = await siteConfig();
-  const name = opts.localOnly ? SITE_CONFIG_LOCAL_JSON : SITE_CONFIG_JSON;
-  const body = HEADER + JSON.stringify(opts.localOnly ? withoutRemoteOnly(config) : config, null, 2) + "\n";
+// Writes only when the bytes would change, so a caller in a hot loop does not
+// churn wrangler's config watcher. Returns the path relative to the repo.
+function writeIfChanged(name: string, from: string, config: Record<string, unknown>): string {
+  const body = header(from) + JSON.stringify(config, null, 2) + "\n";
   const path = join(REPO, name);
   let current = "";
   try { current = readFileSync(path, "utf8"); } catch { /* first write */ }
   if (current !== body) writeFileSync(path, body);
   return name;
+}
+
+// Writes .wrangler.site.jsonc and returns its path relative to the repo, for a
+// `-c`. `localOnly` writes the credential-free twin beside it instead, for a
+// harness that boots where no token exists.
+export async function writeSiteConfigFile(opts: { localOnly?: boolean } = {}): Promise<string> {
+  const config = await siteConfig();
+  return writeIfChanged(
+    opts.localOnly ? SITE_CONFIG_LOCAL_JSON : SITE_CONFIG_JSON,
+    "cloudflare.config.ts + wrangler.config.ts",
+    opts.localOnly ? withoutRemoteOnly(config) : config,
+  );
+}
+
+// Writes .wrangler.dev.jsonc, the config `bun run dev` boots with `-c`.
+// tools/dev-stage.ts calls this, so every dev start reads the current configs.
+export async function writeDevConfigFile(): Promise<string> {
+  return writeIfChanged(DEV_CONFIG_JSON, `${DEV_CONFIG_DIR}/ (production + the dev overlay)`, await devSiteConfig());
 }
 
 // The config arguments for a wrangler command run against the SITE Worker from
@@ -256,4 +322,4 @@ export async function siteWranglerArgs(args: string[]): Promise<string[]> {
   return [...args, "-c", join(REPO, await writeSiteConfigFile())];
 }
 
-if (import.meta.main) console.log(await writeSiteConfigFile());
+if (import.meta.main) console.log(process.argv.includes("--dev") ? await writeDevConfigFile() : await writeSiteConfigFile());

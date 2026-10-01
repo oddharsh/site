@@ -165,4 +165,9 @@ export async function stage() {
 if (import.meta.main) {
   const { links: n, dirs: d } = await stage();
   console.log(`dev-stage: ${FARM}/ ready — ${n} links across ${d} merged director${d === 1 ? "y" : "ies"} from ${ASSET_ROOTS.join(", ")}`);
+  // The config `wrangler dev -c` boots next, projected from config/dev/ (which
+  // spreads cloudflare.config.ts) on every start, so dev reads the bindings and
+  // routes production has right now rather than a copy somebody last synced.
+  const { writeDevConfigFile } = await import("./lib/site-config.ts");
+  console.log(`dev-stage: ${await writeDevConfigFile()} written from config/dev/`);
 }

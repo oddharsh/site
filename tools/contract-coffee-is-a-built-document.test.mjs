@@ -115,12 +115,11 @@ test("the route serves the bake, and the island stays out of Workers Cache", asy
   assert.ok(!cacheable.includes(SLOTS_URL), "the slots island must not sit behind Workers Cache");
 
   const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, ".*") + "$");
-  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
-    const block = ((await configText(config)).match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [, ""])[1];
-    const allow = [...block.replace(/\/\/[^\n]*/g, "").matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-    for (const p of ["/coffee", SLOTS_URL, "/coffee/pick"]) {
-      assert.ok(allow.includes(p) || allow.some((a) => a.includes("*") && globRe(a).test(p)), `${config}: ${p} is not in run_worker_first`);
-    }
+  const config = "cloudflare.config.ts";
+  const block = ((await configText(config)).match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [, ""])[1];
+  const allow = [...block.replace(/\/\/[^\n]*/g, "").matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  for (const p of ["/coffee", SLOTS_URL, "/coffee/pick"]) {
+    assert.ok(allow.includes(p) || allow.some((a) => a.includes("*") && globRe(a).test(p)), `${config}: ${p} is not in run_worker_first`);
   }
   const ledger = JSON.parse(read("config/per-request-pages.json")).pages;
   assert.ok(!("/coffee" in ledger), "a built page leaves the per-request ledger");

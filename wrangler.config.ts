@@ -12,13 +12,13 @@ export default defineWranglerConfig({
   // runs the installed Wrangler entrypoint under Node, which Wrangler requires,
   // and adds `--x-new-config` because this file exists; Wrangler then owns this
   // one build instead of running it twice. Local dev must NOT use this config (it
-  // would pay the full public/ -> .build copy on every reload); wrangler.dev.jsonc
-  // uses source code and staged .dev-assets.
+  // would pay the full public/ -> .build copy on every reload); config/dev/wrangler.config.ts
+  // is its tooling, serving source code and staged .dev-assets.
   build: { command: "bun tools/build.ts" },
   assetsDirectory: ".build/public",
 
   // Deploy-only. Measured 2026-08-16: 274.45 -> 227.67 KiB gzip (17.0% off).
-  // Keep the local-dev twin readable; uploaded source maps retain original stack
+  // Local dev stays readable (config/dev/wrangler.config.ts); uploaded source maps retain original stack
   // locations in Workers Logs without shipping to clients.
   minify: true,
   uploadSourceMaps: true,

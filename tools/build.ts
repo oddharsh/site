@@ -155,13 +155,11 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
 
 // One array-of-strings, read out of a wrangler config's source text by key.
 //
-// GENERIC because the alternative is what put this here. Two configs must agree
-// on two such arrays, and each hand-rolled copy of this regex is one more place
-// to be subtly different from the others: the dev twin lost "/ask", "/inbox",
-// "/webmention" and "/webmention/*" (2026-08-27) and the "41 5 * * *" cron
-// (2026-08-14) precisely because nothing compared them. Five readers share this
-// now — invariant #1, both halves of the invariant #6 dev-twin diff, and the
-// link resolver in step 7b.
+// GENERIC because each hand-rolled copy of this regex is one more place to be
+// subtly different from the others. Two readers share it now: invariant #1 and
+// the link resolver in step 7b. (Invariant #6 read it too, to diff a hand-kept
+// dev config that drifted anyway; config/dev/ replaced that file on
+// 2026-10-01, so there is nothing left to diff.)
 //
 // These are JSONC files and the // COMMENTS INSIDE THESE BLOCKS QUOTE VALUES, so
 // a bare scan for quoted strings reads prose as data. cloudflare.config.ts's fold note
@@ -383,119 +381,14 @@ async function checkInvariants() {
   // warns: a missing rule here is a rename or a bad edit, not a taste call.
   if (!clientEdgeDecl(await read("src/styles/luna.css"))) hard.push("luna.css: the client-edge declaration went missing (search \"THE CLIENT EDGE\") — build.ts injects it into every windowed page and has nothing to inject");
 
-  // 6 (warn) — the local-dev twin (wrangler.dev.jsonc) must declare the same
-  // bindings as the deploy config (cloudflare.config.ts), or local `wrangler dev`
-  // diverges from prod. Compare the set of binding identifiers by name; a
-  // mismatch means a binding was added to one config but not the other.
-  //
-  // The run_worker_first ALLOWLIST is compared the same way, and it was not until
-  // 2026-08-27. Both files' headers say the two must match, and a check reading
-  // only the bindings watched them diverge by four entries ("/ask", "/inbox",
-  // "/webmention", "/webmention/*") while reporting a clean build. Same class as
-  // the missing "41 5 * * *" cron of 2026-08-14, which wrangler.dev.jsonc's own
-  // comment records — so the CRONS are diffed here too, at the end of this block,
-  // and the COMPATIBILITY FLAGS after them.
-  //
-  // What that drift COST was nothing yet, measured rather than assumed: all four
-  // answered identically under `bun run dev` with their entries absent, because
-  // nothing is staged at those paths and the asset layer passes a path it cannot
-  // serve to the Worker anyway. This claim is deliberately not stronger than the
-  // measurement — the first draft of this comment said those routes "fell through
-  // to the asset layer" locally, which is what the config says and not what the
-  // wire said. The rule it enforces is unchanged either way: the allowlist governs
-  // precedence WHERE AN ASSET EXISTS, so a divergence is inert exactly until a
-  // file lands at one of the diverging paths, and this repo has two notes in that
-  // config about routes the asset layer answered first once one did.
-  //
-  // Compared as SETS, in both directions, since an entry in the dev twin that
-  // production does not claim is the more dangerous half: it makes local dev
-  // exercise a path the deployed site serves statically.
-  //
-  // WARN rather than hard, on this function's stated policy for duplicated text
-  // (see the header above): the drift is real, and blocking the one deploy path
-  // over a local-dev-only file would gate production on something that cannot
-  // reach it. The scanner cannot pass VACUOUSLY, which is the failure this would
-  // otherwise share with every other text scraper here — invariant #1 floors the
-  // same extraction at 60 entries and hard-fails, so a regex that has stopped
-  // matching reddens the build before it can quietly agree with itself.
-  //
-  // The HARD half of this block lives in the contract suite since 2026-09-29:
-  // contract-the-dev-twin-matches-production fails `validate` on the same four
-  // comparisons, so drift reddens the PR that makes it rather than the release
-  // that ships it. #876 left "/dotfiles" out of the twin and this warning printed
-  // on every build for a day with nothing red anywhere.
-  try {
-    const dev = await read("wrangler.dev.jsonc");
-    const names = (s) => new Set([...s.matchAll(/"(?:binding|name|database_name|bucket_name|dataset)"\s*:\s*"([^"]+)"/g)].map((m) => m[1]));
-    const a = names(wrangler), b = names(dev);
-    const diff = [...new Set([...a].filter((x) => !b.has(x)).concat([...b].filter((x) => !a.has(x))))];
-    if (diff.length) warn.push(`cloudflare.config.ts and wrangler.dev.jsonc binding sets differ (${diff.join(", ")}) — keep the dev twin in sync`);
-
-    const prodAllow = new Set(allow), devAllow = new Set(runWorkerFirst(dev));
-    const prodOnly = [...prodAllow].filter((x) => !devAllow.has(x));
-    const devOnly = [...devAllow].filter((x) => !prodAllow.has(x));
-    if (prodOnly.length || devOnly.length) {
-      const parts: string[] = [];
-      if (prodOnly.length) parts.push(`missing from wrangler.dev.jsonc: ${prodOnly.join(", ")}`);
-      if (devOnly.length) parts.push(`only in wrangler.dev.jsonc: ${devOnly.join(", ")}`);
-      warn.push(`cloudflare.config.ts and wrangler.dev.jsonc run_worker_first allowlists differ (${parts.join("; ")}) — the two configs disagree about which paths the Worker claims from the asset layer, so dev and prod diverge the moment a file is staged at one of them`);
-    }
-
-    // And the CRONS, which is the drift this file's own comment records: this
-    // list was missing "41 5 * * *" entirely from 2026-08-14, so the daily
-    // outbound tick existed in production and not in dev. That one was found by
-    // hand while folding the /around crawl onto the tick, and it stayed on the
-    // honour system for the whole time an allowlist check sat next to it.
-    //
-    // Compared ORDER-INSENSITIVELY, because index.ts dispatches on the cron
-    // STRING (`switch (event.cron)`), so a reordering changes nothing and
-    // failing on one would be a check with an opinion about formatting. Sorting
-    // and joining rather than diffing two Sets keeps a duplicated entry visible,
-    // which a symmetric set difference reports as no difference at all.
-    //
-    // Both lists print in full: there are four, and naming them beats a diff the
-    // reader then has to reconstruct the lists from.
-    //
-    // Keyed on "crons" rather than the "triggers" that holds it, because
-    // triggers opens an OBJECT and this reads arrays. Both files carry the key
-    // exactly once, comments included, so the first match is the real one.
-    const prodCrons = jsoncStringArray(wrangler, "crons"), devCrons = jsoncStringArray(dev, "crons");
-    const sorted = (xs: string[]) => [...xs].sort().join(", ");
-    // The floor. Four crons are documented at this key in both files and Workers
-    // Free caps an account at five, so zero means the extraction lost the block
-    // rather than the site losing its jobs. Deleting every cron is a real edit
-    // that should come here and say so, which is the point of failing loudly.
-    if (!prodCrons.length) hard.push("dev-twin drift check read 0 crons from cloudflare.config.ts — the scanner has lost the triggers block, not the site its schedule");
-    else if (sorted(prodCrons) !== sorted(devCrons)) {
-      warn.push(`cloudflare.config.ts and wrangler.dev.jsonc crons differ (cloudflare.config.ts: ${prodCrons.join(", ") || "none"}; wrangler.dev.jsonc: ${devCrons.join(", ") || "none"}) — the two schedules must match, or a job fires in one config and not the other`);
-    }
-
-    // And the COMPATIBILITY FLAGS, added 2026-08-28 with the first one this repo
-    // has ever set. A flag changes what the RUNTIME hands the Worker, so a
-    // divergence here is worse than the three above: those make dev and prod
-    // disagree about which paths compute, while this makes them disagree about
-    // what the platform is. `enable_request_signal` is the live case, since it
-    // decides whether request.signal aborts, and dispatchTraced() branches on
-    // exactly that. A dev twin without it runs the not-instrumented arm on every
-    // local request while production runs the other one, silently.
-    //
-    // Compared ORDER-INSENSITIVELY like the crons, and for the same reason: the
-    // runtime reads this as a set, so a reordering changes nothing and failing
-    // on one would be a check with an opinion about formatting.
-    const prodFlags = jsoncStringArray(wrangler, "compatibility_flags");
-    const devFlags = jsoncStringArray(dev, "compatibility_flags");
-    // The floor, and it is a claim about this commit rather than about the key.
-    // Zero flags was the TRUE state here until 2026-08-28, so an empty array is
-    // a config a reader could reasonably expect; what it cannot be is invisible.
-    // Both sides are lists and two empty lists agree, so without this a renamed
-    // key or a reformatted array reports a clean build over a config it never
-    // read. Removing the last flag is a real edit that should come here and say
-    // so, which is the point of failing rather than warning.
-    if (!prodFlags.length) hard.push("dev-twin drift check read 0 compatibility_flags from cloudflare.config.ts — either the scanner lost the key or the last flag was dropped; both want a human here");
-    else if (sorted(prodFlags) !== sorted(devFlags)) {
-      warn.push(`cloudflare.config.ts and wrangler.dev.jsonc compatibility_flags differ (cloudflare.config.ts: ${prodFlags.join(", ") || "none"}; wrangler.dev.jsonc: ${devFlags.join(", ") || "none"}) — a flag changes what the runtime hands the Worker, so local dev exercises a different platform from the one that ships`);
-    }
-  } catch (e) { warn.push(`dev-config drift check could not run: ${e.message}`); }
+  // 6 — RETIRED 2026-10-01. It diffed the hand-kept local-dev twin
+  // (wrangler.dev.jsonc) against this config: bindings, run_worker_first, crons
+  // and compatibility flags, as warnings. That twin no longer exists. Local dev
+  // is config/dev/, which SPREADS cloudflare.config.ts and overrides only what
+  // dev means to change, so there is no second copy left to drift, and
+  // contract-the-dev-config-only-overrides-the-overlay holds the overlay to
+  // that. The number stays retired rather than reused, so older notes that cite
+  // "invariant #6" still point at something that explains itself.
 
   // 7 (hard) — every agent-skills digest matches the file it points at. The
   // discovery schema invites clients to verify these, so a stale digest doesn't
@@ -524,7 +417,8 @@ async function checkInvariants() {
       "src/worker/index.ts",
       "cloudflare.config.ts",
       "wrangler.config.ts",
-      "wrangler.dev.jsonc",
+      "config/dev/cloudflare.config.ts",
+      "config/dev/wrangler.config.ts",
     ];
     const forbidden = ["/ledger/rum", "data-cf-beacon", "cloudflareinsights.com"];
     for (const name of runtimeFiles) {
@@ -789,7 +683,7 @@ async function checkInvariants() {
 // gutter is layout, so without a copy in that page's inline block it lays out
 // 12px wider and re-wraps once when luna lands. The build derives the copy from
 // luna.css rather than anyone hand-maintaining it: it is derived data, and a
-// hand copy drifts. Local dev (wrangler.dev.jsonc) serves the unbuilt tree,
+// hand copy drifts. Local dev (config/dev/) serves the unbuilt tree,
 // where the edge simply arrives with luna.css.
 //
 // The injection keys on a page's own geometry mirror (below), which only a
@@ -920,7 +814,7 @@ await mkdir(OUT, { recursive: true });
 // 1) stage: public/ verbatim (.assetsignore rides along). No wrangler config is
 // copied into .build anymore — the deploy config (cloudflare.config.ts) points its entrypoint +
 // assets at .build/public and runs THIS script via its build.command, so the
-// build output never needs its own config. (Local dev uses wrangler.dev.jsonc.)
+// build output never needs its own config. (Local dev uses config/dev/.)
 //
 // public/scripts USED TO BE the one exception here, and it was 89% of the tree's
 // bytes: the zenc cargo target/ and the uv venv put it at ~232 MB across 767

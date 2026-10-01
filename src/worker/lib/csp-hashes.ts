@@ -6,7 +6,7 @@
 // hashes derived from the final bytes it just wrote. Keep the
 // `// build:csp-hashes` marker — the build replaces that whole line.
 //
-// Empty here on purpose. `bun run dev` (wrangler.dev.jsonc) serves the readable
+// Empty here on purpose. `bun run dev` (config/dev/) serves the readable
 // unminified source tree through the .dev-assets farm, whose inline blocks
 // hash differently from the staged
 // ones, so a committed map would be wrong for exactly the surface it claims to

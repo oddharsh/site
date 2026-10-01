@@ -62,7 +62,7 @@ import { fileURLToPath } from "node:url";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
 import { interpretZstdProbe } from "./lib/bun-pin.ts";
 import { HARNESS_TEST_FLOOR, harnessTests, testArgv } from "./lib/harness-tests.ts";
-import { WRANGLER_WATCHES, type WatchResult, interpretTemporalProbe, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
+import { WRANGLER_WATCHES, type WatchResult, interpretDevAuxProbe, interpretTemporalProbe, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { siteWranglerArgs } from "./lib/site-config.ts";
 
@@ -321,6 +321,11 @@ try {
       "workerd-exposes-temporal": (tree) => {
         const out = run(NODE, ["tools/workerd-temporal-probe.ts"], { cwd: tree, timeout: 3 * 60_000 });
         const read = interpretTemporalProbe(out.stdout);
+        return read.landed === null ? { landed: null, detail: `did not run: ${tail(out, 1).join(" ").slice(0, 120)}` } : read;
+      },
+      "new-config-dev-boots-auxiliary-workers": (tree, entry) => {
+        const out = run(NODE, ["tools/dev-aux-worker-probe.ts", entry], { cwd: tree, timeout: 3 * 60_000 });
+        const read = interpretDevAuxProbe(out.stdout);
         return read.landed === null ? { landed: null, detail: `did not run: ${tail(out, 1).join(" ").slice(0, 120)}` } : read;
       },
       "vitest-plugin-accepts-vitest-5": (tree) => {
