@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 // gen-remote-config.mjs — derive a remote-bindings twin of a wrangler config.
 //
-//   node tools/gen-remote-config.ts wrangler.dev.jsonc            # dev twin
+//   node tools/gen-remote-config.ts .wrangler.dev.jsonc           # local dev (bun run dev:remote)
 //   node tools/gen-remote-config.ts .wrangler.site.jsonc --out x.jsonc  # oracle twin (a JSONC config; not the .ts)
-//   node tools/gen-remote-config.ts wrangler.dev.jsonc --d1       # opt into D1
+//   node tools/gen-remote-config.ts .wrangler.dev.jsonc --d1      # opt into D1
 //
 // WHAT A REMOTE BINDING IS. Your Worker code still runs locally in workerd; the
 // BINDING calls hop to the real Cloudflare resource instead of a local simulation.
 // So `wrangler dev` reads the actual RN_KV, the actual aadhar-photos bucket, the
 // actual Browser Run service — with your uncommitted edits in the handler.
 //
-// WHY THIS IS GENERATED AND NOT A THIRD COMMITTED CONFIG. There are already two
-// (cloudflare.config.ts and wrangler.dev.jsonc), build.ts invariant #6 exists solely
-// to warn when their binding sets drift, and that warning is the evidence that a
-// third hand-maintained copy would rot. A twin derived at the moment of use is a
-// pure function of the config it came from, which is the same argument the
-// Markdown twins and the dcz deltas already won. Output goes under .build/ and
+// WHY THIS IS GENERATED AND NOT A COMMITTED CONFIG. The hand-kept dev config it
+// used to read (wrangler.dev.jsonc) drifted from production more than once while
+// a build warning watched it, and was retired on 2026-10-01 for a projection of
+// config/dev/, which is the source this reads by default now. A twin derived
+// at the moment of use is a pure function of the config it came from, which is
+// the same argument the Markdown twins and the dcz deltas already won. Output goes under .build/ and
 // is never committed.
 //
 // WHAT REMOTE CANNOT REACH, said up front because it decides what this is good
@@ -31,8 +31,8 @@
 // on this Worker: SERENDIPITY_DB takes the Luma sync, SOCIAL_DB takes moderated
 // third-party webmentions, RESTORE_DB is the append-only deploy log that both
 // /restore and /updates read. A dev session pointed at those is one stray handler
-// away from writing production history from a laptop. wrangler.dev.jsonc already
-// says as much about SOCIAL_DB in its own comment. The flag exists because
+// away from writing production history from a laptop. config/dev/cloudflare.config.ts
+// says as much about local D1 in its own header. The flag exists because
 // debugging a D1 handler against real rows is occasionally the only way, and it
 // should cost a deliberate keystroke every time.
 //
@@ -67,7 +67,7 @@ function main() {
     process.exit(2);
   }
 
-  const source = argv.find((a) => !a.startsWith("--")) || "wrangler.dev.jsonc";
+  const source = argv.find((a) => !a.startsWith("--")) || ".wrangler.dev.jsonc";
   const withD1 = argv.includes("--d1");
   // Written to the repo ROOT, not under .build/, and that is load-bearing rather
   // than tidy-minded. Wrangler resolves `main`, `assets.directory` and the build
@@ -94,9 +94,9 @@ for (const [key, label] of Object.entries(REMOTABLE)) {
     marked.push(`${label} ${binding.binding}`);
   }
 }
-// Browser Run is a single object rather than an array, and wrangler.dev.jsonc
-// already marks it remote by hand (Quick Actions have no local simulation at
-// all). Setting it here too makes the derived config self-sufficient, so the
+// Browser Run is a single object rather than an array, and the local-dev config
+// already marks it remote (production declares `dev: { remote: true }`; Quick
+// Actions have no local simulation at all). Setting it here too makes the derived config self-sufficient, so the
 // oracle twin derived from cloudflare.config.ts gets it without a second edit.
 if (config.browser && !config.browser.remote) {
   config.browser.remote = true;

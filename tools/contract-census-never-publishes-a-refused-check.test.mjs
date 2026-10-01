@@ -102,7 +102,7 @@ test("the cron dispatches and never scans in-line", async () => {
   assert.doesNotMatch(inner, /batchSize|CENSUS_ROSTER\.slice/, "batching hosts into one invocation is what overspent the budget");
 });
 
-test("the Workflow class is exported from the entrypoint and bound in both configs", async () => {
+test("the Workflow class is exported from the entrypoint and bound in the site config", async () => {
   // A `workflows` binding names a class_name that must resolve on the deployed
   // Worker. It resolves through the entrypoint's re-export, the same way
   // BookingWorkflow and the Counter Durable Object do, and a class that is bound
@@ -112,12 +112,11 @@ test("the Workflow class is exported from the entrypoint and bound in both confi
     "index.ts must re-export CensusWorkflow for the binding's class_name to resolve");
 
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  for (const config of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
-    const parsed = parseJsonc(await configText(config));
-    const entry = (parsed.workflows ?? []).find((w) => w.binding === "CENSUS_WORKFLOW");
-    assert.ok(entry, `${config} must bind CENSUS_WORKFLOW`);
-    assert.equal(entry.class_name, "CensusWorkflow", `${config} must name the exported class`);
-  }
+  const config = "cloudflare.config.ts";
+  const parsed = parseJsonc(await configText(config));
+  const entry = (parsed.workflows ?? []).find((w) => w.binding === "CENSUS_WORKFLOW");
+  assert.ok(entry, `${config} must bind CENSUS_WORKFLOW`);
+  assert.equal(entry.class_name, "CensusWorkflow", `${config} must name the exported class`);
 });
 
 test("only the entrypoint and the workflow module import cloudflare:workers", () => {

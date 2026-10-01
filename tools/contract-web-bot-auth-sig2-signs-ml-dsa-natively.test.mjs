@@ -239,10 +239,9 @@ test("production carries webcrypto_modern_algorithms, without which sig2 silentl
   // build.ts already fails when dev and production flags differ. What it cannot
   // see is both losing the flag together: sig2 would degrade to nothing, by
   // design, and every other check would stay green.
-  for (const name of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
-    const flags = parseJsonc(await configText(name)).compatibility_flags;
-    assert.ok(flags.includes("webcrypto_modern_algorithms"), `${name} must enable native ML-DSA`);
-  }
+  const name = "cloudflare.config.ts";
+  const flags = parseJsonc(await configText(name)).compatibility_flags;
+  assert.ok(flags.includes("webcrypto_modern_algorithms"), `${name} must enable native ML-DSA`);
 });
 
 // Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.

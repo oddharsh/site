@@ -10,7 +10,7 @@
 //   bun run routes:check                 # boot .build/public, sweep, exit non-zero on failure
 //   bun run perf-budget && bun run routes:check --prebuilt .build/.perfbudget
 //
-// It points at cloudflare.config.ts, NOT wrangler.dev.jsonc, deliberately: that config
+// It points at cloudflare.config.ts, NOT the local-dev config (config/dev/), deliberately: that config
 // carries `build.command`, so the harness runs build.ts itself and serves the
 // minified tree with the /a/<hash8> shell — the bytes a deploy would ship. That
 // is also why VERIFY_BUILT=1 is set, which re-arms the build-output rows

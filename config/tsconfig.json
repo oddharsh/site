@@ -86,6 +86,8 @@
   "include": [
     "../cloudflare.config.ts",
     "../wrangler.config.ts",
+    "../config/dev/cloudflare.config.ts",
+    "../config/dev/wrangler.config.ts",
     "../cal/src/**/*.ts",
     "../counter/src/**/*.ts",
     "../src/worker/**/*.ts",

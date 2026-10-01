@@ -311,7 +311,36 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
     landed: "the workerd this wrangler ships exposes a Temporal under production's compatibility date and flags, and `Temporal.Now.instant()` agrees with Date.now() within a minute (tools/workerd-temporal-probe.ts); until then Worker code here uses Date and the client islands keep their typeof guard",
     measured: "2026-09-23, workerd 1.20260921.1 via wrangler a1f05a3 at compatibility_date 2026-06-01: Temporal absent; V8's harmony_temporal is compiled in and no compat flag enables it",
   },
+  {
+    // The last thing between local dev and wrangler's TypeScript loader. Dev is
+    // authored as a native-shaped pair in config/dev/ since 2026-10-01 and
+    // projected to .wrangler.dev.jsonc only because `bun run dev` boots
+    // counter/wrangler.jsonc in the same process (COUNTER binds that Worker's
+    // class), and --x-new-config refuses `-c`. It watches the NEED, a TS-native
+    // dev with COUNTER bound, through the one door known today; the retired
+    // `wrangler-types-accepts-x-new-config` above is why a different door
+    // means extending tools/dev-aux-worker-probe.ts rather than trusting this.
+    name: "new-config-dev-boots-auxiliary-workers",
+    issue: "https://github.com/cloudflare/workers-sdk",
+    landed: "`wrangler dev --x-new-config` run from config/dev/ boots the site Worker with counter/wrangler.jsonc beside it and /hit?peek=1 reads a bound COUNTER (tools/dev-aux-worker-probe.ts); then config/dev/ can be read natively and the projection step in tools/dev-stage.ts can go",
+    measured: "2026-10-01, wrangler 4.146.0 (b4954c1): `--config is not supported with --experimental-new-config. cloudflare.config.ts and wrangler.config.ts are loaded from the project root.`, exit 1",
+  },
 ];
+
+/**
+ * Reads tools/dev-aux-worker-probe.ts's one JSON line. Landed means the server
+ * BOOTED and COUNTER was bound: a boot with the binding unconnected (the dev
+ * registry finding no Counter) is the state that looks like progress and is
+ * not, so it reads not-yet. An unparseable line is `null`, which never moves a
+ * verdict.
+ */
+export function interpretDevAuxProbe(stdout: unknown): { landed: boolean | null; detail: string } {
+  let raw: unknown = null;
+  try { raw = JSON.parse(String(stdout).trim().split("\n").at(-1) ?? ""); } catch { /* left null on purpose */ }
+  const parsed = asRecord(raw);
+  if (!parsed || (parsed.booted !== true && parsed.booted !== false)) return { landed: null, detail: "probe did not run" };
+  return { landed: parsed.booted === true && parsed.counterBound === true, detail: asText(parsed.detail) ?? "" };
+}
 
 /**
  * Reads tools/workerd-temporal-probe.ts's one JSON line. Landed means present

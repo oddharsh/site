@@ -167,11 +167,10 @@ test("both asset routers send the directory to the Worker within the platform's 
   // folded into "/.well-known/*" on 2026-09-16, and what this test guards is
   // that the Worker still sees the request, not the spelling of the rule.
   const claims = (rule, path) => rule === path || (rule.endsWith("*") && path.startsWith(rule.slice(0, -1)));
-  for (const name of ["cloudflare.config.ts", "wrangler.dev.jsonc"]) {
-    const config = parseJsonc(await configText(name));
-    assert.ok(config.assets.run_worker_first.some((rule) => claims(rule, DIRECTORY_PATH)), name);
-    assert.ok(config.assets.run_worker_first.length <= 100, name);
-  }
+  const name = "cloudflare.config.ts";
+  const config = parseJsonc(await configText(name));
+  assert.ok(config.assets.run_worker_first.some((rule) => claims(rule, DIRECTORY_PATH)), name);
+  assert.ok(config.assets.run_worker_first.length <= 100, name);
 });
 
 test("the /garage/pqc worked example quotes the published kid, so the page cannot teach the label shape", async () => {
