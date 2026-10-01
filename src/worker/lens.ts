@@ -15,6 +15,7 @@ import { asRecord, asText, isCallable } from "./lib/parse.ts";
 import { overBudget } from "./lib/ratelimit.ts";
 import { parseMcpBody } from "./lib/mcp-protocol.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
+import { VIEW_SAMPLE, classifyWalls } from "./lens-walls.ts";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -2681,6 +2682,23 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       ]);
     });
 
+    // A 2xx that is really a wall: one Clef call over every view the regex left
+    // unflagged (lens-walls.ts has the measurement). Skipped once the platform
+    // has refused probes, since a refused call would read as unread anyway and
+    // the budget is what ran out. Before readiness, so a walled CONTROL stops
+    // counting as admitted and the crawler rows read as unmeasured.
+    if (Array.isArray(botViews) && botViews.length && !(disco.refused || subrequestLimitIn({ mdNego, botViews }))) {
+      const walls = await span("lens.discovery.walls", async (s) => {
+        const w = await classifyWalls(botViews, env || {});
+        s.setAttribute("lens.walls_asked", w.asked);
+        s.setAttribute("lens.walls_distinct", w.distinct);
+        s.setAttribute("lens.walls_flagged", w.flagged);
+        s.setAttribute("lens.walls_outcome", w.outcome);
+        return w;
+      });
+      out.phases.wallCheck = walls.outcome;
+    }
+
     out.phases.discovery = true;
     out.phases.botViews = Array.isArray(botViews) && botViews.length > 0;
     out.phases.discoveryCached = !!disco.cached;
@@ -3273,7 +3291,7 @@ export async function lensProbeBotView(targetUrl, env, profile) {
     const contentType = (res.headers.get("content-type") || "").split(";")[0].trim();
     const cap = await lensReadCapped(res, 2048);
     const challenge = res.headers.get("cf-mitigated") === "challenge" || /challenge-platform|<title>Just a moment/i.test(cap.text);
-    return {
+    const view = {
       key: profile.key, label: profile.label, owner: profile.owner, role: profile.role || "train", userAgent: profile.ua,
       status: res.status, contentType, sampleBytes: cap.text.length,
       blocked: challenge || [401, 403, 406, 429, 451].includes(res.status), challenge,
@@ -3282,6 +3300,10 @@ export async function lensProbeBotView(targetUrl, env, profile) {
       // aadhar.sh scan. Fall back to targetUrl, matching lensInspect's `res.url || targetUrl`.
       redirected: (res.url || targetUrl) !== targetUrl,
     };
+    // The sample rides on a symbol key so it never reaches JSON (lens-walls.ts),
+    // and classifyWalls reads it to ask whether a 2xx was really the site.
+    view[VIEW_SAMPLE] = cap.text;
+    return view;
   } catch (e) {
     return { key: profile.key, label: profile.label, owner: profile.owner, role: profile.role || "train", userAgent: profile.ua, status: null, contentType: "", sampleBytes: 0, blocked: false, challenge: false, error: (e && e.message) || String(e) };
   } finally { clearTimeout(to); }
