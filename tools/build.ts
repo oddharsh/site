@@ -2218,6 +2218,18 @@ const SHELL_RANKED = new Set([...CONTENT_HASHED].filter((f) => !PAGE_SCOPED_HASH
   console.log(`quiz data: ${files} payloads moved to /a/quiz-*.json (${(bytesOut / 1024).toFixed(1)} KiB raw)`);
 }
 
+// 5e) name the commit this Worker was built from. Workers Builds sets
+// WORKERS_CI_COMMIT_SHA on every build; everything else leaves BUILD_INFO null.
+// It goes into the staged WORKER and never into public/, so the static tree stays
+// identical from every builder, which is what tools/check-served.ts verifies.
+{
+  const { buildInfoFromEnv, bakeBuildInfo } = await import("./lib/build-info.ts");
+  const info = buildInfoFromEnv(process.env);
+  const p = `${OUT}/src/worker/lib/build-info.ts`;
+  await writeFile(p, bakeBuildInfo(await readFile(p, "utf8"), info));
+  console.log(info ? `build-info: ${info.commit.slice(0, 12)} on ${info.branch ?? "?"}` : "build-info: not a Workers Builds build, BUILD_INFO stays null");
+}
+
 // The fresh family corpus step 6 derives. Whether it SHIPS is step 8's call, made
 // against the final page bytes and the committed src/dict/f-dict dictionary.
 let freshFamily: Buffer | null = null;
@@ -3385,8 +3397,8 @@ let freshFamily: Buffer | null = null;
     // section prefixes, worker-first for the pages. Text, data, the section's own
     // scripts (/lwe/ask.js, the vendored /garage/pretext.lib.js) and the readable
     // .src.html twins, all through serveStaticPage's extension branch (hasTextTwin).
-    /^(?:garage|lwe|pixel-peeper|access)\/.+\.(?:md|txt|xml|json|js|css)$/,
-    /^(?:garage|lwe|pixel-peeper|access)\/.+\.src\.html$/,
+    /^(?:garage|lwe|pixel-peeper|access|dotfiles)\/.+\.(?:md|txt|xml|json|js|css)$/,
+    /^(?:garage|lwe|pixel-peeper|access|dotfiles)\/.+\.src\.html$/,  // dotfiles joined 2026-10-01: served:check found its twin 307ing
     /^writing\/[^/]+\.(?:json|txt|xml)$/,        // /writing/* is worker-first for the slug route
     /^images\/(?:meta\/)?[^/]+\.json$/,          // the data indexes and the per-photo meta
     /^[^/]+\.md$/,                                 // root-level Markdown twins, "/*.md"

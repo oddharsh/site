@@ -259,6 +259,18 @@ bun run dcz:check
 bun run q11:check
 bun run q11:check -- --url http://localhost:8799 --accept-encoding br
 
+# DOES PRODUCTION SERVE WHAT CI BUILT? ci.yml cuts a manifest of every static URL
+# and its sha256 from its own build of each main commit and signs it (actions/
+# attest). This reads the commit production reports in /whoareyou.json, fetches
+# that commit's manifest, checks ci.yml signed it, and GETs every URL from
+# production, comparing DECODED bytes. The after-release job runs it with --since
+# (only what the release changed); served-check.yml runs the full sweep nightly.
+# Static tree only: the Worker bundle and per-request routes are out of its reach.
+# Exit 0 green, 1 a finding, 2 the instrument. Needs `gh` auth.
+bun run served:check
+bun run served:check -- --since <commit>     # the per-release scope
+bun run served:check -- --manifest m.json --commit <sha> --no-attest   # a hand-cut manifest
+
 # THE CANARY TRIPWIRE: three moving targets through gates this repo already
 # holds its pins to, PROPOSING NOTHING. .github/workflows/canary.yml runs all
 # three nightly and keeps at most one open issue per leg (canary-report.ts
@@ -631,6 +643,50 @@ worktrees may edit freely, but a worktree is not a release surface.
   rather than against a declared list, on purpose: a list invites someone to add
   an entry to `infra.json` to turn a red check green, which is the precise change
   the check exists to catch.
+- **Two builders make every release, and since 2026-10-01 something checks they
+  agree.** `validate` builds a commit to test it; Workers Builds builds the same
+  commit again to ship it. Everything here that calls a build "a pure function of
+  the commit" (q11 twins, dcz deltas, the 0-of-1443 upload after the bun cutover)
+  is a claim about those two, and nothing compared them until `bun run
+  served:check` (tools/check-served.ts, tools/lib/served-manifest.ts).
+
+  | piece | where |
+  |---|---|
+  | the commit production was built from | `BUILD_INFO`, baked into the WORKER by build.ts step 5e from Workers Builds' `WORKERS_CI_COMMIT_SHA`; `/whoareyou.json` reports it as `build.commit` and "Built from commit" |
+  | what CI built | the `served-manifest` artifact of ci.yml's push run, cut straight after `perf-budget` |
+  | proof CI made it | the `attest` job in ci.yml, verified with `--signer-workflow` ci.yml and `--source-ref refs/heads/main` |
+  | per release | promote-production's after-release job, `--since` the commit `production` pointed at before |
+  | nightly | served-check.yml, every URL |
+
+  **The commit lives in the Worker and never in `public/`**, because a commit
+  in a served file changes that file on every deploy, which re-mints what hashes
+  it and breaks the very property being checked. A build with and without the
+  Workers Builds variables writes a byte-identical manifest, and the contract
+  test pins the bake to the staged Worker path.
+
+  **The first comparison agreed and still found a bug.** A macOS build of
+  `5fb917b3` against the Linux build production served: 1849 of 1850 URLs
+  identical after decoding. The 1850th was `/dotfiles/index.src.html`, the
+  readable source the page's own banner links, answering 307. `/dotfiles`
+  (#876) postdated build.ts's text-twin allowlist, so that twin had no `.br`,
+  the Worker handed it to the asset layer, and html_handling stripped the
+  `.html`. A route oracle row holds it now, with the missing twin as its
+  control. The comparison refuses redirects for exactly this reason: a followed
+  307 hashes the destination and calls the wrong URL a match.
+
+  **Why the release check is scoped.** 716 of the 1850 URLs reach the Worker
+  (the rest are asset-layer hits and cost no observability event), and 13
+  releases shipped on 2026-09-30, so a full sweep per release would be roughly
+  9,300 Worker invocations a day against the 200K/day quota before counting
+  spans. The release changes a known set of URLs; the nightly sweep catches what
+  changes none (an edge rewrite, gotcha 20; a routing change).
+
+  It cannot see the Worker bundle, since no public URL returns those bytes, or
+  any route rendered per request. Quote its verdict as "the static tree", never
+  as "production". The `attest` job carries `continue-on-error`, because
+  promote-production waits for this workflow to COMPLETE and an attestation
+  outage must not block a release; an unattested manifest is a finding in the
+  check instead.
 - **Reaching `production` deploys at 100%, since 2026-09-28.** Workers Builds
   runs `wrangler deploy` on the `production` branch, so a promoted commit serves
   everyone a few minutes after CI passes on `main`. Branch builds still run

@@ -37,6 +37,7 @@ jobs:
       RELEASE_SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
     outputs:
       before: ${{ steps.before.outputs.version }}
+      before_commit: ${{ steps.before.outputs.commit }}
       promoted: ${{ steps.promote.outputs.promoted }}
 
     steps:
@@ -82,6 +83,14 @@ jobs:
               done | sort -u | paste -sd ' ' -)"
           echo "serving before promotion: ${v:-unknown}"
           echo "version=${v}" >> "$GITHUB_OUTPUT"
+          # The commit the previous release was built from, which is where the
+          # production branch points until the next step moves it. The post-release
+          # check compares only what changed since it (tools/check-served.ts --since).
+          c="$(gh api "/repos/${GITHUB_REPOSITORY}/branches/production" --jq '.commit.sha' || true)"
+          echo "production commit before promotion: ${c:-unknown}"
+          echo "commit=${c}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Promote exact tested commit to production
         id: promote
@@ -143,6 +152,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+      attestations: read # served:check verifies CI's signature on the manifest
     steps:
       - name: Wait for Workers Builds to deploy the release
         id: live
@@ -182,6 +192,20 @@ jobs:
       - name: Install dependencies
         if: steps.live.outputs.deployed == 'true'
         run: bun install --frozen-lockfile
+
+      # Advisory, like the dictionary check: it reads production after the fact
+      # and can only report. It compares the URLs this release CHANGED (against
+      # the manifest of the commit production served before) with the bytes
+      # production now returns, and checks ci.yml signed that manifest. The full
+      # sweep runs nightly in served-check.yml; a full one per release would put
+      # about 716 Worker invocations on the observability quota 13 times a day.
+      - name: Production serves what CI built
+        if: steps.live.outputs.deployed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SINCE: ${{ needs.promote.outputs.before_commit }}
+        run: bun run served:check ${SINCE:+--since "$SINCE"}
 
       # Advisory: a stale dictionary tier is a lost optimisation, not an outage.
       - name: Dictionary tiers against live production

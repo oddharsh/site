@@ -26,6 +26,8 @@
     "resample:probe": "bun tools/photos/resample-probe.ts",
     "captions": "bun tools/photos/gen-alt-text.ts",
     "perf-budget": "bun tools/perf-budget.ts",
+    "served:manifest": "bun tools/served-manifest.ts",
+    "served:check": "bun tools/check-served.ts",
     "perf:snapshot": "bun tools/perf-snapshot.ts",
     "deps:dedupe": "bun dedupe --check",
     "deps:audit": "bun audit",

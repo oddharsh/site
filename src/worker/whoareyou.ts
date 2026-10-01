@@ -1,6 +1,7 @@
 // whoareyou.ts — /whoareyou (System Properties), its values island, and the
 // /whoareyou.json feed the tray and the release canary read. Bundled by wrangler.
 import { BOT_UA } from "./lib/botauth.ts";
+import { BUILD_INFO } from "./lib/build-info.ts";
 import { deadline } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
@@ -177,7 +178,7 @@ export async function gatherWhoareyou(request, ctx) {
 // strings; extra detail that is itself DATA (continent, allocation type,
 // last-changed date, QUIC) rides inline. pure explanation (what a field means,
 // why it matters) is omitted — the popout shows fields, the page carries prose.
-export function buildWhoareyouGroups(data, ua, rdap, version) {
+export function buildWhoareyouGroups(data, ua, rdap, version, build = BUILD_INFO) {
   const net = [
     { k: "IP address", v: data.ip },
     { k: "ISP / ASN", v: `${data.asOrg} (AS${data.asn})` },
@@ -226,7 +227,7 @@ export function buildWhoareyouGroups(data, ua, rdap, version) {
   // and are not exposed on request.cf, so the worker genuinely cannot know
   // them. The page fills them in the browser; this JSON feed is server-rendered
   // and would have to invent them, so it says nothing instead.
-  // The one field here that describes the SERVER rather than the caller, and it
+  // The first field here that describes the SERVER rather than the caller, and it
   // is here because "what does one request reveal" honestly includes which build
   // answered it. During a gradual deployment two versions serve this route at
   // once, so an outside prober polling this feed is how a ramp gets verified from
@@ -237,7 +238,16 @@ export function buildWhoareyouGroups(data, ua, rdap, version) {
   //
   // Omitted entirely when unbound (local dev, the contract tests) rather than
   // filled with a placeholder, same nullable discipline as the photo pipeline.
-  const server = version ? [{ k: "Serving version", v: version, mono: true }] : [];
+  //
+  // "Built from commit" is the other half: the source that version was built
+  // from, baked in by build.ts step 5e (lib/build-info.ts). A version names an
+  // upload and no commit, so the commit is what lets tools/check-served.ts ask CI
+  // for the manifest this release should match. Absent outside Workers Builds,
+  // same discipline.
+  const server = [
+    version ? { k: "Serving version", v: version, mono: true } : null,
+    build ? { k: "Built from commit", v: build.commit, mono: true } : null,
+  ].filter(Boolean);
 
   return [
     { title: "Network adapter", fields: net.filter(Boolean) },
@@ -251,7 +261,13 @@ export function buildWhoareyouGroups(data, ua, rdap, version) {
 export async function handleWhoareyouJson(request, env, ctx) {
   const { data, ua, rdap } = await gatherWhoareyou(request, ctx);
   const version = env?.CF_VERSION_METADATA?.id;
-  const body = JSON.stringify({ groups: buildWhoareyouGroups(data, ua, rdap, version) });
+  // `build` is the same facts as the Server group, for a reader that wants them
+  // without walking the groups. Null when there is neither a version binding nor
+  // a Workers Builds commit, and each missing half is null, never a placeholder.
+  const build = version || BUILD_INFO
+    ? { version: version ?? null, commit: BUILD_INFO?.commit ?? null, branch: BUILD_INFO?.branch ?? null, build: BUILD_INFO?.build ?? null }
+    : null;
+  const body = JSON.stringify({ groups: buildWhoareyouGroups(data, ua, rdap, version), build });
   return new Response(body, {
     headers: {
       "content-type":    "application/json; charset=utf-8",
