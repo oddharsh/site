@@ -392,6 +392,11 @@ const worker = defineWorker({
     // SQL API + ANALYTICS_READ_TOKEN as the ledger. AE datasets materialize on
     // first write: no id, nothing for infra:apply to provision.
     PERF_PROBE: bindings.analyticsEngineDataset({ name: "aadhar_perf_probe" }),
+    // The miss ledger: every 404 the Worker answered or recovered, by caller
+    // class and path bucket (lib/not-found.ts). It exists because the bot
+    // ledger drops every response >= 400 and the request log carries no
+    // user-agent, so until 2026-10-01 nothing here could say what agents miss.
+    MISS_LEDGER: bindings.analyticsEngineDataset({ name: "aadhar_misses" }),
 
     PHOTOS_R2: bindings.r2({ name: "aadhar-photos" }),
 
