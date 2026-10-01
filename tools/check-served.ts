@@ -125,4 +125,4 @@ if (findings.length) {
   console.log(`served:check: FINDING: ${findings.join("; ")}`);
   process.exit(1);
 }
-console.log(`served:check: production serves what CI built, ${results.length} of ${results.length} URLs`);
+console.log(`served:check: ${values.origin} serves what CI built, ${results.length} of ${results.length} URLs`);

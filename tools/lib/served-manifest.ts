@@ -61,7 +61,11 @@ export function parseAssetsIgnore(text: string): (rel: string) => boolean {
     }
     const anchored = rule.startsWith("/");
     const body = rule.replace(/^\//, "").replace(/\/$/, "");
-    const parts = body.split("/").map((seg) => new RegExp(`^${seg.replace(/[.+^${}()|]/g, "\\$&").replace(/\*/g, "[^/]*")}$`));
+    // Split on the one wildcard first, then escape EVERY regex metacharacter in
+    // the literal pieces, so the escape is complete on its own rather than
+    // leaning on the syntax guard above to keep a backslash out.
+    const literal = (s: string) => s.replace(/[\\^$.*+?()[\]{}|/]/g, "\\$&");
+    const parts = body.split("/").map((seg) => new RegExp(`^${seg.split("*").map(literal).join("[^/]*")}$`));
     return (rel: string) => {
       const segs = rel.split("/");
       const starts = anchored || parts.length > 1 ? [0] : segs.map((_, i) => i);

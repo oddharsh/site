@@ -49,6 +49,13 @@ test("served-manifest: an encoding, a config file or an ignored path is not a UR
   for (const rel of ["bot.md", "garage/custom-media.css", "markdown/x.md", "index.html", "a/luna.0dbcdba1.css"]) {
     assert.equal(isServedFile(rel, ignored), true, `${rel} is served at its own URL`);
   }
+  // Regex metacharacters in a rule are literal: "a+b.css" is that file and no other.
+  const literal = parseAssetsIgnore("a+b.css\n(x)|y\n");
+  assert.equal(literal("a+b.css"), true);
+  assert.equal(literal("aab.css"), false);
+  assert.equal(literal("a+bxcss"), false);
+  assert.equal(literal("(x)|y"), true);
+  assert.equal(literal("x"), false);
   // A rule this reader would misread must fail the manifest rather than list a
   // file the upload skips (or skip one it uploads).
   for (const rule of ["!keep.md", "a/**/b", "file?.txt", "[ab].css"]) {
