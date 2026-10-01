@@ -527,6 +527,9 @@ const ROUTES = [
   // (2026-10-01): /dotfiles postdated the text-twin allowlist, so its readable
   // twin had no .br, fell through to the asset layer and answered 307.
   { path: "/dotfiles/index.src.html", status: 200, ct: "text/html", marker: "<html lang", encoding: "br" },
+  // The IndexNow key file. Engines fetch it to verify a submission came from
+  // the host, so a 404 here turns every post-release submission into a 403.
+  { path: "/57f3182c72aa0d0075d7128bf27cb016.txt", status: 200, ct: "text/plain", marker: "57f3182c72aa0d0075d7128bf27cb016" },
 ];
 
 // One negotiation row per agents:true surface, DERIVED from the registry rather
