@@ -153,7 +153,7 @@ export async function callDataTool(name, args, request, env, ctx): Promise<Recor
     // specifies them together.
     const parsed = parseAskRequest(new URL("https://aadhar.sh/ask"), args);
     if (!parsed.ok) return toolError(parsed.error.error);
-    return nlwebAsk(env, parsed.params);
+    return nlwebAsk(env, parsed.params, request);
   }
   if (name === "search_site") return searchSite(env, args.q, args.limit);
   if (name === "photo_query") return queryPhotos(env, args, ctx);

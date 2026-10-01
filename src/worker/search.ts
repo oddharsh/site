@@ -116,6 +116,21 @@ export async function searchSiteRanked(env, query: string, limit: string | numbe
     })),
   };
 }
+/**
+ * The whole corpus as excerpt-ready records, for /ask's Clef ranking, which
+ * chooses across every page rather than reordering the lexical matches
+ * (ask-rank.ts has the measurement). Each record carries the snippet the
+ * lexical pass would have shown for this query, so a page Clef found without a
+ * matching word still reads the same way in the answer.
+ */
+export async function searchCorpusFor(env, query: string) {
+  const q = String(query || "").trim().slice(0, 160);
+  const meaningful = queryTermsOf(q).terms;
+  const queryTerms = meaningful.length ? meaningful : terms(q);
+  const records = await getSearchIndex(env);
+  return records.map((entry) => ({ ...entry.record, snippet: snippet(entry.excerpt, entry.excerptLower, queryTerms) }));
+}
+
 export async function searchSite(env, query: string, limit: string | number | null = 20) {
   const ranked = await searchSiteRanked(env, query, limit);
   return {

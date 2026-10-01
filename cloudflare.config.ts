@@ -483,6 +483,11 @@ const worker = defineWorker({
     // fetch, a D1 write and a Resend email, so this is the one budget here whose
     // overrun spends somebody else's quota as well as ours.
     WEBMENTION_RL: bindings.rateLimit({ namespace: "1015", simple: { limit: 10, period: 60 } }),
+    // /ask and the MCP `ask` tool: each question is one Clef call over the
+    // whole corpus (src/worker/ask-rank.ts). Past this a caller gets the
+    // lexical ranking, named in `_meta.ranking`, rather than a refusal.
+    // Mirrored in ASK_BUDGET.
+    ASK_RL: bindings.rateLimit({ namespace: "1016", simple: { limit: 20, period: 60 } }),
 
     // Not a secret: an account id is an identifier, and this one is already
     // committed as the default in tools/photos/gen-alt-text.ts. It is a VAR
