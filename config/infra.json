@@ -1218,6 +1218,14 @@
           "why": "These files decide which commit becomes a release and how traffic reaches it. A mistake here is not caught by the page rendering correctly, so the label exists to make the review bar visible from the pull request list."
         },
 
+        {
+          "name": "workers-issue",
+          "color": "b60205",
+          "description": "Opened by the Workers Issues triage routine for a production error",
+          "applied_by": "routine",
+          "why": "Cloudflare Workers Issues hands each new or recurring production error to a Claude Code routine (docs/routines/workers-issue-triage.md), which searches for this label plus a marker line to keep ONE issue per error. Declared because a label the routine applies without it would be minted silently, which is the failure this block exists to catch."
+        },
+
         { "name": "dependencies", "color": "0366d6", "description": "Pull requests that update a dependency file", "applied_by": "dependabot" },
         { "name": "javascript", "color": "168700", "description": "Pull requests that update javascript code", "applied_by": "dependabot" }
       ]

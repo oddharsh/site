@@ -1,0 +1,178 @@
+name: Preview check
+
+# Does this branch's PREVIEW serve what this branch builds?
+#
+# Workers Builds uploads every push as a version with a preview URL (they serve
+# since 2026-09-29, when aadhar-sh stopped exporting a Durable Object). Until now
+# nothing read one: every check that reads a live site here reads production,
+# after the merge. This job builds the PR's head commit, waits for Workers
+# Builds to finish the same commit, and compares the two with served:check, URL
+# by URL, decoded. It is #1073's production check pointed at the release before
+# it is one.
+#
+# SCOPE. Only the URLs whose bytes differ from what production serves, read off
+# the manifest ci.yml signed for production's commit. A preview is the same
+# Worker script as production, so its requests land on the same 200K/day
+# observability quota, and a full sweep is about 716 Worker invocations a push.
+# With no production manifest to diff against (before #1073 ships, or for a
+# commit CI never cut one for), it checks every URL.
+#
+# WHAT A PREVIEW CANNOT SHOW. It runs on workers.dev, outside the aadhar.sh zone,
+# so zone features never touch it: Transform Rules (version affinity), 0-RTT,
+# the zone's shared-dictionary passthrough, Early Hints. It also refuses writes
+# by design (src/worker/lib/preview.ts). What it does show is everything the
+# Worker and the asset layer do with this branch's build, on Cloudflare rather
+# than on miniflare, which is where gotcha 13's encoding traps live.
+#
+# Advisory. It is not a required check and it gates nothing; a red run is a
+# finding to read, posted as one comment that updates in place.
+
+on:
+  pull_request:
+    paths:
+      - "public/**"
+      - "src/**"
+      - "cal/**"
+      - "serendipity/**"
+      - "tools/**"
+      - "config/site-manifest.json"
+      - "cloudflare.config.ts"
+      - "wrangler.config.ts"
+      - "bun.lock"
+      - ".github/workflows/preview-check.yml"
+      - "!public/i/**"
+      - "!public/images/**"
+      - "!public/cars/**"
+      - "!public/og/**"
+      - "!src/dict/p-dict/**"
+      - "!src/dict/a-dict/**"
+      - "!**.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  served:
+    name: preview serves what this branch builds
+    # Workers Builds builds this repository's branches only, so a fork has no
+    # preview to read, and its token could not comment anyway.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read        # production's manifest is a ci.yml artifact
+      checks: read         # the preview URL is in Workers Builds' check run
+      pull-requests: write # the one comment, same-repo PRs only, as perf-diff
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      # The HEAD commit, not the merge commit pull_request checks out by default:
+      # Workers Builds builds the branch, so that is the build to compare with.
+      - name: Check out the head commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Runs while Workers Builds builds the same commit, so the wait below is
+      # usually short or nothing.
+      - name: Build the head commit
+        run: bun run build
+
+      - name: Cut its served manifest
+        run: bun run served:manifest --commit "$HEAD_SHA" --out "$RUNNER_TEMP/head-manifest.json"
+
+      - name: Wait for Workers Builds to publish the same commit
+        id: preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun run preview:target --sha "$HEAD_SHA" --wait 900
+
+      - name: Compare the preview with the build
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW: ${{ steps.preview.outputs.url }}
+        run: |
+          prod="$(gh api "/repos/${GITHUB_REPOSITORY}/branches/production" --jq '.commit.sha' || true)"
+          set +e
+          bun run served:check --origin "$PREVIEW" --manifest "$RUNNER_TEMP/head-manifest.json" \
+            --commit "$HEAD_SHA" --no-attest ${prod:+--since "$prod"} > "$RUNNER_TEMP/served.txt" 2>&1
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/served.txt"
+          echo "code=${code}" >> "$GITHUB_OUTPUT"
+          echo "prod=${prod}" >> "$GITHUB_OUTPUT"
+
+      - name: Write the report
+        if: always() && steps.check.outputs.code != ''
+        env:
+          PREVIEW: ${{ steps.preview.outputs.url }}
+          CODE: ${{ steps.check.outputs.code }}
+          PROD: ${{ steps.check.outputs.prod }}
+        run: |
+          case "$CODE" in
+            0) if grep -q "nothing to compare" "$RUNNER_TEMP/served.txt"; then
+                 verdict="**NOTHING TO COMPARE.** No static file differs from production, so no bytes were checked."
+               else
+                 verdict="**PASS.** The preview serves exactly what this commit builds."
+               fi ;;
+            1) verdict="**FINDING.** The preview and this commit's build disagree; the lines below name each URL." ;;
+            *) verdict="**NOT MEASURED** (exit ${CODE}). The check could not run, so this says nothing about the preview." ;;
+          esac
+          {
+            echo "<!-- preview-served-check -->"
+            echo "## Preview vs this branch's build"
+            echo
+            echo "Preview ${PREVIEW} against a build of \`${HEAD_SHA:0:12}\`, every URL whose bytes differ from production \`${PROD:0:12}\`. Decoded bytes, no redirects followed. **Advisory: it gates nothing.**"
+            echo
+            echo "$verdict"
+            echo
+            echo '```'
+            head -n 60 "$RUNNER_TEMP/served.txt"
+            echo '```'
+            echo
+            echo "Covers the static tree. A preview runs outside the aadhar.sh zone, so zone rules and settings are not in it."
+          } > "$RUNNER_TEMP/preview.md"
+          cat "$RUNNER_TEMP/preview.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment the report on the pull request
+        if: always() && steps.check.outputs.code != ''
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          REPORT_PATH: ${{ runner.temp }}/preview.md
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("node:fs");
+            const marker = "<!-- preview-served-check -->";
+            const body = fs.readFileSync(process.env.REPORT_PATH, "utf8");
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner, repo: context.repo.repo, issue_number, per_page: 100,
+            });
+            // One current report per PR, updated in place, the perf-diff rule.
+            const prior = comments.find((comment) => comment.body?.includes(marker));
+            if (prior) {
+              await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: prior.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number, body });
+            }
+
+      # Last, so the comment lands either way: a finding reds this run, while the
+      # instrument failing (exit 2) stays a note, since "could not look" is not
+      # evidence that the preview is wrong.
+      - name: Fail on a finding
+        if: steps.check.outputs.code == '1'
+        run: exit 1

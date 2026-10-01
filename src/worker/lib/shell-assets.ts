@@ -44,6 +44,14 @@ export const PAGE_DICTIONARY: string = ""; // build:page-dictionary
 // dev` speculates nothing.
 export const SPECULATION_RULES: string = ""; // build:speculation-rules
 
+// Every content-hashed file in /a/, keyed by its name with the hash taken out
+// ("icons.svg" -> "/a/icons.<hash8>.svg"). lib/not-found.ts reads it to send a
+// request for a SUPERSEDED hash to the current one: on 2026-10-01 stale /a/
+// URLs were 57% of every 404 this site answered, one crawler asking 1,737 times
+// for a sprite two releases old. Empty in readable local development, where
+// nothing is hashed; build.ts fills it after the last /a/ file is written.
+export const HASHED_ASSETS: Record<string, string> = {}; // build:hashed-assets
+
 // luna.css first: it is render-blocking style, so it outranks the deferred
 // nav.js script. Browsers dedupe a preload against the in-document <link
 // rel=preload> + the eventual request by URL, so this never double-fetches.
