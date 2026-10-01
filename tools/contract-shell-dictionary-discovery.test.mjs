@@ -15,6 +15,7 @@ test("dictionary discovery never turns JSON data or source maps into scripts", (
     <script type="application/json" src="/a/quiz-lwe-utf8.94c40998.json"></script>
     fetch("/a/pixel-peeper-manifest.119c850a.json");
     /a/nav.1234abcd.js.map /a/nav.1234abcd.javascript
+    /a/nav.1234abcd.js-other /a/nav.1234abcd.js/nested /a/nav.1234abcd.js%2Emap
     /a/nav.1234abc.js /a/nav.1234abcde.js
   `), []);
 });

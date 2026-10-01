@@ -12,5 +12,5 @@ export const SHELL_DISCOVERY_ROOTS = ["/", "/lens", "/lwe/utf8", "/writing", "/d
 // extension must be complete: .json is not a .js URL, nor is .js.map a script.
 // Query strings and SVG fragments sit outside the filename.
 export function shellAssetRefs(body: string): string[] {
-  return [...body.matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css|svg))(?![\w.])/g)].map(([, name]) => name);
+  return [...body.matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css|svg))(?![\w./%-])/g)].map(([, name]) => name);
 }
