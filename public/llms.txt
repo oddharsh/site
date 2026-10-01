@@ -203,12 +203,16 @@ on, which is the only arrangement where photographs never have to move.
   `schema_object`. STREAMING IS ON BY DEFAULT, per the protocol: a bare
   `GET /ask?query=...` is an event stream, and `streaming=0` returns one JSON
   body. A structured POST body (`{"query":{"text":...},"prefer":{...}}`) selects
-  the v0.55 dialect and answers in named SSE events. Only `mode=list` is served:
-  `summarize` and `generate` need a language model this origin does not run, so
-  they are refused by name with `supported_modes` attached rather than quietly
-  answered as a list. Descriptions are extractive rather than model-written, and
-  `_meta` says so on every answer. The same answer is available as the `ask`
-  tool on [/mcp](https://aadhar.sh/mcp).
+  the v0.55 dialect and answers in named SSE events. Results are ranked by
+  Clef, a decision model that chooses among every page on the site, so a page
+  can answer a question it shares no word with; `score` is then the probability
+  Clef puts on that page. When Clef is slow, rate-limited or unavailable the
+  answer falls back to lexical ranking, and `_meta.ranking` says which ran.
+  Only `mode=list` is served: `summarize` and `generate` need a generative model
+  this origin does not run, so they are refused by name with `supported_modes`
+  attached rather than quietly answered as a list. Descriptions are extractive
+  rather than model-written, and `_meta` says so on every answer. The same
+  answer is available as the `ask` tool on [/mcp](https://aadhar.sh/mcp).
 
 ## Redirects
 

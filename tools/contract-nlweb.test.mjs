@@ -144,7 +144,8 @@ test("/ask says when it took a follow-up query literally", async () => {
   assert.equal(plain.decontextualized_query, NLWEB_HIT, "the searched string is always reported");
 
   const followUp = await (await askGet(`?query=${NLWEB_HIT}&prev=tell%20me%20about%20it&streaming=0`)).json();
-  assert.match(followUp._meta.decontextualization, /no language model/i);
+  // Clef ranks the list and cannot rewrite text, so the reason is GENERATIVE.
+  assert.match(followUp._meta.decontextualization, /no generative model/i);
 
   // A caller who resolved the follow-up themselves is believed, and the searched
   // string is reported either way so the two can be compared.
@@ -198,7 +199,7 @@ test("the ask MCP tool and /ask are the same answer", async () => {
   assert.deepEqual(viaTool.results, viaRoute.results);
   // The tool inherits the route's refusals rather than re-implementing them.
   const refused = await callDataTool("ask", { query: NLWEB_HIT, mode: "generate" }, req, nlwebEnv(), undefined);
-  assert.match(refused._error, /language model/i);
+  assert.match(refused._error, /generative model/i);
 });
 
 // The lens half. foreignNlwebAsk reaches a foreign origin, which no test can do

@@ -18,6 +18,7 @@ test("every rate-limit ceiling matches the ratelimits declared in both wrangler 
   const { LENS_BUDGETS } = await import("../src/worker/lens.ts");
   const { MCP_BUDGETS } = await import("../src/worker/mcp.ts");
   const { WEBMENTION_BUDGET } = await import("../src/worker/webmention.ts");
+  const { ASK_BUDGET } = await import("../src/worker/ask-rank.ts");
   const { parseJsonc } = await import("./lib/jsonc.ts");
 
   // EVERY per-IP budget on the site, not just Lens's. The orphan check at the
@@ -26,12 +27,12 @@ test("every rate-limit ceiling matches the ratelimits declared in both wrangler 
   // declared and would catch the next one too. A budget that lives in a module
   // this list forgets reads as an orphan and fails here, which is the correct
   // and cheap way to find out.
-  const BUDGETS = { ...LENS_BUDGETS, ...MCP_BUDGETS, webmention: WEBMENTION_BUDGET };
+  const BUDGETS = { ...LENS_BUDGETS, ...MCP_BUDGETS, webmention: WEBMENTION_BUDGET, ask: ASK_BUDGET };
   // Two budget tables plus a singleton is three chances to typo a key into
   // nothing, and a `{...a, ...b}` that silently loses one still passes every
   // assertion below. Count what went in.
   assert.equal(Object.keys(BUDGETS).length,
-    Object.keys(LENS_BUDGETS).length + Object.keys(MCP_BUDGETS).length + 1,
+    Object.keys(LENS_BUDGETS).length + Object.keys(MCP_BUDGETS).length + 2,
     "two budgets share a key, so one of them is not being checked");
 
   // And one binding per budget ACROSS the tables, not just inside Lens's. Two

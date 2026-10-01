@@ -25,8 +25,11 @@
 //
 // WHAT THIS SERVER WILL NOT PRETEND TO DO. NLWeb's `mode` has three values and
 // two of them need an LLM: `summarize` writes a summary of the list, `generate`
-// is RAG. This Worker has no AI binding, deliberately, so both are refused by
-// name with the supported set attached rather than quietly served as `list`.
+// is RAG. This Worker runs no GENERATIVE model, deliberately, so both are
+// refused by name with the supported set attached rather than quietly served
+// as `list`. It does run Clef since 2026-10-01, a decision model that ranks
+// the list (ask-rank.ts) and can only pick among options, never write text, so
+// it changes the order of `list` and none of this paragraph.
 // The same rule governs `prev`: decontextualizing a follow-up ("what about the
 // other one?") is a model's job, so a caller who sends `prev` without
 // `decontextualized_query` gets their raw query searched AND a field saying so.
@@ -42,7 +45,9 @@ import { CANONICAL_HOST } from "./lib/const.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { asRecord } from "./lib/parse.ts";
 import { span } from "./lib/trace.ts";
-import { SEARCH_TERM_MAX, searchSiteRanked } from "./search.ts";
+import { SEARCH_TERM_MAX, searchCorpusFor, searchSiteRanked } from "./search.ts";
+import { ASK_BUDGET, ASK_DEADLINE_MS, ASK_FLOOR, MAX_OPTIONS, clefRank } from "./ask-rank.ts";
+import { overBudget } from "./lib/ratelimit.ts";
 
 export const NLWEB_VERSION = "0.55";
 export const NLWEB_SITE = CANONICAL_HOST;
@@ -82,6 +87,10 @@ export function askSchemaObject(record) {
 }
 
 /**
+ * The LEXICAL score, used whenever Clef did not rank the answer (ask-rank.ts
+ * says when). A Clef-ranked answer reports Clef's probability instead, and
+ * `_meta.score` names which one a response carries.
+ *
  * NLWeb scores are a 0-100 relevance. Ours is lexical and additive (8 for a
  * term in the title, 4 in the description, 1 in the body), so the raw number
  * means nothing on its own — it rises with the term COUNT, and a one-word query
@@ -154,7 +163,7 @@ export function parseAskRequest(url, body): { ok: true, params: any } | { ok: fa
       status: known ? 501 : 400,
       error: {
         error: known
-          ? `mode "${modeToken}" needs a language model and this origin runs none. It is refused rather than answered as "list", because a summary you did not get is worse than a summary you were told you cannot have.`
+          ? `mode "${modeToken}" needs a generative model and this origin runs none (Clef, which ranks the list, can only choose, never write). It is refused rather than answered as "list", because a summary you did not get is worse than a summary you were told you cannot have.`
           : `unknown mode "${modeToken}"`,
         parameter: "mode",
         supported_modes: NLWEB_MODES.supported,
@@ -200,16 +209,56 @@ export function parseAskRequest(url, body): { ok: true, params: any } | { ok: fa
  * The answer itself, in NLWeb's result shape. Shared by /ask and the `ask` MCP
  * tool, so the two doors cannot describe this origin differently.
  */
-export async function nlwebAsk(env, params) {
-  const ranked = await searchSiteRanked(env, params.searched, params.limit);
-  const results = ranked.results.map((record) => ({
+// Why a query was ranked lexically, in the words `_meta.ranking` reports.
+const FALLBACK = {
+  "no AI binding": "lexical: no Workers AI binding here",
+  "rate limited": `lexical: this caller passed ${ASK_BUDGET.max} Clef-ranked questions in the last minute`,
+  timeout: `lexical: Clef did not answer within ${ASK_DEADLINE_MS / 1000} s`,
+};
+
+type CorpusRow = Awaited<ReturnType<typeof searchCorpusFor>>[number];
+type ClefRanking = { kept: CorpusRow[], p: (url: string) => number } | { fallback: string };
+
+/**
+ * Clef's ranking of the whole corpus (ask-rank.ts), or the reason there is
+ * none. Pages it put at least ASK_FLOOR on, plus every page the lexical pass
+ * matched, ordered by Clef's probability.
+ */
+async function clefRanked(env, params, request, lexical): Promise<ClefRanking> {
+  if (!env?.AI) return { fallback: "no AI binding" };
+  if (request && await overBudget(ASK_BUDGET, request, env)) return { fallback: "rate limited" };
+  const lexRank = new Map<string, number>(lexical.results.map((r, i) => [r.url, i]));
+  const lexAt = (url: string) => lexRank.get(url) ?? Infinity;
+  let corpus = await searchCorpusFor(env, params.searched);
+  // Past the 255-option ceiling, the lexical matches go first so they survive the cut.
+  if (corpus.length > MAX_OPTIONS) corpus = [...corpus].sort((a, b) => lexAt(a.url) - lexAt(b.url)).slice(0, MAX_OPTIONS);
+  const ranked = await clefRank(env, params.searched, corpus);
+  if ("error" in ranked) return { fallback: ranked.error };
+  const p = (url: string) => ranked.probabilities.get(url) ?? 0;
+  const kept = corpus
+    .filter((r) => p(r.url) >= ASK_FLOOR || lexRank.has(r.url))
+    .sort((a, b) => p(b.url) - p(a.url) || lexAt(a.url) - lexAt(b.url));
+  return { kept, p };
+}
+
+export async function nlwebAsk(env, params, request: Request | null = null) {
+  const limit = Math.min(50, Math.max(1, Number(params.limit) || 20));
+  const lexical = await searchSiteRanked(env, params.searched, 50);
+  const clef = await clefRanked(env, params, request, lexical);
+  const byClef = "kept" in clef;
+  const nlwebResult = (record, score: number) => ({
     url: absolute(record.url),
     name: String(record.title || ""),
     site: NLWEB_SITE,
-    score: askRelevance(record.score, ranked.terms.length),
+    score,
     description: String(record.snippet || record.description || ""),
     schema_object: askSchemaObject(record),
-  }));
+  });
+  const results = "kept" in clef
+    ? clef.kept.slice(0, limit).map((record) => nlwebResult(record, Math.round(clef.p(record.url) * 100)))
+    : lexical.results.slice(0, limit).map((record) => nlwebResult(record, askRelevance(record.score, lexical.terms.length)));
+  const total = "kept" in clef ? clef.kept.length : lexical.total;
+  const ranking = "kept" in clef ? "clef" : (FALLBACK[clef.fallback] || `lexical: Clef answered nothing usable (${clef.fallback})`);
 
   // The revision this SERVER speaks, and separately the dialect this REQUEST
   // was read as. `decontextualization` is absent unless it is true of this
@@ -219,6 +268,7 @@ export async function nlwebAsk(env, params) {
     version: string;
     dialect: string;
     retrieval: string;
+    ranking: string;
     description: string;
     score: string;
     modes_supported: string[];
@@ -226,9 +276,12 @@ export async function nlwebAsk(env, params) {
   } = {
     version: NLWEB_VERSION,
     dialect: params.structured ? "0.55" : "legacy",
-    retrieval: "lexical",
+    retrieval: byClef ? "every page, chosen by Clef" : "lexical",
+    ranking,
     description: "extractive",
-    score: `0-100, relevance as a percentage of the maximum a ${ranked.terms.length}-term query could score`,
+    score: byClef
+      ? "0-100, the probability Clef puts on this page being the best answer, as a percentage; the results sum to at most 100"
+      : `0-100, relevance as a percentage of the maximum a ${lexical.terms.length}-term query could score`,
     modes_supported: NLWEB_MODES.supported,
   };
   const payload = {
@@ -240,7 +293,7 @@ export async function nlwebAsk(env, params) {
     // produced it. A caller comparing the two can see when their follow-up was
     // taken literally.
     decontextualized_query: params.searched,
-    total: ranked.total,
+    total,
     results,
     _meta: responseMeta,
   };
@@ -248,7 +301,7 @@ export async function nlwebAsk(env, params) {
   // Only ever present when it is TRUE of this response: a caller who sent no
   // follow-up context should not read a line about follow-up context.
   if (params.prev.length && !params.decontextualized) {
-    payload._meta.decontextualization = "none — `prev` was received and ignored. This origin runs no language model, so the query was searched verbatim. Send `decontextualized_query` to resolve a follow-up yourself.";
+    payload._meta.decontextualization = "none — `prev` was received and ignored. This origin runs no generative model, so the query was searched verbatim. Send `decontextualized_query` to resolve a follow-up yourself.";
   }
   return payload;
 }
@@ -323,7 +376,8 @@ export async function handleAsk(request, env) {
     s.setAttribute("nlweb.dialect", params.structured ? "v0.55" : "legacy");
     if (params.prev.length) s.setAttribute("nlweb.prev_count", params.prev.length);
 
-    const payload = await nlwebAsk(env, params);
+    const payload = await nlwebAsk(env, params, request);
+    s.setAttribute("nlweb.ranking", payload._meta.ranking);
     s.setAttribute("nlweb.results", payload.results.length);
     s.setAttribute("nlweb.total", payload.total);
 

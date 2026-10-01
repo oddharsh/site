@@ -89,6 +89,8 @@ export interface EnvBindings {
   MCP_RL_REPR_CAPTURE: RateLimit;
   MCP_RL_REPR_COMPARE: RateLimit;
   WEBMENTION_RL: RateLimit;
+  /** /ask's Clef ranking, per IP; past it the answer is lexical (ask-rank.ts). */
+  ASK_RL: RateLimit;
 
   BROWSER: BrowserRun;
   IMAGES: ImagesBinding;

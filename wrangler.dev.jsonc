@@ -241,7 +241,8 @@
     { "name": "MCP_RL_IMAGE_COMPARE",   "namespace_id": "1012", "simple": { "limit": 4,  "period": 60 } },
     { "name": "MCP_RL_REPR_CAPTURE",    "namespace_id": "1013", "simple": { "limit": 4,  "period": 60 } },
     { "name": "MCP_RL_REPR_COMPARE",    "namespace_id": "1014", "simple": { "limit": 8,  "period": 60 } },
-    { "name": "WEBMENTION_RL", "namespace_id": "1015", "simple": { "limit": 10, "period": 60 } }
+    { "name": "WEBMENTION_RL", "namespace_id": "1015", "simple": { "limit": 10, "period": 60 } },
+    { "name": "ASK_RL", "namespace_id": "1016", "simple": { "limit": 20, "period": 60 } }
   ],
   "vars": {
     // Not a secret: an account id is an identifier, and this one is already

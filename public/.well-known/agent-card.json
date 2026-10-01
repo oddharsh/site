@@ -166,7 +166,7 @@
           "modes": { "served": ["list"], "refused": ["summarize", "generate"] },
           "authentication": "anonymous",
           "documentationUrl": "https://aadhar.sh/llms.txt",
-          "note": "Retrieval is lexical and descriptions are extractive. summarize and generate are refused by name rather than degraded to list, because this origin runs no language model."
+          "note": "Results are ranked by Clef, a decision model choosing among every page, with a lexical fallback that _meta.ranking names. Descriptions are extractive. summarize and generate are refused by name rather than degraded to list, because this origin runs no generative model."
         }
       ],
       "httpJson": [
