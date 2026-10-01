@@ -9,8 +9,9 @@ import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import {
   EVENT_TAGS_DDL, EVENT_TOPICS, FORMAT_CRITERIA, TAG_MODEL, TOPIC_CRITERIA,
-  askClef, buildTagRequest, clefRunOptions, parseTagAnswers, tagInputHash,
+  askClef, buildTagRequest, parseTagAnswers, tagInputHash,
 } from "../serendipity/event-tags.ts";
+import { clefRunOptions } from "../src/worker/lib/clef.ts";
 import { tagEvents } from "../serendipity/serendipity.ts";
 
 const EV = { name: "Onchain Credit Dinner", description: "A small dinner on stablecoin lending.", location: "New York" };

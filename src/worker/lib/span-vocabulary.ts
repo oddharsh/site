@@ -67,6 +67,8 @@ export type SpanName =
   | "lens.discovery"
   | "lens.discovery.per_url"
   | "lens.discovery.bot_views"
+  // One Clef call deciding which 2xx bot views were really walls (lens-walls.ts).
+  | "lens.discovery.walls"
   | "lens.shot"
   | "lens.shot.quick_action"
   | "lens.browser"

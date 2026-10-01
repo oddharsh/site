@@ -25,6 +25,7 @@
 // suite imports it outside workerd (gotcha 16).
 
 import { asNumber, asText } from "../src/worker/lib/parse.ts";
+import { runClef, type ClefEnv, type ClefModel } from "../src/worker/lib/clef.ts";
 
 // "clef" rather than "clef-flash", on the benchmarks closest to this job.
 // Topic and format are intent classification over short text, and on the two
@@ -34,8 +35,7 @@ import { asNumber, asText } from "../src/worker/lib/parse.ts";
 // latency, 39ms median against 209ms, and this runs on a cron where nobody
 // waits. Moving this string re-tags the whole pool, since it is part of every
 // input hash; the move from `jev-1.13.0` did exactly that, once.
-export const TAG_MODEL = "clef";
-const WORKERS_AI_MODEL = `@cf/cloudflare/${TAG_MODEL}`;
+export const TAG_MODEL: ClefModel = "clef";
 
 // ── the taxonomy ─────────────────────────────────────────────────────────────
 // Two Choice questions, both objective, both with a no-match option so the
@@ -166,56 +166,22 @@ export function parseTagAnswers(body: any): EventTag | null {
   };
 }
 
-/** The slice of the Workers AI binding this file calls. Narrower than `Ai`,
- *  whose `run` is typed by a model catalog that may not name Clef yet, and it
- *  is what a test hands in instead of a fetch. */
-export type AiRunner = { run: (model: string, input: unknown, options?: unknown) => Promise<unknown> };
-export type TagEnv = { AI?: AiRunner | null, AI_GATEWAY?: string };
-
-/** The binding's third argument: through the named gateway, uncached, or no
- *  gateway at all when AI_GATEWAY is empty. A wrong or deleted gateway FAILS
- *  the call rather than falling back (gotcha 23), and the tag pass reports it
- *  by cause. No gateway cache, because the stored tag is the memo and a cache
- *  hit would make the gateway's log disagree with what this run asked. */
-export function clefRunOptions(env: { AI_GATEWAY?: string } | null | undefined) {
-  const id = env?.AI_GATEWAY?.trim();
-  return id ? { gateway: { id, skipCache: true } } : {};
-}
-
 // Clef's published p95 is 239ms. Five seconds is for a cold isolate or a slow
 // gateway, and an answer later than that is retried next tick rather than
 // waited on inside a cron invocation.
 const CLEF_TIMEOUT_MS = 5000;
 
-/** The binding THROWS where a fetch returned a status, so the cause is read off
- *  the error: Workers AI messages carry a four-digit error code, and "the
- *  gateway is missing" and "Free's daily neurons ran out" need different fixes.
- *  Which code means which is deliberately not hardcoded here; the count keyed
- *  by code is what to read when the pass stalls. */
-function classifyAiError(err: unknown): string {
-  if (err instanceof Error && err.name === "TimeoutError") return "timeout";
-  const message = err instanceof Error ? err.message : String(err);
-  const code = /\b(\d{4})\b/.exec(message)?.[1];
-  return code ? `ai ${code}` : "ai error";
-}
+export type TagEnv = ClefEnv;
 
-/** One call. Never throws: the caller counts outcomes by cause. */
+/** One call. Never throws: the caller counts outcomes by cause. The transport
+ *  (gateway, deadline, error codes) is src/worker/lib/clef.ts, shared with the
+ *  /lens wall check. */
 export async function askClef(request: ReturnType<typeof buildTagRequest>, env: TagEnv):
   Promise<{ tag: EventTag } | { error: string }> {
-  if (!env.AI) return { error: "no AI binding" };
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(Object.assign(new Error("Clef did not answer in time"), { name: "TimeoutError" })), CLEF_TIMEOUT_MS);
-  });
-  try {
-    const body = await Promise.race([env.AI.run(WORKERS_AI_MODEL, request, clefRunOptions(env)), timeout]);
-    const tag = parseTagAnswers(body);
-    return tag ? { tag } : { error: "unparseable" };
-  } catch (err) {
-    return { error: classifyAiError(err) };
-  } finally {
-    clearTimeout(timer);
-  }
+  const r = await runClef(env, TAG_MODEL, request, CLEF_TIMEOUT_MS);
+  if ("error" in r) return r;
+  const tag = parseTagAnswers(r.body);
+  return tag ? { tag } : { error: "unparseable" };
 }
 
 // The table is created on first use as well as by migration 0003, because the
