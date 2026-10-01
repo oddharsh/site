@@ -615,8 +615,8 @@ export function renderAroundPage() {
       the shortlist is funds whose work I follow. Receiving sites can
       verify the signatures against
       <a href="/.well-known/http-message-signatures-directory">our JWKS</a>. Each
-      request carries two: Ed25519, and a provisional post-quantum ML-DSA-44
-      second label (<a href="/garage/pqc">why</a>).
+      request carries an Ed25519 signature. A post-quantum ML-DSA-44 second label
+      rode along for 19 days and is off for now (<a href="/garage/pqc">why</a>).
     </p>
     ${islandMount("ar-snapshot", SNAPSHOT_URL, renderAroundSnapshot(PENDING_REPORT), html`<p>The crawl arrives in a second request after the page loads, and that needs a script. Without one, <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> shows it as plain HTML, and <a href="/around/json">/around/json</a> as JSON.</p>`)}
     <p class="ar-fail">The request for the snapshot failed, so the table stays empty rather than guessed. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
