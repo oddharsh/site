@@ -4095,6 +4095,11 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     origin"), and `encodeBody: "manual"` is mandatory or the runtime
     re-compresses your already-compressed body.
 
+    It is the HEADER that is the constant. `request.cf.clientAcceptEncoding`
+    keeps the original "if Cloudflare modified it", in the pinned runtime's own
+    type comment, so the client's offer is readable after all. The 2026-10-01
+    note further down says why the Worker still has no use for it.
+
     **`wrangler dev` does not emulate that edge layer**, so it cannot validate
     the design — it only proves the negotiation is impossible. Locally, three
     of four client cases came back mangled (identity got raw brotli with the
@@ -4199,11 +4204,42 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
 
     Three suspects were investigated and exonerated. Two of the three are real
     facts worth keeping, they just weren't the cause: (1) a worker cannot read the
-    client's Accept-Encoding, so it genuinely cannot negotiate compression;
-    (2) the edge does NOT down-convert, so an `identity` client handed br gets raw
-    brotli, which is why negotiation can't be faked either; (3) the static-assets
-    layer was innocent — `/abr/` had been built only to bypass a suspect that
-    turned out not to matter, so it was deleted.
+    client's Accept-Encoding off the header, which arrives rewritten; (2) read
+    "the edge does NOT down-convert, so an `identity` client handed br gets raw
+    brotli", and production says otherwise (the next paragraph); (3) the
+    static-assets layer was innocent: `/abr/` had been built only to bypass a
+    suspect that turned out not to matter, so it was deleted.
+
+    **The edge DOES down-convert, re-measured 2026-10-01, and the July reading
+    cost a PR.** Six paths (`/`, `/llms.txt`, `/index.md`, `/garage/horizon`,
+    `/a/nav.<hash8>.js`, `/photos/grid.html`), each over HTTP/1.1 and HTTP/2:
+
+    | client offers | production sends |
+    |---|---|
+    | nothing, or `identity` | plain bytes, every path |
+    | `gzip, deflate` | valid gzip, every path (`/garage/horizon` 80,338 B) |
+    | `br, gzip` | br (`/garage/horizon` 66,291 B) |
+    | `gzip, br;q=0` | br, on all three paths tried |
+
+    The edge cache keys on `Vary: accept-encoding` and converts the Worker's br
+    itself, which is the "serve Brotli from origin" contract the top of this
+    entry already relies on. Whether July's raw brotli was the double-encoding
+    bug above or the platform has changed since is not settled. The cost is not
+    in doubt: #1078 built Worker-side negotiation on (2), streaming gzip from the
+    Worker with `no-transform` on the fallback, passed every check, and was
+    closed once six curls showed production already serving that client
+    correctly. On Workers Free that would have moved free edge work onto the
+    Worker's CPU.
+
+    The last row is the one real miss, and a Worker cannot fix it either:
+    #1078's preview probe found the `q=0` weight stripped from
+    `cf.clientAcceptEncoding` as well as from the header, so the refusal never
+    reaches code. A client that cannot decode br leaves it out rather than
+    refusing it, so the row costs nothing in practice.
+
+    Build that curl with an array. `${ae:+-H "Accept-Encoding: $ae"}` is one word
+    in zsh (gotcha 2), the header never leaves, and every row reads as plain
+    bytes: a uniform table that measured the instrument.
 
     What this unlocks: q11 precompression (~19% off nav.js + luna.css), and
     `Content-Encoding: dcb` from a worker, since `Available-Dictionary` demonstrably
@@ -4466,8 +4502,10 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     the navigation dies on `ERR_CONTENT_DECODING_FAILED`.
 
     **Plain (non-delta) responses stay brotli q11, and that is forced, not chosen.**
-    A worker cannot see the client's Accept-Encoding (gotcha 13), so plain zstd is
-    unnegotiable server-side; the ONLY safe zstd trigger is `Available-Dictionary`,
+    A worker sees a rewritten Accept-Encoding header (gotcha 13), and nobody has
+    tested whether `cf.clientAcceptEncoding` carries a zstd offer or whether the
+    edge converts a zstd body for a client without it, so plain zstd is
+    unnegotiable server-side today; the ONLY safe zstd trigger is `Available-Dictionary`,
     which doubles as proof the client speaks dcz. So "zstd where it wins" IS the
     delta path. Loader classes differ (#119): js/css dcz proven in production, html
     server-side proven (149-byte page delta decodes to the live page), and svg ON
