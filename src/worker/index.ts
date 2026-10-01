@@ -210,7 +210,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // line is emitted on every worker-owned request; the prefix is unique across any
   // two versions that will ever be live together.
   const t0 = Date.now();
-  const response = await route(request, env, ctx);
+  const response = encodeClientResponse(request, await route(request, env, ctx));
   // the bot ledger: identified AI-crawler hits tick into Analytics Engine
   // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
   countCrawlerHit(env, request, response, url.pathname);
@@ -250,7 +250,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // booking page was publishable at two hostnames. Keying on "is this aadhar.sh"
   // rather than listing the hosts that are not means the next alias is covered by
   // arriving, which is the same argument the preview guard's default-deny wins on.
-  return withSecurityHeaders(encodeClientResponse(request, response), url.pathname, { noindex: !isCanonicalHost(url.hostname) });
+  return withSecurityHeaders(response, url.pathname, { noindex: !isCanonicalHost(url.hostname) });
 }
 
 // The named entrypoint is the only one configured to consult Workers Cache in
