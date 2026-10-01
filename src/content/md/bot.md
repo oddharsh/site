@@ -50,14 +50,19 @@ post-quantum [ML-DSA-44](https://csrc.nist.gov/pubs/fips/204/final) signature ov
 the same covered components. It is gone, and its public key has been removed from
 the JWKS, so a request from this bot now carries `sig1` alone.
 
-It was removed for its CPU cost. Cloudflare's runtime has no ML-DSA in WebCrypto,
-so signing ran in pure JavaScript at roughly 8.5ms per request, against a 10ms
-per-invocation budget. One signature spent most of a request, and anything that
-fans out spent several requests' worth: the playlist scrape signs once per track,
-and the [/lens](https://aadhar.sh/lens) discovery pass signs 28 probes. Both were
-failing because of it. Nothing on the internet verified `sig2`, so dropping it
-costs no verifier anything. [/garage/pqc](https://aadhar.sh/garage/pqc) has the
-measurements and the full argument.
+It was removed for its CPU cost. At the time, Cloudflare's runtime had no ML-DSA
+in WebCrypto, so signing ran in pure JavaScript at roughly 8.5ms per request,
+against a 10ms per-invocation budget. One signature spent most of a request, and
+anything that fans out spent several requests' worth: the playlist scrape signs
+once per track, and the [/lens](https://aadhar.sh/lens) discovery pass signs 28
+probes. Both were failing because of it. Nothing on the internet verified `sig2`,
+so dropping it costs no verifier anything.
+
+Cloudflare has since added ML-DSA to WebCrypto on Workers, and it signs in about
+0.12ms, 72 times faster than the JavaScript did. That removes the reason `sig2`
+left, so it can come back once the price holds up in production. Until then,
+verify `sig1`. [/garage/pqc](https://aadhar.sh/garage/pqc) has the measurements
+and the full argument.
 
 ## How to opt out
 
