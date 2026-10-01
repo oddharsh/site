@@ -37,5 +37,5 @@
   // existing. The allowlist habit is what let ten client islands go unchecked.
   // cloudflare.config.ts is named here for the reason tsconfig.cf-garage.json
   // gives: checked beside the Worker it configures (since `cf migrate`, 2026-09-28).
-  "include": ["../lwe-ask/src/**/*.ts", "../lwe-ask/cloudflare.config.ts", "../lwe-ask/wrangler.config.ts", "./.generated/workers-runtime.d.ts"]
+  "include": ["../lwe-ask/src/**/*.ts", "../lwe-ask/cloudflare.config.ts", "../lwe-ask/wrangler.config.ts", "./.generated/workers-runtime-aux.d.ts"]
 }

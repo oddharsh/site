@@ -35,8 +35,8 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
 .pqc-demo-head,.pqc-live-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,#eaf0f9,#dbe4f1);border-bottom:1px solid #b6c2d4;padding:5px 9px;font-family:var(--font-caption);font-weight:bold;font-size:9.5pt;color:#20406e}
 .pqc-toggle button{font:inherit;font-size:8.5pt;font-weight:normal;font-family:var(--font-ui);padding:2px 8px;cursor:pointer;background:linear-gradient(180deg,#fff,#e4e9f2);border:1px solid #8c9ab0;border-radius:3px;color:#243}
 .pqc-toggle button.on{background:linear-gradient(180deg,#cddcf2,#aec4e6);border-color:#5a7398;box-shadow:inset 1px 1px 2px rgba(0,0,0,.18)}
-.pqc-bars{list-style:none;margin:0;padding:10px 12px 4px}
-.pqc-bars li{display:grid;grid-template-columns:8.5em 1fr auto;align-items:center;gap:8px;margin:0 0 7px;font-size:9pt}
+.pqc-bars{list-style:none;margin:0;padding:10px 12px 4px;display:grid;grid-template-columns:max-content 1fr auto;gap:7px 8px;font-size:9pt}
+.pqc-bars li{display:grid;grid-column:1/-1;grid-template-columns:subgrid;align-items:center}
 .pqc-bars .n{font-family:var(--font-mono);color:#33455f;white-space:nowrap}
 .pqc-bars .t{height:15px;background:linear-gradient(180deg,#7fb0e8,#3f7fd0);border:1px solid #2f5f9e;min-width:2px;transition:width .28s ease}
 .pqc-bars li.now .t{background:linear-gradient(180deg,#8fd98f,#3ea23e);border-color:#2c7a2c}
@@ -50,7 +50,7 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
 .pqc-retired{border-left:3px solid var(--blue-40);background:oklch(96.5% 0.012 250.51);padding:8px 10px;margin:0 0 14px}
 .pqc-retired p{margin:0}
 .pqc-falsify{border-left:3px solid #c9a227;background:#fffbe8;padding:8px 10px;margin:14px 0 0}
-@media(max-width:620px){.pqc-bars li{grid-template-columns:7em 1fr;row-gap:2px}.pqc-bars .v{grid-column:2}}
+@media(max-width:620px){.pqc-bars{grid-template-columns:max-content 1fr}.pqc-bars li{row-gap:2px}.pqc-bars .v{grid-column:2}}
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -86,7 +86,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <p><a href="/bot">AadharshBot</a> signs every outbound request per <a href="https://www.rfc-editor.org/rfc/rfc9421" target="_blank" rel="noopener">RFC 9421</a> using the Web Bot Auth profile, so receiving sites can check that a request really came from here. That signature is the only asymmetric one this site owns end to end. The whole post-quantum question collapses to it.</p>
 
 <h2>What the candidates actually cost</h2>
-<p>Cloudflare's runtime has no post-quantum algorithm in WebCrypto. I checked the shipping binary rather than the docs: <code>workerd</code> 1.20260722 contains the strings <code>Ed25519</code>, <code>X25519</code>, and <code>ECDSA</code>, and no <code>ML-DSA</code> at any parameter size. So this is pure JavaScript, via <a href="https://github.com/paulmillr/noble-post-quantum" target="_blank" rel="noopener">@noble/post-quantum</a>, signing the site's real signature base on an M3 Max under Node 26.</p>
+<p>When I first measured this in July, Cloudflare's runtime had no post-quantum algorithm in WebCrypto. I checked the shipping binary rather than the docs: <code>workerd</code> 1.20260722 contained the strings <code>Ed25519</code>, <code>X25519</code>, and <code>ECDSA</code>, and no <code>ML-DSA</code> at any parameter size. So the blue bars are pure JavaScript, via <a href="https://github.com/paulmillr/noble-post-quantum" target="_blank" rel="noopener">@noble/post-quantum</a>, signing the site's real signature base on an M3 Max under Node 26. The amber bar arrived in October, and the <a href="#native">last section</a> explains it.</p>
 <div class="pqc-demo" id="pqc-demo">
   <div class="pqc-demo-head">
     <span class="pqc-demo-title">Cost of one signature</span>
@@ -102,7 +102,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <p>Flip the toggle before you read on and predict where each bar lands. The point of the exercise is that the ordering <em>changes</em>. SLH-DSA-128s has the smallest public key of anything here at 32 bytes, and it takes two and a half seconds to produce one signature. Its sibling 128f signs in 132ms and spends 22KB of header doing it. There is no row that is small on both axes, which is the actual state of post-quantum signatures rather than a quirk of this library.</p>
 
 <h3>How much of that 8.58ms is the algorithm?</h3>
-<p>Less than it looks, and the panel above will prove it on your own hardware if it can. Chrome ships ML-DSA in WebCrypto behind <code>chrome://flags/#webcrypto-pqc</code>, implementing the same <a href="https://wicg.github.io/webcrypto-modern-algos/" target="_blank" rel="noopener">WICG proposal</a> whose JWK shape this site already publishes. If that flag is on, the panel offers a button that generates an ML-DSA-44 key in your browser, signs this page's signature base 200 times natively, and drops the result in as a fifth bar next to the JavaScript number.</p>
+<p>Less than it looks, and the panel above will prove it on your own hardware if it can. Chrome ships ML-DSA in WebCrypto behind <code>chrome://flags/#webcrypto-pqc</code>, implementing the same <a href="https://wicg.github.io/webcrypto-modern-algos/" target="_blank" rel="noopener">WICG proposal</a> whose JWK shape this site already publishes. If that flag is on, the panel offers a button that generates an ML-DSA-44 key in your browser, signs this page's signature base 200 times natively, and drops the result in beside the JavaScript number. The amber workerd bar answers the same question for Cloudflare's runtime.</p>
 <p>This matters for how you read the whole table. The 8.58ms is a <em>ceiling</em> set by running a lattice scheme in a JIT, and the byte counts underneath it are properties of FIPS 204 that no implementation will improve. Sizes are the permanent cost. Speed is the temporary one, and it goes away on its own when the runtimes catch up.</p>
 
 <h2>Why the hash-based options lost</h2>
@@ -147,6 +147,45 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <p>Removing <code>sig2</code> took the scrape from 379ms of CPU to 95ms, measured on the same 21-track playlist. The key is out of the JWKS too, because publishing a key nothing signs with is the dangling-pointer problem this site refuses elsewhere.</p>
 <p>The honest reading is that the objection above was right for a reason it did not name. Shipping the migration early was cheap to <em>build</em> and the build was never the risk. What it cost was a recurring tax on every outbound request, on the one axis a free-tier Worker has least of, and the page that measured the tax in isolation is the same page that missed it in aggregate. <strong>A per-request cost is only a number once you know how many requests, and how much budget.</strong></p>
 <p>None of this changes the sizing argument, which is the part worth keeping. The 3,228 bytes are still permanent, the speed is still temporary, and when <code>workerd</code> ships native ML-DSA the CPU objection evaporates and <code>sig2</code> can come back with no code to write beyond deleting this section. Until then the migration is measured, documented, and turned off.</p>
+
+<h2 id="native">Then the runtime caught up</h2>
+<p>That last paragraph made a prediction, and on 2026-10-01 I got to check it. Cloudflare has put ML-KEM and ML-DSA into WebCrypto on Workers. They run on BoringSSL, and each Worker opts in with the <code>webcrypto_modern_algorithms</code> compatibility flag (<a href="https://blog.cloudflare.com/workers-ml-kem-ml-dsa-support/" target="_blank" rel="noopener">the announcement</a>). This site already pins a <code>workerd</code> build from 2026-09-26 that carries both, so I measured it on the same M3 Max that drew the JavaScript bars.</p>
+<table class="pqc-tiers">
+  <tr><th>Same laptop, same signature base</th><th>JavaScript</th><th>workerd, native</th></tr>
+  <tr><td>Sign once with ML-DSA-44</td><td>8.58ms</td><td><strong>0.12ms</strong></td></tr>
+  <tr><td>Expand the 32-byte seed into a signing key</td><td>~1.4ms</td><td>0.03ms</td></tr>
+  <tr><td>Signature in the header</td><td>3,228 bytes</td><td>3,228 bytes</td></tr>
+</table>
+<p>Signing got 72 times faster, and the header didn't lose a single byte. That's the asymmetry this page bet on in July. Natively, one ML-DSA-44 signature costs about as much as 10 Ed25519 signatures (11.3&micro;s each on the same rig), where the JavaScript version cost as much as 170.</p>
+<p>Here is the table that retired <code>sig2</code>, repriced:</p>
+<table class="pqc-tiers">
+  <tr><th>Surface</th><th>Signatures per request</th><th>JavaScript</th><th>Native, on the laptop</th></tr>
+  <tr><td>A single crawl of one origin</td><td>1</td><td>~8.5ms</td><td>~0.12ms</td></tr>
+  <tr class="mine"><td>The <a href="/rn">/rn</a> playlist scrape</td><td>21</td><td>~180ms</td><td><strong>~2.5ms</strong></td></tr>
+  <tr class="mine"><td><a href="/lens">/lens</a> discovery</td><td>28</td><td>~240ms</td><td><strong>~3.4ms</strong></td></tr>
+</table>
+<p>On the laptop, one signature takes about 1% of a 10ms request budget, and the worst fan-out on the site would sign everything it needs in about a third of a single budget. Hold that projection loosely; production priced it at 3 times that.</p>
+
+<h3>How I checked it</h3>
+<p>A 72x speedup deserves a control, so I ran three.</p>
+<p>Without the flag, the same runtime refuses outright: <code>Unrecognized key generation algorithm "ML-DSA-44" requested</code>. With it, a key shaped like the one still sitting in this site's secrets (a bare 32-byte seed in an <code>AKP</code> JWK, with no public half) imports and signs. And Node 26's WebCrypto, which runs on OpenSSL instead of BoringSSL, verifies workerd's signature and rejects it the moment one byte of the signed base changes.</p>
+<p>A Worker's clock only advances across I/O, so a Worker can't time its own crypto. The timings are wall-clock from outside instead: 2,000 signatures inside one request, minus an empty request so the dispatch cost cancels, median of 9 runs. The browser button above times yours the same way.</p>
+
+<h3>What it leaves open</h3>
+<p>The objection I think is right survives intact. Nothing on the internet verifies <code>sig2</code>, the IANA registry still lists six classical algorithms, and every signed request would still carry 3.2KB more header for a signature with no harvest-now clock behind it.</p>
+<p>The retirement section also promised <code>sig2</code> could return "with no code to write." That was wrong. The library left with the label, so bringing it back means a compatibility flag on the whole Worker plus a signing path through <code>crypto.subtle</code>. It's a small change, and a real one.</p>
+<h3>What production said</h3>
+<p>Those were laptop numbers, and production bills CPU on different hardware, under a clamp that tightens with load. That is exactly where this page went wrong the first time. So before <code>sig2</code> came back, I deployed it at 0% beside the live version and pinned six <code>/lens</code> scans to it, each against a fresh origin so no cache could skip the signing.</p>
+<table class="pqc-tiers">
+  <tr><th>Version</th><th>/lens scan CPU, median of 6</th></tr>
+  <tr><td>Live, sig1 only</td><td>22ms</td></tr>
+  <tr class="mine"><td>sig2 on every request</td><td><strong>32ms</strong></td></tr>
+  <tr><td>sig2 on primary fetches only</td><td>22ms (live read 20ms in the same run)</td></tr>
+</table>
+<p>Signing everything cost 10ms a scan, about 0.33ms a signature, which is 3 times the laptop figure. August's lesson applied a second time: the per-signature price was right, and the price that mattered was that number on production's CPU, multiplied by fan-out.</p>
+<p>So <code>sig2</code> now rides on the requests that are this crawler's identity (the page being scanned, <a href="/around">/around</a>, the playlist) and skips the 28 discovery probes and the <code>robots.txt</code> reads that only look around. That costs about 2ms a scan, inside the noise between two runs of the live version.</p>
+<p>The flag carries its own risk, since Cloudflare gates it "while the specification is still moving." If the API breaks, this site loses the second label and nothing else: any ML-DSA failure drops <code>sig2</code>, logs once, and <code>sig1</code> ships alone.</p>
+<p>In July this page priced three costs: CPU, bundle size, and header bytes. Two belonged to the runtime, and the runtime has now paid them. The 3,228 bytes belong to FIPS 204, so they're the only number left to decide on. That's the rule I'd hand anyone timing a post-quantum migration: decide on the sizes, because the speeds come down on someone else's schedule.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
   </div>
@@ -161,12 +200,16 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
   var ROWS = [
     { n: "Ed25519",      bytes: 88,    sign: 0.05,    now: true },
     { n: "ML-DSA-44",    bytes: 3228,  sign: 8.58 },
+    // workerd 2026-09-26 behind webcrypto_modern_algorithms, same M3 Max,
+    // 2026-10-01: median of 9 runs of 2,000 signatures, wall-clock per request
+    // differenced against an empty one (a Worker's clock is frozen inside it).
+    { n: "ML-DSA-44 (workerd)", bytes: 3228, sign: 0.12, native: true },
     { n: "SLH-DSA-128s", bytes: 10476, sign: 2650 },
     { n: "SLH-DSA-128f", bytes: 22784, sign: 132.34 }
   ];
   var NOTE = {
     bytes: "Base64'd signature as it sits in the Signature header. Most servers cap total request headers near 8KB, which rules out both hash-based rows.",
-    sign: "Single-threaded JavaScript, log scale. Ed25519 is roughly 170x faster than ML-DSA-44 and still leaves headroom on a background crawl."
+    sign: "Log scale. The blue bars are single-threaded JavaScript; the amber one is the same ML-DSA-44 native in Cloudflare's runtime, 72x faster on the same M3 Max at the same 3,228 bytes."
   };
   var host = document.getElementById("pqc-demo");
   if (!host) return;
@@ -177,7 +220,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
     if (metric === "bytes") return v.toLocaleString("en-US") + " B";
     // a native ML-DSA result can land well under 0.01ms, where two decimals
     // would round a real measurement down to "0.00".
-    var s = v < 0.1 ? v.toPrecision(2) : v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString("en-US");
+    var s = v < 1 ? v.toPrecision(2) : v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString("en-US");
     return s + " ms";
   }
   // bytes read honestly on a linear scale; sign times span microseconds to
@@ -235,7 +278,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
           return Promise.all(runs).then(function (sigs) {
             var ms = (performance.now() - t0) / 200;
             ROWS.push({
-              n: "ML-DSA-44 (native)",
+              n: "ML-DSA-44 (browser)",
               bytes: Math.ceil(sigs[0].byteLength / 3) * 4,
               sign: ms, native: true,
             });
@@ -287,7 +330,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <script type="application/json" id="luq-data">
 {
   "skin": "garage",
-  "intro": "Before you close the hood: four questions about why this shipped and what it does not buy.",
+  "intro": "Before you close the hood: seven questions about why this shipped and what it does not buy.",
   "questions": [
     {
       "q": "Why can this site send an ML-DSA signature years before IANA registers a post-quantum algorithm?",
@@ -367,7 +410,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
         {
           "t": "The time, because it measures a lattice scheme running in JavaScript, while the size is fixed by FIPS 204.",
           "ok": true,
-          "why": "Right. A native implementation changes the timing and cannot change the byte count, which is why the migration decision should rest on the size budget."
+          "why": "Right, and it did. Cloudflare's runtime now signs natively in 0.12ms and emits the same 2,420 bytes, which is why the migration decision should rest on the size budget."
         },
         {
           "t": "The size, because compression will shrink the signature once it travels as a header.",
@@ -375,7 +418,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
         },
         {
           "t": "Neither, because both are properties of ML-DSA-44 as standardised.",
-          "why": "Only the sizes are standardised. The 8.58ms belongs to this implementation on this hardware, which is what the in-browser native run demonstrates."
+          "why": "Only the sizes are standardised. The 8.58ms belongs to this implementation on this hardware, which the in-browser native run and the workerd measurement both demonstrate."
         }
       ]
     },
@@ -394,6 +437,24 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
         {
           "t": "IANA registering a different token for ML-DSA in the signature algorithms registry.",
           "why": "That would mean renaming a string. The page already treats its own token as provisional."
+        }
+      ]
+    },
+    {
+      "q": "Native ML-DSA-44 signed in 0.12ms on a laptop. Why did sig2 wait for a production measurement before coming back?",
+      "options": [
+        {
+          "t": "Laptop wall-clock time and production CPU differ, and this page already missed a cost once by pricing it in isolation from fan-out and load.",
+          "ok": true,
+          "why": "Right, and the wait paid for itself. Signing every request took a /lens scan from 22ms to 32ms of CPU, 3 times the laptop projection, so sig2 now skips the fan-out and costs about 2ms a scan."
+        },
+        {
+          "t": "A native signature is a different size, so headers could break where the JavaScript ones did fine.",
+          "why": "The size is fixed by FIPS 204. Native and JavaScript ML-DSA-44 signatures are both 2,420 bytes."
+        },
+        {
+          "t": "Other libraries cannot check signatures from the native implementation yet.",
+          "why": "Node's OpenSSL-backed WebCrypto verified a workerd signature, and rejected it once the signed bytes changed."
         }
       ]
     }

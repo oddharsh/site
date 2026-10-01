@@ -2191,8 +2191,11 @@ scope this repo does not otherwise have.** It is workstation-only and is wired
 into no workflow. Do NOT add it to the CI token: nothing in CI reads this, and
 the six-read-scopes rule under "Infrastructure declaration" is the point.
 Measured 2026-08-29, wrangler's own OAuth token does not carry it either and
-answers 403; `wrangler login` on 4.127.0 does request the scope, so re-logging in
-is the alternative to minting a token.
+answers 403. Re-logging in does NOT help, measured 2026-10-01: the pinned
+wrangler 4.144.0 cannot request the scope (`wrangler login --scopes-list` has
+no observability entry), so mint a token with `Workers Observability : Read`.
+For a one-off read, the dashboard session can post the same `telemetry/query`
+route from the browser.
 
 **Do not answer a tight number by lowering `head_sampling_rate`.** It is
 per-Worker, not per-route, so it thins the rare expensive events tracing exists

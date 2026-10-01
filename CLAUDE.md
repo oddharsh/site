@@ -2304,6 +2304,25 @@ The directory is Worker-first: `lib/botauth.ts` signs its response over
 Its committed JWK Set must match `RN_SIGNING_KEY_JWK`; missing or mismatched
 material returns 503, so rotate the public file and private secret together.
 
+**Primary fetches carry a second label, `sig2`, ML-DSA-44, since 2026-10-01.**
+The fan-out passes `postQuantum: false` and carries `sig1` alone: the /lens
+discovery probes (`FAN_OUT` in lens.ts), its Markdown replay, and the robots.txt
+bootstrap. Measured in production with `sig2` on every request, a /lens scan
+went from a 22ms to a 32ms CPU median, ~0.33ms a signature against the laptop's
+0.12ms. That is gotcha 36 again: multiply by fan-out on production's CPU.
+It signs natively through `crypto.subtle`, which needs the
+`webcrypto_modern_algorithms` compatibility flag (about 0.12ms a signature;
+the pure-JS run of 2026-07-27 to 2026-08-15 took 8.5ms and was retired on CPU,
+gotcha 36). Three rules in `lib/botauth.ts` keep it from costing `sig1`
+anything. It is OPTIONAL: an unset, malformed or unimportable
+`RN_SIGNING_KEY_MLDSA_JWK` drops the label and logs once per isolate.
+Its `keyid` is the RFC 9964 thumbprint (`alg`, `kty`, `pub`) of the public key
+`getPublicKey` derives, so the secret may be a bare 32-byte seed, which workerd
+accepts and bun and node refuse. And the directory carries the AKP entry only
+while `sig2` can sign: unavailable filters it out of the served copy, and a
+usable key that differs from the published one 503s like ed25519 drift. The
+directory response carries one signature per key, as directory-05 recommends.
+
 All signed content reads use `botRequestHeaders`, which checks the destination's
 robots.txt before each hop by default. RN explicitly selects `robots: "spotify-embed"`
 for the owner's public playlist, track and artist embed reads: the 2026-09-16
@@ -3477,6 +3496,46 @@ Four layers, deliberately not redundant:
    pass the caught value to `console.error()` inside the catch, and weigh that
    against the 200K events/day, since every error line is an event.
 
+   **An issue becomes ONE GitHub issue through a Claude Code routine
+   (2026-10-01).** The automation's destination is the routine, and the
+   routine's prompt is committed at `docs/routines/workers-issue-triage.md`:
+   it treats the payload as untrusted data, redacts IPs, tokens and
+   user-agents, dedupes on a `<!-- workers-issue: ID -->` marker line under the
+   `workers-issue` label (comment on an open one, reopen a closed one as a
+   regression), and only then reads the code and opens an issue. Edit that
+   file first and paste it into the routine, so the prompt that runs is one a
+   pull request reviewed.
+
+   Three facts decided the shape, all read 2026-10-01:
+
+   | path | why not, or why |
+   |---|---|
+   | generic webhook | Issues sends it as a Cloudflare Notifications webhook, and those need at least one zone on Pro or above. aadhar.sh is Free. |
+   | a Worker route that files issues | the webhook above is the only way to reach one, and it would park a GitHub write token in a Worker secret |
+   | Claude Code routine | a prebuilt destination on every plan: Cloudflare fires the routine's API trigger with the issue as text, and the routine runs with this repository checked out |
+
+   **Setup is two web UIs and cannot be scripted.** A routine's API trigger is
+   created at claude.ai/code/routines and nowhere else (the routines API takes
+   a cron or a one-shot time, never an API-only trigger), its token is shown
+   once, and the automation that holds it lives in the Cloudflare dashboard
+   with no config form or API to declare it from. So:
+
+   1. At claude.ai/code/routines, create a routine on `oddharsh/site` with no
+      schedule, and paste the prompt in.
+   2. Add an API trigger to it and generate the token. Copy the routine id
+      (`trig_…`) and the token.
+   3. In Cloudflare, Workers & Pages, Observability, Issues, Automations: a
+      Claude Code destination with that routine id and token. Trigger it on an
+      occurrence threshold of 1 and on recurrence after 7 days quiet.
+   4. Check the routine can open an issue at all. It needs GitHub access in
+      its cloud session (an authenticated `gh` or a GitHub connector on
+      claude.ai). Without it the prompt makes the run end with the issue text
+      as its final message rather than lose it, so read the run log.
+
+   The `workers-issue` label is declared in `infra.json` and has to exist on
+   GitHub before the first run, or the routine's first issue mints it with a
+   random colour: `bun run labels:sync -- --confirm`.
+
 Spans go through `lib/trace.ts` (`span(name, fn, attrs)`), never
 `tracing.enterSpan` directly. Names are `<surface>.<phase>`, lowercase and
 dot-separated; the dispatcher is the one exception, naming its spans
@@ -3554,8 +3613,15 @@ nothing about spans (introspected 2026-08-29).
 **The token wants `Workers Observability : Read`, a SEVENTH read scope, and it
 must NOT join the CI token's six.** This is workstation-only, wired into no
 workflow, and gates nothing. wrangler's own OAuth token does not carry it and
-answers 403, measured the same day; wrangler 4.127.0 does request the scope at
-login, so `wrangler login` is the alternative to minting a token.
+answers 403, measured the same day. **`wrangler login` is NOT an alternative,
+and this said it was until 2026-10-01.** The pinned wrangler (4.144.0) cannot
+request the scope at all: `wrangler login --scopes-list` has no observability
+entry, and a fresh login holds 28 scopes and still answers 403. Whatever 4.127.0
+did, it does not survive here. The two working doors are a minted token
+carrying `Workers Observability : Read`, and the dashboard's own session, which
+posts the same `telemetry/query` route from the browser (the `atok` cookie
+travels as an `x-atok` header). The second is how sig2's CPU was read on
+2026-10-01.
 
 **Lowering `head_sampling_rate` is the wrong fix when that number gets tight**,
 for the reason the paragraph above already gives. Cut spans on the surface

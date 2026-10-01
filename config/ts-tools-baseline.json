@@ -22,7 +22,6 @@
     "tools/contract-the-luma-session-jar.test.mjs": 24,
     "tools/contract-the-reader-lens-lens-read-lens-reader.test.mjs": 5,
     "tools/contract-the-tools-are-services-the-frame-is-a-representation.test.mjs": 3,
-    "tools/contract-web-bot-auth-the-post-quantum-second-label-retired.test.mjs": 6,
     "tools/contract-webmention-inbound.test.mjs": 7,
     "tools/csp-sweep.ts": 8,
     "tools/gen-manifest.ts": 1,

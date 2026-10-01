@@ -93,6 +93,13 @@ import { asList, asRecord, asText } from "../src/worker/lib/parse.ts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 export const OUT = join(REPO, "config", ".generated", "workers-runtime.d.ts");
+// TWO FILES SINCE 2026-10-01. The site took `webcrypto_modern_algorithms` for
+// AadharshBot's native ML-DSA signature (sig2), which adds the ML-DSA/ML-KEM
+// surface to its runtime: 623,650 bytes against the auxiliaries' 621,909 on
+// the day it landed. The divergence check below did exactly its job and refused
+// to type lwe-ask and lens-reader against a runtime they do not run, so those
+// two now share AUX_OUT, and THEY are the pair that must agree.
+export const AUX_OUT = join(REPO, "config", ".generated", "workers-runtime-aux.d.ts");
 const KEY_PREFIX = "// gen-runtime-types key ";
 
 // The site config is the one whose output ships; the others are the control.
@@ -172,8 +179,9 @@ function generateCfGarage() {
 generateCfGarage();
 
 const key = inputsKey();
-if (!FORCE && existsSync(OUT) && readFileSync(OUT, "utf8").startsWith(KEY_PREFIX + key + "\n")) {
-  console.log(`gen-runtime-types: config/.generated/workers-runtime.d.ts is current (key ${key}); pass --force to regenerate`);
+const current = (file: string) => existsSync(file) && readFileSync(file, "utf8").startsWith(KEY_PREFIX + key + "\n");
+if (!FORCE && current(OUT) && current(AUX_OUT)) {
+  console.log(`gen-runtime-types: config/.generated/workers-runtime{,-aux}.d.ts are current (key ${key}); pass --force to regenerate`);
   process.exit(0);
 }
 
@@ -221,22 +229,25 @@ function generate(config: string, out: string) {
 const scratch = mkdtempSync(join(tmpdir(), "workers-runtime-"));
 try {
   const results = CONFIGS.map((c) => ({ ...c, ...generate(c.config, join(scratch, `${c.name}.d.ts`)) }));
-  const [site, ...others] = results;
+  const [site, aux, ...others] = results;
   for (const other of others) {
-    if (other.body !== site.body) {
+    if (other.body !== aux.body) {
       throw new Error(
-        `gen-runtime-types: ${other.config} generates a different runtime surface from cloudflare.config.ts ` +
-        `(${other.body.length} vs ${site.body.length} bytes). The shared file no longer fits every Worker; ` +
-        `give that program its own generated file rather than typing it against the site's runtime.`,
+        `gen-runtime-types: ${other.config} generates a different runtime surface from ${aux.config} ` +
+        `(${other.body.length} vs ${aux.body.length} bytes). The shared auxiliary file no longer fits both; ` +
+        `give that program its own generated file rather than typing it against another Worker's runtime.`,
       );
     }
   }
-  // A floor, because a generator that writes an empty file passes every include.
-  if (site.body.length < 400_000) throw new Error(`gen-runtime-types: runtime surface is only ${site.body.length} bytes; expected ~590 KB`);
+  // A floor on each, because a generator that writes an empty file passes every include.
+  for (const r of [site, aux]) {
+    if (r.body.length < 400_000) throw new Error(`gen-runtime-types: ${r.config} runtime surface is only ${r.body.length} bytes; expected ~620 KB`);
+  }
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, KEY_PREFIX + key + "\n" + site.text);
+  writeFileSync(AUX_OUT, KEY_PREFIX + key + "\n" + aux.text);
   const header = site.text.split("\n").find((l) => l.startsWith("// Runtime types generated with")) ?? "";
-  console.log(`gen-runtime-types: ${site.body.length} bytes -> config/.generated/workers-runtime.d.ts (${header.replace("// ", "")}; ${others.length} auxiliary configs agree)`);
+  console.log(`gen-runtime-types: ${site.body.length} bytes -> workers-runtime.d.ts, ${aux.body.length} bytes -> workers-runtime-aux.d.ts (${header.replace("// ", "")}; ${others.length + 1} auxiliary configs agree)`);
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }
