@@ -9,8 +9,10 @@
 // byte-identical origins compared as readiness 27 against 7.
 //
 // These tests run the REAL compareLensTargets and lensInspect against counting
-// stubs for fetch, RN_KV and caches.default, all charging one ledger, so the
-// number asserted is the number the platform would bill.
+// stubs for fetch, RN_KV, caches.default and the Workers AI binding, all
+// charging one ledger, so the number asserted is the number the platform would
+// bill. The AI binding is the one Clef call per live scan (lens-walls.ts), and
+// it is charged as a subrequest like every other binding call.
 import { assert, test, testGlobals } from "./contract-shared.ts";
 import { SUBREQUEST_CAP_FREE } from "../src/worker/lib/budget.ts";
 
@@ -32,7 +34,7 @@ async function signingEnv() {
 // One ledger for every billable call. `enforce` makes the 51st throw exactly
 // what the runtime throws, so a test can watch what the code does with it.
 function harness({ enforce = false, store = new Map() } = {}) {
-  const ledger = { fetch: 0, kv: 0, cache: 0, get total() { return this.fetch + this.kv + this.cache; } };
+  const ledger = { fetch: 0, kv: 0, cache: 0, ai: 0, get total() { return this.fetch + this.kv + this.cache + this.ai; } };
   const charge = (kind) => {
     ledger[kind]++;
     if (enforce && ledger.total > SUBREQUEST_CAP_FREE) throw new Error(CAP_ERROR);
@@ -57,7 +59,15 @@ function harness({ enforce = false, store = new Map() } = {}) {
       async put(req, res) { charge("cache"); store.set(req.url, await res.text()); },
     },
   };
-  return { ledger, fetch, RN_KV, caches, store };
+  // Every question answered "not a wall", which leaves the scan's verdicts
+  // exactly what they were before the check existed.
+  const AI = {
+    async run(_model, input) {
+      charge("ai");
+      return { answers: Object.fromEntries(Object.keys(input.questions).map((id) => [id, { type: "noul", noul: 0.05 }])) };
+    },
+  };
+  return { ledger, fetch, RN_KV, caches, store, AI };
 }
 
 async function withHarness(h, run) {
@@ -77,15 +87,17 @@ const RIGHT = "https://right.example/";
 test("a cold compare stays under the cap and says which side it deferred", needsParser, async () => {
   const { compareLensTargets } = await import("../src/worker/lens.ts");
   const h = harness();
-  const env = { ...(await signingEnv()), RN_KV: h.RN_KV };
+  const env = { ...(await signingEnv()), RN_KV: h.RN_KV, AI: h.AI };
   const out = await withHarness(h, () => compareLensTargets(LEFT, RIGHT, env));
 
   // 72 before (both sides live). One live side, one deferred side, is 41:
   // 36 for the live side and 5 for the deferred one (robots gate 3, page 1,
   // one cache peek). 9 of headroom, which a redirect hop or two can spend.
+  // A compare samples no bot views, so its Clef wall check never runs.
   assert.ok(h.ledger.total < SUBREQUEST_CAP_FREE,
     `cold compare spent ${h.ledger.total} subrequests (${JSON.stringify(h.ledger)}) against a cap of ${SUBREQUEST_CAP_FREE}`);
   assert.equal(h.ledger.total, 41, `the measured cold count moved: ${JSON.stringify(h.ledger)}`);
+  assert.equal(h.ledger.ai, 0, "a compare samples no bot views, so it asks Clef nothing");
 
   // Left runs live on a cold pair, so the choice is deterministic rather than a race.
   assert.equal(out.left.phases.discovery, true);
@@ -110,7 +122,7 @@ test("control: two cold scans in one invocation with no board cross the cap", ne
   // unarbitrated scans are what compareLensTargets ran before, and they bill 72.
   const { lensInspect } = await import("../src/worker/lens.ts");
   const h = harness();
-  const env = { ...(await signingEnv()), RN_KV: h.RN_KV };
+  const env = { ...(await signingEnv()), RN_KV: h.RN_KV, AI: h.AI };
   await withHarness(h, () => Promise.all([
     lensInspect(LEFT, env, { skipBotViews: true }),
     lensInspect(RIGHT, env, { skipBotViews: true }),
@@ -128,7 +140,7 @@ test("our own origin runs live beside a foreign one, since its probes self-dispa
       return new Response("not found", { status: 404, headers: { "content-type": "text/plain" } });
     },
   };
-  const env = { ...(await signingEnv()), RN_KV: h.RN_KV, ASSETS, CF_VERSION_METADATA: { id: "test-version" } };
+  const env = { ...(await signingEnv()), RN_KV: h.RN_KV, AI: h.AI, ASSETS, CF_VERSION_METADATA: { id: "test-version" } };
   const out = await withHarness(h, () => compareLensTargets("https://aadhar.sh/", RIGHT, env));
   assert.equal(out.discovery.left, "live");
   assert.equal(out.discovery.right, "live", "a free self-scan must not take the foreign side's live turn");
@@ -141,12 +153,12 @@ test("a second compare of the same pair completes both sides", needsParser, asyn
   const env = { ...(await signingEnv()) };
 
   const first = harness({ store });
-  await withHarness(first, () => compareLensTargets(LEFT, RIGHT, { ...env, RN_KV: first.RN_KV }));
+  await withHarness(first, () => compareLensTargets(LEFT, RIGHT, { ...env, RN_KV: first.RN_KV, AI: first.AI }));
   assert.equal(store.size, 1, "the live side's discovery must be cached for the next compare");
 
   // Same order: left is now cached, so the one live discovery goes to the right.
   const second = harness({ store });
-  const out = await withHarness(second, () => compareLensTargets(LEFT, RIGHT, { ...env, RN_KV: second.RN_KV }));
+  const out = await withHarness(second, () => compareLensTargets(LEFT, RIGHT, { ...env, RN_KV: second.RN_KV, AI: second.AI }));
   // 42: the cached side is 6 (robots gate 3, page 1, cache hit 1, Markdown
   // negotiation 1) and the live side is 36.
   assert.ok(second.ledger.total < SUBREQUEST_CAP_FREE, `warm compare spent ${second.ledger.total}`);
@@ -163,7 +175,7 @@ test("a second compare of the same pair completes both sides", needsParser, asyn
 test("two pages on one origin share a single live discovery", needsParser, async () => {
   const { compareLensTargets } = await import("../src/worker/lens.ts");
   const h = harness();
-  const env = { ...(await signingEnv()), RN_KV: h.RN_KV };
+  const env = { ...(await signingEnv()), RN_KV: h.RN_KV, AI: h.AI };
   const out = await withHarness(h, () => compareLensTargets(LEFT, LEFT + "?b", env));
   assert.equal(out.discovery.left, "live");
   assert.equal(out.discovery.right, "shared");
@@ -175,14 +187,17 @@ test("two pages on one origin share a single live discovery", needsParser, async
 test("a single cold scan stays under the cap, with its headroom named", needsParser, async () => {
   const { lensInspect } = await import("../src/worker/lens.ts");
   const h = harness();
-  const env = { ...(await signingEnv()), RN_KV: h.RN_KV };
+  const env = { ...(await signingEnv()), RN_KV: h.RN_KV, AI: h.AI };
   const out = await withHarness(h, () => lensInspect(LEFT, env, {}));
   assert.equal(out.phases.discovery, true);
-  // 46: robots gate 3, page 1, doors cache 2, fan-out 29, Markdown negotiation
-  // 1, bot views 10. Four spare, so a target that redirects five times crosses
-  // the cap; that side then reads as refused rather than absent (below).
-  assert.equal(h.ledger.total, 46, `the measured single-scan count moved: ${JSON.stringify(h.ledger)}`);
-  assert.ok(SUBREQUEST_CAP_FREE - h.ledger.total >= 4);
+  // 47: robots gate 3, page 1, doors cache 2, fan-out 29, Markdown negotiation
+  // 1, bot views 10, and ONE Clef call for every view's wall check. Three
+  // spare, so a target that redirects four times crosses the cap; that side
+  // then reads as refused rather than absent (below), and the wall check is
+  // skipped rather than spent.
+  assert.equal(h.ledger.total, 47, `the measured single-scan count moved: ${JSON.stringify(h.ledger)}`);
+  assert.equal(h.ledger.ai, 1, "ten bot views, one Clef call");
+  assert.ok(SUBREQUEST_CAP_FREE - h.ledger.total >= 3);
 });
 
 // The checks that read discovery. Page-only checks (linkHeaders, webMcp) and
@@ -196,7 +211,7 @@ const DISCOVERY_CHECKS = [
 async function refusedScan(spentElsewhere) {
   const { lensInspect } = await import("../src/worker/lens.ts");
   const h = harness({ enforce: true });
-  const env = { ...(await signingEnv()), RN_KV: h.RN_KV };
+  const env = { ...(await signingEnv()), RN_KV: h.RN_KV, AI: h.AI };
   h.ledger.fetch = spentElsewhere;
   const out = await withHarness(h, () => lensInspect(LEFT, env, { skipBotViews: true }));
   return { out, h };

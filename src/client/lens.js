@@ -1254,7 +1254,9 @@
 
   function readinessBotState(bot) {
     if (bot.error) return { text: "unknown", kind: "warn" };
-    if (bot.challenge) return { text: "challenge", kind: "warn" };
+    // A challenge Clef inferred from the body says so, with its probability:
+    // the regex reads a vendor's own marker, and this one is a judgment.
+    if (bot.challenge) return { text: bot.wall && bot.wall.p != null ? "wall (Clef " + bot.wall.p.toFixed(2) + ")" : "challenge", kind: "warn" };
     if (bot.blocked) return { text: (bot.status || "blocked") + " blocked", kind: "warn" };
     if (bot.status >= 200 && bot.status < 400) return { text: bot.status + " " + (bot.contentType || "readable"), kind: "ok" };
     return { text: bot.status || "unknown", kind: "warn" };
