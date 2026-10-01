@@ -43,20 +43,33 @@ Browser rendering, webmention delivery and verification, and ancillary service
 calls can also use this User-Agent but do not currently carry Web Bot Auth
 signatures. They are outside the signed identity described here.
 
-## The second signature, retired
+## The second signature
 
-Between 2026-07-27 and 2026-08-15 every request carried a second label, `sig2`, a
-post-quantum [ML-DSA-44](https://csrc.nist.gov/pubs/fips/204/final) signature over
-the same covered components. It is gone, and its public key has been removed from
-the JWKS, so a request from this bot now carries `sig1` alone.
+Requests that fetch a page also carry a second label, `sig2`, a post-quantum
+[ML-DSA-44](https://csrc.nist.gov/pubs/fips/204/final) signature over the same
+covered components. Verify `sig1`. A verifier that only knows Ed25519 reads
+`sig1` and skips the label it does not recognise, which is what makes a second
+one safe to send.
 
-It was removed for its CPU cost. Cloudflare's runtime has no ML-DSA in WebCrypto,
-so signing ran in pure JavaScript at roughly 8.5ms per request, against a 10ms
-per-invocation budget. One signature spent most of a request, and anything that
-fans out spent several requests' worth: the playlist scrape signs once per track,
-and the [/lens](https://aadhar.sh/lens) discovery pass signs 28 probes. Both were
-failing because of it. Nothing on the internet verified `sig2`, so dropping it
-costs no verifier anything. [/garage/pqc](https://aadhar.sh/garage/pqc) has the
+Probes carry `sig1` alone: `robots.txt` reads, and the 28 discovery checks a
+[/lens](https://aadhar.sh/lens) scan makes for well-known files. Signing all of
+them took a scan from 22ms to 32ms of CPU in production, so the post-quantum
+label rides on the requests that are this crawler's identity and skips the ones
+that only look around.
+
+Its `alg` token, `ml-dsa-44`, is this site's spelling, because the IANA HTTP
+Signature Algorithms registry has no post-quantum entry yet. Its public key sits in
+the same JWKS as an `AKP` key ([RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html)),
+and its `keyid` is that key's thumbprint, the same rule `sig1` follows. The
+directory response carries both signatures too, one per key.
+
+This is its second run. The first, from 2026-07-27 to 2026-08-15, signed in pure
+JavaScript, because Cloudflare's runtime had no ML-DSA in WebCrypto: roughly 8.5ms
+a signature against a 10ms per-invocation budget, so the playlist scrape and the
+[/lens](https://aadhar.sh/lens) discovery pass, which sign many times per request,
+failed because of it. Cloudflare has since added ML-DSA to WebCrypto on Workers,
+where it signs in about 0.12ms. If that ever stops working, the label drops and
+`sig1` ships alone. [/garage/pqc](https://aadhar.sh/garage/pqc) has the
 measurements and the full argument.
 
 ## How to opt out

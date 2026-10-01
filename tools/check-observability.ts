@@ -57,9 +57,11 @@
 // workers_observability.api.error.authentication.no_access_to_workers_observability`
 // on /telemetry/keys. Cloudflare's observability MCP server names the OAuth
 // spelling of the same grant, `workers_observability:read`, in
-// src/workers-observability.app.ts. Note that wrangler 4.127.0 DOES request that
-// scope at login, so `wrangler login` again is the other way to get it; this
-// tool reads the env var, in the shape check-infra.ts's api tier uses.
+// src/workers-observability.app.ts. `wrangler login` is NOT another way to get
+// it, whatever 4.127.0 did: on the pinned 4.144.0 `wrangler login --scopes-list`
+// has no observability scope, and a fresh login still answers 403 (measured
+// 2026-10-01). So this tool reads the env var, in the shape check-infra.ts's
+// api tier uses, and a minted token is the only credential that works.
 //
 //     CLOUDFLARE_API_TOKEN=... bun run obs:check
 //     CLOUDFLARE_API_TOKEN=... bun run obs:check --days 3

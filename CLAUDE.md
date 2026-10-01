@@ -259,6 +259,28 @@ bun run dcz:check
 bun run q11:check
 bun run q11:check -- --url http://localhost:8799 --accept-encoding br
 
+# DOES PRODUCTION SERVE WHAT CI BUILT? ci.yml cuts a manifest of every static URL
+# and its sha256 from its own build of each main commit and signs it (actions/
+# attest). This reads the commit production reports in /whoareyou.json, fetches
+# that commit's manifest, checks ci.yml signed it, and GETs every URL from
+# production, comparing DECODED bytes. The after-release job runs it with --since
+# (only what the release changed); served-check.yml runs the full sweep nightly.
+# Static tree only: the Worker bundle and per-request routes are out of its reach.
+# Exit 0 green, 1 a finding, 2 the instrument. Needs `gh` auth.
+bun run served:check
+bun run served:check -- --since <commit>     # the per-release scope
+bun run served:check -- --manifest m.json --commit <sha> --no-attest   # a hand-cut manifest
+
+# INDEXNOW: tell search engines which pages a release changed. Diffs the two
+# signed served manifests on each page's CONTENT (its Markdown twin, a writing
+# post's .txt, or the file itself), never its HTML bytes: a shell-only release
+# (#1063) moved the bytes of 53 of 56 sitemap pages and the content of none.
+# One POST to api.indexnow.org reaches Bing, Yandex, Naver, Seznam and Yep
+# (Google is not a participant). The key is public by design and served at
+# /<key>.txt; the route oracle holds it at 200. The after-release job runs it
+# per release; with no previous manifest it submits nothing.
+bun run indexnow -- --since <previous release commit> --dry-run
+
 # THE CANARY TRIPWIRE: three moving targets through gates this repo already
 # holds its pins to, PROPOSING NOTHING. .github/workflows/canary.yml runs all
 # three nightly and keeps at most one open issue per leg (canary-report.ts
@@ -631,6 +653,50 @@ worktrees may edit freely, but a worktree is not a release surface.
   rather than against a declared list, on purpose: a list invites someone to add
   an entry to `infra.json` to turn a red check green, which is the precise change
   the check exists to catch.
+- **Two builders make every release, and since 2026-10-01 something checks they
+  agree.** `validate` builds a commit to test it; Workers Builds builds the same
+  commit again to ship it. Everything here that calls a build "a pure function of
+  the commit" (q11 twins, dcz deltas, the 0-of-1443 upload after the bun cutover)
+  is a claim about those two, and nothing compared them until `bun run
+  served:check` (tools/check-served.ts, tools/lib/served-manifest.ts).
+
+  | piece | where |
+  |---|---|
+  | the commit production was built from | `BUILD_INFO`, baked into the WORKER by build.ts step 5e from Workers Builds' `WORKERS_CI_COMMIT_SHA`; `/whoareyou.json` reports it as `build.commit` and "Built from commit" |
+  | what CI built | the `served-manifest` artifact of ci.yml's push run, cut straight after `perf-budget` |
+  | proof CI made it | the `attest` job in ci.yml, verified with `--signer-workflow` ci.yml and `--source-ref refs/heads/main` |
+  | per release | promote-production's after-release job, `--since` the commit `production` pointed at before |
+  | nightly | served-check.yml, every URL |
+
+  **The commit lives in the Worker and never in `public/`**, because a commit
+  in a served file changes that file on every deploy, which re-mints what hashes
+  it and breaks the very property being checked. A build with and without the
+  Workers Builds variables writes a byte-identical manifest, and the contract
+  test pins the bake to the staged Worker path.
+
+  **The first comparison agreed and still found a bug.** A macOS build of
+  `5fb917b3` against the Linux build production served: 1849 of 1850 URLs
+  identical after decoding. The 1850th was `/dotfiles/index.src.html`, the
+  readable source the page's own banner links, answering 307. `/dotfiles`
+  (#876) postdated build.ts's text-twin allowlist, so that twin had no `.br`,
+  the Worker handed it to the asset layer, and html_handling stripped the
+  `.html`. A route oracle row holds it now, with the missing twin as its
+  control. The comparison refuses redirects for exactly this reason: a followed
+  307 hashes the destination and calls the wrong URL a match.
+
+  **Why the release check is scoped.** 716 of the 1850 URLs reach the Worker
+  (the rest are asset-layer hits and cost no observability event), and 13
+  releases shipped on 2026-09-30, so a full sweep per release would be roughly
+  9,300 Worker invocations a day against the 200K/day quota before counting
+  spans. The release changes a known set of URLs; the nightly sweep catches what
+  changes none (an edge rewrite, gotcha 20; a routing change).
+
+  It cannot see the Worker bundle, since no public URL returns those bytes, or
+  any route rendered per request. Quote its verdict as "the static tree", never
+  as "production". The `attest` job carries `continue-on-error`, because
+  promote-production waits for this workflow to COMPLETE and an attestation
+  outage must not block a release; an unattested manifest is a finding in the
+  check instead.
 - **Reaching `production` deploys at 100%, since 2026-09-28.** Workers Builds
   runs `wrangler deploy` on the `production` branch, so a promoted commit serves
   everyone a few minutes after CI passes on `main`. Branch builds still run
@@ -1204,6 +1270,20 @@ worktrees may edit freely, but a worktree is not a release surface.
   half: the next POST route anyone adds is guarded on the day it is written.
   Reads all pass, which is the point of the surface. Do not enable previews with
   that guard removed.
+
+  **Something reads them now: `preview-check.yml`, on every PR touching served
+  code (2026-10-01).** It builds the PR's HEAD commit, waits for Workers Builds
+  to publish the same commit, and runs `served:check` against the preview, over
+  the URLs whose bytes differ from production. The URL comes off Workers Builds'
+  own check run ("Workers Builds: aadhar-sh", `Preview URL:` in its summary)
+  through `bun run preview:target`, never derived from the branch name:
+  Cloudflare documents no rule for folding a branch into an alias, and the
+  VERSION URL names one upload where the alias moves on the next push. The first
+  run against #1073's preview matched 1850 of 1850 URLs, the `/dotfiles` twin
+  fix included, which is that fix verified on Cloudflare rather than miniflare.
+  It is advisory, posts one comment that updates in place, and reds only on a
+  finding. What it cannot show is anything the ZONE does: a preview is
+  workers.dev, so Transform Rules, 0-RTT and Early Hints never touch it.
 - **0-RTT is declared ON in `infra.json` (`zone.zero_rtt`), and the Worker's
   early-data guard is what makes that safe.** A resumed TLS 1.3 or QUIC client
   sends its first request inside the handshake, one round trip sooner, on the one
@@ -2223,6 +2303,25 @@ The directory is Worker-first: `lib/botauth.ts` signs its response over
 `"@authority";req` with the directory tag and serves it with `no-store`.
 Its committed JWK Set must match `RN_SIGNING_KEY_JWK`; missing or mismatched
 material returns 503, so rotate the public file and private secret together.
+
+**Primary fetches carry a second label, `sig2`, ML-DSA-44, since 2026-10-01.**
+The fan-out passes `postQuantum: false` and carries `sig1` alone: the /lens
+discovery probes (`FAN_OUT` in lens.ts), its Markdown replay, and the robots.txt
+bootstrap. Measured in production with `sig2` on every request, a /lens scan
+went from a 22ms to a 32ms CPU median, ~0.33ms a signature against the laptop's
+0.12ms. That is gotcha 36 again: multiply by fan-out on production's CPU.
+It signs natively through `crypto.subtle`, which needs the
+`webcrypto_modern_algorithms` compatibility flag (about 0.12ms a signature;
+the pure-JS run of 2026-07-27 to 2026-08-15 took 8.5ms and was retired on CPU,
+gotcha 36). Three rules in `lib/botauth.ts` keep it from costing `sig1`
+anything. It is OPTIONAL: an unset, malformed or unimportable
+`RN_SIGNING_KEY_MLDSA_JWK` drops the label and logs once per isolate.
+Its `keyid` is the RFC 9964 thumbprint (`alg`, `kty`, `pub`) of the public key
+`getPublicKey` derives, so the secret may be a bare 32-byte seed, which workerd
+accepts and bun and node refuse. And the directory carries the AKP entry only
+while `sig2` can sign: unavailable filters it out of the served copy, and a
+usable key that differs from the published one 503s like ed25519 drift. The
+directory response carries one signature per key, as directory-05 recommends.
 
 All signed content reads use `botRequestHeaders`, which checks the destination's
 robots.txt before each hop by default. RN explicitly selects `robots: "spotify-embed"`
@@ -3397,6 +3496,46 @@ Four layers, deliberately not redundant:
    pass the caught value to `console.error()` inside the catch, and weigh that
    against the 200K events/day, since every error line is an event.
 
+   **An issue becomes ONE GitHub issue through a Claude Code routine
+   (2026-10-01).** The automation's destination is the routine, and the
+   routine's prompt is committed at `docs/routines/workers-issue-triage.md`:
+   it treats the payload as untrusted data, redacts IPs, tokens and
+   user-agents, dedupes on a `<!-- workers-issue: ID -->` marker line under the
+   `workers-issue` label (comment on an open one, reopen a closed one as a
+   regression), and only then reads the code and opens an issue. Edit that
+   file first and paste it into the routine, so the prompt that runs is one a
+   pull request reviewed.
+
+   Three facts decided the shape, all read 2026-10-01:
+
+   | path | why not, or why |
+   |---|---|
+   | generic webhook | Issues sends it as a Cloudflare Notifications webhook, and those need at least one zone on Pro or above. aadhar.sh is Free. |
+   | a Worker route that files issues | the webhook above is the only way to reach one, and it would park a GitHub write token in a Worker secret |
+   | Claude Code routine | a prebuilt destination on every plan: Cloudflare fires the routine's API trigger with the issue as text, and the routine runs with this repository checked out |
+
+   **Setup is two web UIs and cannot be scripted.** A routine's API trigger is
+   created at claude.ai/code/routines and nowhere else (the routines API takes
+   a cron or a one-shot time, never an API-only trigger), its token is shown
+   once, and the automation that holds it lives in the Cloudflare dashboard
+   with no config form or API to declare it from. So:
+
+   1. At claude.ai/code/routines, create a routine on `oddharsh/site` with no
+      schedule, and paste the prompt in.
+   2. Add an API trigger to it and generate the token. Copy the routine id
+      (`trig_…`) and the token.
+   3. In Cloudflare, Workers & Pages, Observability, Issues, Automations: a
+      Claude Code destination with that routine id and token. Trigger it on an
+      occurrence threshold of 1 and on recurrence after 7 days quiet.
+   4. Check the routine can open an issue at all. It needs GitHub access in
+      its cloud session (an authenticated `gh` or a GitHub connector on
+      claude.ai). Without it the prompt makes the run end with the issue text
+      as its final message rather than lose it, so read the run log.
+
+   The `workers-issue` label is declared in `infra.json` and has to exist on
+   GitHub before the first run, or the routine's first issue mints it with a
+   random colour: `bun run labels:sync -- --confirm`.
+
 Spans go through `lib/trace.ts` (`span(name, fn, attrs)`), never
 `tracing.enterSpan` directly. Names are `<surface>.<phase>`, lowercase and
 dot-separated; the dispatcher is the one exception, naming its spans
@@ -3474,8 +3613,15 @@ nothing about spans (introspected 2026-08-29).
 **The token wants `Workers Observability : Read`, a SEVENTH read scope, and it
 must NOT join the CI token's six.** This is workstation-only, wired into no
 workflow, and gates nothing. wrangler's own OAuth token does not carry it and
-answers 403, measured the same day; wrangler 4.127.0 does request the scope at
-login, so `wrangler login` is the alternative to minting a token.
+answers 403, measured the same day. **`wrangler login` is NOT an alternative,
+and this said it was until 2026-10-01.** The pinned wrangler (4.144.0) cannot
+request the scope at all: `wrangler login --scopes-list` has no observability
+entry, and a fresh login holds 28 scopes and still answers 403. Whatever 4.127.0
+did, it does not survive here. The two working doors are a minted token
+carrying `Workers Observability : Read`, and the dashboard's own session, which
+posts the same `telemetry/query` route from the browser (the `atok` cookie
+travels as an `x-atok` header). The second is how sig2's CPU was read on
+2026-10-01.
 
 **Lowering `head_sampling_rate` is the wrong fix when that number gets tight**,
 for the reason the paragraph above already gives. Cut spans on the surface
