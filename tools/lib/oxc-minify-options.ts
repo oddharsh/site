@@ -13,8 +13,8 @@
 // and once a property write counts as side-effect free the whole IIFE has no
 // effects and is tree-shaken away. The marker tripwire in build.ts step 3 turns
 // that into a failed build (`lens-browser.js: minified output lost the
-// "LensBrowser" marker`), which is the reason every SHELLS row carries one. The
-// islands communicate through globals on purpose, so `true` here is the same
+// "LensBrowser" marker`), which is the reason every script row in
+// tools/lib/client-assets.ts carries one. The islands communicate through globals on purpose, so `true` here is the same
 // decision as `mangle.toplevel: false` seen from the tree-shaker's side.
 //
 // `propertyReadSideEffects: false` and `unknownGlobalSideEffects: false` were

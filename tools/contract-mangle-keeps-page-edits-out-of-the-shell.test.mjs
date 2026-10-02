@@ -14,6 +14,7 @@
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { applyMangle, assertIntegrity, planNames } from "./lib/mangle-custom-properties.ts";
+import { CLIENT_ASSETS, contentHashedFiles, shellRankedFiles } from "./lib/client-assets.ts";
 
 const SHELL = new Set(["public/luna.css"]);
 
@@ -110,14 +111,27 @@ test("the rename still passes the dangling-reference invariant", () => {
 // reads three --font-* tokens, and in the shell set its edits would reorder
 // luna.css's names. "more page uses of a SHELL token" above is that case, so
 // what is left to pin is that 5c actually hands them over on the page side.
-test("step 5c hands planNames the shell set, and step 6 holds that set to its own asset lists", () => {
+//
+// The shell set and the set step 6 hashes are two projections of ONE registry
+// (tools/lib/client-assets.ts), so they cannot disagree and the drift throw
+// build.ts carried between its three lists is gone with the lists.
+test("step 5c plans with the registry's shell tier, which is every hashed file minus the page-scoped ones", () => {
   const build = readFileSync(new URL("./build.ts", import.meta.url), "utf8");
   assert.ok(build.includes("planNames(before, SHELL_RANKED)"), "5c must plan with the shell part of the content-hashed set");
-  assert.match(
-    build,
-    /const SHELL_RANKED = new Set\(\[\.\.\.CONTENT_HASHED\]\.filter\(\(f\) => !PAGE_SCOPED_HASHED\.has\(f\)\)\)/,
-    "SHELL_RANKED must be CONTENT_HASHED minus the page-scoped files",
-  );
-  assert.match(build, /\.\.\.PAGE_SCOPED_HASHED,\n\]\);/, "the page-scoped files must still be in CONTENT_HASHED, which the drift check holds to step 6");
-  assert.match(build, /CONTENT_HASHED \(step 5c\) and step 6's asset lists disagree/, "the drift check between the two lists is gone");
+  assert.ok(build.includes("const SHELL_RANKED = shellRankedFiles();"), "and that set must come from the registry step 6 hashes from");
+  assert.ok(build.includes("await hashClientAssets(OUT,"), "step 6 must hash from the same registry");
+
+  const shell = shellRankedFiles();
+  const hashed = contentHashedFiles();
+  const pageScoped = ["serendipity.js", "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json", "quiz.css"].map((f) => `public/${f}`);
+  assert.deepEqual([...hashed].filter((f) => !shell.has(f)).sort(), pageScoped.sort(), "exactly these six are hashed and ranked as pages");
+  assert.ok([...shell].every((f) => hashed.has(f)), "the shell tier is a subset of what step 6 hashes");
+  assert.ok(shell.has("public/luna.css") && shell.has("public/nav.js"), "the two files every page links are shell");
+  assert.equal(hashed.size, CLIENT_ASSETS.length, "every registered asset is hashed");
+});
+
+test("CONTROL: an asset declared shell-scoped joins the shell tier, so the scope field is what decides it", () => {
+  const moved = CLIENT_ASSETS.map((a) => (a.file === "lwe/ask.js" ? { ...a, scope: /** @type {const} */ ("shell") } : a));
+  assert.ok(shellRankedFiles(moved).has("public/lwe/ask.js"));
+  assert.ok(!shellRankedFiles().has("public/lwe/ask.js"));
 });

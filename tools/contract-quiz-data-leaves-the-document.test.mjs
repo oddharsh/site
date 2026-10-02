@@ -62,7 +62,7 @@ test("quiz.js fetches the payload lazily and still reads an inline one", () => {
   assert.match(src, /new IntersectionObserver\([\s\S]*rootMargin:/, "start() waits on an observer with a margin");
   assert.match(src, /getAttribute\("data-src"\)/, "the served reference is read");
   assert.match(src, /JSON\.parse\(inline\)/, "the authored inline form still works for dev and the .src.html twin");
-  // The build repoints this exact shape to the hashed sheet (STRING_ASSETS).
+  // The build repoints this exact shape to the hashed sheet (the client asset registry's quiz.css loader).
   assert.match(src, /\.href\s*=\s*"\/quiz\.css"/, "the quiz.css href keeps the shape step 6 rewrites");
   // Rendering waits for both halves: never unstyled, never without data.
   assert.match(src, /Promise\.all\(\[payload, styled\]\)/);

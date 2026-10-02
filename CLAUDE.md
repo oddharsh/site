@@ -3908,7 +3908,8 @@ how to recover the plans and their audit from git.
    luna.css's `--blue-65` (23). The two swapped letters inside luna.css,
    `/a/luna.5e0c7979.css` became `/a/luna.5b20cdaa.css`, and 311 staged files
    changed, which is gotcha 35's full bill for a one-line edit to one page. Now
-   `planNames` takes `CONTENT_HASHED`, the staged files step 6 hashes into `/a/`:
+   `planNames` takes the shell tier of `tools/lib/client-assets.ts`, the registry
+   step 6 hashes into `/a/` from:
 
    | tier | names | ranked by |
    |---|---|---|
@@ -3925,8 +3926,8 @@ how to recover the plans and their audit from git.
    in total (luna.css -17 B, since its own repetition now decides its names),
    and the 59 pages are +179 B in total, about 3 B each. The one remaining way
    a page can move a shell name is to add a LITERAL short token (an authored
-   `--q`), because `taken` still seeds from every file. Step 6 fails if its
-   asset lists and `CONTENT_HASHED` disagree, and
+   `--q`), because `taken` still seeds from every file. The tiers and step 6
+   read one registry, so they cannot disagree, and
    `contract-mangle-keeps-page-edits-out-of-the-shell` pins the tiers with a
    control showing the old ranking moves the shell on the same edit.
 

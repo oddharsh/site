@@ -45,35 +45,20 @@ import { dictionaryTag, zstdDictionaryFrame } from "./lib/dcz.ts";
 import { DCZ_HEADER_BYTES, pageDeltaName, pageSlug, parseFamilyDictionary } from "../src/worker/lib/dictionary-names.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { siteWranglerArgs } from "./lib/site-config.ts";
+import { budgetedAssets, readableTwins, unbudgetedAssets } from "./lib/client-assets.ts";
 
 // Wire-size envelopes, not raw-source ceilings. These start from the current
 // built output with enough room for ordinary feature work; they are deliberately
 // advisory while the site has no field-RUM baseline for path prioritization.
-const ASSET_ENVELOPES = {
-  "nav.js":         { role: "shared deferred shell",       gzipKiB: 20, brotliKiB: 18 },
-  "nav-run.js":     { role: "first-open Run island",       gzipKiB: 12, brotliKiB: 10 },
-  "nav-tray.js":    { role: "first-click tray island",     gzipKiB: 5,  brotliKiB: 4 },
-  "nav-pipes.js":   { role: "idle screen-saver island",    gzipKiB: 6,  brotliKiB: 5 },
-  "nav-tips.js":    { role: "once-a-day tips island",      gzipKiB: 3,  brotliKiB: 2.5 },
-  "notepad.js":     { role: "writing-only island",         gzipKiB: 4,  brotliKiB: 3.5 },
-  "lens-boot.js":   { role: "idle Lens bootstrap",         gzipKiB: 1,  brotliKiB: 1 },
-  "lens-webmcp.js": { role: "idle WebMCP registrar",       gzipKiB: 5,  brotliKiB: 4 },
-  "lens.js":        { role: "post-intent Lens application", gzipKiB: 24, brotliKiB: 21 },
-  // Raised from 4/3.5 on 2026-08-08 for the interaction recipes: the chip row,
-  // the before/after screenshot pair, and the six honest-null strings that say
-  // WHY a recipe found nothing (a CSP refusing inline script, a forged receipt,
-  // a wall that turned out to be cosmetic). Measured +1.4 KiB gzip, 3.0 -> 4.4.
-  // Most of that is the copy, which IS the feature: a result the reader cannot
-  // interpret is worth less than no result. Bumped deliberately rather than
-  // discovered by CI.
-  "lens-browser.js": { role: "optional browser island",    gzipKiB: 5,  brotliKiB: 4.5 },
-  "lens-tools.js":  { role: "optional MCP-form island",     gzipKiB: 7,  brotliKiB: 6 },
-  "quiz.js":        { role: "understanding-check island",  gzipKiB: 6,  brotliKiB: 5 },
-  "tooltip.js":     { role: "optional hover island",       gzipKiB: 6,  brotliKiB: 5 },
-  "hoist.js":       { role: "shared hover engine",         gzipKiB: 2,  brotliKiB: 1.5 },
-  "luna.css":       { role: "shared render-blocking CSS",  gzipKiB: 12, brotliKiB: 10 },
-  "lwe-base.css":   { role: "LWE render-blocking CSS",     gzipKiB: 2,  brotliKiB: 2 },
-};
+//
+// Each envelope is declared on its asset in the client asset registry
+// (tools/lib/client-assets.ts), beside what the build needs to know about the
+// same file. This list was a second, hand-kept one until 2026-10-02 and had
+// fallen 14 minified assets behind the build's. Those are declared
+// "unbudgeted" there now: section 3 holds them to the banner and prints their
+// sizes, and nobody has invented a number for them.
+const ASSET_ENVELOPES = budgetedAssets();
+const UNBUDGETED = unbudgetedAssets();
 
 // This is an observability alert, not a platform limit. It is intentionally
 // separate from the user-facing LCP budget: Worker code is server-side and can
@@ -203,11 +188,8 @@ const WORKER_BASELINE_SOURCE_KIB = 1376.65;
 // 9.6, 7.6 and 6.4ms with nothing changed. Advisory, never fatal; a sampled
 // profile at that resolution has no business failing a PR.
 const WORKER_STARTUP_ALERT_MS = 50;
-const TWINS = [
-  "nav.src.js", "nav-run.src.js", "nav-tray.src.js", "nav-pipes.src.js", "nav-tips.src.js", "notepad.src.js", "lens-boot.src.js", "lens-webmcp.src.js", "lens.src.js", "lens-browser.src.js", "lens-tools.src.js",
-  "quiz.src.js", "tooltip.src.js", "infotip.src.js", "hoist.src.js", "luna.src.css",
-  "lwe-base.src.css",
-];
+// Every minified asset's readable twin, from the same registry.
+const TWINS = readableTwins();
 const HTML_TWIN = "index.src.html";
 const HTML_ENVELOPE = {
   role: "homepage document",
@@ -354,7 +336,7 @@ try {
 }
 
 // 3) minified shells + luna.css: banner + compressed advisory envelope --------
-for (const [file, envelope] of Object.entries(ASSET_ENVELOPES)) {
+for (const { file, envelope } of ASSET_ENVELOPES) {
   const path = `.build/public/${file}`;
   let bytes;
   try { bytes = await readFile(path); } catch { bad(`${file}: missing from build output (run build first)`); continue; }
@@ -367,6 +349,17 @@ for (const [file, envelope] of Object.entries(ASSET_ENVELOPES)) {
   const line = `${file}: ${bytes.length} B raw, ${fmt(sizes.gzip)} gzip, ${fmt(sizes.brotli)} Brotli (${envelope.role})`;
   if (overGzip || overBrotli) warn(`${line}; advisory envelope ${envelope.gzipKiB}/${envelope.brotliKiB} KiB gzip/Brotli`);
   else ok(`${line}; envelope ${envelope.gzipKiB}/${envelope.brotliKiB} KiB gzip/Brotli`);
+}
+// The declared gap: minified and banner-checked like the rest, with no envelope
+// to compare against. Printed so the sizes are on the record when somebody
+// decides a number.
+for (const file of UNBUDGETED) {
+  let bytes;
+  try { bytes = await readFile(`.build/public/${file}`); } catch { bad(`${file}: missing from build output (run build first)`); continue; }
+  const text = bytes.toString("utf8");
+  if (!(text.startsWith("/*!") && text.includes("minified at deploy"))) { bad(`${file}: missing "minified at deploy" banner (build bypassed / not minified?)`); continue; }
+  const sizes = compressedSizes(bytes);
+  ok(`${file}: ${bytes.length} B raw, ${fmt(sizes.gzip)} gzip, ${fmt(sizes.brotli)} Brotli (unbudgeted: no envelope declared)`);
 }
 
 // 4) readable twins present --------------------------------------------------

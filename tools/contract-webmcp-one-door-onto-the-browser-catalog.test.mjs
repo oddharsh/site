@@ -17,13 +17,13 @@ import {
   test,
 } from "./contract-shared.ts";
 import { readdirSync } from "node:fs";
+import { minifiedScripts } from "./lib/client-assets.ts";
 
 const LENS = readFileSync("./src/client/lens.js", "utf8");
 const LENS_BOOT = readFileSync("./src/client/lens-boot.js", "utf8");
 const LENS_WEBMCP = readFileSync("./src/client/lens-webmcp.js", "utf8");
 const WEBMCP = readFileSync("./src/client/webmcp.js", "utf8");
 const NAV = readFileSync("./src/client/nav.js", "utf8");
-const BUILD = readFileSync("./tools/build.ts", "utf8");
 const TRAY = readFileSync("./src/client/nav-tray.js", "utf8");
 const SHELL = readFileSync("./tools/photos/shell-data.ts", "utf8");
 const CHROME = readFileSync("./src/worker/lib/desktop.ts", "utf8");
@@ -169,14 +169,15 @@ test("successful registration repaints activity observers", () => {
 });
 
 test("webmcp.js ships as a minified asset with a readable twin", () => {
-  assert.ok(/\["webmcp\.js",\s*"\/webmcp\.src\.js",/.test(BUILD),
-    "webmcp.js is missing from build.ts SHELLS, so it would ship unminified and without a .src.js twin");
-  assert.ok(/\["lens-webmcp\.js",\s*"\/lens-webmcp\.src\.js",/.test(BUILD),
-    "lens-webmcp.js is missing from build.ts SHELLS, so the early catalog would ship unminified");
+  const twins = new Map(minifiedScripts().map((row) => [row.file, row.twin]));
+  assert.equal(twins.get("webmcp.js"), "/webmcp.src.js",
+    "webmcp.js is missing from the client asset registry, so it would ship unminified and without a .src.js twin");
+  assert.equal(twins.get("lens-webmcp.js"), "/lens-webmcp.src.js",
+    "lens-webmcp.js is missing from the client asset registry, so the early catalog would ship unminified");
 });
 
 test("both entry points reach webmcp.js through an import specifier", () => {
-  // The SOURCE keeps the plain specifier; build.ts STRING_ASSETS rewrites it to
+  // The SOURCE keeps the plain specifier; the client asset registry's import loader rewrites it to
   // the hashed /a/ URL in the staged copies, and fails the build if it did not.
   for (const [file, source] of [["nav.js", NAV], ["lens-webmcp.js", LENS_WEBMCP]]) {
     assert.ok(/import\(\s*"\/webmcp\.js"\s*\)/.test(source),

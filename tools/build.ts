@@ -55,6 +55,8 @@ import { dczEncode, dczEncodeBatch, dictionaryTag, frameDcz } from "./lib/dcz.ts
 import { familyDictionaryName, pageDeltaName, pageSlug, parsePageSnapshot, parseShellAsset, shellDeltaName } from "../src/worker/lib/dictionary-names.ts";
 import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
 import { unpackHistogram } from "./photos/build-histogram-index.ts";
+import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
+import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 
 const OUT = ".build";
@@ -656,83 +658,17 @@ const clientEdgeMirror = (source, decl) => {
   return source.slice(0, m.index + m[0].length) + "\n" + line + source.slice(m.index + m[0].length);
 };
 
-// the client scripts to minify: [file, banner pointer, tripwire the minified output MUST contain]
-// sw.js left this list in v136: it's a ~15-line unregister stub now, shipped
-// readable and verbatim (no version string, no twin, nothing to tripwire).
-const SHELLS = [
-  ["nav.js",     "/nav.src.js",     "axp-histnav"],
-  ["nav-run.js", "/nav-run.src.js", "axp-run"],
-  ["nav-tray.js", "/nav-tray.src.js", "axp-balloon"],
-  ["nav-pipes.js", "/nav-pipes.src.js", "axp-pipes"],  // the idle screen saver
-  ["nav-tips.js", "/nav-tips.src.js", "axp-tips"],  // Tip of the Day, once a day
-  ["notepad.js", "/notepad.src.js", "np-window"],
-  ["lens-boot.js", "/lens-boot.src.js", "requestSubmit"],
-  ["lens-webmcp.js", "/lens-webmcp.src.js", "LensWebMcp"],
-  ["lens.js",    "/lens.src.js",    "replaceState"],   // verify-routes.mjs marker
-  ["lens-browser.js", "/lens-browser.src.js", "LensBrowser"],
-  ["lens-reader.js", "/lens-reader.src.js", "LensReader"],
-  ["lens-wire.js",   "/lens-wire.src.js",   "LensWire"],
-  ["lens-tools.js",  "/lens-tools.src.js",  "LensTools"],
-  ["lens-nlweb.js",  "/lens-nlweb.src.js",  "LensNlweb"],
-  ["lens-markdown.js", "/lens-markdown.src.js", "LensMarkdown"],
-  ["serendipity.js", "/serendipity.src.js", "data-event-time"],
-  ["quiz.js",    "/quiz.src.js",    "luq-data"],       // the understanding-check widget
-  ["tooltip.js", "/tooltip.src.js", "function start"],
-  ["infotip.js", "/infotip.src.js", "axp-infotip"],   // the shell's own tooltips
-  // the shared hover engine. tooltip.js imports it statically; the serendipity
-  // shell and nav.js import it dynamically. Content-hashed in step 6 through
-  // STRING_ASSETS, which rewrites those `import` specifiers; the attribute-scoped
-  // /a/ repointer never could, which is what this comment used to say instead.
-  ["hoist.js",   "/hoist.src.js",   "createHoist"],
-  // first-party WebMCP registration, loaded on idle from nav.js on every page and
-  // from lens-webmcp.js. Content-hashed through STRING_ASSETS like hoist.js since
-  // 2026-09-26; it had stayed a plain /webmcp.js on hoist's old, stale reason, and
-  // so shipped at the edge's q4 with no twin (2,436 B against 2,098 at q11).
-  ["webmcp.js",  "/webmcp.src.js",  "registerSiteTools"],
-  // the LWE pages' ask widget. Page-specific rather than shell, so it keeps its
-  // /lwe/ URL (a subdirectory here stages to the same subdirectory served); it
-  // moved out of public/ on 2026-09-16 because public/ is for bytes that ship
-  // unchanged and this one is now minified. Measured: 4,305 B on the wire at the
-  // edge's q4 against 2,833 minified with a q11 twin, on 12 pages. The pages load
-  // it from /a/ since 2026-09-30 (PAGE_SCOPED_HASHED); /lwe/ask.js stays served.
-  ["lwe/ask.js", "/lwe/ask.src.js", "lwe-q"],
-  // the vendored @chenglou/pretext 0.0.7 that /garage/pretext imports. It came
-  // prebuilt by its own bundler and shipped from public/ unchanged until
-  // 2026-09-28; oxc takes it 12,974 -> 12,564 B at q11 (-3.2%). The marker is an
-  // export NAME, which survives minification by construction, so losing it
-  // means the module lost its public surface and the page's import would break.
-  ["garage/pretext.lib.js", "/garage/pretext.lib.src.js", "prepareWithSegments"],
-  // the /dotfiles checklist. An ES module (tools/gen-dotfiles.ts imports its
-  // renderer to write the committed macos.sh). It shipped unhashed until
-  // 2026-09-30, on the argument that a hash re-mints nothing worth re-minting;
-  // that was true and beside the point, since the plain root URL had no
-  // _headers rule and no q11 twin, so every visit revalidated 1,483 B of q4.
-  ["dotfiles.js", "/dotfiles.src.js", "dotfiles-data"],
-];
-
-// SHELLS rows that are ES MODULES rather than classic scripts. OXC_MINIFY_OPTIONS
-// parses as a script (module: false), which refuses `export`. A module's
-// top-level names are module-scoped rather than globals, so mangling them is
-// safe and is where most of this file's saving comes from.
-const MODULE_SHELLS = new Set(["garage/pretext.lib.js", "dotfiles.js"]);
-
-// EVERY client script is a SHELLS row, or is sw.js. A file missing from the list
-// ships readable and unminified with no .src.js twin and, the sharper half, no
-// MARKER: the marker is the one tripwire that turns a minifier deleting a whole
-// island into a failed build (measured 2026-09-15: `propertyWriteSideEffects:
-// false` minified six /lens islands to 0 bytes, and "lost the LensBrowser
-// marker" is what stopped it). Three contract tests used to pin three files by
-// name, which is the allowlist that only grows when somebody remembers; this
-// reads the directory. sw.js is the ONE exception and the comment above the
-// list is its reason.
+// The client scripts to minify, their readable twins and their marker tripwires
+// are rows of the client asset registry (tools/lib/client-assets.ts), which
+// also decides what step 6 hashes and in which order.
+//
+// EVERY client script is a registry row, or is sw.js: a ~15-line unregister
+// stub since v136, shipped readable and verbatim. clientScriptProblems has the
+// reason a missing row matters. It reads the directory recursively, because two
+// rows (lwe/ask.js, garage/pretext.lib.js) live in a subdirectory.
 {
-  const rows = new Map(SHELLS.map(([file, , marker]) => [file, marker]));
-  // Recursive, because two rows (lwe/ask.js, garage/pretext.lib.js) live in a
-  // subdirectory, and a top-level read could not see a third one missing.
-  const missing = (await readdir("src/client", { recursive: true })).filter((f) => f.endsWith(".js") && f !== "sw.js" && !rows.has(f));
-  if (missing.length) throw new Error(`SHELLS: ${missing.join(", ")} in src/client but not in the list, so it would ship unminified with no twin and no marker tripwire`);
-  const unmarked = [...rows].filter(([, marker]) => !marker).map(([file]) => file);
-  if (unmarked.length) throw new Error(`SHELLS: ${unmarked.join(", ")} carries no marker, so a minifier deleting it would pass the build`);
+  const problems = clientScriptProblems(await readdir("src/client", { recursive: true }));
+  if (problems.length) throw new Error(`client assets: ${problems.join("; ")}`);
 }
 
 // Fail fast on a broken invariant before doing any staging work. The same call
@@ -1697,11 +1633,14 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
 
 
 // 3) shells: deploy the readable original as <name>.src.js, minify the served file
-for (const [file, srcPath, marker] of SHELLS) {
+for (const { file, twin: srcPath, marker, module } of minifiedScripts()) {
   const src = await readFile(`src/client/${file}`, "utf8");
   await writeFile(`${OUT}/public/${srcPath.slice(1)}`, src);
 
-  const code = MODULE_SHELLS.has(file)
+  // An ES module parses as one (a script parse refuses `export`), and its
+  // top-level names are module-scoped rather than globals, so mangling them is
+  // safe and is where most of such a file's saving comes from.
+  const code = module
     ? minifyJavaScript(`src/client/${file}`, src, { ...OXC_MINIFY_OPTIONS, module: true, mangle: { toplevel: true } })
     : minifyJavaScript(`src/client/${file}`, src);
   const banner = `/*! minified at deploy - readable source: ${srcPath} */\n`;
@@ -1724,34 +1663,19 @@ for (const [file, srcPath, marker] of SHELLS) {
 // Owner-approved 2026-07 as the ONE non-shell file the build is allowed to
 // minify. The three first-interaction sheets below are explicit exceptions: each
 // was extracted byte-for-byte from luna.css and loads only with its matching JS.
-{
-  const src = await readFile("src/styles/luna.css", "utf8");
-  await writeFile(`${OUT}/public/luna.src.css`, src);
-  const code = minifyCss("src/styles/luna.css", src);
-  const out = `/*! minified at deploy - readable source: /luna.src.css */\n` + code;
-  await writeFile(`${OUT}/public/luna.css`, out);
-  console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
-}
-
-for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
-  const src = await readFile(`src/styles/${file}`, "utf8");
-  await writeFile(`${OUT}/public/${file.replace(".css", ".src.css")}`, src);
-  const code = minifyCss(`src/styles/${file}`, src);
-  const out = `/*! minified at deploy - readable source: /${file.replace(".css", ".src.css")} */\n` + code;
-  await writeFile(`${OUT}/public/${file}`, out);
-  console.log(`${file}: ${src.length} -> ${out.length} bytes`);
-}
-
+//
 // 4b) the LWE conversation pages share their byte-identical structural CSS
-// instead of embedding it eleven times. Keep the same readable-twin contract as
-// luna.css: author the source directly, ship a small minified render-blocker.
-{
-  const src = await readFile("src/styles/lwe-base.css", "utf8");
-  await writeFile(`${OUT}/public/lwe-base.src.css`, src);
-  const code = minifyCss("src/styles/lwe-base.css", src);
-  const out = `/*! minified at deploy - readable source: /lwe-base.src.css */\n` + code;
-  await writeFile(`${OUT}/public/lwe-base.css`, out);
-  console.log(`lwe-base.css: ${src.length} -> ${out.length} bytes (+ /lwe-base.src.css)`);
+// (lwe-base.css) instead of embedding it eleven times, under the same
+// readable-twin contract: author the source directly, ship a small minified
+// render-blocker. Which sheets these are is the registry's call.
+for (const file of minifiedStyles()) {
+  const twin = file.replace(".css", ".src.css");
+  const src = await readFile(`src/styles/${file}`, "utf8");
+  await writeFile(`${OUT}/public/${twin}`, src);
+  const code = minifyCss(`src/styles/${file}`, src);
+  const out = `/*! minified at deploy - readable source: /${twin} */\n` + code;
+  await writeFile(`${OUT}/public/${file}`, out);
+  console.log(`${file}: ${src.length} -> ${out.length} bytes (+ /${twin})`);
 }
 
 // 5) worker-module CSS: minify static CSS template literals marked with a
@@ -1886,38 +1810,18 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
   }
 }
 
-// Staged files step 6 content-hashes into /a/ that ONE page or one section
-// loads: the LWE ask widget, the vendored pretext library, the /dotfiles
-// checklist and the /pixel-peeper trial manifest. They were plain URLs that
-// every visit revalidated (max-age=0 under /lwe/*, /garage/*, the root default
-// and /pixel-peeper/manifest.json), so the hash is what buys the year.
+// The staged files step 6 content-hashes into /a/ that step 5c ranks as the
+// SHELL. The registry declares each hashed asset shell-scoped or page-scoped;
+// the page-scoped ones (the /serendipity island, the LWE ask widget, the
+// vendored pretext library, the /dotfiles checklist, the /pixel-peeper trial
+// manifest, quiz.css) are hashed like the shell and RANKED like pages. The shell tier orders names by their
+// uses inside the shell alone, so a page-scoped file in that set would let an
+// edit to ask.js (which reads three --font-* tokens) reorder luna.css's short
+// names and re-mint every page (gotcha 35).
 //
-// They are hashed like the shell and RANKED like pages in 5c. The shell tier
-// orders names by their uses inside the shell alone, so a page-scoped file in
-// that set would let an edit to ask.js (which reads three --font-* tokens)
-// reorder luna.css's short names and re-mint every page (gotcha 35).
-//
-// quiz.css joins them for the same reason: it is loaded beside quiz.js on the
-// garage and lwe pages, reads --font-ui and --font-caption, and defines no
-// custom property of its own.
-const PAGE_SCOPED_HASHED = new Set([
-  "serendipity.js", "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json", "quiz.css",
-].map((f) => `public/${f}`));
-
-// Every staged file step 6 content-hashes into /a/. Step 5c reads the shell
-// part of it to keep page edits out of these files' bytes, and step 6 fails if
-// its two asset lists and this one disagree, so an asset cannot join /a/
-// without joining this too.
-const CONTENT_HASHED = new Set([
-  ...[
-    "nav.js", "luna.css", "lens-boot.js", "icons.svg", "quiz.js", "notepad.js", "lwe-base.css",
-    "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js", "nav-tips.js",
-    "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js",
-    "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js", "webmcp.js",
-  ].map((f) => `public/${f}`),
-  ...PAGE_SCOPED_HASHED,
-]);
-const SHELL_RANKED = new Set([...CONTENT_HASHED].filter((f) => !PAGE_SCOPED_HASHED.has(f)));
+// Step 6 hashes from the same registry, so an asset cannot join /a/ without
+// being placed in one tier or the other.
+const SHELL_RANKED = shellRankedFiles();
 
 // 5c) shorten every CSS custom property name, across the whole staged tree.
 //
@@ -2067,307 +1971,13 @@ let freshFamily: Buffer | null = null;
 // the build is allowed past the six shells + luna.css (hard rule 3).
 {
   const hash8 = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 8);
-  const esc = (s) => s.replace(/[\\/.*+?^${}()|[\]]/g, "\\$&");
-  await mkdir(`${OUT}/public/a`, { recursive: true });
-
-  const ASSETS = [
-    { attr: "src",  from: "/nav.js",   base: "nav",  ext: "js",  witness: "index.html" },
-    { attr: "href", from: "/luna.css", base: "luna", ext: "css", witness: "index.html" },
-    // The server-rendered idle Lens shell emits only the interaction bootstrap.
-    // Phase 0 hashes the full client and rewrites its URL into this file first;
-    // hashing the bootstrap here makes the complete two-step chain immutable.
-    { attr: "src",  from: "/lens-boot.js",  base: "lens-boot", ext: "js",  witness: "../src/worker/lens.ts" },
-    // the desktop icon sprite. Unlike the three above, every ref carries a
-    // #fragment (src="/icons.svg#pin-garage"), so `frag` widens the match to
-    // keep it. Its witness is the desktop partial, which is where all 12 live.
-    // src= rather than href= because the refs are <img> against <view>s, not
-    // <svg><use> against <symbol>s — see the WebKit note in gen-desktop-partial.mjs.
-    { attr: "src", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "../src/worker/lib/desktop.ts" },
-    // quiz.js + notepad.js joined 2026-07-27. Both were served unhashed at max-age=300,
-    // so hashing them buys a year + immutable outright, and enrolling them in /a/ means
-    // they inherit the brotli q11 twin and the dcz delta path for free.
-    //
-    // These two and no others of the five deferred islands. tooltip.js and hoist.js load
-    // via `import("/tooltip.js")`, and lens-browser.js via `script.src = "..."`: all three
-    // are JS STRING literals, not attributes. The repointer below is attribute-scoped on
-    // purpose, so that it cannot rewrite the garage pages' documentary /nav.js mentions.
-    // It would silently miss those three and the witness tripwire would fail the deploy.
-    // Moving them needs a different mechanism, not another line here.
-    { attr: "src", from: "/serendipity.js", base: "serendipity", ext: "js", witness: "../serendipity/serendipity.ts" },
-    { attr: "src", from: "/quiz.js",    base: "quiz",    ext: "js", witness: "garage/encoding.html" },
-    { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "../src/worker/writing.ts" },
-    // Shared LWE structure is a separate warm-cache object.
-    { attr: "href", from: "/lwe-base.css", base: "lwe-base", ext: "css", witness: "lwe/vigenere.html" },
-    // The LWE ask widget, on 12 pages, joined 2026-09-30 (PAGE_SCOPED_HASHED).
-    // Under /lwe/* it revalidated on every view: a background conditional GET
-    // for a week, a blocking one after that. A subdirectory asset takes a flat
-    // base, because roll-shell-dictionary and dcz:check read /a/ names as
-    // [\w-]+, and it has no top-level copy for perf-snapshot's merge to pair.
-    { attr: "src", from: "/lwe/ask.js", base: "ask", ext: "js", witness: "lwe/vigenere.html" },
-  ];
-  const hashedFor: Record<string, string> = {};
-  // ── phase 0: the three JS-STRING-loaded islands (tooltip, hoist, lens-browser) ──
-  // These load via `import("/hoist.js")` / `script.src = "/lens-browser.js?v=1"`, which
-  // the attribute-scoped repointer below cannot touch. They are hashed FIRST, and their
-  // loader strings rewritten across the staged tree BEFORE nav.js / lens-boot.js are
-  // hashed, so a dependent's hash covers its final bytes (nav.js imports hoist;
-  // lens.js loads its four feature modules; lens-boot.js imports lens.js). The
-  // patterns are exact call-syntax matches — `import((["'`])/x.js\1)`
-  // — so the garage pages' documentary "/hoist.js" prose mentions cannot be caught, which
-  // is the precision the attribute rule existed to protect. The ?v=1 ritual on
-  // lens-browser retires here: the hash IS the version.
-  //
-  // hoist has TWO loader shapes, and missing the second one cost a real serialized
-  // fetch in production: nav.js + index.html reach it through `import("/hoist.js")`,
-  // but tooltip.js reaches it through a STATIC `import {...} from "/hoist.js"`. With
-  // only the call-syntax pattern, tooltip.js kept the unhashed specifier, so every
-  // homepage load fetched hoist twice — once hashed (the inline warm-up, parallel with
-  // tooltip.js) and once unhashed, discovered only after tooltip.js had parsed. Measured
-  // on production 2026-07-27: tooltip.js finished at 1112ms and /hoist.js only STARTED at
-  // 1114ms, the one serialized fetch left on the page, and the duplicate came back
-  // max-age=300 while its immutable twin sat in cache unused.
-  //
-  // ORDER IS LOAD-BEARING and the list is sorted leaves-first. Each asset's rewrites are
-  // applied to the staged tree immediately after it is hashed, so a dependent hashed
-  // later reads bytes that already carry its dependency's hashed URL. tooltip depends on
-  // hoist, so hoist must be hashed and rewritten first — otherwise tooltip's `/a/` copy
-  // ships the unhashed specifier forever, since the rewrite pass deliberately skips `a/`.
-  // `/a/<base>.<hash8>.<ext>` must dehash back to the asset's own filename, or
-  // perf-snapshot's merge (which keys on that dehashed name) reads the top-level
-  // copy and the /a/ copy as two separate assets and counts every byte twice. So
-  // base tracks the FILE, and the js/css pairs that now share a stem are told
-  // apart by extension in hashedFor instead of by a "-style" suffix nothing else
-  // knew about. #341's own size table read +4.82 KiB for what is a -1.28 KiB
-  // change, which is how this was found.
-  const hashKey = (a) => (a.ext && a.ext !== "js" ? `${a.base}.${a.ext}` : a.base);
-  const STRING_ASSETS = [
-    { file: "/nav-run.css",     base: "nav-run",           ext: "css", mk: (to) => [
-      [/("nav-run"\s*:\s*)(["'`])\/nav-run\.css\2/g, `$1$2${to}$2`] ] },
-    { file: "/nav-tray.css",    base: "nav-tray",          ext: "css", mk: (to) => [
-      [/("nav-tray"\s*:\s*)(["'`])\/nav-tray\.css\2/g, `$1$2${to}$2`] ] },
-    { file: "/infotip.css",     base: "infotip",           ext: "css", mk: (to) => [
-      [/(\binfotip\b\s*:\s*)(["'`])\/infotip\.css\2/g, `$1$2${to}$2`] ] },
-    // quiz.js's stylesheet. A leaf rewritten into quiz.js before ASSETS hashes
-    // quiz.js below, so the quiz's /a/ URL covers the sheet's.
-    { file: "/quiz.css",        base: "quiz",              ext: "css", mk: (to) => [
-      [/(\.href\s*=\s*)(["'`])\/quiz\.css\2/g, `$1$2${to}$2`] ] },
-    { file: "/hoist.js",        base: "hoist",        mk: (to) => [
-      [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`],
-      [/(\bfrom\s*)(["'`])\/hoist\.js\2/g, `$1$2${to}$2`] ] },
-    // The WebMCP core. A leaf: nav.js and lens-webmcp.js import it, so it is
-    // hashed before lens-webmcp below and before nav.js is hashed by ASSETS.
-    { file: "/webmcp.js",       base: "webmcp",       mk: (to) => [
-      [/import\((["'`])\/webmcp\.js\1\)/g, `import($1${to}$1)`] ] },
-    // First-interaction shell islands. nav-run depends on hoist, so hoist must
-    // be rewritten into its source before nav-run receives its own hash. Both
-    // are then rewritten into nav.js before the shared shell is hashed below.
-    { file: "/nav-run.js",      base: "nav-run",      mk: (to) => [
-      [/import\((["'`])\/nav-run\.js\1\)/g, `import($1${to}$1)`] ] },
-    { file: "/nav-tray.js",     base: "nav-tray",     mk: (to) => [
-      [/import\((["'`])\/nav-tray\.js\1\)/g, `import($1${to}$1)`] ] },
-    // The idle screen saver. A leaf with no imports, rewritten into nav.js before
-    // the shell is hashed, like the two islands above.
-    { file: "/nav-pipes.js",    base: "nav-pipes",    mk: (to) => [
-      [/import\((["'`])\/nav-pipes\.js\1\)/g, `import($1${to}$1)`] ] },
-    // Tip of the Day. A leaf like the saver; its stylesheet is nav-tray.css, which
-    // nav.js already repoints.
-    { file: "/nav-tips.js",     base: "nav-tips",     mk: (to) => [
-      [/import\((["'`])\/nav-tips\.js\1\)/g, `import($1${to}$1)`] ] },
-    { file: "/lens-browser.js", base: "lens-browser", mk: (to) => [
-      [/(["'`])\/lens-browser\.js\?v=1\1/g, `$1${to}$1`] ] },
-    { file: "/lens-reader.js",  base: "lens-reader",  mk: (to) => [
-      [/(["'`])\/lens-reader\.js\?v=1\1/g, `$1${to}$1`] ] },
-    { file: "/lens-wire.js",    base: "lens-wire",    mk: (to) => [
-      [/(["'`])\/lens-wire\.js\?v=1\1/g, `$1${to}$1`] ] },
-    { file: "/lens-tools.js",   base: "lens-tools",   mk: (to) => [
-      [/(["'`])\/lens-tools\.js\?v=1\1/g, `$1${to}$1`] ] },
-    { file: "/lens-nlweb.js",   base: "lens-nlweb",   mk: (to) => [
-      [/(["'`])\/lens-nlweb\.js\?v=1\1/g, `$1${to}$1`] ] },
-    { file: "/lens-markdown.js", base: "lens-markdown", mk: (to) => [
-      [/(["'`])\/lens-markdown\.js\?v=1\1/g, `$1${to}$1`] ] },
-    // The WebMCP-capable idle shell loads only this registrar. Hash it before
-    // lens-boot so the bootstrap's immutable URL covers the complete lazy chain.
-    { file: "/lens-webmcp.js",  base: "lens-webmcp",  mk: (to) => [
-      [/import\((["'`])\/lens-webmcp\.js\1\)/g, `import($1${to}$1)`] ] },
-    // The full Lens application depends on all six feature modules above. It
-    // must be hashed after they rewrite it, and before lens-boot.js is hashed by
-    // ASSETS below, so every URL names the final bytes of its complete subtree.
-    { file: "/lens.js",         base: "lens",         mk: (to) => [
-      [/import\((["'`])\/lens\.js\?v=1\1\)/g, `import($1${to}$1)`] ] },
-    { file: "/tooltip.js",      base: "tooltip",      mk: (to) => [
-      [/import\((["'`])\/tooltip\.js\1\)/g, `import($1${to}$1)`] ] },
-    // nav.js's shell infotips. Same shape as tooltip, and it depends on hoist
-    // for the same reason, so it sits below hoist in this leaves-first list.
-    { file: "/infotip.js",      base: "infotip",      mk: (to) => [
-      [/import\((["'`])\/infotip\.js\1\)/g, `import($1${to}$1)`] ] },
-    // PAGE_SCOPED_HASHED: three leaves, each loaded from one page's inline
-    // script, joined 2026-09-30. /garage/pretext imports its library RELATIVELY
-    // ("./pretext.lib.js"), so the pattern takes that spelling and the absolute
-    // one; the page's prose names /garage/pretext.lib.js in <code> twice, and
-    // call syntax is what keeps those mentions out of reach.
-    { file: "/garage/pretext.lib.js", base: "pretext-lib", mk: (to) => [
-      [/import\((["'`])(?:\.\/|\/garage\/)pretext\.lib\.js\1\)/g, `import($1${to}$1)`] ] },
-    { file: "/dotfiles.js",     base: "dotfiles",     mk: (to) => [
-      [/(\bfrom\s*)(["'`])\/dotfiles\.js\2/g, `$1$2${to}$2`],
-      [/import\((["'`])\/dotfiles\.js\1\)/g, `import($1${to}$1)`] ] },
-    // The one DATA file here, fetched before /pixel-peeper can draw a trial. It
-    // sat at max-age=0, must-revalidate, so every visit paid a blocking
-    // round trip for 1,860 B that changed in 5 of the last 200 releases. It
-    // stays OFF the dictionary path (DICTIONARY_TYPES in lib/assets.ts says
-    // why), so it gets the year and the q11 twin and nothing else.
-    { file: "/pixel-peeper/manifest.json", base: "pixel-peeper-manifest", ext: "json", mk: (to) => [
-      [/fetch\((["'`])\/pixel-peeper\/manifest\.json\1\)/g, `fetch($1${to}$1)`] ] },
-  ];
-  // 5c planned its short names with CONTENT_HASHED's shell part as the shell. An
-  // asset hashed here and missing there would take page-driven renames into an
-  // /a/ URL again.
-  {
-    const hashedHere = new Set([...ASSETS.map((a) => a.from), ...STRING_ASSETS.map((a) => a.file)].map((f) => `public${f}`));
-    const drift = [...hashedHere].filter((f) => !CONTENT_HASHED.has(f)).concat([...CONTENT_HASHED].filter((f) => !hashedHere.has(f)));
-    if (drift.length) throw new Error(`CONTENT_HASHED (step 5c) and step 6's asset lists disagree on: ${drift.join(", ")}`);
-  }
-  {
-    // Every staged surface that can carry a loader: HTML pages, the top-level shell
-    // scripts themselves (nav.js imports hoist), worker modules, serendipity. NOT the
-    // .src twins, and NOT `a/` — the hashed copies are already-final bytes, which is
-    // precisely why each asset must be rewritten before the next one is hashed.
-    const stringTargets = [`${OUT}/serendipity/serendipity.ts`];
-    for (const rel of await readdir(`${OUT}/public`, { recursive: true })) {
-      if (rel.includes(".src.")) continue;
-      if (rel.endsWith(".html") || (rel.endsWith(".js") && !rel.startsWith("a/"))) {
-        stringTargets.push(`${OUT}/public/${rel}`);
-      }
-    }
-    let hits = 0;
-    for (const a of STRING_ASSETS) {
-      let bytes = await readFile(`${OUT}/public${a.file}`);
-      // A JSON asset takes compact-data's canonical form HERE, before its hash,
-      // and the plain copy with it. compact-data runs long after this step and
-      // skips a/, so it can never rewrite bytes a hash already names.
-      if (a.ext === "json") {
-        const compact = Buffer.from(JSON.stringify(JSON.parse(bytes.toString("utf8"))));
-        if (compact.length < bytes.length) {
-          bytes = compact;
-          await writeFile(`${OUT}/public${a.file}`, bytes);
-        }
-      }
-      const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.${a.ext || "js"}`;
-      await writeFile(`${OUT}/public${to}`, bytes);
-      hashedFor[hashKey(a)] = to;
-      const reps = a.mk(to);
-      const touched = await Promise.all(stringTargets.map(async (path) => {
-        let t; try { t = await readFile(path, "utf8"); } catch { return null; }
-        let out = t;
-        for (const [re, sub] of reps) out = out.replace(re, sub);
-        if (out === t) return false;
-        await writeFile(path, out);
-        return true;
-      }));
-      hits += touched.filter(Boolean).length;
-      console.log(`hashed asset (string-loaded): ${a.file} -> ${to} (${bytes.length} bytes)`);
-    }
-    // Witnesses: each island's loader must now carry the hashed URL, or the enrolment
-    // silently did nothing and the deploy must not proceed.
-    const idx = await readFile(`${OUT}/public/index.html`, "utf8");
-    const nav = await readFile(`${OUT}/public/nav.js`, "utf8");
-    const lens = await readFile(`${OUT}/public/lens.js`, "utf8");
-    const tip = await readFile(`${OUT}/public${hashedFor.tooltip}`, "utf8");
-    const run = await readFile(`${OUT}/public${hashedFor["nav-run"]}`, "utf8");
-    if (!idx.includes(hashedFor.tooltip)) throw new Error("index.html was not repointed to hashed tooltip.js");
-    if (!idx.includes(hashedFor.hoist) || !run.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav-run.js)");
-    if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"]) || !nav.includes(hashedFor["nav-pipes"]) || !nav.includes(hashedFor["nav-tips"])) throw new Error("nav.js was not repointed to its first-interaction islands");
-    for (const style of ["nav-run", "nav-tray", "infotip"]) {
-      if (!nav.includes(hashedFor[`${style}.css`])) throw new Error(`nav.js was not repointed to hashed ${style}.css`);
-    }
-    if (!lens.includes(hashedFor["lens-browser"])) throw new Error("lens.js was not repointed to hashed lens-browser.js");
-    if (!lens.includes(hashedFor["lens-reader"])) throw new Error("lens.js was not repointed to hashed lens-reader.js");
-    if (!lens.includes(hashedFor["lens-wire"])) throw new Error("lens.js was not repointed to hashed lens-wire.js");
-    if (!lens.includes(hashedFor["lens-tools"])) throw new Error("lens.js was not repointed to hashed lens-tools.js");
-    if (!lens.includes(hashedFor["lens-nlweb"])) throw new Error("lens.js was not repointed to hashed lens-nlweb.js");
-    if (!lens.includes(hashedFor["lens-markdown"])) throw new Error("lens.js was not repointed to hashed lens-markdown.js");
-    const lensBoot = await readFile(`${OUT}/public/lens-boot.js`, "utf8");
-    if (!lensBoot.includes(hashedFor.lens)) throw new Error("lens-boot.js was not repointed to hashed lens.js");
-    if (!lensBoot.includes(hashedFor["lens-webmcp"])) throw new Error("lens-boot.js was not repointed to hashed lens-webmcp.js");
-    const lensWebmcp = await readFile(`${OUT}/public${hashedFor["lens-webmcp"]}`, "utf8");
-    if (!nav.includes(hashedFor.webmcp)) throw new Error("nav.js was not repointed to hashed webmcp.js");
-    if (!lensWebmcp.includes(hashedFor.webmcp)) throw new Error(`${hashedFor["lens-webmcp"]} still imports an unhashed /webmcp.js (webmcp must be hashed before lens-webmcp)`);
-    // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
-    // and the one the old ordering left pointing at the unhashed duplicate.
-    if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
-    // The page-scoped three: each has exactly one loader, on one page.
-    for (const [page, key] of [["garage/pretext.html", "pretext-lib"], ["dotfiles/index.html", "dotfiles"], ["pixel-peeper/index.html", "pixel-peeper-manifest.json"]]) {
-      const body = await readFile(`${OUT}/public/${page}`, "utf8");
-      if (!body.includes(hashedFor[key])) throw new Error(`${page} was not repointed to ${hashedFor[key] ?? `a hashed ${key}`}`);
-    }
-    console.log(`string-loaded islands: rewritten across ${hits} staged files`);
-  }
-
-  const reps = [];
-  for (const a of ASSETS) {
-    const bytes = await readFile(`${OUT}/public${a.from}`);   // exact served bytes (banner incl.)
-    const to = `/a/${a.base}.${hash8(bytes)}.${a.ext}`;
-    hashedFor[a.base] = to;
-    await writeFile(`${OUT}/public${to}`, bytes);
-    // one regex for quoted "x" AND backslash-escaped \"x\" (writing.js builds its
-    // <head> as an escaped string); a second for minify-html's unquoted x.
-    const frag = a.frag ? "(#[\\w-]+)" : "";
-    const keep = a.frag ? "$2" : "";
-    reps.push({ re: new RegExp(`\\b${a.attr}=(\\\\?")${esc(a.from)}${frag}\\1`, "g"), sub: `${a.attr}=$1${to}${keep}$1` });
-    reps.push({ re: new RegExp(`\\b${a.attr}=${esc(a.from)}${a.frag ? "(#[\\w-]+)" : ""}(?=[\\s/>])`, "g"), sub: `${a.attr}=${to}${a.frag ? "$1" : ""}` });
-    console.log(`hashed asset: ${a.from} -> ${to} (${bytes.length} bytes)`);
-  }
-
-  // repoint: every served HTML file + the two worker tag-emitters (chrome.js,
-  // writing.js) + the serendipity shell. NOT the top-level shell scripts /
-  // luna.css, and NOT the readable *.src.html twin (it must stay byte-identical
-  // to src/pages/index.html for the perf-budget twin check — View Source is the
-  // authoring source, which keeps the plain /nav.js the fallback still serves).
-  // cal/src rides along: /coffee's SSR templates load the shell too, and were the
-  // whole reason the unhashed fallbacks existed. Their nav and luna refs are both
-  // relative and attribute-shaped, so the ordinary reps catch them (the luna ref was
-  // absolute until 2026-09-23 and had its own pass; cal/src/templates.ts says why
-  // that never worked).
-  const targets = [`${OUT}/serendipity/serendipity.ts`];
-  for (const rel of await readdir(`${OUT}/cal/src`).catch(() => [])) {
-    if (rel.endsWith(".ts")) targets.push(`${OUT}/cal/src/${rel}`);
-  }
-  for (const rel of await readdir(`${OUT}/public`, { recursive: true })) {
-    if (rel.endsWith(".html") && !rel.endsWith(".src.html")) targets.push(`${OUT}/public/${rel}`);
-  }
-  // The Worker stages beside cal and serendipity now rather than inside the asset
-  // tree, so it needs its own walk. It was never served (.assetsignore listed
-  // _worker.js), and mirroring the source layout is what lets one relative
-  // specifier resolve in both the source and the staged tree.
-  for (const rel of await readdir(`${OUT}/src/worker`, { recursive: true })) {
-    if (rel.endsWith(".js") || rel.endsWith(".ts")) targets.push(`${OUT}/src/worker/${rel}`);
-  }
-  const rewritten = await Promise.all(targets.map(async (path) => {
-    let s; try { s = await readFile(path, "utf8"); } catch { return null; }
-    let out = s, hits = 0;
-    for (const { re, sub } of reps) {
-      const m = out.match(re);
-      if (m) { hits += m.length; out = out.replace(re, sub); }
-    }
-    if (!hits) return 0;
-    await writeFile(path, out);
-    return hits;
-  }));
-  const rewriteHits = rewritten.filter((hits): hits is number => hits !== null);
-  const refCount = rewriteHits.reduce((total, hits) => total + hits, 0);
-  const filesTouched = rewriteHits.filter(Boolean).length;
-
-  // /coffee's shell refs ride the ordinary reps above. Assert they landed, since a
-  // cal page left on the unhashed /luna.css keeps working and only loses the
-  // immutable cache, which nothing else would notice.
-  {
-    const p = `${OUT}/cal/src/templates.ts`;
-    let now; try { now = await readFile(p, "utf8"); } catch { now = null; }
-    if (now !== null) {
-      if (!now.includes(hashedFor.luna)) throw new Error("cal/src/templates.ts was not repointed to hashed luna.css");
-      if (!now.includes(hashedFor.nav)) throw new Error("cal/src/templates.ts was not repointed to hashed nav.js");
-      console.log(`cal: /coffee templates repointed to ${hashedFor.luna} + ${hashedFor.nav}`);
-    }
-  }
+  // Which assets, in which order, rewritten by which patterns and witnessed by
+  // which files: all of it is the registry's (tools/lib/client-assets.ts) and
+  // the hasher's (tools/lib/hash-client-assets.ts), which takes the staged root.
+  // The order is DERIVED from each asset's declared loaders, leaves first, so a
+  // dependent's hash covers its final bytes (nav.js imports hoist; lens.js
+  // loads its six feature modules; lens-boot.js imports lens.js).
+  const { urls: hashedFor, filesTouched } = await hashClientAssets(OUT, { log: console.log });
 
   // RFC 9842 requires dcz to treat the supplied bytes as a RAW dictionary. A zstd
   // --train artifact is self-describing, so a server library recognizes its tables
@@ -2461,11 +2071,11 @@ let freshFamily: Buffer | null = null;
   {
     const p = `${OUT}/src/worker/lib/shell-assets.ts`;
     const src = await readFile(p, "utf8");
-    const line = `export const SHELL_ASSETS = { luna: ${JSON.stringify(hashedFor.luna)}, nav: ${JSON.stringify(hashedFor.nav)} }; // build:shell-assets`;
+    const line = `export const SHELL_ASSETS = { luna: ${JSON.stringify(hashedFor["luna.css"])}, nav: ${JSON.stringify(hashedFor["nav.js"])} }; // build:shell-assets`;
     const shellPatched = src.replace(/^export const SHELL_ASSETS = .*\/\/ build:shell-assets$/m, line);
     if (shellPatched === src) throw new Error("shell-assets.js: the `// build:shell-assets` marker line was not found — did the export shape change?");
     await writeFile(p, shellPatched);
-    console.log(`shell-assets: Early-Hints -> ${hashedFor.luna} + ${hashedFor.nav}`);
+    console.log(`shell-assets: Early-Hints -> ${hashedFor["luna.css"]} + ${hashedFor["nav.js"]}`);
   }
 
   // The speculation ruleset leaves the documents for a header (2026-09-30). One
@@ -2529,26 +2139,15 @@ let freshFamily: Buffer | null = null;
     const p = `${OUT}/public/_headers`;
     const src = await readFile(p, "utf8");
     const out = src
-      .split("</luna.css>").join(`<${hashedFor.luna}>`)
-      .split("</nav.js>").join(`<${hashedFor.nav}>`)
-      .split("</lwe-base.css>").join(`<${hashedFor["lwe-base"]}>`);
+      .split("</luna.css>").join(`<${hashedFor["luna.css"]}>`)
+      .split("</nav.js>").join(`<${hashedFor["nav.js"]}>`)
+      .split("</lwe-base.css>").join(`<${hashedFor["lwe-base.css"]}>`);
     if (out === src) throw new Error("_headers: no shell Link target found to hash — did the Early-Hints rule move?");
     await writeFile(p, out);
     console.log(`_headers: Early-Hints Link rewritten to hashed shell URLs`);
   }
 
-  // tripwires: the rewrite must fire, and each asset's own entry point must load
-  // the hashed URL (a moved ref or renamed asset would silently drop the immutable
-  // win). Each asset names its WITNESS: the served file that must carry the hashed
-  // ref. index.html for the two shell assets it loads; the lens shell for lens-boot.js,
-  // which the homepage never loads.
-  if (!refCount) throw new Error("hashed-asset rewrite matched zero references — did the src=/href= ref shape change?");
-  for (const a of ASSETS) {
-    const to = hashedFor[a.base];
-    const body = await readFile(`${OUT}/public/${a.witness}`, "utf8");
-    if (!body.includes(to)) throw new Error(`${a.witness} was not repointed to hashed ${a.base} (${to})`);
-  }
-  console.log(`hashed-asset refs: repointed ${refCount} references across ${filesTouched} files`);
+  console.log(`hashed assets: ${Object.keys(hashedFor).length} repointed across ${filesTouched} staged files, every declared loader witnessed`);
 }
 
 // 7) precompress the /a/ shell assets at brotli q11, next to the bytes they encode.

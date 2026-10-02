@@ -21,6 +21,7 @@
 
 import { readFileSync } from "node:fs";
 import { agentRepresentation, agentSurfaces, needsBuiltTwin } from "./lib/agent-representation.ts";
+import { twinOracleRows } from "./lib/client-assets.ts";
 
 // Every path lookup below is relative to the REPO ROOT, not to this file.
 // Naming it means moving this script again costs one line instead of 57.
@@ -226,22 +227,16 @@ const ROUTES = [
   // byte pressure is the concern, perf-budget.mjs is where a budget belongs.
   ...(builtOutput ? [
     { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 65000 },
-    { path: "/nav.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-histnav" },
     { path: "/nav-run.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 25000 },
-    { path: "/nav-run.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-run" },
     { path: "/nav-tray.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 10000 },
-    { path: "/nav-tray.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-balloon" },
     { path: "/nav-pipes.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 20000 },
-    { path: "/nav-pipes.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-pipes" },
     { path: "/nav-tips.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 10000 },
-    { path: "/nav-tips.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-tips" },
-    { path: "/notepad.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "np-window" },
-    { path: "/lens-boot.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "requestSubmit" },
-    { path: "/lens-webmcp.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensWebMcp" },
-    { path: "/lens.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
-    { path: "/lens-browser.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
     { path: "/tooltip.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 18000 },
-    { path: "/tooltip.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "tooltip.js" },
+    // Every client script's readable twin serves and still carries the marker the
+    // build holds its minified copy to: one row per script in the client asset
+    // registry. 11 of these 23 were hand-written here until 2026-10-02.
+    // /lwe/ask.src.js has its own row further down, which also asserts its twin.
+    ...twinOracleRows().filter((row) => row.path !== "/lwe/ask.src.js").map((row) => ({ ...row })),
     // /terminal.js and /terminal.src.js used to be asserted here — the console
     // was the one client script whose absence was invisible on its own page.
     // Both are gone, and so is /terminal itself (410 since 2026-09-16).
