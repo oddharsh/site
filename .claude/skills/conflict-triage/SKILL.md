@@ -1,6 +1,6 @@
 ---
 name: conflict-triage
-description: Walk a PR's merge conflicts one at a time and say, for each, whether GitHub's web editor can resolve it or it needs a local checkout, then resolve it the right way. Use when a PR shows "This branch has conflicts", when the Resolve conflicts button is greyed out, when reviewing a PR that conflicts with main, or on "can I fix this in the web editor", "triage the conflicts on #N", "which open PRs conflict", "sweep conflicting PRs".
+description: Walk a PR's merge conflicts one at a time, explain what each side of each hunk did and which commit or PR did it, show that as a three-way view, and say whether GitHub's web editor can resolve it or it needs a local checkout, then resolve it the right way. Use when a PR shows "This branch has conflicts", when the Resolve conflicts button is greyed out, when a local merge, rebase or cherry-pick stops on conflicts (the repo's conflict hook names this skill when that happens), when reviewing a PR that conflicts with main, or on "explain these conflicts", "what do these diffs do", "can I fix this in the web editor", "triage the conflicts on #N", "which open PRs conflict", "sweep conflicting PRs".
 ---
 
 # Conflict triage
@@ -15,7 +15,10 @@ GitHub's web editor resolves plain line conflicts and nothing else. This reposit
 bun run conflicts -- <PR#> --json        # one PR
 bun run conflicts -- --json              # this branch against origin/main
 bun run conflicts -- --all --json        # every open PR that conflicts
+bun run conflicts -- --in-progress --json  # the merge/rebase/cherry-pick git just stopped on, here
 ```
+
+`.claude/settings.json` runs `tools/conflict-hook.ts` after every Bash call. When a git command leaves unmerged files behind, it injects a note naming them and this skill. Treat that note as the start of step 1 with `--in-progress`, run from the directory it names. `--in-progress` re-runs the merge in memory, so it describes the conflict as git first stopped on it even if some files are already resolved in the worktree.
 
 Exit 0: nothing needs a local checkout. Exit 1: something does. **Exit 2: the instrument failed.** Report its message and stop there. Never read an exit 2 as "no conflicts", and never fall back to guessing from `gh pr view`.
 
@@ -35,13 +38,11 @@ Files arrive sorted strongest verdict first. Present them in that order, one at 
 | `local-recommended` | renderable, but too big, too many hunks, or owes a command | The web editor would work but is the wrong tool. Say which reason. |
 | `web-ok` | small line conflict | Fine in the web editor, unless another file forces the PR local. |
 
-For each hunk, read the actual sides before saying anything about it. `tree` in the JSON is the GitHub-view result tree, and `hunk.line` is the `<<<<<<<` line in it:
+For each hunk, read the actual sides before saying anything about it. They are in the JSON as `hunk.sides.main`, `hunk.sides.base` and `hunk.sides.pr`, and `hunk.why` names the commits on each side whose patches wrote or removed those lines, strongest first, with the PR when the subject ends in `(#N)`.
 
-```bash
-git cat-file -p <tree>:<path> | sed -n '<line>,<line+main+base+pr+4>p'
-```
+**Explain the intent, then the resolution.** The commit subjects are evidence, not the answer: for each side, read the top commit before describing what it meant (`git show <sha> -- <path>`, or `gh pr view <N>` when `pr` is set) and say what that side was trying to do in a sentence a reviewer could check against it. An empty `why` on a side means no commit since the merge base touched those lines, usually because the side kept the base text; say that rather than inventing an author. For a hunk-less file (modify/delete), `file.history` has the newest commits per side.
 
-Then say what each side did and what the resolution should be, in one or two sentences:
+Then say what the resolution should be, in one or two sentences:
 
 - `trivial` whitespace: take either side.
 - `easy` add-add: keep both, and check the order and any trailing commas (JSON).
@@ -55,6 +56,25 @@ For `local-required` modify/delete, always look for where the content went befor
 ```bash
 git log origin/main --diff-filter=D --format='%h %s' -1 -- <path>
 ```
+
+## 2b. Show it
+
+Put the explanations on the page beside the sides they explain. Write them to a notes file in the scratchpad, keyed `<path>:<line>` per hunk (the `hunk.line` from the JSON), `<path>` per file, and `*` for a one-paragraph summary of the whole merge. Plain text; backticks render as code.
+
+```json
+{
+  "*": "Two conflicts, both main renaming route registration (#1102) under a branch that documented the old shape.",
+  "CLAUDE.md:1444": "Main (#1102) rewrote this to say routes are records in `src/worker/routes.ts`. The branch reworded the OLD sentence, which named `route()` in `_worker.js`. #1102's text is current; keep it and fold in any point the branch added."
+}
+```
+
+Then render with the same target arguments as step 1 and send the file:
+
+```bash
+bun run conflicts -- <target> --html <scratchpad>/conflicts.html --notes <scratchpad>/notes.json
+```
+
+A key that names no hunk exits 2 rather than vanishing from the page. Send the file with `SendUserFile` (`display: "render"`), which works from the desktop app and from a phone. Keep the per-hunk prose in chat short once the page carries it: one line per hunk plus the route.
 
 ## 3. Say the route
 
