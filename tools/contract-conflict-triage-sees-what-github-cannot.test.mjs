@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, test } from "./contract-shared.ts";
-import { HEAVY_HUNK, gradeHunk, parseHunks } from "./conflict-triage.ts";
+import { HEAVY_HUNK, gradeHunk, parseHunks, renderHtml } from "./conflict-triage.ts";
 
 // tools/conflict-triage.ts answers "can this conflict go through GitHub's web
 // editor", and its whole value is that the answer differs from what a local
@@ -174,4 +174,147 @@ test("hunk grades separate keep-both from near-duplicates and size from kind", (
   const [hunk] = parseHunks(text);
   assert.equal(hunk.line, 2);
   assert.deepEqual([hunk.main, hunk.base, hunk.pr], [1, 1, 2]);
+});
+
+// ── why each side looks the way it does ─────────────────────────────────────
+// A verdict says where to resolve a conflict; `why` says what each side was
+// doing, which is what a resolution actually needs. The control is the part
+// that matters: a commit that touched the SAME FILE but none of the hunk's
+// lines must not be credited with the hunk, or every busy file's top commit
+// would claim every conflict in it.
+
+test("each side of a hunk is attributed to the commit that wrote it, and only that one", () => {
+  const dir = fixture({ wired: true });
+  try {
+    git(dir, ["checkout", "-q", "feature"]);
+    writeFileSync(join(dir, "notes.txt"), notes("two, as the feature has it").replace("five", "five, unrelated"));
+    git(dir, ["commit", "-qam", "unrelated edit further down (#7)"]);
+
+    const { report } = run(dir);
+    const hunk = report.files.find((f) => f.path === "notes.txt").hunks[0];
+    assert.deepEqual(hunk.sides, { main: ["two, as main has it"], base: ["two"], pr: ["two, as the feature has it"] });
+    assert.deepEqual(hunk.why.main.map((o) => o.subject), ["main"]);
+    // The control: "unrelated edit" touched notes.txt and none of this hunk.
+    assert.deepEqual(hunk.why.pr.map((o) => o.subject), ["feature"]);
+    assert.equal(hunk.why.pr[0].lines, 2, "the added line and the base line it replaced");
+
+    // A modify/delete has no hunk to attribute, so the file carries its history:
+    // main's side is the commit that deleted it.
+    const gone = report.files.find((f) => f.path === "gone.txt");
+    assert.equal(gone.hunks.length, 0);
+    assert.equal(gone.history.main[0].subject, "main");
+    assert.equal(report.mergeBase, git(dir, ["merge-base", "main", "feature"]));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("--in-progress keeps main on the main side for a merge AND for a cherry-pick", () => {
+  // The two operations put the branches on opposite sides of git's markers
+  // (gotcha 47), so a mode that read HEAD as "the PR" would label a cherry-pick
+  // backwards and every explanation built on it would credit the wrong side.
+  const dir = fixture({ wired: true });
+  const inProgress = () => {
+    const out = spawnSync("bun", [tool, "--in-progress", "--json"], { cwd: dir, encoding: "utf8" });
+    assert.notEqual(out.status, 2, out.stderr);
+    return JSON.parse(out.stdout).files.find((f) => f.path === "notes.txt").hunks[0].sides;
+  };
+  try {
+    git(dir, ["checkout", "-q", "feature"]);
+    assert.equal(spawnSync("git", ["merge", "-q", "main"], { cwd: dir }).status, 1, "the merge should stop on conflicts");
+    assert.deepEqual(inProgress(), { main: ["two, as main has it"], base: ["two"], pr: ["two, as the feature has it"] });
+    git(dir, ["merge", "--abort"]);
+
+    git(dir, ["checkout", "-q", "main"]);
+    assert.equal(spawnSync("git", ["cherry-pick", "feature"], { cwd: dir }).status, 1, "the cherry-pick should stop on conflicts");
+    assert.deepEqual(inProgress(), { main: ["two, as main has it"], base: ["two"], pr: ["two, as the feature has it"] });
+    git(dir, ["cherry-pick", "--abort"]);
+
+    const idle = spawnSync("bun", [tool, "--in-progress"], { cwd: dir, encoding: "utf8" });
+    assert.equal(idle.status, 2, "nothing in progress is the instrument refusing, never a clean result");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the conflict hook speaks only when git left unmerged files behind", () => {
+  const hook = join(repoRoot, "tools", "conflict-hook.ts");
+  const dir = fixture({ wired: true });
+  const call = (input) => {
+    const out = spawnSync("bun", [hook], { input: JSON.stringify(input), encoding: "utf8" });
+    assert.equal(out.status, 0, "a hook must never fail the tool call");
+    return out.stdout ? JSON.parse(out.stdout) : null;
+  };
+  try {
+    git(dir, ["checkout", "-q", "feature"]);
+    // Before anything conflicts: a merge verb, no unmerged files, nothing to say.
+    assert.equal(call({ hook_event_name: "PostToolUse", cwd: dir, tool_input: { command: "git merge --ff-only main" } }), null);
+
+    spawnSync("git", ["merge", "-q", "main"], { cwd: dir });
+    // The failing merge, reached through a `cd` from somewhere else.
+    const said = call({ hook_event_name: "PostToolUseFailure", cwd: tmpdir(), tool_input: { command: `cd ${dir} && git merge main` } });
+    assert.equal(said.hookSpecificOutput.hookEventName, "PostToolUseFailure");
+    assert.match(said.hookSpecificOutput.additionalContext, /notes\.txt/);
+    assert.match(said.hookSpecificOutput.additionalContext, /conflict-triage/);
+    assert.match(said.hookSpecificOutput.additionalContext, /--in-progress/);
+
+    // Controls: the tree is still mid-merge, but neither of these could have
+    // caused it, so repeating the note on every command would be noise.
+    assert.equal(call({ hook_event_name: "PostToolUse", cwd: dir, tool_input: { command: "git status" } }), null);
+    assert.equal(call({ hook_event_name: "PostToolUse", cwd: dir, tool_input: { command: "ls" } }), null);
+    assert.equal(spawnSync("bun", [hook], { input: "not json", encoding: "utf8" }).status, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the three-way view escapes every side and every note", () => {
+  // Hunk text is file content and notes are model-written, so neither may
+  // reach the page as markup.
+  /** @type {import("./conflict-triage.ts").Report} */
+  const report = {
+    label: "fixture",
+    base: "main",
+    head: "f".repeat(40),
+    mergeBase: "b".repeat(40),
+    repo: "https://github.com/o/r",
+    tree: "t",
+    verdict: "web",
+    webEditorAvailable: true,
+    warnings: [],
+    files: [
+      {
+        path: "page.html",
+        github: "content",
+        kinds: ["content"],
+        stages: [1, 2, 3],
+        local: "conflicted",
+        driverNotes: [],
+        verdict: "web-ok",
+        reasons: [],
+        owes: [],
+        history: { main: [], pr: [] },
+        hunks: [
+          {
+            line: 3,
+            main: 1,
+            base: 1,
+            pr: 1,
+            clash: "edit-edit",
+            grade: "easy",
+            preview: { main: "", pr: "" },
+            sides: { main: ["<script>alert(1)</script>"], base: ["<p>"], pr: ["<img src=x onerror=alert(2)>"] },
+            why: { main: [{ sha: "a".repeat(40), subject: "add <b>bold</b> (#12)", pr: 12, lines: 1 }], pr: [] },
+          },
+        ],
+      },
+    ],
+  };
+  const page = renderHtml([report], { "page.html:3": "Main added a `<script>`; <i>keep</i> the PR side." });
+  assert.ok(!page.includes("<script>alert"), "side text escaped");
+  assert.ok(!page.includes("<img src=x"), "side text escaped");
+  assert.ok(!page.includes("<b>bold"), "commit subject escaped");
+  assert.ok(!page.includes("<i>keep"), "note escaped");
+  assert.ok(page.includes("<code>&lt;script&gt;</code>"), "backticks still render as code");
+  assert.ok(page.includes('href="https://github.com/o/r/pull/12"'), "the PR is linked");
 });
