@@ -50,6 +50,10 @@ type ExactRoute = {
   // methods are admitted on a preview and the WRITING tools are refused one
   // layer down (previewToolRefusal).
   writes?: "get" | "per-tool";
+  // The handler reads this origin through env.SELF_FETCH, an in-process
+  // dispatch (dispatch.ts withSelfFetch). Armed on these routes alone, because
+  // building that env costs a copy of every binding on each request.
+  selfFetch?: true;
 };
 
 type PrefixRoute = {
@@ -117,21 +121,21 @@ export const EXACT_ROUTES = [
   // are top-level (/lens.js, /lens-browser.js, /lens-reader.js), "/lens.txt" has
   // its own row, and /lens/read belongs to the lens-reader Worker through a
   // ZONE ROUTE, which is matched before this allowlist is consulted.
-  { path: "/lens", claim: ["/lens"], cacheable: true },
+  { path: "/lens", claim: ["/lens"], cacheable: true, selfFetch: true },
   { path: "/lens/", claim: ["/lens/*"] },
-  { path: "/lens/fetch", claim: ["/lens/*"] },
-  { path: "/lens/shot", claim: ["/lens/*"] },
-  { path: "/lens/browser", claim: ["/lens/*"] },
-  { path: "/lens/wire", claim: ["/lens/*"] },
-  { path: "/lens/tools", claim: ["/lens/*"] },
-  { path: "/lens/nlweb", claim: ["/lens/*"] },
-  { path: "/lens/markdown", claim: ["/lens/*"] },
-  { path: "/lens/compare.json", claim: ["/lens/*"] },
+  { path: "/lens/fetch", claim: ["/lens/*"], selfFetch: true },
+  { path: "/lens/shot", claim: ["/lens/*"], selfFetch: true },
+  { path: "/lens/browser", claim: ["/lens/*"], selfFetch: true },
+  { path: "/lens/wire", claim: ["/lens/*"], selfFetch: true },
+  { path: "/lens/tools", claim: ["/lens/*"], selfFetch: true },
+  { path: "/lens/nlweb", claim: ["/lens/*"], selfFetch: true },
+  { path: "/lens/markdown", claim: ["/lens/*"], selfFetch: true },
+  { path: "/lens/compare.json", claim: ["/lens/*"], selfFetch: true },
   { path: "/lens/census", claim: ["/lens/*"] },
   { path: CENSUS_TABLE_URL, claim: ["/lens/*"] },
   { path: "/lens/census.json", claim: ["/lens/*"] },
 
-  { path: "/mcp", writes: "per-tool" },
+  { path: "/mcp", writes: "per-tool", selfFetch: true },
 
   // The retired console: one wildcard for the 410 at /terminal and under it.
   { path: "/terminal", claim: ["/terminal*"] },
@@ -396,7 +400,7 @@ export const PREFIX_ROUTES = [
 
 export type PrefixLabel = (typeof PREFIX_ROUTES)[number]["label"];
 
-// cal.aadhar.sh is dispatched before any table (index.ts route()), and these are
+// cal.aadhar.sh is dispatched before any table (dispatch.ts route()), and these are
 // its retired spellings. They route nothing on aadhar.sh; on the cal host the
 // Worker sees them anyway while no static file sits at those paths. Kept as
 // claims so a file that ever lands at /book cannot answer cal's host first.
@@ -416,11 +420,15 @@ export const RUN_WORKER_FIRST: readonly string[] = unique([
   ...CAL_HOST.claim,
 ]);
 
-/** Exact paths Workers Cache may answer (WORKERS_CACHEABLE_PATHS in index.ts). */
+/** Exact paths Workers Cache may answer (dispatch.ts isEdgeCacheable). */
 export const CACHEABLE_PATHS: ReadonlySet<string> = new Set([
   ...(EXACT_ROUTES as readonly ExactRoute[]).filter((r) => r.cacheable).map((r) => r.path),
   ...(PREFIX_ROUTES as readonly PrefixRoute[]).flatMap((r) => r.cacheable?.paths ?? []),
 ]);
+
+/** Exact paths whose handler is handed SELF_FETCH (dispatch.ts). */
+export const SELF_FETCH_PATHS: ReadonlySet<string> =
+  new Set((EXACT_ROUTES as readonly ExactRoute[]).filter((r) => r.selfFetch).map((r) => r.path));
 
 /** Path prefixes Workers Cache may answer anything under (lib/cache.ts). */
 export const CACHEABLE_PREFIXES: readonly string[] =

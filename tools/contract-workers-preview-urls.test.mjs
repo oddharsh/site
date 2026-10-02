@@ -200,17 +200,9 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
     assert.equal(plain.headers.get("x-robots-tag"), null, `${what} must NOT be noindexed off a preview`);
   }
 
-  // The wrapper is only half of it: what decides `noindex` is the dispatcher, and
-  // that used to be `onPreview` alone, which left cal.aadhar.sh publishing
-  // /coffee at a second hostname (cal's templates carry no rel=canonical). The
-  // dispatcher cannot be imported here, since index.js is the one module allowed
-  // to import "cloudflare:workers" (gotcha 16), so pin the decision as source.
-  const dispatcher = readFileSync(new URL("./src/worker/index.ts", ROOT), "utf8");
-  assert.match(
-    dispatcher,
-    /noindex:\s*!isCanonicalHost\(url\.hostname\)/,
-    "every hostname that is not the canonical site must be noindexed, not just previews",
-  );
+  // The wrapper is only half of it: what decides `noindex` is the dispatcher,
+  // which noindexes every hostname but the canonical one. That half is asserted
+  // by calling it, in contract-the-dispatch-pipeline.
 
   // A route that already set its own x-robots-tag keeps it (/whoareyou.json and
   // /updates.json both do), so the guard can't weaken an existing directive.

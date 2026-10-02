@@ -49,12 +49,8 @@ test("the order-sensitive prefixes are in the order their comments promise", () 
   assert.equal(firstPrefix("/coffee/index.src.html"), "/coffee/<path>", "coffee's own twins reach cal");
   assert.equal(firstPrefix("/garage/horizon.src.html"), "/<path>.src.<ext>", "a section's readable twin is answered as a text twin");
   assert.equal(firstPrefix("/images/meta/XT500010.json"), "/images/meta/<stem>.json", "per-photo meta wins over the data-index row");
-  // and exact routes are consulted before any prefix, which is index.ts's route()
-  const route = read("src/worker/index.ts");
-  const exactAt = route.indexOf("const exact = ROUTES.get(url.pathname);");
-  const prefixAt = route.indexOf("for (const r of PREFIX) {");
-  assert.ok(exactAt > 0 && prefixAt > exactAt, "route() must try the exact table before the prefixes");
-  assert.equal(firstPrefix("/garage/dyno"), "/garage/<page>", "the control: /garage/dyno only reaches its own handler because exact wins");
+  // That exact routes are consulted before any prefix is asserted by calling
+  // dispatch.ts's route() with fake handlers, in contract-the-dispatch-pipeline.
 });
 
 test("each consumer reads the derived value rather than a copy of it", async () => {
@@ -71,7 +67,10 @@ test("each consumer reads the derived value rather than a copy of it", async () 
   const get = (path) => new Request(`https://aadhar.sh${path}`, { headers: { accept: "text/html" } });
   assert.equal(shouldUseWorkersCache(get("/writing/big-screens-and-small-screens"), new Set()), true);
   assert.equal(shouldUseWorkersCache(get("/lens/fetch"), new Set()), false, "the control: an undeclared path stays out");
-  assert.match(read("src/worker/index.ts"), /const WORKERS_CACHEABLE_PATHS = CACHEABLE_PATHS;/);
+  // and the dispatcher's own predicate admits exactly the derived exact paths
+  const { isEdgeCacheable } = await import("../src/worker/dispatch.ts");
+  assert.equal(isEdgeCacheable(get("/reading")), true, "/reading is declared cacheable in routes.ts");
+  assert.equal(isEdgeCacheable(get("/reading/list.html")), false, "the control: its island is not");
 });
 
 test("the island URLs are routing facts the feature modules import", async () => {

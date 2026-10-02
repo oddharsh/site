@@ -253,7 +253,7 @@ export const mcpError = (id, code, message) => ({ jsonrpc: "2.0", id: id ?? null
 // The legacy half of this module exists for one reason, that a pre-2026 client
 // has no fall-forward mechanism. That reason expires when those clients stop
 // calling, and nothing here could say when that happens. This records the era of
-// every well-formed message so the per-request log line in index.ts can carry
+// every well-formed message so the per-request log line in dispatch.ts can carry
 // it, which turns "can the legacy door close" into a count rather than a guess.
 //
 // It rides the EXISTING log line rather than emitting its own, because every
@@ -312,7 +312,7 @@ function noteEra(request: Request, msg) {
 
 // What the MCP handlers recorded for this request, or undefined when the
 // request never reached one (every non-MCP route, and every MCP request that
-// failed to parse). Read by the log line in index.ts.
+// failed to parse). Read by the log line in dispatch.ts.
 export function mcpEraOf(request: Request): McpEra | undefined {
   return ERAS.get(request);
 }
