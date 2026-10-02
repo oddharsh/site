@@ -20,6 +20,7 @@ import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc } from "./lib/http.ts";
 import { readApprovedMentions } from "./webmention.ts";
+import { INBOX_MAIL_URL } from "./routes.ts";
 
 const KIND_LABEL = {
   reply: "replied",
@@ -35,7 +36,7 @@ const KIND_LABEL = {
 // the endpoint line under them) is the island at MAIL_URL, read from D1 per
 // request. The endpoint line rides in the island because it names the origin,
 // and because nothing may sit below an island whose height the mail decides.
-export const MAIL_URL = "/inbox/mail.html";
+export const MAIL_URL = INBOX_MAIL_URL;
 
 // The endpoint, relative so the one baked shell is right on every host. RFC 8288
 // resolves a Link target against the request URL, and webmention discovery

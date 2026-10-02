@@ -87,7 +87,7 @@ test("the fallback carries the same headers the static path sends", () => {
 // 16), so the wiring is asserted on the source.
 test("the route serves the twin and falls back to the handler", async () => {
   const src = await readFile(new URL("src/worker/index.ts", ROOT), "utf8");
-  assert.match(src, /\["\/images\/manifest\.json", routeImagesManifest\]/, "the ROUTES row must name the twin-serving route, not the per-request handler");
+  assert.match(src, /"\/images\/manifest\.json": routeImagesManifest,/, "the route's handler must be the twin-serving one, not the per-request handler");
   const body = (src.match(/async function routeImagesManifest\([^)]*\) \{([\s\S]*?)\n\}/) || [])[1];
   assert.ok(body, "routeImagesManifest is gone");
   assert.match(body, /servePrecompressedText\(request, env, \{ headers: IMAGES_MANIFEST_HEADERS \}\)/);

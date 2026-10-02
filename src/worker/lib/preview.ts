@@ -36,6 +36,7 @@
 // exact test for "not the canonical host". Checked on hostname, never on the Host
 // header directly, because a spoofed Host must not be able to turn the guard OFF.
 import { asText } from "./parse.ts";
+import { GET_WRITES, PER_TOOL_WRITES } from "../routes.ts";
 
 export function isPreviewHost(hostname) {
   return asText(hostname, "").toLowerCase().endsWith(".workers.dev");
@@ -55,35 +56,25 @@ export const PREVIEW_ROBOTS = "noindex, nofollow";
 // `representation_compare` each INSERT a D1 row, so for as long as the old text
 // stood, any POST to a preview's /mcp could write the production vault with no
 // signature and no secret. The endpoint is admitted and the WRITING TOOLS are
-// refused one layer down, by previewToolRefusal() below.
-const SAFE_UNSAFE_METHODS = new Set(["/mcp"]);
+// refused one layer down, by previewToolRefusal() below. Declared on the route
+// in routes.ts as `writes: "per-tool"`.
+const SAFE_UNSAFE_METHODS = PER_TOOL_WRITES;
 
 // The other direction: GET-shaped mutations, which the method rule cannot catch.
-// Each of these changes durable state or sends something, from a plain GET.
-//   /hit                  ticks the visit-counter Durable Object
-//   /coffee/approve,      confirm or refuse a real coffee booking, and email a
-//   /coffee/decline       real person about it (HMAC-signed links, but the
-//                         signature is made with the production SIGNING_SECRET,
-//                         which a preview also holds)
-//   /webmention/*         the same construction for webmention moderation
-//   /ledger/prefetch      writes the speculation ledger's numerator, so preview
-//                         traffic would land in a series about the real site
+// Each one changes durable state or sends something from a plain GET (/hit, the
+// signed coffee and webmention decisions, the speculation beacon). They are
+// declared on their routes in routes.ts (`writes: "get"`, and cal's pair as the
+// /coffee route's `getWrites`), with the reason beside each, since 2026-10-02.
 //
 // Every entry has to be a pathname the dispatcher really routes, because a stale
 // one reads as protection while protecting nothing. The coffee pair spent its
 // whole life here as bare /approve and /decline, which were the retired
 // cal.aadhar.sh spellings; the live routes arrive under the /coffee prefix
 // (index.js hands /coffee/* to cal, which strips it before matching), so the
-// guard was open on exactly the two routes that email a real person. A contract
-// test now pins each entry against both route tables.
-const UNSAFE_READS = new Set([
-  "/hit",
-  "/coffee/approve",
-  "/coffee/decline",
-  "/webmention/approve",
-  "/webmention/decline",
-  "/ledger/prefetch",
-]);
+// guard was open on exactly the two routes that email a real person. Declaring
+// the write ON the route is what makes a stale entry hard to write now; a
+// contract test still pins each one against both route tables.
+const UNSAFE_READS = GET_WRITES;
 
 // The entries, for the contract test that pins them against the route tables.
 export const PREVIEW_GET_WRITES = UNSAFE_READS;

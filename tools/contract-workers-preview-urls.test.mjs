@@ -93,21 +93,21 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
 // preview confirmed a real booking and emailed a real person, on production's
 // SIGNING_SECRET. So pin every entry against the route tables it claims to guard.
 //
-// The tables are read as SOURCE TEXT, not imported: index.js is the one module
-// allowed to import "cloudflare:workers", and importing it here would kill the
-// whole suite at link time (gotcha 16).
+// The site's routes come from routes.ts, the data-only route list (it was
+// index.ts's source text until 2026-10-02). cal's are still read as TEXT: cal's
+// Worker imports "cloudflare:workers" through its Workflow (gotcha 16).
 test("every preview-guarded GET write names a path the site really routes", async () => {
   const { PREVIEW_GET_WRITES } = await import("../src/worker/lib/preview.ts");
-  const dispatcher = readFileSync(new URL("./src/worker/index.ts", ROOT), "utf8");
+  const { EXACT_PATHS, PREFIX_ROUTES } = await import("../src/worker/routes.ts");
   const cal = readFileSync(new URL("./cal/src/index.ts", ROOT), "utf8");
 
   // Exact ROUTES entries in the site dispatcher, plus cal's own matches, which
   // reach the visitor one prefix deeper: index.js hands /coffee/* to cal, and
   // cal strips that prefix before comparing.
   const routed = new Set();
-  for (const [, path] of dispatcher.matchAll(/\[\s*"(\/[^"]*)"\s*,\s*[A-Za-z_$]/g)) routed.add(path);
-  assert.ok(routed.has("/hit") && routed.has("/webmention/approve"), "the ROUTES scan must actually find routes");
-  const coffeePrefixed = /pathname\.startsWith\("\/coffee\/"\)/.test(dispatcher);
+  for (const path of EXACT_PATHS) routed.add(path);
+  assert.ok(routed.has("/hit") && routed.has("/webmention/approve"), "the route list must actually carry routes");
+  const coffeePrefixed = PREFIX_ROUTES.some((r) => r.label === "/coffee/<path>" && r.match("/coffee/approve"));
   assert.ok(coffeePrefixed, "cal is reached through the /coffee/ prefix; this test's mapping assumes it");
   for (const [, path] of cal.matchAll(/path === "(\/[^"]*)"/g)) routed.add(`/coffee${path === "/" ? "" : path}`);
   assert.ok(routed.has("/coffee/approve"), "the cal scan must actually find cal's routes");

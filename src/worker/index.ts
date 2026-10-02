@@ -3,17 +3,17 @@ import type { Env, SiteRequest } from "./lib/env.ts";
 import type { SpanName } from "./lib/span-vocabulary.ts";
 import calWorker from "../../cal/src/index.ts";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.ts";
-import { cronAround, handleAroundChangesJson, handleAroundJson, handleAroundSnapshot, refreshAroundSnapshot, renderAroundPage, SNAPSHOT_URL as AROUND_SNAPSHOT_URL } from "./around.ts";
+import { cronAround, handleAroundChangesJson, handleAroundJson, handleAroundSnapshot, refreshAroundSnapshot, renderAroundPage } from "./around.ts";
 import { handleBotPage } from "./bot.ts";
-import { cronCensus, handleCensus, handleCensusJson, handleCensusTable, renderCensusPage, TABLE_URL as CENSUS_TABLE_URL } from "./census.ts";
+import { cronCensus, handleCensus, handleCensusJson, handleCensusTable, renderCensusPage } from "./census.ts";
 import { shouldUseWorkersCache } from "./lib/cache.ts";
 import { handleCoffeeAvailability } from "./coffee.ts";
 import { handleHit } from "./counter.ts";
 import { handlePhotoGrid, serveMarkdown, warmGridData } from "./home.ts";
-import { handleInbox, handleInboxMail, MAIL_URL as INBOX_MAIL_URL } from "./inbox.ts";
+import { handleInbox, handleInboxMail } from "./inbox.ts";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.ts";
 import { cronSendWebmentions } from "./webmention-send.ts";
-import { countCrawlerHit, handleLedgerJson, handleLedgerLines, LINES_URL as LEDGER_LINES_URL, renderLedgerPage } from "./ledger.ts";
+import { countCrawlerHit, handleLedgerJson, handleLedgerLines, renderLedgerPage } from "./ledger.ts";
 import { countSpeculativeLoad, handlePrefetchActivation, handleSpeculationJson } from "./speculation.ts";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.ts";
 import { handleLensWire } from "./lens-wire.ts";
@@ -38,18 +38,22 @@ import { installTracing, span } from "./lib/trace.ts";
 import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
 import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
-import { handleReading, handleReadingList, LIST_URL as READING_LIST_URL } from "./reading.ts";
+import {
+  AROUND_SNAPSHOT_URL, CACHEABLE_PATHS, CENSUS_TABLE_URL, DYNO_PULLS_URL, INBOX_MAIL_URL, LEDGER_LINES_URL,
+  PREFIX_ROUTES, READING_LIST_URL, WHOAREYOU_VALUES_URL, type ExactPath, type PrefixLabel,
+} from "./routes.ts";
+import { handleReading, handleReadingList } from "./reading.ts";
 import { cronEnrichReadingHn } from "./reading-hn.ts";
 import { handleRun } from "./run.ts";
 import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.ts";
 import { cronHomeProbe } from "./perf-probe.ts";
-import { handleDynoJson, handleDynoPulls, PULLS_URL as DYNO_PULLS_URL, renderDynoPage } from "./dyno.ts";
+import { handleDynoJson, handleDynoPulls, renderDynoPage } from "./dyno.ts";
 import { handleAsk } from "./nlweb.ts";
 import { handleSearch, handleSearchJson } from "./search.ts";
 import { handleSecurityJson, renderSecurityCenter } from "./security.ts";
 import { handleTool } from "./terminal.ts";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.ts";
-import { handleWhoareyouJson, handleWhoareyouValues, renderWhoareyouPage, VALUES_URL as WHOAREYOU_VALUES_URL } from "./whoareyou.ts";
+import { handleWhoareyouJson, handleWhoareyouValues, renderWhoareyouPage } from "./whoareyou.ts";
 import { handleWritingIndex, handleWritingPost } from "./writing.ts";
 import { handleLlmsFull } from "./x402.ts";
 import { cronSerendipity, handleSerendipity, MCP_INFO_PATH as SERENDIPITY_MCP_INFO, SERENDIPITY_SECURITY_HEADERS, serendipityCsp, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
@@ -120,7 +124,8 @@ export { CensusWorkflow } from "./census-workflow.ts";
 // actual lesson here: it was a private function in this module, this module cannot
 // be imported under plain node (see gotcha 16), and so nothing in the 78-test suite
 // could reach it. The bug shipped through a green CI.
-const WORKERS_CACHEABLE_PATHS = new Set("/ /favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee /coffee/availability.json /run /search /photos/query.json".split(" "));
+// Derived from routes.ts's `cacheable` flags since 2026-10-02.
+const WORKERS_CACHEABLE_PATHS = CACHEABLE_PATHS;
 
 // The self-dispatcher itself, factored out because the CRON needs it too and a
 // second copy is how the two drift. `scheduled()` has no request to build one
@@ -380,9 +385,9 @@ export default {
 };
 
 // A worker-owned route handler, as dispatchTraced() calls one. This was a
-// `@typedef` a .ts file ignores, so the ROUTE_TABLE below fell back to the
-// `Function` its annotation names — a precise signature documented and an
-// imprecise one enforced.
+// `@typedef` a .ts file ignores, so the route table it typed fell back to the
+// `Function` its annotation named — a precise signature documented and an
+// imprecise one enforced. The handler maps below are typed with it.
 type RouteHandler = (request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) => Response | Promise<Response>;
 
 // Lens and MCP dispatch back into this Worker. Building that derived env
@@ -398,78 +403,68 @@ function withSelfFetchHandler(handle: RouteHandler): RouteHandler {
     handle(request, env.SELF_FETCH === null ? env : withSelfFetch(env, ctx), ctx, url);
 }
 
-// Exact worker-owned routes. This table mirrors cloudflare.config.ts's
-// assets.run_worker_first allowlist: static is the default, and each entry here
-// earns a Worker invocation because it renders, redirects, negotiates, proxies,
-// writes, or needs a deliberate cache-policy override.
+// The handler for each exact route, keyed by its id in routes.ts. The ROUTE
+// LIST is data and lives there, where cloudflare.config.ts, build.ts and the
+// contract suite can read it; this module cannot be loaded outside workerd
+// (gotcha 16), so it binds handlers and nothing else. `Record<ExactPath, …>`
+// is what makes that safe: a route with no handler is a missing key and a
+// handler with no route is an excess one, and both are compile errors.
 //
-// The annotation below is load-bearing for `bun run typecheck` and costs nothing
-// at runtime. This table is heterogeneous on purpose: some handlers are
-// synchronous, most are async, and many take fewer than four arguments. Inferred,
-// the array takes its element type from the FIRST entry (routeFavicon, which
-// returns a bare Response) and then rejects the 72 async handlers under it.
-//
-// It sits on the DECLARATION, and the separate ROUTE_TABLE const is the whole
-// reason why. Written as a cast on the argument to new Map(), `@type` ASSERTS
-// rather than checks, and a handler returning something that is not a Response
-// passes silently. Measured 2026-08-10 by planting `["/bogus", () => ({status:
-// 200})]`: the cast form accepted it, `@satisfies` caught it but left all 72
-// errors standing, and only the declaration form does both.
-// Typed as an array of TUPLES so `new Map(ROUTE_TABLE)` resolves. Left to
-// inference the elements widen to (string | Function)[], which matches no Map
-// constructor overload, and the error lands on the Map rather than on the table.
-const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
-  ["/favicon.ico", routeFavicon],
+// The annotation is also what checks each handler's signature. Inferred, an
+// object of handlers would take whatever each function happens to be, and a
+// handler returning something that is not a Response would pass silently.
+const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
+  "/favicon.ico": routeFavicon,
 
-  ["/auth.md", routeAuthMd],
-  ["/.well-known/api-catalog", routeApiCatalog],
-  ["/.well-known/agent-card.json", routeAgentCard],
-  ["/.well-known/oauth-protected-resource", routeOAuthProtectedResource],
-  ["/.well-known/oauth-authorization-server", routeOAuthAuthorizationServer],
-  ["/.well-known/http-message-signatures-directory", handleSignatureDirectory],
-  ["/agent/auth", handleAgentAuthRegister],
-  ["/agent/auth/claim", handleAgentAuthClaim],
-  ["/oauth2/token", handleAgentAuthToken],
-  ["/oauth2/revoke", handleAgentAuthRevoke],
+  "/auth.md": routeAuthMd,
+  "/.well-known/api-catalog": routeApiCatalog,
+  "/.well-known/agent-card.json": routeAgentCard,
+  "/.well-known/oauth-protected-resource": routeOAuthProtectedResource,
+  "/.well-known/oauth-authorization-server": routeOAuthAuthorizationServer,
+  "/.well-known/http-message-signatures-directory": handleSignatureDirectory,
+  "/agent/auth": handleAgentAuthRegister,
+  "/agent/auth/claim": handleAgentAuthClaim,
+  "/oauth2/token": handleAgentAuthToken,
+  "/oauth2/revoke": handleAgentAuthRevoke,
 
-  ["/hit", handleHit],
+  "/hit": handleHit,
 
-  ["/whoareyou", routeWhoareyou],
-  ["/whoareyou.json", handleWhoareyouJson],
-  [WHOAREYOU_VALUES_URL, handleWhoareyouValues],
-  ["/security", routeSecurity],
-  ["/security.json", handleSecurityJson],
-  ["/reading", handleReading],
-  [READING_LIST_URL, handleReadingList],
-  ["/updates", routeUpdates],
-  ["/updates.json", handleUpdatesJson],
-  ["/restore", routeRestore],
-  ["/garage/dyno", routeDyno],
-  [DYNO_PULLS_URL, handleDynoPulls],
-  ["/garage/dyno.json", handleDynoJson],
+  "/whoareyou": routeWhoareyou,
+  "/whoareyou.json": handleWhoareyouJson,
+  [WHOAREYOU_VALUES_URL]: handleWhoareyouValues,
+  "/security": routeSecurity,
+  "/security.json": handleSecurityJson,
+  "/reading": handleReading,
+  [READING_LIST_URL]: handleReadingList,
+  "/updates": routeUpdates,
+  "/updates.json": handleUpdatesJson,
+  "/restore": routeRestore,
+  "/garage/dyno": routeDyno,
+  [DYNO_PULLS_URL]: handleDynoPulls,
+  "/garage/dyno.json": handleDynoJson,
   // /perf shipped as the original name and lived for about an hour. The 301s are
   // not for humans: `agents: true` puts a surface in the MCP resources projection,
   // and _headers caches the well-known cards for 30 days, so an agent can hold the
   // old path long after a deploy could purge it. Same argument as the /images ->
   // /i/ redirects, on a shorter clock.
-  ["/perf", (request) => Response.redirect(new URL("/garage/dyno", request.url).href, 301)],
-  ["/perf.json", (request) => Response.redirect(new URL("/garage/dyno.json", request.url).href, 301)],
+  "/perf": (request) => Response.redirect(new URL("/garage/dyno", request.url).href, 301),
+  "/perf.json": (request) => Response.redirect(new URL("/garage/dyno.json", request.url).href, 301),
 
-  ["/lens", withSelfFetchHandler(routeLens)],
-  ["/lens/", routeDropSlash],
-  ["/lens/fetch", withSelfFetchHandler(handleLensFetch)],
-  ["/lens/shot", withSelfFetchHandler(handleLensShot)],
-  ["/lens/browser", withSelfFetchHandler(handleLensBrowser)],
-  ["/lens/wire", withSelfFetchHandler(handleLensWire)],
-  ["/lens/tools", withSelfFetchHandler(handleLensTools)],
-  ["/lens/nlweb", withSelfFetchHandler(handleLensNlweb)],
-  ["/lens/markdown", withSelfFetchHandler(handleLensMarkdown)],
-  ["/lens/compare.json", withSelfFetchHandler(handleLensCompare)],
-  ["/lens/census", routeCensus],
-  [CENSUS_TABLE_URL, handleCensusTable],
-  ["/lens/census.json", handleCensusJson],
+  "/lens": withSelfFetchHandler(routeLens),
+  "/lens/": routeDropSlash,
+  "/lens/fetch": withSelfFetchHandler(handleLensFetch),
+  "/lens/shot": withSelfFetchHandler(handleLensShot),
+  "/lens/browser": withSelfFetchHandler(handleLensBrowser),
+  "/lens/wire": withSelfFetchHandler(handleLensWire),
+  "/lens/tools": withSelfFetchHandler(handleLensTools),
+  "/lens/nlweb": withSelfFetchHandler(handleLensNlweb),
+  "/lens/markdown": withSelfFetchHandler(handleLensMarkdown),
+  "/lens/compare.json": withSelfFetchHandler(handleLensCompare),
+  "/lens/census": routeCensus,
+  [CENSUS_TABLE_URL]: handleCensusTable,
+  "/lens/census.json": handleCensusJson,
 
-  ["/mcp", withSelfFetchHandler(handleSiteMcp)],
+  "/mcp": withSelfFetchHandler(handleSiteMcp),
 
   // ── the tools ──────────────────────────────────────────────────────────
   // Top-level, because that is where this site puts utilities: /lens, /photos,
@@ -483,266 +478,139 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   // it demonstrated reads better from /mcp itself. A 410 rather than a redirect,
   // because no surviving page is the same thing; the body says where to go. One
   // `/terminal*` run_worker_first row covers the bare path and everything under it.
-  ["/terminal", routeTerminalGone],
-  ["/terminal/", routeTerminalGone],
+  "/terminal": routeTerminalGone,
+  "/terminal/": routeTerminalGone,
 
-  ["/finger", handleTool], ["/finger.txt", handleTool],
-  ["/radar", handleTool],  ["/radar.txt", handleTool],
-  ["/dict", handleTool],   ["/dict.txt", handleTool],
-  ["/cache", handleTool],  ["/cache.txt", handleTool],
-  ["/agent-ready", handleTool], ["/agent-ready.txt", handleTool],
-  ["/encode", handleTool], ["/encode.txt", handleTool],
+  "/finger": handleTool, "/finger.txt": handleTool,
+  "/radar": handleTool,  "/radar.txt": handleTool,
+  "/dict": handleTool,   "/dict.txt": handleTool,
+  "/cache": handleTool,  "/cache.txt": handleTool,
+  "/agent-ready": handleTool, "/agent-ready.txt": handleTool,
+  "/encode": handleTool, "/encode.txt": handleTool,
   // /photos and /lens already own their HTML pages, so they gain only the frame
   // representation rather than a second competing route.
-  ["/photos.txt", handleTool],
-  ["/lens.txt", handleTool],
+  "/photos.txt": handleTool,
+  "/lens.txt": handleTool,
 
-  ["/search", routeSearch],
-  ["/search.json", handleSearchJson],
+  "/search": routeSearch,
+  "/search.json": handleSearchJson,
 
   // /ask — NLWeb's REST convention, over the same corpus /search reads. It sits
   // beside search rather than under /terminal because NLWeb specifies the path:
   // a client knocks on <origin>/ask and nothing else, so this is one of the few
   // routes here whose SPELLING is load-bearing.
-  ["/ask", handleAsk],
+  "/ask": handleAsk,
 
   // the x402 bot paywall: llms.txt's map is free, the full corpus costs $0.01
   // by machine payment (ungated until X402_PAY_TO is set).
-  ["/llms-full.txt", handleLlmsFull],
+  "/llms-full.txt": handleLlmsFull,
 
   // the crawl ledger: the month's AI-bot traffic as an invoice, issued
   // monthly, collected never.
-  ["/ledger", routeLedger],
-  [LEDGER_LINES_URL, handleLedgerLines],
-  ["/ledger.json", handleLedgerJson],
+  "/ledger": routeLedger,
+  [LEDGER_LINES_URL]: handleLedgerLines,
+  "/ledger.json": handleLedgerJson,
 
   // the prefetch activation beacon's receiver (speculation.js). A credentialless
   // HEAD from the browser when a speculated document is actually navigated to.
-  ["/ledger/prefetch", handlePrefetchActivation],
+  "/ledger/prefetch": handlePrefetchActivation,
   // the ledger read back per path: speculations against activations, so the
   // eager candidates are chosen from what got navigated to (speculation.js).
-  ["/ledger/speculation.json", handleSpeculationJson],
+  "/ledger/speculation.json": handleSpeculationJson,
 
-  ["/writing", routeWritingIndex],
-  ["/writing/", routeDropSlash],
+  "/writing": routeWritingIndex,
+  "/writing/": routeDropSlash,
 
   // webmention: the open web's way to say "I linked to you." The endpoint takes
   // the POST; the approve/decline pair are HMAC-signed host actions (same
   // construction as cal's booking approvals); /inbox displays what I approved.
-  ["/webmention", handleWebmention],
-  ["/webmention/approve", handleWebmentionDecision],
-  ["/webmention/decline", handleWebmentionDecision],
-  ["/inbox", handleInbox],
-  [INBOX_MAIL_URL, handleInboxMail],
+  "/webmention": handleWebmention,
+  "/webmention/approve": handleWebmentionDecision,
+  "/webmention/decline": handleWebmentionDecision,
+  "/inbox": handleInbox,
+  [INBOX_MAIL_URL]: handleInboxMail,
 
-  ["/rn", handleRn],
+  "/rn": handleRn,
   // /rn has no page of its own to twin, so its Markdown is rendered live from
   // the same payload /rn/tracks serves. This is the URL form; /rn negotiates.
-  ["/rn.md", handleRnMarkdown],
-  ["/rn/tracks", handleRnTracks],
-  ["/rn/tracks.html", handleRnTracksHtml],
-  ["/rn/admin", handleRnAdmin],
-  ["/rn/set", handleRnSet],
+  "/rn.md": handleRnMarkdown,
+  "/rn/tracks": handleRnTracks,
+  "/rn/tracks.html": handleRnTracksHtml,
+  "/rn/admin": handleRnAdmin,
+  "/rn/set": handleRnSet,
 
-  ["/bot", routeBot],
-  ["/around", routeAround],
-  [AROUND_SNAPSHOT_URL, handleAroundSnapshot],
-  ["/around/json", handleAroundJson],
-  ["/around/changes.json", handleAroundChangesJson],
+  "/bot": routeBot,
+  "/around": routeAround,
+  [AROUND_SNAPSHOT_URL]: handleAroundSnapshot,
+  "/around/json": handleAroundJson,
+  "/around/changes.json": handleAroundChangesJson,
 
-  ["/photos", routePhotos],
-  ["/photos/", routePhotosRedirect],
-  // one page per album (albums.ts), generated at deploy like /photos, with the
-  // dynamic handler as the 404 fallback and the slashed twin 301ing to it
-  ...Object.values(ALBUMS).flatMap((album): Array<[string, RouteHandler]> => [
-    [albumPath(album), (request, env, ctx) => routeAlbum(album, request, env, ctx)],
-    [`${albumPath(album)}/`, (_request, _env, _ctx, url) => Response.redirect(url.origin + albumPath(album), 301)],
-  ]),
-  ["/photos/query.json", handlePhotoQuery],
+  "/photos": routePhotos,
+  "/photos/": routePhotosRedirect,
+  "/photos/query.json": handlePhotoQuery,
   // the homepage grid's random twelve, fetched by the inline hydrator
-  ["/photos/grid.html", handlePhotoGrid],
-  ["/coffee/availability.json", handleCoffeeAvailability],
-  ["/run", routeRun],
+  "/photos/grid.html": handlePhotoGrid,
+  "/coffee/availability.json": handleCoffeeAvailability,
+  "/run": routeRun,
 
   // the Apache-styled listings are retired (owner decree 2026-07-02): /photos
   // is the browse surface, so every listing URL 301s there instead of 404ing.
-  ["/images", routePhotosRedirect],
-  ["/images/", routePhotosRedirect],
-  ["/images/full", routePhotosRedirect],
-  ["/images/full/", routePhotosRedirect],
-  ["/images/manifest.json", routeImagesManifest],
-  ["/images/metadata.json", routeImagesMetadata],
+  "/images": routePhotosRedirect,
+  "/images/": routePhotosRedirect,
+  "/images/full": routePhotosRedirect,
+  "/images/full/": routePhotosRedirect,
+  "/images/manifest.json": routeImagesManifest,
+  "/images/metadata.json": routeImagesMetadata,
   // Three root-level text assets that were edge-compressed at ~q4 until
   // 2026-08-31, now served from their build-time q11 twin. search-index.json is
   // the one /search fetches on every query, and the largest of the three.
-  ["/search-index.json", routeTextTwin],
-  ["/llms.txt", routeTextTwin],
-  ["/sitemap.xml", routeTextTwin],
-  ["/resume.json", routeTextTwin],
+  "/search-index.json": routeTextTwin,
+  "/llms.txt": routeTextTwin,
+  "/sitemap.xml": routeTextTwin,
+  "/resume.json": routeTextTwin,
 
-  ["/index.html", routeIndexHtml],
-  ["/", routeHomepage],
-];
-const ROUTES = new Map(ROUTE_TABLE);
+  "/index.html": routeIndexHtml,
+  "/": routeHomepage,
+};
+// one page per album (albums.ts), generated at deploy like /photos, with the
+// dynamic handler as the 404 fallback and the slashed twin 301ing to it
+const ALBUM_HANDLERS = Object.values(ALBUMS).flatMap((album): Array<[string, RouteHandler]> => [
+  [albumPath(album), (request, env, ctx) => routeAlbum(album, request, env, ctx)],
+  [`${albumPath(album)}/`, (_request, _env, _ctx, url) => Response.redirect(url.origin + albumPath(album), 301)],
+]);
+const ROUTES = new Map<string, RouteHandler>([...Object.entries(EXACT_HANDLERS), ...ALBUM_HANDLERS]);
 
-// Ordered prefix/pattern routes. Order is load-bearing: R2 originals and
-// per-photo metadata must win before the generic thumbnail clamp.
-const PREFIX = [
-  {
-    label: "/coffee/<path>",
-    match: (pathname) => pathname === "/coffee" || pathname.startsWith("/coffee/"),
-    handle: routeCoffee,
-  },
-  {
-    label: "/serendipity/<path>",
-    match: (pathname) => pathname === "/serendipity" || pathname.startsWith("/serendipity/"),
-    handle: routeSerendipity,
-  },
-  {
-    label: "/writing/<slug>",
-    match: (pathname) => {
-      if (!pathname.startsWith("/writing/")) return false;
-      const slug = pathname.slice("/writing/".length);
-      return !!slug && slug.indexOf("/") === -1 && slug.indexOf(".") === -1;
-    },
-    handle: routeWritingPost,
-  },
-  {
-    // The section's own data files: posts.json, feed.xml, and the raw .txt of
-    // each post. /writing/* is already worker-first for the slug route above,
-    // which excludes anything carrying a dot, so these used to fall through to
-    // the bare asset fetch at the end of route() and ship edge-compressed.
-    label: "/writing/<file>.<ext>",
-    match: (pathname) => /^\/writing\/[^/]+\.(json|txt|xml)$/i.test(pathname),
-    handle: routeTextTwin,
-  },
-  {
-    // The favicons. Each section's first-level route sets its tab icon from
-    // here, so these load on 12 pages, and until 2026-09-26 at the edge's q4.
-    label: "/section-icons/<name>.svg",
-    match: (pathname) => /^\/section-icons\/[^/]+\.svg$/i.test(pathname),
-    handle: routeTextTwin,
-  },
-  {
-    // /terminal/<tool> was a development-era spelling of the top-level tools
-    // (never shipped) and was a 301 while the console page lived. Gone with it;
-    // the tools still answer at /<tool>, and the 410 body lists them.
-    label: "/terminal/<anything>",
-    match: (pathname) => pathname.startsWith("/terminal/"),
-    handle: routeTerminalGone,
-  },
-  {
-    label: "/rn/art/<hash>-<width>-<v>.<ext>",
-    match: (pathname) => pathname.startsWith("/rn/art/"),
-    handle: handleRnArt,
-    // Matches the whole prefix and lets the handler 404 a bad shape, rather than
-    // duplicating its hash/width/format grammar here. One regex, in rn.js, is
-    // what keeps this from becoming an open image proxy.
-  },
-  {
-    label: "/images/meta/<stem>.json",
-    match: (pathname) => /^\/images\/meta\/[^/]+\.json$/i.test(pathname),
-    handle: routeImagesMeta,
-  },
-  {
-    // The photo data indexes beside meta/: exif.json is warmed on idle by every
-    // homepage visit, so it is the highest-frequency file this covers. The
-    // exact routes above (manifest, metadata) win first, so the Worker-built
-    // manifest never reaches a twin lookup it has no file for.
-    label: "/images/<index>.json",
-    match: (pathname) => /^\/images\/[^/]+\.json$/i.test(pathname),
-    handle: routeTextTwin,
-  },
-  {
-    // A root-level Markdown twin (/access.md, /garage.md, /index.md). The two
-    // the Worker renders itself, /auth.md and /rn.md, are exact routes and are
-    // matched before this table is consulted.
-    label: "/<page>.md",
-    match: (pathname) => /^\/[^/]+\.md$/i.test(pathname),
-    handle: routeTextTwin,
-  },
-  {
-    // The readable twins at the ROOT (/index.src.html, /nav.src.js,
-    // /luna.src.css). Section-level ones (/garage/horizon.src.html) reach the
-    // same twin lookup through serveStaticPage's extension branch; these have no
-    // section, so they need a row of their own ("/*.src.*") and this match.
-    // Measured 2026-09-16 over all 79 readable twins: 984 KiB at the edge's q4,
-    // 819 KiB from the q11 twin.
-    label: "/<path>.src.<ext>",
-    match: (pathname) => /^\/(?:[^/]+\/)*[^/]+\.src\.(?:html|js|css)$/i.test(pathname),
-    handle: routeTextTwin,
-  },
-  {
-    // The static agent-discovery cards (/.well-known/mcp/*.json, ard.json,
-    // ai-catalog.json, mcp.json, agent-skills/*). Every exact /.well-known route
-    // above wins first; what lands here is a committed file the build wrote a
-    // q11 twin for. Before 2026-09-16 the whole namespace was edge-direct, so the
-    // cards an agent reads FIRST were the one surface still on q4: measured
-    // 20,092 B across nine files against 15,428 minified at q11.
-    label: "/.well-known/<card>",
-    match: (pathname) => pathname.startsWith("/.well-known/"),
-    handle: routeTextTwin,
-  },
-  {
-    label: "/images/full/<key>",
-    match: (pathname) => pathname.startsWith("/images/full/"),
-    handle: servePhotoFromR2,
-  },
-  {
-    label: "/images/<thumb>",
-    match: (pathname) => /^\/images\/[^/]+\.(avif|jpe?g|png|gif|heic|heif|hif)$/i.test(pathname),
-    handle: routeImageThumb,
-  },
-  // /a/<name>.<hash8>.<ext> — the content-hashed shell (nav.js, luna.css, lens.js,
-  // icons.svg). This was edge-direct until 2026-07-26 and the _headers comment said
-  // so deliberately; it moved behind the worker to hand out build.ts's brotli q11
-  // twin, which the edge would not have produced (it fly-compresses at ~q4 and
-  // prefers zstd, measured LARGER than its own brotli here). The `.br` suffix is
-  // excluded so the twin itself stays a plain static asset — the worker fetches it
-  // through ASSETS, and matching it here would recurse.
-  // the 30 static garage/lwe pages. Worker-first so they can be answered with a dcz delta
-  // or the brotli q11 twin; a sub-resource under either prefix (images, ask.js) is matched
-  // out by the extension test inside the handler and passes straight through.
-  // The bare section path is matched alongside the prefix, because "/garage/" does
-  // NOT match "/garage". Without it the two section indexes fell straight through
-  // to the asset layer and their brotli q11 twins were built, uploaded, and never
-  // served: /garage shipped 13,264 bytes against an 11,131-byte twin, /lwe 6,197
-  // against 5,171 (2026-07-28). It hid because an unserved twin still returns a
-  // correct page, only a larger one, and all 29 sub-pages were byte-exact.
-  {
-    label: "/garage/<page>",
-    match: (pathname) => pathname === "/garage" || pathname.startsWith("/garage/"),
-    handle: routeStaticPage,
-  },
-  {
-    label: "/lwe/<page>",
-    match: (pathname) => pathname === "/lwe" || pathname.startsWith("/lwe/"),
-    handle: routeStaticPage,
-  },
-  {
-    label: "/pixel-peeper/<page>",
-    match: (pathname) => pathname === "/pixel-peeper" || pathname.startsWith("/pixel-peeper/"),
-    handle: routeStaticPage,
-  },
-  {
-    label: "/access",
-    match: (pathname) => pathname === "/access" || pathname.startsWith("/access/"),
-    handle: routeStaticPage,
-  },
-  // /dotfiles is a static page with one sub-resource, /dotfiles/macos.sh, which
-  // falls through serveStaticPage's extension branch to the asset layer (no
-  // .sh twin: it is 6 KB and read once).
-  {
-    label: "/dotfiles",
-    match: (pathname) => pathname === "/dotfiles" || pathname.startsWith("/dotfiles/"),
-    handle: routeStaticPage,
-  },
-  {
-    label: "/a/<asset>",
-    match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg|json|dict)$/.test(pathname),
-    handle: routeShellAsset,
-  },
-];
+// The handler for each prefix route. Their ORDER, patterns and the reasons for
+// both are in routes.ts's PREFIX_ROUTES; dispatch walks that order.
+const PREFIX_HANDLERS: Record<PrefixLabel, RouteHandler> = {
+  "/coffee/<path>": routeCoffee,
+  "/serendipity/<path>": routeSerendipity,
+  "/writing/<slug>": routeWritingPost,
+  "/writing/<file>.<ext>": routeTextTwin,
+  "/section-icons/<name>.svg": routeTextTwin,
+  "/terminal/<anything>": routeTerminalGone,
+  // Matches the whole prefix and lets the handler 404 a bad shape, rather than
+  // duplicating its hash/width/format grammar here. One regex, in rn.ts, is
+  // what keeps this from becoming an open image proxy.
+  "/rn/art/<hash>-<width>-<v>.<ext>": handleRnArt,
+  "/images/meta/<stem>.json": routeImagesMeta,
+  "/images/<index>.json": routeTextTwin,
+  "/<page>.md": routeTextTwin,
+  "/<path>.src.<ext>": routeTextTwin,
+  "/.well-known/<card>": routeTextTwin,
+  "/images/full/<key>": servePhotoFromR2,
+  "/images/<thumb>": routeImageThumb,
+  // A sub-resource under a static section (images, ask.js, /dotfiles/macos.sh)
+  // is matched out by serveStaticPage's extension test and passes straight
+  // through to the asset layer.
+  "/garage/<page>": routeStaticPage,
+  "/lwe/<page>": routeStaticPage,
+  "/pixel-peeper/<page>": routeStaticPage,
+  "/access": routeStaticPage,
+  "/dotfiles": routeStaticPage,
+  "/a/<asset>": routeShellAsset,
+};
+const PREFIX = PREFIX_ROUTES.map((r) => ({ label: r.label, match: r.match, handle: PREFIX_HANDLERS[r.label] }));
 
 async function route(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const url = new URL(request.url);
