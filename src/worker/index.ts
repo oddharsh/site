@@ -21,7 +21,8 @@ import { handleLensNlweb } from "./lens-nlweb.ts";
 import { handleLensTools } from "./lens-tools.ts";
 import { handleLensMarkdown } from "./lens-markdown.ts";
 import { countMiss, recoverNotFound } from "./lib/not-found.ts";
-import { serveAssetWith404Clamp, serveFreshAsset, serveMarkdownTwin, servePrecompressedShell, servePrecompressedText, serveStaticPage } from "./lib/assets.ts";
+import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, servePrecompressedText, serveStaticPage } from "./lib/assets.ts";
+import { serveBuiltPage } from "./lib/built-page.ts";
 import { BOT_UA, handleSignatureDirectory, withBotPolicyCache } from "./lib/botauth.ts";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
@@ -737,10 +738,10 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
 // staged (bun run dev serves the unbuilt tree) cal renders the same shell.
 async function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   if ((request.method === "GET" || request.method === "HEAD") && new URL(request.url).pathname === "/coffee") {
-    const headers = { "cache-control": PAGE_CACHE_CONTROL, link: SHELL_PRELOAD_LINK, "referrer-policy": "strict-origin-when-cross-origin" };
-    const response = await serveStaticPage(request, env, { headers });
-    if (response.status !== 404) return response;
-    try { await response.body?.cancel(); } catch {}
+    return serveBuiltPage(request, env, {
+      headers: { "cache-control": PAGE_CACHE_CONTROL, link: SHELL_PRELOAD_LINK, "referrer-policy": "strict-origin-when-cross-origin" },
+      live: () => calWorker.fetch(request, env, ctx),
+    });
   }
   return calWorker.fetch(request, env, ctx);
 }
@@ -962,12 +963,12 @@ function routeTerminalGone() {
   );
 }
 
-async function routeWritingPost(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
+function routeWritingPost(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   const slug = url.pathname.slice("/writing/".length);
-  const response = await serveGeneratedWriting(request, env);
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  return handleWritingPost(request, slug, env, ctx);
+  return serveBuiltPage(request, env, {
+    headers: WRITING_PAGE_HEADERS,
+    live: () => handleWritingPost(request, slug, env, ctx),
+  });
 }
 
 // stale-while-revalidate rather than must-revalidate, matching the `/garage/*` and
@@ -986,92 +987,53 @@ const UTILITY_SHELL_HEADERS = {
 };
 
 function routeRun(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
-  if (url.searchParams.get("cmd")) return handleRun(request, env, ctx);
-  return serveStaticPage(request, env, {
+  // A command answers with its own redirect; the bare page is noindex.
+  return serveBuiltPage(request, env, {
     headers: { ...UTILITY_SHELL_HEADERS, "x-robots-tag": "noindex" },
+    divert: () => (url.searchParams.get("cmd") ? handleRun(request, env, ctx) : null),
   });
 }
 
-// The bare form's Markdown twin carries the page's noindex, the same way
-// routeSecurity's does. A query still answers HTML: the twin describes the form
-// and names /search.json for results, and it has no rendering of one query.
-async function routeSearch(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
-  if (url.searchParams.get("q")) return handleSearch(request, env, ctx);
-  if (wantsMarkdown(request)) {
-    const md = await serveMarkdownTwin(request, env, "/search.md", { "x-robots-tag": "noindex" });
-    if (md) return md;
-  }
-  return serveStaticPage(request, env, { headers: UTILITY_SHELL_HEADERS });
+// A query answers HTML and keeps its own headers: the twin describes the form
+// and names /search.json for results, and it has no rendering of one query. The
+// bare form's Markdown twin is noindex while its HTML carries no robots header,
+// which is how this route has always answered, so the noindex is declared for
+// the negotiated request alone.
+function routeSearch(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, {
+    headers: wantsMarkdown(request) ? { ...UTILITY_SHELL_HEADERS, "x-robots-tag": "noindex" } : UTILITY_SHELL_HEADERS,
+    divert: () => (url.searchParams.get("q") ? handleSearch(request, env, ctx) : null),
+  });
 }
 
 // /security is a built document since 2026-09-16 (security.ts's header says
 // why); the three per-connection values it shows arrive from /security.json.
-// Markdown negotiation runs here rather than inside serveStaticPage because the
-// twin has to carry the page's own noindex: a Markdown rendering of a noindex
-// page should not be the indexable copy of it.
-async function routeSecurity(request: SiteRequest, env: Env) {
-  if (wantsMarkdown(request)) {
-    const md = await serveMarkdownTwin(request, env, "/security.md", { "x-robots-tag": "noindex" });
-    if (md) return md;
-  }
-  const headers = {
-    ...GENERATED_PAGE_HEADERS,
-    "x-robots-tag":    "noindex",
-    "referrer-policy": "strict-origin-when-cross-origin",
-  };
-  const response = await serveStaticPage(request, env, { headers });
-  if (response.status !== 404) return response;
-  // No staged document: `bun run dev` serves the readable tree and derives
-  // nothing, so the bake is absent there. Render live, the way /writing does,
-  // so the page works in dev; in production the build refuses to ship without
-  // the file, so this arm is never taken.
-  try { await response.body?.cancel(); } catch {}
-  const live = renderSecurityCenter();
-  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
-  return live;
+// Its Markdown twin carries the page's own noindex, as every representation of a
+// built page carries its policy (lib/built-page.ts): a Markdown rendering of a
+// noindex page should not be the indexable copy of it. The live arm is for `bun
+// run dev`, which stages no bake; the build refuses to ship without the file.
+const PRIVATE_PAGE_HEADERS = {
+  ...GENERATED_PAGE_HEADERS,
+  "x-robots-tag":    "noindex",
+  "referrer-policy": "strict-origin-when-cross-origin",
+};
+
+function routeSecurity(request: SiteRequest, env: Env) {
+  return serveBuiltPage(request, env, { headers: PRIVATE_PAGE_HEADERS, live: () => renderSecurityCenter() });
 }
 
 // /whoareyou is a built document since 2026-09-25, with its per-request values
 // as an island from /whoareyou/values.html (whoareyou.ts says why and what moved).
 // Same shape as routeSecurity above, down to the twin carrying the page's noindex.
-async function routeWhoareyou(request: SiteRequest, env: Env) {
-  if (wantsMarkdown(request)) {
-    const md = await serveMarkdownTwin(request, env, "/whoareyou.md", { "x-robots-tag": "noindex" });
-    if (md) return md;
-  }
-  const headers = {
-    ...GENERATED_PAGE_HEADERS,
-    "x-robots-tag":    "noindex",
-    "referrer-policy": "strict-origin-when-cross-origin",
-  };
-  const response = await serveStaticPage(request, env, { headers });
-  if (response.status !== 404) return response;
-  // `bun run dev` stages no bake; render live so the page works there. The
-  // build refuses to ship without the file, so production never takes this arm.
-  try { await response.body?.cancel(); } catch {}
-  const live = renderWhoareyouPage();
-  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
-  return live;
+function routeWhoareyou(request: SiteRequest, env: Env) {
+  return serveBuiltPage(request, env, { headers: PRIVATE_PAGE_HEADERS, live: () => renderWhoareyouPage() });
 }
 
 // /garage/dyno is a built document since 2026-09-25, with its chart and table as
 // an island from /garage/dyno/pulls.html (dyno.ts says why). It takes the same
 // headers as the other garage pages, since the shell only moves on a deploy.
-// Markdown negotiation happens here because this exact route is matched before
-// the /garage prefix; before this, `Accept: text/markdown` got the HTML.
-async function routeDyno(request: SiteRequest, env: Env) {
-  if (wantsMarkdown(request)) {
-    const md = await serveMarkdownTwin(request, env, "/garage/dyno.md");
-    if (md) return md;
-  }
-  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
-  if (response.status !== 404) return response;
-  // `bun run dev` stages no bake; render live so the page works there. The
-  // build refuses to ship without the file, so production never takes this arm.
-  try { await response.body?.cancel(); } catch {}
-  const live = renderDynoPage();
-  for (const [k, v] of Object.entries(GENERATED_PAGE_HEADERS)) live.headers.set(k, v);
-  return live;
+function routeDyno(request: SiteRequest, env: Env) {
+  return serveBuiltPage(request, env, { headers: GENERATED_PAGE_HEADERS, live: () => renderDynoPage() });
 }
 
 // /ledger and /around are built documents since 2026-09-25, each with its live
@@ -1081,24 +1043,16 @@ async function routeDyno(request: SiteRequest, env: Env) {
 // owner's ?refresh=KEY view renders live and whole, because its banner belongs
 // to the request that asked for the sweep. /inbox is the same shape, and its
 // route lives in inbox.ts so the contract suite can call it (gotcha 16).
-async function routeCensus(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  if (new URL(request.url).searchParams.has("refresh")) return handleCensus(request, env, ctx);
-  const headers = { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "index" };
-  const response = await serveStaticPage(request, env, { headers });
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  const live = renderCensusPage();
-  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
-  return live;
+function routeCensus(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  return serveBuiltPage(request, env, {
+    headers: { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "index" },
+    divert: (url) => (url.searchParams.has("refresh") ? handleCensus(request, env, ctx) : null),
+    live: () => renderCensusPage(),
+  });
 }
 
-async function routeLedger(request: SiteRequest, env: Env) {
-  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  const live = renderLedgerPage();
-  for (const [k, v] of Object.entries(GENERATED_PAGE_HEADERS)) live.headers.set(k, v);
-  return live;
+function routeLedger(request: SiteRequest, env: Env) {
+  return serveBuiltPage(request, env, { headers: GENERATED_PAGE_HEADERS, live: () => renderLedgerPage() });
 }
 
 // The owner's ?bust=SECRET still works at the page URL: it re-crawls and
@@ -1110,32 +1064,27 @@ async function routeAround(request: SiteRequest, env: Env) {
     const busted = await refreshAroundSnapshot(request, env);
     try { await busted?.body?.cancel(); } catch {}
   }
-  const headers = { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "noindex" };
-  if (wantsMarkdown(request)) {
-    const md = await serveMarkdownTwin(request, env, "/around.md", { "x-robots-tag": "noindex" });
-    if (md) return md;
-  }
-  const response = await serveStaticPage(request, env, { headers });
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  const live = renderAroundPage();
-  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
-  return live;
+  return serveBuiltPage(request, env, {
+    headers: { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "noindex" },
+    live: () => renderAroundPage(),
+  });
 }
 
 function routeLens(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   // A target-bearing Lens response spends crawler/browser budget and contains
   // third-party data, so it remains the live no-store Worker path. The bare,
   // deterministic shell is now a built q11/DCZ/304 static page.
-  if (url.searchParams.get("url")) return handleLens(request, env, ctx);
-  return serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
+  return serveBuiltPage(request, env, {
+    headers: GENERATED_PAGE_HEADERS,
+    divert: () => (url.searchParams.get("url") ? handleLens(request, env, ctx) : null),
+  });
 }
 
-async function routeWritingIndex(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  const response = await serveGeneratedWriting(request, env);
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  return handleWritingIndex(request, env, ctx);
+function routeWritingIndex(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  return serveBuiltPage(request, env, {
+    headers: WRITING_PAGE_HEADERS,
+    live: () => handleWritingIndex(request, env, ctx),
+  });
 }
 
 // /photos and /bot join the generated-page tier, same shape as /writing above: the
@@ -1163,49 +1112,45 @@ const PHOTOS_PAGE_HEADERS = {
 // Same shape as /photos and /writing. They take the standard generated policy — no
 // shortened window like /photos needs, because their data cannot change between
 // deploys, so a stale copy inside the 7 days is a copy of the same log.
-async function routeUpdates(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  return handleWindowsUpdate(request, env, ctx);
-}
-
-async function routeRestore(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  return handleSystemRestore(request, env, ctx);
-}
-
-async function routePhotos(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  const response = await serveStaticPage(request, env, { headers: PHOTOS_PAGE_HEADERS });
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  return handlePhotos(request, env, ctx);
-}
-
-async function routeAlbum(album: Album, request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  const response = await serveStaticPage(request, env, { headers: PHOTOS_PAGE_HEADERS });
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  return handleAlbum(album, request, env, ctx);
-}
-
-async function routeBot(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  return handleBotPage(request, env, ctx);
-}
-
-function serveGeneratedWriting(request: SiteRequest, env: Env) {
-  return serveStaticPage(request, env, {
-    headers: {
-      ...GENERATED_PAGE_HEADERS,
-      "link": `${SHELL_PRELOAD_LINK}, </webmention>; rel="webmention"`,
-    },
+function routeUpdates(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  return serveBuiltPage(request, env, {
+    headers: GENERATED_PAGE_HEADERS,
+    live: () => handleWindowsUpdate(request, env, ctx),
   });
 }
+
+function routeRestore(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  return serveBuiltPage(request, env, {
+    headers: GENERATED_PAGE_HEADERS,
+    live: () => handleSystemRestore(request, env, ctx),
+  });
+}
+
+function routePhotos(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  return serveBuiltPage(request, env, {
+    headers: PHOTOS_PAGE_HEADERS,
+    live: () => handlePhotos(request, env, ctx),
+  });
+}
+
+function routeAlbum(album: Album, request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  return serveBuiltPage(request, env, {
+    headers: PHOTOS_PAGE_HEADERS,
+    live: () => handleAlbum(album, request, env, ctx),
+  });
+}
+
+function routeBot(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  return serveBuiltPage(request, env, {
+    headers: GENERATED_PAGE_HEADERS,
+    live: () => handleBotPage(request, env, ctx),
+  });
+}
+
+const WRITING_PAGE_HEADERS = {
+  ...GENERATED_PAGE_HEADERS,
+  "link": `${SHELL_PRELOAD_LINK}, </webmention>; rel="webmention"`,
+};
 
 // The staged manifest and its q11 twin (build.ts step 1e), with the live handler
 // as the 404 fallback for a tree that staged nothing, which is `bun run dev`.
