@@ -2220,7 +2220,7 @@
     if (data.cost && data.cost.tiers && data.cost.tiers.length) parts.push("<span>~" + fmtTok(data.cost.tiers[0].tokens) + " tok</span>");
     parts.push("<span>" + data.elapsedMs + " ms</span>");
     if (data.redirected) parts.push("<span>&rarr; " + esc(data.finalUrl) + "</span>");
-    if (browserData) parts.push("<span>Browser Run: " + (browserData.cached ? "cached" : "fresh") + "</span>");
+    if (browserData) parts.push("<span>Browser Run: " + (browserData.fromCache ? "cached" : "fresh") + "</span>");
     parts.push('<span style="margin-left:auto">fetched as ' + esc(data.fetchedBy) + "</span>");
     statusBar.innerHTML = parts.join("");
   }

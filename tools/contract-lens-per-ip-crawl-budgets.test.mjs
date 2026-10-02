@@ -2,8 +2,10 @@
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   configText,
+  context,
   testGlobals,
   assert,
+  readFile,
   test,
 } from "./contract-shared.ts";
 
@@ -63,8 +65,9 @@ test("every rate-limit ceiling matches the ratelimits declared in the site confi
   }
 });
 
-test("overLensBudget fails open without a limiter and closes when one says no", async () => {
-  const { LENS_BUDGETS, overLensBudget } = await import("../src/worker/lens.ts");
+test("overBudget fails open without a limiter and closes when one says no", async () => {
+  const { LENS_BUDGETS } = await import("../src/worker/lens.ts");
+  const { overBudget } = await import("../src/worker/lib/ratelimit.ts");
   const req = new Request("https://aadhar.sh/lens/fetch?url=https://example.com", {
     headers: { "cf-connecting-ip": "203.0.113.7" },
   });
@@ -73,21 +76,21 @@ test("overLensBudget fails open without a limiter and closes when one says no", 
   // shape, and it matches the KV version's behaviour without RN_KV: abuse
   // control, not authorization. validateLensTarget's SSRF guard has no fallback
   // and is what actually keeps this route safe.
-  assert.equal(await overLensBudget(LENS_BUDGETS.inspect, req, {}), false);
-  assert.equal(await overLensBudget(LENS_BUDGETS.inspect, req, { LENS_RL_INSPECT: {} }), false,
+  assert.equal(await overBudget(LENS_BUDGETS.inspect, req, {}), false);
+  assert.equal(await overBudget(LENS_BUDGETS.inspect, req, { LENS_RL_INSPECT: {} }), false,
     "a binding without .limit() is not a limiter");
 
   // ...and open when the limiter throws. A limiter blip must cost the rate
   // limit, never the route: an unhandled throw here renders Cloudflare's HTML
   // 1101 page, which the caller then tries to JSON.parse.
-  assert.equal(await overLensBudget(LENS_BUDGETS.inspect, req, {
+  assert.equal(await overBudget(LENS_BUDGETS.inspect, req, {
     LENS_RL_INSPECT: { limit: () => { throw new Error("limiter down"); } },
   }), false);
 
   // Closes when the limiter says so, and keys on the caller's IP.
   let seen = null;
   const env = { LENS_RL_SHOT: { limit: (arg) => { seen = arg; return { success: false }; } } };
-  assert.equal(await overLensBudget(LENS_BUDGETS.shot, req, env), true);
+  assert.equal(await overBudget(LENS_BUDGETS.shot, req, env), true);
   assert.deepEqual(seen, { key: "203.0.113.7" });
 
   // Each budget reads its OWN binding, which is the property that stopped /mcp
@@ -96,64 +99,195 @@ test("overLensBudget fails open without a limiter and closes when one says no", 
   assert.equal(new Set(names).size, names.length, "two budgets share one binding");
 });
 
-test("each cached Lens handler answers a hit before either budget and tolerates a failed KV read", async () => {
-  const { handleLensShot, handleLensBrowser, LENS_BUDGETS } = await import("../src/worker/lens.ts");
+// The seven cached lenses, driven through their real handlers. This replaced a
+// STRUCTURAL test on 2026-10-02 that compared two indexOf() positions in each
+// handler's source. That could only see the four handlers it named, and
+// /lens/fetch?mode=cloudflare, the one route that had the order backwards, was
+// not among them: it charged its budget before reading its cache, with no
+// comment saying why. Run against the code before the pipeline, the hit case
+// below fails on that route, which is the control this test is anchored to.
+const CACHED_LENSES = [
+  { name: "shot", url: "/lens/shot", budget: "shot", prefix: "lens:shot:", png: true },
+  { name: "browser", url: "/lens/browser", budget: "browser", prefix: "lens:browser:" },
+  { name: "cloudflare-score", url: "/lens/fetch?mode=cloudflare&", budget: "inspect", prefix: "lens:cloudflare-score:" },
+  { name: "wire", url: "/lens/wire", budget: "wire", prefix: "lens:wire:" },
+  { name: "tools", url: "/lens/tools", budget: "tools", prefix: "lens:tools:" },
+  { name: "nlweb", url: "/lens/nlweb", budget: "nlweb", prefix: "lens:nlweb:" },
+  { name: "markdown", url: "/lens/markdown", budget: "markdown", prefix: "lens:md:" },
+];
+
+async function lensHandlers() {
+  const lens = await import("../src/worker/lens.ts");
   const { handleLensWire } = await import("../src/worker/lens-wire.ts");
-  const { handleLensMarkdown } = await import("../src/worker/lens-markdown.ts");
   const { handleLensTools } = await import("../src/worker/lens-tools.ts");
   const { handleLensNlweb } = await import("../src/worker/lens-nlweb.ts");
-  const { lensCacheKey } = await import("../src/worker/lens-guard.ts");
-  const target = "https://example.com/page";
-  const png = new Uint8Array([137, 80, 78, 71]).buffer;
-  const cases = [
-    { handler: handleLensShot, name: "shot", tab: "shot", budget: "shot", hit: png, as: "arrayBuffer" },
-    { handler: handleLensBrowser, name: "browser", tab: "browser", budget: "browser", hit: { ok: true }, flag: "cached" },
-    { handler: handleLensWire, name: "wire", tab: "wire", budget: "wire", hit: { ok: true, cached: 3 }, flag: "fromCache" },
-    { handler: handleLensMarkdown, name: "markdown", tab: "md", budget: "markdown", hit: { ok: true }, flag: "fromCache" },
-    { handler: handleLensTools, name: "tools", tab: "tools", budget: "tools", hit: { ok: true }, flag: "fromCache", identity: "https://example.com" },
-    { handler: handleLensNlweb, name: "nlweb", tab: "nlweb", budget: "nlweb", hit: { ok: true }, flag: "fromCache", identity: "https://example.com\nwhat is this site about" },
-  ];
-  for (const c of cases) {
-    const log = [];
-    let cold = false;
-    let broken = false;
-    const env = {
-      BROWSER: { fetch() { throw new Error("unexpected render"); }, quickAction() { throw new Error("unexpected render"); } },
-      RN_KV: { async get(key, as) {
-        log.push("get");
-        assert.equal(key, await lensCacheKey(c.tab, c.identity || target));
-        assert.equal(as, c.as || "json");
-        if (broken) throw new Error("KV is down");
-        return cold ? null : c.hit;
-      } },
-    };
-    for (const budget of Object.values(LENS_BUDGETS)) env[budget.binding] = {
-      limit() { log.push(budget.binding); return { success: false }; },
-    };
-    const req = () => new Request("https://aadhar.sh/lens/" + c.name + "?url=" + encodeURIComponent(target));
-    const ctx = { waitUntil() {} };
-    const res = await c.handler(req(), env, ctx);
-    assert.equal(res.status, 200, c.name + ": a warm cache survives every refusing limiter");
-    assert.deepEqual(log, ["get"]);
-    if (c.flag) {
-      const body = await res.json();
-      assert.equal(body[c.flag], true);
-      if (c.name === "wire") assert.equal(body.cached, 3, "the target's count survives the KV hit");
-    } else {
-      assert.equal(res.headers.get("content-type"), "image/png");
+  const { handleLensMarkdown } = await import("../src/worker/lens-markdown.ts");
+  return {
+    shot: lens.handleLensShot, browser: lens.handleLensBrowser, "cloudflare-score": lens.handleLensFetch,
+    wire: handleLensWire, tools: handleLensTools, nlweb: handleLensNlweb, markdown: handleLensMarkdown,
+  };
+}
+
+// Every limiter refuses and counts, so a route that consults one on a hit is
+// caught twice: by the count, and by the 429 it would answer.
+function refusingEnv(kv, budgets) {
+  const calls = [];
+  const env = {
+    RN_KV: kv,
+    // Both Browser Run doors present, so the 503 precondition passes and the
+    // budgets are what decide. Neither is ever called: a hit returns first and
+    // a miss is refused first.
+    BROWSER: {
+      quickAction: () => { throw new Error("a hit must not render"); },
+      fetch: () => { throw new Error("a hit must not open a session"); },
+    },
+  };
+  for (const { binding } of Object.values(budgets)) {
+    env[binding] = { limit: () => { calls.push(binding); return { success: false }; } };
+  }
+  return { env, calls };
+}
+
+function fakeKv(entry) {
+  const reads = [];
+  return {
+    reads,
+    get: async (key, type) => {
+      reads.push(key);
+      if (entry === undefined) return null;
+      if (entry instanceof Error) throw entry;
+      return type === "arrayBuffer" ? new TextEncoder().encode("PNG").buffer : entry;
+    },
+    put: async () => { throw new Error("nothing may be written on these paths"); },
+  };
+}
+
+test("every cached lens answers a hit without consulting a budget", async () => {
+  const { LENS_BUDGETS } = await import("../src/worker/lens.ts");
+  const handlers = await lensHandlers();
+  assert.equal(Object.keys(handlers).length, CACHED_LENSES.length, "a cached lens is missing from the list");
+
+  for (const lens of CACHED_LENSES) {
+    // `available` serves cloudflare-score's own usability rule; the rest read `ok`.
+    const kv = fakeKv({ ok: true, available: true, host: "example.com" });
+    const { env, calls } = refusingEnv(kv, LENS_BUDGETS);
+    const sep = lens.url.includes("?") ? "" : "?";
+    const res = await handlers[lens.name](new Request(`https://aadhar.sh${lens.url}${sep}url=https://example.com/`), env, context());
+    assert.equal(res.status, 200, `${lens.name}: a cached answer was refused (${res.status})`);
+    assert.deepEqual(calls, [], `${lens.name}: a hit consulted ${calls.join(", ")}`);
+    assert.ok(kv.reads.length === 1 && kv.reads[0].startsWith(lens.prefix), `${lens.name}: read ${kv.reads[0]}, not a ${lens.prefix} key`);
+    if (lens.png) {
       assert.equal(res.headers.get("x-lens-cache"), "hit");
-      assert.deepEqual(new Uint8Array(await res.arrayBuffer()), new Uint8Array(png));
+    } else {
+      const body = await res.json();
+      assert.equal(body.fromCache, true, `${lens.name}: a hit must say fromCache: true`);
+      assert.equal(body.ok, true);
+      assert.equal("cached" in body, false, `${lens.name}: the hit flag is spelled fromCache, never cached`);
     }
-    // Controls run the actual handler cold and with a broken cache. Both must
-    // reach its per-caller limiter and stop before the shared ceiling or work.
-    for (const failure of [false, true]) {
-      cold = true;
-      broken = failure;
-      log.length = 0;
-      const refused = await c.handler(req(), env, ctx);
-      assert.equal(refused.status, 429, c.name + ": KV failure degrades to a miss");
-      assert.deepEqual(log, ["get", LENS_BUDGETS[c.budget].binding]);
-    }
+  }
+});
+
+test("every cached lens charges its own budget on a miss, and quotes it", async () => {
+  const { LENS_BUDGETS, budgetMessage } = await import("../src/worker/lens.ts");
+  const handlers = await lensHandlers();
+  for (const lens of CACHED_LENSES) {
+    const { env, calls } = refusingEnv(fakeKv(undefined), LENS_BUDGETS);
+    const sep = lens.url.includes("?") ? "" : "?";
+    const res = await handlers[lens.name](new Request(`https://aadhar.sh${lens.url}${sep}url=https://example.com/`), env, context());
+    assert.equal(res.status, 429, `${lens.name}: a miss over budget answered ${res.status}`);
+    assert.equal(calls[0], LENS_BUDGETS[lens.budget].binding, `${lens.name}: the first budget charged was ${calls[0]}`);
+    assert.equal((await res.json()).error, budgetMessage(/** @type {any} */ (lens.budget)), `${lens.name}: the 429 is not the derived message`);
+  }
+});
+
+test("a cache read that throws is a miss, never the route's failure", async () => {
+  // An unhandled throw on these routes is Cloudflare's HTML 1101 page, which
+  // the client then JSON.parses. Five routes read KV with no guard until
+  // 2026-10-02; the pipeline's one read is guarded for all seven.
+  const { LENS_BUDGETS } = await import("../src/worker/lens.ts");
+  const handlers = await lensHandlers();
+  for (const lens of CACHED_LENSES) {
+    const { env } = refusingEnv(fakeKv(new Error("KV is down")), LENS_BUDGETS);
+    const sep = lens.url.includes("?") ? "" : "?";
+    const res = await handlers[lens.name](new Request(`https://aadhar.sh${lens.url}${sep}url=https://example.com/`), env, context());
+    assert.equal(res.status, 429, `${lens.name}: a throwing KV read should fall through to the budget, got ${res.status}`);
+  }
+});
+
+test("the pipeline caches what a lens reached and nothing it was refused", async () => {
+  const { defineLens, lensJson } = await import("../src/worker/lens-pipeline.ts");
+  const writes = [];
+  const kv = { get: async () => null, put: async (key, value, opts) => { writes.push({ key, value, opts }); } };
+  let answer;
+  const probe = defineLens({
+    budget: "tools",
+    targets: (p) => p.get("url") || "",
+    cache: { prefix: "lens:contract-probe:", ttl: 123 },
+    run: async () => answer,
+  });
+  const req = new Request("https://aadhar.sh/x?url=https://example.com/");
+
+  // A shut door is an answer the pane renders and must not sit in KV.
+  answer = { ok: false, status: 200, outcome: "shut", payload: { ok: false, error: "no MCP here" } };
+  const shut = await (await probe.handle(req, { RN_KV: kv })).json();
+  assert.deepEqual(shut, { ok: false, error: "no MCP here" });
+  assert.equal(writes.length, 0, "a refused result was cached");
+
+  // A failure SHAPED like a success is refused at the write too.
+  answer = { ok: true, value: { ok: false, error: "looks like an answer" } };
+  await probe.handle(req, { RN_KV: kv });
+  assert.equal(writes.length, 0, "an ok:false payload was cached because run called it ok");
+
+  answer = { ok: true, value: { ok: true, tools: 3 } };
+  const read = await (await probe.handle(req, { RN_KV: kv })).json();
+  assert.deepEqual(read, { ok: true, tools: 3, fromCache: false }, "a miss says fromCache: false");
+  assert.equal(writes.length, 1);
+  assert.ok(writes[0].key.startsWith("lens:contract-probe:"));
+  assert.deepEqual(writes[0].opts, { expirationTtl: 123 });
+
+  // The encoder only ever adds `fromCache`. The wire summary owns `cached` as a
+  // COUNT of the target's own cache-served requests, and a hit flag spelled
+  // the same way once replaced it with a boolean ("true served from cache").
+  const hit = await lensJson({ kind: "ok", value: { ok: true, cached: 4 }, fromCache: true }).json();
+  assert.equal(hit.cached, 4);
+  assert.equal(hit.fromCache, true);
+});
+
+test("a lens is refused at definition when its spec breaks a rule the order depends on", async () => {
+  const { defineLens } = await import("../src/worker/lens-pipeline.ts");
+  // Deliberately malformed specs, so the type is widened on purpose.
+  /** @type {any} */
+  const base = { targets: () => "", run: async () => ({ ok: true, value: {} }) };
+  // The shared browser ceiling is charged by `browser:` and never as a route's
+  // own budget, or a route could bill it before the per-caller one.
+  assert.throws(() => defineLens({ ...base, budget: "browserAll" }), /not a per-route budget/);
+  assert.throws(() => defineLens({ ...base, budget: /** @type {any} */ ("nope") }), /not a per-route budget/);
+  // Two lenses on one prefix would serve each other's answers.
+  assert.throws(() => defineLens({ ...base, budget: "tools", cache: { prefix: "lens:md:", ttl: 1 } }), /declared twice/);
+});
+
+test("every lens 429 is derived from LENS_BUDGETS, never typed", async () => {
+  const { LENS_BUDGETS, budgetMessage } = await import("../src/worker/lens.ts");
+  for (const name of Object.keys(LENS_BUDGETS)) {
+    assert.ok(budgetMessage(/** @type {any} */ (name)).includes(`${LENS_BUDGETS[name].max}/min`), `${name}: the message does not quote its own ceiling`);
+  }
+  // The doors that answer a lens refusal. A literal "N/min" or "N lookups a
+  // minute" in their code is a ceiling restated by hand, which is the drift
+  // this table exists to end: nine 429s carried typed numbers until 2026-10-02.
+  // Comments are skipped, because they record measurements by design.
+  const DOORS = ["src/worker/lens.ts", "src/worker/lens-pipeline.ts", "src/worker/lens-wire.ts", "src/worker/lens-tools.ts",
+    "src/worker/lens-nlweb.ts", "src/worker/lens-markdown.ts", "src/worker/terminal.ts", "src/worker/lib/tools.ts"];
+  const typed = (src) => src.split("\n")
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .filter((line) => /(?<![$\w}])\d+\s*\/\s*min\b|\b\d+ lookups a minute/.test(line));
+  // The control: the scanner sees the shape it exists to refuse, and passes a
+  // derived one.
+  assert.equal(typed(`  error: "Lens comparisons are rate-limited to 4/min."`).length, 1);
+  assert.equal(typed("  error: `Slow down — 30 lookups a minute.`").length, 1);
+  assert.equal(typed("  error: `rate-limited to ${b.max}/min`").length, 0);
+  for (const file of DOORS) {
+    const hits = typed(await readFile(new URL(`../${file}`, import.meta.url), "utf8"));
+    assert.deepEqual(hits, [], `${file} types a rate-limit number by hand`);
   }
 });
 
@@ -377,7 +511,8 @@ test("the ramp guard asks whether it can authenticate, not whether it is CI", as
 });
 
 test("the shared browser ceiling bills everyone to one bucket, not per caller", async () => {
-  const { BROWSER_FREE_PLAN, LENS_BUDGETS, overLensBudget } = await import("../src/worker/lens.ts");
+  const { BROWSER_FREE_PLAN, LENS_BUDGETS } = await import("../src/worker/lens.ts");
+  const { overBudget } = await import("../src/worker/lib/ratelimit.ts");
 
   // A budget carrying a fixed key must IGNORE the caller's IP. Two different
   // visitors have to land in the same bucket, because the allowance they are
@@ -386,7 +521,7 @@ test("the shared browser ceiling bills everyone to one bucket, not per caller", 
   const env = { LENS_RL_BROWSER_ALL: { limit: (arg) => { keys.push(arg.key); return { success: true }; } } };
   for (const ip of ["203.0.113.7", "198.51.100.4"]) {
     const req = new Request("https://aadhar.sh/lens/shot?url=https://example.com", { headers: { "cf-connecting-ip": ip } });
-    await overLensBudget(LENS_BUDGETS.browserAll, req, env);
+    await overBudget(LENS_BUDGETS.browserAll, req, env);
   }
   assert.deepEqual(keys, ["browser-run", "browser-run"], "the shared ceiling must not key on the caller");
 

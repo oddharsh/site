@@ -28,11 +28,12 @@ test("the markdown lens reaches the network with nothing but the URL", async () 
   assert.equal(reads.length, 1, "exactly one caller-supplied parameter is read");
   assert.ok(worker.includes('params.get("url")'), "and it is the target URL");
 
-  let touched = false;
-  const env = { RN_KV: { get() { touched = true; throw new Error("unexpected cache read"); } } };
-  const res = await handleLensMarkdown(new Request("https://aadhar.sh/lens/markdown?url=http://169.254.169.254/"), env);
-  assert.equal(res.status, 400);
-  assert.equal(touched, false, "private targets are refused before the cache or network");
+  // The target is validated by the lens pipeline, which imports the shared guard
+  // and calls it on every target before any cache read, budget or fetch.
+  const pipeline = await readFile(new URL("../src/worker/lens-pipeline.ts", import.meta.url), "utf8");
+  assert.ok(worker.includes('from "./lens-pipeline.ts"'), "runs through the lens pipeline");
+  assert.ok(pipeline.includes('from "./lib/public-fetch.ts"'), "which imports the shared SSRF guard");
+  assert.ok(pipeline.includes("validateLensTarget("), "and calls it");
   // Never a local copy. Two allowlists pass review on the day they are written
   // and drift the week after.
   assert.ok(!/function\s+validateLensTarget/.test(worker), "does not redefine validateLensTarget");

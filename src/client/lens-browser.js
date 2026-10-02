@@ -209,7 +209,7 @@
     var facts = [];
     if (it.scanned) facts.push(it.scanned + " candidate" + (it.scanned === 1 ? "" : "s") + " examined");
     if (after.engine) facts.push("engine: " + esc(after.engine));
-    facts.push(after.cached ? "KV cache" : "fresh Browser Run");
+    facts.push(after.fromCache ? "KV cache" : "fresh Browser Run");
     return '<div class="lx-browser-delta"><b>After &ldquo;' + esc(it.label) + '&rdquo;:</b> ' + head +
       '<div class="lx-cap">' + facts.join(" &middot; ") + "</div>" +
       (it.id === "consent" && it.acted
@@ -279,7 +279,7 @@
       "rendered HTML": bytes((snapshot.content || "").length) + (snapshot.contentTruncated ? " (capped)" : ""),
       "rendered Markdown": bytes((snapshot.markdown || "").length),
       "accessibility nodes": tree ? treeNodes(tree) : "not returned",
-      observation: snapshot.cached ? "KV cache" : "fresh Browser Run",
+      observation: snapshot.fromCache ? "KV cache" : "fresh Browser Run",
       elapsed: (snapshot.elapsedMs || 0) + " ms",
     };
     var out = deltaStrip(snapshot, data);
