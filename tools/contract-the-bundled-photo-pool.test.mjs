@@ -450,31 +450,20 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
 
 // Local dev serves a SYMLINK FARM (tools/dev-stage.ts) because the served URL
 // root is composed from five authored directories and assets.directory can only
-// name one. That makes the farm a second definition of "the served tree", and a
-// second definition is a thing that drifts: this config named a directory that
-// had been deleted for a day after the 2026-08-18 split, and dev simply did not
-// start. The failure this test guards is the QUIET version of that — a sixth
-// root reaching production while dev keeps composing five, where dev starts fine
-// and merely 404s whatever the new root holds.
-test("local dev composes the same served tree the build stages", async () => {
+// name one. The farm used to be a second definition of "the served tree", held
+// to build.ts by regexing its cp() calls out of the source. Both now consume one
+// plan from tools/lib/served-tree.ts, and contract-served-tree-plan.test.mjs
+// runs both adapters against it. What stays here is the wiring around the farm:
+// the dev config serves it, the dev scripts stage it, and git ignores it.
+test("local dev serves the staged farm, and stages it before wrangler boots", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
   const { ASSET_ROOTS, FARM } = await import("./dev-stage.ts");
-  const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
+  const { STAGED_ROOTS } = await import("./lib/served-tree.ts");
   const devConfig = parseJsonc(await configText("config/dev"));
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
 
-  // Step 1's cp calls into .build/public ARE the production definition of the
-  // served root. Read them rather than restating the list, so this test cannot
-  // agree with a copy of itself (the failure mode gotcha 24 names). They run in
-  // parallel now; build.ts separately blocks any path collision before staging.
-  const staged = [...build.matchAll(/\bcp\("([^"]+)",\s*`\$\{OUT\}\/public`/g)].map((m) => m[1]);
-  assert.ok(staged.length >= 3, "build.ts step 1 should still stage several roots into .build/public");
-  assert.ok(staged.includes("public"), "the byte-for-byte asset root must still be staged");
-  // public/ is the cp with the STAGE_SKIP filter, so it matches a different
-  // shape above; assert it explicitly rather than loosening the regex.
-  assert.match(build, /\bcp\("public", `\$\{OUT\}\/public`/, "build.ts must still stage public/ into the served root");
-  assert.deepEqual(ASSET_ROOTS, staged,
-    "dev-stage.mjs's roots must equal build.ts step 1's, in the same canonical order");
+  assert.equal(ASSET_ROOTS, STAGED_ROOTS,
+    "dev-stage's roots must BE the plan's roots, never a copy of them");
 
   assert.equal(devConfig.assets.directory, FARM,
     "local dev must serve the farm, not one authored root (pointing it at any single root 404s every document the others hold)");
