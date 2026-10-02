@@ -3965,7 +3965,7 @@ how to recover the plans and their audit from git.
    What the farm cannot see is a file CREATED in one of the four directories more
    than one root contributes to (the root, `garage`, `lwe`, `pixel-peeper`);
    restart dev and it is there. Everything deeper is a whole-directory symlink and
-   needs nothing. A contract test pins the farm's roots to `build.ts` step 1, so
+   needs nothing. The farm and the build consume one plan (`tools/lib/served-tree.ts`), so
    the quiet version of this failure (a sixth root reaching production while dev
    composes five) cannot ship. Never bundle or extend the build without the
    owner's say-so. `luna.css` was owner-approved

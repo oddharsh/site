@@ -27,8 +27,7 @@
 // Re-sending is the spec's own edit/delete signal, so a repeat send re-verifies
 // and, when the source no longer links here (or is gone), retracts the mention.
 // A displayed mention should still be TRUE, the same reason /around re-crawls.
-import { validateLensTarget } from "./lens.ts";
-import { fetchFollowingPublicRedirects, privateHostBlocked } from "./lib/public-fetch.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget } from "./lib/public-fetch.ts";
 import { readResponseCapped } from "./lib/crawl.ts";
 import { esc, extractMeta, extractTitle } from "./lib/http.ts";
 import { mf2All, mf2First, mf2Strings, mf2Values, parseMf2 } from "./lib/mf2.ts";
