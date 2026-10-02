@@ -737,6 +737,7 @@ const SHELLS = [
   ["lens-tools.js",  "/lens-tools.src.js",  "LensTools"],
   ["lens-nlweb.js",  "/lens-nlweb.src.js",  "LensNlweb"],
   ["lens-markdown.js", "/lens-markdown.src.js", "LensMarkdown"],
+  ["serendipity.js", "/serendipity.src.js", "data-event-time"],
   ["quiz.js",    "/quiz.src.js",    "luq-data"],       // the understanding-check widget
   ["tooltip.js", "/tooltip.src.js", "function start"],
   ["infotip.js", "/infotip.src.js", "axp-infotip"],   // the shell's own tooltips
@@ -1977,7 +1978,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css", "quiz.css"]) {
 // garage and lwe pages, reads --font-ui and --font-caption, and defines no
 // custom property of its own.
 const PAGE_SCOPED_HASHED = new Set([
-  "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json", "quiz.css",
+  "serendipity.js", "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json", "quiz.css",
 ].map((f) => `public/${f}`));
 
 // Every staged file step 6 content-hashes into /a/. Step 5c reads the shell
@@ -2169,6 +2170,7 @@ let freshFamily: Buffer | null = null;
     // purpose, so that it cannot rewrite the garage pages' documentary /nav.js mentions.
     // It would silently miss those three and the witness tripwire would fail the deploy.
     // Moving them needs a different mechanism, not another line here.
+    { attr: "src", from: "/serendipity.js", base: "serendipity", ext: "js", witness: "../serendipity/serendipity.ts" },
     { attr: "src", from: "/quiz.js",    base: "quiz",    ext: "js", witness: "garage/encoding.html" },
     { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "../src/worker/writing.ts" },
     // Shared LWE structure is a separate warm-cache object.
