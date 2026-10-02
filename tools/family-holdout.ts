@@ -38,6 +38,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { brotliCompressSync, zstdCompressSync, constants as zc } from "node:zlib";
 import { createHash, randomBytes } from "node:crypto";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
+import { zstdDictionaryFrame } from "./lib/dcz.ts";
+import { DCZ_HEADER_BYTES, DCZ_ZSTD_LEVEL, pageSlug } from "../src/worker/lib/dictionary-names.ts";
 import { FAMILY_DRIFT } from "./lib/page-family.ts";
 import { judge } from "./lib/hillclimb.ts";
 import { deriveFamily, FAMILY_WINDOW, loadServedSeries, page, q11, type Snap, type State } from "./lib/served-pages.ts";
@@ -58,13 +60,12 @@ const listBlock = (name: string) => {
   if (!m) throw new Error(`build.ts: could not find ${name}; did the family corpus block move?`);
   return m[1];
 };
-const slugOf = (rel: string) => rel.replace(/\.html$/, "").replaceAll("/", "__");
-const BASE = [...listBlock("BASE_CORPUS").matchAll(/"([^"]+\.html)"/g)].map((m) => slugOf(m[1]));
+const BASE = [...listBlock("BASE_CORPUS").matchAll(/"([^"]+\.html)"/g)].map((m) => pageSlug(m[1]));
 if (BASE.length < 2) throw new Error("build.ts: BASE_CORPUS parsed empty");
 // Tails, if build.ts ever carries them again: the same [page, bytes] shape the
 // REPRESENTATIVES list had. Absent means none, which is the shipped state.
 const CURRENT: Array<[string, number]> = /const REPRESENTATIVES\b/.test(buildSrc)
-  ? [...listBlock("REPRESENTATIVES").matchAll(/\["([^"]+\.html)",\s*([\d_]+)\]/g)].map((m) => [slugOf(m[1]), Number(m[2].replaceAll("_", ""))])
+  ? [...listBlock("REPRESENTATIVES").matchAll(/\["([^"]+\.html)",\s*([\d_]+)\]/g)].map((m) => [pageSlug(m[1]), Number(m[2].replaceAll("_", ""))])
   : [];
 const SIZE = FAMILY_WINDOW;
 
@@ -93,7 +94,7 @@ const derive = (state: State, reps: Array<[string, number]>) => deriveFamily(sta
   const dict = derive(last, CURRENT);
   const target = last.get("garage__index") ?? [...last.values()][0];
   if (!dict) throw new Error("control: no dictionary derivable at the newest checkpoint");
-  const lvl = { params: { [zc.ZSTD_c_compressionLevel]: 19 } };
+  const lvl = { params: { [zc.ZSTD_c_compressionLevel]: DCZ_ZSTD_LEVEL } };
   const none = zstdCompressSync(page(target), lvl).length;
   const right = zstdCompressSync(page(target), { ...lvl, dictionary: dict }).length;
   const wrong = zstdCompressSync(page(target), { ...lvl, dictionary: randomBytes(SIZE) }).length;
@@ -107,8 +108,7 @@ const derive = (state: State, reps: Array<[string, number]>) => deriveFamily(sta
 if (args.includes("--detail")) {
   const newest = states.length - 1, from = newest - K[0];
   const pages = [...states[newest].values()].sort((a, b) => a.slug.localeCompare(b.slug));
-  const lvl = { [zc.ZSTD_c_compressionLevel]: 19 };
-  const served = (dict: Buffer, s: Snap) => Math.min(zstdCompressSync(page(s), { dictionary: dict, params: lvl }).length + 40, q11(s));
+  const served = (dict: Buffer, s: Snap) => Math.min(zstdDictionaryFrame(page(s), dict).length + DCZ_HEADER_BYTES, q11(s));
   const dicts = CONFIGS.map((c) => derive(states[from], c.reps)!);
   console.log(`\nserved bytes at ${checkpoints[newest].date}, dictionaries cut at ${checkpoints[from].date}; columns are each config minus current`);
   console.log(`  ${"page".padEnd(40)} ${"q11".padStart(7)} ${"current".padStart(8)} ${CONFIGS.slice(1).map((c) => c.name.padStart(8)).join(" ")}`);
@@ -171,8 +171,8 @@ function score(dict: string, pages: Snap[]): Score {
     const f = frameSize.get(`${dict}|${s.slug}.${s.tag}`)!;
     const b = q11(s);
     frames += f; base += b;
-    served += Math.min(f + 40, b);
-    if (f + 40 >= b) losses++;
+    served += Math.min(f + DCZ_HEADER_BYTES, b);
+    if (f + DCZ_HEADER_BYTES >= b) losses++;
   }
   return { frames, served, q11: base, pages: pages.length, losses };
 }

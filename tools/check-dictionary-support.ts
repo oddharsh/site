@@ -17,6 +17,7 @@ import { createHash } from "node:crypto";
 import { PAGE_FAMILY_MATCH } from "../src/worker/lib/assets.ts";
 import { FAMILY_DICT_DIR, readCommittedFamily, type CommittedFamily } from "./lib/page-family.ts";
 import { SHELL_DISCOVERY_ROOTS, shellAssetRefs } from "./lib/shell-roots.ts";
+import { parseFamilyDictionary, parseShellAsset } from "../src/worker/lib/dictionary-names.ts";
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
 const get = (url, dict?, extra: Record<string, string> = {}) => {
@@ -66,8 +67,8 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 // until a deploy fixes it. Do NOT make dcz:check a required check or it deadlocks the very
 // release that would clear it.
 {
-  const committed = (await readdir("src/dict/a-dict")).filter((n) => /\.[0-9a-f]{8}\.(js|css|svg)$/.test(n));
-  const bases = new Set(committed.map((n) => n.replace(/\.[0-9a-f]{8}\.(js|css|svg)$/, "")));
+  const committed = (await readdir("src/dict/a-dict")).filter((n) => parseShellAsset(n));
+  const bases = new Set(committed.map((n) => parseShellAsset(n)!.base));
 
   // Discovery has to match the ROLL's, or this assertion grades a different set from the
   // one the nightly job adopts. It walks the same documents (SHELL_DISCOVERY_ROOTS, one
@@ -95,7 +96,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   };
 
   const refs = new Map();
-  const see = (name) => refs.set(name, name.replace(/\.[0-9a-f]{8}\.(js|css|svg)$/, ""));
+  const see = (name) => refs.set(name, parseShellAsset(name)?.base ?? name);
   for (const path of SHELL_DISCOVERY_ROOTS) {
     const doc = await fetchLive(path);
     if (doc) for (const n of assetRefs(doc)) see(n);
@@ -150,7 +151,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const home = await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } });
   const offered = home.headers.get("link")?.match(/<([^>]+)>;\s*rel="compression-dictionary"/)?.[1] || null;
   try { await home.body?.cancel(); } catch {}
-  const liveHash = offered?.match(/page-family\.([0-9a-f]{8})\.dict$/)?.[1] || null;
+  const liveHash = parseFamilyDictionary(offered?.split("/").pop() ?? "");
   if (problem) report("family dictionary is committed", false, problem);
   else if (!liveHash) report("family dictionary is committed", false, "production's homepage advertises no rel=compression-dictionary Link");
   else if (!committed) report("family dictionary is committed", false, `${FAMILY_DICT_DIR} is empty while production serves ${liveHash}; run \`bun run dict:roll\``);
