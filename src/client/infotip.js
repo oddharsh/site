@@ -206,7 +206,7 @@ export function start(o) {
     if (co.repos.length) {
       const covered = co.coveredSince !== g.since ? `since ${shortDay(co.coveredSince)}` : "";
       out += head("Commits to my repos", [plural(co.total, "commit"), covered].filter(Boolean).join(" · "));
-      out += `<div class="gh-t">${co.repos.slice(0, 5).map((r) => `${esc(nameOnly(r.repo))} ${r.count}`).join(" · ")}</div>`;
+      out += `<div class="gh-t">${co.repos.slice(0, 6).map((r) => `${esc(nameOnly(r.repo))} ${r.count}`).join(" · ")}</div>`;
     }
     return `<div class="gh">${out}</div>`;
   };

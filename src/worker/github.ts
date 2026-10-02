@@ -6,11 +6,12 @@
 // own. A visitor pointing at the icon is asking "what is he up to", and an
 // upstream PR answers that better than the forty commits a day this site gets.
 //
-// THREE SEARCH CALLS, NOT THE EVENTS API. Events is the obvious source and the
+// SEARCH CALLS, NOT THE EVENTS API. Events is the obvious source and the
 // wrong one: it caps at 300 events and 90 days, mixes every kind of activity
 // into one stream that would need paging to separate, and its PushEvent
-// payloads no longer carry commit messages. Search answers each tier with one
-// request, scoped to a window, and reports a total_count alongside the page.
+// payloads no longer carry commit messages. Search answers each tier with a
+// request or two (commits take two, see BUSIEST_REPO), scoped to a window, and
+// reports a total_count alongside the page.
 //
 // `is:public` IS IN EVERY QUERY, and that is the privacy boundary, not a
 // filter applied afterwards. An issue search result carries no `private` flag
@@ -24,15 +25,15 @@
 // Unauthenticated search allows 10 requests a minute per IP, and a Worker's
 // egress IP is shared, so a refusal is expected rather than exceptional. SWR
 // in KV is what makes that survivable: a refresh that fails stores nothing and
-// the last good payload keeps serving (shouldStore below requires all three
-// tiers). Absence from one read is not evidence that the activity stopped.
+// the last good payload keeps serving (shouldStore below requires every
+// tier). Absence from one read is not evidence that the activity stopped.
 import { signedFetch } from "./lib/botauth.ts";
 import { swrKV } from "./lib/cache.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 
 export const GITHUB_USER = "oddharsh";
 export const GITHUB_CACHE_KEY = "github:activity:v1";
-const GITHUB_TTL = 3600;          // an hour; three searches an hour at most
+const GITHUB_TTL = 3600;          // an hour; four searches an hour at most
 export const WINDOW_DAYS = 30;
 const PER_PAGE = 100;             // search's maximum, one page per tier
 const API = "https://api.github.com";
@@ -117,18 +118,35 @@ export function normalizeIssues(body: unknown): GithubActivity["issues"] {
   return { total: totalOf(body), repoCount: new Set(list.map((i) => i.repo)).size, items: list };
 }
 
-/** Commits to my own repositories, grouped by repository. */
-export function normalizeCommits(body: unknown, since: string): GithubActivity["commits"] {
-  const list: Commit[] = items(body)
-    // Belt and braces under `is:public`: commit results DO carry the flag, so a
-    // private repository that slipped the query still never reaches the payload.
-    .filter((it) => it?.repository?.private === false)
-    .map((it) => ({
-      repo: text(it?.repository?.full_name),
-      message: clip(text(it?.commit?.message).split("\n")[0], 140),
-      url: ghUrl(it?.html_url),
-      at: text(it?.commit?.author?.date),
-    })).filter((c) => c.repo && c.message);
+// The repository that would otherwise fill the commit page on its own. This
+// site takes about ten commits a day, so one page of 100 reached back only
+// five days and showed two other repositories where six had commits that
+// month. It gets a query of its own that reads total_count alone, which is
+// exact however many pages it spans, and the page goes to everything else.
+export const BUSIEST_REPO = `${GITHUB_USER}/site`;
+
+const toCommit = (it: any): Commit => ({
+  repo: text(it?.repository?.full_name),
+  message: clip(text(it?.commit?.message).split("\n")[0], 140),
+  url: ghUrl(it?.html_url),
+  at: text(it?.commit?.author?.date),
+});
+// Belt and braces under `is:public`: commit results DO carry the flag, so a
+// private repository that slipped the query still never reaches the payload.
+const publicCommits = (body: unknown) =>
+  items(body).filter((it) => it?.repository?.private === false).map(toCommit).filter((c) => c.repo && c.message);
+
+/**
+ * Commits to my own repositories, grouped by repository. `rest` is every
+ * repository but BUSIEST_REPO, one page; `busiest` is that repository alone,
+ * asked for one item, so its count is total_count and its latest is item 0.
+ */
+export function normalizeCommits(rest: unknown, busiest: unknown, since: string): GithubActivity["commits"] {
+  // A busiest-repo commit in `rest` would be counted twice, so it is dropped
+  // here whatever the query said, from the items AND from rest's total_count.
+  const all = publicCommits(rest);
+  const list = all.filter((c) => c.repo !== BUSIEST_REPO);
+  const leaked = all.length - list.length;
   const byRepo = new Map<string, { repo: string; count: number; latest: Commit }>();
   for (const c of list) {
     const g = byRepo.get(c.repo) ?? { repo: c.repo, count: 0, latest: c };
@@ -136,11 +154,16 @@ export function normalizeCommits(body: unknown, since: string): GithubActivity["
     if (c.at > g.latest.at) g.latest = c;
     byRepo.set(c.repo, g);
   }
-  const total = totalOf(body);
+  const top = publicCommits(busiest).find((c) => c.repo === BUSIEST_REPO);
+  // Without a public item to name the repository by, its count is not shown:
+  // total_count alone cannot say the repository is still the public one.
+  const busiestCount = top ? totalOf(busiest) : 0;
+  if (top && busiestCount) byRepo.set(BUSIEST_REPO, { repo: BUSIEST_REPO, count: busiestCount, latest: top });
+  const restTotal = Math.max(0, totalOf(rest) - leaked);
   const oldest = list.reduce((min, c) => (c.at && c.at < min ? c.at : min), "9999");
   return {
-    total,
-    coveredSince: total > list.length && list.length ? day(oldest) : since,
+    total: restTotal + busiestCount,
+    coveredSince: restTotal > list.length && list.length ? day(oldest) : since,
     repos: [...byRepo.values()].sort((a, b) => b.count - a.count || b.latest.at.localeCompare(a.latest.at)),
   };
 }
@@ -149,10 +172,13 @@ export function githubQueries(since: string) {
   const u = GITHUB_USER;
   const issues = (q: string) =>
     `${API}/search/issues?q=${encodeURIComponent(q)}&sort=created&order=desc&per_page=${PER_PAGE}`;
+  const commits = (q: string, perPage: number) =>
+    `${API}/search/commits?q=${encodeURIComponent(q)}&sort=author-date&order=desc&per_page=${perPage}`;
   return {
     prs: issues(`author:${u} is:pr is:public -user:${u} created:>=${since}`),
     issues: issues(`author:${u} is:issue is:public -user:${u} created:>=${since}`),
-    commits: `${API}/search/commits?q=${encodeURIComponent(`author:${u} user:${u} is:public author-date:>=${since}`)}&sort=author-date&order=desc&per_page=${PER_PAGE}`,
+    commits: commits(`author:${u} user:${u} is:public -repo:${BUSIEST_REPO} author-date:>=${since}`, PER_PAGE),
+    busiest: commits(`author:${u} repo:${BUSIEST_REPO} is:public author-date:>=${since}`, 1),
   };
 }
 
@@ -160,7 +186,7 @@ export function windowStart(now: Date, days = WINDOW_DAYS) {
   return new Date(now.getTime() - days * 86_400_000).toISOString().slice(0, 10);
 }
 
-// Three requests in parallel under ONE deadline, the shape reading.ts uses for
+// Four requests in parallel under ONE deadline, the shape reading.ts uses for
 // Curius. A tier that fails throws, and the whole build fails with it: a card
 // missing its PR section would read as "no PRs this month", which is false.
 async function buildGithubActivity(env): Promise<GithubActivity> {
@@ -176,7 +202,7 @@ async function buildGithubActivity(env): Promise<GithubActivity> {
     if (!res.ok) { await res.body?.cancel(); throw new Error(`GitHub search ${res.status}`); }
     return res.json();
   };
-  const [prs, issues, commits] = await Promise.all([get(q.prs), get(q.issues), get(q.commits)]);
+  const [prs, issues, commits, busiest] = await Promise.all([get(q.prs), get(q.issues), get(q.commits), get(q.busiest)]);
   return {
     user: GITHUB_USER,
     fetchedAt: now.toISOString(),
@@ -184,7 +210,7 @@ async function buildGithubActivity(env): Promise<GithubActivity> {
     since,
     prs: normalizePrs(prs),
     issues: normalizeIssues(issues),
-    commits: normalizeCommits(commits, since),
+    commits: normalizeCommits(commits, busiest, since),
   };
 }
 
