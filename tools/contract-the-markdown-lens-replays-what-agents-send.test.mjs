@@ -19,7 +19,7 @@ import { wantsMarkdown } from "../src/worker/lib/http.ts";
 const worker = await readFile(new URL("../src/worker/lens-markdown.ts", import.meta.url), "utf8");
 const island = await readFile(new URL("../src/client/lens-markdown.js", import.meta.url), "utf8");
 
-test("the markdown lens reaches the network with nothing but the URL", () => {
+test("the markdown lens reaches the network with nothing but the URL", async () => {
   // Same shape as the wire lens's guard, for the same reason: this route aims a
   // visitor-supplied URL at the public internet ten times, so the ONE thing a
   // caller may influence is which URL. A second params.get() is how a header,
@@ -28,8 +28,12 @@ test("the markdown lens reaches the network with nothing but the URL", () => {
   assert.equal(reads.length, 1, "exactly one caller-supplied parameter is read");
   assert.ok(worker.includes('params.get("url")'), "and it is the target URL");
 
-  assert.ok(worker.includes('from "./lib/public-fetch.ts"'), "imports the shared SSRF guard");
-  assert.ok(worker.includes("validateLensTarget("), "and calls it");
+  // The target is validated by the lens pipeline, which imports the shared guard
+  // and calls it on every target before any cache read, budget or fetch.
+  const pipeline = await readFile(new URL("../src/worker/lens-pipeline.ts", import.meta.url), "utf8");
+  assert.ok(worker.includes('from "./lens-pipeline.ts"'), "runs through the lens pipeline");
+  assert.ok(pipeline.includes('from "./lib/public-fetch.ts"'), "which imports the shared SSRF guard");
+  assert.ok(pipeline.includes("validateLensTarget("), "and calls it");
   // Never a local copy. Two allowlists pass review on the day they are written
   // and drift the week after.
   assert.ok(!/function\s+validateLensTarget/.test(worker), "does not redefine validateLensTarget");

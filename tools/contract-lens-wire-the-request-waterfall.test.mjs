@@ -185,8 +185,10 @@ test("the KV-hit flag does not collide with the target's own cache count", async
   ], "https://site.test/");
   assert.equal(d.cached, 1, "`cached` is a COUNT of the target's cache-served requests");
   assert.equal(typeof d.cached, "number");
-  assert.match(worker, /\.\.\.hit, fromCache: true/, "the KV hit must set fromCache, never cached");
-  assert.doesNotMatch(worker, /\.\.\.hit, cached: true/);
+  // The hit flag is the pipeline's to write (lens-pipeline.ts's lensJson, held
+  // behaviourally in contract-lens-per-ip-crawl-budgets), so the module itself
+  // must never spell one.
+  assert.doesNotMatch(worker, /\bcached: true\b/, "lens-wire.ts writes a hit flag over the summary's count");
   assert.match(pane, /d\.fromCache \?/, "the pane must read fromCache for the KV-hit line");
 });
 
@@ -212,7 +214,11 @@ test("the wire lens shares the SSRF guard and reaches the browser with nothing b
   // The rule lens-recipes.js is built around: this route points a real browser
   // at a visitor-supplied address, so the ONLY caller byte that may reach it is
   // the URL, after the shared guard has passed it.
-  assert.match(src, /from "\.\/lib\/public-fetch\.(js|ts)"/, "must import the shared guard, not reimplement it");
+  // Validation happens in the pipeline, which imports the shared guard. The
+  // route only says which parameter is the target.
+  assert.match(src, /from "\.\/lens-pipeline\.ts"/, "must run through the lens pipeline");
+  assert.match(readFileSync("./src/worker/lens-pipeline.ts", "utf8"), /from "\.\/lib\/public-fetch\.ts"/,
+    "the pipeline must import the shared guard, not reimplement it");
   assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
     "lens-wire.js redefines a guard it is supposed to be importing");
   // Exactly one searchParams read, and it is the url. A second one is how a
@@ -251,7 +257,7 @@ test("the wire lens reports a spent browser budget as ours, not as the target fa
   // answered 429 on the create.
   assert.match(src, /browser_budget_spent/, "a refused session needs its own span outcome");
   const budgetBranch = src.slice(src.indexOf("if (out.budget)"), src.indexOf("if (out.error)"));
-  assert.match(budgetBranch, /\}, 429\);/, "a spent budget is a 429, never a 502");
+  assert.match(budgetBranch, /status: 429/, "a spent budget is a 429, never a 502");
   assert.match(budgetBranch, /Every other lens still works/,
     "the message must tell the visitor what they can still do");
 });

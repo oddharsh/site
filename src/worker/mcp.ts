@@ -315,8 +315,8 @@ async function callTool(name, args, request, env, ctx): Promise<ToolOutcome> {
 
   // The three frame tools share one implementation, because the HTTP route and
   // the tool are the same program read through different doors. terminal_lens does
-  // NOT get its own rate-limit check here: lensFrame calls the same
-  // overLensBudget bucket lens_inspect does, so the ceiling is shared whichever
+  // NOT get its own rate-limit check here: lensFrame runs the same LENS_INSPECT
+  // spec lens_inspect does, so the ceiling is shared whichever
   // door you knock on — the rule the crawl-tool note above already states.
   if (name === "finger") return terminalToolFrame("finger", args, request, env, ctx);
   if (name === "photos") return terminalToolFrame("photos", args, request, env, ctx);

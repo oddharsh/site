@@ -55,14 +55,18 @@ function walk(dir) {
 }
 
 // Every `span("literal"` and `cron("literal"` in the tree, allowing any
-// whitespace (newlines included) between the paren and the quote.
+// whitespace (newlines included) between the paren and the quote. Plus every
+// `span: "literal"` property, because a lens declares its span on its spec and
+// lens-pipeline.ts opens it (since 2026-10-02): the six /lens routes that own a
+// span name no longer call span() with it themselves.
 function used() {
   const seen = new Map();
   for (const tree of TREES) {
     for (const file of walk(tree)) {
       const src = readFileSync(file, "utf8");
-      for (const m of src.matchAll(/\b(?:span|cron)\(\s*"([^"]+)"/g)) {
-        if (!seen.has(m[1])) seen.set(m[1], file);
+      for (const m of src.matchAll(/\b(?:span|cron)\(\s*"([^"]+)"|\bspan:\s*"([^"]+)"/g)) {
+        const name = m[1] ?? m[2];
+        if (!seen.has(name)) seen.set(name, file);
       }
     }
   }

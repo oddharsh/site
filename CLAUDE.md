@@ -2751,18 +2751,17 @@ generic hex back.
   below — they were a WRITE per allowed request on the busiest route here, which
   had quietly made "we use a handful" false.)
 - **LENS_RL_\*** (Rate Limiting bindings, `bindings.rateLimit` in `cloudflare.config.ts`) —
-  the seven per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
-  inspect 30/min, shot 3/min, compare 4/min, browser 3/min, wire 2/min, tools
-  10/min, nlweb 4/min. An eighth, `LENS_RL_BROWSER_ALL` at 4/min, is keyed on a
-  CONSTANT rather than on the caller, so every browser-consuming route bills
-  against one bucket. Counters are per-colo and cost no write. `LENS_BUDGETS`
-  in `lens.ts` mirrors the ceilings because that is what the 429 message quotes, and a
-  contract test pins the two configs and the code together so a message cannot
-  outlive its limit. **This prose is a THIRD copy that the test does not cover**,
-  which is how it undercounted the budgets and overstated two of the ceilings
-  until 2026-08-14 while config and code agreed with each other throughout. The
-  wrong values are deliberately not restated here: a stale number written as
-  `N/min` inside its own correction is still a greppable stale number.
+  the per-IP crawl budgets `/lens`, the terminal tools and the `/mcp` lens
+  tools share, plus `LENS_RL_BROWSER_ALL`, which is keyed on a CONSTANT rather
+  than on the caller, so every browser-consuming route bills against one bucket.
+  Counters are per-colo and cost no write. `LENS_BUDGETS` in
+  `lens-pipeline.ts` mirrors the ceilings, and since 2026-10-02 it is the ONLY
+  place a lens 429 gets its wording: `budgetMessage()` derives every one. A
+  contract test pins the table to the config, and another fails on a
+  hand-typed `N/min` in any lens door. **The ceilings are deliberately not
+  listed here.** This paragraph was a third copy for two months, undercounted the
+  budgets twice (most recently by leaving out `markdown`), and overstated two
+  ceilings while config and code agreed throughout. Read the table.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 158 photos at FUJIFILM X-T50 + Leica resolution).
 - **ASSETS** — the Workers static-assets binding (`bindings.assets()` in cloudflare.config.ts), serves files from public/.
@@ -3023,6 +3022,51 @@ generic hex back.
   `169.254.169.254` hosts, ports 80/443 only, 8s timeout, 2MB cap) and identify honestly
   as AadharshBot. Framability is read from the target's `X-Frame-Options` /
   `Content-Security-Policy: frame-ancestors` in the `/lens/fetch` pass, so no extra probe.
+
+### `lens-pipeline.ts`: one request pipeline for every lens door
+
+Every lens door runs one ordered sequence, owned by `defineLens(spec)` since
+2026-10-02: validate the target, derive `args`, check the browser
+precondition, read the cache, charge the route's own budget, then
+`browserAll` when the lens spends Browser Run, run, and write the cache. **The
+order is not configurable**, and a hit returns before any budget is consulted,
+because the budgets ration exactly the work a hit does not do.
+
+Seventeen callers used to hand-copy those steps, and the copies drifted in
+four ways at once. `/lens/fetch?mode=cloudflare` charged its budget before
+reading its cache, so a cached score could be refused (measured on the old code:
+a hit with a refusing limiter answered 429). Five routes read KV with no guard,
+where a throw is Cloudflare's HTML 1101 page. The hit flag was spelled
+`cached`, `fromCache` and `x-lens-cache`. And nine 429s quoted numbers no
+test checked.
+
+A spec says what DIFFERS per lens: its `budget`, `browser: "render" | "cdp"`
+(which adds the 503 and the shared budget together), `body: "png"`, a
+`cache` with a literal `lens:<name>:` prefix, and its own `run`. Three rules
+are worth knowing before writing one:
+
+- **`run` decides what is cached, never the payload.** The tools and nlweb
+  lenses answer 200 with `ok: false` for a shut door, so a `run` returns
+  `{ ok: false, status, payload, outcome }` for anything that must stay out of
+  KV, and `usable` is checked again on the write so a failure shaped like a
+  success cannot slip in.
+- **Every input that changes the answer goes in the cache key.** nlweb's
+  question and browser's recipe arrive through `args`, and `cache.key` /
+  `cache.suffix` read them. Keying nlweb on the origin alone would serve one
+  visitor's answer to another's question.
+- **`defineLens` refuses a duplicate prefix and a `browserAll` own budget at
+  module load**, so two lenses cannot share a cache namespace.
+
+The result is an OUTCOME, never a Response, because the callers answer in
+different shapes. `lensJson`, `lensPng` and `lensStatusPayload` live in the
+module, the terminal's is `refusalFrame` in `terminal.ts`, and the MCP one,
+`lensToolResult`, is in `lib/tools.ts`. That encoder is the one seam the
+pipeline added. KV and the rate limiter stay behind `env`, because the
+contract suite already fakes both, and the guarded read lives in the pipeline
+so a throwing fake KV tests the guard itself.
+`contract-lens-per-ip-crawl-budgets` drives all seven cached lenses through
+their real handlers: a hit with an exhausted limiter answers 200 with
+`fromCache: true`, and a miss answers 429 with the derived message.
 
 ### `/lens` bot views, and the control rows that make them readable
 
