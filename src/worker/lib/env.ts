@@ -41,6 +41,7 @@
 
 
 import type { BotRobotsRead } from "./botauth.ts";
+import type { PublicTransport } from "./public-fetch.ts";
 import type { BookingWorkflow } from "../../../cal/src/workflow.ts";
 import type { CensusWorkflow } from "../census-workflow.ts";
 
@@ -219,6 +220,13 @@ export interface EnvInjected {
    * `env.SELF_FETCH ? env.SELF_FETCH(req) : env.ASSETS.fetch(req)`.
    */
   SELF_FETCH?: ((request: Request) => Promise<Response>) | null;
+  /**
+   * The network adapter for AadharshBot's outbound reads (lib/outbound.ts,
+   * lib/botauth.ts). Nothing in the Worker sets it, so production reads go to
+   * the global fetch; a test sets it to supply a fake network by injection.
+   * Per-hop URL validation, the robots gate and signing all run in front of it.
+   */
+  OUTBOUND_TRANSPORT?: PublicTransport | null;
   /**
    * Set beside SELF_FETCH. Tells lib/assets.ts to skip the brotli and dictionary
    * lookups and hand back plain bytes, because an in-process caller is going to

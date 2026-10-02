@@ -311,7 +311,7 @@ export class BotPolicyError extends Error {
 // consult this cached policy unless RN selects the Spotify-only exception below.
 // Keep this out of botHeaders: signing is a pure operation used by self-dispatch
 // and cryptographic verifiers as well as network callers.
-export async function botRobotsPolicy(targetUrl: string, env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK" | "BOT_ROBOTS_CACHE">, signal?: AbortSignal): Promise<BotPolicy> {
+export async function botRobotsPolicy(targetUrl: string, env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK" | "BOT_ROBOTS_CACHE" | "OUTBOUND_TRANSPORT">, signal?: AbortSignal): Promise<BotPolicy> {
   const target = validateLensTarget(targetUrl);
   if (!target.ok) return { ok: false, kind: "undetermined", reason: target.error || "invalid target" };
   const url = new URL(target.url);
@@ -340,7 +340,7 @@ export function withBotPolicyCache<T>(env: T) {
   return { ...env, BOT_ROBOTS_CACHE: new Map<string, Promise<BotRobotsRead>>() };
 }
 
-async function readBotRobots(origin: string, env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK">): Promise<BotRobotsRead> {
+async function readBotRobots(origin: string, env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK" | "OUTBOUND_TRANSPORT">): Promise<BotRobotsRead> {
   const cacheKey = `bot:robots:v1:${origin}`;
   let parsed: ReturnType<typeof lensParseRobots> | null = null;
   try { parsed = env.RN_KV ? await env.RN_KV.get(cacheKey, "json") : null; } catch (error) { if (isSubrequestLimit(error)) throw error; }
@@ -351,7 +351,7 @@ async function readBotRobots(origin: string, env: Pick<Env, "RN_KV" | "RN_SIGNIN
         headers: await botHeaders(candidate, env, { headers: { accept: "text/plain" }, postQuantum: false }),
         signal: policySignal,
         cf: { cacheTtl: 0 },
-      }), validateLensTarget, 5);
+      }), validateLensTarget, 5, env.OUTBOUND_TRANSPORT);
       if (!followed.ok) return { ok: false, kind: "undetermined", reason: "robots.txt redirect refused" };
       const response = followed.response;
       if (response.ok) {
@@ -404,9 +404,10 @@ export async function signedFetch(targetUrl, env, opts: BotRequestOptions = {}) 
   if (opts.redirect && opts.redirect !== "follow") {
     const verdict = validateLensTarget(targetUrl);
     if (!verdict.ok) throw new TypeError(verdict.error);
-    return fetch(targetUrl, { ...await init(targetUrl), redirect: opts.redirect });
+    const single = { ...await init(targetUrl), redirect: opts.redirect };
+    return env?.OUTBOUND_TRANSPORT ? env.OUTBOUND_TRANSPORT(targetUrl, single) : fetch(targetUrl, single);
   }
-  const followed = await fetchFollowingPublicRedirects(targetUrl, init, validateLensTarget, 20);
+  const followed = await fetchFollowingPublicRedirects(targetUrl, init, validateLensTarget, 20, env?.OUTBOUND_TRANSPORT);
   if (!followed.ok) throw new TypeError(followed.error);
   return followed.response;
 }
