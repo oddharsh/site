@@ -50,7 +50,6 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { siteWranglerArgs } from "./lib/site-config.ts";
-import { parseFamilyDictionary } from "../src/worker/lib/dictionary-names.ts";
 
 const BUILD = ".build/public";
 const DRYRUN_OUT = ".build/.perfsnap";
@@ -206,7 +205,11 @@ async function record(outPath, label) {
   // overnight. Keep acquisition beside the deltas it enables, using the emitted
   // twin rather than recompressing, so a corpus edit that improves one while
   // worsening the other is visible in the same section.
-  for (const name of await walk(`${BUILD}/a`, (f) => f.endsWith(".br") && Boolean(parseFamilyDictionary(f.slice(0, -3))))) {
+  // The family dictionary name is matched here rather than through
+  // src/worker/lib/dictionary-names.ts on purpose: perf-diff.yml runs this script
+  // against the MERGE BASE with only tools/ stashed, so it can import nothing
+  // outside tools/.
+  for (const name of await walk(`${BUILD}/a`, (f) => /^page-family\.[0-9a-f]{8}\.dict\.br$/.test(f))) {
     snapshot.dcz.dictionaryBrotliBytes += (await readFile(`${BUILD}/a/${name}`)).length;
   }
 
