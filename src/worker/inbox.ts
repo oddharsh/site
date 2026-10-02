@@ -12,7 +12,7 @@
 // No avatars, by choice: hotlinking a stranger's profile picture leaks my
 // readers' IPs to their host and buys nothing OE ever had. Name, subject, date,
 // excerpt — very 2003.
-import { serveStaticPage } from "./lib/assets.ts";
+import { serveBuiltPage } from "./lib/built-page.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
@@ -129,14 +129,11 @@ export async function handleInboxMail(request, env, ctx) {
 // document takes, plus the webmention Link header the live render always sent,
 // and falls back to rendering the shell where no bake is staged (bun run dev,
 // and the contract suite, which is why it lives here rather than in index.ts).
-export async function handleInbox(request, env) {
-  const headers = { "cache-control": PAGE_CACHE_CONTROL, link: `${SHELL_PRELOAD_LINK}, ${WEBMENTION_LINK}` };
-  const response = await serveStaticPage(request, env, { headers });
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  const live = renderInboxPage();
-  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
-  return live;
+export function handleInbox(request, env) {
+  return serveBuiltPage(request, env, {
+    headers: { "cache-control": PAGE_CACHE_CONTROL, link: `${SHELL_PRELOAD_LINK}, ${WEBMENTION_LINK}` },
+    live: () => renderInboxPage(),
+  });
 }
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */

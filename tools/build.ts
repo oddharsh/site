@@ -51,7 +51,8 @@ import { parseCss } from "./lib/css-parse.ts";
 import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
-import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
+import { dczEncode, dczEncodeBatch, dictionaryTag, frameDcz } from "./lib/dcz.ts";
+import { familyDictionaryName, pageDeltaName, pageSlug, parsePageSnapshot, parseShellAsset, shellDeltaName } from "../src/worker/lib/dictionary-names.ts";
 import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
 import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
@@ -80,40 +81,9 @@ function brotliQ11(bytes) {
   });
 }
 
-// dcz framing (RFC 9842), the one construction both delta passes share: compress
-// against the dictionary, then prepend the dictionary's SHA-256 in a Zstandard
-// SKIPPABLE frame — magic 0x184D2A5E little-endian, a 4-byte LE length of 32, then
-// the raw digest. Being valid zstd, that prefix is skipped by any conforming
-// decoder, which is what lets `zstd -d -D dict` round-trip the whole file.
-//
-// One framing function because the shell pass and the page pass each built this by hand and
-// the browser is the decoder: a byte wrong in either copy is a delta no client can
-// apply, and only on the surface whose copy drifted. Consolidated 2026-07-28.
-function frameDcz(frame, dictBytes) {
-  const digest = createHash("sha256").update(dictBytes).digest();
-  const len = Buffer.alloc(4);
-  len.writeUInt32LE(digest.length, 0);
-  return {
-    out: Buffer.concat([Buffer.from([0x5e, 0x2a, 0x4d, 0x18]), len, digest, frame]),
-    digest,
-  };
-}
-
-function dczEncode(bytes, dictBytes) {
-  const frame = zstdCompressSync(bytes, {
-    dictionary: dictBytes,
-    params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
-  });
-  return frameDcz(frame, dictBytes);
-}
-
-async function dczEncodeBatch(jobs) {
-  const frames = await zstdCompressDictionaryBatch(jobs.map(({ bytes, dictBytes }) => ({
-    bytes,
-    dictionary: dictBytes,
-  })));
-  return jobs.map(({ dictBytes }, index) => frameDcz(frames[index], dictBytes));
-}
+// The dcz encoder (frameDcz, dczEncode, dczEncodeBatch) is tools/lib/dcz.ts, and
+// the names its output is written under are src/worker/lib/dictionary-names.ts,
+// the same module the Worker looks them up with.
 
 // Parse host-shaped CSP sources before comparing DNS labels. A raw substring
 // test is both imprecise and security-shaped: `cloudflareinsights.com.evil`
@@ -2701,9 +2671,8 @@ let freshFamily: Buffer | null = null;
 
     const dictDir = "src/dict/a-dict";
     const dicts = await readdir(dictDir).catch(() => []);
-    const parse = (n) => { const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/); return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null; };
-    const shell = files.map(parse).filter(Boolean);
-    const cands = dicts.map(parse).filter(Boolean);
+    const shell = files.map(parseShellAsset).filter(Boolean);
+    const cands = dicts.map(parseShellAsset).filter(Boolean);
     if (cands.length) await mkdir(`${OUT}/public/ad`, { recursive: true });
     let n = 0, deltaBytes = 0;
     for (const asset of shell) {
@@ -2717,7 +2686,7 @@ let freshFamily: Buffer | null = null;
         // ever request a new URL for them — a delta here could not be asked for.
         if (dictBytes.equals(targetBytes)) continue;
 
-        const { out, digest } = dczEncode(targetBytes, dictBytes);
+        const { out, tag } = dczEncode(targetBytes, dictBytes);
 
         // A delta that lost to the plain q11 twin is worse than no delta: the worker would
         // serve more bytes AND cost the client a dictionary lookup.
@@ -2726,10 +2695,10 @@ let freshFamily: Buffer | null = null;
           console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
           continue;
         }
-        const tag = digest.toString("hex").slice(0, 16);
-        await writeFile(`${OUT}/public/ad/${asset.base}.${asset.hash8}.${tag}.dcz`, out);
+        const deltaName = shellDeltaName(asset, tag);
+        await writeFile(`${OUT}/public/ad/${deltaName}`, out);
         n++; deltaBytes += out.length;
-        console.log(`delta: /ad/${asset.base}.${asset.hash8}.${tag}.dcz ${out.length} bytes (vs ${plainTwin} plain br)`);
+        console.log(`delta: /ad/${deltaName} ${out.length} bytes (vs ${plainTwin} plain br)`);
       }
     }
     // Distinguish the two reasons for zero deltas. "Every candidate matches" is normal and
@@ -3077,16 +3046,10 @@ let freshFamily: Buffer | null = null;
   // same twin, delta, and validator as the rest.
   const pages = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"));
-  // slug: the request path with separators folded, so it survives as one filename segment.
-  const slugOf = (assetPath) => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
 
   const dictDir = "src/dict/p-dict";
   const dicts = (await readdir(dictDir).catch(() => []));
-  const parseDict = (n) => {
-    const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/);
-    return m ? { slug: m[1], tag: m[2], name: n } : null;
-  };
-  const pageDicts = dicts.map(parseDict).filter(Boolean);
+  const pageDicts = dicts.map(parsePageSnapshot).filter(Boolean);
 
   let dCount = 0, dBytes = 0, dPlain = 0, pageCount = 0, pageBytes = 0, familyCount = 0, familyBytesOut = 0;
   const compressedPages = await Promise.all(pages.map(async (page) => {
@@ -3113,7 +3076,7 @@ let freshFamily: Buffer | null = null;
   });
   const dictionary = family.dictionary;
   const committedHash = committedFamily?.hash8 ?? null;
-  const familyName = `page-family.${hash8(dictionary)}.dict`;
+  const familyName = familyDictionaryName(hash8(dictionary));
   await writeFile(`${OUT}/public/a/${familyName}`, dictionary);
   // Its q11 twin. Step 7 wrote one for every other /a/ asset before this file
   // existed, and the Worker serves the dictionary through the same twin path.
@@ -3152,7 +3115,7 @@ let freshFamily: Buffer | null = null;
   }
   console.log(`shell-assets: page dictionary -> /a/${familyName}`);
   const familyBytes = dictionary;
-  const familyTag = createHash("sha256").update(familyBytes).digest("hex").slice(0, 16);
+  const familyTag = dictionaryTag(familyBytes);
   console.log(`page-delta: site-page dictionary ${familyName} (${familyBytes.length} bytes, tag ${familyTag})`);
   await mkdir(`${OUT}/public/pd`, { recursive: true });
   const brotliPages = compressedPages.filter(({ bytes, br }) => br.length < bytes.length);
@@ -3164,7 +3127,7 @@ let freshFamily: Buffer | null = null;
   type DeltaJob = { kind: "page" | "family"; slug: string; tag?: string; bytes: Buffer; dictBytes: Buffer; br: Buffer; frame?: Buffer };
   const deltaJobs = (await Promise.all(compressedPages.map(async ({ page, bytes, br }, index) => {
     const jobs: DeltaJob[] = [];
-    const slug = slugOf(page);
+    const slug = pageSlug(page);
     for (const candidate of pageDicts.filter((d) => d.slug === slug)) {
       const dictBytes = brotliDecompressSync(await readFile(`${dictDir}/${candidate.name}`));
       if (dictBytes.equals(bytes)) continue;
@@ -3179,12 +3142,12 @@ let freshFamily: Buffer | null = null;
   const encoded = await dczEncodeBatch(toEncode);
   const deltas = deltaJobs.map((job) => job.frame ? frameDcz(job.frame, job.dictBytes) : encoded[toEncode.indexOf(job)]);
   const deltaWrites = await Promise.all(deltaJobs.map(async (job, i) => {
-    const { out, digest } = deltas[i];
+    const { out, tag } = deltas[i];
     if (out.length >= job.br.length) {
       const label = job.kind === "page" ? `per-page ${job.tag.slice(0, 8)}` : "site-page";
       return { job, out, skipped: `page-delta: SKIPPED ${job.slug} vs ${label} (dcz ${out.length} >= br ${job.br.length})` };
     }
-    await writeFile(`${OUT}/public/pd/${job.slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
+    await writeFile(`${OUT}/public/pd/${pageDeltaName(job.slug, tag)}`, out);
     return { job, out, skipped: null };
   }));
   for (const { job, out, skipped } of deltaWrites) {

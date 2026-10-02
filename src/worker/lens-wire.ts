@@ -1,15 +1,12 @@
-import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { BOT_UA } from "./lib/botauth.ts";
 // lens.js does not import this file, so the edge runs one way and there is no
-// cycle.
+// cycle. The route's validation, cache, budgets and span are lens-pipeline.ts's;
+// the SSRF guard it validates through is lib/public-fetch.ts's, never a copy.
 import { BROWSER_FREE_PLAN } from "./lens.ts";
-// The shell around the session: the SSRF guard (lib/public-fetch.ts), the cache
-// read before any budget, the per-IP and shared ceilings, and the cache write.
-import { guardedRead } from "./lens-guard.ts";
+import { defineLens, lensErrorText } from "./lens-pipeline.ts";
 import { EXECUTION_PROBE } from "./lib/agent-execution.ts";
 import { WEBMCP_PROBE, readWebmcpProbe } from "./lib/agent-webmcp.ts";
-import { isCallable } from "./lib/parse.ts";
 import { asText } from "./lib/parse.ts";
 
 const CDP_BASE = "https://localhost/v1/devtools/browser";
@@ -421,48 +418,46 @@ async function runWireSession(env, url) {
 
 // ── route ──────────────────────────────────────────────────────────────────
 
-export function handleLensWire(request, env, ctx) {
-  const params = new URL(request.url).searchParams;
-
-  return guardedRead(request, env, ctx, {
-    span: "lens.wire",
-    url: params.get("url") || "",
-    budget: "wire",
-    limited: (max) => `Wire traces are rate-limited to ${max}/min. Hang on a moment.`,
-    // CDP needs the BINDING itself; a REST token cannot open a session. Naming
-    // the engine is also what bills the ceiling every browser route shares.
-    browser: (e) => !!e.BROWSER && isCallable(e.BROWSER.fetch),
-    cache: { tab: "wire", ttl: WIRE_CACHE_TTL },
-    run: async (url, s) => {
+// A CDP session is a real browser instance on the account-wide allowance, so
+// this is a "cdp" browser lens: the pipeline refuses with a 503 when the
+// binding cannot open one, and bills the shared browser budget after the
+// per-IP one.
+const LENS_WIRE = defineLens({
+  span: "lens.wire",
+  budget: "wire",
+  browser: "cdp",
+  targets: (params: URLSearchParams) => params.get("url") || "",
+  cache: { prefix: "lens:wire:", ttl: WIRE_CACHE_TTL },
+  run: async ({ target, env, span: s }) => {
     let out;
     try {
-      out = await span("lens.wire.session", () => runWireSession(env, url));
+      out = await span("lens.wire.session", () => runWireSession(env, target));
     } catch (e) {
-      s.setAttribute("lens.outcome", "session_threw");
-      s.setAttribute("lens.error", (e && e.message) || String(e));
-      return jsonResponse({ ok: false, error: "The CDP session failed: " + ((e && e.message) || e) }, 502);
+      s.setAttribute("lens.error", lensErrorText(e));
+      return { ok: false, status: 502, outcome: "session_threw", payload: { ok: false, error: "The CDP session failed: " + lensErrorText(e) } };
     }
 
     // Our own budget, not the target site's fault. /lens/shot already made this
     // correction and the reasoning transfers exactly: on the free plan this is
     // the single most likely non-success here.
     if (out.budget) {
-      s.setAttribute("lens.outcome", "browser_budget_spent");
-      return jsonResponse({
-        ok: false,
-        error: `Browser Run is rate-limited right now (free plan: one new browser every 20s, ${BROWSER_FREE_PLAN.perDayMinutes} min/day account-wide). Every other lens still works.`,
-      }, 429);
+      return {
+        ok: false, status: 429, outcome: "browser_budget_spent",
+        payload: {
+          ok: false,
+          error: `Browser Run is rate-limited right now (free plan: one new browser every 20s, ${BROWSER_FREE_PLAN.perDayMinutes} min/day account-wide). Every other lens still works.`,
+        },
+      };
     }
     if (out.error) {
-      s.setAttribute("lens.outcome", "session_failed");
       if (out.status) s.setAttribute("http.response.status_code", out.status);
-      return jsonResponse({ ok: false, error: out.error, detail: out.detail }, 502);
+      return { ok: false, status: 502, outcome: "session_failed", payload: { ok: false, error: out.error, detail: out.detail } };
     }
 
-    const summary = summariseWire(out.events, url);
+    const summary = summariseWire(out.events, target);
     const payload = {
       ok: true,
-      url,
+      url: target,
       fetchedBy: "Cloudflare Browser Run (CDP)",
       engine: "chromium-cdp",
       navMs: out.navMs,
@@ -481,7 +476,6 @@ export function handleLensWire(request, env, ctx) {
       ...summary,
     };
 
-    s.setAttribute("lens.outcome", "ok");
     s.setAttribute("lens.wire_requests", summary.requests);
     s.setAttribute("lens.wire_bytes", summary.bytes);
     s.setAttribute("lens.wire_third_pct", summary.thirdParty.bytesPct);
@@ -498,8 +492,15 @@ export function handleLensWire(request, env, ctx) {
       s.setAttribute("lens.webmcp_tools", out.webmcp.count || 0);
       s.setAttribute("lens.webmcp_write", out.webmcp.write || 0);
     }
+    // `fromCache`, NEVER `cached`, on the response the pipeline builds. The
+    // summary already owns `cached` as the number of the TARGET's requests the
+    // browser served from ITS cache, and spelling the hit flag the same way
+    // overwrote that count with a boolean: the pane rendered "true served from
+    // cache". Two different subjects, so two different keys.
+    return { ok: true, value: payload };
+  },
+});
 
-    return payload;
-    },
-  });
+export function handleLensWire(request, env, ctx) {
+  return LENS_WIRE.handle(request, env, ctx);
 }

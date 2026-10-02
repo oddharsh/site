@@ -2,6 +2,7 @@
 // asset path would lie.
 import { wantsMarkdown } from "./http.ts";
 import { notModifiedIfFresh } from "./cache.ts";
+import { pageDeltaPaths, parseFamilyDictionary, shellDeltaPath, tagFromAvailableDictionary } from "./dictionary-names.ts";
 //
 
 type AssetOptions = {
@@ -252,7 +253,7 @@ const shellOffer = (pathname, ext) => {
 // `hasRegExpGroups` is false, as RFC 9842 requires.
 export const PAGE_FAMILY_MATCH = "/:sitewide_html_dictionary_preferred_over_uncaptured_exact_page_snapshots*/*";
 const pageFamilyOffer = (pathname) =>
-  /^\/a\/page-family\.[0-9a-f]{8}\.dict$/.test(pathname)
+  pathname.startsWith("/a/") && parseFamilyDictionary(pathname.slice("/a/".length))
     ? `match="${PAGE_FAMILY_MATCH}", match-dest=("document")`
     : null;
 const pageOffer = (pathname) => pathname.length < PAGE_FAMILY_MATCH.length
@@ -346,25 +347,10 @@ const variantEtag = (etag, suffix) => {
 //   byte-exact. 65x under the plain response for a returning Chromium visitor.
 
 
-// Available-Dictionary is a Structured Field Byte Sequence: `:<base64 sha256>:`. Returns
-// the first 16 hex chars of that hash, which is the tag build.ts puts in each .dcz
-// filename, or null if the header is absent or malformed.
-//
-// Deliberately strict. This value selects a file path, so anything unexpected must become
-// null rather than something that could escape the /ad/ prefix: the base64 is length-
-// checked to a 32-byte digest and the result is re-derived as hex, so only [0-9a-f] can
-// ever reach the URL.
-function dictionaryTag(request) {
-  const raw = request.headers.get("available-dictionary");
-  if (!raw) return null;
-  const m = raw.trim().match(/^:([A-Za-z0-9+/=]+):$/);
-  if (!m) return null;
-  try {
-    const digest = Uint8Array.fromBase64(m[1]);
-    if (digest.length !== 32) return null;       // not a SHA-256 digest
-    return digest.subarray(0, 8).toHex();
-  } catch { return null; }
-}
+// The tag build.ts put in each .dcz filename for the dictionary this client says it
+// holds, or null. The parse (and why it is strict) is lib/dictionary-names.ts, the
+// module the build names those files with.
+const dictionaryTag = (request) => tagFromAvailableDictionary(request.headers.get("available-dictionary"));
 
 // serveDictionaryDelta: hand back the precomputed dcz for the dictionary this client
 // says it holds, or null to let the caller fall through.
@@ -373,10 +359,11 @@ async function serveDictionaryDelta(url, ext, request, env) {
   if (!tag) return null;
 
   // /a/<base>.<hash8>.<ext> -> /ad/<base>.<hash8>.<tag>.dcz
-  const stem = url.pathname.slice("/a/".length).replace(new RegExp(`\\.${ext}$`), "");
+  const deltaPath = shellDeltaPath(url.pathname, tag);
+  if (!deltaPath) return null;
   let res;
   try {
-    res = await env.ASSETS.fetch(new Request(`${url.origin}/ad/${stem}.${tag}.dcz`, {
+    res = await env.ASSETS.fetch(new Request(`${url.origin}${deltaPath}`, {
       headers: { "accept-encoding": "identity" },
     }));
   } catch { return null; }
@@ -618,6 +605,30 @@ export async function servePrecompressedText(request, env, opts: AssetOptions = 
   return notModifiedIfFresh(request, res);
 }
 
+// twinPolicy: the part of a page's header policy its negotiated Markdown twin
+// takes, which is all of it except two headers that describe the HTML
+// representation. cache-control stays the twin's own no-store (the edge keys the
+// URL, never the Accept), and a rel=preload entry names the shell's stylesheet
+// and script, which a Markdown body never loads. Every other Link entry is about
+// the resource and stays: it is the rule the homepage's twin already followed by
+// hand (HOMEPAGE_DISCOVERY_LINK without SHELL_PRELOAD_LINK), and it is what
+// keeps /inbox's webmention endpoint discoverable from either representation.
+export function twinPolicy(headers: Record<string, string> = {}): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    const key = name.toLowerCase();
+    if (key === "cache-control") continue;
+    if (key === "link") {
+      // split between entries only: a comma inside <...> belongs to a URL
+      const kept = value.split(/,\s*(?=<)/).filter((entry) => !/;\s*rel="?preload"?/i.test(entry)).join(", ");
+      if (kept) out[name] = kept;
+      continue;
+    }
+    out[name] = value;
+  }
+  return out;
+}
+
 // serveStaticPage: static and build-rendered HTML, with a dcz delta when the
 // client holds either the preferred immutable family dictionary or a committed
 // per-page snapshot, otherwise the brotli q11 twin, otherwise the plain asset.
@@ -698,7 +709,10 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
     // decided in one place for every negotiated route. It costs a HEAD one ASSETS
     // subrequest it used to skip; HEAD is rare enough here that an honest
     // content-type is the better side of that trade.
-    const md = await serveMarkdownTwin(request, env, `/${rel}.md`);
+    // The twin is the same page in another representation, so it takes the
+    // page's policy too. Before 2026-10-02 it took none, and a noindex page had
+    // to negotiate by hand ahead of this call to keep its twin noindex.
+    const md = await serveMarkdownTwin(request, env, `/${rel}.md`, twinPolicy(opts.headers));
     if (md) return md;
   }
   // Everything below hands back a precompressed BODY (a dcz delta or the q11 twin)
@@ -725,9 +739,9 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   const findDelta = async () => {
     const tag = dictionaryTag(request);
     if (!tag) return null;
-    for (const base of bases) {
+    for (const deltaPath of pageDeltaPaths(rel, tag)) {
       try {
-        const d = await env.ASSETS.fetch(new Request(`${url.origin}/pd/${base.replace(/\//g, "__")}.${tag}.dcz`, {
+        const d = await env.ASSETS.fetch(new Request(`${url.origin}${deltaPath}`, {
           headers: { "accept-encoding": "identity" },
         }));
         if (d.ok) {

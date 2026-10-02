@@ -99,7 +99,7 @@ test("the build, the roll and the nightly workflow all know the directory", () =
   const build = readFileSync("tools/build.ts", "utf8");
   assert.match(build, /readCommittedFamily\(\)/, "build.ts no longer reads the committed family dictionary");
   assert.match(build, /chooseFamilyDictionary\(/, "build.ts no longer applies the drift rule");
-  assert.match(build, /page-family\.\$\{hash8\(dictionary\)\}\.dict/, "the shipped URL must still be the hash of the CHOSEN bytes");
+  assert.match(build, /familyDictionaryName\(hash8\(dictionary\)\)/, "the shipped URL must still be the hash of the CHOSEN bytes");
   assert.match(build, /FAMILY_REPORT/, "build.ts must record its decision for the roll");
   // The build must never write into the source tree; only the roll commits.
   assert.doesNotMatch(build, /writeCommittedFamily/);

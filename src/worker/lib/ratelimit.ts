@@ -3,8 +3,8 @@ import { isCallable } from "./parse.ts";
 // The site's one per-caller rate limiter. It lived in lens.ts until /mcp's five
 // spending tools and /webmention needed it too; a helper that guards three
 // surfaces should not be named after one of them, which is the move
-// validateLensTarget already made into lib/crawl.ts. lens.ts re-exports it as
-// `overLensBudget` so its twenty call sites read as they always did.
+// validateLensTarget already made into lib/crawl.ts. Every lens door reaches it
+// through lens-pipeline.ts, which charges the budgets in a fixed order.
 //
 // A BUDGET is `{ binding, max }`: the name of a Rate Limiting binding, and the
 // ceiling the module's own 429 message quotes. The two are mirrored rather than
