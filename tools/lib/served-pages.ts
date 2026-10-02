@@ -11,9 +11,15 @@
 
 import { execFileSync } from "node:child_process";
 import { brotliCompressSync, brotliDecompressSync, constants as zc } from "node:zlib";
+import { parsePageSnapshot } from "../../src/worker/lib/dictionary-names.ts";
 
 export const FAMILY_WINDOW = 65_536;
-const PDICT = /(?:^|\/)p-dict\/([^/]+)\.([0-9a-f]{16})\.html\.br$/;
+// A path under any p-dict directory the series ever lived in -> its snapshot.
+const pdictSnapshot = (path: string) => {
+  const at = path.lastIndexOf("/");
+  const inPdict = at >= 0 && (path.slice(0, at) === "p-dict" || path.slice(0, at).endsWith("/p-dict"));
+  return inPdict ? parsePageSnapshot(path.slice(at + 1)) : null;
+};
 
 export type Snap = { slug: string; tag: string; order: number; path: string; commit: string };
 export type State = Map<string, Snap>;
@@ -33,17 +39,17 @@ export function loadServedSeries(): Series {
   for (const line of git(["log", "--reverse", "--no-renames", "--diff-filter=A", "--format=C %H %cs",
     "--name-only", "--", ":(glob)**/p-dict/*.html.br"]).split("\n")) {
     if (line.startsWith("C ")) { const [, c, d] = line.split(" "); cur = { commit: c, date: d }; checkpoints.push(cur); continue; }
-    const m = line.match(PDICT);
+    const m = pdictSnapshot(line);
     if (!m || !cur) continue;
-    const key = `${m[1]}.${m[2]}`;
-    if (!firstSeen.has(key)) firstSeen.set(key, { slug: m[1], tag: m[2], order: firstSeen.size, path: line, commit: cur.commit });
+    const key = `${m.slug}.${m.tag}`;
+    if (!firstSeen.has(key)) firstSeen.set(key, { slug: m.slug, tag: m.tag, order: firstSeen.size, path: line, commit: cur.commit });
   }
   const states = checkpoints.map(({ commit }) => {
     const s: State = new Map();
     for (const path of git(["ls-tree", "-r", "--name-only", commit]).split("\n")) {
-      const m = path.match(PDICT);
+      const m = pdictSnapshot(path);
       if (!m) continue;
-      const snap = firstSeen.get(`${m[1]}.${m[2]}`);
+      const snap = firstSeen.get(`${m.slug}.${m.tag}`);
       if (!snap) continue;
       const held = s.get(snap.slug);
       if (!held || snap.order > held.order) s.set(snap.slug, snap);

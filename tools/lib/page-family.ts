@@ -36,6 +36,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { brotliCompressSync, brotliDecompressSync, constants as zc } from "node:zlib";
 import { zstdCompressDictionaryBatch } from "./zstd-batch.ts";
+import { familyDictionaryName, parseFamilyDictionary } from "../../src/worker/lib/dictionary-names.ts";
 
 export const FAMILY_DICT_DIR = "src/dict/f-dict";
 export const FAMILY_DICT_SIZE = 65_536;
@@ -43,12 +44,13 @@ export const FAMILY_DICT_SIZE = 65_536;
 // of the fresh derivation's. See the header for the arithmetic behind the number.
 export const FAMILY_DRIFT = 0.10;
 
-const NAME = /^page-family\.([0-9a-f]{8})\.dict\.br$/;
 // A zstd --train artifact opens with this magic; RFC 9842 needs RAW bytes.
 const ZSTD_DICT_MAGIC = 0xec30a437;
 
 export const hash8 = (buf: Uint8Array) => createHash("sha256").update(buf).digest("hex").slice(0, 8);
-export const familyFileName = (bytes: Uint8Array) => `page-family.${hash8(bytes)}.dict.br`;
+// Committed brotli'd, so its name is the served dictionary's name plus `.br`.
+export const familyFileName = (bytes: Uint8Array) => `${familyDictionaryName(hash8(bytes))}.br`;
+const committedHash8 = (name: string) => name.endsWith(".br") ? parseFamilyDictionary(name.slice(0, -3)) : null;
 
 export type CommittedFamily = { bytes: Buffer; hash8: string; name: string };
 
@@ -64,8 +66,8 @@ export async function readCommittedFamily(dir = FAMILY_DICT_DIR): Promise<Commit
     throw new Error(`${dir}: expected at most one committed family dictionary, found ${names.length}: ${names.join(", ")}`);
   }
   const [name] = names;
-  const m = NAME.exec(name);
-  if (!m) throw new Error(`${dir}/${name}: not a page-family.<hash8>.dict.br file`);
+  const named = committedHash8(name);
+  if (!named) throw new Error(`${dir}/${name}: not a page-family.<hash8>.dict.br file`);
   const bytes = brotliDecompressSync(await readFile(`${dir}/${name}`));
   if (bytes.length !== FAMILY_DICT_SIZE) {
     throw new Error(`${dir}/${name}: decodes to ${bytes.length} B, expected ${FAMILY_DICT_SIZE}`);
@@ -74,8 +76,8 @@ export async function readCommittedFamily(dir = FAMILY_DICT_DIR): Promise<Commit
     throw new Error(`${dir}/${name}: starts with the zstd --train magic; dcz needs RAW bytes`);
   }
   const actual = hash8(bytes);
-  if (actual !== m[1]) {
-    throw new Error(`${dir}/${name}: the filename names ${m[1]} but the bytes hash to ${actual}`);
+  if (actual !== named) {
+    throw new Error(`${dir}/${name}: the filename names ${named} but the bytes hash to ${actual}`);
   }
   return { bytes, hash8: actual, name };
 }

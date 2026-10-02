@@ -27,11 +27,11 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { DCZ_HEADER_BYTES } from "../src/worker/lib/dictionary-names.ts";
 import { brotliDecompressSync, constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 
 const ORIGIN = "https://aadhar.sh";
 const LEVELS = [3, 6, 19];
-const DCZ_HEADER_BYTES = 40;
 
 interface Reply { status: number; encoding: string; type: string; cacheControl: string; body: Buffer }
 // One page the Worker renders: its size, the brotli it ships, and per level the
