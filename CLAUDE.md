@@ -1442,8 +1442,8 @@ worktrees may edit freely, but a worktree is not a release surface.
 Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets, with a
 `_worker.js` that does server-side enhancement of an otherwise-static
 `index.html`. Every route the Worker owns is one record in
-`src/worker/routes.ts` (since 2026-10-02); `route()` in `src/worker/index.ts`
-walks it, binding each record's id to a handler. "Moving a page" below has the
+`src/worker/routes.ts` (since 2026-10-02); `route()` in `src/worker/dispatch.ts`
+walks it, calling the handler `index.ts` binds to each record's id. "Moving a page" below has the
 list's shape and what derives from it.
 
 ### Key files
@@ -2494,7 +2494,7 @@ the day it was written and rot later.
 **The legacy half has an exit condition now, and it is a count.** Since
 2026-09-22 `mcpRequest` tags every well-formed message with its era
 (`noteEra` in `lib/mcp-protocol.ts`), and the per-request log line in
-`index.ts` carries it as `mcp` (`modern`, `legacy` or `mixed`), `mv` (the
+`dispatch.ts` carries it as `mcp` (`modern`, `legacy` or `mixed`), `mv` (the
 revision declared) and `mc` (the client a legacy `initialize` named). It rides
 the existing line rather than emitting its own, because every log line and span
 is an event on the 200K/day Free quota from 2026-10-01. Group `mcp` over the

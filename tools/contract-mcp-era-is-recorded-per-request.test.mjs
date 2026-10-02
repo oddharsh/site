@@ -2,10 +2,11 @@
 // The legacy half of lib/mcp-protocol.ts exists because pre-2026 clients have
 // no fall-forward mechanism, and it can only be retired on evidence that they
 // stopped calling. noteEra() is that evidence: it tags each request both MCP
-// servers parse, and index.ts's per-request log line carries the tag. These
-// assert the classification on BOTH servers, the narrowing that keeps a
-// caller-controlled string out of the logs, and that the log line reads it.
-import { MODERN_META, assert, context, handleSiteMcp, readFileSync, test } from "./contract-shared.ts";
+// servers parse, and dispatch.ts's per-request log line carries the tag. These
+// assert the classification on BOTH servers and the narrowing that keeps a
+// caller-controlled string out of the logs. That the log line reads it is
+// asserted by calling the dispatcher, in contract-the-dispatch-pipeline.
+import { MODERN_META, assert, context, handleSiteMcp, test } from "./contract-shared.ts";
 import { mcpEraOf } from "../src/worker/lib/mcp-protocol.ts";
 
 const serendipity = await import("../serendipity/serendipity.ts");
@@ -67,13 +68,3 @@ for (const server of ["site", "serendipity"]) {
     assert.equal(mcpEraOf(request), undefined);
   });
 }
-
-test("the per-request log line carries the MCP era", () => {
-  const source = readFileSync(new URL("../src/worker/index.ts", import.meta.url), "utf8");
-  const line = source.slice(source.indexOf("console.log(JSON.stringify({"));
-  const body = line.slice(0, line.indexOf("}));"));
-  assert.match(source, /const mcpEra = mcpEraOf\(request\);/);
-  for (const field of ["mcp: mcpEra?.era", "mv: mcpEra?.version", "mc: mcpEra?.client"]) {
-    assert.ok(body.includes(field), `log line is missing ${field}`);
-  }
-});

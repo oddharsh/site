@@ -36,12 +36,9 @@ test("early data: the GET-shaped writes answer 425, everything else passes", asy
   assert.equal(earlyDataDenial(new Request("https://aadhar.sh/hit", { headers: { "early-data": "0" } }), "/hit"), null);
 });
 
-test("early data: the guard runs in the dispatcher ahead of routing, and the setting is declared", () => {
-  const idx = readFileSync("src/worker/index.ts", "utf8");
-  const guard = idx.indexOf("earlyDataDenial(request, url.pathname)");
-  const routing = idx.indexOf("await route(request, env, ctx)");
-  assert.ok(guard !== -1, "index.ts no longer calls earlyDataDenial");
-  assert.ok(routing !== -1 && guard < routing, "the early-data guard must run before route(): a guard after routing has already lost");
+// That the guard runs ahead of routing is asserted by calling the dispatcher
+// (contract-the-dispatch-pipeline); this half is the setting it exists for.
+test("early data: the zone setting the guard exists for is declared", () => {
   const infra = JSON.parse(readFileSync("config/infra.json", "utf8"));
   assert.equal(infra.zone?.zero_rtt?.setting, "0rtt", "infra.json must declare the zone setting the guard exists for");
   assert.equal(infra.zone?.zero_rtt?.value, "on");

@@ -214,7 +214,7 @@ export interface EnvInjected {
   BOT_ROBOTS_CACHE?: Map<string, Promise<BotRobotsRead>>;
   /**
    * In-process dispatch back into this Worker, so a /lens self-scan costs no
-   * wire request. index.ts sets it to NULL on the inner env, which is what stops
+   * wire request. dispatch.ts sets it to NULL on the inner env, which is what stops
    * a self-scan recursing forever, so the type has to admit null rather than
    * only absence. Callers read it as
    * `env.SELF_FETCH ? env.SELF_FETCH(req) : env.ASSETS.fetch(req)`.
