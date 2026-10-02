@@ -8,6 +8,7 @@ import {
   zlibConstants,
 } from "./contract-shared.ts";
 import { asRecord } from "../src/worker/lib/parse.ts";
+import { hashOrder, minifiedScripts } from "./lib/client-assets.ts";
 
 // ── the Reader lens (/lens/read, lens-reader/) ───────────────────────────────
 // The Reader lens is the one /lens surface that lives in a DIFFERENT Worker, so
@@ -144,7 +145,6 @@ test("a ?lens= deep link works for every tab in the strip", async () => {
 test("the idle Lens shell defers its full client without losing the first action", () => {
   const server = readFileSync("./src/worker/lens.ts", "utf8");
   const boot = readFileSync("./src/client/lens-boot.js", "utf8");
-  const build = readFileSync("./tools/build.ts", "utf8");
 
   assert.match(server, /scripts: (?:unsafeHtml\()?`<script src="\/lens-boot\.js" defer><\/script>`/,
     "the server-rendered idle shell must load only the bootstrap");
@@ -195,16 +195,21 @@ test("the idle Lens shell defers its full client without losing the first action
     assert.ok(hydrated.has(key), `lens.js reads ?${key}= but lens-boot.js will not eagerly hydrate for it`);
   }
 
-  assert.match(build, /\["lens-boot\.js", "\/lens-boot\.src\.js", "requestSubmit"\]/,
+  // The registry is what the build minifies and hashes from, and the order it
+  // hashes in is derived from the declared loaders (tools/lib/client-assets.ts).
+  assert.deepEqual(minifiedScripts().find((row) => row.file === "lens-boot.js"),
+    { file: "lens-boot.js", twin: "/lens-boot.src.js", marker: "requestSubmit", module: false },
     "the bootstrap must be minified with a readable source twin");
-  assert.match(build, /\{ file: "\/lens\.js",\s+base: "lens"/,
-    "the full client must be content-hashed as a string-loaded dependency");
-  assert.match(build, /from: "\/lens-boot\.js",\s+base: "lens-boot"/,
-    "the shell must receive the final content-hashed bootstrap");
-  assert.ok(build.indexOf('{ file: "/lens-tools.js"') < build.indexOf('{ file: "/lens.js"'),
-    "Lens feature modules must be hashed before the application that loads them");
-  assert.ok(build.indexOf("for (const a of STRING_ASSETS)") < build.indexOf("for (const a of ASSETS)"),
-    "string-loaded applications must be hashed before the shell assets that import them");
+  const order = hashOrder().map((asset) => asset.file);
+  const at = (file) => {
+    assert.ok(order.includes(file), `${file} must be content-hashed`);
+    return order.indexOf(file);
+  };
+  for (const feature of ["lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js"]) {
+    assert.ok(at(feature) < at("lens.js"), `${feature} must be hashed before the application that loads it`);
+  }
+  assert.ok(at("lens.js") < at("lens-boot.js") && at("lens-webmcp.js") < at("lens-boot.js"),
+    "the bootstrap must be hashed last, so the shell receives a URL covering the whole lazy chain");
 });
 
 test("the reader never renders an unmeasurable phase as 0 ms", () => {

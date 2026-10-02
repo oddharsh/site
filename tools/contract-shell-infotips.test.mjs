@@ -34,6 +34,7 @@ import {
   workerModule,
 } from "./contract-shared.ts";
 import { SPECULATION } from "./photos/shell-data.ts";
+import { CLIENT_ASSETS, hashOrder, minifiedScripts } from "./lib/client-assets.ts";
 import { existsSync, readFileSync } from "node:fs";
 
 // ── shell infotips ──────────────────────────────────────────────────────────
@@ -99,14 +100,17 @@ test("an infotip row is dropped rather than filled in", async () => {
 });
 
 test("the shell infotip ships minified, hashed, and with a readable twin", async () => {
-  const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
-  // Missing from SHELLS it would ship unminified with no /infotip.src.js twin;
-  // missing from STRING_ASSETS its import specifier would stay unhashed and
-  // the module would serve at max-age=300 forever beside its immutable peers.
-  assert.match(build, /\["infotip\.js",\s*"\/infotip\.src\.js"/, "infotip.js belongs in SHELLS");
-  assert.match(build, /\{ file: "\/infotip\.js",\s*base: "infotip"/, "and in STRING_ASSETS, so nav.js's import() is repointed");
-  const shells = build.slice(build.indexOf("const SHELLS = ["));
-  assert.ok(shells.indexOf('"/hoist.js"') < shells.indexOf('{ file: "/infotip.js"'),
+  // Missing from the client asset registry it would ship unminified with no
+  // /infotip.src.js twin; without an import loader its specifier would stay
+  // unhashed and the module would serve at max-age=300 forever beside its
+  // immutable peers.
+  assert.equal(minifiedScripts().find((row) => row.file === "infotip.js")?.twin, "/infotip.src.js", "infotip.js belongs in the registry");
+  const infotip = CLIENT_ASSETS.find((asset) => asset.file === "infotip.js");
+  assert.ok(infotip, "infotip.js is a registry row");
+  assert.ok(infotip.load.some((loader) => loader.via === "import"), "nav.js's import() must be repointed");
+  assert.ok(infotip.loadedBy.includes("public/nav.js"), "and nav.js is the loader the build witnesses");
+  const order = hashOrder().map((asset) => asset.file);
+  assert.ok(order.indexOf("hoist.js") < order.indexOf("infotip.js"),
     "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
 });
 
