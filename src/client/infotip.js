@@ -158,7 +158,64 @@ export function start(o) {
     }
     return writingCount;
   };
+  // The GitHub shortcut says what the profile behind it has been doing, ranked
+  // the way the work matters: PRs to other people's repositories, then issues
+  // filed on them, then commits to my own. /github.json carries all three
+  // (github.ts), read once per page on the first hover that asks. Until it
+  // lands, or if it never does, the shortcut keeps its ordinary card below.
+  const GITHUB = "https://github.com/oddharsh";
+  const isGithub = (t) => t.matches(".axp-ico") && t.getAttribute("href") === GITHUB;
+  let gh = null, ghAsked = false;
+  const loadGithub = (t) => {
+    if (ghAsked) return;
+    ghAsked = true;
+    fetch("/github.json", { headers: { accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j && j.prs && j.issues && j.commits) { gh = j; reshow(t); } })
+      .catch(() => {});
+  };
+  const shortDay = (iso) => {
+    try {
+      return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", timeZone: "UTC" })
+        .format(new Date(String(iso).slice(0, 10) + "T00:00:00Z"));
+    } catch (_) { return ""; }
+  };
+  const nameOnly = (repo) => String(repo).replace(/^oddharsh\//, "");
+  const ghTip = (g) => {
+    const pr = g.prs, is = g.issues, co = g.commits;
+    const head = (label, tail) =>
+      `<div class="gh-s"><b>${esc(label)}</b>${tail ? `<span>${esc(tail)}</span>` : ""}</div>`;
+    let out = `<div class="n">GitHub · ${esc(g.user)}</div>` +
+      `<div class="h">since ${esc(shortDay(g.since))}</div>`;
+
+    // Tier 1, the most room: each repository with its count and latest title.
+    if (pr.repos.length) {
+      out += head("Pull requests", [plural(pr.total, "PR"), pr.merged && pr.merged + " merged", pr.open && pr.open + " open"].filter(Boolean).join(" · "));
+      out += pr.repos.slice(0, 4).map((r) =>
+        `<div class="gh-r"><span class="gh-repo">${esc(r.repo)}</span><span class="gh-c">${r.count}</span></div>` +
+        `<div class="gh-t">${esc(r.latest.title)}${r.latest.state === "merged" ? " ✓" : ""}</div>`).join("");
+      if (pr.repos.length > 4) out += `<div class="gh-more">+ ${plural(pr.repos.length - 4, "more repo")}</div>`;
+    }
+    // Tier 2: the newest issues, because an issue's title is its content.
+    if (is.items.length) {
+      out += head("Issues", plural(is.total, "issue") + (is.repoCount > 1 ? ` · ${is.repoCount} repos` : ""));
+      out += is.items.slice(0, 3).map((i) =>
+        `<div class="gh-t"><span class="gh-repo">${esc(i.repo)}</span> ${esc(i.title)}</div>`).join("");
+    }
+    // Tier 3, one line: where the commits went, by repository.
+    if (co.repos.length) {
+      const covered = co.coveredSince !== g.since ? `since ${shortDay(co.coveredSince)}` : "";
+      out += head("Commits to my repos", [plural(co.total, "commit"), covered].filter(Boolean).join(" · "));
+      out += `<div class="gh-t">${co.repos.slice(0, 5).map((r) => `${esc(nameOnly(r.repo))} ${r.count}`).join(" · ")}</div>`;
+    }
+    return `<div class="gh">${out}</div>`;
+  };
+
   const icoTip = (a) => {
+    if (isGithub(a)) {
+      if (gh) return ghTip(gh);
+      loadGithub(a);
+    }
     const name = (a.querySelector(".t") || {}).textContent || a.dataset.key || "";
     const ext = a.target === "_blank";
     const target = ext ? destination(a) : a.getAttribute("href") || "";
@@ -287,6 +344,7 @@ export function start(o) {
     // roughly the same moment.
     openMs: 400,
     autopopMs: 6000,
+    autopopFor: (t) => (gh && isGithub(t) ? 20000 : 6000),
   });
 
   // A tip already on screen when its data arrives should say the new thing

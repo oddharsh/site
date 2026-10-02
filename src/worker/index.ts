@@ -43,6 +43,7 @@ import {
   PREFIX_ROUTES, READING_LIST_URL, WHOAREYOU_VALUES_URL, type ExactPath, type PrefixLabel,
 } from "./routes.ts";
 import { handleReading, handleReadingList } from "./reading.ts";
+import { handleGithubJson } from "./github.ts";
 import { cronEnrichReadingHn } from "./reading-hn.ts";
 import { handleRun } from "./run.ts";
 import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.ts";
@@ -436,6 +437,7 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/security.json": handleSecurityJson,
   "/reading": handleReading,
   [READING_LIST_URL]: handleReadingList,
+  "/github.json": handleGithubJson,
   "/updates": routeUpdates,
   "/updates.json": handleUpdatesJson,
   "/restore": routeRestore,
