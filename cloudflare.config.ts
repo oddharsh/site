@@ -26,6 +26,7 @@
 // per request". It is a deterministic document now and carries the same q11
 // twin, dcz delta, and ETag as every other page.)
 import { bindings, defineConfig, defineWorker, exports, triggers } from "@cloudflare/config/public";
+import { RUN_WORKER_FIRST } from "./src/worker/routes.ts";
 
 const worker = defineWorker({
   name: "aadhar-sh",
@@ -199,122 +200,15 @@ const worker = defineWorker({
     // directly, /garage/ + /lwe/ 301 to the slashless form. Local dev inherits
     // it (config/dev/ spreads this config), so the two cannot diverge.
     htmlHandling: "drop-trailing-slash",
-    // Worker-owned routes only. New static files do not cost invocations unless
-    // they are added here and to the ROUTES/PREFIX tables in index.ts.
-    //
-    // /images/<thumb> stays worker-first for one narrow reason: a real 404 under
-    // /images/* must not inherit the immutable thumbnail cache rule. The old
-    // Pages SPA-fallback content-type sniff is gone; the Worker now only clamps
-    // asset 404 cache-control and passes every non-404 response through.
-    runWorkerFirst: [
-      "/", "/index.html", "/favicon.ico", "/hit",
-      // the content-hashed shell: worker-first so it can hand out the q11 .br twin
-      "/a/*",
-      // static pages: worker-first for the dcz delta + brotli q11 twin.
-      // The bare section paths are listed SEPARATELY because "/garage/*" does not
-      // match "/garage"; without them the two section indexes never reached the
-      // worker at all, so their twins were built, uploaded, and never served
-      // (2026-07-28). Same shape as "/lens", "/lens/" and "/photos", "/photos/".
-      "/garage", "/garage/*", "/lwe", "/lwe/*",
-      "/pixel-peeper", "/pixel-peeper/*",
-      "/access", "/access/*",
-      "/dotfiles", "/dotfiles/*",
-      "/auth.md",
-      // The whole agent-discovery namespace, FOLDED from five exact rows on
-      // 2026-09-16 (api-catalog, agent-card.json, the two oauth documents, and
-      // the signed http-message-signatures-directory, which needs the Worker for
-      // its per-request proof of possession). The fold frees four rows and
-      // brings the static cards (mcp/*.json, ard.json, ai-catalog.json) to the
-      // Worker for their q11 twins; they were the one discovery surface still
-      // shipping at the edge's q4.
-      "/.well-known/*",
-      "/agent/*", "/oauth2/*",
-      // /whoareyou (a built page), /whoareyou.json, and the page's values island
-      // at /whoareyou/values.html, folded onto one row 2026-09-25 like "/security*".
-      // /whoareyou.md is already claimed by "/*.md" below.
-      "/whoareyou*",
-      // /security and /security.json (the page is built, the JSON is its three
-      // live connection values). /security.md is already claimed by "/*.md" below.
-      "/security*",
-      // "/reading*" covers the page and its island at /reading/list.html
-      // (2026-09-29); nothing static lives under /reading.
-      "/reading*", "/updates", "/updates.json",
-      "/perf",
-      "/perf.json", "/restore",
-      // FOLDED onto a wildcard 2026-08-11, from eight exact rows ("/lens",
-      // "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser",
-      // "/lens/compare.json", "/lens/census", "/lens/census.json") to two.
-      // This config sat at exactly 100 of the 100 allowed rules, so /lens/wire
-      // could not be added as a ninth row at any price (gotcha 26 in CLAUDE.md),
-      // and the fold is the remedy that note recommends. It frees six.
-      //
-      // Safe because NOTHING static lives under /lens/: the three client scripts
-      // are top-level (/lens.js, /lens-browser.js, /lens-reader.js) and a
-      // wildcard on "/lens/" cannot reach them. "/lens.txt" is likewise outside
-      // it and keeps its own row. /lens/read belongs to the separate lens-reader
-      // Worker via a ZONE ROUTE, which is matched before this config is
-      // consulted, so widening the site Worker's claim here does not touch it.
-      "/lens", "/lens/*",
-      "/mcp",
-      // The retired console: one wildcard for the 410 at /terminal and under it.
-      "/terminal*",
-      // One wildcard per tool covers both the bare route and its .txt twin.
-      // NOT cosmetic: run_worker_first caps at 100 RULES (wrangler refuses to
-      // boot at 101), and twelve exact entries put this config at 102. A site
-      // can only claim so many paths from the asset layer, which is a real
-      // ceiling on how many surfaces you can add this way.
-      "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*", "/encode*",
-      "/photos.txt", "/lens.txt",
-      "/search", "/search.json", "/ask",
-      "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
-      "/slots", "/book", "/approve", "/decline",
-      "/llms-full.txt", "/ledger", "/ledger.json",
-      // one glob for the ledger's sub-routes: the activation beacon and the
-      // speculation readback. Nothing static lives under /ledger/.
-      "/ledger/*",
-      "/writing", "/writing/*",
-      // "/inbox*" covers the page and its island at /inbox/mail.html (2026-09-25);
-      // nothing static lives under it, and /inbox.md is "/*.md"'s anyway.
-      "/webmention", "/webmention/*", "/inbox*",
-      // "/rn.md" carries an extension, so without it here the asset layer would
-      // answer first and 404 a route the worker renders.
-      "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
-      // "/around*" folds "/around", "/around/json" and "/around/changes.json",
-      // and covers the page's island at /around/snapshot.html (2026-09-25).
-      // Nothing static lives under /around; /around.md is "/*.md"'s anyway.
-      "/bot", "/around*",
-      // "/photos/*" FOLDS the three exact sub-rows it replaced ("/photos/",
-      // "/photos/query.json", "/photos/grid.html"), 2026-09-12. Nothing static
-      // lives under /photos/ (no public/photos, no src/pages/photos), so the
-      // wildcard claims only Worker routes. The two rows it freed pay for the
-      // first album below; the config is back at 98 of 100 after it.
-      "/photos", "/photos/*", "/run",
-      // albums (src/worker/albums.ts): each is a root-level generated page plus
-      // its slashed twin, and needs its own pair here because a root path has no
-      // wildcard to inherit. The next album costs two rows; fold before adding.
-      "/cota-wec", "/cota-wec/",
-      "/images", "/images/", "/images/full", "/images/full/*",
-      "/images/manifest.json", "/images/metadata.json", "/images/meta/*",
-      "/images/*.avif", "/images/*.jpg", "/images/*.jpeg",
-      "/images/*.png", "/images/*.gif",
-      "/images/*.heic", "/images/*.heif", "/images/*.hif",
-      // Five rules for the brotli q11 twins of static text assets, added
-      // 2026-08-31. Without them these paths never reach the Worker and ship
-      // edge-compressed at ~q4, 12-24% larger than the twin the build already
-      // writes. /garage/*, /lwe/*, /writing/*, /pixel-peeper/* and
-      // /images/meta/* were worker-first already and needed nothing here. `*`
-      // spans slashes in this allowlist (build.ts's own coverage check reads it
-      // that way), so "/*.md" claims every Markdown twin at any depth and
-      // "/images/*.json" the data indexes beside meta/. This put the config at
-      // 98 of the 100 rules wrangler allows; the /.well-known fold above
-      // (gotcha 26's remedy) took it back down, and "/*.src.*" (the readable
-      // twins at the root: index.src.html, nav.src.js, luna.src.css) spent one of
-      // the freed rows.
-      "/images/*.json", "/*.md", "/*.src.*", "/search-index.json", "/llms.txt", "/sitemap.xml",
-      // q11 everywhere, 2026-09-26: the section icons (favicons on 12 pages) and
-      // /resume.json, both at the edge's q4 until their twins had a route.
-      "/section-icons/*", "/resume.json",
-    ],
+    // Worker-owned routes only: static is the default, and a path earns a
+    // Worker invocation by being claimed here. DERIVED since 2026-10-02 from
+    // the route list in src/worker/routes.ts, where each route declares the
+    // rows it needs and every fold (a wildcard standing for several routes)
+    // carries the reason it is safe. That is also where to look before adding
+    // one: wrangler refuses to boot past 100 rows (gotcha 26), and
+    // contract-the-route-list-derives-every-route-list holds the count and the
+    // coverage of every route.
+    runWorkerFirst: [...RUN_WORKER_FIRST],
   },
 
   // `enabled` is Workers LOGS (the structured line serveWorkerRequest emits).

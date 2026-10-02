@@ -740,12 +740,18 @@ export async function lensFrame(env, request, state, ctx) {
       status: keyHints([["&url=", "inspect a target"]]),
     };
   }
-  const inspected = await LENS_INSPECT.run({ url: state.url, skipBotViews: true }, request, env, ctx);
-  if (inspected.kind !== "ok") {
-    return refusalFrame("lens", inspected, {
-      failed: "the target could not be inspected.",
-      refusedStatus: keyHints([["&url=", "try another target"]]),
-    });
+  const target = validateLensTarget(state.url);
+  if (!target.ok) {
+    return { title: "lens — refused", body: [[s(target.error, "bad")]], status: keyHints([["&url=", "try another target"]]) };
+  }
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
+    return { title: "lens — rate limited", body: [[s(`${LENS_BUDGETS.inspect.max} lookups a minute, shared with /lens/fetch. Try again shortly.`, "warn")]], status: [] };
+  }
+  let obs;
+  try {
+    obs = lensObservationSummary(await lensInspect(target.url, env, { skipBotViews: true }));
+  } catch {
+    return { title: "lens — failed", body: [[s("the target could not be inspected.", "bad")]], status: [] };
   }
   const obs = lensObservationSummary(inspected.value);
   const target = { url: obs.url };
@@ -838,10 +844,13 @@ export async function dictFrame(env, request, state, ctx) {
     };
   }
 
-  const gated = await TERMINAL_DICT.run({ url: state.url }, request, env, ctx);
-  if (gated.kind !== "ok") return refusalFrame("dict", gated);
-  const { url, value: audit } = gated.value;
-  const target = { url };
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "dict — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
+    return { title: "dict — rate limited", body: [[s(`Shares Lens's ${LENS_BUDGETS.inspect.max}/min budget. Try again shortly.`, "warn")]], status: [] };
+  }
+
+  const audit = await auditUrl(target.url, env);
   if (!audit.ok) {
     return {
       title: "dict — unreadable",
@@ -912,10 +921,13 @@ export async function cacheFrame(env, request, state, ctx) {
     };
   }
 
-  const gated = await TERMINAL_CACHE.run({ url: state.url }, request, env, ctx);
-  if (gated.kind !== "ok") return refusalFrame("cache", gated);
-  const { url, value: probe } = gated.value;
-  const target = { url };
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "cache — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
+    return { title: "cache — rate limited", body: [[s(`Shares Lens's ${LENS_BUDGETS.inspect.max}/min budget. Try again shortly.`, "warn")]], status: [] };
+  }
+
+  const probe = await probeRevalidation(target.url, env);
   if (!probe.ok) {
     return {
       title: "cache — unreadable",
@@ -956,8 +968,12 @@ export async function agentReadyRoute(env, request, state, ctx) {
   if (!state.url.trim()) {
     return agentReadyFrame(`https://${CANONICAL_HOST}/`, env, { self: true });
   }
-  const gated = await TERMINAL_AGENT_READY.run({ url: state.url }, request, env, ctx);
-  return gated.kind === "ok" ? gated.value.value : refusalFrame("agent-ready", gated);
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "agent-ready — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
+    return { title: "agent-ready — rate limited", body: [[s(`Shares Lens's ${LENS_BUDGETS.inspect.max}/min budget. Try again shortly.`, "warn")]], status: [] };
+  }
+  return agentReadyFrame(target.url, env);
 }
 
 // ── encode: what did your encoder actually do? ────────────────────────────
@@ -983,10 +999,13 @@ export async function encodeFrame(env, request, state, ctx) {
     };
   }
 
-  const gated = await TERMINAL_ENCODE.run({ url: state.url }, request, env, ctx);
-  if (gated.kind !== "ok") return refusalFrame("encode", gated);
-  const { url, value: got } = gated.value;
-  const target = { url };
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "encode — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
+    return { title: "encode — rate limited", body: [[s(`Shares Lens's ${LENS_BUDGETS.inspect.max}/min budget. Try again shortly.`, "warn")]], status: [] };
+  }
+
+  const got = await fetchImageBytes(target.url, env, lensFetch);
   if (!got.ok) {
     return {
       title: "encode — unreadable",

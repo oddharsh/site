@@ -110,9 +110,9 @@ test("the route serves the bake, and the island stays out of Workers Cache", asy
   // cal invalidates the slot list through caches.default on every booking
   // action. Workers Cache answers before the Worker runs and those deletes never
   // reach it, so a fragment admitted there would outlive a booking.
-  const cacheable = index.match(/const WORKERS_CACHEABLE_PATHS = new Set\("([^"]+)"/)?.[1].split(" ") ?? [];
-  assert.ok(cacheable.includes("/coffee"), "the page is a static document like /reading and /around");
-  assert.ok(!cacheable.includes(SLOTS_URL), "the slots island must not sit behind Workers Cache");
+  const { CACHEABLE_PATHS } = await import("../src/worker/routes.ts");
+  assert.ok(CACHEABLE_PATHS.has("/coffee"), "the page is a static document like /reading and /around");
+  assert.ok(!CACHEABLE_PATHS.has(SLOTS_URL), "the slots island must not sit behind Workers Cache");
 
   const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, ".*") + "$");
   const config = "cloudflare.config.ts";

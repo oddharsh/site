@@ -17,6 +17,7 @@ const EVENTS = [
 ];
 
 // A D1 that answers the dashboard's two queries and nothing else.
+/** @param {Array<Omit<(typeof EVENTS)[number], "start_at"> & {start_at: string | null}>} events */
 function fakeDb(events = EVENTS) {
   return { prepare(sql) {
     const bound = { all: async () => ({ results: /FROM events e/.test(sql) ? events : [] }), first: async () => (/COUNT\(\*\) AS n/.test(sql) ? { n: 3 } : null) };
@@ -116,4 +117,35 @@ test("the agents page is a deterministic bake, and the live arm still renders it
     assert.equal(live.status, 200);
     assert.equal(await live.text(), a, "the bake and the live render are the same bytes");
   });
+});
+
+test("shared event HTML normalizes offsets and zoneless dates, labels UTC, and tolerates invalid dates", async () => {
+  const events = [
+    { ...EVENTS[0], id: "offset", start_at: "2026-10-02T21:00:00-04:00" },
+    { ...EVENTS[0], id: "zoneless", start_at: "2026-10-03 01:00:00" },
+    { ...EVENTS[0], id: "invalid", start_at: "invalid" },
+    { ...EVENTS[0], id: "unknown", start_at: null },
+  ];
+  await withCache(async (_c, ctx) => {
+    const response = await handleSerendipity(new Request("https://aadhar.sh" + EVENTS_URL), { SERENDIPITY_DB: fakeDb(events) }, ctx);
+    const body = await response.text();
+    assert.equal((body.match(/datetime="2026-10-03T01:00:00.000Z"/g) || []).length, 2);
+    assert.match(body, /Sat, Oct 3 · 1:00 AM UTC<\/time>/);
+    assert.match(body, /data-start="2026-10-03T01:00:00.000Z"/);
+    assert.match(body, /date TBD/);
+    assert.equal(response.headers.get("set-cookie"), null);
+  });
+});
+
+test("event detail pages ship the same UTC time markup and client as the dashboard", async () => {
+  const db = { prepare(sql) {
+    const bound = { all: async () => ({ results: [] }), first: async () => /SELECT id, name, description/.test(sql) ? { ...EVENTS[0], start_at: "2026-10-03 01:00:00" } : null };
+    return { ...bound, bind: () => bound };
+  } };
+  const response = await handleSerendipity(new Request("https://aadhar.sh/serendipity/event/e1"), { SERENDIPITY_DB: db }, { waitUntil() {} });
+  const body = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(body, /<time data-event-time datetime="2026-10-03T01:00:00.000Z">Sat, Oct 3 · 1:00 AM UTC<\/time>/);
+  assert.match(body, /<script src="\/serendipity.js" defer><\/script>/);
+  assert.match(await renderSerendipityPage().text(), /<script src="\/serendipity.js" defer><\/script>/);
 });

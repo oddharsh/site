@@ -29,7 +29,8 @@
 // Same reasoning as the Reader lens, one step stronger, because a second fetch
 // of a page costs the origin bandwidth and a second /ask costs them compute.
 import { foreignNlwebAsk } from "./lib/doors.ts";
-import { defineLens } from "./lens-pipeline.ts";
+import { jsonResponse } from "./lib/http.ts";
+import { guardedRead } from "./lens-guard.ts";
 
 const NLWEB_CACHE_SECONDS = 3600;
 // The visitor may ask their own question, because "what does this endpoint
@@ -42,19 +43,24 @@ const NLWEB_CACHE_SECONDS = 3600;
 const MAX_QUERY = 200;
 const DEFAULT_QUERY = "what is this site about";
 
-const LENS_NLWEB = defineLens({
-  span: "lens.nlweb",
-  budget: "nlweb",
-  targets: (params: URLSearchParams) => params.get("url") || "",
-  args: (params) => ({ query: String(params.get("q") || "").trim().slice(0, MAX_QUERY) || DEFAULT_QUERY }),
-  // Keyed on the QUERY as well as the origin. Keying on origin alone would show
-  // one visitor's answer to another visitor's question, which on a surface whose
-  // whole claim is "this is what the machine actually got" is the exact lie it
-  // exists to prevent.
-  cache: { prefix: "lens:nlweb:", ttl: NLWEB_CACHE_SECONDS, key: (url, { query }) => new URL(url).origin + "\n" + query },
-  run: async ({ target, args: { query }, env, span: s }) => {
-    const origin = new URL(target).origin;
-    const host = new URL(origin).hostname;
+export function handleLensNlweb(request, env) {
+  const params = new URL(request.url).searchParams;
+  const query = String(params.get("q") || "").trim().slice(0, MAX_QUERY) || DEFAULT_QUERY;
+
+  return guardedRead(request, env, undefined, {
+    span: "lens.nlweb",
+    url: params.get("url") || "",
+    budget: "nlweb",
+    limited: (max) => `NLWeb reads are rate-limited to ${max}/min, because each one asks somebody else's server a real question. Hang on a moment.`,
+    // Keyed on the QUERY as well as the origin. Keying on origin alone would show
+    // one visitor's answer to another visitor's question, which on a surface whose
+    // whole claim is "this is what the machine actually got" is the exact lie it
+    // exists to prevent.
+    cache: { tab: "nlweb", identity: (url) => new URL(url).origin + "\n" + query, ttl: NLWEB_CACHE_SECONDS },
+    run: async (url, s) => {
+    const origin = new URL(url).origin;
+    const host = (() => { try { return new URL(origin).hostname; } catch { return undefined; } })();
+
     const probe = await foreignNlwebAsk(origin, env, { query });
 
     if (!probe.ok) {
@@ -82,6 +88,7 @@ const LENS_NLWEB = defineLens({
   },
 });
 
-export function handleLensNlweb(request, env, ctx?) {
-  return LENS_NLWEB.handle(request, env, ctx);
+    return { ok: true, origin, host, ...probe };
+    },
+  });
 }

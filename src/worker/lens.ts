@@ -16,6 +16,7 @@ import { asRecord, asText } from "./lib/parse.ts";
 import { parseMcpBody } from "./lib/mcp-protocol.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
 import { VIEW_SAMPLE, classifyWalls } from "./lens-walls.ts";
+import { LENS_BUDGETS, browserRunMissing, guardedRead, lensCacheKey, lensSha256Hex, type LensCacheForm } from "./lens-guard.ts";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -393,13 +394,19 @@ export function lensParseCap(env: { LENS_PARSE_KB?: unknown } | undefined): numb
 // account's minute and the next visitor got a failure that read like a bug.
 export const BROWSER_FREE_PLAN = { perMinute: 6, perDayMinutes: 10, concurrent: 3 };
 
-// The budgets, the cache helpers and the request pipeline live in
-// lens-pipeline.ts since 2026-10-02, where every lens door runs through one
-// ordered sequence of validate, cache, budget and run. Re-exported here because
-// the contract suite and the auxiliary modules have always read them from this
-// file. `overLensBudget` is gone: its twenty call sites were the copies the
-// pipeline replaced, and the limiter itself is lib/ratelimit.ts's overBudget.
-export { LENS_BUDGETS, budgetMessage, lensPngHeaders, lensSha256Hex } from "./lens-pipeline.ts";
+// The table itself lives in lens-guard.ts, beside the one module that quotes a
+// ceiling in a 429. Re-exported because every other caller and the contract
+// test that pins it to the wrangler configs name it on this module.
+export { LENS_BUDGETS, lensSha256Hex };
+
+// Returns true when the caller is already over their per-minute budget.
+//
+// The implementation moved to lib/ratelimit.ts when /mcp and /webmention became
+// the second and third surfaces to need it. Re-exported under the lens name
+// because twenty call sites across eight modules read
+// `overLensBudget(LENS_BUDGETS.x, ...)`, and renaming those is a sweep rather
+// than part of moving the function.
+export const overLensBudget = overBudget;
 
 // ── /lens — "the other web" -----------------------------------------------
 // A URL goes in; what a MACHINE sees comes out, across five lenses: page
@@ -696,26 +703,15 @@ export function lensVsFragment(payload) {
 }
 
 
-// One inspection, four doors: /lens/fetch and the SSR shell here, the
-// lens_inspect and lens_page MCP tools, and the terminal's lens frame. They
-// bill one budget through one spec, so no door can be the cheaper way in.
-export const LENS_INSPECT = defineLens({
-  budget: "inspect",
-  targets: (input: { url?: string | null; phases?: string[]; skipBotViews?: boolean }) => input.url || "",
-  // Only the options a door asked for reach lensInspect, so /lens/fetch with no
-  // ?phases calls it with {} exactly as it always did.
-  args: (input) => {
-    const opts: { phases?: string[]; skipBotViews?: boolean } = {};
-    if (input.phases) opts.phases = input.phases;
-    if (input.skipBotViews) opts.skipBotViews = true;
-    return opts;
-  },
-  run: async ({ target, args, env }) => ({ ok: true, value: await lensInspect(target, env, args) }),
-  onThrow: (e) => ({
-    status: 502,
-    payload: { ok: false, error: asRecord(e)?.name === "TimeoutError" ? "The site took too long to answer (8s timeout)." : lensErrorText(e) },
-  }),
-});
+async function inspectLensRequest(request, env, ctx) {
+  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  if (!v.ok) return { status: 400, payload: { ok: false, error: v.error } };
+
+  // best-effort per-IP rate limit so the proxy can't be turned into a firehose.
+  // Shared with /mcp's lens_inspect tool (same bucket, see LENS_BUDGETS).
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
+    return { status: 429, payload: { ok: false, error: `Slow down — ${LENS_BUDGETS.inspect.max} lookups a minute. Try again shortly.` } };
+  }
 
 async function inspectLensRequest(request, env, ctx) {
   const params = new URL(request.url).searchParams;
@@ -1716,22 +1712,23 @@ export function lensParseCloudflareAgentScore(body, contentType = "") {
   };
 }
 
-// The cache is read BEFORE the inspect budget now, the order every other lens
-// keeps. This route charged first until 2026-10-02, with no comment saying
-// why, so a reader whose score was already in KV could still be refused it.
-//
-// Only an available score is cached. "Could not be read", "did not answer"
-// and a thrown fetch all answer 200 with `available: false`, the shape the
-// pane already renders, and none of them may sit in KV for six hours.
-const LENS_CLOUDFLARE_SCORE = defineLens({
-  budget: "inspect",
-  targets: (params: URLSearchParams) => params.get("url") || "",
-  cache: {
-    prefix: "lens:cloudflare-score:",
-    ttl: CLOUDFLARE_SCORE_TTL,
-    usable: (entry) => !!entry && entry.available === true,
-  },
-  run: async ({ target }) => {
+export async function handleLensCloudflareScore(request, env, ctx) {
+  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
+    return jsonResponse({ ok: false, error: `Slow down — ${LENS_BUDGETS.inspect.max} lookups a minute. Try again shortly.` }, 429);
+  }
+
+  const cacheKey = "lens:cloudflare-score:" + (await lensSha256Hex(v.url));
+  if (env && env.RN_KV) {
+    try {
+      const cached = await env.RN_KV.get(cacheKey, "json");
+      if (cached && cached.available) return jsonResponse({ ok: true, cached: true, ...cached });
+    } catch (_e) { /* an advisory source must not fail because its cache did */ }
+  }
+
+  const deadline = AbortSignal.timeout(CLOUDFLARE_SCORE_TIMEOUT_MS);
+  try {
     const response = await fetch(CLOUDFLARE_AGENT_READINESS_MCP, {
       method: "POST",
       headers: {
@@ -1797,29 +1794,47 @@ const LENS_GOTO = { waitUntil: "networkidle2", timeout: 18000 };
 // /lens/shot?url=… → a faithful PNG of the page, rendered by Cloudflare
 // Browser Run (real headless Chrome, server-side). The Human view uses this
 // only when a site forbids live framing.
-// The pipeline reads the cache BEFORE either budget, and the order is the point
-// rather than a micro-optimization: every limit here exists to ration Browser
-// Run, and a hit spends none of it. Measured 2026-08-15 against a fully warmed
-// cache, one visitor clicking through the seeded chips got 429 on the third,
-// with all seven entries present in KV the whole time.
-//
-// 6h, up from 1h. On the free plan a MISS costs a slice of a 6-per-minute,
-// 10-minute-a-day allowance, while a stale screenshot costs a slightly old
-// picture of a page that mostly did not change. The cache is the real budget
-// control here; the rate limits only stop a burst.
-const LENS_SHOT = defineLens({
-  span: "lens.shot",
-  budget: "shot",
-  // Either Browser Run door counts. This demanded the BINDING until
-  // 2026-10-01, so a deployment holding only a REST token rendered
-  // /lens/browser and answered 503 here.
-  browser: "render",
-  body: "png",
-  targets: (params: URLSearchParams) => params.get("url") || "",
-  cache: { prefix: "lens:shot:", ttl: 21600 },
-  run: async ({ target, env, span: s }) => {
+// The stored form of a screenshot: raw PNG bytes in, raw PNG bytes out, with
+// `x-lens-cache` saying which side of the cache the reader got.
+const LENS_SHOT_FORM: LensCacheForm<ArrayBuffer> = {
+  as: "arrayBuffer",
+  hit: (png, s) => {
+    s.setAttribute("lens.png_bytes", png.byteLength);
+    return new Response(png, { headers: lensPngHeaders(true) });
+  },
+  fresh: (png) => new Response(png, { headers: lensPngHeaders(false) }),
+  stored: (png) => png,
+};
+
+export function handleLensShot(request, env, ctx) {
+  // The shell is lens-guard's: the 400, the 503, the cache read BEFORE either
+  // budget (its header has the 2026-08-15 measurement that put it there), the
+  // per-IP ceiling and then the shared one, and the cache write.
+  //
+  // Headless Chrome is by far the most expensive thing this site can be asked to
+  // do, and it is the only one with a real external dependency that can be slow
+  // without being wrong. The KV cache already reports itself to the client via
+  // `x-lens-cache`; the span records the same fact server-side so the hit rate is
+  // measurable rather than inferable, and so a slow render is separable from a
+  // slow cache read.
+  return guardedRead(request, env, ctx, {
+    span: "lens.shot",
+    url: new URL(request.url).searchParams.get("url") || "",
+    budget: "shot",
+    limited: (max) => `Snapshots are rate-limited to ${max}/min. Hang on a moment.`,
+    // Either Browser Run door counts, the same guard /lens/browser uses. This
+    // demanded the BINDING until 2026-10-01, so a deployment holding only a REST
+    // token rendered /lens/browser and answered 503 here, two routes disagreeing
+    // about one configuration.
+    browser: hasRenderEngine,
+    // 6h, up from 1h. On the free plan a MISS costs a slice of a 6-per-minute,
+    // 10-minute-a-day allowance, while a stale screenshot costs a slightly old
+    // picture of a page that mostly did not change. The cache is the real budget
+    // control here; the rate limits only stop a burst.
+    cache: { tab: "shot", ttl: 21600, form: LENS_SHOT_FORM },
+    run: async (url, s) => {
     const payload = {
-      url: target,
+      url,
       viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
       screenshotOptions: { fullPage: true, type: "png" },
       gotoOptions: LENS_GOTO,
@@ -1832,7 +1847,10 @@ const LENS_SHOT = defineLens({
       // view, and Kitesurf was measured drawing /garage with a fallback font and
       // no SVG icons (2026-09-28). The Browser view is where Kitesurf belongs.
       const ran = await span("lens.shot.quick_action", () => runBrowserAction("screenshot", payload, env, { engine: "chromium" }));
-      if (!ran) return { ok: false, status: 503, outcome: "no_engine", payload: { ok: false, error: "Browser Run is not configured on this deployment." } };
+      if (!ran) {
+        s.setAttribute("lens.outcome", "no_engine");
+        return browserRunMissing();
+      }
       r = ran.response;
       s.setAttribute("lens.render_engine", ran.engine);
     } catch (e) {
@@ -1861,12 +1879,9 @@ const LENS_SHOT = defineLens({
     }
     const buf = await r.arrayBuffer();
     s.setAttribute("lens.png_bytes", buf.byteLength);
-    return { ok: true, value: buf };
-  },
-});
-
-export function handleLensShot(request, env, ctx) {
-  return LENS_SHOT.handle(request, env, ctx);
+    return buf;
+    },
+  });
 }
 
 // Base64 chars, so roughly 4.5 MB of PNG. Chosen to keep the whole snapshot an
@@ -1917,101 +1932,217 @@ function interactionPayload({ outcome: _outcome, ...rest }) { return rest; }
 // This deliberately stays separate from /lens/fetch: the normal scan is an
 // identified HTTP observation, while this path executes page JavaScript in a
 // Browser Run instance and returns a rendered snapshot plus browser structure.
-const LENS_BROWSER = defineLens({
-  span: "lens.browser",
-  budget: "browser",
-  browser: "render",
-  targets: (params: URLSearchParams) => params.get("url") || "",
+// The stored form of a rendered snapshot. It differs from the JSON default in
+// three ways, each older than lens-guard: the flag is `cached` on BOTH sides,
+// an entry that is not `ok` is re-rendered rather than served, and a snapshot
+// too large for KV is answered but not kept.
+const LENS_BROWSER_FORM: LensCacheForm<Record<string, any>> = {
+  as: "json",
+  usable: (hit) => !!hit.ok,
+  hit: (hit) => jsonResponse({ ...hit, cached: true }),
+  fresh: (output) => jsonResponse({ ...output, cached: false }),
+  stored: (output, s) => {
+    // KV rejects a value over 25 MB, so an oversize snapshot used to throw
+    // where nobody was listening, the only symptom being a page that
+    // re-rendered from scratch on every visit.
+    const serialized = JSON.stringify(output);
+    if (serialized.length <= LENS_BROWSER_KV_MAX) return serialized;
+    s.setAttribute("lens.cache_skipped", serialized.length);
+    return null;
+  },
+};
+
+export async function handleLensBrowser(request, env, ctx) {
+  const params = new URL(request.url).searchParams;
+
+  // The published allowlist, answered without a url and without a render, so
+  // anyone can read exactly what this route is willing to run before they let
+  // it run anything. Same route rather than a new one: run_worker_first is
+  // capped at 100 rules and a query parameter costs none of them.
+  if (params.has("recipes")) {
+    return jsonResponse({ ok: true, recipes: lensRecipeCatalog() });
+  }
+
+  // Resolved BEFORE the engine check, so a typo'd recipe id answers the same
+  // 400 on a deployment with no Browser Run as on one with it. Absent `do` is
+  // today's path byte for byte.
+  //
   // An unknown id is a 400 and not a silent fall-through to the plain render.
   // Falling through would hand back a perfectly good snapshot that the caller
   // believes is post-interaction, which is the one failure mode this whole
-  // feature exists to avoid. Absent `do` is the plain path byte for byte.
-  args: (params) => {
-    const id = params.get("do");
-    if (id == null) return { recipe: null };
-    const recipe = lensRecipe(id);
-    return recipe ? { recipe } : new LensArgsRefusal("Unknown interaction recipe.", { recipes: lensRecipeIds() });
-  },
-  // The plain key keeps its exact legacy shape and a recipe run APPENDS to it.
-  // Hashing url+id together would have been tidier and would also have changed
-  // every plain key in one deploy, invalidating the namespace and buying a wave
-  // of fresh Quick Actions against a 10 min/day budget. An allowlisted [a-z] id
-  // on the end is safe, cheap, and greppable in KV.
-  //
-  // 6h, up from 15 MINUTES, which was the shortest TTL of the three browser
-  // caches while guarding by far the most expensive call. A render costs a
-  // slice of a 10-minute-a-day account-wide allowance and takes ~19s; expiring
-  // it after a quarter of an hour meant two visitors twenty minutes apart paid
-  // twice for the same page.
-  cache: { prefix: "lens:browser:", ttl: 21600, suffix: (args) => args.recipe?.id },
-  // Same reasoning as lens.shot, one step heavier: this asks Browser Run for four
-  // formats at once (content, screenshot, markdown, accessibility tree) and has
-  // FOUR distinct 502 shapes below — binding threw, non-ok status, invalid JSON,
-  // and a body that parsed but carried nothing. They are indistinguishable in the
-  // client's error string and separable on the span.
-  run: async ({ target, args, env, span: s }) => {
-    const { recipe } = args;
-    const started = Date.now();
-    // Fresh per request. The page is being rendered right now and must not be
-    // able to guess this; it does not have to survive the request.
-    const nonce = recipe ? lensRecipeNonce() : "";
-    const payload: Record<string, any> = {
-      url: target,
-      formats: ["content", "screenshot", "markdown", "accessibilityTree"],
-      viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
-      screenshotOptions: { fullPage: true, type: "png" },
-      // Same object REFERENCE, not a clone: a contract test asserts this route and
-      // /lens/shot share one config by identity, and a per-recipe clone would
-      // break it. Both shipping recipes are synchronous, so nothing here needs a
-      // settle; an async recipe would ride `waitForTimeout` (a sibling key) rather
-      // than reach in here.
-      gotoOptions: LENS_GOTO,
-      userAgent: BOT_UA,
-    };
-    // The ONLY place caller input reaches the payload is `url`. `content` is
-    // assembled from the frozen registry plus a server-generated nonce, and a
-    // contract test asserts no caller bytes appear anywhere else.
-    if (recipe) payload.addScriptTag = [{ content: lensRecipeScript(recipe, nonce) }];
-    if (recipe) s.setAttribute("lens.recipe", recipe.id);
+  // feature exists to avoid.
+  const recipeId = params.get("do");
+  const recipe = recipeId == null ? null : lensRecipe(recipeId);
 
-    let response;
-    let engine = "chromium-binding";
-    try {
-      // Routed through the engine seam, which asks the binding for Kitesurf and
-      // falls back to Chromium on a refused option. Still returns a Response,
-      // because the four distinct 502 shapes below are the point and must not be
-      // flattened into one.
-      const run = await span("lens.browser.quick_action", () => runBrowserAction("snapshot", payload, env));
-      if (!run) return { ok: false, status: 503, outcome: "no_engine", payload: { ok: false, error: "Browser Run is not configured on this deployment." } };
-      response = run.response;
-      engine = run.engine;
-      s.setAttribute("lens.render_engine", engine);
-    } catch (e) {
-      s.setAttribute("lens.error", lensErrorText(e));
-      return { ok: false, status: 502, outcome: "binding_threw", payload: { ok: false, error: "Browser Run request failed: " + lensErrorText(e) } };
+  // The shell is lens-guard's. Same reasoning as lens.shot, one step heavier:
+  // this asks Browser Run for four formats at once (content, screenshot,
+  // markdown, accessibility tree) and has FOUR distinct 502 shapes below —
+  // binding threw, non-ok status, invalid JSON, and a body that parsed but
+  // carried nothing. They are indistinguishable in the client's error string
+  // and separable on the span.
+  return guardedRead(request, env, ctx, {
+    span: "lens.browser",
+    url: params.get("url") || "",
+    refuse: recipeId != null && !recipe
+      ? jsonResponse({ ok: false, error: "Unknown interaction recipe.", recipes: lensRecipeIds() }, 400)
+      : null,
+    budget: "browser",
+    limited: (max) => `Browser Run snapshots are rate-limited to ${max}/min. Hang on a moment.`,
+    browser: hasRenderEngine,
+    // The plain key keeps its exact legacy shape and a recipe run APPENDS to it.
+    // Hashing url+id together would have been tidier and would also have changed
+    // every plain key in one deploy, invalidating the namespace and buying a wave
+    // of fresh Quick Actions against a 10 min/day budget. An allowlisted [a-z] id
+    // on the end is safe, cheap, and greppable in KV.
+    //
+    // 6h, up from 15 MINUTES, which was the shortest TTL of the three browser
+    // caches while guarding by far the most expensive call. A render costs a
+    // slice of a 10-minute-a-day account-wide allowance and takes ~19s; expiring
+    // it after a quarter of an hour meant two visitors twenty minutes apart paid
+    // twice for the same page, and it made the cache useless as the budget
+    // control it exists to be. /lens/shot and /lens/wire both already sit at 6h
+    // on exactly this reasoning, and the snapshot labels itself "KV cache" in
+    // the summary, so a reader is told what they are looking at.
+    cache: { tab: "browser", variant: recipe ? recipe.id : null, ttl: 21600, form: LENS_BROWSER_FORM },
+    run: async (url, s) => {
+  const started = Date.now();
+  // Fresh per request. The page is being rendered right now and must not be
+  // able to guess this; it does not have to survive the request.
+  const nonce = recipe ? lensRecipeNonce() : "";
+  const payload: Record<string, any> = {
+    url: url,
+    formats: ["content", "screenshot", "markdown", "accessibilityTree"],
+    viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
+    screenshotOptions: { fullPage: true, type: "png" },
+    // Same object REFERENCE, not a clone: a contract test asserts this route and
+    // /lens/shot share one config by identity, and a per-recipe clone would
+    // break it. Both shipping recipes are synchronous, so nothing here needs a
+    // settle; an async recipe would ride `waitForTimeout` (a sibling key) rather
+    // than reach in here.
+    gotoOptions: LENS_GOTO,
+    userAgent: BOT_UA,
+  };
+  // The ONLY place caller input reaches the payload is `url`. `content` is
+  // assembled from the frozen registry plus a server-generated nonce, and a
+  // contract test asserts no caller bytes appear anywhere else.
+  if (recipe) payload.addScriptTag = [{ content: lensRecipeScript(recipe, nonce) }];
+  if (recipe) s.setAttribute("lens.recipe", recipe.id);
+
+  let response;
+  let engine = "chromium-binding";
+  try {
+    // Routed through the engine seam, which asks the binding for Kitesurf and
+    // falls back to Chromium on a refused option. Still returns a Response,
+    // because the four distinct 502 shapes below are the point and must not be
+    // flattened into one.
+    const run = await span("lens.browser.quick_action", () => runBrowserAction("snapshot", payload, env));
+    if (!run) {
+      s.setAttribute("lens.outcome", "no_engine");
+      return browserRunMissing();
     }
-    // Browser Run refusing US is not the scanned site failing. /lens/shot learned
-    // this and /lens/browser did not, which is how production answered a 502
-    // carrying {"code":2001,"message":"Rate limit exceeded"} on 2026-08-06 — a
-    // bad-gateway status pointing whoever read it at react.dev instead of at our
-    // own six-per-minute allowance. On the free plan this is the MOST likely
-    // response here, so it is the one that most needs to be itself.
-    if (response.status === 429) {
-      return {
-        ok: false, status: 429, outcome: "browser_budget_spent",
-        payload: {
-          ok: false,
-          reason: "budget_spent",
-          error: `Browser Run is rate-limited right now (free plan: ${BROWSER_FREE_PLAN.perMinute}/min account-wide, ${BROWSER_FREE_PLAN.perDayMinutes} min/day). Every other lens still works.`,
-        },
-      };
-    }
-    if (!response.ok) {
-      let detail = "";
-      try { detail = (await response.text()).slice(0, 500); } catch (_e) {}
-      s.setAttribute("http.response.status_code", response.status);
-      return { ok: false, status: 502, outcome: "upstream_not_ok", payload: { ok: false, error: "Browser Run returned " + response.status + ".", detail } };
-    }
+    response = run.response;
+    engine = run.engine;
+    s.setAttribute("lens.render_engine", engine);
+  } catch (e) {
+    s.setAttribute("lens.outcome", "binding_threw");
+    s.setAttribute("lens.error", (e && e.message) || String(e));
+    return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
+  }
+  // Browser Run refusing US is not the scanned site failing. /lens/shot learned
+  // this and /lens/browser did not, which is how production answered a 502
+  // carrying {"code":2001,"message":"Rate limit exceeded"} on 2026-08-06 — a
+  // bad-gateway status pointing whoever read it at react.dev instead of at our
+  // own six-per-minute allowance. On the free plan this is the MOST likely
+  // response here, so it is the one that most needs to be itself.
+  if (response.status === 429) {
+    s.setAttribute("lens.outcome", "browser_budget_spent");
+    return jsonResponse({
+      ok: false,
+      reason: "budget_spent",
+      error: `Browser Run is rate-limited right now (free plan: ${BROWSER_FREE_PLAN.perMinute}/min account-wide, ${BROWSER_FREE_PLAN.perDayMinutes} min/day). Every other lens still works.`,
+    }, 429);
+  }
+  if (!response.ok) {
+    let detail = "";
+    try { detail = (await response.text()).slice(0, 500); } catch (_e) {}
+    s.setAttribute("lens.outcome", "upstream_not_ok");
+    s.setAttribute("http.response.status_code", response.status);
+    return jsonResponse({ ok: false, error: "Browser Run returned " + response.status + ".", detail }, 502);
+  }
+
+  let envelope;
+  try { envelope = await response.json(); }
+  catch (e) {
+    s.setAttribute("lens.outcome", "invalid_json");
+    s.setAttribute("lens.error", (e && e.message) || String(e));
+    return jsonResponse({ ok: false, error: "Browser Run returned invalid JSON: " + ((e && e.message) || e) }, 502);
+  }
+  const result = envelope && envelope.result ? envelope.result : envelope || {};
+  const meta = envelope && envelope.meta ? envelope.meta : {};
+  // Strip the receipt FIRST. Everything downstream — documentTally, the 120KB
+  // cap, the body the reader sees — has to run on a document that no longer
+  // carries our own injected node. Count before stripping and `shape` counts our
+  // script; cap before stripping and the receipt falls off the end of a large
+  // page and the run reports as "never happened".
+  const settled = recipe
+    ? lensRecipeReceipt(String(result.content || ""), nonce)
+    : { receipt: null, html: String(result.content || "") };
+  const rawContent = settled.html;
+  const interaction = recipe ? buildInteraction(recipe, settled.receipt, await plainTally(env, await lensCacheKey("browser", url))) : null;
+  if (recipe) s.setAttribute("lens.recipe_outcome", interaction.outcome);
+  // Every other field on this snapshot is capped; the screenshot was not, and a
+  // fullPage PNG has no natural ceiling. Measured 2026-08-04 against production:
+  // en.wikipedia.org/wiki/World_War_II returned 24.3 MB of base64 in one
+  // response, inside a 128 MB isolate that then stringifies the payload twice
+  // (once for the KV write, once for the body) and against a KV value cap of
+  // 25 MB. Nothing here fails cleanly at that size: the isolate dies on limits
+  // and the client receives Cloudflare's HTML error page instead of JSON.
+  const rawShot = String(result.screenshot || "");
+  const shotTooBig = rawShot.length > LENS_BROWSER_SHOT_MAX;
+  const output: Record<string, any> = {
+    ok: true,
+    url: url,
+    finalUrl: meta.url || url,
+    status: meta.status == null ? null : meta.status,
+    title: meta.title || "",
+    content: rawContent.slice(0, 120000),
+    contentTruncated: rawContent.length > 120000,
+    markdown: String(result.markdown || "").slice(0, 60000),
+    accessibilityTree: result.accessibilityTree || null,
+    screenshot: rawShot && !shotTooBig ? "data:image/png;base64," + rawShot : null,
+    // Dropping the image silently would read as "the browser took no shot",
+    // which is a different observation. Say which one happened.
+    screenshotDropped: shotTooBig ? Math.round(rawShot.length * 0.75) : 0,
+    // WebMCP discovery is currently a Chrome-beta lab capability, not a
+    // production Browser Run binding capability. The local helper performs
+    // the real runtime listing; this field keeps that boundary explicit.
+    webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use tools/lens-webmcp.ts." },
+    fetchedBy: "Cloudflare Browser Run",
+    // WHICH engine rendered this. A reader comparing two snapshots needs to know
+    // whether they came from the same one, and "Browser Run" alone stopped being
+    // a specific enough answer the moment Kitesurf existed.
+    engine,
+    // Counted from the FULL body, before the 120KB content cap above, so a
+    // truncated `content` field cannot quietly shrink the comparison. The
+    // client's deltaStrip subtracts this from the HTTP anatomy.
+    tally: documentTally(rawContent),
+    tallyTruncated: rawContent.length > 120000,
+  };
+  // Absent entirely on a plain run, so every existing consumer sees the exact
+  // response it saw before. `shape` above stays the AFTER; the before lives
+  // inside here, next to the count of what the recipe actually touched. Set
+  // before `elapsedMs` so the key order of the JSON is what it always was.
+  if (interaction) output.interaction = interactionPayload(interaction);
+  output.elapsedMs = Date.now() - started;
+  s.setAttribute("lens.outcome", "ok");
+  s.setAttribute("lens.content_bytes", rawContent.length);
+  s.setAttribute("lens.has_screenshot", !!output.screenshot);
+  if (shotTooBig) s.setAttribute("lens.shot_dropped_bytes", output.screenshotDropped);
+  s.setAttribute("lens.has_a11y_tree", !!result.accessibilityTree);
+  return output;
+    },
+  });
+}
 
     let envelope;
     try { envelope = await response.json(); }
@@ -2087,17 +2218,6 @@ const LENS_BROWSER = defineLens({
     return { ok: true, value: output };
   },
 });
-
-export async function handleLensBrowser(request, env, ctx) {
-  // The published allowlist, answered without a url and without a render, so
-  // anyone can read exactly what this route is willing to run before they let
-  // it run anything. Same route rather than a new one: run_worker_first is
-  // capped at 100 rules and a query parameter costs none of them.
-  if (new URL(request.url).searchParams.has("recipes")) {
-    return jsonResponse({ ok: true, recipes: lensRecipeCatalog() });
-  }
-  return LENS_BROWSER.handle(request, env, ctx);
-}
 
 // X-Frame-Options / CSP frame-ancestors → can a browser embed this live?
 export function lensFramable(headers) {
@@ -2268,10 +2388,20 @@ export const LENS_COMPARE = defineLens({
 });
 
 export async function compareLensRequest(request, env, ctx, leftRaw, rightRaw) {
-  const o = await LENS_COMPARE.run({ left: leftRaw, right: rightRaw }, request, env, ctx);
-  return o.kind === "ok"
-    ? { status: 200, payload: { ok: true, comparedAt: new Date().toISOString(), ...o.value } }
-    : lensStatusPayload(o);
+  const left = validateLensTarget(leftRaw || "");
+  const right = validateLensTarget(rightRaw || "");
+  if (!left.ok || !right.ok) {
+    return { status: 400, payload: { ok: false, error: left.ok ? `right: ${right.error}` : `left: ${left.error}` } };
+  }
+  // Shared with /mcp's lens_compare tool (same bucket, see LENS_BUDGETS).
+  if (await overLensBudget(LENS_BUDGETS.compare, request, env)) {
+    return { status: 429, payload: { ok: false, error: `Lens comparisons are rate-limited to ${LENS_BUDGETS.compare.max}/min.` } };
+  }
+  try {
+    return { status: 200, payload: { ok: true, comparedAt: new Date().toISOString(), ...(await compareLensTargets(left.url, right.url, env)) } };
+  } catch (error) {
+    return { status: 502, payload: { ok: false, error: "Lens comparison failed.", detail: String(error?.message || error).slice(0, 240) } };
+  }
 }
 
 export async function handleLensCompare(request, env, ctx) {

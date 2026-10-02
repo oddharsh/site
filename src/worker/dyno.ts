@@ -7,6 +7,7 @@ import { asNumber } from "./lib/parse.ts";
 import { esc, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import seed from "./dyno-seed.json" with { type: "json" };
+import { DYNO_PULLS_URL } from "./routes.ts";
 
 // The machine-owned branch. `perf-history.yml` appends one line a night and
 // force-pushes nothing; /garage/dyno only ever reads.
@@ -197,7 +198,7 @@ function chart(rows) {
 // fetched after load from PULLS_URL. It rendered per request until then, which
 // sent the whole page at the edge's on-the-fly brotli with no twin and no delta,
 // for a series that changes once a night.
-export const PULLS_URL = "/garage/dyno/pulls.html";
+export const PULLS_URL = DYNO_PULLS_URL;
 
 // The table shows the last 14 pulls. The live series has held more than that
 // since 2026-08, so the placeholder draws exactly this many rows and the swap

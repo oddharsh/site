@@ -1,5 +1,6 @@
 import { isCanonicalHost } from "./const.ts";
 import { wantsMarkdown } from "./http.ts";
+import { CACHEABLE_PREFIXES } from "../routes.ts";
 
 // lib/cache.js: the worker's caching kit, one primitive surface where four
 // hand-rolled dialects used to drift apart.
@@ -304,7 +305,7 @@ export function shouldUseWorkersCache(request, cacheablePaths) {
   if (!isCanonicalHost(url.hostname)) return false;
   if (url.search) return false;
   if (cacheablePaths.has(url.pathname)) return true;
-  return url.pathname.startsWith("/writing/")
-    || url.pathname.startsWith("/images/full/")
-    || url.pathname.startsWith("/images/meta/");
+  // /writing/, /images/full/ and /images/meta/, declared on their routes in
+  // routes.ts rather than listed here a second time.
+  return CACHEABLE_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
 }

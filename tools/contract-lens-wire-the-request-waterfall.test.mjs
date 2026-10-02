@@ -172,7 +172,6 @@ test("data: URIs are counted but kept out of the host roll call", async () => {
 
 test("the KV-hit flag does not collide with the target's own cache count", async () => {
   const { summariseWire } = await import("../src/worker/lens-wire.ts");
-  const worker = readFileSync("./src/worker/lens-wire.ts", "utf8");
   const pane = readFileSync("./src/client/lens-wire.js", "utf8");
   // Caught in the browser 2026-08-11, rendering as "true served from cache".
   // The summary owns `cached` — how many of the TARGET's requests came from the
@@ -185,10 +184,8 @@ test("the KV-hit flag does not collide with the target's own cache count", async
   ], "https://site.test/");
   assert.equal(d.cached, 1, "`cached` is a COUNT of the target's cache-served requests");
   assert.equal(typeof d.cached, "number");
-  // The hit flag is the pipeline's to write (lens-pipeline.ts's lensJson, held
-  // behaviourally in contract-lens-per-ip-crawl-budgets), so the module itself
-  // must never spell one.
-  assert.doesNotMatch(worker, /\bcached: true\b/, "lens-wire.ts writes a hit flag over the summary's count");
+  // The real handler's KV flag and preserved count are exercised by the
+  // cache/budget matrix in contract-lens-per-ip-crawl-budgets.test.mjs.
   assert.match(pane, /d\.fromCache \?/, "the pane must read fromCache for the KV-hit line");
 });
 
@@ -209,16 +206,18 @@ test("siteOf groups subdomains without a public-suffix list, and says where it i
   assert.match(pane, /last two labels of the hostname/, "the pane must disclose the grouping rule to the reader");
 });
 
-test("the wire lens shares the SSRF guard and reaches the browser with nothing but the URL", () => {
+test("the wire lens refuses private targets and reaches the browser with nothing but the URL", async () => {
   const src = readFileSync("./src/worker/lens-wire.ts", "utf8");
   // The rule lens-recipes.js is built around: this route points a real browser
   // at a visitor-supplied address, so the ONLY caller byte that may reach it is
   // the URL, after the shared guard has passed it.
-  // Validation happens in the pipeline, which imports the shared guard. The
-  // route only says which parameter is the target.
-  assert.match(src, /from "\.\/lens-pipeline\.ts"/, "must run through the lens pipeline");
-  assert.match(readFileSync("./src/worker/lens-pipeline.ts", "utf8"), /from "\.\/lib\/public-fetch\.ts"/,
-    "the pipeline must import the shared guard, not reimplement it");
+  const { handleLensWire } = await import("../src/worker/lens-wire.ts");
+  let touched = false;
+  const env = { BROWSER: { fetch() { touched = true; throw new Error("unexpected browser request"); } },
+    RN_KV: { get() { touched = true; throw new Error("unexpected cache read"); } } };
+  const res = await handleLensWire(new Request("https://aadhar.sh/lens/wire?url=http://169.254.169.254/"), env, {});
+  assert.equal(res.status, 400);
+  assert.equal(touched, false, "a private target spends no cache read or browser request");
   assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
     "lens-wire.js redefines a guard it is supposed to be importing");
   // Exactly one searchParams read, and it is the url. A second one is how a

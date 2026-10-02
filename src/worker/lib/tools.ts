@@ -177,13 +177,27 @@ export async function callDataTool(name, args, request, env, ctx): Promise<Recor
     } catch { return toolError("the playlist is temporarily unavailable"); }
   }
   if (name === "lens_inspect") {
-    return lensToolResult(await LENS_INSPECT.run({ url: args.url, skipBotViews: true }, request, env, ctx), lensObservationSummary);
+    const target = validateLensTarget(args.url || "");
+    if (!target.ok) return toolError(target.error);
+    if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) return toolError(`Lens lookups are rate-limited to ${LENS_BUDGETS.inspect.max}/min, shared with /lens/fetch.`);
+    try { return lensObservationSummary(await lensInspect(target.url, env, { skipBotViews: true })); }
+    catch { return toolError("Lens inspection failed."); }
   }
   if (name === "lens_page") {
-    return lensToolResult(await LENS_INSPECT.run({ url: args.url, phases: ["page"] }, request, env, ctx), lensObservationSummary);
+    const target = validateLensTarget(args.url || "");
+    if (!target.ok) return toolError(target.error);
+    if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) return toolError(`Lens lookups are rate-limited to ${LENS_BUDGETS.inspect.max}/min, shared with /lens/fetch.`);
+    try { return lensObservationSummary(await lensInspect(target.url, env, { phases: ["page"] })); }
+    catch { return toolError("Lens inspection failed."); }
   }
   if (name === "lens_compare") {
-    return lensToolResult(await LENS_COMPARE.run({ left: args.left, right: args.right }, request, env, ctx));
+    const left = validateLensTarget(args.left || "");
+    const right = validateLensTarget(args.right || "");
+    if (!left.ok) return toolError(`left: ${left.error}`);
+    if (!right.ok) return toolError(`right: ${right.error}`);
+    if (await overLensBudget(LENS_BUDGETS.compare, request, env)) return toolError(`Lens comparisons are rate-limited to ${LENS_BUDGETS.compare.max}/min, shared with /lens/compare.`);
+    try { return await compareLensTargets(left.url, right.url, env); }
+    catch { return toolError("Lens comparison failed."); }
   }
   if (name === "find_events") {
     try { return await serendipityFindEvents(env, args); }

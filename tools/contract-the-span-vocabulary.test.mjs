@@ -68,6 +68,12 @@ function used() {
         const name = m[1] ?? m[2];
         if (!seen.has(name)) seen.set(name, file);
       }
+      // guardedRead opens the named span for both hits and misses. The name is
+      // the first property of its request specification, rather than a direct
+      // span() argument; retain the registry's orphan check across this seam.
+      for (const m of src.matchAll(/\bguardedRead\([^{}]*\{\s*span:\s*"([^"]+)"/g)) {
+        if (!seen.has(m[1])) seen.set(m[1], file);
+      }
     }
   }
   return seen;

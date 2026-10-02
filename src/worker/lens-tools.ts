@@ -1,5 +1,6 @@
+import { jsonResponse } from "./lib/http.ts";
 import { foreignMcpTools } from "./lib/doors.ts";
-import { defineLens } from "./lens-pipeline.ts";
+import { guardedRead } from "./lens-guard.ts";
 
 // A catalogue read is one POST that a foreign server answers from memory, so
 // this is cached to be POLITE rather than to be fast. A public button pointed at
@@ -7,17 +8,22 @@ import { defineLens } from "./lens-pipeline.ts";
 // visitor clicks a tab.
 const TOOLS_CACHE_SECONDS = 3600;
 
-// Keyed on the ORIGIN: an MCP catalogue belongs to the origin, so every page on
-// it shares one entry. Validation, the cache, the budget and the span are the
-// pipeline's (lens-pipeline.ts); what is here is the read itself.
-const LENS_TOOLS = defineLens({
-  span: "lens.tools",
-  budget: "tools",
-  targets: (params: URLSearchParams) => params.get("url") || "",
-  cache: { prefix: "lens:tools:", ttl: TOOLS_CACHE_SECONDS, key: (url) => new URL(url).origin },
-  run: async ({ target, env, span: s }) => {
-    const origin = new URL(target).origin;
-    const host = new URL(origin).hostname;
+export function handleLensTools(request, env) {
+  const params = new URL(request.url).searchParams;
+
+  // The shell (validate, cache before budget, the 429, the hit/miss span, the
+  // cache write) is lens-guard's. No `ctx` is handed over, so the write is
+  // awaited, as it always was on this route.
+  return guardedRead(request, env, undefined, {
+    span: "lens.tools",
+    url: params.get("url") || "",
+    budget: "tools",
+    limited: (max) => `Catalogue reads are rate-limited to ${max}/min. Hang on a moment.`,
+    cache: { tab: "tools", identity: (url) => new URL(url).origin, ttl: TOOLS_CACHE_SECONDS },
+    run: async (url, s) => {
+    const origin = new URL(url).origin;
+    const host = (() => { try { return new URL(origin).hostname; } catch { return undefined; } })();
+
     const probe = await foreignMcpTools(origin, env, { schemas: true });
 
     // SHUT and UNREADABLE stay different answers here for the same reason
@@ -39,22 +45,18 @@ const LENS_TOOLS = defineLens({
     const withSchema = probe.tools.filter((t) => t.inputSchema && t.inputSchema.properties).length;
     s.setAttribute("lens.tool_count", probe.count);
     s.setAttribute("lens.tools_with_schema", withSchema);
-    return {
-      ok: true, outcome: "read",
-      value: {
-        ok: true,
-        origin,
-        host,
-        endpoint: origin.replace(/\/+$/, "") + "/mcp",
-        count: probe.count,
-        shown: probe.tools.length,
-        withSchema,
-        tools: probe.tools,
-      },
-    };
-  },
-});
+    s.setAttribute("lens.outcome", "read");
 
-export function handleLensTools(request, env, ctx?) {
-  return LENS_TOOLS.handle(request, env, ctx);
+    return {
+      ok: true,
+      origin,
+      host,
+      endpoint: origin.replace(/\/+$/, "") + "/mcp",
+      count: probe.count,
+      shown: probe.tools.length,
+      withSchema,
+      tools: probe.tools,
+    };
+    },
+  });
 }

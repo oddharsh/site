@@ -39,8 +39,9 @@
 // which is why it is opt-in, cached for an hour, and rate-limited on its own
 // budget rather than the shared browser ceiling.
 import { mapWithConcurrency } from "./lib/crawl.ts";
+import { jsonResponse } from "./lib/http.ts";
 import { FAN_OUT, lensFetch } from "./lens.ts";
-import { defineLens } from "./lens-pipeline.ts";
+import { guardedRead } from "./lens-guard.ts";
 
 const MARKDOWN_CACHE_SECONDS = 3600;
 const BODY_SAMPLE = 4096;
@@ -269,16 +270,17 @@ async function probeOnce(targetUrl, env, accept) {
   }
 }
 
-// The caller influences exactly one thing, which URL. The pipeline validates it
-// through the shared SSRF guard, reads the cache before the budget, and keeps an
-// unreadable origin out of KV.
-const LENS_MARKDOWN = defineLens({
-  span: "lens.markdown",
-  budget: "markdown",
-  targets: (params: URLSearchParams) => params.get("url") || "",
-  cache: { prefix: "lens:md:", ttl: MARKDOWN_CACHE_SECONDS },
-  run: async ({ target, env, span: s }) => {
-    const host = new URL(target).hostname;
+export function handleLensMarkdown(request, env) {
+  const params = new URL(request.url).searchParams;
+
+  return guardedRead(request, env, undefined, {
+    span: "lens.markdown",
+    url: params.get("url") || "",
+    budget: "markdown",
+    limited: (max) => `Markdown checks are rate-limited to ${max}/min, because each one fetches the same page ten times from somebody else's origin. Hang on a moment.`,
+    cache: { tab: "md", ttl: MARKDOWN_CACHE_SECONDS },
+    run: async (target, s) => {
+    const host = (() => { try { return new URL(target).hostname; } catch { return undefined; } })();
 
     const { probes, agentProbe } = probePlan();
     // Two workers halve the waterfall without turning ten probes into a burst.
@@ -440,10 +442,7 @@ const LENS_MARKDOWN = defineLens({
       sample: mdBest ? mdBest.sample.slice(0, BODY_SAMPLE) : "",
       source: "https://acceptmarkdown.com/status",
     };
-    return { ok: true, outcome: anyMarkdown ? "markdown" : "html-only", value: payload };
-  },
-});
-
-export function handleLensMarkdown(request, env, ctx?) {
-  return LENS_MARKDOWN.handle(request, env, ctx);
+    return payload;
+    },
+  });
 }
