@@ -22,7 +22,7 @@ const commit = (repo, message, date, isPrivate = false) => ({
 test("every query names is:public, because the result cannot be filtered after", () => {
   const q = githubQueries(SINCE);
   for (const [tier, url] of Object.entries(q)) {
-    const query = decodeURIComponent(new URL(url).searchParams.get("q"));
+    const query = decodeURIComponent(new URL(url).searchParams.get("q") ?? "");
     assert.ok(query.includes("is:public"), `${tier}: ${query}`);
     assert.ok(query.includes(`author:${GITHUB_USER}`), `${tier} is not scoped to the owner`);
   }
