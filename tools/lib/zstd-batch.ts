@@ -1,8 +1,11 @@
 import { availableParallelism } from "node:os";
 import { constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
+import { DCZ_ZSTD_LEVEL } from "../../src/worker/lib/dictionary-names.ts";
 
-const LEVEL = 19;
+// The level is part of the wire contract the tools re-measure against, so it
+// is declared with the rest of it.
+const LEVEL = DCZ_ZSTD_LEVEL;
 
 if (!isMainThread) {
   const results = workerData.map(({ index, bytes, dictionary }) => ({

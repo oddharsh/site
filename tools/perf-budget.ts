@@ -37,11 +37,12 @@
 // drift is invisible to everything here and obvious there.
 
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
-import { brotliCompressSync, constants as zlibConstants, gzipSync, zstdCompressSync } from "node:zlib";
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 import { transform as transformCss } from "lightningcss";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
+import { dictionaryTag, zstdDictionaryFrame } from "./lib/dcz.ts";
+import { DCZ_HEADER_BYTES, pageDeltaName, pageSlug, parseFamilyDictionary } from "../src/worker/lib/dictionary-names.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { siteWranglerArgs } from "./lib/site-config.ts";
 import { budgetedAssets, readableTwins, unbudgetedAssets } from "./lib/client-assets.ts";
@@ -370,7 +371,7 @@ for (const t of TWINS) {
 // 4b) dictionary + generated-page pipeline ----------------------------------
 try {
   const name = (await readdir(".build/public/a"))
-    .find((f) => /^page-family\.[0-9a-f]{8}\.dict$/.test(f));
+    .find((f) => parseFamilyDictionary(f));
   if (!name) bad("page-family.dict: content-hashed build asset missing");
   else {
     const [dict, br] = await Promise.all([
@@ -399,12 +400,12 @@ try {
   // family hash and fall through to Brotli. Require the preferred family tag on
   // every deterministic page; exact snapshots remain a high-ratio cold-family path.
   const familyName = (await readdir(".build/public/a"))
-    .find((name) => /^page-family\.[0-9a-f]{8}\.dict$/.test(name));
+    .find((name) => parseFamilyDictionary(name));
   if (!familyName) throw new Error("page-family dictionary is missing");
   const family = await readFile(`.build/public/a/${familyName}`);
-  const familyTag = createHash("sha256").update(family).digest("hex").slice(0, 16);
+  const familyTag = dictionaryTag(family);
   const absent = pages
-    .filter((path) => !deltas.includes(`${path.replace(/\.html$/, "").replace(/\//g, "__")}.${familyTag}.dcz`));
+    .filter((path) => !deltas.includes(pageDeltaName(pageSlug(path), familyTag)));
 
   // build.ts step 8 SKIPS a family delta that is not smaller than the page's q11
   // twin, and it is right to: Chrome sends the family hash either way, so with no
@@ -412,20 +413,17 @@ try {
   // the first page this happened to (2026-09-30, once its quiz payload left the
   // document: 66,660 B delta against 66,291 B q11). So an absent variant is a
   // breach only when it would have been USEFUL, and that is recomputed here the
-  // way the build encodes it (zstd 19, raw dictionary, 40 B skippable header)
-  // rather than trusted, so a build that forgets a useful delta still fails.
+  // way the build encodes it (its own encoder in tools/lib/dcz.ts: zstd 19, raw
+  // dictionary, 40 B skippable header) rather than trusted, so a build that forgets a useful delta still fails.
   const missing: string[] = [];
   const notUseful: string[] = [];
   for (const path of absent) {
-    const slug = path.replace(/\.html$/, "").replace(/\//g, "__");
+    const slug = pageSlug(path);
     const bytes = await readFile(`.build/public/${path}`);
     const q11 = await readFile(`.build/public/${path}.br`).then((b) => b.length, () => Infinity);
-    const frame = zstdCompressSync(bytes, {
-      params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
-      dictionary: family,
-    });
-    if (frame.length + 40 < q11) missing.push(slug);
-    else notUseful.push(`${slug} (${frame.length + 40} B dcz >= ${q11} B q11)`);
+    const dcz = zstdDictionaryFrame(bytes, family).length + DCZ_HEADER_BYTES;
+    if (dcz < q11) missing.push(slug);
+    else notUseful.push(`${slug} (${dcz} B dcz >= ${q11} B q11)`);
   }
 
   if (missing.length) bad(`preferred site-page dictionary: missing useful family DCZ variants for ${missing.join(", ")}`);

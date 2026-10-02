@@ -97,6 +97,7 @@ import { brotliCompressSync, constants as zc } from "node:zlib";
 import { climb, type Candidate } from "./lib/hillclimb.ts";
 import { deriveFamily, FAMILY_WINDOW, loadServedSeries, q11, page, type Snap } from "./lib/served-pages.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
+import { DCZ_HEADER_BYTES, pageSlug } from "../src/worker/lib/dictionary-names.ts";
 
 const argv = process.argv.slice(2);
 const arg = (name: string) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -106,7 +107,7 @@ const K = Number(arg("k") ?? 16);
 const buildSrc = readFileSync(new URL("./build.ts", import.meta.url), "utf8");
 const block = buildSrc.match(/const BASE_CORPUS[^=]*=\s*\[([\s\S]*?)\n\s*\];/);
 if (!block) throw new Error("build.ts: BASE_CORPUS not found");
-const SHIPPED = [...block[1].matchAll(/"([^"]+)\.html"/g)].map((m) => m[1].replaceAll("/", "__"));
+const SHIPPED = [...block[1].matchAll(/"([^"]+)\.html"/g)].map((m) => pageSlug(m[1]));
 
 // A corpus is the page list build.ts reads in order AND the window it fills.
 type Corpus = { pages: string[]; size: number };
@@ -159,7 +160,7 @@ function frames(c: Corpus): Promise<Map<string, number>> {
   })());
   return frameMemo.get(key)!;
 }
-const served = (f: number, s: Snap) => Math.min(f + 40, q11(s));
+const served = (f: number, s: Snap) => Math.min(f + DCZ_HEADER_BYTES, q11(s));
 async function score(c: Corpus, slug: string): Promise<number> {
   const fr = await frames(c);
   let total = 0;

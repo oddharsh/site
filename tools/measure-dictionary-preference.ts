@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { brotliDecompressSync, zstdDecompressSync } from "node:zlib";
+import { familyDictionaryName, pageSlug, pageSnapshotName, parseDcz, parseFamilyDictionary, parsePageDelta, tagOfDigest } from "../src/worker/lib/dictionary-names.ts";
 
 export type PageBytes = {
   page: string;
@@ -42,14 +43,14 @@ export function preferenceModel(pages: PageBytes[], acquisition: number, hitRate
 
 export async function measureDictionaryPreference(root = ".build/public", snapshots = "src/dict/p-dict") {
   const files = (await readdir(root, { recursive: true })).sort();
-  const families = files.filter(n => /^a\/page-family\.[0-9a-f]{8}\.dict$/.test(n));
+  const families = files.filter(n => n.startsWith("a/") && parseFamilyDictionary(n.slice(2)));
   if (families.length !== 1) throw new Error(`Expected one built family dictionary, found ${families.length}; run bun run build`);
   const dictionary = await readFile(join(root, families[0]));
   const hash = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest();
   const familyHash = hash(dictionary);
-  const familyTag = familyHash.toString("hex").slice(0, 16);
+  const familyTag = tagOfDigest(familyHash);
   const familyTwin = await readFile(join(root, `${families[0]}.br`));
-  if (families[0] !== `a/page-family.${familyTag.slice(0, 8)}.dict` || !brotliDecompressSync(familyTwin).equals(dictionary)) {
+  if (families[0] !== `a/${familyDictionaryName(familyTag.slice(0, 8))}` || !brotliDecompressSync(familyTwin).equals(dictionary)) {
     throw new Error("Family dictionary name or Brotli twin does not match its bytes");
   }
   const acquisition = familyTwin.length;
@@ -60,18 +61,17 @@ export async function measureDictionaryPreference(root = ".build/public", snapsh
     const raw = await readFile(join(root, page));
     const compressed = await readFile(join(root, twin));
     if (!brotliDecompressSync(compressed).equals(raw)) throw new Error(`Brotli twin does not reconstruct ${page}`);
-    const slug = page.slice(0, -5).replaceAll("/", "__");
+    const slug = pageSlug(page);
     const row: PageBytes = { page, brotli: compressed.length, family: compressed.length, exact: [] };
-    const prefix = `pd/${slug}.`;
-    for (const file of files.filter(n => n.startsWith(prefix) && /^[0-9a-f]{16}\.dcz$/.test(n.slice(prefix.length)))) {
-      const tag = file.slice(prefix.length, -4);
-      const dict = tag === familyTag ? dictionary : brotliDecompressSync(await readFile(join(snapshots, `${slug}.${tag}.html.br`)));
+    for (const file of files.filter(n => n.startsWith("pd/") && parsePageDelta(n.slice(3))?.slug === slug)) {
+      const { tag } = parsePageDelta(file.slice(3))!;
+      const dict = tag === familyTag ? dictionary : brotliDecompressSync(await readFile(join(snapshots, pageSnapshotName(slug, tag))));
       const bytes = await readFile(join(root, file));
-      if (bytes.length < 40 || bytes.readUInt32LE(0) !== 0x184d2a5e || bytes.readUInt32LE(4) !== 32 ||
-          !bytes.subarray(8, 40).equals(hash(dict)) || hash(dict).toString("hex").slice(0, 16) !== tag) {
+      const dcz = parseDcz(bytes);
+      if (!dcz || !dcz.digest.equals(hash(dict)) || tagOfDigest(hash(dict)) !== tag) {
         throw new Error(`Invalid dictionary frame: ${file}`);
       }
-      if (!zstdDecompressSync(bytes.subarray(40), { dictionary: dict }).equals(raw)) {
+      if (!zstdDecompressSync(dcz.frame, { dictionary: dict }).equals(raw)) {
         throw new Error(`Delta does not reconstruct ${page}: ${file}`);
       }
       if (bytes.length >= compressed.length) throw new Error(`Delta does not beat Brotli: ${file}`);

@@ -20,7 +20,8 @@
 // records to reason over, not a rendered 80-column screen.
 import { readAroundChanges } from "../around.ts";
 import { getPublicAvailability } from "../../../cal/src/slots.ts";
-import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "../lens.ts";
+import { LENS_COMPARE, LENS_INSPECT, lensObservationSummary } from "../lens.ts";
+import type { LensOutcome } from "../lens-pipeline.ts";
 import { queryPhotos } from "../photos.ts";
 import { PLAYLIST_ID_CACHE_TTL, RN_FALLBACK, getTracksSWR } from "../rn.ts";
 import { NLWEB_MODES, nlwebAsk, parseAskRequest } from "../nlweb.ts";
@@ -35,9 +36,17 @@ import { mcpTool } from "./mcp-tools.ts";
 // (gotcha 16).
 import { serendipityFindEvents } from "../../../serendipity/serendipity.ts";
 import { EVENT_FORMATS, EVENT_TOPICS } from "../../../serendipity/event-tags.ts";
-import { asRecord } from "./parse.ts";
+import { asRecord, asText } from "./parse.ts";
 
 export function toolError(message) { return { _error: String(message).slice(0, 400) }; }
+
+// The MCP encoder over a lens outcome (lens-pipeline.ts). The lens tools run the
+// same spec as their HTTP twins, so validation, the budget and the refusal
+// wording are one implementation whichever door an agent knocks on.
+function lensToolResult<V>(o: LensOutcome<V>, map: (value: V) => Record<string, any> = (v) => v as Record<string, any>): Record<string, any> {
+  if (o.kind === "ok") return map(o.value);
+  return toolError(o.kind === "failed" ? asText(o.payload.error) ?? "The lens failed." : o.error);
+}
 
 // The crawl tools bill against the SAME per-IP buckets as their HTTP twins
 // (lens.js LENS_BUDGETS), not a private one. A separate bucket let a caller
@@ -168,27 +177,13 @@ export async function callDataTool(name, args, request, env, ctx): Promise<Recor
     } catch { return toolError("the playlist is temporarily unavailable"); }
   }
   if (name === "lens_inspect") {
-    const target = validateLensTarget(args.url || "");
-    if (!target.ok) return toolError(target.error);
-    if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) return toolError(`Lens lookups are rate-limited to ${LENS_BUDGETS.inspect.max}/min, shared with /lens/fetch.`);
-    try { return lensObservationSummary(await lensInspect(target.url, env, { skipBotViews: true })); }
-    catch { return toolError("Lens inspection failed."); }
+    return lensToolResult(await LENS_INSPECT.run({ url: args.url, skipBotViews: true }, request, env, ctx), lensObservationSummary);
   }
   if (name === "lens_page") {
-    const target = validateLensTarget(args.url || "");
-    if (!target.ok) return toolError(target.error);
-    if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) return toolError(`Lens lookups are rate-limited to ${LENS_BUDGETS.inspect.max}/min, shared with /lens/fetch.`);
-    try { return lensObservationSummary(await lensInspect(target.url, env, { phases: ["page"] })); }
-    catch { return toolError("Lens inspection failed."); }
+    return lensToolResult(await LENS_INSPECT.run({ url: args.url, phases: ["page"] }, request, env, ctx), lensObservationSummary);
   }
   if (name === "lens_compare") {
-    const left = validateLensTarget(args.left || "");
-    const right = validateLensTarget(args.right || "");
-    if (!left.ok) return toolError(`left: ${left.error}`);
-    if (!right.ok) return toolError(`right: ${right.error}`);
-    if (await overLensBudget(LENS_BUDGETS.compare, request, env)) return toolError(`Lens comparisons are rate-limited to ${LENS_BUDGETS.compare.max}/min, shared with /lens/compare.`);
-    try { return await compareLensTargets(left.url, right.url, env); }
-    catch { return toolError("Lens comparison failed."); }
+    return lensToolResult(await LENS_COMPARE.run({ left: args.left, right: args.right }, request, env, ctx));
   }
   if (name === "find_events") {
     try { return await serendipityFindEvents(env, args); }

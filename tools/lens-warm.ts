@@ -70,8 +70,9 @@ async function ask(path, url) {
     const ms = Date.now() - started;
     const type = res.headers.get("content-type") || "";
     // /lens/shot answers PNG bytes and reports cache state in a header;
-    // /lens/browser answers JSON carrying `cached`. Read each on its own terms
-    // rather than inferring from the status code.
+    // /lens/browser answers JSON carrying `fromCache` (it was `cached` until
+    // 2026-10-02, when every lens settled on one spelling). Read each on its
+    // own terms rather than inferring from the status code.
     if (type.startsWith("image/")) {
       return { ok: res.ok, cached: res.headers.get("x-lens-cache") === "hit", ms, note: "PNG" };
     }
@@ -79,7 +80,7 @@ async function ask(path, url) {
     try { body = await res.json(); } catch { /* an HTML error page from the edge */ }
     if (!body) return { ok: false, cached: false, ms, note: `${res.status} ${type || "no content-type"}` };
     if (body.ok === false) return { ok: false, cached: false, ms, note: body.reason || body.error || String(res.status) };
-    return { ok: true, cached: !!body.cached, ms, note: body.cached ? "cache" : "fresh render" };
+    return { ok: true, cached: !!body.fromCache, ms, note: body.fromCache ? "cache" : "fresh render" };
   } catch (e) {
     return { ok: false, cached: false, ms: Date.now() - started, note: (e && e.message) || String(e) };
   }

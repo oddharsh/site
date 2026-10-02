@@ -534,7 +534,7 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
   assert.doesNotMatch(base, /\.controls/);
   const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
   assert.match(build, /site-page corpus/);
-  assert.match(build, /page-family\.\$\{hash8\(dictionary\)\}\.dict/);
+  assert.match(build, /familyDictionaryName\(hash8\(dictionary\)\)/);
   assert.match(build, /src\/dict\/p-dict/);
   assert.match(build, /site-page dictionary/);
   // The snapshots live at src/dict/ now, OUTSIDE the served tree, which is a

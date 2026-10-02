@@ -22,6 +22,8 @@ import { brotliCompressSync, brotliDecompressSync, constants as zc } from "node:
 import { execFileSync } from "node:child_process";
 import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily, writeCommittedFamily } from "./lib/page-family.ts";
 import { SHELL_DISCOVERY_ROOTS, shellAssetRefs } from "./lib/shell-roots.ts";
+import { dictionaryTag } from "./lib/dcz.ts";
+import { pageSlug, pageSnapshotName, parseFamilyDictionary, parsePageSnapshot, parseShellAsset } from "../src/worker/lib/dictionary-names.ts";
 
 // ------------------------------------------------------- adoption order ----
 
@@ -111,10 +113,7 @@ const KEEP = 3;
 // A delta exists only if a-dict already holds the sprite a browser was offered. It
 // changes rarely and KEEP prunes per base, so this files one candidate per sprite
 // change rather than one per deploy.
-const parse = (n) => {
-  const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/);
-  return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null;
-};
+const parse = parseShellAsset;
 
 if (!live && !existsSync(BUILT)) {
   console.error(`shell:roll — ${BUILT} is missing. Run \`bun run build\` first: the /a/ hashes`);
@@ -277,10 +276,7 @@ else {
   // and 4% at 6).
   const KEEP_PAGES = 4;
   const FETCH_CONCURRENCY = 6;
-  const parse = (n) => {
-    const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/);
-    return m ? { slug: m[1], tag: m[2], name: n } : null;
-  };
+  const parse = parsePageSnapshot;
   // `.build/public/garage/pretext.html` is served at `/garage/pretext`, and an
   // index file is served at its directory: `garage/index.html` -> `/garage`,
   // `index.html` -> `/`.
@@ -296,7 +292,6 @@ else {
   // Every snapshot this run confirmed as CURRENTLY SERVED, whether it wrote the
   // file or found it already there. These are never prune candidates.
   const adoptedNow = new Set();
-  const { createHash } = await import("node:crypto");
 
   // Ask for brotli and decode what comes back, rather than asking for `identity`
   // and trusting it. The Worker precompresses and cannot negotiate (gotcha 13), and
@@ -313,7 +308,7 @@ else {
     return { status: res.status, bytes: raw };
   };
 
-  const jobs = staged.map((rel) => ({ rel, slug: rel.replace(/\.html$/, "").replace(/\//g, "__"), route: routeOf(rel) }));
+  const jobs = staged.map((rel) => ({ rel, slug: pageSlug(rel), route: routeOf(rel) }));
   for (const job of jobs) liveSlugs.add(job.slug);
   for (let i = 0; i < jobs.length; i += FETCH_CONCURRENCY) {
     const batch = jobs.slice(i, i + FETCH_CONCURRENCY);
@@ -330,12 +325,13 @@ else {
         missing++;
         continue;
       }
-      const tag = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
-      const dest = `${PDICTS}/${job.slug}.${tag}.html.br`;
+      const tag = dictionaryTag(bytes);
+      const snapshot = pageSnapshotName(job.slug, tag);
+      const dest = `${PDICTS}/${snapshot}`;
       // Record it either way: an already-present snapshot is still what production
       // is serving right now, so it must not become a prune candidate just because
       // this run had nothing to write.
-      adoptedNow.add(`${job.slug}.${tag}.html.br`);
+      adoptedNow.add(snapshot);
       if (existsSync(dest)) continue;
       await writeFile(dest, brotliCompressSync(bytes, { params: { [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_LGWIN]: 24 } }));
       adopted++;
@@ -429,7 +425,7 @@ else {
       const body = Buffer.from(await res.arrayBuffer());
       let liveBytes = body;
       try { liveBytes = brotliDecompressSync(body); } catch { /* already plain */ }
-      const liveHash = offered.match(/page-family\.([0-9a-f]{8})\.dict$/)?.[1];
+      const liveHash = parseFamilyDictionary(offered.split("/").pop() ?? "");
       if (!res.ok || liveHash !== hash8(liveBytes)) {
         console.error(`family:roll --live: ${offered} answered ${res.status} and hashes to ${hash8(liveBytes)}; refusing to adopt bytes the URL does not name.`);
         process.exit(1);
