@@ -2,6 +2,7 @@
 // Split-file suite; shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { CREDENTIAL_NAME, credentialValues, redactCredentials } from "./lib/redact.ts";
+import { createReport } from "./lib/infra-report.ts";
 
 // WHAT THIS PINS, and why it is a barrier rather than a dismissal. CodeQL
 // alerts 100 and 101 (js/clear-text-logging, 2026-08-29) land on the two print
@@ -66,23 +67,43 @@ test("overlapping values are replaced whole, longest first", () => {
 });
 
 test("check-infra routes every message through the barrier", async () => {
-  const src = await readFile(new URL("tools/check-infra.ts", ROOT), "utf8");
-
-  // The funnel is the only thing that prints a string in that file, so this
-  // pair of assertions is the whole coverage argument. Guarding it at PUSH time
-  // rather than at print time is deliberate: the arrays then never hold a
-  // credential, so a second reader added later inherits the guarantee.
-  for (const [name, store] of [["fail", "hard"], ["warn", "advisory"], ["pass", "ok"]]) {
-    // assert.equal on the boolean rather than assert.match, because a failed
-    // match prints the whole 60KB file and buries its own message.
-    const wired = new RegExp(`const ${name} = \\(m: string\\) => ${store}\\.push\\(redactCredentials\\(m\\)\\)`).test(src);
-    assert.equal(wired, true, `${name}() must redact before it stores`);
+  // The store is a module now (tools/lib/infra-report.ts), so the barrier is
+  // asserted by CALLING it: each of the three doors redacts before it stores.
+  // Guarding at PUSH time rather than at print time is deliberate: the arrays
+  // then never hold a credential, so a second reader added later inherits the
+  // guarantee. The fixture-driven half, a token arriving inside an adapter's
+  // error, is in contract-infra-check-compares-declared-against-observed.
+  const report = createReport({ CLOUDFLARE_API_TOKEN: TOKEN });
+  report.fail(`drift ${TOKEN}`);
+  report.warn(`note ${TOKEN}`);
+  report.pass(`ok ${TOKEN}`);
+  for (const [name, store] of [["fail", report.hard], ["warn", report.advisory], ["pass", report.ok]]) {
+    assert.equal(store.length, 1, `${name}() must store its message`);
+    assert.equal(store[0].includes(TOKEN), false, `${name}() must redact before it stores`);
   }
 
-  // A new console call that interpolates something other than the three stores
-  // or a count would route around all of it. This is the tripwire for that, and
-  // it fails loudly rather than silently widening: the count is the floor.
+  const src = await readFile(new URL("tools/check-infra.ts", ROOT), "utf8");
+
+  // What is left to pin in the source is that check-infra.ts has no second
+  // store and no second printer. Its four message doors come off the report,
+  // and the only console calls drain what the report rendered.
+  assert.equal(/const \{ hard, fail, warn, pass \} = report;/.test(src), true,
+    "check-infra.ts must take fail/warn/pass from the redacting report");
+  assert.equal(/\b(hard|advisory|ok)\.push\(/.test(src), false,
+    "check-infra.ts must not push to a store directly; that skips the barrier");
+
+  // A new console call that interpolates something other than rendered output
+  // would route around all of it. This is the tripwire for that, and it fails
+  // loudly rather than silently widening: the count is the floor.
   const consoles = src.match(/console\.(log|error|warn)\(/g) || [];
-  assert.equal(consoles.length, 6,
-    "check-infra.ts grew or lost a console call. Confirm the new one prints only funnel output or a count, then move this floor");
+  assert.equal(consoles.length, 2,
+    "check-infra.ts grew or lost a console call. Confirm the new one prints only what report.render() returned, then move this floor");
+  assert.equal(/for \(const line of rendered\.stdout\) console\.log\(line\);\nfor \(const line of rendered\.stderr\) console\.error\(line\);/.test(src), true,
+    "the two console calls must print the report's rendered lines and nothing else");
+
+  // The comparers and adapters return data. Neither may print or store.
+  for (const lib of ["tools/lib/infra-compare.ts", "tools/lib/infra-ports.ts"]) {
+    const text = await readFile(new URL(lib, ROOT), "utf8");
+    assert.equal(/console\.|process\.std(out|err)/.test(text), false, `${lib} must not print`);
+  }
 });
