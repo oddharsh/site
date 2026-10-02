@@ -316,8 +316,9 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
     "the homepage must take the shared generated-page policy, not a hand-written one");
   assert.doesNotMatch(block[0], /no-cache|must-revalidate|private/,
     "no-cache vetoes dictionary registration, must-revalidate cancels the swr window a max-age=0 page lives on, and private keeps shared caches out; `/` cannot carry them");
-  assert.match(index, /WORKERS_CACHEABLE_PATHS = new Set\("\/ /,
-    "`/` must be in WORKERS_CACHEABLE_PATHS, or a cacheable homepage still invokes the worker every hit");
+  const { CACHEABLE_PATHS } = await import("../src/worker/routes.ts");
+  assert.ok(CACHEABLE_PATHS.has("/"),
+    "`/` must be cacheable in routes.ts, or a cacheable homepage still invokes the worker every hit");
 
   // The HEAD path used to write its own headers, which is how it drifted: a
   // hand-maintained duplicate can only be checked by asserting it restates the

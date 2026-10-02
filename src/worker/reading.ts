@@ -10,6 +10,7 @@ import { esc } from "./lib/http.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
+import { READING_LIST_URL } from "./routes.ts";
 
 // ── /reading — a native, Luna-styled mirror of my Curius reading list ──
 // Curius (the social reading-list app) exposes a clean JSON API per user. We
@@ -116,7 +117,7 @@ export async function getCuriusCached(request, env, ctx) {
 // page's bytes. That priced only the first visit: a returning reader already
 // holds the shell, so what they fetch shrinks to the dictionary delta plus the
 // list, and the list is the one part that could have changed.
-export const LIST_URL = "/reading/list.html";
+export const LIST_URL = READING_LIST_URL;
 
 const LIST_CACHE = "public, max-age=300";
 

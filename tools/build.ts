@@ -229,51 +229,26 @@ async function checkInvariants() {
   };
   for (const root of stageRoots) await walkStage(root);
 
-  // 1 (hard) — every index.js dispatch key is covered by the wrangler
-  // run_worker_first allowlist, or that route silently serves static. BOTH tables
-  // are checked: the exact ROUTES map, and the ordered PREFIX table (whose labels
-  // become a concrete probe path). Allowlist globs are matched as patterns, never
-  // required literally (a symmetric diff would false-fire on the glob entries —
-  // the exact disable-magnet).
-  const idx = await read("src/worker/index.ts");
-  const wrangler = await siteConfigText();
-  // Reads ROUTE_TABLE, which is where the dispatch keys live. This matched
-  // `const ROUTES = new Map([...])` until 2026-08-19, and that form stopped
-  // existing when the table was extracted into its own const so the @type
-  // annotation could sit on a declaration. The regex then captured nothing, so
-  // routeKeys was EMPTY and this hard invariant asserted nothing about any of
-  // the 85 exact routes — silently, because the PREFIX half below still found
-  // its 13 and the summary line kept printing a plausible number.
+  // 1 (hard) — every route the Worker dispatches is covered by the
+  // run_worker_first allowlist the deployed config actually carries, or that
+  // route silently serves static. Exact paths are checked as themselves and each
+  // prefix route by its `probe`, a real path it answers.
   //
-  // Two general lessons, both cheap to act on. A check that scrapes source text
-  // is coupled to the shape of that source, so a refactor can retire it without
-  // touching it. And a scanner that finds ZERO of something must say so rather
-  // than pass: the floor below is what turns this class of failure back into a
-  // red build, and it is the same guard tools/check-tools.ts puts on its own
-  // scanners for the same reason.
-  // The type annotation is OPTIONAL in this pattern because the declaration form
-  // has now moved under this scanner TWICE: once when the table was extracted
-  // into its own const (above), and again on 2026-08-20 when it gained
-  // `: Array<[path: string, handler: Function]>` so tsc could resolve
-  // `new Map(ROUTE_TABLE)`. Both times the regex captured nothing. The floor
-  // below is the only reason either was noticed, and it caught this one before
-  // the change left the worktree, which is what a floor is for.
-  const routesBlock = (idx.match(/const ROUTE_TABLE(?::[^=]*)? = \[([\s\S]*?)\n\];/) || [, ""])[1];
-  const routeKeys = [...routesBlock.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]);
-  if (routeKeys.length < 60) hard.push(`route invariant scanned only ${routeKeys.length} ROUTE_TABLE keys — the scanner has lost the table, not the site its routes`);
+  // Read from src/worker/routes.ts since 2026-10-02, by IMPORT. Until then this
+  // regex-scraped index.ts for ROUTE_TABLE and PREFIX, and the declaration moved
+  // under the scanner twice (2026-08-19 and 2026-08-20) with the regex capturing
+  // nothing both times; only the floor noticed. The allowlist is derived from the
+  // same list now, so what this still guards is the WIRING: a config that stops
+  // using RUN_WORKER_FIRST, or a projection that drops rows on the way to
+  // wrangler. Allowlist globs are matched as patterns, never required literally.
+  const wrangler = await siteConfigText();
+  const routeModule = await import(pathToFileURL(resolve("src/worker/routes.ts")).href);
+  const routeKeys: readonly string[] = routeModule.EXACT_PATHS;
+  const prefixProbes: string[] = routeModule.PREFIX_ROUTES.map((r) => r.probe);
+  if (routeKeys.length < 60) hard.push(`route invariant read only ${routeKeys.length} exact routes from routes.ts — the list has lost its routes`);
   const allow = runWorkerFirst(wrangler);
   if (allow.length < 60) hard.push(`route invariant scanned only ${allow.length} run_worker_first entries — the scanner has lost the allowlist, not the config its rules`);
-  const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, ".*") + "$");
-  const covered = (p) => allow.includes(p) || allow.some((a) => a.includes("*") && globRe(a).test(p));
-  for (const k of routeKeys) if (!covered(k)) hard.push(`ROUTES key ${k} is not in wrangler run_worker_first (route would silently serve static)`);
-
-  // the PREFIX table is the second dispatch surface and was never asserted, so a
-  // route like /writing/<slug> could lose its allowlist entry and quietly go static.
-  // Turn each label's placeholder into a path the glob matcher can actually test.
-  const prefixBlock = (idx.match(/const PREFIX = \[([\s\S]*?)\n\];/) || [, ""])[1];
-  const prefixProbes = [...prefixBlock.matchAll(/label:\s*"([^"]+)"/g)].map((m) =>
-    m[1].replace("<slug>", "x").replace("<stem>", "x").replace("<key>", "x").replace("<thumb>", "x.avif"));
-  for (const p of prefixProbes) if (!covered(p)) hard.push(`PREFIX route ${p} is not in wrangler run_worker_first (route would silently serve static)`);
+  for (const p of routeModule.uncoveredRoutes(allow)) hard.push(`route ${p} is not in wrangler run_worker_first (route would silently serve static)`);
 
   // 2 (hard) — wherever a worker emits a CSP with a style-src, it includes
   // 'self'. cal emits no CSP and passes vacuously (this is the exact thing that
@@ -2896,17 +2871,15 @@ let freshFamily: Buffer | null = null;
   const served = new Set<string>();
   for (const rel of await readdir(`${OUT}/public`, { recursive: true })) served.add("/" + rel);
 
-  const idxSrc = await readFile("src/worker/index.ts", "utf8");
   const wranglerSrc = await siteConfigText();
-  // The same pattern invariant #1 reads the table with, and the same floor. This
-  // matched `const ROUTES = new Map([...])` until 2026-09-25, a form that stopped
-  // existing on 2026-08-19, so for five weeks routeKeys was EMPTY and every Worker
-  // route resolved only by luck: through a run_worker_first glob, or not at all
-  // under a governed prefix. /garage/dyno.json was the first ref to land in the
-  // gap, when /garage/dyno became the first built page linking it.
-  const routesSrc = (idxSrc.match(/const ROUTE_TABLE(?::[^=]*)? = \[([\s\S]*?)\n\];/) || [, ""])[1];
-  const linkRouteKeys = new Set([...routesSrc.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]));
-  if (linkRouteKeys.size < 60) throw new Error(`link-integrity scanned only ${linkRouteKeys.size} ROUTE_TABLE keys — the scanner has lost the table`);
+  // The exact routes, from src/worker/routes.ts by import (2026-10-02). This
+  // regex-scraped index.ts until then, and the form it matched stopped existing
+  // on 2026-08-19, so for five weeks the set was EMPTY and every Worker route
+  // resolved only by luck: through a run_worker_first glob, or not at all under a
+  // governed prefix. /garage/dyno.json was the first ref to land in the gap.
+  const { EXACT_PATHS } = await import(pathToFileURL(resolve("src/worker/routes.ts")).href);
+  const linkRouteKeys = new Set<string>(EXACT_PATHS);
+  if (linkRouteKeys.size < 60) throw new Error(`link-integrity read only ${linkRouteKeys.size} exact routes from routes.ts — the list has lost its routes`);
   const surfaceList = JSON.parse(await readFile("config/site-manifest.json", "utf8")).surfaces;
 
   const resolves = makeResolver({

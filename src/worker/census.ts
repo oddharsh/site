@@ -5,6 +5,7 @@ import { escHtml, escAttr, jsonResponse, timingSafeEqual } from "./lib/http.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
 import { lensInspect } from "./lens.ts";
 import { span } from "./lib/trace.ts";
+import { CENSUS_TABLE_URL } from "./routes.ts";
 
 // The roster: 16 sites chosen to span the open → agent-native spectrum a
 // crypto-VC audience cares about. Agent-native infra, AI labs, publishers
@@ -524,7 +525,7 @@ export async function handleCensus(request, env, ctx) {
 // delta and an ETag, and the table arrives from TABLE_URL. The owner's
 // ?refresh=KEY view above still renders live and whole, since its banner belongs
 // to the request that asked for the sweep (index.ts routes it there).
-export const TABLE_URL = "/lens/census/table.html";
+export const TABLE_URL = CENSUS_TABLE_URL;
 
 const PENDING_CENSUS = { pending: true };
 

@@ -23,13 +23,13 @@ const ORIGIN = "https://aadhar.sh";
 const URN = /^urn:air:aadhar\.sh:[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)+$/;
 const MEDIA_TYPE = /^(?:application|text)\/[a-z0-9][a-z0-9.+-]*$/;
 
-// Route literals in the dispatcher table, so a url with no file behind it
-// (/ask) still has to be something the Worker answers. Reading the source
-// rather than importing ROUTES keeps this file free of the Worker's module
-// graph, which is the same choice the link-integrity invariant makes.
+// The Worker's exact routes, so a url with no file behind it (/ask) still has
+// to be something the Worker answers. Imported from routes.ts, the data-only
+// route list, which keeps this file free of the Worker's module graph; it read
+// index.ts's source text until 2026-10-02.
 async function workerRoutes() {
-  const src = await readFile(new URL("src/worker/index.ts", ROOT), "utf8");
-  return new Set([...src.matchAll(/^\s*\["(\/[^"]*)",/gm)].map((m) => m[1]));
+  const { EXACT_PATHS } = await import("../src/worker/routes.ts");
+  return new Set(EXACT_PATHS);
 }
 
 // The validator, as a function, so the control below can prove it rejects.

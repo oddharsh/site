@@ -5,7 +5,7 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](../CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `cloudflare.config.ts` + `wrangler.config.ts` at the repo root (`wrangler.jsonc` until 2026-09-28; CLAUDE.md gotcha 48): it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `config/dev/`, production plus a dev overlay, projected to a gitignored `.wrangler.dev.jsonc` (readable source, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `cloudflare.config.ts`; secrets via `wrangler versions secret put`.
+- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `cloudflare.config.ts` + `wrangler.config.ts` at the repo root (`wrangler.jsonc` until 2026-09-28; CLAUDE.md gotcha 48): it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist derived from the route list in `src/worker/routes.ts`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `config/dev/`, production plus a dev overlay, projected to a gitignored `.wrangler.dev.jsonc` (readable source, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `cloudflare.config.ts`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](../cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
@@ -1304,11 +1304,13 @@ OG/Twitter card once the page is live with `bun run og-cards` (see below).
 
 ## Route map (where each URL's code lives)
 
-Start with [`src/worker/index.ts`](../src/worker/index.ts). Its route tables,
-pattern handlers, and host dispatch select the handler; the imports lead to
-its implementation. [`cloudflare.config.ts`](../cloudflare.config.ts)'s
-`assets.run_worker_first` decides which requests reach that dispatcher before
-static assets. Keep the two in sync when adding a Worker-owned route.
+Start with [`src/worker/routes.ts`](../src/worker/routes.ts), the one route
+list: every exact path and prefix pattern the Worker owns, in dispatch order,
+with the `run_worker_first` rows each one claims. [`src/worker/index.ts`](../src/worker/index.ts)
+binds each route's id to its handler, and the imports there lead to the
+implementation. Adding a Worker-owned route is a record in `routes.ts` plus
+its handler in `index.ts`; the compiler fails if either half is missing, and
+`cloudflare.config.ts`'s allowlist follows on its own.
 
 [`config/site-manifest.json`](../config/site-manifest.json) owns the public
 surface registry and discovery metadata. URL paths and source paths differ:

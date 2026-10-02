@@ -104,7 +104,7 @@ test("speculation readback: the route is wired, allowlisted, and refuses writes"
   assert.equal(none.headers.get("cache-control"), "no-store", "an unconfigured answer must not be cached as the ledger");
 
   const idx = readFileSync("src/worker/index.ts", "utf8");
-  assert.match(idx, /\["\/ledger\/speculation\.json", handleSpeculationJson\]/);
+  assert.match(idx, /"\/ledger\/speculation\.json": handleSpeculationJson,/);
   const wrangler = await configText("cloudflare.config.ts");
   assert.match(wrangler, /"\/ledger\/\*"/, "the ledger's sub-routes ride one run_worker_first glob");
   const pkg = JSON.parse(readFileSync("package.json", "utf8"));

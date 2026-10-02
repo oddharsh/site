@@ -7,6 +7,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { asNumber, asRecord, asText } from "./lib/parse.ts";
+import { WHOAREYOU_VALUES_URL } from "./routes.ts";
 
 const RDAP_BUDGET_MS = 250;
 
@@ -295,7 +296,7 @@ export async function handleWhoareyouJson(request, env, ctx) {
 // referrer: the fragment request's Referer is this page, so that row is filled
 // in the browser from document.referrer, which is what the browser sent with
 // the page request. The callout says all of this in the page's own copy.
-export const VALUES_URL = "/whoareyou/values.html";
+export const VALUES_URL = WHOAREYOU_VALUES_URL;
 const PENDING = "…";
 
 // The placeholder model. The same renderer draws the baked placeholder and the
