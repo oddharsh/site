@@ -63,21 +63,24 @@ function relativeTime(date) {
   return `${Math.floor(days / 365)}y ago`;
 }
 
-// Pinned to UTC, which is this Worker's clock: an instant shows in UTC and a
-// zoneless wall-clock string shows as recorded. A zoneless string is read AS
-// UTC rather than as the host's local time, so the output is the same in
-// workerd and in a test on a workstation in any timezone. Matches what the
-// retired Temporal branch printed, byte for byte (checked on six shapes, two
-// host zones, 2026-09-23).
-function fmtDateTime(s) {
-  if (!s) return "";
-  const opt: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
-  const topt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit", timeZone: "UTC" };
+// Normalize zoneless source dates as UTC on the server, so browsers receive
+// an unambiguous instant. The client localizes the same <time> on the dashboard
+// and event page; cached HTML and visitors without JavaScript retain labeled UTC.
+function eventDate(s): Date | null {
+  if (!s) return null;
   const z = String(s).replace(" ", "T");
   const d = new Date(/T\d/.test(z) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(z) ? z + "Z" : z);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-US", opt) + " · " + d.toLocaleTimeString("en-US", topt);
+  return isNaN(d.getTime()) ? null : d;
 }
+
+function eventTime(d: Date | null): string {
+  if (!d) return "date TBD";
+  const day = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+  const clock = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" });
+  return `<time data-event-time datetime="${d.toISOString()}">${esc(day)} · ${esc(clock)}</time>`;
+}
+
+const EVENT_SCRIPT = '<script src="/serendipity.js" defer></script>';
 
 // influence/seniority proxy, first match wins. Exported as a table so a
 // classifier meant to replace it (tools/serendipity-role-baseline.ts) is
@@ -431,10 +434,10 @@ function eventCard(e, isPast) {
   const counts: string[] = [];
   if (Number(e.host_count) > 0) counts.push(`${e.host_count} host${e.host_count == 1 ? "" : "s"}`);
   if (Number(e.attendee_count) > 0) counts.push(`${e.attendee_count} going`);
-  const d = e.start_at ? new Date(e.start_at) : null;
-  return `<a class="ev${going ? "" : " disc"}" data-tier="${going ? "going" : "browsed"}" href="${PREFIX}/event/${esc(e.id)}" data-start="${esc(e.start_at || "")}"${e._coverHref ? ` data-cover="${esc(e._coverHref)}"` : ""}>
+  const d = eventDate(e.start_at);
+  return `<a class="ev${going ? "" : " disc"}" data-tier="${going ? "going" : "browsed"}" href="${PREFIX}/event/${esc(e.id)}" data-start="${d ? d.toISOString() : ""}"${e._coverHref ? ` data-cover="${esc(e._coverHref)}"` : ""}>
     <div class="nm">${esc(e.name)}</div>
-    <div class="meta">${d ? esc(fmtDateTime(e.start_at)) : "date TBD"}${isPast && d ? ` · ${esc(relativeTime(d))}` : ""}${e.location ? " · " + esc(e.location) : ""}</div>
+    <div class="meta">${eventTime(d)}${isPast && d ? ` · ${esc(relativeTime(d))}` : ""}${e.location ? " · " + esc(e.location) : ""}</div>
     <div class="row">
       ${going ? "" : `<span class="badge browsed" title="synced from a browsed feed — not RSVP'd">browsed</span>`}
       ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:oklch(60% 0 0)">${going ? "no guest list yet" : "not RSVP&rsquo;d"}</span>`}
@@ -444,69 +447,9 @@ function eventCard(e, isPast) {
   </a>`;
 }
 
-// client-side dashboard interactivity: live search, date-filter chips, and the
-// cursor-following cover tooltip (homepage idiom). all over the rendered cards —
-// no extra requests. On the built page the cards arrive with the island, so the
-// filter re-reads them on every apply and re-runs when the island lands.
-const DASHBOARD_JS = `
-(function(){
-  // Cards and group headers are read on every apply rather than once, because
-  // on the built page they arrive with the island after this runs. The toolbar
-  // is in the shell, so a search typed before the swap survives it.
-  var search=document.getElementById('ev-search'), chips=document.getElementById('ev-chips');
-  var none=document.getElementById('ev-none'), tip=document.getElementById('ev-tip'), when='all';
-  function isWeekend(s,now){ if(s<now||s>now+8*864e5)return false; var w=new Date(s).getDay(); return w===0||w===6; }
-  function apply(){
-    var cards=[].slice.call(document.querySelectorAll('.ev[href]')), grps=[].slice.call(document.querySelectorAll('.grp[data-grp]'));
-    var q=((search&&search.value)||'').trim().toLowerCase(), now=Date.now(), wk=now+7*864e5, shown=0;
-    cards.forEach(function(c){
-      var okq=!q||c.textContent.toLowerCase().indexOf(q)!==-1;
-      var s=c.dataset.start?new Date(c.dataset.start).getTime():NaN, okw=true;
-      if(when==='week')okw=!isNaN(s)&&s>=now&&s<=wk;
-      else if(when==='weekend')okw=!isNaN(s)&&isWeekend(s,now);
-      var v=okq&&okw; c.hidden=!v; if(v)shown++;
-    });
-    grps.forEach(function(g){
-      var any=false,n=g.nextElementSibling;
-      while(n&&!(n.classList&&n.classList.contains('grp'))){ if(n.classList&&n.classList.contains('ev')&&!n.hidden){any=true;break;} n=n.nextElementSibling; }
-      g.hidden=!any;
-    });
-    if(none)none.style.display=shown||!cards.length?'none':'block';
-  }
-  document.addEventListener('island',apply);
-  if(search)search.addEventListener('input',apply);
-  if(chips)chips.addEventListener('click',function(e){
-    var b=e.target.closest&&e.target.closest('.chip'); if(!b)return;
-    when=b.getAttribute('data-when');
-    [].forEach.call(chips.children,function(c){c.classList.toggle('on',c===b);});
-    apply();
-  });
-  // the cover tooltip runs on the SHARED hover engine (/hoist.js) that the
-  // homepage photo/track/artist tips use. This was a hand-ported copy whose own
-  // comment asked the next editor to keep TIP_DISMISS_MS in sync with the
-  // homepage by hand, and it had already drifted from the original on three
-  // counts: no popover hoist (so it was clippable and got no fade), no keyboard
-  // path, no will-change lifecycle. It gains all three here. Deferred import,
-  // because a hover nicety must never sit in front of the event list rendering.
-  if(tip&&!matchMedia('(hover: none)').matches){
-    import('/hoist.js').then(function(m){
-      m.createHoist({
-        node: tip,
-        anchorName: '--ev-tip',
-        findTarget: function(el){ return (el&&el.closest&&el.closest('.ev[data-cover]'))||null; },
-        contentFor: function(a){
-          var u=a.getAttribute('data-cover');
-          return u ? '<img decoding="async" alt="" src="'+u.replace(/"/g,'&quot;')+'">' : '';
-        }
-      });
-    }).catch(function(){});   // no covers is a fine outcome; the list still works
-  }
-})();
-`;
-
 // ── the dashboard: a built shell and one island ──────────────────────────────
 // Since 2026-09-25 build.ts step 5b bakes renderSerendipityPage() once, so the
-// shell (12 KB of CSS, the toolbar and the filter script) ships as a q11 twin
+// shell (12 KB of CSS, the toolbar and its client script) ships as a q11 twin
 // with a dcz delta, an ETag and hashed script-src. The pool's half, the count
 // line and the cards, is the island at EVENTS_URL, cached at the edge for the
 // 60 s the whole dashboard used to take and evicted by every mutation below.
@@ -522,15 +465,15 @@ const DASHBOARD_LEDE = `<h1 class="page">Events</h1>
 const DASHBOARD_TOOLBAR = `<div class="toolbar">
         <input class="xp-field search" id="ev-search" type="search" placeholder="Search events, places, contributors…" autocomplete="off">
         <div class="chips" id="ev-chips">
-          <button type="button" class="chip on" data-when="all">All</button>
-          <button type="button" class="chip" data-when="week">This week</button>
-          <button type="button" class="chip" data-when="weekend">This weekend</button>
+          <button type="button" class="chip on" data-when="all" aria-pressed="true">All</button>
+          <button type="button" class="chip" data-when="week" aria-pressed="false">This week</button>
+          <button type="button" class="chip" data-when="weekend" aria-pressed="false">This weekend</button>
         </div>
       </div>`;
 
 const DASHBOARD_TAIL = `<p class="empty-filter" id="ev-none">No events match — clear the search or pick a wider range.</p>
       <div id="ev-tip" popover="manual" aria-hidden="true"></div>
-      <script>${DASHBOARD_JS}</script>`;
+      ${EVENT_SCRIPT}`;
 
 // The placeholder model: a count line and a screenful of unread cards. The
 // number of cards is not the live number, and it does not need to be: nothing
@@ -626,19 +569,19 @@ async function renderEvent(d, id, path) {
   const hosts = rows.filter((a) => a.is_host);
   const guests = rows.filter((a) => !a.is_host).map((a) => ({ ...a, _s: attendeeScore(a) }))
                      .sort((a, b) => b._s - a._s || a.name.localeCompare(b.name));
-  const d0 = ev.start_at ? new Date(ev.start_at) : null;
+  const d0 = eventDate(ev.start_at);
   const lumaUrl = ev.url || (ev.id ? `https://lu.ma/${esc(ev.id)}` : null);
   const body = `
     <p style="margin:0 0 10px"><a href="${PREFIX}">&larr; All events</a></p>
     <h1 class="page">${esc(ev.name)}</h1>
-    <p class="lede">${d0 ? esc(fmtDateTime(ev.start_at)) : "date TBD"}${ev.location ? " · " + esc(ev.location) : ""}${lumaUrl ? ` · <a href="${esc(lumaUrl)}" rel="noopener external">View on Luma ↗</a>` : ""}</p>
+    <p class="lede">${eventTime(d0)}${ev.location ? " · " + esc(ev.location) : ""}${lumaUrl ? ` · <a href="${esc(lumaUrl)}" rel="noopener external">View on Luma ↗</a>` : ""}</p>
     ${contributors.length ? `<div class="row" style="display:flex;gap:6px;flex-wrap:wrap;margin:-8px 0 14px"><span class="grp" style="margin:0">Contributed by</span>${contributors.map((c) => `<span class="badge via"${Number(c.enabled) === 0 ? ' style="text-decoration:line-through;opacity:.6"' : ""}>${esc(c.label)}</span>`).join("")}</div>` : ""}
     ${ev.description && ev.description.trim() ? `<button class="xp-button" type="button" style="margin:0 0 12px" onclick="var d=this.nextElementSibling;d.hidden=false;this.remove()">Show description &#9662;</button><div class="evdesc" hidden="until-found">${esc(ev.description.trim())}</div>` : ""}
     ${hosts.length ? `<div class="grp">${hosts.length === 1 ? "Host" : "Hosts"}</div><div class="alist">${hosts.map(attendeeRow).join("")}</div>` : ""}
     <div class="grp">Attendees${guests.length ? ` (${guests.length})` : ""}</div>
     ${guests.length ? `<div class="alist">${guests.map(attendeeRow).join("")}</div>`
       : `<div class="empty"><p class="note">No guest list loaded for this event yet.</p></div>`}`;
-  return html(200, shell(ev.name, path, body));
+  return html(200, shell(ev.name, path, body + EVENT_SCRIPT));
 }
 
 async function renderContribute(d, path, uid, msg) {

@@ -32,7 +32,7 @@ test("the homepage Link set advertises the webmention endpoint", () => {
   assert.ok(block, "_headers lost its `/` rule");
   assert.ok(block[1].includes(`Link: ${WEBMENTION}`), "_headers' `/` rule must carry the webmention Link too");
   // and the endpoint it names is a real route, so the rel always leads somewhere
-  assert.match(read("src/worker/index.ts"), /\["\/webmention", handleWebmention\]/);
+  assert.match(read("src/worker/index.ts"), /"\/webmention": handleWebmention,/);
 });
 
 test("the homepage body carries no webmention <link>, so the rel costs no body bytes", () => {

@@ -6,6 +6,7 @@ import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, extractMeta, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
+import { AROUND_SNAPSHOT_URL } from "./routes.ts";
 
   // Signature-Agent value (RFC 8941 string)
 
@@ -452,7 +453,7 @@ async function runAroundInner(env, sCrawl) {
 // The crawl's half (when it ran, and the twenty rows) is the island, fetched
 // from SNAPSHOT_URL. The snapshot changes once a day and is the same for every
 // visitor, so the island is edge-cached behind cachedRender like the page was.
-export const SNAPSHOT_URL = "/around/snapshot.html";
+export const SNAPSHOT_URL = AROUND_SNAPSHOT_URL;
 
 // The placeholder model: one row per neighbour, none of them named. The live
 // crawl always reports exactly NEIGHBORS.length rows, so the swap adds none,

@@ -407,7 +407,7 @@ export const TWIN_FACTS = [
       { label: "worker series key", source: "src/worker/dyno.ts", string: "worker_gzip" },
       { label: "assets series key", source: "src/worker/dyno.ts", string: "assets_br" },
       { label: "history branch", source: "src/worker/dyno.ts", string: "perf-history" },
-      { label: "island URL", source: "src/worker/dyno.ts", string: "/garage/dyno/pulls.html" },
+      { label: "island URL", source: "src/worker/routes.ts", string: "/garage/dyno/pulls.html" },
       {
         label: "cache window",
         source: "src/worker/dyno.ts",
@@ -427,7 +427,7 @@ export const TWIN_FACTS = [
   {
     twin: "src/content/md/ledger.md",
     facts: [
-      { label: "island URL", source: "src/worker/ledger.ts", string: "/ledger/lines.html" },
+      { label: "island URL", source: "src/worker/routes.ts", string: "/ledger/lines.html" },
       { label: "JSON endpoint", source: "src/worker/index.ts", string: "/ledger.json" },
       { label: "line-item key", source: "src/worker/ledger.ts", string: "line_items" },
       {
@@ -451,7 +451,7 @@ export const TWIN_FACTS = [
   {
     twin: "src/content/md/inbox.md",
     facts: [
-      { label: "island URL", source: "src/worker/inbox.ts", string: "/inbox/mail.html" },
+      { label: "island URL", source: "src/worker/routes.ts", string: "/inbox/mail.html" },
       { label: "endpoint", source: "src/worker/index.ts", string: "/webmention" },
       { label: "encoding", source: "src/worker/webmention.ts", string: "application/x-www-form-urlencoded" },
     ],
@@ -459,7 +459,7 @@ export const TWIN_FACTS = [
   {
     twin: "src/content/md/reading.md",
     facts: [
-      { label: "island URL", source: "src/worker/reading.ts", string: "/reading/list.html" },
+      { label: "island URL", source: "src/worker/routes.ts", string: "/reading/list.html" },
       {
         label: "Curius profile",
         source: "src/worker/reading.ts",
@@ -482,7 +482,7 @@ export const TWIN_FACTS = [
   {
     twin: "src/content/md/lens-census.md",
     facts: [
-      { label: "island URL", source: "src/worker/census.ts", string: "/lens/census/table.html" },
+      { label: "island URL", source: "src/worker/routes.ts", string: "/lens/census/table.html" },
       { label: "JSON endpoint", source: "src/worker/index.ts", string: "/lens/census.json" },
       { label: "newest-sweep key", source: "src/worker/census.ts", string: "lastYmd" },
       { label: "roster size", source: "src/worker/census.ts", string: "16 representative sites" },

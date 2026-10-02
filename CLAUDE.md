@@ -1441,8 +1441,10 @@ worktrees may edit freely, but a worktree is not a release surface.
 
 Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets, with a
 `_worker.js` that does server-side enhancement of an otherwise-static
-`index.html`. The worker route table sits in `route()` at the top of
-`_worker.js`.
+`index.html`. Every route the Worker owns is one record in
+`src/worker/routes.ts` (since 2026-10-02); `route()` in `src/worker/index.ts`
+walks it, binding each record's id to a handler. "Moving a page" below has the
+list's shape and what derives from it.
 
 ### Key files
 
@@ -2026,6 +2028,22 @@ the strength of a `_playlistId` module memo that no longer exists and a prerende
 that no longer happens.
 
 ### Moving a page: what checks it, and what does not
+
+**Adding or moving a ROUTE is one record in `src/worker/routes.ts`, since
+2026-10-02.** That module is DATA: each route's path (or label and pattern),
+the `run_worker_first` rows it claims, and whether it is cacheable or writes.
+`cloudflare.config.ts`'s allowlist, Workers Cache's paths and prefixes, the
+preview and early-data write guards, and build.ts's route checks all derive
+from it, where they used to be five hand-kept lists joined by regexes over
+`index.ts` that matched nothing twice. `index.ts` binds handlers in maps typed
+`Record<RouteId, RouteHandler>`, so a route without a handler, or a handler
+without a route, is a compile error. It stays data because `index.ts` and cal's
+Worker cannot load outside workerd (gotcha 16), and the config, the build and
+the tests all need to read the list. A FOLD (one wildcard claim standing for
+several routes) is still a human call, made on the record with the reason it is
+safe; `contract-the-route-list-derives-every-route-list` holds the 100-row cap,
+coverage of every route, the order-sensitive prefixes, and that every
+registered surface lands on a route.
 
 Renaming or moving a page used to leave every page LINKING to it pointing at a
 404, and nothing in the repo noticed. `routes:check` sweeps the routes it is
@@ -5303,9 +5321,10 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     The oracle still earns its keep on the routes it sweeps, and it is not the
     only thing between this config and a Worker that cannot boot.
 
-    **The repo is not at the cap.** `wrangler.jsonc` carries 93 entries, all 93
-    distinct, 7 short of the limit. There were duplicates when this was written;
-    there are none now.
+    **The repo is not at the cap.** The allowlist is DERIVED from the route
+    claims in `src/worker/routes.ts` since 2026-10-02: 96 rows, all distinct, 4
+    short of the limit, and a contract test fails the 101st by name and refuses
+    a duplicate, since the cap counts raw rows.
 
     What survives is the first thing to do anyway: **check whether a wildcard
     already covers your path before adding a rule.** `/garage/*`, `/lwe/*`,

@@ -23,6 +23,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, jsonResp } from "./lib/http.ts";
+import { LEDGER_LINES_URL } from "./routes.ts";
 
 const RATE_USD = 0.01;      // the site's posted price (the /llms-full.txt cent), not a market quote
 const WINDOW_DAYS = 30;
@@ -247,7 +248,7 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
 // as a q11 twin with a dcz delta and an ETag. The part the bookkeeper reads
 // (the line items, the total and the cost line) is the island at LINES_URL,
 // edge-cached behind cachedRender for the five minutes the page used to take.
-export const LINES_URL = "/ledger/lines.html";
+export const LINES_URL = LEDGER_LINES_URL;
 
 export function handleLedgerLines(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   return cachedRender(request, ctx, async () => {
