@@ -42,6 +42,14 @@
 //   node tools/check-infra.ts              tree + dns, api if a token exists
 //   node tools/check-infra.ts --offline    tree only
 //   node tools/check-infra.ts --strict     turn advisories into failures
+//
+// THIS FILE IS THE COMPOSITION, and only that: adapters, comparers, printing,
+// exit code. The comparers (declaration plus observation in, findings out) are
+// tools/lib/infra-compare.ts and never fetch. The adapters (DNS, edge,
+// Cloudflare, GitHub) are tools/lib/infra-ports.ts and never judge. The store
+// that redacts and renders is tools/lib/infra-report.ts. What stays here is
+// what reads this tree or this machine: the three file-walking tree checks,
+// the openssl probe, and the production Markdown sweep.
 
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm, writeFile, access } from "node:fs/promises";
@@ -50,8 +58,20 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { siteConfig } from "./lib/site-config.ts";
 import { auditActionPins } from "./lib/action-pins.ts";
-import { redactCredentials } from "./lib/redact.ts";
 import { agentRepresentation, agentSurfaces } from "./lib/agent-representation.ts";
+import {
+  AUX_CONFIGS, SHARED_DICTIONARY_SECTION, ZERO_RTT_SECTION,
+  compareD1Databases, compareDns, compareEdge, compareKvNamespaces, compareR2Buckets,
+  compareRepository, compareTokens, compareTree, compareVersionAffinity,
+  compareWorkerInventory, compareWorkersBuilds, compareZoneSetting, dnsQueries,
+} from "./lib/infra-compare.ts";
+import type { EarlyDataResult, WorkflowBlocks } from "./lib/infra-compare.ts";
+import {
+  cloudflareReader, edgeFetcher, githubReader, readD1Databases, readDns, readEdge,
+  readKvNamespaces, readR2Buckets, readRepository, readTokens, readVersionAffinity,
+  readWorkerScripts, readWorkersBuilds, readZoneSetting,
+} from "./lib/infra-ports.ts";
+import { createReport } from "./lib/infra-report.ts";
 
 const execFileP = promisify(execFile);
 
@@ -79,7 +99,7 @@ const execFileP = promisify(execFile);
 // evidence the zone setting is off. Three attempts, spaced, is: the drift is
 // reported only when every spaced sample missed, and it names the count so a
 // future failure says how much evidence is behind it.
-async function probeEarlyData(host: string) {
+async function probeEarlyData(host: string): Promise<EarlyDataResult> {
   let ossl: string | null = null;
   for (const c of [process.env.OPENSSL_BIN, "/opt/homebrew/opt/openssl@3/bin/openssl",
                    "/usr/local/opt/openssl@3/bin/openssl", "openssl"].filter(Boolean)) {
@@ -122,318 +142,26 @@ const ROOT = new URL("../", import.meta.url).pathname;
 const OFFLINE = process.argv.includes("--offline");
 const STRICT = process.argv.includes("--strict");
 
-// Identify honestly in the edge tier's own logs, same rule the Worker's
-// outbound fetches follow. This is not AadharshBot: it does not sign, and
-// pretending otherwise in the access log would be a small lie.
-const BOT_UA = "aadhar-sh-infra-check/1.0 (+https://aadhar.sh/bot)";
-
-// Typed because a bare `[]` infers `never[]`, which made every one of the ~90
-// fail/warn/pass call sites in this file a TS2345 against the tools ratchet.
-// The annotation is the whole fix and it costs nothing at runtime.
-const hard: string[] = [];
-const advisory: string[] = [];
-const ok: string[] = [];
-
-// Every message goes through the redaction barrier on the way IN, so the three
-// arrays never hold a credential and the print loops at the bottom cannot leak
-// one. This script holds CLOUDFLARE_API_TOKEN and GITHUB_TOKEN and prints into
-// Actions logs on a PUBLIC repository; nothing today interpolates either, and
-// the funnel is ~90 call sites wide, so "nothing today" is not a property
-// anybody can keep by reading. tools/lib/redact.ts argues the rest.
-const fail = (m: string) => hard.push(redactCredentials(m));
-const warn = (m: string) => advisory.push(redactCredentials(m));
-const pass = (m: string) => ok.push(redactCredentials(m));
+// The store every message lands in. It redacts on the way IN (see
+// tools/lib/infra-report.ts), so nothing below can print a credential, and the
+// four names are the ones the tree checks in this file have always called.
+const report = createReport();
+const { hard, fail, warn, pass } = report;
 
 const exists = (rel) => access(join(ROOT, rel)).then(() => true, () => false);
 
-// ------------------------------------------------------------------ DoH ----
-
-const RRTYPE = { A: 1, NS: 2, CNAME: 5, MX: 15, TXT: 16, AAAA: 28, DS: 43, SVCB: 64, HTTPS: 65 };
-
-// Two independent resolvers. Google renders SVCB in presentation format;
-// Cloudflare returns the RFC 3597 generic form, which decodeSvcb() normalizes
-// back. Asking Cloudflare about a Cloudflare-hosted zone is also a bit
-// incestuous, which is why Google goes first.
-const RESOLVERS = [
-  { name: "dns.google", url: (n, t) => `https://dns.google/resolve?name=${n}&type=${t}` },
-  { name: "cloudflare-dns.com", url: (n, t) => `https://cloudflare-dns.com/dns-query?name=${n}&type=${t}` },
-];
-
-const SVCB_KEYS = { 0: "mandatory", 1: "alpn", 2: "no-default-alpn", 3: "port", 4: "ipv4hint", 5: "ech", 6: "ipv6hint" };
-
-// RFC 3597 generic form ("\\# 37 00 01 06 61 ...") back to presentation format,
-// so both resolvers can be compared against one expected string.
-function decodeSvcb(generic) {
-  const hex = generic.replace(/^\\#\s*\d+\s*/, "").replace(/\s+/g, "");
-  const b = Buffer.from(hex, "hex");
-  let i = 0;
-  const priority = b.readUInt16BE(i); i += 2;
-  const labels = [];
-  while (b[i] !== 0) { const len = b[i]; labels.push(b.subarray(i + 1, i + 1 + len).toString("ascii")); i += 1 + len; }
-  i += 1;
-  const target = labels.length ? `${labels.join(".")}.` : ".";
-  const params = [];
-  while (i < b.length) {
-    const key = b.readUInt16BE(i); i += 2;
-    const len = b.readUInt16BE(i); i += 2;
-    const val = b.subarray(i, i + len); i += len;
-    const name = SVCB_KEYS[key] ?? `key${key}`;
-    if (name === "mandatory") {
-      const keys = [];
-      for (let j = 0; j < val.length; j += 2) keys.push(SVCB_KEYS[val.readUInt16BE(j)] ?? `key${val.readUInt16BE(j)}`);
-      params.push(`mandatory=${keys.join(",")}`);
-    } else if (name === "alpn") {
-      const alpns = [];
-      for (let j = 0; j < val.length;) { const len2 = val[j]; alpns.push(val.subarray(j + 1, j + 1 + len2).toString("ascii")); j += 1 + len2; }
-      params.push(`alpn=${alpns.join(",")}`);
-    } else if (name === "port") {
-      params.push(`port=${val.readUInt16BE(0)}`);
-    } else if (name === "no-default-alpn") {
-      params.push(name);
-    } else {
-      params.push(`${name}=${val.toString("hex")}`);
-    }
-  }
-  return [priority, target, ...params].join(" ");
-}
-
-// Long TXT records arrive as concatenated quoted segments. Join them and drop
-// the quoting so the declared value can read as the plain string it is.
-function normalizeTxt(data) {
-  if (!data.startsWith('"')) return data.trim();
-  return [...data.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]).join("").trim();
-}
-
-function normalize(type, data) {
-  if (type === "TXT") return normalizeTxt(data);
-  if (type === "SVCB") return data.trim().startsWith("\\#") ? decodeSvcb(data) : data.trim();
-  if (type === "DS") return data.replace(/\s+/g, " ").trim();
-  return data.trim();
-}
-
-async function query(resolver, name, type) {
-  const url = resolver.url(encodeURIComponent(name), RRTYPE[type]);
-  const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(`${resolver.name} returned HTTP ${res.status}`);
-  const body = await res.json();
-  if (body.Status !== 0 && body.Status !== 3) throw new Error(`${resolver.name} returned DNS status ${body.Status}`);
-  // Filter by the type we asked for: with DNSSEC in play the Answer section
-  // also carries RRSIG (46), and A queries can carry the CNAME that led there.
-  const answers = (body.Answer || [])
-    .filter((a) => a.type === RRTYPE[type])
-    .map((a) => normalize(type, a.data));
-  return { answers: answers.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), authenticated: body.AD === true };
-}
-
-// Try each resolver in turn. A resolver that errors is an availability problem,
-// not a drift signal, so it degrades to an advisory rather than a failure.
-//
-// The two arms are DECLARED, and the `?: undefined` members on each are what
-// make them narrow. This returns either an answer or an unreachable report, and
-// callers separate them with `if (got.unreachable) … continue;`. Left to
-// inference that guard narrows nothing, because neither property exists on the
-// other arm, and every later `got.answers` reads as an error: 25 of them, which
-// was every finding in this file.
-type DnsResolved = { answers: string[]; authenticated: boolean; resolver: string; unreachable?: undefined };
-type DnsUnreachable = { unreachable: string[]; answers?: undefined; authenticated?: undefined; resolver?: undefined };
-
-async function resolveWithFallback(name: string, type: string): Promise<DnsResolved | DnsUnreachable> {
-  const errors = [];
-  for (const resolver of RESOLVERS) {
-    try {
-      return { ...(await query(resolver, name, type)), resolver: resolver.name };
-    } catch (e) {
-      errors.push(`${resolver.name}: ${e.message}`);
-    }
-  }
-  return { unreachable: errors };
-}
+const fetchEdge = edgeFetcher();
 
 // ----------------------------------------------------------- tier: tree ----
 
-// The three auxiliary Workers, whose configs stopped being one format on
-// 2026-08-23: cf-garage moved to wrangler's experimental TypeScript config,
-// where the account pin is an `accountId` key on the default export (it sat on
-// a separate `settings` export until workers-sdk#15713, 2026-09-21; the
-// line-anchored regex below matched both) rather than a toml `account_id`.
-// The pattern and the label travel WITH the path, so a
-// fourth format joins by adding a row instead of by widening one regex until it
-// matches every shape and asserts nothing about any of them.
-const AUX_CONFIGS = [
-  { path: "cf-garage/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
-  // lwe-ask and lens-reader joined cf-garage on 2026-09-28 (`cf migrate`), so all
-  // three rows share one shape today. They stay three rows rather than a loop
-  // over a directory list for the reason above: the next format is a row.
-  { path: "lwe-ask/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
-  { path: "lens-reader/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
-  // aadhar-counter hosts the site's Counter Durable Object (CLAUDE.md, "Moving
-  // Counter out"). It stays on JSONC deliberately: the transfer's lifecycle
-  // states were rehearsed in that form, and the key is quoted there.
-  { path: "counter/wrangler.jsonc", key: "account_id", pattern: /^\s*"account_id":\s*"([^"]+)"/m },
-];
-
-async function checkTree(infra, wrangler, aux) {
-  const lwe = aux.get("lwe-ask/cloudflare.config.ts");
-  // Binding names in infra.json must exist in the config that owns them. This
-  // is the join that lets infra.json stay ID-free: cloudflare.config.ts remains the
-  // single source for IDs, and this stops the two describing different worlds.
-  const declared = new Map();
-  for (const n of wrangler.kv_namespaces || []) declared.set(n.binding, { kind: "kv", id: n.id });
-  for (const b of wrangler.r2_buckets || []) declared.set(b.binding, { kind: "r2", name: b.bucket_name });
-  for (const d of wrangler.d1_databases || []) declared.set(d.binding, { kind: "d1", id: d.database_id, name: d.database_name });
-  // The binding NAME is the env key and the index is `name:` on the helper,
-  // since lwe-ask moved to cloudflare.config.ts (2026-09-28). A match that stops
-  // finding it reports the binding as unbound below, so a format change fails
-  // loudly rather than skipping the join.
-  const vectorize = lwe.match(/^\s*VECTORIZE:\s*bindings\.vectorize\(\{\s*name:\s*"([^"]+)"/m);
-  if (vectorize) declared.set("VECTORIZE", { kind: "vectorize", name: vectorize[1] });
-
-  const wanted = [
-    ...(infra.resources.kv_namespaces || []).map((r) => [r.binding, "kv", r.title]),
-    ...(infra.resources.r2_buckets || []).map((r) => [r.binding, "r2", r.bucket]),
-    ...(infra.resources.d1_databases || []).map((r) => [r.binding, "d1", r.database]),
-    ...(infra.resources.vectorize_indexes || []).map((r) => [r.binding, "vectorize", r.index]),
-  ];
-
-  for (const [binding, kind, label] of wanted) {
-    const found = declared.get(binding);
-    if (!found) { fail(`infra.json declares binding ${binding} (${kind} ${label}) that no Wrangler config binds`); continue; }
-    if (found.kind !== kind) { fail(`binding ${binding} is ${kind} in infra.json but ${found.kind} in the Wrangler config`); continue; }
-    if (found.name && label && found.name !== label) {
-      fail(`binding ${binding} names ${JSON.stringify(label)} in infra.json but ${JSON.stringify(found.name)} in the Wrangler config`);
-    }
-  }
-  pass(`${wanted.length} declared bindings line up with the Wrangler configs`);
-
-  // The point of the `consumer` field: a DNS record that points at a file in
-  // this tree makes that file load-bearing, even though nothing here links it.
-  let consumers = 0;
+// The config half of the tree tier is compareTree; this gathers the two local
+// observations it wants and then runs the three checks that walk files.
+async function checkTree(infra, wrangler, aux: Map<string, string>) {
+  const presentConsumers = new Set<string>();
   for (const record of infra.dns) {
-    if (!record.consumer) continue;
-    consumers++;
-    if (!(await exists(record.consumer))) {
-      fail(`${record.consumer} is missing, but DNS ${record.type} ${record.name} points at it — deleting it breaks mail, not the site`);
-    }
+    if (record.consumer && (await exists(record.consumer))) presentConsumers.add(record.consumer);
   }
-  pass(`${consumers} DNS-referenced files present in the tree`);
-
-  // The account pin. The site config must name the account infra.json
-  // declares, because wrangler only auto-selects while the login can see
-  // exactly one and that is not a property this repo controls — a second
-  // account appearing on the login is enough to break every non-interactive
-  // wrangler call at once (2026-08-07). Local dev needs the same pin (dev:remote
-  // reaches production bindings) and INHERITS it: config/dev/ spreads
-  // cloudflare.config.ts, so since 2026-10-01 there is no dev copy to check.
-  //
-  // cloudflare.config.ts's accountId is the SOURCE OF TRUTH and every copy below is
-  // compared against it, rather than against a copy in infra.json. That is this
-  // file's existing rule for resource ids, and it is why infra.json's account
-  // block declares the invariant without repeating the value.
-  const declaredAccount = wrangler.account_id;
-  if (!declaredAccount) {
-    fail(`cloudflare.config.ts lost its accountId — wrangler picks an account by itself only while the login sees exactly one, so every non-interactive call fails the moment a second appears`);
-  } else {
-    // TWO copies ship in the site config, not one: the deploy-time
-    // `account_id` pin AND the runtime var CF_ACCOUNT_ID, which /ledger uses
-    // to query this account's own Analytics Engine. The var predates the pin.
-    // Check both against one declaration so the string cannot be half-updated:
-    // an account_id and a CF_ACCOUNT_ID that disagree would deploy to one
-    // account and read analytics from another, and both halves would look fine
-    // on their own.
-    //
-    // Counted rather than assumed, so the ok line cannot claim everything is
-    // pinned while one of these is the reason the run is failing.
-    const sites = [
-      ["cloudflare.config.ts env.CF_ACCOUNT_ID", wrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
-      ...AUX_CONFIGS.map(({ path, key, pattern }) => [
-        `${path} ${key}`,
-        (aux.get(path).match(pattern) || [])[1],
-        "this Worker deploys from its own directory, so wrangler resolves the account from this file and never sees the root config",
-      ]),
-    ];
-    // infra.json names the same five, so a copy added there without a check
-    // here (or the reverse) is itself drift.
-    const declared = infra.account?.must_agree || [];
-    const named = sites.map(([where]) => where);
-    if (declared.join("|") !== named.join("|")) {
-      fail(`infra.json's account.must_agree (${JSON.stringify(declared)}) does not match what checkTree verifies (${JSON.stringify(named)})`);
-    }
-    let agreed = 0;
-    for (const [where, value, why] of sites) {
-      if (!value) {
-        fail(`${where} is missing — ${why}`);
-      } else if (value !== declaredAccount) {
-        fail(`${where} (${JSON.stringify(value)}) disagrees with cloudflare.config.ts's accountId (${JSON.stringify(declaredAccount)})`);
-      } else {
-        agreed++;
-      }
-    }
-    if (agreed === sites.length && sites.length === 6) {
-      pass(`account ${declaredAccount} agrees across all 7 declarations (account_id + vars.CF_ACCOUNT_ID on both site configs, the account pin on all 3 auxiliary Workers)`);
-    }
-  }
-
-  // The site Worker's name must match what the release config expects, or
-  // Workers Builds refuses the build outright.
-  if (wrangler.name !== infra.release.worker) {
-    fail(`cloudflare.config.ts names the Worker ${JSON.stringify(wrangler.name)} but infra.json's release block expects ${JSON.stringify(infra.release.worker)}`);
-  }
-  if (infra.release.build_command !== "") {
-    fail(`infra.json's release.build_command must stay empty (wrangler.config.ts's build.command owns the build); got ${JSON.stringify(infra.release.build_command)}`);
-  }
-  if (!wrangler.build?.command) {
-    fail(`wrangler.config.ts lost its build.command — the deploy would ship the readable originals`);
-  }
-  // The provisioning flags, on whichever subcommand a deploy command names.
-  // Both default to TRUE and both let a publish create real KV/R2/D1 for any
-  // id-less binding, which is the one thing no deploy path here may do.
-  //
-  // EVERY publishing command, from one list. The non-production command ran
-  // bare until 2026-08-04 and this loop only read the production one, so a
-  // push to any branch published with both flags at their default. The reason
-  // it hid for so long is that the rule enumerated deploy paths in prose and a
-  // branch build was not among the three it named. So iterate rather than name:
-  // the next trigger Cloudflare adds gets checked by being added here, and the
-  // failure names which command is loose instead of saying "the deploy command".
-  //
-  // This is the TREE tier, so it checks the intent recorded in infra.json and
-  // runs with no credential on every PR. The api tier below now reads the LIVE
-  // dashboard values and compares them, so a command that carries the flags
-  // here but lost them upstream is caught there. Keep both: this one fails on a
-  // branch that proposes a bad command, before anyone can paste it in.
-  const deployCmd = String(infra.release.deploy_command || "");
-  const previewCmd = String(infra.release.non_production_deploy_command || "");
-  const publishCommands = [
-    ["deploy_command", deployCmd],
-    // Optional: a repo that turns non-production branch builds off drops the
-    // field entirely. An EMPTY string is that, and skipping it is right. A
-    // MISSING pin on a present command is the bug this loop exists for.
-    ...(previewCmd ? [["non_production_deploy_command", previewCmd]] : []),
-  ];
-  for (const [field, cmd] of publishCommands) {
-    for (const flag of ["--x-provision=false", "--x-auto-create=false"]) {
-      if (!cmd.includes(flag)) {
-        fail(`infra.json's release.${field} must pin ${flag} (it defaults to TRUE and would let a publish create resources); got ${JSON.stringify(cmd)}`);
-      }
-    }
-    // Since 2026-09-28 the two commands have OPPOSITE jobs. Production deploys
-    // at 100% (the ramp was deleted as overhead), while a branch build must only
-    // UPLOAD: every push to every branch builds against production's bindings,
-    // so a `deploy` there would hand a feature branch production traffic.
-    if (field === "non_production_deploy_command" && !/\bversions upload\b/.test(cmd)) {
-      fail(`infra.json's release.${field} must be a \`versions upload\` so a branch build never takes production traffic; got ${JSON.stringify(cmd)}`);
-    }
-    if (field === "deploy_command" && !/\bdeploy-wrangler\.sh deploy\b/.test(cmd)) {
-      fail(`infra.json's release.${field} should be a \`deploy\`: nothing ramps an uploaded version any more, so a \`versions upload\` here ships nothing; got ${JSON.stringify(cmd)}`);
-    }
-  }
-  // Preview URLs are what makes an uploaded version worth anything before it
-  // serves. `preview_urls` defaults to `workers_dev`, which is false here, so
-  // dropping the explicit line silently turns every preview back off.
-  if (infra.release.preview_urls !== wrangler.preview_urls) {
-    fail(`infra.json's release.preview_urls (${infra.release.preview_urls}) disagrees with cloudflare.config.ts's previewUrls (${wrangler.preview_urls}) — with workers_dev false, an unset value means OFF`);
-  }
-  pass(`release block agrees with cloudflare.config.ts (Worker ${wrangler.name}, build owned by Wrangler, production deploys and branches only upload, previews ${wrangler.preview_urls ? "on" : "off"})`);
+  report.add(compareTree(infra, wrangler, { aux, presentConsumers }));
 
   await checkCodeqlWorkflow(infra.repository);
   await checkTriageDeclaration(infra.repository);
@@ -764,270 +492,10 @@ async function checkCodeqlWorkflow(repo) {
   pass(`${want.workflow} matches: ${got.length} analysis job(s) (${got.join(", ")}), ${want.query_suite} suite, ${want.threat_model} threat model, actions SHA-pinned`);
 }
 
-// ------------------------------------------------------------ tier: dns ----
-
-async function checkDns(infra) {
-  const apex: Record<string, string[]> = {};
-
-  for (const record of infra.dns) {
-    const { name, type, match } = record;
-    const got = await resolveWithFallback(name, type);
-    if (got.unreachable) { warn(`could not resolve ${type} ${name} (${got.unreachable.join("; ")})`); continue; }
-
-    // The zone is DNSSEC-signed, so an unauthenticated answer means either the
-    // chain broke or something is answering that should not be.
-    if (!got.authenticated) warn(`${type} ${name} resolved but was not DNSSEC-authenticated (AD flag unset via ${got.resolver})`);
-
-    if (name === "aadhar.sh" && type === "A") apex.A = got.answers;
-
-    if (match === "exact") {
-      const want = [...record.expect].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-      const same = want.length === got.answers.length && want.every((v, i) => v === got.answers[i]);
-      if (same) pass(`${type} ${name} matches (${got.resolver})`);
-      else fail(`${type} ${name} drifted\n      declared: ${want.join(" | ") || "(none)"}\n      live:     ${got.answers.join(" | ") || "(none)"}`);
-    } else if (match === "present") {
-      if (got.answers.length) pass(`${type} ${name} present (${got.answers.length} record${got.answers.length === 1 ? "" : "s"})`);
-      else fail(`${type} ${name} is missing entirely — ${record.why?.split(".")[0] || "declared as required"}`);
-    } else if (match === "contains") {
-      // For records whose full value is Cloudflare's to rotate (the HTTPS RR's
-      // ipv6hint moves, its ech= key rotates hourly) but whose PARAMETERS are
-      // ours to insist on. Exact-matching would fail on every key rotation;
-      // present-matching would miss the case that matters, a zone toggle
-      // silently dropping a parameter out of an otherwise healthy record.
-      const joined = got.answers.join(" ");
-      const missing = record.expect.filter((needle) => !joined.includes(needle));
-      if (!got.answers.length) fail(`${type} ${name} is missing entirely — ${record.why?.split(".")[0] || "declared as required"}`);
-      else if (missing.length) fail(`${type} ${name} lost ${missing.map((m) => JSON.stringify(m)).join(", ")}\n      live: ${joined}`);
-      else pass(`${type} ${name} carries ${record.expect.map((e) => JSON.stringify(e)).join(", ")}`);
-    } else if (match === "proxied") {
-      const v6 = await resolveWithFallback(name, "AAAA");
-      if (!got.answers.length) fail(`${type} ${name} has no A records — the apex is not resolving`);
-      else if (!v6.unreachable && !v6.answers.length) fail(`${name} has A records but no AAAA — the proxy should answer on both families`);
-      else pass(`${name} proxied (${got.answers.length}x A, ${v6.answers?.length ?? "?"}x AAAA)`);
-    } else if (match === "sameAs") {
-      const base = apex.A ?? (await resolveWithFallback(record.expect, "A")).answers;
-      if (!base?.length) { warn(`could not compare ${name} against ${record.expect} (no baseline answers)`); continue; }
-      const same = base.length === got.answers.length && base.every((v, i) => v === got.answers[i]);
-      if (same) pass(`${name} resolves to the same edge as ${record.expect}`);
-      else fail(`${name} no longer resolves to the same edge as ${record.expect}\n      ${record.expect}: ${base.join(" | ")}\n      ${name}: ${got.answers.join(" | ") || "(none)"}`);
-    } else {
-      fail(`infra.json: unknown match mode ${JSON.stringify(match)} on ${type} ${name}`);
-    }
-  }
-
-  // Zone identity: nameservers and the DS the registrar publishes.
-  const ns = await resolveWithFallback(infra.zone.name, "NS");
-  if (ns.unreachable) warn(`could not resolve NS ${infra.zone.name}`);
-  else {
-    const want = [...infra.zone.nameservers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-    const same = want.length === ns.answers.length && want.every((v, i) => v === ns.answers[i]);
-    same ? pass(`nameservers match (${want.join(", ")})`)
-         : fail(`nameservers drifted\n      declared: ${want.join(" | ")}\n      live:     ${ns.answers.join(" | ")}`);
-  }
-
-  const ds = await resolveWithFallback(infra.zone.name, "DS");
-  if (ds.unreachable) warn(`could not resolve DS ${infra.zone.name}`);
-  else if (ds.answers.includes(infra.zone.dnssec.ds)) pass(`DNSSEC DS matches the registrar-published digest`);
-  else fail(`DNSSEC DS drifted\n      declared: ${infra.zone.dnssec.ds}\n      live:     ${ds.answers.join(" | ") || "(none)"}`);
-}
-
-// ----------------------------------------------------------- tier: edge ----
-
-async function fetchEdge(url, headers: Record<string, string> = {}, opts: { redirect?: RequestRedirect } = {}) {
-  const res = await fetch(url, {
-    headers: { "user-agent": `${BOT_UA}`, ...headers },
-    redirect: opts.redirect || "follow",
-    signal: AbortSignal.timeout(12000),
-  });
-  return res;
-}
-
-// The thumbnail URLs are content-hashed, so a re-encode mints new ones and any
-// URL pinned in infra.json would rot within a release. Resolve one from the
-// live manifest instead, which is the same indirection the site itself uses.
-async function sampleImageUrl(origin) {
-  const res = await fetchEdge(`${origin}/images/manifest.json`);
-  if (!res.ok) throw new Error(`manifest returned HTTP ${res.status}`);
-  const manifest = await res.json();
-  const photo = (manifest.photos || manifest.images || [])[0];
-  const path = photo?.thumb_jpg || photo?.thumb_avif;
-  if (!path) throw new Error("manifest carried no thumbnail path");
-  return path.startsWith("http") ? path : `${origin}${path}`;
-}
-
-async function checkEdge(infra) {
-  const { origin, checks } = infra.edge;
-  // Prefix findings so nobody reads a production drift as a regression in the
-  // branch being reviewed.
-  const drift = (m) => fail(`production edge: ${m}`);
-
-  let sample = null;
-  const targetUrl = async (target) => {
-    if (target === "homepage") return `${origin}/`;
-    if (target === "sample-image") return (sample ??= await sampleImageUrl(origin));
-    // The Markdown twins are their own target because they are their own content
-    // type, and content type is what compression is keyed on. /index.md is the
-    // stable one: it is served from a committed file rather than generated, so it
-    // exists on every deploy and cannot go missing the way a per-page twin could.
-    if (target === "markdown-twin") return `${origin}/index.md`;
-    throw new Error(`unknown edge target ${JSON.stringify(target)}`);
-  };
-
-  for (const check of checks) {
-    let url;
-    try {
-      url = await targetUrl(check.target);
-    } catch (e) {
-      warn(`edge check ${check.id} could not resolve its target: ${e.message}`);
-      continue;
-    }
-
-    try {
-      const { assert: want } = check;
-
-      // Compression is the one assertion that needs its own request per
-      // encoding: ask for exactly one and require the edge to answer in it.
-      if (want.compression) {
-        const missing = [];
-        for (const encoding of want.compression) {
-          const res = await fetchEdge(url, { "accept-encoding": encoding });
-          const got = (res.headers.get("content-encoding") || "").trim().toLowerCase();
-          if (got !== encoding) missing.push(`${encoding} (got ${got || "none"})`);
-        }
-        missing.length ? drift(`${check.id}: edge did not compress as ${missing.join(", ")} — ${check.why.split(".")[0]}`)
-                       : pass(`edge ${check.id}: ${want.compression.join(", ")} all served`);
-        continue;
-      }
-
-      // "can the edge do X" and "which X does it PICK" are different questions,
-      // and only the second one describes what a visitor receives. Every real
-      // browser offers several encodings at once, so the choice among them is
-      // the whole behaviour — and it is invisible to the check above, which
-      // offers exactly one at a time and so can never observe a preference.
-      // Offer the full set a browser sends and require a specific winner.
-      if (want.compressionPrefers) {
-        const { offer, expect } = want.compressionPrefers;
-        const res = await fetchEdge(url, { "accept-encoding": offer });
-        const got = (res.headers.get("content-encoding") || "").trim().toLowerCase();
-        got !== expect
-          ? drift(`${check.id}: offered "${offer}" and the edge chose ${got || "none"}, declared ${expect} — ${check.why.split(".")[0]}`)
-          : pass(`edge ${check.id}: chose ${expect} from "${offer}"`);
-        continue;
-      }
-
-      // TLS-layer assertion: no HTTP response can carry it, so it gets its own
-      // probe (openssl, see probeEarlyData) instead of a fetchEdge. A machine
-      // that cannot run the probe warns rather than drifts — an unmeasurable
-      // check must not report the zone broken.
-      //
-      // A REJECTION IS A DRIFT ON A WORKSTATION AND AN ADVISORY IN HOSTED CI,
-      // and the split is measured rather than cautious. Cloudflare may refuse
-      // early data on any resumption (anti-replay is why 0-RTT is hedged), so
-      // the probe already takes three spaced samples before calling it drift.
-      // From GitHub's runners all three have now missed on three separate runs
-      // while the zone was fine: 2026-08-20 (five concurrent jobs), and twice
-      // on 2026-09-02, run 33652822639 on MAIN and the first attempt of
-      // 33654520873 on a PR, each accepted on a plain re-run minutes later and
-      // accepted 5 of 5 from a workstation in between. The main failure is the
-      // expensive one: `validate` gates promotion, so a merged PR sat
-      // unpromoted until somebody noticed and re-ran CI. That is the deadlock
-      // CLAUDE.md's release notes describe, arriving through a probe whose
-      // subject (a shared egress address's ticket-issuance conditions) has
-      // nothing to do with any diff. So on a hosted runner the rejection is
-      // reported, with its sample count, as something a workstation must
-      // confirm, and it fails nothing; a workstation keeps the hard failure,
-      // because there the three samples have never been wrong. GITHUB_ACTIONS
-      // rather than CI, since CI=1 is what this repo sets by hand to exercise
-      // the release guard locally (see the ramp-token control in CLAUDE.md).
-      if (want.earlyData) {
-        const r = await probeEarlyData(new URL(url).hostname);
-        if (r.skip) warn(`edge check ${check.id} skipped: ${r.skip}`);
-        else if (r.accepted) pass(`edge ${check.id}: TLS early data accepted (0-RTT on)`);
-        else if (process.env.GITHUB_ACTIONS) warn(`edge check ${check.id}: TLS early data rejected on ${r.attempts} spaced resumptions from a hosted runner; not a drift here (three false rejections on record from this network), confirm from a workstation with \`bun run infra:check\``);
-        else drift(`${check.id}: TLS early data rejected on ${r.attempts} spaced resumptions — ${check.why.split(".")[0]}`);
-        continue;
-      }
-
-      // A check may need to ASK for something before it can assert what comes back.
-      // Content negotiation is the case that forced this: "the zone is not converting
-      // our HTML" is only observable on a request that says `Accept: text/markdown`,
-      // and a check that cannot set a request header cannot see it at all.
-      const res = await fetchEdge(url, check.request || {});
-      const problems = [];
-
-      for (const name of want.headerAbsent || []) {
-        const got = res.headers.get(name);
-        if (got !== null) problems.push(`${name} is present (${got})`);
-      }
-      // headerPresent exists because headerContains cannot express it: every string
-      // contains "", so `headerContains: {x: ""}` passes on an ABSENT header and
-      // asserts nothing at all. That mistake shipped in the first draft of
-      // markdown-for-agents-off below and was caught only by deleting the check's
-      // request header and watching it still pass.
-      for (const name of want.headerPresent || []) {
-        if (res.headers.get(name) === null) problems.push(`${name} is absent`);
-      }
-      for (const [name, expected] of Object.entries(want.headerEquals || {})) {
-        const got = (res.headers.get(name) || "").trim();
-        if (got !== expected) problems.push(`${name} is ${JSON.stringify(got || "(absent)")}, declared ${JSON.stringify(expected)}`);
-      }
-      for (const [name, needle] of Object.entries(want.headerContains || {}) as [string, string][]) {
-        const got = res.headers.get(name) || "";
-        if (!got.includes(needle)) problems.push(`${name} does not contain ${JSON.stringify(needle)} (got ${JSON.stringify(got || "(absent)")})`);
-      }
-      if (want.bodyLacks) {
-        const body = await res.text();
-        for (const needle of want.bodyLacks) {
-          if (body.includes(needle)) problems.push(`response body contains ${JSON.stringify(needle)}`);
-        }
-      }
-
-      problems.length ? drift(`${check.id}: ${problems.join("; ")} — ${check.why.split(".")[0]}`)
-                      : pass(`edge ${check.id} holds`);
-    } catch (e) {
-      // Production being unreachable is an availability problem, not drift.
-      warn(`edge check ${check.id} could not run: ${e.message}`);
-    }
-  }
-}
-
 // ------------------------------------------------------------ tier: api ----
 
-const API = "https://api.cloudflare.com/client/v4";
-
-async function cf(token, path) {
-  const res = await fetch(`${API}${path}`, {
-    headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-    signal: AbortSignal.timeout(15000),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || body.success === false) {
-    const detail = (body.errors || []).map((e) => `${e.code} ${e.message}`).join("; ") || `HTTP ${res.status}`;
-    throw new Error(`${path}: ${detail}`);
-  }
-  return body.result;
-}
-
-// Each resource class is checked independently. A token missing ONE read scope
-// must not blank the whole tier: the first version batched these into a
-// Promise.all under a single catch, so an absent R2 scope silently took KV, D1
-// and the Worker inventory down with it and reported one opaque auth error.
-// Cloudflare returns 10000 for both "bad token" and "token lacks this scope",
-// so name the scope each section needs and let the reader tell them apart.
-async function section(label, scope, fn) {
-  try {
-    await fn();
-  } catch (e) {
-    // Cloudflare is not consistent here: the same missing scope surfaces as
-    // 10000 "Authentication error" on some endpoints and 9106 "Authentication
-    // failed" on others, so match the family rather than one code.
-    const authy = /\b(10000|9106|9109)\b|authentication|unauthorized|forbidden/i.test(e.message);
-    warn(authy ? `${label} unchecked: token is missing ${scope} (${e.message})`
-               : `${label} unchecked: ${e.message}`);
-  }
-}
-
-async function checkApi(infra, wrangler, token) {
+async function checkApi(infra, wrangler, token: string) {
+  const cf = cloudflareReader(token);
   // The account id, in the order it should be trusted. cloudflare.config.ts's accountId pin is
   // the SOURCE OF TRUTH per infra.json's account block, and checkTree has
   // already proven all 7 declarations agree by the time this runs.
@@ -1055,7 +523,7 @@ async function checkApi(infra, wrangler, token) {
     warn(`CLOUDFLARE_ACCOUNT_ID (${process.env.CLOUDFLARE_ACCOUNT_ID}) overrides cloudflare.config.ts's accountId pin (${pinned}) — the account tier is checking an account this repo does not deploy to`);
   }
   if (!accountId) {
-    const accounts = await cf(token, "/accounts");
+    const accounts = await cf("/accounts");
     if (accounts.length !== 1) {
       warn(`no accountId in cloudflare.config.ts and the token sees ${accounts.length} accounts; set CLOUDFLARE_ACCOUNT_ID to pick one`);
       return;
@@ -1063,550 +531,28 @@ async function checkApi(infra, wrangler, token) {
     accountId = accounts[0].id;
   }
 
-  // Resources the bindings point at. wrangler deploy --dry-run validates the
-  // config's shape but never asks whether the IDs resolve to anything.
-  await section("KV namespaces", "Workers KV Storage:Read", async () => {
-    const kv = await cf(token, `/accounts/${accountId}/storage/kv/namespaces?per_page=100`);
-    const ids = new Set(kv.map((n) => n.id));
-    for (const n of wrangler.kv_namespaces || []) {
-      ids.has(n.id) ? pass(`KV ${n.binding} resolves (${n.id})`)
-                    : fail(`KV binding ${n.binding} points at namespace ${n.id}, which does not exist in this account`);
-    }
-  });
+  // One read and one comparer per section, in the order the tier prints. Each
+  // resource class is read independently, so a token missing ONE scope costs
+  // that section an advisory and leaves the rest standing.
+  report.add(compareKvNamespaces(wrangler, await readKvNamespaces(cf, accountId)));
+  report.add(compareR2Buckets(wrangler, await readR2Buckets(cf, accountId)));
+  report.add(compareD1Databases(wrangler, await readD1Databases(cf, accountId)));
+  report.add(compareWorkersBuilds(infra.release, await readWorkersBuilds(cf, accountId, infra.release.worker)));
+  report.add(compareWorkerInventory(infra.workers, await readWorkerScripts(cf, accountId)));
+  report.add(compareTokens(infra, accountId, await readTokens(cf, accountId)));
 
-  await section("R2 buckets", "Workers R2 Storage:Read", async () => {
-    const r2 = await cf(token, `/accounts/${accountId}/r2/buckets`);
-    const names = new Set((r2.buckets || r2).map((b) => b.name));
-    for (const b of wrangler.r2_buckets || []) {
-      names.has(b.bucket_name) ? pass(`R2 ${b.binding} resolves (${b.bucket_name})`)
-                               : fail(`R2 binding ${b.binding} points at bucket ${b.bucket_name}, which does not exist`);
-    }
-  });
-
-  await section("D1 databases", "D1:Read", async () => {
-    const d1 = await cf(token, `/accounts/${accountId}/d1/database?per_page=100`);
-    const dbs = new Map(d1.map((d) => [d.uuid, d.name])) as Map<string, string>;
-    for (const d of wrangler.d1_databases || []) {
-      if (!dbs.has(d.database_id)) fail(`D1 binding ${d.binding} points at database ${d.database_id}, which does not exist`);
-      else if (dbs.get(d.database_id) !== d.database_name) fail(`D1 binding ${d.binding} expects ${d.database_name} but ${d.database_id} is named ${dbs.get(d.database_id)}`);
-      else pass(`D1 ${d.binding} resolves (${d.database_name})`);
-    }
-  });
-
-  // The Workers Builds release config. This is the ONE setting in the whole
-  // release path that lives outside the repo and can be changed with nothing
-  // noticing: a bare `wrangler deploy` in the dashboard's Deploy command turns
-  // every merge back into an instant 100% release and makes deploy:promote dead
-  // code, and releases keep working, so the failure never surfaces.
-  //
-  // It used to be unverifiable and infra.json said so at length. That is no
-  // longer true (checked 2026-08-04): Workers Builds has a REST API, the
-  // permission is `Workers Builds Configuration` and it HAS a Read variant, so
-  // this fits the read-only token rule with no exception carved for it.
-  //
-  // PROVEN AGAINST THE LIVE API, run 30927021869 on 2026-08-04. Both the
-  // endpoint path and the response envelope below were originally written from
-  // Cloudflare's docs without a live call, and both turned out right first try:
-  //   ok  Workers Builds deploy_command matches infra.json ("npx wrangler versions upload ...")
-  //   ok  Workers Builds build_command matches infra.json ("")
-  //   ok  Workers Builds root_directory matches infra.json (".")
-  //   ok  Workers Builds non-production trigger uploads without deploying
-  // Left verbatim because it is a transcript of that run. Both commands moved
-  // from `npx` to `pnpm exec` on 2026-08-14, so a run today prints the same
-  // lines with the new prefix.
-  //
-  // A SHAPE SURPRISE STILL DEGRADES TO A NOTE rather than failing, and that is
-  // now a doctrine call rather than a hedge. This file's own header draws the
-  // line: hard failures mean "we checked and it is wrong", advisories mean "we
-  // could not check". An endpoint that moves or an envelope that changes is
-  // squarely the second, and a Cloudflare API revision must not redden a PR that
-  // only touched CSS. Only a value successfully READ that disagrees with
-  // infra.json is fatal, which is the case this section exists for.
-  await section("Workers Builds release config", "Workers Builds Configuration:Read", async () => {
-    const scripts = await cf(token, `/accounts/${accountId}/workers/scripts`);
-    const script = (scripts || []).find((s) => s.id === infra.release.worker);
-    const tag = script?.tag || script?.external_script_id;
-    if (!tag) {
-      warn(`release config unchecked: no worker tag for ${infra.release.worker} in the script listing`);
-      return;
-    }
-
-    const raw = await cf(token, `/accounts/${accountId}/builds/workers/${tag}/triggers`);
-    // The docs show a bare trigger object; a list endpoint may wrap it. Accept
-    // either rather than guessing which, and say so if it is neither.
-    const triggers = Array.isArray(raw) ? raw : (Array.isArray(raw?.triggers) ? raw.triggers : null);
-    if (!triggers) {
-      warn(`release config unchecked: unexpected triggers response shape (${JSON.stringify(raw).slice(0, 160)})`);
-      return;
-    }
-
-    const branch = infra.release.production_branch;
-    // The dashboard's "Deploy command" and "Non-production branch deploy
-    // command" are two TRIGGERS in the API, told apart by their branch filters.
-    const prod = triggers.find((t) => (t.branch_includes || []).includes(branch));
-    if (!prod) {
-      fail(`Workers Builds has no trigger matching the ${branch} branch — nothing publishes this Worker`);
-      return;
-    }
-
-    const checks = [
-      ["deploy_command",  infra.release.deploy_command],
-      ["build_command",   infra.release.build_command],
-      ["root_directory",  infra.release.root_directory],
-    ];
-    for (const [field, expected] of checks) {
-      const live = prod[field] ?? "";
-      // root_directory is written "." here and may come back "" or "/" upstream;
-      // treat those three as the same statement about a monorepo root.
-      const same = field === "root_directory"
-        ? [".", "", "/"].includes(String(live)) === [".", "", "/"].includes(String(expected))
-        : String(live).trim() === String(expected).trim();
-      same
-        ? pass(`Workers Builds ${field} matches infra.json (${JSON.stringify(live)})`)
-        : fail(`Workers Builds ${field} is ${JSON.stringify(live)} but infra.json declares ${JSON.stringify(expected)} — the dashboard is the live value, so fix it there`);
-    }
-
-    // The non-production trigger, held to the SAME standard as the production
-    // one. This used to test only that the live command said `versions upload`,
-    // which it called a low-drama check because that is already the Cloudflare
-    // default. The drama was in what the test did not read: the two provisioning
-    // flags. A command can pass a `versions upload` match and still publish with
-    // --x-provision and --x-auto-create at their default TRUE, which is exactly
-    // what this trigger did until 2026-08-04. Compare the whole string, so a
-    // dropped flag reads as drift like any other.
-    const preview = triggers.find((t) => t !== prod);
-    const expectedPreview = String(infra.release.non_production_deploy_command || "");
-    if (expectedPreview && !preview) {
-      // Declared but absent. Nothing PUBLISHES in this direction, so it is not
-      // dangerous, and a trigger list whose shape we guessed at is the case the
-      // section header says degrades to a note. Say it and move on.
-      warn(`release config partly unchecked: infra.json declares a non-production deploy command but Workers Builds returned no second trigger (branch builds off, or the trigger list is shaped differently than assumed)`);
-    } else if (expectedPreview && preview) {
-      const live = String(preview.deploy_command ?? "").trim();
-      if (live === expectedPreview.trim()) {
-        pass(`Workers Builds non_production_deploy_command matches infra.json (${JSON.stringify(live)})`);
-      } else {
-        // Name the CONSEQUENCE of this particular difference. "the strings
-        // differ" sends whoever reads it back to diffing two long commands by
-        // eye, and the two differences that matter have very different stakes.
-        const missing = ["--x-provision=false", "--x-auto-create=false"].filter((f) => !live.includes(f));
-        const why = missing.length
-          ? `it is missing ${missing.join(" and ")}, so a push to ANY branch publishes with resource creation ON`
-          : !/\bversions upload\b/.test(live)
-            ? `it is not a \`versions upload\`, so a branch build would take production traffic on push`
-            : `the commands differ in some other way, and the dashboard is what actually runs`;
-        fail(`Workers Builds non_production_deploy_command is ${JSON.stringify(live)} but infra.json declares ${JSON.stringify(expectedPreview)} — ${why}. The dashboard is the live value, so fix it there`);
-      }
-    }
-  });
-
-  // Worker inventory. A retired Worker that is still deployed keeps its routes,
-  // which is invisible from inside this repo.
-  await section("Worker inventory", "Workers Scripts:Read", async () => {
-    const scripts = await cf(token, `/accounts/${accountId}/workers/scripts`);
-    const live = new Set(scripts.map((s) => s.id)) as Set<string>;
-    for (const w of infra.workers.expected) {
-      live.has(w.name) ? pass(`Worker ${w.name} deployed`) : fail(`Worker ${w.name} is declared but not deployed`);
-    }
-    for (const w of infra.workers.retired) {
-      if (live.has(w.name)) fail(`Worker ${w.name} is retired but still deployed — ${w.why}`);
-      else pass(`retired Worker ${w.name} is gone`);
-    }
-    const known = new Set([...infra.workers.expected, ...infra.workers.retired, ...infra.workers.unmanaged].map((w) => w.name));
-    for (const name of live) if (!known.has(name)) warn(`Worker ${name} is deployed but not accounted for in infra.json`);
-  });
-
-  // API token scoping. Granular Workers permissions (2026-08-29) made the ramp
-  // token's blast radius a CHOICE rather than a platform limit, so it is worth
-  // declaring and therefore worth checking. infra.json's `tokens` block carries
-  // the long argument; three things about this section decide how it behaves.
-  //
-  // IT IS WORKSTATION-ONLY, and that is deliberate rather than a gap. Reading a
-  // token's policies costs API Tokens Read, which lets the bearer enumerate
-  // every token on the account and read what each one may do. Granting that to
-  // the CI credential to verify that the CI credential is narrow would be a
-  // wider grant than the one being verified. So this degrades to a note in CI,
-  // the same standing as repository.code_scanning and zone.version_affinity.
-  //
-  // THE HARD FAILURES ARE NEGATIVES, and both are chosen so they hold without
-  // knowing what Cloudflare ends up calling the new roles. A token declared
-  // read-only must carry no group whose name matches write/edit/admin, and a
-  // token declared resource-scoped must not hold the bare account resource.
-  // Neither depends on a permission-group name or a resource-key format that
-  // nobody here has observed yet.
-  //
-  // EVERYTHING ELSE IS A REPORT. The declared permission_groups are dashboard
-  // labels and the API may spell them differently, so a mismatch prints both
-  // lists rather than failing. The first run against a real token is the
-  // measurement: it prints the observed resource keys, which is what fills in
-  // `resource_key` in infra.json. Asserting against a string invented here
-  // would be a check that only ever agreed with itself.
-  await section("API token scoping", "API Tokens Read", async () => {
-    const accountResource = `com.cloudflare.api.account.${accountId}`;
-    const writeGroup = new RegExp(infra.tokens.write_group_pattern, "i");
-
-    const tokens = await cf(token, `/accounts/${accountId}/tokens?per_page=100`);
-    const byName = new Map((tokens || []).map((t) => [t.name, t])) as Map<string, any>;
-
-    // `checked` is an explicit flag rather than a read of `location`, and the
-    // first draft is why: it filtered on location.includes("GitHub"), and the
-    // DNS token's location reads "workstation only, never GitHub", which
-    // contains it. The one entry the filter existed to exclude was the one it
-    // selected. A prose field must never carry a machine decision.
-    for (const want of infra.tokens.expected.filter((t) => t.checked)) {
-      const live = byName.get(want.name);
-      if (!live) {
-        // A rename is indistinguishable from a deletion from here, and both are
-        // worth a look, so say what was searched for rather than guessing which.
-        warn(`token ${want.name} (${want.env}) is declared but no account token carries that name — renamed, deleted, or user-owned rather than account-owned`);
-        continue;
-      }
-
-      const policies = live.policies || [];
-      const groups = policies.flatMap((p) => (p.permission_groups || []).map((g) => g.name));
-      const resources = [...new Set(policies.flatMap((p) => Object.keys(p.resources || {})))];
-
-      // 1. A read-only token may hold nothing that writes. Asserted against the
-      //    NAME rather than against want.permission_groups, on the same
-      //    reasoning bypass_actors is asserted empty: diffing against a
-      //    declared list means the way to turn this green is to add the write
-      //    scope to infra.json, which is the exact change worth catching.
-      if (!want.may_write) {
-        const offenders = groups.filter((g) => writeGroup.test(g));
-        if (offenders.length) fail(`token ${want.name} (${want.env}) is declared read-only but carries ${offenders.join(", ")} — this credential is a GitHub secret on a PUBLIC repository`);
-        else pass(`token ${want.name} carries no write permission (${groups.length} groups, all read)`);
-      }
-
-      // 2. The Workers half of a resource-scoped token must not hold the whole
-      //    account. PER POLICY, and only the policies carrying the declared
-      //    group: D1 Edit and Account Settings Read have no per-resource form,
-      //    so a real ramp token is necessarily account-wide for those, and the
-      //    first draft's flat "no resource may name the account" failed the
-      //    clean control. The narrow grant and the wide one both ramp
-      //    perfectly, so undoing this is silent by construction.
-      if (want.resource_scoped_group) {
-        const guard = new RegExp(want.resource_scoped_group, "i");
-        const guarded = policies.filter((p) => (p.permission_groups || []).some((g) => guard.test(g.name)));
-        if (!guarded.length) {
-          // A guard pointed at nothing that reports success is the silent pass
-          // this file exists to refuse. Cloudflare's API name for the granular
-          // Workers roles is unmeasured here, so a rename can do exactly that.
-          fail(`token ${want.name} (${want.env}) declares resource_scoped_group /${want.resource_scoped_group}/i but no permission group on it matches — the scoping guard is pointed at nothing. Observed ${JSON.stringify(groups)}; correct the pattern in infra.json`);
-        } else {
-          const wide = guarded.filter((p) => Object.keys(p.resources || {}).includes(accountResource));
-          if (wide.length) fail(`token ${want.name} (${want.env}) is declared resource-scoped but its Workers policy names the whole account (${accountResource}), so it can write to every Worker rather than just ${infra.release.worker}`);
-          else pass(`token ${want.name}: Workers grant is scoped below the account (${guarded.flatMap((p) => Object.keys(p.resources || {})).join(", ")})`);
-        }
-      }
-
-      // 3. Report the shape, so infra.json can be corrected from evidence.
-      if (!want.resource_key) warn(`token ${want.name}: resource_key is unrecorded in infra.json — observed ${JSON.stringify(resources)}`);
-      else if (!resources.includes(want.resource_key)) warn(`token ${want.name}: declared resource_key ${want.resource_key} is not among the observed ${JSON.stringify(resources)}`);
-
-      const missing = want.permission_groups.filter((g) => !groups.some((n) => n.toLowerCase() === g.toLowerCase()));
-      if (missing.length) warn(`token ${want.name}: declared groups ${JSON.stringify(missing)} were not found by that name — observed ${JSON.stringify(groups)}. These are dashboard labels and the API may spell them differently, so correct infra.json from the observed list rather than treating this as drift`);
-    }
-  });
-
-  // Version affinity: the Transform Rule that keeps one visitor on one Worker
-  // version for the length of a ramp.
-  //
-  // ZONE-scoped, which makes it the first thing in this tier the account-scoped
-  // CI token cannot reach. It needs Zone:Zone:Read to resolve the id and
-  // Zone:Transform Rules:Read to read the phase, neither of which is among the
-  // six reads CI carries, so IN CI THIS ALWAYS DEGRADES TO A NOTE. That is the
-  // same standing as repository.code_scanning: the assertion runs on a
-  // workstation and CI reports one advisory naming what it could not read.
-  //
-  // Worth a section anyway, because the rule is invisible from inside this repo
-  // and its absence is silent. Nothing errors when affinity is off. The next
-  // ramp that changes a shell asset simply serves part of the audience an
-  // unstyled page for the length of the canary, and the release still reports
-  // success, because every sampled document came back 200 and the assets that
-  // 404ed were never sampled. The arithmetic is in infra.json under
-  // zone.version_affinity.
-  // 0-RTT. Zone-scoped like version affinity, so CI degrades to a note and a
-  // workstation run asserts it. The value is declared "on" together with the
-  // Worker's early-data guard (lib/early-data.ts); the arithmetic and the
-  // pairing argument are in infra.json under zone.zero_rtt. A workstation run
-  // reads FAIL until the toggle is flipped, which is the tripwire working:
-  // the guard shipped, the round trip it exists to make safe has not.
-  async function assertZoneSetting(label, declared) {
-    if (!declared) return;
-    const zones = await cf(token, `/zones?name=${encodeURIComponent(infra.zone.name)}`);
-    const zoneId = zones?.[0]?.id;
-    if (!zoneId) {
-      warn(`${label} unchecked: this token sees no zone named ${infra.zone.name}`);
-      return;
-    }
-    const live = await cf(token, `/zones/${zoneId}/settings/${declared.setting}`);
-    const value = live?.value;
-    if (value !== declared.value) {
-      fail(`zone setting ${declared.setting} is "${value}" on ${infra.zone.name}, declared "${declared.value}". ${declared.why}`);
-      return;
-    }
-    pass(`zone setting ${declared.setting} is ${value}`);
-  }
-
-  await section("0-RTT connection resumption", "Zone:Zone Settings:Read and Zone:Zone:Read", async () => {
-    await assertZoneSetting("0-RTT", infra.zone?.zero_rtt);
-  });
-
-  // Shared Dictionaries passthrough. Same standing as 0-RTT: zone-scoped, so CI
-  // degrades to a note and a workstation run asserts it. The docs say `disabled`
-  // strips Use-As-Dictionary and refuses to cache dcb/dcz, which would drop every
-  // dictionary tier to plain brotli without an error. infra.json under
-  // zone.shared_dictionary says what is and is not measured about that.
-  await section("shared dictionaries passthrough", "Zone:Zone Settings:Read and Zone:Zone:Read", async () => {
-    await assertZoneSetting("shared dictionaries", infra.zone?.shared_dictionary);
-  });
-
-  await section("version affinity", "Zone:Transform Rules:Read and Zone:Zone:Read", async () => {
-    const declared = infra.zone?.version_affinity;
-    if (!declared) return;
-
-    const zones = await cf(token, `/zones?name=${encodeURIComponent(infra.zone.name)}`);
-    const zoneId = zones?.[0]?.id;
-    if (!zoneId) {
-      warn(`version affinity unchecked: this token sees no zone named ${infra.zone.name}`);
-      return;
-    }
-
-    let ruleset;
-    try {
-      ruleset = await cf(token, `/zones/${zoneId}/rulesets/phases/${declared.phase}/entrypoint`);
-    } catch (e) {
-      // A 404 on the phase entrypoint is NOT "could not check". It is the phase
-      // holding no ruleset at all, which is a definite statement that the rule
-      // is absent. Anything else is a genuine read failure and belongs to
-      // section()'s handling, so rethrow it.
-      if (!/\b404\b/.test(e.message)) throw e;
-      fail(`no ${declared.phase} ruleset on ${infra.zone.name}, so nothing sets ${declared.header}. ${declared.why}`);
-      return;
-    }
-
-    const wanted = declared.header.toLowerCase();
-    const rule = (ruleset.rules || []).find((r) =>
-      Object.keys(r?.action_parameters?.headers || {}).some((h) => h.toLowerCase() === wanted));
-    if (!rule) {
-      fail(`no Transform Rule on ${infra.zone.name} sets ${declared.header}. ${declared.why}`);
-      return;
-    }
-
-    // A DISABLED rule is the quietest way for this to be gone: it survives every
-    // listing, reads as configured to anyone glancing at the dashboard, and does
-    // nothing. Check it before the values, which are meaningless while it is off.
-    if (rule.enabled === false) {
-      fail(`the ${declared.header} Transform Rule exists on ${infra.zone.name} but is DISABLED, so ramps run without version affinity. ${declared.why}`);
-      return;
-    }
-
-    const entry = Object.entries(rule.action_parameters.headers)
-      .find(([h]) => h.toLowerCase() === wanted)[1] as { value?: string; expression?: string };
-
-    // "Set dynamic" comes back as an `expression`; "Set static" comes back as a
-    // `value`. The difference is not cosmetic here: a static key is the SAME key
-    // for every visitor on earth, which hashes to one version and puts 100% of
-    // traffic on one side of a split that reports itself as 10%. That is worse
-    // than having no affinity at all, so it gets its own failure.
-    if (entry.value !== undefined && entry.expression === undefined) {
-      fail(`${declared.header} is set STATICALLY to ${JSON.stringify(entry.value)} on ${infra.zone.name}, so every visitor shares one affinity key and a ramp puts all traffic on one version regardless of the percentages. It must be "Set dynamic" with ${JSON.stringify(declared.value)}`);
-      return;
-    }
-    if (String(entry.expression || "").trim() !== String(declared.value).trim()) {
-      fail(`${declared.header} is derived from ${JSON.stringify(entry.expression)} but infra.json declares ${JSON.stringify(declared.value)}. The dashboard is the live value, so fix it there`);
-      return;
-    }
-
-    // The rule's own filter expression, checked for the ONE property that
-    // matters rather than string-equal against the declaration. Cloudflare
-    // normalizes expressions, so a textual diff would false-fire on formatting;
-    // what has to hold is that the rule SKIPS a request that already carries the
-    // header. deploy-promote.mjs sends one key per request so it can still watch
-    // the split take from a single IP, and a rule that overwrites those keys
-    // collapses every sample onto one version, which the ramp reads as dead and
-    // aborts on. Fails closed, and loudly, but it aborts healthy releases.
-    if (!String(rule.expression || "").toLowerCase().includes(wanted)) {
-      fail(`the ${declared.header} rule matches on ${JSON.stringify(rule.expression)}, which does not exempt requests that already carry the header. It will overwrite the per-request keys deploy:promote sends, and every ramp step will read as "the ramp did not take". infra.json declares: ${declared.expression}`);
-      return;
-    }
-
-    pass(`version affinity: ${declared.header} set dynamically from ${declared.value}, client-supplied keys exempted`);
-  });
+  // The three zone-scoped sections. The account-scoped CI token cannot reach
+  // them, so in CI each degrades to a note. An undeclared one is not read.
+  const zone = infra.zone.name;
+  const zeroRtt = infra.zone?.zero_rtt;
+  if (zeroRtt) report.add(compareZoneSetting(ZERO_RTT_SECTION, zeroRtt, zone, await readZoneSetting(cf, zone, zeroRtt.setting)));
+  const sharedDictionary = infra.zone?.shared_dictionary;
+  if (sharedDictionary) report.add(compareZoneSetting(SHARED_DICTIONARY_SECTION, sharedDictionary, zone, await readZoneSetting(cf, zone, sharedDictionary.setting)));
+  const affinity = infra.zone?.version_affinity;
+  if (affinity) report.add(compareVersionAffinity(affinity, zone, await readVersionAffinity(cf, zone, affinity.phase)));
 }
 
 // ----------------------------------------------------- tier: repository ----
-
-// GitHub repository rulesets, the BRANCH half of the release model. Same class
-// as the Workers Builds block: dashboard state no config in this repo can
-// derive, load-bearing for what may reach production, and silent when it drifts.
-//
-// NO CREDENTIAL, because the repo is public and the rulesets endpoint is public
-// with it. That is what puts this beside the DNS tier rather than behind a token
-// like the account tier. GITHUB_TOKEN, when present, buys rate-limit headroom
-// alone (60/hr unauthenticated per IP, which shared Actions runners do exhaust)
-// and grants nothing this needs.
-//
-// Anything we could not READ is an advisory, so GitHub being down cannot redden
-// a PR that only touched CSS. Anything we read and found wrong is fatal.
-async function ghFetch(path, token) {
-  // authorization is added below when a token is present.
-  const headers: Record<string, string> = {
-    accept: "application/vnd.github+json",
-    "x-github-api-version": "2022-11-28",
-    "user-agent": BOT_UA,
-  };
-  if (token) headers.authorization = `Bearer ${token}`;
-  const res = await fetch(`https://api.github.com${path}`, {
-    headers,
-    signal: AbortSignal.timeout(12000),
-  });
-  if (res.status === 403 || res.status === 429) {
-    const remaining = res.headers.get("x-ratelimit-remaining");
-    throw new Error(
-      remaining === "0"
-        ? "GitHub API rate limit exhausted (set GITHUB_TOKEN for headroom)"
-        : `GitHub API returned HTTP ${res.status}`,
-    );
-  }
-  if (!res.ok) throw new Error(`GitHub API returned HTTP ${res.status} for ${path}`);
-  return res.json();
-}
-
-async function checkRepo(infra) {
-  const repo = infra.repository;
-  if (!repo) return;
-  const slug = `${repo.owner}/${repo.name}`;
-  const token = process.env.GITHUB_TOKEN;
-
-  let meta, live;
-  try {
-    meta = await ghFetch(`/repos/${slug}`, token);
-    live = await ghFetch(`/repos/${slug}/rulesets`, token);
-  } catch (e) {
-    warn(`repository rulesets could not be read: ${e.message}`);
-    return;
-  }
-
-  // Visibility first, and as a PRECONDITION rather than a preference: rulesets
-  // on a private repo need a paid plan, so a flip back to private silently
-  // takes every rule below with it. Failing here names the cause; failing on
-  // four missing rules would not.
-  if (meta.visibility !== repo.visibility) {
-    fail(
-      `${slug} is ${JSON.stringify(meta.visibility)} but infra.json declares ${JSON.stringify(repo.visibility)}: rulesets need a paid plan on a private repo, so every branch rule below this line may have gone dark with it`,
-    );
-    return;
-  }
-
-  const byName = new Map(live.map((r) => [r.name, r]));
-  for (const want of repo.rulesets) {
-    const found = byName.get(want.name) as { id?: string } | undefined;
-    byName.delete(want.name);
-    if (!found) {
-      fail(`${slug} has no ruleset named ${JSON.stringify(want.name)}: the ${want.name} branch is unprotected`);
-      continue;
-    }
-
-    let detail: any;
-    try {
-      detail = await ghFetch(`/repos/${slug}/rulesets/${found.id}`, token);
-    } catch (e) {
-      warn(`ruleset ${want.name} could not be read in full: ${e.message}`);
-      continue;
-    }
-
-    const at = `ruleset ${want.name}`;
-    if (detail.enforcement !== want.enforcement) {
-      fail(
-        `${at} is ${JSON.stringify(detail.enforcement)}, declared ${JSON.stringify(want.enforcement)}. If this is the deliberate disable for an infra:check deadlock, flip it back (CLAUDE.md, "Branch protection sharpened this")`,
-      );
-    }
-
-    // Checked as EMPTY, never against a declared list. A list would invite
-    // somebody to add an entry here to turn a red check green, which is exactly
-    // the change the check exists to catch: every push in this repo carries the
-    // OWNER's credentials, so "bypass for repository admins" exempts precisely
-    // the actors the rule is aimed at.
-    if (detail.bypass_actors?.length) {
-      const who = detail.bypass_actors.map((a) => `${a.actor_type}#${a.actor_id} (${a.bypass_mode})`).join(", ");
-      fail(`${at} has ${detail.bypass_actors.length} bypass actor(s): ${who}. Every push here uses the owner's credentials, so a bypass exempts the actors the rule is for`);
-    }
-
-    const include = detail.conditions?.ref_name?.include || [];
-    if (want.include && include.join(",") !== want.include.join(",")) {
-      fail(`${at} covers ${JSON.stringify(include)}, declared ${JSON.stringify(want.include)}`);
-    }
-
-    const types = new Set(detail.rules.map((r) => r.type));
-    const missing = want.rules.filter((r) => !types.has(r));
-    if (missing.length) fail(`${at} lost rule(s) ${missing.join(", ")}`);
-    const extra = detail.rules.map((r) => r.type).filter((t) => !want.rules.includes(t));
-    if (extra.length) warn(`${at} carries undeclared rule(s) ${extra.join(", ")}: stricter than declared, but declare them so this file stays the source of truth`);
-
-    // A forbidden rule is not an oversight in the declaration. `production`
-    // must carry no pull_request rule, because promote-production.yml moves
-    // that ref directly and a PR requirement would break the release path.
-    for (const banned of want.forbidden_rules || []) {
-      if (types.has(banned)) fail(`${at} gained a ${banned} rule, which it must not have. ${want.why}`);
-    }
-
-    const rule = (t) => detail.rules.find((r) => r.type === t)?.parameters || {};
-
-    if (want.required_approving_review_count !== undefined && types.has("pull_request")) {
-      const got = rule("pull_request").required_approving_review_count;
-      if (got !== want.required_approving_review_count) {
-        fail(`${at} requires ${got} approving review(s), declared ${want.required_approving_review_count}. GitHub refuses to let anyone approve their own PR, so a solo repo above 0 can never merge`);
-      }
-    }
-
-    if (want.required_status_checks && types.has("required_status_checks")) {
-      const params = rule("required_status_checks");
-      const got = params.required_status_checks || [];
-      for (const req of want.required_status_checks) {
-        const hit = got.find((c) => c.context === req.context);
-        if (!hit) fail(`${at} no longer requires the ${JSON.stringify(req.context)} check`);
-        else if (hit.integration_id !== req.integration_id) {
-          fail(`${at}'s ${JSON.stringify(req.context)} check is pinned to integration_id ${hit.integration_id}, declared ${req.integration_id}. Unpinned, any caller of the commit-status API could satisfy it`);
-        }
-      }
-      if (params.strict_required_status_checks_policy !== want.strict_required_status_checks_policy) {
-        fail(`${at}'s strict_required_status_checks_policy is ${params.strict_required_status_checks_policy}, declared ${want.strict_required_status_checks_policy}. Strict makes every Dependabot PR churn a rebase on each unrelated merge`);
-      }
-    }
-  }
-
-  for (const stray of byName.keys()) {
-    warn(`${slug} carries an undeclared ruleset ${JSON.stringify(stray)}: add it to infra.json's repository block or delete it`);
-  }
-
-  pass(`${slug} is ${meta.visibility} and its ${repo.rulesets.length} declared ruleset(s) match, with no bypass actors${token ? "" : " (unauthenticated read)"}`);
-
-  await checkLabels(repo, slug, token);
-  await checkCodeScanning(repo, slug, token);
-  await checkActionsPermissions(repo, slug, token);
-  checkSecretScanning(repo, slug, meta);
-}
-
-// The Actions policy, on the two endpoints that hold it. Same tier as
-// checkCodeScanning above and workstation-only for the same measured reason:
-// /repos/:slug/actions/permissions and .../permissions/workflow each answer
-// HTTP 401 unauthenticated on this public repo (2026-08-27), so no PR run can
-// assert them and CI says so in one advisory instead of pretending.
-//
-// TWO OF THESE ARE DECLARED AHEAD OF LIVE STATE ON PURPOSE, so this reports
-// drift today and is meant to. zone.version_affinity set that precedent: the
-// declaration is the intent, the red line is the to-do, and the check goes
-// green when the owner flips the toggle rather than when somebody edits the
-// declaration down to match a dashboard nobody chose.
-//
-// `can_approve_pull_request_reviews` runs the OTHER WAY and is the sharp one.
-// It is true today and declared true to KEEP it, because the dashboard control
-// it maps to is "Allow GitHub Actions to create and approve pull requests" and
-// clearing it stops the default GITHUB_TOKEN from CREATING one. The scheduled
-// PR-opening workflows moved to an App token on 2026-09-28 (a github.token PR
-// now needs a human to approve its CI), so nothing here depends on it today;
-// it stays declared so that clearing it is a diff rather than a surprise.
 
 /** How many workflows carry a TOP-LEVEL `permissions:` block, counted rather
  *  than remembered.
@@ -1621,7 +567,7 @@ async function checkRepo(infra) {
  *
  *  Column 0 is the whole discriminator: a job-level `permissions:` is indented
  *  and does not govern a job that omits one. */
-async function workflowPermissionBlocks() {
+async function workflowPermissionBlocks(): Promise<WorkflowBlocks> {
   const dir = join(ROOT, ".github/workflows");
   const files = (await readdir(dir).catch(() => [])).filter((f) => /\.ya?ml$/.test(f)).sort();
   const without: string[] = [];
@@ -1630,286 +576,6 @@ async function workflowPermissionBlocks() {
     if (!/^permissions\s*:/m.test(src)) without.push(f);
   }
   return { total: files.length, without };
-}
-
-async function checkActionsPermissions(repo, slug, token) {
-  const want = repo.actions_permissions;
-  if (!want) return;
-
-  let live, workflow;
-  try {
-    live = await ghFetch(`/repos/${slug}/actions/permissions`, token);
-    workflow = await ghFetch(`/repos/${slug}/actions/permissions/workflow`, token);
-  } catch (e) {
-    warn(
-      /401|403/.test(e.message)
-        ? `Actions permissions: not verifiable here, both endpoints answer 401 unauthenticated even on a public repo. Run \`GITHUB_TOKEN=$(gh auth token) bun run infra:check\` on a workstation (being logged in is not enough, the script reads GITHUB_TOKEN) to assert them (${e.message})`
-        : `Actions permissions could not be read: ${e.message}`,
-    );
-    return;
-  }
-
-  // SHAPE BEFORE VALUES, and this guard is what keeps the tier out of CI's way
-  // rather than a defensive reflex. CI reads with the workflow's own
-  // GITHUB_TOKEN, which holds no Administration permission, so the expected
-  // answer is a 403 the catch above turns into an advisory. What this covers is
-  // the other shape: a 200 carrying a body without these fields. Read as values
-  // that are simply absent, `undefined !== true` fails, and a required check
-  // goes red over a credential rather than over a setting. Unverifiable is the
-  // honest reading of a payload that never named the thing.
-  const policyAbsent = (live.enabled !== true && live.enabled !== false) || !workflow.default_workflow_permissions;
-  if (policyAbsent) {
-    warn(
-      `Actions permissions: the API answered without the policy fields, so this tier is not verifiable with the credential in use. Run \`GITHUB_TOKEN=$(gh auth token) bun run infra:check\` on a workstation to assert it`,
-    );
-    return;
-  }
-
-  const before = hard.length;
-
-  // enabled first, as a PRECONDITION rather than a field. With Actions off the
-  // three settings below govern nothing, and so does every workflow in this
-  // repo, which is a much larger fact than any drift underneath it.
-  if (live.enabled !== true) {
-    fail(`${slug} has GitHub Actions DISABLED, so every workflow here is dead and the policy below governs nothing`);
-    return;
-  }
-
-  if (live.allowed_actions !== want.allowed_actions) {
-    fail(
-      `Actions allowed_actions is ${JSON.stringify(live.allowed_actions)}, declared ${JSON.stringify(want.allowed_actions)}. \`selected\` needs an explicit allowlist of every action and reusable workflow, which is a second registry beside the commit pins`,
-    );
-  }
-
-  if (live.sha_pinning_required !== want.sha_pinning_required) {
-    fail(
-      `Actions sha_pinning_required is ${live.sha_pinning_required}, declared ${want.sha_pinning_required}. Flip it under Settings, Actions, General: every third-party ref here is already commit-pinned by hand (the tree tier proves it), so this costs nothing today and is what stops the next one arriving on a tag`,
-    );
-  }
-
-  if (workflow.default_workflow_permissions !== want.default_workflow_permissions) {
-    const blocks = await workflowPermissionBlocks();
-    fail(
-      `Actions default_workflow_permissions is ${JSON.stringify(workflow.default_workflow_permissions)}, declared ${JSON.stringify(want.default_workflow_permissions)}. An explicit \`permissions:\` block beats the default and ${blocks.without.length ? `${blocks.total - blocks.without.length} of ${blocks.total} workflows carry one (missing: ${blocks.without.join(", ")}), which already inherit the default` : `all ${blocks.total} workflows carry one`}, so the flip governs the next workflow added without one rather than anything running today`,
-    );
-  }
-
-  // Asserted TRUE, which is the reverse of every other line here. See the
-  // header: this field gates CREATING pull requests, not only approving them.
-  if (workflow.can_approve_pull_request_reviews !== want.can_approve_pull_request_reviews) {
-    fail(
-      `Actions can_approve_pull_request_reviews is ${workflow.can_approve_pull_request_reviews}, declared ${want.can_approve_pull_request_reviews}. That checkbox reads "create AND approve", so turning it off stops \`gh pr create\` on the default token in dictionary-roll.yml, bun-pin.yml, og-cards.yml and photo-pipeline.yml. The nightly dictionary roll then fails silently inside a scheduled job`,
-    );
-  }
-
-  if (hard.length > before) return;
-  pass(
-    `Actions policy matches: ${live.allowed_actions} actions allowed, sha pinning ${live.sha_pinning_required ? "required" : "off"}, default token ${workflow.default_workflow_permissions}, PR creation ${workflow.can_approve_pull_request_reviews ? "allowed" : "BLOCKED"}`,
-  );
-}
-
-// Secret scanning, read off the repo metadata checkRepo already fetched for its
-// `visibility` precondition. No third call: `security_and_analysis` rides on
-// that same payload, so this tier costs one field rather than one request.
-//
-// IT READS BOTH DIRECTIONS, which the first version did not. Looping the
-// DECLARED keys answers "is every setting I named still right" and is silent
-// about a setting GitHub added or the owner switched on;
-// `dependabot_security_updates` was live and undeclared the day this landed.
-// The stray pass below is an advisory, matching checkRepo's undeclared-ruleset
-// line: an undeclared setting is a declaration to write.
-//
-// THE ABSENT-OBJECT CASE IS THE TRAP AND IS WHY THIS IS NOT A BARE LOOP. /repos/:slug answers HTTP 200 with NO credential and simply omits
-// `security_and_analysis` (measured 2026-08-27), which is sharper than the 401s
-// the Actions endpoints give: a checker written against the anonymous shape
-// gets a successful read of an object that is not there, and every `?.status`
-// under it comes back undefined. Reported as four settings being off, that is a
-// false alarm on every unauthenticated run, meaning every run in CI. So the
-// missing key is an advisory naming the credential, and only a PRESENT object
-// is ever compared.
-function checkSecretScanning(repo, slug, meta) {
-  const want = repo.security_and_analysis;
-  if (!want) return;
-
-  const live = meta?.security_and_analysis;
-  if (!live) {
-    warn(
-      `secret scanning: not verifiable here, /repos/${slug} omits \`security_and_analysis\` unless the read is authenticated (it answers 200 either way, so absence is not a failure). Run \`GITHUB_TOKEN=$(gh auth token) bun run infra:check\` on a workstation to assert it`,
-    );
-    return;
-  }
-
-  const before = hard.length;
-  const fields = Object.keys(want).filter((k) => !k.startsWith("$") && k !== "why");
-  for (const key of fields) {
-    const got = live[key]?.status;
-    if (got === undefined) {
-      fail(`${slug} reports no \`${key}\` at all; GitHub renamed or withdrew it, so this declaration is asserting a field that no longer exists`);
-      continue;
-    }
-    if (got !== want[key]) {
-      fail(`secret scanning: \`${key}\` is ${JSON.stringify(got)}, declared ${JSON.stringify(want[key])}. Flip it under Settings, Advanced Security`);
-    }
-  }
-
-  // The OTHER direction, which a loop over declared keys structurally cannot
-  // see. Iterating the declaration answers "is every setting I named still
-  // right" and says nothing about a setting GitHub added or the owner switched
-  // on, so this file quietly stops being the source of truth for that object.
-  // `dependabot_security_updates` was live and undeclared the day this landed.
-  //
-  // ADVISORY rather than fatal, matching the undeclared-ruleset line in
-  // checkRepo above: a setting the repo carries and this file does not name is
-  // a declaration to write, not a security state to be red about, and GitHub
-  // adding a field should not fail a PR that touched CSS.
-  const strays = Object.keys(live).filter((k) => !fields.includes(k));
-  if (strays.length) {
-    warn(
-      `${slug} carries ${strays.length} undeclared \`security_and_analysis\` setting(s): ${strays.map((k) => `${k} ${live[k]?.status}`).join(", ")}. Declare them in infra.json's repository.security_and_analysis block so this file stays the source of truth for that object`,
-    );
-  }
-
-  if (hard.length > before) return;
-  pass(`security_and_analysis matches on all ${fields.length} declared setting(s): ${fields.map((k) => `${k.replace(/^secret_scanning_?/, "") || "secret_scanning"} ${live[k].status}`).join(", ")}`);
-}
-
-// The live half of the triage declaration. Same tier as the rulesets above and
-// for the same reason: /repos/:slug/labels is public on a public repo, so this
-// runs on every pull request with no credential rather than degrading to a note
-// like the account tier.
-//
-// A MISSING LABEL IS FATAL, and the reason is not tidiness. Three things break
-// on one: `gh pr create --label` fails outright, so the nightly dictionary roll
-// stops opening pull requests; triage.yml silently CREATES the label instead,
-// because the add-labels endpoint invents what it is handed; and the label list
-// stops being the thing you can filter the repository by, which is the only
-// reason any of this exists.
-//
-// Colour and description drift is fatal too, which looks strict for something
-// cosmetic. It is one command to fix and it is the only signal that somebody
-// edited the set from the web UI, where the next edit is a rename.
-async function checkLabels(repo, slug, token) {
-  const triage = repo.triage;
-  if (!triage) return;
-
-  const live: any[] = [];
-  try {
-    for (let page = 1; ; page++) {
-      const batch = await ghFetch(`/repos/${slug}/labels?per_page=100&page=${page}`, token);
-      live.push(...batch);
-      if (batch.length < 100) break;
-    }
-  } catch (e) {
-    warn(`repository labels could not be read: ${e.message}`);
-    return;
-  }
-
-  const byName = new Map<string, any>(live.map((l) => [l.name, l]));
-  const before = hard.length;
-  for (const want of triage.labels) {
-    const got = byName.get(want.name);
-    byName.delete(want.name);
-    if (!got) {
-      fail(`${slug} has no label ${JSON.stringify(want.name)}. Run \`bun run labels:sync -- --confirm\`: until then triage.yml will invent it with a colour nobody chose, and any workflow passing it to \`gh --label\` fails outright`);
-      continue;
-    }
-    if (got.color.toLowerCase() !== want.color.toLowerCase()) {
-      fail(`label ${JSON.stringify(want.name)} is #${got.color}, declared #${want.color} (\`bun run labels:sync -- --confirm\`)`);
-    }
-    if ((got.description ?? "") !== want.description) {
-      fail(`label ${JSON.stringify(want.name)} reads ${JSON.stringify(got.description ?? "")}, declared ${JSON.stringify(want.description)} (\`bun run labels:sync -- --confirm\`)`);
-    }
-  }
-
-  // Strays WARN, matching the ruleset tier. GitHub ships a stock label set on
-  // every new repository, so failing here would make the first run of this
-  // check red for something nobody chose.
-  const strays = [...byName.keys()];
-  if (strays.length) {
-    warn(`${slug} carries ${strays.length} undeclared label(s): ${strays.join(", ")}. Declare them in infra.json or remove them with \`bun run labels:sync -- --confirm --prune\` (a deletion strips the label from every issue that carried it)`);
-  }
-
-  if (hard.length > before) return;
-  pass(`${slug}'s ${triage.labels.length} declared label(s) match on name, colour and description${strays.length ? `, with ${strays.length} stray` : ""}${token ? "" : " (unauthenticated read)"}`);
-}
-
-// CodeQL default setup, declared for the same reason the rulesets are: it is a
-// curated decision living in a dashboard, and #241 recorded the language list
-// plus the cost argument for it in MAINTENANCE.md while noting infra:check
-// could not see it.
-//
-// WORKSTATION-ONLY, and that is structural rather than a missing setting.
-// The endpoint needs the repository **Administration** permission (read), which
-// is NOT one of the keys a workflow may grant its GITHUB_TOKEN: the whole list
-// is actions, artifact-metadata, attestations, checks, code-quality, contents,
-// deployments, discussions, id-token, issues, models, packages, pages,
-// pull-requests, repository-projects, security-events and statuses. So no
-// `permissions:` block can turn this on in CI, and `security-events: read` in
-// particular does nothing here (tried on 2026-08-07: still HTTP 403).
-//
-// This is the mirror image of the Workers Builds case, where a Read variant of
-// the permission existed and made the check possible without widening anything.
-// Here the only credential that can read it is a classic PAT with `repo`, which
-// is precisely the kind of broad standing credential this repo keeps out of CI.
-// So the check runs where the owner runs it, and CI says plainly that it cannot.
-async function checkCodeScanning(repo, slug, token) {
-  const want = repo.code_scanning;
-  if (!want) return;
-
-  let live;
-  try {
-    live = await ghFetch(`/repos/${slug}/code-scanning/default-setup`, token);
-  } catch (e) {
-    warn(
-      /401|403/.test(e.message)
-        ? `CodeQL default setup: not verifiable here, the endpoint needs the repository Administration permission and no GITHUB_TOKEN can hold it. Run \`GITHUB_TOKEN=$(gh auth token) bun run infra:check\` on a workstation (any credential with the \`repo\` scope; being logged in is not enough, the script reads GITHUB_TOKEN) to assert it (${e.message})`
-        : `CodeQL default setup could not be read: ${e.message}`,
-    );
-    return;
-  }
-
-  // Under ADVANCED setup this tier has exactly one job: prove default setup is
-  // still OFF. Both on would analyze every commit twice and file duplicate
-  // alerts, and the dashboard is one click from doing it. The curation itself
-  // moved to checkCodeqlWorkflow, which needs no credential.
-  if (want.mode === "advanced") {
-    if (live.state !== want.default_setup_state) {
-      fail(`CodeQL default setup is ${JSON.stringify(live.state)}, declared ${JSON.stringify(want.default_setup_state)}. With ${want.workflow} committed, both being on double-scans every commit and files duplicate alerts`);
-      return;
-    }
-    pass(`CodeQL default setup is ${live.state}, leaving ${want.workflow} the only scanner`);
-    return;
-  }
-
-  // state first. A scanner that is simply off reports nothing, which reads
-  // exactly like a clean scan, so every field below is moot if this drifted.
-  if (live.state !== want.state) {
-    fail(`CodeQL default setup is ${JSON.stringify(live.state)}, declared ${JSON.stringify(want.state)}. A disabled scanner reports no findings, which looks identical to a clean scan`);
-    return;
-  }
-
-  // The curated list. Compared as a SET, because the API's ordering is not a
-  // documented guarantee and reordering is not drift worth failing on.
-  const got = [...(live.languages || [])].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-  const declared = [...want.languages].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-  if (got.join(",") !== declared.join(",")) {
-    const added = got.filter((l) => !declared.includes(l));
-    const dropped = declared.filter((l) => !got.includes(l));
-    const parts = [];
-    if (added.length) parts.push(`gained ${added.join(", ")}`);
-    if (dropped.length) parts.push(`lost ${dropped.join(", ")}`);
-    fail(`CodeQL default setup ${parts.join(" and ")} (live ${got.join(", ")}); #241 curated this list, so re-read MAINTENANCE.md before widening it`);
-  }
-
-  if (live.threat_model !== want.threat_model) {
-    fail(`CodeQL threat_model is ${JSON.stringify(live.threat_model)}, declared ${JSON.stringify(want.threat_model)}. MAINTENANCE.md argues rust and python are droppable BECAUSE the model is remote, so this change invalidates that reasoning`);
-  }
-
-  if (live.query_suite !== want.query_suite) {
-    fail(`CodeQL query_suite is ${JSON.stringify(live.query_suite)}, declared ${JSON.stringify(want.query_suite)}`);
-  }
-
-  pass(`CodeQL default setup matches: ${got.length} languages (${got.join(", ")}), ${live.query_suite} suite, ${live.threat_model} threat model`);
 }
 
 
@@ -1993,9 +659,15 @@ await checkTree(infra, wrangler, auxConfigs);
 if (OFFLINE) {
   warn("--offline: skipped the DNS and API tiers");
 } else {
-  await checkDns(infra);
-  await checkEdge(infra);
-  await checkRepo(infra);
+  report.add(compareDns(infra, await readDns(dnsQueries(infra))));
+  report.add(compareEdge(infra.edge, await readEdge(infra.edge, { fetchEdge, probeEarlyData }), {
+    hostedRunner: Boolean(process.env.GITHUB_ACTIONS),
+  }));
+  if (infra.repository) {
+    const githubToken = process.env.GITHUB_TOKEN;
+    const observed = await readRepository(githubReader(githubToken), infra.repository, await workflowPermissionBlocks());
+    report.add(compareRepository(infra.repository, observed, { authenticated: Boolean(githubToken) }));
+  }
   await checkAgentMarkdown();
 
   const token = process.env.CLOUDFLARE_API_TOKEN;
@@ -2014,18 +686,7 @@ if (!infra.release.verifiable) {
   warn(`release config is not API-verifiable — review by hand: production branch ${JSON.stringify(infra.release.production_branch)}, root ${JSON.stringify(infra.release.root_directory)}, build command empty, deploy ${JSON.stringify(infra.release.deploy_command)}`);
 }
 
-for (const line of ok) console.log(`  ok    ${line}`);
-for (const line of advisory) console.log(`  note  ${line}`);
-
-if (hard.length) {
-  console.error(`\ninfra drift detected (${hard.length}):`);
-  for (const line of hard) console.error(`  - ${line}`);
-  process.exit(1);
-}
-
-if (STRICT && advisory.length) {
-  console.error(`\n--strict: ${advisory.length} advisor${advisory.length === 1 ? "y" : "ies"} treated as failures`);
-  process.exit(1);
-}
-
-console.log(`\ninfra ok: ${ok.length} checks passed, ${advisory.length} skipped or advisory`);
+const rendered = report.render({ strict: STRICT });
+for (const line of rendered.stdout) console.log(line);
+for (const line of rendered.stderr) console.error(line);
+if (rendered.exitCode) process.exit(rendered.exitCode);
