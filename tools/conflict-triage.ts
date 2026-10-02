@@ -6,6 +6,28 @@
 //     bun run conflicts -- 876           one PR
 //     bun run conflicts -- --all         every open PR that conflicts
 //     bun run conflicts -- 876 --markdown | --json
+//     bun run conflicts -- --in-progress  the merge/rebase/cherry-pick git just stopped on
+//     bun run conflicts -- 876 --html view.html [--notes notes.json]
+//
+// WHY EACH SIDE LOOKS THE WAY IT DOES. A verdict says where to resolve a
+// conflict and nothing about what the two sides were trying to do, which is
+// the thing a resolution actually needs. Every hunk therefore carries `why`:
+// the commits on each side, since the merge base, whose patches added or
+// removed the hunk's lines, ranked by how many they touched. On this repo a
+// squash subject ends in `(#N)`, so a commit names its PR, and the PR names the
+// intent. `--html` lays each hunk out as main | base | PR with those commits
+// above their columns, and `--notes` adds a plain-language reading per hunk,
+// keyed `<path>:<line>` (`<path>` for a file, `*` for the whole merge). The
+// notes are written by whoever read the sides, never generated here: this
+// file measures, and an explanation is a claim about intent it cannot check.
+//
+// `--in-progress` reads which operation stopped in the current worktree and
+// orients it the way the rest of this file does, "main" being the upstream
+// side: a merge of main INTO a branch is MERGE_HEAD against HEAD, while a
+// rebase or cherry-pick replays one commit, so it is HEAD against that commit
+// over the commit's own parent (gotcha 47 has why %A and %B swap). It re-runs
+// the merge in memory, so it describes the conflict as git first stopped on
+// it, whatever has been resolved in the worktree since.
 //
 // THE QUESTION HAS TWO HALVES, AND GITHUB ONLY ANSWERS THE FIRST. GitHub's
 // editor handles "simple competing line change conflicts" and greys out its
@@ -44,10 +66,11 @@
 // Exit 0: nothing needs a local checkout. 1: something does. 2: the instrument
 // could not run, which is never reported as a clean result.
 
-import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { spawnSync, execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { asRecord, asText } from "../src/worker/lib/parse.ts";
 
 // ── grades ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +98,19 @@ export type Hunk = {
   clash: HunkClash;
   grade: HunkGrade;
   preview: { main: string; pr: string };
+  /** The hunk's full text per side; `base` is null without diff3 markers. */
+  sides: { main: string[]; base: string[] | null; pr: string[] };
+  /** Commits on each side whose patches wrote or removed these lines, strongest first. */
+  why?: { main: Origin[]; pr: Origin[] };
+};
+
+export type Origin = {
+  sha: string;
+  subject: string;
+  /** The PR a squash subject names with a trailing `(#N)`. */
+  pr: number | null;
+  /** How many of the hunk's distinct lines this commit's patch added or removed. */
+  lines: number;
 };
 
 export type Verdict =
@@ -100,12 +136,18 @@ export type FileTriage = {
   reasons: string[];
   owes: string[];
   hunks: Hunk[];
+  /** The newest commits touching the path on each side, for a conflict with no hunks to attribute (a modify/delete). */
+  history: { main: Origin[]; pr: Origin[] };
 };
 
 export type Report = {
   label: string;
   base: string;
   head: string;
+  /** The common ancestor both sides are measured from. */
+  mergeBase: string;
+  /** `https://github.com/<owner>/<repo>`, for linking commits and PRs, when origin is on GitHub. */
+  repo: string | null;
   pr?: { number: number; url: string; mergeable: string };
   /** The GitHub-view result tree: `git cat-file -p <tree>:<path>` shows the markers. */
   tree: string;
@@ -148,12 +190,13 @@ type MergeTree = {
  * the tree, then `<mode> <oid> <stage>\t<path>` per unmerged entry, then an
  * empty field, then messages as `<n>, <path> x n, <type>, <text>`.
  */
-function mergeTree(base: string, head: string, opts: { githubView: boolean; ledger?: string }): MergeTree {
+function mergeTree(base: string, head: string, opts: { githubView: boolean; ledger?: string; mergeBase?: string }): MergeTree {
   const pre = ["-c", "merge.conflictStyle=diff3"];
   if (opts.githubView) pre.push(`--attr-source=${emptyTree()}`);
   const env: NodeJS.ProcessEnv = { ...process.env };
   if (opts.ledger) env.SITE_MERGE_LEDGER = opts.ledger;
-  const run = spawnSync("git", [...pre, "merge-tree", "--write-tree", "--messages", "-z", base, head], {
+  const explicit = opts.mergeBase ? [`--merge-base=${opts.mergeBase}`] : [];
+  const run = spawnSync("git", [...pre, "merge-tree", "--write-tree", "--messages", "-z", ...explicit, base, head], {
     encoding: "utf8",
     maxBuffer: 256 * 1024 * 1024,
     env,
@@ -194,6 +237,78 @@ function emptyTree(): string {
   // and SHA-256 repositories.
   EMPTY_TREE ??= execFileSync("git", ["hash-object", "-t", "tree", "--stdin"], { input: "", encoding: "utf8" }).trim();
   return EMPTY_TREE;
+}
+
+// ── provenance: which commit wrote each side ────────────────────────────────
+
+const prOf = (subject: string) => Number(subject.match(/\(#(\d+)\)\s*$/)?.[1]) || null;
+
+type Patch = { sha: string; subject: string; added: Set<string>; removed: Set<string> };
+
+/**
+ * Every non-merge commit in `from..to` that touched `path`, newest first, with
+ * the lines its patch added and removed. Lines are compared trimmed: a
+ * conflict hunk is cut from the merged file and a re-indent should not hide
+ * the commit that wrote the line.
+ */
+function patches(from: string, to: string, path: string): Patch[] {
+  const text = gitTry(["log", "--no-merges", "-p", "-U0", "--no-color", "--no-ext-diff", "--format=%x00%H%x09%s", `${from}..${to}`, "--", path]);
+  if (!text) return [];
+  return text
+    .split("\0")
+    .filter(Boolean)
+    .map((chunk) => {
+      const [head, ...diff] = chunk.split("\n");
+      const [sha, ...subject] = head.split("\t");
+      const added = new Set<string>();
+      const removed = new Set<string>();
+      for (const line of diff) {
+        if (line.startsWith("+++") || line.startsWith("---")) continue;
+        const body = line.slice(1).trim();
+        if (!body) continue;
+        if (line[0] === "+") added.add(body);
+        else if (line[0] === "-") removed.add(body);
+      }
+      return { sha, subject: subject.join("\t"), added, removed };
+    });
+}
+
+/**
+ * Rank a side's commits by how many of the hunk's distinct lines their patches
+ * touched: lines the side now holds that a patch ADDED, plus base lines that a
+ * patch REMOVED (which is how a pure deletion gets an author at all). A commit
+ * that touched the file but none of these lines is left out, so an unrelated
+ * edit elsewhere in the file cannot claim the hunk.
+ */
+export function attribute(list: Patch[], side: string[], base: string[] | null, keep = 3): Origin[] {
+  const now = new Set(side.map((l) => l.trim()).filter(Boolean));
+  const was = new Set((base ?? []).map((l) => l.trim()).filter(Boolean));
+  return list
+    .map((p) => {
+      let lines = 0;
+      for (const l of now) if (p.added.has(l)) lines++;
+      for (const l of was) if (!now.has(l) && p.removed.has(l)) lines++;
+      return { sha: p.sha, subject: p.subject, pr: prOf(p.subject), lines };
+    })
+    .filter((o) => o.lines > 0)
+    .sort((a, b) => b.lines - a.lines) // stable, so ties stay newest first
+    .slice(0, keep);
+}
+
+function history(from: string, to: string, path: string, keep = 3): Origin[] {
+  const text = gitTry(["log", "--no-merges", `-${keep}`, "--format=%H%x09%s", `${from}..${to}`, "--", path]);
+  if (!text) return [];
+  return text.split("\n").map((row) => {
+    const [sha, ...subject] = row.split("\t");
+    const s = subject.join("\t");
+    return { sha, subject: s, pr: prOf(s), lines: 0 };
+  });
+}
+
+function githubRepo(): string | null {
+  const url = gitTry(["remote", "get-url", "origin"]);
+  const m = url?.match(/github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?$/);
+  return m ? `https://github.com/${m[1]}` : null;
 }
 
 // ── repository policy, read from the BASE tree ──────────────────────────────
@@ -286,6 +401,7 @@ export function parseHunks(text: string): Hunk[] {
         clash,
         grade,
         preview: { main: clip(main), pr: clip(pr) },
+        sides: { main, base, pr },
       });
       state = "out";
     } else if (state === "main") main.push(line);
@@ -301,11 +417,13 @@ export function parseHunks(text: string): Hunk[] {
 const STRUCTURAL = /^(modify\/delete|file location|rename|file\/directory|directory\/file|distinct modes|binary|submodule|add\/add, mode)/;
 const CODE = /\.(ts|tsx|js|mjs|cjs|rs|css|html|sh)$/;
 
-export function triage(base: string, head: string, label: string): Report {
+export function triage(base: string, head: string, label: string, opts: { mergeBase?: string } = {}): Report {
   const warnings: string[] = [];
-  for (const ref of [base, head]) {
+  for (const ref of [base, head, ...(opts.mergeBase ? [opts.mergeBase] : [])]) {
     if (gitTry(["rev-parse", "--verify", "-q", `${ref}^{commit}`]) === null) throw new Instrument(`not a commit: ${ref}`);
   }
+  const mergeBase = opts.mergeBase ? git(["rev-parse", opts.mergeBase]).trim() : gitTry(["merge-base", base, head]);
+  if (!mergeBase) throw new Instrument(`${base} and ${head} share no merge base`);
   const wired = gitTry(["config", "--get", "merge.json.driver"]) !== null;
   // BOTH passes get a throwaway ledger. The GitHub view should never reach a
   // driver, but when that control fails it fails AFTER the merge ran, and the
@@ -317,11 +435,11 @@ export function triage(base: string, head: string, label: string): Report {
   let local: MergeTree;
   let ledger: { path: string; note: string }[] = [];
   try {
-    github = mergeTree(base, head, { githubView: true, ledger: join(scratch, "github-ledger") });
+    github = mergeTree(base, head, { githubView: true, ledger: join(scratch, "github-ledger"), mergeBase: opts.mergeBase });
     if (/^merge-driver:/m.test(github.stderr) || existsSync(join(scratch, "github-ledger"))) {
       throw new Instrument("control failed: a merge driver ran in the GitHub view, so --attr-source did not take effect");
     }
-    local = mergeTree(base, head, { githubView: false, ledger: ledgerPath });
+    local = mergeTree(base, head, { githubView: false, ledger: ledgerPath, mergeBase: opts.mergeBase });
     if (existsSync(ledgerPath)) {
       ledger = readFileSync(ledgerPath, "utf8")
         .split("\n")
@@ -423,8 +541,7 @@ export function triage(base: string, head: string, label: string): Report {
         owes.push(`${d.regenerate}  (input to ${d.id})`);
       }
     }
-    if (path === "config/derivations.json") owes.push("bun run derive:check -- --lock, after reading what it vouches for");
-    // A merged input moves a recorded digest, so `validate` runs derive:check
+    if (path === "config/derivations.json") owes.push("bun run derive:check -- --lock, after reading what it vouches for");    // A merged input moves a recorded digest, so `validate` runs derive:check
     // against a hash neither side recorded. The web editor commits and stops;
     // it cannot run the command that clears that, so the owed step is the
     // reason to take the file local even when every hunk is small.
@@ -441,13 +558,26 @@ export function triage(base: string, head: string, label: string): Report {
       reasons,
       owes: [...new Set(owes)],
       hunks,
+      history: { main: history(mergeBase, base, path), pr: history(mergeBase, head, path) },
     };
   });
+
+  // Attribution reads every patch on both sides, so it is skipped where no
+  // reading of the hunks is owed: a derived file is regenerated, never merged,
+  // and a driver-resolved one has nothing left to resolve.
+  for (const f of files) {
+    if (f.hunks.length === 0 || f.verdict === "regenerate" || f.verdict === "local-free") continue;
+    const mainPatches = patches(mergeBase, base, f.path);
+    const prPatches = patches(mergeBase, head, f.path);
+    for (const h of f.hunks) {
+      h.why = { main: attribute(mainPatches, h.sides.main, h.sides.base), pr: attribute(prPatches, h.sides.pr, h.sides.base) };
+    }
+  }
 
   files.sort((a, b) => VERDICT_RANK.indexOf(a.verdict) - VERDICT_RANK.indexOf(b.verdict) || a.path.localeCompare(b.path));
   const webEditorAvailable = !files.some((f) => f.verdict === "local-required");
   const verdict: Report["verdict"] = files.length === 0 ? "clean" : files.every((f) => f.verdict === "web-ok") ? "web" : "local";
-  return { label, base, head, tree: github.tree, verdict, webEditorAvailable, files, warnings };
+  return { label, base, head, mergeBase, repo: githubRepo(), tree: github.tree, verdict, webEditorAvailable, files, warnings };
 }
 
 // ── targets ──────────────────────────────────────────────────────────────────
@@ -508,6 +638,16 @@ export function renderText(r: Report): string {
       const base = h.base === null ? "" : ` base ${h.base} /`;
       out.push(`      hunk @${h.line}: ${h.grade} ${h.clash}, main ${h.main} /${base} pr ${h.pr} lines`);
       if (h.preview.main || h.preview.pr) out.push(`          main: ${h.preview.main || "(empty)"}`, `          pr:   ${h.preview.pr || "(empty)"}`);
+      for (const side of ["main", "pr"] as const) {
+        const top = h.why?.[side][0];
+        if (top) out.push(`          ${side === "main" ? "main" : "pr  "} by ${top.sha.slice(0, 8)} ${top.subject}`);
+      }
+    }
+    if (f.hunks.length === 0) {
+      for (const side of ["main", "pr"] as const) {
+        const top = f.history[side][0];
+        if (top) out.push(`      last on ${side}: ${top.sha.slice(0, 8)} ${top.subject}`);
+      }
     }
     for (const o of f.owes) out.push(`      owes: ${o}`);
   }
@@ -529,6 +669,134 @@ export function renderMarkdown(r: Report): string {
   for (const w of r.warnings) out.push("", `> ${w}`);
   out.push("", `<sub>\`bun run conflicts -- ${r.pr?.number ?? ""}\`, GitHub view emulated with drivers off and checked against GitHub's own mergeable field.</sub>`);
   return out.join("\n");
+}
+
+// ── the three-way view ───────────────────────────────────────────────────────
+
+/** Notes keyed `<path>:<line>` (a hunk), `<path>` (a file) or `*` (the merge). Plain text; `code` spans in backticks. */
+export type Notes = Record<string, string>;
+
+/** A notes file decoded at the boundary, or null when any entry is not non-empty text. */
+function parseNotes(value: unknown): Notes | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const out: Notes = {};
+  for (const [key, note] of Object.entries(record)) {
+    const text = asText(note);
+    if (text === null) return null;
+    out[key] = text;
+  }
+  return out;
+}
+
+const esc = (s: string) => s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+const prose = (s: string) =>
+  esc(s)
+    .split(/\n{2,}/)
+    .map((p) => `<p>${p.replace(/`([^`\n]+)`/g, "<code>$1</code>").replaceAll("\n", "<br>")}</p>`)
+    .join("");
+
+/** Past this many lines a column is cut, with the count of what was left out. */
+const VIEW_LINES = 80;
+
+/** `lines` undefined renders the commits alone, for a file-level column with no hunk text. */
+function column(label: string, lines: string[] | null | undefined, origins: Origin[] | undefined, repo: string | null): string {
+  const chips = (origins ?? [])
+    .map((o) => {
+      const sha = repo ? `<a href="${esc(`${repo}/commit/${o.sha}`)}">${o.sha.slice(0, 8)}</a>` : o.sha.slice(0, 8);
+      const pr = o.pr && repo ? ` <a href="${esc(`${repo}/pull/${o.pr}`)}">#${o.pr}</a>` : "";
+      const subject = o.subject.replace(/\s*\(#\d+\)\s*$/, "");
+      return `<li>${sha}${pr} ${esc(subject)} <span class="n">${o.lines} line${o.lines === 1 ? "" : "s"}</span></li>`;
+    })
+    .join("");
+  const body =
+    lines === undefined
+      ? chips
+        ? ""
+        : `<div class="none">no commits on this side since the merge base</div>`
+      : lines === null
+      ? `<div class="none">no base (git wrote no diff3 section)</div>`
+      : lines.length === 0
+        ? `<div class="none">nothing: this side has no lines here</div>`
+        : `<pre>${esc(lines.slice(0, VIEW_LINES).join("\n"))}${lines.length > VIEW_LINES ? `\n<span class="n">… ${lines.length - VIEW_LINES} more lines</span>` : ""}</pre>`;
+  return `<div class="col ${label}"><h4>${label}</h4>${chips ? `<ul class="by">${chips}</ul>` : ""}${body}</div>`;
+}
+
+export function renderHtml(reports: Report[], notes: Notes = {}): string {
+  const sections = reports.map((r) => {
+    const title = r.pr ? `<a href="${esc(r.pr.url)}">#${r.pr.number}</a> ${esc(r.label.replace(/^#\d+\s*/, ""))}` : esc(r.label);
+    const files = r.files.map((f) => {
+      const hunks = f.hunks
+        .map((h) => {
+          const note = notes[`${f.path}:${h.line}`];
+          return `<article class="hunk">
+<header><span class="grade ${h.grade}">${h.grade}</span> ${h.clash} <span class="n">@${h.line} · main ${h.main} / base ${h.base ?? "?"} / pr ${h.pr}</span></header>
+${note ? `<div class="note">${prose(note)}</div>` : ""}
+<div class="cols">${column("main", h.sides.main, h.why?.main, r.repo)}${column("base", h.sides.base, undefined, r.repo)}${column("pr", h.sides.pr, h.why?.pr, r.repo)}</div>
+</article>`;
+        })
+        .join("");
+      const hist =
+        f.hunks.length === 0
+          ? `<div class="cols two">${column("main", undefined, f.history.main, r.repo)}${column("pr", undefined, f.history.pr, r.repo)}</div>`
+          : "";
+      const note = notes[f.path];
+      return `<section class="file">
+<h3><code>${esc(f.path)}</code> <span class="verdict ${f.verdict}">${ICON[f.verdict]}</span>${f.kinds.length ? ` <span class="n">${esc(f.kinds.join(", "))}</span>` : ""}</h3>
+${note ? `<div class="note">${prose(note)}</div>` : ""}
+${f.reasons.length || f.owes.length ? `<ul class="reasons">${[...f.reasons.map(esc), ...f.owes.map((o) => `owes <code>${esc(o)}</code>`)].map((x) => `<li>${x}</li>`).join("")}</ul>` : ""}
+${hist}${hunks}
+</section>`;
+    });
+    const top = notes["*"];
+    return `<section class="report">
+<h2>${title}</h2>
+<p class="n">${esc(r.base)} ← ${esc(r.head.slice(0, 12))}, from merge base ${esc(r.mergeBase.slice(0, 12))}</p>
+${top ? `<div class="note lead">${prose(top)}</div>` : ""}
+<div class="route">${route(r).map((l) => `<p>${esc(l).replace(/`([^`]+)`/g, "<code>$1</code>")}</p>`).join("")}</div>
+${r.warnings.map((w) => `<p class="warn">${esc(w)}</p>`).join("")}
+${files.join("")}
+</section>`;
+  });
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conflict view</title>
+<style>
+:root{--bg:#fbfbfa;--fg:#1d1d1b;--muted:#6b6b66;--line:#e2e1dc;--card:#fff;--main:#2f5fb3;--pr:#a14d12;--base:#6b6b66;--note:#f3f0e4;--warn:#9b2c2c;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--fg:#e8e6df;--muted:#9a9890;--line:#2e2d2a;--card:#1e1e1c;--main:#7fa6ea;--pr:#e09a62;--base:#9a9890;--note:#26241d;--warn:#f08080}}
+:root[data-theme="dark"]{--bg:#161615;--fg:#e8e6df;--muted:#9a9890;--line:#2e2d2a;--card:#1e1e1c;--main:#7fa6ea;--pr:#e09a62;--base:#9a9890;--note:#26241d;--warn:#f08080}
+*{box-sizing:border-box}body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+main{max-width:1280px;margin:0 auto}a{color:inherit}code,pre{font-family:var(--mono);font-size:12.5px}
+h2{margin:0 0 4px;font-size:20px}h3{font-size:15px;margin:28px 0 8px;display:flex;gap:8px;flex-wrap:wrap;align-items:baseline}h4{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.n{color:var(--muted);font-size:12.5px}.warn{color:var(--warn)}
+.note{background:var(--note);border-radius:6px;padding:8px 12px;margin:8px 0}.note p{margin:4px 0}.lead{font-size:15.5px}
+.route p{margin:4px 0}.reasons{margin:4px 0;padding-left:20px;color:var(--muted);font-size:13.5px}
+.verdict,.grade{font-size:11.5px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-weight:600}
+.hunk{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:10px 0}.hunk header{font-size:13.5px}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:8px}.cols.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.col{min-width:0}.col.main h4{color:var(--main)}.col.pr h4{color:var(--pr)}.col.base h4{color:var(--base)}
+.col pre{margin:0;padding:8px;border:1px solid var(--line);border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere}
+.col.main pre{border-left:3px solid var(--main)}.col.pr pre{border-left:3px solid var(--pr)}.col.base pre{border-left:3px solid var(--base);opacity:.85}
+.by{list-style:none;margin:0 0 6px;padding:0;font-size:12.5px}.by li{overflow-wrap:anywhere}
+.none{color:var(--muted);font-style:italic;font-size:13px;padding:8px;border:1px dashed var(--line);border-radius:6px}
+@media (max-width:760px){.cols,.cols.two{grid-template-columns:minmax(0,1fr)}}
+</style></head><body><main>
+${sections.join("\n")}
+</main></body></html>
+`;
+}
+
+/** What `git` is in the middle of in the current worktree, oriented upstream-first. */
+function inProgress(): { base: string; head: string; mergeBase?: string; label: string } {
+  const has = (name: string) => gitTry(["rev-parse", "-q", "--verify", name]) !== null;
+  if (has("MERGE_HEAD")) return { base: "MERGE_HEAD", head: "HEAD", label: "merge in progress (MERGE_HEAD into HEAD)" };
+  for (const name of ["REBASE_HEAD", "CHERRY_PICK_HEAD"]) {
+    if (has(name)) {
+      const subject = gitTry(["log", "-1", "--format=%s", name]) ?? "";
+      return { base: "HEAD", head: name, mergeBase: `${name}^`, label: `${name === "REBASE_HEAD" ? "rebase" : "cherry-pick"} replaying ${subject}` };
+    }
+  }
+  throw new Instrument("--in-progress: git is not stopped in a merge, rebase or cherry-pick here");
 }
 
 // ── cli ──────────────────────────────────────────────────────────────────────
@@ -553,11 +821,32 @@ function main() {
   } else if (prArg) {
     const meta = JSON.parse(gh(["pr", "view", prArg.replace("#", ""), "--json", PR_FIELDS])) as PrMeta;
     reports = [triagePr(meta)];
+  } else if (args.includes("--in-progress")) {
+    const op = inProgress();
+    reports = [triage(git(["rev-parse", op.base]).trim(), git(["rev-parse", op.head]).trim(), op.label, { mergeBase: op.mergeBase })];
   } else {
     const base = flag("--base") ?? "origin/main";
     const head = flag("--head") ?? "HEAD";
     if (base.startsWith("origin/")) git(["fetch", "-q", "origin", base.slice("origin/".length)]);
     reports = [triage(base, git(["rev-parse", head]).trim(), head === "HEAD" ? git(["rev-parse", "--abbrev-ref", "HEAD"]).trim() : head)];
+  }
+
+  const htmlPath = flag("--html");
+  if (htmlPath) {
+    const notesPath = flag("--notes");
+    let notes: Notes = {};
+    if (notesPath) {
+      const parsed = parseNotes(JSON.parse(readFileSync(notesPath, "utf8")));
+      if (!parsed) throw new Instrument(`--notes ${notesPath}: expected an object of non-empty strings keyed "<path>:<line>", "<path>" or "*"`);
+      notes = parsed;
+      // A key that names no hunk is a note nobody will see, which reads as an
+      // explanation that was written and is simply absent from the page.
+      const known = new Set(["*", ...reports.flatMap((r) => r.files.flatMap((f) => [f.path, ...f.hunks.map((h) => `${f.path}:${h.line}`)]))]);
+      const stray = Object.keys(notes).filter((k) => !known.has(k));
+      if (stray.length > 0) throw new Instrument(`--notes: no such hunk or file: ${stray.join(", ")}`);
+    }
+    writeFileSync(htmlPath, renderHtml(reports, notes));
+    console.error(`conflicts: wrote ${htmlPath}`);
   }
 
   if (format === "json") console.log(JSON.stringify(reports.length === 1 && !args.includes("--all") ? reports[0] : reports, null, 2));

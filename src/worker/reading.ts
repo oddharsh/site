@@ -1,7 +1,7 @@
 // reading.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, signedFetch } from "./lib/botauth.ts";
-import { serveStaticPage } from "./lib/assets.ts";
+import { serveBuiltPage } from "./lib/built-page.ts";
 import { cachedRender, deleteSWRKV, edgeKey, swrKV, withWeakEtag } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
@@ -179,17 +179,14 @@ export async function handleReading(request, env, ctx) {
     const busted = await refreshReadingList(request, env, ctx);
     try { await busted?.body?.cancel(); } catch {}
   }
-  const headers = {
-    "cache-control":   PAGE_CACHE_CONTROL,
-    "link":            SHELL_PRELOAD_LINK,
-    "referrer-policy": "strict-origin-when-cross-origin",
-  };
-  const response = await serveStaticPage(request, env, { headers });
-  if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
-  const live = renderReadingPage();
-  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
-  return live;
+  return serveBuiltPage(request, env, {
+    headers: {
+      "cache-control":   PAGE_CACHE_CONTROL,
+      "link":            SHELL_PRELOAD_LINK,
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+    live: () => renderReadingPage(),
+  });
 }
 
 /** The island: the count bar, the rows and the footer, or the placeholder. */
