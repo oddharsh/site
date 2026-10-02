@@ -29,128 +29,39 @@
 // created directly in one of those four needs a dev restart to appear; anywhere
 // deeper is free. That is the whole cost of not copying.
 //
-// It is NOT a second definition of the served tree. The roots and their order
-// are build.ts step 1's, and a contract test pins the two lists together so a
-// sixth root cannot reach production while dev keeps serving five.
-import { mkdir, readdir, rm, symlink, stat } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
-
-// Same roots, same ORDER, as build.ts step 1: a later root wins a path an
-// earlier one also provides, which is what `cp` does there. There are no such
-// paths today and the collision report below is what says so out loud.
-export const ASSET_ROOTS = ["public", "src/pages", "src/content", "src/client", "src/styles"];
-
-// Three paths build.ts DERIVES rather than copies, so a local leftover at any of
-// them must not reach the farm either: the tree would then depend on whatever
-// pipeline output a given machine happens to be holding.
+// It is NOT a second definition of the served tree. The roots, their order, the
+// derived paths left out and the one-owner-per-path rule live in
+// tools/lib/served-tree.ts, which plans the tree once. build.ts copies that
+// plan; this file symlinks the same plan. A sixth root added there reaches
+// both, and a path two roots claim is refused there, before either adapter runs.
 //
-// Dev derives nothing, so all three are build-only surfaces here, the same
-// standing as the generated /lens shell and /run that CLAUDE.md records as
-// 404ing under `bun run dev`.
+// Dev derives nothing, so the three DERIVED_PATHS are build-only surfaces here,
+// the same standing as the generated /lens shell and /run that CLAUDE.md
+// records as 404ing under `bun run dev`.
 //
 // **THE TOOLTIP LOSES ITS EXIF UNDER `bun run dev`, and that is new as of
-// 2026-08-29.** This comment used to end "the tooltip's primary tier is
-// /images/exif.json, which is committed and staged", which was true while that
-// file was committed. Both of its tiers are derived now, so a hover in dev draws
-// the frame and no EXIF lines. `photo_recipe`'s byte-match arm degrades the same
-// way, since it reads fingerprints.json through ASSETS. Build if you need either.
-const SKIP = new Set([
-  "public/images/meta",
-  "public/images/exif.json",
-  "public/images/fingerprints.json",
-]);
+// 2026-08-29.** Both of its tiers (/images/exif.json and /images/meta/) are
+// derived now, so a hover in dev draws the frame and no EXIF lines.
+// `photo_recipe`'s byte-match arm degrades the same way, since it reads
+// fingerprints.json through ASSETS. Build if you need either.
+import { rm } from "node:fs/promises";
+import { linkServedTree, planServedTree, STAGED_ROOTS } from "./lib/served-tree.ts";
+
+// Re-exported under the name this file has always used for them.
+export const ASSET_ROOTS = STAGED_ROOTS;
 
 export const FARM = ".dev-assets";
 
-// Read a directory as a map of name -> isDirectory, or null when the path is not
-// a directory. Returning null rather than throwing is what lets a path that is a
-// file in one root and a directory in another be reported as a collision below
-// instead of crashing the stage.
-async function entries(path) {
-  const list = await readdir(path, { withFileTypes: true }).catch(() => null);
-  if (!list) return null;
-  return new Map(list.map((e) => [e.name, e.isDirectory()]));
-}
-
-let links = 0;
-let dirs = 0;
-const collisions: string[] = [];
-
-// Link one path into the farm, relative so `ls -l .dev-assets` names the source
-// directory a file actually authors in. That readability is the point: the farm
-// is the first thing anyone looks at when dev serves something unexpected.
-async function link(farmPath, target) {
-  await symlink(relative(dirname(farmPath), target), farmPath);
-  links++;
-}
-
-// Merge `rel` across every root that provides it. Callers pass the roots that
-// still have this path, so recursion narrows rather than re-scanning all five.
-async function merge(rel, roots) {
-  const farmPath = rel ? `${FARM}/${rel}` : FARM;
-  const listings = await Promise.all(roots.map((root) => entries(rel ? `${root}/${rel}` : root)));
-
-  const providers = roots.filter((_, i) => listings[i]);
-  if (providers.length === 1) {
-    // One root owns this directory outright: point at it whole. Everything
-    // created inside it later is served without touching this script again.
-    await link(farmPath, resolve(providers[0], rel));
-    return;
-  }
-
-  await mkdir(farmPath, { recursive: true });
-  dirs++;
-
-  // Union of names across the providers, in root order, so a later root's
-  // version of a colliding path wins the same way it does under `cp`.
-  const owners = new Map();
-  for (const [i, listing] of listings.entries()) {
-    if (!listing) continue;
-    for (const [name, isDir] of listing) {
-      const child = rel ? `${rel}/${name}` : name;
-      if (SKIP.has(`${roots[i]}/${child}`)) continue;
-      if (!owners.has(name)) owners.set(name, []);
-      owners.get(name).push({ root: roots[i], isDir });
-    }
-  }
-
-  for (const [name, claims] of owners) {
-    const child = rel ? `${rel}/${name}` : name;
-    if (claims.length > 1 && claims.every((c) => c.isDir)) {
-      await merge(child, claims.map((c) => c.root));
-      continue;
-    }
-    if (claims.length > 1) {
-      // Two roots claiming ONE URL is an authoring mistake rather than a merge
-      // to resolve, and it is silent under build.ts's cp. Name it here.
-      collisions.push(`/${child} <- ${claims.map((c) => c.root).join(", ")} (last wins)`);
-    }
-    const winner = claims[claims.length - 1];
-    await link(`${FARM}/${child}`, resolve(winner.root, child));
-  }
-}
-
 // Everything below runs only when this file is INVOKED, never when it is
-// imported. The contract test imports ASSET_ROOTS to pin them against build.ts
-// step 1, and an import that staged as a side effect would rm -rf and rebuild
-// the farm under a dev server that happens to be running.
+// imported. A contract test imports ASSET_ROOTS and FARM, and an import that
+// staged as a side effect would rm -rf and rebuild the farm under a dev server
+// that happens to be running.
 export async function stage() {
-  links = 0;
-  dirs = 0;
-  collisions.length = 0;
-
-  // A root that has been renamed out from under this file is exactly the failure
-  // this script was written to repair (assets.directory pointed at `www` for a
-  // day after the 2026-08-18 split). Fail by NAME rather than compose a partial
-  // tree: a dev server that starts and serves no documents is worse than one
-  // that does not start, because the second tells you what is wrong.
-  for (const root of ASSET_ROOTS) {
-    const ok = await stat(root).then((s) => s.isDirectory()).catch(() => false);
-    if (!ok) throw new Error(`dev-stage: asset root "${root}" does not exist — has the served tree been rearranged again? Update ASSET_ROOTS here and build.ts step 1 together.`);
-  }
-
+  // Plan BEFORE removing the old farm: a refused plan (a missing root, a path
+  // two roots claim) then leaves the last good farm in place.
+  const plan = await planServedTree();
   await rm(FARM, { recursive: true, force: true });
-  await merge("", ASSET_ROOTS);
+  const { links, dirs } = await linkServedTree(plan, FARM);
 
   // A farm that collapses to a handful of links serves a site with no pages, and
   // wrangler reports that as 404s rather than as a staging failure. 36 documents
@@ -158,13 +69,13 @@ export async function stage() {
   // catches a collapse without firing on ordinary authoring.
   if (links < 20) throw new Error(`dev-stage: only ${links} links staged — the merge found almost nothing, refusing to serve an empty site`);
 
-  for (const c of collisions) console.warn(`dev-stage: WARNING two roots claim ${c}`);
-  return { links, dirs, collisions: [...collisions] };
+  return { links, dirs, skipped: plan.skipped };
 }
 
 if (import.meta.main) {
-  const { links: n, dirs: d } = await stage();
+  const { links: n, dirs: d, skipped } = await stage();
   console.log(`dev-stage: ${FARM}/ ready — ${n} links across ${d} merged director${d === 1 ? "y" : "ies"} from ${ASSET_ROOTS.join(", ")}`);
+  for (const path of skipped) console.warn(`dev-stage: left out ${path} (the build derives it; this copy is a local leftover)`);
   // The config `wrangler dev -c` boots next, projected from config/dev/ (which
   // spreads cloudflare.config.ts) on every start, so dev reads the bindings and
   // routes production has right now rather than a copy somebody last synced.

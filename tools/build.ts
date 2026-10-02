@@ -41,6 +41,7 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import { siteConfig } from "./lib/site-config.ts";
+import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision, type ServedTreePlan } from "./lib/served-tree.ts";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -141,7 +142,10 @@ function containsRetiredRumHost(source) {
 // www/ walks all of them. Keeping this in one place is the point: a check that
 // walks only some of the roots reports a clean tree it never fully read, which
 // is the quietest way for one of these tripwires to stop meaning anything.
-const SERVED_SOURCES = ["public", "src/pages", "src/content"];
+// The list is a projection of tools/lib/served-tree.ts's one declaration: the
+// roots that were www/. The client and stylesheet roots stage too, and a
+// tripwire that wants them names them itself.
+const SERVED_SOURCES = AUTHORED_ROOTS;
 const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]> => {
   const out: string[] = [];
   for (const root of SERVED_SOURCES) {
@@ -205,29 +209,17 @@ async function checkInvariants() {
   const hard: string[] = [], warn: string[] = [];
 
   // 0 (hard) — the authored roots merged into .build/public have no file-path
-  // collisions. Staging copies them concurrently below, so there is no longer
-  // a meaningful "last writer wins" order to hide a duplicate behind. A file
-  // belongs to exactly one authored root; fail before copying if that changes.
-  const stageRoots = ["public", "src/pages", "src/content", "src/client", "src/styles"];
-  const stageOwner = new Map<string, string>();
-  const stageDirectories = new Set<string>();
-  let stagedAuthored = 0;
-  const walkStage = async (root, dir = root, prefix = "") => {
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
-      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (root === "public" && (rel === "images/meta" || rel.startsWith("images/meta/"))) continue;
-      if (entry.isDirectory()) {
-        stageDirectories.add(rel);
-        await walkStage(root, `${dir}/${entry.name}`, rel);
-        continue;
-      }
-      stagedAuthored++;
-      const prior = stageOwner.get(rel);
-      if (prior) hard.push(`served path ${rel} is authored by both ${prior} and ${root}; parallel staging has no overwrite order`);
-      else stageOwner.set(rel, root);
-    }
-  };
-  for (const root of stageRoots) await walkStage(root);
+  // collisions. A served path belongs to exactly one authored root, and the
+  // planner (tools/lib/served-tree.ts) is what refuses a second owner, naming
+  // the path. The plan it returns is the one step 1 copies below, and the one
+  // local dev symlinks (tools/dev-stage.ts).
+  let servedPlan: ServedTreePlan | null = null;
+  try {
+    servedPlan = await planServedTree();
+  } catch (error) {
+    if (!(error instanceof ServedTreeCollision)) throw error;
+    hard.push(error.message);
+  }
 
   // 1 (hard) — every route the Worker dispatches is covered by the
   // run_worker_first allowlist the deployed config actually carries, or that
@@ -643,8 +635,9 @@ async function checkInvariants() {
 
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${stagedAuthored} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
-  return stageDirectories;
+  if (!servedPlan) throw new Error("build: the served tree was never planned");
+  console.log(`invariants ok: ${servedPlan.files.size} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
+  return servedPlan;
 }
 
 // ── the client edge, authored once and mirrored at deploy ────────────────────
@@ -772,9 +765,9 @@ const MODULE_SHELLS = new Set(["garage/pretext.lib.js", "dotfiles.js"]);
   if (unmarked.length) throw new Error(`SHELLS: ${unmarked.join(", ")} carries no marker, so a minifier deleting it would pass the build`);
 }
 
-// Fail fast on a broken invariant before doing any staging work. The same walk
-// also returns the destination directory skeleton used by the merge below.
-const stageDirectories = await checkInvariants();
+// Fail fast on a broken invariant before doing any staging work. The same call
+// returns the served-tree plan that step 1 copies below.
+const servedPlan = await checkInvariants();
 
 // Generated delta dirs must never exist in the SOURCE tree. They were committed under an
 // earlier design and are pure build output now, but a leftover public/ad/ gets copied in
@@ -814,39 +807,27 @@ await mkdir(OUT, { recursive: true });
 // src/pages/ is every HTML document, src/content/ is authored prose, and
 // src/client + src/styles supply the shell. src/dict/ is deliberately absent:
 // the committed dictionary snapshots are build INPUT (#455).
-// Three paths under public/ that step 1a and 1a2 DERIVE rather than copy.
-// images/meta was the first; exif.json and fingerprints.json joined it on
-// 2026-08-29. Skipping them is not tidiness: nothing writes any of the three
-// into the source tree any more, so a file at one of these paths can only be a
-// leftover from a checkout that predates the move, and copying it would let the
-// built tree depend on a pipeline artifact somebody happens to still have.
-const STAGE_SKIP = new Set([
-  "public/images/meta",
-  "public/images/exif.json",
-  "public/images/fingerprints.json",
-]);
-// The invariant above proves that the five served roots do not contend for a
-// destination file, but directories are intentionally shared: public/ and
-// src/pages/ both contribute to garage/, lwe/ and pixel-peeper/. Bun 1.4's
-// recursive cp can race two walkers through mkdir for one of those directories
-// and fail with EEXIST. Pre-create the complete directory union captured by the
-// invariant walk, then keep the independent file copies concurrent. This is
-// deterministic for future shared directories too; no collision list can rot.
+//
+// Which roots, in what order, and which three paths under public/ are left out
+// because steps 1a and 1a2 DERIVE them (images/meta, exif.json and
+// fingerprints.json) is tools/lib/served-tree.ts's declaration. checkInvariants
+// planned the tree from it, and local dev symlinks the same plan.
+//
+// The plan proves that the five served roots do not contend for a destination
+// file, but directories are intentionally shared: public/ and src/pages/ both
+// contribute to garage/, lwe/ and pixel-peeper/. Bun 1.4's recursive cp can
+// race two walkers through mkdir for one of those directories and fail with
+// EEXIST. copyServedTree pre-creates the plan's complete directory union, then
+// keeps the file copies concurrent. This is deterministic for future shared
+// directories too; no collision list can rot.
 await Promise.all([
   mkdir(`${OUT}/public`, { recursive: true }),
   mkdir(`${OUT}/src`, { recursive: true }),
   mkdir(`${OUT}/cal`, { recursive: true }),
   mkdir(`${OUT}/serendipity`, { recursive: true }),
 ]);
-await Promise.all([...stageDirectories].map((dir) =>
-  mkdir(`${OUT}/public/${dir}`, { recursive: true })
-));
 await Promise.all([
-  cp("public", `${OUT}/public`, {
-    recursive: true,
-    filter: (source) => !STAGE_SKIP.has(source.split(sep).join("/")),
-  }),
-  cp("src/pages", `${OUT}/public`, { recursive: true }),
+  copyServedTree(servedPlan, `${OUT}/public`),
 // The Worker is a PROGRAM, not a document, so its source lives in src/worker
 // beside cal/ and serendipity/ rather than inside the tree of things a browser
 // can fetch. Its STAGED position is unchanged: cloudflare.config.ts still points its entrypoint
@@ -863,9 +844,6 @@ await Promise.all([
 // paths, so /writing/<slug>.txt, /index.md and the rest answer exactly where they
 // did. Source layout and URL layout are different questions, and only the first
 // one moved.
-  cp("src/content", `${OUT}/public`, { recursive: true }),
-  cp("src/client", `${OUT}/public`, { recursive: true }),
-  cp("src/styles", `${OUT}/public`, { recursive: true }),
   cp("cal/src", `${OUT}/cal/src`, { recursive: true }),
 // Every module in serendipity/, rather than serendipity.ts by name. It was one
 // file until jev.ts (event-tags.ts since 2026-10-01) arrived beside it, and the
@@ -993,7 +971,7 @@ await Promise.all([
 // should not be a second committed copy that can fall behind, and generating it
 // here means there is no step anyone can forget.
 //
-// public/images/meta is in STAGE_SKIP for this reason. Copying whatever happens to be
+// public/images/meta is in served-tree.ts's DERIVED_PATHS for this reason. Copying whatever happens to be
 // on the local disk and then writing over it would make the built tree depend on
 // pipeline leftovers; deriving it makes the two indexes the only source.
 //

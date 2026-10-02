@@ -46,6 +46,7 @@ export const ANCHOR_OK = !!(window.CSS && CSS.supports &&
  * @param {number}  [o.settleMs=60]
  * @param {number}  [o.openMs=0]     cold-open dwell (see below). 0 = show at once.
  * @param {number}  [o.autopopMs=0]  hide again after this long. 0 = stay until dismissed.
+ * @param {(target: Element) => number} [o.autopopFor]  per-target autopop, over autopopMs
  */
 export function createHoist(o) {
   const node = o.node;
@@ -67,6 +68,9 @@ export function createHoist(o) {
   // XP's autopop (5s). It also covers the one dismissal the pointer cannot: a
   // cursor that leaves the viewport for another window fires no pointerout.
   const AUTOPOP_MS = o.autopopMs || 0;
+  // A card with more to read than a name can ask for longer: the GitHub
+  // shortcut lists a month of work, and 5s is XP's figure for one line.
+  const autopopFor = o.autopopFor || (() => AUTOPOP_MS);
 
   // A dead surface still answers every method, so callers never null-check.
   const dead = { show() {}, showAnchored() {}, hide() {}, isOpen: () => false, active: () => null };
@@ -103,7 +107,8 @@ export function createHoist(o) {
   // is what keeps tracking smooth on ProMotion / Low-Power VRR — then release it
   // the instant it closes.
   const openNode = () => {
-    if (AUTOPOP_MS) { clearTimeout(autopopTimer); autopopTimer = setTimeout(hide, AUTOPOP_MS); }
+    const autopop = activeTarget ? autopopFor(activeTarget) : AUTOPOP_MS;
+    if (autopop) { clearTimeout(autopopTimer); autopopTimer = setTimeout(hide, autopop); }
     if (followPointer) node.style.willChange = "transform";
     if (supportsPopover) { if (!node.matches(":popover-open")) node.showPopover(); }
     else node.style.display = "block";

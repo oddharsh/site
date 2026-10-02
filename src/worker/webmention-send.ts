@@ -1,5 +1,6 @@
 import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget } from "./lib/public-fetch.ts";
 import { readResponseCapped } from "./lib/crawl.ts";
+import { selfAdapter } from "./lib/outbound.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
 import { span } from "./lib/trace.ts";
 import { asText } from "./lib/parse.ts";
@@ -244,11 +245,7 @@ async function fetchOwnPage(url, env) {
     headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
     signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
   });
-  const read = env?.SELF_FETCH
-    ? (r) => env.SELF_FETCH(r)
-    : env?.ASSETS
-      ? (r) => env.ASSETS.fetch(r)
-      : null;
+  const read = selfAdapter(env);
   if (!read) { console.warn("webmention-send: no SELF_FETCH or ASSETS; cannot read own pages"); return ""; }
   try {
     const res = await read(req);

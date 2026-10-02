@@ -1,7 +1,8 @@
-import { BOT_UA, botHeaders, botRequestHeaders, botRobotsPolicy, BotPolicyError, withBotPolicyCache } from "./lib/botauth.ts";
+import { BOT_UA, withBotPolicyCache } from "./lib/botauth.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget } from "./lib/public-fetch.ts";
+import { dispatchesToSelf, outboundRead } from "./lib/outbound.ts";
+import { privateHostBlocked, validateLensTarget } from "./lib/public-fetch.ts";
 import { readResponseCapped } from "./lib/crawl.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.ts";
@@ -2659,22 +2660,21 @@ export async function lensFetch(targetUrl, env, signal?, accept?, opts: { postQu
     "accept": accept || "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
     "accept-language": "en-US,en;q=0.9",
   };
-  const target = new URL(targetUrl);
-  // Network self-fetch loops back through this Worker and Cloudflare refuses it.
-  // SELF_FETCH measures the enhanced response; ASSETS is the static fallback.
-  // A binding failure must propagate, never become an unsigned network request.
-  if (target.hostname.toLowerCase() === CANONICAL_HOST && (env.SELF_FETCH || env.ASSETS)) {
-    const headers = await botHeaders(targetUrl, env, { headers: baseHeaders, sign: false });
-    const selfReq = new Request(target.toString(), { method: "GET", headers });
-    return env.SELF_FETCH ? await env.SELF_FETCH(selfReq) : await env.ASSETS.fetch(selfReq);
-  }
-  const followed = await fetchFollowingPublicRedirects(
-    targetUrl,
-    async (candidate) => ({ method: "GET", headers: await botRequestHeaders(candidate, env, { headers: baseHeaders, signal, postQuantum: opts.postQuantum }), signal, cf: { cacheTtl: 0 } }),
-    (candidate) => validateLensTarget(candidate),
-  );
-  if (!followed.ok) return new Response(null, { status: 502, statusText: "Blocked redirect" });
-  return followed.response;
+  // An unparseable target is a caller bug and throws, as it always has.
+  if (!URL.canParse(targetUrl)) throw new TypeError("Invalid URL");
+  // Self or network is lib/outbound.ts's decision. This origin dispatches
+  // in-process and unsigned; anything else is signed and robots-gated per hop.
+  const read = await outboundRead(targetUrl, env, {
+    method: "GET",
+    headers: baseHeaders,
+    signal,
+    identity: { as: "aadharshbot", postQuantum: opts.postQuantum },
+    maxHops: 4,
+  });
+  if (read.ok) return read.response;
+  // This function's callers catch the robots refusal as a BotPolicyError.
+  if (read.reason === "robots") throw read.cause;
+  return new Response(null, { status: 502, statusText: "Blocked redirect" });
 }
 
 // read a response body but stop at `max` bytes so a giant page can't blow memory.
@@ -2975,7 +2975,7 @@ export async function originDiscovery(
   const side = opts.side || "";
   let claimed = false;
   if (board) {
-    const free = String(hostname || "").toLowerCase() === CANONICAL_HOST && !!(env?.SELF_FETCH || env?.ASSETS);
+    const free = dispatchesToSelf(hostname, env);
     if (free) board.pass(side);
     else {
       const mode = await board.claim(side, key.url);
@@ -3142,28 +3142,22 @@ export async function lensFetchAsBot(targetUrl, env, signal, userAgent, accept =
     accept,
     "accept-language": "en-US,en;q=0.9",
   });
-  // Use the same local dispatch boundary as lensFetch, with this profile's UA.
-  const target = new URL(targetUrl);
-  if (target.hostname.toLowerCase() === CANONICAL_HOST && (env?.SELF_FETCH || env?.ASSETS)) {
-    const selfReq = new Request(target.toString(), { method: "GET", headers });
-    return env.SELF_FETCH ? await env.SELF_FETCH(selfReq) : await env.ASSETS.fetch(selfReq);
-  }
-  // Per-hop validation, not redirect:"follow". The allowlist vetted the URL the
-  // visitor typed; without this, one 302 to a blocked host still got fetched and
-  // its body read, and only the discovery fan-out was skipped afterwards. A
-  // refused hop reads as an unreachable target, which is what it is.
-  const followed = await fetchFollowingPublicRedirects(
-    targetUrl,
-    async (candidate) => {
-      // Diagnostic UA comparisons cannot be a back door around our own opt-out.
-      const policy = await botRobotsPolicy(candidate, env || {}, signal);
-      if (!policy.ok) throw new BotPolicyError(policy);
-      return { method: "GET", headers, signal, cf: { cacheTtl: 0 } };
-    },
-    (candidate) => validateLensTarget(candidate),
-  );
-  if (!followed.ok) return new Response(null, { status: 502, statusText: "Blocked redirect" });
-  return followed.response;
+  if (!URL.canParse(targetUrl)) throw new TypeError("Invalid URL");
+  // The same self-or-network boundary as lensFetch, with this profile's UA and
+  // deliberately NO signature: "unsigned-probe" sends these headers verbatim.
+  // It still validates every hop (a refused hop reads as an unreachable target,
+  // which is what it is) and still obeys AadharshBot's robots opt-out, so a
+  // diagnostic UA comparison cannot be a back door around our own.
+  const read = await outboundRead(targetUrl, env, {
+    method: "GET",
+    headers,
+    signal,
+    identity: { as: "unsigned-probe" },
+    maxHops: 4,
+  });
+  if (read.ok) return read.response;
+  if (read.reason === "robots") throw read.cause;
+  return new Response(null, { status: 502, statusText: "Blocked redirect" });
 }
 
 export async function lensProbeBotView(targetUrl, env, profile) {
