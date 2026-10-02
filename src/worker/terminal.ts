@@ -706,7 +706,7 @@ export async function lensFrame(env, request, state, ctx) {
         blank(),
         [s("  curl 'aadhar.sh/lens?url=https://example.com'", "accent")],
         blank(),
-        ...wrap("Private, local, and non-HTTP targets are refused. Lookups are rate-limited to 30/min per address, shared with /lens/fetch — knocking on the cheaper door does not buy a second budget.", INNER).map((row) => [s(row, "dim")]),
+        ...wrap(`Private, local, and non-HTTP targets are refused. Lookups are rate-limited to ${LENS_BUDGETS.inspect.max}/min per address, shared with /lens/fetch — knocking on the cheaper door does not buy a second budget.`, INNER).map((row) => [s(row, "dim")]),
       ),
       status: keyHints([["&url=", "inspect a target"]]),
     };
@@ -716,7 +716,7 @@ export async function lensFrame(env, request, state, ctx) {
     return { title: "lens — refused", body: [[s(target.error, "bad")]], status: keyHints([["&url=", "try another target"]]) };
   }
   if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
-    return { title: "lens — rate limited", body: [[s("30 lookups a minute, shared with /lens/fetch. Try again shortly.", "warn")]], status: [] };
+    return { title: "lens — rate limited", body: [[s(`${LENS_BUDGETS.inspect.max} lookups a minute, shared with /lens/fetch. Try again shortly.`, "warn")]], status: [] };
   }
   let obs;
   try {
@@ -816,7 +816,7 @@ export async function dictFrame(env, request, state, ctx) {
   const target = validateLensTarget(state.url);
   if (!target.ok) return { title: "dict — refused", body: [[s(target.error, "bad")]], status: [] };
   if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
-    return { title: "dict — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+    return { title: "dict — rate limited", body: [[s(`Shares Lens's ${LENS_BUDGETS.inspect.max}/min budget. Try again shortly.`, "warn")]], status: [] };
   }
 
   const audit = await auditUrl(target.url, env);
@@ -884,7 +884,7 @@ export async function cacheFrame(env, request, state, ctx) {
         ...wrap("No header grading. It fetches the target twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin actually did. For HTML it also asks for a second representation and checks the Vary header against the answer — the shared-cache trap this site hit in production (#195).", INNER).map((row) => [s(row, "dim")]),
         blank(),
         kv("cost", "3-4 subrequests, headers only; bodies are cancelled unread", INNER, { gutter: 8 }),
-        kv("shares", "Lens's 30/min per-address budget", INNER, { gutter: 8 }),
+        kv("shares", `Lens's ${LENS_BUDGETS.inspect.max}/min per-address budget`, INNER, { gutter: 8 }),
       ),
       status: keyHints([["&url=", "probe a resource"]]),
     };
@@ -893,7 +893,7 @@ export async function cacheFrame(env, request, state, ctx) {
   const target = validateLensTarget(state.url);
   if (!target.ok) return { title: "cache — refused", body: [[s(target.error, "bad")]], status: [] };
   if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
-    return { title: "cache — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+    return { title: "cache — rate limited", body: [[s(`Shares Lens's ${LENS_BUDGETS.inspect.max}/min budget. Try again shortly.`, "warn")]], status: [] };
   }
 
   const probe = await probeRevalidation(target.url, env);
@@ -940,7 +940,7 @@ export async function agentReadyRoute(env, request, state, ctx) {
   const target = validateLensTarget(state.url);
   if (!target.ok) return { title: "agent-ready — refused", body: [[s(target.error, "bad")]], status: [] };
   if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
-    return { title: "agent-ready — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+    return { title: "agent-ready — rate limited", body: [[s(`Shares Lens's ${LENS_BUDGETS.inspect.max}/min budget. Try again shortly.`, "warn")]], status: [] };
   }
   return agentReadyFrame(target.url, env);
 }
@@ -971,7 +971,7 @@ export async function encodeFrame(env, request, state, ctx) {
   const target = validateLensTarget(state.url);
   if (!target.ok) return { title: "encode — refused", body: [[s(target.error, "bad")]], status: [] };
   if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
-    return { title: "encode — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+    return { title: "encode — rate limited", body: [[s(`Shares Lens's ${LENS_BUDGETS.inspect.max}/min budget. Try again shortly.`, "warn")]], status: [] };
   }
 
   const got = await fetchImageBytes(target.url, env, lensFetch);

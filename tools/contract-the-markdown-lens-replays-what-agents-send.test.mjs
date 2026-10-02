@@ -19,7 +19,7 @@ import { wantsMarkdown } from "../src/worker/lib/http.ts";
 const worker = await readFile(new URL("../src/worker/lens-markdown.ts", import.meta.url), "utf8");
 const island = await readFile(new URL("../src/client/lens-markdown.js", import.meta.url), "utf8");
 
-test("the markdown lens reaches the network with nothing but the URL", () => {
+test("the markdown lens reaches the network with nothing but the URL", async () => {
   // Same shape as the wire lens's guard, for the same reason: this route aims a
   // visitor-supplied URL at the public internet ten times, so the ONE thing a
   // caller may influence is which URL. A second params.get() is how a header,
@@ -28,8 +28,11 @@ test("the markdown lens reaches the network with nothing but the URL", () => {
   assert.equal(reads.length, 1, "exactly one caller-supplied parameter is read");
   assert.ok(worker.includes('params.get("url")'), "and it is the target URL");
 
-  assert.ok(worker.includes('from "./lib/public-fetch.ts"'), "imports the shared SSRF guard");
-  assert.ok(worker.includes("validateLensTarget("), "and calls it");
+  let touched = false;
+  const env = { RN_KV: { get() { touched = true; throw new Error("unexpected cache read"); } } };
+  const res = await handleLensMarkdown(new Request("https://aadhar.sh/lens/markdown?url=http://169.254.169.254/"), env);
+  assert.equal(res.status, 400);
+  assert.equal(touched, false, "private targets are refused before the cache or network");
   // Never a local copy. Two allowlists pass review on the day they are written
   // and drift the week after.
   assert.ok(!/function\s+validateLensTarget/.test(worker), "does not redefine validateLensTarget");

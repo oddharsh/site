@@ -4,7 +4,6 @@ import {
   configText,
   testGlobals,
   assert,
-  readFile,
   test,
 } from "./contract-shared.ts";
 
@@ -97,43 +96,64 @@ test("overLensBudget fails open without a limiter and closes when one says no", 
   assert.equal(new Set(names).size, names.length, "two budgets share one binding");
 });
 
-test("every browser lens reads its cache before it checks a budget", async () => {
-  // STRUCTURAL, and it says so here because the behavioural version needs a
-  // Rate Limiting binding plus a populated KV, neither of which node --test has.
-  // What it pins is an ORDER in the source, which is exactly what regressed.
-  //
-  // The rule: the per-minute limits exist to ration Browser Run, a cache hit
-  // spends none of it, so a hit must be answered before any limit is consulted.
-  // Getting this backwards refuses a reader a snapshot the Worker is already
-  // holding, and it does so hardest when the cache is fullest.
-  const files = {
-    "lens.js": await readFile(new URL("../src/worker/lens.ts", import.meta.url), "utf8"),
-    "lens-wire.js": await readFile(new URL("../src/worker/lens-wire.ts", import.meta.url), "utf8"),
-    "lens-markdown.js": await readFile(new URL("../src/worker/lens-markdown.ts", import.meta.url), "utf8"),
-  };
+test("each cached Lens handler answers a hit before either budget and tolerates a failed KV read", async () => {
+  const { handleLensShot, handleLensBrowser, LENS_BUDGETS } = await import("../src/worker/lens.ts");
+  const { handleLensWire } = await import("../src/worker/lens-wire.ts");
+  const { handleLensMarkdown } = await import("../src/worker/lens-markdown.ts");
+  const { handleLensTools } = await import("../src/worker/lens-tools.ts");
+  const { handleLensNlweb } = await import("../src/worker/lens-nlweb.ts");
+  const { lensCacheKey } = await import("../src/worker/lens-guard.ts");
+  const target = "https://example.com/page";
+  const png = new Uint8Array([137, 80, 78, 71]).buffer;
   const cases = [
-    { file: "lens.js", handler: "handleLensShot", key: '"lens:shot:"' },
-    { file: "lens.js", handler: "handleLensBrowser", key: '"lens:browser:"' },
-    { file: "lens-wire.js", handler: "handleLensWire", key: '"lens:wire:"' },
-    // Not a browser lens, and the rule is the same one: a cache hit spends none
-    // of the budget, so refusing one on a full cache rations nothing.
-    { file: "lens-markdown.js", handler: "handleLensMarkdown", key: '"lens:md:"' },
+    { handler: handleLensShot, name: "shot", tab: "shot", budget: "shot", hit: png, as: "arrayBuffer" },
+    { handler: handleLensBrowser, name: "browser", tab: "browser", budget: "browser", hit: { ok: true }, flag: "cached" },
+    { handler: handleLensWire, name: "wire", tab: "wire", budget: "wire", hit: { ok: true, cached: 3 }, flag: "fromCache" },
+    { handler: handleLensMarkdown, name: "markdown", tab: "md", budget: "markdown", hit: { ok: true }, flag: "fromCache" },
+    { handler: handleLensTools, name: "tools", tab: "tools", budget: "tools", hit: { ok: true }, flag: "fromCache", identity: "https://example.com" },
+    { handler: handleLensNlweb, name: "nlweb", tab: "nlweb", budget: "nlweb", hit: { ok: true }, flag: "fromCache", identity: "https://example.com\nwhat is this site about" },
   ];
   for (const c of cases) {
-    const src = files[c.file];
-    const from = src.indexOf("export async function " + c.handler);
-    assert.ok(from > -1, `${c.handler} not found in ${c.file}`);
-    // The next exported function is where this one ends. Scanning to end-of-file
-    // would let a LATER handler's cache read satisfy an earlier handler's test.
-    const next = src.indexOf("export async function ", from + 1);
-    const body = src.slice(from, next === -1 ? src.length : next);
-
-    const cacheAt = body.indexOf(c.key);
-    const budgetAt = body.indexOf("overLensBudget(");
-    assert.ok(cacheAt > -1, `${c.handler} no longer builds its ${c.key} cache key`);
-    assert.ok(budgetAt > -1, `${c.handler} no longer checks a budget, so this test is now vacuous`);
-    assert.ok(cacheAt < budgetAt,
-      `${c.handler} checks a rate limit before reading its cache, so a cached answer can be refused`);
+    const log = [];
+    let cold = false;
+    let broken = false;
+    const env = {
+      BROWSER: { fetch() { throw new Error("unexpected render"); }, quickAction() { throw new Error("unexpected render"); } },
+      RN_KV: { async get(key, as) {
+        log.push("get");
+        assert.equal(key, await lensCacheKey(c.tab, c.identity || target));
+        assert.equal(as, c.as || "json");
+        if (broken) throw new Error("KV is down");
+        return cold ? null : c.hit;
+      } },
+    };
+    for (const budget of Object.values(LENS_BUDGETS)) env[budget.binding] = {
+      limit() { log.push(budget.binding); return { success: false }; },
+    };
+    const req = () => new Request("https://aadhar.sh/lens/" + c.name + "?url=" + encodeURIComponent(target));
+    const ctx = { waitUntil() {} };
+    const res = await c.handler(req(), env, ctx);
+    assert.equal(res.status, 200, c.name + ": a warm cache survives every refusing limiter");
+    assert.deepEqual(log, ["get"]);
+    if (c.flag) {
+      const body = await res.json();
+      assert.equal(body[c.flag], true);
+      if (c.name === "wire") assert.equal(body.cached, 3, "the target's count survives the KV hit");
+    } else {
+      assert.equal(res.headers.get("content-type"), "image/png");
+      assert.equal(res.headers.get("x-lens-cache"), "hit");
+      assert.deepEqual(new Uint8Array(await res.arrayBuffer()), new Uint8Array(png));
+    }
+    // Controls run the actual handler cold and with a broken cache. Both must
+    // reach its per-caller limiter and stop before the shared ceiling or work.
+    for (const failure of [false, true]) {
+      cold = true;
+      broken = failure;
+      log.length = 0;
+      const refused = await c.handler(req(), env, ctx);
+      assert.equal(refused.status, 429, c.name + ": KV failure degrades to a miss");
+      assert.deepEqual(log, ["get", LENS_BUDGETS[c.budget].binding]);
+    }
   }
 });
 
