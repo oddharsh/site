@@ -99,6 +99,8 @@ export const EXACT_ROUTES = [
   // nothing static lives under /reading
   { path: "/reading", claim: ["/reading*"], cacheable: true },
   { path: READING_LIST_URL, claim: ["/reading*"] },
+  // the GitHub shortcut infotip reads this (github.ts); one row of its own
+  { path: "/github.json" },
   { path: "/updates", cacheable: true },
   { path: "/updates.json", cacheable: true },
   { path: "/restore", cacheable: true },
