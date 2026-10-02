@@ -605,6 +605,30 @@ export async function servePrecompressedText(request, env, opts: AssetOptions = 
   return notModifiedIfFresh(request, res);
 }
 
+// twinPolicy: the part of a page's header policy its negotiated Markdown twin
+// takes, which is all of it except two headers that describe the HTML
+// representation. cache-control stays the twin's own no-store (the edge keys the
+// URL, never the Accept), and a rel=preload entry names the shell's stylesheet
+// and script, which a Markdown body never loads. Every other Link entry is about
+// the resource and stays: it is the rule the homepage's twin already followed by
+// hand (HOMEPAGE_DISCOVERY_LINK without SHELL_PRELOAD_LINK), and it is what
+// keeps /inbox's webmention endpoint discoverable from either representation.
+export function twinPolicy(headers: Record<string, string> = {}): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    const key = name.toLowerCase();
+    if (key === "cache-control") continue;
+    if (key === "link") {
+      // split between entries only: a comma inside <...> belongs to a URL
+      const kept = value.split(/,\s*(?=<)/).filter((entry) => !/;\s*rel="?preload"?/i.test(entry)).join(", ");
+      if (kept) out[name] = kept;
+      continue;
+    }
+    out[name] = value;
+  }
+  return out;
+}
+
 // serveStaticPage: static and build-rendered HTML, with a dcz delta when the
 // client holds either the preferred immutable family dictionary or a committed
 // per-page snapshot, otherwise the brotli q11 twin, otherwise the plain asset.
@@ -685,7 +709,10 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
     // decided in one place for every negotiated route. It costs a HEAD one ASSETS
     // subrequest it used to skip; HEAD is rare enough here that an honest
     // content-type is the better side of that trade.
-    const md = await serveMarkdownTwin(request, env, `/${rel}.md`);
+    // The twin is the same page in another representation, so it takes the
+    // page's policy too. Before 2026-10-02 it took none, and a noindex page had
+    // to negotiate by hand ahead of this call to keep its twin noindex.
+    const md = await serveMarkdownTwin(request, env, `/${rel}.md`, twinPolicy(opts.headers));
     if (md) return md;
   }
   // Everything below hands back a precompressed BODY (a dcz delta or the q11 twin)

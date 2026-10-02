@@ -105,7 +105,7 @@ test("a slot is a native radio that names the form, so booking needs no script",
 test("the route serves the bake, and the island stays out of Workers Cache", async () => {
   const index = read("src/worker/index.ts");
   const route = index.slice(index.indexOf("async function routeCoffee("), index.indexOf("async function routeCalHost("));
-  assert.ok(route.indexOf("serveStaticPage(") > 0 && route.indexOf("serveStaticPage(") < route.indexOf("calWorker.fetch("),
+  assert.ok(route.indexOf("serveBuiltPage(") > 0 && route.indexOf("serveBuiltPage(") < route.indexOf("live: () => calWorker.fetch("),
     "GET /coffee reads the built page before falling back to cal's render");
   // cal invalidates the slot list through caches.default on every booking
   // action. Workers Cache answers before the Worker runs and those deletes never
