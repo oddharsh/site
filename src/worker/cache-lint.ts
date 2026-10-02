@@ -25,8 +25,7 @@
 // markdown ask off a warm cache came back HTML. The lint probes it the same
 // behavioral way: ask for a second representation and check whether the answer
 // changed while Vary claims it cannot.
-import { botHeaders, signedFetch } from "./lib/botauth.ts";
-import { CANONICAL_HOST } from "./lib/const.ts";
+import { outboundRead } from "./lib/outbound.ts";
 import { parseCacheControl } from "./dict.ts";
 
 const FETCH_TIMEOUT = 8000;
@@ -44,16 +43,18 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
       accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.7",
       ...extraHeaders,
     };
-    let isSelf = false;
-    try { isSelf = new URL(url).hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS); } catch { /* not self */ }
-    let res;
-    if (isSelf) {
-      const headers = await botHeaders(url, env, { headers: base, sign: false });
-      const req = new Request(url, { headers, redirect: "follow" });
-      res = await (env.SELF_FETCH ? env.SELF_FETCH(req) : env.ASSETS.fetch(req));
-    } else {
-      res = await signedFetch(url, env, { headers: base, signal: deadline });
-    }
+    // This origin dispatches in-process, unsigned. Anything else is signed and
+    // robots-gated per hop, with native fetch's 20-redirect allowance, which
+    // is what signedFetch gave this probe before lib/outbound.ts owned both arms.
+    const read = await outboundRead(url, env, {
+      method: "GET",
+      headers: base,
+      signal: deadline,
+      identity: { as: "aadharshbot" },
+      maxHops: 20,
+    });
+    if (!read.ok) return { error: read.error.slice(0, 80) };
+    const res = read.response;
     const responseHeaders: Record<string, string> = {};
     for (const [key, value] of res.headers) responseHeaders[key.toLowerCase()] = value;
     try { await res.body?.cancel(); } catch { /* already drained */ }

@@ -24,9 +24,7 @@
 // POST body that lensFetch cannot express, so it re-states each of those bounds
 // itself rather than inheriting them, per-hop redirect validation included.
 // This module adds no new way to reach the network.
-import { botHeaders, botRequestHeaders } from "./botauth.ts";
-import { CANONICAL_HOST } from "./const.ts";
-import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetch.ts";
+import { outboundRead, type OutboundRefusal } from "./outbound.ts";
 import { readResponseCapped } from "./crawl.ts";
 import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS, parseMcpBody, rpcErrorDetail } from "./mcp-protocol.ts";
 import { lensProbe, originDiscovery } from "../lens.ts";
@@ -119,6 +117,21 @@ export function gatedDoor(res): { ok: false; unreadable: true; gated: true; deta
 }
 
 /**
+ * A door this reader declined to walk through, from lib/outbound.ts's refusal.
+ *
+ * Both are UNREADABLE rather than shut: no request reached the endpoint. A
+ * robots refusal keeps its own sentence (the rule that said no); a hop the URL
+ * policy rejected reads as a redirect this reader will not follow.
+ */
+function refusedDoor(refusal: OutboundRefusal): { ok: false; unreadable: true; detail: string } {
+  return {
+    ok: false,
+    unreadable: true,
+    detail: refusal.reason === "robots" ? refusal.error.slice(0, 80) : "redirected somewhere this reader will not follow",
+  };
+}
+
+/**
  * tools/list against a foreign MCP server.
  *
  * A POST with a body, which signedFetch cannot express (it forwards `method` but
@@ -172,46 +185,33 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
   // Pointing this at aadhar.sh is the first thing anybody will try, and over the
   // network that request loops back into this same Worker — which Cloudflare
   // kills with a 522, so a self-scan would report its own MCP server as down.
-  // lensFetch already solves this by dispatching through SELF_FETCH; the POST
-  // cannot reuse lensFetch (no body), so the same escape hatch is mirrored here.
-  // Self-dispatch never leaves Cloudflare, so it needs no wire signature either,
-  // which is also why a self-scan works in local dev without the signing key.
-  let isSelf = false;
-  try { isSelf = new URL(url).hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS); } catch { /* not self */ }
-
-  const send = async (extra) => {
-    const headersFor = (candidate) => (isSelf ? botHeaders : botRequestHeaders)(candidate, env, {
-      headers: {
-        "content-type": "application/json",
-        // Both framings, because the server picks. DeepWiki refuses a
-        // JSON-only Accept outright (406, "Client must accept both") rather
-        // than downgrading to the one framing we said we could read.
-        accept: "application/json, text/event-stream",
-        "mcp-method": LIST_METHOD,
-        ...extra,
-      },
-      method: "POST",
-      sign: !isSelf,
-      signal: deadline,
-    });
-    if (isSelf) {
-      const selfReq = new Request(url, { method: "POST", headers: await headersFor(url), body });
-      return { res: await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq)) };
-    }
-    // Per-hop validation, not redirect:"follow", for the reason lensFetch
-    // already gives: the allowlist vetted the origin the visitor typed, and a
-    // 302 from there is a NEW target nobody vetted. Under "follow" that hop
-    // was taken and its body read, so a public host could hand this POST to
-    // an address validateLensTarget exists to refuse. A refused hop reads as
-    // an unreachable target, which is what it is.
-    const followed = await fetchFollowingPublicRedirects(
-      url,
-      async (candidate) => ({ method: "POST", headers: await headersFor(candidate), body, signal: deadline, cf: { cacheTtl: 0 } }),
-      (candidate) => validateLensTarget(candidate),
-    );
-    if (!followed.ok) return { blocked: true };
-    return { res: followed.response };
-  };
+  // lib/outbound.ts dispatches a read of this origin in-process instead, which
+  // lensFetch shares; the POST cannot reuse lensFetch (no body), so it states
+  // its own request here. Self-dispatch never leaves Cloudflare, so it needs no
+  // wire signature either, which is also why a self-scan works in local dev
+  // without the signing key.
+  //
+  // On the network it is per-hop validation, not redirect:"follow": the
+  // allowlist vetted the origin the visitor typed, and a 302 from there is a
+  // NEW target nobody vetted. Under "follow" that hop was taken and its body
+  // read, so a public host could hand this POST to an address
+  // validateLensTarget exists to refuse.
+  const send = (extra) => outboundRead(url, env, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      // Both framings, because the server picks. DeepWiki refuses a
+      // JSON-only Accept outright (406, "Client must accept both") rather
+      // than downgrading to the one framing we said we could read.
+      accept: "application/json, text/event-stream",
+      "mcp-method": LIST_METHOD,
+      ...extra,
+    },
+    body,
+    signal: deadline,
+    identity: { as: "aadharshbot" },
+    maxHops: 4,
+  });
 
   const read = async (res) => {
     const got = await readResponseCapped(res, CATALOG_CAP);
@@ -226,8 +226,8 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
 
   try {
     let sent = await send(null);
-    if (sent.blocked) return { ok: false, unreadable: true, detail: "redirected somewhere this reader will not follow" };
-    let res = sent.res;
+    if (!sent.ok) return refusedDoor(sent);
+    let res = sent.response;
 
     // 401/403 is neither a broken server nor an absent one: the door is there
     // and it wants a key this reader does not have. lens already reports the
@@ -255,8 +255,8 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
     // the body is the other half of what -32020 refuses.
     if (parsed.ok && wantsProtocolHeader(parsed.payload)) {
       sent = await send({ [PROTOCOL_HEADER]: MCP_MODERN });
-      if (sent.blocked) return { ok: false, unreadable: true, detail: "redirected somewhere this reader will not follow" };
-      res = sent.res;
+      if (!sent.ok) return refusedDoor(sent);
+      res = sent.response;
       if (res.status === 401 || res.status === 403) return gatedDoor(res);
       parsed = await read(res);
       if ("over" in parsed) return { ok: false, unreadable: true, detail: `catalogue over ${CATALOG_CAP / 1024} KB — not read` };
@@ -356,35 +356,22 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
 
   const deadline = AbortSignal.timeout(8000);
 
-  // Same loopback escape as the catalogue read: over the network a request to
-  // our own hostname is killed with a 522, so a self-scan would report this
-  // origin's own /ask as down.
-  let isSelf = false;
-  try { isSelf = new URL(url).hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS); } catch { /* not self */ }
-
   try {
+    // Same loopback escape as the catalogue read: over the network a request to
+    // our own hostname is killed with a 522, so a self-scan would report this
+    // origin's own /ask as down. lib/outbound.ts dispatches it in-process.
+    //
     // Both framings on Accept. A server is entitled to stream even when asked
     // not to, and one that does is answering rather than failing.
-    const headersFor = (candidate) => (isSelf ? botHeaders : botRequestHeaders)(candidate, env, {
-      headers: { accept: "application/json, text/event-stream" },
+    const read = await outboundRead(url, env, {
       method: "GET",
-      sign: !isSelf,
+      headers: { accept: "application/json, text/event-stream" },
       signal: deadline,
+      identity: { as: "aadharshbot" },
+      maxHops: 4,
     });
-
-    let res;
-    if (isSelf) {
-      const selfReq = new Request(url, { method: "GET", headers: await headersFor(url) });
-      res = await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq));
-    } else {
-      const followed = await fetchFollowingPublicRedirects(
-        url,
-        async (candidate) => ({ method: "GET", headers: await headersFor(candidate), signal: deadline, cf: { cacheTtl: 0 } }),
-        (candidate) => validateLensTarget(candidate),
-      );
-      if (!followed.ok) return { ok: false, unreadable: true, detail: "redirected somewhere this reader will not follow" };
-      res = followed.response;
-    }
+    if (!read.ok) return refusedDoor(read);
+    const res = read.response;
 
     if (res.status === 401 || res.status === 403) return gatedDoor(res);
     if (res.status === 404) return { ok: false, detail: "no /ask" };

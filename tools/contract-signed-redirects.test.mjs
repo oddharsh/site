@@ -43,6 +43,22 @@ async function withFetch(respond, run, robots = (_record) => new Response(null, 
   finally { testGlobals.fetch = original; }
 }
 
+// The same fixture by INJECTION: env.OUTBOUND_TRANSPORT is the network adapter
+// (lib/outbound.ts, lib/botauth.ts), so these tests leave the global fetch
+// alone and the no-network preload stays armed under them. `net(env)` returns
+// the env with the fake network attached.
+async function withTransport(respond, run, robots = (_record) => new Response(null, { status: 404 })) {
+  const seen = [];
+  const transport = async (url, init = {}) => {
+    const record = { url, ...init, headers: new Headers(init.headers) };
+    seen.push(record);
+    const response = new URL(url).pathname === "/robots.txt" ? robots(record) : respond(record);
+    Object.defineProperty(response, "url", { value: url });
+    return response;
+  };
+  return run(seen, (env) => ({ ...env, OUTBOUND_TRANSPORT: transport }));
+}
+
 async function verifies({ url, headers }, publicKey) {
   const params = headers.get("signature-input")?.match(/^sig1=(.+)$/)?.[1];
   const encoded = headers.get("signature")?.match(/^sig1=:([^:]+):$/)?.[1];
@@ -123,8 +139,8 @@ for (const reader of readers) test(`${reader.name} honors AadharshBot opt-outs b
 
 test("redirect destinations are checked against their own policy", async () => {
   const { env } = await keyPair();
-  await withFetch(() => new Response(null, { status: 302, headers: { location: "https://other.example/private" } }), async (seen) => {
-    await assert.rejects(signedFetch(origin + "/page", env), /Disallow: \/private/);
+  await withTransport(() => new Response(null, { status: 302, headers: { location: "https://other.example/private" } }), async (seen, net) => {
+    await assert.rejects(signedFetch(origin + "/page", net(env)), /Disallow: \/private/);
     assert.deepEqual(seen.map((r) => r.url), [origin + "/robots.txt", origin + "/page", "https://other.example/robots.txt"]);
   }, ({ url }) => new Response(new URL(url).origin === origin ? "" : "User-agent: *\nDisallow: /private"));
 });
@@ -138,8 +154,8 @@ test("unknown, oversized, rate-limited and crawl-delayed policies stop the conte
     () => new Response("#".repeat(512 * 1024 + 1)),
     () => new Response("User-agent: *\nCrawl-delay: 0.5"),
     () => new Response(null, { status: 302, headers: { location: "http://169.254.169.254/robots.txt" } }),
-  ]) await withFetch(() => { throw new Error("content fetched without permission"); }, async (seen) => {
-    await assert.rejects(signedFetch(origin + "/page", env), /not fetched/);
+  ]) await withTransport(() => { throw new Error("content fetched without permission"); }, async (seen, net) => {
+    await assert.rejects(signedFetch(origin + "/page", net(env)), /not fetched/);
     assert.deepEqual(seen.map((r) => r.url), [origin + "/robots.txt"]);
   }, policy);
 });
@@ -148,9 +164,9 @@ test("named groups, query paths and percent-encoded paths keep the same opt-out"
   const { env } = await keyPair();
   const policy = "User-agent: *\nDisallow: /\nCrawl-delay: 5\nUser-agent: AadharshBot\nDisallow: /private\nDisallow: /*?secret=\nAllow: /private/public";
   for (const [path, allowed] of [["/page", true], ["/private/public", true], ["/pr%69vate", false], ["/page?secret=yes", false]]) {
-    await withFetch(() => new Response("content"), async (seen) => {
-      if (allowed) assert.equal((await signedFetch(origin + path, env)).status, 200);
-      else await assert.rejects(signedFetch(origin + path, env), /Disallow/);
+    await withTransport(() => new Response("content"), async (seen, net) => {
+      if (allowed) assert.equal((await signedFetch(origin + path, net(env))).status, 200);
+      else await assert.rejects(signedFetch(origin + path, net(env)), /Disallow/);
       assert.equal(seen.length, allowed ? 2 : 1);
     }, () => new Response(policy));
   }
@@ -178,16 +194,16 @@ test("a policy is fetched once per invocation and cached in KV for twelve hours"
 
 test("Lens UA diagnostics cannot bypass AadharshBot's robots opt-out", async () => {
   const { env } = await keyPair();
-  await withFetch(() => { throw new Error("diagnostic content fetched"); }, async (seen) => {
-    await assert.rejects(lensFetchAsBot(origin + "/page", env, undefined, "GPTBot/1.0"), /Disallow/);
+  await withTransport(() => { throw new Error("diagnostic content fetched"); }, async (seen, net) => {
+    await assert.rejects(lensFetchAsBot(origin + "/page", net(env), undefined, "GPTBot/1.0"), /Disallow/);
     assert.equal(seen.length, 1);
   }, () => new Response("User-agent: AadharshBot\nDisallow: /"));
 });
 
 test("a policy read preserves platform exhaustion for the census guard", async () => {
   const { env } = await keyPair();
-  await withFetch(() => { throw new Error("content fetched after exhaustion"); }, async (seen) => {
-    await assert.rejects(signedFetch(origin + "/page", env), /Too many subrequests/);
+  await withTransport(() => { throw new Error("content fetched after exhaustion"); }, async (seen, net) => {
+    await assert.rejects(signedFetch(origin + "/page", net(env)), /Too many subrequests/);
     assert.equal(seen.length, 1);
   }, () => { throw new Error("Too many subrequests by single Worker"); });
 });

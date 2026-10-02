@@ -103,7 +103,14 @@ export function validateLensTarget(raw) {
 // module's host floor, because a redirect can change the scheme and port too.
 // A per-hop init can sign the validated authority; fixed headers serve unsigned
 // reads. The callback runs only after the URL has passed the policy check.
-export async function fetchFollowingPublicRedirects(url, init: (url: string) => RequestInit | Promise<RequestInit>, check, maxHops = 4): Promise<
+//
+// `transport` is the network adapter. Absent, each hop goes to the global
+// `fetch`, read at call time. lib/outbound.ts and lib/botauth.ts pass
+// `env.OUTBOUND_TRANSPORT`, which only a test ever sets, so a fake network
+// reaches this loop by injection and the per-hop check still runs before it.
+export type PublicTransport = (url: string, init: RequestInit) => Promise<Response>;
+
+export async function fetchFollowingPublicRedirects(url, init: (url: string) => RequestInit | Promise<RequestInit>, check, maxHops = 4, transport?: PublicTransport | null): Promise<
   | { ok: true; response: Response; finalUrl: string; hops: number }
   | { ok: false; error: string; blockedHop: number; url: string }
 > {
@@ -112,7 +119,8 @@ export async function fetchFollowingPublicRedirects(url, init: (url: string) => 
     const verdict = check(current);
     if (!verdict.ok) return { ok: false, error: verdict.error, blockedHop: hop, url: current };
     const options = await init(current);
-    const response = await fetch(current, { ...options, redirect: "manual" });
+    const hopInit = { ...options, redirect: "manual" as const };
+    const response = await (transport ? transport(current, hopInit) : fetch(current, hopInit));
     const location = [301, 302, 303, 307, 308].includes(response.status) ? response.headers.get("location") : null;
     if (location === null) return { ok: true, response, finalUrl: response.url || current, hops: hop };
     try { await response.body?.cancel(); } catch (_e) { /* nothing buffered yet */ }
