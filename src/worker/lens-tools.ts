@@ -1,8 +1,6 @@
-import { validateLensTarget } from "./lib/public-fetch.ts";
 import { jsonResponse } from "./lib/http.ts";
-import { span } from "./lib/trace.ts";
 import { foreignMcpTools } from "./lib/doors.ts";
-import { LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.ts";
+import { guardedRead } from "./lens-guard.ts";
 
 // A catalogue read is one POST that a foreign server answers from memory, so
 // this is cached to be POLITE rather than to be fast. A public button pointed at
@@ -10,35 +8,21 @@ import { LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.ts";
 // visitor clicks a tab.
 const TOOLS_CACHE_SECONDS = 3600;
 
-export async function handleLensTools(request, env) {
+export function handleLensTools(request, env) {
   const params = new URL(request.url).searchParams;
 
-  const v = validateLensTarget(params.get("url") || "");
-  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-
-  const origin = new URL(v.url).origin;
-  const cacheKey = "lens:tools:" + (await lensSha256Hex(origin));
-  if (env.RN_KV) {
-    const hit = await env.RN_KV.get(cacheKey, "json");
-    // One span name for hit and miss, differing on lens.cache, so the hit rate
-    // is a group-by rather than a join. Same convention as lens.shot.
-    if (hit) {
-      return span("lens.tools", (s) => {
-        s.setAttribute("lens.target_host", hit.host);
-        s.setAttribute("lens.cache", "hit");
-        return jsonResponse({ ...hit, fromCache: true });
-      });
-    }
-  }
-
-  if (await overLensBudget(LENS_BUDGETS.tools, request, env)) {
-    return jsonResponse({ ok: false, error: `Catalogue reads are rate-limited to ${LENS_BUDGETS.tools.max}/min. Hang on a moment.` }, 429);
-  }
-
-  return span("lens.tools", async (s) => {
+  // The shell (validate, cache before budget, the 429, the hit/miss span, the
+  // cache write) is lens-guard's. No `ctx` is handed over, so the write is
+  // awaited, as it always was on this route.
+  return guardedRead(request, env, undefined, {
+    span: "lens.tools",
+    url: params.get("url") || "",
+    budget: "tools",
+    limited: (max) => `Catalogue reads are rate-limited to ${max}/min. Hang on a moment.`,
+    cache: { tab: "tools", identity: (url) => new URL(url).origin, ttl: TOOLS_CACHE_SECONDS },
+    run: async (url, s) => {
+    const origin = new URL(url).origin;
     const host = (() => { try { return new URL(origin).hostname; } catch { return undefined; } })();
-    s.setAttribute("lens.target_host", host);
-    s.setAttribute("lens.cache", "miss");
 
     const probe = await foreignMcpTools(origin, env, { schemas: true });
 
@@ -61,7 +45,7 @@ export async function handleLensTools(request, env) {
     s.setAttribute("lens.tools_with_schema", withSchema);
     s.setAttribute("lens.outcome", "read");
 
-    const payload = {
+    return {
       ok: true,
       origin,
       host,
@@ -71,10 +55,6 @@ export async function handleLensTools(request, env) {
       withSchema,
       tools: probe.tools,
     };
-    if (env.RN_KV) {
-      await env.RN_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: TOOLS_CACHE_SECONDS })
-        .catch(() => { /* a cache write is never worth failing the read for */ });
-    }
-    return jsonResponse(payload);
+    },
   });
 }

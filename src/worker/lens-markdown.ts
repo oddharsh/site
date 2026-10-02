@@ -38,11 +38,10 @@
 // no model. Cheaper per run than the Reader or Wire tabs and more than a knock,
 // which is why it is opt-in, cached for an hour, and rate-limited on its own
 // budget rather than the shared browser ceiling.
-import { validateLensTarget } from "./lib/public-fetch.ts";
 import { mapWithConcurrency } from "./lib/crawl.ts";
 import { jsonResponse } from "./lib/http.ts";
-import { span } from "./lib/trace.ts";
-import { FAN_OUT, LENS_BUDGETS, lensFetch, lensSha256Hex, overLensBudget } from "./lens.ts";
+import { FAN_OUT, lensFetch } from "./lens.ts";
+import { guardedRead } from "./lens-guard.ts";
 
 const MARKDOWN_CACHE_SECONDS = 3600;
 const BODY_SAMPLE = 4096;
@@ -271,34 +270,17 @@ async function probeOnce(targetUrl, env, accept) {
   }
 }
 
-export async function handleLensMarkdown(request, env) {
+export function handleLensMarkdown(request, env) {
   const params = new URL(request.url).searchParams;
 
-  const v = validateLensTarget(params.get("url") || "");
-  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-
-  const target = v.url;
-  const cacheKey = "lens:md:" + (await lensSha256Hex(target));
-
-  if (env.RN_KV) {
-    const hit = await env.RN_KV.get(cacheKey, "json");
-    if (hit) {
-      return span("lens.markdown", (s) => {
-        s.setAttribute("lens.target_host", hit.host);
-        s.setAttribute("lens.cache", "hit");
-        return jsonResponse({ ...hit, fromCache: true });
-      });
-    }
-  }
-
-  if (await overLensBudget(LENS_BUDGETS.markdown, request, env)) {
-    return jsonResponse({ ok: false, error: `Markdown checks are rate-limited to ${LENS_BUDGETS.markdown.max}/min, because each one fetches the same page ten times from somebody else's origin. Hang on a moment.` }, 429);
-  }
-
-  return span("lens.markdown", async (s) => {
+  return guardedRead(request, env, undefined, {
+    span: "lens.markdown",
+    url: params.get("url") || "",
+    budget: "markdown",
+    limited: (max) => `Markdown checks are rate-limited to ${max}/min, because each one fetches the same page ten times from somebody else's origin. Hang on a moment.`,
+    cache: { tab: "md", ttl: MARKDOWN_CACHE_SECONDS },
+    run: async (target, s) => {
     const host = (() => { try { return new URL(target).hostname; } catch { return undefined; } })();
-    s.setAttribute("lens.target_host", host);
-    s.setAttribute("lens.cache", "miss");
 
     const { probes, agentProbe } = probePlan();
     // Two workers halve the waterfall without turning ten probes into a burst.
@@ -459,11 +441,7 @@ export async function handleLensMarkdown(request, env) {
       sample: mdBest ? mdBest.sample.slice(0, BODY_SAMPLE) : "",
       source: "https://acceptmarkdown.com/status",
     };
-
-    if (env.RN_KV) {
-      await env.RN_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: MARKDOWN_CACHE_SECONDS })
-        .catch(() => { /* a cache write is never worth failing the read for */ });
-    }
-    return jsonResponse(payload);
+    return payload;
+    },
   });
 }

@@ -28,11 +28,9 @@
 // cached for an hour per origin and query, and the tab never fires on its own.
 // Same reasoning as the Reader lens, one step stronger, because a second fetch
 // of a page costs the origin bandwidth and a second /ask costs them compute.
-import { validateLensTarget } from "./lib/public-fetch.ts";
 import { foreignNlwebAsk } from "./lib/doors.ts";
 import { jsonResponse } from "./lib/http.ts";
-import { span } from "./lib/trace.ts";
-import { LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.ts";
+import { guardedRead } from "./lens-guard.ts";
 
 const NLWEB_CACHE_SECONDS = 3600;
 // The visitor may ask their own question, because "what does this endpoint
@@ -45,39 +43,23 @@ const NLWEB_CACHE_SECONDS = 3600;
 const MAX_QUERY = 200;
 const DEFAULT_QUERY = "what is this site about";
 
-export async function handleLensNlweb(request, env) {
+export function handleLensNlweb(request, env) {
   const params = new URL(request.url).searchParams;
-
-  const v = validateLensTarget(params.get("url") || "");
-  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-
-  const origin = new URL(v.url).origin;
   const query = String(params.get("q") || "").trim().slice(0, MAX_QUERY) || DEFAULT_QUERY;
-  // Keyed on the QUERY as well as the origin. Keying on origin alone would show
-  // one visitor's answer to another visitor's question, which on a surface whose
-  // whole claim is "this is what the machine actually got" is the exact lie it
-  // exists to prevent.
-  const cacheKey = "lens:nlweb:" + (await lensSha256Hex(origin + "\n" + query));
 
-  if (env.RN_KV) {
-    const hit = await env.RN_KV.get(cacheKey, "json");
-    if (hit) {
-      return span("lens.nlweb", (s) => {
-        s.setAttribute("lens.target_host", hit.host);
-        s.setAttribute("lens.cache", "hit");
-        return jsonResponse({ ...hit, fromCache: true });
-      });
-    }
-  }
-
-  if (await overLensBudget(LENS_BUDGETS.nlweb, request, env)) {
-    return jsonResponse({ ok: false, error: `NLWeb reads are rate-limited to ${LENS_BUDGETS.nlweb.max}/min, because each one asks somebody else's server a real question. Hang on a moment.` }, 429);
-  }
-
-  return span("lens.nlweb", async (s) => {
+  return guardedRead(request, env, undefined, {
+    span: "lens.nlweb",
+    url: params.get("url") || "",
+    budget: "nlweb",
+    limited: (max) => `NLWeb reads are rate-limited to ${max}/min, because each one asks somebody else's server a real question. Hang on a moment.`,
+    // Keyed on the QUERY as well as the origin. Keying on origin alone would show
+    // one visitor's answer to another visitor's question, which on a surface whose
+    // whole claim is "this is what the machine actually got" is the exact lie it
+    // exists to prevent.
+    cache: { tab: "nlweb", identity: (url) => new URL(url).origin + "\n" + query, ttl: NLWEB_CACHE_SECONDS },
+    run: async (url, s) => {
+    const origin = new URL(url).origin;
     const host = (() => { try { return new URL(origin).hostname; } catch { return undefined; } })();
-    s.setAttribute("lens.target_host", host);
-    s.setAttribute("lens.cache", "miss");
 
     const probe = await foreignNlwebAsk(origin, env, { query });
 
@@ -102,11 +84,7 @@ export async function handleLensNlweb(request, env) {
     s.setAttribute("lens.nlweb_schemas", probe.coverage.schema_object);
     s.setAttribute("lens.outcome", "read");
 
-    const payload = { ok: true, origin, host, ...probe };
-    if (env.RN_KV) {
-      await env.RN_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: NLWEB_CACHE_SECONDS })
-        .catch(() => { /* a cache write is never worth failing the read for */ });
-    }
-    return jsonResponse(payload);
+    return { ok: true, origin, host, ...probe };
+    },
   });
 }

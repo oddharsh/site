@@ -1,11 +1,12 @@
-import { validateLensTarget } from "./lib/public-fetch.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { BOT_UA } from "./lib/botauth.ts";
 // lens.js does not import this file, so the edge runs one way and there is no
-// cycle. Budgets live there because that is where every other lens route reads
-// them, and a second copy is the drift the LENS_BUDGETS contract test refuses.
-import { BROWSER_FREE_PLAN, LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.ts";
+// cycle.
+import { BROWSER_FREE_PLAN } from "./lens.ts";
+// The shell around the session: the SSRF guard (lib/public-fetch.ts), the cache
+// read before any budget, the per-IP and shared ceilings, and the cache write.
+import { guardedRead } from "./lens-guard.ts";
 import { EXECUTION_PROBE } from "./lib/agent-execution.ts";
 import { WEBMCP_PROBE, readWebmcpProbe } from "./lib/agent-webmcp.ts";
 import { isCallable } from "./lib/parse.ts";
@@ -420,51 +421,22 @@ async function runWireSession(env, url) {
 
 // ── route ──────────────────────────────────────────────────────────────────
 
-export async function handleLensWire(request, env, ctx) {
+export function handleLensWire(request, env, ctx) {
   const params = new URL(request.url).searchParams;
 
-  const v = validateLensTarget(params.get("url") || "");
-  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-
-  if (!env.BROWSER || !isCallable(env.BROWSER.fetch)) {
-    return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
-  }
-
-  const cacheKey = "lens:wire:" + (await lensSha256Hex(v.url));
-  if (env.RN_KV) {
-    const hit = await env.RN_KV.get(cacheKey, "json");
-    if (hit) {
-      // One span name for hit and miss, differing on lens.cache, so the hit rate
-      // stays a group-by rather than a join. Same convention as lens.shot.
-      return span("lens.wire", (s) => {
-        s.setAttribute("lens.target_host", hit.pageHost);
-        s.setAttribute("lens.cache", "hit");
-        // `fromCache`, NEVER `cached`. The summary already owns `cached` as the
-        // number of the TARGET's requests the browser served from ITS cache, and
-        // spelling this one the same way overwrote that count with a boolean —
-        // the pane rendered "true served from cache". Two different subjects, so
-        // two different keys.
-        return jsonResponse({ ...hit, fromCache: true });
-      });
-    }
-  }
-
-  // Per-IP first, then the ceiling every browser-consuming route shares. A
-  // visitor politely under their own limit still must not spend the account's.
-  if (await overLensBudget(LENS_BUDGETS.wire, request, env)) {
-    return jsonResponse({ ok: false, error: `Wire traces are rate-limited to ${LENS_BUDGETS.wire.max}/min. Hang on a moment.` }, 429);
-  }
-  if (await overLensBudget(LENS_BUDGETS.browserAll, request, env)) {
-    return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
-  }
-
-  return span("lens.wire", async (s) => {
-    s.setAttribute("lens.target_host", (() => { try { return new URL(v.url).hostname; } catch { return undefined; } })());
-    s.setAttribute("lens.cache", "miss");
-
+  return guardedRead(request, env, ctx, {
+    span: "lens.wire",
+    url: params.get("url") || "",
+    budget: "wire",
+    limited: (max) => `Wire traces are rate-limited to ${max}/min. Hang on a moment.`,
+    // CDP needs the BINDING itself; a REST token cannot open a session. Naming
+    // the engine is also what bills the ceiling every browser route shares.
+    browser: (e) => !!e.BROWSER && isCallable(e.BROWSER.fetch),
+    cache: { tab: "wire", ttl: WIRE_CACHE_TTL },
+    run: async (url, s) => {
     let out;
     try {
-      out = await span("lens.wire.session", () => runWireSession(env, v.url));
+      out = await span("lens.wire.session", () => runWireSession(env, url));
     } catch (e) {
       s.setAttribute("lens.outcome", "session_threw");
       s.setAttribute("lens.error", (e && e.message) || String(e));
@@ -487,10 +459,10 @@ export async function handleLensWire(request, env, ctx) {
       return jsonResponse({ ok: false, error: out.error, detail: out.detail }, 502);
     }
 
-    const summary = summariseWire(out.events, v.url);
+    const summary = summariseWire(out.events, url);
     const payload = {
       ok: true,
-      url: v.url,
+      url,
       fetchedBy: "Cloudflare Browser Run (CDP)",
       engine: "chromium-cdp",
       navMs: out.navMs,
@@ -527,7 +499,7 @@ export async function handleLensWire(request, env, ctx) {
       s.setAttribute("lens.webmcp_write", out.webmcp.write || 0);
     }
 
-    if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: WIRE_CACHE_TTL }));
-    return jsonResponse(payload);
+    return payload;
+    },
   });
 }

@@ -64,6 +64,12 @@ function used() {
       for (const m of src.matchAll(/\b(?:span|cron)\(\s*"([^"]+)"/g)) {
         if (!seen.has(m[1])) seen.set(m[1], file);
       }
+      // guardedRead opens the named span for both hits and misses. The name is
+      // the first property of its request specification, rather than a direct
+      // span() argument; retain the registry's orphan check across this seam.
+      for (const m of src.matchAll(/\bguardedRead\([^{}]*\{\s*span:\s*"([^"]+)"/g)) {
+        if (!seen.has(m[1])) seen.set(m[1], file);
+      }
     }
   }
   return seen;
