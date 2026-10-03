@@ -5,7 +5,7 @@
 // PostToolUseFailure for Bash, and the second is the one that matters: a merge
 // that stops on a conflict exits 1, and a non-zero Bash command fires
 // PostToolUseFailure. Git's own hooks cannot do this job at all, because
-// post-merge does not fire on a conflicted merge (gotcha 47).
+// post-merge does not fire on a conflicted merge.
 //
 // It reads STATE rather than output. Git's "CONFLICT (content)" lines are
 // human text that changes between versions and vanishes under -q, while an

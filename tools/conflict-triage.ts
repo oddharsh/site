@@ -25,39 +25,22 @@
 // orients it the way the rest of this file does, "main" being the upstream
 // side: a merge of main INTO a branch is MERGE_HEAD against HEAD, while a
 // rebase or cherry-pick replays one commit, so it is HEAD against that commit
-// over the commit's own parent (gotcha 47 has why %A and %B swap). It re-runs
+// over the commit's own parent. It re-runs
 // the merge in memory, so it describes the conflict as git first stopped on
 // it, whatever has been resolved in the worktree since.
 //
-// THE QUESTION HAS TWO HALVES, AND GITHUB ONLY ANSWERS THE FIRST. GitHub's
-// editor handles "simple competing line change conflicts" and greys out its
-// Resolve button for everything else (modify/delete, renames, binaries, mode
-// changes). That half is mechanical. The second half is specific to this
-// repository: .gitattributes routes package.json, the lockfiles, the pin and
-// the long-form prose through tools/merge-driver.ts, and GITHUB NEVER RUNS IT.
-// So GitHub shows conflicts a local merge resolves for free, and it will let you
-// hand-merge bun.lock in a textarea, which is wrong by construction (the lock is
-// a function of package.json, and CI's frozen install refuses a hand-merged
-// one). Its merge commit also runs no hook here, so merge-finish never drains
-// what the drivers would have parked.
+// WHAT GITHUB CAN RENDER. GitHub's editor handles "simple competing line
+// change conflicts" and greys out its Resolve button for everything else
+// (modify/delete, renames, binaries, mode changes). A derived file (a lockfile,
+// anything config/derivations.json names as output) should never be
+// hand-merged in a textarea either, since its merged text is never the answer.
 //
-// HOW EACH HALF IS MEASURED. Both are `git merge-tree --write-tree`, which does
-// the whole merge in memory and touches no worktree, so this is safe to run in a
-// tree other sessions are using.
+// It is measured with `git merge-tree --write-tree`, which does the whole merge
+// in memory and touches no worktree, so this is safe to run in a tree other
+// sessions are using.
 //
-//   the GitHub view   --attr-source=<empty tree>, so no path carries a merge=
-//                     attribute and every file gets git's plain text merge.
-//                     That is what GitHub computes. A control asserts the
-//                     drivers really did not run (they announce themselves on
-//                     stderr), since an --attr-source that stopped taking effect
-//                     would make both views agree and report nothing.
-//   the local view    attributes as committed, drivers live, and the driver's
-//                     ledger redirected to a temp file (SITE_MERGE_LEDGER) so a
-//                     triage run parks nothing in the real one. What it parked
-//                     is reported as what the resolution OWES.
-//
-// For a PR the GitHub view is also checked against GitHub's own `mergeable`
-// field, which is the only outside control on the emulation there is.
+// For a PR the result is also checked against GitHub's own `mergeable` field,
+// which is the only outside control on the emulation there is.
 //
 // THE HUNK GRADES ARE A FIRST CUT AND NOT A MEASUREMENT. The thresholds below
 // were picked, not fitted, so every hunk prints its raw line counts beside its
@@ -66,10 +49,8 @@
 // Exit 0: nothing needs a local checkout. 1: something does. 2: the instrument
 // could not run, which is never reported as a clean result.
 
-import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync, execFileSync } from "node:child_process";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
 
 // ── grades ────────────────────────────────────────────────────────────────────
@@ -116,11 +97,10 @@ export type Origin = {
 export type Verdict =
   | "local-required" // GitHub cannot render it; the Resolve button is disabled
   | "regenerate" // a derived file: re-run its generator, never hand-merge it
-  | "local-free" // this repo's merge driver resolves it; GitHub shows it anyway
   | "local-recommended" // renderable, but too big or too many hunks for a textarea
   | "web-ok";
 
-const VERDICT_RANK: Verdict[] = ["local-required", "regenerate", "local-free", "local-recommended", "web-ok"];
+const VERDICT_RANK: Verdict[] = ["local-required", "regenerate", "local-recommended", "web-ok"];
 
 export type FileTriage = {
   path: string;
@@ -129,9 +109,6 @@ export type FileTriage = {
   /** git's own conflict labels for the path, e.g. "modify/delete". */
   kinds: string[];
   stages: number[];
-  /** The same merge with this repository's drivers live. */
-  local: "resolved" | "conflicted" | "drivers-not-wired";
-  driverNotes: string[];
   verdict: Verdict;
   reasons: string[];
   owes: string[];
@@ -149,7 +126,7 @@ export type Report = {
   /** `https://github.com/<owner>/<repo>`, for linking commits and PRs, when origin is on GitHub. */
   repo: string | null;
   pr?: { number: number; url: string; mergeable: string };
-  /** The GitHub-view result tree: `git cat-file -p <tree>:<path>` shows the markers. */
+  /** The merged result tree: `git cat-file -p <tree>:<path>` shows the markers. */
   tree: string;
   verdict: "clean" | "web" | "local";
   webEditorAvailable: boolean;
@@ -182,7 +159,6 @@ type MergeTree = {
   tree: string;
   entries: { mode: string; oid: string; stage: number; path: string }[];
   messages: { paths: string[]; type: string; text: string }[];
-  stderr: string;
 };
 
 /**
@@ -190,16 +166,11 @@ type MergeTree = {
  * the tree, then `<mode> <oid> <stage>\t<path>` per unmerged entry, then an
  * empty field, then messages as `<n>, <path> x n, <type>, <text>`.
  */
-function mergeTree(base: string, head: string, opts: { githubView: boolean; ledger?: string; mergeBase?: string }): MergeTree {
-  const pre = ["-c", "merge.conflictStyle=diff3"];
-  if (opts.githubView) pre.push(`--attr-source=${emptyTree()}`);
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  if (opts.ledger) env.SITE_MERGE_LEDGER = opts.ledger;
-  const explicit = opts.mergeBase ? [`--merge-base=${opts.mergeBase}`] : [];
-  const run = spawnSync("git", [...pre, "merge-tree", "--write-tree", "--messages", "-z", ...explicit, base, head], {
+function mergeTree(base: string, head: string, mergeBase?: string): MergeTree {
+  const explicit = mergeBase ? [`--merge-base=${mergeBase}`] : [];
+  const run = spawnSync("git", ["-c", "merge.conflictStyle=diff3", "merge-tree", "--write-tree", "--messages", "-z", ...explicit, base, head], {
     encoding: "utf8",
     maxBuffer: 256 * 1024 * 1024,
-    env,
   });
   // merge-tree exits 1 for "merged with conflicts", which is a result. Anything
   // else (no merge base, a bad ref) is the instrument failing.
@@ -228,15 +199,7 @@ function mergeTree(base: string, head: string, opts: { githubView: boolean; ledg
     const text = (fields.shift() ?? "").trim();
     messages.push({ paths, type, text });
   }
-  return { tree, entries, messages, stderr: run.stderr };
-}
-
-let EMPTY_TREE: string | null = null;
-function emptyTree(): string {
-  // Computed rather than hardcoded, because the constant differs between SHA-1
-  // and SHA-256 repositories.
-  EMPTY_TREE ??= execFileSync("git", ["hash-object", "-t", "tree", "--stdin"], { input: "", encoding: "utf8" }).trim();
-  return EMPTY_TREE;
+  return { tree, entries, messages };
 }
 
 // ── provenance: which commit wrote each side ────────────────────────────────
@@ -327,16 +290,6 @@ function derivations(base: string): Derivation[] {
 
 const under = (path: string, root: string) => path === root || path.startsWith(root.endsWith("/") ? root : `${root}/`);
 
-/** The merge= attribute each path carries in the base tree, which is what a local merge reads. */
-function mergeAttrs(base: string, paths: string[]): Map<string, string> {
-  const out = new Map<string, string>();
-  if (paths.length === 0) return out;
-  const text = git([`--attr-source=${base}`, "check-attr", "-z", "merge", "--", ...paths]);
-  const f = text.split("\0");
-  for (let i = 0; i + 2 < f.length; i += 3) if (f[i + 2] !== "unspecified") out.set(f[i], f[i + 2]);
-  return out;
-}
-
 // ── hunks ────────────────────────────────────────────────────────────────────
 
 const squash = (lines: string[]) => lines.join("\n").replace(/\s+/g, " ").trim();
@@ -424,49 +377,8 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
   }
   const mergeBase = opts.mergeBase ? git(["rev-parse", opts.mergeBase]).trim() : gitTry(["merge-base", base, head]);
   if (!mergeBase) throw new Instrument(`${base} and ${head} share no merge base`);
-  const wired = gitTry(["config", "--get", "merge.json.driver"]) !== null;
-  // BOTH passes get a throwaway ledger. The GitHub view should never reach a
-  // driver, but when that control fails it fails AFTER the merge ran, and the
-  // first version of this file let that run park a real `bun install` in the
-  // worktree's ledger on its way to reporting the failure.
-  const scratch = mkdtempSync(join(tmpdir(), "conflict-triage-"));
-  const ledgerPath = join(scratch, "ledger");
-  let github: MergeTree;
-  let local: MergeTree;
-  let ledger: { path: string; note: string }[] = [];
-  try {
-    github = mergeTree(base, head, { githubView: true, ledger: join(scratch, "github-ledger"), mergeBase: opts.mergeBase });
-    if (/^merge-driver:/m.test(github.stderr) || existsSync(join(scratch, "github-ledger"))) {
-      throw new Instrument("control failed: a merge driver ran in the GitHub view, so --attr-source did not take effect");
-    }
-    local = mergeTree(base, head, { githubView: false, ledger: ledgerPath, mergeBase: opts.mergeBase });
-    if (existsSync(ledgerPath)) {
-      ledger = readFileSync(ledgerPath, "utf8")
-        .split("\n")
-        .filter(Boolean)
-        .map((row) => {
-          const [path, ...rest] = row.split("\t");
-          return { path, note: rest.join("\t") };
-        });
-    }
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
-  if (!wired) warnings.push("merge drivers are not wired in this clone (`bun run setup:merge`), so the local view is the GitHub view");
-
-  const driverNotes = new Map<string, string[]>();
-  for (const m of local.stderr.matchAll(/^merge-driver: (.+?): (.+)$/gm)) {
-    driverNotes.set(m[1], [...(driverNotes.get(m[1]) ?? []), m[2]]);
-  }
-
-  const githubPaths = new Set(github.entries.map((e) => e.path));
-  const localPaths = new Set(local.entries.map((e) => e.path));
-  for (const path of localPaths) {
-    if (!githubPaths.has(path)) warnings.push(`${path} conflicts locally but not on GitHub; a driver refused a merge git would have made`);
-  }
-
-  const paths = [...new Set([...githubPaths, ...localPaths])].sort();
-  const attrs = mergeAttrs(base, paths);
+  const github = mergeTree(base, head, opts.mergeBase);
+  const paths = [...new Set(github.entries.map((e) => e.path))].sort();
   const derived = derivations(base);
 
   const files: FileTriage[] = paths.map((path) => {
@@ -482,7 +394,7 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
     ];
 
     let hunks: Hunk[] = [];
-    const blob = githubPaths.has(path) ? gitTry(["cat-file", "blob", `${github.tree}:${path}`]) : null;
+    const blob = gitTry(["cat-file", "blob", `${github.tree}:${path}`]);
     if (blob !== null) hunks = parseHunks(blob);
 
     const structural =
@@ -491,7 +403,7 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
       !stages.includes(3) ||
       modes.size > 1 ||
       [...modes].some((m) => m === "120000" || m === "160000") ||
-      (githubPaths.has(path) && hunks.length === 0);
+      hunks.length === 0;
 
     const reasons: string[] = [];
     const owes: string[] = [];
@@ -509,22 +421,14 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
     // A derivation naming this exact file is decisive. One naming a DIRECTORY
     // above it is not: repo/card declares all of `.github` for one PNG, so a
     // conflict in a workflow file would read as generated. That match is a note.
-    const attr = attrs.get(path);
     const exact = derived.find((d) => (d.outputs ?? []).includes(path));
     const byDir = exact ? undefined : derived.find((d) => (d.outputs ?? []).some((o) => under(path, o)));
-    const ledgerOwes = ledger.filter((r) => r.path === path).map((r) => r.note);
-    if (attr === "regen" || exact) {
-      lift("regenerate", exact ? `derived by ${exact.id}; the merged text is never the answer` : "derived file (merge=regen); the merged text is never the answer");
-      if (exact?.regenerate) owes.push(exact.regenerate);
-      else if (ledgerOwes.length === 0) owes.push(path.endsWith("bun.lock") ? "bun install" : "bun run derive:check -- --lock");
+    const lockfile = path.endsWith("bun.lock");
+    if (exact || lockfile) {
+      lift("regenerate", exact ? `derived by ${exact.id}; the merged text is never the answer` : "a lockfile; the merged text is never the answer");
+      owes.push(exact?.regenerate ?? "bun install");
     }
     if (byDir) reasons.push(`sits under ${(byDir.outputs ?? []).find((o) => under(path, o))}, which ${byDir.id} declares as output; regenerate if it is one of that generator's files`);
-
-    const notes = driverNotes.get(path) ?? [];
-    const localState: FileTriage["local"] = !wired ? "drivers-not-wired" : localPaths.has(path) ? "conflicted" : "resolved";
-    if (localState === "resolved" && attr && attr !== "regen") {
-      lift("local-free", `merge=${attr} resolves it locally (${notes.join("; ") || "driver ran"}); GitHub never runs it`);
-    }
 
     if (!structural && hunks.length > 0) {
       const heavy = hunks.filter((h) => h.grade === "heavy").length;
@@ -535,7 +439,6 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
       }
     }
 
-    owes.push(...ledgerOwes);
     for (const d of derived) {
       if (d.regenerate && (d.inputs?.paths ?? []).some((p) => under(path, p)) && !owes.includes(d.regenerate)) {
         owes.push(`${d.regenerate}  (input to ${d.id})`);
@@ -552,8 +455,6 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
       github: structural ? "structural" : "content",
       kinds,
       stages,
-      local: localState,
-      driverNotes: notes,
       verdict,
       reasons,
       owes: [...new Set(owes)],
@@ -563,10 +464,9 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
   });
 
   // Attribution reads every patch on both sides, so it is skipped where no
-  // reading of the hunks is owed: a derived file is regenerated, never merged,
-  // and a driver-resolved one has nothing left to resolve.
+  // reading of the hunks is owed: a derived file is regenerated, never merged.
   for (const f of files) {
-    if (f.hunks.length === 0 || f.verdict === "regenerate" || f.verdict === "local-free") continue;
+    if (f.hunks.length === 0 || f.verdict === "regenerate") continue;
     const mainPatches = patches(mergeBase, base, f.path);
     const prPatches = patches(mergeBase, head, f.path);
     for (const h of f.hunks) {
@@ -598,10 +498,10 @@ function triagePr(meta: PrMeta): Report {
   const report = triage(`origin/${meta.baseRefName}`, meta.headRefOid, `#${meta.number} ${meta.title}`);
   report.pr = { number: meta.number, url: meta.url, mergeable: meta.mergeable };
   // The outside control. GitHub computes `mergeable` lazily, so UNKNOWN is no
-  // evidence either way; the other two must agree with the GitHub view.
+  // evidence either way; the other two must agree with ours.
   const ours = report.files.length > 0 ? "CONFLICTING" : "MERGEABLE";
   if (meta.mergeable !== "UNKNOWN" && meta.mergeable !== ours) {
-    report.warnings.push(`GitHub reports ${meta.mergeable} and the emulated GitHub view reads ${ours}; trust neither until one is re-read`);
+    report.warnings.push(`GitHub reports ${meta.mergeable} and the local merge reads ${ours}; trust neither until one is re-read`);
   }
   return report;
 }
@@ -611,7 +511,6 @@ function triagePr(meta: PrMeta): Report {
 const ICON: Record<Verdict, string> = {
   "local-required": "LOCAL (required)",
   regenerate: "LOCAL (regenerate)",
-  "local-free": "LOCAL (free)",
   "local-recommended": "LOCAL (recommended)",
   "web-ok": "WEB OK",
 };
@@ -624,7 +523,7 @@ function route(r: Report): string[] {
     r.webEditorAvailable
       ? "GitHub will offer its editor, but at least one conflict should not go through it."
       : "GitHub's Resolve button is disabled for this PR: at least one conflict is not a line conflict.",
-    `Resolve every file in ONE local merge, including the web-ok ones: check out ${branch}, \`git merge origin/main\`, then \`bun run merge:finish\`.`,
+    `Resolve every file in ONE local merge, including the web-ok ones: check out ${branch}, \`git merge origin/main\`, resolve, then run what each file owes.`,
   ];
 }
 
@@ -667,7 +566,7 @@ export function renderMarkdown(r: Report): string {
     }
   }
   for (const w of r.warnings) out.push("", `> ${w}`);
-  out.push("", `<sub>\`bun run conflicts -- ${r.pr?.number ?? ""}\`, GitHub view emulated with drivers off and checked against GitHub's own mergeable field.</sub>`);
+  out.push("", `<sub>\`bun run conflicts -- ${r.pr?.number ?? ""}\`, checked against GitHub's own mergeable field.</sub>`);
   return out.join("\n");
 }
 
