@@ -5,7 +5,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asNumber, asRecord, asText } from "./lib/parse.ts";
-import { esc, jsonResp, timingSafeEqual, wantsMarkdown } from "./lib/http.ts";
+import { esc, jsonResp, secretMatches, wantsMarkdown } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 
 // ── /rn redirect target ─────────────────────────────────────────────
@@ -492,7 +492,7 @@ async function loadRnTracksInner(request, env, ctx, s) {
   // optional bust: drop the value, whose metadata carries the freshness stamp.
   // constant-time compare, same as the admin/set gate (a plain === leaks the
   // secret's length + prefix through timing).
-  if (env.RN_BUST_SECRET && timingSafeEqual(url.searchParams.get("bust") || "", env.RN_BUST_SECRET)) {
+  if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {
     s.setAttribute("rn.busted", true);
     await span("rn.tracks.bust", () => deleteSWRKV(env, cacheKey));
   }
@@ -1144,7 +1144,7 @@ export async function handleRnAdmin(request, env) {
   const url = new URL(request.url);
   const secret = url.searchParams.get("secret") || "";
 
-  if (!env.RN_BUST_SECRET || !timingSafeEqual(secret, env.RN_BUST_SECRET)) {
+  if (!secretMatches(secret, env.RN_BUST_SECRET)) {
     return setPage(403, "denied", "wrong secret. check the bookmark.");
   }
 
@@ -1189,7 +1189,7 @@ export async function handleRnSet(request, env) {
   const secret = params.get("secret") || "";
   const target = params.get("url")    || "";
 
-  if (!env.RN_BUST_SECRET || !timingSafeEqual(secret, env.RN_BUST_SECRET)) {
+  if (!secretMatches(secret, env.RN_BUST_SECRET)) {
     return setPage(403, "denied", "wrong secret. check the bookmark.");
   }
 

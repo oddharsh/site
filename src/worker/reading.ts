@@ -6,7 +6,7 @@ import { cachedRender, deleteSWRKV, edgeKey, swrKV, withWeakEtag } from "./lib/c
 import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { html, unsafeHtml, type Html } from "./lib/html.ts";
-import { esc } from "./lib/http.ts";
+import { esc, secretMatches } from "./lib/http.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
@@ -84,7 +84,7 @@ async function buildCuriusPayload(env) {
 
 export async function getCuriusCached(request, env, ctx) {
   const url = new URL(request.url);
-  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET && env.RN_KV) {
+  if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET) && env.RN_KV) {
     // drop the value itself, since the persistent key is what a rebuild is gated on.
     await deleteSWRKV(env, CURIUS_CACHE_KEY);
   }
@@ -154,7 +154,7 @@ async function readReadingList(request, env, ctx): Promise<{ response: Response;
 // the owner's own next load reads the new list. Anything else is null.
 export async function refreshReadingList(request, env, ctx) {
   const url = new URL(request.url);
-  if (!env.RN_BUST_SECRET || url.searchParams.get("bust") !== env.RN_BUST_SECRET) return null;
+  if (!secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return null;
   const { ok, response } = await readReadingList(request, env, ctx);
   if (ok) {
     try { await caches.default.put(edgeKey(url.origin, LIST_URL, env), await withWeakEtag(response.clone())); } catch {}

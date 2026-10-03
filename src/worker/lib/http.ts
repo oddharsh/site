@@ -182,6 +182,17 @@ export function timingSafeEqual(a, b) {
   return diff === 0;
 }
 
+// The one gate for an owner secret arriving in a request: a query parameter, a
+// header, a form field. It fails CLOSED when the secret is unset or empty, so a
+// missing binding can never match a missing parameter, and it compares in
+// constant time. Six of ten owner checks compared with `===` before this
+// existed, because the rule lived in a comment above timingSafeEqual rather
+// than in the one function every gate calls.
+export function secretMatches(supplied: string | null | undefined, secret: string | undefined): boolean {
+  if (!secret || supplied == null) return false;
+  return timingSafeEqual(supplied, secret);
+}
+
 export function esc(s) {
   return escape(String(s ?? ""));
 }
