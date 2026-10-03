@@ -1,7 +1,7 @@
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
-import { escHtml, escAttr, jsonResponse, timingSafeEqual } from "./lib/http.ts";
+import { escHtml, escAttr, jsonResponse, secretMatches } from "./lib/http.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
 import { lensInspect } from "./lens.ts";
 import { span } from "./lib/trace.ts";
@@ -503,7 +503,7 @@ export async function handleCensus(request, env, ctx) {
   const refresh = url.searchParams.get("refresh");
   let banner = html``;
   if (refresh) {
-    if (env.CENSUS_KEY && timingSafeEqual(refresh, env.CENSUS_KEY)) {
+    if (secretMatches(refresh, env.CENSUS_KEY)) {
       // ONE sweep path now. This used to run its own cursor-and-batch variant
       // because a fetch invocation's waitUntil gets only ~30s past the
       // response, and a 16-host in-line sweep blows through that. Dispatching

@@ -4,7 +4,7 @@ import { crawlDocument, mapWithConcurrency } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
-import { esc, extractMeta, jsonResponse } from "./lib/http.ts";
+import { esc, extractMeta, jsonResponse, secretMatches } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { AROUND_SNAPSHOT_URL } from "./routes.ts";
 
@@ -55,7 +55,7 @@ export const NEIGHBORS = [
 // half is renderAroundSnapshot below. The JSON twin keeps its own bust.
 export async function handleAroundJson(request, env, ctx) {
   const url = new URL(request.url);
-  const isBust = env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET;
+  const isBust = secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET);
   const render = async () => {
     const report = await readAroundReport(request, env);
     if (!report) {
@@ -329,7 +329,7 @@ async function readAroundReport(request, env) {
   // ?bust=SECRET stays as the owner's force-refresh: the one request-path caller
   // still allowed to crawl, because it authenticates as the owner.
   const url = new URL(request.url);
-  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
+  if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {
     await deleteSWRKV(env, AROUND_KEY);   // this key is written directly above, never by swrKV
     const report = await runAround(env);
     if (report && report.results && report.results.some(r => !r.error) && env.RN_KV) {
@@ -531,7 +531,7 @@ export function renderAroundSnapshot(report) {
 // crawl instead of whatever KV's cacheTtl still holds. Anything else is null.
 export async function refreshAroundSnapshot(request, env) {
   const url = new URL(request.url);
-  if (!env.RN_BUST_SECRET || url.searchParams.get("bust") !== env.RN_BUST_SECRET) return null;
+  if (!secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return null;
   const report = await readAroundReport(request, env);
   const fresh = islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
   if (report) {

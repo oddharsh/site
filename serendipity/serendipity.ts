@@ -13,7 +13,7 @@ const PREFIX = "/serendipity";
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { BOT_UA } from "../src/worker/lib/botauth.ts";
-import { esc } from "../src/worker/lib/http.ts";
+import { esc, secretMatches } from "../src/worker/lib/http.ts";
 import { twinFor } from "../src/worker/lib/twins.ts";
 import { titleBar } from "../src/worker/lib/window.ts";
 import { html as htmlTag, unsafeHtml } from "../src/worker/lib/html.ts";
@@ -1522,7 +1522,7 @@ function mcpTags(t) {
 // was the only option before.
 export function adminGated(request, env) {
   const supplied = request.headers.get("x-sync-key") || new URL(request.url).searchParams.get("key");
-  return !!(env && env.SYNC_SECRET && supplied === env.SYNC_SECRET);
+  return !!env && secretMatches(supplied, env.SYNC_SECRET);
 }
 
 async function handleSync(request, env, d) {
