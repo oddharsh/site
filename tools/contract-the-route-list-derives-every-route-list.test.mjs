@@ -33,6 +33,24 @@ test("the coverage check sees a route whose claim went missing", () => {
   assert.ok(lost.includes("/lens/fetch") && lost.includes("/lens/census.json"), `expected the /lens routes, got ${lost}`);
 });
 
+// claimedByWorker is the one reader of the allowlist's globs: build.ts (through
+// uncoveredRoutes), link-integrity and two tests all ask it, where each carried
+// its own copy of the glob-to-regex line until 2026-10-02.
+test("claimedByWorker reads the allowlist the way wrangler does", () => {
+  const claimed = routes.claimedByWorker(["/exact", "/dir/*", "/a.b", "!/dir/skip"]);
+  assert.ok(claimed("/exact"));
+  assert.ok(!claimed("/exact/more"), "a row without * matches only itself");
+  assert.ok(claimed("/dir/x") && claimed("/dir/x/y"), "* spans slashes");
+  assert.ok(!claimed("/dir"), "/dir/* does not claim /dir");
+  assert.ok(claimed("/a.b") && !claimed("/aXb"), "a dot is literal, not a wildcard");
+  assert.ok(!claimed("!/dir/skip"), "a negated row never claims its own literal");
+  // On the real list: the /lens fold claims a sub-route, and robots.txt stays
+  // with the asset layer (the twin test's control depends on that).
+  const real = routes.claimedByWorker();
+  assert.ok(real("/lens/fetch"));
+  assert.ok(!real("/robots.txt"));
+});
+
 test("every prefix route's probe is a path that route answers, and ids are unique", () => {
   for (const r of routes.PREFIX_ROUTES) assert.ok(r.match(r.probe), `${r.label}: probe ${r.probe} does not match its own route`);
   const exact = routes.EXACT_PATHS;

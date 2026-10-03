@@ -968,7 +968,7 @@ const HOMEPAGE_HEADERS = {
 // omitted x-markdown-tokens, which the GET has always sent.
 //
 // The drift also hid, and it is worth knowing why. `/` is in
-// WORKERS_CACHEABLE_PATHS and the predicate admits HEAD, so a plain HEAD is
+// CACHEABLE_PATHS (routes.ts) and the predicate admits HEAD, so a plain HEAD is
 // satisfied from the stored GET entry, carrying the GET's own headers and ETag
 // (verified against production: both returned W/"c4717f10…-br"). Only the
 // MARKDOWN head reached the duplicate, because wantsMarkdown bails the cache —
