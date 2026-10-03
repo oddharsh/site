@@ -395,7 +395,7 @@ is missing or differs, use this setup procedure to restore the declaration.
 asset, and during a gradual deployment each request routes to a version
 independently. So a document from one version asks for an asset the other version
 has never heard of and gets a 404. `/a/*` is `run_worker_first` and is not in
-`WORKERS_CACHEABLE_PATHS`, so nothing bridges the two. At the 10% canary step that
+`CACHEABLE_PATHS` (`routes.ts`), so nothing bridges the two. At the 10% canary step that
 is roughly 90% of the new-HTML cohort plus 10% of the old-HTML cohort, per changed
 asset, on any release touching `nav.js` or `luna.css`. Cloudflare's docs name this
 exact case as what version affinity is for.
@@ -1981,7 +1981,7 @@ curl -s "https://aadhar.sh/rn/tracks" >/dev/null                       # warms t
   document is deterministic and static, and the tracklist hydrates client-side from
   `/rn/tracks.html`.
 - **What is left is a ten-minute stale window on one fragment, and it clears itself.**
-  `/rn/tracks.html` is in `WORKERS_CACHEABLE_PATHS` under `s-maxage=600`, so a copy
+  `/rn/tracks.html` is in `CACHEABLE_PATHS` (`routes.ts`) under `s-maxage=600`, so a copy
   rendered just before the swap keeps serving the old list until it ages out. A deploy
   WOULD flush it at once, since `edgeKey` folds the worker version into the cache key,
   but that is a full production release to save under ten minutes. Confirm the origin is

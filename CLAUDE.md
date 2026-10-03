@@ -742,7 +742,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   per asset, and during a split (a manual ramp now) each request picks a version independently. So a
   document from one version asks for an asset the other version has never built
   and gets a 404: `/a/*` is `run_worker_first` and is NOT in
-  `WORKERS_CACHEABLE_PATHS`, so nothing bridges the two. At the 10% canary that is
+  `CACHEABLE_PATHS` (`routes.ts`), so nothing bridges the two. At the 10% canary that is
   roughly 90% of the new-HTML cohort plus 10% of the old-HTML cohort, per changed
   asset, on any release touching `nav.js` or `luna.css`. It fired on its own
   while `ramp.yml` canaried every release; with direct deploys it only happens
@@ -2652,7 +2652,7 @@ each one is joined by `@id` to the WebSite node the homepage's JSON-LD already
 declares. A contract test asserts that node still exists, since a dangling `@id`
 is a silent dead reference.
 
-`/ask` is NOT in `WORKERS_CACHEABLE_PATHS` and must never be: that cache keys the
+`/ask` is NOT in `CACHEABLE_PATHS` (`routes.ts`) and must never be: that cache keys the
 URL, and the answer is per-query.
 
 **`/lens/nlweb`, the tenth machine tab ("What it answers"), walks through the

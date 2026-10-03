@@ -444,12 +444,20 @@ export const GET_WRITES: ReadonlySet<string> = new Set([
 export const PER_TOOL_WRITES: ReadonlySet<string> =
   new Set((EXACT_ROUTES as readonly ExactRoute[]).filter((r) => r.writes === "per-tool").map((r) => r.path));
 
-// The allowlist's glob as wrangler and build.ts read it: `*` spans slashes.
+// The allowlist's glob as wrangler and build.ts read it: `*` spans slashes, and
+// a row without one matches only itself. Negated rows (`!/x`) are dropped, as
+// every reader here always has: none of them can make a path Worker-first.
 const globRe = (glob: string) => new RegExp("^" + glob.replace(/[\\.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, ".*") + "$");
+
+/** Does the Worker see `path` first? The one reader of the allowlist's globs:
+ *  build.ts, link-integrity and the twin and /coffee tests all ask it here. */
+export function claimedByWorker(allow: readonly string[] = RUN_WORKER_FIRST): (path: string) => boolean {
+  const rows = allow.filter((a) => !a.startsWith("!")).map(globRe);
+  return (path) => rows.some((re) => re.test(path));
+}
 
 /** Paths and probes no allowlist row reaches; a route here would serve static. */
 export function uncoveredRoutes(allow: readonly string[] = RUN_WORKER_FIRST): string[] {
-  const rows = allow.filter((a) => !a.startsWith("!")).map(globRe);
-  const covered = (p: string) => rows.some((re) => re.test(p));
+  const covered = claimedByWorker(allow);
   return [...EXACT_PATHS, ...PREFIX_ROUTES.map((r) => r.probe)].filter((p) => !covered(p));
 }

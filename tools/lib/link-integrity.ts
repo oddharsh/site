@@ -26,8 +26,7 @@
 // governed set is DERIVED from the manifest rather than listed, so adding a
 // section governs it automatically.
 
-/** Turn a run_worker_first entry into a matcher. */
-const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, ".*") + "$");
+import { claimedByWorker } from "../../src/worker/routes.ts";
 
 export function makeResolver({ files, routeKeys, allow, surfaces }: {
   /** served paths in the staged tree, each leading "/" */
@@ -39,9 +38,7 @@ export function makeResolver({ files, routeKeys, allow, surfaces }: {
   /** registered surface paths from site-manifest.json */
   surfaces: Set<string>;
 }) {
-  const globs = allow.filter((a) => a.includes("*")).map(globRe);
-  const exact = new Set(allow.filter((a) => !a.includes("*")));
-  const workerOwned = (p) => exact.has(p) || globs.some((re) => re.test(p));
+  const workerOwned = claimedByWorker(allow);
 
   const governed = new Set();
   for (const p of surfaces) {

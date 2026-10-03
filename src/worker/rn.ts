@@ -29,7 +29,7 @@ export const RN_FALLBACK = "https://open.spotify.com/playlist/4IRq9W1N2tOWHhH0O3
 // written exactly once, by hand, at /rn/set; a rollover is a monthly event, so
 // this is the window a swap takes to reach every colo. 900 is picked from both
 // ends. It has to clear 600 to help /rn/tracks at all, which is in
-// WORKERS_CACHEABLE_PATHS at s-maxage=600 and so only reads KV on a miss. And it
+// CACHEABLE_PATHS (routes.ts) at s-maxage=600 and so only reads KV on a miss. And it
 // stays inside the 1800 getTracksSWR already spends on the payload this id
 // selects, so the pointer can never be the stalest thing in the chain. /rn itself
 // is `no-store`, so before this every redirect paid a central round trip for 22
@@ -39,6 +39,25 @@ export const RN_FALLBACK = "https://open.spotify.com/playlist/4IRq9W1N2tOWHhH0O3
 // and it should enrich the playlist that is set NOW) and /rn/admin (a read-back of
 // what you just wrote, which must never be able to lie).
 export const PLAYLIST_ID_CACHE_TTL = 900;
+
+const PLAYLIST_ID = /^[0-9A-Za-z]{22}$/;
+const FALLBACK_ID = RN_FALLBACK.split("/").pop() as string;
+
+// The stored playlist id, or null when it is unset or not a Spotify id. A KV
+// failure THROWS: /rn/tracks and the cron report it as their own outcome.
+// `fresh` skips the colo cache, for the two readers named above.
+export async function readPlaylistId(env, { fresh = false } = {}): Promise<string | null> {
+  if (!env?.RN_KV) return null;
+  const id = await env.RN_KV.get("playlist-id", fresh ? undefined : { cacheTtl: PLAYLIST_ID_CACHE_TTL });
+  return id && PLAYLIST_ID.test(id) ? id : null;
+}
+
+// The playlist to show right now: the stored one, else the fallback. A KV
+// failure falls back too, since every caller of this would rather show the
+// fallback playlist than nothing.
+export async function currentPlaylistId(env): Promise<string> {
+  return (await readPlaylistId(env).catch(() => null)) ?? FALLBACK_ID;
+}
 
 // /rn redirects browsers to Spotify and answers Markdown readers locally,
 // including MCP (the surface registry declares that representation). The live
@@ -60,13 +79,7 @@ export async function handleRn(request, env, ctx) {
 // representations so the Markdown one cannot cite a different playlist than the
 // one a browser is sent to.
 async function playlistUrl(env) {
-  let playlistId: string | null = null;
-  if (env?.RN_KV) {
-    try { playlistId = await env.RN_KV.get("playlist-id", { cacheTtl: PLAYLIST_ID_CACHE_TTL }); } catch {}
-  }
-  return (playlistId && /^[0-9A-Za-z]{22}$/.test(playlistId))
-    ? `https://open.spotify.com/playlist/${playlistId}`
-    : RN_FALLBACK;
+  return `https://open.spotify.com/playlist/${await currentPlaylistId(env)}`;
 }
 
 // ── /rn/tracks handlers ─────────────────────────────────────────────
@@ -480,8 +493,8 @@ async function loadRnTracksInner(request, env, ctx, s) {
     s.setAttribute("rn.outcome", "no_kv_binding");
     return { payload: { error: "no kv binding", tracks: [] }, status: 500 };
   }
-  const playlistId = await span("rn.tracks.playlist_id", () => env.RN_KV.get("playlist-id", { cacheTtl: PLAYLIST_ID_CACHE_TTL }));
-  if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
+  const playlistId = await span("rn.tracks.playlist_id", () => readPlaylistId(env));
+  if (!playlistId) {
     s.setAttribute("rn.outcome", "no_playlist_set");
     return { payload: { error: "no playlist set", tracks: [] }, status: 200 };
   }
@@ -870,8 +883,8 @@ export async function cronEnrichTracks(env, ctx) {
     // no cacheTtl on purpose: a cron tick is off the request path, so it has no
     // latency to save, and it is the job that would spend a whole cycle enriching
     // the playlist someone just swapped away from.
-    const playlistId = await env.RN_KV.get("playlist-id");
-    if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
+    const playlistId = await readPlaylistId(env, { fresh: true });
+    if (!playlistId) {
       s.setAttribute("rn.outcome", "no_playlist_set");
       return { ok: false, reason: "no_playlist_set" };
     }

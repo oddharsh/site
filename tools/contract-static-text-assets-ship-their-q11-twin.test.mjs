@@ -5,6 +5,7 @@ import {
 import { existsSync } from "node:fs";
 import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { servePrecompressedText } from "../src/worker/lib/assets.ts";
+import { claimedByWorker } from "../src/worker/routes.ts";
 
 // Every hashed /a/ asset reaches the client at EXACTLY its q11 size, and every
 // text asset without a twin reached it 12-24% larger, because the edge
@@ -40,21 +41,19 @@ test("every text twin decodes to the bytes beside it, and is smaller", { skip: n
   }
 });
 
-// build.ts's own reader and glob matcher, mirrored so this test agrees with the
-// invariant that already guards ROUTES and PREFIX. `*` spans slashes there, and
-// so it does here.
+// The allowlist is read from the projected config (what wrangler is handed) and
+// matched by routes.ts's claimedByWorker, the one reader of its globs.
 const jsoncStringArray = (src, key) => {
   const block = (src.match(new RegExp(`"${key}"\\s*:\\s*\\[([\\s\\S]*?)\\]`)) || [, ""])[1];
   return [...block.replace(/\/\/[^\n]*/g, "").matchAll(/"([^"]+)"/g)].map((m) => m[1]);
 };
-const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, ".*") + "$");
 
 test("every text twin sits on a path the Worker claims", { skip: needsBuild }, async () => {
   const twins = (await textTwins()).map((rel) => `/${rel.slice(0, -3)}`);
   const config = "cloudflare.config.ts";
   const allow = jsoncStringArray(await configText(config), "run_worker_first");
   assert.ok(allow.length >= 60, `${config}: scanned only ${allow.length} run_worker_first entries; the reader has lost the allowlist`);
-  const covered = (p) => allow.includes(p) || allow.some((a) => a.includes("*") && globRe(a).test(p));
+  const covered = claimedByWorker(allow);
   const dead = twins.filter((p) => !covered(p));
   assert.deepEqual(dead, [], `${config}: ${dead.length} twin(s) on paths the asset layer answers directly, so they are uploaded and never served: ${dead.slice(0, 5).join(", ")}`);
   // THE CONVERSE CONTROL. The build's walk is a declared set of routable globs,

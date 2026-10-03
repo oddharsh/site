@@ -106,7 +106,7 @@
         "build.ts keeps exactly one hash per asset, so a version has never heard",
         "of any other version's hashes. During a ramp each request routes",
         "independently, /a/* is run_worker_first, and /a/ is NOT in",
-        "WORKERS_CACHEABLE_PATHS, so nothing bridges the two versions: a document",
+        "CACHEABLE_PATHS (routes.ts), so nothing bridges the two versions: a document",
         "from one version asks for an asset the other version does not have and",
         "gets serveAssetWith404Clamp's 404. At the 10% canary step that is ~90% of",
         "the new-HTML cohort plus ~10% of the old-HTML cohort, per changed asset,",
