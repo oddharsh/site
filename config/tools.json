@@ -208,7 +208,7 @@
       "bin": "jpegtran",
       "path": "/opt/homebrew/opt/mozjpeg/bin/jpegtran",
       "install": "brew install mozjpeg",
-      "why": "progressive rearrangement of the R2 share copies, a coefficient reorder. It did EXIF-orientation rotation until 2026-08-26; that is `zenc square --orient` now, per CLAUDE.md gotcha 3",
+      "why": "progressive rearrangement of the R2 share copies, a coefficient reorder. It did EXIF-orientation rotation until 2026-08-26; that is `zenc square --orient` now, per docs/GOTCHAS.md gotcha 3",
       "required_by": [
         "tools/photos/add-photos.sh"
       ],

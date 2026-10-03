@@ -87,7 +87,7 @@ const derive = (state: State, reps: Array<[string, number]>) => deriveFamily(sta
 
 // ── the grader's own control, before any score is believed ──────────────────
 // A zstd that silently ignores `dictionary` prints the same size three times
-// (CLAUDE.md gotcha 14), and every number below would then be a no-dictionary
+// (docs/GOTCHAS.md gotcha 14), and every number below would then be a no-dictionary
 // number. The right dictionary must beat both no dictionary and a wrong one.
 {
   const last = states.at(-1)!;

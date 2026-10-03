@@ -74,7 +74,7 @@ agentic-iteration AGENTS.md to a crate whose output is content-addressed.
 - Never edit the bench, its corpus, `TIERS`, or `add-photos.sh` to make a
   result pass. A contract test pins the bench to the production command.
 - Encoder settings are off limits. AVIF speed, `--jobs` and quality, JPEG
-  quality and subsampling all change bytes (CLAUDE.md gotcha 43), so none of
+  quality and subsampling all change bytes (docs/GOTCHAS.md gotcha 43), so none of
   them is a speed knob here.
 - Read the CPU table for throughput. `add-photos.sh` runs 8 photos at once, so
   the pipeline is CPU-bound, and wall-clock under load can miss a real saving:

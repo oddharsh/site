@@ -35,7 +35,7 @@ pub fn run(args: &[String]) -> i32 {
             }
             // EXIF orientation, applied by sample re-indexing before the cap is
             // interpreted — so --width caps the DISPLAYED width, matching what
-            // the caller sees, and CLAUDE.md gotcha 3's account of this flag.
+            // the caller sees, and docs/GOTCHAS.md gotcha 3's account of this flag.
             "--orient" => {
                 i += 1;
                 match args.get(i).and_then(|s| s.parse::<u8>().ok()).and_then(|n| Orientation::try_from(n).ok()) {

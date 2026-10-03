@@ -53,7 +53,7 @@ export async function serveFreshAsset(request, env, contentType) {
 // Strip the body, keep every header. Not `new Response(null, res)`: Response init
 // is read as a plain object there, so status/headers survive but anything carried
 // out-of-band does not — the same write-only-init trap that made encodeBody a
-// silent no-op site-wide (CLAUDE.md gotcha 13). Spelled out so it stays visible.
+// silent no-op site-wide (docs/GOTCHAS.md gotcha 13). Spelled out so it stays visible.
 function bodiless(res) {
   try { res.body?.cancel(); } catch {}
   return new Response(null, { status: res.status, headers: new Headers(res.headers) });
@@ -336,7 +336,7 @@ const variantEtag = (etag, suffix) => {
 //
 // Both paths are ON, each verified in production on 2026-07-27 before its gate came out,
 // and the canaries that proved them are gone now that the default paths exercise the same
-// code. CLAUDE.md gotchas 13 and 14 record how to rebuild them if a regression ever needs
+// code. docs/GOTCHAS.md gotchas 13 and 14 record how to rebuild them if a regression ever needs
 // bisecting.
 //
 //   precompression: /encoding-test returned 30 bytes in ONE brotli layer (34 in two before
