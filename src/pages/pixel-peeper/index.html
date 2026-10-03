@@ -231,7 +231,9 @@ function wireQuiz(){
 }
 
 const state={i:0,trials:[],log:[]};
-// JPEG XL decodes in Safari 17+ and is arriving in Chrome, and nowhere else yet.
+// JPEG XL decodes in Safari 17+ and in Chrome from 155 (stable 2026-10-06;
+// checked in Canary 157 on 2026-10-02: both format calls draw, the diff map
+// reads both tiles, and Chrome 154 still hides the axis). Firefox is on the way.
 // A format call the browser cannot draw would be two tiles with one blank, so
 // the axis is gated on actually decoding a 25-byte, 1px lossless JXL. Asking the
 // decoder is the only honest test: a type check says what the browser claims.
