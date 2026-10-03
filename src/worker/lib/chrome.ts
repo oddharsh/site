@@ -150,6 +150,13 @@ export function lunaPage({
   const metaRobots = robots
     ? html`\n<meta name="robots" content="${robots}">`
     : EMPTY;
+  // rel=canonical names the one URL a search engine should index, so the
+  // ?query and trailing-slash variants the Worker also answers fold onto it.
+  // Only for a page that takes indexing at all: a canonical on a noindex page
+  // asks a crawler to index the URL the robots tag just told it to drop.
+  const linkCanonical = route && !/\bnoindex\b/.test(robots)
+    ? html`\n<link rel="canonical" href="https://aadhar.sh${route}">`
+    : EMPTY;
   const scriptHtml = html`${scripts}\n<script src="/nav.js" defer></script>`;
   // Back/Forward ship in the HTML so the caption has its final geometry at first
   // paint (gen-desktop-partial.ts, HISTNAV_HTML, says what injecting it cost).
@@ -180,7 +187,7 @@ export function lunaPage({
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>${documentTitle}</title>${metaDescription}${metaRobots}${twinLink}
+<title>${documentTitle}</title>${metaDescription}${metaRobots}${linkCanonical}${twinLink}
 ${faviconLink(route)}
 ${head}<style>
 :root{--axp-maxw:${width}px}

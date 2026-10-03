@@ -151,7 +151,10 @@ a{color:var(--link)}
     <span class="title-text"><span class="icon" aria-hidden="true"></span>Pixel Peeper &middot; compression eye exam</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div><!-- /axp:window -->
-  <div class="content" id="stage"></div>
+  <div class="content" id="stage">
+   <h1>whose eye do you have?</h1>
+   <p class="lede">a vision test for image compression, in the spirit of <a href="https://ismy.blue" rel="external">ismy.blue</a>. each call shows the same photo squeezed two or three ways, and you <b>pick the one that looks best.</b> we won't say what changed, on purpose: if we told you to watch the color, you'd watch the color. so answer on instinct.</p>
+  </div>
   <div class="xp-statusbar panes"><span class="fill" id="sb-left">← aadhar.sh · prototype</span><span id="sb-right">real encoders · two metrics</span></div>
 </div>
 <canvas id="loupe"></canvas>
@@ -239,7 +242,10 @@ const state={i:0,trials:[],log:[]};
 // decoder is the only honest test: a type check says what the browser claims.
 const CAN_JXL=new Promise(r=>{const i=new Image();i.onload=()=>r(i.naturalWidth===1);i.onerror=()=>r(false);
   i.src="data:image/jxl;base64,/woAEBBQXAgIAAEALABLGIsVwklBHoAAAA==";});
-const stage=document.getElementById("stage"), sbLeft=document.getElementById("sb-left"), sbRight=document.getElementById("sb-right");
+// The intro heading and lede ship in the HTML, so the page reads without
+// JavaScript and the intro stays on screen while the manifest loads.
+// screenIntro reuses those bytes rather than keeping a second copy.
+const stage=document.getElementById("stage"), INTRO=stage.innerHTML.trim(), sbLeft=document.getElementById("sb-left"), sbRight=document.getElementById("sb-right");
 const loupe=document.getElementById("loupe"), lctx=loupe.getContext("2d"); loupe.width=150;loupe.height=150;const ZOOM=3;
 const kb=n=>(n/1024).toFixed(1)+"KB";
 const tileSrc=o=>o.src||o.uri;                 // split build: o.src (tile file). fat build: o.uri (data-URI)
@@ -270,9 +276,7 @@ function buildRun(){
 
 function screenIntro(){
   sbLeft.textContent="← aadhar.sh · prototype"; sbRight.textContent="real encoders · two metrics";
-  stage.innerHTML=`
-   <h1>whose eye do you have?</h1>
-   <p class="lede">a vision test for image compression, in the spirit of <a href="https://ismy.blue" rel="external">ismy.blue</a>. each call shows the same photo squeezed two or three ways, and you <b>pick the one that looks best.</b> we won't say what changed, on purpose: if we told you to watch the color, you'd watch the color. so answer on instinct.</p>
+  stage.innerHTML=`${INTRO}
    <div class="gb"><span class="gb-legend">${RUN_SIZE} quick calls</span>
      <p style="margin:0 0 6px">behind the scenes, every set is judged by two machine metrics too, <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b>. they're rival models of human vision, not ground truth, and they <b>disagree</b>. at the end you'll see what your eye is quietly tuned to, which metric it thinks like, and a little grid you can paste anywhere.</p>
    </div>
@@ -712,7 +716,6 @@ function wireDiff(gl,tiles,trial,order,pos){
 }
 
 let DATA=null;
-stage.innerHTML='<h1>loading…</h1>';
 Promise.all([fetch('/pixel-peeper/manifest.json').then(r=>r.json()),CAN_JXL]).then(([d,jxl])=>{
   state.noJxl=!jxl; if(!jxl)d.trials=d.trials.filter(t=>t.axis!=="format"); DATA=d;boot();}).catch(e=>{stage.innerHTML='<h1>could not load</h1><p>'+e+'</p>';});
 function boot(){ screenIntro(); }

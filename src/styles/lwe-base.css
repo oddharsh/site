@@ -10,7 +10,8 @@ body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: 
 .window { --axp-maxw: 640px; max-width: var(--axp-maxw); }
 .content { background: oklch(99% 0.005 95); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
 .msgr { display: flex; flex-direction: column; }
-.msgr-head .who { flex: 1; min-width: 0; }
+/* an h1 (the page heading), styled as the plain buddy line it replaced */
+.msgr-head .who { flex: 1; min-width: 0; margin: 0; font: inherit; color: inherit; }
 .msgr-head .who .stat { display: block; font-size: 8.5pt; color: oklch(46% 0.02 145); }
 .msgr-head .who .stat::before { content: "● "; color: oklch(60% 0.18 145); }
 .msgr-head .pets { font-size: 8pt; color: #6b7280; text-align: right; line-height: 1.35; }
