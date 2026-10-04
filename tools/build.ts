@@ -2008,7 +2008,7 @@ let freshFamily: Buffer | null = null;
   // compresses to almost nothing. The tails were kept for "a margin" on those four
   // pages, which was their own tails being found in the dictionary.
   //
-  // `bun tools/family-holdout.ts` asks the production question instead: rebuild
+  // tools/family-holdout.ts (in git history) asked the production question: rebuild
   // this dictionary from the pages served at each dictionary roll, and score it
   // on the pages served k rolls LATER, with every corpus page left out of the
   // score. Over 34 rolls (2026-07-27 to 2026-09-28), no tails beat the 11/4/4/12

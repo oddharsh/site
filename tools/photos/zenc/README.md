@@ -64,44 +64,18 @@ histograms were regenerated, and the packed committed index stayed identical.
 
 ## Optimizing zenc
 
-`bun run zenc:bench` is the instrument, and its gate is the definition of done:
-every `square` output and every histogram byte-identical to the baseline. The
-rules below are for an agent iterating on speed, adapted from Max Woolf's
-agentic-iteration AGENTS.md to a crate whose output is content-addressed.
+Speed work has one gate: every `square` output and every histogram stays
+byte-identical to the previous binary on real photos, because `/i/` is
+content-addressed. Encoder settings (AVIF speed, `--jobs`, quality,
+subsampling) all change bytes (docs/GOTCHAS.md gotcha 43), so none of them is
+a speed knob. `tools/photos/zenc-bench.ts` (in git history, deleted
+2026-10-04) automated that A/B with timing.
 
-- Run it once on an unchanged tree first. That run is the baseline and the
-  noise floor, and it should report no measurable difference.
-- Never edit the bench, its corpus, `TIERS`, or `add-photos.sh` to make a
-  result pass. A contract test pins the bench to the production command.
-- Encoder settings are off limits. AVIF speed, `--jobs` and quality, JPEG
-  quality and subsampling all change bytes (docs/GOTCHAS.md gotcha 43), so none of
-  them is a speed knob here.
-- Read the CPU table for throughput. `add-photos.sh` runs 8 photos at once, so
-  the pipeline is CPU-bound, and wall-clock under load can miss a real saving:
-  the tiled `orient()` read 1.004x at `--parallel 8` on wall-clock while saving
-  5.4-7.0% of CPU per rotated photo. A change that adds threads inside one
-  photo also owes a `--parallel 8` run.
-- Don't run the bench while something else builds or benchmarks. It prints the
-  load average, and a BUSY warning means rerun.
-- Stop when a pass moves no source at p < 0.01, or wins under 5%
-  while adding a disproportionate amount of code.
-
-The split the bench prints bounds the prize. On the 2026-09-22 corpus, zenc's
-own code was 27-28% of a photo, a ceiling of about 1.37x before any encoder.
-135 of the 185 sources are rotated, and `orient()` costs 225-360 ms per 26 MP
-frame, most of it in a per-pixel loop that read the source down a column.
-
-That was the first pass through the loop. `orient()` now copies or reverses
-whole rows for the flips and walks 64px tiles for the four transposes, which
-took the decode-to-resample floor from 731/774/859 ms to 572/577/601 ms at
-orientations 3/6/8. On the bench's corpus, rotated sources run 1.09-1.17x
-faster and use 5-9.5% less CPU, each at p = 0.0006, with every output
-byte-identical. The second pass removed the copy itself: `square` now hands the
-STORED frame to halflight's `resample_oriented`, which reads it upright inside
-the resample and is bitwise equal to orienting first. On one 26 MP JPEG the
-floor reads 491 ms upright and 491/445/461 ms at orientations 3/6/8, so a
-rotated photo now costs nothing extra, and the axis-swapping ones are cheaper
-than upright. `resize` and `frame` still orient with the tiled copy.
+`orient()` copies or reverses whole rows for flips and walks 64px tiles for
+transposes. `square` hands the stored frame to halflight's
+`resample_oriented`, which reads it upright inside the resample, so a rotated
+photo costs nothing extra there. `resize` and `frame` still orient with the
+tiled copy.
 
 ## Remaining work
 
