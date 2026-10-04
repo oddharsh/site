@@ -36,7 +36,7 @@ import { PREVIEW_ROBOTS } from "./preview.ts";
 // A nonce has to be unique per response and it lives in the BODY. Build step 8
 // precompresses every staged document into brotli q11 twins plus dcz deltas, served
 // `encodeBody: "manual"`, and the runtime ships no brotli encoder to recompress with
-// (CLAUDE.md gotcha 14). You cannot write a per-request nonce into bytes you already
+// (docs/GOTCHAS.md gotcha 14). You cannot write a per-request nonce into bytes you already
 // compressed at build time, so for these 43 documents a nonce would mean giving up
 // precompression on the render-blocking path to buy a marginally tidier policy.
 // Hashes are computed from those same final bytes and cost nothing at request time.

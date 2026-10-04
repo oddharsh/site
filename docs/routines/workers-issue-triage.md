@@ -56,10 +56,8 @@ whose body contains that marker line.
 
 ## Step 3: investigate
 
-Read the repository's `CLAUDE.md` sections that the error touches before
-reading code; this repository records a great deal of measured behaviour
-there, and its "Conventions + gotchas" list explains many failures that look
-like platform bugs. Then follow the stack trace into `src/worker/`, `cal/src/`
+Read the repository's `CLAUDE.md` and `docs/GOTCHAS.md` before reading code;
+the gotchas explain many failures that look like platform bugs. Then follow the stack trace into `src/worker/`, `cal/src/`
 or `serendipity/`. Work out, as far as the evidence supports:
 
 - which route or cron fired it (`route <template>` and `cron.*` span names

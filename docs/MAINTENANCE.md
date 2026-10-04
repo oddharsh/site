@@ -5,7 +5,7 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](../CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `cloudflare.config.ts` + `wrangler.config.ts` at the repo root (`wrangler.jsonc` until 2026-09-28; CLAUDE.md gotcha 48): it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist derived from the route list in `src/worker/routes.ts`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `config/dev/`, production plus a dev overlay, projected to a gitignored `.wrangler.dev.jsonc` (readable source, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `cloudflare.config.ts`; secrets via `wrangler versions secret put`.
+- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `cloudflare.config.ts` + `wrangler.config.ts` at the repo root (`wrangler.jsonc` until 2026-09-28; docs/GOTCHAS.md gotcha 48): it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist derived from the route list in `src/worker/routes.ts`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `config/dev/`, production plus a dev overlay, projected to a gitignored `.wrangler.dev.jsonc` (readable source, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `cloudflare.config.ts`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](../cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
@@ -68,105 +68,12 @@ git ls-files --stage | awk '$1 == 120000 { print }'
 Before committing, `git status --short` should show only intentional source
 changes, and `git ls-files --others --exclude-standard` should be empty.
 
-## Merge drivers for the machine-owned files
+## Conflicts on machine-owned files
 
-Several sessions work in this tree at once, so `main` moves under every open
-branch. Replaying the last 80 commits puts the conflict rate at about 14% of
-adjacent PR pairs, and the machine-owned share of that is resolvable without a
-human. `.gitattributes` routes those paths through `tools/merge-driver.ts`.
-
-**Wire it once per clone.** Worktrees share one `.git/config`, so a single run
-covers every worktree of this repository, including the codex ones:
-
-```bash
-bun run setup:merge
-```
-
-It adds an `include.path` for `config/gitconfig` (which holds the driver
-definitions, because git will only read an executable definition out of
-`.git/config` and that file is not tracked) and points `core.hooksPath` at
-`.githooks`. It refuses rather than clobbering an existing `core.hooksPath` or a
-hook already installed in `.git/hooks`, and it reads the drivers back out
-afterwards, since an `include.path` naming a missing file is silently ignored.
-
-What each class does:
-
-| path | driver | resolution |
-|---|---|---|
-| `package.json`, `config/derivations.json` | `json` | three-way merge over the parsed value; a key only one side moved is taken, a key both sides moved stays a conflict |
-| `config/bun-pin.json` | `pin` | the newer pin, with the gate it owes recorded |
-| `bun.lock`, `lens-reader/bun.lock`, `config/derivations.lock.json` | `regen` | parked, then regenerated by `tools/merge-finish.ts` |
-| `CLAUDE.md`, `docs/*.md` | `prose` | diff3 over paragraphs, list items, headings and table rows |
-
-`devDependencies.wrangler` is the one key where both sides moving still resolves:
-two pkg.pr.new shas carry no order, so the branch being integrated is taken as
-the proposal and `canary:wrangler` is recorded as owed.
-
-**The prose driver is a union only where unioning is safe.** Git's built-in
-`merge=union` works on lines, so it resolves a two-sided EDIT by keeping both
-versions of the sentence; measured on this repository's own history, that puts
-one sentence in CLAUDE.md twice, one character apart. `prose` works on blocks
-instead: a chunk one side moved is taken, a chunk both sides moved differently
-is declined, and both sides are emitted only where the base chunk is empty. When
-one side's change within a chunk is pure insertion, its blocks are laid back
-into the other side's text, which is what resolves a version bump sitting next
-to somebody else's new bullet.
-
-Measured against the eight real diverged branches here it resolves 2 of 4 prose
-conflicts, invents nothing, drops nothing both sides kept, and preserves every
-main-only line. The two it declines are genuine two-sided edits of one
-paragraph, and you resolve those the way you always did.
-
-
-**After a merge or rebase, read what it owes you.** The hooks drain the ledger
-automatically (`post-rewrite` for rebase, `post-merge` for a clean merge,
-`post-commit` for a conflicted one, which is the case `post-merge` does not
-cover). `bun.lock` is regenerated with `bun install` and staged. Everything else
-is reported and left alone on purpose: re-recording `config/derivations.lock.json`
-vouches for artifacts nobody looked at, and a pin owes its gate. To see the
-ledger without draining it, or to drain it by hand:
-
-```bash
-bun run merge:finish -- --check
-bun run merge:finish
-```
-
-**When a conflict still arrives, it is a real one.** The drivers refuse rather
-than guess, and a refusal writes ordinary conflict markers, so resolving one is
-what it always was.
-
-**GitHub runs none of this, so triage a PR's conflicts before opening its web
-editor.** The editor handles plain line conflicts, greys its Resolve button out
-for anything else, and never calls these drivers. So it shows conflicts a local
-merge clears for free, and it will let you hand-merge `bun.lock`. The triage
-merges each PR twice in memory, once as GitHub sees it (`--attr-source` on the
-empty tree, drivers off) and once as a local merge would, and grades every
-conflict and every hunk:
-
-```bash
-bun run conflicts -- 876            # one PR, conflict by conflict
-bun run conflicts -- --all          # every open PR that conflicts
-bun run conflicts -- 876 --markdown # the same, as a PR comment
-```
-
-Verdicts run `local-required` (not a line conflict), `regenerate` (a derived
-file), `local-free` (a driver here resolves it), `local-recommended` (too big,
-too many hunks, or owes a command), `web-ok`. One non-`web-ok` file sends the
-whole PR to one local merge. The first sweep, 2026-09-29, found 6 conflicting
-PRs, 2 of which GitHub still listed as `UNKNOWN` because it computes
-`mergeable` lazily. 3 could not use the web editor at all (#732, #800 and #801,
-modify/delete and file-location conflicts from the old `holding/` layout). The
-other 3 could, and each carried a file it should not touch: #799's `bun.lock`,
-and in #730 and #731 an 85-line hunk where the PR edits the CI jobs main deleted
-on 2026-09-28. The `conflict-triage` skill in `.claude/skills/` walks the report
-one conflict at a time.
-
-**If the drivers seem to have stopped working**, check that the file still
-reproduces through the serializer. `json` and `pin` rewrite the whole file from
-a parsed value and refuse anything they cannot reproduce byte for byte, so a
-reformat of `package.json` turns them into silent no-ops.
-`contract-merge-drivers-resolve-only-what-they-should.test.mjs` asserts this, and
-`git check-attr merge -- <path>` shows whether a path is routed at all.
+Regenerate a derived file rather than hand-merging it: `bun install` for a
+lockfile, `bun run derive:check -- --lock` for `config/derivations.lock.json`.
+`bun run conflicts` says, per file, whether GitHub's web editor can take a
+conflict or it needs a local checkout.
 
 ## Rotate Cal's calendar or approval secret
 

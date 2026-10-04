@@ -44,7 +44,7 @@ export default defineConfig({
     // Intercepts /lens/read* ahead of the site Worker, exactly the way cf-garage
     // intercepts /garage/cf/*. This is a ROUTE and not a `run_worker_first`
     // entry, which is the whole reason the feature lives in its own script: that
-    // list is a hard 100 (CLAUDE.md gotcha 26).
+    // list is a hard 100 (docs/GOTCHAS.md gotcha 26).
     triggers: [triggers.fetch({ pattern: "aadhar.sh/lens/read*", zone: "aadhar.sh" })],
 
     env: {

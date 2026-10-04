@@ -6,7 +6,7 @@
 //
 // It cost two tests in contract-page-generator-ownership, red on main under
 // `bun test:node` and green everywhere else, because macOS reaches $TMPDIR
-// through the /var symlink and bun resolves both sides. CLAUDE.md gotcha 45.
+// through the /var symlink and bun resolves both sides. docs/GOTCHAS.md gotcha 45.
 //
 // `import.meta.main` is the runtime answering the question directly, so it has
 // no path arithmetic to get wrong. This pins every module onto it, and pins the

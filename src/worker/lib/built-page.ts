@@ -49,7 +49,7 @@ function withPagePolicy(live: Response, headers: Record<string, string> = {}): R
   if (!isDocument) return live;
   // The Response itself as init, then mutate: a handler's response can come out
   // of caches.default with immutable headers, and an init OBJECT would drop
-  // encodeBody on an encoded body (CLAUDE.md gotcha 13).
+  // encodeBody on an encoded body (docs/GOTCHAS.md gotcha 13).
   const out = new Response(live.body, live);
   for (const [name, value] of Object.entries(headers)) out.headers.set(name, value);
   return out;

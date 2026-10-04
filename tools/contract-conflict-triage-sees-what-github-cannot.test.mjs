@@ -1,7 +1,7 @@
-// ── conflict triage separates GitHub's view of a conflict from a local one ────
+// ── conflict triage: which conflicts GitHub's web editor can take ────────────
 // Split-file convention: shared imports live in contract-shared.ts.
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,17 +9,12 @@ import { ROOT, assert, test } from "./contract-shared.ts";
 import { HEAVY_HUNK, gradeHunk, parseHunks, renderHtml } from "./conflict-triage.ts";
 
 // tools/conflict-triage.ts answers "can this conflict go through GitHub's web
-// editor", and its whole value is that the answer differs from what a local
-// merge says: GitHub never runs this repository's merge drivers. So the fixture
-// carries one conflict of each kind that matters, merged by a real git with the
-// real drivers wired, and the assertions are about the three disagreeing.
-//
-// Canonical fixture root for the reason gotcha 45 gives: the driver asks git for
-// an absolute git dir, and /var vs /private/var would split it on macOS.
+// editor". The fixture carries one conflict of each kind that matters, merged
+// by a real git. The root is canonicalised so /var vs /private/var cannot split
+// paths on macOS.
 
 const repoRoot = fileURLToPath(ROOT);
 const tool = join(repoRoot, "tools", "conflict-triage.ts");
-const driver = join(repoRoot, "tools", "merge-driver.ts");
 
 function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -29,21 +24,15 @@ const pkg = (scripts) => JSON.stringify({ name: "fixture", scripts }, null, 2) +
 const notes = (line2) => ["one", line2, "three", "four", "five"].join("\n") + "\n";
 
 /** base, then a `main` and a `feature` that conflict three different ways. */
-function fixture({ wired }) {
+function fixture() {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "conflict-triage-")));
   git(dir, ["init", "-q", "-b", "main"]);
   git(dir, ["config", "user.email", "t@example.invalid"]);
   git(dir, ["config", "user.name", "contract"]);
-  if (wired) {
-    for (const mode of ["json", "pin", "regen", "prose"]) {
-      git(dir, ["config", `merge.${mode}.driver`, `bun ${driver} ${mode} %O %A %B %L %P`]);
-    }
-  }
   const write = (files) => {
     for (const [path, body] of Object.entries(files)) writeFileSync(join(dir, path), body);
   };
   write({
-    ".gitattributes": readFileSync(join(repoRoot, ".gitattributes"), "utf8"),
     "package.json": pkg({ build: "bun build", test: "bun test" }),
     "notes.txt": notes("two"),
     "gone.txt": "kept on the feature branch\n",
@@ -58,7 +47,7 @@ function fixture({ wired }) {
   git(dir, ["commit", "-qam", "main"]);
 
   // feature: the same line edited differently, the deleted file modified, and a
-  // different script added beside main's (the add/add the json driver resolves).
+  // different script added beside main's.
   git(dir, ["checkout", "-q", "feature"]);
   write({
     "package.json": pkg({ build: "bun build", test: "bun test", dev: "bun dev" }),
@@ -75,7 +64,7 @@ function run(dir) {
 }
 
 test("each conflict gets the verdict its kind earns, and the PR as a whole goes local", () => {
-  const dir = fixture({ wired: true });
+  const dir = fixture();
   try {
     const { status, report, stderr } = run(dir);
     assert.equal(status, 1, stderr);
@@ -92,10 +81,9 @@ test("each conflict gets the verdict its kind earns, and the PR as a whole goes 
     assert.equal(byPath["gone.txt"].github, "structural");
     assert.ok(byPath["gone.txt"].kinds.includes("modify/delete"), JSON.stringify(byPath["gone.txt"].kinds));
 
-    // GitHub shows a conflict that the local json driver resolves outright.
+    // Two scripts added side by side: a plain line conflict.
     assert.equal(byPath["package.json"].github, "content");
-    assert.equal(byPath["package.json"].local, "resolved");
-    assert.equal(byPath["package.json"].verdict, "local-free");
+    assert.equal(byPath["package.json"].verdict, "web-ok");
 
     assert.equal(report.verdict, "local");
     assert.equal(report.webEditorAvailable, false);
@@ -104,12 +92,9 @@ test("each conflict gets the verdict its kind earns, and the PR as a whole goes 
   }
 });
 
-test("a triage run parks nothing in the real merge ledger", () => {
-  // The drivers run inside `git merge-tree` exactly as in a real merge, so
-  // without SITE_MERGE_LEDGER a triage would leave merge-finish a phantom job.
-  const dir = fixture({ wired: true });
+test("a lockfile conflict is regenerated, never merged", () => {
+  const dir = fixture();
   try {
-    // A regen-class conflict is the one that writes the ledger.
     git(dir, ["checkout", "-q", "main"]);
     writeFileSync(join(dir, "bun.lock"), "main\n");
     git(dir, ["add", "bun.lock"]);
@@ -123,23 +108,6 @@ test("a triage run parks nothing in the real merge ledger", () => {
     const lock = report.files.find((f) => f.path === "bun.lock");
     assert.equal(lock?.verdict, "regenerate");
     assert.ok(lock.owes.includes("bun install"), JSON.stringify(lock.owes));
-    assert.equal(existsSync(join(git(dir, ["rev-parse", "--absolute-git-dir"]), "site-merge-pending")), false);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("control: with the drivers unwired, nothing reads as resolved for free", () => {
-  // Without this, "local-free" could be an artifact of the GitHub view and the
-  // local view being the same merge, which is the failure the control in the
-  // tool itself guards from the other side.
-  const dir = fixture({ wired: false });
-  try {
-    const { report } = run(dir);
-    const json = report.files.find((f) => f.path === "package.json");
-    assert.equal(json.local, "drivers-not-wired");
-    assert.notEqual(json.verdict, "local-free");
-    assert.ok(report.warnings.some((w) => w.includes("setup:merge")), JSON.stringify(report.warnings));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -150,7 +118,7 @@ test("a ref git cannot merge is the instrument failing, never a clean merge", ()
   // as "merged with conflicts", and prints nothing on stdout. Read as a result,
   // that is an empty conflict list, so the first version of the tool reported a
   // typo'd base as a PR with no conflicts. Found by greyout's suite.
-  const dir = fixture({ wired: true });
+  const dir = fixture();
   try {
     const out = spawnSync("bun", [tool, "--base", "no-such-ref", "--head", "feature", "--json"], { cwd: dir, encoding: "utf8" });
     assert.equal(out.status, 2, out.stdout);
@@ -184,7 +152,7 @@ test("hunk grades separate keep-both from near-duplicates and size from kind", (
 // would claim every conflict in it.
 
 test("each side of a hunk is attributed to the commit that wrote it, and only that one", () => {
-  const dir = fixture({ wired: true });
+  const dir = fixture();
   try {
     git(dir, ["checkout", "-q", "feature"]);
     writeFileSync(join(dir, "notes.txt"), notes("two, as the feature has it").replace("five", "five, unrelated"));
@@ -211,9 +179,9 @@ test("each side of a hunk is attributed to the commit that wrote it, and only th
 
 test("--in-progress keeps main on the main side for a merge AND for a cherry-pick", () => {
   // The two operations put the branches on opposite sides of git's markers
-  // (gotcha 47), so a mode that read HEAD as "the PR" would label a cherry-pick
+  // (ours is the branch for a merge, upstream for a cherry-pick), so a mode that read HEAD as "the PR" would label a cherry-pick
   // backwards and every explanation built on it would credit the wrong side.
-  const dir = fixture({ wired: true });
+  const dir = fixture();
   const inProgress = () => {
     const out = spawnSync("bun", [tool, "--in-progress", "--json"], { cwd: dir, encoding: "utf8" });
     assert.notEqual(out.status, 2, out.stderr);
@@ -239,7 +207,7 @@ test("--in-progress keeps main on the main side for a merge AND for a cherry-pic
 
 test("the conflict hook speaks only when git left unmerged files behind", () => {
   const hook = join(repoRoot, "tools", "conflict-hook.ts");
-  const dir = fixture({ wired: true });
+  const dir = fixture();
   const call = (input) => {
     const out = spawnSync("bun", [hook], { input: JSON.stringify(input), encoding: "utf8" });
     assert.equal(out.status, 0, "a hook must never fail the tool call");
@@ -288,8 +256,6 @@ test("the three-way view escapes every side and every note", () => {
         github: "content",
         kinds: ["content"],
         stages: [1, 2, 3],
-        local: "conflicted",
-        driverNotes: [],
         verdict: "web-ok",
         reasons: [],
         owes: [],

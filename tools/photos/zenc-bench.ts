@@ -336,7 +336,7 @@ if (import.meta.main) {
     console.log(`\nGATE FAILED: ${moved.length} output(s) differ from baseline ${baseSha}`);
     for (const m of moved.slice(0, 20)) console.log(`  moved  ${m}`);
     console.log("\nNo timing is printed. A faster zenc with different bytes re-mints /i/ URLs and");
-    console.log("orphans their histograms (CLAUDE.md gotchas 35, 46); that is a different encoder.");
+    console.log("orphans their histograms (docs/GOTCHAS.md gotchas 35, 46); that is a different encoder.");
     process.exit(1);
   }
   console.log(`  identical: ${corpus.length * OUTPUT_FILES.length} square outputs and ${ha.size} histograms`);

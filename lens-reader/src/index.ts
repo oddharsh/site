@@ -27,7 +27,7 @@
 // comes back under budget, re-open this rather than assuming it is settled.
 //
 // The SECOND reason this comment used to give has EXPIRED. `run_worker_first`
-// capped at 100 rules with the repo at exactly 100 (CLAUDE.md gotcha 26), but
+// capped at 100 rules with the repo at exactly 100 (docs/GOTCHAS.md gotcha 26), but
 // folding the eight exact /lens rows to /lens + /lens/* dropped it to 94. The
 // size argument is carrying this alone now; do not cite the cap again.
 //

@@ -1590,7 +1590,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
            load: order says what to reach for next, not what opens.
            NB: no backticks in this comment. It lives inside a JS template
            literal, so one would end the string mid-file and the build would
-           fail on a line that looks fine (CLAUDE.md gotcha 19). -->
+           fail on a line that looks fine (docs/GOTCHAS.md gotcha 19). -->
       <div class="lx-view" role="radiogroup" aria-label="page mode">
         <button class="lx-seg${state.view === "human" ? " is-on" : ""}" data-view="human" role="radio" aria-checked="${state.view === "human" ? "true" : "false"}" type="button">Human</button>
         <button class="lx-seg${state.view === "machine" ? " is-on" : ""}" data-view="machine" role="radio" aria-checked="${state.view === "machine" ? "true" : "false"}" type="button">Machine</button>

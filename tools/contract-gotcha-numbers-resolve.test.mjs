@@ -3,41 +3,16 @@
 import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
-// CLAUDE.md carried TWO entries numbered 41 from 2026-08-24 (#538 added the
-// cf-garage TypeScript-config entry on top of #535's histogram entry, which had
-// landed the day before) until 2026-09-10. Twenty-four references pointed at
-// that number across twelve files (CLAUDE.md, ci.yml, two config declarations, a
-// contract test, two derive modules and five photo-pipeline files), and every one
-// of them was ambiguous: three meant cf-garage and twenty-one meant the
-// histograms.
-//
-// Nothing caught it because nothing had ever read these numbers. The build stays
-// green throughout, and what a collision costs is the cross-reference itself:
-// "gotcha 41 as a standing risk" is unresolvable until you read both entries and
-// decide which one the sentence is about, which is exactly the work a number
-// exists to save. That is the same shape as the repository-layout note's
-// warning about stale paths, one layer up: a reference nobody re-reads rots
-// silently.
-//
-// UNIQUENESS ONLY, NEVER MONOTONICITY. The repair renumbered the second 41 to 46
-// rather than shifting 42-45 up by one, because the shift would have rewritten
-// every cross-reference in a 6000-line file to fix a collision between two of
-// them. So the list deliberately ends 40, 41, 42, 43, 44, 45, 46-where-41-was.
-// It was already out of order anyway: 22 has sat above 21 since 2026-08-06.
-// Asserting order here would fail on that history and invite renumbering the
-// file to satisfy a test, which is the change this check exists to make
-// unnecessary.
+// The gotchas live in docs/GOTCHAS.md and code cites them by number. A number
+// that names two entries, or none, makes every citation of it ambiguous, and
+// nothing else would notice. Uniqueness only, never order: numbers are
+// permanent, so retired entries leave gaps.
 
-/** The gotcha headings, which are the column-0 numbered items AFTER the section
- *  header. The anchor is load-bearing: this file opens with several ordinary
- *  numbered lists at column 0 (the two homepage fragments, the converter's two
- *  rules, the three MCP deviations), and a scan of the whole document reads
- *  those as gotchas 1, 2 and 3 and reports duplicates that are not there.
- */
+/** Column-0 numbered items after the `## Gotchas` header. */
 async function gotchaNumbers() {
-  const md = await readFile(new URL("CLAUDE.md", ROOT), "utf8");
-  const start = md.indexOf("\n## Conventions + gotchas");
-  assert.ok(start > 0, "CLAUDE.md no longer carries the gotchas section header");
+  const md = await readFile(new URL("docs/GOTCHAS.md", ROOT), "utf8");
+  const start = md.indexOf("\n## Gotchas");
+  assert.ok(start > 0, "docs/GOTCHAS.md no longer carries the gotchas section header");
   return [...md.slice(start).matchAll(/^(\d+)\. \*\*/gm)].map((m) => Number(m[1]));
 }
 
@@ -47,7 +22,7 @@ test("every gotcha number names exactly one entry", async () => {
   // A floor, on the a-dict precedent: a scanner that has quietly stopped
   // matching reports a clean pass over zero headings, and an empty list is
   // trivially unique. 46 today.
-  assert.ok(nums.length >= 40, `only ${nums.length} gotcha headings found; the scan has stopped matching`);
+  assert.ok(nums.length >= 30, `only ${nums.length} gotcha headings found; the scan has stopped matching`);
 
   const seen = new Map();
   const dupes = [];

@@ -4,7 +4,7 @@
 //   bun run early-hints:probe                        # cloudflare.com, a known-good origin
 //   bun run early-hints:probe https://aadhar.sh/     # or any target
 //
-// Committed because CLAUDE.md gotcha 15 spent a month asserting a MECHANISM that
+// Committed because docs/GOTCHAS.md gotcha 15 spent a month asserting a MECHANISM that
 // nobody could re-run. It claimed a CDP session suppressed Chrome's Early-Hints
 // preload; measured 2026-08-24 on Chrome 151 it does not, and the harness that
 // produced the original claim was ad-hoc and gone. This is the control that would

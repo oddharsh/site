@@ -298,7 +298,7 @@ mod tests {
     // 158-photo re-bake to be a no-op diff, and every one is a form nobody
     // would write from scratch. Each gets a test, because getting one wrong
     // moves a bar on the whole library and re-mints every meta file, which is
-    // CLAUDE.md gotcha 46 arriving a second time through a different door.
+    // docs/GOTCHAS.md gotcha 46 arriving a second time through a different door.
 
     /// Note 1: Pillow's 16-bit fixed point, NOT the /1000 form its own
     /// docstring's "ITU-R 601-2" wording implies. The two disagree on roughly

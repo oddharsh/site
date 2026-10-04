@@ -14,7 +14,7 @@ async function fixture(run) {
   // CLI exited 0 having written nothing and these assertions read the unwired
   // fixture. They are on `import.meta.main` since, and the unresolved root was
   // MEASURED green against it. Kept because the fixture spawns real tools and
-  // the next one to canonicalise a path inherits the trap. CLAUDE.md gotcha 45.
+  // the next one to canonicalise a path inherits the trap. docs/GOTCHAS.md gotcha 45.
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "page-generators-")));
   const put = async (file, body) => {
     await mkdir(path.dirname(path.join(root, file)), { recursive: true });

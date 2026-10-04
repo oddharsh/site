@@ -24,7 +24,7 @@
 // segment.
 //
 // PURE on purpose: no `node:` and no `cloudflare:` import, so the Worker, the
-// build and the contract suite all load the same file (CLAUDE.md gotcha 16).
+// build and the contract suite all load the same file (docs/GOTCHAS.md gotcha 16).
 // The zstd ENCODER needs node:zlib and lives in tools/lib/dcz.ts.
 
 // ── tags ────────────────────────────────────────────────────────────────────
