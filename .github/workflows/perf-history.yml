@@ -1,6 +1,6 @@
 name: Wire-size history
 
-# The TREND tier. perf-diff.yml catches the step a single PR makes; this catches
+# The TREND tier. A per-change diff catches the step one change makes; this catches
 # drift, which is the failure this repo actually had. The worker bundle went
 # 86 -> 129.23 -> 204.24 -> 258.34 -> 261.74 KiB gzip and every one of those
 # numbers was found by somebody tripping over a stale constant, because nothing

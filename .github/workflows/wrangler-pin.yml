@@ -156,7 +156,7 @@ jobs:
           $EVIDENCE
           \`\`\`
 
-          A DIFF line means the bundle moved bytes while every gate passed; \`perf-diff.yml\` on this PR says by how much. Wrangler is the publisher on the path that ships production, so this is a release-path change wearing a sha.
+          A DIFF line means the bundle moved bytes while every gate passed; \`bun run perf:snapshot compare\` against main says by how much. Wrangler is the publisher on the path that ships production, so this is a release-path change wearing a sha.
 
           $DIGEST
 

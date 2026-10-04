@@ -309,12 +309,9 @@ export async function writeDevConfigFile(): Promise<string> {
 const BUILDS = [["deploy"], ["build"], ["versions", "upload"]];
 export async function siteWranglerArgs(args: string[]): Promise<string[]> {
   // Keyed on the FILE, like .github/deploy-wrangler.sh, never on an assumption
-  // about which tree this runs in. perf-diff.yml runs HEAD's copy of this module
-  // against the merge base too, and a base from before 2026-09-28 has no
+  // about which tree this runs in. A tree from before 2026-09-28 has no
   // cloudflare.config.ts; its wrangler.jsonc is found by wrangler unaided, so
-  // the arguments pass through unchanged. Measured on #999's first CI run,
-  // where the base died on "cloudflare.config.ts is required when
-  // --experimental-new-config is enabled".
+  // the arguments pass through unchanged.
   if (!existsSync(join(REPO, "cloudflare.config.ts"))) return args;
   if (BUILDS.some((prefix) => prefix.every((word, i) => args[i] === word))) return [...args, "--x-new-config"];
   // Absolute, so a caller running from another directory (the ramp checks out

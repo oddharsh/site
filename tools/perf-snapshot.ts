@@ -205,10 +205,9 @@ async function record(outPath, label) {
   // overnight. Keep acquisition beside the deltas it enables, using the emitted
   // twin rather than recompressing, so a corpus edit that improves one while
   // worsening the other is visible in the same section.
-  // The family dictionary name is matched here rather than through
-  // src/worker/lib/dictionary-names.ts on purpose: perf-diff.yml runs this script
-  // against the MERGE BASE with only tools/ stashed, so it can import nothing
-  // outside tools/.
+  // The family dictionary name is matched here rather than imported from
+  // src/worker/lib/dictionary-names.ts, so this script can measure an older
+  // tree with only tools/ copied in.
   for (const name of await walk(`${BUILD}/a`, (f) => /^page-family\.[0-9a-f]{8}\.dict\.br$/.test(f))) {
     snapshot.dcz.dictionaryBrotliBytes += (await readFile(`${BUILD}/a/${name}`)).length;
   }

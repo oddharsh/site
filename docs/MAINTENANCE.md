@@ -810,36 +810,14 @@ bun run perf:snapshot record head.json --label mine
 bun run perf:snapshot compare base.json head.json     # markdown to stdout
 ```
 
-`.github/workflows/perf-diff.yml` runs that on every PR touching served code: it
-builds the merge base and HEAD concurrently in separate worktrees, each with
-its own dependencies and output. Both use HEAD's measurement code, copied to
-`.perf-measure` at the same depth in each tree so Wrangler resolves correctly.
-It waits for both measurements and rejects either failure before comparing,
-then posts the delta as a marker-updated PR comment. It is deliberately **not** part of `validate`: `validate` is the one
-required check on `main`, so anything living there is a merge gate, and a perf
-number that blocks a merge teaches people to widen thresholds. This one fails on
-nothing.
-
-Two design notes worth knowing before editing it. **Everything measured is
-deterministic**, so an unchanged file produces no row and a tooling-only PR
-produces a diff that says "No change" four times; that silence is the feature,
-because a report that always has content stops being read. And the **noise floor
-is asymmetric**: pages get a 128-byte floor, client assets get none. A page
-carries `/a/<name>.<hash8>.<ext>` references, so touching one shared asset flips
-its hash and moves every page's compressed size by a few bytes (measured: a
-one-line `nav.js` edit moved 38 of 46 pages, max 41 bytes, net -0.03 KiB); an
-asset's bytes are its own content, so nothing but editing it can move them and
-every byte is signal. One floor everywhere would have hidden the 50-byte `nav.js`
-change that produced the churn. Sub-floor movers are collapsed into a counted
-aggregate line, never dropped, and they stay in the totals.
-
-The shape is lifted from `astral-sh/ruff`'s `memory_report.yaml` and its ecosystem
-job: build the merge base, build HEAD, run both, post the difference, gate on
-nothing.
+Run it by hand when a change might move served bytes. Everything it measures is
+deterministic, so an unchanged file produces no row. Pages carry a 128-byte
+noise floor because a shared `/a/` asset changing its hash moves every page by a
+few bytes; client assets carry none.
 
 ### The trend (`/garage/dyno`, and the `perf-history` branch)
 
-The diff catches the STEP one PR makes. It structurally cannot see DRIFT, and
+A diff catches the STEP one change makes. It structurally cannot see DRIFT, and
 drift is the failure this repo actually had: 86 → 129.23 → 204.24 → 258.34 →
 261.74 KiB gzip, every number found by somebody tripping over a stale constant
 because nothing drew the slope.
@@ -1123,8 +1101,8 @@ node node_modules/playwright-core/cli.js install --with-deps chromium chrome-bet
 **What to do with a finding.** A bun `red` on the byte-identical gate lists the
 differing staged files; file it upstream with the `--revision` string the
 report carries, since `--version` on a canary prints the plain triple. A
-wrangler `changed` means the next wrangler pin re-mints the bundle, and
-`perf-diff.yml` will say by how much when dependabot opens it. A browsers
+wrangler `changed` means the next wrangler pin re-mints the bundle;
+`bun run perf:snapshot compare` says by how much. A browsers
 `changed` line is a horizon card to re-read (the page's "cards that moved"
 rot direction, found by machine), and a probe that goes `true -> false` in a
 prerelease is a browser bug to file with the probe's one-liner as the repro.

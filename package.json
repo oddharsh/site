@@ -87,7 +87,6 @@
     "release": "bun tools/release-status.ts",
     "zenc:bench": "bun tools/photos/zenc-bench.ts",
     "zenc:reproducible": "bun tools/photos/zenc-reproducible.ts",
-    "preview:target": "bun tools/preview-target.ts",
     "indexnow": "bun tools/indexnow.ts",
     "misses": "bun tools/miss-report.ts",
     "ask:eval": "bun tools/ask-rank-eval.ts",

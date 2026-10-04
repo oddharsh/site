@@ -26,9 +26,8 @@
 // against a constant somebody typed, and the baseline history at
 // WORKER_BASELINE_GZIP_KIB is the record of what that costs — a number that sat
 // 58% stale for months while CI printed "hard checks green" over it every run.
-// The differential half now lives in `tools/perf-snapshot.ts`, run by
-// .github/workflows/perf-diff.yml, which builds the merge base and HEAD and
-// posts the delta as a PR comment. It has no constants, so it cannot go stale.
+// The differential half lives in `tools/perf-snapshot.ts` (`record` two builds,
+// then `compare`). It has no constants, so it cannot go stale.
 //
 // Read the two together and the division of labour is clean: THIS script is the
 // gate (structural invariants that must never ship broken, plus a coarse alarm

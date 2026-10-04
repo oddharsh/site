@@ -37,8 +37,8 @@
 //
 // THE BUNDLE COMPARISON IS A FINDING RATHER THAN A GATE. A wrangler that
 // bundles the same source into different bytes has usually bumped esbuild,
-// which is news (the next wrangler pin re-mints the bundle and perf-diff will
-// say by how much) and not a failure. So it reports `changed` rather than
+// which is news (the next wrangler pin re-mints the bundle, and
+// `perf:snapshot compare` says by how much) and not a failure. So it reports `changed` rather than
 // `red`, and the workflow files it once and stays quiet until it changes
 // again or goes back to identical.
 //
