@@ -390,7 +390,8 @@ function shell(title, currentPath, bodyHtml, head = "") {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#2D78BD">
 <title>${currentPath === PREFIX ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <link rel="icon" type="image/svg+xml" href="/section-icons/serendipity.svg">
-<meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">${twinLink}
+<meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
+<link rel="canonical" href="https://aadhar.sh${esc(currentPath)}">${twinLink}
 <style>${shellCss()}</style>
 <link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css">${head}</head><body>${DESKTOP_TOP}
 <div class="window">

@@ -56,6 +56,12 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://aadhar.sh/writing/big-screens-and-small-screens</loc>
+    <lastmod>2026-07-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://aadhar.sh/writing/education-in-tech</loc>
     <lastmod>2026-06-09</lastmod>
     <changefreq>monthly</changefreq>

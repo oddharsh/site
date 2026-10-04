@@ -25,7 +25,7 @@ font-family:var(--font-caption);font-weight:bold;font-size:10pt;text-shadow:1px 
 background:var(--grad-title)}
 .np-ico{flex:0 0 auto;width:14px;height:15px;background:oklch(100% 0 0);border:1px solid oklch(45% 0 0);border-radius:1px;position:relative}
 .np-ico::before{content:"";position:absolute;left:2px;right:3px;top:3px;height:1px;background:oklch(55% 0.16 258);box-shadow:0 3px 0 oklch(55% 0.16 258),0 6px 0 oklch(55% 0.16 258),0 9px 0 oklch(55% 0.16 258)}
-.np-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.np-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;font:inherit}
 .np-controls{display:flex;gap:2px}
 /* the canonical Luna gel caption buttons live in luna.css now (phase D):
    its :where(.np-controls ...) twins carry this window's controls too. */
@@ -145,7 +145,9 @@ export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: 
     : escHtml(date);
   return open +
     "<div class=\"np-titlebar\">" + (popId ? "" : DESKTOP_HISTNAV) + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-title\">" + title + " — Notepad</span>" +
+      // The standalone note's caption is its page heading. A popover note sits
+      // inside the folder index, whose own caption is that page's one h1.
+      (popId ? "<span class=\"np-title\">" + title + " — Notepad</span>" : "<h1 class=\"np-title\">" + title + " — Notepad</h1>") +
       // A popover note is never the body-level window nav.js wires, so its max
       // stays an inert decoration; the standalone window's is a real button.
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + (popId ? "<span class=\"max\" aria-hidden=\"true\"></span>" : MAX_BUTTON) +
@@ -237,8 +239,8 @@ export async function renderWritingIndex(env) {
   // u-url and author ride along as empty <data>, the same as on a note.
   const body = "<div class=\"np-window np-folder h-feed\">" +
     "<div class=\"np-titlebar\">" + DESKTOP_HISTNAV + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-title\"><span class=\"p-name\">aadhar.sh/writing</span>" +
-        "<data class=\"u-url\" value=\"https://aadhar.sh/writing\"></data>" + AUTHOR_CARD + "</span>" +
+      "<h1 class=\"np-title\"><span class=\"p-name\">aadhar.sh/writing</span>" +
+        "<data class=\"u-url\" value=\"https://aadhar.sh/writing\"></data>" + AUTHOR_CARD + "</h1>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + MAX_BUTTON +
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
     // The folder view is the one place on this site that was already a complete

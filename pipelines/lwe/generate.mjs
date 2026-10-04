@@ -129,7 +129,7 @@ ${spec.demoCss ? spec.demoCss + "\n" : ""}</style>
 
       <div class="msgr-head">
         <div class="ava" aria-hidden="true"></div>
-        <div class="who"><b>${c.buddyName}</b><span class="stat">Online, ${stat}</span></div>
+        <h1 class="who"><b>${c.buddyName}</b><span class="stat">Online, ${stat}</span></h1>
         <div class="pets">${pets}</div>
       </div>
 

@@ -438,6 +438,12 @@ async function checkInvariants() {
     // resume files), so forward is full but reverse is scoped to garage/lwe.
     for (const p of want("sitemap")) if (!smLocs.has(p)) hard.push(`sitemap: ${p} is flagged sitemap in site-manifest.json but has no <loc>`);
     for (const p of smLocs) if (/^\/(garage|lwe)\//.test(p) && !surfaces.some((s) => s.path === p)) hard.push(`sitemap: ${p} has a <loc> but is not registered in site-manifest.json`);
+    // Writing posts are the leaf content the line above exempts, so they get
+    // their own floor: posts.json is their registry. The newest post went nine
+    // weeks without a <loc> (added 2026-07-13, caught 2026-10-03) because
+    // nothing joined the two files.
+    const posts = JSON.parse(await read("src/content/writing/posts.json"));
+    for (const post of posts) if (!smLocs.has(`/writing/${post.slug}`)) hard.push(`sitemap: /writing/${post.slug} is in posts.json but has no <loc>`);
 
     // 8c — every garage/lwe page on disk is registered (or an explicit exclusion),
     // so adding a page forces a registry entry rather than a silent omission.
