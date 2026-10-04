@@ -71,8 +71,8 @@ import { isCallable } from "./lib/parse.ts";
 //
 // Promoting that to a bare `kitesurf` takes one control: does the REST endpoint
 // REJECT an invented engine name? A rejection means the parameter is parsed and
-// enforced, so a 200 carrying `kitesurf` is Kitesurf. `bun run kitesurf:check`
-// runs that control and prints the verdict.
+// enforced, so a 200 carrying `kitesurf` is Kitesurf. The check-kitesurf
+// script that ran that control was deleted 2026-10-04; git history has it.
 //
 // It is a script rather than a runtime probe on purpose. An IGNORED parameter
 // means the control renders instead of erroring, and this account gets 10 free
@@ -94,8 +94,8 @@ export function _kitesurfParamLive() { return kitesurfParamLive; }
 
 const REST_BASE = "https://api.cloudflare.com/client/v4/accounts";
 
-// Exported so check-kitesurf.mjs probes the SAME URL this ships, rather than a
-// second copy of the path that can agree with itself while both are wrong.
+// Exported so a probe hits the SAME URL this ships, rather than a second copy
+// of the path that can agree with itself while both are wrong.
 // engine is OPTIONAL: the body already treats an absent one as "no query
 // string", and the contract test asserts exactly that by calling with two args.
 export const restUrl = (accountId, action, engine?) =>

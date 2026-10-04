@@ -253,8 +253,8 @@ const worker = defineWorker({
   // `versions upload` + `versions deploy` (the manual ramp) exited 0.
   //
   // What it costs on Workers Free is not documented. Issues is assembled from
-  // the logs and traces this block already emits, but read `bun run obs:check`
-  // for a few days after it ships and turn it off if events/day moves.
+  // the logs and traces this block already emits, but watch events/day on the
+  // Observability dashboard for a few days after it ships and turn it off if it moves.
   // Automations (Claude Code routine, webhook) are dashboard state with no
   // config form, so none are declared here.
   observability: {

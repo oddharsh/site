@@ -89,7 +89,7 @@ test("every Playwright launch in tools reads its channel from browser-channel.ts
       launchers.push(rel);
     }
   }
-  assert.ok(launchers.length >= 8, `only ${launchers.length} launch sites found; the scanner has stopped matching (there were 9 on 2026-09-14)`);
+  assert.ok(launchers.length >= 5, `only ${launchers.length} launch sites found; the scanner has stopped matching (there were 6 on 2026-10-04)`);
 });
 
 test("chromeChannel() reads CHROME_CHANNEL and defaults to stable Chrome", () => {
