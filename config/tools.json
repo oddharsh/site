@@ -51,7 +51,6 @@
         "tools/photos/extract-photo-metadata.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
-        "tools/photos/onestep-probe.sh",
         "tools/photos/require-exif-sooc.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
@@ -72,7 +71,6 @@
         "tools/photos/export-for-instagram.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
-        "tools/photos/onestep-probe.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
       "version": {
@@ -105,7 +103,6 @@
         "tools/photos/export-for-instagram.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
-        "tools/photos/onestep-probe.sh",
         "tools/photos/require-zenc.sh"
       ],
       "version": {
@@ -174,7 +171,6 @@
         "tools/photos/extract-photo-metadata.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
-        "tools/photos/onestep-probe.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
       "optional_why": "`optional` here means BUILT ON DEMAND rather than degrades: every caller runs `cargo build --release --locked` when the binary is missing, so an absent zenc on a fresh checkout is a state the pipeline repairs itself rather than a prerequisite anybody has to go install. A missing `cargo` is the blocking failure, and cargo is declared above",
@@ -271,10 +267,9 @@
     {
       "bin": "ffmpeg",
       "install": "brew install ffmpeg",
-      "why": "PNG to PPM, because cjpeg will not read PNG and sips BMP confuses it; also the independent reduction the one-step probe scores against",
+      "why": "PNG to PPM, because cjpeg will not read PNG and sips BMP confuses it",
       "required_by": [
-        "tools/photos/gen-encoding-grids.sh",
-        "tools/photos/onestep-probe.sh"
+        "tools/photos/gen-encoding-grids.sh"
       ],
       "version": {
         "flag": "-version",
@@ -286,10 +281,9 @@
     {
       "bin": "ssimulacra2",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
-      "why": "the perceptual metric the Instagram export searches quality against, and the one the one-step ingest probe compares geometries with",
+      "why": "the perceptual metric the Instagram export searches quality against",
       "required_by": [
-        "tools/photos/export-for-instagram.sh",
-        "tools/photos/onestep-probe.sh"
+        "tools/photos/export-for-instagram.sh"
       ],
       "version": {
         "reports": false,

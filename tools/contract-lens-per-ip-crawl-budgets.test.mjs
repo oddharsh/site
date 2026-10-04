@@ -401,7 +401,7 @@ test("a 200 is not evidence that kitesurf rendered, and is not reported as if it
     );
     const run = await runBrowserAction("snapshot", { url: "https://example.com" }, { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" });
     assert.equal(run.engine, "kitesurf-requested", "a 200 means the call worked, not that Kitesurf served it");
-    assert.notEqual(run.engine, "kitesurf", "only bun run kitesurf:check can promote this label");
+    assert.notEqual(run.engine, "kitesurf", "only a control that sees an invented engine name rejected can promote this label");
   } finally {
     testGlobals.fetch = realFetch;
     _resetKitesurfProbe();

@@ -281,24 +281,19 @@ test("the nightly row's gzip figure is wrangler's, never the runtime's zlib", as
 // the twin suite and exists to be the other runtime. Everything else runs
 // under bun, and this is the list, so a fourth node spawn is a decision.
 //
-// THE FOURTH, taken 2026-09-23: `insn` (tools/insn-count.ts) counts the
-// instructions a Worker hot path retires, and production runs V8 inside workerd.
-// Under bun the count would describe JavaScriptCore, an engine this site never
-// runs on, so a number from it could not stand for a request.
-//
-// THE FIFTH, taken 2026-09-30: tools/lib/harness-dispatch.ts. Since the wrangler
+// THE FOURTH, taken 2026-09-30: tools/lib/harness-dispatch.ts. Since the wrangler
 // pin ddaa558, getWorker().fetch() reaches workerd only through an undici
 // Dispatcher that bun's fetch ignores, so the three contract tests that dispatch
 // through the harness re-run themselves in a node child when bun collects them.
 // It spawns from a module rather than a script, so the scan below cannot see it;
 // this paragraph and the module's header are its record.
-test("node is spawned only by the wrangler bridge, the route oracle, the twin suite, the V8 instruction counter and the harness dispatch tests", async () => {
+test("node is spawned only by the wrangler bridge, the route oracle, the twin suite and the harness dispatch tests", async () => {
   const { readFileSync } = await import("node:fs");
   const { execFileSync } = await import("node:child_process");
   const root = new URL(".", ROOT).pathname;
   const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT).pathname, "utf8"));
   const nodeScripts = Object.entries(pkg.scripts).filter(([, cmd]) => /(^|&& |\| )node /.test(cmd)).map(([k]) => k).sort();
-  assert.deepEqual(nodeScripts, ["insn", "routes:check", "routes:check:remote", "test:node"]);
+  assert.deepEqual(nodeScripts, ["routes:check", "routes:check:remote", "test:node"]);
   const files = execFileSync("git", ["ls-files", "-z", "*.sh", "**/*.sh", ".github/workflows/*.yml"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
   const spawns = [];
   for (const rel of files) {

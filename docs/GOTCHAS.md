@@ -55,7 +55,7 @@ by renumbering. The long-form history of each one is in git
 
 15. **Read a browser feature off two signals, and suspect the instrument
     first.** For Early Hints: `initiatorType === "early-hints"` plus a fetch
-    duration too short for the bytes. `bun run early-hints:probe` runs it. Two
+    duration too short for the bytes. Two
     unrelated origins failing identically means the harness is lying. Confirm
     paint claims in a visible window.
 
