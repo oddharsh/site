@@ -39,6 +39,12 @@
 import { EXTRACTOR, READER_LIMIT_PER_MIN, READER_NOTE, ReaderError, read } from "./reader.ts";
 import { jsonResponse } from "../../src/worker/lib/http.ts";
 import { validateLensTarget } from "../../src/worker/lib/public-fetch.ts";
+import { overBudget } from "../../src/worker/lib/ratelimit.ts";
+
+// The site's own per-caller limiter (lib/ratelimit.ts), on this Worker's binding.
+// The 429 message quotes READER_LIMIT_PER_MIN, which a contract test pins to the
+// ceiling declared in cloudflare.config.ts.
+const READER_BUDGET = { binding: "READER_RL", max: READER_LIMIT_PER_MIN };
 
 export default {
   async fetch(request, env) {
@@ -55,8 +61,9 @@ export default {
     const target = validateLensTarget(url.searchParams.get("url") || "");
     if (!target.ok) return json({ ok: false, error: target.error }, 400);
 
-    const over = await overBudget(env, request);
-    if (over) return json({ ok: false, error: over }, 429);
+    if (await overBudget(READER_BUDGET, request, env)) {
+      return json({ ok: false, error: `Reader extraction is limited to ${READER_LIMIT_PER_MIN} per minute per visitor. Try again shortly.` }, 429);
+    }
 
     try {
       return json(await read(target.url));
@@ -76,24 +83,6 @@ export default {
     }
   },
 };
-
-async function overBudget(env, request) {
-  const limiter = env && env.READER_RL;
-  // Binding capability probe, and this Worker is outside the site tree with its
-  // own dependency set, so it cannot import _worker.js/lib/parse.js.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  if (!limiter || typeof limiter.limit !== "function") return null;
-  const ip = request.headers.get("cf-connecting-ip") || "anon";
-  try {
-    const { success } = await limiter.limit({ key: ip });
-    // The message quotes READER_LIMIT_PER_MIN, which a contract test pins to the
-    // ceiling declared in cloudflare.config.ts: same discipline as LENS_BUDGETS on the
-    // site Worker, where a message outliving its limit is the failure mode.
-    return success ? null : `Reader extraction is limited to ${READER_LIMIT_PER_MIN} per minute per visitor. Try again shortly.`;
-  } catch (_e) {
-    return null;
-  }
-}
 
 function json(body, status = 200) {
   return jsonResponse(body, status, {
