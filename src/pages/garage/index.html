@@ -264,23 +264,22 @@ p { margin: 0 0 12px; }
           <span class="badge watching">watching</span>
         </div>
         <div class="desc">
-          A Worker config is data, so every binding name in it is a string nothing checks, and
-          this site's own <code style="font-family: var(--font-mono);font-size:9pt">env</code>
-          is typed <code style="font-family: var(--font-mono);font-size:9pt">any</code>.
-          Wrangler hides a flag that makes the config a TypeScript program and infers
-          <code style="font-family: var(--font-mono);font-size:9pt">Env</code> from it, so one
-          Worker here was converted to find out what that buys. The upload came out
-          byte-identical, a plain-text variable arrived in the type as the literal
-          <code style="font-family: var(--font-mono);font-size:9pt">"default"</code>, and the
-          Durable Object type went backwards to
-          <code style="font-family: var(--font-mono);font-size:9pt">undefined</code> under both
-          entrypoint forms. Migration tags become a state on an export, and the one step a dry
-          run structurally cannot check is named rather than glossed. With a three-pane
-          explorer: toggle bindings, watch the config, the resolved JSON, and the inferred
-          interface move together.
+          A Worker config is data, so every binding name in it is a string nothing checks.
+          Wrangler hides a flag that makes the config a TypeScript program, Cloudflare's
+          <code style="font-family: var(--font-mono);font-size:9pt">cf</code> CLI loads the same
+          file without one, and both infer
+          <code style="font-family: var(--font-mono);font-size:9pt">Env</code> from it. Measured
+          in August on wrangler 4.125.0 and again in October on 4.147.0: the upload is still
+          byte-identical, a self-bound Durable Object still types as
+          <code style="font-family: var(--font-mono);font-size:9pt">undefined</code>, and a
+          binding through a second Worker's definition now carries the class. The re-run also
+          corrects an August claim, since
+          <code style="font-family: var(--font-mono);font-size:9pt">wrangler types</code> already
+          wrote a variable's value into its type. With a three-pane explorer: toggle bindings,
+          watch the config, the resolved JSON, and the inferred interface move together.
         </div>
         <div class="meta">
-          shape: a conversion, measured on both sides &middot; added 2026-08-24
+          shape: a conversion, measured on both sides &middot; added 2026-08-24 &middot; re-measured 2026-10-05
         </div>
       </li>
 

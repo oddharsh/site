@@ -322,7 +322,7 @@ export const AGENT_SURFACES = [
     "path": "/garage/typed-config",
     "title": "The config that types itself",
     "mimeType": "text/html",
-    "description": "Wrangler's hidden TypeScript config, converted on a real Worker: the upload came out byte-identical, a plain-text variable arrived in the type as its own value, and the Durable Object type went backwards."
+    "description": "Wrangler's TypeScript config, measured on a real Worker in August and again in October on wrangler 4.147.0 and cf: a byte-identical upload, a Durable Object type that now threads across Workers, and a correction about literal variables."
   },
   {
     "path": "/garage/hidden-flags",
