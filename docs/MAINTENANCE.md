@@ -181,10 +181,13 @@ rotation and treat all previously emailed links as compromised.
 ### Auxiliary Workers deploy themselves (from 2026-10-05)
 
 cf-garage, lwe-ask, lens-reader and aadhar-counter each get their own Workers
-Builds project, connected to this repository and set up in the dashboard
-(Workers & Pages > the Worker > Settings > Builds). Nothing in CI can do this:
-its token is read-only by design. Every project uses the same settings except
-the variable and the watch paths:
+Builds trigger, connected to this repository. `bun tools/aux-builds.ts` prints
+the plan and `--apply` creates them through Cloudflare's `cf` CLI; it skips a
+Worker that already has a trigger. Run it from a workstation logged in with
+`bunx cf auth login`, because nothing in CI can do this: its token is read-only
+by design. The dashboard path (Workers & Pages > the Worker > Settings > Builds)
+works too. Every trigger uses the same settings except the variable and the
+watch paths:
 
 | setting | value |
 |---|---|
@@ -204,7 +207,7 @@ the variable and the watch paths:
 
 The watch paths are each Worker's own directory plus everything outside it
 that it imports. If a Worker gains an import from somewhere else, add that
-path here and in the dashboard, or a change there won't redeploy it.
+path here, in `tools/aux-builds.ts` and on the live trigger, or a change there won't redeploy it.
 `bun.lock` is left out on purpose: the nightly wrangler bump would otherwise
 redeploy all four with unchanged code. The counter's deploy must stay
 `deploy` (never `versions upload`), because it owns a Durable Object.
