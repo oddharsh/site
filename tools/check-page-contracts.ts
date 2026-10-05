@@ -174,6 +174,17 @@ for (const file of pageFiles) {
   const inline = [...page.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n");
   assert.doesNotMatch(inline, restatesDefaults, `src/pages/${file}: border-box sizing and the .window max-width come from luna.css`);
 }
+// A page's :root must not redeclare a luna.css token. luna.css links after the
+// page's <style>, so the page's value silently loses: /access once set --gold to
+// amber and rendered its "partial" rows in luna's yellow. Page-only colors get
+// page-only names. The homepage is exempt for the same first-paint reason.
+const lunaTokens = new Set([...(await readFile(join(ROOT, "src/styles/luna.css"), "utf8")).matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+for (const file of pageFiles) {
+  const page = await readFile(join(ROOT, "src/pages", file), "utf8");
+  const inline = [...page.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n");
+  const shadowed = [...inline.matchAll(/:root\s*\{([^}]*)\}/g)].flatMap((m) => [...m[1].matchAll(/(--[a-z0-9-]+)\s*:/g)].map((d) => d[1])).filter((t) => lunaTokens.has(t));
+  assert.deepEqual(shadowed, [], `src/pages/${file}: :root redeclares luna.css tokens; use luna's or give the page color its own name`);
+}
 assert.doesNotMatch(await readFile(join(ROOT, "src/styles/lwe-base.css"), "utf8"), restatesDefaults, "lwe-base.css restates page defaults luna.css owns");
 
 const invalidUnderstanding = JSON.parse(JSON.stringify(garageFixture.understanding));
