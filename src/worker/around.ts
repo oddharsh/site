@@ -61,20 +61,15 @@ export async function handleAroundJson(request, env, ctx) {
     if (!report) {
       // 503 pending is never cached (cachedRender only stores 200) — a snapshot
       // that appears next cron won't be shadowed by a pinned "pending".
-      return new Response(JSON.stringify({ pending: true, note: "no snapshot yet; the daily crawl hasn't run" }), {
-        status: 503,
-        // retry-after tracks the crawl cadence, which became daily on 2026-08-14.
-        // Only reachable before the first successful crawl ever: after that a
-        // snapshot exists and an all-error crawl deliberately will not clear it.
-        headers: { "content-type": "application/json; charset=utf-8", "retry-after": "86400", "x-robots-tag": "noindex" },
-      });
+      // retry-after tracks the crawl cadence, which became daily on 2026-08-14.
+      // Only reachable before the first successful crawl ever: after that a
+      // snapshot exists and an all-error crawl deliberately will not clear it.
+      return jsonResponse({ pending: true, note: "no snapshot yet; the daily crawl hasn't run" }, 503,
+        { "retry-after": "86400", "x-robots-tag": "noindex" }, { pretty: false });
     }
-    return new Response(JSON.stringify(report, null, 2), {
-      headers: {
-        "content-type":  "application/json; charset=utf-8",
-        "cache-control": "public, max-age=60, s-maxage=300",
-        "x-robots-tag":  "noindex",
-      },
+    return jsonResponse(report, 200, {
+      "cache-control": "public, max-age=60, s-maxage=300",
+      "x-robots-tag":  "noindex",
     });
   };
   return isBust ? render() : cachedRender(request, ctx, render, "/around/json", env);

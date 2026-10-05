@@ -3,7 +3,7 @@
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
-import { esc } from "./lib/http.ts";
+import { esc, jsonResponse } from "./lib/http.ts";
 import checkpoints from "./checkpoints.json" with { type: "json" };
 
 // ── /updates handler (Windows Update reskin) ────────────────────────
@@ -116,14 +116,11 @@ export async function renderUpdatesJson(cp) {
   const pts = cp.points.slice(-8).reverse();           // newest first, same as the old DESC LIMIT 8
   let build = "aadhar.sh", items = [];
   if (pts.length) { build = pts[0].version; items = pts.map((p) => ({ slug: p.slug, title: p.title })); }
-  return new Response(JSON.stringify({ build, items }), {
-    headers: {
-      "content-type":    "application/json; charset=utf-8",
-      "cache-control":   "public, max-age=0, s-maxage=300",
-      "x-robots-tag":    "noindex",
-      "referrer-policy": "strict-origin-when-cross-origin",
-    },
-  });
+  return jsonResponse({ build, items }, 200, {
+    "cache-control":   "public, max-age=0, s-maxage=300",
+    "x-robots-tag":    "noindex",
+    "referrer-policy": "strict-origin-when-cross-origin",
+  }, { pretty: false });
 }
 
 // ── /restore handler (Windows System Restore reskin, backed by D1) ───

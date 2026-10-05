@@ -10,8 +10,12 @@ export function escHtml(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function jsonResponse(body, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(body, null, 2) + "\n", {
+// The one JSON response every route builds. Defaults to a private reply: never
+// cached, pretty-printed for a person reading it with curl. A route changes the
+// policy through extraHeaders (cache-control, CORS, x-robots-tag, ...), and a
+// big public payload passes { pretty: false } to ship compact bytes.
+export function jsonResponse(body, status = 200, extraHeaders = {}, { pretty = true } = {}) {
+  return new Response(pretty ? JSON.stringify(body, null, 2) + "\n" : JSON.stringify(body), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
@@ -123,19 +127,16 @@ function acceptQ(accept, type) {
   return best;
 }
 
-export function jsonResp(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: {
-      "content-type":  "application/json; charset=utf-8",
-      // errors get the errorResp() discipline (30s), never the 5-minute
-      // success TTL — a transient scrape 502 must not pin in browsers.
-      "cache-control": status >= 400
-        ? "public, max-age=30, must-revalidate"
-        : "public, max-age=300, s-maxage=600",
-      "access-control-allow-origin": "*",
-    },
-  });
+// The cache policy for a public, CORS-open JSON read (search, photos, ledger,
+// the playlist): errors get the errorResp() discipline (30s), never the
+// 5-minute success TTL, so a transient scrape 502 does not pin in browsers.
+export function publicJsonHeaders(status) {
+  return {
+    "cache-control": status >= 400
+      ? "public, max-age=30, must-revalidate"
+      : "public, max-age=300, s-maxage=600",
+    "access-control-allow-origin": "*",
+  };
 }
 
 export function extractTitle(html) {

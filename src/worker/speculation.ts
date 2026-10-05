@@ -159,6 +159,7 @@ export function handlePrefetchActivation(request, env) {
 // is also where any promotion to a more eager rule is decided; this route only
 // answers.
 import { analyticsSql, text, type AnalyticsRow } from "./ledger.ts";
+import { jsonResponse } from "./lib/http.ts";
 
 export const SPECULATION_DATASET = "aadhar_speculation";
 export const SPECULATION_WINDOW_DAYS = 30;
@@ -208,15 +209,14 @@ export async function handleSpeculationJson(request, env) {
     `SELECT blob1 AS kind, blob2 AS path, SUM(_sample_interval * double1) AS n ` +
     `FROM ${SPECULATION_DATASET} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
     `GROUP BY kind, path FORMAT JSON`);
-  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300, s-maxage=300" };
   if (!read.ok) {
-    return new Response(JSON.stringify({ ok: false, reason: read.reason, window_days: SPECULATION_WINDOW_DAYS }) + "\n",
-      { status: read.reason === "unconfigured" ? 200 : 502, headers: { ...headers, "cache-control": "no-store" } });
+    return jsonResponse({ ok: false, reason: read.reason, window_days: SPECULATION_WINDOW_DAYS },
+      read.reason === "unconfigured" ? 200 : 502);
   }
   const rows = summarizeSpeculation(read.data);
-  return new Response(JSON.stringify({
+  return jsonResponse({
     ok: true, window_days: SPECULATION_WINDOW_DAYS, dataset: SPECULATION_DATASET,
     note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate",
     rows,
-  }, null, 2) + "\n", { status: 200, headers });
+  }, 200, { "cache-control": "public, max-age=300, s-maxage=300" });
 }

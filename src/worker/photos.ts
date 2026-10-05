@@ -5,7 +5,7 @@ import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
-import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.ts";
+import { errorResp, escAttr, escHtml, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
 import { commonPairs, queryTerms, scoreFields } from "./lib/text.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
@@ -554,9 +554,7 @@ export async function handlePhotoQuery(request, env, ctx) {
     from: url.searchParams.get("from"), to: url.searchParams.get("to"),
     limit: url.searchParams.get("limit"), offset: url.searchParams.get("offset"),
   }, ctx);
-  const response = jsonResp(payload);
-  response.headers.set("x-robots-tag", "noindex");
-  return response;
+  return jsonResponse(payload, 200, { ...publicJsonHeaders(200), "x-robots-tag": "noindex" }, { pretty: false });
 }
 
 // /images/manifest.json is BUILD OUTPUT since 2026-09-26: build.ts step 1e stages
