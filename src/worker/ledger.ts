@@ -133,7 +133,10 @@ export async function analyticsSql(env: Env, sql: string): Promise<AnalyticsRead
     const j = await r.json<{ data?: AnalyticsRow[] }>().catch(() => null);
     return { ok: true, data: j && Array.isArray(j.data) ? j.data : [] };
   } catch (e) {
-    return { ok: false, reason: (e && e.message) || String(e) };
+    // The reason is served publicly (/ledger.json, /speculation.json), so an
+    // exception's text goes to Workers Logs and the reply says only that it threw.
+    console.error("ledger: analytics read threw", e);
+    return { ok: false, reason: "request failed" };
   }
 }
 
@@ -211,7 +214,10 @@ async function queryBillableUsage(env: Env): Promise<BillableRead> {
       services: [...services].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), from: ymd(start), to: ymd(end),
     };
   } catch (e) {
-    return { ok: false, reason: (e && e.message) || String(e) };
+    // The reason is served publicly (/ledger.json, /speculation.json), so an
+    // exception's text goes to Workers Logs and the reply says only that it threw.
+    console.error("ledger: analytics read threw", e);
+    return { ok: false, reason: "request failed" };
   }
 }
 
