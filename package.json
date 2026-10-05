@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "bun tools/build.ts",
-    "dev": "bun tools/dev-stage.ts && wrangler dev -c .wrangler.dev.jsonc -c counter/wrangler.jsonc",
-    "dev:remote": "bun tools/dev-stage.ts && bun tools/gen-remote-config.ts .wrangler.dev.jsonc && wrangler dev -c .wrangler.remote.jsonc -c counter/wrangler.jsonc",
+    "dev": "bun tools/dev.ts",
+    "dev:remote": "bun tools/dev-stage.ts && bun tools/lib/site-config.ts --dev && bun tools/gen-remote-config.ts .wrangler.dev.jsonc && wrangler dev -c .wrangler.remote.jsonc -c counter/wrangler.jsonc",
     "deploy:direct": "wrangler deploy --x-new-config --x-provision=false --x-auto-create=false --strict",
     "deploy:version": "wrangler versions upload --x-new-config --x-provision=false --x-auto-create=false --strict",
     "deploy:promote": "bun tools/deploy-promote.ts",
@@ -100,6 +100,7 @@
   "workspaces": [
     "cal",
     "cf-garage",
+    "config/dev",
     "lwe-ask",
     "serendipity"
   ],

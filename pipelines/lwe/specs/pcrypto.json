@@ -1,6 +1,6 @@
 {
   "id": "pcrypto",
-  "description": "Programmable cryptography explained at the pace of a 2009 MSN chat: 2PC and garbled circuits, SNARKs, FHE, and ORAM as one toolkit. A fair-use walkthrough of the 0xPARC primer, with a live SHA-256 preimage demo.",
+  "description": "Programmable cryptography at MSN-chat pace: garbled circuits, SNARKs, FHE and ORAM as one toolkit, after the 0xPARC primer, with a live SHA-256 demo.",
   "buddyStat": "programmable cryptography",
   "petsLine": "Learning&nbsp;With&nbsp;Errors<br>one toolkit, four pieces",
   "composeNote": "This is a recorded conversation. Hash a secret in the demo above.",

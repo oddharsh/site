@@ -13,10 +13,15 @@ One site Worker, with three source islands:
 `.build/src/worker/index.ts` and `.build/public`. Local development uses
 [`config/dev/`](../config/dev/cloudflare.config.ts), which spreads the production
 config and overrides only the entrypoint, the assets directory, the build and
-the cache. `tools/dev-stage.ts` assembles `.dev-assets` and writes the
-projection to a gitignored `.wrangler.dev.jsonc` on every `bun run dev`, so a
-binding, route or cron added to `cloudflare.config.ts` reaches dev with no
-second edit.
+the cache, so a binding, route or cron added to `cloudflare.config.ts` reaches
+dev with no second edit. `bun run dev` (`tools/dev.ts`) assembles
+`.dev-assets`, starts aadhar-counter in its own `wrangler dev`, then runs
+`cf dev` in `config/dev/`, which reads that pair natively; both share one dev
+registry under `.wrangler/dev-registry`, so COUNTER reads `[connected]`. It
+needs the `cf` CLI once per machine (`bun add -g cf`), and arguments after
+`--` go to `cf dev`, which accepts only `--port`, `--host`, `--mode` and
+`--local`. `bun run dev:remote` still boots the JSON projection
+(`.wrangler.dev.jsonc`), since its remote overrides are written against it.
 
 A merge passes through CI, branch promotion, version upload, and a traffic ramp.
 Follow the [release path](#cicd-release-path) below; an uploaded version alone

@@ -1,6 +1,6 @@
 {
   "id": "encoding",
-  "description": "Why one photo gives three file sizes, explained at the pace of an MSN chat. AVIF against JPEG against the tuned JPEG encoders (mozjpeg, jpegli, zenjpeg), with a bytes-per-pixel demo that fetches the real encoded files live.",
+  "description": "Why one photo gives three file sizes, at MSN-chat pace: AVIF against JPEG and its tuned encoders, with a demo that fetches the real files live.",
   "buddyStat": "image encoding",
   "petsLine": "Learning&nbsp;With&nbsp;Errors<br>bytes &amp; pixels",
   "composeNote": "This is a recorded conversation. The demo above measures real files.",

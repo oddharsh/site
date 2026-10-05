@@ -1,6 +1,8 @@
 // dev-stage.mjs: compose the served URL root for LOCAL DEV, as a symlink farm.
 //
-//   node tools/dev-stage.ts        # (re)build .dev-assets/, then wrangler dev
+//   bun tools/dev-stage.ts         # (re)build .dev-assets/ only
+//
+// `bun run dev` (tools/dev.ts) and `bun run dev:remote` both call this first.
 //
 // WHY THIS EXISTS. The served tree is authored across five directories now
 // (public/, src/pages/, src/content/, src/client/, src/styles/) and merged into
@@ -76,9 +78,4 @@ if (import.meta.main) {
   const { links: n, dirs: d, skipped } = await stage();
   console.log(`dev-stage: ${FARM}/ ready — ${n} links across ${d} merged director${d === 1 ? "y" : "ies"} from ${ASSET_ROOTS.join(", ")}`);
   for (const path of skipped) console.warn(`dev-stage: left out ${path} (the build derives it; this copy is a local leftover)`);
-  // The config `wrangler dev -c` boots next, projected from config/dev/ (which
-  // spreads cloudflare.config.ts) on every start, so dev reads the bindings and
-  // routes production has right now rather than a copy somebody last synced.
-  const { writeDevConfigFile } = await import("./lib/site-config.ts");
-  console.log(`dev-stage: ${await writeDevConfigFile()} written from config/dev/`);
 }
