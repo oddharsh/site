@@ -124,6 +124,26 @@ jobs:
       - name: Verify route surface against a local Worker
         run: bun run routes:check --prebuilt .build/.perfbudget
 
+      # timbrado's engine builds into target/ inside the installed package, and
+      # a fresh install has none, so every run paid a ~21s cold cargo build.
+      # The key names everything that decides the binary: the runner, rustc,
+      # and the package's real path (bun puts the pinned sha in it) plus its
+      # Cargo.lock. A bump misses and rebuilds; cargo's fingerprint check still
+      # runs on a hit, so a stale restore rebuilds rather than ships.
+      - name: Key timbrado's engine cache
+        id: timbrado
+        run: |
+          set -euo pipefail
+          pkg=$(realpath node_modules/timbrado)
+          echo "target=$pkg/target" >> "$GITHUB_OUTPUT"
+          echo "key=timbrado-engine-${RUNNER_OS}-$( { rustc -V; basename "$(dirname "$(dirname "$pkg")")"; cat "$pkg/Cargo.lock"; } | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore timbrado's engine
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.timbrado.outputs.target }}
+          key: ${{ steps.timbrado.outputs.key }}
+
       # A cold cargo build; inside the suite it raced one test's 30s clock.
       - name: Build timbrado's watch engine
         run: bun -e 'import { ensureTimbradoEngine } from "./tools/lib/upstream-watches.ts"; console.log(ensureTimbradoEngine())'
