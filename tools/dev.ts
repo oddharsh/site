@@ -18,7 +18,8 @@
 // XDG config dir (CLOUDFLARE_REGISTRY_PATH; ~/Library/Preferences/.wrangler on
 // macOS), while plain `wrangler dev` prefers a legacy ~/.wrangler whenever one
 // exists. On any machine old enough to have it, the two never meet and COUNTER
-// stays `[not connected]` (reproduced on cf beta.5 and beta.12). And a shared registry would let another checkout's dev
+// stays `[not connected]` (reproduced on cf beta.5 and beta.12; filed as
+// cloudflare/cf#204). The per-checkout registry stays useful after a fix. And a shared registry would let another checkout's dev
 // server answer for aadhar-counter. One directory under this checkout's
 // .wrangler/ (gitignored) fixes both.
 //
