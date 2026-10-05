@@ -124,11 +124,36 @@ jobs:
       - name: Verify route surface against a local Worker
         run: bun run routes:check --prebuilt .build/.perfbudget
 
+      # The runner image names a default Rust toolchain but doesn't ship it:
+      # the first rustc or cargo call made rustup download it, about 8.5s a run.
+      # The key is the toolchain's full name (version and target), read with
+      # auto-install off so asking can't trigger the download it's caching.
+      - name: Key the Rust toolchain cache
+        id: rust
+        env:
+          RUSTUP_AUTO_INSTALL: "0"
+        run: |
+          set -euo pipefail
+          tc=$(rustup default | cut -d' ' -f1)
+          # A channel name (stable-...) would freeze whichever stable this
+          # cache first saw, since the key never moves. The image pins a
+          # version today; say so loudly if that stops being true.
+          [[ $tc =~ ^[0-9] ]] || echo "::warning title=Rust toolchain is a channel::'$tc' keys a cache that never refreshes"
+          echo "toolchain=$tc" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the Rust toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.rustup/toolchains/${{ steps.rust.outputs.toolchain }}
+            ~/.rustup/update-hashes/${{ steps.rust.outputs.toolchain }}
+          key: rust-toolchain-${{ steps.rust.outputs.toolchain }}
+
       # timbrado's engine builds into target/ inside the installed package, and
-      # a fresh install has none, so every run paid a ~21s cold cargo build.
-      # The key names everything that decides the binary: the runner, rustc,
-      # and the package's real path (bun puts the pinned sha in it) plus its
-      # Cargo.lock. A bump misses and rebuilds; cargo's fingerprint check still
+      # a fresh install has none, so every run paid a ~13s cold cargo build.
+      # The key names everything that decides the binary: the runner, rustc
+      # (restored above), and the package's real path (bun puts the pinned
+      # sha in it) plus its Cargo.lock. A bump misses and rebuilds; cargo's fingerprint check still
       # runs on a hit, so a stale restore rebuilds rather than ships.
       - name: Key timbrado's engine cache
         id: timbrado
