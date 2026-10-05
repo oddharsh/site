@@ -105,7 +105,7 @@
       <pre class="tc-src"><code id="tc-out"></code></pre>
     </div>
   </div>
-  <p class="tc-legend">The resolved pane is the Build Output Specification wrangler writes to <code>.cloudflare/output/v0/workers/default/config.json</code>, which is the readable answer to "what did my config actually become". The Env pane is what <code>tsc</code> reported for each key of the generated interface.</p>
+  <p class="tc-legend">The resolved pane is the Build Output Specification wrangler writes to <code>.cloudflare/output/v0/workers/default/worker.config.json</code>, which is the readable answer to "what did my config actually become". Both panes were measured again on wrangler 4.147.0 (2026-10-05) with every row switched on. The config now default-exports <code>defineConfig({ worker })</code> and imports its helpers from <code>@cloudflare/config/public</code>. The output file was <code>config.json</code> and dropped its top-level <code>type</code>, and a Durable Object binding names its Worker as <code>worker</code>. Every other row reads the same. The Env pane is what <code>tsc</code> reported for each key of the generated interface.</p>
 </div>
 
 <h2>A variable arrives in the type as its own value</h2>
@@ -184,8 +184,8 @@ Please use Node.js v22.18.0 or higher.</code></pre>
       resolved: { type: "version-metadata" }, env: "WorkerVersionMetadata", on: false },
     { key: "ASSETS", note: "static assets; the directory lives in wrangler.config.ts", call: "bindings.assets()",
       resolved: { type: "assets" }, env: "Fetcher", on: false },
-    { key: "COUNTER", note: "Durable Object stub", call: 'bindings.durableObject({ workerName: "probe", exportName: "Counter" })',
-      resolved: { type: "durable-object", workerName: "probe", exportName: "Counter" }, env: "DurableObjectNamespace<undefined>", on: true },
+    { key: "COUNTER", note: "Durable Object stub", call: 'bindings.durableObject({ worker: "probe", exportName: "Counter" })',
+      resolved: { type: "durable-object", worker: "probe", exportName: "Counter" }, env: "DurableObjectNamespace<undefined>", on: true },
     { key: "SIGNING_SECRET", note: "secret; the value never enters the config", call: "bindings.secret()",
       resolved: { type: "secret" }, env: "string", on: true },
     { key: "AI_GATEWAY", note: "plain text; the value reaches the type", call: 'bindings.text("default")',
@@ -236,9 +236,13 @@ Please use Node.js v22.18.0 or higher.</code></pre>
     var env = chosen(BINDINGS);
     var ex = chosen(EXPORTS);
     var lines = [];
-    lines.push('import { bindings, defineWorker, exports, triggers } from "wrangler/experimental-config";');
+    // The shape since workers-sdk#15713 and #15914: the helpers come from
+    // @cloudflare/config/public (wrangler/experimental-config keeps only
+    // defineWranglerConfig), and the default export is defineConfig({ worker }).
+    // cloudflare.config.ts at the repo root is written the same way.
+    lines.push('import { bindings, defineConfig, defineWorker, exports, triggers } from "@cloudflare/config/public";');
     lines.push("");
-    lines.push("export default defineWorker({");
+    lines.push("const worker = defineWorker({");
     lines.push('  name: "probe",');
     lines.push('  compatibilityDate: "2026-08-15",');
     lines.push('  entrypoint: "./src/index.ts",');
@@ -254,12 +258,13 @@ Please use Node.js v22.18.0 or higher.</code></pre>
       lines.push("  },");
     }
     lines.push("});");
+    lines.push("");
+    lines.push("export default defineConfig({ worker });");
     return lines.join("\n");
   }
 
   function resolved() {
     var out = {
-      type: "worker",
       name: "probe",
       compatibilityDate: "2026-08-15",
       triggers: [{ type: "fetch", pattern: "aadhar.sh/probe/*", zone: "aadhar.sh" }],
