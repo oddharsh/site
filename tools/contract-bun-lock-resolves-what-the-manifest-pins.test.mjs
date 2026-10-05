@@ -63,7 +63,7 @@ test("the walk finds every committed lockfile and every workspace each one gover
   const { lock: root } = rootOf(lockfiles);
   assert.deepEqual(
     root.manifests.map((m) => m.manifest).sort(),
-    ["cal/package.json", "cf-garage/package.json", "lwe-ask/package.json", "package.json", "serendipity/package.json"],
+    ["cal/package.json", "cf-garage/package.json", "config/dev/package.json", "lwe-ask/package.json", "package.json", "serendipity/package.json"],
     "the root lockfile's workspace set moved; the manifests come from the lockfile itself, so this is a real change",
   );
   // lwe-ask and serendipity are dependency-free today and are NOT in
