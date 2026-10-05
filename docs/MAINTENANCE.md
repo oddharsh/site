@@ -1988,7 +1988,8 @@ and `double4` are `-1` because those old homepage spans are no longer measured.
 
 The total can be partial when one handler throws; it is not browser load time
 or synchronous CPU time. Both handlers throwing produces no row. Query the
-series with the same token `/ledger` uses:
+series with the token `/ledger` falls back to (the Worker itself reads through
+the `ANALYTICS` binding, which a workstation cannot use):
 ```bash
 curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_engine/sql" \
   -H "Authorization: Bearer $ANALYTICS_READ_TOKEN" \

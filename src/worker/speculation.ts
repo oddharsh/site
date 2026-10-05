@@ -205,10 +205,10 @@ export async function handleSpeculationJson(request, env) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
   }
-  const read = await analyticsSql(env,
-    `SELECT blob1 AS kind, blob2 AS path, SUM(_sample_interval * double1) AS n ` +
-    `FROM ${SPECULATION_DATASET} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
-    `GROUP BY kind, path FORMAT JSON`);
+  const read = await analyticsSql(env, SPECULATION_DATASET, (from, sum) =>
+    `SELECT blob1 AS kind, blob2 AS path, ${sum("double1")} AS n ` +
+    `FROM ${from} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
+    `GROUP BY kind, path`);
   if (!read.ok) {
     return jsonResponse({ ok: false, reason: read.reason, binding_fallback: read.binding_fallback, window_days: SPECULATION_WINDOW_DAYS },
       read.reason === "unconfigured" ? 200 : 502);

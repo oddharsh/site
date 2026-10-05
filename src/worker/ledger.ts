@@ -110,7 +110,7 @@ export type AnalyticsRow = Record<string, AnalyticsCell>;
 export const text = (v: AnalyticsCell, dflt: string): string => (v === null || v === undefined || v === "") ? dflt : String(v);
 
 // `via` names the door that answered, and `binding_fallback` says why the
-// binding did not, so a preview can show which one production would use.
+// binding did not, so a reply shows which one production is using.
 export type AnalyticsRead =
   | { ok: false; reason: string; binding_fallback?: string }
   | { ok: true; data: AnalyticsRow[]; via: "binding" | "token"; binding_fallback?: string };
@@ -119,28 +119,38 @@ const DEADLINE_MS = 8000;
 // A dataset with zero writes ever does not exist yet: an empty ledger, not an error.
 const NO_TABLE = /no such table|does not exist|unknown table/i;
 
-// THE BINDING DOOR (Analytics SQL, workers-sdk#15685, since 2026-10-05). It is
-// the SQL API without the token: same queries, same rows. `FORMAT JSON` is the
-// HTTP endpoint's output clause, and the binding already returns rows as data.
-async function viaBinding(env: Env, sql: string): Promise<AnalyticsRead> {
+// THE TWO DOORS SPEAK DIFFERENT SQL, so a caller writes its query once against
+// `from` and `sum` and each door fills them in. Measured 2026-10-05 against the
+// bot ledger, both doors answered 3,949 hits over 30 days:
+//   binding: FROM events.analyticsEngine.<dataset>, SUM(col). The Analytics SQL
+//            engine applies sample weights itself and has no _sample_interval.
+//   token:   FROM <dataset>, SUM(_sample_interval * col), FORMAT JSON.
+export type AnalyticsQuery = (from: string, sum: (col: string) => string) => string;
+
+// THE BINDING DOOR (Analytics SQL, workers-sdk#15685, since 2026-10-05): the
+// account's SQL API with no token and no subrequest to api.cloudflare.com.
+// "not found" is NEVER read as an empty dataset here, because a dataset with no
+// writes and a misnamed one answer the same words; the token door can tell
+// them apart, so any binding error falls back to it.
+async function viaBinding(env: Env, dataset: string, build: AnalyticsQuery): Promise<AnalyticsRead> {
   if (!env.ANALYTICS) return { ok: false, reason: "unbound" };
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
     const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("timed out")), DEADLINE_MS); });
-    const r = await Promise.race([env.ANALYTICS.query<AnalyticsRow>({ query: sql.replace(/\s+FORMAT\s+JSON\s*$/i, "") }), deadline]);
+    const query = build(`events.analyticsEngine.${dataset}`, (col) => `SUM(${col})`);
+    const r = await Promise.race([env.ANALYTICS.query<AnalyticsRow>({ query }), deadline]);
     return { ok: true, data: Array.isArray(r?.data) ? r.data : [], via: "binding" };
   } catch (e) {
-    const detail = String((e as Error)?.message ?? e).slice(0, 200);
-    if (NO_TABLE.test(detail)) return { ok: true, data: [], via: "binding" };
-    return { ok: false, reason: detail };
+    return { ok: false, reason: String((e as Error)?.message ?? e).slice(0, 200) };
   } finally {
     clearTimeout(timer);
   }
 }
 
 // THE TOKEN DOOR: the SQL API over HTTPS with ANALYTICS_READ_TOKEN.
-async function viaToken(env: Env, sql: string): Promise<AnalyticsRead> {
+async function viaToken(env: Env, dataset: string, build: AnalyticsQuery): Promise<AnalyticsRead> {
   if (!env.ANALYTICS_READ_TOKEN || !env.CF_ACCOUNT_ID) return { ok: false, reason: "unconfigured" };
+  const sql = build(dataset, (col) => `SUM(_sample_interval * ${col})`) + " FORMAT JSON";
   try {
     const deadline = AbortSignal.timeout(DEADLINE_MS);
     const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/analytics_engine/sql`, {
@@ -164,18 +174,18 @@ async function viaToken(env: Env, sql: string): Promise<AnalyticsRead> {
   }
 }
 
-export async function analyticsSql(env: Env, sql: string): Promise<AnalyticsRead> {
-  const bound = await viaBinding(env, sql);
+export async function analyticsSql(env: Env, dataset: string, build: AnalyticsQuery): Promise<AnalyticsRead> {
+  const bound = await viaBinding(env, dataset, build);
   if (bound.ok) return bound;
-  const read = await viaToken(env, sql);
+  const read = await viaToken(env, dataset, build);
   return bound.reason === "unbound" ? read : { ...read, binding_fallback: bound.reason };
 }
 
 async function queryLedger(env: Env): Promise<LedgerRead> {
-  const read = await analyticsSql(env,
-    `SELECT blob1 AS bot, blob2 AS owner, blob3 AS kind, SUM(_sample_interval * double1) AS hits ` +
-    `FROM ${DATASET} WHERE timestamp > NOW() - INTERVAL '${WINDOW_DAYS}' DAY ` +
-    `GROUP BY bot, owner, kind ORDER BY hits DESC FORMAT JSON`);
+  const read = await analyticsSql(env, DATASET, (from, sum) =>
+    `SELECT blob1 AS bot, blob2 AS owner, blob3 AS kind, ${sum("double1")} AS hits ` +
+    `FROM ${from} WHERE timestamp > NOW() - INTERVAL '${WINDOW_DAYS}' DAY ` +
+    `GROUP BY bot, owner, kind ORDER BY hits DESC`);
   if (!read.ok) return read;
   const rows = read.data.map((d) => ({
     bot: text(d.bot, "?"), owner: text(d.owner, "?"), kind: text(d.kind, "?"),

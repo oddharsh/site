@@ -287,8 +287,8 @@ const worker = defineWorker({
     // The speculation ledger: Sec-Purpose prefetch/prerender requests, plus the
     // activation beacons that say which of them paid off (speculation.ts).
     SPECULATION: bindings.analyticsEngineDataset({ name: "aadhar_speculation" }),
-    // The homepage perf probe's spans (perf-probe.ts); read back with the same
-    // SQL API + ANALYTICS_READ_TOKEN as the ledger. AE datasets materialize on
+    // The homepage perf probe's spans (perf-probe.ts); read back from a
+    // workstation with the SQL API (docs/MAINTENANCE.md). AE datasets materialize on
     // first write: no id, nothing for infra:apply to provision.
     PERF_PROBE: bindings.analyticsEngineDataset({ name: "aadhar_perf_probe" }),
     // The miss ledger: every 404 the Worker answered or recovered, by caller
@@ -456,7 +456,8 @@ const worker = defineWorker({
     //   COVER_SECRET          read by code, never set. The path degrades without
     //                         it, so declaring it would fail the deploy over a
     //                         working site.
-    //   ANALYTICS_READ_TOKEN  same shape: /ledger's SQL reads degrade without it.
+    //   ANALYTICS_READ_TOKEN  same shape: /ledger's SQL reads fall back to it when
+    //                         the ANALYTICS binding cannot answer.
     //   BILLING_READ_TOKEN    same shape again: /ledger's account cost line
     //                         renders a "not readable yet" note without it. Scope
     //                         it to Billing:Read and NOTHING else, and keep it off
