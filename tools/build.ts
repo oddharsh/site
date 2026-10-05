@@ -1606,6 +1606,32 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
 }
 
 
+// 1g4) schema.org Article on every Garage and LWE page: author, date, headline.
+// tools/lib/article-ld.ts says where each field comes from. It runs on the
+// staged copy (after 1g2 dressed it, before 7b minifies it), so the authored
+// pages and `bun run dev` carry none, the same standing as the Explorer chrome.
+// A content page with no sitemap date or no headline fails the build by name:
+// an Article with an invented date would be worse than none.
+{
+  const { articleLd, articleLdScript, injectArticleLd } = await import("./lib/article-ld.ts");
+  const { sitemapDates } = await import("./gen-feeds.ts");
+  const dates = sitemapDates(await readFile("public/sitemap.xml", "utf8"));
+  const { surfaces } = JSON.parse(await readFile("config/site-manifest.json", "utf8"));
+  const articles = surfaces.filter((s) => s.kind === "content" && /^\/(garage|lwe)\//.test(s.path));
+  let written = 0;
+  for (const surface of articles) {
+    const file = `${OUT}/public${surface.path}.html`;
+    if (!existsSync(file)) continue; // Worker-rendered (/garage/dyno): no staged document to carry it
+    const html = await readFile(file, "utf8");
+    const ld = articleLd({ path: surface.path, section: surface.section, html, date: dates.get(surface.path) });
+    const next = injectArticleLd(html, articleLdScript(ld));
+    if (next !== html) { await writeFile(file, next); written++; }
+  }
+  if (written < 30) throw new Error(`article-ld: only ${written} of ${articles.length} Garage/LWE pages got an Article; expected 30 or more`);
+  console.log(`article-ld: ${written} of ${articles.length} Garage/LWE pages carry a schema.org Article`);
+}
+
+
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
