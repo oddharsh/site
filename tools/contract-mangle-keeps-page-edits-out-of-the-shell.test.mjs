@@ -123,8 +123,8 @@ test("step 5c plans with the registry's shell tier, which is every hashed file m
 
   const shell = shellRankedFiles();
   const hashed = contentHashedFiles();
-  const pageScoped = ["serendipity.js", "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json", "quiz.css"].map((f) => `public/${f}`);
-  assert.deepEqual([...hashed].filter((f) => !shell.has(f)).sort(), pageScoped.sort(), "exactly these six are hashed and ranked as pages");
+  const pageScoped = ["serendipity.js", "lwe/ask.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json", "quiz.css", "garage-base.css"].map((f) => `public/${f}`);
+  assert.deepEqual([...hashed].filter((f) => !shell.has(f)).sort(), pageScoped.sort(), "exactly these seven are hashed and ranked as pages");
   assert.ok([...shell].every((f) => hashed.has(f)), "the shell tier is a subset of what step 6 hashes");
   assert.ok(shell.has("public/luna.css") && shell.has("public/nav.js"), "the two files every page links are shell");
   assert.equal(hashed.size, CLIENT_ASSETS.length, "every registered asset is hashed");

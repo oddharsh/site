@@ -36,9 +36,10 @@
 import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 // The site's island contract, imported the same way desktop.ts is: island.ts
 // and html.ts are pure modules that never reach cloudflare:workers (gotcha 16).
-// cal builds strings with its own esc(), so what it hands islandMount is
+// cal builds strings with the site's esc(), so what it hands islandMount is
 // already escaped and goes in through unsafeHtml.
 import { unsafeHtml } from "../../src/worker/lib/html.ts";
+import { esc } from "../../src/worker/lib/http.ts";
 import { islandMount, islandPreload, islandScript } from "../../src/worker/lib/island.ts";
 
 const STYLES = `/*min*/
@@ -886,8 +887,3 @@ export function errorPage(message, env) {
   return shell("Error", body, env);
 }
 
-function esc(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}

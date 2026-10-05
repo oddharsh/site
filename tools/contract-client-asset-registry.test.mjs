@@ -175,7 +175,7 @@ const HAND_SORTED = [
   "nav-run.css", "nav-tray.css", "infotip.css", "quiz.css", "hoist.js", "webmcp.js", "nav-run.js", "nav-tray.js", "nav-pipes.js", "nav-tips.js",
   "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js", "lens-webmcp.js", "lens.js",
   "tooltip.js", "infotip.js", "garage/pretext.lib.js", "dotfiles.js", "pixel-peeper/manifest.json",
-  "nav.js", "luna.css", "lens-boot.js", "icons.svg", "serendipity.js", "quiz.js", "notepad.js", "lwe-base.css", "lwe/ask.js",
+  "nav.js", "luna.css", "lens-boot.js", "icons.svg", "serendipity.js", "quiz.js", "notepad.js", "lwe-base.css", "garage-base.css", "lwe/ask.js",
 ];
 
 test("the derived hash order reproduces the hand-sorted one, and puts every asset after what it loads", () => {
@@ -227,7 +227,7 @@ test("perf-budget and the route oracle read projections of the same rows", () =>
   assert.deepEqual(budgetedAssets().find((b) => b.file === "nav.js")?.envelope, { role: "shared deferred shell", gzipKiB: 20, brotliKiB: 18 });
   // The declared gap, named so that closing part of it is a visible edit.
   assert.deepEqual([...unbudgeted].sort(), [
-    "dotfiles.js", "garage/pretext.lib.js", "infotip.css", "infotip.js", "lens-markdown.js", "lens-nlweb.js", "lens-reader.js", "lens-wire.js",
+    "dotfiles.js", "garage-base.css", "garage/pretext.lib.js", "infotip.css", "infotip.js", "lens-markdown.js", "lens-nlweb.js", "lens-reader.js", "lens-wire.js",
     "lwe/ask.js", "nav-run.css", "nav-tray.css", "quiz.css", "serendipity.js", "webmcp.js",
   ]);
   assert.equal(readableTwins().length, minified.length, "one readable twin per minified asset");
