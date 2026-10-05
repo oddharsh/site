@@ -1,8 +1,10 @@
 // aadhar-counter: hosts the Counter Durable Object for aadhar-sh.
 //
-// Deployed BY HAND from this directory, never by Workers Builds, and always with
+// Deployed by its own Workers Builds trigger on `production` since 2026-10-05
+// (docs/MAINTENANCE.md, "Auxiliary Workers deploy themselves"), and always with
 // `wrangler deploy`: a Durable Object lifecycle change is refused by `versions
-// upload` (error 10211), and every step of the transfer is one.
+// upload` (error 10211). The trigger runs .github/deploy-wrangler.sh with
+// WRANGLER_CWD=counter; the workstation equivalent is
 //
 //   bun run wrangler deploy -c counter/wrangler.jsonc --x-provision=false --x-auto-create=false
 //
@@ -28,6 +30,18 @@
   "workers_dev": false,
   "preview_urls": false,
   "observability": { "enabled": true },
+  // HOW LIVE INSTANCES TAKE NEW CODE, declared rather than inherited. Since
+  // workers-sdk#15658 (pinned from #945) every deploy sends a strategy, and an
+  // unset one means "deferred, up to 300s". "homepage-visits" takes a request
+  // on every homepage view, so it rarely idles and would sit out the full 300s
+  // on old code while aadhar-sh, built from the same production commit, already
+  // runs the new. Every request here is one storage read or write and the class
+  // keeps nothing in memory, so 30s is room for in-flight work to finish while
+  // keeping that window short. Not measured: the window is the platform's cap,
+  // and nothing in this repo observes it.
+  "durable_objects": {
+    "code_update_strategy": { "mode": "deferred", "max_delay": 30 }
+  },
   "exports": {
     "default": { "type": "worker" },
     "Counter": { "type": "durable-object", "storage": "sqlite" }
