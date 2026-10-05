@@ -24,7 +24,7 @@
 //
 // The Worker is written into a temp directory rather than committed under
 // tools/fixtures, because that directory is exempt from typecheck coverage on
-// the grounds that it holds frozen DATA (check-ts-coverage.ts), and a fixture
+// the grounds that it holds frozen DATA (tools/typecheck.ts), and a fixture
 // Worker is code. It imports the real lib/security.ts, so the two rows that
 // matter most run production's withSecurityHeaders inside workerd.
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";

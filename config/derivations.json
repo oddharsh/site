@@ -314,7 +314,7 @@
       "tools/photos/inject-og-meta.ts": "same, a one-time edit that adds og:image tags to pages people then keep editing",
       "tools/check-derivations.ts": "writes this file and its lock, which is the graph recording itself",
       "tools/check-checkpoints.ts": "--sync writes src/worker/checkpoints.json, the deploy-log projection, which checkpoints:check already diffs against D1",
-      "tools/lib/tsc-scope.ts": "writes the typecheck ratchet baseline, a machine-owned record of owed errors",
+      "tools/typecheck.ts": "--update writes the typecheck ratchet baseline, a machine-owned record of owed errors",
       "tools/perf-snapshot.ts": "writes a snapshot file named on the command line, never a fixed committed path",
       "tools/conflict-triage.ts": "--html writes a conflict view to a path named on the command line, for a person to read once; it commits nothing and derives nothing",
       "tools/gen-remote-config.ts": "writes .wrangler.remote.jsonc, which is gitignored",

@@ -12,9 +12,8 @@
   // the wrong globals: `fetch(url, { cf: { ... } })` reads as `'cf' does not
   // exist in type 'RequestInit'` here and is clean next door. That diagnostic is
   // a missing declaration rather than a finding, so this program is NOT run
-  // bare. `bun run typecheck:tests` filters to cf-garage/test/ and asserts the
-  // program holds every test file on disk, which is the floor that keeps the
-  // filter from quietly scanning nothing.
+  // bare. tools/typecheck.ts reports only cf-garage/test/'s own diagnostics
+  // from it.
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,

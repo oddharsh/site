@@ -459,8 +459,8 @@ does not make a failed write safe to ignore.
 
   Run `bun run typecheck` for the workspace programs. Reader is outside the
   workspace: install its locked dependencies and run `bun run typecheck` from
-  `lens-reader/` as CI does. `bun run typecheck:coverage` compares tracked
-  source with all programs' file lists; it checks membership, not correctness.
+  `lens-reader/` as CI does. Both run `tools/typecheck.ts`, which also checks
+  that every tracked source file belongs to a program and is named by its include.
   The root `tsconfig.json` maps those programs for tsgolint and intentionally
   has no compiler options or source files of its own.
 
@@ -468,13 +468,13 @@ does not make a failed write safe to ignore.
   declarations, client code uses the DOM, the service worker uses WebWorker
   globals, and host tools/tests use Bun's declarations. Cal's test harness
   deliberately also includes Worker types to describe its binding proxies.
-  The config headers explain each boundary. `tools/check-tool-types.ts` and
-  `tools/check-test-types.ts` report diagnostics only from their owned trees;
-  imported Worker source is checked by its Worker program.
+  The config headers explain each boundary. `tools/typecheck.ts` reports each
+  program's diagnostics only from its own tree; imported Worker source is
+  checked by its Worker program.
 
   Every program enables `strictNullChecks`. Worker, browser, and tools debt is
-  recorded in the three `config/ts-*-baseline.json` files; the corresponding
-  checkers reject increases and require reductions to be recorded. The other
+  recorded per file in `config/ts-baseline.json`; `tools/typecheck.ts` rejects
+  increases and requires reductions to be recorded. The other
   programs have no diagnostic baseline. Full `strict` remains a separate
   migration, as `config/tsconfig.json` explains.
 

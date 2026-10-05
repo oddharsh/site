@@ -17,10 +17,9 @@
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    // bun run typecheck:browser holds the current per-file counts in
-    // ts-browser-baseline.json. Prefer JSDoc changes when fixing these hashed
-    // assets: check-browser-types.ts explains why splitting a declaration to
-    // host a comment can still change the built bytes. Verify the hashes.
+    // config/ts-baseline.json holds the current per-file counts. Prefer JSDoc
+    // changes when fixing these hashed assets, because splitting a declaration
+    // to host a comment can still change the built bytes. Verify the hashes.
     "strictNullChecks": true,
     "strict": false
   },
