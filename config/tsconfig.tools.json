@@ -1,16 +1,16 @@
 {
   // Host tools, contract tests, and page generators use Bun/Node globals.
-  // Worker modules imported by these tools also enter this program. Run
-  // `bun run typecheck:tools`; tools/check-tool-types.ts reports diagnostics
-  // only for tools/ and pipelines/. The Worker program checks imported source
-  // against its own runtime. Both programs must retain their coverage checks.
+  // Worker modules imported by these tools also enter this program. 
+  // tools/typecheck.ts reports this program's diagnostics only for tools/ and
+  // pipelines/. The Worker program checks imported source against its own
+  // runtime.
   "compilerOptions": {
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    // Current diagnostic counts live in ts-tools-baseline.json. The checker
+    // Current diagnostic counts live in ts-baseline.json. The checker
     // rejects regressions and improvements whose baseline was not updated.
     // Full strictness is a separate migration; see tsconfig.json.
     "strictNullChecks": true,

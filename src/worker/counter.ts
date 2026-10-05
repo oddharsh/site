@@ -119,13 +119,17 @@ export async function handleHit(request, env, ctx) {
   // and the beacon stops holding a socket for ~630ms against the same pool the
   // photo tiles are queued in. Without a ctx (tests, direct calls) fall back to
   // awaiting, so the tick can never be silently dropped.
+  //
+  // `?tick=1&n=1` is the homepage's one request: the same deferred tick, then
+  // the mirrored count as JSON (below), so the footer needs no second fetch.
   if (url.searchParams.has("tick")) {
     const work = readCount().then(mirror).catch(() => {});
     if (ctx) ctx.waitUntil(work); else await work;
-    return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
+    if (!url.searchParams.has("n")) return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
   }
 
-  // `?n=1`: the number as JSON, for the footer odometer.
+  // `?n=1`: the number as JSON, for the footer odometer. Alone it reads without
+  // ticking; the homepage sends it with `tick=1`.
   //
   // The homepage used to SSR this digit string from the KV mirror. `/` is a
   // deterministic document now, and a per-visitor count is the definition of

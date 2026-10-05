@@ -47,8 +47,8 @@
     // All programs enable null checks separately from full strictness. The
     // initial noImplicitAny probe found 7,197 missing annotations repo-wide;
     // enabling it alongside null checks would have buried the actionable work.
-    // Current debt lives in ts-worker-baseline.json, checked by
-    // bun run typecheck:worker. The per-file baseline may only shrink.
+    // Current debt lives in ts-baseline.json, checked by `bun run typecheck`.
+    // The per-file baseline may only shrink.
     "strictNullChecks": true,
     "strict": false
   },
@@ -59,7 +59,7 @@
   //
   // SERENDIPITY IS NAMED HERE THOUGH TSC ALREADY REACHED IT, and the second
   // reader is why. It arrives in this program transitively, through the
-  // Worker's imports, so `tsc -p` has always checked it and check-ts-coverage
+  // Worker's imports, so `tsc -p` has always checked it and the coverage check
   // has always counted it. tsgolint asks a DIFFERENT question: it walks up from
   // each file looking for a config that NAMES it, and until 2026-09-22 nothing
   // did, so it built a default program with the DOM lib for serendipity alone.

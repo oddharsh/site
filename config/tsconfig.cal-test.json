@@ -13,9 +13,8 @@
   // the Worker pulls cal/src in against the wrong scope, so a Workers-only
   // shape reads as a diagnostic here and is clean in tsconfig.json next door.
   // That is a missing declaration rather than a finding, which is why this
-  // program is NOT run bare. `bun run typecheck:tests` filters to cal/test/ and
-  // asserts the program holds every test file on disk, the floor that keeps
-  // the filter from quietly scanning nothing.
+  // program is NOT run bare. tools/typecheck.ts reports only cal/test/'s own
+  // diagnostics from it.
   //
   // Until 2026-09-02 this was a Workers-globals program run as a plain `tsc -p`
   // from the `typecheck` script, because @cloudflare/vitest-pool-workers ran
@@ -47,7 +46,7 @@
     // config/: harness.ts's whole job is to type workerd bindings (KVNamespace,
     // Workflow, ExecutionContext) from a bun host, and the alternative, a
     // type-only import from @cloudflare/workers-types, left with that package
-    // on 2026-09-02. The filter in check-test-types still reports only
+    // on 2026-09-02. The filter in tools/typecheck.ts still reports only
     // cal/test's own diagnostics, so the cost is narrow: a Workers-only call
     // written in a TEST file would pass here. cal/src is checked against the
     // Workers globals alone next door.

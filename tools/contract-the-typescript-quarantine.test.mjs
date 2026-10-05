@@ -23,156 +23,6 @@ test("every Worker module remains free of ts-nocheck", async () => {
   }
 });
 
-test("the TypeScript compiler program includes every Worker module", async () => {
-  const { execFileSync } = await import("node:child_process");
-  const { fileURLToPath } = await import("node:url");
-  const tsc = fileURLToPath(new URL("node_modules/typescript/bin/tsc", ROOT));
-  const config = fileURLToPath(new URL("config/tsconfig.json", ROOT));
-  const output = execFileSync(process.execPath, [tsc, "-p", config, "--listFilesOnly"], { encoding: "utf8" });
-  const compiled = new Set(output.trim().split(/\r?\n/));
-  const workerModules = (await readdir(new URL("src/worker", ROOT), { recursive: true }))
-    .filter((rel) => rel.endsWith(".ts"))
-    .map((rel) => fileURLToPath(new URL(`src/worker/${rel}`, ROOT)));
-  const missing = workerModules.filter((file) => !compiled.has(file));
-
-  assert.deepEqual(missing, [], `tsc skipped Worker modules:\n  ${missing.join("\n  ")}`);
-});
-
-// EVERY DEPLOYABLE WORKER IS IN SOME TSC PROGRAM. The three auxiliary Workers
-// (cf-garage, lwe-ask, lens-reader) reach production on their own deploys, and
-// until 2026-08-21 no tsc program held a line of them: 6 files of live runtime
-// code, checked by nothing. They were invisible for the ordinary reason an
-// allowlist goes stale, which is that config/tsconfig.json's include names the
-// site Worker and cal and has no way to notice a fourth project appearing.
-//
-// So the wrangler.toml is the registry rather than a list anybody maintains. A
-// new auxiliary Worker joins this assertion by being deployable, and the test
-// fails until it has a program and something runs that program.
-//
-// TWO PLACES COUNT AS RUNNING IT, and lens-reader is why. It is deliberately
-// out of the workspace, so readability and linkedom live in
-// lens-reader/node_modules; wired into the ROOT typecheck it fails in CI with
-// TS2307 on both imports while every workstation that has installed there stays
-// green. That is the split CLAUDE.md records about the root contract suite,
-// arriving through a second door, and the control for it is to hide
-// lens-reader/node_modules and re-run rather than to trust a local pass. So a
-// project may instead carry its own typecheck script, and then CI has to invoke
-// it in the step that installs its dependencies.
-//
-// Text-only on purpose: a tsc run per project would put seconds on the suite to
-// re-prove what the package scripts already state.
-test("every auxiliary Worker has a tsc program, and something runs it", async () => {
-  const { readdirSync, existsSync } = await import("node:fs");
-  const root = new URL("./", ROOT).pathname;
-
-  // A directory holding a wrangler config is a separately deployed Worker. The
-  // ROOT config is excluded because only SUBDIRECTORIES are walked, which
-  // matters since 2026-09-28: it was wrangler.jsonc and excluded by extension,
-  // and is cloudflare.config.ts now, which WOULD match the list below by name.
-  // cal/ and serendipity/ are correctly absent: they carry no wrangler config
-  // because the site Worker bundles them.
-  //
-  // TWO FILENAMES COUNT, since 2026-08-23. cf-garage moved to wrangler's
-  // experimental TypeScript config and its wrangler.toml is gone, which dropped
-  // it out of this registry silently — the floor below caught it, and that is
-  // exactly the job the floor was written for. Read it as the general warning
-  // rather than as one project's quirk: a registry derived from a FILENAME
-  // expires the day the vendor ships a second filename, and the discovery is
-  // still better than a hand-kept list, because the list would have gone stale
-  // without failing anything at all.
-  const WORKER_CONFIGS = ["wrangler.toml", "cloudflare.config.ts"];
-  const projects = readdirSync(root, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules")
-    .map((e) => e.name)
-    .filter((name) => WORKER_CONFIGS.some((config) => existsSync(`${root}${name}/${config}`)))
-    .sort();
-
-  // A FLOOR, because a test that scanned nothing looks exactly like a clean run.
-  assert.ok(projects.length >= 3,
-    `expected at least the three auxiliary Workers, found ${projects.length}: ${projects.join(", ")}`);
-
-  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
-  const rootTypecheck = pkg.scripts.typecheck;
-
-  const ranBy = new Map();
-  const missing = [];
-  for (const name of projects) {
-    const config = `config/tsconfig.${name}.json`;
-    if (!existsSync(`${root}${config}`)) {
-      missing.push(`${name}: no ${config}`);
-      continue;
-    }
-    if (rootTypecheck.includes(config)) {
-      ranBy.set(config, "root");
-      continue;
-    }
-    // The self-run arm. Both halves are required: a script nothing invokes is
-    // decoration, and this repo has the perf-budget history to prove it.
-    const own = JSON.parse(await readFile(new URL(`${name}/package.json`, ROOT), "utf8"));
-    const script = own.scripts?.typecheck;
-    if (!script?.includes(config.replace("config/", ""))) {
-      missing.push(`${name}: ${config} exists but neither the root typecheck nor ${name}/package.json runs it`);
-      continue;
-    }
-    // Since 2026-09-28 CI no longer runs the auxiliary Workers' own steps, so
-    // the project's script IS the runner: `bun run typecheck` from its own
-    // directory, before deploying it.
-    ranBy.set(config, name);
-  }
-  assert.deepEqual(missing, [],
-    `an auxiliary Worker is unchecked:\n  ${missing.join("\n  ")}`);
-
-  // The other direction, so a program cannot be written and left unwired. Every
-  // tsconfig in config/ has to be run by something, which is the failure that
-  // made the aux Workers orphans in the first place, one level up.
-  const configs = readdirSync(`${root}config`).filter((f) => /^tsconfig\..+\.json$/.test(f));
-
-  // A THIRD WAY TO BE RUN, and it is now the common one: through a wrapper.
-  // Several programs hold files from two runtimes at once, so their diagnostics
-  // have to be filtered to the tree the program can legitimately judge, and a
-  // package script therefore names `tools/check-*.mjs` rather than the config.
-  // This arm used to be a single hardcoded exemption for tsconfig.tools.json,
-  // which is the same allowlist habit the rest of this file is about: the two
-  // test-suite programs added on 2026-08-23 landed on it immediately. So the
-  // wrappers are READ instead. A config counts as run when some wrapper names
-  // it AND a script names that wrapper — both halves, because a wrapper nothing
-  // invokes is decoration and a script pointing at a wrapper that checks
-  // nothing is worse.
-  //
-  // WHAT THIS ARM DOES NOT PROVE, stated because the obvious control is weaker
-  // than it looks. It asks whether SOME script names the wrapper, not whether
-  // the invocation that names it reaches this particular config:
-  // check-test-types.mjs takes `--only`, so lens-reader's script runs one of its
-  // two programs. Unwiring a single caller therefore leaves the arm satisfied,
-  // and the control that bites is unwiring every caller (run 2026-08-23: both
-  // configs reported orphaned). Modelling the flag here would mean
-  // reimplementing the wrapper's selection inside the test, which is the shape
-  // of check that can only ever agree with itself. The claim is the useful one
-  // either way: a config cannot be written and left with nothing pointing at it.
-  const scripts = [rootTypecheck, ...await Promise.all(projects.map(async (name) => {
-    const own = JSON.parse(await readFile(new URL(`${name}/package.json`, ROOT), "utf8"));
-    return own.scripts?.typecheck ?? "";
-  }))].join(" ");
-
-  const wrappedBy = new Map();
-  for (const file of readdirSync(`${root}tools`).filter((f) => f.startsWith("check-") && f.endsWith(".ts"))) {
-    const source = await readFile(new URL(`tools/${file}`, ROOT), "utf8");
-    for (const config of configs) {
-      if (source.includes(`config/${config}`) && scripts.includes(`tools/${file}`)) wrappedBy.set(config, file);
-    }
-  }
-
-  const orphaned = configs.filter((f) =>
-    !rootTypecheck.includes(`config/${f}`) && !ranBy.has(`config/${f}`) && !wrappedBy.has(f));
-  assert.deepEqual(orphaned, [],
-    `a tsconfig exists that nothing runs: ${orphaned.join(", ")}`);
-
-  // The wrapper arm has to have MATCHED something, or a rename in tools/ turns
-  // it into a filter that exempts nothing while this test still reports green.
-  assert.ok(wrappedBy.size >= 1,
-    "no tsconfig resolved through a tools/check-*.ts wrapper — the wrapper scan has lost its target");
-});
-
 // A TOOL MAY NOT SPAWN A PACKAGE MANAGER. Every script in tools/ runs under
 // whichever runtime invoked it, in a tree that is bun today and was pnpm last
 // week, so a hardcoded manager is wrong half the time. pnpm reads
@@ -521,13 +371,10 @@ test("the ramp's error reporter strips wrangler's ANSI colour codes", () => {
 test("every program declared null-safe still declares it", async () => {
   const { readdirSync } = await import("node:fs");
 
-  // TWO KINDS OF ENTRY, and the difference matters before adding one. Most of
-  // these are CLEAN under the flag, so `bun run typecheck` fails on a single new
-  // diagnostic. Two are RATCHETED instead, each against a per-file baseline that
-  // can only fall: tsconfig.tools.json through check-tool-types.ts,
-  // tsconfig.json through check-worker-types.ts, and tsconfig.browser.json
-  // through check-browser-types.ts. Both kinds belong here, because
-  // what this asserts is that the flag stays ON, not that a program is clean.
+  // Some of these are clean under the flag; tsconfig.json, tsconfig.tools.json
+  // and tsconfig.browser.json are ratcheted against config/ts-baseline.json by
+  // tools/typecheck.ts. Both kinds belong here, because what this asserts is
+  // that the flag stays ON, not that a program is clean.
   const DECLARED = [
     "tsconfig.json",
     "tsconfig.cf-garage.json",

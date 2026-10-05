@@ -2,9 +2,8 @@
   // The separately deployed LWE ask Worker uses workerd globals. Each auxiliary
   // Worker has its own program and dependency graph; combining host tests with
   // Worker source would admit globals unavailable in one of those runtimes.
-  // Garage and Reader tests have separate host programs, run through
-  // tools/check-test-types.ts. lwe-ask currently has no test suite.
-  // bun run typecheck:coverage guards against leaving a source tree unchecked.
+  // Garage and Reader tests have separate host programs. lwe-ask currently has
+  // no test suite. tools/typecheck.ts fails on a source tree no program holds.
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,
