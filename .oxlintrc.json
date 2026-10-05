@@ -200,8 +200,12 @@
   },
 
   // Type-aware linting, via tsgolint, enabled by `--type-aware` in the `lint`
-  // script. It costs 0.56s over the whole tree, which is less than the tsc pass
-  // it runs beside, so there is no reason to split it into a second script.
+  // script. It costs about 0.8s over the whole tree (medians of 7 interleaved
+  // runs on 2026-10-05, oxlint 1.85.0: 1.50s with --type-aware, 0.71s without),
+  // which is still less than the 1.56s `bun run typecheck` it runs beside, so
+  // there is no reason to split it into a second script. The 0.56s recorded on
+  // 2026-08-14 predates the real programs below. `--debug=timings` prints
+  // nothing on the release binary, so wall clock is the instrument.
   //
   // IT RAN WITHOUT REAL PROGRAMS UNTIL 2026-09-02. tsgolint discovers a
   // tsconfig per file by walking up, every program here lives in

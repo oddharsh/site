@@ -145,14 +145,16 @@ it takes to read the question, and run the osv scan for the whole tree.
 `bun why <package>` answers the floor questions the manifest comments argue in
 prose. The `comment:undici` block spends a paragraph on where undici comes from
 and why an `overrides` entry was retired; the command prints the chain, read
-here on 2026-09-10 and checked by nothing, so treat the versions as a snapshot:
+here on 2026-10-05 and checked by nothing, so treat the versions as a snapshot:
 
 ```
 $ bun why undici
-undici@7.29.0
-  └─ miniflare@5.20260908.0-alpha (requires 7.29.0)
-     └─ wrangler@4.130.0 (requires 5.20260908.0-alpha)
-        └─ dev aadhar-sh (requires 4.130.0)
+undici@7.29.1
+  └─ miniflare@https://pkg.pr.new/cloudflare/workers-sdk/miniflare@f025bbf (requires 7.29.1)
+     └─ wrangler@https://pkg.pr.new/cloudflare/workers-sdk/wrangler@f025bbf (requires https://pkg.pr.new/cloudflare/workers-sdk/miniflare@f025bbf)
+        ├─ dev aadhar-sh (requires https://pkg.pr.new/cloudflare/workers-sdk/wrangler@f025bbf)
+        ├─ dev cf-garage@workspace (requires https://pkg.pr.new/cloudflare/workers-sdk/wrangler@f025bbf)
+        └─ dev lwe-ask@workspace (requires https://pkg.pr.new/cloudflare/workers-sdk/wrangler@f025bbf)
 ```
 
 `bun test --parallel=4 --no-isolate --timeout=30000` runs the suite's 92 files
@@ -173,9 +175,10 @@ anything a `.test.mjs` file imports, or spawns with `process.execPath`, runs
 under node too, so a `Bun.` reference there fails `test:node` and passes every
 local run.** That is why 22 tools walk directories with `readdirSync` rather than
 `Bun.Glob`, why `check-tools.ts` walks `PATH` by hand rather than calling
-`Bun.which`, and why `smol-toml` stays a dependency: its one consumer,
-`tools/lib/dependency-docs.ts`, is imported by two contract tests, so
-`Bun.TOML` cannot replace it. Two files are audited exceptions today, each
+`Bun.which`, and why `smol-toml` stays a dependency: its three consumers
+(`tools/lib/dependency-docs.ts`, `tools/lib/retired.ts` and
+`contract-osv-ignore-names-a-url-pin.test.mjs`) are each a test or imported by
+one, so `Bun.TOML` cannot replace it. Two files are audited exceptions today, each
 run only by bun and spawned by nothing: `gen-runtime-types.ts` (`Bun.TOML`)
 and `gen-repo-card.ts` (`Bun.WebView`, `Bun.write`). No scanner enforces this. `bun run test:node` in CI is the
 enforcement, and it fails by name.
