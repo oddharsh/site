@@ -25,6 +25,17 @@
 // this file stays the roster and nothing else.
 export const OG_PAGE_DIRS = [
   {
+    // The site root: `dir` is empty, so the page is src/pages/index.html and
+    // the live route is `/`. The homepage is the URL people share most, and it
+    // carried og tags with no image until 2026-10-05, so it unfurled as text.
+    // Count- and subject-agnostic, because the grid draws a random twelve of the
+    // library on every request and a regeneration changes every photo.
+    id: "home",
+    dir: "",
+    alt: "The aadhar.sh homepage as a Windows XP window: Aadharsh Pannirselvam's name "
+       + "and one-line bio above a contact sheet of his photographs.",
+  },
+  {
     id: "access",
     dir: "access",
     // Hand-written alt, because the generic "<og:title>, live demo screenshotted"
