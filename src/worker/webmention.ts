@@ -32,7 +32,7 @@ import { readResponseCapped } from "./lib/crawl.ts";
 import { esc, extractMeta, extractTitle } from "./lib/http.ts";
 import { mf2All, mf2First, mf2Strings, mf2Values, parseMf2 } from "./lib/mf2.ts";
 import { overBudget } from "./lib/ratelimit.ts";
-import { sign, verify } from "../../cal/src/sign.ts";
+import { sign, verify } from "./lib/sign.ts";
 import { resendSend } from "../../cal/src/email.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
 import { span } from "./lib/trace.ts";

@@ -14,7 +14,8 @@
 // occurrence; VTIMEZONE blocks are not expanded (TZID resolves through Intl).
 // These limits can miss busy intervals; freshness checks do not correct them.
 
-import { span } from "./trace.ts";
+import { isCallable } from "../../src/worker/lib/parse.ts";
+import { span } from "../../src/worker/lib/trace.ts";
 
 // The one shape this module traffics in: a half-open span of unix-ms. Busy
 // intervals from the feed, expanded recurrences, held coffee slots and generated
@@ -101,12 +102,8 @@ async function fetchBusySWRInner(env, ctx, allowStale, s) {
   // continues after the response. Booking and /slots callers leave this false:
   // they must still wait for a live calendar or fail closed.
   if (snap && allowStale) {
-    // cal MUST NOT import src/worker/lib/parse.ts: cal's Vitest pool boots from
-  // cal/src/index.ts alone, so that edge would make cal untestable without the
-  // site tree (gotcha 16, the same constraint that keeps cal/src/trace.ts a
-  // deliberate duplicate). One binding check does not earn a second parse layer.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  if (ctx && typeof ctx.waitUntil === "function") {
+    // A null ctx is legitimate here (cal's own tests call with none).
+  if (ctx && isCallable(ctx.waitUntil)) {
       // The whole refresh already belongs to waitUntil here, so let it await its
       // own KV write instead of registering a nested background task.
       ctx.waitUntil(span("cal.refresh_background", () => refreshBusy(env, null)).catch(() => {}));

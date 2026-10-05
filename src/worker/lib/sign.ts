@@ -1,5 +1,6 @@
-// HMAC-SHA256 for signed approve/decline links.
-// using WebCrypto in the Worker runtime — no deps.
+// HMAC-SHA256 signed links, base64url. One implementation for every signed URL
+// the site mints: cal's approve/decline links, webmention's, and serendipity's
+// cover-proxy URLs. WebCrypto in the Worker runtime, no deps.
 
 export async function sign(message, secret) {
   const key = await importKey(secret);

@@ -10,24 +10,16 @@ import { join } from "node:path";
 
 // src/worker/lib/span-vocabulary.ts declares every span this Worker may open,
 // and `span()` is generic over that union, so the COMPILER already refuses an
-// undeclared name in src/worker. This file covers the two things it cannot.
+// undeclared name in src/worker, cal/src and serendipity (all three open spans
+// through lib/trace.ts). This file covers the one thing it cannot.
 //
-// 1. THE COFFEE MODULE IS NOT CHECKED BY THAT TYPE. cal/src/trace.ts is a
-//    deliberate near-duplicate of lib/trace.ts and its `span()` is untyped, for
-//    the reason gotcha 16 gives: cal's Vitest pool boots from cal/src/index.ts
-//    alone, so a cal to src/worker import would make cal untestable without the
-//    site tree. Types are erased and would not create that import at runtime,
-//    but the rule is worth keeping intact rather than half-kept. So the NAMES
-//    live in one registry and this test is what holds cal to it — the drift
-//    protection without the import.
-//
-// 2. A DECLARED NAME NOTHING OPENS. The type only constrains use, so an entry
-//    left behind by a refactor stays in the registry forever, reading as part
-//    of the vocabulary while emitting nothing. That is precisely what happened
-//    to `rn.scrape.tracks` and `rn.scrape.artists`, which CLAUDE.md still lists
-//    as a three-tier scrape: the tiers moved to the cron in #395 and the names
-//    went with them. A registry that documents spans nobody emits is worse than
-//    no registry, because it is believed.
+// A DECLARED NAME NOTHING OPENS. The type only constrains use, so an entry
+// left behind by a refactor stays in the registry forever, reading as part
+// of the vocabulary while emitting nothing. That is precisely what happened
+// to `rn.scrape.tracks` and `rn.scrape.artists`, which CLAUDE.md still lists
+// as a three-tier scrape: the tiers moved to the cron in #395 and the names
+// went with them. A registry that documents spans nobody emits is worse than
+// no registry, because it is believed.
 //
 // THE SCANNER IS DELIBERATELY MULTILINE, and that is not a precaution either.
 // The grep that seeded the registry was `span\("` on one line, and it MISSED
@@ -112,10 +104,10 @@ test("every declared span name is actually opened somewhere", () => {
   );
 });
 
-test("the coffee module's spans are in the registry, though its span() is untyped", () => {
-  // cal is the half the compiler does not cover, so it gets its own assertion
-  // rather than being folded into the sweep above. If cal ever stops opening
-  // spans this fails loudly instead of passing over an empty scan.
+test("the coffee module's spans are in the registry", () => {
+  // cal opens its spans through lib/trace.ts, so the compiler checks the names
+  // too. This stays as the floor: if cal ever stops opening spans it fails
+  // loudly instead of passing over an empty scan.
   const calNames = [];
   for (const file of walk("cal/src")) {
     const src = readFileSync(file, "utf8");

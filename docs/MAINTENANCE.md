@@ -2004,8 +2004,8 @@ bun run wrangler tail aadhar-sh --format json | grep -o '"cpuTime":[0-9]*'
 ```
 
 The site entrypoint [`src/worker/index.ts`](../src/worker/index.ts) injects the
-runtime tracer into `src/worker/lib/trace.ts` and `cal/src/trace.ts`, so those
-helpers can also load under Node.
+runtime tracer into `src/worker/lib/trace.ts` (cal and serendipity open their
+spans through it too), so the helper can also load under Node.
 That injection runs at module scope, and workerd loads that module locally too,
 which is why the next section works with no setup at all.
 

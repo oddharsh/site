@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from "bun:test";
 import { bootCal, createExecutionContext, waitOnExecutionContext, stubFetch } from "./harness.ts";
 import worker from "../src/index.js";
-import { sign } from "../src/sign.js";
+import { sign } from "../../src/worker/lib/sign.js";
 import { getBooking, listHeld } from "../src/booking.js";
 
 const SECRET = "integration-signing-secret";

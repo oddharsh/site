@@ -29,7 +29,6 @@ import { handleSiteMcp } from "./mcp.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { cronJob } from "./lib/cron.ts";
 import { installTracing, span } from "./lib/trace.ts";
-import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
 import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
 import type { Album } from "./albums.ts";
 import { createDispatch, isEdgeCacheable, type RouteHandler } from "./dispatch.ts";
@@ -55,14 +54,13 @@ import { handleLlmsFull } from "./x402.ts";
 import { cronSerendipity, handleSerendipity, MCP_INFO_PATH as SERENDIPITY_MCP_INFO, SERENDIPITY_SECURITY_HEADERS, serendipityCsp, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
 import { scriptHashesFor } from "./lib/csp-hashes.ts";
 
-// Hand the runtime's tracer to both span helpers. THIS is the only module that
+// Hand the runtime's tracer to the one span helper (cal and serendipity use it too). THIS is the only module that
 // may import it: the rest of the worker is also imported by contract-tests.mjs
 // under plain node, which cannot resolve the `cloudflare:` scheme (see
 // lib/trace.js's header). Module-scope, so it completes at isolate init before
 // any handler runs; without it every span is a harmless direct call, which is
 // exactly the behavior the tests and `wrangler dev` get.
 installTracing(tracing);
-installCalTracing(tracing);
 
 
 // the coffee-booking expiry timer (Workflows). One durable instance per pending
