@@ -162,6 +162,20 @@ for (const file of (await readdir(join(ROOT, "src/pages/garage"))).filter((f) =>
   assert.doesNotMatch(inline, /(^|[}\s])\*\s*\{\s*box-sizing|(^|[}\s])body\s*\{/, `src/pages/garage/${file}: page defaults belong to luna.css and prose.css, not the page`);
 }
 
+// The same holds outside Garage: every page that links luna.css render-blocking
+// gets border-box sizing and the window measure from it, so none restates them.
+// The homepage is the exception: it loads luna.css non-blocking, so it keeps its
+// own copy for first paint.
+const restatesDefaults = /(^|[}\s])\*\s*\{\s*box-sizing|\.window\s*\{[^}]*[{;\s]max-width:\s*var\(--axp-maxw\)/;
+const pageFiles = (await readdir(join(ROOT, "src/pages"), { recursive: true }))
+  .filter((f) => f.endsWith(".html") && f !== "index.html" && !f.startsWith("garage/vt-"));
+for (const file of pageFiles) {
+  const page = await readFile(join(ROOT, "src/pages", file), "utf8");
+  const inline = [...page.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n");
+  assert.doesNotMatch(inline, restatesDefaults, `src/pages/${file}: border-box sizing and the .window max-width come from luna.css`);
+}
+assert.doesNotMatch(await readFile(join(ROOT, "src/styles/lwe-base.css"), "utf8"), restatesDefaults, "lwe-base.css restates page defaults luna.css owns");
+
 const invalidUnderstanding = JSON.parse(JSON.stringify(garageFixture.understanding));
 invalidUnderstanding.questions[0].options[1].ok = true;
 assert.throws(
