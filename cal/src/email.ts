@@ -2,6 +2,8 @@
 // free tier: 3,000/month, 100/day. more than enough for personal coffee
 // requests. switch to Postmark/SES later if volume changes.
 
+import { esc } from "../../src/worker/lib/http.ts";
+
 const RESEND_API = "https://api.resend.com/emails";
 
 // Every piece of booking mail carries `X-Coffee-Booking`, and the mail addressed
@@ -393,9 +395,4 @@ function shortWhen(ms, tz) {
     timeZone: tz, month: "short", day: "numeric",
     hour: "numeric", minute: "2-digit",
   });
-}
-function esc(s) {
-  return String(s)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

@@ -4,7 +4,7 @@
 // public photo bucket or the representation vault.
 import photoIndex from "./photo-index.json" with { type: "json" };
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { fetchFollowingPublicRedirects, validateLensTarget } from "./lib/public-fetch.ts";
+import { fetchFollowingPublicRedirects, sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";
 
 const INPUT_CAP = 8 * 1024 * 1024;
 const OUTPUT_CAP = 4 * 1024 * 1024;
@@ -106,11 +106,6 @@ async function readBytesCapped(response, maxBytes) {
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   return { bytes, truncated: false };
-}
-
-async function sha256(bytes) {
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  return digest.toHex();
 }
 
 function normalizeFormat(value, fallback = "avif") {
@@ -216,7 +211,7 @@ function mcpOutput(receipt, images: TransformedImage[] = []) {
 export async function imageInspect(args: ImageToolArgs, env) {
   const input = await resolveImageInput(args, env);
   if ("error" in input) return error(input.error);
-  input.sha256 = await sha256(input.bytes);
+  input.sha256 = await sha256Hex(input.bytes);
   const info = await imageInfo(env, input.bytes);
   if (!info) return error("Image binding is not configured on this deployment.");
   return { ...imageReceipt(input, info, null), operation: "inspect" };
@@ -227,12 +222,12 @@ export async function imageTransform(args: ImageToolArgs, env) {
   if ("error" in spec) return error(spec.error);
   const input = await resolveImageInput(args, env);
   if ("error" in input) return error(input.error);
-  input.sha256 = await sha256(input.bytes);
+  input.sha256 = await sha256Hex(input.bytes);
   const info = await imageInfo(env, input.bytes);
   if (!info) return error("Image binding is not configured on this deployment.");
   const output = await transformBytes(env, input.bytes, spec);
   if ("error" in output) return error(output.error);
-  output.sha256 = await sha256(output.bytes);
+  output.sha256 = await sha256Hex(output.bytes);
   const receipt = { ...imageReceipt(input, info, output), operation: "transform", preset: spec.preset, transform: spec.options };
   return mcpOutput(receipt, [output]);
 }
@@ -244,7 +239,7 @@ export async function imageCompare(args: ImageToolArgs, env) {
   if (formats.length > 3) return error("formats is limited to three variants");
   const normalized = formats.map((format) => normalizeFormat(format, "avif"));
   if (normalized.some((format) => !MIME_BY_FORMAT[format])) return error("formats must contain avif, webp, or jpeg");
-  input.sha256 = await sha256(input.bytes);
+  input.sha256 = await sha256Hex(input.bytes);
   const info = await imageInfo(env, input.bytes);
   if (!info) return error("Image binding is not configured on this deployment.");
   const jobs: { format: string; spec: TransformSpec }[] = [];
@@ -260,7 +255,7 @@ export async function imageCompare(args: ImageToolArgs, env) {
   const outputs: ({ _error: string } | (TransformedImage & { format: string }))[] = await Promise.all(jobs.map(async ({ format, spec }) => {
     const output = await transformBytes(env, input.bytes, spec);
     if ("error" in output) return error(output.error);
-    output.sha256 = await sha256(output.bytes);
+    output.sha256 = await sha256Hex(output.bytes);
     return { ...output, format };
   }));
   const variants: (TransformedImage & { format: string })[] = [];
@@ -330,7 +325,7 @@ export async function photoRecipe(args, env) {
   if (args.image_data) {
     const encoded = decodeBase64(args.image_data);
     if (!encoded) return error("image_data must be valid base64 and no larger than 8 MiB");
-    inputSha256 = await sha256(encoded.bytes);
+    inputSha256 = await sha256Hex(encoded.bytes);
     const fingerprints = await loadJson(env, "images/fingerprints.json");
     // fingerprints.json is keyed BY DIGEST, so the parsed object IS the index and
     // this is the whole lookup. It used to be a nested scan over all 474 entries

@@ -32,7 +32,7 @@
 // suite, so a port in front of either would be a second name for the same
 // thing. The guarded read lives HERE rather than in an adapter, so a fake KV
 // that throws or returns garbage exercises the guard itself.
-import { validateLensTarget } from "./lib/public-fetch.ts";
+import { sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";
 import { overBudget } from "./lib/ratelimit.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
@@ -111,10 +111,7 @@ export function budgetMessage(name: LensBudget): string {
 
 // ── shared helpers the lens modules used to import from lens.ts ────────────
 
-export async function lensSha256Hex(s: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return new Uint8Array(buf).toHex();
-}
+export { sha256Hex as lensSha256Hex };
 
 export function lensPngHeaders(cached: boolean) {
   return { "content-type": "image/png", "cache-control": "public, max-age=3600", "x-robots-tag": "noindex", "x-lens-cache": cached ? "hit" : "miss" };
@@ -303,7 +300,7 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
     const host = hostOf(first);
     let key: string | null = null;
     if (spec.cache) {
-      key = spec.cache.prefix + (await lensSha256Hex(spec.cache.key ? spec.cache.key(target, args) : first));
+      key = spec.cache.prefix + (await sha256Hex(spec.cache.key ? spec.cache.key(target, args) : first));
       const suffix = spec.cache.suffix?.(args);
       if (suffix) key += ":" + suffix;
     }

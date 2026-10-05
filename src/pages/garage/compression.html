@@ -19,42 +19,14 @@
 <meta property="og:image:alt" content="aadhar.sh/garage/compression teardown, live demo screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-compression.jpg">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='3'%20y='6'%20width='7'%20height='20'%20rx='1'%20fill='%230855dd'/%3E%3Crect%20x='12'%20y='6'%20width='5'%20height='20'%20rx='1'%20fill='%23166aee'/%3E%3Crect%20x='19'%20y='6'%20width='10'%20height='20'%20rx='1'%20fill='%23003bda'/%3E%3C/svg%3E">
-<style>* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: var(--ink); }
-.window { --axp-maxw: 720px; max-width: var(--axp-maxw); }
-.title-bar .icon { background: oklch(87.82% 0.0877 66.27); }
-.title-bar .icon::before {
-  content: ""; position: absolute; inset: 3px;
-  background: oklch(69.58% 0.2043 43.49);
-  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
-}
-.content { padding: 12px 16px 18px; }
-h1 {
-  font-family: var(--font-caption);
-  font-size: 14pt;
-  color: var(--blue-40);
-  margin: 0 0 6px;
-}
-.lede { color: var(--ink-soft); font-size: 10.5pt; margin: 0 0 4px; }
-h2 {
-  font-family: var(--font-caption);
-  font-size: 13pt;
-  color: var(--blue-40);
-  margin: 28px 0 4px;
-}
-.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
-.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
-hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
-a { color: var(--blue-40); }
-.badge {
+<link rel="stylesheet" href="/garage-base.css">
+<style>.badge {
   display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
   font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
   border-radius: 2px; text-transform: uppercase; vertical-align: middle;
 }
 
 .replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
-footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
 
 
 /* comparison tables + the winning-cell tint, matching the convention the other
