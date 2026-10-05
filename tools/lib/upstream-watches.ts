@@ -243,7 +243,7 @@ export const BUN_WATCHES: Watch[] = [
     name: "oxc-minifier-reaches-swc-parity",
     issue: "https://github.com/oxc-project/oxc",
     landed: "oxc-minify at the pin, run with the build's exact options over the two frozen fixtures, produces no more brotli q11 bytes than SWC 1.16.2 did on the same bytes (5,786 B)",
-    measured: "2026-09-15, oxc-minify 0.150.0 under bun 1.4.2: 5,843 B against SWC's 5,786 B, +57 B (quiz.js 2,974 vs 2,932; lens-wire.js 2,869 vs 2,854)",
+    measured: "2026-10-05, oxc-minify 0.151.0 under bun 1.4.3-canary.1 and node 26.10.0: 5,843 B against SWC's 5,786 B, +57 B (quiz.js 2,974 vs 2,932; lens-wire.js 2,869 vs 2,854), the same bytes 0.150.0 produced on 2026-09-15",
     runtime: "bun",
     script: `
       const { minifySync } = require(${JSON.stringify(REPO + "node_modules/oxc-minify/index.js")});

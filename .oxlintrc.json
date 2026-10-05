@@ -200,8 +200,17 @@
   },
 
   // Type-aware linting, via tsgolint, enabled by `--type-aware` in the `lint`
-  // script. It costs 0.56s over the whole tree, which is less than the tsc pass
-  // it runs beside, so there is no reason to split it into a second script.
+  // script. It costs 0.74s over the whole tree, which is less than the 1.36s
+  // `typecheck` pass it runs beside, so there is no reason to split it into a
+  // second script. Measured 2026-10-05 on an M3 Max, oxlint 1.85.0 and tsgolint
+  // 7.0.2002, 5 runs each: 0.66s without `--type-aware`, 1.40s with it. (The
+  // 0.56s this line used to carry dates from before the 2026-09-02 fix below,
+  // when there were no real programs to check.) `--debug=timings -f default`
+  // prints the per-rule table; without an explicit `-f` it prints nothing when
+  // stdout is not a terminal. It puts 75% of rule time in
+  // typescript/no-misused-promises. The anti-slop plugin costs 0.33s of wall
+  // clock (1.34s with it, 1.02s without), and that is almost all the JS
+  // runtime's fixed cost: 255ms of shared overhead against 14ms in its rules.
   //
   // IT RAN WITHOUT REAL PROGRAMS UNTIL 2026-09-02. tsgolint discovers a
   // tsconfig per file by walking up, every program here lives in
