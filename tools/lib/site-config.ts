@@ -34,7 +34,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { asList, asRecord, asText } from "../../src/worker/lib/parse.ts";
 
 export const REPO = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-export const SITE_CONFIG_FILES = ["cloudflare.config.ts", "wrangler.config.ts"];
 // Beside the TS configs, so every relative path in it (main, assets.directory)
 // resolves exactly as it did from wrangler.jsonc. A dotfile, so wrangler's own
 // config discovery (wrangler.json / .jsonc / .toml) never picks it up by

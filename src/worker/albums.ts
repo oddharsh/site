@@ -41,7 +41,3 @@ export const ALBUMS: Record<string, Album> = {
 };
 
 export const albumPath = (album: Album) => `/${album.slug}`;
-
-/** The album a slug names, or null. Slugs are validated by check-photo-pipeline.ts. */
-export const albumFor = (slug: string | null | undefined): Album | null =>
-  (slug && Object.hasOwn(ALBUMS, slug)) ? ALBUMS[slug] : null;

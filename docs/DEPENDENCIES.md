@@ -516,9 +516,8 @@ does not make a failed write safe to ignore.
   pin worth stating. That argument is about the BROWSER, and it left the half a
   lockfile CAN hold still floating. The scope it also rested on had gone stale:
   "only `tools/photos/gen-og-cards.ts` uses it, and no CI job and no deploy path
-  touches it" was true when written and is now six callers (`csp-sweep`,
-  `speculation-probe`, `lens-seed`, `check-agent`, `check-xp-menu`,
-  `gen-og-cards`) plus
+  touches it" was true when written and is now five callers (`csp-sweep`,
+  `speculation-probe`, `lens-seed`, `check-agent`, `gen-og-cards`) plus
   [`og-cards.yml`](../.github/workflows/og-cards.yml), which drives it in CI and
   COMMITS the PNGs it bakes. Those cards are `unverifiable` in
   `config/derivations.json`, since the homepage draws a random 12 of 158 photos
