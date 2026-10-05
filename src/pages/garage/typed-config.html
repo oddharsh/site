@@ -113,7 +113,7 @@
   </div>
   <p class="tc-legend">The resolved pane is the Build Output Specification wrangler writes to <code>.cloudflare/output/v0/workers/default/worker.config.json</code>, which is the readable answer to "what did my config actually become". In August that file was <code>config.json</code> and opened with <code>"type": "worker"</code>; today it drops that key and ends with a <code>manifest</code>. The Env pane is what <code>tsc</code> reported for each key of the generated interface.</p>
 </div>
-<p>The two front doors agree. <code>cf build</code> (1.0.0-beta.12) printed "Delegating to Wrangler" and wrote the same four files <code>wrangler build</code> did, sha256 for sha256. The snippet imports from <code>cf/config</code> because that is what the documentation tells a reader to install; this site imports the same helpers from <code>@cloudflare/config/public</code>, which <code>cf/config</code> re-exports in one line, and the resolved output is identical either way.</p>
+<p>The two front doors agree. <code>cf build</code> (1.0.0-beta.12) printed "Delegating to Wrangler" and wrote the same four files <code>wrangler build</code> did, sha256 for sha256. The snippet imports from <code>@cloudflare/config/public</code>, as this site's own <code>cloudflare.config.ts</code> does. The documentation's <code>cf/config</code> re-exports that module in one line, so either import works, and the resolved output is identical.</p>
 <p>One trap sits between the build and the types. The generated <code>.cloudflare/types/index.d.ts</code> imports <code>cf/config</code>. Install wrangler and <code>@cloudflare/config</code> without <code>cf</code>, keep <code>skipLibCheck</code> on as most templates do, and nothing complains: <code>Env</code> comes back empty, and every binding read is TS2339 on a value typed <code>any</code>. Only with <code>skipLibCheck</code> off does TS2307 name the missing module. Add <code>cf</code> as a dev dependency, as the docs say, or map <code>cf/config</code> in <code>paths</code>, which is what this site does.</p>
 
 <h2>A variable arrives in the type as its own value, in both formats</h2>
@@ -265,10 +265,12 @@ Wrangler does not support the Bun runtime. Please try this command again using N
 
   function chosen(list) { return list.filter(function (i) { return i.on; }); }
 
-  // The shape that builds on wrangler 4.147.0 and cf 1.0.0-beta.12: helpers from
-  // cf/config (workers-sdk#15914 moved them out of wrangler/experimental-config),
-  // and one default export, defineConfig({ worker }) (workers-sdk#15713 retired
-  // the defineWorker default export this page emitted in August).
+  // The shape that builds on wrangler 4.147.0 and cf 1.0.0-beta.12, written the
+  // way this site's cloudflare.config.ts is: helpers from @cloudflare/config/public
+  // (workers-sdk#15914 moved them out of wrangler/experimental-config; cf/config
+  // re-exports the same module), and one default export, defineConfig({ worker })
+  // (workers-sdk#15713 retired the defineWorker default export this page emitted
+  // in August).
   function source() {
     var env = chosen(BINDINGS);
     var ex = chosen(EXPORTS);
@@ -276,7 +278,7 @@ Wrangler does not support the Bun runtime. Please try this command again using N
     if (ex.length) helpers.push("exports");
     helpers.push("triggers");
     var lines = [];
-    lines.push("import { " + helpers.join(", ") + ' } from "cf/config";');
+    lines.push("import { " + helpers.join(", ") + ' } from "@cloudflare/config/public";');
     lines.push("");
     lines.push("const worker = defineWorker({");
     lines.push('  name: "probe",');
