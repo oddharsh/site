@@ -14,6 +14,7 @@ import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { BOT_UA } from "../src/worker/lib/botauth.ts";
 import { esc, jsonResponse, secretMatches } from "../src/worker/lib/http.ts";
+import { shareMeta } from "../src/worker/lib/chrome.ts";
 import { sign, verify } from "../src/worker/lib/sign.ts";
 import { twinFor } from "../src/worker/lib/twins.ts";
 import { titleBar } from "../src/worker/lib/window.ts";
@@ -409,7 +410,7 @@ function shell(title, currentPath, bodyHtml, head = "", description = POOL_DESCR
 <title>${currentPath === PREFIX ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <link rel="icon" type="image/svg+xml" href="/section-icons/serendipity.svg">
 <meta name="description" content="${esc(description)}">
-<link rel="canonical" href="https://aadhar.sh${esc(currentPath)}">${twinLink}
+<link rel="canonical" href="https://aadhar.sh${esc(currentPath)}">${String(shareMeta({ title: currentPath === PREFIX ? "Serendipity" : title + " · Serendipity", description, path: currentPath }))}${twinLink}
 <style>${shellCss()}</style>
 <link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css">${head}</head><body>${DESKTOP_TOP}
 <div class="window">

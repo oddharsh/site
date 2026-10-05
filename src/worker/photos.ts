@@ -573,6 +573,26 @@ export function imagesManifestJson(photos: ReturnType<typeof derivePhotoPool>): 
   return JSON.stringify({ _address: "handwritten worker at aadhar.sh", photos, count: photos.length });
 }
 
+// /sitemap-images.xml: every published photo, under the page that shows it, so
+// Google Images can find the library at all. /photos and each album are their
+// own <url>, matching how the pages split the pool. The image is the full
+// JPEG the tile opens (`fullUrl`), the best copy Google can be handed; the
+// tiles' alt text lives on the pages, since Google stopped reading
+// image:caption and image:title from sitemaps in 2022. Build output only
+// (build.ts step 1e), from the same bundled pool as the pages beside it.
+export function imageSitemapXml(photos: ReturnType<typeof derivePhotoPool>, albums: Album[]): string {
+  const xml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const page = (path: string, members: ReturnType<typeof derivePhotoPool>) =>
+    `  <url>\n    <loc>https://aadhar.sh${path}</loc>\n`
+    + members.filter((p) => p.full).map((p) => `    <image:image><image:loc>${xml(`https://aadhar.sh${fullUrl(p.full)}`)}</image:loc></image:image>\n`).join("")
+    + `  </url>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n`
+    + `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n`
+    + page("/photos", curatedPool(photos))
+    + albums.map((album) => page(albumPath(album), albumPool(photos, album))).join("")
+    + `</urlset>\n`;
+}
+
 // cache-control is load-bearing on the STATIC path rather than a restatement.
 // _headers gives /images/* a one-year immutable cache for the old thumbnail
 // URLs, and a staged file under /images/ inherits it, so a manifest that must
@@ -691,6 +711,9 @@ export function renderPhotosPage(photos, altMap) {
     route: "/photos",
     width: 980,
     description: `All ${curated.length} photos, straight out of camera. FUJIFILM X-T50 + Leica M.`,
+    // The unfurl card shows the sheet's first photo, the same one the page opens on.
+    ogImage: curated[0].thumb_jpg,
+    ogImageAlt: (altMap && altMap[curated[0].stem]) || curated[0].stem,
     css: SHEET_CSS,
     body: unsafeHtml(`
   <h1>Photos</h1>
@@ -746,6 +769,8 @@ export function renderAlbumPage(album: Album, photos, altMap) {
     route: albumPath(album),
     width: 980,
     description: album.description,
+    ogImage: members[0].thumb_jpg,
+    ogImageAlt: (altMap && altMap[members[0].stem]) || members[0].stem,
     css: SHEET_CSS,
     body: html`
   <h1>${album.title}</h1>

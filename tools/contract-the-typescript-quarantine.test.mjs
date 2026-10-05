@@ -171,12 +171,14 @@ test("node is spawned only by the wrangler bridge, the route oracle, the twin su
 // failure it guards is a broken production deploy.
 test("the deploy bridge runs the pinned wrangler under node, on either tree", async () => {
   const { execFileSync } = await import("node:child_process");
-  const { mkdtempSync, mkdirSync, writeFileSync, chmodSync } = await import("node:fs");
+  const { mkdtempSync, mkdirSync, writeFileSync, chmodSync, realpathSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
 
   const script = new URL(".github/deploy-wrangler.sh", ROOT).pathname;
-  const root = mkdtempSync(join(tmpdir(), "bridge-"));
+  // The REAL path: macOS tmpdir() is /var/folders, a symlink to /private/var, and
+  // the script prints the resolved path, so a symlinked root fails the match.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "bridge-")));
   // A HERMETIC PATH: the stub directory is the whole of it, so nothing can fall
   // through to a real binary and pass this test for the wrong reason. bash has
   // to be linked in, since the parent resolves it through this same PATH.

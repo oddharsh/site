@@ -3,6 +3,7 @@
 import { cachedRender } from "./lib/cache.ts";
 import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "./lib/desktop.ts";
 import { addressBar, taskPane } from "./lib/explorer.ts";
+import { shareMeta } from "./lib/chrome.ts";
 import { escAttr, escHtml } from "./lib/http.ts";
 import { twinFor } from "./lib/twins.ts";
 
@@ -93,6 +94,9 @@ export function writingShell(o) {
     "<link rel=\"icon\" type=\"image/svg+xml\" href=\"/section-icons/writing.svg\">" +
     "<meta name=\"description\" content=\"" + escAttr(o.desc) + "\">" +
     "<link rel=\"canonical\" href=\"https://aadhar.sh" + escAttr(o.path) + "\">" +
+    // A post unfurls as an article and the folder as a site page. No image: a
+    // note has none, and an unfurler draws title and description without one.
+    String(shareMeta({ title: o.title, description: o.desc, path: o.path, type: o.path === "/writing" ? "website" : "article" })) +
     (twin ? "<link rel=\"alternate\" type=\"text/markdown\" title=\"markdown source\" href=\"" + escAttr(twin) + "\">" : "") +
     // Feed discovery for the whole section, on the index and on every post, which
     // is where a reader's "subscribe" button actually looks.

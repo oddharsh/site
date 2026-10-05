@@ -60,6 +60,8 @@ export interface EnvBindings {
   RESTORE_DB: D1Database;
   SERENDIPITY_DB: D1Database;
   SOCIAL_DB: D1Database;
+  /** Reads every dataset below with SQL, no token (ledger.ts analyticsSql). */
+  ANALYTICS: AnalyticsSQLBinding;
   /** Identified crawler hits, priced by /ledger. */
   BOT_LEDGER: AnalyticsEngineDataset;
   SPECULATION: AnalyticsEngineDataset;
