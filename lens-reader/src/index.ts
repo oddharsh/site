@@ -37,6 +37,7 @@
 // with "Incorrect type for map entry '<name>': the provided value is not of
 // type 'function or ExportedHandler'", which is how that rule was learned here.
 import { EXTRACTOR, READER_LIMIT_PER_MIN, READER_NOTE, ReaderError, read } from "./reader.ts";
+import { jsonResponse } from "../../src/worker/lib/http.ts";
 import { validateLensTarget } from "../../src/worker/lib/public-fetch.ts";
 import { overBudget } from "../../src/worker/lib/ratelimit.ts";
 
@@ -84,15 +85,11 @@ export default {
 };
 
 function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      // Third-party page content keyed by a visitor-supplied URL: private, the
-      // same rule /lens/fetch follows.
-      "cache-control": "private, no-store",
-      "x-content-type-options": "nosniff",
-      "x-robots-tag": "noindex",
-    },
-  });
+  return jsonResponse(body, status, {
+    // Third-party page content keyed by a visitor-supplied URL: private, the
+    // same rule /lens/fetch follows.
+    "cache-control": "private, no-store",
+    "x-content-type-options": "nosniff",
+    "x-robots-tag": "noindex",
+  }, { pretty: false });
 }

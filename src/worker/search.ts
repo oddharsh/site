@@ -4,7 +4,7 @@
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
-import { escAttr, escHtml, jsonResp } from "./lib/http.ts";
+import { escAttr, escHtml, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
 import { queryTerms as queryTermsOf, terms } from "./lib/text.ts";
 
 export type SearchRecord = {
@@ -144,11 +144,9 @@ export async function searchSite(env, query: string, limit: string | number | nu
 export async function handleSearchJson(request, env) {
   const url = new URL(request.url);
   const query = url.searchParams.get("q") || "";
-  if (!query.trim()) return jsonResp({ ok: false, error: "q is required", results: [] }, 400);
+  if (!query.trim()) return jsonResponse({ ok: false, error: "q is required", results: [] }, 400, { ...publicJsonHeaders(400), "x-robots-tag": "noindex" }, { pretty: false });
   const payload = await searchSite(env, query, url.searchParams.get("limit"));
-  const response = jsonResp(payload);
-  response.headers.set("x-robots-tag", "noindex");
-  return response;
+  return jsonResponse(payload, 200, { ...publicJsonHeaders(200), "x-robots-tag": "noindex" }, { pretty: false });
 }
 
 export async function handleSearch(request, env, ctx) {

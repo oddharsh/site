@@ -1,4 +1,5 @@
 import { asNumber } from "./lib/parse.ts";
+import { jsonResponse } from "./lib/http.ts";
 
 // counter.ts — the homepage visit counter's HTTP side: /hit, and the KV mirror
 // the homepage reads instead of asking the Durable Object.
@@ -149,9 +150,7 @@ export async function handleHit(request, env, ctx) {
   if (url.searchParams.has("n")) {
     let n = null;
     try { const v = env.RN_KV && await env.RN_KV.get(COUNT_KEY, { cacheTtl: MIRROR_TTL }); if (v != null) n = Number(v); } catch {}
-    return Response.json({ n: Number.isFinite(n) ? n : null }, {
-      headers: { "cache-control": "no-store", "x-robots-tag": "noindex" },
-    });
+    return jsonResponse({ n: Number.isFinite(n) ? n : null }, 200, { "x-robots-tag": "noindex" }, { pretty: false });
   }
 
   // everyone else asked for an image, which means they asked for the NUMBER, so

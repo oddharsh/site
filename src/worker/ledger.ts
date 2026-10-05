@@ -22,7 +22,7 @@ import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
-import { esc, jsonResp } from "./lib/http.ts";
+import { esc, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
 import { LEDGER_LINES_URL } from "./routes.ts";
 
 const RATE_USD = 0.01;      // the site's posted price (the /llms-full.txt cent), not a market quote
@@ -133,7 +133,10 @@ export async function analyticsSql(env: Env, sql: string): Promise<AnalyticsRead
     const j = await r.json<{ data?: AnalyticsRow[] }>().catch(() => null);
     return { ok: true, data: j && Array.isArray(j.data) ? j.data : [] };
   } catch (e) {
-    return { ok: false, reason: (e && e.message) || String(e) };
+    // The reason is served publicly (/ledger.json, /speculation.json), so an
+    // exception's text goes to Workers Logs and the reply says only that it threw.
+    console.error("ledger: analytics read threw", e);
+    return { ok: false, reason: "request failed" };
   }
 }
 
@@ -211,7 +214,10 @@ async function queryBillableUsage(env: Env): Promise<BillableRead> {
       services: [...services].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), from: ymd(start), to: ymd(end),
     };
   } catch (e) {
-    return { ok: false, reason: (e && e.message) || String(e) };
+    // The reason is served publicly (/ledger.json, /speculation.json), so an
+    // exception's text goes to Workers Logs and the reply says only that it threw.
+    console.error("ledger: analytics read threw", e);
+    return { ok: false, reason: "request failed" };
   }
 }
 
@@ -232,14 +238,17 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
         note: "account-wide across every product Cloudflare bills through the Billable Usage API; daily granularity, so no part of this is attributable to any crawler",
       }
     : { available: false, reason: cost.reason };
-  if (!q.ok) return jsonResp({ ok: false, reason: q.reason, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock }, q.reason === "unconfigured" ? 200 : 502);
+  if (!q.ok) {
+    const status = q.reason === "unconfigured" ? 200 : 502;
+    return jsonResponse({ ok: false, reason: q.reason, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock }, status, publicJsonHeaders(status), { pretty: false });
+  }
   const { items, totalHits, totalUsd } = priced(q.rows);
-  return jsonResp({
+  return jsonResponse({
     ok: true, window_days: WINDOW_DAYS, rate_usd: RATE_USD,
     note: "worker-served requests only; UA-matched (self-reported identity); the rate is this site's posted price, not a market quote",
     line_items: items, total_hits: totalHits, total_usd: totalUsd,
     cost: costBlock,
-  });
+  }, 200, publicJsonHeaders(200), { pretty: false });
 }
 
 // ── /ledger — the invoice ───────────────────────────────────────────

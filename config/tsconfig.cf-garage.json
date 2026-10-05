@@ -17,6 +17,9 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
+    // index.ts imports src/worker/lib/http.ts by its real `.ts` filename, the
+    // one specifier that resolves in both trees (tsconfig.json says why).
+    "allowImportingTsExtensions": true,
     "lib": ["esnext"],
     // Empty rather than omitted (an omitted `types` admits every @types/*, bun's
     // included); the Workers runtime comes in through `include`. Unlike the

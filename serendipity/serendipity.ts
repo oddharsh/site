@@ -13,7 +13,7 @@ const PREFIX = "/serendipity";
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { BOT_UA } from "../src/worker/lib/botauth.ts";
-import { esc, secretMatches } from "../src/worker/lib/http.ts";
+import { esc, jsonResponse, secretMatches } from "../src/worker/lib/http.ts";
 import { sign, verify } from "../src/worker/lib/sign.ts";
 import { twinFor } from "../src/worker/lib/twins.ts";
 import { titleBar } from "../src/worker/lib/window.ts";
@@ -1411,9 +1411,9 @@ async function handleSyncDescriptions(request, env, d) {
   const limit = Math.min(45, Math.max(1, parseInt(url.searchParams.get("n") || "30", 10) || 30));
   // any enabled cookie can read public event detail; use the first available.
   const set = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1 LIMIT 1").get();
-  if (!set) return new Response(JSON.stringify({ ok: false, error: "no enabled cookies" }), { status: 400, headers: { "content-type": "application/json" } });
+  if (!set) return jsonResponse({ ok: false, error: "no enabled cookies" }, 400);
   const r = await syncDescriptions(d, set.user_key, set.cookies_json, limit);
-  return new Response(JSON.stringify({ ok: !r.error, via: set.label, ...r }, null, 2), { headers: { "content-type": "application/json" } });
+  return jsonResponse({ ok: !r.error, via: set.label, ...r });
 }
 
 // ── event tags: Clef's topic + format, decided once and stored ──────────────
@@ -1483,7 +1483,7 @@ async function handleTag(request, env, d) {
   const n = parseInt(new URL(request.url).searchParams.get("n") || "", 10);
   const limit = Math.min(TAG_MAX, Math.max(1, Number.isFinite(n) ? n : TAG_DEFAULT));
   const r = await tagEvents(d, env, limit);
-  return new Response(JSON.stringify({ ok: !("skipped" in r), ...r }, null, 2), { headers: { "content-type": "application/json" } });
+  return jsonResponse({ ok: !("skipped" in r), ...r });
 }
 
 // The stored tags for a set of events, keyed by id. Its own query rather than a
@@ -1548,7 +1548,7 @@ async function handleSync(request, env, d) {
     if (eventId) out.push({ label: s.label, event: eventId, ...(await syncGuests(d, eventId, s.user_key, s.cookies_json, budget)) });
     else out.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
   }
-  return new Response(JSON.stringify({ ok: true, results: out }, null, 2), { headers: { "content-type": "application/json" } });
+  return jsonResponse({ ok: true, results: out });
 }
 
 // ── cron: the recurring tick that keeps the pool honest ─────────────────────
@@ -2167,7 +2167,7 @@ export function enrichBatchLimit(raw, fallback = ENRICH_CRON_BATCH, max = ENRICH
 async function handleEnrich(request, env, d) {
   const url = new URL(request.url);
   if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
-  const jerr = (msg, code) => new Response(JSON.stringify({ error: msg }), { status: code, headers: { "content-type": "application/json" } });
+  const jerr = (msg, code) => jsonResponse({ error: msg }, code);
   const provider = (url.searchParams.get("provider") || "exa").toLowerCase();
   const P = ENRICH_PROVIDERS[provider];
   if (!P) return jerr(`unknown provider "${provider}" (use exa | parallel)`, 400);
@@ -2210,7 +2210,7 @@ async function handleEnrich(request, env, d) {
 
   const out: any[] = [];
   for (const a of targets) out.push({ name: a.name, ...(await P.fn(d, key, a, !!aid)) });
-  return new Response(JSON.stringify({ ok: true, provider, enriched: out }, null, 2), { headers: { "content-type": "application/json" } });
+  return jsonResponse({ ok: true, provider, enriched: out });
 }
 
 // ── cover-proxy request signing ─────────────────────────────────────────────

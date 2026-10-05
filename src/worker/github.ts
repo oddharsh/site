@@ -28,6 +28,7 @@
 // tiers). Absence from one read is not evidence that the activity stopped.
 import { signedFetch } from "./lib/botauth.ts";
 import { swrKV } from "./lib/cache.ts";
+import { jsonResponse } from "./lib/http.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 
 export const GITHUB_USER = "oddharsh";
@@ -205,17 +206,12 @@ export async function handleGithubJson(request, env, ctx) {
   if (!payload) {
     // Only reachable before the first good build ever lands in KV. The infotip
     // falls back to the plain shortcut card on anything but a 200.
-    return new Response(JSON.stringify({ pending: true, note: "GitHub activity has not been read yet" }), {
-      status: 503,
-      headers: { "content-type": "application/json; charset=utf-8", "retry-after": "300", "x-robots-tag": "noindex", "cache-control": "no-store" },
-    });
+    return jsonResponse({ pending: true, note: "GitHub activity has not been read yet" }, 503,
+      { "retry-after": "300", "x-robots-tag": "noindex" }, { pretty: false });
   }
-  return new Response(JSON.stringify(payload), {
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "public, max-age=300",
-      "x-robots-tag": "noindex",
-      "access-control-allow-origin": "*",
-    },
-  });
+  return jsonResponse(payload, 200, {
+    "cache-control": "public, max-age=300",
+    "x-robots-tag": "noindex",
+    "access-control-allow-origin": "*",
+  }, { pretty: false });
 }

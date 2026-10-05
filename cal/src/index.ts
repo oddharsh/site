@@ -46,6 +46,7 @@ import { bookingPage, slotsFragment, SLOTS_PATH, PICK_PATH, successPage,
          reschedulePage, rescheduledPage,
          cancelPage, cancelledPage,
          errorPage }                       from "./templates.ts";
+import { jsonResponse } from "../../src/worker/lib/http.ts";
 import { ISLAND_MARKER }                from "../../src/worker/lib/island.ts";
 
 // Re-export the expiry-timer Workflow so it resolves as a class_name both from
@@ -167,7 +168,7 @@ async function route_slots(req, env, ctx) {
   // the JSON view, for scripts and the runbook: never cached, so it always
   // reflects the latest slots.
   const { slots } = await listOpenSlots(env, ctx);
-  return Response.json({ slots });
+  return jsonResponse({ slots });
 }
 
 async function route_book(req, env, ctx) {

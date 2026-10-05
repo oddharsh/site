@@ -5,7 +5,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asNumber, asRecord, asText } from "./lib/parse.ts";
-import { esc, jsonResp, secretMatches, wantsMarkdown } from "./lib/http.ts";
+import { esc, jsonResponse, publicJsonHeaders, secretMatches, wantsMarkdown } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 
 // ── /rn redirect target ─────────────────────────────────────────────
@@ -471,9 +471,7 @@ function trackResponse(payload, status = 200, format = "json") {
       "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
     }, status);
   }
-  const res = jsonResp(payload, status);
-  res.headers.set("x-robots-tag", "noindex");
-  return res;
+  return jsonResponse(payload, status, { ...publicJsonHeaders(status), "x-robots-tag": "noindex" }, { pretty: false });
 }
 
 // Traced as `rn.tracks.load` with the OUTCOME on the span, because this handler
