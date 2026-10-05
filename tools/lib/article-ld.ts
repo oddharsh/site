@@ -80,7 +80,7 @@ export type ArticleLd = {
 export function articleLd({ path, section, html, date }: { path: string; section: string; html: string; date: string | undefined }): ArticleLd {
   const headline = topicOf(meta(html, "property", "og:title")) || h1Of(html);
   if (!headline) throw new Error(`article-ld: ${path} has neither an og:title topic nor an h1 to name it`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`article-ld: ${path} has no sitemap date (got ${JSON.stringify(date)})`);
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`article-ld: ${path} has no sitemap date (got ${JSON.stringify(date)})`);
   const description = meta(html, "name", "description");
   const image = meta(html, "property", "og:image");
   // Key order is output order, so the optional fields are placed by rebuilding
