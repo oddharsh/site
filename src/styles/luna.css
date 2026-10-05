@@ -758,6 +758,20 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 }
 :where(.xp-statusbar > .fill) { flex: 1 1 auto; min-width: 0; }
 
+/* ───────────── page defaults (zero-specificity) ─────────────
+   What every windowed page used to restate in its own <style>: border-box
+   sizing and the 720px measure. Zero specificity, so a page that wants
+   something else just says so and wins. Prose pages get their type from
+   /prose.css (the prose kit), which they link before their own <style>.
+
+   .icon.play is the Garage tab icon (a cream square with an orange play
+   triangle), a variant of the default icon above, so a page picks it with a
+   class instead of carrying the two rules. */
+:where(*) { box-sizing: border-box; }
+:where(.window) { max-width: var(--axp-maxw, 720px); }
+:where(.title-bar .icon.play) { background: oklch(87.82% 0.0877 66.27); }
+:where(.title-bar .icon.play)::before { inset: 3px; background: oklch(69.58% 0.2043 43.49); clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%); }
+
 /* ───────────────── homepage music island (below the fold) ─────────────────
    Kept in the immutable shared sheet so a dynamic homepage reload does not
    retransmit these rules. The visible photo grid keeps its geometry inline. */

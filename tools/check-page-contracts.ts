@@ -149,6 +149,18 @@ assert.ok(garageCss, "Garage scaffold omitted inline CSS");
 // uses, so a scaffold cannot pass here and fail step 7b. This used to be
 // esbuild's CSS loader, which disagrees with Lightning in both directions.
 parseCss("garage scaffold inline <style>", garageCss);
+assert.equal((garageHtml.match(/<link rel="stylesheet" href="\/prose\.css">/g) || []).length, 1, "Garage scaffold omitted the prose kit (/prose.css)");
+assert.match(garageHtml, /<div class="content prose">/, "Garage scaffold omitted the prose class on its content");
+assert.doesNotMatch(garageCss, /(^|[}\s])\*\s*\{\s*box-sizing|(^|[}\s])body\s*\{/, "Garage scaffold re-inlined page defaults that luna.css and prose.css own");
+
+// Every windowed Garage page shares the prose kit and the page defaults rather
+// than pasting them. vt-b and vt-check are windowless view-transition fixtures.
+for (const file of (await readdir(join(ROOT, "src/pages/garage"))).filter((f) => f.endsWith(".html") && !f.startsWith("vt-"))) {
+  const page = await readFile(join(ROOT, "src/pages/garage", file), "utf8");
+  assert.equal((page.match(/<link rel="stylesheet" href="\/prose\.css">/g) || []).length, 1, `src/pages/garage/${file}: link /prose.css before the page's <style>`);
+  const inline = page.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? "";
+  assert.doesNotMatch(inline, /(^|[}\s])\*\s*\{\s*box-sizing|(^|[}\s])body\s*\{/, `src/pages/garage/${file}: page defaults belong to luna.css and prose.css, not the page`);
+}
 
 const invalidUnderstanding = JSON.parse(JSON.stringify(garageFixture.understanding));
 invalidUnderstanding.questions[0].options[1].ok = true;

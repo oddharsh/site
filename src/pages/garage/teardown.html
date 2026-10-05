@@ -19,7 +19,7 @@
 <meta property="og:image:alt" content="aadhar.sh/garage/teardown, live demo screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-teardown.jpg">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='3'%20y='6'%20width='7'%20height='20'%20rx='1'%20fill='%230855dd'/%3E%3Crect%20x='12'%20y='6'%20width='5'%20height='20'%20rx='1'%20fill='%23166aee'/%3E%3Crect%20x='19'%20y='6'%20width='10'%20height='20'%20rx='1'%20fill='%23003bda'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/garage-base.css">
+<link rel="stylesheet" href="/prose.css">
 <style>
   /* ── teardown: before/after comparison cards ─────────────────────────── */
   .content hr { border: 0; border-top: 1px solid oklch(86% 0.02 255); margin: 18px 0; }
@@ -58,10 +58,10 @@
 <!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
-    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/teardown</span>
+    <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/teardown</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content">
+  <div class="content prose">
     <h1>Teardown</h1>
     <p class="lede">A resto-mod gets pulled apart on a lift before anyone trusts it on the road. This site got the same treatment. Fable 5 ran a multi-agent audit over the whole thing, eight finders sweeping in parallel, and handed every finding to a skeptic that tried to refute it before it counted. Here is what came back, and what changed. Before on the left, after on the right.</p>
     <p class="note">The harness: eight finders (payload, caching, two consistency passes, compatibility fallbacks, frontier adoption, perceived speed, live behavior), then one adversarial verifier per finding that re-read the code or re-hit the live URL and tried to prove it wrong. Sixty agents in all. Every claim below survived a second pass.</p>

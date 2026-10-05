@@ -51,18 +51,14 @@ function validateGarageSpec(spec, context = "Garage spec") {
 }
 
 // Page-only CSS. The window chrome (frame, title bar, caption buttons and their
-// hover glow), the desktop and the window geometry all come from /luna.css,
-// which every generated page links render-blocking, so a copy here would paint
-// nothing and, at class specificity, would beat luna's zero-specificity
-// :where() rules and switch the caption buttons' hover off. The icon is this
-// section's own glyph.
-const BASE_CSS = `*{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
-.window{--axp-maxw:820px;--axp-gutter:20px;max-width:var(--axp-maxw)}
-.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
-.content{padding:18px 20px 8px;background:#fffdf6;border-top:1px solid #8d9bb0}.content h1,.content h2,.content h3{font-family:var(--font-caption);color:#0831d9;line-height:1.25}.content h1{font-size:18pt;margin:0 0 7px}.content h2{font-size:13pt;margin:18px 0 5px}.content h3{font-size:11pt;margin:13px 0 4px}.content p{margin:0 0 12px}.content a{color:#153eab}.content code,.content pre{font-family:var(--font-mono)}
-.garage-intro{font-size:11pt;color:#444;max-width:70ch}.garage-meta{font-size:8.5pt;color:#69758a;border-top:1px solid #d8dfeb;margin-top:18px;padding-top:6px}
+// hover glow), the desktop, the window geometry and the page defaults all come
+// from /luna.css, and the article typography (headings, lede, note, code, rule,
+// links, callout, footer) from /prose.css, the prose kit every hand-written
+// Garage page shares. What stays here is what only generated pages have: the
+// star icon, paragraph rhythm, and the intro and meta lines.
+const BASE_CSS = `.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
+.content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:11pt;color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:8.5pt;color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 `;
 
@@ -91,6 +87,7 @@ export function pageHtml(spec) {
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="The aadhar.sh${html(path)} interactive demo, screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-${spec.id}.jpg">${spec.favicon ? `\n<link rel="icon" type="image/svg+xml" href="${spec.favicon}">` : ""}
+<link rel="stylesheet" href="/prose.css">
 <style>${BASE_CSS}${pageCss}</style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -98,7 +95,7 @@ export function pageHtml(spec) {
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window -->${titleBar({ caption: `aadhar.sh${path}`, closeHref: "/garage", closeTitle: "back to the garage" })}<!-- /axp:window -->
-  <div class="content">
+  <div class="content prose">
 ${spec.bodyHtml}
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">${html(spec.status)} · the understanding check is part of the page, not a gate</p>

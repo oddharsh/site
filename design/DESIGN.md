@@ -170,6 +170,13 @@ A "depressed/active button" swaps to sunken while held. Selected slot buttons
   `<style>` holds its measure (`.window { --axp-maxw: 720px; }`), its title-bar
   icon glyph, and its content. The homepage is the one exception: it loads
   luna without blocking first paint and carries its own first-paint geometry.
+- ✅ Start a page of writing from the prose kit: link `/prose.css` before the
+  page's `<style>` and mark the scroller `<div class="content prose">`. It
+  carries the body type, headings, lede, note, inline code, groove rule,
+  callout and footer, so the page's own `<style>` starts at what is actually
+  its own. luna.css supplies border-box sizing, the 720px default measure and
+  the Garage play icon (`<span class="icon play">`). Every Garage page uses it,
+  and `pages:check` fails a Garage page that pastes the defaults back in.
 - ✅ Reuse the `.title-bar` / `.window` / `.content` / `.xp-tooltip` vocabulary.
 - ✅ Saturated, vivid, slightly-plasticky is correct. Luna was never subtle.
 

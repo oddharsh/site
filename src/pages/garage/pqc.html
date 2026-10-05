@@ -18,13 +18,10 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="The aadhar.sh/garage/pqc interactive demo, screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-pqc.jpg">
-<style>*{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
-.window{--axp-maxw:820px;--axp-gutter:20px;max-width:var(--axp-maxw)}
-.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
-.content{padding:18px 20px 8px;background:#fffdf6;border-top:1px solid #8d9bb0}.content h1,.content h2,.content h3{font-family:var(--font-caption);color:#0831d9;line-height:1.25}.content h1{font-size:18pt;margin:0 0 7px}.content h2{font-size:13pt;margin:18px 0 5px}.content h3{font-size:11pt;margin:13px 0 4px}.content p{margin:0 0 12px}.content a{color:#153eab}.content code,.content pre{font-family:var(--font-mono)}
-.garage-intro{font-size:11pt;color:#444;max-width:70ch}.garage-meta{font-size:8.5pt;color:#69758a;border-top:1px solid #d8dfeb;margin-top:18px;padding-top:6px}
+<link rel="stylesheet" href="/prose.css">
+<style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
+.content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:11pt;color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:8.5pt;color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
 .pqc-tiers{border-collapse:collapse;width:100%;margin:0 0 14px;font-size:9.5pt}
@@ -61,7 +58,7 @@ body{font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818}
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/pqc</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content">
+  <div class="content prose">
 <h1>Post-quantum signatures, priced</h1>
 <p class="garage-intro">Half of this site's TLS handshake is already post-quantum and I did nothing to make that happen. The other half, authentication, moves on a completely different schedule, because signatures live in certificates and registries that a personal site does not control. So I went looking for the signature I <em>do</em> control, and measured what it would cost to migrate it.</p>
 

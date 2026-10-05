@@ -375,7 +375,7 @@
 /lwe-base.css
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
-/garage-base.css
+/prose.css
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
 /notepad.js
