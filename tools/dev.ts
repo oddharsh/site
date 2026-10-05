@@ -14,10 +14,11 @@
 // binding table reads `[connected]`. Measured 2026-10-05 (cf 1.0.0-beta.5,
 // wrangler f025bbf): COUNTER connected and /hit?peek=1 answered digits.
 //
-// THE REGISTRY IS PINNED HERE, for two reasons. cf points its delegate at its
-// own registry directory (CLOUDFLARE_REGISTRY_PATH) while plain `wrangler dev`
-// uses ~/.wrangler/registry, so by default the two never meet and COUNTER stays
-// `[not connected]`. And a shared registry would let another checkout's dev
+// THE REGISTRY IS PINNED HERE, for two reasons. cf points its delegate at the
+// XDG config dir (CLOUDFLARE_REGISTRY_PATH; ~/Library/Preferences/.wrangler on
+// macOS), while plain `wrangler dev` prefers a legacy ~/.wrangler whenever one
+// exists. On any machine old enough to have it, the two never meet and COUNTER
+// stays `[not connected]` (reproduced on cf beta.5 and beta.12). And a shared registry would let another checkout's dev
 // server answer for aadhar-counter. One directory under this checkout's
 // .wrangler/ (gitignored) fixes both.
 //
