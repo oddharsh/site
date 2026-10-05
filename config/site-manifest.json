@@ -394,7 +394,7 @@
       "note": "A utility at the root, per the rule that only content nests. The page carries its option data inline; public/dotfiles/macos.sh is that data with every box ticked, projected by bun run gen:dotfiles and held equal by a contract test.",
       "flags": {
         "run": true,
-        "taskbar": false,
+        "taskbar": true,
         "sitemap": true,
         "gallery": false,
         "agents": true,
