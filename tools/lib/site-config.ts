@@ -57,7 +57,11 @@ export const DEV_CONFIG_JSON = ".wrangler.dev.jsonc";
 // without it, and `remote: false` died the same way. CI holds no Cloudflare
 // credential on purpose, so the credential-free boots drop these and the code
 // behind them degrades as it does for a missing binding (the tag pass skips).
-export const REMOTE_ONLY_KEYS = Object.freeze(["ai"]);
+// Analytics SQL joined on 2026-10-05, measured the same way: "Analytics SQL
+// bindings always access remote resources", and the oracle died on the same
+// proxy error until it was dropped. Without it ledger.ts reads `unbound` and
+// takes the token door, which a credential-free boot does not have either.
+export const REMOTE_ONLY_KEYS = Object.freeze(["ai", "analytics"]);
 
 /** The projection minus every binding that would need a credential to boot. */
 export function withoutRemoteOnly(config: Record<string, unknown>): Record<string, unknown> {
