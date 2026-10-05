@@ -1,6 +1,6 @@
 {
   "id": "drivers",
-  "description": "Planar magnetic versus dynamic headphone drivers, explained at MSN-chat pace. A live diaphragm-motion demo: a dynamic cone driven at one point breaks up at high frequency, while a planar film driven everywhere stays flat.",
+  "description": "Planar magnetic versus dynamic headphone drivers at MSN-chat pace, with a live demo of a cone breaking up at high frequency while a planar film stays flat.",
   "buddyStat": "point drive vs distributed drive",
   "petsLine": "Learning&nbsp;With&nbsp;Errors<br>cones &amp; films",
   "composeNote": "This is a recorded conversation. Drag the frequency in the demo above.",

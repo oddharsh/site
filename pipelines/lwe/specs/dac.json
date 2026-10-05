@@ -1,6 +1,6 @@
 {
   "id": "dac",
-  "description": "Why DAC nerds fight about multibit versus delta-sigma, explained at MSN-chat pace. An R-2R ladder you can mismatch, a multibit staircase, a live noise-shaping DFT, an audible bit-depth demo, a reconstruction filter showing the time-frequency tradeoff, and a tube stage you can overdrive into even or odd harmonics. Leans on Schiit Happened and head-fi, cited.",
+  "description": "Multibit versus delta-sigma DACs at MSN-chat pace, with an R-2R ladder to mismatch, a live noise-shaping DFT and a tube stage to overdrive.",
   "buddyStat": "ladders vs noise shaping",
   "petsLine": "Learning&nbsp;With&nbsp;Errors<br>bits &amp; voltages",
   "composeNote": "This is a recorded conversation. The demos above run live: drag, toggle, and click to hear.",

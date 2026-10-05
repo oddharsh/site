@@ -1,7 +1,7 @@
 {
   "id": "octane",
   "title": "Octane, priced against no framework",
-  "description": "Nextane ships 60.9% less client JavaScript than Next.js 16. Re-measuring that claim on the live demo, then adding the row every framework benchmark leaves out: a site that ships no framework at all.",
+  "description": "Nextane claims 60.9% less JavaScript than Next.js 16. Re-measured on the live demo, plus the row every benchmark leaves out: a site with no framework.",
   "status": "shipped",
   "added": "2026-07-31",
   "favicon": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20d='M5%2023%20A11%2011%200%200%201%2027%2023'%20stroke='%23166aee'%20stroke-width='2.8'%20fill='none'%20stroke-linecap='round'/%3E%3Cpath%20d='M16%2023%20L10%2015'%20stroke='%230855dd'%20stroke-width='2.8'%20fill='none'%20stroke-linecap='round'/%3E%3Ccircle%20cx='16'%20cy='23'%20r='2.6'%20fill='%23003bda'/%3E%3C/svg%3E",

@@ -1,6 +1,6 @@
 {
   "id": "fuse",
-  "description": "eFuses and anti-rollback explained at the pace of a 2009 MSN chat: why a signature cannot refuse yesterday's firmware, how Qualcomm's Qfprom turns a version floor into a one-way ratchet, and what that costs the owner. With a fuse bank you can blow and cannot un-blow.",
+  "description": "eFuses and anti-rollback at MSN-chat pace: how Qualcomm's Qfprom turns a version floor into a one-way ratchet, with a fuse bank you can blow for good.",
   "buddyStat": "one-way bits",
   "petsLine": "Learning&nbsp;With&nbsp;Errors<br>0 goes to 1, once",
   "composeNote": "This is a recorded conversation. The fuse bank above ratchets, and no button puts it back.",
