@@ -167,7 +167,10 @@ export async function callDataTool(name, args, request, env, ctx): Promise<Recor
   if (name === "search_site") return searchSite(env, args.q, args.limit);
   if (name === "photo_query") return queryPhotos(env, args, ctx);
   if (name === "coffee_availability") return getPublicAvailability(env, ctx);
-  if (name === "change_radar") return readAroundChanges(env, args.limit);
+  if (name === "change_radar") {
+    try { return await readAroundChanges(env, args.limit); }
+    catch { return toolError("change history is temporarily unavailable"); }
+  }
   if (name === "now_playing") {
     const pid = await currentPlaylistId(env);
     try {
