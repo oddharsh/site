@@ -81,6 +81,18 @@ function eventTime(d: Date | null): string {
   return `<time data-event-time datetime="${d.toISOString()}">${esc(day)} · ${esc(clock)}</time>`;
 }
 
+// One event's meta description: what it is, when, where, and how many are
+// going, from the same fields the page prints. Plain text, since eventTime()
+// returns markup, and the date carries its year because a search result has no
+// calendar around it.
+function eventDescription(ev, d: Date | null, going: number): string {
+  const when = d ? d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : "date TBD";
+  const name = ev.name.length > 80 ? ev.name.slice(0, 79).trimEnd() + "…" : ev.name;
+  const where = ev.location ? ` at ${ev.location}` : "";
+  const who = going ? ` ${going} ${going === 1 ? "person is" : "people are"} going.` : "";
+  return `${name}, ${when}${where}.${who} From Serendipity, a shared pool of events worth going to.`;
+}
+
 const EVENT_SCRIPT = '<script src="/serendipity.js" defer></script>';
 
 // influence/seniority proxy, first match wins. Exported as a table so a
@@ -377,7 +389,12 @@ function shellCss() {
 `;
 }
 
-function shell(title, currentPath, bodyHtml, head = "") {
+// The pool's own description, for the dashboard and every page that has none
+// of its own. Event pages and the two fixed subpages pass theirs, so a search
+// result for one event does not read the same as a result for any other.
+const POOL_DESCRIPTION = "A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.";
+
+function shell(title, currentPath, bodyHtml, head = "", description = POOL_DESCRIPTION) {
   const nav = (href, label) => {
     const full = PREFIX + href;
     const cur = currentPath === full || (href !== "" && currentPath.startsWith(full));
@@ -391,7 +408,7 @@ function shell(title, currentPath, bodyHtml, head = "") {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#2D78BD">
 <title>${currentPath === PREFIX ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <link rel="icon" type="image/svg+xml" href="/section-icons/serendipity.svg">
-<meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
+<meta name="description" content="${esc(description)}">
 <link rel="canonical" href="https://aadhar.sh${esc(currentPath)}">${twinLink}
 <style>${shellCss()}</style>
 <link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css">${head}</head><body>${DESKTOP_TOP}
@@ -583,7 +600,7 @@ async function renderEvent(d, id, path) {
     <div class="grp">Attendees${guests.length ? ` (${guests.length})` : ""}</div>
     ${guests.length ? `<div class="alist">${guests.map(attendeeRow).join("")}</div>`
       : `<div class="empty"><p class="note">No guest list loaded for this event yet.</p></div>`}`;
-  return html(200, shell(ev.name, path, body + EVENT_SCRIPT));
+  return html(200, shell(ev.name, path, body + EVENT_SCRIPT, "", eventDescription(ev, d0, guests.length)));
 }
 
 async function renderContribute(d, path, uid, msg) {
@@ -626,7 +643,7 @@ async function renderContribute(d, path, uid, msg) {
       <p class="note" style="margin:0 0 8px">Stored privately, used only to sync your Luma events into the shared pool. Must contain <code>luma.auth-session-key</code>.</p>
       <button class="xp-button primary" type="submit">${own ? "Refresh my events" : "Save &amp; sync"}</button>
     </form>`;
-  return html(200, shell("Contribute", path, body));
+  return html(200, shell("Contribute", path, body, "", "Add an event to Serendipity by link, or connect a Luma feed to sync every event you're going to into the shared pool."));
 }
 
 // parse a Cookie-Editor JSON export (or a "name=value; ..." header) into our
@@ -717,7 +734,7 @@ function renderMcpInfo(path) {
   }
 }</pre>
     <p class="note">It exposes exactly what the dashboard shows: event details and who&apos;s going, with names, roles, companies, and public social links. The email and phone columns behind the pool never leave the database.</p>`;
-  return html(200, shell("For agents", path, body));
+  return html(200, shell("For agents", path, body, "", "Query Serendipity's event pool from an agent: a read-only MCP endpoint over Streamable HTTP, with tools to find events and see who's going."));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
