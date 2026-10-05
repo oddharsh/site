@@ -1224,11 +1224,19 @@ if (inlineProbe.includes("/* probe */") ||
     albumSizes.push(`${albumPath(album)}.html ${html.length}B (${photos.albumPool(pool, album).length} tiles)`);
   }
 
+  // /sitemap-images.xml, advertised in robots.txt beside sitemap.xml. A floor,
+  // because every failure here is an absence: a sitemap listing no photos would
+  // pass every other check and quietly take the library out of Google Images.
+  const imageSitemap = photos.imageSitemapXml(pool, Object.values(ALBUMS));
+  const imageCount = (imageSitemap.match(/<image:image>/g) || []).length;
+  if (imageCount < 100) throw new Error(`sitemap-images.xml: only ${imageCount} images from a pool of ${pool.length}`);
+  await writeFile(`${OUT}/public/sitemap-images.xml`, imageSitemap);
+
   const botHtml = await bot.renderBotPage().text();
   if (!botHtml.includes("AadharshBot")) throw new Error("bot page: rendered document does not name the crawler — did the copy move?");
   await writeFile(`${OUT}/public/bot.html`, botHtml);
 
-  console.log(`pages(gen): photos.html ${photosHtml.length}B (${photos.curatedPool(pool).length} tiles), ${albumSizes.join(", ")}${albumSizes.length ? ", " : ""}bot.html ${botHtml.length}B`);
+  console.log(`pages(gen): photos.html ${photosHtml.length}B (${photos.curatedPool(pool).length} tiles), ${albumSizes.join(", ")}${albumSizes.length ? ", " : ""}bot.html ${botHtml.length}B, sitemap-images.xml ${imageCount} images`);
 }
 
 // 1f) /updates and /restore as deploy-time documents.
