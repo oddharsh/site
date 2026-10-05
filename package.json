@@ -96,7 +96,7 @@
   "engines": {
     "node": ">=26.0.0"
   },
-  "comment:undici": "undici arrives only through miniflare, which pins it EXACTLY, so npm cannot move it and dependabot cannot either. An `overrides` block forced 7.29.0 from 2026-08-05 until this commit, for five advisories in the 7.28.0 pin. Both miniflare consumers now ask for 7.29.0 themselves, so the override is gone. The floors are what replace it: `wrangler >= 4.120.0` and `cal`'s `@cloudflare/vitest-pool-workers >= 0.20.3` are the two versions whose miniflare (5.20260801.1-alpha) carries the fixed pin. Dropping EITHER floor puts 7.28.0 back at the hoisted position, silently, because npm hoists whichever exact pin it resolves first and the vulnerable one wins that race.",
+  "comment:undici": "undici arrives only through miniflare, which pins it EXACTLY, so npm cannot move it and dependabot cannot either. An `overrides` block forced 7.29.0 from 2026-08-05 for five advisories in the 7.28.0 pin, until both miniflare consumers asked for 7.29.0 themselves. Since #703 (2026-09-02) retired cal's @cloudflare/vitest-pool-workers, wrangler's miniflare is the ONLY consumer, so the wrangler pin decides undici and there is no second pin to lose a hoisting race to. workers-sdk#15938 moved miniflare to 7.29.1 for GHSA-3wwx-pv8p-q78v, and `bun why undici` reads 7.29.1 at wrangler f025bbf. A wrangler pin whose miniflare asks for anything older reopens that advisory, so read `bun why undici` before moving the pin backwards.",
   "workspaces": [
     "cal",
     "cf-garage",
