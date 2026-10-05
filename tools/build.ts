@@ -1444,7 +1444,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
       // Both devices go BEFORE .content as its siblings; luna.css grids the
       // window around them. Putting the pane inside .content cost every page a
       // hole under its heading, because the pane then owned grid row 1.
-      const contentOpen = /<div class="content"[^>]*>/.exec(out);
+      const contentOpen = /<div class="content(?: [^"]*)?"[^>]*>/.exec(out);
       if (contentOpen) {
         out = out.slice(0, contentOpen.index)
           + String(addressBar(options))
@@ -1469,7 +1469,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     const file = `${OUT}/public/${rel}`;
     const html = await readFile(file, "utf8");
     const hasChrome = html.includes('class="axp-tasks"');
-    const windowed = /<div class="content"[^>]*>/.test(html) && /<div class="window"/.test(html);
+    const windowed = /<div class="content(?: [^"]*)?"[^>]*>/.test(html) && /<div class="window"/.test(html);
     if (!hasChrome && !windowed) return null;
     const result = dressPage(html, rel);
     await writeFile(file, result.html);
