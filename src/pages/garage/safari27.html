@@ -23,22 +23,14 @@
 <meta property="og:image:alt" content="aadhar.sh/garage/safari 27, live demo screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-safari27.jpg">
 
-<style>* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: var(--ink); }
-.window { --axp-maxw: 720px; max-width: var(--axp-maxw); }
-.title-bar .icon { border-radius: 50%; background: oklch(100% 0 0); border: 1.5px solid #001ea0; }
+<link rel="stylesheet" href="/prose.css">
+<style>.title-bar .icon { border-radius: 50%; background: oklch(100% 0 0); border: 1.5px solid #001ea0; }
 .title-bar .icon::before { content: ""; position: absolute; left: 6.5px; top: 2px; width: 0; height: 0;
   border: 3px solid transparent; border-bottom-color: #e45f3e; }
 .title-bar .icon::after { content: ""; position: absolute; left: 6.5px; bottom: 2px; width: 0; height: 0;
   border: 3px solid transparent; border-top-color: #8fa6d8; }
 
-.content { padding: 12px 16px 16px; }
-h1 { font-family: var(--font-caption); font-size: 14pt; color: var(--blue-40); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
-.lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
 p { margin: 0 0 12px; }
-a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
-hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 16px 0; height: 0; }
 code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
 pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; background: oklch(97.5% 0.006 255); border: 1px solid oklch(86.67% 0.0294 259.59); padding: 8px 10px; margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
 
@@ -104,7 +96,7 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/safari 27</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content">
+  <div class="content prose">
     <h1>Safari 27, through this site&apos;s lens</h1>
     <p class="lede">WWDC26 shipped <strong>Safari 27</strong> (macOS&nbsp;27 "Golden Gate," iOS/iPadOS&nbsp;27, visionOS&nbsp;27): ~58 new web-platform features. This site already leans on a bunch of them, so this cut shows where the platform caught up rather than the whole changelog. Source: the WebKit team&apos;s <a href="https://webkit.org/blog/17967/news-from-wwdc26-webkit-in-safari-27-beta/" rel="external">News from WWDC26: WebKit in Safari&nbsp;27 beta</a>.</p>
 

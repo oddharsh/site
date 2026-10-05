@@ -210,9 +210,10 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
   { file: "lwe-base.css", kind: "style", scope: "shell",
     budget: { role: "LWE render-blocking CSS", gzipKiB: 2, brotliKiB: 2 },
     load: [{ via: "attr", attr: "href" }], loadedBy: ["public/lwe/vigenere.html"] },
-  // Shared prose CSS for ten hand-written Garage pages. Page-scoped, so its
-  // custom-property uses cannot re-rank luna.css's short names (gotcha 35).
-  { file: "garage-base.css", kind: "style", scope: "page", budget: "unbudgeted",
+  // The prose kit: article typography for every Garage page, linked before a
+  // page's own <style>. Page-scoped, so its custom-property uses cannot
+  // re-rank luna.css's short names (gotcha 35).
+  { file: "prose.css", kind: "style", scope: "page", budget: "unbudgeted",
     load: [{ via: "attr", attr: "href" }], loadedBy: ["public/garage/wire.html"] },
   // The LWE pages' ask widget, on 12 pages. Minified since 2026-09-16 (4,305 B
   // at the edge's q4 against 2,833 with a q11 twin); /lwe/ask.js stays served.

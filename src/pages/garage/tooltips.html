@@ -19,6 +19,7 @@
 <meta property="og:image:alt" content="aadhar.sh/garage/tooltip experiments, live demo screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-tooltips.jpg">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='2.5'%20y='4'%20width='20'%20height='13'%20rx='2.5'%20fill='%230855dd'/%3E%3Cpath%20d='M8%2016%20L8%2021.5%20L13%2016%20Z'%20fill='%230855dd'/%3E%3Crect%20x='5.5'%20y='8'%20width='14'%20height='1.8'%20rx='0.9'%20fill='%23cfe0fb'/%3E%3Crect%20x='5.5'%20y='11.5'%20width='9.5'%20height='1.8'%20rx='0.9'%20fill='%23cfe0fb'/%3E%3Cpath%20d='M17.5%2018.5%20L17.5%2029%20L20.2%2026.3%20L22.3%2031.2%20L24.1%2030.4%20L22%2025.7%20L25.5%2025.7%20Z'%20fill='%23ffffff'%20stroke='%23001ea0'%20stroke-width='1'%20stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/prose.css">
 <style>/* --x/--y carry the cursor position (clientX/Y in px), written by JS on
    pointermove. registering them as typed <length> properties (instead of
    plain custom properties) makes them transitionable, and initial-value
@@ -31,38 +32,8 @@
 @property --y { syntax: "<length>"; inherits: false; initial-value: 0px; }
 
 /* shared XP window chrome */
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: var(--ink); }
-.window { --axp-maxw: 720px; max-width: var(--axp-maxw); }
-.title-bar .icon { background: oklch(87.82% 0.0877 66.27); }
-.title-bar .icon::before {
-  content: ""; position: absolute; inset: 3px;
-  background: oklch(69.58% 0.2043 43.49);
-  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
-}
-.content { padding: 12px 16px 18px; }
-h1 {
-  font-family: var(--font-caption);
-  font-size: 14pt;
-  color: var(--blue-40);
-  margin: 0 0 6px;
-}
-.lede { color: var(--ink-soft); font-size: 10.5pt; margin: 0 0 4px; }
-h2 {
-  font-family: var(--font-caption);
-  font-size: 13pt;
-  color: var(--blue-40);
-  margin: 28px 0 4px;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
-.note code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .toy { font: 9.5pt/1.5 var(--font-mono); color: oklch(30% 0.02 250); background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 8px 10px; margin: 4px 0 10px; overflow-x: auto; }
-hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
 
 /* status pills (match garage/index.html styling) */
 .badge {
@@ -604,14 +575,6 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 }
 @supports (anchor-name: --x) { .anchor-fallback { display: none; } }
 
-footer {
-  text-align: center;
-  font-size: 9pt;
-  color: oklch(44.95% 0 0);
-  margin: 24px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid oklch(86.67% 0.0294 259.59);
-}
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -626,10 +589,10 @@ footer {
 
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
-    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/tooltip experiments</span>
+    <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/tooltip experiments</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content">
+  <div class="content prose">
 
     <h1>Tooltip Experiments</h1>
     <p class="lede">

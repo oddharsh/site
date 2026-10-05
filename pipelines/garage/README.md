@@ -2,7 +2,9 @@
 
 Use this pipeline for every new Garage page. It gives the page the Luna shell,
 the shared navigation hook, the active-recall check, and the same editorial card
-that LWE pages use. The experiment still owns its body HTML, CSS, and JavaScript.
+that LWE pages use, and links the prose kit (`/prose.css`), which supplies the
+article typography every Garage page shares. The experiment still owns its body
+HTML, CSS, and JavaScript; keep `pageCss` to what is actually that page's own.
 
 ## Create a page
 

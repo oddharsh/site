@@ -23,20 +23,12 @@
 <meta property="og:image:alt" content="aadhar.sh/garage/masonry, live demo screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-masonry.jpg">
 
-<style>* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: var(--ink); }
-.window { --axp-maxw: 720px; max-width: var(--axp-maxw); }
-.title-bar .icon { width:14px; height:14px;
+<link rel="stylesheet" href="/prose.css">
+<style>.title-bar .icon { width:14px; height:14px;
   background: linear-gradient(135deg, #166aee 0 50%, #ff9500 50% 100%); border:1px solid #001ea0; }
 
-.content { padding: 12px 16px 16px; }
-h1 { font-family: var(--font-caption); font-size: 14pt; color: var(--blue-40); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
-.lede { margin: 0 0 12px; color: var(--ink-soft); font-size: 10.5pt; }
 p { margin: 0 0 12px; }
-a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
 code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
-hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; height: 0; }
 
 /* ── controls row: chip + a segmented toggle ─────────────────────────── */
 .bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
@@ -95,7 +87,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/masonry</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content">
+  <div class="content prose">
     <h1>A masonry contact sheet</h1>
     <p class="lede">The homepage grid crops every photo to a 1:1 square: <code>object-fit: cover</code> drops each one into the same cell. <strong><a href="https://drafts.csswg.org/css-grid-3/" rel="external">CSS Grid Lanes</a></strong> (<code>display: grid-lanes</code>, shipped in Safari&nbsp;27; see <a href="/garage/safari27">the Safari 27 notes</a>) lays the columns on a grid but stacks the rows masonry-style, so a portrait and a landscape sit side by side at their true heights. No JavaScript lays anything out, no media queries fire.</p>
 

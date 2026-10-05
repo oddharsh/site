@@ -20,20 +20,9 @@
 <meta property="og:image:alt" content="aadhar.sh/garage/scroll, live demo screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-scroll.jpg">
 
-<style>* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: var(--ink); }
-.window { --axp-maxw: 680px; max-width: var(--axp-maxw); }
-.title-bar .icon { background: oklch(87.82% 0.0877 66.27); }
-.title-bar .icon::before { content: ""; position: absolute; inset: 3px; background: oklch(69.58% 0.2043 43.49); clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%); }
-.content { padding: 12px 16px 16px; }
-h1 { font-family: var(--font-caption); font-size: 14pt; color: var(--blue-40); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
-.lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
+<link rel="stylesheet" href="/prose.css">
+<style>.window { --axp-maxw: 680px; }
 p { margin: 0 0 12px; }
-a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
-a:visited { color: oklch(42.09% 0.1935 328.36); }
-a:hover { color: oklch(62.80% 0.2577 29.23); }
-hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 16px 0; height: 0; }
 code { font-family: var(--font-mono); font-size: 9.5pt; }
 .chip { font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
@@ -217,7 +206,6 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
   .maxi { animation: none !important; transform: none !important; opacity: 1 !important; }
   .xp-progress-fill { animation: none !important; width: 60% !important; }
 }
-footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color: oklch(44.95% 0 0); margin: 18px 0 0; padding-top: 14px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
 /* spacer so there's room to actually scroll and watch the copy bar fill */
 .scroll-room { height: 60vh; display: flex; align-items: center; justify-content: center; color: oklch(60% 0 0); font-size: 9pt; font-style: italic; }
 </style>
@@ -228,10 +216,10 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
 
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
-    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/scroll</span>
+    <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/scroll</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content">
+  <div class="content prose">
 
     <h1>Scroll, the XP way</h1>
     <p class="lede">
