@@ -214,6 +214,21 @@ test("the deploy bridge runs the pinned wrangler under node, on either tree", as
     assert.doesNotMatch(out, /(pnpm|npx|bunx) ran:/, `${tree} must not go through a package manager`);
   }
 
+  // An AUXILIARY Worker: WRANGLER_CWD names its directory. The root's pinned
+  // entry runs from there, and --x-new-config follows THAT directory's config.
+  const repo = withEntry(join(root, "aux-tree"), "bun.lock");
+  mkdirSync(join(repo, "lwe-ask"));
+  writeFileSync(join(repo, "lwe-ask/cloudflare.config.ts"), "");
+  mkdirSync(join(repo, "counter"));
+  const runIn = (dir, args) => execFileSync("bash", [script, ...args], {
+    cwd: repo, encoding: "utf8", env: { PATH: stub, HOME: process.env.HOME || root, WRANGLER_CWD: dir },
+  });
+  assert.match(runIn("lwe-ask", ["deploy"]), new RegExp(`node ran: ${repo}/node_modules/wrangler/bin/wrangler\\.js deploy --x-new-config`),
+    "an aux Worker with a TS config runs the root's wrangler with --x-new-config");
+  assert.match(runIn("counter", ["deploy"]), new RegExp(`node ran: ${repo}/node_modules/wrangler/bin/wrangler\\.js deploy$`, "m"),
+    "an aux Worker without one gets no flag");
+  assert.throws(() => runIn("missing", ["deploy"]), /Command failed/, "a WRANGLER_CWD that does not exist must fail");
+
   // Every failure is LOUD, because a deploy command that half-works is worse
   // than one that stops.
   const half = join(root, "half");

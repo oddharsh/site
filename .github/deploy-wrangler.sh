@@ -63,6 +63,23 @@ if [ ! -f "$entry" ]; then
   exit 1
 fi
 
+# ONE WRAPPER FOR EVERY WORKER (2026-10-05). The auxiliary Workers (cf-garage,
+# lwe-ask, lens-reader, counter) each have their own Workers Builds project
+# whose build variables set WRANGLER_CWD to that Worker's directory. The
+# install above still runs at the repository root, because the workspace's one
+# pinned wrangler lives there; wrangler then runs from the Worker's directory,
+# which is where it reads that Worker's config. A directory outside the bun
+# workspace with its own lockfile (lens-reader) gets its own frozen install.
+# Unset, nothing here changes: the site Worker builds from the root as before.
+if [ -n "${WRANGLER_CWD:-}" ]; then
+  entry="$PWD/$entry"
+  cd "$WRANGLER_CWD"
+  if [ -n "${SKIP_DEPENDENCY_INSTALL:-}" ] && [ -f bun.lock ]; then
+    echo "deploy-wrangler.sh: $WRANGLER_CWD has its own lockfile; bun install --frozen-lockfile there"
+    bun install --frozen-lockfile
+  fi
+fi
+
 # THE SITE CONFIG IS TYPESCRIPT since 2026-09-28 (cloudflare.config.ts plus
 # wrangler.config.ts, replacing wrangler.jsonc), and wrangler reads it only
 # behind `--x-new-config`. The flag is added HERE rather than in the dashboard
