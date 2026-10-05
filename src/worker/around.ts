@@ -277,7 +277,10 @@ export async function handleAroundChangesJson(request, env) {
       "x-robots-tag": "noindex",
     });
   } catch (e) {
-    return jsonResponse({ ok: false, available: false, changes: [], error: String(e?.message || e) }, 503, {
+    // The detail goes to Workers Logs, never the body: this 503 is edge-cached
+    // for everyone, and a D1 message can name tables, columns and SQL.
+    console.error("around/changes.json: history read failed", e);
+    return jsonResponse({ ok: false, available: false, changes: [], error: "change history is temporarily unavailable" }, 503, {
       "cache-control": "public, max-age=30, must-revalidate",
       "x-robots-tag": "noindex",
     });
