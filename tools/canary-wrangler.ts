@@ -60,6 +60,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
+import { suiteCounts } from "./lib/bun-gates.ts";
 import { interpretZstdProbe } from "./lib/bun-pin.ts";
 import { HARNESS_TEST_FLOOR, harnessTests, testArgv } from "./lib/harness-tests.ts";
 import { WRANGLER_WATCHES, type WatchResult, interpretDevAuxProbe, interpretTemporalProbe, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
@@ -254,8 +255,7 @@ try {
   {
     const out = run(BUN, ["run", "--filter", "cal-aadhar-sh", "test"], { cwd: wt, timeout: 5 * 60_000 });
     const text = `${out.stdout}\n${out.stderr}`;
-    const pass = Number(text.match(/(\d+) pass/)?.[1] ?? 0);
-    const fail = Number(text.match(/(\d+) fail/)?.[1] ?? -1);
+    const { pass, fail } = suiteCounts(text);
     const timedOut = out.signal === "SIGTERM";
     step({
       name: "cal suite passes on the candidate harness",
@@ -283,8 +283,7 @@ try {
     const script = String(JSON.parse(readFileSync(join(wt, "package.json"), "utf8")).scripts?.test ?? "");
     const out = run(BUN, testArgv(script, files), { cwd: wt, timeout: 5 * 60_000 });
     const text = `${out.stdout}\n${out.stderr}`;
-    const pass = Number(text.match(/^\s*(\d+) pass$/m)?.[1] ?? 0);
-    const fail = Number(text.match(/^\s*(\d+) fail$/m)?.[1] ?? -1);
+    const { pass, fail } = suiteCounts(text);
     const timedOut = out.signal === "SIGTERM";
     // Each failure prints its error up to ~25 lines above its "(fail)" row (the
     // stack sits between), and bun repeats every "(fail)" row in a summary at

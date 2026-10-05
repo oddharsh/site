@@ -34,13 +34,18 @@
 // and every "first-run finding" before that came from a Mac. The installable
 // prerelease channels are Google's and Microsoft's: `chrome-beta` (one major
 // ahead of stable) and `msedge-dev` (Chromium's tip, roughly weekly), each
-// paired with its own stable. Playwright's bundled firefox and webkit are
+// paired with its own stable. Until 2026-10-04 Chrome Beta was paired with
+// the BUNDLED chromium, which playwright-core pins (153 under 1.63) while
+// Google stable moves every four weeks: the pair spanned three majors, and a
+// flip already in stable Chrome stayed a flip until someone bumped
+// playwright, so the leg's one issue (#816) could never close itself.
+// Playwright's bundled firefox and webkit are
 // themselves built from near-trunk, so they stand alone as snapshots. On a
 // Mac with Canary, `--pairs chrome:chrome-canary` is the one-minute version
 // and needs nothing downloaded. A contract test asks the pinned installer
 // about every default name, so the next rename fails there by name.
 //
-//   node node_modules/playwright-core/cli.js install --with-deps chromium chrome-beta msedge msedge-dev firefox webkit
+//   node node_modules/playwright-core/cli.js install --with-deps chrome chrome-beta msedge msedge-dev firefox webkit
 //
 // THE CONTROL is the stable half of each pair, and it is two assertions: the
 // engine returned every probe the page declares, and at least one probe is
@@ -80,7 +85,7 @@ const flag = (name: string): string | null => {
   return i === -1 ? null : argv[i + 1];
 };
 
-export const DEFAULT_PAIRS = "chromium:chrome-beta,msedge:msedge-dev,firefox,webkit";
+export const DEFAULT_PAIRS = "chrome:chrome-beta,msedge:msedge-dev,firefox,webkit";
 const pairs = (flag("--pairs") ?? DEFAULT_PAIRS).split(",").map((p) => p.trim()).filter(Boolean).map((p) => p.split(":"));
 const pagePath = realpathSync(flag("--page") ?? join(ROOT, "src", "pages", "garage", "horizon.html"));
 const jsonPath = flag("--json");

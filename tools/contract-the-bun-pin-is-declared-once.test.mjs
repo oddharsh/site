@@ -5,7 +5,7 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, newestSeasonedCanary, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";
 import { fileURLToPath } from "node:url";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { contractSuiteGate, suiteArgs } from "./lib/bun-gates.ts";
+import { contractSuiteGate, suiteArgs, suiteCounts } from "./lib/bun-gates.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -317,5 +317,45 @@ test("the suite gate runs `bun run test`'s own flags, and a failed gate reaches 
     const at = bumper.indexOf(exit);
     assert.ok(at > 0, `the bumper no longer prints ${JSON.stringify(exit)}`);
     assert.match(bumper.slice(at, at + 300), /red\(\);\s*process\.exit\(1\);/, `the ${JSON.stringify(exit)} exit writes no red report, so its gate never reaches the issue`);
+  }
+});
+
+test("suite gates read bun's summary rows, never a test name that happens to say \"1 fail\"", async () => {
+  // A passing test from #1113 is named "... a renamed D1 fails", and "D1 fails"
+  // contains "1 fail". The unanchored regex every gate used took that as the
+  // count, so bun:pin and canary:bun each filed a RED issue (#1122, #1124)
+  // nightly from 2026-10-03 against a suite whose summary said 0 fail.
+  const output = [
+    "bun test v1.4.3-canary.1 (bc7a813b1) 4x PARALLEL",
+    "(pass) a binding pointing at a resource the account does not hold fails; a renamed D1 fails [0.16ms]",
+    "",
+    " 1217 pass",
+    " 0 fail",
+    "Ran 1217 tests across 177 files. [8.49s]",
+  ].join("\n");
+  assert.deepEqual(suiteCounts(output), { pass: 1217, fail: 0 });
+  // The control: the old pattern misreads this exact output, so the fixture can fail.
+  assert.equal(Number(output.match(/(\d+) fail/)?.[1]), 1, "the fixture no longer trips the unanchored regex, so the check above measures nothing");
+  assert.deepEqual(suiteCounts("no summary here"), { pass: 0, fail: -1 }, "a run with no summary reads as no verdict, never as zero failures");
+
+  const dir = await mkdtemp(join(tmpdir(), "suite-counts-"));
+  try {
+    await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test tools/" } }));
+    const fake = join(dir, "fake-bun");
+    await writeFile(fake, `#!/bin/sh\ncat <<'OUT'\n${output}\nOUT\n`);
+    await chmod(fake, 0o755);
+    const g = contractSuiteGate(fake, dir, 10_000);
+    assert.ok(g.ok, `the gate misread a green suite: ${g.detail}`);
+    assert.equal(g.detail, "1217 pass, 0 fail");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  // One reader, so the next gate cannot bring the unanchored copy back.
+  for (const file of ["tools/lib/bun-gates.ts", "tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/bump-bun-pin.ts"]) {
+    const src = (await readFile(new URL(file, ROOT), "utf8")).replace(/^\s*(\*|\/\/).*$/gm, "");
+    const own = file === "tools/lib/bun-gates.ts" ? src.replace(/export function suiteCounts[\s\S]*?\n}\n/, "") : src;
+    const stray = own.match(/.*\(\\d\+\) (pass|fail).*/)?.[0]?.trim() ?? null;
+    assert.equal(stray, null, `${file} counts bun's results with its own regex; use suiteCounts`);
   }
 });

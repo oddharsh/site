@@ -238,7 +238,7 @@ jobs:
           docker run --rm --init --ipc=host \
             -v "$PWD:/work" -v "$HOME/.bun/bin/bun:/usr/local/bin/bun:ro" \
             -w /work "$BROWSER_IMAGE" bash -c '
-              bun node_modules/playwright-core/cli.js install chrome-beta msedge msedge-dev || exit 2
+              bun node_modules/playwright-core/cli.js install chrome chrome-beta msedge msedge-dev || exit 2
               bun run canary:browsers -- --json canary.json
             ' > canary.txt 2>&1
           verdict=$?
