@@ -34,6 +34,7 @@ export const PLACES = [
   { path: "/around", label: "Around" },
   { path: "/lens", label: "The Other Web" },
   { path: "/pixel-peeper", label: "Pixel Peeper" },
+  { path: "/dotfiles", label: "Dotfiles" },
   { path: "/rn", label: "Music" },
   { path: "/coffee", label: "Coffee" },
 ];
