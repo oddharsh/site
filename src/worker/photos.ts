@@ -691,6 +691,9 @@ export function renderPhotosPage(photos, altMap) {
     route: "/photos",
     width: 980,
     description: `All ${curated.length} photos, straight out of camera. FUJIFILM X-T50 + Leica M.`,
+    // The unfurl card shows the sheet's first photo, the same one the page opens on.
+    ogImage: curated[0].thumb_jpg,
+    ogImageAlt: (altMap && altMap[curated[0].stem]) || curated[0].stem,
     css: SHEET_CSS,
     body: unsafeHtml(`
   <h1>Photos</h1>
@@ -746,6 +749,8 @@ export function renderAlbumPage(album: Album, photos, altMap) {
     route: albumPath(album),
     width: 980,
     description: album.description,
+    ogImage: members[0].thumb_jpg,
+    ogImageAlt: (altMap && altMap[members[0].stem]) || members[0].stem,
     css: SHEET_CSS,
     body: html`
   <h1>${album.title}</h1>

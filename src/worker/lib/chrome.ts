@@ -63,12 +63,40 @@ function faviconLink(route): Html {
  *  CSS would turn `a > b` into `a &gt; b` and break the selector rather than
  *  protect anything. Escaping is the wrong tool in that context, which is why
  *  it goes through `unsafeHtml(` at the one place it is spliced. */
+/** The link-unfurl card: Open Graph plus the twitter:card hint, which is what
+ *  X, Slack, iMessage and Discord read when a URL is pasted. The static pages
+ *  author these by hand (with a pre-baked /og/ image); this is the same set for
+ *  every page rendered here, so a shared /photos or writing post unfurls with a
+ *  title and description instead of a bare URL. `image` is site-relative and
+ *  must be a JPEG or PNG: no unfurler draws an SVG. Without one the card is
+ *  `summary`, which needs no image. */
+export function shareMeta({ title, description = "", path, type = "website", image = "", imageAlt = "" }: {
+  title: string; description?: string; path: string; type?: string; image?: string; imageAlt?: string;
+}): Html {
+  const url = `https://aadhar.sh${path}`;
+  const img = image ? `https://aadhar.sh${image}` : "";
+  return html`
+<meta property="og:type" content="${type}">
+<meta property="og:site_name" content="aadhar.sh">
+<meta property="og:title" content="${title}">${description ? html`
+<meta property="og:description" content="${description}">` : EMPTY}
+<meta property="og:url" content="${url}">
+<meta name="twitter:card" content="summary">${img ? html`
+<meta property="og:image" content="${img}">
+<meta name="twitter:image" content="${img}">${imageAlt ? html`
+<meta property="og:image:alt" content="${imageAlt}">` : EMPTY}` : EMPTY}`;
+}
+
 export type LunaPageOptions = {
   title?: string;
   path?: string;
   width?: number;
   description?: string;
   robots?: string;
+  /** A site-relative image for the link-unfurl card. Without one the card is
+   *  title and description alone, which every unfurler still draws. */
+  ogImage?: string;
+  ogImageAlt?: string;
   /** CSS, not HTML. See the note above. */
   css?: string;
   head?: Html;
@@ -98,6 +126,8 @@ export function lunaPage({
   width = 720,
   description = "",
   robots = "",
+  ogImage = "",
+  ogImageAlt = "",
   css = "",
   head = EMPTY,
   body = EMPTY,
@@ -187,7 +217,7 @@ export function lunaPage({
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>${documentTitle}</title>${metaDescription}${metaRobots}${linkCanonical}${twinLink}
+<title>${documentTitle}</title>${metaDescription}${metaRobots}${linkCanonical}${route ? shareMeta({ title: documentTitle, description, path: route, image: ogImage, imageAlt: ogImageAlt }) : EMPTY}${twinLink}
 ${faviconLink(route)}
 ${head}<style>
 :root{--axp-maxw:${width}px}
