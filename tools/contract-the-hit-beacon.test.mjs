@@ -47,6 +47,23 @@ test("the /hit beacon answers 204 without waiting on the Durable Object", async 
   await kept[0];   // and it still completes behind the response
 });
 
+test("the homepage's one /hit request ticks without waiting and answers the mirrored count", async () => {
+  const { env, seen, release } = slowCounter();
+  env.RN_KV = { get: async () => "1234" };
+  const kept = [];
+  const ctx = { waitUntil: (p) => kept.push(p) };
+
+  const res = await handleHit(new Request("https://aadhar.sh/hit?tick=1&n=1"), env, ctx);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { n: 1234 }, "the count comes from the KV mirror, not the DO");
+  assert.equal(seen.length, 1, "the tick must still be initiated");
+  assert.equal(seen[0], "", "it advances the count (no ?peek)");
+  assert.equal(kept.length >= 1, true, "the unfinished DO trip must be handed to waitUntil");
+
+  release();
+  await Promise.all(kept);
+});
+
 test("the /hit beacon still ticks when there is no ctx to defer onto", async () => {
   const { env, seen, release } = slowCounter();
   release();   // resolve immediately; without a ctx the handler must await it

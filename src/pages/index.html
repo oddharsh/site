@@ -874,9 +874,8 @@ footer .signature small { color: oklch(56.93% 0 0); }
            has every link. -->
       <p>
         Last modified <time datetime="2026-06-07">June 7, 2026</time>
-        <!-- the count is SSR'd text from a read-only DO peek (display mutates
-             nothing, so homepage GETs stay pure + prerender-safe); the actual
-             tick is the /hit?tick=1 beacon at the end of <body>, plus the
+        <!-- the count hydrates from the /hit?tick=1&n=1 beacon at the end of
+             <body>, which is also the tick, plus the
              <noscript> pixel here for script-off visitors, who can't fetch and
              so tick by loading an image instead. curl /hit for the odometer. -->
         &middot; You are visitor <span class="counter">000042</span><noscript><img src="/hit" alt="" width="1" height="1"></noscript>
@@ -1060,52 +1059,18 @@ footer .signature small { color: oklch(56.93% 0 0); }
 <!-- the counter's ONLY scripted tick: fires once per real visit, deferred to
      prerenderingchange when the load was speculative so a hover-prerender that
      never activates counts zero and an activated one counts exactly once.
-     bfcache restores re-run nothing, so back/forward stays tick-free. the
-     display above is a read-only peek; script-off visitors tick via the
-     <noscript> pixel instead. ?tick=1 says "side effect only" and gets a 204
-     back with no body AND no wait: the worker finishes the Durable Object trip
-     under waitUntil, so this costs edge RTT rather than the ~630ms the DO round
-     trip took on a cold contended load. -->
+     bfcache restores re-run nothing, so back/forward stays tick-free.
+     script-off visitors tick via the <noscript> pixel instead. one request does
+     both jobs: the worker finishes the Durable Object tick under waitUntil and
+     answers with the KV-mirrored count, so this never waits on the DO. a failed
+     read leaves the static placeholder rather than showing a number nobody
+     counted. priority:"low" keeps it behind the photo tiles. -->
 <script>(function(){
-  // Two separate things, deliberately. The TICK is the visit beacon: fire and
-  // forget, 204, never prerendered (a speculative load is not a visit). The
-  // COUNT is the footer odometer, hydrated on idle because `/` is a
-  // deterministic document now and a per-visitor number cannot live in it. A
-  // failed read leaves the static placeholder where it is rather than showing a
-  // number nobody counted.
   var t=function(){
-    // priority:"low" because this beacon kept losing the argument counter.js
-    // already had with itself. that handler returns its 204 without waiting on
-    // the DO precisely so the tick "stops holding a socket against the same
-    // pool the photo tiles are queued in" — but the HAR on 2026-07-30 still
-    // caught it at 127ms wall (58ms receive), fired at 116ms alongside
-    // /photos/grid.html and /rn/tracks.html, and classed High by fetch's
-    // default. the server side was fixed; the CLIENT was still spending a
-    // high-priority stream on a visit counter during the window that decides
-    // when photos start. this is the missing half of that change.
-    //
-    // NOT sendBeacon, which looks like the textbook answer here and would break
-    // the counter outright: with no body it POSTs, and index.js rejects every
-    // method that is not GET or HEAD, so the tick would never reach the route.
-    // keepalive stays for the unload case; unsupporting browsers ignore the
-    // priority hint and land exactly where they are today.
-    fetch("/hit?tick=1",{keepalive:true,priority:"low"}).catch(function(){});
-    var fill=function(){
-      // Same demotion as the tick above, and the half that one missed. Being
-      // inside requestIdleCallback sets WHEN this fires, never what it outranks
-      // once it does: measured on a cold incognito load 2026-07-30, idle came at
-      // 153ms on a page whose tiles start at 178ms, so a High-priority odometer
-      // went out ahead of all twelve of them. The tiles are deliberately
-      // fetchpriority=low (#156 put LCP on the prose), which is exactly why
-      // nothing else on this page should be defaulting to High by accident.
-      // counter.js says it plainly: a footer odometer is the last thing on the
-      // page that matters.
-      fetch("/hit?n=1",{priority:"low"}).then(function(r){return r.ok?r.json():null}).then(function(j){
-        var el=document.querySelector(".counter");
-        if(el&&j&&typeof j.n==="number")el.textContent=String(j.n).padStart(6,"0");
-      }).catch(function(){});
-    };
-    "requestIdleCallback"in window?requestIdleCallback(fill,{timeout:3000}):setTimeout(fill,1200);
+    fetch("/hit?tick=1&n=1",{keepalive:true,priority:"low"}).then(function(r){return r.ok?r.json():null}).then(function(j){
+      var el=document.querySelector(".counter");
+      if(el&&j&&typeof j.n==="number")el.textContent=String(j.n).padStart(6,"0");
+    }).catch(function(){});
   };
   document.prerendering?addEventListener("prerenderingchange",t,{once:true}):t()
 })();</script>
