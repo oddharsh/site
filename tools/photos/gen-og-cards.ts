@@ -166,6 +166,12 @@ const HERO = {
   // type, and at the ~500px a timeline unfurls the card both sheets turn to
   // noise. The script is what the click is for; the card only has to show the list.
   "dotfiles": { hero: [".sheet:has(#df-list)"] },
+  // The name and bio down through the photo grid: who, and the first thing the
+  // page shows of their work. Capped so the card holds the top rows of photos
+  // rather than shrinking the whole sheet to thumbnails. Capture against
+  // PRODUCTION: the grid is an island (/photos/grid.html) that a plain static
+  // server cannot answer, so locally it keeps only the baked fallback, if any.
+  "home": { span: ["h1.p-name", ".photos"], spanMaxH: 640, hero: [".photos"] },
 };
 
 // Selectors tried when a page has no HERO entry, or its listed heroes all miss.
@@ -286,7 +292,9 @@ async function listPages() {
   // local static server too — no LOCAL skip, unlike the worker routes. The
   // static server serves raw paths, the live worker serves the clean route.
   for (const p of OG_PAGE_DIRS) {
-    out.push({ id: p.id, url: LOCAL ? `${BASE}/${p.dir}/index.html` : `${BASE}/${p.dir}` });
+    // An empty dir is the site root: `/` live, `/index.html` on the static server.
+    const local = `${BASE}/${p.dir ? p.dir + "/" : ""}index.html`;
+    out.push({ id: p.id, url: LOCAL ? local : `${BASE}/${p.dir}` });
   }
   return ONLY ? out.filter((p) => ONLY.has(p.id)) : out;
 }
