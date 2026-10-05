@@ -210,12 +210,12 @@ export async function handleSpeculationJson(request, env) {
     `FROM ${SPECULATION_DATASET} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
     `GROUP BY kind, path FORMAT JSON`);
   if (!read.ok) {
-    return jsonResponse({ ok: false, reason: read.reason, window_days: SPECULATION_WINDOW_DAYS },
+    return jsonResponse({ ok: false, reason: read.reason, binding_fallback: read.binding_fallback, window_days: SPECULATION_WINDOW_DAYS },
       read.reason === "unconfigured" ? 200 : 502);
   }
   const rows = summarizeSpeculation(read.data);
   return jsonResponse({
-    ok: true, window_days: SPECULATION_WINDOW_DAYS, dataset: SPECULATION_DATASET,
+    ok: true, via: read.via, binding_fallback: read.binding_fallback, window_days: SPECULATION_WINDOW_DAYS, dataset: SPECULATION_DATASET,
     note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate",
     rows,
   }, 200, { "cache-control": "public, max-age=300, s-maxage=300" });

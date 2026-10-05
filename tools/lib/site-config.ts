@@ -126,7 +126,7 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
   // Only the binding types below have a legacy `remote` key wired here. A
   // `dev.remote` on any other type throws rather than vanishing, because a
   // binding silently running local is the failure this module exists to stop.
-  const REMOTE_WIRED = new Set(["browser", "images", "ai"]);
+  const REMOTE_WIRED = new Set(["browser", "images", "ai", "analytics"]);
   const devRemote = new Set<string>();
   const remote = (name: string) => (opts.dev && devRemote.has(name) ? { remote: true } : {});
   const worker = need(top.worker, "config.worker");
@@ -144,6 +144,7 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
   const secrets: string[] = [];
   let assetsBinding: string | undefined, versionBinding: string | undefined;
   let browserBinding: string | undefined, imagesBinding: string | undefined, aiBinding: string | undefined;
+  let analyticsBinding: string | undefined;
 
   for (const [name, raw] of Object.entries(env)) {
     const b = need(raw, `env.${name}`);
@@ -160,6 +161,7 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
       case "browser": browserBinding = name; break;
       case "images": imagesBinding = name; break;
       case "ai": aiBinding = name; break;
+      case "analytics": analyticsBinding = name; break;
       case "kv": kv.push({ binding: name, id: text(b.id, `env.${name}.id`) }); break;
       case "analytics-engine-dataset": ae.push({ binding: name, dataset: text(b.name, `env.${name}.name`) }); break;
       case "r2": r2.push({ binding: name, bucket_name: text(b.name, `env.${name}.name`) }); break;
@@ -258,6 +260,7 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
   if (browserBinding) out.browser = { binding: browserBinding, ...remote(browserBinding) };
   if (imagesBinding) out.images = { binding: imagesBinding, ...remote(imagesBinding) };
   if (aiBinding) out.ai = { binding: aiBinding, ...remote(aiBinding) };
+  if (analyticsBinding) out.analytics = { binding: analyticsBinding, ...remote(analyticsBinding) };
   if (ratelimits.length) out.ratelimits = ratelimits;
   if (Object.keys(vars).length) out.vars = vars;
   if (secrets.length) out.secrets = { required: secrets };

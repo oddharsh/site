@@ -276,8 +276,13 @@ const worker = defineWorker({
     RN_KV: bindings.kv({ id: "3cb8a107c58e47dc9244e75b33401f36" }),
     BOOKINGS: bindings.kv({ id: "37acb65118fe485583a90a94cb89365e" }),
 
+    // The read side of every dataset below: Analytics SQL, the SQL API as a
+    // binding (workers-sdk#15685), so a read needs no token. ledger.ts tries it
+    // first and falls back to ANALYTICS_READ_TOKEN, and each JSON reply names
+    // the door that answered in `via`.
+    ANALYTICS: bindings.analyticsSQL(),
     // The bot ledger: identified AI-crawler hits tick in here (ledger.ts);
-    // /ledger reads them back via the SQL API (needs ANALYTICS_READ_TOKEN).
+    // /ledger reads them back through ANALYTICS.
     BOT_LEDGER: bindings.analyticsEngineDataset({ name: "aadhar_bot_ledger" }),
     // The speculation ledger: Sec-Purpose prefetch/prerender requests, plus the
     // activation beacons that say which of them paid off (speculation.ts).

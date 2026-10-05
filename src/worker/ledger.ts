@@ -10,9 +10,9 @@
 //   Analytics Engine dataset. Free tier, non-blocking, guarded — no binding,
 //   no counting. Only worker-owned routes are visible (edge-direct static
 //   assets never wake the worker); the page says so honestly.
-//   READING — Analytics Engine has no read binding, so /ledger queries the
-//   SQL API over HTTPS with ANALYTICS_READ_TOKEN (Account Analytics : Read).
-//   Absent token → the invoice renders with a "meter not readable yet" note.
+//   READING — through the Analytics SQL binding (ANALYTICS) first, and the SQL
+//   API over HTTPS with ANALYTICS_READ_TOKEN (Account Analytics : Read) when
+//   the binding cannot answer. Neither → "meter not readable yet".
 //   COSTING — one line under the total, read from Cloudflare's Billable Usage
 //   API with BILLING_READ_TOKEN (Billing : Read). It is the only figure on the
 //   page that was ever actually paid, and it is account-level by necessity;
@@ -96,12 +96,12 @@ export function countCrawlerHit(env: Env, request, response, pathname) {
 // tell, which is the whole reason a `?` on a degrading secret means anything.
 type LedgerRow = { bot: string; owner: string; kind: string; hits: number };
 type LedgerRead =
-  | { ok: false; reason: string }
-  | { ok: true; rows: LedgerRow[] };
+  | { ok: false; reason: string; binding_fallback?: string }
+  | { ok: true; rows: LedgerRow[]; via?: "binding" | "token"; binding_fallback?: string };
 
 // One SQL read against Analytics Engine, shared with the speculation ledger
 // (speculation.ts), which keeps its own dataset and its own GROUP BY but the
-// same token, the same 8s deadline and the same reading of "no such table".
+// same two doors, the same 8s deadline and the same reading of "no such table".
 // The SQL API answers JSON scalars per cell: a string for a blob, a number for
 // a SUM, null for nothing. That is the contract this parses at, so a caller
 // reads a cell as text with one default and never sees "[object Object]".
@@ -109,14 +109,40 @@ export type AnalyticsCell = string | number | null | undefined;
 export type AnalyticsRow = Record<string, AnalyticsCell>;
 export const text = (v: AnalyticsCell, dflt: string): string => (v === null || v === undefined || v === "") ? dflt : String(v);
 
+// `via` names the door that answered, and `binding_fallback` says why the
+// binding did not, so a preview can show which one production would use.
 export type AnalyticsRead =
-  | { ok: false; reason: string }
-  | { ok: true; data: AnalyticsRow[] };
+  | { ok: false; reason: string; binding_fallback?: string }
+  | { ok: true; data: AnalyticsRow[]; via: "binding" | "token"; binding_fallback?: string };
 
-export async function analyticsSql(env: Env, sql: string): Promise<AnalyticsRead> {
+const DEADLINE_MS = 8000;
+// A dataset with zero writes ever does not exist yet: an empty ledger, not an error.
+const NO_TABLE = /no such table|does not exist|unknown table/i;
+
+// THE BINDING DOOR (Analytics SQL, workers-sdk#15685, since 2026-10-05). It is
+// the SQL API without the token: same queries, same rows. `FORMAT JSON` is the
+// HTTP endpoint's output clause, and the binding already returns rows as data.
+async function viaBinding(env: Env, sql: string): Promise<AnalyticsRead> {
+  if (!env.ANALYTICS) return { ok: false, reason: "unbound" };
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("timed out")), DEADLINE_MS); });
+    const r = await Promise.race([env.ANALYTICS.query<AnalyticsRow>({ query: sql.replace(/\s+FORMAT\s+JSON\s*$/i, "") }), deadline]);
+    return { ok: true, data: Array.isArray(r?.data) ? r.data : [], via: "binding" };
+  } catch (e) {
+    const detail = String((e as Error)?.message ?? e).slice(0, 200);
+    if (NO_TABLE.test(detail)) return { ok: true, data: [], via: "binding" };
+    return { ok: false, reason: detail };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// THE TOKEN DOOR: the SQL API over HTTPS with ANALYTICS_READ_TOKEN.
+async function viaToken(env: Env, sql: string): Promise<AnalyticsRead> {
   if (!env.ANALYTICS_READ_TOKEN || !env.CF_ACCOUNT_ID) return { ok: false, reason: "unconfigured" };
   try {
-    const deadline = AbortSignal.timeout(8000);
+    const deadline = AbortSignal.timeout(DEADLINE_MS);
     const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/analytics_engine/sql`, {
       method: "POST",
       headers: { authorization: "Bearer " + env.ANALYTICS_READ_TOKEN },
@@ -125,19 +151,24 @@ export async function analyticsSql(env: Env, sql: string): Promise<AnalyticsRead
     });
     if (!r.ok) {
       const detail = (await r.text().catch(() => "")).slice(0, 200);
-      // a dataset with zero writes ever doesn't exist yet — that's an empty
-      // ledger, not an error.
-      if (/no such table|does not exist|unknown table/i.test(detail)) return { ok: true, data: [] };
+      if (NO_TABLE.test(detail)) return { ok: true, data: [], via: "token" };
       return { ok: false, reason: "SQL API " + r.status + ": " + detail };
     }
     const j = await r.json<{ data?: AnalyticsRow[] }>().catch(() => null);
-    return { ok: true, data: j && Array.isArray(j.data) ? j.data : [] };
+    return { ok: true, data: j && Array.isArray(j.data) ? j.data : [], via: "token" };
   } catch (e) {
     // The reason is served publicly (/ledger.json, /speculation.json), so an
     // exception's text goes to Workers Logs and the reply says only that it threw.
     console.error("ledger: analytics read threw", e);
     return { ok: false, reason: "request failed" };
   }
+}
+
+export async function analyticsSql(env: Env, sql: string): Promise<AnalyticsRead> {
+  const bound = await viaBinding(env, sql);
+  if (bound.ok) return bound;
+  const read = await viaToken(env, sql);
+  return bound.reason === "unbound" ? read : { ...read, binding_fallback: bound.reason };
 }
 
 async function queryLedger(env: Env): Promise<LedgerRead> {
@@ -150,7 +181,7 @@ async function queryLedger(env: Env): Promise<LedgerRead> {
     bot: text(d.bot, "?"), owner: text(d.owner, "?"), kind: text(d.kind, "?"),
     hits: Math.round(Number(d.hits) || 0),
   })).filter((d) => d.hits > 0);
-  return { ok: true, rows };
+  return { ok: true, rows, via: read.via, binding_fallback: read.binding_fallback };
 }
 
 // ── the other column: what the account actually paid ────────────────
@@ -240,11 +271,11 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
     : { available: false, reason: cost.reason };
   if (!q.ok) {
     const status = q.reason === "unconfigured" ? 200 : 502;
-    return jsonResponse({ ok: false, reason: q.reason, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock }, status, publicJsonHeaders(status), { pretty: false });
+    return jsonResponse({ ok: false, reason: q.reason, binding_fallback: q.binding_fallback, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock }, status, publicJsonHeaders(status), { pretty: false });
   }
   const { items, totalHits, totalUsd } = priced(q.rows);
   return jsonResponse({
-    ok: true, window_days: WINDOW_DAYS, rate_usd: RATE_USD,
+    ok: true, via: q.via, binding_fallback: q.binding_fallback, window_days: WINDOW_DAYS, rate_usd: RATE_USD,
     note: "worker-served requests only; UA-matched (self-reported identity); the rate is this site's posted price, not a market quote",
     line_items: items, total_hits: totalHits, total_usd: totalUsd,
     cost: costBlock,
