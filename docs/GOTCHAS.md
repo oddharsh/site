@@ -206,3 +206,16 @@ by renumbering. The long-form history of each one is in git
     test's name and filed RED issues against a healthy bun for two nights
     (#1122, #1124). Use `suiteCounts()` from `tools/lib/bun-gates.ts`. A
     count with no `(fail)` row beside it is the tell.
+
+50. **`cf` can't replace wrangler here yet; it runs wrangler underneath.**
+    Audited on cf 1.0.0-beta.12 (2026-10-05). `cf build` and `cf dev` print
+    "Delegating to Wrangler" and spawn the project's own wrangler, so the pin
+    stays either way. `cf deploy` and `cf workers versions create` hardcode
+    `resourcesProvision: true` and `experimentalAutoCreate: true` (in cf's
+    `deploy-input` chunk) with no flag to turn them off, which breaks the
+    rule that no deploy path creates resources. The tests, `routes:check` and
+    `gen-runtime-types` use wrangler as a library (`createTestHarness`,
+    `wrangler types`), which cf has no stand-in for. And cf's CLI half pins its
+    own miniflare (5.20260930.0-alpha), a second workerd in the tree. Use `cf`
+    for account work it already owns (`cf builds`, `tools/aux-builds.ts`);
+    re-audit when cf ships a no-provision switch.
