@@ -1,7 +1,7 @@
 {
   "$comment": "Machine-owned. Per-input hashes for config/derivations.json, so a stale result can name what moved. Written by `bun run derive:check -- --lock`; do not hand-edit.",
   "files": {
-    "config/site-manifest.json": "c1ccf0c78569788f5363ed1e47ca5f6f7c94c99d0272092e6a9fd65202d5c776",
+    "config/site-manifest.json": "81ee0092ce0ffdbd99a16c0dfc7ffa28ee61917045f14e6cadecb2daf5022efa",
     "images/alt#L1000069_3": "set",
     "images/alt#L1009919_2": "set",
     "images/alt#L1009920": "set",
@@ -1552,6 +1552,6 @@
     "public/i/XT509996.7c90b12d.jpg": "7c90b12dc70fc92e8f5e836e0b28248f7f07929b2df5607bf8a601b2a4b1b7c4",
     "public/images/alt.json": "1b133ef47bf7695e5503f9f98197d9930995f9f74629a1d3bd1602c21c559ac1",
     "public/images/metadata.json": "0dcbf4790d4a2c2eba07f7fa79600ee0e53df055aa886644255b34b5461b1cc0",
-    "tools/photos/shell-data.ts": "9f579625d015d884ac8cae51ee6075df9993b3b658f894cadbd168cde05b29e1"
+    "tools/photos/shell-data.ts": "6473e5af5fd47d81aeb80ce91ba6e8f9ec0f5ac462f4319a22dc95f7fb2f4707"
   }
 }

@@ -175,10 +175,10 @@ anything a `.test.mjs` file imports, or spawns with `process.execPath`, runs
 under node too, so a `Bun.` reference there fails `test:node` and passes every
 local run.** That is why 22 tools walk directories with `readdirSync` rather than
 `Bun.Glob`, why `check-tools.ts` walks `PATH` by hand rather than calling
-`Bun.which`, and why `smol-toml` stays a dependency: all 3 of its consumers
-run under node. `tools/lib/dependency-docs.ts` and `tools/lib/retired.ts` are
-imported by contract tests, and `contract-osv-ignore-names-a-url-pin.test.mjs`
-imports it directly, so `Bun.TOML` cannot replace it. Two files are audited exceptions today, each
+`Bun.which`, and why `smol-toml` stays a dependency: its three consumers
+(`tools/lib/dependency-docs.ts`, `tools/lib/retired.ts` and
+`contract-osv-ignore-names-a-url-pin.test.mjs`) are each a test or imported by
+one, so `Bun.TOML` cannot replace it. Two files are audited exceptions today, each
 run only by bun and spawned by nothing: `gen-runtime-types.ts` (`Bun.TOML`)
 and `gen-repo-card.ts` (`Bun.WebView`, `Bun.write`). No scanner enforces this. `bun run test:node` in CI is the
 enforcement, and it fails by name.

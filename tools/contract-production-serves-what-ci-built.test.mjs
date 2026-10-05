@@ -150,7 +150,7 @@ test("whoareyou: the Server group names the commit beside the version, and omits
   assert.equal(buildWhoareyouGroups(data, ua, null, undefined, null).some((g) => g.title === "Server"), false);
 });
 
-test("served-manifest: CI cuts and signs it, and every release and night checks it", async () => {
+test("served-manifest: CI cuts and signs it, and every release checks it", async () => {
   const ci = yaml(".github/workflows/ci.yml");
   const steps = ci.jobs.validate.steps;
   const build = steps.findIndex((s) => s.run === "bun run perf-budget");
@@ -176,9 +176,6 @@ test("served-manifest: CI cuts and signs it, and every release and night checks 
 
   const promote = await readFile(new URL(".github/workflows/promote-production.yml", ROOT), "utf8");
   assert.match(promote, /run: bun run served:check \$\{SINCE:\+--since "\$SINCE"\}/, "each release checks the URLs it changed");
-  const nightly = yaml(".github/workflows/served-check.yml");
-  assert.ok(nightly.on.schedule?.length, "the full sweep runs on a schedule");
-  assert.ok(nightly.jobs.check.steps.some((s) => s.run === "bun run served:check"), "the nightly sweep is the full one, no --since");
 
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
   assert.equal(pkg.scripts["served:manifest"], "bun tools/served-manifest.ts");

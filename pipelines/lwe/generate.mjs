@@ -101,7 +101,7 @@ function pageHtml(spec) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh${c.path}</title>
+<title>aadhar.sh${c.path} · ${titleSuffix}</title>
 <meta name="description" content="${spec.description || ""}">
 <link rel="canonical" href="https://aadhar.sh${c.path}">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='${favFill}'/%3E%3Ctext%20x='16'%20y='23'%20font-size='20'%20font-family='${favFont.replaceAll(" ", "%20")}'%20fill='%23fff'%20text-anchor='middle'%3E${c.glyph}%3C/text%3E%3C/svg%3E">

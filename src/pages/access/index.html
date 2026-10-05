@@ -26,16 +26,11 @@
 <meta name="twitter:image" content="https://aadhar.sh/og/access.jpg">
 <style>
 :root{
-  --face:#ECE9D8; --face-light:#F1EFE2;
-  --hi:#FFFFFF; --sh:#ACA899; --dsh:#716F64;
+  /* The chrome, ink, link and status colors are luna.css's tokens (--face,
+     --shadow, --ink, --link, --danger, ...). Only what the site palette has no
+     close match for is declared here. */
   --navy:#0a246a; --navy2:#3a6ea5;
-  --win:#FFFFFF; --paper:#fbfbf7;
-  --ink:#1a1a1a; --ink-soft:#454545; --ink-dim:#636363;
-  --link:#0b3fae; --danger:#c8402f; --go:#3a7d2c; --gold:#c8811c;
-  --sel:#316ac5; --sel-soft:#d6e4f7;
-  --bevel-raised:inset 1px 1px 0 var(--hi),inset -1px -1px 0 var(--sh);
-  --bevel-sunken:inset 1px 1px 0 var(--sh),inset -1px -1px 0 var(--hi);
-  --grad-button:linear-gradient(180deg,#ffffff 0%,#ece9d8 100%);
+  --amber:#c8811c; --sel-soft:#d6e4f7;
   --grad-btn-hover:linear-gradient(180deg,#ffffff 0%,#f3f4ff 100%);
   /* The five device states, borrowed wholesale from Device Manager. The mapping IS
      the argument, and the red X is the one worth reading twice: in Device Manager a
@@ -55,7 +50,6 @@
 }
 @media (min-width:1600px){:root{--sc:1.12}}
 @media (min-width:1900px){:root{--sc:1.26}}
-*{box-sizing:border-box}
 /* the page's own chrome lives on .window below, but body needs the family too:
    anything the shell injects OUTSIDE .window inherits from here. */
 body{font-family:var(--font-ui)}
@@ -64,7 +58,7 @@ body{font-family:var(--font-ui)}
    wallpaper either side and the graph rendering at 1:1 in an 1188px canvas, so
    half the pixels of a projector went to Bliss. A maximized MMC console is also
    what the title bar's box glyph has always claimed this window is. */
-.window{--axp-maxw:1880px;--axp-gutter:16px; max-width:var(--axp-maxw);font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
+.window{--axp-maxw:1880px;--axp-gutter:16px;font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
 h1{font-family:var(--font-caption);font-size:17pt;font-weight:700;color:var(--navy);margin:0 0 2px;letter-spacing:-.01em;text-wrap:balance}
 h2{font-family:var(--font-caption);font-size:12.5pt;font-weight:700;color:var(--navy2);margin:22px 0 6px}
 h3{font-family:var(--font-caption);font-size:10.5pt;font-weight:700;color:var(--navy);margin:14px 0 4px}
@@ -80,25 +74,25 @@ a{color:var(--link)}
 small,.meta{font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
 
 /* ---- the MMC console ------------------------------------------------- */
-.mmc{position:relative;border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--face);margin:14px 0 6px}
+.mmc{position:relative;border:1px solid var(--shadow);box-shadow:var(--bevel-sunken);background:var(--face);margin:14px 0 6px}
 .mmc-menu{display:flex;gap:2px;padding:2px 3px;border-bottom:1px solid var(--face);background:var(--face-light);font-size:calc(9.5pt * var(--sc))}
 .mmc-menu span,.mmc-menu button{font:inherit;font-size:calc(9.5pt * var(--sc));padding:2px 8px;border:1px solid transparent;border-radius:2px;color:var(--ink-soft);background:transparent}
 .mmc-menu span:first-child{color:var(--ink)}
 .mmc-menu button{color:var(--ink);cursor:pointer}
-.mmc-menu button:hover,.mmc-menu button[aria-expanded=true]{background:var(--sel);color:#fff;border-color:var(--sel)}
+.mmc-menu button:hover,.mmc-menu button[aria-expanded=true]{background:var(--selection);color:#fff;border-color:var(--selection)}
 .mmc-menu button:focus-visible{outline:1px dotted var(--navy);outline-offset:1px}
 /* the one real dropdown. XP menus really did drop a soft shadow. */
-.menu-pop{position:fixed;inset:auto;margin:0;z-index:30;min-width:196px;background:var(--face-light);border:1px solid var(--dsh);box-shadow:2px 3px 7px rgba(0,20,90,.28);padding:2px}
+.menu-pop{position:fixed;inset:auto;margin:0;z-index:30;min-width:196px;background:var(--face-light);border:1px solid var(--darkshadow);box-shadow:2px 3px 7px rgba(0,20,90,.28);padding:2px}
 .menu-pop button{font:inherit;font-size:calc(9.5pt * var(--sc));display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:transparent;border:0;padding:4px 10px 4px 6px;cursor:pointer;color:var(--ink)}
-.menu-pop button:hover{background:var(--sel);color:#fff}
+.menu-pop button:hover{background:var(--selection);color:#fff}
 .menu-pop .tick{width:13px;flex:0 0 13px;font-family:var(--font-ui);font-weight:700;font-size:10pt;line-height:1}
-.mmc-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 6px;border-top:1px solid var(--hi);border-bottom:1px solid var(--sh);background:var(--face)}
+.mmc-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 6px;border-top:1px solid var(--highlight);border-bottom:1px solid var(--shadow);background:var(--face)}
 /* a caption and the control it names wrap as one item, so a narrow toolbar
    cannot leave the word ZOOM stranded on a row above its own buttons */
 .bar-grp{display:flex;gap:8px;align-items:center}
-.seg{display:flex;box-shadow:var(--bevel-raised);border:1px solid var(--dsh);background:var(--grad-button)}
+.seg{display:flex;box-shadow:var(--bevel-raised);border:1px solid var(--darkshadow);background:var(--grad-button)}
 .seg button{font:inherit;font-size:calc(9.5pt * var(--sc));color:var(--ink);background:transparent;border:0;padding:4px 11px;cursor:pointer}
-.seg button+button{border-left:1px solid var(--sh)}
+.seg button+button{border-left:1px solid var(--shadow)}
 .seg button[aria-pressed=true]{background:linear-gradient(180deg,#c9d9f0,#e4ecf9);box-shadow:var(--bevel-sunken);font-weight:700}
 .seg button:hover{background:var(--grad-btn-hover)}
 /* luna's command button, scaled with the chrome like everything above */
@@ -106,7 +100,7 @@ small,.meta{font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
 .xp-button[aria-pressed=true]{background:linear-gradient(180deg,#f6d9d3,#fbeae6);border-color:var(--danger);font-weight:700}
 .seg button:focus-visible{outline:1px dotted var(--navy);outline-offset:1px}
 .bar-lab{font-size:calc(9pt * var(--sc));color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em}
-select{font:inherit;font-size:calc(9.5pt * var(--sc));border:1px solid var(--dsh);box-shadow:var(--bevel-sunken);background:var(--win);padding:3px 4px}
+select{font:inherit;font-size:calc(9.5pt * var(--sc));border:1px solid var(--darkshadow);box-shadow:var(--bevel-sunken);background:var(--window);padding:3px 4px}
 
 /* THE SPLIT IS SIZED OFF THE VIEWPORT, never off a constant. A 380px floor and a
    580px ceiling showed 42% of a 1385px board through a scroller nested inside
@@ -115,15 +109,15 @@ select{font:inherit;font-size:calc(9.5pt * var(--sc));border:1px solid var(--dsh
    scroll pane, so the room was there and the console only had to ask for it. */
 .mmc-split{display:flex;align-items:stretch;height:clamp(340px,calc(100vh - 330px),1180px);min-height:0}
 .mmc.no-tree .mmc-tree{display:none}
-.mmc-tree{flex:0 0 calc(186px * var(--sc));border-right:1px solid var(--sh);background:var(--win);overflow-y:auto;padding:5px 0}
-.mmc-canvas{flex:1 1 0;min-width:0;min-height:0;background:var(--win);position:relative;overscroll-behavior:contain}
+.mmc-tree{flex:0 0 calc(186px * var(--sc));border-right:1px solid var(--shadow);background:var(--window);overflow-y:auto;padding:5px 0}
+.mmc-canvas{flex:1 1 0;min-width:0;min-height:0;background:var(--window);position:relative;overscroll-behavior:contain}
 /* A wheel over the board must not reach the document once the board bottoms out:
    scrolling the essay away mid-sentence is the one thing a presenter cannot undo
    gracefully in front of a room. overscroll-behavior above; the reserved gutter
    below keeps the graph from resizing by a scrollbar width as one appears. */
 .mmc-canvas{overflow-x:auto;overflow-y:scroll}
 .mmc-canvas.z-fit{overflow:hidden}
-.mmc-status{display:flex;gap:0;border-top:1px solid var(--hi);background:var(--face);font-size:calc(9pt * var(--sc));color:var(--ink-soft);flex-wrap:wrap}
+.mmc-status{display:flex;gap:0;border-top:1px solid var(--highlight);background:var(--face);font-size:calc(9pt * var(--sc));color:var(--ink-soft);flex-wrap:wrap}
 .mmc-status span{padding:3px 8px;box-shadow:var(--bevel-sunken);flex:0 0 auto}
 .mmc-status span:last-child{flex:1 1 auto;color:var(--ink-dim);min-width:180px}
 
@@ -160,17 +154,17 @@ select{font:inherit;font-size:calc(9.5pt * var(--sc));border:1px solid var(--dsh
    content is the whole 1950px board, so a shrinkable strip gets squeezed to a
    fraction of its height and clips its labels to a sliver. Measured at 15px of
    a 41px strip before this line existed. */
-.mmc-head{flex:0 0 auto;background:var(--face-light);border-bottom:1px solid var(--sh);overflow:hidden}
+.mmc-head{flex:0 0 auto;background:var(--face-light);border-bottom:1px solid var(--shadow);overflow:hidden}
 .mmc-head svg{display:block;margin:0 auto}
 .mmc-board{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
 
 /* left pane: the tree, as a tree */
 .tree,.tree ul{list-style:none;margin:0;padding:0}
-.tree ul{margin-left:15px;border-left:1px dotted var(--sh)}
+.tree ul{margin-left:15px;border-left:1px dotted var(--shadow)}
 .tree li{font-size:calc(9.5pt * var(--sc));line-height:1.35}
 .tree button{font:inherit;font-size:calc(9.5pt * var(--sc));display:flex;align-items:center;gap:5px;width:100%;text-align:left;background:transparent;border:0;padding:2px 6px 2px 4px;cursor:pointer;color:var(--ink)}
 .tree button:hover{background:var(--sel-soft)}
-.tree button[aria-current=true]{background:var(--sel);color:#fff}
+.tree button[aria-current=true]{background:var(--selection);color:#fff}
 .tree .tw{width:9px;flex:0 0 9px;font-family:var(--font-mono);font-size:8pt;color:var(--ink-dim)}
 .tree button[aria-current=true] .tw{color:#dbe6f7}
 .tree .gi{width:13px;height:13px;flex:0 0 13px}
@@ -210,13 +204,13 @@ svg.graph{margin:0 auto}
 @media (--motion-ok) {.flowing .flow{animation:march 1s linear infinite}}
 @keyframes march{to{stroke-dashoffset:-14}}
 .dev{cursor:pointer}
-.dev .box{fill:var(--face-light);stroke:var(--sh);stroke-width:1}
+.dev .box{fill:var(--face-light);stroke:var(--shadow);stroke-width:1}
 .dev:hover .box{fill:#eef3fc;stroke:var(--navy2)}
 .dev.sel .box{fill:#dbe7fa;stroke:var(--navy);stroke-width:2}
 .dev .nm{font-size:9.5px;fill:var(--ink)}
 .dev .sub{font-family:var(--font-mono);font-size:8px;fill:#55554e}
 .dev.dim{opacity:.22}
-.dev.junction .box{fill:#fdf3d6;stroke:var(--gold);stroke-width:2}
+.dev.junction .box{fill:#fdf3d6;stroke:var(--amber);stroke-width:2}
 .dev:focus-visible .box{stroke:var(--navy);stroke-width:2}
 .dev:focus{outline:none}
 /* a phantom is a device the system can describe and nothing is attached to */
@@ -230,7 +224,7 @@ svg.graph{margin:0 auto}
 .s-phantom .chip,.s-phantom .chip-in{opacity:.42}
 .gl-warn path{fill:var(--st-partial);stroke:#8a6d10;stroke-width:.7}
 .gl-warn rect{fill:#4a3a00}
-.gl-unk circle{fill:var(--win);stroke:var(--st-frontier);stroke-width:1.1}
+.gl-unk circle{fill:var(--window);stroke:var(--st-frontier);stroke-width:1.1}
 .gl-unk text{font-family:var(--font-caption);font-size:9px;font-weight:700;fill:var(--st-frontier)}
 .gl-off path{stroke:var(--st-passed);stroke-width:2;stroke-linecap:square}
 .gl-ghost circle{fill:none;stroke:#a9a9a0;stroke-width:1;stroke-dasharray:2 2}
@@ -265,9 +259,9 @@ dialog.props::backdrop{background:rgba(10,36,106,.28)}
 .props .tb .x{width:19px;height:17px;display:grid;place-items:center;border:1px solid #d8401c;border-radius:3px;background:linear-gradient(180deg,#e8795f,#ae3110);font-size:9px;color:#fff;cursor:pointer;font-family:var(--font-ui)}
 .props .tb .x:hover{filter:brightness(1.12)}
 .props .tabs{display:flex;gap:2px;padding:6px 8px 0;background:var(--face)}
-.props .tabs button{font:inherit;font-size:calc(9.5pt * var(--sc));padding:3px 11px;border:1px solid var(--sh);border-bottom:0;border-radius:3px 3px 0 0;background:linear-gradient(180deg,#e3e0d2,#d7d4c6);color:var(--ink-soft);cursor:pointer;position:relative;top:1px}
+.props .tabs button{font:inherit;font-size:calc(9.5pt * var(--sc));padding:3px 11px;border:1px solid var(--shadow);border-bottom:0;border-radius:3px 3px 0 0;background:linear-gradient(180deg,#e3e0d2,#d7d4c6);color:var(--ink-soft);cursor:pointer;position:relative;top:1px}
 .props .tabs button[aria-selected=true]{background:var(--face);color:var(--ink);font-weight:700;top:0;padding-bottom:5px;z-index:2}
-.props .sheet{border:1px solid var(--sh);box-shadow:var(--bevel-raised);background:var(--face);margin:0 8px 8px;padding:11px 12px;min-height:calc(186px * var(--sc))}
+.props .sheet{border:1px solid var(--shadow);box-shadow:var(--bevel-raised);background:var(--face);margin:0 8px 8px;padding:11px 12px;min-height:calc(186px * var(--sc))}
 .props dl{margin:0;font-size:calc(9.5pt * var(--sc))}
 .props dt{font-weight:700;color:var(--navy);margin-top:8px}
 .props dt:first-child{margin-top:0}
@@ -278,7 +272,7 @@ dialog.props::backdrop{background:rgba(10,36,106,.28)}
 .props .foot{display:flex;justify-content:flex-end;gap:6px;padding:0 8px 9px}
 
 /* the flat table */
-.tw-scroll{overflow-x:auto;border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--win)}
+.tw-scroll{overflow-x:auto;border:1px solid var(--shadow);box-shadow:var(--bevel-sunken);background:var(--window)}
 table.devs{border-collapse:collapse;font-size:9pt;min-width:1020px;width:100%}
 table.devs caption{text-align:left;font-size:9pt;color:var(--ink-dim);padding:5px 7px;font-family:var(--font-mono)}
 table.devs th,table.devs td{border:1px solid #e2e0d6;padding:5px 7px;text-align:left;vertical-align:top;line-height:1.45}
@@ -288,7 +282,7 @@ table.devs tbody tr:nth-child(even){background:#fafaf6}
 table.devs tbody tr.ph th{font-style:italic}
 table.devs .st{font-family:var(--font-mono);font-size:8.5pt;white-space:nowrap}
 table.devs .st-shipped{color:var(--go)}
-table.devs .st-partial{color:var(--gold)}
+table.devs .st-partial{color:var(--amber)}
 table.devs .st-frontier{color:#5f5290}
 table.devs .st-passed{color:var(--danger)}
 table.devs .st-phantom{color:#71716a}
@@ -296,19 +290,19 @@ table.devs .seen{font-family:var(--font-mono);font-size:8.5pt;white-space:nowrap
 table.devs td.ex{font-size:8.5pt}
 .legend{display:flex;gap:13px;flex-wrap:wrap;margin:8px 0 2px;font-size:calc(9pt * var(--sc));color:var(--ink-soft)}
 .legend span{display:flex;align-items:center;gap:5px}
-.legend i{width:11px;height:11px;display:inline-block;border:1px solid var(--sh)}
+.legend i{width:11px;height:11px;display:inline-block;border:1px solid var(--shadow)}
 .legend i.gh{border-style:dashed;background:#f8f8f5}
 .legend i.rv{border:0;height:0;width:22px;border-top:2px dashed #b8860b}
-.gb{position:relative;border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--paper);border-radius:2px;padding:16px 14px 13px;margin:14px 0}
+.gb{position:relative;border:1px solid var(--shadow);box-shadow:var(--bevel-sunken);background:var(--paper);border-radius:2px;padding:16px 14px 13px;margin:14px 0}
 .gb-legend{position:absolute;top:-9px;left:9px;background:var(--face);padding:0 5px;font-size:9pt;color:var(--ink-dim);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
-footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:9pt;color:var(--ink-dim)}
+footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-size:9pt;color:var(--ink-dim)}
 @media (max-width:820px){
   /* Stacked, so the split's height is now shared rather than spent on one pane,
      and the tree gives most of it back to the board. Fill scales the graph down
      to whatever width is left, which is what finally retires the horizontal
      scroll a phone used to get from a 1002px board in a 360px canvas. */
   .mmc-split{flex-direction:column;height:clamp(380px,calc(100vh - 250px),760px)}
-  .mmc-tree{flex:0 0 auto;max-height:132px;border-right:0;border-bottom:1px solid var(--sh)}
+  .mmc-tree{flex:0 0 auto;max-height:132px;border-right:0;border-bottom:1px solid var(--shadow)}
 }
 </style>
 <link rel="stylesheet" href="/luna.css">
@@ -1734,6 +1728,6 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
 })();
 </script>
 <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="27"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="27"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>

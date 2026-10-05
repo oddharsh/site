@@ -190,7 +190,7 @@
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "305095d8f2bd50dd5d490f12e8963ccb386ccd5f62799a5dd3a9df62bed0b6f0",
+        "inputs": "499510e37a367e49beb9b868ed458e5f0cbfbd3fdfdbc7fb0f7a0fd6fa026d16",
         "count": 2
       }
     },
@@ -296,7 +296,6 @@
     ],
     "exempt": {
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
-      "tools/preview-target.ts": "its only write is two lines to $GITHUB_OUTPUT under GitHub Actions (the preview URL and version it read off a check run), which is a step output and never a file in this tree",
       "tools/served-manifest.ts": "writes served-manifest.json, a CI artifact cut from .build/public on each push to main and signed there; it is never committed, and tools/check-served.ts is what compares it against production",
       "tools/lib/hash-client-assets.ts": "build step 6's core, called by build.ts with the staged root: writes only the /a/ copies and the repointed loaders under the directory it is handed, which is .build/ in a build and a temp dir in the contract suite",
       "tools/bake-worker-pages.ts": "build step 5b, spawned by build.ts in its own process: writes only the baked Worker pages into .build/public, the staged tree",
