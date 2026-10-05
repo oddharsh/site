@@ -21,7 +21,7 @@
 // carries a control that has to come back non-empty.
 
 import { spawnSync } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { marker, plan, render, title } from "timbrado/report";
@@ -279,5 +279,14 @@ test("every name in the browsers leg's default pairs is an installation target t
     const runtime = process.versions.bun ? process.execPath : "bun";
     const run = spawnSync(runtime, ["node_modules/playwright-core/cli.js", "install", "--dry-run", name], { cwd: fileURLToPath(ROOT), encoding: "utf8", timeout: 60_000 });
     assert.doesNotMatch(`${run.stdout}${run.stderr}`, /Invalid installation targets/, `${name} is not an installation target of the pinned playwright-core`);
+  }
+  // The image ships only the bundled engines, so every branded channel a pair
+  // launches has to be on the workflow's install line too. Pairing chrome-beta
+  // with `chrome` instead of the bundled chromium (#816) added one.
+  const yml = readFileSync(fileURLToPath(new URL(".github/workflows/canary.yml", ROOT)), "utf8");
+  const installed = yml.match(/playwright-core\/cli\.js install ([\w\s-]+?) \|\|/)?.[1]?.split(/\s+/) ?? [];
+  assert.ok(installed.length, "canary.yml's browsers leg no longer installs channels where this test looks");
+  for (const name of names.filter((n) => !["chromium", "firefox", "webkit"].includes(n))) {
+    assert.ok(installed.includes(name), `${name} is in DEFAULT_PAIRS but canary.yml never installs it, so the leg dies at launch`);
   }
 });
