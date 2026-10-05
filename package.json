@@ -71,7 +71,6 @@
     "csp:sweep": "bun tools/csp-sweep.ts",
     "checkpoints:check": "bun tools/check-checkpoints.ts",
     "checkpoints:sync": "bun tools/check-checkpoints.ts --sync",
-    "preview:target": "bun tools/preview-target.ts",
     "indexnow": "bun tools/indexnow.ts",
     "ask:eval": "bun tools/ask-rank-eval.ts",
     "webmention:eval": "bun tools/webmention-sort-eval.ts"

@@ -196,9 +196,9 @@ jobs:
       # Advisory, like the dictionary check: it reads production after the fact
       # and can only report. It compares the URLs this release CHANGED (against
       # the manifest of the commit production served before) with the bytes
-      # production now returns, and checks ci.yml signed that manifest. The full
-      # sweep runs nightly in served-check.yml; a full one per release would put
-      # about 716 Worker invocations on the observability quota 13 times a day.
+      # production now returns, and checks ci.yml signed that manifest. A full
+      # sweep is `bun run served:check` by hand; one per release would put about
+      # 716 Worker invocations on the observability quota 13 times a day.
       - name: Production serves what CI built
         if: steps.live.outputs.deployed == 'true'
         continue-on-error: true
