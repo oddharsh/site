@@ -250,12 +250,23 @@ export function suiteArgs(root: string): string[] {
  * "(pass) ... a renamed D1 fails" read as "1 fail", so every nightly from
  * 2026-10-03 reported "1 fail" under a suite that printed "0 fail" and filed
  * two RED issues against a bun that was fine. -1 means no summary was found.
+ *
+ * `bun run --filter <pkg> <script>` prefixes every line with "<pkg> <script>: ",
+ * so the cal gates read "cal-aadhar-sh test:  88 pass". The anchor allows that
+ * one prefix and nothing else. Without it, the anchored read found no summary
+ * and both cal gates reported "0 pass, -1 fail" over a suite that passed
+ * (#1124, #1170, from the first nightly after #1134 added the anchor).
  */
 export function suiteCounts(text: string): { pass: number; fail: number } {
   return {
-    pass: Number(text.match(/^\s*(\d+) pass$/m)?.[1] ?? 0),
-    fail: Number(text.match(/^\s*(\d+) fail$/m)?.[1] ?? -1),
+    pass: Number(text.match(/^(?:[^\s:]+ [^\s:]+: )?\s*(\d+) pass$/m)?.[1] ?? 0),
+    fail: Number(text.match(/^(?:[^\s:]+ [^\s:]+: )?\s*(\d+) fail$/m)?.[1] ?? -1),
   };
+}
+
+/** A gate's one-line reading of those counts. A missing summary says so, rather than printing "-1 fail" as if a test had failed. */
+export function suiteCountsText({ pass, fail }: { pass: number; fail: number }): string {
+  return fail < 0 ? "no bun test summary in the output" : `${pass} pass, ${fail} fail`;
 }
 
 // THE GATE RUNS `bun run test`'s OWN FLAGS, and restating them is what broke
@@ -270,13 +281,14 @@ export function suiteCounts(text: string): { pass: number; fail: number } {
 export function contractSuiteGate(exe: string, root: string, timeoutMs = 15 * 60_000): Gate {
   const out = run(exe, ["test", ...suiteArgs(root)], { cwd: root, timeout: timeoutMs });
   const text = `${out.stdout}\n${out.stderr}`;
-  const { pass, fail } = suiteCounts(text);
+  const counts = suiteCounts(text);
+  const { pass, fail } = counts;
   const timedOut = out.signal === "SIGTERM";
   const telling = text.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("(fail)") || l.startsWith("error:"));
   return {
     name: "contract suite passes under the candidate",
     ok: !timedOut && fail === 0 && pass > 0,
-    detail: timedOut ? `hung past ${timeoutMs / 1000}s` : `${pass} pass, ${fail} fail`,
+    detail: timedOut ? `hung past ${timeoutMs / 1000}s` : suiteCountsText(counts),
     notes: [...new Set(telling)].slice(0, 10),
   };
 }
@@ -290,12 +302,13 @@ export function contractSuiteGate(exe: string, root: string, timeoutMs = 15 * 60
 export function calSuiteGate(exe: string, root: string, timeoutMs = 5 * 60_000): Gate {
   const out = run(exe, ["run", "--filter", "cal-aadhar-sh", "test"], { cwd: root, timeout: timeoutMs });
   const text = `${out.stdout}\n${out.stderr}`;
-  const { pass, fail } = suiteCounts(text);
+  const counts = suiteCounts(text);
+  const { pass, fail } = counts;
   const timedOut = out.signal === "SIGTERM";
   return {
     name: "cal suite passes under the candidate (wrangler harness)",
     ok: !timedOut && fail === 0 && pass > 0 && out.status === 0,
-    detail: timedOut ? `hung past ${timeoutMs / 1000}s, which is the shape of oven-sh/bun#39247` : `${pass} pass, ${fail} fail`,
+    detail: timedOut ? `hung past ${timeoutMs / 1000}s, which is the shape of oven-sh/bun#39247` : suiteCountsText(counts),
     notes: text.split("\n").filter((l) => l.includes("(fail)")).slice(0, 10).map((l) => l.trim()),
   };
 }
