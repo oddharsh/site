@@ -11,15 +11,14 @@
 // "41 5 * * *" cron was missing for two weeks, and #876 shipped "/dotfiles"
 // without the twin. A spread cannot drift, so all four went with it.
 //
-// WHO READS THIS TODAY. tools/lib/site-config.ts projects this pair into
-// .wrangler.dev.jsonc (gitignored, written by tools/dev-stage.ts), and `bun run
-// dev` boots that with `-c`. Wrangler's own TypeScript loader could read these
-// two files directly (`cd config/dev && wrangler dev --x-new-config`, measured
-// 2026-10-01: ready in about 4s, readable source, no build), but under
-// --x-new-config it refuses `-c`, so it cannot boot counter/wrangler.jsonc in
-// the same process, and COUNTER binds that Worker's class. The day it can, the
-// projection step goes and these files stay where they are. The watch for that
-// day is `new-config-dev-boots-auxiliary-workers` in tools/lib/upstream-watches.ts.
+// WHO READS THIS TODAY. `bun run dev` runs `cf dev` in this directory, which
+// reads the pair natively (tools/dev.ts; package.json here names the root's
+// wrangler so cf can find its dev server). COUNTER binds a class in another
+// Worker, which neither cf nor a TypeScript config will boot in-process (both
+// refuse `-c`), so tools/dev.ts runs aadhar-counter as a second dev process on
+// one shared registry, and the binding connects across them. Since 2026-10-05.
+// `bun run dev:remote` still reads the projection tools/lib/site-config.ts
+// writes to .wrangler.dev.jsonc.
 //
 // Paths here are relative to THIS directory, because that is how wrangler's
 // loader resolves them. The projection rebases them to the repository root.

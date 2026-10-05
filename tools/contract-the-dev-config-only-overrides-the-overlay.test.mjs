@@ -114,10 +114,28 @@ test("the dev pair is native-shaped, so TS-native dev is a file move rather than
   assert.ok(existsSync(fromDev), `config/dev's entrypoint ${raw.worker.entrypoint} does not resolve from config/dev`);
 });
 
-test("the generated config is what `bun run dev` boots, and it is never committed", async () => {
+test("`bun run dev` reads config/dev natively through cf, and only dev:remote boots the generated config", async () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-  for (const script of ["dev", "dev:remote"]) assert.match(pkg.scripts[script], /\.wrangler\.dev\.jsonc/, `${script} must boot the generated dev config`);
+  assert.match(pkg.scripts["dev:remote"], /site-config\.ts --dev/, "dev:remote must write the projection it boots");
+  assert.match(pkg.scripts["dev:remote"], /\.wrangler\.dev\.jsonc/, "dev:remote must boot the generated dev config");
+  assert.doesNotMatch(pkg.scripts.dev, /\.wrangler\.dev\.jsonc/, "dev reads config/dev/ natively since 2026-10-05");
   assert.match(readFileSync(new URL("../.gitignore", import.meta.url), "utf8"), /^\.wrangler\.dev\.jsonc$/m);
   assert.ok(!existsSync(new URL("../wrangler.dev.jsonc", import.meta.url)), "the hand-kept twin is retired; config/dev/ is local dev's source");
-  assert.match(readFileSync(new URL("./dev-stage.ts", import.meta.url), "utf8"), /writeDevConfigFile\(\)/, "dev-stage must write the dev config before wrangler boots");
+
+  // cf finds a dev server through the manifest in ITS cwd, and refuses a
+  // workspace root, so config/dev/ is a workspace that names the root's wrangler
+  // byte for byte (check-wrangler holds the equality and the shared install).
+  assert.ok(pkg.workspaces.includes("config/dev"), "config/dev must be a workspace so bun links wrangler beside its manifest");
+  const devPkg = JSON.parse(readFileSync(new URL("../config/dev/package.json", import.meta.url), "utf8"));
+  assert.equal(devPkg.devDependencies?.wrangler, pkg.devDependencies.wrangler);
+
+  // THE REGISTRY PAIR. cf sends its delegate to CLOUDFLARE_REGISTRY_PATH and
+  // plain wrangler dev to WRANGLER_REGISTRY_PATH; by default they differ, and
+  // then COUNTER reads [not connected] (measured 2026-10-05). Both must be set,
+  // to the same value, on the two processes dev.ts starts.
+  const launcher = readFileSync(new URL("./dev.ts", import.meta.url), "utf8");
+  assert.match(launcher, /spawn\("cf", \["dev"/, "dev.ts must run cf dev");
+  assert.match(launcher, /cwd: join\(ROOT, "config", "dev"\)/, "cf dev must run in config/dev/");
+  assert.match(launcher, /WRANGLER_REGISTRY_PATH: REGISTRY/, "Counter must register in the pinned registry");
+  assert.match(launcher, /CLOUDFLARE_REGISTRY_PATH: REGISTRY/, "cf dev must read the same registry Counter writes");
 });
