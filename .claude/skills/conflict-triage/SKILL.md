@@ -5,9 +5,11 @@ description: Walk a PR's merge conflicts one at a time, explain what each side o
 
 # Conflict triage
 
-GitHub's web editor resolves plain line conflicts and nothing else. This repository adds a second problem on top: `.gitattributes` routes `package.json`, the lockfiles, the bun pin and the long-form prose through `tools/merge-driver.ts`, and **GitHub never runs it**. So GitHub shows conflicts a local merge resolves for free, and it will let you hand-merge `bun.lock` in a textarea, which CI's frozen install then refuses.
+GitHub's web editor resolves plain line conflicts and nothing else. It greys out its Resolve button for modify/delete, renames, binaries and mode changes, and it will happily let you hand-merge `bun.lock` in a textarea, which CI's frozen install then refuses. A derived file is never resolved by editing its text.
 
-`bun run conflicts` measures both views with `git merge-tree` and touches no worktree, so it is safe to run while other sessions use the tree. Read its header (`tools/conflict-triage.ts`) if a verdict surprises you.
+`bun run conflicts` runs one `git merge-tree` pass and touches no worktree, so it is safe to run while other sessions use the tree. Read its header (`tools/conflict-triage.ts`) if a verdict surprises you.
+
+**While `package.json` itself has conflict markers, `bun run conflicts` fails with "Script not found"**, because bun cannot parse the file the script lives in. Call the tool directly then: `bun tools/conflict-triage.ts <args>`.
 
 ## 1. Measure
 
@@ -22,9 +24,7 @@ bun run conflicts -- --in-progress --json  # the merge/rebase/cherry-pick git ju
 
 Exit 0: nothing needs a local checkout. Exit 1: something does. **Exit 2: the instrument failed.** Report its message and stop there. Never read an exit 2 as "no conflicts", and never fall back to guessing from `gh pr view`.
 
-If `warnings` names `setup:merge`, the drivers are not wired in this clone and every `local-free` verdict is missing. Say so; running `bun run setup:merge` once fixes it for every worktree.
-
-If `warnings` says GitHub and the emulated view disagree, re-run once. `mergeable` is computed lazily on GitHub's side and a branch may have just moved (another session rebases these). If it still disagrees, report both readings and trust neither.
+If `warnings` says GitHub and the local merge disagree, re-run once. `mergeable` is computed lazily on GitHub's side and a branch may have just moved (another session rebases these). If it still disagrees, report both readings and trust neither.
 
 ## 2. Walk it conflict by conflict
 
@@ -33,8 +33,7 @@ Files arrive sorted strongest verdict first. Present them in that order, one at 
 | verdict | means | what to say |
 |---|---|---|
 | `local-required` | not a line conflict (modify/delete, rename, file location, binary, mode) | GitHub's Resolve button is disabled for the whole PR. Name the kind. |
-| `regenerate` | a derived file | Hand-merging it is wrong by construction. Name the command in `owes`. |
-| `local-free` | a repo merge driver resolves it | GitHub shows it; `git merge origin/main` locally clears it with no edit. |
+| `regenerate` | a derived file (`bun.lock`, anything `config/derivations.json` names as output) | Hand-merging it is wrong by construction. Name the command in `owes` (`bun install` for a lockfile). |
 | `local-recommended` | renderable, but too big, too many hunks, or owes a command | The web editor would work but is the wrong tool. Say which reason. |
 | `web-ok` | small line conflict | Fine in the web editor, unless another file forces the PR local. |
 
@@ -80,7 +79,7 @@ A key that names no hunk exits 2 rather than vanishing from the page. Send the f
 
 End with the PR-level call, in one line: web editor, or one local merge.
 
-**If any file is not `web-ok`, the whole PR goes local, including its `web-ok` files.** Two resolutions of one PR (some hunks in the browser, the rest locally) means two merge commits and a second chance to get the first set wrong. The web editor's merge commit also runs none of this repo's hooks, so `merge-finish` never drains what the drivers parked.
+**If any file is not `web-ok`, the whole PR goes local, including its `web-ok` files.** Two resolutions of one PR (some hunks in the browser, the rest locally) means two merge commits and a second chance to get the first set wrong. The web editor also cannot run what a file owes, so a `regenerate` file merged there ships text nobody generated.
 
 When the route is the web editor, give the user the exact replacement text for each hunk so they can paste it.
 
@@ -95,14 +94,7 @@ cd .claude/worktrees/resolve-<PR#> || exit 1
 git merge origin/main       # MERGE, not rebase: a rebased PR branch needs a force push
 ```
 
-Resolve the files in the triage order, then:
-
-```bash
-bun run merge:finish -- --check   # what the drivers parked
-bun run merge:finish              # drains it (bun install for lockfiles)
-```
-
-Run every command in each file's `owes`, then the gates the touched files reach (`bun run lint`, `bun run typecheck`, `bun run test`; `bun run derive:check` if a derivation input or `config/derivations.json` moved). Commit the merge. Push only after the user says yes.
+Resolve the files in the triage order, then run each file's `owes` command: `bun install` for a lockfile, and `bun run derive:check -- --lock` once you have reviewed what `config/derivations.json` now vouches for. Then run the gates the touched files reach (`bun run lint`, `bun run typecheck`, `bun run test`; `bun run derive:check` if a derivation input or `config/derivations.json` moved). Commit the merge. Push only after the user says yes.
 
 ## Posting to the PR
 
