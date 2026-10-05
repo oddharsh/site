@@ -242,6 +242,22 @@ export function suiteArgs(root: string): string[] {
   return args;
 }
 
+/**
+ * The pass and fail counts from bun test's closing summary, read ONLY from
+ * those summary rows (` 1217 pass` / ` 0 fail`, each on its own line). An
+ * unanchored `/(\d+) fail/` takes the first match anywhere in the output, and
+ * a passing test's own name can carry one: from #1113 on 2026-10-02, the row
+ * "(pass) ... a renamed D1 fails" read as "1 fail", so every nightly from
+ * 2026-10-03 reported "1 fail" under a suite that printed "0 fail" and filed
+ * two RED issues against a bun that was fine. -1 means no summary was found.
+ */
+export function suiteCounts(text: string): { pass: number; fail: number } {
+  return {
+    pass: Number(text.match(/^\s*(\d+) pass$/m)?.[1] ?? 0),
+    fail: Number(text.match(/^\s*(\d+) fail$/m)?.[1] ?? -1),
+  };
+}
+
 // THE GATE RUNS `bun run test`'s OWN FLAGS, and restating them is what broke
 // it. It used to pass `--preload` alone, on the argument that a suite without
 // the preload is a different suite from `validate`'s. True, and the same holds
@@ -254,8 +270,7 @@ export function suiteArgs(root: string): string[] {
 export function contractSuiteGate(exe: string, root: string, timeoutMs = 15 * 60_000): Gate {
   const out = run(exe, ["test", ...suiteArgs(root)], { cwd: root, timeout: timeoutMs });
   const text = `${out.stdout}\n${out.stderr}`;
-  const pass = Number(text.match(/(\d+) pass/)?.[1] ?? 0);
-  const fail = Number(text.match(/(\d+) fail/)?.[1] ?? -1);
+  const { pass, fail } = suiteCounts(text);
   const timedOut = out.signal === "SIGTERM";
   const telling = text.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("(fail)") || l.startsWith("error:"));
   return {
@@ -275,8 +290,7 @@ export function contractSuiteGate(exe: string, root: string, timeoutMs = 15 * 60
 export function calSuiteGate(exe: string, root: string, timeoutMs = 5 * 60_000): Gate {
   const out = run(exe, ["run", "--filter", "cal-aadhar-sh", "test"], { cwd: root, timeout: timeoutMs });
   const text = `${out.stdout}\n${out.stderr}`;
-  const pass = Number(text.match(/(\d+) pass/)?.[1] ?? 0);
-  const fail = Number(text.match(/(\d+) fail/)?.[1] ?? -1);
+  const { pass, fail } = suiteCounts(text);
   const timedOut = out.signal === "SIGTERM";
   return {
     name: "cal suite passes under the candidate (wrangler harness)",

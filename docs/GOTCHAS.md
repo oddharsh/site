@@ -199,3 +199,9 @@ by renumbering. The long-form history of each one is in git
     `tools/lib/site-config.ts` to a gitignored `.wrangler.site.jsonc`. Use
     `bun run wrangler:site <command>`; tools use `siteWranglerArgs()`. Local
     dev is `config/dev/`, an overlay projected to `.wrangler.dev.jsonc`.
+
+49. **Read bun test's counts from its summary rows, never from anywhere in the
+    output.** An unanchored `/(\d+) fail/` matched "D1 fails" in a passing
+    test's name and filed RED issues against a healthy bun for two nights
+    (#1122, #1124). Use `suiteCounts()` from `tools/lib/bun-gates.ts`. A
+    count with no `(fail)` row beside it is the tell.
