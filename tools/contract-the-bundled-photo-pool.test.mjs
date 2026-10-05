@@ -471,13 +471,14 @@ test("local dev serves the staged farm, and stages it before wrangler boots", as
   // The farm is BUILD OUTPUT with no watcher: nothing regenerates it except the
   // dev scripts, so a script that skips the stager serves whatever the last run
   // left behind, or fails to start on a clean checkout.
-  for (const script of ["dev", "dev:remote"]) {
-    // The RUNNER is not the point of this assertion; staging before wrangler
-    // boots is. Pinning it to one interpreter is what made a toolchain swap
-    // fail a test about dev-server ordering.
-    assert.match(pkg.scripts[script], /(node|bun) tools\/dev-stage\.ts/,
-      `${script} must stage the farm before booting wrangler`);
-  }
+  // The RUNNER is not the point of these assertions; staging before a dev
+  // server boots is. Pinning it to one interpreter is what made a toolchain
+  // swap fail a test about dev-server ordering.
+  assert.match(pkg.scripts["dev:remote"], /(node|bun) tools\/dev-stage\.ts/, "dev:remote must stage the farm before booting wrangler");
+  assert.match(pkg.scripts.dev, /(node|bun) tools\/dev\.ts/, "dev runs through tools/dev.ts");
+  const launcher = await readFile(new URL("tools/dev.ts", ROOT), "utf8");
+  const staged = launcher.indexOf("await stage()");
+  assert.ok(staged > 0 && staged < launcher.indexOf("spawn("), "tools/dev.ts must stage the farm before it spawns either dev server");
 
   // It must never be committed: it is a tree of symlinks into the source, so a
   // checkout that carried it would go stale silently rather than break.

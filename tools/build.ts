@@ -1224,11 +1224,19 @@ if (inlineProbe.includes("/* probe */") ||
     albumSizes.push(`${albumPath(album)}.html ${html.length}B (${photos.albumPool(pool, album).length} tiles)`);
   }
 
+  // /sitemap-images.xml, advertised in robots.txt beside sitemap.xml. A floor,
+  // because every failure here is an absence: a sitemap listing no photos would
+  // pass every other check and quietly take the library out of Google Images.
+  const imageSitemap = photos.imageSitemapXml(pool, Object.values(ALBUMS));
+  const imageCount = (imageSitemap.match(/<image:image>/g) || []).length;
+  if (imageCount < 100) throw new Error(`sitemap-images.xml: only ${imageCount} images from a pool of ${pool.length}`);
+  await writeFile(`${OUT}/public/sitemap-images.xml`, imageSitemap);
+
   const botHtml = await bot.renderBotPage().text();
   if (!botHtml.includes("AadharshBot")) throw new Error("bot page: rendered document does not name the crawler — did the copy move?");
   await writeFile(`${OUT}/public/bot.html`, botHtml);
 
-  console.log(`pages(gen): photos.html ${photosHtml.length}B (${photos.curatedPool(pool).length} tiles), ${albumSizes.join(", ")}${albumSizes.length ? ", " : ""}bot.html ${botHtml.length}B`);
+  console.log(`pages(gen): photos.html ${photosHtml.length}B (${photos.curatedPool(pool).length} tiles), ${albumSizes.join(", ")}${albumSizes.length ? ", " : ""}bot.html ${botHtml.length}B, sitemap-images.xml ${imageCount} images`);
 }
 
 // 1f) /updates and /restore as deploy-time documents.
@@ -1603,6 +1611,32 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
   if (!manual) throw new Error("search index: no manifest-injected records — is site-manifest.json readable and are any surfaces still flagged searchIndex?");
   await writeFile(`${OUT}/public/search-index.json`, JSON.stringify(index));
   console.log(`search index: ${index.records.length} records staged (${manual} from the surface registry)`);
+}
+
+
+// 1g4) schema.org Article on every Garage and LWE page: author, date, headline.
+// tools/lib/article-ld.ts says where each field comes from. It runs on the
+// staged copy (after 1g2 dressed it, before 7b minifies it), so the authored
+// pages and `bun run dev` carry none, the same standing as the Explorer chrome.
+// A content page with no sitemap date or no headline fails the build by name:
+// an Article with an invented date would be worse than none.
+{
+  const { articleLd, articleLdScript, injectArticleLd } = await import("./lib/article-ld.ts");
+  const { sitemapDates } = await import("./gen-feeds.ts");
+  const dates = sitemapDates(await readFile("public/sitemap.xml", "utf8"));
+  const { surfaces } = JSON.parse(await readFile("config/site-manifest.json", "utf8"));
+  const articles = surfaces.filter((s) => s.kind === "content" && /^\/(garage|lwe)\//.test(s.path));
+  let written = 0;
+  for (const surface of articles) {
+    const file = `${OUT}/public${surface.path}.html`;
+    if (!existsSync(file)) continue; // Worker-rendered (/garage/dyno): no staged document to carry it
+    const html = await readFile(file, "utf8");
+    const ld = articleLd({ path: surface.path, section: surface.section, html, date: dates.get(surface.path) });
+    const next = injectArticleLd(html, articleLdScript(ld));
+    if (next !== html) { await writeFile(file, next); written++; }
+  }
+  if (written < 30) throw new Error(`article-ld: only ${written} of ${articles.length} Garage/LWE pages got an Article; expected 30 or more`);
+  console.log(`article-ld: ${written} of ${articles.length} Garage/LWE pages carry a schema.org Article`);
 }
 
 

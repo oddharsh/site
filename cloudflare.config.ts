@@ -276,14 +276,19 @@ const worker = defineWorker({
     RN_KV: bindings.kv({ id: "3cb8a107c58e47dc9244e75b33401f36" }),
     BOOKINGS: bindings.kv({ id: "37acb65118fe485583a90a94cb89365e" }),
 
+    // The read side of every dataset below: Analytics SQL, the SQL API as a
+    // binding (workers-sdk#15685), so a read needs no token. ledger.ts tries it
+    // first and falls back to ANALYTICS_READ_TOKEN, and each JSON reply names
+    // the door that answered in `via`.
+    ANALYTICS: bindings.analyticsSQL(),
     // The bot ledger: identified AI-crawler hits tick in here (ledger.ts);
-    // /ledger reads them back via the SQL API (needs ANALYTICS_READ_TOKEN).
+    // /ledger reads them back through ANALYTICS.
     BOT_LEDGER: bindings.analyticsEngineDataset({ name: "aadhar_bot_ledger" }),
     // The speculation ledger: Sec-Purpose prefetch/prerender requests, plus the
     // activation beacons that say which of them paid off (speculation.ts).
     SPECULATION: bindings.analyticsEngineDataset({ name: "aadhar_speculation" }),
-    // The homepage perf probe's spans (perf-probe.ts); read back with the same
-    // SQL API + ANALYTICS_READ_TOKEN as the ledger. AE datasets materialize on
+    // The homepage perf probe's spans (perf-probe.ts); read back from a
+    // workstation with the SQL API (docs/MAINTENANCE.md). AE datasets materialize on
     // first write: no id, nothing for infra:apply to provision.
     PERF_PROBE: bindings.analyticsEngineDataset({ name: "aadhar_perf_probe" }),
     // The miss ledger: every 404 the Worker answered or recovered, by caller
@@ -451,7 +456,8 @@ const worker = defineWorker({
     //   COVER_SECRET          read by code, never set. The path degrades without
     //                         it, so declaring it would fail the deploy over a
     //                         working site.
-    //   ANALYTICS_READ_TOKEN  same shape: /ledger's SQL reads degrade without it.
+    //   ANALYTICS_READ_TOKEN  same shape: /ledger's SQL reads fall back to it when
+    //                         the ANALYTICS binding cannot answer.
     //   BILLING_READ_TOKEN    same shape again: /ledger's account cost line
     //                         renders a "not readable yet" note without it. Scope
     //                         it to Billing:Read and NOTHING else, and keep it off

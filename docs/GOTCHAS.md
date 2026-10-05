@@ -198,7 +198,8 @@ by renumbering. The long-form history of each one is in git
     it.** `cloudflare.config.ts` + `wrangler.config.ts` are projected by
     `tools/lib/site-config.ts` to a gitignored `.wrangler.site.jsonc`. Use
     `bun run wrangler:site <command>`; tools use `siteWranglerArgs()`. Local
-    dev is `config/dev/`, an overlay projected to `.wrangler.dev.jsonc`.
+    dev is `config/dev/`, an overlay `cf dev` reads natively (`tools/dev.ts`);
+    only `dev:remote` still projects it to `.wrangler.dev.jsonc`.
 
 49. **Read bun test's counts from its summary rows, never from anywhere in the
     output.** An unanchored `/(\d+) fail/` matched "D1 fails" in a passing
