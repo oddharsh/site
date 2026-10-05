@@ -178,6 +178,41 @@ rotation and treat all previously emailed links as compromised.
    `dictionary-roll.yml`. There is no automatic ramp or rollback since
    2026-09-28; roll back from a workstation with `bun run deploy:promote --rollback`.
 
+### Auxiliary Workers deploy themselves (from 2026-10-05)
+
+cf-garage, lwe-ask, lens-reader and aadhar-counter each get their own Workers
+Builds project, connected to this repository and set up in the dashboard
+(Workers & Pages > the Worker > Settings > Builds). Nothing in CI can do this:
+its token is read-only by design. Every project uses the same settings except
+the variable and the watch paths:
+
+| setting | value |
+|---|---|
+| Root directory | `.` (the install has to run at the root, where the pinned wrangler is) |
+| Production branch | `production`, so a Worker redeploys only after a merged, CI-green commit is promoted |
+| Non-production branch builds | off |
+| Build command | blank |
+| Deploy command | `bash .github/deploy-wrangler.sh deploy --x-provision=false --x-auto-create=false` |
+| Build variables | `SKIP_DEPENDENCY_INSTALL=true`, `WRANGLER_CWD=<the Worker's directory>` |
+
+| Worker | `WRANGLER_CWD` | build watch paths (include) |
+|---|---|---|
+| cf-garage | `cf-garage` | `cf-garage/*`, `src/worker/lib/*` |
+| lwe-ask | `lwe-ask` | `lwe-ask/*`, `src/worker/lib/*` |
+| lens-reader | `lens-reader` | `lens-reader/*`, `src/worker/lib/*` |
+| aadhar-counter | `counter` | `counter/*`, `cal/src/reservation.ts`, `src/worker/lib/*` |
+
+The watch paths are each Worker's own directory plus everything outside it
+that it imports. If a Worker gains an import from somewhere else, add that
+path here and in the dashboard, or a change there won't redeploy it.
+`bun.lock` is left out on purpose: the nightly wrangler bump would otherwise
+redeploy all four with unchanged code. The counter's deploy must stay
+`deploy` (never `versions upload`), because it owns a Durable Object.
+
+Stage each one the way the site's commands were staged: connect it, then
+confirm the first build's log shows `running /…/node_modules/wrangler/…` from
+the Worker's directory before relying on it.
+
 To run CI manually, select the desired branch in Actions, or run
 `gh workflow run ci.yml --ref <branch>`. All validation jobs check out the
 event's commit. The former custom `ref` input is removed: overriding checkout
