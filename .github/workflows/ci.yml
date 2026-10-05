@@ -124,30 +124,28 @@ jobs:
       - name: Verify route surface against a local Worker
         run: bun run routes:check --prebuilt .build/.perfbudget
 
-      # The runner image names a default Rust toolchain but doesn't ship it:
-      # the first rustc or cargo call made rustup download it, about 8.5s a run.
-      # The key is the toolchain's full name (version and target), read with
-      # auto-install off so asking can't trigger the download it's caching.
+      # rust-toolchain.toml pins the compiler, and the runner image doesn't
+      # ship that version: the first rustc or cargo call made rustup download
+      # it, about 8.5s a run. Read the pin from the file, never from
+      # `rustup default`, which names the image's stable and is overridden
+      # here (keying on it cached the wrong toolchain, 200 MB of it).
       - name: Key the Rust toolchain cache
         id: rust
-        env:
-          RUSTUP_AUTO_INSTALL: "0"
         run: |
           set -euo pipefail
-          tc=$(rustup default | cut -d' ' -f1)
-          # A channel name (stable-...) would freeze whichever stable this
-          # cache first saw, since the key never moves. The image pins a
-          # version today; say so loudly if that stops being true.
-          [[ $tc =~ ^[0-9] ]] || echo "::warning title=Rust toolchain is a channel::'$tc' keys a cache that never refreshes"
-          echo "toolchain=$tc" >> "$GITHUB_OUTPUT"
+          channel=$(sed -n 's/^channel *= *"\(.*\)"$/\1/p' rust-toolchain.toml)
+          # A channel name (stable, nightly) would freeze whichever build
+          # this cache first saw, because the file and so the key never move.
+          [[ $channel =~ ^[0-9] ]] || echo "::warning title=Rust pin is a channel::rust-toolchain.toml names '$channel', which keys a cache that never refreshes"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
 
       - name: Restore the Rust toolchain
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            ~/.rustup/toolchains/${{ steps.rust.outputs.toolchain }}
-            ~/.rustup/update-hashes/${{ steps.rust.outputs.toolchain }}
-          key: rust-toolchain-${{ steps.rust.outputs.toolchain }}
+            ~/.rustup/toolchains/${{ steps.rust.outputs.channel }}-*
+            ~/.rustup/update-hashes/${{ steps.rust.outputs.channel }}-*
+          key: rust-toolchain-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}
 
       # timbrado's engine builds into target/ inside the installed package, and
       # a fresh install has none, so every run paid a ~13s cold cargo build.
