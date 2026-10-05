@@ -1,4 +1,8 @@
 import { claimReservation, dropReservation } from "../../cal/src/reservation.ts";
+import { jsonResponse, PLAIN_JSON } from "../../src/worker/lib/http.ts";
+
+// Same bytes and headers as json(): this only ever answers aadhar-sh.
+const json = (body, status = 200) => jsonResponse(body, status, PLAIN_JSON, { pretty: false });
 
 // counter.ts — the Counter Durable Object, which aadhar-counter implements and
 // aadhar-sh binds as COUNTER.
@@ -40,26 +44,26 @@ export class Counter {
     // slot instance.
     if (url.pathname === "/reserve" || url.pathname === "/release") {
       let payload;
-      try { payload = await request.json(); } catch { return Response.json({ error: "invalid body" }, { status: 400 }); }
+      try { payload = await request.json(); } catch { return json({ error: "invalid body" }, 400); }
       const bookingId = String(payload?.bookingId || "");
-      if (!bookingId) return Response.json({ error: "bookingId is required" }, { status: 400 });
+      if (!bookingId) return json({ error: "bookingId is required" }, 400);
       if (url.pathname === "/release") {
-        return Response.json({ released: await dropReservation(this.state.storage, bookingId) });
+        return json({ released: await dropReservation(this.state.storage, bookingId) });
       }
       const claimed = await claimReservation(
         this.state.storage, bookingId, Number(payload.start), Number(payload.end),
       );
-      return Response.json({ claimed });
+      return json({ claimed });
     }
 
     let n = (await this.state.storage.get<number>("n")) || 0;
 
     // read-only: bots + speculative prerenders see the value without bumping it
-    if (url.searchParams.has("peek")) return Response.json({ n });
+    if (url.searchParams.has("peek")) return json({ n });
 
     // default: atomic increment (classic-90s-counter behavior, no session dedup)
     n += 1;
     await this.state.storage.put("n", n);
-    return Response.json({ n });
+    return json({ n });
   }
 }

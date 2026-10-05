@@ -13,17 +13,17 @@ export function escHtml(s) {
 // The one JSON response every route builds. Defaults to a private reply: never
 // cached, pretty-printed for a person reading it with curl. A route changes the
 // policy through extraHeaders (cache-control, CORS, x-robots-tag, ...), and a
-// big public payload passes { pretty: false } to ship compact bytes.
+// big public payload passes { pretty: false } to ship compact bytes. A header
+// set to null is dropped, which is how a caller turns a default off entirely.
 export function jsonResponse(body, status = 200, extraHeaders = {}, { pretty = true } = {}) {
-  return new Response(pretty ? JSON.stringify(body, null, 2) + "\n" : JSON.stringify(body), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-      ...extraHeaders,
-    },
-  });
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...extraHeaders };
+  for (const key of Object.keys(headers)) if (headers[key] === null) delete headers[key];
+  return new Response(pretty ? JSON.stringify(body, null, 2) + "\n" : JSON.stringify(body), { status, headers });
 }
+
+// The headers Response.json() sends, for an internal hop (a Durable Object
+// answering its own Worker) that should stay byte-identical to it.
+export const PLAIN_JSON = { "content-type": "application/json", "cache-control": null };
 
 // short-cache error response. matches the CF Cache Rule that pins edge
 // TTL to 30s on 4xx/5xx — sending max-age=30 makes the browser cache

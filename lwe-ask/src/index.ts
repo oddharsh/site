@@ -16,9 +16,9 @@
 
 import { PASSAGES, SOURCE_URL, SOURCE_TITLE, CORPUS_VERSION } from "./passages.ts";
 import { CAR_STEMS, NONCAR_STEMS } from "./captcha-data.ts";
+import { jsonResponse } from "../../src/worker/lib/http.ts";
 
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" };
-const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: JSON_HEADERS });
+const json = (o, s = 200) => jsonResponse(o, s, { "x-content-type-options": "nosniff" }, { pretty: false });
 const enc = new TextEncoder();
 // route Workers AI through the "lwe" AI Gateway: response caching (24h), request
 // logging, and rate-limiting, all configured in the dashboard. cacheTtl enables +

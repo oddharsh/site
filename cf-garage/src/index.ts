@@ -3,16 +3,10 @@
 // aadhar.sh/garage/cf/* (ahead of the site Worker). Every request logs a
 // structured line (Workers Logs, feature #4).
 
+import { jsonResponse, PLAIN_JSON } from "../../src/worker/lib/http.ts";
+
 const ORIGIN = "https://aadhar.sh";
-const json = (obj, status = 200) =>
-  new Response(JSON.stringify(obj), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "access-control-allow-origin": ORIGIN,
-      "cache-control": "no-store",
-    },
-  });
+const json = (obj, status = 200) => jsonResponse(obj, status, { "access-control-allow-origin": ORIGIN }, { pretty: false });
 
 // ── custom-span helpers (Workers tracing) ─────────────────────────────────
 // ctx.tracing.enterSpan(name, fn) records a span (with parent-child nesting)
@@ -22,7 +16,7 @@ const json = (obj, status = 200) =>
 // the waterfall and the demo page can draw it without the dashboard.
 async function inSpan(tr, name, fn) {
   // Capability probe on the injected tracer (gotcha 16's seam). This Worker is
-  // deployed on its own and does not import the site tree.
+  // deployed on its own and imports only leaf helpers from src/worker/lib.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
   if (tr && typeof tr.enterSpan === "function") return tr.enterSpan(name, fn);
   return fn({ setAttribute() {}, isTraced: false });
@@ -62,14 +56,14 @@ export class Counter {
         await this.state.storage.put("n", n);
         await this.state.storage.put("seeded", true);
       }
-      return Response.json({ n, seeded: true });
+      return jsonResponse({ n, seeded: true }, 200, PLAIN_JSON, { pretty: false });
     }
     // read-only — bots/peekers see the value without bumping it
-    if (url.searchParams.has("peek")) return Response.json({ n });
+    if (url.searchParams.has("peek")) return jsonResponse({ n }, 200, PLAIN_JSON, { pretty: false });
     // default — atomic increment (the canonical counter behaviour)
     n += 1;
     await this.state.storage.put("n", n);
-    return Response.json({ n });
+    return jsonResponse({ n }, 200, PLAIN_JSON, { pretty: false });
   }
 }
 
