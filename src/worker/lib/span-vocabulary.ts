@@ -116,12 +116,9 @@ export type SpanName =
   | "nlweb.ask"
   | "dyno.fetch"
 
-  // Coffee. These are opened by cal/src/trace.ts, which is a deliberate
-  // near-duplicate of lib/trace.ts (gotcha 16: cal's Vitest pool boots from
-  // cal/src/index.ts alone, so a cal to src/worker import would make cal
-  // untestable without the site tree). The NAMES still belong in one registry,
-  // and the contract test reads both files against this list, which is how the
-  // two vocabularies are kept together without creating that import.
+  // Coffee. cal/src/availability.ts opens these through lib/trace.ts, so the
+  // compiler checks them like every other name here. (cal kept its own untyped
+  // copy of the tracer until 2026-10-05.)
   | "cal.busy"
   | "cal.refresh"
   | "cal.refresh_background"

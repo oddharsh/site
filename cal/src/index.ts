@@ -39,7 +39,7 @@ import { createBooking, getBooking, setStatus,
 import { releaseSlotClaim, reserveSlot }  from "./reservation.ts";
 import { sendApprovalRequest, sendInvite, sendHostCopy,
          sendDecline, sendUpdate, sendCancel } from "./email.ts";
-import { sign, verify }                    from "./sign.ts";
+import { sign, verify }                    from "../../src/worker/lib/sign.ts";
 import { bookingPage, slotsFragment, SLOTS_PATH, PICK_PATH, successPage,
          confirmedPage, declinedPage,
          locationPage, locationSavedPage,

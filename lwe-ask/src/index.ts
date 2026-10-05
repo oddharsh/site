@@ -16,6 +16,7 @@
 
 import { PASSAGES, SOURCE_URL, SOURCE_TITLE, CORPUS_VERSION } from "./passages.ts";
 import { CAR_STEMS, NONCAR_STEMS } from "./captcha-data.ts";
+import { secretMatches, timingSafeEqual } from "../../src/worker/lib/http.ts";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" };
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: JSON_HEADERS });
@@ -54,15 +55,6 @@ async function hmac(secret, msg) {
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(msg));
   return new Uint8Array(sig).toHex();
 }
-function timingSafeEq(a, b) {
-  // Same reasoning as lib/http.js: asText treats "" as absent, which is right at
-  // a boundary and wrong for a constant-time compare where two empty secrets must
-  // still compare equal. A precondition on an internal call, not a parse.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
-  let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return d === 0;
-}
 function sample(arr, n) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
@@ -95,7 +87,7 @@ async function verifyCaptcha(req, env) {
   // really are numbers by then: `.map(Number)` is what put them there.
   const sel = [...new Set<number>((b.selected || []).map(Number))].filter(n => n >= 0 && n < stems.length).sort((a, b) => a - b);
   const candidate = await hmac(env.SIGNING_SECRET, stems.join(",") + "|" + exp + "|" + sel.join(","));
-  if (!timingSafeEq(candidate, String(b.token))) return json({ ok: false, error: "not quite — pick exactly the cars" });
+  if (!timingSafeEqual(candidate, String(b.token))) return json({ ok: false, error: "not quite — pick exactly the cars" });
   const askExp = Date.now() + 600_000; // 10 min of asking per solve
   const askToken = await hmac(env.SIGNING_SECRET, "ask|" + askExp);
   return json({ ok: true, askToken, askExp });
@@ -103,7 +95,7 @@ async function verifyCaptcha(req, env) {
 async function validAsk(env, token, exp) {
   exp = +exp;
   if (!token || !Number.isFinite(exp) || Date.now() > exp) return false;
-  return timingSafeEq(String(token), await hmac(env.SIGNING_SECRET, "ask|" + exp));
+  return timingSafeEqual(String(token), await hmac(env.SIGNING_SECRET, "ask|" + exp));
 }
 
 // ── embeddings ────────────────────────────────────────────────────────────────
@@ -179,7 +171,7 @@ async function search(req, env) {
 
 // ── /lwe/ask/reindex — embed + upsert the corpus ──────────────────────────────
 async function reindex(req, env) {
-  if (!env.REINDEX_SECRET || !timingSafeEq(req.headers.get("x-reindex-secret") || "", env.REINDEX_SECRET)) return json({ error: "unauthorized" }, 401);
+  if (!secretMatches(req.headers.get("x-reindex-secret"), env.REINDEX_SECRET)) return json({ error: "unauthorized" }, 401);
   // Batch the embeddings: the model takes an array of texts per call, so a per-passage
   // loop fires ~80 Workers AI requests and trips the rate limit (2003). ~25 per call keeps
   // it to a handful. Direct env.AI.run, not the per-text gateway cache, since this is a

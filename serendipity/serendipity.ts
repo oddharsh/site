@@ -14,6 +14,7 @@ import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { BOT_UA } from "../src/worker/lib/botauth.ts";
 import { esc, secretMatches } from "../src/worker/lib/http.ts";
+import { sign, verify } from "../src/worker/lib/sign.ts";
 import { twinFor } from "../src/worker/lib/twins.ts";
 import { titleBar } from "../src/worker/lib/window.ts";
 import { html as htmlTag, unsafeHtml } from "../src/worker/lib/html.ts";
@@ -2224,28 +2225,13 @@ async function handleEnrich(request, env, d) {
 // MAC, so attacker-chosen URLs are rejected. Secret reuses SYNC_SECRET (override
 // with a dedicated COVER_SECRET). If neither is set the proxy degrades to open —
 // that's an unconfigured deploy only, not anything an attacker can induce.
-const _enc = new TextEncoder();
 function coverSecret(env) { return (env && (env.COVER_SECRET || env.SYNC_SECRET)) || null; }
-function coverKey(secret) {
-  return crypto.subtle.importKey("raw", _enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
-}
-async function signCoverUrl(rawUrl, secret) {
-  const sig = await crypto.subtle.sign("HMAC", await coverKey(secret), _enc.encode(rawUrl));
-  return new Uint8Array(sig).toBase64({ alphabet: "base64url", omitPadding: true });
-}
-async function verifyCoverUrl(rawUrl, sig, secret) {
-  if (!sig) return false;
-  let bytes;
-  try { bytes = Uint8Array.fromBase64(sig, { alphabet: "base64url" }); }
-  catch { return false; }
-  return crypto.subtle.verify("HMAC", await coverKey(secret), bytes, _enc.encode(rawUrl));
-}
 // Same-origin, signed cover-proxy URL for a raw cover_url ("" when there's none).
 async function coverProxyUrl(rawUrl, env) {
   if (!rawUrl) return "";
   const base = `${PREFIX}/cover?u=${encodeURIComponent(rawUrl)}`;
   const secret = coverSecret(env);
-  return secret ? `${base}&s=${await signCoverUrl(rawUrl, secret)}` : base;
+  return secret ? `${base}&s=${await sign(rawUrl, secret)}` : base;
 }
 
 // ── router ────────────────────────────────────────────────────────────────────
@@ -2272,7 +2258,7 @@ async function handleCover(request, env, ctx) {
   // off, so a signature check alone is not the gate; the host floor runs regardless.
   if (privateHostBlocked(target.hostname.toLowerCase())) return new Response("blocked host", { status: 400 });
   const secret = coverSecret(env);
-  if (secret && !(await verifyCoverUrl(raw, url.searchParams.get("s"), secret))) {
+  if (secret && !(await verify(raw, url.searchParams.get("s"), secret))) {
     return new Response("bad or missing signature", { status: 403 });
   }
 
