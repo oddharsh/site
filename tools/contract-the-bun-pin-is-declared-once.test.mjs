@@ -5,7 +5,7 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, newestSeasonedCanary, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";
 import { fileURLToPath } from "node:url";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { contractSuiteGate, suiteArgs, suiteCounts } from "./lib/bun-gates.ts";
+import { calSuiteGate, contractSuiteGate, suiteArgs, suiteCounts, suiteCountsText } from "./lib/bun-gates.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -358,4 +358,37 @@ test("suite gates read bun's summary rows, never a test name that happens to say
     const stray = own.match(/.*\(\\d\+\) (pass|fail).*/)?.[0]?.trim() ?? null;
     assert.equal(stray, null, `${file} counts bun's results with its own regex; use suiteCounts`);
   }
+});
+
+test("the cal gates read a summary that `bun run --filter` prefixed with the package name", async () => {
+  // cal's suite runs as `bun run --filter cal-aadhar-sh test`, and --filter
+  // prefixes every line. The anchor #1134 added could not see those rows, so
+  // both cal gates read "0 pass, -1 fail" over a suite that passed and filed
+  // RED on #1124 and #1170. This is cal's real tail from 2026-10-05.
+  const output = [
+    "cal-aadhar-sh test: (pass) a renamed D1 fails [0.10ms]",
+    "cal-aadhar-sh test:  88 pass",
+    "cal-aadhar-sh test:  0 fail",
+    "cal-aadhar-sh test:  1147 expect() calls",
+    "cal-aadhar-sh test: Ran 88 tests across 7 files. [2.85s]",
+    "cal-aadhar-sh test: Exited with code 0",
+  ].join("\n");
+  assert.deepEqual(suiteCounts(output), { pass: 88, fail: 0 });
+  // The control: the anchor without the prefix finds no summary in this exact output.
+  assert.equal(output.match(/^\s*(\d+) fail$/m), null, "the fixture no longer carries the --filter prefix, so the check above measures nothing");
+
+  const dir = await mkdtemp(join(tmpdir(), "cal-gate-"));
+  try {
+    const fake = join(dir, "fake-bun");
+    await writeFile(fake, `#!/bin/sh\n[ "$*" = "run --filter cal-aadhar-sh test" ] || { echo "wrong args: $*"; exit 2; }\ncat <<'OUT'\n${output}\nOUT\n`);
+    await chmod(fake, 0o755);
+    const g = calSuiteGate(fake, dir, 10_000);
+    assert.ok(g.ok, `the cal gate misread a green suite: ${g.detail}`);
+    assert.equal(g.detail, "88 pass, 0 fail");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  // A missing summary reads as what it is, never as "-1 fail".
+  assert.equal(suiteCountsText(suiteCounts("no summary here")), "no bun test summary in the output");
 });

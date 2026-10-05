@@ -60,7 +60,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
-import { suiteCounts } from "./lib/bun-gates.ts";
+import { suiteCounts, suiteCountsText } from "./lib/bun-gates.ts";
 import { interpretZstdProbe } from "./lib/bun-pin.ts";
 import { HARNESS_TEST_FLOOR, harnessTests, testArgv } from "./lib/harness-tests.ts";
 import { WRANGLER_WATCHES, type WatchResult, interpretTemporalProbe, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
@@ -255,13 +255,14 @@ try {
   {
     const out = run(BUN, ["run", "--filter", "cal-aadhar-sh", "test"], { cwd: wt, timeout: 5 * 60_000 });
     const text = `${out.stdout}\n${out.stderr}`;
-    const { pass, fail } = suiteCounts(text);
+    const counts = suiteCounts(text);
+    const { pass, fail } = counts;
     const timedOut = out.signal === "SIGTERM";
     step({
       name: "cal suite passes on the candidate harness",
       ok: !timedOut && out.status === 0 && fail === 0 && pass > 0,
       hard: true,
-      detail: timedOut ? "hung past 5 minutes" : `${pass} pass, ${fail} fail`,
+      detail: timedOut ? "hung past 5 minutes" : suiteCountsText(counts),
       notes: text.split("\n").filter((l) => l.includes("(fail)")).slice(0, 10).map((l) => l.trim()),
     });
   }
@@ -283,7 +284,8 @@ try {
     const script = String(JSON.parse(readFileSync(join(wt, "package.json"), "utf8")).scripts?.test ?? "");
     const out = run(BUN, testArgv(script, files), { cwd: wt, timeout: 5 * 60_000 });
     const text = `${out.stdout}\n${out.stderr}`;
-    const { pass, fail } = suiteCounts(text);
+    const counts = suiteCounts(text);
+    const { pass, fail } = counts;
     const timedOut = out.signal === "SIGTERM";
     // Each failure prints its error up to ~25 lines above its "(fail)" row (the
     // stack sits between), and bun repeats every "(fail)" row in a summary at
@@ -301,7 +303,7 @@ try {
       name: "harness contract tests pass on the candidate harness",
       ok: !timedOut && out.status === 0 && fail === 0 && pass >= files.length,
       hard: true,
-      detail: timedOut ? "hung past 5 minutes" : `${pass} pass, ${fail} fail across ${files.length} files`,
+      detail: timedOut ? "hung past 5 minutes" : `${suiteCountsText(counts)} across ${files.length} files`,
       notes: notes.slice(0, 12),
     });
   }
