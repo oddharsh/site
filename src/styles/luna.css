@@ -199,9 +199,13 @@
   --shadow-drop:  4px 4px 0 oklch(46% 0.16 var(--hue-luna) / 0.35); /* window cast */
   --shadow-tip:   2px 2px 0 oklch(15% 0 0 / 0.15);   /* hard XP tooltip drop     */
 
-  /* ── MOTION — XP is instant. Keep transitions short/snappy. ──────────────*/
-  --xp-transition: 60ms ease-out;       /* @kind other */
-  --xp-transition-fade: 90ms ease-out;  /* @kind other */ /* tooltip opacity fade        */
+  /* ── MOTION — XP is instant. Keep transitions short/snappy. ──────────────
+     Every transition and animation duration names one of these; the motion
+     contract refuses a literal. Infinite and scroll-driven motion is ambient
+     and exempt, and a rule whose motion IS the exhibit says @motion demo. */
+  --xp-transition: 60ms ease-out;       /* @kind other */ /* press + hover feedback      */
+  --xp-transition-fade: 90ms ease-out;  /* @kind other */ /* anything appearing/leaving */
+  --xp-transition-move: 120ms ease-out; /* @kind other */ /* a value or position, in place */
 
   /* ── SPACING — the dialog rhythm (4px base, tight XP density) ────────────*/
   --space-1: 2px;
@@ -593,7 +597,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter 60ms ease-out;
+  transition: filter var(--xp-transition);
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 :where(.title-bar .controls .min)::after, :where(.np-controls .min)::after, :where(.title-bar .controls .max)::after, :where(.np-controls .max)::after {
@@ -649,7 +653,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   display: inline-block; overflow: hidden; font: 0/0 a; color: transparent; cursor: pointer;
   border: 1px solid #6696eb; border-radius: 3px; background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter 60ms ease-out;
+  transition: filter var(--xp-transition);
 }
 .axp-histnav button::after {
   content: ''; position: absolute; left: 0; right: 0; top: 0; height: 45%;
@@ -928,7 +932,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 }
 @supports selector(:popover-open) {
   .xp-tooltip:popover-open { display: block; }
-  .xp-tooltip.anchored:popover-open { transition: opacity 120ms ease-out; }
+  .xp-tooltip.anchored:popover-open { transition: opacity var(--xp-transition-fade); }
   @starting-style {
     .xp-tooltip.anchored:popover-open { opacity: 0; }
   }

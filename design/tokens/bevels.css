@@ -56,9 +56,13 @@
   --shadow-drop:  4px 4px 0 oklch(46% 0.16 var(--hue-luna) / 0.35); /* window cast */
   --shadow-tip:   2px 2px 0 oklch(15% 0 0 / 0.15);   /* hard XP tooltip drop     */
 
-  /* ── MOTION — XP is instant. Keep transitions short/snappy. ──────────────*/
-  --xp-transition: 60ms ease-out;       /* @kind other */
-  --xp-transition-fade: 90ms ease-out;  /* @kind other */ /* tooltip opacity fade        */
+  /* ── MOTION — XP is instant. Keep transitions short/snappy. ──────────────
+     Every transition and animation duration names one of these; the motion
+     contract refuses a literal. Infinite and scroll-driven motion is ambient
+     and exempt, and a rule whose motion IS the exhibit says @motion demo. */
+  --xp-transition: 60ms ease-out;       /* @kind other */ /* press + hover feedback      */
+  --xp-transition-fade: 90ms ease-out;  /* @kind other */ /* anything appearing/leaving */
+  --xp-transition-move: 120ms ease-out; /* @kind other */ /* a value or position, in place */
 
   /* ── SPACING — the dialog rhythm (4px base, tight XP density) ────────────*/
   --space-1: 2px;

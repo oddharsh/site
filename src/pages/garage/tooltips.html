@@ -129,7 +129,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   pointer-events: none;
   z-index: 10000;
   opacity: 1;
-  transition: opacity 100ms ease-out, display 100ms allow-discrete;
+  transition: opacity var(--xp-transition-fade), display var(--xp-transition-fade) allow-discrete;
 }
 .lcd-tip:not(:popover-open) { opacity: 0; }
 @starting-style { .lcd-tip:popover-open { opacity: 0; } }
@@ -262,7 +262,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   pointer-events: none;
   z-index: 10000;
   opacity: 1;
-  transition: opacity 120ms ease-out, display 120ms allow-discrete;
+  transition: opacity var(--xp-transition-fade), display var(--xp-transition-fade) allow-discrete;
   filter: drop-shadow(0 8px 16px oklch(0% 0 0 / 0.35));
 }
 .vinyl-tip:not(:popover-open) { opacity: 0; }
@@ -328,7 +328,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   pointer-events: none;
   z-index: 10000;
   opacity: 1;
-  transition: opacity 100ms ease-out, display 100ms allow-discrete;
+  transition: opacity var(--xp-transition-fade), display var(--xp-transition-fade) allow-discrete;
 }
 .xp-cam-tip:not(:popover-open) { opacity: 0; }
 @starting-style { .xp-cam-tip:popover-open { opacity: 0; } }
@@ -347,7 +347,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   font-family: var(--font-ui); font-size: 11px; line-height: 1.42;
   box-shadow: 2px 4px 12px -3px oklch(0% 0 0 / 0.4);
   pointer-events: none; z-index: 10000;
-  opacity: 1; transition: opacity 110ms ease-out, display 110ms allow-discrete;
+  opacity: 1; transition: opacity var(--xp-transition-fade), display var(--xp-transition-fade) allow-discrete;
 }
 .balloon-tip:not(:popover-open) { opacity: 0; }
 @starting-style { .balloon-tip:popover-open { opacity: 0; } }
@@ -487,7 +487,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   position: relative;
   width: 100%;
   height: 100%;
-  transition: transform 520ms cubic-bezier(.2, .8, .3, 1);
+  /* @motion demo: a 3D flip needs time to read as a rotation */ transition: transform 520ms cubic-bezier(.2, .8, .3, 1);
   transform-style: preserve-3d;
 }
 .polaroid .slot:hover .card,
@@ -548,7 +548,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   box-shadow: 2px 2px 0 oklch(15% 0 0 / 0.15);
   pointer-events: none;
   opacity: 0;
-  transition: opacity 120ms ease-out;
+  transition: opacity var(--xp-transition-fade);
   z-index: 1000;
   max-width: 260px;
 }
