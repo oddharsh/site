@@ -5,7 +5,7 @@
 // WHY. `@cloudflare/workers-types` was 12 of the 29 Dependabot PRs in the
 // thirty days to 2026-09-02, each a date-stamped release describing a runtime
 // this repo does not yet run on, and each needing the hand relock commit
-// (bun run deps:relock). Wrangler ships the same declarations itself:
+// (bun run deps:relock, retired 2026-10-06). Wrangler ships the same declarations itself:
 // `wrangler types --include-runtime` boots the pinned workerd's own types
 // worker (workerd/worker.mjs, no network) and asks it for the surface at a
 // given compatibility date and flag set. Wrangler's own migration notice says

@@ -118,7 +118,7 @@
     {
       "who": "bot",
       "time": "19:40",
-      "html": "<p>How the diaphragm gets pushed. A dynamic driver glues a voice coil to a cone and parks it in a magnet gap; current through the coil makes a force at that one spot, and the cone has to carry that push out to its edges. A planar driver etches the conductor across a thin flat film hung between two magnet arrays, so the force lands evenly over the whole surface.</p>"
+      "html": "<p>How the <a class=\"term\" data-t=\"diaphragm\" href=\"https://en.wikipedia.org/wiki/Diaphragm_(acoustics)\" title=\"The thin membrane in a speaker or headphone that moves back and forth to push air and make sound.\" rel=\"external\">diaphragm</a> gets pushed. A dynamic driver glues a <a class=\"term\" data-t=\"voice-coil\" href=\"https://en.wikipedia.org/wiki/Voice_coil\" title=\"A coil of wire fixed to a speaker cone that moves in a magnet's field when audio current flows through it, driving the cone.\" rel=\"external\">voice coil</a> to a cone and parks it in a magnet gap; current through the coil makes a force at that one spot, and the cone has to carry that push out to its edges. A planar driver etches the conductor across a thin flat film hung between two magnet arrays, so the force lands evenly over the whole surface.</p>"
     },
     {
       "who": "you",
@@ -128,7 +128,7 @@
     {
       "who": "bot",
       "time": "19:41",
-      "html": "<p>At low frequencies it barely does; the cone moves as one piston either way. The split shows up high, where the wavelength inside the diaphragm gets short. A point-driven cone has to propagate that motion outward, so the rim starts lagging the center and the surface stops moving as one piece. It breaks into modes. The flat film, driven everywhere at once, stays flat.</p>"
+      "html": "<p>At low frequencies it barely does; the cone moves as one piston either way. The split shows up high, where the wavelength inside the diaphragm gets short. A point-driven cone has to propagate that motion outward, so the rim starts lagging the center and the surface stops moving as one piece. It breaks into <a class=\"term\" data-t=\"normal-mode\" href=\"https://en.wikipedia.org/wiki/Normal_mode\" title=\"A pattern in which an object vibrates at one frequency, with some regions moving and others standing still.\" rel=\"external\">modes</a>. The flat film, driven everywhere at once, stays flat.</p>"
     },
     {
       "demo": {
@@ -145,7 +145,7 @@
     {
       "who": "bot",
       "time": "19:43",
-      "html": "<p>It is. When different parts of the diaphragm move out of step, they radiate sound that was not in the signal, which shows up as resonance peaks and extra distortion in the treble. Spreading the drive is how planars keep distortion low up high. It is also why a planar diaphragm can be so thin and light: it never has to be stiff enough to stay rigid under a point load.</p>"
+      "html": "<p>It is. When different parts of the diaphragm move out of step, they radiate sound that was not in the signal, which shows up as <a class=\"term\" data-t=\"resonance\" href=\"https://en.wikipedia.org/wiki/Resonance\" title=\"The tendency of an object to vibrate much more strongly at certain frequencies; in a speaker it shows up as peaks at those pitches.\" rel=\"external\">resonance</a> peaks and extra distortion in the treble. Spreading the drive is how planars keep distortion low up high. It is also why a planar diaphragm can be so thin and light: it never has to be stiff enough to stay rigid under a point load.</p>"
     },
     {
       "who": "you",

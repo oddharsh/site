@@ -1,178 +1,31 @@
 version: 2
 updates:
-  # THE ECOSYSTEM IS `npm` AND THE TREE IS BUN, WHICH IS DELIBERATE AND COSTS A
-  # MANUAL COMMIT PER PR. Read this before "fixing" it, because the obvious fix
-  # is measurably worse.
+  # NO npm BLOCK, ON PURPOSE, since 2026-10-06. Read this before adding one back.
   #
-  # This block writes package.json and NOTHING ELSE. The npm updater maintains
-  # package-lock, yarn.lock and pnpm-lock; it has never written a bun.lock, and
-  # this tree has kept one since the 2026-08-20 toolchain move. So every
-  # dependency PR since that date has died at `bun install --frozen-lockfile`
-  # with "lockfile had changes, but lockfile is frozen", before `validate`
-  # reached a single check. Three were open at once on 2026-08-24 and all three
-  # failed at that same step.
+  # Dependabot cannot update this tree's npm dependencies today, from either
+  # side. The `npm` updater has refused any directory holding a bun.lock since
+  # dependabot-core#16220 (merged 2026-09-25): every daily `npm_and_yarn` job
+  # for `/` and `/lens-reader` failed from that morning on, while the cargo and
+  # actions jobs kept opening PRs, so the queue never looked empty and the gap
+  # ran 11 days before a fix. The `bun` updater is no way out either: it declares
+  # `BunPackageManager::MAX_SUPPORTED_LOCKFILE_VERSION = 1`, both lockfiles here
+  # are version 2 (bun 1.4's default), and over that ceiling it opens nothing
+  # (dependabot-core#16026, open).
   #
-  # Dependabot HAS a bun updater, GA since 2025-02-13, and switching to
-  # `package-ecosystem: bun` is the reflex. It would be a downgrade from red PRs
-  # to no PRs: its bundled bun is 1.3.14, which caps at `lockfileVersion` 1, and
-  # both lockfiles here are version 2 because bun 1.4 raised the default.
-  # Over that ceiling the updater raises DependencyFileNotSupported rather than
-  # opening anything. Worth knowing that this used to be SILENT, where the old
-  # bun discarded the lockfile it could not read, re-resolved, and wrote v1
-  # back; dependabot-core made it a loud refusal on 2026-08-14.
+  # .github/workflows/deps-pin.yml does the npm half instead, nightly:
+  # `bun run deps:pin` reads the registry, applies the same 24-hour release age
+  # bunfig.toml enforces, keeps the groups this file used to declare (now in
+  # tools/lib/deps-plan.ts with their reasons), relocks, moves the version
+  # claims in docs/DEPENDENCIES.md, and opens one PR per group. It also runs
+  # `bun audit`, because security updates went quiet with the version ones.
   #
-  # Two smaller reasons the switch is not close. The bun updater serves version
-  # updates only, so security updates would be LOST, and bun-plus-workspaces has
-  # been open as a known bug since 2026-02-19 while this repo has five workspace
-  # projects.
+  # When dependabot-core raises that constant to 2, the move back is
+  # `package-ecosystem: bun` for `/` and `/lens-reader` with the groups copied
+  # from deps-plan.ts, and deps-pin.yml can go. The bun updater writes bun.lock
+  # itself, so the relock workflow this file once leaned on does not come back.
   #
-  # RE-CHECKED 2026-08-24, and THE NUMBER TO WATCH IS NOT THE ONE THIS COMMENT
-  # USED TO NAME. It said to revisit when the updater's bundled bun reaches 1.4.
-  # The ceiling is a CONSTANT in the Ruby instead, and dependabot-core#15896
-  # moved the two independently on 2026-08-14: it bumped `BUN_VERSION` from
-  # 1.3.5 to 1.3.14 AND added `BunPackageManager::MAX_SUPPORTED_LOCKFILE_VERSION
-  # = 1`, calling the bun bump routine and saying outright that it does not
-  # change the ceiling. So an image carrying bun 1.4 still refuses a v2 lockfile
-  # until somebody raises that constant, and watching the bundled version would
-  # have read a fixed gate as an open one.
-  #
-  # Nothing upstream is moving on it. dependabot-core#16026 ("Bun 1.4 uses
-  # lockfile v2 which dependabot currently does not support") was opened by
-  # another user on 2026-08-24, carries `help-wanted`, and has zero comments;
-  # #15897, asking for per-repository bun versions in the updater image, is open
-  # as well. Until the constant reaches 2 the lockfile is a SECOND COMMIT on each
-  # dependency PR, and `validate` failing at install is the expected first state
-  # of one rather than a broken branch.
-  #
-  # THAT COMMIT IS MADE FOR YOU, by .github/workflows/dependabot-relock.yml,
-  # which runs `bun run deps:relock <pr> --push --no-gates` on every bump that
-  # touches a package.json. It rebases the branch first (two bumps in flight both
-  # edit the head of bun.lock, so whichever merges second conflicts), installs,
-  # moves the version claims in docs/DEPENDENCIES.md that a contract test holds
-  # against package.json, and force-pushes. The push carries a GitHub App token
-  # rather than GITHUB_TOKEN, and that is the load-bearing part: a push made with
-  # GITHUB_TOKEN triggers no further workflow, so `validate` would never re-run
-  # and the branch would sit on a stale red required check having been fixed.
-  #
-  # EXPECT TO SEE RED BRIEFLY, and read it as the pipeline working. The first
-  # `validate` fires against Dependabot's own commit and dies at the frozen
-  # install; the relock lands seconds later and the re-run is the one that
-  # counts. A pull request still red MINUTES later is the signal, and the run to
-  # read is `Relock Dependabot bumps` on that branch.
-  #
-  # `bun run deps:relock <pr> --push` by hand still works, gates and all, and is
-  # what to reach for when the workflow is the thing that is broken. Re-verified
-  # 2026-08-26 against the live constant rather than trusting the paragraph
-  # above; when it reaches 2, the script, the workflow and this comment are all
-  # deletable.
-  #
-  # The root workspace owns the shared deploy toolchain (including Wrangler,
-  # Oxc Minify, and Lightning CSS) and all workspace dependency resolution.
-  #
-  # This block used to carry `open-pull-requests-limit: 1` and no groups, so
-  # every pin queued behind one PR. That is why seven packages were outdated at
-  # once on 2026-08-19 with ZERO dependabot PRs open: the four packages here
-  # that cut releases most often (wrangler, workers-types, oxlint, oxc-minify;
-  # workers-types left on 2026-09-02, generated from the wrangler pin instead)
-  # generate new versions faster than a serialized queue can drain, so the
-  # backlog grew while the config reported itself as busy. A limit of 1 is a
-  # throughput cap masquerading as a review policy.
-  #
-  # GROUPS are what replace it, and they buy correctness rather than tidiness.
-  # Dependabot assigns each dependency to the FIRST group whose patterns match,
-  # so order below is load-bearing; anything unmatched falls through to the
-  # catch-all and a MAJOR arrives on its own.
-  - package-ecosystem: npm
-    directory: "/"
-    schedule:
-      interval: daily
-      time: "09:00"
-      timezone: America/New_York
-    open-pull-requests-limit: 10
-    # COOLDOWN MIRRORS `minimumReleaseAge = 86400` IN bunfig.toml, and without it
-    # dependabot opens pull requests this repo cannot finish. bun refuses to
-    # RESOLVE a version published inside that window, and an exact pin gets no
-    # fallback the way a range does: measured 2026-08-24 on bun 1.4.0, an
-    # `bun install` whose exact devDependency the policy rejects exits 1 with
-    # `failed to resolve`, where the same tree with the policy off exits 0. The
-    # whole cost of staying on the npm ecosystem is the hand `bun install` that
-    # carries the bump into bun.lock, so a PR opened inside that window is one
-    # nobody can relock until the package turns a day old.
-    #
-    # It buys that for no advisory latency, because cooldown governs VERSION
-    # updates alone and is documented as never applying to security updates.
-    # One day rather than a rounder number, because the number is the install
-    # policy's number: a second, larger source of truth for the same window is
-    # how the two quietly drift apart.
-    cooldown:
-      default-days: 1
-    commit-message:
-      prefix: chore
-      include: scope
-    groups:
-      # The linter ABI, and the one group that exists to prevent a BREAKAGE.
-      # `@oxlint/plugins` is the interface between oxlint and the three rules
-      # vendored at tools/oxlint/anti-slop; the two ship one version number and
-      # a mismatch fails at PLUGIN LOAD rather than at install, so a serialized
-      # queue that merged one without the other would red `validate` on
-      # unchanged code. DEPENDENCIES.md states the lockstep rule in prose; this
-      # is the machine-enforced half.
-      oxlint:
-        patterns:
-          - "oxlint"
-          - "@oxlint/plugins"
-      # tsgolint tracks the TYPESCRIPT pin, not the oxlint one. TypeScript 7.0
-      # ships no stable programmatic API, so typescript-eslint cannot run on it
-      # and tsgolint is the only door to the type-aware rules; a tsgolint
-      # release is paired with a TypeScript one by construction, which is why
-      # it groups here rather than with oxlint above.
-      typescript:
-        patterns:
-          - "typescript"
-          - "oxlint-tsgolint"
-      # One resolved Cloudflare stack, verified by the lockfile carrying
-      # exactly one miniflare, one workerd and one undici. `cal`'s
-      # vitest-pool-workers used to pull its own wrangler/miniflare/workerd, so
-      # bumping it apart from wrangler split that stack in two and silently
-      # re-hoisted the undici 7.28.0 pin the floors exist to keep out. It left
-      # the tree on 2026-09-02 (cal tests on bun over wrangler's own harness);
-      # the group stays, because the next @cloudflare/* package carrying its
-      # own wrangler re-creates the same split.
-      #
-      # WRANGLER IS NOT A REGISTRY VERSION ANY MORE, since 2026-09-14: it is a
-      # pkg.pr.new tarball URL naming a commit of workers-sdk main, which
-      # Dependabot cannot bump (it tracks registry versions and nothing else), so
-      # the pattern below matches nothing today and wrangler-pin.yml owns that
-      # advance. The pattern STAYS, because the day the pin goes back to a
-      # release number this group is what should catch it again.
-      cloudflare-toolchain:
-        patterns:
-          - "wrangler"
-          - "@cloudflare/*"
-      # The three packages that REWRITE BUILT BYTES. They get their own lane so
-      # a content-hash re-mint is always one identifiable PR rather than a side
-      # effect of a batch. Measured 2026-08-19 on oxc-minify 0.144.0 -> 0.145.0:
-      # 10 hashed /a/ assets re-minted, 752 staged files changed, for 22 bytes
-      # of brotli across all of them, and 7 of the 9 scripts changed hash at
-      # IDENTICAL size. A new hash orphans every a-dict snapshot naming the old
-      # one, which costs a returning visitor the shell dictionary tier on the
-      # render-blocking path until dictionary-roll.yml catches up that night.
-      # So these are never a free bump, and the PR should say what it cost.
-      minifiers:
-        patterns:
-          - "oxc-minify"
-          - "lightningcss"
-          - "@minify-html/node"
-      # Everything else, batched by RISK rather than by package. A minor or
-      # patch lands as one PR; a MAJOR is deliberately excluded so it arrives
-      # alone and its surgery stays legible. That is the "flag what we cannot
-      # do in one shot" half: the major still opens, `validate` still gates it,
-      # and nothing merges on a red check.
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
+  # Dependabot ALERTS still cover every npm manifest: the dependency graph
+  # reads them regardless of this file. Only the update PRs moved.
   # Keep the action toolchain current too; its PRs get the same review note.
   #
   # `directories` RATHER THAN `directory`, BECAUSE "/" DOES NOT REACH A COMPOSITE
@@ -250,53 +103,6 @@ updates:
       time: "09:00"
       timezone: America/New_York
     open-pull-requests-limit: 3
-    cooldown:
-      default-days: 1
-    commit-message:
-      prefix: chore
-      include: scope
-
-  # `lens-reader` keeps its own package.json and lockfile OUTSIDE the bun
-  # workspace (readability + linkedom are megabytes only that Worker bundles, and
-  # the root suite may not import from it at all, gotcha 29), so the npm entry
-  # at "/" above never reaches it. Without this block its three dependencies get
-  # no update PRs at all.
-  #
-  # Read this against the osv-scanner scan (a workstation command since #1001
-  # took it out of ci.yml; osv-scanner.toml's header has the invocation),
-  # because the two cover DIFFERENT halves and the distinction is easy to lose:
-  #
-  #   security ALERTS   come from GitHub's dependency graph, which indexes every
-  #                     manifest in the repository regardless of this file.
-  #                     lens-reader was ALREADY covered. Verified 2026-08-14 on
-  #                     the manifest of that day: defuddle, linkedom, turndown
-  #                     and @mixmark-io/domino all appeared in this repo's SBOM
-  #                     (`gh api repos/oddharsh/site/dependency-graph/sbom`).
-  #                     Three of those four have since left (Readability replaced
-  #                     defuddle, a first-party serializer replaced turndown and
-  #                     its domino fallback); the coverage claim is about the
-  #                     GRAPH rather than about any package, so it is unchanged.
-  #
-  #   version UPDATES   are scoped strictly to the directories listed HERE, and
-  #                     an unwatched directory simply never gets a bump PR.
-  #
-  # So this closes a staleness gap, never a missed-advisory one. It went
-  # unnoticed because every pin in that project was current, so nothing had
-  # drifted yet to reveal it.
-  #
-  # Anyone editing that project by hand needs `bun install --ignore-workspace`;
-  # a bare install walks UP to the root workspace and never creates
-  # lens-reader/node_modules at all. It carries its own bun.lock, so it needs
-  # the same hand commit the root block describes above.
-  - package-ecosystem: npm
-    directory: "/lens-reader"
-    schedule:
-      interval: daily
-      time: "09:00"
-      timezone: America/New_York
-    open-pull-requests-limit: 3
-    # Its own bun.lock, so its own instance of the resolve failure the root
-    # block measures.
     cooldown:
       default-days: 1
     commit-message:

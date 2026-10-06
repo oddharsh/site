@@ -1,0 +1,208 @@
+name: Dependency pins
+
+# The npm half of Dependabot, run here because Dependabot can no longer read
+# this tree. Its npm updater refuses any directory holding a bun.lock since
+# dependabot-core#16220 (2026-09-25), and its bun updater refuses lockfile
+# version 2, which bun 1.4 writes (dependabot-core#16026). tools/lib/deps-plan.ts
+# carries the policy: the 24-hour release age from bunfig.toml, no
+# prereleases, no deprecated versions, and Dependabot's own groups.
+#
+# Same shape as wrangler-pin.yml and bun-pin.yml, for the same reasons: one
+# long-lived branch per group, force-pushed; never a push to a protected ref;
+# a human merge, because `main` takes no bypass actors.
+#
+# NOTHING NEWLY PUBLISHED RUNS HERE. The planner reads the registry; the writer
+# relocks with --ignore-scripts. Every install that runs here is either frozen
+# against main's committed lockfile or inside bump-deps.ts with scripts off, so
+# the App token minted afterwards never shares a process tree with code that
+# arrived today. `validate` on the PR is the first thing that executes a bump.
+
+on:
+  schedule:
+    - cron: "20 10 * * *" # after canary at 10:05, the last of the nightly PR openers
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deps-pin
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan the bumps the registry allows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      groups: ${{ steps.plan.outputs.groups }}
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install main's lockfile, scripts off
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Plan
+        id: plan
+        run: |
+          set -euo pipefail
+          bun run deps:pin -- --json plan.json | tee plan.log
+          echo "groups=$(bun -e 'process.stdout.write(JSON.stringify(require("./plan.json").groups.map((g) => g.name)))')" >> "$GITHUB_OUTPUT"
+
+      # Security updates were the other thing Dependabot gave, and they went
+      # quiet with the version updates. An advisory on an exact pin is fixed by
+      # the next bump above; one on a transitive pin (sharp under miniflare,
+      # 2026-10-06) needs a person, so it is reported rather than failed on.
+      - name: Audit
+        run: |
+          set +e
+          bun audit > audit.log 2>&1
+          status=$?
+          set -e
+          cat audit.log
+          if [ "$status" -ne 0 ]; then
+            echo "::warning title=bun audit::$(grep -c '^  \(low\|moderate\|high\|critical\):' audit.log) advisory(ies); see the job summary"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Dependency pins"
+            echo
+            echo '```'
+            cat plan.log 2>/dev/null || echo "(the planner did not run)"
+            echo '```'
+            echo
+            echo "#### bun audit"
+            echo
+            echo '```'
+            cat audit.log 2>/dev/null || echo "(the audit did not run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  propose:
+    name: Propose ${{ matrix.group }}
+    needs: plan
+    if: github.ref == 'refs/heads/main' && needs.plan.outputs.groups != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      # One at a time, so two groups never mint tokens or push in the same minute.
+      max-parallel: 1
+      matrix:
+        group: ${{ fromJSON(needs.plan.outputs.groups) }}
+    permissions:
+      # read: the push and the PR go through the App token minted after the
+      # write (.github/actions/bot-pr-token says why). It reaches only the
+      # chore/deps-* branches; main and production carry rulesets with zero
+      # bypass actors.
+      contents: read
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install main's lockfile, scripts off
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Write the group
+        env:
+          GROUP: ${{ matrix.group }}
+        run: |
+          set -euo pipefail
+          bun run deps:pin -- --group "$GROUP" --write --body body.md --json plan.json
+          bun -e '
+            const g = require("./plan.json").groups.find((x) => x.name === process.env.GROUP);
+            const fs = require("node:fs");
+            // A version can be pulled between the plan job and this one.
+            if (!g) { fs.appendFileSync(process.env.GITHUB_ENV, "SKIP=1\n"); process.exit(0); }
+            fs.appendFileSync(process.env.GITHUB_ENV, `BRANCH=${g.branch}\n`);
+            const list = g.bumps.map((b) => `${b.pkg} ${b.to}`).join(", ");
+            fs.appendFileSync(process.env.GITHUB_ENV, `TITLE=chore(deps): move ${list}\n`);
+          '
+
+      - name: Mint the App token that opens the PR
+        if: env.SKIP != '1'
+        id: bot
+        uses: ./.github/actions/bot-pr-token
+        with:
+          app-id: ${{ secrets.RELOCK_APP_ID }}
+          private-key: ${{ secrets.RELOCK_APP_PRIVATE_KEY }}
+
+      - name: Open or update the PR
+        if: env.SKIP != '1'
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+        run: |
+          set -euo pipefail
+          git checkout -B "$BRANCH"
+          # Named rather than `git add -A`: these are the only files the writer
+          # may touch, so anything else in the tree stays out of the commit.
+          git add -u -- package.json bun.lock '*/package.json' lens-reader/bun.lock docs/DEPENDENCIES.md
+          git -c core.hooksPath=/dev/null commit -m "$TITLE" -m "Opened by .github/workflows/deps-pin.yml."
+          git -c core.hooksPath=/dev/null push --force origin "$BRANCH"
+
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr edit "$BRANCH" --title "$TITLE" --body-file body.md
+            echo "PR already open for $BRANCH; the force-push updated it."
+          else
+            gh pr create --base main --head "$BRANCH" \
+              --assignee oddharsh \
+              --label "type: chore" --label "dependencies" \
+              --title "$TITLE" \
+              --body-file body.md
+          fi
+
+  prune:
+    name: Close PRs whose bump is already done
+    needs: plan
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Mint the App token
+        id: bot
+        uses: ./.github/actions/bot-pr-token
+        with:
+          app-id: ${{ secrets.RELOCK_APP_ID }}
+          private-key: ${{ secrets.RELOCK_APP_PRIVATE_KEY }}
+
+      # A group with nothing left to bump (a hand bump landed, or the version
+      # was pulled) leaves its PR stale. Only branches this job owns are read:
+      # the chore/deps- prefix AND the label it applies.
+      - name: Close stale group PRs
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+          PLANNED: ${{ needs.plan.outputs.groups }}
+        run: |
+          set -euo pipefail
+          live=$(bun -e 'const n = JSON.parse(process.env.PLANNED); process.stdout.write(n.map((g) => "chore/deps-" + g.replace(/^@/, "").replace(/[^\w.-]+/g, "-")).join("\n"))')
+          gh pr list --state open --label dependencies --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("chore/deps-")) | "\(.number) \(.headRefName)"' |
+          while read -r number branch; do
+            if ! grep -qxF "$branch" <<< "$live"; then
+              gh pr close "$number" --delete-branch --comment "Nothing left to bump in this group on main; closed by .github/workflows/deps-pin.yml."
+            fi
+          done

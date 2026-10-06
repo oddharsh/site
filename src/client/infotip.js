@@ -316,6 +316,34 @@ export function start(o) {
       [["Target", to], ["Opens", blank ? "in a new window" : ""]]);
   };
 
+  // A glossary term in an essay (docs/TERMS.md). The definition is the point of
+  // the card, so it reads as body text rather than a grey hint, and the one row
+  // names where a click goes. Help's popup definitions did the same job; the
+  // source row is what a reader weighs before leaving the page. Everything here
+  // comes off the element, whose title and href a contract test holds to
+  // src/content/terms.json, so the card never fetches.
+  const SOURCES = {
+    "en.wikipedia.org": "Wikipedia",
+    "developer.mozilla.org": "MDN",
+    "www.rfc-editor.org": "RFC Editor",
+    "datatracker.ietf.org": "IETF",
+    "csrc.nist.gov": "NIST",
+    "arxiv.org": "arXiv",
+    "eprint.iacr.org": "IACR ePrint",
+    "developers.cloudflare.com": "Cloudflare Docs",
+    "github.com": "GitHub",
+    "www.unicode.org": "Unicode",
+  };
+  const termTip = (a) => {
+    const text = a.dataset.tip || a.getAttribute("title") || "";
+    let host = "";
+    try { host = new URL(a.href).host; } catch (_) {}
+    const src = SOURCES[host] || host.replace(/^www\./, "");
+    return `<div class="n">${esc(a.textContent.trim())}</div>` +
+      (text ? `<div class="d">${esc(text)}</div>` : "") +
+      (src ? `<dl><dt>Read more</dt><dd>${esc(src)}</dd></dl>` : "");
+  };
+
   const contentFor = (t) => {
     // Chrome that lives ON the taskbar has to be described from ABOVE it: the
     // default below-cursor offset would put the box over the very row being
@@ -329,6 +357,7 @@ export function start(o) {
     if (t.matches("#axp-clock")) return clockTip();
     if (t.matches("#axp-sound")) return soundTip(t);
     if (t.matches("#axp-start")) return startTip();
+    if (t.matches("a.term")) return termTip(t);
     if (t.matches("a[href]")) return linkTip(t);
     return plainTip(t);
   };

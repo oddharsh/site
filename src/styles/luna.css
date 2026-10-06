@@ -1071,6 +1071,13 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 }
 a.car-link:link,
 a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
+/* A glossary term in an essay (docs/TERMS.md): the same dotted promise the car
+   links make, that hovering says more before clicking leaves. */
+a.term:link,
+a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
+/* Hold Alt (nav.js initExact): a figure showing its exact value reads in the
+   mono face the site keeps for raw readouts, so you can tell which ones moved. */
+.exact data[data-shown] { font-family: var(--font-mono); }
 
 /* native window resize (phase C follow-up): the platform owns the corner
    drag; nav.js keeps only the dotted-grip decoration and the clamp lift

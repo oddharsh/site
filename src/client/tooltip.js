@@ -372,7 +372,11 @@ export function start(initial) {
         const w = exif.w, h = exif.h;
         const dims = (w && h) ? `${w} × ${h}` : "";
         const evStr = (asNumber(exif.ev) !== null && exif.ev !== 0) ? ((exif.ev > 0 ? "+" : "") + exif.ev + " EV") : "";
-        const metaStrip = [evStr, dims, slot.dataset.size ? fmtBytes(slot.dataset.size) : ""].filter(Boolean).join(" · ");
+        // The rounded size carries its byte count for hold-Alt (nav.js initExact).
+        const bytes = Number(slot.dataset.size) || 0;
+        const sizeHtml = bytes
+          ? `<data value="${esc(bytes.toLocaleString("en-US"))} bytes">${esc(fmtBytes(bytes))}</data>` : "";
+        const metaStrip = [esc(evStr), esc(dims), sizeHtml].filter(Boolean).join(" · ");
 
         // Fuji recipe rows — only the populated/non-default ones
         const isOn = v => v && !/^off$/i.test(String(v));
@@ -406,16 +410,21 @@ export function start(initial) {
         const hist = histFor(stem, slot);
         const histSvg = hist ? renderHistogramSvg(hist) : "";
         const dateStr = fmtDate(exif.dt) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
+        // The footer trims to the minute; hold-Alt shows the capture time to the
+        // second, exactly as the camera wrote it (only the date separators change).
+        const dateHtml = fmtDate(exif.dt)
+          ? `<data value="${esc(String(exif.dt).replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3"))}">${esc(dateStr)}</data>`
+          : esc(dateStr);
 
         return `<div class="cam">` +
             `<div class="header"><span>${esc(stem)}.jpg</span>${flashBolt(exif.fs)}</div>` +
             `<div class="histogram-frame">${histSvg}</div>` +
             `<div class="body">` +
               (expo ? `<div class="exposure">${esc(expo)}</div>` : "") +
-              (metaStrip ? `<div class="meta-strip">${esc(metaStrip)}</div>` : "") +
+              (metaStrip ? `<div class="meta-strip">${metaStrip}</div>` : "") +
               (recipe ? `<dl class="recipe-rows">${recipe}</dl>` : "") +
             `</div>` +
-            `<div class="footer"><span>${esc(dateStr)}</span></div>` +
+            `<div class="footer"><span>${dateHtml}</span></div>` +
           `</div>`;
       }
 

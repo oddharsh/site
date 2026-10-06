@@ -223,7 +223,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
 
     <h1>Scroll, the XP way</h1>
     <p class="lede">
-      <a href="https://drafts.csswg.org/scroll-animations-1/" rel="external">Scroll-driven animation</a>, but in a period-correct Luna idiom: the
+      <a href="https://drafts.csswg.org/scroll-animations-1/" rel="external">Scroll-driven animation</a>, but in a period-correct <a class="term" data-t="luna" href="https://en.wikipedia.org/wiki/Windows_XP_visual_styles" title="The default visual style of Windows XP, with blue title bars, a green Start button and rounded, glossy controls." rel="external">Luna</a> idiom: the
       file-copy progress bar, windows that maximize as they open, the blue
       gradient scrollbar. All <code>animation-timeline</code>, no scroll
       listeners, no JS. Your browser: <span id="cap-scroll" class="chip no">animation-timeline: scroll()</span>
@@ -255,7 +255,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
       </div>
       <p class="how">
         <code>.xp-progress-fill { animation: xp-fill linear both; animation-timeline: scroll(root block); }</code>.
-        The keyframes just animate <code>width: 0 &rarr; 100%</code>; the
+        The <a class="term" data-t="keyframes" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@keyframes" title="The CSS rule that lists an animation's waypoints, such as 0% and 100%, and the styles the browser animates between them." rel="external">keyframes</a> just animate <code>width: 0 &rarr; 100%</code>; the
         browser maps it to document scroll. Where unsupported it falls back to a
         static 60%-filled frame.
       </p>
@@ -266,7 +266,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
       <h2>2 &middot; Maximize on open <span class="scroll-hint">(scroll so each window enters)</span></h2>
       <p class="note">
         XP windows opened with a quick zoom-from-small. Each card below plays
-        that as it rises into the viewport, fast and snappy like the real
+        that as it rises into the <a class="term" data-t="viewport" href="https://developer.mozilla.org/en-US/docs/Glossary/Viewport" title="The part of a web page currently visible in the browser window; anything outside it needs scrolling to see." rel="external">viewport</a>, fast and snappy like the real
         Luna animation, driven by <code>animation-timeline: view()</code>.
       </p>
       <div class="maxi-stack">
@@ -278,7 +278,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
         <code>animation-timeline: view(); animation-range: entry 5% cover 32%;</code>
         with a <code>transform-origin: bottom</code> zoom. It finishes early
         (within a third of the way across the viewport) so it reads as a one-shot
-        &quot;open,&quot; not a parallax that keeps moving.
+        &quot;open,&quot; not a <a class="term" data-t="parallax-scrolling" href="https://en.wikipedia.org/wiki/Parallax_scrolling" title="A scrolling effect where background layers move slower than foreground ones, creating a sense of depth." rel="external">parallax</a> that keeps moving.
       </p>
     </section>
 
@@ -294,7 +294,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
       </p>
       <div class="luna-scroller">
         <p>The Windows XP scrollbar: a Luna-blue gradient thumb with a 3D bevel, a lighter track, and square arrow buttons top and bottom.</p>
-        <p>Scroll this box to drive it. WebKit/Blink get the full gradient thumb + buttons; Firefox gets the two-tone <code>scrollbar-color</code> (thumb + track), no buttons.</p>
+        <p>Scroll this box to drive it. <a class="term" data-t="webkit" href="https://en.wikipedia.org/wiki/WebKit" title="The open-source browser engine that powers Safari." rel="external">WebKit</a>/<a class="term" data-t="blink" href="https://en.wikipedia.org/wiki/Blink_(browser_engine)" title="The browser engine behind Chrome, Edge and other Chromium-based browsers." rel="external">Blink</a> get the full gradient thumb + buttons; Firefox gets the two-tone <code>scrollbar-color</code> (thumb + track), no buttons.</p>
         <p>On the homepage the photo wall and tracklist would scroll inside windows that actually look like windows, right down to the chrome.</p>
         <p>Keep scrolling&hellip; the thumb is the gradient, the track is the lighter channel beside it.</p>
         <p>That&apos;s the whole trick. No images, no JS, just a styled native scrollbar.</p>
@@ -310,7 +310,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; prefers-reduced-motion respected</small></p>
+      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; <a class="term" data-t="prefers-reduced-motion" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/prefers-reduced-motion" title="A CSS media feature that tells a page the user has asked their system to minimize animation." rel="external">prefers-reduced-motion</a> respected</small></p>
     </footer>
 
     <hr>
