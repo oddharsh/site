@@ -1,32 +1,32 @@
 # Dependency updates and site leverage
 
-The [Dependabot configuration](../.github/dependabot.yml) has five update blocks:
+Two systems own dependency updates, split by ecosystem:
 
-| ecosystem | directory | what it owns |
-|---|---|---|
-| npm | `/` | the shared build, test, and deploy toolchain |
-| npm | `/lens-reader` | the Reader lens Worker, which is outside the workspace on purpose |
-| github-actions | `/`, `/.github/actions/*` | SHA-pinned workflows and composite actions |
-| cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
+| owner | ecosystem | directory | what it owns |
+|---|---|---|---|
+| [`deps-pin.yml`](../.github/workflows/deps-pin.yml) | npm | `/`, its workspaces, `/lens-reader` | the shared build, test, and deploy toolchain, and the Reader lens Worker, which is outside the workspace on purpose |
+| [Dependabot](../.github/dependabot.yml) | github-actions | `/`, `/.github/actions/*` | SHA-pinned workflows and composite actions |
+| [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
 
-A fifth, pip, watched Pillow for one page generator until 2026-09-15, when the
-last Python in the tree became TypeScript and the lane left with it.
+Dependabot owned npm too until 2026-10-06. Its npm updater has refused any
+directory holding a `bun.lock` since dependabot-core#16220 (2026-09-25), and its
+bun updater refuses lockfile version 2, which bun 1.4 writes
+(dependabot-core#16026). `.github/dependabot.yml` carries the full account and
+the way back. A pip lane watched Pillow for one page generator until
+2026-09-15, when the last Python in the tree became TypeScript.
 
-Each update PR keeps the upstream release notes/changelog in its Dependabot
-description and gets a persistent site-review comment containing the exact
-version change, update type, and questions for the site.
+`bun run deps:pin` prints what it would bump and touches nothing; the nightly
+job adds `--group <name> --write` and opens one PR per group. The groups and
+their reasons live in `tools/lib/deps-plan.ts`. A version is proposed only once
+it is as old as `bunfig.toml`'s `minimumReleaseAge = 86400`, which is
+load-bearing rather than tidy: bun refuses to RESOLVE a pin younger than that
+window and an exact pin gets no fallback (measured 2026-08-24 on bun 1.4.0,
+`bun install` exits 1 with `failed to resolve`, and exits 0 on the same tree
+with the policy off). The job also runs `bun audit` and reports advisories in
+its summary, since an advisory on a transitive pin needs a person.
 
-Keep the composite-action glob: the root directory entry alone does not reach
-actions nested under `.github/actions/`.
-
-Every ecosystem carries `cooldown: default-days: 1`, which is the same 24 hours
-`bunfig.toml` sets as `minimumReleaseAge = 86400`. For the two npm blocks it is
-load-bearing rather than tidy, since bun refuses to RESOLVE a pin younger than
-that window and an exact pin gets no fallback: measured 2026-08-24 on bun 1.4.0,
-`bun install` exits 1 with `failed to resolve`, and exits 0 on the same tree with
-the policy off. A dependency PR opened inside the window is therefore one nobody
-can carry into `bun.lock` until the package turns a day old. Cooldown governs
-version updates alone and never security updates, so it delays no advisory.
+Keep the composite-action glob in `dependabot.yml`: the root directory entry
+alone does not reach actions nested under `.github/actions/`.
 
 Before merging a dependency PR, future agents should record whether the new
 release changes any of these surfaces:
@@ -51,7 +51,7 @@ Cloudflare's build image reads that field and cannot resolve a canary in it
 its build sha, and removing the field with the pin in its own file builds a
 version the canary compiled). `package.json` deliberately carries no
 `packageManager` now, and a contract test keeps it that way. The field, and
-none of those update blocks changes it. The npm updater bumps `@types/bun`
+neither `deps:pin` nor Dependabot changes it. `deps:pin` bumps `@types/bun`
 and leaves the runtime alone. Dependabot's own `bun` ecosystem would not help
 either: it reads `bun.lock` rather than the field, and it cannot run here at all
 while dependabot-core pins `MAX_SUPPORTED_LOCKFILE_VERSION = 1` against our v2
@@ -86,7 +86,7 @@ That must fail at the zstd gate with `73 none / 73 good / 73 wrong`, the collaps
 that means the option was ignored. Without it, a run reporting "nothing to do" on
 a day when the pin is already current proves only that the comparison ran.
 
-`@types/bun` stays dependabot's, and the two are allowed to disagree for a day.
+`@types/bun` stays `deps:pin`'s, and the two are allowed to disagree for a day.
 The baseline below already worked that through: the release-age policy once held
 the types pin a release behind the runtime and it caught up on its own, which is
 a wait rather than a fork.
@@ -414,13 +414,13 @@ does not make a failed write safe to ignore.
 - Oxc Minify 0.153.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
-  runtime dependency. Dependabot should review their release notes for output,
+  runtime dependency. A bump PR's review should read their release notes for output,
   target-browser, and native-install changes.
 - Oxlint 1.85.0 and oxlint-tsgolint 7.0.2002 are exact root pins for
   `bun run lint`, a required step in `validate`. The tsgolint version tracks the
   TypeScript pin below on purpose: TypeScript 7.0 ships no stable programmatic
   API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint
-  uses to reach the same type-aware rules. Dependabot should review oxlint
+  uses to reach the same type-aware rules. A bump PR's review should read oxlint
   releases for NEW rules, since a new rule in an enabled category fails CI on
   unchanged code, and should treat any tsgolint release as paired with a
   TypeScript one. Every rule this repo turns off is turned off in

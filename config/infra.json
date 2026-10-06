@@ -1161,7 +1161,7 @@
         "does not."
       ],
       "dependabot": ".github/dependabot.yml",
-      "dependabot_ecosystems": 3,
+      "dependabot_ecosystems": 2,
       "$dependabot_ecosystems": [
         "The FLOOR on `package-ecosystem:` list items in .github/dependabot.yml,",
         "and it is STRUCTURAL rather than an inventory. check-infra reads that",
@@ -1170,11 +1170,12 @@
         "an unknown name in silence: #620 shipped carrying no `dependencies`",
         "label at all, against a `github-actions` label GitHub never had.",
         "A line scanner that stops matching this file's shape finds zero labels",
-        "and reports a clean pass, so the floor asserts the file parsed. Four",
-        "ecosystems today (npm, github-actions, cargo, npm again for lens-reader;",
-        "the pip lane left with the last Python on 2026-09-15); three is the",
-        "floor, so deleting one block is a deliberate act that costs nothing here",
-        "while a broken parser matches zero and fails."
+        "and reports a clean pass, so the floor asserts the file parsed. Two",
+        "ecosystems today (github-actions, cargo). The pip lane left with the",
+        "last Python on 2026-09-15, and both npm lanes on 2026-10-06, when",
+        "Dependabot stopped reading bun.lock and .github/workflows/deps-pin.yml",
+        "took over npm. Two is the floor, so a broken parser that matches zero",
+        "still fails."
       ],
       "labels": [
         { "name": "type: feat", "color": "0e8a16", "description": "New capability or surface", "title": ["feat"] },
@@ -1225,7 +1226,7 @@
           "why": "Cloudflare Workers Issues hands each new or recurring production error to a Claude Code routine (docs/routines/workers-issue-triage.md), which searches for this label plus a marker line to keep ONE issue per error. Declared because a label the routine applies without it would be minted silently, which is the failure this block exists to catch."
         },
 
-        { "name": "dependencies", "color": "0366d6", "description": "Pull requests that update a dependency file", "applied_by": "dependabot" },
+        { "name": "dependencies", "color": "0366d6", "description": "Pull requests that update a dependency file", "applied_by": "dependabot and deps-pin.yml" },
         { "name": "javascript", "color": "168700", "description": "Pull requests that update javascript code", "applied_by": "dependabot" }
       ]
     }
