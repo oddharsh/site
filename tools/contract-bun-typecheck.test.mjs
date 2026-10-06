@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -76,6 +76,23 @@ test("a missing checker and an empty program cannot report a clean check", (t) =
   write("tsconfig.json", { compilerOptions: OPTIONS, files: [] });
   assert.throws(() => checkProgram(root, "tsconfig.json", [""], BUN), /could not complete|holds no files/);
   assert.throws(() => checkProgram(root, "tsconfig.json", [""], join(root, "missing-bun")), /could not complete/);
+});
+
+test("a Bun without the checker is named, with the install command", (t) => {
+  const { root, write } = fixture(t);
+  write("tsconfig.json", { compilerOptions: OPTIONS, files: ["main.ts"] });
+  write("main.ts", "export const value = 1;");
+  // What a pre-checker Bun prints for `bun check` (09bb546, 2026-10-06).
+  write("old-bun", "#!/bin/sh\necho 'error: Script not found \"check\"' >&2\nexit 1\n");
+  chmodSync(join(root, "old-bun"), 0o755);
+  assert.throws(() => checkProgram(root, "tsconfig.json", [], join(root, "old-bun")), /has no `bun check`.*install-bun\.sh/);
+});
+
+test("more than 50 identical errors are each counted", (t) => {
+  const { root, write } = fixture(t);
+  write("tsconfig.json", { compilerOptions: OPTIONS, files: ["main.ts"] });
+  write("main.ts", Array.from({ length: 80 }, (_, i) => `export const v${i}: number = "x";`).join("\n"));
+  assert.deepEqual(checkProgram(root, "tsconfig.json", ["main.ts"], BUN).counts, { "main.ts": 80 });
 });
 
 test("Reader's partial baseline update preserves errors owed by other programs", (t) => {
