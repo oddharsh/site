@@ -62,7 +62,7 @@ if [ "$pin" = "canary" ]; then
   mkdir -p "$dir"
   work=$(mktemp -d "$dir/.install.XXXXXX")
   trap 'rm -rf "$work"' EXIT
-  curl -fsSL -o "$work/release.json" "https://api.github.com/repos/oven-sh/bun/releases/tags/canary"
+  curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 -o "$work/release.json" "https://api.github.com/repos/oven-sh/bun/releases/tags/canary"
   node - "$work/release.json" "$platform" "$work/resolved.json" <<'NODE'
 const fs = require("node:fs");
 const [file, platform, out] = process.argv.slice(2);
