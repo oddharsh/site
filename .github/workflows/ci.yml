@@ -60,6 +60,22 @@ jobs:
   #
   # The job is named `validate` because the `main` ruleset requires a check of
   # that name from the GitHub Actions app.
+  #
+  # PARALLEL STEPS, since 2026-10-06 (Actions `background` and `wait`, GA on
+  # 2026-06-25). The steps ran one at a time, about 80s of work whose long
+  # poles share nothing: lint 12s, the build 12s, the suite 16s. Independent
+  # checks now start in the background, and the critical path is setup, then
+  # the build, then the suite. Three ordering edges are real, and
+  # contract-ci-required-gate holds each one (gotcha 54):
+  #   the suite starts after the build, because eight contract tests read
+  #     .build/ and two of them SKIP when it is missing instead of failing
+  #   gen-runtime-types finishes before lint and typecheck start, since both
+  #     open with it and it deletes, then rewrites, cf-garage's generated types
+  #   the suite waits for timbrado's engine (a cold cargo build inside it
+  #     raced one test's 30s clock)
+  # Flat `background` steps rather than a `parallel:` group: a group nests its
+  # steps, which hides their `run:` lines from the tests that read this file,
+  # and it has no way to say "the suite waits for the build".
   validate:
     name: validate
     runs-on: ubuntu-latest
@@ -69,14 +85,22 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # wrangler and the route oracle run under node (gotcha 38). It overlaps
+      # bun's install; its PATH change lands at the wait below. Bun stays in
+      # the foreground because its composite action puts bun on PATH in one
+      # inner step and calls it in the next.
+      - name: Set up Node.js
+        id: node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        background: true
+        with:
+          node-version-file: .node-version
+
       - name: Set up bun
         uses: ./.github/actions/setup-bun
 
-      # wrangler and the route oracle run under node (gotcha 38).
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
+      - name: Wait for Node.js
+        wait: node
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -88,41 +112,29 @@ jobs:
       - name: Check every project uses the root wrangler
         run: bun run check-wrangler
 
-      - name: Lint
-        run: bun run lint
-
-      - name: Typecheck
-        run: bun run typecheck
-
-      # perf-budget owns the build and the Worker dry-run; the route oracle
-      # below loads that exact bundle.
-      - name: Build, with the performance budget
-        run: bun run perf-budget
-
-      # What this build stages, URL by URL, for tools/check-served.ts to compare
-      # against production. Cut right after the build, before any later step can
-      # touch .build/, and only for a push to main: that is the commit Workers
-      # Builds rebuilds and ships, and a pull_request run builds a merge commit
-      # nobody deploys. The `attest` job below signs it.
-      - name: Cut the served manifest
-        if: github.event_name == 'push'
-        run: bun run served:manifest --commit "${{ github.sha }}" --out served-manifest.json
-
-      - name: Upload the served manifest
-        if: github.event_name == 'push'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: served-manifest
-          path: served-manifest.json
-          if-no-files-found: error
+      # `lint` and `typecheck` both open with this generator, and on a fresh
+      # checkout it writes config/.generated/ and deletes, then rewrites,
+      # cf-garage/.cloudflare/types/. Run concurrently, one reads what the
+      # other just deleted. So it runs once, here, and both start after it and
+      # find it current. It boots workerd and takes about 9s, which is why it
+      # runs beside the build: nothing the build, the route oracle or the suite
+      # reads comes from it.
+      - name: Generate the Workers runtime types
+        id: types
+        run: bun tools/gen-runtime-types.ts
+        background: true
 
       # Hashes the INPUTS of every committed derived artifact, so a re-encode
       # that skips a regeneration fails here (gotcha 46). No toolchain needed.
       - name: Check derived artifacts against their inputs
+        id: derive
         run: bun run derive:check
+        background: true
 
-      - name: Verify route surface against a local Worker
-        run: bun run routes:check --prebuilt .build/.perfbudget
+      - name: Test coffee Worker
+        id: cal
+        run: bun run --filter cal-aadhar-sh test
+        background: true
 
       # rust-toolchain.toml pins the compiler, and the runner image doesn't
       # ship that version: the first rustc or cargo call made rustup download
@@ -167,15 +179,70 @@ jobs:
           path: ${{ steps.timbrado.outputs.target }}
           key: ${{ steps.timbrado.outputs.key }}
 
-      # A cold cargo build; inside the suite it raced one test's 30s clock.
+      # A cold cargo build; inside the suite it raced one test's 30s clock. So
+      # it overlaps the build instead, and the suite waits for it.
       - name: Build timbrado's watch engine
+        id: engine
         run: bun -e 'import { ensureTimbradoEngine } from "./tools/lib/upstream-watches.ts"; console.log(ensureTimbradoEngine())'
+        background: true
+
+      # perf-budget owns the build and the Worker dry-run; the route oracle
+      # below loads that exact bundle. It stays in the foreground: the
+      # manifest is cut from what it leaves, and every step after it reads
+      # .build/.
+      - name: Build, with the performance budget
+        run: bun run perf-budget
+
+      # What this build stages, URL by URL, for tools/check-served.ts to compare
+      # against production. Cut right after the build, before any later step can
+      # touch .build/, and only for a push to main: that is the commit Workers
+      # Builds rebuilds and ships, and a pull_request run builds a merge commit
+      # nobody deploys. The `attest` job below signs it.
+      - name: Cut the served manifest
+        if: github.event_name == 'push'
+        run: bun run served:manifest --commit "${{ github.sha }}" --out served-manifest.json
+
+      - name: Upload the served manifest
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: served-manifest
+          path: served-manifest.json
+          if-no-files-found: error
+
+      # Reads .build/.perfbudget and writes only .wrangler.site.local.jsonc,
+      # which nothing in the suite touches, so the two overlap.
+      - name: Verify route surface against a local Worker
+        id: routes
+        run: bun run routes:check --prebuilt .build/.perfbudget
+        background: true
+
+      - name: Wait for the runtime types
+        wait: types
+
+      # Read-only checks: nothing below writes what they read. oxlint ignores
+      # .build/**, and typecheck writes only under --update.
+      - name: Lint
+        id: lint
+        run: bun run lint
+        background: true
+
+      - name: Typecheck
+        id: typecheck
+        run: bun run typecheck
+        background: true
+
+      - name: Wait for timbrado's engine
+        wait: engine
 
       - name: Run the contract suite
         run: bun run test
 
-      - name: Test coffee Worker
-        run: bun run --filter cal-aadhar-sh test
+      # Every background step above joins here, and one that failed fails this
+      # step by name. Actions would also join them implicitly before post-job
+      # cleanup; the explicit step makes the failure read as a check.
+      - name: Wait for every background check
+        wait-all:
 
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,
   # on main, at this commit, produced these URL hashes. tools/check-served.ts

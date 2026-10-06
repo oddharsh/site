@@ -251,3 +251,12 @@ by renumbering. The long-form history of each one is in git
     Two byte-identical Workers can give different upload-file hashes. Compare
     the named `index.js`, `index.js.map`, and `metadata` parts before blaming
     a Bun or bundler change; keep public asset comparisons byte-for-byte.
+
+54. **A background CI step can weaken the gate without failing it.** Since
+    2026-10-06 `validate` runs independent checks as Actions `background`
+    steps. Two of the contract tests that read `.build/` skip ("needs a
+    build") when it is missing, so a suite started beside the build passes
+    with less coverage instead of failing. `lint` and `typecheck` both open
+    with `gen-runtime-types.ts`, which deletes and rewrites cf-garage's types
+    on a fresh checkout. Before backgrounding a step, list what it writes and
+    what reads it; `contract-ci-required-gate` holds the edges known today.
