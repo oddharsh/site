@@ -380,7 +380,7 @@ test("the ramp's error reporter strips wrangler's ANSI colour codes", () => {
 // the completed Worker migration used for its quarantine, pointed the other
 // way — that one could only shrink, this one can only grow.
 //
-// TEXT-BASED on purpose. Proving a program is clean means RUNNING tsc against
+// TEXT-BASED on purpose. Proving a program is clean means RUNNING bun check against
 // it, which is what `bun run typecheck` already does on every one of these; a
 // second run per program here would put ~8 compilations on a suite that answers
 // in about a second. What this asserts is the declaration, and typecheck is what

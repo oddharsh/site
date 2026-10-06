@@ -1,8 +1,9 @@
 {
-  // SOLUTION-STYLE, and it exists for ONE reader: oxlint's type-aware pass.
+  // SOLUTION-STYLE: the checker walks these references, and oxlint's
+  // type-aware pass uses them to find each file's runtime program.
   //
   // Every real program lives in config/tsconfig.*.json and is run by `bun run
-  // typecheck` by explicit path; nothing here changes what tsc checks. tsgolint
+  // typecheck` by explicit path; each config owns what Bun checks. tsgolint
   // is different. It discovers a tsconfig PER FILE by walking up from that file
   // and, finding none named tsconfig.json above src/ or tools/, built a default
   // program with no includes, in which every Workers global was an error type

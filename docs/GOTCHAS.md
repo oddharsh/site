@@ -224,3 +224,25 @@ by renumbering. The long-form history of each one is in git
     must go literally.
     The Workers AI evals keep `wrangler auth token`, because cf has no command
     that prints its token. Re-audit when cf ships a no-provision switch.
+
+51. **A Rust compiler bump can fail strict Clippy on unchanged source.**
+    Rust 1.99 adds `chunks_exact_to_as_chunks`; fixed-size pixel loops use
+    `as_chunks::<N>().0.iter()` and `as_chunks_mut::<N>().0.iter_mut()`.
+    Both retain the old iterator's treatment of a trailing partial chunk.
+    Run zenc's tests and `clippy --all-targets -- -D warnings`, including its
+    example, then compare encoded output and reproduce the committed histograms.
+
+52. **A Bun canary's `--version` does not prove it has `bun check`.** The
+    installed binary and the 2026-10-06 npm canary both reported 1.4.3 but
+    predated the checker. GitHub's later canary at `bbdc5a519` had it.
+    Verify the full `Bun.revision` and `bun check --help`. The owner selected
+    the rolling GitHub canary temporarily; the shared installer verifies its
+    digest and commit, then records both in `bun.install.json` beside Bun.
+    Bun's checker also lacks `--showConfig`. Use
+    `--listFilesOnly --noResolve` to discover files selected directly by a
+    config, separately from the import graph.
+
+53. **Wrangler's `--outfile` is a multipart upload, with a random boundary.**
+    Two byte-identical Workers can give different upload-file hashes. Compare
+    the named `index.js`, `index.js.map`, and `metadata` parts before blaming
+    a Bun or bundler change; keep public asset comparisons byte-for-byte.

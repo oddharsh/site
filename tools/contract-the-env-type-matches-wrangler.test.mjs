@@ -31,17 +31,9 @@ import {
 // handler, the link scanner read 33 of 2645 refs because minify-html unquotes
 // attributes.
 //
-// THE TYPESCRIPT COMPILER IS NOT AVAILABLE FOR THIS, which is worth knowing
-// before anyone rewrites the scanner to use it. This repo pins TypeScript
-// 7.0.2, the Go port, and its JS entry exports exactly two things: measured
-// here, `Object.keys(require("typescript"))` is `["version",
-// "versionMajorMinor"]`. There is no createSourceFile, no ScriptTarget, no AST.
-// That is the same limit CLAUDE.md records as the reason typescript-eslint
-// cannot run here and the type-aware lint rules go through tsgolint instead;
-// it reaches source-reading tests too. So the scanner below is hand-rolled, in
-// the same depth-counting idiom the `new Response(` scanner already uses, and
-// it carries FLOORS because a scanner that quietly stops matching is how a set
-// comparison passes over a file it never read.
+// Bun's checker supplies diagnostics and file discovery, but exposes no AST
+// API. The scanner below therefore keeps its depth-counting implementation
+// and floors, which detect a source scan that quietly stops matching.
 
 const ENV_TS = "src/worker/lib/env.ts";
 // The site config, read through its legacy-shape projection (configText), so

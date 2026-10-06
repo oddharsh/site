@@ -128,7 +128,7 @@ jobs:
           Gates before taking a new major:
 
           - wrangler runs under it, per COMMAND rather than per tool (gotcha 38: \`deploy --dry-run\` worked under bun while \`check startup\` silently did nothing).
-          - \`bun run test:node\` and \`bun run typecheck\`, both of which run under node.
+          - \`bun run test:node\`, which runs under node.
           - **gzip continuity, one column.** Every \`perf-history\` row's \`worker_gzip\` is the figure wrangler prints, gzipped by the node wrangler runs under; the other columns are brotli and runtime-independent. A zlib change in the new major re-reads that one column as a step nobody took, which is exactly the phantom the perf-history branch exists to detect. Compress one fixed buffer under both majors and compare before believing any number after the move.
           - the zstd \`dictionary\` floor, which \`build.ts\` throws on. Measured 2026-08-24: v23.11.1 ignores it (63 none / 63 dict), v24.19.0 and v26.7.0 honour it (63 / 19).
 
