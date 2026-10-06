@@ -30,6 +30,6 @@
 # with the floor set past every package's age: `bun install --frozen-lockfile`
 # still exited 0 and installed, while the unfrozen run refused. So what this
 # guards is somebody adding or bumping a dependency HERE, and it cannot redden a
-# CI install of an already-committed lock. `.github/dependabot.yml` mirrors the
-# window for the bot with `cooldown.default-days: 1`.
+# CI install of an already-committed lock. `bun run deps:pin` (deps-pin.yml)
+# reads the root's window and proposes nothing younger, for this manifest too.
 minimumReleaseAge = 86400

@@ -404,7 +404,7 @@ type PlanDocPinRewritesInput = {
 };
 
 // The INVERSE of the claim audit above: given the pins, say exactly which spans
-// of prose disagree and what they should read instead. `bun run deps:relock`
+// of prose disagree and what they should read instead. `bun run deps:pin`
 // applies these; nothing else writes to the doc.
 //
 // It reuses findClaims rather than matching versions itself, and that is the
