@@ -83,17 +83,17 @@ export function renderRun({ cmd = "", notFound = false } = {}) {
   .run-lede { display: flex; gap: 10px; align-items: flex-start; margin: 2px 0 12px; }
   .run-ico { flex: 0 0 32px; width: 32px; height: 32px; background: oklch(69.58% 0.2043 43.49); position: relative; }
   .run-ico::before { content: ""; position: absolute; inset: 4px 7px; background: oklch(87.82% 0.0877 66.27); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-  .run-lede p { margin: 2px 0 0; font-size: 10pt; color: oklch(30% 0 0); }
+  .run-lede p { margin: 2px 0 0; font-size: var(--text-ui); color: oklch(30% 0 0); }
   form { display: flex; gap: 8px; align-items: center; margin: 0 0 4px; }
-  label { font-size: 10pt; }
+  label { font-size: var(--text-ui); }
   input[type=text] {
-    flex: 1; font-family: var(--font-ui); font-size: 10pt; padding: 3px 5px;
+    flex: 1; font-family: var(--font-ui); font-size: var(--text-ui); padding: 3px 5px;
     border: 1px solid oklch(56.86% 0.0525 249.86);
     box-shadow: inset 1px 1px 0 oklch(80.63% 0.0281 250.85);
     background: oklch(100% 0 0);
   }
   button {
-    min-width: 74px; padding: 3px 12px; font-family: var(--font-ui); font-size: 10pt; cursor: pointer;
+    min-width: 74px; padding: 3px 12px; font-family: var(--font-ui); font-size: var(--text-ui); cursor: pointer;
     color: oklch(18% 0 0); background: linear-gradient(180deg, var(--paper) 0%, oklch(93.5% 0.008 100) 86%, oklch(88% 0.012 95) 100%);
     border: 1px solid oklch(56.86% 0.0525 249.86); border-radius: 3px;
     box-shadow: inset 1px 1px 0 oklch(100% 0 0);
@@ -101,9 +101,9 @@ export function renderRun({ cmd = "", notFound = false } = {}) {
   button:active { background: oklch(88% 0.012 95); box-shadow: none; }
   .run-err {
     border: 1px solid oklch(60% 0.16 29); background: oklch(97% 0.02 60);
-    color: oklch(35% 0.05 29); padding: 8px 10px; margin: 10px 0; font-size: 9.5pt;
+    color: oklch(35% 0.05 29); padding: 8px 10px; margin: 10px 0; font-size: var(--text-sm);
   }
-  .run-note { font-size: 9pt; color: var(--ink-dim); margin-top: 12px; }
+  .run-note { font-size: var(--text-xs); color: var(--ink-dim); margin-top: 12px; }
 `,
     body: unsafeHtml(`
     <div class="run-lede">

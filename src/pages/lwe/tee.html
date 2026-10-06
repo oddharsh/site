@@ -24,23 +24,23 @@
 /* the lock is a color emoji, so it keeps its own ink and weight rather than the concept's white bold glyph */
 .title-bar .icon::before { color: #fff; filter: grayscale(.3); }
 .msgr-head .ava::before, .msg.bot .pic::before { color: inherit; font-weight: normal; font-family: inherit; }
-.msg .cite { display: inline-block; margin-top: 4px; font-size: 8pt; color: #6b7280; text-decoration: none; border-bottom: 1px dotted #9aa3b2; }
+.msg .cite { display: inline-block; margin-top: 4px; font-size: var(--text-2xs); color: #6b7280; text-decoration: none; border-bottom: 1px dotted #9aa3b2; }
 .msg .cite::before { content: "▸ "; } .msg .cite:hover { color: #334155; border-color: #334155; }
 .msg.ai-note .bubble { background: #f3f0fb; border: 1px solid #d7cdef; border-radius: 4px; padding: 7px 9px; }
-.msg.ai-note .tagai { display: inline-block; font-size: 7.5pt; font-weight: bold; color: #6b4ec2; background: #ece5fb; border: 1px solid #d0c3f0; border-radius: 9px; padding: 0 6px; margin-bottom: 4px; letter-spacing: .03em; }
+.msg.ai-note .tagai { display: inline-block; font-size: var(--text-3xs); font-weight: bold; color: #6b4ec2; background: #ece5fb; border: 1px solid #d0c3f0; border-radius: 9px; padding: 0 6px; margin-bottom: 4px; letter-spacing: .03em; }
 
 
 /* TEE side-channel demo */
 .enclave { border: 2px solid #44505f; border-radius: 6px; background: linear-gradient(180deg,#3a4453,#2a3340); color: #cfe3ff; padding: 12px; text-align: center; position: relative; }
-.enclave .lockline { font-size: 9pt; color: #9fb6cf; } .enclave .lockline b { color: #fff; }
+.enclave .lockline { font-size: var(--text-xs); color: #9fb6cf; } .enclave .lockline b { color: #fff; }
 .enclave .secret { font-family: var(--font-mono); font-size: 20px; letter-spacing: 4px; margin: 6px 0 2px; color: #6b7d93; }
 .enclave .secret.leaked { color: #ff9d6e; text-shadow: 0 0 8px rgba(255,120,60,.5); }
 .atk { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
-.trace { margin-top: 8px; min-height: 46px; border: 1px solid var(--accent); border-radius: 4px; background: #0f1722; padding: 8px 10px; font-family: var(--font-mono); font-size: 8.5pt; color: #7ee0a0; overflow: hidden; }
+.trace { margin-top: 8px; min-height: 46px; border: 1px solid var(--accent); border-radius: 4px; background: #0f1722; padding: 8px 10px; font-family: var(--font-mono); font-size: var(--text-micro); color: #7ee0a0; overflow: hidden; }
 .trace .t-title { color: #9fb6cf; margin-bottom: 4px; } .trace .t-title b { color:#fff }
 .trace .bars { display: flex; align-items: flex-end; gap: 2px; height: 22px; }
 .trace .bars i { display: block; width: 6px; background: #4fd1a0; }
-.note { font-size: 8.5pt; color: #4a5568; margin-top: 8px; } .note b { color:#15243f }
+.note { font-size: var(--text-micro); color: #4a5568; margin-top: 8px; } .note b { color:#15243f }
 
 </style>
 <link rel="stylesheet" href="/luna.css">

@@ -19,16 +19,24 @@
 
   /* ── SIZE SCALE — authored in pt, the period-correct unit for XP UI ──────
      The site sets body at 10.5pt and scales headings up; control text is 10pt.
-     Kept in pt so it reads like a 2003 dialog, not a 2026 rem grid. */
-  --text-h1:    14pt;   /* page heading (homepage h1)                          */
+     Kept in pt so it reads like a 2003 dialog, not a 2026 rem grid. Every pt
+     size up to 14pt names one of these; the type contract refuses a literal.
+     px stays legal for pixel-exact chrome and SVG text, and anything over 14pt
+     is display type, composed per page. */
   --text-h1-lg: 18pt;   /* large heading (coffee page h1)                      */
+  --text-h1:    14pt;   /* page heading (homepage h1)                          */
+  --text-lg:    13pt;   /* big figures, stat numerals, lwe h2                  */
   --text-h2:    12pt;   /* section heading                                     */
-  --text-body:  10.5pt; /* prose / lede                                        */
+  --text-lede:  11pt;   /* ledes and intro paragraphs                          */
+  --text-body:  10.5pt; /* prose                                               */
   --text-ui:    10pt;   /* buttons, labels, list rows                          */
   --text-sm:    9.5pt;  /* meta, captions                                      */
   --text-xs:    9pt;    /* footer, status bar                                  */
   --text-mono:  9pt;    /* mono readouts, badges                               */
   --text-micro: 8.5pt;  /* status pills, fine print                            */
+  --text-2xs:   8pt;    /* dense tables, chat metadata, code in proofs         */
+  --text-3xs:   7.5pt;  /* sub-labels, tags                                    */
+  --text-4xs:   7pt;    /* bit and byte labels inside diagrams                 */
 
   /* ── WEIGHTS — XP UI is normal or bold, nothing in between ───────────────*/
   --weight-normal: 400;

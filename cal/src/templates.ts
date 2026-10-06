@@ -56,7 +56,7 @@ body {
      reads too "modern" on macOS (which falls back to Arial). Verdana
      is web-installed everywhere and gives the bolder 2003 weight. */
   font-family: var(--font-ui);
-  font-size: 11pt;
+  font-size: var(--text-lede);
   line-height: 1.4;
   margin: 0;
   padding: 24px 12px 48px;
@@ -108,7 +108,7 @@ h1 {
   text-wrap: balance;   /* horizon: even heading line breaks, no JS */
 }
 .lead {
-  font-size: 10.5pt;
+  font-size: var(--text-body);
   color: var(--ink-soft);
   margin: 0 0 12px;
   text-wrap: pretty;    /* horizon: avoids orphans/ragged last line */
@@ -136,7 +136,7 @@ a:hover { color: var(--link-hover); }
   top: -8px; left: 10px;
   background: var(--paper);
   padding: 0 6px;
-  font-size: 10pt;
+  font-size: var(--text-ui);
   font-weight: bold;
   color: var(--blue-40);
 }
@@ -144,7 +144,7 @@ a:hover { color: var(--link-hover); }
 /* ── slot listing ───────────────────────────────────────────────────── */
 .xp-meta {
   color: var(--ink-dim);
-  font-size: 9.5pt;
+  font-size: var(--text-sm);
   margin: 0 0 8px;
 }
 .xp-day-label {
@@ -155,7 +155,7 @@ a:hover { color: var(--link-hover); }
      font in the XP era). Verdana fallback for systems missing it. */
   font-family: var(--font-caption);
   font-weight: bold;
-  font-size: 10pt;
+  font-size: var(--text-ui);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--blue-40);
@@ -197,7 +197,7 @@ button.xp-button {
   padding: 3px 12px;
   min-width: 70px;
   font-family: var(--font-ui);
-  font-size: 10pt;
+  font-size: var(--text-ui);
   color: var(--ink);
   background: linear-gradient(to bottom, oklch(99% 0 0) 0%, oklch(92% 0.005 240) 100%);
   border: 1px solid var(--shadow);
@@ -236,7 +236,7 @@ button.xp-button:active {
   cursor: default;
 }
 /* an island that could not load leaves its placeholder and says so */
-.slot-failed { display: none; margin: 8px 0 0; font-size: 10pt; }
+.slot-failed { display: none; margin: 8px 0 0; font-size: var(--text-ui); }
 [data-state="failed"] + .slot-failed { display: block; }
 /* No scripts, no swap: hide the placeholder and keep only the noscript note. */
 @media (scripting: none) {
@@ -284,14 +284,14 @@ form.book .row.stacked {
   gap: 4px;
 }
 form.book label {
-  font-size: 10pt;
+  font-size: var(--text-ui);
   color: var(--ink);
 }
 form.book input[type="text"],
 form.book input[type="email"],
 form.book textarea {
   font-family: var(--font-ui);
-  font-size: 10.5pt;
+  font-size: var(--text-body);
   padding: 3px 6px;
   background: oklch(100% 0 0);
   color: var(--ink);
@@ -328,7 +328,7 @@ form.book .actions {
   border: 1px solid oklch(75% 0.10 95);
   background: oklch(96% 0.06 100);
   padding: 8px 10px;
-  font-size: 10pt;
+  font-size: var(--text-ui);
   margin: 12px 0;
   display: flex;
   gap: 8px;
@@ -359,7 +359,7 @@ form.book .actions {
   body { padding: 8px 4px 32px; }
   .content { padding: 10px 10px 12px; }
   form.book .row { grid-template-columns: 1fr; gap: 2px; }
-  form.book label { font-size: 9.5pt; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  form.book label { font-size: var(--text-sm); color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.04em; }
 }
 `;
 

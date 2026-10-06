@@ -84,7 +84,6 @@
   --surface-field:    var(--window);               /* inputs / wells           */
   --text-title:       oklch(100% 0 0);             /* caption text (white)      */
   --text-heading:     var(--blue-40);              /* navy h1–h3                */
-  --text-body:        var(--ink);
   --text-muted:       var(--ink-dim);
   --border-window-color: var(--frame);
   --border-field:     var(--frame);
