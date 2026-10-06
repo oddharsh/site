@@ -13,7 +13,7 @@ box-shadow:2px 2px 0 oklch(15% 0 0 / .15)}
 #axp-infotip .h{color:oklch(38% 0 0)}
 #axp-infotip dl{display:grid;grid-template-columns:auto 1fr;gap:0 8px;margin:3px 0 0;border-top:1px solid oklch(15% 0 0 / .18);padding-top:3px}
 #axp-infotip dt{color:oklch(45% 0 0)}
-#axp-infotip dd{margin:0;color:oklch(22% 0 0);overflow-wrap:anywhere}
+#axp-infotip dd{margin:0;color:var(--ink);overflow-wrap:anywhere}
 /* The GitHub shortcut's activity card: three tiers, each quieter than the one above. */
 #axp-infotip:has(.gh){max-width:min(360px,calc(100vw - 16px))}
 #axp-infotip .gh-s{display:flex;justify-content:space-between;gap:8px;margin:5px 0 1px;padding-top:3px;border-top:1px solid oklch(15% 0 0 / .18)}

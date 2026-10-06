@@ -673,12 +673,12 @@ const SHEET_CSS = `/*min*/
   display: block; margin-top: 3px; font-size: 7.5pt; color: oklch(44.95% 0 0);
   font-family: var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .ph:hover .ph-name { color: oklch(42.61% 0.2353 263.74); }
+  .ph:hover .ph-name { color: var(--link); }
   .ph-fmt { display: block; font-size: 7.5pt; font-family: var(--font-ui); color: oklch(44.95% 0 0); }
   .ph-fmt a { margin: 0 2px; }
-  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
+  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule); }
   footer address { font-style: italic; margin-top: 4px; }
-  a { color: oklch(42.61% 0.2353 263.74); }
+  a { color: var(--link); }
 `;
 
 // `photos` is the WHOLE pool. The sheet lists the curated part and the lede

@@ -94,7 +94,7 @@ export function renderRun({ cmd = "", notFound = false } = {}) {
   }
   button {
     min-width: 74px; padding: 3px 12px; font-family: var(--font-ui); font-size: 10pt; cursor: pointer;
-    color: oklch(18% 0 0); background: linear-gradient(180deg, oklch(99% 0.004 106) 0%, oklch(93.5% 0.008 100) 86%, oklch(88% 0.012 95) 100%);
+    color: oklch(18% 0 0); background: linear-gradient(180deg, var(--paper) 0%, oklch(93.5% 0.008 100) 86%, oklch(88% 0.012 95) 100%);
     border: 1px solid oklch(56.86% 0.0525 249.86); border-radius: 3px;
     box-shadow: inset 1px 1px 0 oklch(100% 0 0);
   }

@@ -14,13 +14,17 @@
 // nothing asserted it. The copies one is a ZERO rather than a ratchet: after
 // the sweep there is no ledger to hold, and the rule for a page that wants a
 // token's colour is to write the token.
-import { readdir } from "node:fs/promises";
+//
+// The first version compared text, and on 2026-10-06 that turned out to have
+// missed 149 copies in 31 files: the token under an alpha (`--frame / .3`),
+// the token retyped at another rounding (`--link` as `0.2353`), and every
+// stylesheet beside luna.css. The check now matches by OKLab distance under
+// COPY_DE and walks src/styles whole. The band above COPY_DE is a person's
+// call, so `bun run colors:drift` lists it and nothing here gates on it.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
-import { loadTokenValueMap, normalizeColor, styleBlocksOf, tokenCopiesIn, tokenValueMap } from "./lib/token-literals.ts";
+import { cssSources, loadTokenValueMap, normalizeColor, tokenCopiesIn, tokenValueMap } from "./lib/token-literals.ts";
 
 const read = (rel) => readFile(new URL(rel, ROOT), "utf8");
-/** The one page that does not link luna.css, so a var() there would resolve to nothing. */
-const NO_LUNA = new Set(["garage/vt-b.html"]);
 
 test("luna.css carries design/tokens/{colors,bevels,typography}.css verbatim", async () => {
   const luna = await read("src/styles/luna.css");
@@ -45,55 +49,32 @@ test("the resolver sees the knobs, and refuses an ambiguous value", () => {
   assert.equal(normalizeColor("oklch(70% .15 258)"), "oklch(70% 0.15 258)", "the generator's bare .15 spelling is the same colour");
   // A copy in a fixture IS found, so an empty report below means clean and not blind.
   assert.deepEqual(tokenCopiesIn(".x{color:oklch(51% 0.225 263)}", map).map((c) => c.token), ["--blue-65"]);
+  // The two spellings text equality missed: the token under an alpha, and the token retyped at another rounding.
+  assert.deepEqual(
+    tokenCopiesIn(".x{box-shadow:0 0 0 1px oklch(51% 0.225 263 / .3)}", map).map((c) => c.fix),
+    ["oklch(from var(--blue-65) l c h / .3)"],
+    "an alpha copy is a copy, and its fix keeps the alpha",
+  );
+  assert.deepEqual(tokenCopiesIn(".x{color:oklch(51.2% 0.224 263.3)}", map).map((c) => c.token), ["--blue-65"], "a rounding copy within COPY_DE is a copy");
+  assert.deepEqual(tokenCopiesIn(".x{color:oklch(55% 0.225 263)}", map), [], "four points of lightness is a different colour, not a copy");
+  assert.deepEqual(tokenCopiesIn('<text fill="oklch(51% 0.225 263)">', map), [], "an SVG presentation attribute cannot take var(), so it is never a copy");
+  // Inside COPY_DE of two tokens names neither, like an ambiguous value.
+  const twins = tokenValueMap(`:root{--p: oklch(50% 0.1 250); --q: oklch(50.3% 0.1 250);}`);
+  assert.deepEqual(tokenCopiesIn(".x{color:oklch(50.15% 0.1 250)}", twins), [], "a literal between two near tokens is never reported");
 });
 
-test("no page <style>, Worker CSS literal or luna.css rule carries a token's value as a literal", async () => {
+test("no page <style>, Worker CSS literal or stylesheet rule carries a token's value as a literal", () => {
   const map = loadTokenValueMap(ROOT);
   assert.ok(map.size >= 25, `only ${map.size} token values resolved; the colors.css parse has collapsed`);
-  const offenders = [];
-  const pages = (await readdir(new URL("src/pages", ROOT), { recursive: true })).filter((f) => f.endsWith(".html"));
-  assert.ok(pages.length >= 40, `walked ${pages.length} pages`);
-  for (const rel of pages) {
-    if (NO_LUNA.has(rel)) continue;
-    const html = await read(`src/pages/${rel}`);
-    for (const css of styleBlocksOf(html)) {
-      for (const c of tokenCopiesIn(css, map)) offenders.push(`src/pages/${rel}: ${c.literal} is var(${c.token})`);
-    }
-  }
-  // The generators author INTO src/pages, so a copy there is a copy on the next
-  // page anyone generates. The first sweep missed the garage one because it
-  // spells the stops `.15` rather than `0.15`, which normalizeColor now folds.
-  for (const rel of ["pipelines/lwe/generate.mjs", "pipelines/garage/generate.mjs"]) {
-    for (const c of tokenCopiesIn(await read(rel), map)) offenders.push(`${rel}: ${c.literal} is var(${c.token})`);
-  }
-  for (const family of ["lwe", "garage"]) {
-    const specs = (await readdir(new URL(`pipelines/${family}/specs`, ROOT))).filter((f) => f.endsWith(".json"));
-    for (const f of specs) {
-      const spec = JSON.parse(await read(`pipelines/${family}/specs/${f}`));
-      for (const c of tokenCopiesIn(spec.pageCss ?? "", map)) offenders.push(`pipelines/${family}/specs/${f}: ${c.literal} is var(${c.token})`);
-    }
-  }
-  // Worker-rendered pages: every one goes through lunaPage, which links
-  // luna.css, and cal links it by absolute URL, so the tokens resolve there
-  // too. 63 copies sat in these template strings on 2026-09-15 (around.ts 19,
-  // whoareyou.ts 15, reading.ts 9, bot.ts 8, ...), each read by hand before
-  // the swap because a TS file holds CSS beside things that are not CSS.
-  const workerFiles = [];
-  for (const dir of ["src/worker", "cal/src", "serendipity"]) {
-    for (const f of await readdir(new URL(dir, ROOT), { recursive: true })) {
-      if (/\.(ts|js)$/.test(f) && !/(^|\/)test\//.test(f) && !f.endsWith(".d.ts")) workerFiles.push(`${dir}/${f}`);
-    }
-  }
-  assert.ok(workerFiles.length >= 60, `walked ${workerFiles.length} Worker sources`);
-  for (const rel of workerFiles) {
-    for (const c of tokenCopiesIn(await read(rel), map)) offenders.push(`${rel}: ${c.literal} is var(${c.token})`);
-  }
-  // luna.css after its verbatim token blocks: the definitions themselves are literals by nature.
-  const luna = await read("src/styles/luna.css");
-  const typo = (await read("design/tokens/typography.css")).trim();
-  const body = luna.slice(luna.indexOf(typo) + typo.length);
-  assert.ok(body.length > 20000, "luna.css body after the token blocks is missing");
-  for (const c of tokenCopiesIn(body, map)) offenders.push(`src/styles/luna.css: ${c.literal} is var(${c.token})`);
+  const sources = cssSources(ROOT);
+  const count = (kind) => new Set(sources.filter((s) => s.kind === kind).map((s) => s.file)).size;
+  // Floors on the walk itself, so a moved directory reads as blind rather than clean.
+  assert.ok(count("page") >= 40, `walked ${count("page")} pages`);
+  assert.ok(count("worker") >= 60, `walked ${count("worker")} Worker sources`);
+  assert.ok(count("stylesheet") >= 7, `walked ${count("stylesheet")} stylesheets`);
+  const luna = sources.find((s) => s.file === "src/styles/luna.css");
+  assert.ok(luna && luna.css.length > 20000, "luna.css body after the token blocks is missing");
+  const offenders = sources.flatMap((s) => tokenCopiesIn(s.css, map).map((c) => `${s.file}: ${c.literal} is ${c.fix}`));
   assert.deepEqual(offenders, [], `hand-resolved token copies, which the knobs cannot reach:\n  ${offenders.join("\n  ")}`);
 });
 

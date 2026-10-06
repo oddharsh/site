@@ -939,7 +939,7 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
     css: `/*min*/
 h1 { font-size:13pt; margin:0 0 2px; }
 .lx-lede { margin:0 0 10px; color:oklch(40% 0 0); font-size:10pt; }
-.lx-lede a { color:oklch(42.61% 0.2353 263.74); }
+.lx-lede a { color:var(--link); }
 
 /* glossary terms. A dotted underline has meant "this word carries a definition"
    since IE rendered <abbr> that way, so the affordance is both period-correct
@@ -948,7 +948,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
    which is why the markup is <abbr>: the title attribute is the honest fallback
    and screen readers announce it either way. */
 .lx-term { text-decoration:underline dotted oklch(60% 0.09 258); text-underline-offset:2px; text-decoration-thickness:1px; cursor:help; }
-.lx-term:focus-visible { outline:1px dotted oklch(42.61% 0.2353 263.74); outline-offset:2px; }
+.lx-term:focus-visible { outline:1px dotted var(--link); outline-offset:2px; }
 
 /* the definition surface. XP's info tip: pale yellow, hairline black border, one
    hard offset shadow. Cursor-following, so it hard-snaps (no transition on the
@@ -973,7 +973,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
 .lx-addr-label { font-size:9pt; color:oklch(45% 0 0); padding:0 2px; }
 .lx-globe { width:15px; height:15px; flex:0 0 auto; border-radius:50%; background:radial-gradient(circle at 35% 30%, oklch(78% 0.13 230), oklch(48% 0.16 250)); box-shadow:inset 0 0 0 1px oklch(100% 0 0 / .4); }
 .lx-url { flex:1 1 auto; min-width:0; font-family:"Courier New",Courier,monospace; font-size:10pt; padding:3px 6px; border:2px solid; border-color:oklch(55% 0 0) oklch(85% 0 0) oklch(85% 0 0) oklch(55% 0 0); background:#fff; color:oklch(25% 0.02 255); }
-.lx-url:focus { outline:1px dotted oklch(42.61% 0.2353 263.74); }
+.lx-url:focus { outline:1px dotted var(--link); }
 .lx-go, .lx-seg, .lx-tab, .lx-chip { font-family:Tahoma,Verdana,sans-serif; cursor:pointer; }
 .lx-go { font-size:9.5pt; font-weight:bold; padding:3px 14px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#dcdcd2); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
 .lx-go:active { border-color:oklch(45% 0 0) #fff #fff oklch(45% 0 0); }
@@ -1046,7 +1046,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
    briefing. Tinted and rule-separated so the split from the lens report reads
    as two halves of one pane rather than one long scroll. Empty in every view
    but Machine, and an empty slot must not leave a padded gap. */
-.lx-machine-top { padding:9px 11px 14px; background:oklch(97.5% 0.005 250); }
+.lx-machine-top { padding:9px 11px 14px; background:var(--row-alt); }
 .lx-machine-top:empty { display:none; }
 .lx-machine-top > .lx-sec:last-child { margin-bottom:9px; }
 /* The strip carries the rule between the two halves, and paints its own
@@ -1075,7 +1075,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
    is the payoff, deliberately quieter. */
 .lx-empty { color:oklch(45% 0 0); font-size:10pt; padding:18px 14px; text-align:center; text-wrap:pretty; }
 .lx-empty span { display:block; max-width:34ch; margin:5px auto 0; font-size:9pt; line-height:1.5; color:oklch(58% 0 0); }
-.lx-spin { color:oklch(42.61% 0.2353 263.74); font-size:9.5pt; padding:18px 6px; text-align:center; }
+.lx-spin { color:var(--link); font-size:9.5pt; padding:18px 6px; text-align:center; }
 .lx-idle-lens { max-width:620px; margin:22px auto; padding:16px 18px; border:1px solid oklch(78% 0.04 250); border-radius:4px; background:linear-gradient(180deg,#fff,oklch(97% 0.008 250)); color:oklch(31% 0.02 255); }
 .lx-idle-kicker { color:oklch(46% 0.13 252); font:9pt Tahoma,Verdana,sans-serif; text-transform:uppercase; letter-spacing:.06em; }
 .lx-idle-lens h3 { margin:4px 0 5px; color:oklch(33% 0.10 263); font: bold 13pt "Trebuchet MS",Verdana,sans-serif; }
@@ -1158,7 +1158,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
 .lx-tf-warn { font-size:8.5pt; color:oklch(52% 0.13 75); margin-bottom:3px; }
 .lx-tf-note { font-size:8.5pt; color:oklch(42% 0.02 260); background:oklch(95% 0.008 260); border:1px solid oklch(85% 0.015 260); padding:4px 7px; margin-bottom:8px; }
 .lx-tf-input { box-sizing:border-box; width:100%; font-family:Tahoma,Verdana,sans-serif; font-size:9.5pt; color:oklch(18% 0.01 260); background:oklch(100% 0 0); padding:3px 5px; border-radius:0; border:1px solid oklch(66% 0.04 250); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), inset -1px -1px 0 oklch(100% 0 0); }
-.lx-tf-input:focus { outline:none; border-color:oklch(52% 0.16 262); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), 0 0 0 1px oklch(52% 0.16 262); }
+.lx-tf-input:focus { outline:none; border-color:var(--blue-50); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), 0 0 0 1px var(--blue-50); }
 .lx-tf-json { font-family:"Courier New",monospace; font-size:9pt; }
 .lx-tf-check { display:flex; align-items:center; gap:5px; font-size:9pt; }
 .lx-tf-multi { background:oklch(100% 0 0); border:1px solid oklch(66% 0.04 250); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18); padding:3px 6px; max-height:130px; overflow:auto; }
@@ -1170,7 +1170,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
    design. */
 .lx-nlweb-ask { display:flex; gap:6px; align-items:center; margin-top:8px; flex-wrap:wrap; }
 .lx-nlweb-ask input { flex:1 1 200px; min-width:0; box-sizing:border-box; font-family:Tahoma,Verdana,sans-serif; font-size:9.5pt; color:oklch(18% 0.01 260); background:oklch(100% 0 0); padding:3px 5px; border:1px solid oklch(66% 0.04 250); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), inset -1px -1px 0 oklch(100% 0 0); }
-.lx-nlweb-ask input:focus { outline:none; border-color:oklch(52% 0.16 262); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), 0 0 0 1px oklch(52% 0.16 262); }
+.lx-nlweb-ask input:focus { outline:none; border-color:var(--blue-50); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), 0 0 0 1px var(--blue-50); }
 .lx-nlweb-ask .lx-browser-run { margin-top:0; }
 .lx-nlweb-verdict { padding:6px 8px; margin-bottom:7px; border:1px solid oklch(80% 0.05 150); background:oklch(97% 0.02 150); color:oklch(34% 0.07 150); font-size:9pt; line-height:1.45; }
 .lx-nlweb-shut { padding:6px 8px; border:1px solid oklch(80% 0.02 260); background:oklch(97% 0.005 260); color:oklch(40% 0.02 260); font-size:9pt; line-height:1.45; }
@@ -1258,7 +1258,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
 .lx-h-title { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; font-weight:bold; color:oklch(30% 0.06 255); margin:0 0 8px; }
 .lx-h-text { font-size:10pt; line-height:1.55; color:oklch(28% 0 0); white-space:pre-wrap; }
 .lx-h-outline { margin:0 0 12px; padding:8px 10px; background:oklch(98% 0.01 250); border:1px solid oklch(90% 0.02 250); border-radius:3px; font-size:9pt; }
-.lx-h-outline a { color:oklch(42.61% 0.2353 263.74); text-decoration:none; }
+.lx-h-outline a { color:var(--link); text-decoration:none; }
 .lx-pre { font-family:"Courier New",Courier,monospace; font-size:8.6pt; line-height:1.45; white-space:pre-wrap; word-break:break-word; background:oklch(20% 0.02 255); color:oklch(92% 0.02 150); padding:9px 10px; border-radius:3px; overflow:auto; max-height:520px; }
 .lx-pre-light { background:oklch(98.5% 0.008 250); color:oklch(25% 0.02 255); border:1px solid oklch(90% 0.02 250); }
 .lx-sec { margin:0 0 15px; }
@@ -1380,8 +1380,8 @@ h1 { font-size:13pt; margin:0 0 2px; }
    as the affordance. */
 .lx-verdict-score { float:left; margin:1px 11px 2px 0; padding:0; border:0; background:none; cursor:pointer; font:bold 21pt "Trebuchet MS",Verdana,sans-serif; line-height:1; color:oklch(38% 0.14 255); white-space:nowrap; }
 .lx-verdict-score span { font:normal 9pt Tahoma,Verdana,sans-serif; color:oklch(53% 0 0); }
-.lx-verdict-score:hover span { text-decoration:underline; color:oklch(42.61% 0.2353 263.74); }
-.lx-verdict-score:focus-visible { outline:1px dotted oklch(42.61% 0.2353 263.74); outline-offset:2px; }
+.lx-verdict-score:hover span { text-decoration:underline; color:var(--link); }
+.lx-verdict-score:focus-visible { outline:1px dotted var(--link); outline-offset:2px; }
 .lx-verdict::after { content:""; display:block; clear:both; }
 
 /* the computed HTTP-vs-rendered disagreement, atop the Browser Run pane */
@@ -1408,7 +1408,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
 .lx-focus .lx-kv td { border-bottom-color:oklch(88% 0.025 250); }
 .lx-delta-intro { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.08 75); background:oklch(97% 0.035 85); color:oklch(39% 0.05 60); font-size:9pt; line-height:1.45; }
 .lx-cf-credit { margin-top:10px; font-size:8pt; color:oklch(55% 0 0); line-height:1.5; }
-.lx-cf-credit a { color:oklch(42.61% 0.2353 263.74); }
+.lx-cf-credit a { color:var(--link); }
 /* auto-fill, not a fixed 2: Delta owns the full 980px window now that the
    Human pane no longer rides along, so the cards flow 3-up there and still
    collapse cleanly wherever the grid lands somewhere narrower. */
@@ -1439,7 +1439,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
    sunken like an XP status strip so it reads as instrumentation, not another
    paragraph. The "?" is pinned to the strip's top-right, so it stays put when
    the facts stack under 560px. */
-.lx-sow-rail { display:flex; align-items:flex-start; gap:8px; margin:0 0 9px; padding:4px 6px 4px 8px; font-size:8.5pt; color:oklch(45% 0.02 255); background:oklch(97.5% 0.006 250); border:1px solid; border-color:oklch(80% 0.02 250) oklch(97% 0 0) oklch(97% 0 0) oklch(80% 0.02 250); border-radius:2px; }
+.lx-sow-rail { display:flex; align-items:flex-start; gap:8px; margin:0 0 9px; padding:4px 6px 4px 8px; font-size:8.5pt; color:oklch(45% 0.02 255); background:var(--row-alt); border:1px solid; border-color:oklch(80% 0.02 250) oklch(97% 0 0) oklch(97% 0 0) oklch(80% 0.02 250); border-radius:2px; }
 .lx-sow-facts { display:flex; align-items:center; flex-wrap:wrap; gap:2px 10px; flex:1 1 auto; min-width:0; }
 .lx-sow-rail-k { color:oklch(52% 0 0); }
 .lx-sow-i { white-space:nowrap; }
@@ -1492,10 +1492,10 @@ h1 { font-size:13pt; margin:0 0 2px; }
 .lx-sow-stat { font:bold 12pt "Courier New",monospace; color:oklch(40% 0.14 255); margin:0 0 3px; line-height:1.1; }
 .lx-sow-claim { font-size:8.6pt; line-height:1.42; color:oklch(30% 0.02 255); }
 .lx-sow-src { margin-top:4px; font-size:7.8pt; color:oklch(55% 0 0); }
-.lx-sow-src a { color:oklch(42.61% 0.2353 263.74); text-decoration:none; }
+.lx-sow-src a { color:var(--link); text-decoration:none; }
 .lx-sow-foot { margin-top:10px; padding-top:8px; border-top:1px solid oklch(88% 0.02 250); font-size:8.8pt; line-height:1.45; color:oklch(38% 0.02 255); }
 .lx-sow-foot b { color:oklch(33% 0.10 263); }
-.lx-sow-open { font:inherit; color:oklch(42.61% 0.2353 263.74); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
+.lx-sow-open { font:inherit; color:var(--link); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
 @media (max-width:520px){ .lx-sow-grid{ grid-template-columns:1fr; } }
 
 /* the About dialog: three eras + the instrument's rules. Shares the sow dialog
@@ -1538,8 +1538,8 @@ h1 { font-size:13pt; margin:0 0 2px; }
 .lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
 .lx-status b { color:oklch(30% 0.04 255); font-weight:bold; }
 .lx-status .err { color:oklch(55% 0.2 27); font-weight:bold; }
-footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:14px; padding-top:11px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
-footer a { color:oklch(42.61% 0.2353 263.74); }
+footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:14px; padding-top:11px; border-top:1px solid var(--rule); }
+footer a { color:var(--link); }
 @media (max-width:720px){ .lx-panes{ flex-direction:column; } .lx-panes.is-both .lx-pane{ min-height:280px; } }
 `,
     body: unsafeHtml(`
