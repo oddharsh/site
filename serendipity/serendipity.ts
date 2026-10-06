@@ -338,7 +338,7 @@ function shellCss() {
   code{font-family:var(--font-mono);font-size:11px;background:oklch(96% 0.01 250);border:1px solid oklch(88% 0.02 250);padding:0 3px;border-radius:0}
   ol.steps{margin:8px 0;padding-left:20px}ol.steps li{margin:4px 0}
   .xp-field{box-sizing:border-box;width:100%;font-family:var(--font-ui);font-size:11px;color:#181818;background:#fff;padding:5px 7px;border:1px solid #7f9db9;border-radius:0;box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff;margin:0 0 8px}
-  .xp-field:focus{outline:none;border-color:#316ac5;box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff,0 0 0 1px #316ac5}
+  .xp-field:focus{outline:none;border-color:var(--blue-50);box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff,0 0 0 1px var(--blue-50)}
   /* field-sizing:content (Chrome + Safari 26) auto-grows the textarea as the cookie
      JSON is pasted, capped so a huge blob can't run off-screen; resize stays manual. */
   textarea.xp-field{font-family:var(--font-mono);resize:vertical;field-sizing:content;min-height:6lh;max-height:60vh}
