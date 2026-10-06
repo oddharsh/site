@@ -65,7 +65,11 @@ jobs:
   # 2026-06-25). The steps ran one at a time, about 80s of work whose long
   # poles share nothing: lint 12s, the build 12s, the suite 16s. Independent
   # checks now start in the background, and the critical path is setup, then
-  # the build, then the suite. Three ordering edges are real, and
+  # the build, then the suite. Measured 2026-10-06: the job took a median 74.5s
+  # over 12 green main runs (64 to 92) and 50s over 3 runs of this layout (45
+  # to 66). Not the 40s the serial sum suggests, because this runner has 4
+  # vCPUs and the build and the suite each use several of them. Three
+  # ordering edges are real, and
   # contract-ci-required-gate holds each one (gotcha 54):
   #   the suite starts after the build, because eight contract tests read
   #     .build/ and two of them SKIP when it is missing instead of failing
