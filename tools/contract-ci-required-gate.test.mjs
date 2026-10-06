@@ -69,10 +69,12 @@ test("background steps keep the three ordering edges and all join before the job
   assert.ok(at("bun run test") > build, "the suite must start after the build it reads");
   assert.ok(at("bun run routes:check --prebuilt .build/.perfbudget") > build, "the route oracle loads the build's bundle");
 
-  // lint and typecheck both open with the generator; it runs once, first.
+  // lint and typecheck both open with the generator; it finishes, once, first.
   const gen = at("bun tools/gen-runtime-types.ts");
-  assert.notEqual(steps[gen].background, true);
-  assert.ok(gen < at("bun run lint") && gen < at("bun run typecheck"), "generate the runtime types before lint and typecheck race to");
+  for (const run of ["bun run lint", "bun run typecheck"]) {
+    const i = at(run);
+    assert.ok(gen < i && (!steps[gen].background || waited(steps[gen].id, i)), `generate the runtime types before \`${run}\` races to`);
+  }
 
   // The suite needs timbrado's engine finished, not merely started.
   const engine = steps.find((step) => String(step.run ?? "").includes("ensureTimbradoEngine"));

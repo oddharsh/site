@@ -69,8 +69,8 @@ jobs:
   # contract-ci-required-gate holds each one (gotcha 54):
   #   the suite starts after the build, because eight contract tests read
   #     .build/ and two of them SKIP when it is missing instead of failing
-  #   gen-runtime-types runs once before lint and typecheck, since both open
-  #     with it and it deletes, then rewrites, cf-garage's generated types
+  #   gen-runtime-types finishes before lint and typecheck start, since both
+  #     open with it and it deletes, then rewrites, cf-garage's generated types
   #   the suite waits for timbrado's engine (a cold cargo build inside it
   #     raced one test's 30s clock)
   # Flat `background` steps rather than a `parallel:` group: a group nests its
@@ -115,21 +115,13 @@ jobs:
       # `lint` and `typecheck` both open with this generator, and on a fresh
       # checkout it writes config/.generated/ and deletes, then rewrites,
       # cf-garage/.cloudflare/types/. Run concurrently, one reads what the
-      # other just deleted. Run once here, both find it current and skip.
+      # other just deleted. So it runs once, here, and both start after it and
+      # find it current. It boots workerd and takes about 9s, which is why it
+      # runs beside the build: nothing the build, the route oracle or the suite
+      # reads comes from it.
       - name: Generate the Workers runtime types
+        id: types
         run: bun tools/gen-runtime-types.ts
-
-      # Read-only checks: nothing below writes what they read. oxlint ignores
-      # .build/**, typecheck and derive:check write only under --update and
-      # --lock, and cal's suite lives in its own directory.
-      - name: Lint
-        id: lint
-        run: bun run lint
-        background: true
-
-      - name: Typecheck
-        id: typecheck
-        run: bun run typecheck
         background: true
 
       # Hashes the INPUTS of every committed derived artifact, so a re-encode
@@ -223,6 +215,21 @@ jobs:
       - name: Verify route surface against a local Worker
         id: routes
         run: bun run routes:check --prebuilt .build/.perfbudget
+        background: true
+
+      - name: Wait for the runtime types
+        wait: types
+
+      # Read-only checks: nothing below writes what they read. oxlint ignores
+      # .build/**, and typecheck writes only under --update.
+      - name: Lint
+        id: lint
+        run: bun run lint
+        background: true
+
+      - name: Typecheck
+        id: typecheck
+        run: bun run typecheck
         background: true
 
       - name: Wait for timbrado's engine
