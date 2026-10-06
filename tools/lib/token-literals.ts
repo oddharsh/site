@@ -228,6 +228,15 @@ export function loadTokenValueMap(root: URL): Map<string, string> {
 /** The one page that does not link luna.css, so a var() there would resolve to nothing. */
 export const NO_LUNA = new Set(["garage/vt-b.html"]);
 
+/**
+ * Worker sources whose HTML is EMAIL, not a page. No mail client loads
+ * luna.css and many ignore var() outright, so a token there paints nothing.
+ * Until 2026-10-06 the walk below read these as page CSS, and #1183 swept
+ * four #888s in the booking mail and four greys in the webmention moderation
+ * mail into var(--ink-faint) and var(--ink-quiet). Their colours stay literal.
+ */
+export const EMAIL_TEMPLATES = new Set(["cal/src/email.ts", "src/worker/webmention.ts"]);
+
 export interface CssSource {
   file: string;
   css: string;
@@ -272,7 +281,7 @@ export function cssSources(root: URL): CssSource[] {
   // the swap because a TS file holds CSS beside things that are not CSS.
   for (const dir of ["src/worker", "cal/src", "serendipity"]) {
     for (const f of ls(dir, true)) {
-      if (/\.(ts|js)$/.test(f) && !/(^|\/)test\//.test(f) && !f.endsWith(".d.ts")) out.push({ file: `${dir}/${f}`, css: read(`${dir}/${f}`), kind: "worker", offset: 0 });
+      if (/\.(ts|js)$/.test(f) && !/(^|\/)test\//.test(f) && !f.endsWith(".d.ts") && !EMAIL_TEMPLATES.has(`${dir}/${f}`)) out.push({ file: `${dir}/${f}`, css: read(`${dir}/${f}`), kind: "worker", offset: 0 });
     }
   }
   // luna.css after its verbatim token blocks: the definitions themselves are literals by nature.

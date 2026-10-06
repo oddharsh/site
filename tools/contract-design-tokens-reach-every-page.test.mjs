@@ -21,8 +21,9 @@
 // stylesheet beside luna.css. The check now matches by OKLab distance under
 // COPY_DE and walks src/styles whole. The band above COPY_DE is a person's
 // call, so `bun run colors:drift` lists it and nothing here gates on it.
+import { readdir } from "node:fs/promises";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
-import { cssSources, deltaEOK, loadTokenValueMap, normalizeColor, parseOklch, parseSrgb, tokenCopiesIn, tokenValueMap } from "./lib/token-literals.ts";
+import { EMAIL_TEMPLATES, cssSources, deltaEOK, loadTokenValueMap, normalizeColor, parseOklch, parseSrgb, tokenCopiesIn, tokenValueMap } from "./lib/token-literals.ts";
 
 const read = (rel) => readFile(new URL(rel, ROOT), "utf8");
 
@@ -90,6 +91,27 @@ test("a token whose comment names a hex resolves to that hex", async () => {
     if (d >= 0.002) misses.push(`${name} is dE ${d.toFixed(4)} from the #${hex} its comment names`);
   }
   assert.deepEqual(misses, []);
+});
+
+test("email templates name no token, and every mail sender is listed as one", async () => {
+  // A token resolves only where luna.css loads, and no mail client loads it
+  // (many ignore var() outright). #1183 swept eight email colours into var()
+  // because the page walk read these files as page CSS. They are left out of
+  // that walk now; this holds the other half: no var() in them, and no file
+  // that sends mail missing from the list.
+  const senders = [];
+  for (const dir of ["src/worker", "cal/src", "serendipity"]) {
+    for (const f of await readdir(new URL(dir, ROOT), { recursive: true })) {
+      if (!/\.(ts|js)$/.test(f) || /(^|\/)test\//.test(f)) continue;
+      if (/\bresendSend\b/.test(await read(`${dir}/${f}`))) senders.push(`${dir}/${f}`);
+    }
+  }
+  assert.ok(senders.length >= 2, `found ${senders.length} mail senders; resendSend moved or was renamed`);
+  for (const s of senders) assert.ok(EMAIL_TEMPLATES.has(s), `${s} sends mail but is not in EMAIL_TEMPLATES, so the page walk reads its HTML as page CSS`);
+  for (const t of EMAIL_TEMPLATES) {
+    const tokens = (await read(t)).match(/var\(--[\w-]+/g) ?? [];
+    assert.deepEqual(tokens, [], `${t} is email HTML and names a token, which no mail client resolves`);
+  }
 });
 
 test("no page <style>, Worker CSS literal or stylesheet rule carries a token's value as a literal", () => {

@@ -557,15 +557,15 @@ async function emailHost(env, request, m) {
   const decline = `${origin}/webmention/decline?t=${m.id}&sig=${await sign(`${m.id}|decline`, env.SIGNING_SECRET)}`;
   const html = `
     <p><strong>${esc(m.author)}</strong> ${esc(kindPhrase(m.kind))} <a href="${esc(m.target)}">${esc(m.target.replace(origin, ""))}</a></p>
-    <p><a href="${esc(m.source)}">${esc(m.title)}</a>${m.published ? ` <span style="color:var(--ink-faint)">published ${esc(m.published)}</span>` : ""}</p>
-    ${m.excerpt ? `<blockquote style="border-left:3px solid var(--ink-faint);padding-left:.8em;margin-left:0;color:#333">${esc(m.excerpt)}</blockquote>` : ""}
-    <p style="color:var(--ink-quiet)">${esc(sortLine(sort))}</p>
+    <p><a href="${esc(m.source)}">${esc(m.title)}</a>${m.published ? ` <span style="color:#888">published ${esc(m.published)}</span>` : ""}</p>
+    ${m.excerpt ? `<blockquote style="border-left:3px solid #888;padding-left:.8em;margin-left:0;color:#333">${esc(m.excerpt)}</blockquote>` : ""}
+    <p style="color:#555">${esc(sortLine(sort))}</p>
     <p>
       <a href="${approve}" style="display:inline-block;padding:8px 14px;background:#0a0;color:#fff;text-decoration:none;border-radius:3px">approve &amp; publish</a>
       &nbsp;&nbsp;
       <a href="${decline}" style="display:inline-block;padding:8px 14px;background:#900;color:#fff;text-decoration:none;border-radius:3px">decline</a>
     </p>
-    <p style="color:var(--ink-faint);font-size:12px">verified: the source really does link to that page. signed url; only you can use these.</p>
+    <p style="color:#888;font-size:12px">verified: the source really does link to that page. signed url; only you can use these.</p>
   `;
   await resendSend(env, {
     from: "aadhar.sh <noreply@aadhar.sh>",
