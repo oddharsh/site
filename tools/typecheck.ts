@@ -94,9 +94,7 @@ for (const config of programs) {
 
 const actual = Object.fromEntries([...counts].sort((a, b) => a[0].localeCompare(b[0])));
 const declared: Record<string, number> = JSON.parse(readFileSync(BASELINE, "utf8")).files;
-// A program owning "" owns every file it checks, not every baseline entry in
-// the repository. Partial runs must leave files outside their programs alone.
-const inScope = (f: string) => (full || covered.has(f)) && programs.some((c) => OWNS[c].some((prefix) => f.startsWith(prefix)));
+const inScope = (f: string) => programs.some((c) => OWNS[c].some((prefix) => f.startsWith(prefix)));
 
 if (update) {
   const kept = Object.fromEntries(Object.entries(declared).filter(([f]) => !inScope(f)));
