@@ -83,7 +83,10 @@ test("a token whose comment names a hex resolves to that hex", async () => {
   for (const [, name, value, hex] of claims) {
     const resolved = [...tokenValueMap(`:root{${knobs}${name}: ${value};}`).keys()][0];
     assert.ok(resolved, `${name} did not resolve through the knobs`);
-    const d = deltaEOK(parseOklch(resolved).lab, parseSrgb(`#${hex}`).lab);
+    const token = parseOklch(resolved);
+    const documented = parseSrgb(`#${hex}`);
+    assert.ok(token && documented, `${name}: could not parse ${resolved} or #${hex}`);
+    const d = deltaEOK(token.lab, documented.lab);
     if (d >= 0.002) misses.push(`${name} is dE ${d.toFixed(4)} from the #${hex} its comment names`);
   }
   assert.deepEqual(misses, []);
