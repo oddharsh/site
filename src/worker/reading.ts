@@ -273,11 +273,11 @@ export function renderReadingPage() {
 .rd-hn { display:inline-flex; align-items:center; gap:4px; font-size:8.5pt; color:oklch(33% 0.09 263); text-decoration:none; }
 .rd-hn:hover { color:var(--link-hover); text-decoration:underline; }
 .rd-y { display:inline-block; width:11px; height:11px; line-height:11px; text-align:center; font:bold 8pt Verdana,Geneva,sans-serif; color:white; background:oklch(66% 0.19 42); border:1px solid oklch(56% 0.17 42); }
-.rd-snip { margin:5px 0 0; color:oklch(45% 0 0); font-size:9.5pt; line-height:1.5; }
+.rd-snip { margin:5px 0 0; color:var(--ink-quiet); font-size:9.5pt; line-height:1.5; }
 .rd-hl { margin:6px 0 0; padding:3px 0 3px 9px; border-left:3px solid oklch(72% 0.10 250); color:oklch(33% 0.02 255); font-size:9.5pt; font-style:italic; line-height:1.45; }
-.rd-empty { padding:16px 4px; color:oklch(45% 0 0); font-size:10pt; }
+.rd-empty { padding:16px 4px; color:var(--ink-quiet); font-size:10pt; }
 .rd-empty a { color:var(--link); }
-footer { text-align:center; font-size:9pt; color:oklch(44.95% 0 0); margin-top:16px; padding-top:12px; border-top:1px solid var(--rule); }
+footer { text-align:center; font-size:9pt; color:var(--ink-quiet); margin-top:16px; padding-top:12px; border-top:1px solid var(--rule); }
 footer a { color:var(--link); }
 #rd-list[data-state="pending"] { cursor:progress; }
 /* the island's failure note, shown only if the list request failed */

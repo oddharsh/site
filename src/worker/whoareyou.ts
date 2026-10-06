@@ -496,7 +496,7 @@ code, .mono {
   color: var(--ink);
 }
 .field-grid dd .dim { color: var(--ink-faint); font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
-.field-grid dd.muted { color: oklch(44.95% 0 0); }
+.field-grid dd.muted { color: var(--ink-quiet); }
 
 /* little raised "pill" — looks like a tiny 3D button */
 .pill {
@@ -532,7 +532,7 @@ footer {
   text-align: center;
   font-family: Tahoma, Verdana, Geneva, sans-serif;
   font-size: 9pt;
-  color: oklch(44.95% 0 0);
+  color: var(--ink-quiet);
   margin: 18px 0 0;
   padding-top: 14px;
   border-top: 1px solid var(--rule);

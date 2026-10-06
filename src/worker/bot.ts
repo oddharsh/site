@@ -33,7 +33,7 @@ export function renderBotPage() {
   dl.fields { display: grid; grid-template-columns: 11em 1fr; gap: 1px; margin: 4px 0 14px; background: oklch(85.04% 0.0283 248.16); border: 1px solid var(--frame); border-top-color: var(--blue-45); border-left-color: var(--blue-45); font-size: 10pt; }
   dl.fields dt { background: var(--surface-desktop); color: var(--blue-40); font-weight: bold; padding: 4px 8px; }
   dl.fields dd { background: oklch(100.00% 0 0); margin: 0; padding: 4px 8px; font-family: "Courier New", Courier, monospace; font-size: 9.5pt; word-break: break-all; }
-  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--rule); }
+  footer { text-align: center; font-size: 9pt; color: var(--ink-quiet); margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--rule); }
 `;
   const body = `
     <h1>${BOT_NAME}</h1>

@@ -14,9 +14,10 @@
 // 0.008) and 0.0065 from each other, where XP drew both from one InfoBackground.
 //
 // The second list is the other kind of drift: one colour written by hand in
-// three or more files, which is a token nobody has named yet. On 2026-10-06 the
-// top one was `oklch(44.95% 0 0)`, a note grey between `--ink-soft` and
-// `--ink-dim`, written 52 times across 19 files.
+// three or more files, which is a token nobody has named yet. The first one
+// this list named was `oklch(44.95% 0 0)` (#555555), a note grey between
+// `--ink-soft` and `--ink-dim` written 52 times across 19 files; it is
+// `--ink-quiet` now.
 //
 //   bun run colors:drift            near-token band + unnamed shared colours
 //   bun run colors:drift --json     the same, as JSON

@@ -593,7 +593,7 @@ export function renderAroundPage() {
     padding: 6px 10px; margin: 12px 0;
   }
   .meta code { font-family: "Courier New", Courier, monospace; background: oklch(100.00% 0 0); border: 1px solid oklch(89.75% 0 0); padding: 0 3px; }
-  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule); }
+  footer { text-align: center; font-size: 9pt; color: var(--ink-quiet); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule); }
   a { color: var(--link); }
   .dim { color: var(--ink-faint); }
   hr { border: 0; border-top: 2px groove var(--rule); margin: 12px 0; height: 0; }

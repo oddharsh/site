@@ -54,6 +54,7 @@
   --paper:     oklch(99% 0.005 var(--hue-chrome)); /* faint-warm workspace bg  */
   --ink:       oklch(21.78% 0 0);        /* primary window text (near-black)   */
   --ink-soft:  oklch(38.67% 0 0);        /* body prose / secondary             */
+  --ink-quiet: oklch(44.95% 0 0);        /* #555555 notes, footers, field labels */
   --ink-dim:   oklch(51.03% 0 0);        /* meta, captions, disabled label     */
   --ink-faint: oklch(62.68% 0 0);        /* placeholder / loading text         */
   --rule:      oklch(86.67% 0.0294 calc(var(--hue-luna) - 4)); /* hairline divider */

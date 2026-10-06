@@ -141,7 +141,7 @@ pre {
   background: oklch(96% 0.004 240); border-top: 1px solid var(--frame);
 }
 .ifor-pop .box { width: 200px; height: 120px; display: flex; align-items: center; justify-content: center;
-  font-size: 9pt; color: oklch(45% 0 0); background: oklch(94% 0.01 250); }
+  font-size: 9pt; color: var(--ink-quiet); background: oklch(94% 0.01 250); }
 /* anchor positioning: interestfor sets up an implicit anchor on the invoker,
    so the popover can place itself relative to the link with zero JS. */
 .ifor-pop:popover-open { position-area: bottom span-right; margin-top: 6px; }
@@ -153,7 +153,7 @@ pre {
 .watch .name { font-family: var(--font-mono); font-size: 9pt; font-weight: bold; color: oklch(38% 0.04 250); }
 .watch .desc { font-size: 9.5pt; color: oklch(35% 0 0); }
 .watch .desc .s { font-style: italic; color: oklch(48% 0 0); }
-.stat.early { color: oklch(45% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.stat.early { color: var(--ink-quiet); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
 .engine { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid oklch(93% 0.01 248); }
 .engine h3 {
   font-family: var(--font-caption); font-size: 11.5pt; font-weight: bold;
@@ -561,7 +561,7 @@ placeholder
 .sy-live { margin-top: 12px; }
 .sy-rail { position: relative; height: 20px; margin-bottom: 6px; background: oklch(96% 0.004 240); border: 1px solid var(--frame); overflow: hidden; }
 .sy-dot { position: absolute; top: 3px; left: 0; width: 13px; height: 13px; border-radius: 50%; background: var(--grad-title); }
-.sy-meter { font-size: 8.5pt; color: oklch(45% 0 0); margin: 0; }
+.sy-meter { font-size: 8.5pt; color: var(--ink-quiet); margin: 0; }
 .sy-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
 .sy-out { font-size: 8.5pt; color: oklch(38% 0 0); margin: 8px 0 0; min-height: 2.6em; }
 .sy-out .hi { color: var(--warn); font-weight: bold; }
@@ -666,7 +666,7 @@ placeholder
 /* a fake "file-size meter" bar: relative bytes at matched quality, illustrative */
 .jxl-bar { height: 9px; background: oklch(86% 0.06 250); border: 1px solid var(--frame); margin: 4px 0; }
 .jxl-bar > i { display: block; height: 100%; background: var(--grad-title); }
-.jxl-fmt .jxl-kb { font-size: 8.5pt; color: oklch(45% 0 0); }
+.jxl-fmt .jxl-kb { font-size: 8.5pt; color: var(--ink-quiet); }
 .jxl-fmt .jxl-ships { font-size: 8pt; font-family: var(--font-mono); color: oklch(48% 0 0); margin-top: 3px; }
 .jxl-fmt.win { background: oklch(98% 0.04 142); border-color: oklch(49.32% 0.1678 142.50); }
 .jxl-fmt.win .jxl-bar > i { background: linear-gradient(180deg, oklch(62% 0.16 142), oklch(49.32% 0.1678 142.50)); }
@@ -4720,7 +4720,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .s8-rr { border: 1px dashed oklch(60% 0.06 254); border-radius: 4px; padding: 10px 12px; margin-top: 8px; font-size: 9.5pt; }
       .s8-attr { margin-top: 8px; display: flex; align-items: flex-end; gap: 6px; height: 74px; }
       .s8-attr i { display: block; width: 34px; background: linear-gradient(180deg, oklch(66% 0.16 258), oklch(48% 0.20 263)); border: 1px solid oklch(38% 0.14 263); border-radius: 2px 2px 0 0; height: attr(data-h type(<length>), 8px); }
-      .s8-attr b { font: 8pt Tahoma, sans-serif; color: oklch(45% 0 0); align-self: center; }
+      .s8-attr b { font: 8pt Tahoma, sans-serif; color: var(--ink-quiet); align-self: center; }
       .s8-tdi { font-size: 11pt; color: oklch(28% 0 0); margin-top: 8px; }
       .s8-tdi u { text-decoration: underline 1px oklch(55% 0.20 30); text-decoration-inset: 4px; text-underline-offset: 3px; }
       .s8-out { font: 9pt "Courier New", monospace; white-space: pre-wrap; background: oklch(97% 0 0); border: 1px solid oklch(80% 0 0); padding: 8px 10px; margin-top: 8px; color: oklch(30% 0 0); }

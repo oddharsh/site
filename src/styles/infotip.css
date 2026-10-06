@@ -12,16 +12,16 @@ box-shadow:2px 2px 0 oklch(15% 0 0 / .15)}
 #axp-infotip .n{font-weight:bold;color:oklch(15% 0 0)}
 #axp-infotip .h{color:oklch(38% 0 0)}
 #axp-infotip dl{display:grid;grid-template-columns:auto 1fr;gap:0 8px;margin:3px 0 0;border-top:1px solid oklch(15% 0 0 / .18);padding-top:3px}
-#axp-infotip dt{color:oklch(45% 0 0)}
+#axp-infotip dt{color:var(--ink-quiet)}
 #axp-infotip dd{margin:0;color:var(--ink);overflow-wrap:anywhere}
 /* The GitHub shortcut's activity card: three tiers, each quieter than the one above. */
 #axp-infotip:has(.gh){max-width:min(360px,calc(100vw - 16px))}
 #axp-infotip .gh-s{display:flex;justify-content:space-between;gap:8px;margin:5px 0 1px;padding-top:3px;border-top:1px solid oklch(15% 0 0 / .18)}
-#axp-infotip .gh-s span{color:oklch(45% 0 0)}
+#axp-infotip .gh-s span{color:var(--ink-quiet)}
 #axp-infotip .gh-r{display:flex;justify-content:space-between;gap:8px;margin-top:2px}
 #axp-infotip .gh-repo{color:var(--blue-40)}
 #axp-infotip .gh-r .gh-repo{font-weight:bold}
 #axp-infotip .gh-c{color:oklch(38% 0 0);font-variant-numeric:tabular-nums}
 #axp-infotip .gh-t{color:oklch(38% 0 0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #axp-infotip .gh-r+.gh-t{padding-left:8px}
-#axp-infotip .gh-more{color:oklch(45% 0 0);font-style:italic}
+#axp-infotip .gh-more{color:var(--ink-quiet);font-style:italic}
