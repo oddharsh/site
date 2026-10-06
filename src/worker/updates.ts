@@ -235,7 +235,7 @@ var POINTS = ${JSON.stringify(data)};
 .sr-list{overflow-y:auto;max-height:308px}
 .sr-mon{position:sticky;top:0;background:#eef2f8;color:#5a6b85;font-size:var(--text-2xs);font-weight:bold;padding:3px 10px;border-bottom:1px solid #dde5f0;text-transform:uppercase;letter-spacing:.04em}
 .sr-pt{display:flex;align-items:baseline;gap:7px;width:100%;text-align:left;border:0;background:transparent;padding:5px 10px;font:inherit;font-size:var(--text-micro);color:#33415c;cursor:pointer;border-bottom:1px solid #f0f3f8}
-.sr-pt:hover{background:#f3f7fd}
+.sr-pt:hover{background:var(--row-alt)}
 .sr-pt[aria-current=true]{background:#dceafe;box-shadow:inset 2px 0 0 #2f6fd0}
 .sr-pt .rv{font-family:var(--font-mono);font-size:var(--text-3xs);color:#7a4eb0;flex:0 0 auto}
 .sr-pt .rt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
