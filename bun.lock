@@ -16,7 +16,7 @@
         "playwright-core": "1.63.0",
         "smol-toml": "1.9.0",
         "timbrado": "github:oddharsh/timbrado#c110b3091a42162af54287b869578ea1579e54a9",
-        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@425662b",
+        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@9a58244",
       },
     },
     "cal": {
