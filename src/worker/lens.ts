@@ -1426,7 +1426,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-stage { display:grid; grid-template-columns:88px 1fr; gap:7px; align-items:start; padding:5px 0; border-bottom:1px solid var(--surface-desktop); font-size:var(--text-micro); }
 .lx-stage:last-child { border-bottom:0; }
 .lx-stage-name { font-family:var(--font-mono); color:oklch(39% 0.08 255); }
-.lx-stage-copy { color:var(--grey-33); }
+.lx-stage-copy { color:var(--grey-35); }
 .lx-stage-copy .lx-badge { margin-right:4px; }
 .lx-proof { margin-top:8px; font-size:var(--text-2xs); color:var(--ink-dim); }
 .lx-proof b { color:oklch(38% 0.06 255); }

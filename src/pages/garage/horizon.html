@@ -44,7 +44,7 @@ pre {
 .chip {
   font-family: var(--font-mono); font-size: var(--text-micro); font-weight: bold;
   padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
-  color: var(--ink-dim); border-color: var(--grey-72); background: oklch(97% 0 0);
+  color: var(--ink-dim); border-color: var(--grey-70); background: oklch(97% 0 0);
 }
 .chip::before { content: "… "; }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
@@ -77,17 +77,17 @@ pre {
 .stat.cross    { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
 .stat.chrome   { color: var(--warn);  border-color: var(--warn);  background: oklch(98% 0.03 95);  }
 .stat.trial    { color: var(--link); border-color: var(--link); background: oklch(97% 0.03 264); }
-.stat.contested{ color: var(--red-46);  border-color: var(--red-46);  background: oklch(98% 0.03 30);  }
+.stat.contested{ color: var(--danger-deep);  border-color: var(--danger-deep);  background: oklch(98% 0.03 30);  }
 /* WebKit standards-position chip: what Safari's team actually said, sourced
    from webkit.org/standards-positions (the authoritative signal, vs. the
    secondhand chromestatus "Safari view" column). */
 .wk { font-family: var(--font-mono); font-size: var(--text-3xs); font-weight: bold;
   padding: 0 4px; border: 1px solid; border-radius: 2px; white-space: nowrap; margin-right: 5px; }
 .wk.sup { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
-.wk.opp { color: var(--red-46);  border-color: var(--red-46);  background: oklch(98% 0.03 30); }
-.wk.non { color: var(--ink-dim); border-color: var(--grey-72); background: oklch(97% 0 0); }
+.wk.opp { color: var(--danger-deep);  border-color: var(--danger-deep);  background: oklch(98% 0.03 30); }
+.wk.non { color: var(--ink-dim); border-color: var(--grey-70); background: oklch(97% 0 0); }
 .demo .note { font-size: var(--text-sm); color: var(--ink-soft); margin: 8px 0 0; }
-.demo .replaces { font-size: var(--text-sm); color: var(--grey-33); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+.demo .replaces { font-size: var(--text-sm); color: var(--grey-35); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
 .unsupported { display: none; font-size: var(--text-sm); color: oklch(46% 0.10 50); margin-top: 8px; }
 .demo.no-support .unsupported { display: block; }
 /* "shipped" = not just feasible, but actually live in production on the real
@@ -159,7 +159,7 @@ pre {
   font-family: var(--font-caption); font-size: var(--text-lede); font-weight: bold;
   color: var(--blue-40); margin: 0 0 4px; display: flex; align-items: baseline; gap: 8px;
 }
-.engine p { font-size: var(--text-sm); color: var(--grey-33); margin: 0 0 6px; }
+.engine p { font-size: var(--text-sm); color: var(--grey-35); margin: 0 0 6px; }
 
 
 /* ════════ feature-card demos (added by workflow) ════════ */
@@ -191,7 +191,7 @@ pre {
   background: var(--grad-title);
   padding: 2px 7px;
 }
-.anc-pop .bd { padding: 6px 8px; color: var(--grey-33); }
+.anc-pop .bd { padding: 6px 8px; color: var(--grey-35); }
 
 /* only when the engine supports it: tether to the button + flip on overflow.
    position-area does the placement; position-try-fallbacks flips to the
@@ -317,7 +317,7 @@ pre {
   border: 2px solid;
   border-top-color: var(--grey-60); border-left-color: var(--grey-60);
   border-bottom-color: var(--grey-94); border-right-color: var(--grey-94);
-  outline: 1px solid var(--grey-72); outline-offset: -3px;
+  outline: 1px solid var(--grey-70); outline-offset: -3px;
 }
 .fs-field:focus { outline-color: oklch(49.72% 0.1129 250.87); }
 /* the whole point: the textarea's box tracks its text content instead of a
@@ -630,7 +630,7 @@ placeholder
 .mas-mock .t1 { aspect-ratio: 3 / 4;  background: linear-gradient(160deg, oklch(62% 0.124 252), oklch(50% 0.113 251)); color: oklch(100% 0 0); }
 .mas-mock .t2 { aspect-ratio: 4 / 3;  background: linear-gradient(160deg, var(--amber-88), oklch(70% 0.20 43)); }
 .mas-mock .t3 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, var(--surface-desktop), oklch(72% 0.06 250)); }
-.mas-mock .t4 { aspect-ratio: 2 / 3;  background: linear-gradient(160deg, oklch(59% 0.234 26), var(--red-46)); color: oklch(100% 0 0); }
+.mas-mock .t4 { aspect-ratio: 2 / 3;  background: linear-gradient(160deg, oklch(59% 0.234 26), var(--danger-deep)); color: oklch(100% 0 0); }
 .mas-mock .t5 { aspect-ratio: 16 / 9; background: linear-gradient(160deg, oklch(91% 0.02 250), oklch(80% 0.05 250)); }
 .mas-mock .t6 { aspect-ratio: 4 / 5;  background: linear-gradient(160deg, var(--row-hover), oklch(85% 0.10 90)); }
 .mas-mock .t7 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, oklch(50% 0.113 251), oklch(42% 0.118 255)); color: oklch(100% 0 0); }
@@ -752,7 +752,7 @@ placeholder
 .hq-probe { margin: 10px 0 0; }
 .hq-table { border-collapse: collapse; width: 100%; font-size: var(--text-micro); margin: 6px 0 0; }
 .hq-table th, .hq-table td { text-align: left; padding: 3px 8px 3px 0; border-bottom: 1px solid var(--grey-88); vertical-align: top; }
-.hq-table th { font-weight: 700; color: var(--ink-soft); border-bottom-color: var(--grey-72); }
+.hq-table th { font-weight: 700; color: var(--ink-soft); border-bottom-color: var(--grey-70); }
 .hq-table td.mono { white-space: nowrap; }
 .hq-table .hq-y { color: oklch(48% 0.13 145); font-weight: 700; }
 .hq-table .hq-n { color: oklch(52% 0.16 27); font-weight: 700; }
@@ -2262,7 +2262,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .dgroup details + details { border-top: 1px solid oklch(86% 0.02 250); }
       .dgroup summary { cursor: pointer; padding: 7px 10px; font: bold var(--text-sm) var(--font-ui); color: oklch(35% 0.08 255); background: linear-gradient(180deg, #fff, #f4f3ee); }
       .dgroup summary:hover { color: oklch(45% 0.16 30); }
-      .dgroup details p { margin: 0; padding: 8px 10px; font-size: var(--text-sm); color: var(--grey-30); background: oklch(99% 0.006 250); }
+      .dgroup details p { margin: 0; padding: 8px 10px; font-size: var(--text-sm); color: var(--grey-28); background: oklch(99% 0.006 250); }
       kbd { font: var(--text-micro) var(--font-mono); background: oklch(96% 0 0); border: 1px solid oklch(80% 0 0); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; }
     </style>
 
@@ -4000,7 +4000,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
 
       .mt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
       .mt-box { background: oklch(95% 0.02 255); border: 1px solid oklch(75% 0.03 250); border-radius: 4px; padding: 10px; }
-      .mt-box p { margin: 12px 0; font-size: var(--text-sm); color: var(--grey-33); background: oklch(88% 0.05 255); padding: 4px 8px; border-radius: 3px; }
+      .mt-box p { margin: 12px 0; font-size: var(--text-sm); color: var(--grey-35); background: oklch(88% 0.05 255); padding: 4px 8px; border-radius: 3px; }
       .mt-box.trim { margin-trim: block; }
 
       .sar-out p { margin: 10px 0 0; font-size: var(--text-xs); color: var(--grey-48); }
@@ -4723,7 +4723,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .s8-attr b { font: var(--text-2xs) var(--font-ui); color: var(--ink-quiet); align-self: center; }
       .s8-tdi { font-size: var(--text-lede); color: var(--grey-28); margin-top: 8px; }
       .s8-tdi u { text-decoration: underline 1px oklch(55% 0.20 30); text-decoration-inset: 4px; text-underline-offset: 3px; }
-      .s8-out { font: var(--text-mono) var(--font-mono); white-space: pre-wrap; background: oklch(97% 0 0); border: 1px solid oklch(80% 0 0); padding: 8px 10px; margin-top: 8px; color: var(--grey-30); }
+      .s8-out { font: var(--text-mono) var(--font-mono); white-space: pre-wrap; background: oklch(97% 0 0); border: 1px solid oklch(80% 0 0); padding: 8px 10px; margin-top: 8px; color: var(--grey-28); }
       @media (--p3) {
         .s8-chipbox.luna { background: oklch(50% 0.26 263); }
       }

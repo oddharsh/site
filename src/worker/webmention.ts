@@ -558,7 +558,7 @@ async function emailHost(env, request, m) {
   const html = `
     <p><strong>${esc(m.author)}</strong> ${esc(kindPhrase(m.kind))} <a href="${esc(m.target)}">${esc(m.target.replace(origin, ""))}</a></p>
     <p><a href="${esc(m.source)}">${esc(m.title)}</a>${m.published ? ` <span style="color:var(--ink-faint)">published ${esc(m.published)}</span>` : ""}</p>
-    ${m.excerpt ? `<blockquote style="border-left:3px solid var(--ink-faint);padding-left:.8em;margin-left:0;color:var(--grey-33)">${esc(m.excerpt)}</blockquote>` : ""}
+    ${m.excerpt ? `<blockquote style="border-left:3px solid var(--ink-faint);padding-left:.8em;margin-left:0;color:var(--grey-35)">${esc(m.excerpt)}</blockquote>` : ""}
     <p style="color:var(--ink-quiet)">${esc(sortLine(sort))}</p>
     <p>
       <a href="${approve}" style="display:inline-block;padding:8px 14px;background:#0a0;color:#fff;text-decoration:none;border-radius:3px">approve &amp; publish</a>

@@ -580,7 +580,7 @@ export function renderAroundPage() {
   table.scout .status { font-family: var(--font-mono); width: 8%; text-align: center; }
   table.scout .ok   { color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
   table.scout .warn { color: var(--warn); font-weight: bold; }
-  table.scout .bad  { color: var(--red-46); font-weight: bold; }
+  table.scout .bad  { color: var(--danger-deep); font-weight: bold; }
   table.scout .title { color: var(--ink); }
   table.scout .desc { color: var(--ink-dim); font-size: var(--text-sm); margin-top: 3px; }
   table.scout .latency { font-family: var(--font-mono); color: var(--ink-soft); width: 9%; text-align: right; }

@@ -71,7 +71,7 @@
 
   /* ── SEMANTIC ACCENTS — status + interactive color ───────────────────────*/
   --danger:      oklch(58% 0.200 var(--hue-danger));   /* close red / error      */
-  --danger-deep: oklch(46.34% 0.190 var(--hue-danger));/* error text             */
+  --danger-deep: oklch(46.34% 0.1902 calc(var(--hue-danger) + 4.23)); /* error text = #AA0000, dE 0.0000 */
   --go:          oklch(49.32% 0.168 var(--hue-go));    /* success / shipped      */
   --warn:        oklch(54.44% 0.150 var(--hue-warn));  /* under-construction amber*/
   --gold:        oklch(86.52% 0.177 90.38);            /* counter / odometer LCD  */
@@ -91,19 +91,20 @@
      nothing. Names are family + OKLCH lightness (--slate-84 is a slate at
      L 84%), so a name says what it looks like and a new step slots in. Hues
      hang off the knobs above, so a knob turn retunes these too. Nine clusters
-     within dE 0.01 of an existing token were left out rather than named twice. */
+     within dE 0.01 of an existing token were left out rather than named twice.
+     Merged the same day, on the owner's call: --grey-30 into --grey-28,
+     --grey-33 into --grey-35 and --grey-72 into --grey-70 (each pair sat 0.02
+     apart, the just-noticeable difference), and --red-46 into --danger-deep,
+     which now resolves to the #AA0000 the site wrote by hand from day one. */
   /* neutral greys */
   --grey-95:      oklch(95.00% 0 0);                               /* was oklch(95% 0 0), 7 files */
   --grey-94:      oklch(94.00% 0 0);                               /* was oklch(94% 0 0), 6 files */
   --grey-88:      oklch(88.22% 0 0);                               /* was oklch(88.22% 0 0), 14 files */
-  --grey-72:      oklch(72.00% 0 0);                               /* was oklch(72% 0 0), 5 files */
   --grey-70:      oklch(70.00% 0 0);                               /* was oklch(70% 0 0), 6 files */
   --grey-60:      oklch(59.99% 0 0);                               /* was #808080, 9 files */
   --grey-48:      oklch(48.00% 0 0);                               /* was oklch(48% 0 0), 5 files */
   --grey-42:      oklch(42.00% 0 0);                               /* was oklch(42% 0 0), 5 files */
   --grey-35:      oklch(35.00% 0 0);                               /* was oklch(35% 0 0), 8 files */
-  --grey-33:      oklch(33.00% 0 0);                               /* was oklch(33% 0 0), 8 files */
-  --grey-30:      oklch(30.00% 0 0);                               /* was oklch(30% 0 0), 6 files */
   --grey-28:      oklch(28.00% 0 0);                               /* was oklch(28% 0 0), 5 files */
   /* cool near-neutrals */
   --mist-96:      oklch(96.00% 0.0100 calc(var(--hue-luna) - 13.00)); /* was oklch(96% 0.01 250), 20 files */
@@ -150,7 +151,6 @@
   --red-59:       oklch(59.03% 0.1944 calc(var(--hue-danger) + 9.09)); /* was #d8401c, 5 files */
   --red-55:       oklch(54.86% 0.1791 calc(var(--hue-danger) + 0.34)); /* was #c43636, 6 files */
   --red-50:       oklch(50.13% 0.1667 calc(var(--hue-danger) + 9.66)); /* was #ae3110, 7 files */
-  --red-46:       oklch(46.34% 0.1902 calc(var(--hue-danger) + 4.23)); /* was oklch(46.34% 0.1902 29.23), 5 files */
   /* ambers: status, warnings */
   --amber-96:     oklch(96.46% 0.0301 calc(var(--hue-chrome) - 6.52)); /* was #fbf3dd, 6 files */
   --amber-88:     oklch(87.82% 0.0877 calc(var(--hue-warn) + 19.17)); /* was oklch(87.82% 0.0877 66.27), 5 files */

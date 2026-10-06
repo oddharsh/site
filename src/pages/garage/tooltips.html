@@ -50,19 +50,19 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 }
 .badge.review  { color: var(--warn); border-color: var(--warn); background: oklch(98% 0.03 95); }
 .badge.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
-.badge.dead    { color: var(--red-46); border-color: var(--red-46); background: oklch(98% 0.03 30); }
+.badge.dead    { color: var(--danger-deep); border-color: var(--danger-deep); background: oklch(98% 0.03 30); }
 .badge.ref     { color: var(--ink-dim); border-color: var(--grey-70); background: oklch(96% 0 0); }
 
 /* rejection callout: small box explaining why a variant didn't ship */
 .rejection {
   font-size: var(--text-ui);
   background: oklch(98% 0.02 30);
-  border-left: 3px solid var(--red-46);
+  border-left: 3px solid var(--danger-deep);
   padding: 8px 12px;
   margin: 0 0 14px;
   color: oklch(30% 0.03 30);
 }
-.rejection strong { color: var(--red-46); }
+.rejection strong { color: var(--danger-deep); }
 
 /* three-slot photo row */
 .row {
@@ -205,7 +205,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 }
 .lcd-tip .meta-line {
   font-size: 9.5px;
-  color: var(--grey-72);
+  color: var(--grey-70);
   margin-top: 2px;
 }
 .lcd-tip .exposure {
@@ -359,7 +359,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .balloon-tip::before { top: -8px; border-width: 0 8px 8px; border-color: transparent transparent oklch(52% 0.05 90); }
 .balloon-tip::after  { top: -6px; border-width: 0 7px 7px; border-color: transparent transparent var(--row-hover); }
 .balloon-tip .bln-title  { font-weight: bold; color: oklch(33% 0.06 260); margin-bottom: 1px; }
-.balloon-tip .bln-artist { color: var(--grey-30); }
+.balloon-tip .bln-artist { color: var(--grey-28); }
 .balloon-tip .bln-meta   { margin-top: 5px; font-size: 10px; color: var(--grey-48); }
 
 .xp-cam-tip .header {
