@@ -35,7 +35,7 @@ export async function sendApprovalRequest(env, booking, approveUrl, declineUrl, 
     <p><strong>when:</strong> ${esc(when)}<br>
        ${area ? `<strong>where they are:</strong> ${esc(area)}<br>` : ""}
        <strong>what about:</strong></p>
-    <blockquote style="border-left:3px solid var(--ink-faint);padding-left:.8em;margin-left:0;color:var(--grey-35)">
+    <blockquote style="border-left:3px solid #888;padding-left:.8em;margin-left:0;color:#333">
       ${esc(topic).replace(/\n/g, "<br>")}
     </blockquote>
     <p>
@@ -43,7 +43,7 @@ export async function sendApprovalRequest(env, booking, approveUrl, declineUrl, 
       &nbsp;&nbsp;
       <a href="${declineUrl}" style="display:inline-block;padding:8px 14px;background:#900;color:#fff;text-decoration:none;border-radius:3px">decline</a>
     </p>
-    <p style="color:var(--ink-faint);font-size:12px">one-click. signed url; only you can use these.</p>
+    <p style="color:#888;font-size:12px">one-click. signed url; only you can use these.</p>
     ${locationUrl ? `<p style="font-size:13px">
       <a href="${locationUrl}">set the spot</a> — works before or after you approve,
       and after approval it mails the guest a calendar update in place.
@@ -154,7 +154,7 @@ export async function sendHostCopy(
   // moves the host's own calendar and tells nobody, which is the whole reason
   // this footer exists rather than being left implied.
   const manage = cancelled ? "" : `
-    <p style="color:var(--ink-faint);font-size:12px">
+    <p style="color:#888;font-size:12px">
       ${links.location   ? `<a href="${esc(links.location)}">set the spot</a> &nbsp;·&nbsp; `   : ""}
       ${links.reschedule ? `<a href="${esc(links.reschedule)}">move it</a> &nbsp;·&nbsp; ` : ""}
       ${links.cancel     ? `<a href="${esc(links.cancel)}">cancel</a><br>` : ""}
@@ -165,7 +165,7 @@ export async function sendHostCopy(
     <p><strong>${esc(name)}</strong> &lt;${esc(email)}&gt;${updated ? ", updated" : ""}.</p>
     <p><strong>when:</strong> ${esc(when)}<br>
        <strong>where:</strong> ${esc(location || "still to set")}</p>
-    <blockquote style="border-left:3px solid var(--ink-faint);padding-left:.8em;margin-left:0;color:var(--grey-35)">
+    <blockquote style="border-left:3px solid #888;padding-left:.8em;margin-left:0;color:#333">
       ${esc(topic).replace(/\n/g, "<br>")}
     </blockquote>
     ${cancelled
