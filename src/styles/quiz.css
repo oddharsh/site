@@ -8,8 +8,8 @@
    unstyled. */
 
 /* garage: an XP GroupBox self-test, mounted at #luq */
-#luq{margin:18px 0 6px;border:1px solid #92a0b8;border-radius:4px;background:#fdfdf8;box-shadow:inset 0 1px 0 #fff;font-family:var(--font-ui)}
-#luq .luq-cap{display:flex;align-items:center;gap:7px;padding:5px 10px;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-ui);color:#1d3a8a;background:linear-gradient(180deg,#f4f7fc,#dde7f6);border-bottom:1px solid #b9c8de;border-radius:3px 3px 0 0}
+#luq{margin:18px 0 6px;border:1px solid #92a0b8;border-radius:4px;background:var(--paper);box-shadow:inset 0 1px 0 #fff;font-family:var(--font-ui)}
+#luq .luq-cap{display:flex;align-items:center;gap:7px;padding:5px 10px;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-ui);color:#1d3a8a;background:linear-gradient(180deg,var(--row-alt),#dde7f6);border-bottom:1px solid #b9c8de;border-radius:3px 3px 0 0}
 #luq .luq-cap .n{font-weight:normal;font-size:var(--text-micro);color:#5a6679;margin-left:auto;font-family:var(--font-ui)}
 #luq .luq-bd{padding:11px 13px 13px}
 #luq .luq-q{font-size:var(--text-ui);color:#15243f;margin:0 0 9px;font-weight:bold}
@@ -34,7 +34,7 @@
    now that both skins share one sheet, so these button rules cannot reach the
    garage skin's radio labels, which share the .luq-opt class. */
 .log .luq-opts{display:flex;flex-direction:column;gap:5px;margin-top:7px}
-.log .luq-opt{font-family:var(--font-ui);font-size:var(--text-sm);text-align:left;padding:4px 10px;cursor:pointer;color:#1a2030;background:linear-gradient(to bottom,#fff,#e9edf5);border:1px solid #7d8aa3;border-radius:3px;box-shadow:inset 1px 1px 0 #fff}
+.log .luq-opt{font-family:var(--font-ui);font-size:var(--text-sm);text-align:left;padding:4px 10px;cursor:pointer;color:#1a2030;background:linear-gradient(to bottom,#fff,var(--surface-desktop));border:1px solid #7d8aa3;border-radius:3px;box-shadow:inset 1px 1px 0 #fff}
 .log .luq-opt:hover{border-color:var(--accent,#3a71f5);background:linear-gradient(to bottom,#fff,#e6efe8)}
 .log .luq-opt:disabled{cursor:default;color:#66707d;background:#f4f4f0;box-shadow:none}
 .log .luq-opt.was-pick:disabled{color:#1a2030;border-color:var(--accent,#3a71f5)}
