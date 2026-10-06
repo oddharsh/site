@@ -96,7 +96,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
   <p class="pqc-read"></p>
   <div class="pqc-native" hidden></div>
 </div>
-<p>Flip the toggle before you read on and predict where each bar lands. The point of the exercise is that the ordering <em>changes</em>. <a class="term" data-t="slh-dsa" href="https://csrc.nist.gov/pubs/fips/205/final" title="A post-quantum digital signature standard from NIST (FIPS 205) that relies only on hash functions. Its public keys are tiny; its signatures are large and slow to make." rel="external">SLH-DSA-128s</a> has the smallest public key of anything here at 32 bytes, and it takes two and a half seconds to produce one signature. Its sibling 128f signs in <data value="132.34 ms">132ms</data> and spends <data value="22,784 bytes">22KB</data> of header doing it. There is no row that is small on both axes, which is the actual state of post-quantum signatures rather than a quirk of this library.</p>
+<p>Flip the toggle before you read on and predict where each bar lands. The point of the exercise is that the ordering <em>changes</em>. <a class="term" data-t="slh-dsa" href="https://csrc.nist.gov/pubs/fips/205/final" title="A post-quantum digital signature standard from NIST (FIPS 205) that relies only on hash functions. Its public keys are tiny; its signatures are large and slow to make." rel="external">SLH-DSA-128s</a> has the smallest public key of anything here at 32 bytes, and it takes 2.65 seconds to produce one signature. Its sibling 128f signs in <data value="132.34 ms">132ms</data> and spends <data value="22,784 bytes">22KB</data> of header doing it. There is no row that is small on both axes, which is the actual state of post-quantum signatures rather than a quirk of this library.</p>
 
 <h3>How much of that 8.58ms is the algorithm?</h3>
 <p>Less than it looks, and the panel above will prove it on your own hardware if it can. Chrome ships ML-DSA in WebCrypto behind <code>chrome://flags/#webcrypto-pqc</code>, implementing the same <a href="https://wicg.github.io/webcrypto-modern-algos/" target="_blank" rel="noopener">WICG proposal</a> whose JWK shape this site already publishes. If that flag is on, the panel offers a button that generates an ML-DSA-44 key in your browser, signs this page's signature base 200 times natively, and drops the result in beside the JavaScript number. The amber workerd bar answers the same question for Cloudflare's runtime.</p>
@@ -104,7 +104,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 
 <h2>Why the hash-based options lost</h2>
 <p>I wanted SLH-DSA to work. It rests on hash functions alone, so it survives even if lattices turn out to be broken, and its 32-byte public key is charming. It fails here twice over.</p>
-<p>The header is the harder failure. A 128f signature is 22,784 bytes once base64'd into a structured-fields value, and most servers cap total request headers around 8KB, so the crawl would start collecting 431s instead of pages. The latency is the other one: 2.5 seconds of single-threaded work per signature is not something to put in front of an HTTP request, and a Worker bills CPU time.</p>
+<p>The header is the harder failure. A 128f signature is 22,784 bytes once base64'd into a structured-fields value, and most servers cap total request headers around 8KB, so the crawl would start collecting 431s instead of pages. The latency is the other one: 2.65 seconds of single-threaded work per signature is not something to put in front of an HTTP request, and a Worker bills CPU time.</p>
 <p>Stateful hash-based signatures (LMS, XMSS) fix the size problem and introduce a worse one. Reusing a one-time index is total key compromise, and a <a class="term" data-t="worker-isolate" href="https://developers.cloudflare.com/workers/reference/how-workers-works/" title="A lightweight sandbox inside one runtime process where a Cloudflare Worker's code runs, walled off from other code and reused across requests." rel="external">Worker isolate</a> is close to the worst place to keep a monotonic counter. I would need a Durable Object doing nothing but handing out indices, and a single replay would end the key. ML-DSA-44 is the only candidate that survives contact with the constraints.</p>
 
 <h2>Shipping it without a codepoint</h2>
@@ -353,7 +353,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
         {
           "t": "They trade signing time against signature size, so one blows the header limit and the other blows the latency budget.",
           "ok": true,
-          "why": "Right. 128f signs in 132ms but needs 22,784 bytes of header; 128s is compact by comparison and takes 2.5 seconds. Neither is small on both axes."
+          "why": "Right. 128f signs in 132ms but needs 22,784 bytes of header; 128s is compact by comparison and takes 2.65 seconds. Neither is small on both axes."
         },
         {
           "t": "Hash-based signatures have large public keys, which is what makes them impractical for HTTP.",
