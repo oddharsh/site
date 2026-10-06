@@ -63,33 +63,26 @@ bun mints every content-addressed `/a/` and `/i/` URL production serves. A bump
 that changes one output byte is a dictionary roll and a CSP hash change wearing a
 version string.
 
-`bun run bun:pin` is what owns it, and
-[`.github/workflows/bun-pin.yml`](../.github/workflows/bun-pin.yml) runs it
-nightly and opens a PR when a candidate earns one. Five gates, ordered so the
-cheapest disqualifier runs first:
+On 2026-10-06 the owner selected `"bun": "canary"` temporarily to adopt Bun's
+native `bun check` before the dated npm publication included it. Both CI and
+Workers Builds use `.github/install-bun.sh` to resolve GitHub's latest canary.
+The installer reads one release metadata snapshot, checks the archive's
+SHA-256 and the binary's full commit, verifies `bun check` is available, and
+writes `bun.install.json` beside the binary. A release moving during download
+fails verification before replacing the existing installation.
 
-| gate | refuses |
-|---|---|
-| newest STABLE release, carried by npm too | a rolling `canary`, and a version only half the resolvers can see |
-| older than `minimumReleaseAge` | a runtime younger than the window bunfig applies to a lightningcss patch |
-| zstd honours `dictionary` | the silent one: a runtime that accepts the option and ignores it ships plain zstd as every dcz delta |
-| reads the committed lockfile, writes the same `lockfileVersion` | a format change, which is what 1.4 actually did and what broke dependabot's bun updater |
-| byte-identical build, and the suite | a differing byte, which mints a URL and orphans every `a-dict` snapshot naming the old hash |
+Fresh installs can resolve different commits. This source deliberately skips
+the runtime's npm publication-age gate; `bunfig.toml`'s dependency age gate
+still applies to package installation. `bun:pin` reports the installed commit
+and leaves the rolling declaration alone. `canary:bun` compares against that
+installation's receipt, so its baseline names the runtime actually measured.
 
-The control is permanent, because the previous bun is a known-bad runtime:
-
-```bash
-bun run bun:pin --from 1.3.13 --to 1.3.14
-```
-
-That must fail at the zstd gate with `73 none / 73 good / 73 wrong`, the collapse
-that means the option was ignored. Without it, a run reporting "nothing to do" on
-a day when the pin is already current proves only that the comparison ran.
-
-`@types/bun` stays `deps:pin`'s, and the two are allowed to disagree for a day.
-The baseline below already worked that through: the release-age policy once held
-the types pin a release behind the runtime and it caught up on its own, which is
-a wait rather than a fork.
+To resume exact pins, declare a release or a dated npm canary with its build
+sha in `config/bun-pin.json`, then install it with the shared installer.
+For fixed pins, `bun run bun:pin` and the nightly `bun-pin.yml` select candidates
+on the declared channel and require npm publication age, zstd dictionary
+support, unchanged lockfile format, a byte-identical build and passing tests.
+Those gates remain in place for fixed pins. `@types/bun` stays `deps:pin`'s.
 
 ### what a frozen install does not check
 

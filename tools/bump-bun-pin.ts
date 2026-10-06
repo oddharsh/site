@@ -88,7 +88,7 @@ import {
   npmBunDist,
   npmVersion,
   readPin,
-  runningMatchesPin,
+  installedMatchesPin,
   releaseAsset,
   releaseUrl,
   writePin,
@@ -163,11 +163,23 @@ if (!baselineVersion) {
 }
 // `baselineVersion !== pin.version` is the release-channel form of this guard;
 // a canary proves itself by revision, since its --version is the next release's.
-const baseline = runningMatchesPin(pin.version, { version: baselineVersion, revision: Bun.revision });
+const baseline = installedMatchesPin(pin.version, process.execPath, { version: baselineVersion, revision: Bun.revision });
 if (!baseline.ok) {
   console.error(`${baseline.why}: this bun is not the pin (baselineVersion !== pin.version).`);
   console.error("the pinned bun is the baseline, so this comparison would measure the wrong pair. install the pin first.");
   process.exit(2);
+}
+
+// The rolling source updates on installation rather than through a pin PR.
+// An explicit target must still be selected as an exact source by the owner.
+if (pin.version === "canary") {
+  if (flag("--to") || pretend) {
+    console.error("bun:pin: rolling canary is selected; declare an exact npm pin before comparing explicit versions");
+    process.exit(2);
+  }
+  console.log(`bun:pin: rolling GitHub canary selected, installed revision ${Bun.revision}. Nothing to rewrite.`);
+  report("green", { pin: "bun@canary", revision: Bun.revision }, "rolling source resolves during installation");
+  process.exit(0);
 }
 
 const current = pretend || pin.version;

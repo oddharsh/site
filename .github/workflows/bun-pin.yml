@@ -13,9 +13,10 @@ name: Bun pin
 # THE ANCESTOR is bun-release-watch.yml on the unmerged `ci/bun-release-watch`
 # branch, which watched for ONE version and filed an issue. bun 1.4 shipped on
 # 2026-08-20, so that job's question is answered and this asks the general form.
-# What it keeps from it: stable releases only (a rolling `canary` tag is not
-# pinnable), a numeric version compare so 1.10 does not read as older than 1.4,
-# and holding no Cloudflare credential.
+# Fixed pins follow their declared release or dated-canary channel, with a
+# numeric version compare so 1.10 does not read as older than 1.4. The explicitly
+# rolling source resolves during installation and leaves this job nothing to
+# rewrite. This job holds no Cloudflare credential.
 #
 # It differs in that it does not stop at noticing. `bun:pin` runs every gate and
 # the PR arrives carrying the evidence: the zstd capability probe, the lockfile
