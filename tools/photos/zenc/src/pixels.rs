@@ -214,7 +214,7 @@ pub struct Frame {
 /// The scan bails on the first unequal pixel, so a colour photo pays one
 /// comparison.
 fn channel_equal<T: Copy + PartialEq>(raw: &[T]) -> bool {
-    raw.chunks_exact(3).all(|p| p[0] == p[1] && p[1] == p[2])
+    raw.as_chunks::<3>().0.iter().all(|p| p[0] == p[1] && p[1] == p[2])
 }
 
 pub fn load_linear(path: &str, t: TransferOption) -> Result<Frame, String> {
@@ -363,7 +363,7 @@ fn flip<const CH: usize>(src: &[f32], sw: usize, sh: usize, o: u8) -> Vec<f32> {
         if o == 4 {
             dst.copy_from_slice(line);
         } else {
-            for (d, p) in dst.chunks_exact_mut(CH).zip(line.chunks_exact(CH).rev()) {
+            for (d, p) in dst.as_chunks_mut::<CH>().0.iter_mut().zip(line.as_chunks::<CH>().0.iter().rev()) {
                 d.copy_from_slice(p);
             }
         }
@@ -391,7 +391,7 @@ fn transpose<const CH: usize>(src: &[f32], sw: usize, sh: usize, o: u8) -> Vec<f
             for dy in ty..ty + TILE.min(dh - ty) {
                 let sx = (if rev_x { sw - 1 - dy } else { dy }) * CH;
                 let start = (dy * dw + tx) * CH;
-                for (k, d) in out[start..start + cols * CH].chunks_exact_mut(CH).enumerate() {
+                for (k, d) in out[start..start + cols * CH].as_chunks_mut::<CH>().0.iter_mut().enumerate() {
                     let dx = tx + k;
                     let s = (if rev_y { sh - 1 - dx } else { dx }) * row + sx;
                     d.copy_from_slice(&src[s..s + CH]);
@@ -626,12 +626,12 @@ mod tests {
         }
         let out = orient(Frame { w, h, gray: false, data, transfer: Transfer::Srgb }, Orientation::Rotate90);
         assert_eq!((out.w, out.h), (h, w));
-        for px in out.data.chunks_exact(3) {
+        for px in out.data.as_chunks::<3>().0.iter() {
             assert_eq!(px[1], px[0] + 0.25, "green separated from its pixel");
             assert_eq!(px[2], px[0] + 0.5, "blue separated from its pixel");
         }
         // and it is a permutation: the same pixels, each exactly once
-        let mut seen: Vec<u32> = out.data.chunks_exact(3).map(|p| p[0] as u32).collect();
+        let mut seen: Vec<u32> = out.data.as_chunks::<3>().0.iter().map(|p| p[0] as u32).collect();
         seen.sort_unstable();
         assert_eq!(seen, (0..w * h).collect::<Vec<_>>());
     }
@@ -757,7 +757,7 @@ mod icc_tests {
                 assert!(!frame.gray);
                 assert_eq!(frame.transfer, curve);
                 assert_eq!(frame.data.len(), expected.len() * 3);
-                for (c, actual) in frame.data.chunks_exact(3).enumerate() {
+                for (c, actual) in frame.data.as_chunks::<3>().0.iter().enumerate() {
                     for (sample, code) in actual.iter().zip(channels(c as u32 % 256, c as u32 / 256)) {
                         assert_eq!(sample.to_bits(), expected[code as usize].to_bits());
                     }
