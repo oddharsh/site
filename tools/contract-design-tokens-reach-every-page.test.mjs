@@ -58,6 +58,12 @@ test("the resolver sees the knobs, and refuses an ambiguous value", () => {
   assert.deepEqual(tokenCopiesIn(".x{color:oklch(51.2% 0.224 263.3)}", map).map((c) => c.token), ["--blue-65"], "a rounding copy within COPY_DE is a copy");
   assert.deepEqual(tokenCopiesIn(".x{color:oklch(55% 0.225 263)}", map), [], "four points of lightness is a different colour, not a copy");
   assert.deepEqual(tokenCopiesIn('<text fill="oklch(51% 0.225 263)">', map), [], "an SVG presentation attribute cannot take var(), so it is never a copy");
+  // Hex and rgb() name the same colours in another notation.
+  const hexMap = tokenValueMap(`:root{--ink-faint: oklch(62.68% 0 0);}`);
+  assert.deepEqual(tokenCopiesIn(".x{color:#888}", hexMap).map((c) => c.fix), ["var(--ink-faint)"], "#888 in hex is the --ink-faint token");
+  assert.deepEqual(tokenCopiesIn(".x{border-color:rgba(136,136,136,.5)}", hexMap).map((c) => c.fix), ["oklch(from var(--ink-faint) l c h / .5)"], "rgba() keeps its alpha");
+  assert.deepEqual(tokenCopiesIn("#888, .y{color:red}", hexMap), [], "an id selector that spells a colour is not a declaration");
+  assert.deepEqual(tokenCopiesIn(".x{background:#0054e3}", hexMap), [], "a different colour in hex is not a copy");
   // Inside COPY_DE of two tokens names neither, like an ambiguous value.
   const twins = tokenValueMap(`:root{--p: oklch(50% 0.1 250); --q: oklch(50.3% 0.1 250);}`);
   assert.deepEqual(tokenCopiesIn(".x{color:oklch(50.15% 0.1 250)}", twins), [], "a literal between two near tokens is never reported");

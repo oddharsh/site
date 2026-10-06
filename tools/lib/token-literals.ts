@@ -24,7 +24,6 @@
 // distance in OKLab (see COPY_DE).
 import { readFileSync, readdirSync } from "node:fs";
 
-const OKLCH = /oklch\([^()]*\)/g;
 
 /**
  * Spelling variants collapse so `0.150`, `0.15` and `.15` compare equal, and so
@@ -115,13 +114,84 @@ export interface TokenCopy {
   fix: string;
 }
 
+/** sRGB 0-255 to OKLab, by Björn Ottosson's published matrices. */
+export function srgbToOklab(r: number, g: number, b: number): Lab {
+  const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const [R, G, B] = [r, g, b].map((v) => lin(v / 255));
+  const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+  const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+  const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+  return {
+    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    a: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    b: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  };
+}
+
+/** `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()` or `rgba()` as OKLab plus alpha text. Null for anything else. */
+export function parseSrgb(s: string): { lab: Lab; alpha: string | null } | null {
+  const hex = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(s);
+  if (hex) {
+    const h = hex[1].length <= 4 ? hex[1].replace(/./g, "$&$&") : hex[1];
+    const n = (i: number) => parseInt(h.slice(i, i + 2), 16);
+    return { lab: srgbToOklab(n(0), n(2), n(4)), alpha: h.length === 8 ? String(Math.round((n(6) / 255) * 100) / 100) : null };
+  }
+  const rgb = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/i.exec(s);
+  if (rgb) return { lab: srgbToOklab(+rgb[1], +rgb[2], +rgb[3]), alpha: rgb[4] ?? null };
+  return null;
+}
+
 /**
- * Every oklch() literal in `css` that is one token's value, with where it sits.
+ * True when the colour at `index` sits in a declaration value, so `#fab` in a
+ * selector or a URL fragment is never read as a colour: the nearest `{`, `;`
+ * or `}` behind it must be followed by a `:` before the colour.
+ */
+function inDeclaration(css: string, index: number): boolean {
+  // Inside a /* comment */ is prose, even when the prose has a colon in it
+  // (access's note on why its greys moved names two of them by hex).
+  if (css.lastIndexOf("/*", index) > css.lastIndexOf("*/", index)) return false;
+  const start = Math.max(css.lastIndexOf("{", index), css.lastIndexOf(";", index), css.lastIndexOf("}", index), css.lastIndexOf('"', index));
+  return css.slice(start + 1, index).includes(":");
+}
+
+/** oklch(), and the sRGB spellings the site also writes: hex and rgb()/rgba(). */
+const COLOR = /oklch\([^()]*\)|(?<![\w&#-])#[0-9a-fA-F]{3,8}(?![\w-])|rgba?\([^()]*\)/g;
+
+/**
+ * Every colour literal in `css` that is one token's value, with where it sits.
  * Three spellings count: the token's resolved text, the same with an alpha
  * (`--frame / .3`, written as `oklch(from var(--frame) l c h / .3)`), and a
  * literal within COPY_DE of exactly one token. A literal that close to two
  * tokens names neither, for the same reason an ambiguous value never does.
+ * Hex and rgb() are compared by distance alone, since they never share text
+ * with an oklch() token; that is how 87 of them hid until 2026-10-06.
  */
+export interface ColorLiteral {
+  literal: string;
+  index: number;
+  lab: Lab;
+  alpha: string | null;
+}
+
+/**
+ * Every colour literal in `css` that a stylesheet would paint: oklch(), hex and
+ * rgb(). Skipped: SVG presentation attributes (counter.ts paints its badge with
+ * fill="oklch(...)", which cannot take var() and is served alone where no
+ * token resolves), and for the sRGB spellings anything outside a declaration
+ * value, so an id selector or a hex in a comment is never a colour.
+ */
+export function colorLiteralsIn(css: string): ColorLiteral[] {
+  const out: ColorLiteral[] = [];
+  for (const m of css.matchAll(COLOR)) {
+    if (/\b[a-z-]+=["']$/.test(css.slice(Math.max(0, m.index - 24), m.index))) continue;
+    const isOklch = m[0].startsWith("oklch(");
+    if (!isOklch && !inDeclaration(css, m.index)) continue;
+    const parsed = isOklch ? parseOklch(m[0]) : parseSrgb(m[0]);
+    if (parsed) out.push({ literal: m[0], index: m.index, lab: parsed.lab, alpha: parsed.alpha });
+  }
+  return out;
+}
+
 export function tokenCopiesIn(css: string, map: Map<string, string>): TokenCopy[] {
   const labs: [string, Lab][] = [];
   for (const [value, token] of map) {
@@ -129,15 +199,12 @@ export function tokenCopiesIn(css: string, map: Map<string, string>): TokenCopy[
     if (p) labs.push([token, p.lab]);
   }
   const out: TokenCopy[] = [];
-  for (const m of css.matchAll(OKLCH)) {
-    // An SVG presentation attribute (counter.ts paints its badge with fill="oklch(...)")
-    // cannot take var(), and that badge is served alone where no token resolves.
-    if (/\b[a-z-]+=["']$/.test(css.slice(Math.max(0, m.index - 24), m.index))) continue;
-    const parsed = parseOklch(m[0]);
-    const opaque = normalizeColor(m[0].replace(/\s*\/\s*[\d.]+%?\s*\)$/, ")"));
-    let token = map.get(opaque);
+  for (const parsed of colorLiteralsIn(css)) {
+    const m = { 0: parsed.literal, index: parsed.index };
+    const opaque = m[0].startsWith("oklch(") ? normalizeColor(m[0].replace(/\s*\/\s*[\d.]+%?\s*\)$/, ")")) : "";
+    let token = opaque ? map.get(opaque) : undefined;
     let dE = 0;
-    if (!token && parsed) {
+    if (!token) {
       const near = labs.map(([t, lab]) => [t, deltaEOK(parsed.lab, lab)] as const).filter(([, d]) => d < COPY_DE);
       if (near.length === 1) [token, dE] = near[0];
     }

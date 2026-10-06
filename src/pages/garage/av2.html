@@ -26,13 +26,13 @@
 
 .av2-demo{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0}
 .av2-demo figure{margin:0;text-align:center;font-size:var(--text-micro)}
-.av2-demo img{display:block;width:128px;height:128px;border:1px solid #99a8bd;background:repeating-conic-gradient(#e8eef7 0 25%,#fff 0 50%) 0 0/16px 16px}
-.av2-verdict{font-size:var(--text-xs);padding:6px 10px;border:1px solid #99a8bd;background:#f3f6fa}
+.av2-demo img{display:block;width:128px;height:128px;border:1px solid #99a8bd;background:repeating-conic-gradient(var(--surface-desktop) 0 25%,#fff 0 50%) 0 0/16px 16px}
+.av2-verdict{font-size:var(--text-xs);padding:6px 10px;border:1px solid #99a8bd;background:var(--row-alt)}
 .av2-verdict b{font-family:var(--font-mono)}
-.dd-box{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;margin:10px 0;padding:6px 0}
+.dd-box{border:1px solid #99a8bd;background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;margin:10px 0;padding:6px 0}
 .dd-row{display:grid;gap:10px;align-items:center;padding:3px 10px;font-size:var(--text-micro);border-bottom:1px solid #e4eaf3}
 .dd-row:last-child{border-bottom:0}
-.dd-row.head{font-weight:700;background:#e8eef7}
+.dd-row.head{font-weight:700;background:var(--surface-desktop)}
 .dd-speeds .dd-row{grid-template-columns:2.2fr 1fr 1fr 1fr 1fr}
 .dd-lossless .dd-row{grid-template-columns:2fr 1fr 1fr}
 .dd-bpp .dd-row{grid-template-columns:1.2fr 1.4fr 1fr 1fr}
@@ -47,7 +47,7 @@
 .av2-tag{font-family:var(--font-mono);font-size:var(--text-micro);margin:4px 0}
 .av2-fig figcaption{font-size:var(--text-micro);margin-top:4px}
 .av2-note{font-size:var(--text-micro);color:#3a4a5e}
-.av2-code{font-family:var(--font-mono);font-size:var(--text-micro);background:#f3f6fa;border:1px solid #99a8bd;padding:6px 10px;overflow-x:auto}
+.av2-code{font-family:var(--font-mono);font-size:var(--text-micro);background:var(--row-alt);border:1px solid #99a8bd;padding:6px 10px;overflow-x:auto}
 @media(max-width:620px){.dd-speeds .dd-row,.dd-lossless .dd-row,.dd-bpp .dd-row,.dd-tune .dd-row{grid-template-columns:1fr 1fr}}
 </style>
 <link rel="stylesheet" href="/luna.css">
