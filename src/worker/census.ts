@@ -573,7 +573,7 @@ function censusPage(exhibit, extra = {}) {
 h1 { font-size:13pt; margin:0 0 2px; }
 .cx-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:10pt; line-height:1.5; }
 .cx-lede a { color:var(--link); }
-footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:16px; padding-top:11px; border-top:1px solid var(--rule); }
+footer { text-align:center; font-size:9pt; color:var(--ink-quiet); margin-top:16px; padding-top:11px; border-top:1px solid var(--rule); }
 footer a { color:var(--link); }
 `,
     body: html`

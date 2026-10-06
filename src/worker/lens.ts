@@ -970,13 +970,13 @@ h1 { font-size:13pt; margin:0 0 2px; }
 
 /* IE6 address bar */
 .lx-addr { display:flex; align-items:center; gap:6px; background:var(--surface-desktop); border:1px solid oklch(72% 0.03 250); border-radius:3px; padding:5px 6px; }
-.lx-addr-label { font-size:9pt; color:oklch(45% 0 0); padding:0 2px; }
+.lx-addr-label { font-size:9pt; color:var(--ink-quiet); padding:0 2px; }
 .lx-globe { width:15px; height:15px; flex:0 0 auto; border-radius:50%; background:radial-gradient(circle at 35% 30%, oklch(78% 0.13 230), oklch(48% 0.16 250)); box-shadow:inset 0 0 0 1px oklch(100% 0 0 / .4); }
 .lx-url { flex:1 1 auto; min-width:0; font-family:"Courier New",Courier,monospace; font-size:10pt; padding:3px 6px; border:2px solid; border-color:oklch(55% 0 0) oklch(85% 0 0) oklch(85% 0 0) oklch(55% 0 0); background:#fff; color:oklch(25% 0.02 255); }
 .lx-url:focus { outline:1px dotted var(--link); }
 .lx-go, .lx-seg, .lx-tab, .lx-chip { font-family:Tahoma,Verdana,sans-serif; cursor:pointer; }
-.lx-go { font-size:9.5pt; font-weight:bold; padding:3px 14px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#dcdcd2); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
-.lx-go:active { border-color:oklch(45% 0 0) #fff #fff oklch(45% 0 0); }
+.lx-go { font-size:9.5pt; font-weight:bold; padding:3px 14px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#dcdcd2); border:1px solid; border-color:#fff var(--ink-quiet) var(--ink-quiet) #fff; border-radius:3px; }
+.lx-go:active { border-color:var(--ink-quiet) #fff #fff var(--ink-quiet); }
 
 /* example buttons. These are real <button>s, so they carry the same raised
    bevel as .lx-go above (light top-left, dark bottom-right, inverted on
@@ -989,9 +989,9 @@ h1 { font-size:13pt; margin:0 0 2px; }
    button was 50x14 dialog units = 75x23px at 8pt Tahoma, so the period-correct
    number was already a pixel off WCAG 2.5.8's 24px floor and these were four
    under it. Rounding up to 24 is closer to Luna than what was here. */
-.lx-chip { font-size:8.8pt; padding:4px 9px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
+.lx-chip { font-size:8.8pt; padding:4px 9px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff var(--ink-quiet) var(--ink-quiet) #fff; border-radius:3px; }
 .lx-chip:hover { background:linear-gradient(180deg,#fff,#efefe7); }
-.lx-chip:active { border-color:oklch(45% 0 0) #fff #fff oklch(45% 0 0); }
+.lx-chip:active { border-color:var(--ink-quiet) #fff #fff var(--ink-quiet); }
 /* the interaction chip row, sunk so it reads as a control strip rather than
    another finding in the report it sits above. */
 .lx-browser-do { margin:8px 0 10px; padding:8px 9px; background:oklch(97% 0.004 250); border:1px solid; border-color:oklch(64% 0 0) #fff #fff oklch(64% 0 0); }
@@ -1001,7 +1001,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
    and the whole of it in Browser. */
 .lx-shot-pair { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:8px; }
 .lx-shot-pair figure { margin:0; }
-.lx-shot-pair figcaption { font-size:8.5pt; color:oklch(45% 0 0); margin-top:3px; text-align:center; }
+.lx-shot-pair figcaption { font-size:8.5pt; color:var(--ink-quiet); margin-top:3px; text-align:center; }
 
 /* toolbar: the view switcher stands alone now that the lens tabs live inside
    the Machine pane. The two controls answer different questions (what am I
@@ -1073,7 +1073,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
    naming the action. "Paste a URL to compare the three surfaces" told a stranger
    the mechanic and none of the reason. First line is the instruction, the <span>
    is the payoff, deliberately quieter. */
-.lx-empty { color:oklch(45% 0 0); font-size:10pt; padding:18px 14px; text-align:center; text-wrap:pretty; }
+.lx-empty { color:var(--ink-quiet); font-size:10pt; padding:18px 14px; text-align:center; text-wrap:pretty; }
 .lx-empty span { display:block; max-width:34ch; margin:5px auto 0; font-size:9pt; line-height:1.5; color:oklch(58% 0 0); }
 .lx-spin { color:var(--link); font-size:9.5pt; padding:18px 6px; text-align:center; }
 .lx-idle-lens { max-width:620px; margin:22px auto; padding:16px 18px; border:1px solid oklch(78% 0.04 250); border-radius:4px; background:linear-gradient(180deg,#fff,oklch(97% 0.008 250)); color:oklch(31% 0.02 255); }
@@ -1278,7 +1278,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
 .lx-ogcard { display:flex; gap:9px; border:1px solid oklch(85% 0.02 250); border-radius:4px; padding:8px; background:oklch(99% 0.004 250); }
 .lx-ogcard img { width:96px; height:96px; object-fit:cover; border-radius:3px; flex:0 0 auto; background:oklch(92% 0 0); }
 .lx-ogcard .t { font-weight:bold; font-size:9.6pt; color:oklch(28% 0.04 255); }
-.lx-ogcard .d { font-size:8.8pt; color:oklch(45% 0 0); margin-top:3px; }
+.lx-ogcard .d { font-size:8.8pt; color:var(--ink-quiet); margin-top:3px; }
 .lx-ogcard .u { font-family:"Courier New",monospace; font-size:8pt; color:oklch(50% 0.05 150); margin-top:4px; }
 
 /* Terms lens: the open → signaled → enforced → paid spectrum + bot scoreboard */
@@ -1535,10 +1535,10 @@ h1 { font-size:13pt; margin:0 0 2px; }
 @media (max-width:640px){ .lx-vs-grid{ grid-template-columns:1fr; } }
 
 /* status bar */
-.lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
+.lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:var(--ink-quiet); }
 .lx-status b { color:oklch(30% 0.04 255); font-weight:bold; }
 .lx-status .err { color:oklch(55% 0.2 27); font-weight:bold; }
-footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:14px; padding-top:11px; border-top:1px solid var(--rule); }
+footer { text-align:center; font-size:9pt; color:var(--ink-quiet); margin-top:14px; padding-top:11px; border-top:1px solid var(--rule); }
 footer a { color:var(--link); }
 @media (max-width:720px){ .lx-panes{ flex-direction:column; } .lx-panes.is-both .lx-pane{ min-height:280px; } }
 `,

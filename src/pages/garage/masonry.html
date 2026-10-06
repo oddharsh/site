@@ -46,7 +46,7 @@ code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
 /* reserve the note's height (JS fills it a tick after load, and the longer
    "no Grid Lanes" message runs ~3 lines) so the sheet below doesn't get shoved
    down. kills a ~0.02 CLS. */
-.note { font-size: 9pt; color: oklch(45% 0 0); margin: -6px 0 14px; min-height: 3.4em; }
+.note { font-size: 9pt; color: var(--ink-quiet); margin: -6px 0 14px; min-height: 3.4em; }
 
 /* ── the contact sheet ───────────────────────────────────────────────── */
 /* FALLBACK (everywhere): fixed-area squares, object-fit:cover — what the

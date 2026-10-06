@@ -16,9 +16,9 @@ body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: 
 :where(.prose) h2 { font-family: var(--font-caption); font-size: 13pt; color: var(--blue-40); margin: 28px 0 4px; }
 :where(.prose) h3 { font-family: var(--font-caption); font-size: 11pt; color: var(--blue-40); margin: 13px 0 4px; }
 :where(.prose) .lede { color: var(--ink-soft); font-size: 10.5pt; margin: 0 0 4px; }
-:where(.prose) .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
+:where(.prose) .note { color: var(--ink-quiet); font-size: 10pt; margin: 0 0 14px; }
 :where(.prose) .note code, :where(.prose) p code, :where(.prose) li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
 :where(.prose) hr { border: 0; border-top: 2px groove var(--rule); margin: 14px 0; }
 :where(.prose) a { color: var(--blue-40); }
 :where(.prose) .callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid var(--blue-65); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
-:where(.prose) footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove var(--rule); font-size: 9.5pt; color: oklch(45% 0 0); }
+:where(.prose) footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove var(--rule); font-size: 9.5pt; color: var(--ink-quiet); }

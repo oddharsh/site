@@ -306,7 +306,7 @@ function shellCss() {
   .count{font-size:11px;color:oklch(42% 0.02 255)}
   .badge{display:inline-block;font:bold 9px var(--font-ui);padding:1px 6px;border:1px solid;border-radius:0;text-transform:uppercase;letter-spacing:.04em}
   .badge.via{background:oklch(96% 0.02 250);color:oklch(42% 0.03 255);border-color:oklch(80% 0.04 250);font-weight:normal;text-transform:none}
-  .badge.past{background:oklch(95% 0 0);color:oklch(45% 0 0);border-color:oklch(78% 0 0)}
+  .badge.past{background:oklch(95% 0 0);color:var(--ink-quiet);border-color:oklch(78% 0 0)}
   .badge.browsed{background:oklch(95% 0.03 75);color:oklch(46% 0.08 60);border-color:oklch(83% 0.06 75);font-weight:normal;text-transform:none}
   .ev.disc{opacity:.5;background:oklch(98.5% 0 0)}
   .ev.disc:hover{opacity:1}
