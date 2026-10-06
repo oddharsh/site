@@ -411,7 +411,7 @@ does not make a failed write safe to ignore.
   `cf/config`, so `config/tsconfig.cf-garage.json` maps that specifier to this
   package. Bump it with the wrangler pin when a new wrangler commit's generated
   types need a newer version; `cf`'s own dependency on it shows which.
-- Oxc Minify 0.151.0 and Lightning CSS 1.33.0 are exact root pins for the
+- Oxc Minify 0.153.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
