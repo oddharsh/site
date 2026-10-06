@@ -186,6 +186,9 @@ export function colorLiteralsIn(css: string): ColorLiteral[] {
     if (/\b[a-z-]+=["']$/.test(css.slice(Math.max(0, m.index - 24), m.index))) continue;
     const isOklch = m[0].startsWith("oklch(");
     if (!isOklch && !inDeclaration(css, m.index)) continue;
+    // A var() fallback is where a literal belongs: it paints when the token is
+    // not defined yet (the homepage's client edge, before luna.css lands).
+    if (/var\(\s*--[\w-]+\s*,[^()]*$/.test(css.slice(Math.max(0, m.index - 80), m.index))) continue;
     const parsed = isOklch ? parseOklch(m[0]) : parseSrgb(m[0]);
     if (parsed) out.push({ literal: m[0], index: m.index, lab: parsed.lab, alpha: parsed.alpha });
   }
