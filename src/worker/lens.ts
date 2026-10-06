@@ -963,7 +963,7 @@ h1 { font-size:13pt; margin:0 0 2px; }
 .lx-tip.anchored { position-anchor:--lx-tip; position-area:bottom span-right; top:auto; left:auto; transform:none; margin:6px 0 0; position-try-fallbacks:flip-block,flip-inline; }
 @supports selector(:popover-open){
   .lx-tip:popover-open { display:block; }
-  .lx-tip.anchored:popover-open { transition:opacity 120ms ease-out; }
+  .lx-tip.anchored:popover-open { transition:opacity var(--xp-transition-fade); }
   @starting-style { .lx-tip.anchored:popover-open { opacity:0; } }
 }
 @media (prefers-reduced-motion:reduce){ .lx-tip.anchored:popover-open { transition:none; } }
@@ -1469,10 +1469,10 @@ h1 { font-size:13pt; margin:0 0 2px; }
    leaves an invisible window swallowing clicks after close. Reduced motion and
    browsers without discrete transitions get the safe instant swap. */
 @media (prefers-reduced-motion:no-preference){
-  .lx-sow-dialog { opacity:0; transform:scale(.96); transition:opacity 120ms ease-out, transform 120ms ease-out, overlay 120ms allow-discrete, display 120ms allow-discrete; }
+  .lx-sow-dialog { opacity:0; transform:scale(.96); transition:opacity var(--xp-transition-fade), transform var(--xp-transition-fade), overlay var(--xp-transition-fade) allow-discrete, display var(--xp-transition-fade) allow-discrete; }
   .lx-sow-dialog[open] { opacity:1; transform:scale(1); }
   @starting-style { .lx-sow-dialog[open] { opacity:0; transform:scale(.96); } }
-  .lx-sow-dialog::backdrop { opacity:0; transition:opacity 120ms ease-out, overlay 120ms allow-discrete, display 120ms allow-discrete; }
+  .lx-sow-dialog::backdrop { opacity:0; transition:opacity var(--xp-transition-fade), overlay var(--xp-transition-fade) allow-discrete, display var(--xp-transition-fade) allow-discrete; }
   .lx-sow-dialog[open]::backdrop { opacity:1; }
   @starting-style { .lx-sow-dialog[open]::backdrop { opacity:0; } }
 }

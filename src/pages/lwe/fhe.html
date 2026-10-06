@@ -52,7 +52,7 @@
 /* demo 2 — noise + bootstrapping meter */
 .nz-wrap { margin: 2px 0 4px; }
 .nz-bar { position: relative; height: 24px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; overflow: hidden; }
-.nz-fill { position: absolute; inset: 0 auto 0 0; width: 8%; background: linear-gradient(180deg,#8fd49a,#4a9a52); transition: width .18s ease-out, background .18s; }
+.nz-fill { position: absolute; inset: 0 auto 0 0; width: 8%; background: linear-gradient(180deg,#8fd49a,#4a9a52); transition: width var(--xp-transition-move), background var(--xp-transition-move); }
 .nz-fill.warn { background: linear-gradient(180deg,#f3d27a,#d89a2a); }
 .nz-fill.bad { background: linear-gradient(180deg,#f08a8a,#c43636); }
 .nz-thresh { position: absolute; top: -2px; bottom: -2px; left: 100%; width: 2px; background: #c43636; }

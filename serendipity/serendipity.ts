@@ -374,7 +374,7 @@ function shellCss() {
      above and the engine's inline display:block fallback drives them instead. */
   @supports selector(:popover-open){
     #ev-tip:popover-open{display:block}
-    #ev-tip.anchored:popover-open{transition:opacity 120ms ease-out}
+    #ev-tip.anchored:popover-open{transition:opacity var(--xp-transition-fade)}
     @starting-style{ #ev-tip.anchored:popover-open{opacity:0} }
   }
   /* keyboard focus tethers instead of tracking (there is no cursor to follow) */

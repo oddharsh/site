@@ -11,7 +11,7 @@ font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;color
 background:oklch(98.5% 0.035 95);border:1px solid oklch(72% 0.06 86);border-radius:4px;
 box-shadow:2px 3px 11px -3px oklch(40% 0.05 90 / .55)}
 :is(#axp-balloon,#axp-tips):popover-open{display:block}
-@media (--motion-ok) {:is(#axp-balloon,#axp-tips):popover-open{animation:axp-bln .12s ease-out}}
+@media (--motion-ok) {:is(#axp-balloon,#axp-tips):popover-open{animation:axp-bln var(--xp-transition-fade)}}
 @keyframes axp-bln{from{transform:translateY(7px);opacity:.3}to{transform:translateY(0);opacity:1}}
 :is(#axp-balloon,#axp-tips)::before,:is(#axp-balloon,#axp-tips)::after{content:'';position:absolute;top:100%;left:var(--tail,84%);width:0;height:0;border:9px solid transparent;border-bottom:0;margin-left:-9px}
 :is(#axp-balloon,#axp-tips)::before{border-top-color:oklch(72% 0.06 86)}

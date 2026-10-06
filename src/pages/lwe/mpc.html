@@ -31,7 +31,7 @@
 /* MPC demo */
 .nodes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 6px 0 12px; }
 .node { width: 56px; text-align: center; cursor: pointer; user-select: none; }
-.node .face { width: 40px; height: 40px; margin: 0 auto 3px; border-radius: 7px; border: 2px solid #2c7a36; background: linear-gradient(180deg,#bde6c4,#7fce8c); display: grid; place-items: center; font-size: 17px; position: relative; transition: transform .1s; }
+.node .face { width: 40px; height: 40px; margin: 0 auto 3px; border-radius: 7px; border: 2px solid #2c7a36; background: linear-gradient(180deg,#bde6c4,#7fce8c); display: grid; place-items: center; font-size: 17px; position: relative; transition: transform var(--xp-transition); }
 .node.bad .face { border-color: #c43636; background: linear-gradient(180deg,#f3b6b6,#e07a7a); }
 .node:active .face { transform: scale(.93); }
 .node .lab { font-size: 7.5pt; color: #6b7280; font-family: var(--font-mono); }

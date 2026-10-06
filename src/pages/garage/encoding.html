@@ -54,7 +54,7 @@
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   box-shadow: inset 1px 1px 0 #166aee, inset -1px -1px 0 #00138c, 3px 3px 0 oklch(46% 0.16 263 / 0.35);
   pointer-events: none; z-index: 10000;
-  opacity: 1; transition: opacity 90ms ease-out, display 90ms allow-discrete;
+  opacity: 1; transition: opacity var(--xp-transition-fade), display var(--xp-transition-fade) allow-discrete;
   /* glass centre on the cursor: 2px border + 90px to glass mid (x); 2 + 18 bar + 90 (y) */
   transform: translate(calc(var(--lx, 0px) - 92px), calc(var(--ly, 0px) - 110px));
 }

@@ -377,7 +377,7 @@ placeholder
   border: 1px solid;
   border-color: oklch(100% 0 0) oklch(52% 0.03 255) oklch(52% 0.03 255) oklch(100% 0 0);
   border-radius: 1px;
-  transition: rotate 0.15s ease;
+  transition: rotate var(--xp-transition-move);
 }
 .bsel-field:open::picker-icon {
   rotate: 180deg;
@@ -489,7 +489,7 @@ placeholder
   padding: 5px 9px; cursor: pointer; user-select: none;
   border-bottom: 1px solid oklch(86% 0.03 250);
 }
-.cs-head .chev { font-family: var(--font-mono); transition: transform .25s ease; }
+.cs-head .chev { font-family: var(--font-mono); transition: transform var(--xp-transition-move); }
 .cs-demo[open] .cs-head .chev { transform: rotate(90deg); }
 
 /* collapsed: clip to a real, animatable height. open: grow to the keyword.
@@ -497,7 +497,7 @@ placeholder
    browser computes the resolved auto height and tweens to it. */
 .cs-body {
   height: 0; overflow: hidden;
-  transition: height .35s cubic-bezier(.22,.61,.36,1);
+  /* @motion demo: interpolate-size tweening to auto is the exhibit */ transition: height .35s cubic-bezier(.22,.61,.36,1);
 }
 .cs-demo[open] .cs-body { height: auto; }
 .cs-body-inner {
@@ -516,7 +516,7 @@ placeholder
 }
 .cs-native::details-content {
   height: 0; overflow: hidden; content-visibility: hidden;
-  transition: height .35s ease, content-visibility .35s ease allow-discrete;
+  /* @motion demo: ::details-content opening is the exhibit */ transition: height .35s ease, content-visibility .35s ease allow-discrete;
 }
 .cs-native[open]::details-content { height: auto; content-visibility: visible; }
 /* card: scheduler-yield */
@@ -2236,7 +2236,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .cc-rail { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; padding: 6px; border: 1px solid oklch(80% 0.02 250); background: oklch(96% 0.01 250); border-radius: 4px; scroll-marker-group: after; }
       .cc-slide { flex: 0 0 100%; height: 130px; scroll-snap-align: center; display: grid; place-items: center; color: #fff; font: bold 16pt "Trebuchet MS", Verdana, sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,.45); background: var(--c); border-radius: 3px; }
       .cc-rail::scroll-marker-group { display: flex; justify-content: center; align-items: center; gap: 7px; padding-top: 9px; }
-      .cc-slide::scroll-marker { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1px solid oklch(45% 0.10 250); background: oklch(90% 0.02 250); cursor: pointer; transition: background .12s, transform .12s; }
+      .cc-slide::scroll-marker { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1px solid oklch(45% 0.10 250); background: oklch(90% 0.02 250); cursor: pointer; transition: background var(--xp-transition-move), transform var(--xp-transition-move); }
       .cc-slide::scroll-marker:hover { transform: scale(1.25); }
       .cc-slide::scroll-marker:target-current { background: oklch(50% 0.22 263); border-color: oklch(38% 0.18 263); }
       .cc-rail::scroll-button(left), .cc-rail::scroll-button(right) { border: 1px solid oklch(60% 0.06 254); background: linear-gradient(180deg, #fff, #eceae0); border-radius: 3px; padding: 1px 10px; margin: 9px 4px 0; cursor: pointer; font: bold 12pt Tahoma, sans-serif; color: oklch(40% 0.09 250); }
@@ -2493,7 +2493,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       @keyframes hz-spin { to { --hz-ang: 360deg; } }
       .demo.no-support .prop-demo { animation: none; }
 
-      .ss-pop { margin: 0; border: 2px solid #0831d9; background: oklch(97% 0.01 250); color: oklch(20% 0 0); padding: 12px 14px; border-radius: 4px; max-width: 300px; font-size: 9.5pt; opacity: 0; translate: 0 -10px; transition: opacity .35s ease, translate .35s ease, overlay .35s allow-discrete, display .35s allow-discrete; }
+      .ss-pop { margin: 0; border: 2px solid #0831d9; background: oklch(97% 0.01 250); color: oklch(20% 0 0); padding: 12px 14px; border-radius: 4px; max-width: 300px; font-size: 9.5pt; opacity: 0; translate: 0 -10px; /* @motion demo: the @starting-style entry is the exhibit */ transition: opacity .35s ease, translate .35s ease, overlay .35s allow-discrete, display .35s allow-discrete; }
       .ss-pop:popover-open { opacity: 1; translate: 0 0; }
       @starting-style { .ss-pop:popover-open { opacity: 0; translate: 0 -10px; } }
 
@@ -2512,11 +2512,11 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .sw-row input[switch], .sw-row input { width: 40px; height: 24px; }
 
       .si-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-      .si-list li { background: oklch(93% 0.03 255); border-left: 3px solid var(--blue-65); padding: 6px 10px; font-size: 9.5pt; animation: si-fade .5s backwards; animation-delay: calc(sibling-index() * 90ms); }
+      .si-list li { background: oklch(93% 0.03 255); border-left: 3px solid var(--blue-65); padding: 6px 10px; font-size: 9.5pt; /* @motion demo: the sibling-index() stagger is the exhibit */ animation: si-fade .5s backwards; animation-delay: calc(sibling-index() * 90ms); }
       @keyframes si-fade { from { opacity: 0; translate: -14px 0; } to { opacity: 1; translate: 0 0; } }
 
       .sst-scroll { margin-top: 10px; max-height: 120px; overflow: auto; border: 1px solid oklch(75% 0.03 250); border-radius: 4px; container-type: scroll-state; }
-      .sst-sticky { position: sticky; top: 0; background: oklch(90% 0.02 250); color: oklch(25% 0 0); padding: 8px 10px; font-size: 9.5pt; font-weight: bold; border-bottom: 1px solid oklch(75% 0.03 250); transition: background .2s, color .2s; }
+      .sst-sticky { position: sticky; top: 0; background: oklch(90% 0.02 250); color: oklch(25% 0 0); padding: 8px 10px; font-size: 9.5pt; font-weight: bold; border-bottom: 1px solid oklch(75% 0.03 250); transition: background var(--xp-transition-move), color var(--xp-transition-move); }
       @container scroll-state(stuck: top) { .sst-sticky { background: var(--blue-65); color: #fff; } }
       .sst-scroll p { margin: 8px 10px; font-size: 9pt; color: oklch(42% 0 0); }
 
