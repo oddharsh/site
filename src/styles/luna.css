@@ -37,6 +37,13 @@
 
    Render like 2003, author like 2026: these resolve to period-correct Luna
    blues and beiges, but the source reads modern and gets wide-gamut depth on P3.
+
+   That claim went unmeasured from 2026-06-05, when these came in with a
+   generated design system, until 2026-10-06: the chrome sat up to dE 0.040
+   from its hex (--darkshadow) and the title blues up to 0.042 (--blue-95).
+   Each comment that names a hex now states its measured distance, and
+   tools/contract-design-tokens-reach-every-page.test.mjs holds the four
+   chrome and four title values to it.
    ============================================================================ */
 
 :root {
@@ -45,36 +52,36 @@
      frames) at once; --hue-chrome to warm/cool the beige control face; the
      -boost knobs push saturation on P3. This is the "toneshift later" surface. */
   --hue-luna:    263;     /* @kind other */ /* the Luna blue family (title, frames, links) */
-  --hue-chrome:   95;     /* @kind other */ /* warm hue of the beige ButtonFace + greys     */
+  --hue-chrome:   96.85;  /* @kind other */ /* warm hue of the beige ButtonFace + greys     */
   --hue-danger:   25;     /* @kind other */ /* close-button / error red                     */
   --hue-go:      145;     /* @kind other */ /* success / shipped green                       */
   --hue-warn:  47.10;     /* @kind other */ /* warning / "under construction" amber (matches shipped) */
   --hue-rowhover: 95.44;  /* @kind other */ /* warm-yellow row hover tint (distinct from amber)        */
-  --chroma-luna: 0.225;   /* @kind other */ /* peak chroma of the saturated blue             */
-  --chroma-chrome: 0.018; /* @kind other */ /* how warm the beige chrome reads               */
+  --chroma-luna: 0.2274;  /* @kind other */ /* peak chroma of the saturated blue             */
+  --chroma-chrome: 0.0228; /* @kind other */ /* how warm the beige chrome reads              */
 
   /* ── BLUE RAMP — the saturated Luna accent, derived off --hue-luna ───────
      Canonical: ActiveTitle #0054E3 · GradientActiveTitle #3D95FF ·
      InactiveTitle #7A96DF · Highlight #316AC5. */
-  --blue-95: oklch(70% 0.150 calc(var(--hue-luna) - 5));   /* title-grad top, bright   */
+  --blue-95: oklch(66.95% 0.178 calc(var(--hue-luna) - 7.83)); /* title-grad top = #3D95FF, dE 0.0001 */
   --blue-80: oklch(60% 0.200 calc(var(--hue-luna) - 2));   /* title-grad upper         */
-  --blue-65: oklch(51% var(--chroma-luna) var(--hue-luna));/* title-grad core ≈ #0054E3*/
+  --blue-65: oklch(50.49% var(--chroma-luna) calc(var(--hue-luna) - 1.37)); /* title-grad core = #0054E3, dE 0.0000 */
   --blue-60: oklch(50% var(--chroma-luna) var(--hue-luna));/* title-grad lower         */
   --blue-55: oklch(58% 0.180 calc(var(--hue-luna) - 3));   /* title-grad bottom lip    */
-  --blue-50: oklch(52% 0.160 var(--hue-luna));             /* Highlight/selection ≈ #316AC5 */
+  --blue-50: oklch(53.54% 0.1543 calc(var(--hue-luna) - 3.54)); /* Highlight/selection = #316AC5, dE 0.0001 */
   --blue-45: oklch(47.12% 0.0555 253.58);                  /* strong frame / sunken TL */
   --blue-40: oklch(41.92% 0.0962 250.51);                  /* navy heading / inner edge*/
-  --blue-inactive: oklch(66% 0.090 var(--hue-luna));       /* InactiveTitle ≈ #7A96DF  */
+  --blue-inactive: oklch(68.2% 0.113 calc(var(--hue-luna) + 4.4)); /* InactiveTitle = #7A96DF, dE 0.0001 */
   --frame:   oklch(61.14% 0.0611 253.60);                  /* 1px window/photo frame   */
 
   /* ── CHROME RAMP — the beige Luna "face", derived off --hue-chrome ───────
      Canonical: ButtonFace #ECE9D8 · ButtonLight #F1EFE2 · ButtonShadow #ACA899
      · 3D dark shadow #716F64. */
-  --face:        oklch(92.5% var(--chroma-chrome) var(--hue-chrome));  /* #ECE9D8 */
-  --face-light:  oklch(94.0% calc(var(--chroma-chrome) - 0.002) var(--hue-chrome)); /* #F1EFE2 */
+  --face:        oklch(93.18% var(--chroma-chrome) var(--hue-chrome));  /* #ECE9D8, dE 0.0007 */
+  --face-light:  oklch(95.01% calc(var(--chroma-chrome) - 0.0054) var(--hue-chrome)); /* #F1EFE2, dE 0.0008 */
   --highlight:   oklch(100% 0 0);                                       /* #FFFFFF */
-  --shadow:      oklch(71.5% 0.014 var(--hue-chrome));                  /* #ACA899 */
-  --darkshadow:  oklch(50.0% 0.012 var(--hue-chrome));                  /* #716F64 */
+  --shadow:      oklch(73.07% 0.0216 var(--hue-chrome));                /* #ACA899, dE 0.0008 */
+  --darkshadow:  oklch(54.01% 0.0169 var(--hue-chrome));                /* #716F64, dE 0.0005 */
 
   /* ── NEUTRALS — window/field background + text greys ─────────────────────*/
   --window:    oklch(100% 0 0);          /* #FFFFFF content + input field bg   */
@@ -363,7 +370,7 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
    - 6px clears the browser's ~18px resize grip on pages whose .content padding is
      only 12px, so no page has to pad around the grip on its own.
    Colours are the Luna face and the same #7f9db9 field edge .xp-input uses. */
-.window>.content,.window>.body{border:6px solid #ece9d8;background-clip:padding-box;outline:1px solid #7f9db9;outline-offset:-6px}
+.window>.content,.window>.body{border:6px solid var(--face,#ece9d8);background-clip:padding-box;outline:1px solid #7f9db9;outline-offset:-6px}
 /* THE RIGHT GUTTER beside the 16px scrollbar, 12px unless a page declares its
    own. It lived as a copy on 16 garage pages, pixel-peeper, lwe-base.css,
    xpChromeCss and cal, each `!important` so it beat the page's padding
@@ -375,7 +382,7 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
 .window>.content{padding-right:var(--axp-gutter,12px) !important}
 /* an author outline beats the UA focus ring by origin, so hand keyboard focus a
    real one back (Firefox lets you tab to a scrollable region). */
-.window>.content:focus-visible,.window>.body:focus-visible{outline:2px solid #316ac5}
+.window>.content:focus-visible,.window>.body:focus-visible{outline:2px solid var(--blue-50)}
 .np-window .np-text{flex:1 1 auto;min-height:0}   /* textarea fills the window (so resizing a note grows the editor, not empty space) */
 /* native XP scrollbars (phase C follow-up): the JS widget retired; these
    rules dress the REAL bar. Styling any ::-webkit-scrollbar part opts the
@@ -436,7 +443,7 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
 .axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-ui);text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,var(--blue-95),var(--blue-65) 60%,var(--blue-55))}
 .axp-acc>.tb .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .axp-acc>.tb .x{width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;border:1px solid #d8401c;border-radius:3px;background:linear-gradient(180deg,#e8795f,#ae3110);font-size:9px;cursor:pointer}.axp-acc>.tb .x:hover{filter:brightness(1.12)}
-.axp-acc>.bd{padding:8px;background:#ece9d8}
+.axp-acc>.bd{padding:8px;background:var(--face)}
 .clk{text-align:center;padding:5px 12px}.clk-t{font-family:var(--font-mono);font-size:22pt;font-weight:bold;color:#15243f;letter-spacing:1px}.clk-d{font-size:var(--text-micro);color:#4a5568;margin-top:3px;white-space:nowrap}
 /* windows drag by their title bar */
 .title-bar,.np-titlebar{cursor:move}
@@ -744,7 +751,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   color: #181818; background: #ffffff; padding: 3px 6px; border-radius: 0;
   border: 1px solid #7f9db9; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff;
 }
-:where(.xp-input:focus) { outline: none; border-color: #316ac5; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff, 0 0 0 1px #316ac5; }
+:where(.xp-input:focus) { outline: none; border-color: var(--blue-50); box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff, 0 0 0 1px var(--blue-50); }
 /* THE status bar: the strip of short facts along a window's bottom edge. Four
    variants grew separately (garage's .status on 14 pages, cal's .xp-statusbar,
    pixel-peeper's .statusbar, Notepad's .np-status), and .status also names an
@@ -1151,7 +1158,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
 /* address bar — sits between the caption and the workspace, so it reads as
    window chrome rather than as page content. */
-.axp-address{display:flex;align-items:center;gap:6px;padding:3px 6px;background:#ece9d8;border-bottom:1px solid var(--shadow);font:11px/1.6 var(--font-ui);color:var(--ink-soft)}
+.axp-address{display:flex;align-items:center;gap:6px;padding:3px 6px;background:var(--face);border-bottom:1px solid var(--shadow);font:11px/1.6 var(--font-ui);color:var(--ink-soft)}
 .axp-addr-label{flex:0 0 auto;padding-left:2px}
 /* the well scrolls rather than wraps, so a deep path never grows the chrome to
    a second row and shifts the document down. */

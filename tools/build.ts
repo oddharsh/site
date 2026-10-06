@@ -640,9 +640,13 @@ async function checkInvariants() {
 // no cascade: the injected declaration is byte-identical to luna's, so when luna
 // applies, nothing moves.
 
-// pull the declaration body out of luna.css so there is one definition of it
+// pull the declaration body out of luna.css so there is one definition of it.
+// The border names var(--face) WITH its #ece9d8 fallback: the homepage copy
+// paints before luna.css defines --face, and a bare var() there would drop the
+// 6px border this mirror exists to keep (2026-10-06, when --face became exactly
+// #ece9d8 and the token contract started reading hex).
 const clientEdgeDecl = (luna) => {
-  const m = /\.window>\.content,\.window>\.body\{(border:\d+px solid #ece9d8[^}]*outline-offset:-\d+px)\}/.exec(luna);
+  const m = /\.window>\.content,\.window>\.body\{(border:\d+px solid (?:#ece9d8|var\(--face,#ece9d8\))[^}]*outline-offset:-\d+px)\}/.exec(luna);
   return m ? m[1] : null;
 };
 
@@ -1665,7 +1669,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     if (!marker.test(min)) throw new Error("index.html: HTML minifier lost required marker " + label);
   }
   // the served copy must actually carry the injection; the twin must not
-  if (!/border:\s*6px solid #ece9d8/.test(min)) throw new Error("index.html: the minified homepage lost the injected client edge");
+  if (!/border:\s*6px solid (?:#ece9d8|var\(--face,#ece9d8\))/.test(min)) throw new Error("index.html: the minified homepage lost the injected client edge");
   await writeFile(`${OUT}/public/${srcPath.slice(1)}`, authored);
   await writeFile(`${OUT}/public/index.html`, min);
   console.log(`index.html: ${staged.length} -> ${min.length} bytes (+ ${srcPath}, byte-identical to source; inline JS/CSS use existing minifiers)`);
