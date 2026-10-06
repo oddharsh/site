@@ -241,6 +241,11 @@ by renumbering. The long-form history of each one is in git
     Bun's checker also lacks `--showConfig`. Use
     `--listFilesOnly --noResolve` to discover files selected directly by a
     config, separately from the import graph.
+    On 2026-10-06 the rolling archive hashed to `07b1b4b6`, matching the
+    GitHub asset digest, while Bun's `SHASUMS256.txt` named `08d2883f`.
+    Keep the API digest check; do not trust the manifest as a workaround for
+    an API 403. Workers Builds saw a transient 403, then passed on its next
+    build; the metadata request uses bounded retries.
 
 53. **Wrangler's `--outfile` is a multipart upload, with a random boundary.**
     Two byte-identical Workers can give different upload-file hashes. Compare
