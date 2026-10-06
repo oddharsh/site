@@ -54,7 +54,7 @@ function chromeCss(c) {
   const [g0, g1] = c.picGrad;
   const glyphFont = c.glyphFont ? `;--glyph-font:${c.glyphFont}` : "";
   return `:root{--accent:${c.accent};--accent-soft:${soft};--glyph:"${c.glyph}";--pic-g0:${g0};--pic-g1:${g1};--pic-border:${c.picBorder};--name-color:${c.nameColor}${glyphFont}}
-.msg .bubble code { font-family: var(--font-mono); font-size: var(--text-sm); background: #f1ece0; padding: 0 3px; border-radius: 2px; }`;
+.msg .bubble code { font-family: var(--font-mono); font-size: var(--text-sm); background: var(--face-light); padding: 0 3px; border-radius: 2px; }`;
 }
 
 // ---- message rendering ----

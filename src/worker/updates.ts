@@ -81,7 +81,7 @@ export async function renderWindowsUpdate(cp) {
 .wu-list li{display:flex;gap:9px;align-items:baseline;padding:6px 2px;border-bottom:1px solid #eef2f7;font-size:var(--text-sm);color:#33415c}
 .wu-tag{flex:0 0 92px;font-family:var(--font-mono);font-size:var(--text-2xs);color:#7a4eb0;background:#f3edfb;border:1px solid #e0d4f3;border-radius:3px;padding:1px 5px;text-align:center}
 .wu-desc{flex:1}
-.wu-foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:11px}
+.wu-foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid var(--surface-desktop);padding-top:8px;margin-top:11px}
 `,
     body: unsafeHtml(`
     <h1>Windows Update</h1>
@@ -234,7 +234,7 @@ var POINTS = ${JSON.stringify(data)};
 .sr-listhead{padding:5px 10px;font-family:var(--font-caption);font-size:var(--text-xs);font-weight:bold;color:#fff;background:linear-gradient(180deg,#4f8bd8,#2f6fd0)}
 .sr-list{overflow-y:auto;max-height:308px}
 .sr-mon{position:sticky;top:0;background:#eef2f8;color:#5a6b85;font-size:var(--text-2xs);font-weight:bold;padding:3px 10px;border-bottom:1px solid #dde5f0;text-transform:uppercase;letter-spacing:.04em}
-.sr-pt{display:flex;align-items:baseline;gap:7px;width:100%;text-align:left;border:0;background:transparent;padding:5px 10px;font:inherit;font-size:var(--text-micro);color:#33415c;cursor:pointer;border-bottom:1px solid #f0f3f8}
+.sr-pt{display:flex;align-items:baseline;gap:7px;width:100%;text-align:left;border:0;background:transparent;padding:5px 10px;font:inherit;font-size:var(--text-micro);color:#33415c;cursor:pointer;border-bottom:1px solid var(--row-alt)}
 .sr-pt:hover{background:var(--row-alt)}
 .sr-pt[aria-current=true]{background:#dceafe;box-shadow:inset 2px 0 0 #2f6fd0}
 .sr-pt .rv{font-family:var(--font-mono);font-size:var(--text-3xs);color:#7a4eb0;flex:0 0 auto}
@@ -255,9 +255,9 @@ var POINTS = ${JSON.stringify(data)};
 .sr-scrub{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
 .sr-scrub input[type=range]{flex:1;accent-color:#2f6fd0}
 .sr-scrub-end{font-family:var(--font-mono);font-size:var(--text-2xs);color:#9aa6b8;flex:0 0 auto}
-.sr-foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:12px;line-height:1.5}
+.sr-foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid var(--surface-desktop);padding-top:8px;margin-top:12px;line-height:1.5}
 .sr-foot b{color:#15243f}
-.sr-pending{display:flex;align-items:center;gap:12px;border:1px solid #d8c98a;background:linear-gradient(180deg,#fffdf2,#fcf4d8);border-radius:4px;padding:13px 15px;margin:0 0 13px}
+.sr-pending{display:flex;align-items:center;gap:12px;border:1px solid #d8c98a;background:linear-gradient(180deg,#fffdf2,var(--row-hover));border-radius:4px;padding:13px 15px;margin:0 0 13px}
 .sr-gear{width:24px;height:24px;flex:0 0 24px;border-radius:50%;border:3px solid #c9b25e;border-top-color:transparent;animation:srspin 1.1s linear infinite}
 @keyframes srspin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.sr-gear{animation:none}}

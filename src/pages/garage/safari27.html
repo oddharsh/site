@@ -50,8 +50,8 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
 /* let the title shrink/break so it wraps below the stat badge on narrow windows
    instead of overlapping it (flex items don't shrink past min-content w/o this) */
 .demo > h2 > span { min-width: 0; overflow-wrap: anywhere; }
-.demo > h2 .mono { font-size: var(--text-ui); font-weight: normal; color: oklch(40% 0 0); }
-.demo .sub { margin: 2px 0 10px; color: oklch(40% 0 0); font-size: var(--text-sm); }
+.demo > h2 .mono { font-size: var(--text-ui); font-weight: normal; color: var(--ink-soft); }
+.demo .sub { margin: 2px 0 10px; color: var(--ink-soft); font-size: var(--text-sm); }
 .demo .ours { font-size: var(--text-sm); color: oklch(38% 0.07 145); border-left: 3px solid oklch(60% 0.13 145); padding: 2px 0 2px 9px; margin: 8px 0 0; }
 .stat { font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: bold; letter-spacing: .04em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; white-space: nowrap;
   color: var(--link); border-color: var(--link); background: oklch(97% 0.03 264); }
@@ -59,7 +59,7 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
 
 /* base-select demo (scoped .s27- so it can't touch any real future select) */
 .s27-sel { appearance: base-select; font-family: var(--font-ui); font-size: var(--text-body); color: var(--ink); background: oklch(100% 0 0);
-  border: 2px solid; border-color: oklch(55% 0.02 250) oklch(94% 0.01 250) oklch(94% 0.01 250) oklch(55% 0.02 250); box-shadow: inset 1px 1px 1px oklch(0% 0 0 / .12);
+  border: 2px solid; border-color: oklch(55% 0.02 250) var(--surface-desktop) var(--surface-desktop) oklch(55% 0.02 250); box-shadow: inset 1px 1px 1px oklch(0% 0 0 / .12);
   padding: 3px 3px 3px 8px; min-width: 0; max-width: 100%; display: inline-flex; align-items: stretch; gap: 8px; }
 .s27-sel::picker-icon { margin-left: auto; align-self: stretch; width: 16px; display: inline-flex; align-items: center; justify-content: center; color: oklch(24% 0.02 255);
   background: linear-gradient(180deg, oklch(99% 0 0), oklch(84% 0.02 255)); border: 1px solid; border-color: oklch(100% 0 0) oklch(52% 0.03 255) oklch(52% 0.03 255) oklch(100% 0 0); border-radius: 1px; transition: rotate var(--xp-transition-move); }

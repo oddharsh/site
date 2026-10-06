@@ -376,7 +376,7 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
 export function renderLedgerPage() {
   const css = `/*min*/
 h1 { font-size:var(--text-lg); margin:0 0 2px; }
-.lg-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:var(--text-ui); }
+.lg-lede { margin:0 0 12px; color:var(--ink-soft); font-size:var(--text-ui); }
 .lg-lede a { color:var(--link); }
 
 /* the invoice paper */
@@ -395,7 +395,7 @@ table.lg td { border-bottom:1px dashed oklch(88% 0 0); padding:5px 6px 5px 0; ve
 table.lg .mono { font-family:var(--font-mono); }
 table.lg .num, table.lg th.num { text-align:right; font-family:var(--font-mono); white-space:nowrap; }
 table.lg .dim { color:oklch(55% 0 0); font-size:var(--text-2xs); }
-table.lg .empty { color:oklch(50% 0 0); font-size:var(--text-xs); padding:14px 4px; text-align:center; }
+table.lg .empty { color:var(--ink-dim); font-size:var(--text-xs); padding:14px 4px; text-align:center; }
 .lg-total { display:flex; justify-content:flex-end; gap:24px; font-size:var(--text-ui); margin-top:8px; padding-top:6px; border-top:2px solid oklch(30% 0.02 255); }
 .lg-total b { font-family:var(--font-mono); font-size:var(--text-h2); }
 /* the cost line: the one figure on this invoice that changed hands */
@@ -414,7 +414,7 @@ footer { text-align:center; font-size:var(--text-xs); color:var(--ink-quiet); ma
 footer a { color:var(--link); }
 @media (max-width:560px){ .lg-stamp{ font-size:var(--text-h1); top:110px; right:12px; } }
 /* the island's failure note, shown only if the line-items request failed */
-.lg-fail { display:none; color:oklch(50% 0 0); font-size:var(--text-micro); margin:8px 0 0; }
+.lg-fail { display:none; color:var(--ink-dim); font-size:var(--text-micro); margin:8px 0 0; }
 #lg-lines[data-state="failed"] + .lg-fail { display:block; }
 `;
 

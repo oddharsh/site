@@ -20,7 +20,7 @@
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-pretext.jpg">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='9'%20y='6'%20width='17'%20height='2.6'%20rx='1'%20fill='%230855dd'/%3E%3Crect%20x='9'%20y='11.5'%20width='17'%20height='2.6'%20rx='1'%20fill='%23166aee'/%3E%3Crect%20x='9'%20y='17'%20width='17'%20height='2.6'%20rx='1'%20fill='%23166aee'/%3E%3Crect%20x='9'%20y='22.5'%20width='10'%20height='2.6'%20rx='1'%20fill='%23166aee'/%3E%3Cpath%20d='M5%206.3%20L5%2024.8'%20stroke='%23ff9500'%20stroke-width='1.6'%20stroke-linecap='round'/%3E%3Cpath%20d='M3.2%206.3%20L6.8%206.3%20M3.2%2024.8%20L6.8%2024.8'%20stroke='%23ff9500'%20stroke-width='1.6'%20stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/prose.css">
-<style>ul { margin: 0 0 14px; padding-left: 20px; font-size: var(--text-ui); color: oklch(40% 0 0); }
+<style>ul { margin: 0 0 14px; padding-left: 20px; font-size: var(--text-ui); color: var(--ink-soft); }
 li { margin: 3px 0; }
 .badge { display: inline-block; font-family: var(--font-mono); font-size: var(--text-micro); font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; vertical-align: middle; }
 .badge.idle { color: oklch(45% 0.05 250); border-color: oklch(62% 0.06 250); background: oklch(96% 0.01 250); }
@@ -28,7 +28,7 @@ li { margin: 3px 0; }
 /* demo */
 .dm-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; font-size: var(--text-sm); color: oklch(42% 0 0); }
 .dm-controls input[type=range] { flex: 1; min-width: 160px; accent-color: #0855dd; }
-.measure-wrap { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: oklch(98% 0.005 250); padding: 0; overflow: hidden; }
+.measure-wrap { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: var(--paper-cool); padding: 0; overflow: hidden; }
 /* the SAME text rendered two ways at the chosen width, for visual A/B + validation */
 .col { padding: 10px 12px; }
 .col h3 { margin: 0 0 6px; font-size: var(--text-sm); font-family: var(--font-caption); color: oklch(42% 0.06 250); display: flex; justify-content: space-between; gap: 8px; }
@@ -45,7 +45,7 @@ li { margin: 3px 0; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; }
 .grid2 > .col + .col { border-left: 1px solid oklch(85% 0.02 250); }
 /* dynamic-wrap-around-float demo */
-.float-stage { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: oklch(98% 0.005 250); margin-top: 8px; overflow: hidden; padding: 0; }
+.float-stage { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: var(--paper-cool); margin-top: 8px; overflow: hidden; padding: 0; }
 .float-box { position: absolute; top: 8px; left: 8px; z-index: 1; border-radius: 3px; color: #fff; font-size: 9px; line-height: 1.15; font-weight: bold; text-align: center; display: flex; align-items: center; justify-content: center; text-shadow: 0 1px 1px rgba(0,0,0,.4); background: repeating-linear-gradient(45deg, oklch(70% 0.13 255) 0 8px, oklch(60% 0.15 258) 8px 16px); }
 .float-stage canvas { display: block; width: 100%; }
 /* i18n demo line rows */

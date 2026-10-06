@@ -181,14 +181,14 @@ svg.graph text{font-family:var(--font-ui);fill:var(--ink)}
    laptop and does not survive Meet. Sizes here are SVG user units, so they ride
    the board's scale; the colours do not, which is why only the colours moved far. */
 svg.graph{margin:0 auto}
-.band rect{fill:#eef1f7}
+.band rect{fill:var(--surface-desktop)}
 .band.alt rect{fill:#ffffff}
 .band text,.lane text{font-family:var(--font-mono);font-size:9px;fill:#7a7765;letter-spacing:.04em}
 .bandline{stroke:#c6ccd9;stroke-width:1.2}
 .colhead text{font-family:var(--font-caption);font-size:11.5px;font-weight:700;fill:var(--navy2);letter-spacing:.02em}
 /* time view furniture */
 .axis line{stroke:#c9ccd4;stroke-width:1}
-.axis text{font-family:var(--font-mono);font-size:9px;fill:#6f6c5f}
+.axis text{font-family:var(--font-mono);font-size:9px;fill:var(--darkshadow)}
 .region rect{fill:#f6f5f1}
 .region.spec rect{fill:#faf7ee}
 .region text{font-family:var(--font-mono);font-size:9px;fill:#7a7765}
@@ -210,7 +210,7 @@ svg.graph{margin:0 auto}
 .dev .nm{font-size:9.5px;fill:var(--ink)}
 .dev .sub{font-family:var(--font-mono);font-size:8px;fill:#55554e}
 .dev.dim{opacity:.22}
-.dev.junction .box{fill:#fdf3d6;stroke:var(--amber);stroke-width:2}
+.dev.junction .box{fill:var(--row-hover);stroke:var(--amber);stroke-width:2}
 .dev:focus-visible .box{stroke:var(--navy);stroke-width:2}
 .dev:focus{outline:none}
 /* a phantom is a device the system can describe and nothing is attached to */
@@ -276,9 +276,9 @@ dialog.props::backdrop{background:rgba(10,36,106,.28)}
 table.devs{border-collapse:collapse;font-size:var(--text-xs);min-width:1020px;width:100%}
 table.devs caption{text-align:left;font-size:var(--text-mono);color:var(--ink-dim);padding:5px 7px;font-family:var(--font-mono)}
 table.devs th,table.devs td{border:1px solid #e2e0d6;padding:5px 7px;text-align:left;vertical-align:top;line-height:1.45}
-table.devs thead th{background:linear-gradient(180deg,#f4f2e8,#e6e3d5);font-size:var(--text-micro);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);position:sticky;top:0}
+table.devs thead th{background:linear-gradient(180deg,var(--face-light),var(--face));font-size:var(--text-micro);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);position:sticky;top:0}
 table.devs tbody th{font-weight:700;color:var(--ink);width:14ch}
-table.devs tbody tr:nth-child(even){background:#fafaf6}
+table.devs tbody tr:nth-child(even){background:var(--paper)}
 table.devs tbody tr.ph th{font-style:italic}
 table.devs .st{font-family:var(--font-mono);font-size:var(--text-micro);white-space:nowrap}
 table.devs .st-shipped{color:var(--go)}

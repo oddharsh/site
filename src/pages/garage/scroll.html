@@ -32,7 +32,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
 
 .proto { border: 1px solid var(--frame); border-top-color: var(--blue-45); border-left-color: var(--blue-45); background: oklch(100% 0 0); margin: 0 0 20px; padding: 14px 16px; }
 .proto > h2 { font-family: var(--font-caption); font-size: var(--text-lg); font-weight: bold; color: var(--blue-40); margin: 0 0 6px; }
-.proto .note { font-size: var(--text-sm); color: oklch(40% 0 0); margin: 0 0 10px; }
+.proto .note { font-size: var(--text-sm); color: var(--ink-soft); margin: 0 0 10px; }
 .proto .how { font-size: var(--text-xs); color: oklch(35% 0 0); border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; margin: 10px 0 0; }
 .scroll-hint { font-size: var(--text-micro); color: var(--warn); font-weight: bold; }
 
@@ -50,7 +50,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
 .xp-paper::after { content: ""; position: absolute; inset: 3px 2px auto 2px; height: 1px; background: oklch(70% 0 0); box-shadow: 0 3px 0 oklch(70% 0 0), 0 6px 0 oklch(70% 0 0); }
 .xp-meta { font-size: var(--text-micro); color: var(--ink-quiet); margin: 0 0 4px; }
 /* the green segmented bar: sunken trough + bright Luna-green blocks */
-.xp-progress { height: 19px; background: oklch(100% 0 0); border: 1px solid; border-color: oklch(50% 0 0) oklch(100% 0 0) oklch(100% 0 0) oklch(50% 0 0); padding: 2px; overflow: hidden; }
+.xp-progress { height: 19px; background: oklch(100% 0 0); border: 1px solid; border-color: var(--ink-dim) oklch(100% 0 0) oklch(100% 0 0) var(--ink-dim); padding: 2px; overflow: hidden; }
 .xp-progress-fill {
   height: 100%; width: 0;
   background:

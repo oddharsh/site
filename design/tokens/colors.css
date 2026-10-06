@@ -59,6 +59,7 @@
   /* ── NEUTRALS — window/field background + text greys ─────────────────────*/
   --window:    oklch(100% 0 0);          /* #FFFFFF content + input field bg   */
   --paper:     oklch(99% 0.005 var(--hue-chrome)); /* faint-warm workspace bg  */
+  --paper-cool: oklch(98% 0.004 calc(var(--hue-luna) - 13)); /* faint-cool panel bg: the cool twin of --paper */
   --ink:       oklch(21.78% 0 0);        /* primary window text (near-black)   */
   --ink-soft:  oklch(38.67% 0 0);        /* body prose / secondary             */
   --ink-quiet: oklch(44.95% 0 0);        /* #555555 notes, footers, field labels */

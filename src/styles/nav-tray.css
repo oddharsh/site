@@ -8,14 +8,14 @@
    (nav-tray.js throws there and nav.js navigates to the full page instead). */
 :is(#axp-balloon,#axp-tips){position:fixed;inset:auto 6px 38px auto;margin:0;padding:0;overflow:visible;width:min(300px,calc(100vw - 16px));display:none;
 font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;color:oklch(28% 0.02 90);
-background:oklch(98.5% 0.035 95);border:1px solid oklch(72% 0.06 86);border-radius:4px;
+background:var(--row-hover);border:1px solid oklch(72% 0.06 86);border-radius:4px;
 box-shadow:2px 3px 11px -3px oklch(40% 0.05 90 / .55)}
 :is(#axp-balloon,#axp-tips):popover-open{display:block}
 @media (--motion-ok) {:is(#axp-balloon,#axp-tips):popover-open{animation:axp-bln var(--xp-transition-fade)}}
 @keyframes axp-bln{from{transform:translateY(7px);opacity:.3}to{transform:translateY(0);opacity:1}}
 :is(#axp-balloon,#axp-tips)::before,:is(#axp-balloon,#axp-tips)::after{content:'';position:absolute;top:100%;left:var(--tail,84%);width:0;height:0;border:9px solid transparent;border-bottom:0;margin-left:-9px}
 :is(#axp-balloon,#axp-tips)::before{border-top-color:oklch(72% 0.06 86)}
-:is(#axp-balloon,#axp-tips)::after{border-top-color:oklch(98.5% 0.035 95);margin-top:-1.5px}
+:is(#axp-balloon,#axp-tips)::after{border-top-color:var(--row-hover);margin-top:-1.5px}
 :is(#axp-balloon,#axp-tips) .tb{display:flex;align-items:flex-start;gap:7px;padding:8px 8px 3px 9px}
 :is(#axp-balloon,#axp-tips) .ic{flex:0 0 16px;width:16px;height:16px;margin-top:1px}:is(#axp-balloon,#axp-tips) .ic svg{width:16px;height:16px;display:block}
 :is(#axp-balloon,#axp-tips) .t{flex:1;font-weight:bold;font-size:11px;line-height:1.3;padding-top:1px;color:oklch(24% 0.02 90)}
@@ -28,7 +28,7 @@ box-shadow:2px 3px 11px -3px oklch(40% 0.05 90 / .55)}
 :is(#axp-balloon,#axp-tips) .ln .k{color:oklch(50% 0.02 90)}:is(#axp-balloon,#axp-tips) .ln b{color:oklch(20% 0.02 90)}
 :is(#axp-balloon,#axp-tips) .ok{color:oklch(50% 0.16 145);font-weight:bold}
 :is(#axp-balloon,#axp-tips) .mono{font-family:var(--font-mono,'Courier New',monospace);font-size:10px}
-:is(#axp-balloon,#axp-tips) .load{padding:0 12px 6px 32px;color:oklch(55% 0.02 90);font-style:italic}
+:is(#axp-balloon,#axp-tips) .load{padding:0 12px 6px 32px;color:var(--darkshadow);font-style:italic}
 :is(#axp-balloon,#axp-tips) .ft{padding:2px 12px 9px 32px}:is(#axp-balloon,#axp-tips) .ft a{color:var(--link);font-size:10.5px;text-decoration:underline}
 /* the refusal colour, for the one line where a person overrode an agent */
 #axp-balloon .no{color:oklch(52% 0.19 27);font-weight:bold}

@@ -573,7 +573,7 @@ export function renderAroundPage() {
     border-bottom: 1px solid var(--frame);
     font-family: var(--font-caption);
   }
-  table.scout tbody td { padding: 6px 8px; border-bottom: 1px solid oklch(92.73% 0.0139 247.98); vertical-align: top; }
+  table.scout tbody td { padding: 6px 8px; border-bottom: 1px solid var(--surface-desktop); vertical-align: top; }
   table.scout tbody tr:nth-child(even) td { background: var(--row-alt); }
   table.scout .firm { font-weight: bold; color: var(--blue-40); width: 22%; }
   table.scout .host { font-family: var(--font-mono); color: var(--ink-faint); font-size: var(--text-mono); font-weight: normal; }

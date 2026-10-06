@@ -37,12 +37,12 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
 .chip.yes::before { content: "\2713 "; } .chip.no::before { content: "\2717 "; }
 .seg { display: inline-flex; border: 1px solid oklch(50% 0.04 263); border-radius: 3px; overflow: hidden; }
-.seg button { font: inherit; font-size: var(--text-sm); padding: 3px 12px; border: 0; cursor: pointer; color: oklch(20% 0 0);
+.seg button { font: inherit; font-size: var(--text-sm); padding: 3px 12px; border: 0; cursor: pointer; color: var(--ink);
   background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); }
 .seg button + button { border-left: 1px solid oklch(70% 0.03 263); }
 .seg button[aria-pressed="true"] { color: oklch(100% 0 0);
   background: linear-gradient(180deg, var(--blue-80), var(--blue-60)); box-shadow: inset 1px 1px 2px oklch(36% 0.16 263); }
-.seg button:disabled { color: oklch(62% 0 0); cursor: not-allowed; }
+.seg button:disabled { color: var(--ink-faint); cursor: not-allowed; }
 /* reserve the note's height (JS fills it a tick after load, and the longer
    "no Grid Lanes" message runs ~3 lines) so the sheet below doesn't get shoved
    down. kills a ~0.02 CLS. */
@@ -61,7 +61,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
   border: 1px solid var(--frame); box-shadow: 1px 1px 0 oklch(from var(--frame) l c h / 0.3); aspect-ratio: 1; }
 .tile:hover { border-color: oklch(41.92% 0.13 250.51); }
 .tile picture { display: block; width: 100%; height: 100%; }
-.tile img { display: block; width: 100%; height: 100%; object-fit: cover; background: oklch(94% 0.01 255); }
+.tile img { display: block; width: 100%; height: 100%; object-fit: cover; background: var(--surface-desktop); }
 
 /* MASONRY (where the engine has it): real Grid Lanes. columns stay fixed,
    the masonry algorithm stacks the rows. each tile takes its photo's true
@@ -73,7 +73,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
   /* a correctly-proportioned box means object-fit:cover shows the WHOLE frame */
 }
 
-.empty { color: oklch(50% 0 0); font-style: italic; padding: 18px 0; }
+.empty { color: var(--ink-dim); font-style: italic; padding: 18px 0; }
 
 
 

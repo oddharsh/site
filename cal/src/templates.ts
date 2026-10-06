@@ -128,7 +128,7 @@ a:hover { color: var(--link-hover); }
   background: var(--paper);
   /* inner inset */
   box-shadow:
-    inset 1px 1px 0 oklch(94% 0.01 260),
+    inset 1px 1px 0 var(--surface-desktop),
     inset -1px -1px 0 oklch(100% 0 0);
 }
 .xp-group > .legend {
