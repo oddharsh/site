@@ -224,3 +224,16 @@ by renumbering. The long-form history of each one is in git
     must go literally.
     The Workers AI evals keep `wrangler auth token`, because cf has no command
     that prints its token. Re-audit when cf ships a no-provision switch.
+
+51. **A Bun canary's `--version` does not prove it has `bun check`.** The
+    installed binary and the 2026-10-06 npm canary both reported 1.4.3 but
+    predated the checker. GitHub's later canary at `bbdc5a519` had it.
+    Verify `--revision` and `bun check --help`; keep the production pin on an
+    immutable npm build. Bun's checker also lacks `--showConfig`. Use
+    `--listFilesOnly --noResolve` to discover files selected directly by a
+    config, separately from the import graph.
+
+52. **Wrangler's `--outfile` is a multipart upload, with a random boundary.**
+    Two byte-identical Workers can give different upload-file hashes. Compare
+    the named `index.js`, `index.js.map`, and `metadata` parts before blaming
+    a Bun or bundler change; keep public asset comparisons byte-for-byte.

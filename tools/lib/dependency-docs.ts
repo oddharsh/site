@@ -30,7 +30,6 @@ export const DOC_ALIASES = [
   { prose: "oxlint-tsgolint", pkg: "oxlint-tsgolint" },
   { prose: "@oxlint/plugins", pkg: "@oxlint/plugins" },
   { prose: "minify-html", pkg: "@minify-html/node" },
-  { prose: "TypeScript", pkg: "typescript" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "smol-toml", pkg: "smol-toml" },
   { prose: "@cloudflare/config", pkg: "@cloudflare/config" },
