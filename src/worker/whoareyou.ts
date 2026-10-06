@@ -324,7 +324,7 @@ export function renderWhoareyouValues(data, ua, rdap) {
   const dim = (text) => html` <span class="dim">(${text})</span>`;
   return html`
     <div style="border:1px solid #9aa7bd;background:#fff;box-shadow:inset 1px 1px 0 #eef2f8;margin:8px 0 2px">
-      <div style="background:linear-gradient(#fbfdff,#eaf0f9);border-bottom:1px solid #cfd8e6;padding:5px 9px;font-weight:bold;color:#0a246a">🖥 Device Manager &middot; this connection</div>
+      <div style="background:linear-gradient(#fbfdff,var(--surface-desktop));border-bottom:1px solid #cfd8e6;padding:5px 9px;font-weight:bold;color:#0a246a">🖥 Device Manager &middot; this connection</div>
       <ul style="list-style:none;margin:0;padding:7px 12px;line-height:1.95;font-size:var(--text-sm)">
         <li>🖧 <b>Network adapter</b> &nbsp;Anycast edge, colo <b>${data.colo}</b> <span class="dim">(${data.asOrg}, AS${data.asn})</span></li>
         <li>🔒 <b>Security coprocessor</b> &nbsp;<b>${data.tlsVersion}</b> <span class="dim">${data.tlsCipher}</span></li>

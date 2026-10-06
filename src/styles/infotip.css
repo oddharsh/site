@@ -1,7 +1,7 @@
 /* infotip.css — first-hover styles for the shell's Explorer infotips. */
 #axp-infotip{position:fixed;inset:auto;top:0;left:0;margin:0;display:none;z-index:100001;
 transform:translate(clamp(4px,calc(var(--x) + 14px),calc(100vw - 100% - 8px)),clamp(4px,calc(var(--y) + 20px),calc(100vh - 100% - 8px)));
-background:oklch(98.92% 0.0398 96.79);color:oklch(20% 0 0);border:1px solid oklch(15% 0 0);
+background:var(--row-hover);color:var(--ink);border:1px solid oklch(15% 0 0);
 font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;line-height:1.45;
 padding:3px 7px 4px;max-width:min(300px,calc(100vw - 16px));pointer-events:none;
 box-shadow:2px 2px 0 oklch(15% 0 0 / .15)}
@@ -10,7 +10,7 @@ box-shadow:2px 2px 0 oklch(15% 0 0 / .15)}
 #axp-infotip.anchored.up{position-area:top span-right;margin:0 0 5px}
 @supports selector(:popover-open){#axp-infotip:popover-open{display:block}}
 #axp-infotip .n{font-weight:bold;color:oklch(15% 0 0)}
-#axp-infotip .h{color:oklch(38% 0 0)}
+#axp-infotip .h{color:var(--ink-soft)}
 #axp-infotip .d{color:var(--ink);margin-top:1px}
 #axp-infotip dl{display:grid;grid-template-columns:auto 1fr;gap:0 8px;margin:3px 0 0;border-top:1px solid oklch(15% 0 0 / .18);padding-top:3px}
 #axp-infotip dt{color:var(--ink-quiet)}
@@ -22,7 +22,7 @@ box-shadow:2px 2px 0 oklch(15% 0 0 / .15)}
 #axp-infotip .gh-r{display:flex;justify-content:space-between;gap:8px;margin-top:2px}
 #axp-infotip .gh-repo{color:var(--blue-40)}
 #axp-infotip .gh-r .gh-repo{font-weight:bold}
-#axp-infotip .gh-c{color:oklch(38% 0 0);font-variant-numeric:tabular-nums}
-#axp-infotip .gh-t{color:oklch(38% 0 0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#axp-infotip .gh-c{color:var(--ink-soft);font-variant-numeric:tabular-nums}
+#axp-infotip .gh-t{color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #axp-infotip .gh-r+.gh-t{padding-left:8px}
 #axp-infotip .gh-more{color:var(--ink-quiet);font-style:italic}

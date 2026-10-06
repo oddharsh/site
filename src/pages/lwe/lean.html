@@ -65,7 +65,7 @@
 .tape::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #6d7f9b, #4c5c74); }
 .tape .hi { color: #ffd97a; font-weight: bold; }
 .specs { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.spec { border: 1px solid #c3cbdb; border-radius: 4px; padding: 7px 9px; background: #f7f9fc; }
+.spec { border: 1px solid #c3cbdb; border-radius: 4px; padding: 7px 9px; background: var(--paper-cool); }
 .spec code { display: block; font-family: var(--font-mono); font-size: var(--text-2xs); color: #37347e; margin-bottom: 5px; word-break: break-word; }
 .spec .v { font-weight: bold; font-size: var(--text-xs); display: block; }
 .spec .v.ok { color: #2c7a36; } .spec .v.no { color: #c43636; }
@@ -78,14 +78,14 @@
 .exprs { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 9px; }
 .exprs .xp-button { font-family: var(--font-mono); }
 .pipes { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
-.pipe { border: 1px solid #c3cbdb; border-radius: 4px; background: #f7f9fc; overflow: hidden; }
-.pipe > h4 { margin: 0; font-family: var(--font-caption); font-size: var(--text-micro); padding: 4px 8px; background: #edf1f7; border-bottom: 1px solid #c3cbdb; color: #15243f; }
+.pipe { border: 1px solid #c3cbdb; border-radius: 4px; background: var(--paper-cool); overflow: hidden; }
+.pipe > h4 { margin: 0; font-family: var(--font-caption); font-size: var(--text-micro); padding: 4px 8px; background: var(--surface-desktop); border-bottom: 1px solid #c3cbdb; color: #15243f; }
 .pipe.bad > h4 { background: #fdeaea; border-color: #e8b4b4; color: #8f2020; }
 .pipe .body { padding: 7px 9px; }
 .asm { font-family: var(--font-mono); font-size: var(--text-2xs); color: #37347e; line-height: 1.55; white-space: pre-wrap; }
 .pipe .res { margin-top: 6px; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: bold; }
 .pipe .res.ok { color: #2c7a36; } .pipe .res.no { color: #c43636; }
-.thm { margin-top: 9px; border: 1px solid #c3cbdb; border-radius: 4px; padding: 8px 10px; background: #f7f9fc; font-size: var(--text-micro); }
+.thm { margin-top: 9px; border: 1px solid #c3cbdb; border-radius: 4px; padding: 8px 10px; background: var(--paper-cool); font-size: var(--text-micro); }
 .thm .row { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
 .thm .row code { font-family: var(--font-mono); font-size: var(--text-2xs); color: #37347e; flex: 1 1 auto; }
 .thm .st { font-weight: bold; font-size: var(--text-micro); white-space: nowrap; }
@@ -96,7 +96,7 @@
 /* demo 3: the audit surface */
 .surf-pick { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
 .surf-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }
-.surf-stats .card { border: 1px solid #c3cbdb; border-radius: 4px; background: #f7f9fc; padding: 7px 9px; }
+.surf-stats .card { border: 1px solid #c3cbdb; border-radius: 4px; background: var(--paper-cool); padding: 7px 9px; }
 .surf-stats .card.mine { border-color: #d9a300; background: #fffbea; }
 .surf-stats h5 { margin: 0 0 3px; font-family: var(--font-caption); font-size: var(--text-micro); color: #15243f; }
 .surf-stats .n { font-family: var(--font-mono); font-size: var(--text-lg); font-weight: bold; color: #15243f; display: block; }
@@ -104,7 +104,7 @@
 .surf-scale { border: 1px solid #c3cbdb; border-radius: 4px; background: #fff; padding: 8px 9px; }
 .surf-row { display: flex; align-items: center; gap: 7px; margin: 5px 0; }
 .surf-row .lab { flex: 0 0 4.9em; font-family: var(--font-mono); font-size: var(--text-3xs); text-align: right; color: #66707d; }
-.surf-track { flex: 1 1 auto; height: 13px; background: #eef1f6; border: 1px solid #d6dce6; border-radius: 2px; overflow: hidden; }
+.surf-track { flex: 1 1 auto; height: 13px; background: var(--surface-desktop); border: 1px solid #d6dce6; border-radius: 2px; overflow: hidden; }
 .surf-fill { display: block; height: 100%; background: linear-gradient(180deg,#8b86d8,#4b47a8); }
 .surf-fill.mine { background: linear-gradient(180deg,#ffd97a,#d9a300); }
 .surf-row .amt { flex: 0 0 5.4em; font-family: var(--font-mono); font-size: var(--text-2xs); color: #15243f; }

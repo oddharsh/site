@@ -263,7 +263,7 @@ function shellCss() {
      when a View Transition pinned the old taskbar snapshot against the live new
      one; that transition is gone, the mismatch reason is not. Match the site. */
   body{font-family:var(--font-ui);font-size:12px;line-height:1.5;color:oklch(16% 0 0);font-variant-numeric:tabular-nums;text-wrap:pretty}
-  a{color:oklch(42% 0.235 264);text-decoration:underline}
+  a{color:var(--link);text-decoration:underline}
   a:hover{color:oklch(60% 0.25 29)}
   h1,h2,h3{font-family:var(--font-caption);margin:0}
   /* the window is body-level, like every lunaPage window, so nav.js wires it
@@ -288,8 +288,8 @@ function shellCss() {
   .pane .brand span{font-size:10px;color:oklch(45% 0.01 250)}
   .pane-head{font:bold var(--text-micro) var(--font-caption);color:#fff;padding:3px 10px;border-radius:3px 3px 0 0;text-shadow:0 1px 1px rgba(0,30,90,.5);background:linear-gradient(180deg,oklch(66% 0.16 255),oklch(54% 0.20 260))}
   .pane-body{border:1px solid #bcd0ec;border-top:0;background:rgba(255,255,255,.55);padding:4px;display:flex;flex-direction:column}
-  .pane-body a{padding:3px 8px;border-radius:0;text-decoration:none;color:oklch(42% 0.235 264)}
-  .pane-body a:hover{background:#2f6fde;color:#fff}
+  .pane-body a{padding:3px 8px;border-radius:0;text-decoration:none;color:var(--link)}
+  .pane-body a:hover{background:var(--blue-55);color:#fff}
   .pane-body a.current{background:#3a6ea5;color:#fff;font-weight:bold}
   .pane .foot{margin-top:14px;padding-top:8px;border-top:1px solid #a8c0e0;font-size:10px;color:oklch(45% 0.01 250)}
   .content{flex:1;min-width:0;padding:22px 26px}
@@ -323,7 +323,7 @@ function shellCss() {
      in the DOM (Ctrl-F + #:~:text= deep-links auto-reveal it on Chrome/Safari) while
      the page stays compact; the button is the manual reveal. The state leaves a
      generated box in layout, so strip its chrome until the browser removes hidden. */
-  .evdesc{white-space:pre-wrap;margin:0 0 16px;padding:10px 12px;background:oklch(98% 0.005 250);border:1px solid oklch(85% 0.015 250);border-radius:0;font-size:12px;color:oklch(28% 0.01 250);max-width:64ch}
+  .evdesc{white-space:pre-wrap;margin:0 0 16px;padding:10px 12px;background:var(--paper-cool);border:1px solid oklch(85% 0.015 250);border-radius:0;font-size:12px;color:oklch(28% 0.01 250);max-width:64ch}
   .evdesc[hidden="until-found"]{margin:0;padding:0;border:0}
   .att .who{min-width:0;flex:1}
   .att .who .n{font-weight:bold;color:oklch(20% 0.02 255)}
@@ -333,11 +333,11 @@ function shellCss() {
   .empty{text-align:center;color:oklch(50% 0.01 250);padding:34px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250)}
   .xp-button{display:inline-block;min-width:73px;padding:4px 14px;font:var(--text-2xs)/1.3 var(--font-ui);color:#000;cursor:pointer;border:1px solid #8e9dad;border-radius:0;text-decoration:none;background:var(--grad-raised)}
   .xp-button:hover{border-color:#e9994a;box-shadow:inset 0 0 0 1px #fdd78b,0 0 3px 1px rgba(255,199,60,.55)}
-  .xp-button.primary{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#3f81e8 12%,#2f6fde 50%,#2a64d4 88%,#2a60cc)}
+  .xp-button.primary{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#3f81e8 12%,var(--blue-55) 50%,#2a64d4 88%,#2a60cc)}
   .note{font-size:11px;color:oklch(42% 0.01 250)}
   code{font-family:var(--font-mono);font-size:11px;background:oklch(96% 0.01 250);border:1px solid oklch(88% 0.02 250);padding:0 3px;border-radius:0}
   ol.steps{margin:8px 0;padding-left:20px}ol.steps li{margin:4px 0}
-  .xp-field{box-sizing:border-box;width:100%;font-family:var(--font-ui);font-size:11px;color:#181818;background:#fff;padding:5px 7px;border:1px solid #7f9db9;border-radius:0;box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff;margin:0 0 8px}
+  .xp-field{box-sizing:border-box;width:100%;font-family:var(--font-ui);font-size:11px;color:var(--ink);background:#fff;padding:5px 7px;border:1px solid #7f9db9;border-radius:0;box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff;margin:0 0 8px}
   .xp-field:focus{outline:none;border-color:var(--blue-50);box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff,0 0 0 1px var(--blue-50)}
   /* field-sizing:content (Chrome + Safari 26) auto-grows the textarea as the cookie
      JSON is pasted, capped so a huge blob can't run off-screen; resize stays manual. */
@@ -351,7 +351,7 @@ function shellCss() {
   .toolbar .search{flex:1;min-width:170px;margin:0}
   .chips{display:flex;gap:4px;flex-wrap:wrap}
   .chip{font:var(--text-micro) var(--font-ui);padding:3px 11px;border:1px solid #8e9dad;border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
-  .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#2f6fde 60%,#2a60cc)}
+  .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,var(--blue-55) 60%,#2a60cc)}
   .ev[hidden],.grp[hidden]{display:none}
   .toolbar:has(+ [data-island] .empty){display:none}
   .sd-fail{display:none;color:oklch(50% 0.01 250);font-size:11px;margin:0 0 14px}

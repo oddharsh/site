@@ -278,7 +278,7 @@ export function renderDynoPage() {
 h1{margin:0 0 3px}
 .lede{font-size:var(--text-xs);color:#4a5568;margin:0 0 13px;line-height:1.5}
 .chart{width:100%;height:auto;display:block;margin:2px 0 4px;overflow:visible}
-.chart .grid{stroke:#e2e8f0;stroke-width:1}
+.chart .grid{stroke:var(--surface-desktop);stroke-width:1}
 .chart .axis{stroke:#b6c2d2;stroke-width:1}
 .chart .ytick,.chart .xtick,.chart .yunit{font-family:var(--font-mono);font-size:7.5px;fill:#7a8798}
 .chart .ytick{text-anchor:end}
@@ -301,16 +301,16 @@ h1{margin:0 0 3px}
 .legend i.s-pages{background:#2f6fb5}
 .legend i.s-assets{background:#3c8f24}
 .legend i.s-dash{background:repeating-linear-gradient(90deg,#8b98a8 0 4px,transparent 4px 7px)}
-.callout{border:1px solid #c7d4e4;background:linear-gradient(180deg,var(--row-alt),#e8f0f9);border-radius:4px;padding:10px 12px;margin:0 0 13px;font-size:var(--text-xs);color:#33415c;line-height:1.55}
+.callout{border:1px solid var(--rule);background:linear-gradient(180deg,var(--row-alt),var(--surface-desktop));border-radius:4px;padding:10px 12px;margin:0 0 13px;font-size:var(--text-xs);color:#33415c;line-height:1.55}
 .callout b{font-family:var(--font-caption);color:#1e3a5f}
 table{width:100%;border-collapse:collapse;font-size:var(--text-micro)}
-th{text-align:left;font-family:var(--font-caption);font-size:var(--text-2xs);color:#5a6a7d;border-bottom:1px solid #c7d4e4;padding:4px 6px}
+th{text-align:left;font-family:var(--font-caption);font-size:var(--text-2xs);color:#5a6a7d;border-bottom:1px solid var(--rule);padding:4px 6px}
 th.num,td.num{text-align:right}
 td{padding:4px 6px;border-bottom:1px solid #eef2f7;color:#33415c}
 .mono{font-family:var(--font-mono);font-size:var(--text-2xs)}
 td.sha{color:#7a4eb0}
 td.src{font-size:var(--text-3xs);color:#8b98a8}
-.foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid #e2e8f0;padding-top:9px;margin-top:13px;line-height:1.55}
+.foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid var(--surface-desktop);padding-top:9px;margin-top:13px;line-height:1.55}
 /* the island's failure note, shown only if the pulls request failed */
 .dy-fail{display:none;font-size:var(--text-micro);color:#6b7280;margin:0 0 13px}
 #dy-pulls[data-state="failed"] + .dy-fail{display:block}

@@ -63,7 +63,7 @@ export function renderSecurityCenter() {
 dl.sc-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:6px 0 0;font-size:var(--text-xs)}
 dl.sc-grid dt{color:#6b7280}
 dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:var(--text-micro);word-break:break-word}
-.sc-foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:10px}
+.sc-foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid var(--surface-desktop);padding-top:8px;margin-top:10px}
 `;
   const body = `
     <h1>Security Center</h1>

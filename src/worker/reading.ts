@@ -262,7 +262,7 @@ export function renderReadingPage() {
 .rd-lede a { color:var(--link); }
 .rd-bar { font-size:var(--text-xs); color:var(--ink-dim); border:1px solid var(--frame); background:oklch(98.81% 0.0263 99.90); padding:5px 9px; margin:0 0 6px; }
 .rd-month { font-family:var(--font-caption); font-size:var(--text-sm); font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:var(--blue-40); background:var(--surface-desktop); border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:3px 9px; margin:16px 0 8px; }
-.rd-item { padding:7px 2px 9px; border-bottom:1px solid oklch(92.73% 0.0139 247.98); }
+.rd-item { padding:7px 2px 9px; border-bottom:1px solid var(--surface-desktop); }
 .rd-head { display:flex; align-items:baseline; gap:5px; flex-wrap:wrap; }
 .rd-title { color:oklch(33% 0.09 263); font-weight:bold; font-size:var(--text-lede); text-decoration:none; }
 .rd-title:hover { color:var(--link-hover); text-decoration:underline; }

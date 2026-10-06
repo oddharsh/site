@@ -474,25 +474,25 @@ export function censusExhibitHtml(grouped) {
 }
 
 export const CENSUS_CSS = `/*min*/
-.cx-meta { font-size:var(--text-micro); color:oklch(50% 0 0); font-style:italic; margin:0 0 8px; }
+.cx-meta { font-size:var(--text-micro); color:var(--ink-dim); font-style:italic; margin:0 0 8px; }
 .cx-scroll { overflow-x:auto; }
 .cx-table { width:100%; border-collapse:collapse; font-size:var(--text-xs); min-width:640px; }
-.cx-table th { font:var(--text-2xs) var(--font-ui); text-transform:uppercase; letter-spacing:.05em; color:oklch(50% 0 0); text-align:left; padding:3px 8px 5px 0; border-bottom:2px solid oklch(70% 0.05 250); }
-.cx-table td { padding:5px 8px 5px 0; border-bottom:1px solid oklch(93% 0.01 250); vertical-align:middle; }
+.cx-table th { font:var(--text-2xs) var(--font-ui); text-transform:uppercase; letter-spacing:.05em; color:var(--ink-dim); text-align:left; padding:3px 8px 5px 0; border-bottom:2px solid oklch(70% 0.05 250); }
+.cx-table td { padding:5px 8px 5px 0; border-bottom:1px solid var(--surface-desktop); vertical-align:middle; }
 .cx-site a { font-family:var(--font-mono); color:oklch(40% 0.11 255); text-decoration:none; }
 .cx-site a:hover { text-decoration:underline; }
 .cx-num { font-family:var(--font-mono); white-space:nowrap; color:oklch(30% 0.04 255); }
 .cx-num span { color:oklch(58% 0 0); font-size:var(--text-3xs); }
 .cx-up { color:oklch(45% 0.14 150); margin-left:3px; }
 .cx-down { color:oklch(52% 0.19 27); margin-left:3px; }
-.cx-flat { color:oklch(62% 0 0); margin-left:3px; }
+.cx-flat { color:var(--ink-faint); margin-left:3px; }
 .cx-spark { font-family:var(--font-mono); font-size:var(--text-h2); letter-spacing:1px; color:oklch(45% 0.12 255); }
 .cx-surfs { line-height:1.7; }
 .cx-surf { font-family:var(--font-mono); font-size:var(--text-3xs); color:oklch(35% 0.06 150); background:oklch(95% 0.03 150); border:1px solid oklch(82% 0.05 150); border-radius:3px; padding:0 5px; margin:0 3px 2px 0; display:inline-block; }
 .cx-none { color:oklch(60% 0 0); font-size:var(--text-2xs); }
 .cx-foot { margin-top:10px; padding-top:8px; border-top:1px solid oklch(88% 0.02 250); font-size:var(--text-micro); color:oklch(42% 0.02 255); line-height:1.5; }
 .cx-foot a { color:var(--link); }
-.cx-empty { padding:22px 10px; text-align:center; color:oklch(52% 0 0); font-size:var(--text-sm); }
+.cx-empty { padding:22px 10px; text-align:center; color:var(--ink-dim); font-size:var(--text-sm); }
 `;
 
 // GET /lens/census — the standalone exhibit page (SSR, no-JS friendly, machines
@@ -561,7 +561,7 @@ function censusPage(exhibit, extra = {}) {
     description: "A weekly, longitudinal record of how agent-ready 16 representative websites are — spectrum tier, readiness score, and agent doors, tracked over time.",
     robots: "index, follow",
     css: CENSUS_CSS + `/*min*/
-.cx-fail { display:none; font-size:var(--text-micro); color:oklch(50% 0 0); margin:8px 0 0; }
+.cx-fail { display:none; font-size:var(--text-micro); color:var(--ink-dim); margin:8px 0 0; }
 #cx-island[data-state="failed"] + .cx-fail { display:block; }
 .cx-banner { margin:0 0 12px; padding:7px 10px; border-radius:3px; font-size:var(--text-xs); }
 .cx-banner.ok { border:1px solid oklch(74% 0.09 150); background:oklch(96% 0.03 150); color:oklch(34% 0.11 150); }
@@ -571,7 +571,7 @@ function censusPage(exhibit, extra = {}) {
 .lx-badge.ok { background:oklch(52% 0.13 150); }
 .lx-badge.off { background:oklch(60% 0 0); }
 h1 { font-size:var(--text-lg); margin:0 0 2px; }
-.cx-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:var(--text-ui); line-height:1.5; }
+.cx-lede { margin:0 0 12px; color:var(--ink-soft); font-size:var(--text-ui); line-height:1.5; }
 .cx-lede a { color:var(--link); }
 footer { text-align:center; font-size:var(--text-xs); color:var(--ink-quiet); margin-top:16px; padding-top:11px; border-top:1px solid var(--rule); }
 footer a { color:var(--link); }
