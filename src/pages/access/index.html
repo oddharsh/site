@@ -135,12 +135,12 @@ select{font:inherit;font-size:calc(var(--text-sm) * var(--sc));border:1px solid 
    and flip true in Chromium. */
 .mmc-canvas,.mmc-tree{scrollbar-color:auto}
 .mmc-canvas::-webkit-scrollbar,.mmc-tree::-webkit-scrollbar{width:16px;height:16px}
-.mmc-canvas::-webkit-scrollbar-track,.mmc-tree::-webkit-scrollbar-track{background:#e8edf6;box-shadow:inset 1px 0 0 #a9bcd8,inset -1px 0 0 #fff}
+.mmc-canvas::-webkit-scrollbar-track,.mmc-tree::-webkit-scrollbar-track{background:var(--surface-desktop);box-shadow:inset 1px 0 0 #a9bcd8,inset -1px 0 0 #fff}
 .mmc-canvas::-webkit-scrollbar-thumb,.mmc-tree::-webkit-scrollbar-thumb{border:1px solid;border-color:#c3d4ef #29529c #29529c #c3d4ef;background:linear-gradient(90deg,#a8c0e6,#5a83c8);box-shadow:inset 1px 1px 0 #dae6f8}
 .mmc-canvas::-webkit-scrollbar-thumb:hover,.mmc-tree::-webkit-scrollbar-thumb:hover{background:linear-gradient(90deg,#b6cbec,#6b91d2)}
-.mmc-canvas::-webkit-scrollbar-corner,.mmc-tree::-webkit-scrollbar-corner{background:#e8edf6}
+.mmc-canvas::-webkit-scrollbar-corner,.mmc-tree::-webkit-scrollbar-corner{background:var(--surface-desktop)}
 @supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring){
-  .mmc-canvas,.mmc-tree{scrollbar-color:#5a83c8 #e8edf6;scrollbar-width:auto}
+  .mmc-canvas,.mmc-tree{scrollbar-color:#5a83c8 var(--surface-desktop);scrollbar-width:auto}
 }
 
 /* THE COLUMN HEADS LEFT THE BOARD AND BECAME A STRIP. They were drawn once at
@@ -233,7 +233,7 @@ svg.graph{margin:0 auto}
 /* the shared hover engine (/hoist.js) shows it as a manual popover and writes the
    cursor to --x/--y; the clamp keeps it on screen. The resets undo the UA popover
    box (inset:0, a border, a Canvas background, overflow:auto). */
-#tip{position:fixed;z-index:60;top:0;left:0;right:auto;bottom:auto;margin:0;overflow:visible;width:auto;height:auto;max-width:calc(342px * var(--sc));display:none;background:#ffffe1;border:1px solid #000;box-shadow:2px 2px 4px rgba(0,0,0,.3);padding:6px 8px;font-size:calc(var(--text-sm) * var(--sc));line-height:1.42;color:#1a1a1a;pointer-events:none;
+#tip{position:fixed;z-index:60;top:0;left:0;right:auto;bottom:auto;margin:0;overflow:visible;width:auto;height:auto;max-width:calc(342px * var(--sc));display:none;background:#ffffe1;border:1px solid #000;box-shadow:2px 2px 4px rgba(0,0,0,.3);padding:6px 8px;font-size:calc(var(--text-sm) * var(--sc));line-height:1.42;color:var(--ink);pointer-events:none;
   transform:translate(clamp(8px,calc(var(--x) + 14px),calc(100vw - 100% - 8px)),clamp(8px,calc(var(--y) + 18px),calc(100vh - 100% - 8px)))}
 #tip:popover-open{display:block}
 /* keyboard focus tethers under the device instead (there is no cursor to follow) */

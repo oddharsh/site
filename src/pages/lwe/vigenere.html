@@ -30,7 +30,7 @@
 .field input, .field select, .field textarea { font-family: var(--font-mono); font-size: var(--text-sm); border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 3px 6px; }
 .field input.grow, .field textarea.grow { flex: 1; min-width: 120px; }
 .field textarea { width: 100%; min-height: 3em; resize: vertical; field-sizing: content; }
-.preset { font-family: var(--font-ui); font-size: var(--text-micro); padding: 2px 8px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; }
+.preset { font-family: var(--font-ui); font-size: var(--text-micro); padding: 2px 8px; cursor: pointer; background: linear-gradient(to bottom,#fff,var(--surface-desktop)); border: 1px solid #7d8aa3; }
 .preset:hover { border-color: var(--accent); background: linear-gradient(to bottom,#fff,#f6efdc); }
 /* workbench alignment */
 .wb-out { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5; margin-top: 9px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-color: auto; white-space: pre; padding: 8px 10px; background: #1a2030; border-radius: 4px; }
@@ -50,7 +50,7 @@
 .cr-stage select, .cr-stage input { font-family: var(--font-mono); font-size: var(--text-mono); border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 2px 4px; min-width: 0; }
 .cr-stage .cr-params { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; flex: 1; min-width: 0; }
 .cr-stage .cr-ctl { margin-left: auto; display: flex; gap: 2px; }
-.cr-stage .cr-ctl button { font-size: var(--text-xs); width: 20px; height: 20px; line-height: 1; cursor: pointer; border: 1px solid #7d8aa3; background: linear-gradient(to bottom,#fff,#e9edf5); border-radius: 2px; padding: 0; }
+.cr-stage .cr-ctl button { font-size: var(--text-xs); width: 20px; height: 20px; line-height: 1; cursor: pointer; border: 1px solid #7d8aa3; background: linear-gradient(to bottom,#fff,var(--surface-desktop)); border-radius: 2px; padding: 0; }
 .cr-stage .cr-ctl button:hover { border-color: var(--accent); }
 /* stats demo */
 .st-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
@@ -67,7 +67,7 @@
 /* the cracker */
 .sv-side { border: 1px solid #e0cf9e; border-radius: 4px; padding: 8px 10px 10px; background: #fbf7ec; margin: 6px 0; }
 .sv-cap { font-size: var(--text-2xs); font-weight: bold; color: #9a6a16; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 5px; }
-.sv-machine { background: #f4f7fb; border-color: #c3cbdb; }
+.sv-machine { background: var(--row-alt); border-color: #c3cbdb; }
 .sv-machine .sv-cap { color: #4a5568; }
 .sv-gauge { font-size: var(--text-micro); margin-top: 6px; padding: 4px 8px; border-radius: 4px; background: #fffdf6; border: 1px solid #ddca97; color: #5e4716; }
 .sv-gauge.ok { background: #eef7e8; border-color: #9cc97f; color: #2c7a36; }

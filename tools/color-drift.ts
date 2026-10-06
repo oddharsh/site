@@ -22,7 +22,7 @@
 //   bun run colors:drift            near-token band + unnamed shared colours
 //   bun run colors:drift --json     the same, as JSON
 import { readFileSync } from "node:fs";
-import { COPY_DE, cssSources, deltaEOK, loadTokenValueMap, parseOklch, tokenCopiesIn, type Lab } from "./lib/token-literals.ts";
+import { COPY_DE, colorLiteralsIn, cssSources, deltaEOK, loadTokenValueMap, parseOklch, tokenCopiesIn, type Lab } from "./lib/token-literals.ts";
 
 /** CSS Color 4's just-noticeable difference in OKLab. Past this, a literal is a different colour. */
 const JND = 0.02;
@@ -57,11 +57,11 @@ for (const s of cssSources(ROOT)) {
   // Blanked rather than cut, so line numbers past it still point at the file.
   const css = s.css.replace(/<!-- axp:shell -->[\s\S]*?<!-- \/axp:shell -->/g, (m) => m.replace(/[^\n]/g, " "));
   const copies = new Set(tokenCopiesIn(css, map).map((c) => c.index));
-  for (const m of css.matchAll(/oklch\([^()]*\)/g)) {
-    if (copies.has(m.index)) continue;
-    const p = parseOklch(m[0]);
-    if (!p) continue;
-    hits.push({ file: s.file, line: lineOf(s.file, s.offset, m.index), literal: m[0], lab: p.lab });
+  // oklch(), hex and rgb() alike; until 2026-10-06 this read oklch() only and
+  // missed the 2,248 hex literals that make up most of the site's colour.
+  for (const c of colorLiteralsIn(css)) {
+    if (copies.has(c.index)) continue;
+    hits.push({ file: s.file, line: lineOf(s.file, s.offset, c.index), literal: c.literal, lab: c.lab });
   }
 }
 
