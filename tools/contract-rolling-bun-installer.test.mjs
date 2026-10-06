@@ -55,7 +55,7 @@ for (const scenario of ["valid", "valid Linux", "checksum mismatch", "revision m
       assets: [{ name: `${platform}.zip`, browser_download_url: scenario === "wrong download host" ? `https://example.com/${platform}.zip` : `https://github.com/oven-sh/bun/releases/download/canary/${platform}.zip`,
         digest: scenario === "missing digest" ? undefined : `sha256:${scenario === "checksum mismatch" ? "0".repeat(64) : digest}` }],
     });
-    write("bin/curl", `#!/bin/sh\n[ "$1" = '-fsSL' ] && [ "$2" = '-o' ] || exit 1\ncase "$4" in\n https://api.github.com/repos/oven-sh/bun/releases/tags/canary) cp "$ROLLING_FIXTURE/release.json" "$3";;\n https://github.com/oven-sh/bun/releases/download/canary/${platform}.zip) cp "$ROLLING_FIXTURE/bun.zip" "$3";;\n *) exit 1;;\nesac\n`, 0o755);
+    write("bin/curl", `#!/bin/sh\n[ "$1" = '-fsSL' ] || exit 1\nshift\nif [ "$1" = '--retry' ]; then\n [ "$2" = '3' ] && [ "$3" = '--retry-all-errors' ] && [ "$4" = '--retry-delay' ] && [ "$5" = '2' ] || exit 1\n shift 5\nfi\n[ "$1" = '-o' ] || exit 1\ncase "$3" in\n https://api.github.com/repos/oven-sh/bun/releases/tags/canary) cp "$ROLLING_FIXTURE/release.json" "$2";;\n https://github.com/oven-sh/bun/releases/download/canary/${platform}.zip) cp "$ROLLING_FIXTURE/bun.zip" "$2";;\n *) exit 1;;\nesac\n`, 0o755);
     write("installed/bun", "previous binary", 0o755);
     const result = spawnSync("bash", [INSTALLER, "./installed"], {
       cwd: root, env: { ...process.env, PATH: `${join(root, "bin")}:${process.env.PATH}`, ROLLING_FIXTURE: root }, encoding: "utf8",
