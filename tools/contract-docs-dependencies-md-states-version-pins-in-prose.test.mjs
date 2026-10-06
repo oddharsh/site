@@ -291,6 +291,7 @@ test("the dependency-doc scanner does not read prose as a version claim", () => 
   // line; the others are not packages at all.
   const prose = [
     "TypeScript 7.0 ships no stable programmatic API",
+    "Oxlint 1.87 adds type-aware rules",
     "the CSS Overflow 5 selectors /garage/horizon ships deliberately",
     "Vite 8 keeps 0.28.2 as an OPTIONAL peer",
     "Wrangler hard-depends on 0.28.1 for Cloudflare's Worker bundler",
@@ -298,7 +299,7 @@ test("the dependency-doc scanner does not read prose as a version claim", () => 
   assert.deepEqual(findClaims(prose), [], "prose must yield no version claims");
 
   // and the real thing still matches, so the guard above is not just strictness
-  assert.equal(findClaims("- TypeScript 7.0.2 and @cloudflare/workers-types are pins").length, 1);
+  assert.equal(findClaims("- Oxlint 1.87.0 and esbuild are pins").length, 1);
 });
 
 test("a flex item is its own box, and promoting one never eats an image", () => {

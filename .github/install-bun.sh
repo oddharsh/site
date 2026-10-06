@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # install-bun.sh <dir> — install the bun that config/bun-pin.json names into
-# <dir>/bun, from npm, verified three ways. Prints nothing but the
+# <dir>/bun, from the declared source with checksum and identity checks. Prints nothing but the
 # one summary line on success; every failure names its cause.
 #
 # ONE INSTALLER FOR BOTH PLACES THIS REPO BOOTSTRAPS A BUN: the setup-bun
@@ -15,13 +15,13 @@
 # bootstrapping, the pin lives in a file it never reads, and this script owns
 # the toolchain on both sides.
 #
-# WHY NPM RATHER THAN A GITHUB RELEASE. A pin may be a release (`1.4.2`) or a
+# FIXED PINS USE NPM. A pin may be a release (`1.4.2`) or a
 # DATED CANARY WITH ITS BUILD SHA (`1.4.2-canary.20260913.1+09bb546`), and
 # only the registry carries both: bun publishes every canary build there under
 # an immutable dated version with `@oven/bun-<platform>` tarballs beside it,
 # while the GitHub `canary` tag rolls daily. The registry document carries the
-# tarball's sha512, so the bytes are verified, which the release zip never
-# allowed.
+# tarball's sha512. The explicitly rolling canary instead uses GitHub's
+# release asset SHA-256 and the commit named by that release.
 #
 # THREE WITNESSES, because a canary binary reports the NEXT release as its
 # version (`bun --version` on the 1.4.2-canary.20260913.1 tarball prints
@@ -54,6 +54,49 @@ case "$(uname -s)-$(uname -m)" in
   Darwin-x86_64) platform=bun-darwin-x64 ;;
   *) echo "install-bun.sh: no bun platform package known for $(uname -s)-$(uname -m)" >&2; exit 1 ;;
 esac
+
+# The owner selected the rolling GitHub canary to adopt bun check before npm's
+# daily publication. Resolve one metadata snapshot, verify its bytes and full
+# commit, and keep that identity beside the binary for runtime comparisons.
+if [ "$pin" = "canary" ]; then
+  mkdir -p "$dir"
+  work=$(mktemp -d "$dir/.install.XXXXXX")
+  trap 'rm -rf "$work"' EXIT
+  curl -fsSL -o "$work/release.json" "https://api.github.com/repos/oven-sh/bun/releases/tags/canary"
+  node - "$work/release.json" "$platform" "$work/resolved.json" <<'NODE'
+const fs = require("node:fs");
+const [file, platform, out] = process.argv.slice(2);
+const release = JSON.parse(fs.readFileSync(file, "utf8"));
+const asset = release.assets?.find((entry) => entry.name === `${platform}.zip`);
+const revision = /commit:\s*([0-9a-f]{40})\b/.exec(release.body ?? "")?.[1];
+const expectedUrl = `https://github.com/oven-sh/bun/releases/download/canary/${platform}.zip`;
+if (release.tag_name !== "canary" || !revision || asset?.browser_download_url !== expectedUrl || !/^sha256:[0-9a-f]{64}$/.test(asset?.digest ?? "")) {
+  throw new Error("install-bun.sh: canary metadata lacks a supported URL, full commit, or SHA-256 digest");
+}
+fs.writeFileSync(out, JSON.stringify({ source: "canary", url: expectedUrl, revision, digest: asset.digest }));
+NODE
+  download=$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).url)' "$work/resolved.json")
+  digest=$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).digest)' "$work/resolved.json")
+  commit=$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).revision)' "$work/resolved.json")
+  curl -fsSL -o "$work/bun.zip" "$download"
+  got="sha256:$(openssl dgst -sha256 "$work/bun.zip" | awk '{print $NF}')"
+  if [ "$got" != "$digest" ]; then
+    echo "install-bun.sh: canary checksum mismatch; the rolling release may have moved during download" >&2
+    exit 1
+  fi
+  unzip -qo "$work/bun.zip" -d "$work"
+  candidate="$work/$platform/bun"
+  actual=$("$candidate" -p 'Bun.revision')
+  if [ "$actual" != "$commit" ]; then
+    echo "install-bun.sh: canary names commit $commit, binary reports $actual" >&2
+    exit 1
+  fi
+  "$candidate" check --help >/dev/null
+  install -m 0755 "$candidate" "$dir/bun"
+  install -m 0644 "$work/resolved.json" "$dir/bun.install.json"
+  echo "install-bun.sh: bun $("$dir/bun" --version) ($("$dir/bun" --revision)), GitHub canary, SHA-256 verified, at $dir/bun"
+  exit 0
+fi
 
 # The registry's record of this exact version: where the bytes are and what
 # they hash to. A version the registry does not carry fails HERE, with the

@@ -63,33 +63,26 @@ bun mints every content-addressed `/a/` and `/i/` URL production serves. A bump
 that changes one output byte is a dictionary roll and a CSP hash change wearing a
 version string.
 
-`bun run bun:pin` is what owns it, and
-[`.github/workflows/bun-pin.yml`](../.github/workflows/bun-pin.yml) runs it
-nightly and opens a PR when a candidate earns one. Five gates, ordered so the
-cheapest disqualifier runs first:
+On 2026-10-06 the owner selected `"bun": "canary"` temporarily to adopt Bun's
+native `bun check` before the dated npm publication included it. Both CI and
+Workers Builds use `.github/install-bun.sh` to resolve GitHub's latest canary.
+The installer reads one release metadata snapshot, checks the archive's
+SHA-256 and the binary's full commit, verifies `bun check` is available, and
+writes `bun.install.json` beside the binary. A release moving during download
+fails verification before replacing the existing installation.
 
-| gate | refuses |
-|---|---|
-| newest STABLE release, carried by npm too | a rolling `canary`, and a version only half the resolvers can see |
-| older than `minimumReleaseAge` | a runtime younger than the window bunfig applies to a lightningcss patch |
-| zstd honours `dictionary` | the silent one: a runtime that accepts the option and ignores it ships plain zstd as every dcz delta |
-| reads the committed lockfile, writes the same `lockfileVersion` | a format change, which is what 1.4 actually did and what broke dependabot's bun updater |
-| byte-identical build, and the suite | a differing byte, which mints a URL and orphans every `a-dict` snapshot naming the old hash |
+Fresh installs can resolve different commits. This source deliberately skips
+the runtime's npm publication-age gate; `bunfig.toml`'s dependency age gate
+still applies to package installation. `bun:pin` reports the installed commit
+and leaves the rolling declaration alone. `canary:bun` compares against that
+installation's receipt, so its baseline names the runtime actually measured.
 
-The control is permanent, because the previous bun is a known-bad runtime:
-
-```bash
-bun run bun:pin --from 1.3.13 --to 1.3.14
-```
-
-That must fail at the zstd gate with `73 none / 73 good / 73 wrong`, the collapse
-that means the option was ignored. Without it, a run reporting "nothing to do" on
-a day when the pin is already current proves only that the comparison ran.
-
-`@types/bun` stays `deps:pin`'s, and the two are allowed to disagree for a day.
-The baseline below already worked that through: the release-age policy once held
-the types pin a release behind the runtime and it caught up on its own, which is
-a wait rather than a fork.
+To resume exact pins, declare a release or a dated npm canary with its build
+sha in `config/bun-pin.json`, then install it with the shared installer.
+For fixed pins, `bun run bun:pin` and the nightly `bun-pin.yml` select candidates
+on the declared channel and require npm publication age, zstd dictionary
+support, unchanged lockfile format, a byte-identical build and passing tests.
+Those gates remain in place for fixed pins. `@types/bun` stays `deps:pin`'s.
 
 ### what a frozen install does not check
 
@@ -418,12 +411,12 @@ does not make a failed write safe to ignore.
   target-browser, and native-install changes.
 - Oxlint 1.87.0 and oxlint-tsgolint 7.0.2003 are exact root pins for
   `bun run lint`, a required step in `validate`. The tsgolint version tracks the
-  TypeScript pin below on purpose: TypeScript 7.0 ships no stable programmatic
+  checker bundled with Bun: TypeScript 7.0 ships no stable programmatic
   API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint
   uses to reach the same type-aware rules. A bump PR's review should read oxlint
   releases for NEW rules, since a new rule in an enabled category fails CI on
-  unchanged code, and should treat any tsgolint release as paired with a
-  TypeScript one. Every rule this repo turns off is turned off in
+  unchanged code, and compare any tsgolint release with the
+  checker version reported by `bun -p process.versions.typescript`. Every rule this repo turns off is turned off in
   `.oxlintrc.json` beside the measurement that decided it.
 - @oxlint/plugins 1.87.0 is the runtime for the three rules vendored from
   anti-slop at `tools/oxlint/anti-slop`. **Bump it in lockstep with oxlint and
@@ -457,17 +450,20 @@ does not make a failed write safe to ignore.
   removal as the disk saving, the vitest removal is.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
-- TypeScript 7.0.2 is the exact root pin for the no-emit programs in
-  `config/`. `tsc` checks source without producing JavaScript; Node and Bun load
-  the authored TypeScript, and Wrangler erases types when bundling Workers.
+- Bun supplies the no-emit checker for the programs in `config/` through
+  `bun check`. The standalone TypeScript CLI dependency has been removed.
+  Node and Bun load authored TypeScript, and Wrangler erases types when
+  bundling Workers.
   Client islands remain JavaScript with readable `.src.js` build twins.
 
   Run `bun run typecheck` for the workspace programs. Reader is outside the
   workspace: install its locked dependencies and run `bun run typecheck` from
   `lens-reader/` as CI does. Both run `tools/typecheck.ts`, which also checks
   that every tracked source file belongs to a program and is named by its include.
-  The root `tsconfig.json` maps those programs for tsgolint and intentionally
-  has no compiler options or source files of its own.
+  Bun also discovers directly included files with
+  `--listFilesOnly --noResolve`, preserving the lint coverage check without
+  the old CLI's `--showConfig`. The root `tsconfig.json` maps those programs
+  for tsgolint and Bun. It intentionally has no compiler options or source files of its own.
 
   Programs follow runtime boundaries: Workers use the generated workerd
   declarations, client code uses the DOM, the service worker uses WebWorker
@@ -505,7 +501,7 @@ does not make a failed write safe to ignore.
   the peer is absent. The harness types used here are declared locally in that
   file; keep this limitation in mind when adopting another Wrangler API.
 
-  Review TypeScript upgrades for new checks on unchanged source and keep
+  Review Bun checker upgrades for new checks on unchanged source and keep
   tsgolint paired with the compiler, as described above.
 - @types/bun 1.4.2 is the exact type pin for host tools and tests. It supplies
   Node globals as well as Bun APIs such as HTMLRewriter, so those programs use

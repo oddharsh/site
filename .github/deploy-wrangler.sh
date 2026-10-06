@@ -12,8 +12,8 @@
 # So the pin lives in config/bun-pin.json, package.json carries no
 # packageManager at all, and the image has to stop bootstrapping: `SKIP_DEPENDENCY_INSTALL=true` in the build settings turns
 # its install off, and this script does the same work with the SAME installer
-# the setup-bun action uses (.github/install-bun.sh: npm tarball, sha512,
-# manifest version and binary revision all checked). The image's own bun is
+# the setup-bun action uses (.github/install-bun.sh: declared source,
+# checksum and binary revision checked). The image's own bun is
 # then never on the path that builds, whatever version it happens to be.
 #
 # It bootstraps ONLY WHEN THE FLAG SAYS THE IMAGE WON'T. With

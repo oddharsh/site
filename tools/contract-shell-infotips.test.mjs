@@ -114,25 +114,18 @@ test("the shell infotip ships minified, hashed, and with a readable twin", async
     "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
 });
 
-test("every workflow bootstraps the bun that package.json pins", async () => {
+test("every workflow bootstraps the Bun source that config/bun-pin.json declares", async () => {
   // Inherited from the pnpm era, and the reasoning survives the swap with one
   // change: pnpm self-switched, so a workflow naming the wrong version merely
   // wasted time. Nothing self-switches here. A workflow that installs some
   // other bun builds this repo with a compiler nobody declared, and the output
   // is content-addressed, so that re-mints URLs rather than erroring.
   //
-  // The 1.4 release retired the digest pin this test used to assert. A released
-  // tag is immutable, so the VERSION is the guarantee the SHA-256 provided while
-  // the canary tag was rolling daily. config/bun-canary.json is gone with it.
   const declared = JSON.parse(await readFile(new URL("config/bun-pin.json", ROOT), "utf8"));
-  // A RELEASE or a DATED CANARY WITH ITS BUILD SHA, and nothing that floats.
-  // It was package.json's packageManager until 2026-09-15, when three probes
-  // showed Cloudflare's build image reads that field and cannot resolve a
-  // canary in it, sha or no sha, while removing the field with the pin in its
-  // own file builds a version the canary compiled. lib/bun-pin.ts owns the
-  // shape, and the sha is what lets a running canary prove it is the pin.
-  assert.match(String(declared.bun), /^\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?$/,
-    `config/bun-pin.json names ${declared.bun}; it must be an exact bun, a release or a dated canary with its build sha`);
+  // Fixed sources are exact npm versions. The owner-selected rolling canary
+  // resolves its verified commit through the same installer on every build path.
+  assert.match(String(declared.bun), /^(canary|\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)$/,
+    `config/bun-pin.json names ${declared.bun}; it must select a supported Bun source`);
 
   const dir = new URL(".github/workflows/", ROOT);
   const files = (await readdir(dir)).filter((n) => n.endsWith(".yml"));

@@ -21,9 +21,9 @@ test("the pin lib reads the same string config/bun-pin.json holds, and package.j
   const pin = readPin(root);
   assert.equal(pin.version, declared.bun);
   assert.equal(pin.raw, `bun@${declared.bun}`);
-  // A release or a DATED canary with its build sha, and nothing looser: both are
-  // exact and both are immutable on npm, which is what makes either one a pin.
-  assert.match(pin.version, /^\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?$/);
+  // Fixed sources are exact npm versions; canary explicitly follows GitHub
+  // and resolves its identity at installation time.
+  assert.match(pin.version, /^(canary|\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)$/);
   if (channelOf(pin.version) === "canary") assert.ok(parseVersion(pin.version).sha, "a canary pin must carry the build sha the running bun proves itself by");
 
   // NO packageManager, on purpose. Cloudflare's build image reads that field
@@ -116,6 +116,7 @@ test("versions compare numerically, so 1.10 is newer than 1.4, and canaries orde
 });
 
 test("the channel is the pin's own shape, and the npm tarball names the platform package", () => {
+  assert.equal(channelOf("canary"), "rolling");
   assert.equal(channelOf("1.4.2"), "stable");
   assert.equal(channelOf("1.4.2-canary.20260913.1"), "canary");
   assert.equal(channelOf("1.4.2-canary.20260913.1+09bb546"), "canary");

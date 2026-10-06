@@ -23,9 +23,9 @@
 // a build change wearing a version string.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
-// A pin is a release (`1.4.2`) or a DATED CANARY WITH ITS BUILD SHA
+// A fixed pin is a release (`1.4.2`) or a DATED CANARY WITH ITS BUILD SHA
 // (`1.4.2-canary.20260913.1+09bb546`), and both are exact. bun publishes every
 // canary build to npm under that dated, immutable version with
 // `@oven/bun-<platform>` tarballs beside it, which is what makes a canary
@@ -40,13 +40,16 @@ import { join } from "node:path";
 // canary's platform dependencies (`1.4.2-canary.20260913.1+09bb546`). So the
 // sha is how a running canary proves it IS the pin, which the baseline guard
 // in bump-bun-pin.ts and canary-bun.ts needs before it compares anything.
+// "canary" is an explicitly rolling source. Its installer records the resolved
+// commit beside the binary; it is neither a dated npm version nor sortable.
 export const PIN_FILE = "config/bun-pin.json";
-const PIN_PATTERN = /("bun"\s*:\s*")(\d+\.\d+\.\d+(?:-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)(")/;
+const PIN_PATTERN = /("bun"\s*:\s*")(canary|\d+\.\d+\.\d+(?:-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)(")/;
 
-export type Channel = "stable" | "canary";
+export type Channel = "stable" | "canary" | "rolling";
 
 /** Which channel a pin follows, read off its shape. */
 export function channelOf(version: string): Channel {
+  if (version === "canary") return "rolling";
   return /-canary\.\d{8}\.\d+(\+[0-9a-f]+)?$/.test(version) ? "canary" : "stable";
 }
 
@@ -72,7 +75,11 @@ export function npmVersion(version: string) {
  * Pure, so a test can hand it any pair; callers pass process.versions.bun and
  * Bun.revision.
  */
-export function runningMatchesPin(pin: string, running: { version: string; revision: string }) {
+export function runningMatchesPin(pin: string, running: { version: string; revision: string }, installedRevision?: string) {
+  if (pin === "canary") {
+    const ok = installedRevision !== undefined && running.revision === installedRevision && /^[0-9a-f]{40}$/.test(running.revision);
+    return { ok, why: `rolling canary: running ${running.revision.slice(0, 9)}, ${ok ? "matches installed receipt" : "does not match installation receipt; run .github/install-bun.sh"}` };
+  }
   const parsed = parseVersion(pin);
   if (!parsed.canary) return { ok: running.version === pin, why: `running ${running.version}, pin ${pin}` };
   if (!parsed.sha) return { ok: false, why: `a canary pin must carry its build sha (${pin} has none), or nothing can prove a running bun is it` };
@@ -80,11 +87,22 @@ export function runningMatchesPin(pin: string, running: { version: string; revis
   return { ok, why: `running revision ${running.revision.slice(0, 9)}, pin ${pin}` };
 }
 
+/** A rolling source resolves at installation time; compare against that receipt. */
+export function installedMatchesPin(pin: string, executable: string, running: { version: string; revision: string }) {
+  if (pin !== "canary") return runningMatchesPin(pin, running);
+  try {
+    const receipt = JSON.parse(readFileSync(join(dirname(executable), "bun.install.json"), "utf8"));
+    return runningMatchesPin(pin, running, receipt.source === "canary" ? receipt.revision : undefined);
+  } catch {
+    return runningMatchesPin(pin, running);
+  }
+}
+
 /** The bun config/bun-pin.json pins, as both the `bun@` form and its bare version. */
 export function readPin(root: string) {
   const text = readFileSync(join(root, PIN_FILE), "utf8");
   const found = PIN_PATTERN.exec(text);
-  if (!found) throw new Error(`${PIN_FILE} carries no "bun": "x.y.z" pin`);
+  if (!found) throw new Error(`${PIN_FILE} carries no supported Bun source`);
   return { raw: `bun@${found[2]}`, version: found[2] };
 }
 
@@ -93,7 +111,7 @@ export function readPin(root: string) {
 export function writePin(root: string, version: string) {
   const path = join(root, PIN_FILE);
   const text = readFileSync(path, "utf8");
-  if (!PIN_PATTERN.test(text)) throw new Error(`${PIN_FILE} carries no "bun": "x.y.z" pin`);
+  if (!PIN_PATTERN.test(text)) throw new Error(`${PIN_FILE} carries no supported Bun source`);
   writeFileSync(path, text.replace(PIN_PATTERN, `$1${version}$3`));
 }
 
@@ -231,8 +249,8 @@ export function releaseUrl(version: string, asset: string = releaseAsset()) {
 
 // The ROLLING tag. Its assets are replaced on every canary build (the release
 // object itself dates from 2022 and its `published_at` never moves; the
-// asset's `updated_at` is the honest timestamp), so nothing that pins may read
-// it and canary-bun.ts, which proposes nothing, is its only consumer.
+// asset's `updated_at` is the honest timestamp). canary-bun.ts probes it;
+// the installer also follows it when the owner selects the rolling source.
 export function canaryUrl(asset: string = releaseAsset()) {
   return `https://github.com/oven-sh/bun/releases/download/canary/${asset}`;
 }
