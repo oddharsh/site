@@ -31,11 +31,11 @@
   border: 3px solid transparent; border-top-color: #8fa6d8; }
 
 p { margin: 0 0 12px; }
-code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
-pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; background: var(--row-alt); border: 1px solid var(--rule); padding: 8px 10px; margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
+pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5; background: var(--row-alt); border: 1px solid var(--rule); padding: 8px 10px; margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
 
 .cap-strip { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 18px; }
-.chip { font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
+.chip { font-family: var(--font-mono); font-size: var(--text-micro); font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
   color: var(--ink-dim); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
 .chip::before { content: "… "; }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
@@ -45,27 +45,27 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
 
 .demo { content-visibility: auto; contain-intrinsic-size: auto 320px; border: 1px solid var(--frame); border-top-color: var(--blue-45); border-left-color: var(--blue-45);
   background: oklch(100% 0 0); margin: 0 0 18px; padding: 12px 14px 14px; }
-.demo > h2 { font-family: var(--font-caption); font-size: 13pt; font-weight: bold; color: var(--blue-40); margin: 0 0 2px;
+.demo > h2 { font-family: var(--font-caption); font-size: var(--text-lg); font-weight: bold; color: var(--blue-40); margin: 0 0 2px;
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 /* let the title shrink/break so it wraps below the stat badge on narrow windows
    instead of overlapping it (flex items don't shrink past min-content w/o this) */
 .demo > h2 > span { min-width: 0; overflow-wrap: anywhere; }
-.demo > h2 .mono { font-size: 10pt; font-weight: normal; color: oklch(40% 0 0); }
-.demo .sub { margin: 2px 0 10px; color: oklch(40% 0 0); font-size: 9.5pt; }
-.demo .ours { font-size: 9.5pt; color: oklch(38% 0.07 145); border-left: 3px solid oklch(60% 0.13 145); padding: 2px 0 2px 9px; margin: 8px 0 0; }
-.stat { font-family: var(--font-mono); font-size: 8pt; font-weight: bold; letter-spacing: .04em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; white-space: nowrap;
+.demo > h2 .mono { font-size: var(--text-ui); font-weight: normal; color: oklch(40% 0 0); }
+.demo .sub { margin: 2px 0 10px; color: oklch(40% 0 0); font-size: var(--text-sm); }
+.demo .ours { font-size: var(--text-sm); color: oklch(38% 0.07 145); border-left: 3px solid oklch(60% 0.13 145); padding: 2px 0 2px 9px; margin: 8px 0 0; }
+.stat { font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: bold; letter-spacing: .04em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; white-space: nowrap;
   color: var(--link); border-color: var(--link); background: oklch(97% 0.03 264); }
 .stat.stable { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
 
 /* base-select demo (scoped .s27- so it can't touch any real future select) */
-.s27-sel { appearance: base-select; font-family: var(--font-ui); font-size: 10.5pt; color: var(--ink); background: oklch(100% 0 0);
+.s27-sel { appearance: base-select; font-family: var(--font-ui); font-size: var(--text-body); color: var(--ink); background: oklch(100% 0 0);
   border: 2px solid; border-color: oklch(55% 0.02 250) oklch(94% 0.01 250) oklch(94% 0.01 250) oklch(55% 0.02 250); box-shadow: inset 1px 1px 1px oklch(0% 0 0 / .12);
   padding: 3px 3px 3px 8px; min-width: 0; max-width: 100%; display: inline-flex; align-items: stretch; gap: 8px; }
 .s27-sel::picker-icon { margin-left: auto; align-self: stretch; width: 16px; display: inline-flex; align-items: center; justify-content: center; color: oklch(24% 0.02 255);
   background: linear-gradient(180deg, oklch(99% 0 0), oklch(84% 0.02 255)); border: 1px solid; border-color: oklch(100% 0 0) oklch(52% 0.03 255) oklch(52% 0.03 255) oklch(100% 0 0); border-radius: 1px; transition: rotate var(--xp-transition-move); }
 .s27-sel:open::picker-icon { rotate: 180deg; }
 .s27-sel::picker(select) { appearance: base-select; background: oklch(100% 0 0); border: 1px solid var(--frame); box-shadow: 3px 3px 0 oklch(from var(--frame) l c h / .35); padding: 2px; margin-top: 2px; }
-.s27-sel option { font-family: var(--font-ui); font-size: 10pt; padding: 4px 8px; cursor: pointer; }
+.s27-sel option { font-family: var(--font-ui); font-size: var(--text-ui); padding: 4px 8px; cursor: pointer; }
 .s27-sel option:nth-of-type(even) { background: var(--row-alt); }
 .s27-sel option:hover { background: linear-gradient(180deg, var(--blue-80), var(--blue-60)); color: oklch(100% 0 0); }
 .s27-sel option:checked::before { content: "\2713 "; color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
@@ -73,7 +73,7 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
 /* anchor-positioning demo */
 .s27-anchor-btn { anchor-name: --s27a; }
 .s27-note { position: absolute; position-anchor: --s27a; top: anchor(bottom); left: anchor(left); margin-top: 6px;
-  background: oklch(99% 0.02 95); border: 1px solid oklch(60% 0.13 90); padding: 6px 9px; font-size: 9.5pt; max-width: 240px; box-shadow: 2px 2px 0 oklch(60% 0.13 90 / .3); }
+  background: oklch(99% 0.02 95); border: 1px solid oklch(60% 0.13 90); padding: 6px 9px; font-size: var(--text-sm); max-width: 240px; box-shadow: 2px 2px 0 oklch(60% 0.13 90 / .3); }
 .s27-anchor-wrap { position: relative; }
 .s27-anchor-btn:not(:hover):not(:focus) + .s27-note { display: none; }
 

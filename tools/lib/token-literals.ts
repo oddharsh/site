@@ -187,8 +187,12 @@ export function cssSources(root: URL): CssSource[] {
   for (const rel of ["pipelines/lwe/generate.mjs", "pipelines/garage/generate.mjs"]) out.push({ file: rel, css: read(rel), kind: "generator", offset: 0 });
   for (const family of ["lwe", "garage"]) {
     for (const f of ls(`pipelines/${family}/specs`).filter((f) => f.endsWith(".json"))) {
-      const spec = JSON.parse(read(`pipelines/${family}/specs/${f}`)) as { pageCss?: string };
-      out.push({ file: `pipelines/${family}/specs/${f}`, css: spec.pageCss ?? "", kind: "spec", offset: null });
+      // Garage specs carry their CSS as `pageCss`, lwe specs as `demoCss`. Until
+      // 2026-10-06 only the first was read, so no lwe demo was ever checked.
+      const spec = JSON.parse(read(`pipelines/${family}/specs/${f}`)) as { pageCss?: string; demoCss?: string };
+      for (const css of [spec.pageCss, spec.demoCss]) {
+        if (css) out.push({ file: `pipelines/${family}/specs/${f}`, css, kind: "spec", offset: null });
+      }
     }
   }
   // Worker-rendered pages: every one goes through lunaPage, which links

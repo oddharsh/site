@@ -28,16 +28,16 @@
   background: linear-gradient(135deg, #166aee 0 50%, #ff9500 50% 100%); border:1px solid #001ea0; }
 
 p { margin: 0 0 12px; }
-code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
+code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
 
 /* ── controls row: chip + a segmented toggle ─────────────────────────── */
 .bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
-.chip { font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
+.chip { font-family: var(--font-mono); font-size: var(--text-micro); font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
   color: var(--ink-dim); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
 .chip.yes::before { content: "\2713 "; } .chip.no::before { content: "\2717 "; }
 .seg { display: inline-flex; border: 1px solid oklch(50% 0.04 263); border-radius: 3px; overflow: hidden; }
-.seg button { font: inherit; font-size: 9.5pt; padding: 3px 12px; border: 0; cursor: pointer; color: oklch(20% 0 0);
+.seg button { font: inherit; font-size: var(--text-sm); padding: 3px 12px; border: 0; cursor: pointer; color: oklch(20% 0 0);
   background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); }
 .seg button + button { border-left: 1px solid oklch(70% 0.03 263); }
 .seg button[aria-pressed="true"] { color: oklch(100% 0 0);
@@ -46,7 +46,7 @@ code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
 /* reserve the note's height (JS fills it a tick after load, and the longer
    "no Grid Lanes" message runs ~3 lines) so the sheet below doesn't get shoved
    down. kills a ~0.02 CLS. */
-.note { font-size: 9pt; color: var(--ink-quiet); margin: -6px 0 14px; min-height: 3.4em; }
+.note { font-size: var(--text-xs); color: var(--ink-quiet); margin: -6px 0 14px; min-height: 3.4em; }
 
 /* ── the contact sheet ───────────────────────────────────────────────── */
 /* FALLBACK (everywhere): fixed-area squares, object-fit:cover — what the

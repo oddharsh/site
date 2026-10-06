@@ -560,47 +560,47 @@ export function renderAroundPage() {
     head: islandPreload(SNAPSHOT_URL),
     css: `/*min*/
   h1 { font-size: 18pt; }
-  .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
-  .lede code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; font-size: 10pt; }
+  .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: var(--text-body); }
+  .lede code { font-family: var(--font-mono); background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; font-size: var(--text-ui); }
   table.scout {
     width: 100%; border-collapse: collapse; margin: 8px 0 12px;
     border: 1px solid var(--frame); border-top-color: var(--blue-45); border-left-color: var(--blue-45);
-    background: oklch(100.00% 0 0); font-size: 10pt;
+    background: oklch(100.00% 0 0); font-size: var(--text-ui);
   }
   table.scout thead th {
     background: var(--surface-desktop); color: var(--blue-40); font-weight: bold;
     padding: 5px 8px; text-align: left;
     border-bottom: 1px solid var(--frame);
-    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
+    font-family: var(--font-caption);
   }
   table.scout tbody td { padding: 6px 8px; border-bottom: 1px solid oklch(92.73% 0.0139 247.98); vertical-align: top; }
   table.scout tbody tr:nth-child(even) td { background: var(--row-alt); }
   table.scout .firm { font-weight: bold; color: var(--blue-40); width: 22%; }
-  table.scout .host { font-family: "Courier New", Courier, monospace; color: var(--ink-faint); font-size: 9pt; font-weight: normal; }
-  table.scout .status { font-family: "Courier New", Courier, monospace; width: 8%; text-align: center; }
+  table.scout .host { font-family: var(--font-mono); color: var(--ink-faint); font-size: var(--text-mono); font-weight: normal; }
+  table.scout .status { font-family: var(--font-mono); width: 8%; text-align: center; }
   table.scout .ok   { color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
   table.scout .warn { color: var(--warn); font-weight: bold; }
   table.scout .bad  { color: oklch(46.34% 0.1902 29.23); font-weight: bold; }
   table.scout .title { color: var(--ink); }
-  table.scout .desc { color: var(--ink-dim); font-size: 9.5pt; margin-top: 3px; }
-  table.scout .latency { font-family: "Courier New", Courier, monospace; color: var(--ink-soft); width: 9%; text-align: right; }
+  table.scout .desc { color: var(--ink-dim); font-size: var(--text-sm); margin-top: 3px; }
+  table.scout .latency { font-family: var(--font-mono); color: var(--ink-soft); width: 9%; text-align: right; }
   table.scout .link { width: 5%; text-align: center; }
   table.scout .link a { color: var(--link); text-decoration: none; font-weight: bold; }
   table.scout .link a:hover { color: var(--link-hover); text-decoration: underline; }
   .meta {
-    font-size: 9.5pt; color: var(--ink-dim);
+    font-size: var(--text-sm); color: var(--ink-dim);
     border: 1px solid var(--frame); background: oklch(98.81% 0.0263 99.90);
     padding: 6px 10px; margin: 12px 0;
   }
-  .meta code { font-family: "Courier New", Courier, monospace; background: oklch(100.00% 0 0); border: 1px solid oklch(89.75% 0 0); padding: 0 3px; }
-  footer { text-align: center; font-size: 9pt; color: var(--ink-quiet); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule); }
+  .meta code { font-family: var(--font-mono); background: oklch(100.00% 0 0); border: 1px solid oklch(89.75% 0 0); padding: 0 3px; }
+  footer { text-align: center; font-size: var(--text-xs); color: var(--ink-quiet); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule); }
   a { color: var(--link); }
   .dim { color: var(--ink-faint); }
   hr { border: 0; border-top: 2px groove var(--rule); margin: 12px 0; height: 0; }
   .pending { border: 1px solid var(--frame); background: oklch(96.72% 0 0);
     color: var(--ink-dim); padding: 18px 16px; margin: 16px 0; cursor: progress; }
   /* the island's failure note, shown only if the snapshot request failed */
-  .ar-fail { display: none; color: var(--ink-faint); font-size: 9pt; margin: 0 0 12px; }
+  .ar-fail { display: none; color: var(--ink-faint); font-size: var(--text-xs); margin: 0 0 12px; }
   #ar-snapshot[data-state="failed"] + .ar-fail { display: block; }
 `,
     body: html`
@@ -620,7 +620,7 @@ export function renderAroundPage() {
     ${islandMount("ar-snapshot", SNAPSHOT_URL, renderAroundSnapshot(PENDING_REPORT), html`<p>The crawl arrives in a second request after the page loads, and that needs a script. Without one, <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> shows it as plain HTML, and <a href="/around/json">/around/json</a> as JSON.</p>`)}
     <p class="ar-fail">The request for the snapshot failed, so the table stays empty rather than guessed. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
     <hr>
-    <p class="dim" style="font-size:9pt">
+    <p class="dim" style="font-size:var(--text-xs)">
       Also available as JSON: <a href="/around/json">/around/json</a> &middot;
       Change Radar: <a href="/around/changes.json">/around/changes.json</a>.
       Bot methodology and ethics: <a href="/bot">/bot</a>.

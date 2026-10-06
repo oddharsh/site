@@ -22,7 +22,7 @@ export function xpChromeCss() {
   * { box-sizing: border-box; }
   body {
     font-family: var(--font-ui);
-    font-size: 10.5pt; line-height: 1.5; color: var(--ink);
+    font-size: var(--text-body); line-height: 1.5; color: var(--ink);
     margin: 0;
   }
   .window { max-width: var(--axp-maxw, 720px); }

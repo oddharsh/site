@@ -111,7 +111,6 @@
   --surface-field:    var(--window);               /* inputs / wells           */
   --text-title:       oklch(100% 0 0);             /* caption text (white)      */
   --text-heading:     var(--blue-40);              /* navy h1–h3                */
-  --text-body:        var(--ink);
   --text-muted:       var(--ink-dim);
   --border-window-color: var(--frame);
   --border-field:     var(--frame);
@@ -249,16 +248,24 @@
 
   /* ── SIZE SCALE — authored in pt, the period-correct unit for XP UI ──────
      The site sets body at 10.5pt and scales headings up; control text is 10pt.
-     Kept in pt so it reads like a 2003 dialog, not a 2026 rem grid. */
-  --text-h1:    14pt;   /* page heading (homepage h1)                          */
+     Kept in pt so it reads like a 2003 dialog, not a 2026 rem grid. Every pt
+     size up to 14pt names one of these; the type contract refuses a literal.
+     px stays legal for pixel-exact chrome and SVG text, and anything over 14pt
+     is display type, composed per page. */
   --text-h1-lg: 18pt;   /* large heading (coffee page h1)                      */
+  --text-h1:    14pt;   /* page heading (homepage h1)                          */
+  --text-lg:    13pt;   /* big figures, stat numerals, lwe h2                  */
   --text-h2:    12pt;   /* section heading                                     */
-  --text-body:  10.5pt; /* prose / lede                                        */
+  --text-lede:  11pt;   /* ledes and intro paragraphs                          */
+  --text-body:  10.5pt; /* prose                                               */
   --text-ui:    10pt;   /* buttons, labels, list rows                          */
   --text-sm:    9.5pt;  /* meta, captions                                      */
   --text-xs:    9pt;    /* footer, status bar                                  */
   --text-mono:  9pt;    /* mono readouts, badges                               */
   --text-micro: 8.5pt;  /* status pills, fine print                            */
+  --text-2xs:   8pt;    /* dense tables, chat metadata, code in proofs         */
+  --text-3xs:   7.5pt;  /* sub-labels, tags                                    */
+  --text-4xs:   7pt;    /* bit and byte labels inside diagrams                 */
 
   /* ── WEIGHTS — XP UI is normal or bold, nothing in between ───────────────*/
   --weight-normal: 400;
@@ -426,11 +433,11 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
 /* accessory windows — small built-in apps (a Clock for now) that float over the */
 /* desktop, composite, drag, and click-to-front. plain DOM windows, no iframes. */
 .axp-acc{position:fixed;z-index:40;min-width:170px;background:var(--paper);border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
-.axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:10pt;text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,var(--blue-95),var(--blue-65) 60%,var(--blue-55))}
+.axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-ui);text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,var(--blue-95),var(--blue-65) 60%,var(--blue-55))}
 .axp-acc>.tb .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .axp-acc>.tb .x{width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;border:1px solid #d8401c;border-radius:3px;background:linear-gradient(180deg,#e8795f,#ae3110);font-size:9px;cursor:pointer}.axp-acc>.tb .x:hover{filter:brightness(1.12)}
 .axp-acc>.bd{padding:8px;background:#ece9d8}
-.clk{text-align:center;padding:5px 12px}.clk-t{font-family:var(--font-mono);font-size:22pt;font-weight:bold;color:#15243f;letter-spacing:1px}.clk-d{font-size:8.5pt;color:#4a5568;margin-top:3px;white-space:nowrap}
+.clk{text-align:center;padding:5px 12px}.clk-t{font-family:var(--font-mono);font-size:22pt;font-weight:bold;color:#15243f;letter-spacing:1px}.clk-d{font-size:var(--text-micro);color:#4a5568;margin-top:3px;white-space:nowrap}
 /* windows drag by their title bar */
 .title-bar,.np-titlebar{cursor:move}
 .axp-dragging{user-select:none;will-change:transform}.axp-dragging .title-bar,.axp-dragging .np-titlebar,.axp-acc.axp-dragging>.tb{cursor:grabbing}
@@ -569,7 +576,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   :where(.title-bar) {
     background: var(--grad-title);
     color: oklch(100.00% 0 0); font-family: var(--font-caption);
-    font-size: 10pt; font-weight: bold; padding: 4px 8px;
+    font-size: var(--text-ui); font-weight: bold; padding: 4px 8px;
     border-bottom: 1px solid var(--blue-40); display: flex;
     align-items: center; justify-content: space-between;
     text-box-trim: trim-both; text-box-edge: cap alphabetic;
@@ -697,7 +704,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
    bevel until then. The base is XP's 75px dialog button at 8pt. */
 :where(.xp-button) {
   display: inline-block; min-width: 75px; padding: 3px 12px;
-  font: 8pt/1.4 var(--font-ui); color: #000;
+  font: var(--text-2xs)/1.4 var(--font-ui); color: #000;
   text-align: center; text-decoration: none; cursor: pointer; user-select: none;
   border: 1px solid #8e9dad; border-radius: 3px;
   background: linear-gradient(180deg, #ffffff 0%, #fdfdfd 45%, #f3f2ec 55%, #e9e7dc 100%);
@@ -729,11 +736,11 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
    (measured across .btn, .xp-btn, .pqc-run, .hb-btn, .sy-btn and friends), so
    compact takes the middle of that: no floor, 9pt, 3px 9px. The press still
    nudges the label 1px down and right. */
-:where(.xp-button.compact) { min-width: 0; padding: 3px 9px; font-size: 9pt; }
+:where(.xp-button.compact) { min-width: 0; padding: 3px 9px; font-size: var(--text-xs); }
 :where(.xp-button.compact:active:not(:disabled)) { padding: 4px 8px 2px 10px; }
 :where(.xp-input) {
   box-sizing: border-box; width: 100%;
-  font-family: var(--font-ui); font-size: 10.5pt;
+  font-family: var(--font-ui); font-size: var(--text-body);
   color: #181818; background: #ffffff; padding: 3px 6px; border-radius: 0;
   border: 1px solid #7f9db9; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff;
 }
@@ -752,7 +759,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
    Notepad and pixel-peeper use it. */
 :where(.xp-statusbar) {
   flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-  padding: 4px 10px; font: 8.5pt/1.4 var(--font-ui); color: var(--ink-dim);
+  padding: 4px 10px; font: var(--text-micro)/1.4 var(--font-ui); color: var(--ink-dim);
   background: var(--face-light); border-top: 1px solid var(--rule);
 }
 :where(.xp-statusbar:not(.panes) > span:not(:last-child))::after { content: "·"; margin-left: 8px; color: var(--ink-faint); }
@@ -783,7 +790,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .now-playing { margin: 32px 0 4px; }
 .now-playing h2 {
   font-family: var(--font-caption);
-  font-size: 12pt;
+  font-size: var(--text-h2);
   color: var(--blue-40);
   text-wrap: balance;
   margin: 0 0 32px;
@@ -803,7 +810,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 }
 .now-playing h2 .np-open {
   font-family: var(--font-ui);
-  font-size: 9pt;
+  font-size: var(--text-xs);
   font-weight: normal;
   color: oklch(52% 0.03 255);
   white-space: nowrap;
@@ -833,7 +840,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .np-list li {
   padding: 5px 8px;
   border-bottom: 1px solid oklch(92.73% 0.0139 247.98);
-  font-size: 10pt;
+  font-size: var(--text-ui);
   line-height: 1.35;
 }
 /* The li padding is part of the track's rich-hover target but sits outside its
@@ -875,7 +882,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .np-explicit {
   display: inline-block;
   font-family: var(--font-mono);
-  font-size: 8pt;
+  font-size: var(--text-2xs);
   font-weight: bold;
   color: var(--ink-dim);
   background: oklch(94.91% 0 0);
@@ -886,7 +893,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 }
 .np-duration {
   font-family: var(--font-mono);
-  font-size: 9pt;
+  font-size: var(--text-mono);
   color: var(--ink-faint);
   float: right;
   margin-left: 8px;
@@ -1041,7 +1048,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   width: 240px;
   margin: 0 3px 3px;
   padding: 3px 5px;
-  font-size: 8.5pt;
+  font-size: var(--text-micro);
   color: oklch(38% 0 0);
   background: oklch(96% 0.004 240);
   border: 1px solid var(--frame);
@@ -1051,7 +1058,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .xp-tooltip .car-credit {
   display: block;
   margin-top: 1px;
-  font-size: 7.5pt;
+  font-size: var(--text-3xs);
   color: oklch(58% 0 0);
 }
 a.car-link:link,
@@ -1151,7 +1158,7 @@ a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
 
 /* address bar — sits between the caption and the workspace, so it reads as
    window chrome rather than as page content. */
-.axp-address{display:flex;align-items:center;gap:6px;padding:3px 6px;background:#ece9d8;border-bottom:1px solid var(--shadow);font:11px/1.6 Tahoma,Verdana,Geneva,sans-serif;color:var(--ink-soft)}
+.axp-address{display:flex;align-items:center;gap:6px;padding:3px 6px;background:#ece9d8;border-bottom:1px solid var(--shadow);font:11px/1.6 var(--font-ui);color:var(--ink-soft)}
 .axp-addr-label{flex:0 0 auto;padding-left:2px}
 /* the well scrolls rather than wraps, so a deep path never grows the chrome to
    a second row and shifts the document down. */
@@ -1164,9 +1171,9 @@ a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
 .axp-sep{padding:0 1px;color:oklch(60% 0 0)}
 
 /* task pane — Luna's pale-blue group boxes: gel caption, rounded top only. */
-.axp-pane{display:flex;flex-direction:column;gap:10px;font:11px/1.45 Tahoma,Verdana,Geneva,sans-serif}
+.axp-pane{display:flex;flex-direction:column;gap:10px;font:11px/1.45 var(--font-ui)}
 .axp-group{border:1px solid var(--rule);border-radius:3px 3px 0 0;overflow:hidden;background:linear-gradient(180deg,oklch(98% 0.012 259),oklch(94.5% 0.028 259))}
-.axp-group>h2{margin:0;padding:4px 8px;font:700 11px/1.5 "Trebuchet MS",Verdana,Geneva,sans-serif;color:var(--blue-45);background:linear-gradient(180deg,#fff,oklch(93.5% 0.032 259));border-bottom:1px solid oklch(88% 0.03 259)}
+.axp-group>h2{margin:0;padding:4px 8px;font:700 11px/1.5 var(--font-caption);color:var(--blue-45);background:linear-gradient(180deg,#fff,oklch(93.5% 0.032 259));border-bottom:1px solid oklch(88% 0.03 259)}
 .axp-group>ul{margin:0;padding:6px 8px;list-style:none;display:flex;flex-direction:column;gap:5px}
 .axp-group a{color:oklch(42.61% 0.30 263.74);text-decoration:none}
 .axp-group a:hover{text-decoration:underline}
@@ -1175,7 +1182,7 @@ a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
 .axp-group dt{color:var(--ink-soft);font-size:10px}
 /* a long object name or path wraps inside the rail instead of running out under
    the document column. */
-.axp-group dd{margin:0 0 5px;color:var(--ink);font:10px/1.4 "Courier New",Courier,monospace;overflow-wrap:anywhere}
+.axp-group dd{margin:0 0 5px;color:var(--ink);font:10px/1.4 var(--font-mono);overflow-wrap:anywhere}
 
 /* Narrow: omit the furniture. Turning a 186px sidebar into a full-width strip
    below the document makes secondary navigation look like page content and

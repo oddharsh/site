@@ -50,20 +50,20 @@ export function renderSecurityCenter() {
   const colo = live("colo");
   const shield = `<svg class="shield" viewBox="0 0 16 16" fill="#fff" aria-hidden="true"><path d="M8 1.2 2 3.3v4.2c0 3.8 2.5 6.2 6 7.5 3.5-1.3 6-3.7 6-7.5V3.3z"/><path d="M5.4 8.2 7 9.8l3.4-3.6" fill="none" stroke="#3c8f24" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const css = `/*min*/
-.sc-lede{font-size:9.5pt;color:#4a5568;margin:0 0 13px}
+.sc-lede{font-size:var(--text-sm);color:#4a5568;margin:0 0 13px}
 .sc-panel{border:1px solid #b7c0d0;border-radius:4px;margin:0 0 9px;overflow:hidden;box-shadow:inset 0 1px 0 #fff}
-.sc-bar{display:flex;align-items:center;gap:8px;padding:6px 11px;font-weight:bold;font-family:var(--font-caption);font-size:10.5pt;color:#fff;background:linear-gradient(180deg,#62b043,#3c8f24);text-shadow:0 1px 1px rgba(0,0,0,.25)}
+.sc-bar{display:flex;align-items:center;gap:8px;padding:6px 11px;font-weight:bold;font-family:var(--font-caption);font-size:var(--text-body);color:#fff;background:linear-gradient(180deg,#62b043,#3c8f24);text-shadow:0 1px 1px rgba(0,0,0,.25)}
 .sc-bar .shield{width:17px;height:17px;flex:0 0 17px}
 /* 3px, not the 9px pill it was: the only other radius on this page is 4px, and
    a fully-rounded lozenge is the one shape Luna never used for a status read. */
-.sc-bar .state{margin-left:auto;font-size:8.5pt;font-weight:normal;background:rgba(255,255,255,.24);padding:1px 9px;border-radius:3px;letter-spacing:.04em}
-.sc-body{padding:8px 12px;background:#fbfdff;font-size:9.5pt;color:#33415c;line-height:1.5}
+.sc-bar .state{margin-left:auto;font-size:var(--text-micro);font-weight:normal;background:rgba(255,255,255,.24);padding:1px 9px;border-radius:3px;letter-spacing:.04em}
+.sc-body{padding:8px 12px;background:#fbfdff;font-size:var(--text-sm);color:#33415c;line-height:1.5}
 .sc-body b{color:#15243f}
-.sc-body code,.sc-body .mono{font-family:var(--font-mono);font-size:8.5pt}
-dl.sc-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:6px 0 0;font-size:9pt}
+.sc-body code,.sc-body .mono{font-family:var(--font-mono);font-size:var(--text-micro)}
+dl.sc-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:6px 0 0;font-size:var(--text-xs)}
 dl.sc-grid dt{color:#6b7280}
-dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:8.5pt;word-break:break-word}
-.sc-foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:10px}
+dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:var(--text-micro);word-break:break-word}
+.sc-foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:10px}
 `;
   const body = `
     <h1>Security Center</h1>

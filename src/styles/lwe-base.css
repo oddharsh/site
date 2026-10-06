@@ -5,16 +5,16 @@
  * :root (see "per-concept chrome" at the bottom); the rules that draw it live
  * here once. Page-only demo and content rules stay inline beside their markup. */
 html, body { margin: 0; padding: 0; }
-body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: var(--ink); }
+body { font-family: var(--font-ui); font-size: var(--text-body); line-height: 1.5; color: var(--ink); }
 .window { --axp-maxw: 640px; }
 .content { background: var(--paper); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
 .msgr { display: flex; flex-direction: column; }
 /* an h1 (the page heading), styled as the plain buddy line it replaced */
 .msgr-head .who { flex: 1; min-width: 0; margin: 0; font: inherit; color: inherit; }
-.msgr-head .who .stat { display: block; font-size: 8.5pt; color: oklch(46% 0.02 145); }
+.msgr-head .who .stat { display: block; font-size: var(--text-micro); color: oklch(46% 0.02 145); }
 .msgr-head .who .stat::before { content: "● "; color: oklch(60% 0.18 145); }
-.msgr-head .pets { font-size: 8pt; color: #6b7280; text-align: right; line-height: 1.35; }
-.disclosure { font-size: 8.5pt; color: #5a6679; background: #fcfbe9; border-bottom: 1px solid #e6dfa8; padding: 5px 12px; }
+.msgr-head .pets { font-size: var(--text-2xs); color: #6b7280; text-align: right; line-height: 1.35; }
+.disclosure { font-size: var(--text-micro); color: #5a6679; background: #fcfbe9; border-bottom: 1px solid #e6dfa8; padding: 5px 12px; }
 .log { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 11px; }
 .msg { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; content-visibility: auto; contain-intrinsic-size: auto 90px; }
 /* A grid item's automatic minimum size is its min-content width, and a `white-space: pre`
@@ -27,10 +27,10 @@ body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: 
 .msg .pic { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #99a; position: relative; overflow: hidden; }
 .msg.you .pic { background: linear-gradient(180deg,#ffb35a,#f08a25); border-color:#c96a10; }
 .msg.you .pic::before { content: ":)"; position: absolute; inset: 0; display: grid; place-items: center; color: #7a3d00; font-weight: bold; font-size: 9px; transform: rotate(90deg); }
-.msg .who { font-size: 8.5pt; margin-bottom: 1px; }
+.msg .who { font-size: var(--text-micro); margin-bottom: 1px; }
 .msg .who b { font-family: var(--font-caption); }
 .msg.you .who b { color: #b5560c; }
-.msg .bubble { font-size: 10.5pt; }
+.msg .bubble { font-size: var(--text-body); }
 .msg.bot .bubble { color: #15243f; }
 .msg.you .bubble { color: #3a2a12; }
 .msg .bubble p { margin: 0 0 7px; }
@@ -38,7 +38,7 @@ body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: 
 .msg .bubble em { font-style: italic; }
 .msg a { color: #1a4fc4; }
 .demo > .bar::before { content: "🖥"; filter: grayscale(.2); }
-.demo .lead { font-size: 9pt; color: #4a5568; margin: 0 0 10px; }
+.demo .lead { font-size: var(--text-xs); color: #4a5568; margin: 0 0 10px; }
 .demo .lead b { color: #15243f; }
 .mono { font-family: var(--font-mono); }
 .compose .box { display: flex; gap: 7px; }
@@ -54,17 +54,17 @@ body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: 
 .msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, var(--head-g0, #fffdf6), var(--head-g1, #f6edd6)); border-bottom: 1px solid var(--head-rule, #e0cf9e); }
 .msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid var(--ava-border, var(--pic-border)); background: linear-gradient(180deg, var(--ava-g0, var(--pic-g0)), var(--ava-g1, var(--pic-g1))); position: relative; }
 .msgr-head .ava::before { content: var(--glyph); position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: var(--ava-glyph-size, 19px); font-family: var(--glyph-font, var(--font-caption)); }
-.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: var(--name-color); }
+.msgr-head .who b { font-family: var(--font-caption); font-size: var(--text-lede); color: var(--name-color); }
 .disclosure b { color: var(--disclosure-ink, var(--name-color)); }
 .disclosure a { color: #1a4fc4; }
 .msg.bot .pic { background: linear-gradient(180deg, var(--pic-g0), var(--pic-g1)); border-color: var(--pic-border); }
 .msg.bot .pic::before { content: var(--glyph); position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: var(--pic-glyph-size, 13px); font-family: var(--glyph-font, var(--font-caption)); }
 .msg.bot .who b { color: var(--name-color); }
-.msg .who time { color: #66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .who time { color: #66707d; font-family: var(--font-mono); font-size: var(--text-2xs); margin-left: 5px; }
 .demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft, #f6f1e6); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
-.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: var(--bar-ink, var(--name-color)); background: linear-gradient(180deg, var(--bar-g0, #f6edd6), var(--bar-g1, #ecdfb8)); border-bottom: 1px solid var(--accent); font-weight: bold; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: var(--text-micro); color: var(--bar-ink, var(--name-color)); background: linear-gradient(180deg, var(--bar-g0, #f6edd6), var(--bar-g1, #ecdfb8)); border-bottom: 1px solid var(--accent); font-weight: bold; }
 .demo > .pad { padding: 11px 12px 13px; background: var(--pad-bg, #fff); }
-.scrollnote { text-align: center; font-size: 8pt; color: #66707d; padding: 3px 0 9px; }
+.scrollnote { text-align: center; font-size: var(--text-2xs); color: #66707d; padding: 3px 0 9px; }
 .compose { border-top: 1px solid var(--compose-rule, #e0cf9e); background: linear-gradient(180deg, var(--compose-g0, #fffdf6), var(--compose-g1, #f3ead0)); padding: 7px 10px; }
-.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #66707d; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: var(--text-sm); color: #66707d; }
 @media (max-width: 520px) { .msgr-head .pets { display: none; } }

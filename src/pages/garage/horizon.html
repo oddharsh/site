@@ -26,9 +26,9 @@
 <link rel="stylesheet" href="/prose.css">
 <style>
 p { margin: 0 0 12px; }
-code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
+code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
 pre {
-  font-family: var(--font-mono); font-size: 10.5pt; line-height: 1.5;
+  font-family: var(--font-mono); font-size: var(--text-body); line-height: 1.5;
   background: var(--row-alt); border: 1px solid var(--rule);
   padding: 8px 10px; margin: 8px 0;
   /* wrap long code lines instead of forcing a sideways scroll on narrow
@@ -42,7 +42,7 @@ pre {
 /* ── "your browser" capability strip ─────────────────────────────────── */
 .cap-strip { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 18px; }
 .chip {
-  font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold;
+  font-family: var(--font-mono); font-size: var(--text-micro); font-weight: bold;
   padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
   color: var(--ink-dim); border-color: oklch(72% 0 0); background: oklch(97% 0 0);
 }
@@ -65,13 +65,13 @@ pre {
   contain-intrinsic-size: auto 360px;
 }
 .demo > h2 {
-  font-family: var(--font-caption); font-size: 13pt; font-weight: bold;
+  font-family: var(--font-caption); font-size: var(--text-lg); font-weight: bold;
   color: var(--blue-40); margin: 0 0 2px; display: flex; align-items: baseline;
   justify-content: space-between; gap: 10px; flex-wrap: wrap;
 }
-.demo > h2 .mono { font-size: 10pt; font-weight: normal; color: oklch(40% 0 0); }
+.demo > h2 .mono { font-size: var(--text-ui); font-weight: normal; color: oklch(40% 0 0); }
 .stat {
-  font-family: var(--font-mono); font-size: 8pt; font-weight: bold; letter-spacing: .04em;
+  font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: bold; letter-spacing: .04em;
   padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; white-space: nowrap;
 }
 .stat.cross    { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
@@ -81,14 +81,14 @@ pre {
 /* WebKit standards-position chip: what Safari's team actually said, sourced
    from webkit.org/standards-positions (the authoritative signal, vs. the
    secondhand chromestatus "Safari view" column). */
-.wk { font-family: var(--font-mono); font-size: 7.5pt; font-weight: bold;
+.wk { font-family: var(--font-mono); font-size: var(--text-3xs); font-weight: bold;
   padding: 0 4px; border: 1px solid; border-radius: 2px; white-space: nowrap; margin-right: 5px; }
 .wk.sup { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
 .wk.opp { color: oklch(46.34% 0.1902 29.23);  border-color: oklch(46.34% 0.1902 29.23);  background: oklch(98% 0.03 30); }
 .wk.non { color: var(--ink-dim); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
-.demo .note { font-size: 9.5pt; color: oklch(40% 0 0); margin: 8px 0 0; }
-.demo .replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
-.unsupported { display: none; font-size: 9.5pt; color: oklch(46% 0.10 50); margin-top: 8px; }
+.demo .note { font-size: var(--text-sm); color: oklch(40% 0 0); margin: 8px 0 0; }
+.demo .replaces { font-size: var(--text-sm); color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+.unsupported { display: none; font-size: var(--text-sm); color: oklch(46% 0.10 50); margin-top: 8px; }
 .demo.no-support .unsupported { display: block; }
 /* "shipped" = not just feasible, but actually live in production on the real
    site (homepage / shell / worker / serendipity), not only demoed here. Filled
@@ -96,13 +96,13 @@ pre {
    on colour alone). The .shipped class + .ship-tag are added by the cap-strip
    script from a hand-kept list of what's genuinely adopted. */
 .demo.shipped { background: oklch(95% 0.055 150 / 0.62); border-color: oklch(70% 0.12 150); box-shadow: inset 3px 0 0 oklch(58% 0.16 150); }
-.ship-tag { display: inline-block; margin: 0 0 10px; padding: 1px 8px; font: bold 8pt var(--font-ui); letter-spacing: .05em; text-transform: uppercase; color: oklch(36% 0.13 150); background: oklch(90% 0.10 150); border: 1px solid oklch(66% 0.13 150); }
+.ship-tag { display: inline-block; margin: 0 0 10px; padding: 1px 8px; font: bold var(--text-2xs) var(--font-ui); letter-spacing: .05em; text-transform: uppercase; color: oklch(36% 0.13 150); background: oklch(90% 0.10 150); border: 1px solid oklch(66% 0.13 150); }
 @media (--p3) { .demo.shipped { background: oklch(95% 0.08 150 / 0.62); } }
 
 /* ── text-box-trim demo ──────────────────────────────────────────────── */
 .tb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 @media (max-width: 520px) { .tb-grid { grid-template-columns: 1fr; } }
-.tb-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 0 0 4px; }
+.tb-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 0 0 4px; }
 .tb-line {
   font-family: var(--font-caption); font-size: 26px; line-height: 2.4;
   /* inline-block (NOT inline) so the highlight fills the element's BOX, which
@@ -116,7 +116,7 @@ pre {
 .tb-bar {
   background: var(--grad-title);
   color: oklch(100% 0 0); font-family: var(--font-caption); font-weight: bold;
-  font-size: 13pt; padding: 8px; border: 1px solid var(--blue-40); margin-top: 6px;
+  font-size: var(--text-lg); padding: 8px; border: 1px solid var(--blue-40); margin-top: 6px;
 }
 .tb-bar.trim { text-box-trim: trim-both; text-box-edge: cap alphabetic; }
 
@@ -125,7 +125,7 @@ pre {
 .swatch {
   background: var(--bg); aspect-ratio: 5 / 3; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 2px; border: 1px solid oklch(50% 0 0 / .4);
-  font-size: 8.5pt; text-align: center; padding: 4px;
+  font-size: var(--text-micro); text-align: center; padding: 4px;
 }
 .swatch .fixed { color: oklch(100% 0 0); }                 /* naive: white always */
 .swatch .auto  { color: oklch(0% 0 0); color: contrast-color(var(--bg)); font-weight: bold; }
@@ -137,11 +137,11 @@ pre {
   background: oklch(100% 0 0); box-shadow: 3px 3px 0 oklch(from var(--frame) l c h / .35);
 }
 .ifor-pop .cap {
-  font-size: 8.5pt; color: oklch(38% 0 0); padding: 3px 6px;
+  font-size: var(--text-micro); color: oklch(38% 0 0); padding: 3px 6px;
   background: oklch(96% 0.004 240); border-top: 1px solid var(--frame);
 }
 .ifor-pop .box { width: 200px; height: 120px; display: flex; align-items: center; justify-content: center;
-  font-size: 9pt; color: var(--ink-quiet); background: oklch(94% 0.01 250); }
+  font-size: var(--text-xs); color: var(--ink-quiet); background: oklch(94% 0.01 250); }
 /* anchor positioning: interestfor sets up an implicit anchor on the invoker,
    so the popover can place itself relative to the link with zero JS. */
 .ifor-pop:popover-open { position-area: bottom span-right; margin-top: 6px; }
@@ -150,16 +150,16 @@ pre {
 .watch { list-style: none; padding: 0; margin: 8px 0 0; }
 .watch li { padding: 7px 0; border-bottom: 1px solid oklch(93% 0.01 248); display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; }
 .watch li:last-child { border-bottom: none; }
-.watch .name { font-family: var(--font-mono); font-size: 9pt; font-weight: bold; color: oklch(38% 0.04 250); }
-.watch .desc { font-size: 9.5pt; color: oklch(35% 0 0); }
+.watch .name { font-family: var(--font-mono); font-size: var(--text-mono); font-weight: bold; color: oklch(38% 0.04 250); }
+.watch .desc { font-size: var(--text-sm); color: oklch(35% 0 0); }
 .watch .desc .s { font-style: italic; color: oklch(48% 0 0); }
 .stat.early { color: var(--ink-quiet); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
 .engine { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid oklch(93% 0.01 248); }
 .engine h3 {
-  font-family: var(--font-caption); font-size: 11.5pt; font-weight: bold;
+  font-family: var(--font-caption); font-size: var(--text-lede); font-weight: bold;
   color: var(--blue-40); margin: 0 0 4px; display: flex; align-items: baseline; gap: 8px;
 }
-.engine p { font-size: 9.5pt; color: oklch(33% 0 0); margin: 0 0 6px; }
+.engine p { font-size: var(--text-sm); color: oklch(33% 0 0); margin: 0 0 6px; }
 
 
 /* ════════ feature-card demos (added by workflow) ════════ */
@@ -184,7 +184,7 @@ pre {
   border: 1px solid var(--blue-40);
   background: oklch(100% 0 0);
   box-shadow: 3px 3px 0 oklch(from var(--frame) l c h / .35);
-  font-size: 8.5pt; max-width: 200px;
+  font-size: var(--text-micro); max-width: 200px;
 }
 .anc-pop .hd {
   font-family: var(--font-caption); font-weight: bold; color: oklch(100% 0 0);
@@ -246,13 +246,13 @@ pre {
   scroll-timeline-name: --sd-scroll; scroll-timeline-axis: y;
   scrollbar-width: thin;
 }
-.sd-scroller .filler { font-size: 8.5pt; color: oklch(52% 0 0); text-align: center;
+.sd-scroller .filler { font-size: var(--text-micro); color: oklch(52% 0 0); text-align: center;
   padding: 6px 0; font-style: italic; }
 
 /* each row reveals on its own view-timeline as it crosses the scrollport */
 .sd-row {
   margin: 7px 0; padding: 7px 9px; background: oklch(100% 0 0);
-  border: 1px solid oklch(86% 0.02 250); font-size: 9.5pt; color: oklch(30% 0.02 250);
+  border: 1px solid oklch(86% 0.02 250); font-size: var(--text-sm); color: oklch(30% 0.02 250);
   font-family: var(--font-caption);
   animation: sd-reveal linear both;
   animation-timeline: view();
@@ -294,24 +294,24 @@ pre {
   transform: translate(-50%, -50%);
   border: 1px solid var(--frame);
   background: oklch(100% 0 0); box-shadow: 4px 4px 0 oklch(from var(--frame) l c h / 0.35);
-  font-size: 9pt; min-width: 150px;
+  font-size: var(--text-xs); min-width: 150px;
 }
 .ph-pop .ph-bar {
   background: var(--grad-title);
   color: oklch(100% 0 0); font-family: var(--font-caption); font-weight: bold;
-  font-size: 8.5pt; padding: 2px 6px;
+  font-size: var(--text-micro); padding: 2px 6px;
 }
 .ph-pop .ph-body { padding: 6px 8px; color: oklch(35% 0 0); }
-.ph-pop .ph-body code { font-size: 8.5pt; }
+.ph-pop .ph-body code { font-size: var(--text-micro); }
 /* card: field-sizing */
 /* ── field-sizing demo ───────────────────────────────────────────────── */
 .fs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 @media (max-width: 520px) { .fs-grid { grid-template-columns: 1fr; } }
-.fs-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 0 0 4px; }
+.fs-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 0 0 4px; }
 /* sunken XP field: dark top-left, light bottom-right, the inverse of a raised
    button bevel, exactly like the homepage inputs. */
 .fs-field {
-  display: block; width: 100%; font-family: var(--font-ui); font-size: 10pt;
+  display: block; width: 100%; font-family: var(--font-ui); font-size: var(--text-ui);
   line-height: 1.5; color: var(--ink); padding: 5px 7px; resize: none;
   background: oklch(100% 0 0);
   border: 2px solid;
@@ -325,7 +325,7 @@ pre {
 .fs-field.fs-auto { field-sizing: content; min-height: 2.6em; max-height: 9em; }
 /* same single-line input flavour: grows with the value, shrinks the empty box */
 .fs-input {
-  font-family: var(--font-ui); font-size: 10pt; padding: 4px 7px;
+  font-family: var(--font-ui); font-size: var(--text-ui); padding: 4px 7px;
   background: oklch(100% 0 0); border: 2px solid;
   border-top-color: oklch(58% 0 0); border-left-color: oklch(58% 0 0);
   border-bottom-color: oklch(94% 0 0); border-right-color: oklch(94% 0 0);
@@ -346,7 +346,7 @@ placeholder
   /* XP "sunken" combobox: dark top-left, light bottom-right + an inner shadow,
      same bevel language as the cal/ form inputs. */
   font-family: var(--font-ui);
-  font-size: 10.5pt;
+  font-size: var(--text-body);
   color: var(--ink);
   background: oklch(100% 0 0);
   border: 2px solid;
@@ -396,7 +396,7 @@ placeholder
 }
 .bsel-field option {
   font-family: var(--font-ui);
-  font-size: 10pt;
+  font-size: var(--text-ui);
   padding: 4px 8px;
   display: flex;
   align-items: center;
@@ -430,7 +430,7 @@ placeholder
   border: 1px solid var(--blue-40);
   background: var(--grad-title);
   color: oklch(100% 0 0);
-  font-family: var(--font-caption); font-size: 9pt; font-weight: bold;
+  font-family: var(--font-caption); font-size: var(--text-xs); font-weight: bold;
   display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px;
 }
 .cs-cell.round    { corner-shape: round; }
@@ -453,9 +453,9 @@ placeholder
 .cs-frame .bar {
   background: var(--grad-title);
   color: oklch(100% 0 0); font-family: var(--font-caption); font-weight: bold;
-  font-size: 11pt; padding: 6px 10px;
+  font-size: var(--text-lede); padding: 6px 10px;
 }
-.cs-frame .body { padding: 8px 10px; font-size: 9pt; color: oklch(35% 0 0); }
+.cs-frame .body { padding: 8px 10px; font-size: var(--text-xs); color: oklch(35% 0 0); }
 
 /* unsupported browsers: the @supports block never applies, so the cells keep
    their plain rounded border-radius and we surface the fallback note. */
@@ -484,7 +484,7 @@ placeholder
 .cs-head {
   display: flex; align-items: center; justify-content: space-between;
   font-family: var(--font-caption); font-weight: bold;
-  font-size: 10.5pt; color: var(--blue-40);
+  font-size: var(--text-body); color: var(--blue-40);
   background: linear-gradient(180deg, oklch(97% 0.012 250) 0%, oklch(91% 0.02 250) 100%);
   padding: 5px 9px; cursor: pointer; user-select: none;
   border-bottom: 1px solid oklch(86% 0.03 250);
@@ -501,7 +501,7 @@ placeholder
 }
 .cs-demo[open] .cs-body { height: auto; }
 .cs-body-inner {
-  padding: 9px 11px; font-size: 9.5pt; color: oklch(34% 0 0);
+  padding: 9px 11px; font-size: var(--text-sm); color: oklch(34% 0 0);
   border-top: 1px solid oklch(94% 0.01 250);
 }
 .cs-body-inner p { margin: 0 0 7px; }
@@ -511,7 +511,7 @@ placeholder
 .cs-native { margin-top: 10px; }
 .cs-native > summary {
   font-family: var(--font-caption); font-weight: bold;
-  font-size: 10pt; color: var(--blue-40);
+  font-size: var(--text-ui); color: var(--blue-40);
   cursor: pointer; list-style-position: inside;
 }
 .cs-native::details-content {
@@ -525,7 +525,7 @@ placeholder
 .sy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 @media (max-width: 520px) { .sy-grid { grid-template-columns: 1fr; } }
 .sy-col h3 {
-  font-family: var(--font-caption); font-size: 9.5pt; font-weight: bold;
+  font-family: var(--font-caption); font-size: var(--text-sm); font-weight: bold;
   margin: 0 0 4px; color: var(--blue-40);
 }
 /* a faux main-thread timeline: a long unbroken bar vs. a yielded one with gaps
@@ -551,7 +551,7 @@ placeholder
 }
 .sy-track.blocked .tap { left: 48%; }
 .sy-track.yielded .tap { left: 48%; }
-.sy-leg { font-size: 8pt; color: oklch(48% 0 0); margin: 3px 0 0; }
+.sy-leg { font-size: var(--text-2xs); color: oklch(48% 0 0); margin: 3px 0 0; }
 .sy-leg .red { color: var(--warn); font-weight: bold; }
 @media (--p3) {
   .sy-track .tap { background: oklch(58.99% 0.2604 26.30); }
@@ -561,24 +561,24 @@ placeholder
 .sy-live { margin-top: 12px; }
 .sy-rail { position: relative; height: 20px; margin-bottom: 6px; background: oklch(96% 0.004 240); border: 1px solid var(--frame); overflow: hidden; }
 .sy-dot { position: absolute; top: 3px; left: 0; width: 13px; height: 13px; border-radius: 50%; background: var(--grad-title); }
-.sy-meter { font-size: 8.5pt; color: var(--ink-quiet); margin: 0; }
+.sy-meter { font-size: var(--text-micro); color: var(--ink-quiet); margin: 0; }
 .sy-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
-.sy-out { font-size: 8.5pt; color: oklch(38% 0 0); margin: 8px 0 0; min-height: 2.6em; }
+.sy-out { font-size: var(--text-micro); color: oklch(38% 0 0); margin: 8px 0 0; min-height: 2.6em; }
 .sy-out .hi { color: var(--warn); font-weight: bold; }
 .sy-out .lo { color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
 /* card: html-in-canvas */
 /* ── HTML-in-Canvas (drawElement) demo ───────────────────────────────── */
 .hic-stage { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; align-items: start; }
 @media (max-width: 520px) { .hic-stage { grid-template-columns: 1fr; } }
-.hic-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 0 0 4px; }
+.hic-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 0 0 4px; }
 /* the live DOM source: a real XP title bar we will rasterize into canvas */
 .hic-src {
   background: var(--grad-title);
   color: oklch(100% 0 0); font-family: var(--font-caption); font-weight: bold;
-  font-size: 11pt; padding: 5px 8px; border: 1px solid var(--blue-40);
+  font-size: var(--text-lede); padding: 5px 8px; border: 1px solid var(--blue-40);
   display: flex; align-items: center; justify-content: space-between;
 }
-.hic-src .glyphs { font-family: var(--font-ui); font-size: 9pt; letter-spacing: 2px; }
+.hic-src .glyphs { font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: 2px; }
 .hic-src .glyphs span {
   display: inline-block; background: oklch(87.51% 0.0281 248.15); color: var(--blue-40);
   border: 1px solid var(--blue-40); padding: 0 4px; margin-left: 2px;
@@ -587,7 +587,7 @@ placeholder
   border: 1px solid var(--frame); background: oklch(97% 0.004 240);
   display: block; width: 100%; height: auto; image-rendering: auto;
 }
-.hic-note2 { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
+.hic-note2 { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 6px 0 0; }
 .hic-fail { display: none; }
 .demo.no-support .hic-fail { display: block; }
 .demo.no-support .hic-stage { opacity: .5; }
@@ -622,7 +622,7 @@ placeholder
   box-shadow: 1px 1px 0 oklch(from var(--frame) l c h / 0.35);
   display: flex; align-items: flex-end; justify-content: flex-start;
   padding: 4px 5px;
-  font-family: var(--font-mono); font-size: 8pt;
+  font-family: var(--font-mono); font-size: var(--text-2xs);
   color: oklch(38% 0.04 250);
 }
 /* varied aspect ratios = the whole point of masonry: portrait + landscape
@@ -640,7 +640,7 @@ placeholder
 .mas-mock .cap { opacity: 0.85; }
 
 .mas-flag {
-  font-family: var(--font-mono); font-size: 8.5pt;
+  font-family: var(--font-mono); font-size: var(--text-micro);
   color: oklch(46% 0.10 50);
   margin-top: 8px;
 }
@@ -660,28 +660,28 @@ placeholder
   background: oklch(98% 0.004 250); padding: 8px 9px;
 }
 .jxl-fmt h3 {
-  font-family: var(--font-mono); font-size: 9.5pt; font-weight: bold;
+  font-family: var(--font-mono); font-size: var(--text-sm); font-weight: bold;
   margin: 0 0 5px; color: oklch(38% 0.04 250);
 }
 /* a fake "file-size meter" bar: relative bytes at matched quality, illustrative */
 .jxl-bar { height: 9px; background: oklch(86% 0.06 250); border: 1px solid var(--frame); margin: 4px 0; }
 .jxl-bar > i { display: block; height: 100%; background: var(--grad-title); }
-.jxl-fmt .jxl-kb { font-size: 8.5pt; color: var(--ink-quiet); }
-.jxl-fmt .jxl-ships { font-size: 8pt; font-family: var(--font-mono); color: oklch(48% 0 0); margin-top: 3px; }
+.jxl-fmt .jxl-kb { font-size: var(--text-micro); color: var(--ink-quiet); }
+.jxl-fmt .jxl-ships { font-size: var(--text-2xs); font-family: var(--font-mono); color: oklch(48% 0 0); margin-top: 3px; }
 .jxl-fmt.win { background: oklch(98% 0.04 142); border-color: oklch(49.32% 0.1678 142.50); }
 .jxl-fmt.win .jxl-bar > i { background: linear-gradient(180deg, oklch(62% 0.16 142), oklch(49.32% 0.1678 142.50)); }
 .jxl-feat { list-style: none; padding: 0; margin: 10px 0 0; }
-.jxl-feat li { font-size: 9pt; color: oklch(35% 0 0); padding: 2px 0 2px 16px; position: relative; }
+.jxl-feat li { font-size: var(--text-xs); color: oklch(35% 0 0); padding: 2px 0 2px 16px; position: relative; }
 .jxl-feat li::before { content: "\25B8"; position: absolute; left: 2px; color: oklch(49.72% 0.1129 250.87); }
 /* card: hdr-agtm */
 /* ── HDR adaptive tone-mapping (AGTM) mockup ─────────────────────────── */
 .hdr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 @media (max-width: 520px) { .hdr-grid { grid-template-columns: 1fr; } }
-.hdr-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 0 0 4px; }
+.hdr-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 0 0 4px; }
 .hdr-swatch {
   aspect-ratio: 5 / 3; border: 1px solid oklch(50% 0 0 / .4);
   display: flex; align-items: flex-end; justify-content: center;
-  font-size: 8.5pt; color: oklch(100% 0 0); text-shadow: 0 1px 2px oklch(0% 0 0 / .6);
+  font-size: var(--text-micro); color: oklch(100% 0 0); text-shadow: 0 1px 2px oklch(0% 0 0 / .6);
   padding: 4px; text-align: center;
 }
 /* SDR: the "sun" is a hard radial that clips to flat white at center */
@@ -715,11 +715,11 @@ placeholder
 }
 .hdr-room::before {
   content: "SDR ceiling"; position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
-  font-family: var(--font-mono); font-size: 7pt; color: oklch(40% 0 0);
+  font-family: var(--font-mono); font-size: var(--text-4xs); color: oklch(40% 0 0);
 }
 .hdr-room::after {
   content: "AGTM headroom"; position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
-  font-family: var(--font-mono); font-size: 7pt; color: oklch(38% 0.10 60);
+  font-family: var(--font-mono); font-size: var(--text-4xs); color: oklch(38% 0.10 60);
 }
 /* card: route-matching */
 /* route-matching: no live demo (flag-gated, no engine ships the CSS side).
@@ -729,7 +729,7 @@ placeholder
 .rm-bar {
   display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--blue-45);
   background: linear-gradient(180deg, oklch(96% 0.006 250) 0%, oklch(90% 0.01 250) 100%);
-  font-family: var(--font-caption); font-size: 10pt;
+  font-family: var(--font-caption); font-size: var(--text-ui);
 }
 .rm-bar .rm-tab {
   padding: 5px 12px; border-right: 1px solid oklch(70% 0.02 250);
@@ -745,18 +745,18 @@ placeholder
   border-top-color: var(--blue-40);
   box-shadow: inset 0 -2px 0 oklch(from var(--blue-40) l c h / .6);
 }
-.rm-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
+.rm-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 6px 0 0; }
 
 /* the QUERY card: a measured table rather than a live probe, because the thing
    being measured is an origin's edge and this page cannot re-run that on load. */
 .hq-probe { margin: 10px 0 0; }
-.hq-table { border-collapse: collapse; width: 100%; font-size: 8.5pt; margin: 6px 0 0; }
+.hq-table { border-collapse: collapse; width: 100%; font-size: var(--text-micro); margin: 6px 0 0; }
 .hq-table th, .hq-table td { text-align: left; padding: 3px 8px 3px 0; border-bottom: 1px solid oklch(88% 0 0); vertical-align: top; }
 .hq-table th { font-weight: 700; color: oklch(38% 0 0); border-bottom-color: oklch(72% 0 0); }
 .hq-table td.mono { white-space: nowrap; }
 .hq-table .hq-y { color: oklch(48% 0.13 145); font-weight: 700; }
 .hq-table .hq-n { color: oklch(52% 0.16 27); font-weight: 700; }
-.hq-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 8px 0 0; }
+.hq-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 8px 0 0; }
 </style>
 <link rel="stylesheet" href="/luna.css">
 <script>
@@ -2234,36 +2234,36 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <style>
       /* --- CSS Carousel (::scroll-marker / ::scroll-button) --- */
       .cc-rail { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; padding: 6px; border: 1px solid oklch(80% 0.02 250); background: oklch(96% 0.01 250); border-radius: 4px; scroll-marker-group: after; }
-      .cc-slide { flex: 0 0 100%; height: 130px; scroll-snap-align: center; display: grid; place-items: center; color: #fff; font: bold 16pt "Trebuchet MS", Verdana, sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,.45); background: var(--c); border-radius: 3px; }
+      .cc-slide { flex: 0 0 100%; height: 130px; scroll-snap-align: center; display: grid; place-items: center; color: #fff; font: bold 16pt var(--font-caption); text-shadow: 0 1px 3px rgba(0,0,0,.45); background: var(--c); border-radius: 3px; }
       .cc-rail::scroll-marker-group { display: flex; justify-content: center; align-items: center; gap: 7px; padding-top: 9px; }
       .cc-slide::scroll-marker { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1px solid oklch(45% 0.10 250); background: oklch(90% 0.02 250); cursor: pointer; transition: background var(--xp-transition-move), transform var(--xp-transition-move); }
       .cc-slide::scroll-marker:hover { transform: scale(1.25); }
       .cc-slide::scroll-marker:target-current { background: oklch(50% 0.22 263); border-color: oklch(38% 0.18 263); }
-      .cc-rail::scroll-button(left), .cc-rail::scroll-button(right) { border: 1px solid oklch(60% 0.06 254); background: linear-gradient(180deg, #fff, #eceae0); border-radius: 3px; padding: 1px 10px; margin: 9px 4px 0; cursor: pointer; font: bold 12pt Tahoma, sans-serif; color: oklch(40% 0.09 250); }
+      .cc-rail::scroll-button(left), .cc-rail::scroll-button(right) { border: 1px solid oklch(60% 0.06 254); background: linear-gradient(180deg, #fff, #eceae0); border-radius: 3px; padding: 1px 10px; margin: 9px 4px 0; cursor: pointer; font: bold var(--text-h2) var(--font-ui); color: oklch(40% 0.09 250); }
       .cc-rail::scroll-button(left):hover, .cc-rail::scroll-button(right):hover { border-color: #e9994a; box-shadow: 0 0 3px 1px rgba(255,199,60,.5); }
       .cc-rail::scroll-button(left):disabled, .cc-rail::scroll-button(right):disabled { opacity: .35; cursor: default; box-shadow: none; }
       .cc-rail::scroll-button(left) { content: "\2039 prev"; }
       .cc-rail::scroll-button(right) { content: "next \203A"; }
       /* --- Invoker Commands --- */
-      .ic-pop { max-width: 320px; padding: 12px 14px; font-size: 9.5pt; color: oklch(25% 0 0); background: oklch(99.5% 0.012 100); border: 1px solid oklch(40% 0 0); border-radius: 4px; box-shadow: 0 8px 24px -6px rgba(0,0,0,.4); }
+      .ic-pop { max-width: 320px; padding: 12px 14px; font-size: var(--text-sm); color: oklch(25% 0 0); background: oklch(99.5% 0.012 100); border: 1px solid oklch(40% 0 0); border-radius: 4px; box-shadow: 0 8px 24px -6px rgba(0,0,0,.4); }
       .ic-pop::backdrop { background: rgba(0,0,30,.12); }
       /* --- @scope donut --- */
-      .scope-card { border: 1px dashed oklch(60% 0.06 254); border-radius: 4px; padding: 10px 12px; font-size: 9.5pt; }
+      .scope-card { border: 1px dashed oklch(60% 0.06 254); border-radius: 4px; padding: 10px 12px; font-size: var(--text-sm); }
       .scope-card > p { margin: 0 0 8px; }
       .scope-inner { border: 1px dashed oklch(60% 0.16 30); border-radius: 3px; padding: 8px 10px; }
       .scope-inner p { margin: 0; }
       /* --- Custom Highlight --- */
-      .hl-text { font-size: 10pt; line-height: 1.55; color: oklch(28% 0 0); margin: 6px 0 0; }
+      .hl-text { font-size: var(--text-ui); line-height: 1.55; color: oklch(28% 0 0); margin: 6px 0 0; }
       ::highlight(frontier) { background: oklch(88% 0.17 95); color: oklch(28% 0.10 60); text-shadow: 0 1px 0 rgba(255,255,255,.5); }
       /* --- hidden=until-found --- */
-      .huf { font-size: 9.5pt; color: oklch(30% 0.06 145); background: oklch(96% 0.04 145); border-left: 3px solid oklch(50% 0.15 145); padding: 8px 12px; border-radius: 0 3px 3px 0; margin: 8px 0 0; }
+      .huf { font-size: var(--text-sm); color: oklch(30% 0.06 145); background: oklch(96% 0.04 145); border-left: 3px solid oklch(50% 0.15 145); padding: 8px 12px; border-radius: 0 3px 3px 0; margin: 8px 0 0; }
       /* --- grouped <details name> --- */
       .dgroup { margin: 8px 0 0; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; overflow: hidden; }
       .dgroup details + details { border-top: 1px solid oklch(86% 0.02 250); }
-      .dgroup summary { cursor: pointer; padding: 7px 10px; font: bold 9.5pt Tahoma, Verdana, sans-serif; color: oklch(35% 0.08 255); background: linear-gradient(180deg, #fff, #f4f3ee); }
+      .dgroup summary { cursor: pointer; padding: 7px 10px; font: bold var(--text-sm) var(--font-ui); color: oklch(35% 0.08 255); background: linear-gradient(180deg, #fff, #f4f3ee); }
       .dgroup summary:hover { color: oklch(45% 0.16 30); }
-      .dgroup details p { margin: 0; padding: 8px 10px; font-size: 9.5pt; color: oklch(30% 0 0); background: oklch(99% 0.006 250); }
-      kbd { font: 8.5pt "Courier New", monospace; background: oklch(96% 0 0); border: 1px solid oklch(80% 0 0); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; }
+      .dgroup details p { margin: 0; padding: 8px 10px; font-size: var(--text-sm); color: oklch(30% 0 0); background: oklch(99% 0.006 250); }
+      kbd { font: var(--text-micro) var(--font-mono); background: oklch(96% 0 0); border: 1px solid oklch(80% 0 0); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; }
     </style>
 
     <section class="demo" data-cap="css-carousel">
@@ -2482,51 +2482,51 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <style>
       /* ───── frontier batch 2: demo styles ───── */
       .rc-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-      .rc-row .rc { --c: var(--blue-65); background: var(--c); color: #fff; padding: 12px 8px; border-radius: 4px; font-size: 9pt; flex: 1 1 78px; text-align: center; text-shadow: 0 1px 1px rgba(0,0,0,.4); }
+      .rc-row .rc { --c: var(--blue-65); background: var(--c); color: #fff; padding: 12px 8px; border-radius: 4px; font-size: var(--text-xs); flex: 1 1 78px; text-align: center; text-shadow: 0 1px 1px rgba(0,0,0,.4); }
       .rc-row .lite { background: oklch(from var(--c) calc(l + 0.30) c h); color: oklch(from var(--c) calc(l - 0.30) c h); text-shadow: none; }
       .rc-row .dark { background: oklch(from var(--c) calc(l - 0.24) c h); }
       .rc-row .hue  { background: oklch(from var(--c) l c calc(h + 130)); }
       .rc-row .chr  { background: oklch(from var(--c) l calc(c + 0.12) h); }
 
       @property --hz-ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-      .prop-demo { margin-top: 10px; height: 54px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9.5pt; text-shadow: 0 1px 2px rgba(0,0,0,.45); --hz-ang: 0deg; background: linear-gradient(var(--hz-ang), var(--blue-65), oklch(72% 0.16 200), oklch(60% 0.2 320)); animation: hz-spin 5s linear infinite; }
+      .prop-demo { margin-top: 10px; height: 54px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: var(--text-sm); text-shadow: 0 1px 2px rgba(0,0,0,.45); --hz-ang: 0deg; background: linear-gradient(var(--hz-ang), var(--blue-65), oklch(72% 0.16 200), oklch(60% 0.2 320)); animation: hz-spin 5s linear infinite; }
       @keyframes hz-spin { to { --hz-ang: 360deg; } }
       .demo.no-support .prop-demo { animation: none; }
 
-      .ss-pop { margin: 0; border: 2px solid #0831d9; background: oklch(97% 0.01 250); color: oklch(20% 0 0); padding: 12px 14px; border-radius: 4px; max-width: 300px; font-size: 9.5pt; opacity: 0; translate: 0 -10px; /* @motion demo: the @starting-style entry is the exhibit */ transition: opacity .35s ease, translate .35s ease, overlay .35s allow-discrete, display .35s allow-discrete; }
+      .ss-pop { margin: 0; border: 2px solid #0831d9; background: oklch(97% 0.01 250); color: oklch(20% 0 0); padding: 12px 14px; border-radius: 4px; max-width: 300px; font-size: var(--text-sm); opacity: 0; translate: 0 -10px; /* @motion demo: the @starting-style entry is the exhibit */ transition: opacity .35s ease, translate .35s ease, overlay .35s allow-discrete, display .35s allow-discrete; }
       .ss-pop:popover-open { opacity: 1; translate: 0 0; }
       @starting-style { .ss-pop:popover-open { opacity: 0; translate: 0 -10px; } }
 
       .ld-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-      .ld-row .ld { flex: 1 1 130px; padding: 16px 12px; border-radius: 4px; font-size: 9.5pt; border: 1px solid oklch(70% 0.03 250); background: light-dark(oklch(93% 0.03 255), oklch(26% 0.05 255)); color: light-dark(var(--ink), oklch(95% 0 0)); }
+      .ld-row .ld { flex: 1 1 130px; padding: 16px 12px; border-radius: 4px; font-size: var(--text-sm); border: 1px solid oklch(70% 0.03 250); background: light-dark(oklch(93% 0.03 255), oklch(26% 0.05 255)); color: light-dark(var(--ink), oklch(95% 0 0)); }
       .ld-row .ld.l { color-scheme: light; }
       .ld-row .ld.d { color-scheme: dark; }
 
       .dsd-host { margin-top: 10px; display: block; }
-      .model-mock { margin-top: 10px; height: 88px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 9.5pt; color: oklch(38% 0.02 250); background: repeating-linear-gradient(45deg, oklch(92% 0.02 250) 0 10px, oklch(88% 0.02 250) 10px 20px); border: 1px dashed oklch(60% 0.05 250); }
+      .model-mock { margin-top: 10px; height: 88px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); color: oklch(38% 0.02 250); background: repeating-linear-gradient(45deg, oklch(92% 0.02 250) 0 10px, oklch(88% 0.02 250) 10px 20px); border: 1px dashed oklch(60% 0.05 250); }
 
-      .cw-panel { margin-top: 10px; border: 2px solid #0831d9; background: oklch(97% 0.01 250); padding: 12px; border-radius: 4px; font-size: 9.5pt; display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+      .cw-panel { margin-top: 10px; border: 2px solid #0831d9; background: oklch(97% 0.01 250); padding: 12px; border-radius: 4px; font-size: var(--text-sm); display: flex; align-items: center; gap: 10px; justify-content: space-between; }
       .cw-panel[hidden] { display: none; }
 
-      .sw-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 9.5pt; }
+      .sw-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: var(--text-sm); }
       .sw-row input[switch], .sw-row input { width: 40px; height: 24px; }
 
       .si-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-      .si-list li { background: oklch(93% 0.03 255); border-left: 3px solid var(--blue-65); padding: 6px 10px; font-size: 9.5pt; /* @motion demo: the sibling-index() stagger is the exhibit */ animation: si-fade .5s backwards; animation-delay: calc(sibling-index() * 90ms); }
+      .si-list li { background: oklch(93% 0.03 255); border-left: 3px solid var(--blue-65); padding: 6px 10px; font-size: var(--text-sm); /* @motion demo: the sibling-index() stagger is the exhibit */ animation: si-fade .5s backwards; animation-delay: calc(sibling-index() * 90ms); }
       @keyframes si-fade { from { opacity: 0; translate: -14px 0; } to { opacity: 1; translate: 0 0; } }
 
       .sst-scroll { margin-top: 10px; max-height: 120px; overflow: auto; border: 1px solid oklch(75% 0.03 250); border-radius: 4px; container-type: scroll-state; }
-      .sst-sticky { position: sticky; top: 0; background: oklch(90% 0.02 250); color: oklch(25% 0 0); padding: 8px 10px; font-size: 9.5pt; font-weight: bold; border-bottom: 1px solid oklch(75% 0.03 250); transition: background var(--xp-transition-move), color var(--xp-transition-move); }
+      .sst-sticky { position: sticky; top: 0; background: oklch(90% 0.02 250); color: oklch(25% 0 0); padding: 8px 10px; font-size: var(--text-sm); font-weight: bold; border-bottom: 1px solid oklch(75% 0.03 250); transition: background var(--xp-transition-move), color var(--xp-transition-move); }
       @container scroll-state(stuck: top) { .sst-sticky { background: var(--blue-65); color: #fff; } }
-      .sst-scroll p { margin: 8px 10px; font-size: 9pt; color: oklch(42% 0 0); }
+      .sst-scroll p { margin: 8px 10px; font-size: var(--text-xs); color: oklch(42% 0 0); }
 
       .rf-row { display: flex; gap: 6px; margin-top: 10px; reading-flow: flex-visual; }
-      .rf-row a { flex: 1; text-align: center; padding: 10px; border-radius: 4px; background: oklch(93% 0.03 255); font-size: 9.5pt; color: oklch(30% 0.10 263); text-decoration: none; border: 1px solid oklch(75% 0.03 250); }
+      .rf-row a { flex: 1; text-align: center; padding: 10px; border-radius: 4px; background: oklch(93% 0.03 255); font-size: var(--text-sm); color: oklch(30% 0.10 263); text-decoration: none; border: 1px solid oklch(75% 0.03 250); }
       .rf-row a:focus-visible { outline: 2px solid #e45f3e; }
       .rf-row a:nth-child(1) { order: 3; } .rf-row a:nth-child(2) { order: 1; } .rf-row a:nth-child(3) { order: 2; }
 
-      .pip-content { margin-top: 10px; background: oklch(95% 0.02 255); border: 1px solid oklch(75% 0.03 250); border-radius: 4px; padding: 12px; font-size: 9.5pt; }
-      .tmp-out { margin-top: 10px; font-family: var(--font-mono); font-size: 9.5pt; background: oklch(96% 0.01 250); border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; color: oklch(25% 0 0); white-space: pre-line; }
+      .pip-content { margin-top: 10px; background: oklch(95% 0.02 255); border: 1px solid oklch(75% 0.03 250); border-radius: 4px; padding: 12px; font-size: var(--text-sm); }
+      .tmp-out { margin-top: 10px; font-family: var(--font-mono); font-size: var(--text-sm); background: oklch(96% 0.01 250); border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; color: oklch(25% 0 0); white-space: pre-line; }
     </style>
 
     <!-- ───────────────────── relative color syntax ───────────────────── -->
@@ -2637,7 +2637,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
       <xp-chip class="dsd-host">
         <template shadowrootmode="open">
-          <style>:host { display: inline-block; } .c { background: var(--blue-65); color: #fff; padding: 6px 12px; border-radius: 11px; font: bold 9.5pt Tahoma, sans-serif; box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }</style>
+          <style>:host { display: inline-block; } .c { background: var(--blue-65); color: #fff; padding: 6px 12px; border-radius: 11px; font: bold var(--text-sm) var(--font-ui); box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }</style>
           <span class="c"><slot>chip</slot></span>
         </template>
         rendered server-side, zero JS
@@ -3975,13 +3975,13 @@ navigation.addEventListener("navigate", (e) =&gt; {
 
     <style>
       /* ── 2026-07-30 sweep ── */
-      .out { margin-top: 10px; font-family: var(--font-mono); font-size: 9pt; background: oklch(96% 0.01 250);
+      .out { margin-top: 10px; font-family: var(--font-mono); font-size: var(--text-mono); background: oklch(96% 0.01 250);
         border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; color: oklch(25% 0 0);
         white-space: pre-wrap; overflow-x: auto; }
 
-      .san-in { width: 100%; box-sizing: border-box; margin-bottom: 6px; font-family: var(--font-mono); font-size: 8.5pt; }
+      .san-in { width: 100%; box-sizing: border-box; margin-bottom: 6px; font-family: var(--font-mono); font-size: var(--text-micro); }
       .san-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-      .san-out { font-family: var(--font-mono); font-size: 8.5pt; background: oklch(96% 0.01 250);
+      .san-out { font-family: var(--font-mono); font-size: var(--text-micro); background: oklch(96% 0.01 250);
         border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 8px 10px; margin: 0;
         color: oklch(25% 0 0); white-space: pre-wrap; word-break: break-all; min-height: 3.4em; }
 
@@ -3994,16 +3994,16 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .ce-swatch.crisp { image-rendering: crisp-edges; }
 
       .si-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-      .si-line { font-size: 13pt; text-decoration: underline; text-decoration-thickness: 2px;
+      .si-line { font-size: var(--text-lg); text-decoration: underline; text-decoration-thickness: 2px;
         text-underline-offset: 1px; margin: 0; color: oklch(28% 0 0); }
       .si-line.si-all { text-decoration-skip-ink: all; }
 
       .mt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
       .mt-box { background: oklch(95% 0.02 255); border: 1px solid oklch(75% 0.03 250); border-radius: 4px; padding: 10px; }
-      .mt-box p { margin: 12px 0; font-size: 9.5pt; color: oklch(32% 0 0); background: oklch(88% 0.05 255); padding: 4px 8px; border-radius: 3px; }
+      .mt-box p { margin: 12px 0; font-size: var(--text-sm); color: oklch(32% 0 0); background: oklch(88% 0.05 255); padding: 4px 8px; border-radius: 3px; }
       .mt-box.trim { margin-trim: block; }
 
-      .sar-out p { margin: 10px 0 0; font-size: 9pt; color: oklch(48% 0 0); }
+      .sar-out p { margin: 10px 0 0; font-size: var(--text-xs); color: oklch(48% 0 0); }
     </style>
 
     <!-- ─────────── 2026-07-30 sweep: the cross-engine batch this page had missed ─────────── -->
@@ -4710,20 +4710,20 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <style>
       /* --- 08-10 batch, all classes prefixed .s8- to stay out of the sibling cards --- */
       .s8-swatch { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
-      .s8-chipbox { border: 1px solid oklch(50% 0.02 250); border-radius: 3px; padding: 8px 14px; font: bold 9.5pt Tahoma, Verdana, sans-serif; }
+      .s8-chipbox { border: 1px solid oklch(50% 0.02 250); border-radius: 3px; padding: 8px 14px; font: bold var(--text-sm) var(--font-ui); }
       .s8-chipbox.accent { background: var(--blue-60); color: oklch(100% 0 0); }
       @supports (color: AccentColor) { .s8-chipbox.accent { background: AccentColor; color: AccentColorText; } }
       .s8-chipbox.luna { background: var(--blue-60); color: oklch(100% 0 0); }
-      .s8-caret { font: 11pt "Lucida Console", var(--font-mono); padding: 5px 8px; width: 260px; background: oklch(18% 0.01 250); color: oklch(88% 0.14 145); border: 1px solid oklch(45% 0.02 250); caret-shape: block; }
-      .s8-find { font-size: 9.5pt; line-height: 1.6; color: oklch(28% 0 0); margin: 8px 0 0; }
+      .s8-caret { /* @type demo: a console caret wants the console font */ font: var(--text-lede) "Lucida Console", var(--font-mono); padding: 5px 8px; width: 260px; background: oklch(18% 0.01 250); color: oklch(88% 0.14 145); border: 1px solid oklch(45% 0.02 250); caret-shape: block; }
+      .s8-find { font-size: var(--text-sm); line-height: 1.6; color: oklch(28% 0 0); margin: 8px 0 0; }
       .s8-find::search-text { background: oklch(85% 0.17 95); color: oklch(25% 0.08 60); }
-      .s8-rr { border: 1px dashed oklch(60% 0.06 254); border-radius: 4px; padding: 10px 12px; margin-top: 8px; font-size: 9.5pt; }
+      .s8-rr { border: 1px dashed oklch(60% 0.06 254); border-radius: 4px; padding: 10px 12px; margin-top: 8px; font-size: var(--text-sm); }
       .s8-attr { margin-top: 8px; display: flex; align-items: flex-end; gap: 6px; height: 74px; }
       .s8-attr i { display: block; width: 34px; background: linear-gradient(180deg, oklch(66% 0.16 258), oklch(48% 0.20 263)); border: 1px solid oklch(38% 0.14 263); border-radius: 2px 2px 0 0; height: attr(data-h type(<length>), 8px); }
-      .s8-attr b { font: 8pt Tahoma, sans-serif; color: var(--ink-quiet); align-self: center; }
-      .s8-tdi { font-size: 11pt; color: oklch(28% 0 0); margin-top: 8px; }
+      .s8-attr b { font: var(--text-2xs) var(--font-ui); color: var(--ink-quiet); align-self: center; }
+      .s8-tdi { font-size: var(--text-lede); color: oklch(28% 0 0); margin-top: 8px; }
       .s8-tdi u { text-decoration: underline 1px oklch(55% 0.20 30); text-decoration-inset: 4px; text-underline-offset: 3px; }
-      .s8-out { font: 9pt "Courier New", monospace; white-space: pre-wrap; background: oklch(97% 0 0); border: 1px solid oklch(80% 0 0); padding: 8px 10px; margin-top: 8px; color: oklch(30% 0 0); }
+      .s8-out { font: var(--text-mono) var(--font-mono); white-space: pre-wrap; background: oklch(97% 0 0); border: 1px solid oklch(80% 0 0); padding: 8px 10px; margin-top: 8px; color: oklch(30% 0 0); }
       @media (--p3) {
         .s8-chipbox.luna { background: oklch(50% 0.26 263); }
       }

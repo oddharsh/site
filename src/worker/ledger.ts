@@ -368,53 +368,53 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
         <tr><th>crawler</th><th>operator</th><th class="num">pages</th><th class="num">rate</th><th class="num">amount</th></tr>
         ${tableRows}
       </table>
-      <div class="lg-total"><span>Total due</span> <b>$${pending ? dots : totalUsd.toFixed(2)}</b> <span class="dim" style="font-size:8.6pt; align-self:center;">(${pending ? dots : totalHits.toLocaleString("en-US")} pages)</span></div>
+      <div class="lg-total"><span>Total due</span> <b>$${pending ? dots : totalUsd.toFixed(2)}</b> <span class="dim" style="font-size:var(--text-micro); align-self:center;">(${pending ? dots : totalHits.toLocaleString("en-US")} pages)</span></div>
       ${costLine}`);
 }
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderLedgerPage() {
   const css = `/*min*/
-h1 { font-size:13pt; margin:0 0 2px; }
-.lg-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:10pt; }
+h1 { font-size:var(--text-lg); margin:0 0 2px; }
+.lg-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:var(--text-ui); }
 .lg-lede a { color:var(--link); }
 
 /* the invoice paper */
 .lg-paper { position:relative; background:#fff; border:1px solid oklch(80% 0.01 250); box-shadow:2px 2px 0 oklch(88% 0.01 250); padding:18px 20px 16px; max-width:640px; margin:0 auto; }
 .lg-head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid oklch(30% 0.02 255); padding-bottom:8px; margin-bottom:10px; }
-.lg-from b { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:11pt; color:oklch(28% 0.04 255); }
-.lg-from div, .lg-invno div { font-size:8.6pt; color:var(--ink-quiet); }
+.lg-from b { font-family:var(--font-caption); font-size:var(--text-lede); color:oklch(28% 0.04 255); }
+.lg-from div, .lg-invno div { font-size:var(--text-micro); color:var(--ink-quiet); }
 .lg-invno { text-align:right; }
-.lg-invno b { font-family:"Courier New",monospace; font-size:11pt; color:oklch(28% 0.04 255); }
-.lg-billto { font-size:9pt; color:oklch(35% 0 0); margin:0 0 10px; }
+.lg-invno b { font-family:var(--font-mono); font-size:var(--text-lede); color:oklch(28% 0.04 255); }
+.lg-billto { font-size:var(--text-xs); color:oklch(35% 0 0); margin:0 0 10px; }
 .lg-billto b { color:oklch(28% 0.04 255); }
 
-table.lg { width:100%; border-collapse:collapse; font-size:9pt; }
-table.lg th { text-align:left; font-size:7.8pt; text-transform:uppercase; letter-spacing:.05em; color:oklch(48% 0 0); font-weight:normal; border-bottom:1px solid oklch(70% 0 0); padding:3px 6px 3px 0; }
+table.lg { width:100%; border-collapse:collapse; font-size:var(--text-xs); }
+table.lg th { text-align:left; font-size:var(--text-2xs); text-transform:uppercase; letter-spacing:.05em; color:oklch(48% 0 0); font-weight:normal; border-bottom:1px solid oklch(70% 0 0); padding:3px 6px 3px 0; }
 table.lg td { border-bottom:1px dashed oklch(88% 0 0); padding:5px 6px 5px 0; vertical-align:top; }
-table.lg .mono { font-family:"Courier New",monospace; }
-table.lg .num, table.lg th.num { text-align:right; font-family:"Courier New",monospace; white-space:nowrap; }
-table.lg .dim { color:oklch(55% 0 0); font-size:8pt; }
-table.lg .empty { color:oklch(50% 0 0); font-size:9pt; padding:14px 4px; text-align:center; }
-.lg-total { display:flex; justify-content:flex-end; gap:24px; font-size:10pt; margin-top:8px; padding-top:6px; border-top:2px solid oklch(30% 0.02 255); }
-.lg-total b { font-family:"Courier New",monospace; font-size:12pt; }
+table.lg .mono { font-family:var(--font-mono); }
+table.lg .num, table.lg th.num { text-align:right; font-family:var(--font-mono); white-space:nowrap; }
+table.lg .dim { color:oklch(55% 0 0); font-size:var(--text-2xs); }
+table.lg .empty { color:oklch(50% 0 0); font-size:var(--text-xs); padding:14px 4px; text-align:center; }
+.lg-total { display:flex; justify-content:flex-end; gap:24px; font-size:var(--text-ui); margin-top:8px; padding-top:6px; border-top:2px solid oklch(30% 0.02 255); }
+.lg-total b { font-family:var(--font-mono); font-size:var(--text-h2); }
 /* the cost line: the one figure on this invoice that changed hands */
-.lg-cost { text-align:right; font-size:8.8pt; color:var(--ink-quiet); margin-top:7px; padding-top:6px; border-top:1px dashed oklch(80% 0 0); }
-.lg-cost b { font-family:"Courier New",monospace; font-size:10.5pt; color:oklch(28% 0.04 255); }
-.lg-cost .lg-cost-sub { display:block; color:oklch(55% 0 0); font-size:8pt; margin-top:1px; }
+.lg-cost { text-align:right; font-size:var(--text-xs); color:var(--ink-quiet); margin-top:7px; padding-top:6px; border-top:1px dashed oklch(80% 0 0); }
+.lg-cost b { font-family:var(--font-mono); font-size:var(--text-body); color:oklch(28% 0.04 255); }
+.lg-cost .lg-cost-sub { display:block; color:oklch(55% 0 0); font-size:var(--text-2xs); margin-top:1px; }
 
 /* the stamp */
-.lg-stamp { position:absolute; top:96px; right:26px; transform:rotate(-12deg); font-family:"Courier New",monospace; font-weight:bold; font-size:19pt; color:oklch(55% 0.21 27 / .8); border:3px double oklch(55% 0.21 27 / .8); border-radius:4px; padding:2px 14px; letter-spacing:.12em; pointer-events:none; }
+.lg-stamp { position:absolute; top:96px; right:26px; transform:rotate(-12deg); font-family:var(--font-mono); font-weight:bold; font-size:19pt; color:oklch(55% 0.21 27 / .8); border:3px double oklch(55% 0.21 27 / .8); border-radius:4px; padding:2px 14px; letter-spacing:.12em; pointer-events:none; }
 
-.lg-terms { font-size:8.6pt; color:var(--ink-quiet); margin:12px auto 0; max-width:640px; }
+.lg-terms { font-size:var(--text-micro); color:var(--ink-quiet); margin:12px auto 0; max-width:640px; }
 .lg-terms b { color:oklch(35% 0 0); }
 .lg-terms ul { margin:4px 0 0; padding-left:18px; }
 .lg-terms li { margin:2px 0; }
-footer { text-align:center; font-size:9pt; color:var(--ink-quiet); margin-top:14px; padding-top:11px; border-top:1px solid var(--rule); }
+footer { text-align:center; font-size:var(--text-xs); color:var(--ink-quiet); margin-top:14px; padding-top:11px; border-top:1px solid var(--rule); }
 footer a { color:var(--link); }
-@media (max-width:560px){ .lg-stamp{ font-size:14pt; top:110px; right:12px; } }
+@media (max-width:560px){ .lg-stamp{ font-size:var(--text-h1); top:110px; right:12px; } }
 /* the island's failure note, shown only if the line-items request failed */
-.lg-fail { display:none; color:oklch(50% 0 0); font-size:8.6pt; margin:8px 0 0; }
+.lg-fail { display:none; color:oklch(50% 0 0); font-size:var(--text-micro); margin:8px 0 0; }
 #lg-lines[data-state="failed"] + .lg-fail { display:block; }
 `;
 

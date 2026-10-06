@@ -21,13 +21,13 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='3'%20y='6'%20width='7'%20height='20'%20rx='1'%20fill='%230855dd'/%3E%3Crect%20x='12'%20y='6'%20width='5'%20height='20'%20rx='1'%20fill='%23166aee'/%3E%3Crect%20x='19'%20y='6'%20width='10'%20height='20'%20rx='1'%20fill='%23003bda'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/prose.css">
 <style>.badge {
-  display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
+  display: inline-block; font-family: var(--font-mono); font-size: var(--text-micro);
   font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
   border-radius: 2px; text-transform: uppercase; vertical-align: middle;
 }
 .badge.review { color: var(--warn); border-color: var(--warn); background: oklch(98% 0.03 95); }
 
-.drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
+.drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: var(--text-ui); cursor: pointer; background: oklch(98% 0.01 255); }
 .drop.over { background: oklch(94% 0.04 255); border-color: var(--blue-65); }
 
 /* encoding study */
@@ -61,10 +61,10 @@
 .loupe .bar {
   height: 18px; box-sizing: border-box; display: flex; align-items: center; gap: 5px;
   padding: 0 6px; border-bottom: 1px solid var(--blue-40);
-  font: bold 8.5pt var(--font-caption); color: oklch(100% 0 0); text-shadow: 1px 1px #0f1089;
+  font: bold var(--text-micro) var(--font-caption); color: oklch(100% 0 0); text-shadow: 1px 1px #0f1089;
   background: var(--grad-title);
 }
-.loupe .bar .z { margin-left: auto; font: bold 8pt var(--font-mono); text-shadow: none; color: oklch(96% 0.03 250); }
+.loupe .bar .z { margin-left: auto; font: bold var(--text-2xs) var(--font-mono); text-shadow: none; color: oklch(96% 0.03 250); }
 .loupe .glass {
   width: 180px; height: 180px; box-sizing: border-box; position: relative;
   background-repeat: no-repeat; background-color: oklch(100% 0 0);
@@ -79,11 +79,11 @@
 }
 .loupe:not(:popover-open) { opacity: 0; }
 @starting-style { .loupe:popover-open { opacity: 0; } }
-.enc-card figcaption { font: 8.5pt var(--font-ui); color: oklch(30% 0.01 250); padding: 4px 2px 1px; line-height: 1.4; }
+.enc-card figcaption { font: var(--text-micro) var(--font-ui); color: oklch(30% 0.01 250); padding: 4px 2px 1px; line-height: 1.4; }
 .enc-card figcaption b { color: var(--blue-40); }
 .enc-sz { float: right; font-family: var(--font-mono); font-weight: bold; }
-.enc-bpp { display: block; font-family: var(--font-mono); color: oklch(54% 0 0); font-size: 8pt; }
-.enc-table { border-collapse: collapse; margin: 8px 0 20px; font-size: 10pt; width: 100%; max-width: 460px; }
+.enc-bpp { display: block; font-family: var(--font-mono); color: oklch(54% 0 0); font-size: var(--text-2xs); }
+.enc-table { border-collapse: collapse; margin: 8px 0 20px; font-size: var(--text-ui); width: 100%; max-width: 460px; }
 .enc-table th, .enc-table td { border: 1px solid oklch(80% 0.02 250); padding: 4px 10px; text-align: left; }
 .enc-table th { background: var(--face); font-family: var(--font-caption); }
 .enc-table td.num { font-family: var(--font-mono); text-align: right; }
