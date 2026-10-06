@@ -224,3 +224,10 @@ by renumbering. The long-form history of each one is in git
     must go literally.
     The Workers AI evals keep `wrangler auth token`, because cf has no command
     that prints its token. Re-audit when cf ships a no-provision switch.
+
+51. **A Rust compiler bump can fail strict Clippy on unchanged source.**
+    Rust 1.99 adds `chunks_exact_to_as_chunks`; fixed-size pixel loops use
+    `as_chunks::<N>().0.iter()` and `as_chunks_mut::<N>().0.iter_mut()`.
+    Both retain the old iterator's treatment of a trailing partial chunk.
+    Run zenc's tests and `clippy --all-targets -- -D warnings`, including its
+    example, then compare encoded output and reproduce the committed histograms.
