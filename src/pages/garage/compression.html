@@ -52,7 +52,7 @@
     <h1>Compression teardown <span class="badge shipped">shipped</span></h1>
 
     <p class="lede">
-      Putting a site behind a CDN is supposed to end the compression conversation. The edge
+      Putting a site behind a <a class="term" data-t="cdn" href="https://en.wikipedia.org/wiki/Content_delivery_network" title="A content delivery network: servers spread around the world that keep copies of a site's files close to visitors so pages load faster." rel="external">CDN</a> is supposed to end the compression conversation. The edge
       negotiates, the edge compresses, you stop thinking about it. That held here for a year,
       and then I measured it: the edge was handing browsers <strong>more</strong> bytes than
       its own second choice would have, and compressing at roughly a third of the effort the
@@ -66,8 +66,8 @@
 
     <h2>What the edge was actually doing</h2>
     <p>
-      Cloudflare prefers zstd when a browser offers everything. Reasonable default. On this
-      site it lost to brotli on every asset I checked, because these are small text documents
+      Cloudflare prefers <a class="term" data-t="zstd" href="https://en.wikipedia.org/wiki/Zstd" title="Zstandard, a compression algorithm from Meta built for very fast decompression. Browsers accept it as a way to shrink web pages in transit." rel="external">zstd</a> when a browser offers everything. Reasonable default. On this
+      site it lost to <a class="term" data-t="brotli" href="https://en.wikipedia.org/wiki/Brotli" title="A compression algorithm from Google built for the web. It ships with a built-in dictionary of common web text, which helps on small files." rel="external">brotli</a> on every asset I checked, because these are small text documents
       and brotli's static dictionary is tuned for exactly that:
     </p>
     <table class="cmp">
@@ -88,14 +88,14 @@
 
     <h2>Three limits that turned out innocent</h2>
     <p>
-      Serving my own pre-compressed bytes from a Worker produced brotli inside brotli: a body
+      Serving my own pre-compressed bytes from a <a class="term" data-t="cloudflare-workers" href="https://developers.cloudflare.com/workers/" title="Code that runs on Cloudflare's servers around the world and answers each request directly, with no server of the site's own." rel="external">Worker</a> produced brotli inside brotli: a body
       that decodes once into more compressed bytes, which no client can read. I diagnosed that
       three times and was wrong three times. Each suspect was a <em>real</em> behavior, which is
       what made them so convincing:
     </p>
     <ol>
       <li>
-        <strong>A Worker cannot read the client's Accept-Encoding.</strong> True, and worth
+        <strong>A Worker cannot read the client's <a class="term" data-t="accept-encoding" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept-Encoding" title="The HTTP request header where a browser lists the compression formats it can decode, such as gzip, br and zstd." rel="external">Accept-Encoding</a>.</strong> True, and worth
         knowing. Four requests sending <code>identity</code>, <code>br</code>, <code>gzip</code>
         and <code>br;q=0</code> all arrived at the Worker as <code>"gzip, br"</code>. The runtime
         normalizes it, so any <code>if (acceptsBrotli(request))</code> branch is dead code that
@@ -120,7 +120,7 @@
     <h2>The actual bug, which was one line long</h2>
     <p>
       Cloudflare's <code>encodeBody: "manual"</code> tells the runtime a body is already
-      encoded, so leave it alone. It is <strong>write-only</strong> Response init. There is no
+      encoded, so leave it alone. It is <strong>write-only</strong> <a class="term" data-t="response" href="https://developer.mozilla.org/en-US/docs/Web/API/Response" title="The JavaScript object a web server or Worker builds to describe its reply: status code, headers and body." rel="external">Response</a> init. There is no
       getter. So this, which every response on the site passed through, silently discarded it:
     </p>
     <pre><code>return new Response(response.body, {
@@ -144,8 +144,8 @@
 
     <h2>Deltas, and why they ship as dcz</h2>
     <p>
-      With the emit path fixed, shared dictionaries became reachable. Every shell asset is served
-      with <code>Use-As-Dictionary</code>, so a returning Chromium visitor sends back the SHA-256
+      With the emit path fixed, <a class="term" data-t="compression-dictionaries" href="https://www.rfc-editor.org/rfc/rfc9842.html" title="A scheme where the browser keeps an earlier copy of a file and the server sends only a compressed difference against it." rel="external">shared dictionaries</a> became reachable. Every shell asset is served
+      with <code>Use-As-Dictionary</code>, so a returning <a class="term" data-t="chromium" href="https://en.wikipedia.org/wiki/Chromium_(web_browser)" title="The open-source browser project that Chrome, Edge, Brave and Opera are built on." rel="external">Chromium</a> visitor sends back the <a class="term" data-t="sha-256" href="https://en.wikipedia.org/wiki/SHA-2" title="A hash function that turns any input into a 256-bit fingerprint. Change one byte of the input and the fingerprint changes completely." rel="external">SHA-256</a>
       of the copy it already holds, and the build has already computed the diff against it. A
       CSS change costs 116 bytes instead of 7,615.
     </p>
@@ -157,7 +157,7 @@
     <table class="cmp">
       <thead><tr><th>measure</th><th>dcb (brotli)</th><th>dcz (zstd)</th></tr></thead>
       <tbody>
-        <tr><td>all 12 shipping deltas, total</td><td class="y">3,344 bytes</td><td>3,589 bytes</td></tr>
+        <tr><td>all 12 shipping <a class="term" data-t="delta-encoding" href="https://en.wikipedia.org/wiki/Delta_encoding" title="Storing or sending only the differences between two versions of data, instead of the whole new version." rel="external">deltas</a>, total</td><td class="y">3,344 bytes</td><td>3,589 bytes</td></tr>
         <tr><td>widest single gap (nav.js)</td><td class="y">685 bytes</td><td>729 bytes</td></tr>
         <tr><td>decode, 47,615 B rebuilt</td><td>0.1368 ms</td><td class="y">0.0165 ms</td></tr>
         <tr><td>throughput</td><td>332 MiB/s</td><td class="y">2,752 MiB/s</td></tr>
@@ -184,14 +184,14 @@
     </p>
     <p>
       dcz's framing is the tidier of the two as a bonus. The dictionary hash rides in a Zstandard
-      <em>skippable frame</em>, which is valid zstd, so any conforming decoder steps over it
+      <em><a class="term" data-t="skippable-frame" href="https://www.rfc-editor.org/rfc/rfc8878.html#name-skippable-frames" title="A block inside a zstd stream that carries extra data and is marked so every decoder steps over it without reading it." rel="external">skippable frame</a></em>, which is valid zstd, so any conforming decoder steps over it
       without special handling. dcb needs bespoke treatment of its 36-byte prefix.
     </p>
     <p>
       Cloudflare runs a live demo of the mechanism at
-      <a href="https://canicompress.com" rel="external">canicompress.com</a>: a 94KB mock SPA
+      <a href="https://canicompress.com" rel="external">canicompress.com</a>: a 94KB mock <a class="term" data-t="single-page-application" href="https://en.wikipedia.org/wiki/Single-page_application" title="A web app that loads one page and then rewrites it with JavaScript as you move around, instead of fetching new pages." rel="external">SPA</a>
       bundle redeployed every minute, each version delivered as a delta against the one before.
-      Running its curl recipe from this laptop gave 95,425 bytes raw, 21,702 through gzip, and
+      Running its curl recipe from this laptop gave 95,425 bytes raw, 21,702 through <a class="term" data-t="gzip" href="https://en.wikipedia.org/wiki/Gzip" title="The oldest compression format every browser accepts for web pages. It's fast and universal, and its files come out larger than brotli's or zstd's." rel="external">gzip</a>, and
       <strong>134 as dcz</strong>. That is 162x under gzip, and it lands in the same couple of
       hundred bytes as a change to this site's far smaller stylesheet, because a delta is priced
       by what changed rather than by what the file weighs.
@@ -205,7 +205,7 @@
 
     <h2>One more over-generalization</h2>
     <p>
-      Dictionary compression is unreachable from Node's zlib, so the deltas started life as a
+      Dictionary compression is unreachable from Node's <a class="term" data-t="zlib" href="https://en.wikipedia.org/wiki/Zlib" title="A widely used compression library. Node.js names its built-in compression module after it, and that module also covers brotli and zstd." rel="external">zlib</a>, so the deltas started life as a
       workstation script with committed artifacts. That sentence was true of brotli. I applied it
       to zstd without checking, and <code>zstdCompressSync</code> takes a <code>dictionary</code>
       option. It also beats shelling out to the CLI: 116 bytes against 120.

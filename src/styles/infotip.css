@@ -11,6 +11,7 @@ box-shadow:2px 2px 0 oklch(15% 0 0 / .15)}
 @supports selector(:popover-open){#axp-infotip:popover-open{display:block}}
 #axp-infotip .n{font-weight:bold;color:oklch(15% 0 0)}
 #axp-infotip .h{color:oklch(38% 0 0)}
+#axp-infotip .d{color:var(--ink);margin-top:1px}
 #axp-infotip dl{display:grid;grid-template-columns:auto 1fr;gap:0 8px;margin:3px 0 0;border-top:1px solid oklch(15% 0 0 / .18);padding-top:3px}
 #axp-infotip dt{color:var(--ink-quiet)}
 #axp-infotip dd{margin:0;color:var(--ink);overflow-wrap:anywhere}

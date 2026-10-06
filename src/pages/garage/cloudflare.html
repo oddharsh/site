@@ -55,17 +55,17 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
     <p class="lede">
       The free Workers plan quietly bundles things that used to cost money or
       a separate service. I wired four of them to live demos here
-      (<b>Durable Objects</b>, <b>Workers&nbsp;AI</b>, <b>Workers&nbsp;Logs</b>, and <b>custom trace spans</b>),
+      (<b><a class="term" data-t="durable-object" href="https://developers.cloudflare.com/durable-objects/" title="A Cloudflare Workers object with its own built-in storage, where each named instance lives in one place so every request to it is coordinated." rel="external">Durable Objects</a></b>, <b><a class="term" data-t="workers-ai" href="https://developers.cloudflare.com/workers-ai/" title="Cloudflare's service for running machine-learning models, such as language and vision models, on its own GPUs, called directly from a Worker." rel="external">Workers&nbsp;AI</a></b>, <b><a class="term" data-t="workers-logs" href="https://developers.cloudflare.com/workers/observability/logs/workers-logs/" title="Cloudflare's built-in log store for Workers. It collects each request's log lines so you can search and filter them in the dashboard." rel="external">Workers&nbsp;Logs</a></b>, and <b><a class="term" data-t="trace-span" href="https://opentelemetry.io/docs/concepts/signals/traces/" title="One timed step inside a traced request, with a name, a start time, a duration and attributes. Nested spans show where the time went." rel="external">custom trace spans</a></b>),
       behind a tiny worker (<code class="m">cf-garage</code>) routed at
       <code class="m">/garage/cf/*</code>. The buttons hit real endpoints; nothing is faked.
-      A fifth, <b>Browser&nbsp;Rendering</b>, I bound and deployed, then parked on the free
+      A fifth, <b><a class="term" data-t="browser-run" href="https://developers.cloudflare.com/browser-run/" title="Cloudflare's service for controlling a headless browser from a Worker, to render pages, take screenshots or make PDFs." rel="external">Browser&nbsp;Rendering</a></b>, I bound and deployed, then parked on the free
       tier&apos;s daily cap. <a href="#parked">Noted honestly below.</a>
     </p>
 
     <div class="cf-feat">
       <h2>1 &middot; Durable Objects: an atomic counter</h2>
       <p>A <b>strongly-consistent, single-instance</b> stateful object. The homepage&apos;s
-        visitor counter uses KV, which is eventually-consistent and capped at 1,000 writes/day,
+        visitor counter uses <a class="term" data-t="workers-kv" href="https://developers.cloudflare.com/kv/" title="Cloudflare's key-value store: values saved under names and copied worldwide, so reads are fast everywhere while a new write can take a minute to spread." rel="external">KV</a>, which is <a class="term" data-t="eventual-consistency" href="https://en.wikipedia.org/wiki/Eventual_consistency" title="A guarantee that every copy of some data will match in time, while a read right after a write may still return the old value." rel="external">eventually-consistent</a> and capped at 1,000 writes/day,
         so a busy day silently stalls it. A DO increments <em>exactly once</em>, no race,
         100k writes/day. It used to cost money; it&apos;s free now, and it fixes that counter
         cleanly.</p>
@@ -78,13 +78,13 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
       <h2>2 &middot; Workers AI: caption a photo</h2>
       <p>Every model in the catalog, <b>10,000 neurons/day free</b>. This runs
         <code class="m">@cf/llava-1.5-7b</code> over a real grid photo to generate alt-text.
-        A small, fast vision model hallucinates charmingly now and then
+        A small, fast vision model <a class="term" data-t="ai-hallucination" href="https://en.wikipedia.org/wiki/Hallucination_(artificial_intelligence)" title="When an AI model confidently states something false or invented, like describing an object that isn't in the picture." rel="external">hallucinates</a> charmingly now and then
         (it once called a cloudy sky a UFO). One binding call does it: no GPU, no key.</p>
       <button class="xp-button compact" id="ai-btn" type="button">caption a random grid photo</button>
       <div class="cf-out" id="ai-out">&mdash;</div>
       <pre class="cf-code">env.AI.run("@cf/llava-1.5-7b", { image, prompt }, { gateway: { id } })</pre>
       <p>That third argument arrived in <b>Aug&nbsp;2026</b>, when Cloudflare folded Workers&nbsp;AI and
-        <b>AI&nbsp;Gateway</b> into one control plane. Before that, the gateway was a separate proxy you
+        <b><a class="term" data-t="ai-gateway" href="https://developers.cloudflare.com/ai-gateway/" title="Cloudflare's proxy for calls to AI models. It logs requests and responses, counts tokens and cost, and can cache or rate-limit calls." rel="external">AI&nbsp;Gateway</a></b> into one control plane. Before that, the gateway was a separate proxy you
         pointed a client at. Now it&apos;s an option on the call you were already making, and naming one
         gets the account full request and response payloads, token counts per model, and cost
         attribution, with nothing to set up first. Section&nbsp;3&apos;s log line knows this call took about
@@ -128,15 +128,15 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
       request shows its own spans in the trace waterfall.</p>
 
     <div class="callout" id="parked">
-      <b>The fifth, parked honestly: Browser Rendering.</b> Headless Chromium in a Worker
+      <b>The fifth, parked honestly: Browser Rendering.</b> <a class="term" data-t="headless-browser" href="https://en.wikipedia.org/wiki/Headless_browser" title="A web browser that runs with no window on screen, driven by code, so a program can load pages, run their scripts and capture the result." rel="external">Headless Chromium</a> in a Worker
       via <code class="m">env.BROWSER.quickAction("screenshot", options)</code>, the basis for
       on-the-fly <code class="m">og:image</code> cards. I bind
       it and the worker deploys; no enable toggle exists (the binding
-      is the access). The first implementation used Puppeteer for one screenshot and brought its
-      whole CDP client into this Worker; the native Quick Action now owns the session lifecycle and
+      is the access). The first implementation used <a class="term" data-t="puppeteer" href="https://pptr.dev/" title="A JavaScript library for controlling Chrome or Firefox from code: opening pages, clicking, filling forms and taking screenshots." rel="external">Puppeteer</a> for one screenshot and brought its
+      whole <a class="term" data-t="cdp" href="https://chromedevtools.github.io/devtools-protocol/" title="The message protocol Chrome's developer tools use to inspect and control the browser. Automation libraries like Puppeteer use it too." rel="external">CDP</a> client into this Worker; the native Quick Action now owns the session lifecycle and
       keeps the same bounded navigation and paint-settle behavior without that dependency. A bare
       hit still no-ops, so crawlers can&apos;t burn the <b>10 browser-minutes/day</b> budget. It&apos;s
-      unbuttoned here until the OG-image use case earns that budget; trigger it by hand at
+      unbuttoned here until the <a class="term" data-t="open-graph" href="https://ogp.me/" title="Meta tags a page uses to name the title, description and preview image that apps show when someone shares its link." rel="external">OG-image</a> use case earns that budget; trigger it by hand at
       <code class="m">/garage/cf/screenshot?go=1</code>.</div>
 
     <footer>

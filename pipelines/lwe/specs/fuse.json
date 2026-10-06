@@ -142,7 +142,7 @@
     {
       "who": "bot",
       "time": "00:41",
-      "html": "<p>There is, and it sits on the SoC. Qualcomm chips carry a region called <b>Qfprom</b>, Fuse Programmable Read-Only Memory: a bank of one-time programmable electronic fuses. A controlled voltage pulse moves a fuse from <code>0</code> to <code>1</code>, and that change is physical, so no software can move it back.</p>",
+      "html": "<p>There is, and it sits on the <a class=\"term\" data-t=\"soc\" href=\"https://en.wikipedia.org/wiki/System_on_a_chip\" title=\"System on a chip: one chip holding a device's processor, graphics, memory controller and other parts that once sat on separate chips.\" rel=\"external\">SoC</a>. Qualcomm chips carry a region called <b>Qfprom</b>, Fuse Programmable Read-Only Memory: a bank of one-time programmable electronic fuses. A controlled voltage pulse moves a fuse from <code>0</code> to <code>1</code>, and that change is physical, so no software can move it back.</p>",
       "cite": {
         "url": "https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback",
         "title": "OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)"
@@ -165,7 +165,7 @@
     {
       "who": "bot",
       "time": "00:43",
-      "html": "<p>Start with what a signature can tell you. Secure boot checks that an image was signed by the vendor, so a forged image fails. Last year's image was also signed by the vendor, so it passes the identical check, and last year's image is the one carrying the hole somebody has already published an exploit for.</p>"
+      "html": "<p>Start with what a signature can tell you. Secure boot checks that an image was signed by the vendor, so a forged image fails. Last year's image was also signed by the vendor, so it passes the identical check, and last year's image is the one carrying the hole somebody has already published an <a class=\"term\" data-t=\"exploit\" href=\"https://en.wikipedia.org/wiki/Exploit_(computer_security)\" title=\"Code or a technique that uses a bug to make a system do something its makers never intended, like leak data or run an attacker's code.\" rel=\"external\">exploit</a> for.</p>"
     },
     {
       "who": "bot",
@@ -196,7 +196,7 @@
     {
       "who": "bot",
       "time": "00:45",
-      "html": "<p>The hard part is <em>where</em> that number lives. Anyone who can flash firmware can rewrite ordinary storage, so a counter kept in flash is a counter the attacker edits on the way past. Qualcomm's answer is to keep it in silicon, as fuses. Drag the version and watch the floor move:</p>"
+      "html": "<p>The hard part is <em>where</em> that number lives. Anyone who can flash <a class=\"term\" data-t=\"firmware\" href=\"https://en.wikipedia.org/wiki/Firmware\" title=\"Low-level software stored on a device's chips that starts and controls the hardware, beneath the operating system.\" rel=\"external\">firmware</a> can rewrite ordinary storage, so a counter kept in flash is a counter the attacker edits on the way past. Qualcomm's answer is to keep it in silicon, as fuses. Drag the version and watch the floor move:</p>"
     },
     {
       "demo": {
@@ -223,7 +223,7 @@
     {
       "who": "bot",
       "time": "00:47",
-      "html": "<p>The <b>PBL</b>, the primary bootloader burned into the processor's ROM, comes up first and verifies the next stage, the <b>XBL</b>. Before it hands over, the PBL reads the anti-rollback version out of Qfprom and compares it against the version embedded in the firmware. Come in lower than the fuse value and boot stops there. When a newer build boots cleanly, the bootloader goes through <b>TrustZone</b> to blow more fuses, which writes the new minimum down for good.</p>",
+      "html": "<p>The <b>PBL</b>, the primary <a class=\"term\" data-t=\"bootloader\" href=\"https://en.wikipedia.org/wiki/Bootloader\" title=\"The small program that runs first when a device powers on, checking and loading the next stage of software until the operating system starts.\" rel=\"external\">bootloader</a> burned into the processor's <a class=\"term\" data-t=\"rom\" href=\"https://en.wikipedia.org/wiki/Read-only_memory\" title=\"Read-only memory: storage whose contents are set when the chip is made and can't be rewritten by software.\" rel=\"external\">ROM</a>, comes up first and verifies the next stage, the <b>XBL</b>. Before it hands over, the PBL reads the anti-rollback version out of Qfprom and compares it against the version embedded in the firmware. Come in lower than the fuse value and boot stops there. When a newer build boots cleanly, the bootloader goes through <b><a class=\"term\" data-t=\"trustzone\" href=\"https://www.arm.com/technologies/trustzone-for-cortex-a\" title=\"An Arm processor feature that splits the chip into a normal world and a secure world, so sensitive code runs isolated from the main operating system.\" rel=\"external\">TrustZone</a></b> to blow more fuses, which writes the new minimum down for good.</p>",
       "cite": {
         "url": "https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback",
         "title": "OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)"
@@ -237,7 +237,7 @@
     {
       "who": "bot",
       "time": "00:48",
-      "html": "<p>It does, and it still loses. EDL runs out of that same PBL ROM and can write your storage directly, while the fuses sit in processor silicon where a storage write cannot reach. The Firehose programmers EDL loads have to be OEM-signed and they carry anti-rollback versions of their own, so unbrick tools that worked last year now fail on exactly these devices. The remedy people report is a new motherboard.</p>",
+      "html": "<p>It does, and it still loses. EDL runs out of that same PBL ROM and can write your storage directly, while the fuses sit in processor silicon where a storage write cannot reach. The Firehose programmers EDL loads have to be <a class=\"term\" data-t=\"oem\" href=\"https://en.wikipedia.org/wiki/Original_equipment_manufacturer\" title=\"Original equipment manufacturer: here, the company that builds and sells the phone, such as OnePlus or Samsung.\" rel=\"external\">OEM</a>-signed and they carry anti-rollback versions of their own, so unbrick tools that worked last year now fail on exactly these devices. The remedy people report is a new motherboard.</p>",
       "cite": {
         "url": "https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback",
         "title": "OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)"
@@ -251,7 +251,7 @@
     {
       "who": "bot",
       "time": "00:49",
-      "html": "<p>The substrate is everywhere; the job it gets given is what differs. Samsung's Knox bit is the same kind of eFuse on the same kind of board, and it gates no boot at all. It records that you flashed something Samsung never signed, and once it trips, Samsung Pay and Secure Folder stay off for the life of the device. One fuse used as a gate, one used as a witness.</p>",
+      "html": "<p>The substrate is everywhere; the job it gets given is what differs. Samsung's <a class=\"term\" data-t=\"samsung-knox\" href=\"https://en.wikipedia.org/wiki/Samsung_Knox\" title=\"Samsung's security platform for its phones and tablets, covering secure boot, encrypted storage and a separate secure folder.\" rel=\"external\">Knox</a> bit is the same kind of eFuse on the same kind of board, and it gates no boot at all. It records that you flashed something Samsung never signed, and once it trips, Samsung Pay and Secure Folder stay off for the life of the device. One fuse used as a gate, one used as a witness.</p>",
       "cite": {
         "url": "https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback",
         "title": "OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)"

@@ -109,16 +109,16 @@
     <h1>Thumbnail encoding study <span class="badge shipped">shipped</span></h1>
     <p class="lede">
       Every grid thumbnail ends a chain of choices: <em>format,
-      quality, chroma subsampling, resolution</em>. Here I run one photo through all
+      quality, <a class="term" data-t="chroma-subsampling" href="https://en.wikipedia.org/wiki/Chroma_subsampling" title="Storing colour at lower resolution than brightness, since eyes notice brightness detail more. 4:4:4 keeps full colour and 4:2:0 keeps a quarter." rel="external">chroma subsampling</a>, resolution</em>. Here I run one photo through all
       of them with real byte counts, so you can see the tradeoffs instead of taking them on faith.
       The actual encoders the site uses (avifenc, zenc/zenjpeg, cwebp, sips) produced the shipped
       numbers; the corpus study that put zenjpeg in the pipeline is below.
     </p>
     <p class="lede" style="margin-top:4px">
       <b>The verdict shipped:</b> the live pipeline (<code>tools/photos/add-photos.sh</code>)
-      encodes every thumbnail as AVIF-primary + a JPG fallback. The JPG encoder is now
-      <b>zenc</b> (<code>tools/photos/zenc/</code>, a zenjpeg wrapper: hybrid trellis + progressive
-      scan search) at q84, which retired the from-source jpegli build in 2026-07 for a few percent
+      encodes every thumbnail as <a class="term" data-t="avif" href="https://en.wikipedia.org/wiki/AVIF" title="An image format that stores a picture compressed with the AV1 video codec. Every current major browser can display it." rel="external">AVIF</a>-primary + a JPG fallback. The JPG encoder is now
+      <b>zenc</b> (<code>tools/photos/zenc/</code>, a zenjpeg wrapper: hybrid <a class="term" data-t="trellis-quantization" href="https://en.wikipedia.org/wiki/Trellis_quantization" title="An encoder search that tries alternative rounding choices for each block and keeps whichever gives the best trade of file size against error." rel="external">trellis</a> + <a class="term" data-t="progressive-jpeg" href="https://en.wikipedia.org/wiki/JPEG#JPEG_compression" title="A JPEG saved as several passes over the whole image, coarse first, so a browser can show a rough picture before the download finishes." rel="external">progressive</a>
+      scan search) at q84, which retired the from-source <a class="term" data-t="jpegli" href="https://github.com/google/jpegli" title="Google's JPEG library, a drop-in libjpeg replacement that writes ordinary JPEG files smaller than older encoders at the same visual quality." rel="external">jpegli</a> build in 2026-07 for a few percent
       fewer bytes at equal quality. The corpus comparison that drove that switch is below.
     </p>
 
@@ -162,7 +162,7 @@
       so I ran the whole library through it (112 Fuji X-T50 + 46 Leica frames, resized to the 600px
       thumbnail tier, each normalized so both encoders and the metric see identical pixels).
       Across all 158, zenjpeg's realistic mode (hybrid trellis) needs about <b>1.6% fewer bytes</b>
-      than <code>cjpegli -q82 -p2</code> at equal SSIMULACRA2; its aggressive mode (hybrid plus a
+      than <code>cjpegli -q82 -p2</code> at equal <a class="term" data-t="ssimulacra2" href="https://github.com/cloudinary/ssimulacra2" title="A perceptual image quality score from Cloudinary, built to match how people judge compressed photos. Higher is better, and about 90 is hard to tell from the original." rel="external">SSIMULACRA2</a>; its aggressive mode (hybrid plus a
       64-candidate scan search) about <b>4%</b>. zenjpeg's fast path ties cjpegli. A real win,
       but a small one on a fallback format AVIF already beats by ~40%.</p>
 
@@ -173,8 +173,8 @@
         <tbody>
           <tr><td><code>quality</code></td><td>Quantization strength; zenjpeg's scale is jpegli-like, not a promise of equal bytes.</td><td>Calibrate by output size, not by matching <code>82</code> on the label.</td></tr>
           <tr><td><code>ChromaSubsampling</code></td><td><code>None</code> = 4:4:4; <code>Quarter</code> = 4:2:0.</td><td>4:2:0 is the likely production candidate, but this first matched run used 4:4:4 because current cjpegli did.</td></tr>
-          <tr><td><code>progressive</code></td><td>Progressive versus baseline JPEG; progressive mode also optimizes Huffman coding.</td><td>Use progressive for the jpegli comparison; baseline is a separate decode/compatibility tradeoff.</td></tr>
-          <tr><td><code>ProgressiveScanMode</code></td><td>jpegli script, MozJPEG script, or <code>ProgressiveSearch</code> over 64 scan candidates.</td><td>On the corpus, scan search took the BD-rate from about 1.6% to 4%, at roughly 4&times; hybrid's encode time (13&times; cjpegli).</td></tr>
+          <tr><td><code>progressive</code></td><td>Progressive versus baseline JPEG; progressive mode also optimizes <a class="term" data-t="huffman-coding" href="https://en.wikipedia.org/wiki/Huffman_coding" title="A lossless coding method that gives short bit codes to common symbols and longer ones to rare symbols, shrinking the total." rel="external">Huffman</a> coding.</td><td>Use progressive for the jpegli comparison; baseline is a separate decode/compatibility tradeoff.</td></tr>
+          <tr><td><code>ProgressiveScanMode</code></td><td>jpegli script, MozJPEG script, or <code>ProgressiveSearch</code> over 64 scan candidates.</td><td>On the corpus, scan search took the <a class="term" data-t="bd-rate" href="https://arxiv.org/abs/2401.04039" title="Bjøntegaard delta rate: the average share of bytes one encoder saves over another at equal quality, read off their size and quality curves." rel="external">BD-rate</a> from about 1.6% to 4%, at roughly 4&times; hybrid's encode time (13&times; cjpegli).</td></tr>
           <tr><td><code>auto_optimize(true)</code></td><td>Hybrid trellis: jpegli adaptive quantization plus rate-distortion optimization.</td><td>The mode that actually beats cjpegli (+0.5 SSIMULACRA2 at matched bytes), about 3&times; the base encode time.</td></tr>
           <tr><td><code>OptimizationPreset</code></td><td><code>Jpegli*</code>, <code>Mozjpeg*</code>, and <code>Hybrid*</code> bundle quant tables, AQ/trellis, scan strategy, and deringing policy.</td><td>Compare named profiles rather than accumulating unexplained flags in the Action.</td></tr>
           <tr><td><code>deringing(true)</code></td><td>Overshoot deringing around saturated, high-contrast edges; enabled by default for jpegli/hybrid paths.</td><td>Useful protection, not a byte-saving knob: it changed nothing on this photo fixture, so it still needs an edge-heavy test image.</td></tr>
@@ -185,7 +185,7 @@
 
     <h3>Full-corpus read</h3>
     <p class="note">158 real frames resized to 600px, each normalized to one canonical RGB buffer
-      so both encoders and the metric read identical pixels (the grayscale frames carry a Gray ICC
+      so both encoders and the metric read identical pixels (the grayscale frames carry a Gray <a class="term" data-t="icc-profile" href="https://en.wikipedia.org/wiki/ICC_profile" title="A block of data in an image file that describes its colour space, so software knows how to turn the stored numbers into real colours." rel="external">ICC</a>
       that different decoders expand differently, which will fake a quality collapse if you skip
       this). Quality is <b>SSIMULACRA2</b>, the perceptual metric zenjpeg's own tuning targets,
       cross-checked with PSNR/SSIM. BD-rate is the average byte difference at equal quality over a
@@ -281,7 +281,7 @@
       file, and it costs nothing because it is not an extra request or a placeholder tier.</p>
 
     <h3>What a scan actually is</h3>
-    <p class="note">A JPEG stores each 8&times;8 block as 64 quantized DCT coefficients: one DC term, the
+    <p class="note">A JPEG stores each 8&times;8 block as 64 quantized <a class="term" data-t="dct" href="https://en.wikipedia.org/wiki/Discrete_cosine_transform" title="Discrete cosine transform: math that rewrites a block of pixels as a sum of smooth wave patterns. JPEG stores those wave strengths instead of pixels." rel="external">DCT</a> coefficients: one DC term, the
       block&apos;s average, and 63 AC terms for finer and finer detail. Baseline writes every block
       complete in a single pass, top to bottom, so half the file is the top half of the picture.
       Progressive writes the same coefficients over several passes, each called a <em>scan</em> and
@@ -329,7 +329,7 @@
       their first quarter, and the other 156 wait past halfway.</p>
     <p class="note"><b>On a thumbnail that barely matters.</b> The JPG tile is the fallback most
       browsers never fetch, and it is small: a median 48.7&nbsp;KB, with the gate at a median
-      19.3&nbsp;KB. A 10-packet initial congestion window carries about 14&nbsp;KB, so 116 of the 255
+      19.3&nbsp;KB. A 10-packet initial <a class="term" data-t="congestion-window" href="https://en.wikipedia.org/wiki/TCP_congestion_control#Congestion_window" title="How much data a TCP sender may have in flight before it hears back. Connections usually start at 10 packets and grow as replies arrive." rel="external">congestion window</a> carries about 14&nbsp;KB, so 116 of the 255
       reach their gate in the opening flight and the rest one round trip later. The scan search still earns its place
       at this size, purely for the bytes it saves.</p>
 
@@ -421,7 +421,7 @@
         <tr><td>200&times;200</td><td class="num">79.80</td><td class="num">+0.59</td><td class="num">15 of 24</td></tr>
       </tbody>
     </table>
-    <p class="note">SSIMULACRA2 over 24 photos from both cameras, and butteraugli agrees on every tier.
+    <p class="note">SSIMULACRA2 over 24 photos from both cameras, and <a class="term" data-t="butteraugli" href="https://github.com/google/butteraugli" title="Google's perceptual metric that estimates how visible the differences between two images are to a human eye. Lower is better." rel="external">butteraugli</a> agrees on every tier.
       In bytes, 4:2:0 needs a median <b>2.2% more</b> on the 600 tile to reach 4:4:4&apos;s score.</p>
     <p class="note"><b>Why more chroma helps when the camera recorded less.</b> Every color original here
       is 4:2:2, but that describes the 7728&times;5152 frame. A 600px tile is the frame&apos;s centre square
@@ -432,7 +432,7 @@
       It barely costs bytes to keep, because full-resolution color in a reduced photo is smooth, and AV1
       codes smooth planes for very little.</p>
     <p class="note">It matters most under red light. Red carries only 0.299 of the brightness in the
-      BT.601 matrix these files signal, so fine detail in a red scene lives mostly in the color planes.
+      <a class="term" data-t="bt-601" href="https://en.wikipedia.org/wiki/Rec._601" title="A video standard whose matrix converts red, green and blue into one brightness and two colour channels, with red weighted at 0.299 of brightness." rel="external">BT.601</a> matrix these files signal, so fine detail in a red scene lives mostly in the color planes.
       One night frame of bare branches against red windows needs <b>35% more bytes</b> at 4:2:0 to match
       4:4:4.</p>
     <p class="note">Each layout was scored at the shipped tile&apos;s exact byte count. avifenc&apos;s quality
@@ -441,7 +441,7 @@
       (72 of 72) before anything was compared. <code>tools/photos/avif-chroma-probe.ts</code> reruns it.</p>
 
     <h2>JPEG XL: where it loses, and what it would buy</h2>
-    <p class="note">Safari has decoded JPEG XL since version 17, Chrome Canary turned it on by default at
+    <p class="note">Safari has decoded <a class="term" data-t="jpeg-xl" href="https://en.wikipedia.org/wiki/JPEG_XL" title="A newer image format from the JPEG committee. It compresses well, decodes in parallel, and can repack an existing JPEG losslessly into a smaller file." rel="external">JPEG XL</a> since version 17, Chrome Canary turned it on by default at
       155, and Firefox has it on the way. So the format this page never tested needs an answer. It
       could help this site in three places: replacing the AVIF tiles, repacking the archive JPEGs
       without loss, or decoding faster. All three were measured.</p>

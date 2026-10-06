@@ -617,10 +617,10 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 /* the other half, in CSS */
 .tip { transform: translate(var(--x), var(--y)); }</pre>
     <p class="lede" style="margin-top: 4px;">
-      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Popover_API" rel="external">Popover API</a> for show/hide, <code>@starting-style</code> for the entry fade, and two custom-property writes per move for cursor tracking. No rAF, no layout reads.
+      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Popover_API" rel="external">Popover API</a> for show/hide, <code>@starting-style</code> for the entry fade, and two <a class="term" data-t="css-custom-properties" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Cascading_variables/Using_custom_properties" title="Variables written in CSS, named with two leading dashes, that other style rules can read and JavaScript can change." rel="external">custom-property</a> writes per move for cursor tracking. No <a class="term" data-t="raf" href="https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame" title="A browser API that runs a callback just before the next screen repaint, the usual way to sync JavaScript animation with the display." rel="external">rAF</a>, no layout reads.
     </p>
     <p class="lede" style="margin-top: 4px;">
-      The shipping version is roughly 100 lines. Most of the difference is the markup each variant renders, and the rest is four guards that have nothing to do with tooltips. An <code>activeSlot</code> check, so moving across a slot's children does not re-render it. A <code>:popover-open</code> test before each show and hide, so the platform call only fires on a real state change. A <code>relatedTarget</code> containment test, so moving to another element inside the grid is not read as leaving it. And the <code>clamp()</code> wrapped around each translate, which is viewport edge handling rather than placement. Every one earns its keep and none of them is the idea.
+      The shipping version is roughly 100 lines. Most of the difference is the markup each variant renders, and the rest is four guards that have nothing to do with tooltips. An <code>activeSlot</code> check, so moving across a slot's children does not re-render it. A <code>:popover-open</code> test before each show and hide, so the platform call only fires on a real state change. A <code>relatedTarget</code> containment test, so moving to another element inside the grid is not read as leaving it. And the <code>clamp()</code> wrapped around each translate, which is <a class="term" data-t="viewport" href="https://developer.mozilla.org/en-US/docs/Glossary/Viewport" title="The part of a web page currently visible in the browser window; anything outside it needs scrolling to see." rel="external">viewport</a> edge handling rather than placement. Every one earns its keep and none of them is the idea.
     </p>
     <p class="lede" style="margin-top: 4px;">
       &larr; back to <a href="/garage">garage</a>
@@ -630,10 +630,10 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 
     <h2>Fuji X-T LCD readout (photos) <span class="badge review">in review</span></h2>
     <p class="note">
-      Hover any slot. The floating panel mimics the camera's image-review screen: histogram band on top, filename, exposure trio, recipe grid, footer. It follows the cursor. The slot itself stays untouched (no in-tooltip thumbnail; you can already see the larger slot image).
+      Hover any slot. The floating panel mimics the camera's image-review screen: <a class="term" data-t="image-histogram" href="https://en.wikipedia.org/wiki/Image_histogram" title="A graph of how many pixels in an image fall at each brightness level, from shadows on the left to highlights on the right." rel="external">histogram</a> band on top, filename, exposure trio, recipe grid, footer. It follows the cursor. The slot itself stays untouched (no in-tooltip thumbnail; you can already see the larger slot image).
     </p>
     <p class="note">
-      Each recipe value is real EXIF, pulled from <code>/images/metadata.json</code>. An earlier preview fabricated values (it tagged XT508756 ACROS+R, which shoots B&amp;W only); fixed.
+      Each recipe value is real <a class="term" data-t="exif" href="https://en.wikipedia.org/wiki/Exif" title="Metadata a camera writes into a photo: exposure settings, date, lens, and an Orientation tag saying which way up to show it." rel="external">EXIF</a>, pulled from <code>/images/metadata.json</code>. An earlier preview fabricated values (it tagged XT508756 ACROS+R, which shoots B&amp;W only); fixed.
     </p>
     <div class="row" id="photo-row">
       <a class="slot fuji-slot" href="#"
@@ -672,7 +672,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 
     <h2>XP-skinned camera readout (photos) <span class="badge shipped">shipped</span></h2>
     <p class="note">
-      <b>This is the one that shipped.</b> It's the live photo-grid tooltip on <a href="/">the homepage</a> (the <code>.cam</code> markup out of <code>buildContent()</code>). Same content as the Fuji LCD above (histogram, exposure trio, recipe grid, date) but reskinned in XP visual vocabulary: cream panel, blue gradient title strip, sunken bevel around the histogram, Tahoma body with Courier numerics. Keeps the camera-back density without arguing visually with the surrounding XP shell. The Fuji LCD lost on exactly that (too dark a panel against the Luna page).
+      <b>This is the one that shipped.</b> It's the live photo-grid tooltip on <a href="/">the homepage</a> (the <code>.cam</code> markup out of <code>buildContent()</code>). Same content as the Fuji LCD above (histogram, exposure trio, recipe grid, date) but reskinned in XP visual vocabulary: cream panel, blue gradient title strip, sunken bevel around the histogram, Tahoma body with Courier numerics. Keeps the camera-back density without arguing visually with the surrounding XP shell. The Fuji LCD lost on exactly that (too dark a panel against the <a class="term" data-t="luna" href="https://en.wikipedia.org/wiki/Windows_XP_visual_styles" title="The default visual style of Windows XP, with blue title bars, a green Start button and rounded, glossy controls." rel="external">Luna</a> page).
     </p>
     <div class="row" id="xp-cam-row">
       <a class="slot xp-cam-slot" href="#"
@@ -809,10 +809,10 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 
     <h2>CSS Anchor Positioning <span class="badge shipped">shipped</span></h2>
     <p class="note">
-      Element-anchored rather than cursor-anchored. <b>This shipped.</b> It's the <a href="/">homepage</a>'s <em>keyboard-focus</em> tooltip path: mouse users get the cursor-follower, but a keyboard user tabbing to a slot has no cursor to track, so on <code>:focus-visible</code> the JS sets <code>anchor-name</code> on the focused element and the popover tethers to it via <code>position-anchor</code> / <code>position-area</code> (gated on <code>CSS.supports</code>, a clean no-op where unsupported).
+      Element-anchored rather than cursor-anchored. <b>This shipped.</b> It's the <a href="/">homepage</a>'s <em>keyboard-focus</em> tooltip path: mouse users get the cursor-follower, but a keyboard user tabbing to a slot has no cursor to track, so on <code>:focus-visible</code> the JS sets <code>anchor-name</code> on the focused element and the <a class="term" data-t="popover-api" href="https://developer.mozilla.org/en-US/docs/Web/API/Popover_API" title="A browser API for showing content above the rest of the page, such as menus and tooltips, with built-in show, hide and dismiss behavior." rel="external">popover</a> tethers to it via <code>position-anchor</code> / <code>position-area</code> (gated on <code>CSS.supports</code>, a clean no-op where unsupported).
     </p>
     <p class="note">
-      <b>Note: this is a keyboard fallback, and a keyboard fallback only, not a JS-disabled one.</b> JS orchestrates every live tooltip (here and on serendipity): it populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and never opens: no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are progressive enhancement that simply vanish without script (the photos and links still work).
+      <b>Note: this is a keyboard fallback, and a keyboard fallback only, not a JS-disabled one.</b> JS orchestrates every live tooltip (here and on serendipity): it populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and never opens: no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are <a class="term" data-t="progressive-enhancement" href="https://en.wikipedia.org/wiki/Progressive_enhancement" title="Building a page so its core content works in any browser, then layering extra features on top for browsers that support them." rel="external">progressive enhancement</a> that simply vanish without script (the photos and links still work).
     </p>
     <div class="anchor-fallback">
       Your browser doesn't support <code>anchor-name</code> yet. Chrome 125+ or Safari TP shows this demo.

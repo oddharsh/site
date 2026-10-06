@@ -1,0 +1,1512 @@
+{
+  "0xparc": {
+    "label": "0xPARC",
+    "plain": "A research group that supports applied research on Ethereum and other decentralized platforms, with a focus on programmable cryptography.",
+    "src": "https://0xparc.org/"
+  },
+  "accept-encoding": {
+    "label": "Accept-Encoding",
+    "plain": "The HTTP request header where a browser lists the compression formats it can decode, such as gzip, br and zstd.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept-Encoding"
+  },
+  "agent2agent": {
+    "label": "Agent2Agent",
+    "plain": "An open protocol that lets AI agents built by different companies find each other and hand off tasks.",
+    "src": "https://a2a-protocol.org/"
+  },
+  "ai-gateway": {
+    "label": "AI Gateway",
+    "plain": "Cloudflare's proxy for calls to AI models. It logs requests and responses, counts tokens and cost, and can cache or rate-limit calls.",
+    "src": "https://developers.cloudflare.com/ai-gateway/"
+  },
+  "ai-hallucination": {
+    "label": "hallucination",
+    "plain": "When an AI model confidently states something false or invented, like describing an object that isn't in the picture.",
+    "src": "https://en.wikipedia.org/wiki/Hallucination_(artificial_intelligence)"
+  },
+  "aliasing": {
+    "label": "Aliasing",
+    "plain": "False patterns, like jagged edges or shimmering moire, that appear when detail finer than the sampling grid gets sampled anyway.",
+    "src": "https://en.wikipedia.org/wiki/Aliasing"
+  },
+  "amd-sev": {
+    "label": "AMD SEV",
+    "plain": "Secure Encrypted Virtualization: an AMD processor feature that encrypts each virtual machine's memory with its own key, hiding it from the host.",
+    "src": "https://www.amd.com/en/developer/sev.html"
+  },
+  "anchor-positioning": {
+    "label": "CSS anchor positioning",
+    "plain": "A CSS feature that places one element relative to another, such as a tooltip pinned to its button, without JavaScript measuring positions.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Anchor_positioning"
+  },
+  "apple-t2": {
+    "label": "Apple T2",
+    "plain": "A security chip in Intel-based Macs from 2017 onward that stores encryption keys and Touch ID data and checks the startup software.",
+    "src": "https://en.wikipedia.org/wiki/Apple_T2"
+  },
+  "av1": {
+    "label": "AV1",
+    "plain": "A royalty-free video codec from the Alliance for Open Media. AVIF images are single AV1 frames stored in an image file.",
+    "src": "https://en.wikipedia.org/wiki/AV1"
+  },
+  "av2": {
+    "label": "AV2",
+    "plain": "The video codec that follows AV1, from the Alliance for Open Media. Like AV1, it can also compress single still images.",
+    "src": "https://en.wikipedia.org/wiki/AV2"
+  },
+  "avif": {
+    "label": "AVIF",
+    "plain": "An image format that stores a picture compressed with the AV1 video codec. Every current major browser can display it.",
+    "src": "https://en.wikipedia.org/wiki/AVIF"
+  },
+  "bao": {
+    "label": "Bao",
+    "plain": "A format and tool built on BLAKE3 that lets you verify any slice of a file against its root hash while streaming it.",
+    "src": "https://github.com/oconnor663/bao"
+  },
+  "base32": {
+    "label": "Base32",
+    "plain": "A way to write binary data using 32 characters, letters and digits, so it can be printed, typed or put in a URL safely.",
+    "src": "https://en.wikipedia.org/wiki/Base32"
+  },
+  "base64": {
+    "label": "Base64",
+    "plain": "A way to write binary data as plain text using 64 safe characters. It makes the data about a third larger.",
+    "src": "https://en.wikipedia.org/wiki/Base64"
+  },
+  "baseline": {
+    "label": "Baseline",
+    "plain": "A label for web features that work in the current versions of all the major browsers: Chrome, Edge, Firefox and Safari.",
+    "src": "https://developer.mozilla.org/en-US/docs/Glossary/Baseline/Compatibility"
+  },
+  "bd-rate": {
+    "label": "BD-rate",
+    "plain": "Bjøntegaard delta rate: the average share of bytes one encoder saves over another at equal quality, read off their size and quality curves.",
+    "src": "https://arxiv.org/abs/2401.04039"
+  },
+  "bfcache": {
+    "label": "bfcache",
+    "plain": "The back/forward cache: the browser keeps a page frozen in memory when you leave, so Back or Forward restores it instantly with its state intact.",
+    "src": "https://developer.mozilla.org/en-US/docs/Glossary/bfcache"
+  },
+  "bgv": {
+    "label": "BGV",
+    "plain": "A fully homomorphic encryption scheme by Brakerski, Gentry and Vaikuntanathan that computes exactly on encrypted integers and runs fixed-depth circuits without bootstrapping.",
+    "src": "https://eprint.iacr.org/2011/277"
+  },
+  "binding": {
+    "label": "binding",
+    "plain": "A named handle in a Worker's environment that connects its code to a resource, such as a database, a storage bucket or another Worker.",
+    "src": "https://developers.cloudflare.com/workers/runtime-apis/bindings/"
+  },
+  "bittorrent": {
+    "label": "BitTorrent",
+    "plain": "A file sharing protocol that splits a file into pieces so many computers each upload and download parts of it at once.",
+    "src": "https://en.wikipedia.org/wiki/BitTorrent"
+  },
+  "blake3": {
+    "label": "BLAKE3",
+    "plain": "A fast cryptographic hash function. It hashes a file as a tree of chunks, so work runs in parallel and parts can be verified alone.",
+    "src": "https://github.com/BLAKE3-team/BLAKE3"
+  },
+  "blink": {
+    "label": "Blink",
+    "plain": "The browser engine behind Chrome, Edge and other Chromium-based browsers.",
+    "src": "https://en.wikipedia.org/wiki/Blink_(browser_engine)"
+  },
+  "blockchain": {
+    "label": "blockchain",
+    "plain": "A shared ledger copied across many computers, with records grouped into blocks chained together by hashes so past entries can't be quietly changed.",
+    "src": "https://en.wikipedia.org/wiki/Blockchain"
+  },
+  "boolean-circuit": {
+    "label": "Boolean circuit",
+    "plain": "A computation written as a network of logic gates (AND, OR, NOT) that turns input bits into output bits.",
+    "src": "https://en.wikipedia.org/wiki/Boolean_circuit"
+  },
+  "bootloader": {
+    "label": "bootloader",
+    "plain": "The small program that runs first when a device powers on, checking and loading the next stage of software until the operating system starts.",
+    "src": "https://en.wikipedia.org/wiki/Bootloader"
+  },
+  "brotli": {
+    "label": "Brotli",
+    "plain": "A compression algorithm from Google built for the web. It ships with a built-in dictionary of common web text, which helps on small files.",
+    "src": "https://en.wikipedia.org/wiki/Brotli"
+  },
+  "browser-compat-data": {
+    "label": "browser-compat-data",
+    "plain": "MDN's open dataset recording which version of each browser supports each web feature.",
+    "src": "https://github.com/mdn/browser-compat-data"
+  },
+  "browser-run": {
+    "label": "Browser Run",
+    "plain": "Cloudflare's service for controlling a headless browser from a Worker, to render pages, take screenshots or make PDFs.",
+    "src": "https://developers.cloudflare.com/browser-run/"
+  },
+  "bt-601": {
+    "label": "BT.601",
+    "plain": "A video standard whose matrix converts red, green and blue into one brightness and two colour channels, with red weighted at 0.299 of brightness.",
+    "src": "https://en.wikipedia.org/wiki/Rec._601"
+  },
+  "bun": {
+    "label": "Bun",
+    "plain": "A JavaScript runtime that also bundles a package manager, bundler and test runner, built to work as a replacement for Node.js.",
+    "src": "https://en.wikipedia.org/wiki/Bun_(software)"
+  },
+  "butteraugli": {
+    "label": "Butteraugli",
+    "plain": "Google's perceptual metric that estimates how visible the differences between two images are to a human eye. Lower is better.",
+    "src": "https://github.com/google/butteraugli"
+  },
+  "bytecode": {
+    "label": "bytecode",
+    "plain": "Compact low-level instructions run by a virtual machine. Compilers turn source code into it.",
+    "src": "https://en.wikipedia.org/wiki/Bytecode"
+  },
+  "canvas-api": {
+    "label": "Canvas",
+    "plain": "The browser's drawing surface for scripts. Its drawImage call can copy an image onto it at a new size.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API"
+  },
+  "cdn": {
+    "label": "CDN",
+    "plain": "A content delivery network: servers spread around the world that keep copies of a site's files close to visitors so pages load faster.",
+    "src": "https://en.wikipedia.org/wiki/Content_delivery_network"
+  },
+  "cdp": {
+    "label": "Chrome DevTools Protocol",
+    "plain": "The message protocol Chrome's developer tools use to inspect and control the browser. Automation libraries like Puppeteer use it too.",
+    "src": "https://chromedevtools.github.io/devtools-protocol/"
+  },
+  "certificate-authority": {
+    "label": "certificate authority",
+    "plain": "An organization browsers trust to issue certificates that vouch a public key belongs to a given website.",
+    "src": "https://en.wikipedia.org/wiki/Certificate_authority"
+  },
+  "character-encoding": {
+    "label": "character encoding",
+    "plain": "A rule for turning text characters into numbers, and those numbers into bytes, so computers can store and send text.",
+    "src": "https://en.wikipedia.org/wiki/Character_encoding"
+  },
+  "chi-squared-test": {
+    "label": "chi-squared test",
+    "plain": "A statistic that measures how far a set of observed counts sits from the counts you'd expect; smaller values mean a closer match.",
+    "src": "https://en.wikipedia.org/wiki/Chi-squared_test"
+  },
+  "chirality": {
+    "label": "handedness",
+    "plain": "The property of a shape that can't be turned to match its own mirror image, like a left hand and a right hand.",
+    "src": "https://en.wikipedia.org/wiki/Chirality"
+  },
+  "chroma-subsampling": {
+    "label": "Chroma subsampling",
+    "plain": "Storing colour at lower resolution than brightness, since eyes notice brightness detail more. 4:4:4 keeps full colour and 4:2:0 keeps a quarter.",
+    "src": "https://en.wikipedia.org/wiki/Chroma_subsampling"
+  },
+  "chromium": {
+    "label": "Chromium",
+    "plain": "The open-source browser project that Chrome, Edge, Brave and Opera are built on.",
+    "src": "https://en.wikipedia.org/wiki/Chromium_(web_browser)"
+  },
+  "ciphertext": {
+    "label": "ciphertext",
+    "plain": "The scrambled output of encryption, unreadable without the key.",
+    "src": "https://en.wikipedia.org/wiki/Ciphertext"
+  },
+  "cjk-characters": {
+    "label": "CJK",
+    "plain": "Chinese, Japanese and Korean, grouped in computing because their writing systems share a large set of Chinese-derived characters.",
+    "src": "https://en.wikipedia.org/wiki/CJK_characters"
+  },
+  "ckks": {
+    "label": "CKKS",
+    "plain": "A homomorphic encryption scheme by Cheon, Kim, Kim and Song that computes on encrypted real numbers approximately, treating its noise as rounding error.",
+    "src": "https://eprint.iacr.org/2016/421"
+  },
+  "cloudflare-pages": {
+    "label": "Cloudflare Pages",
+    "plain": "Cloudflare's hosting service for static websites and front-end apps, deployed straight from a Git repository.",
+    "src": "https://developers.cloudflare.com/pages/"
+  },
+  "cloudflare-queues": {
+    "label": "Queues",
+    "plain": "Cloudflare's message queue: one Worker drops tasks in, and another works through them later, in batches and with retries.",
+    "src": "https://developers.cloudflare.com/queues/"
+  },
+  "cloudflare-workers": {
+    "label": "Cloudflare Workers",
+    "plain": "Code that runs on Cloudflare's servers around the world and answers each request directly, with no server of the site's own.",
+    "src": "https://developers.cloudflare.com/workers/"
+  },
+  "cloudflare-workflows": {
+    "label": "Workflows",
+    "plain": "A Cloudflare Workers feature for multi-step jobs that saves progress after each step and retries the ones that fail.",
+    "src": "https://developers.cloudflare.com/workflows/"
+  },
+  "cls": {
+    "label": "Cumulative Layout Shift",
+    "plain": "A score for how much visible content jumps around while a page loads; lower is better, and 0 means nothing moved.",
+    "src": "https://developer.mozilla.org/en-US/docs/Glossary/CLS"
+  },
+  "collatz-conjecture": {
+    "label": "Collatz conjecture",
+    "plain": "An unproven claim that repeatedly halving even numbers and turning odd n into 3n + 1 always reaches 1, from any positive starting number.",
+    "src": "https://en.wikipedia.org/wiki/Collatz_conjecture"
+  },
+  "colo": {
+    "label": "colo",
+    "plain": "Short for colocation center, a shared data center. At Cloudflare it means one of the data centers that answers visitors nearby.",
+    "src": "https://en.wikipedia.org/wiki/Colocation_centre"
+  },
+  "compcert": {
+    "label": "CompCert",
+    "plain": "A C compiler with a machine-checked proof that the code it produces behaves the way the source program says.",
+    "src": "https://compcert.org/"
+  },
+  "compression-dictionaries": {
+    "label": "Shared dictionary compression",
+    "plain": "A scheme where the browser keeps an earlier copy of a file and the server sends only a compressed difference against it.",
+    "src": "https://www.rfc-editor.org/rfc/rfc9842.html"
+  },
+  "congestion-window": {
+    "label": "Congestion window",
+    "plain": "How much data a TCP sender may have in flight before it hears back. Connections usually start at 10 packets and grow as replies arrive.",
+    "src": "https://en.wikipedia.org/wiki/TCP_congestion_control#Congestion_window"
+  },
+  "content-addressing": {
+    "label": "Content addressing",
+    "plain": "Naming each piece of data by a hash of its bytes, so the same content always gets the same name and any change gets a new one.",
+    "src": "https://en.wikipedia.org/wiki/Content-addressable_storage"
+  },
+  "content-defined-chunking": {
+    "label": "Content-defined chunking",
+    "plain": "Splitting a file wherever its own bytes match a pattern, so an insertion only moves the boundaries near it and the other chunks stay identical.",
+    "src": "https://en.wikipedia.org/wiki/Rolling_hash#Content-based_slicing_using_a_rolling_hash"
+  },
+  "content-negotiation": {
+    "label": "content negotiation",
+    "plain": "The HTTP mechanism where one URL can answer in different formats, such as HTML or Markdown, depending on what the client says it accepts.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation"
+  },
+  "context-window": {
+    "label": "Context window",
+    "plain": "The amount of text, counted in tokens, that a language model can take in at once, including its own reply.",
+    "src": "https://en.wikipedia.org/wiki/Context_window"
+  },
+  "control-character": {
+    "label": "control code",
+    "plain": "A character code that tells a device to do something instead of printing a symbol, such as a newline, a tab or a backspace.",
+    "src": "https://en.wikipedia.org/wiki/Control_character"
+  },
+  "cookie-store-api": {
+    "label": "Cookie Store API",
+    "plain": "A promise-based browser API for reading and writing cookies, usable from service workers as well as pages.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Cookie_Store_API"
+  },
+  "cpu-cache": {
+    "label": "CPU cache",
+    "plain": "A small, fast memory on the processor that keeps copies of recently used data so the chip doesn't have to wait on main memory.",
+    "src": "https://en.wikipedia.org/wiki/CPU_cache"
+  },
+  "cron-triggers": {
+    "label": "Cron Triggers",
+    "plain": "Cloudflare's way to run a Worker on a schedule, like every hour, written in cron syntax.",
+    "src": "https://developers.cloudflare.com/workers/configuration/cron-triggers/"
+  },
+  "cryptanalysis": {
+    "label": "cryptanalysis",
+    "plain": "The study and practice of breaking ciphers and recovering secrets without being given the key.",
+    "src": "https://en.wikipedia.org/wiki/Cryptanalysis"
+  },
+  "cryptographic-hash-function": {
+    "label": "Hash",
+    "plain": "A short fingerprint computed from data. The same data always gives the same hash, and any change, even one byte, gives a different one.",
+    "src": "https://en.wikipedia.org/wiki/Cryptographic_hash_function"
+  },
+  "cryptographic-key": {
+    "label": "cryptographic key",
+    "plain": "A secret value, usually a long random number, that an encryption or signature algorithm uses to lock, unlock or sign data.",
+    "src": "https://en.wikipedia.org/wiki/Key_(cryptography)"
+  },
+  "cryptographic-primitive": {
+    "label": "cryptographic primitive",
+    "plain": "A basic, well-studied building block of cryptography, such as a hash function or a cipher, that larger protocols are built from.",
+    "src": "https://en.wikipedia.org/wiki/Cryptographic_primitive"
+  },
+  "csp": {
+    "label": "Content Security Policy",
+    "plain": "A header that tells the browser which sources a page may load scripts, styles and other resources from, to block injected code.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP"
+  },
+  "css-custom-properties": {
+    "label": "CSS custom properties",
+    "plain": "Variables written in CSS, named with two leading dashes, that other style rules can read and JavaScript can change.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Cascading_variables/Using_custom_properties"
+  },
+  "customizable-select": {
+    "label": "customizable select",
+    "plain": "The CSS value appearance: base-select, which lets a page fully style a native select dropdown, including its open list of options.",
+    "src": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Customizable_select"
+  },
+  "d1": {
+    "label": "D1",
+    "plain": "Cloudflare's SQL database for Workers, built on SQLite.",
+    "src": "https://developers.cloudflare.com/d1/"
+  },
+  "dac": {
+    "label": "DAC",
+    "plain": "Digital-to-analog converter: a circuit that turns a stream of numbers into a changing voltage, such as the audio signal that drives headphones.",
+    "src": "https://en.wikipedia.org/wiki/Digital-to-analog_converter"
+  },
+  "data-deduplication": {
+    "label": "Deduplication",
+    "plain": "Storing identical pieces of data once and pointing to that one copy wherever else they appear.",
+    "src": "https://en.wikipedia.org/wiki/Data_deduplication"
+  },
+  "dct": {
+    "label": "DCT",
+    "plain": "Discrete cosine transform: math that rewrites a block of pixels as a sum of smooth wave patterns. JPEG stores those wave strengths instead of pixels.",
+    "src": "https://en.wikipedia.org/wiki/Discrete_cosine_transform"
+  },
+  "delta-encoding": {
+    "label": "Delta",
+    "plain": "Storing or sending only the differences between two versions of data, instead of the whole new version.",
+    "src": "https://en.wikipedia.org/wiki/Delta_encoding"
+  },
+  "denylist": {
+    "label": "denylist",
+    "plain": "A list of things to block, where anything not on the list is allowed through by default.",
+    "src": "https://en.wikipedia.org/wiki/Blacklist_(computing)"
+  },
+  "dependency-array": {
+    "label": "dependency array",
+    "plain": "The list of values a React hook watches; the hook runs again only when one of them changes.",
+    "src": "https://react.dev/reference/react/useEffect"
+  },
+  "diaphragm": {
+    "label": "diaphragm",
+    "plain": "The thin membrane in a speaker or headphone that moves back and forth to push air and make sound.",
+    "src": "https://en.wikipedia.org/wiki/Diaphragm_(acoustics)"
+  },
+  "digital-signature": {
+    "label": "digital signature",
+    "plain": "A value made from a message and a private key that anyone with the matching public key can check, proving who signed it and that it is unchanged.",
+    "src": "https://en.wikipedia.org/wiki/Digital_signature"
+  },
+  "display-p3": {
+    "label": "Display P3",
+    "plain": "Apple's wide-gamut colour space, which holds more saturated colours than sRGB. iPhones and Macs capture and display in it.",
+    "src": "https://en.wikipedia.org/wiki/DCI-P3"
+  },
+  "dither": {
+    "label": "dither",
+    "plain": "Low-level random noise added before rounding a signal, which turns the rounding's patterned distortion into a steady, gentler hiss.",
+    "src": "https://en.wikipedia.org/wiki/Dither"
+  },
+  "dry-run": {
+    "label": "dry run",
+    "plain": "Running a command so it reports what it would do without actually doing it.",
+    "src": "https://en.wikipedia.org/wiki/Dry_run_(testing)"
+  },
+  "durable-object": {
+    "label": "Durable Object",
+    "plain": "A Cloudflare Workers object with its own built-in storage, where each named instance lives in one place so every request to it is coordinated.",
+    "src": "https://developers.cloudflare.com/durable-objects/"
+  },
+  "ecdsa": {
+    "label": "ECDSA",
+    "plain": "A widely used digital signature scheme built on elliptic curves. P-256 is a standard curve commonly paired with it.",
+    "src": "https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm"
+  },
+  "ed25519": {
+    "label": "Ed25519",
+    "plain": "A widely used digital signature scheme built on an elliptic curve, with 32-byte public keys and 64-byte signatures that are fast to make and check.",
+    "src": "https://en.wikipedia.org/wiki/EdDSA"
+  },
+  "edge": {
+    "label": "the edge",
+    "plain": "A network of servers spread around the world close to users, so each request is answered from somewhere nearby.",
+    "src": "https://en.wikipedia.org/wiki/Edge_computing"
+  },
+  "entropy": {
+    "label": "entropy",
+    "plain": "A measure of how unpredictable data is. The less predictable the bytes, the less a compressor can shrink them.",
+    "src": "https://en.wikipedia.org/wiki/Entropy_(information_theory)"
+  },
+  "es-module": {
+    "label": "ES module",
+    "plain": "JavaScript's built-in module format, where files share code through import and export statements.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules"
+  },
+  "etag": {
+    "label": "ETag",
+    "plain": "An HTTP response header that names one exact version of a file, so a cache can ask whether its copy is still current.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag"
+  },
+  "eventual-consistency": {
+    "label": "eventual consistency",
+    "plain": "A guarantee that every copy of some data will match in time, while a read right after a write may still return the old value.",
+    "src": "https://en.wikipedia.org/wiki/Eventual_consistency"
+  },
+  "evm": {
+    "label": "EVM",
+    "plain": "The Ethereum Virtual Machine: the computer every Ethereum node simulates to run smart contract bytecode, charging gas for each step.",
+    "src": "https://ethereum.org/en/developers/docs/evm/"
+  },
+  "exif": {
+    "label": "EXIF",
+    "plain": "Metadata a camera writes into a photo: exposure settings, date, lens, and an Orientation tag saying which way up to show it.",
+    "src": "https://en.wikipedia.org/wiki/Exif"
+  },
+  "exit-code": {
+    "label": "exit code",
+    "plain": "The number a program reports when it finishes; 0 means success and anything else signals an error.",
+    "src": "https://en.wikipedia.org/wiki/Exit_status"
+  },
+  "exploit": {
+    "label": "exploit",
+    "plain": "Code or a technique that uses a bug to make a system do something its makers never intended, like leak data or run an attacker's code.",
+    "src": "https://en.wikipedia.org/wiki/Exploit_(computer_security)"
+  },
+  "fastcdc": {
+    "label": "FastCDC",
+    "plain": "A fast content-defined chunking algorithm from a 2016 USENIX paper. It uses a cheap gear hash and tuned masks to pick cut points.",
+    "src": "https://www.usenix.org/conference/atc16/technical-sessions/presentation/xia"
+  },
+  "fetch-api": {
+    "label": "fetch",
+    "plain": "The browser's JavaScript function for requesting a URL from a script and reading the reply.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API"
+  },
+  "firmware": {
+    "label": "firmware",
+    "plain": "Low-level software stored on a device's chips that starts and controls the hardware, beneath the operating system.",
+    "src": "https://en.wikipedia.org/wiki/Firmware"
+  },
+  "first-paint": {
+    "label": "first paint",
+    "plain": "The moment the browser first draws anything on screen after it starts loading a page.",
+    "src": "https://developer.mozilla.org/en-US/docs/Glossary/First_paint"
+  },
+  "formal-verification": {
+    "label": "formal verification",
+    "plain": "Using a computer-checked mathematical proof to show a program or system meets a precise specification for every possible input.",
+    "src": "https://en.wikipedia.org/wiki/Formal_verification"
+  },
+  "frequency-analysis": {
+    "label": "frequency analysis",
+    "plain": "Breaking a cipher by counting how often each letter appears and matching those counts to a language's known letter frequencies.",
+    "src": "https://en.wikipedia.org/wiki/Frequency_analysis"
+  },
+  "fri": {
+    "label": "FRI",
+    "plain": "Fast Reed-Solomon Interactive Oracle Proof of Proximity: a protocol that lets a verifier check, with few queries, that committed data is close to a low-degree polynomial.",
+    "src": "https://eccc.weizmann.ac.il/report/2017/134/"
+  },
+  "fuzzing": {
+    "label": "fuzzing",
+    "plain": "Testing a program by feeding it huge numbers of random or mutated inputs and watching for crashes or broken rules.",
+    "src": "https://en.wikipedia.org/wiki/Fuzzing"
+  },
+  "gamma-correction": {
+    "label": "Gamma",
+    "plain": "The curve that maps stored pixel values to light. Files use it to spend more of their levels on dark tones, where eyes are most sensitive.",
+    "src": "https://en.wikipedia.org/wiki/Gamma_correction"
+  },
+  "gear-hash": {
+    "label": "Gear hash",
+    "plain": "A rolling hash that updates with one shift and one table lookup per byte, cheap enough to run over every byte of a file.",
+    "src": "https://en.wikipedia.org/wiki/Rolling_hash#Gear_hashing"
+  },
+  "gecko": {
+    "label": "Gecko",
+    "plain": "The browser engine inside Firefox that turns HTML, CSS and JavaScript into the page you see.",
+    "src": "https://en.wikipedia.org/wiki/Gecko_(software)"
+  },
+  "generics": {
+    "label": "generics",
+    "plain": "Code written in terms of a type parameter, so one definition, such as a list, works with many specific types.",
+    "src": "https://en.wikipedia.org/wiki/Generic_programming"
+  },
+  "glyph": {
+    "label": "glyph",
+    "plain": "The visual shape drawn for a character in a particular font.",
+    "src": "https://en.wikipedia.org/wiki/Glyph"
+  },
+  "gradual-deployments": {
+    "label": "gradual deployment",
+    "plain": "Moving live traffic to a new version of a Worker a percentage at a time, so the old and new versions serve side by side.",
+    "src": "https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/"
+  },
+  "granny-knot": {
+    "label": "granny knot",
+    "plain": "A knot made of two identical half-knots in a row. It looks like a reef knot but slips or jams under load.",
+    "src": "https://en.wikipedia.org/wiki/Granny_knot"
+  },
+  "grapheme-cluster": {
+    "label": "grapheme",
+    "plain": "What a reader sees as one character, even when it is stored as several code points, such as an accented letter or an emoji with a skin tone.",
+    "src": "https://www.unicode.org/reports/tr29/"
+  },
+  "grovers-algorithm": {
+    "label": "Grover's algorithm",
+    "plain": "A quantum search method that speeds up guessing a secret key, roughly halving its strength: a 256-bit key gives about 128 bits of security.",
+    "src": "https://en.wikipedia.org/wiki/Grover%27s_algorithm"
+  },
+  "gsw": {
+    "label": "GSW scheme",
+    "plain": "A 2013 fully homomorphic encryption scheme by Gentry, Sahai and Waters, built on learning with errors, whose ciphertexts are matrices.",
+    "src": "https://eprint.iacr.org/2013/340"
+  },
+  "gzip": {
+    "label": "gzip",
+    "plain": "The oldest compression format every browser accepts for web pages. It's fast and universal, and its files come out larger than brotli's or zstd's.",
+    "src": "https://en.wikipedia.org/wiki/Gzip"
+  },
+  "harvest-now-decrypt-later": {
+    "label": "harvest now, decrypt later",
+    "plain": "An attack where encrypted traffic is recorded today and stored until a future quantum computer can decrypt it.",
+    "src": "https://en.wikipedia.org/wiki/Harvest_now,_decrypt_later"
+  },
+  "headless-browser": {
+    "label": "headless browser",
+    "plain": "A web browser that runs with no window on screen, driven by code, so a program can load pages, run their scripts and capture the result.",
+    "src": "https://en.wikipedia.org/wiki/Headless_browser"
+  },
+  "heif": {
+    "label": "HEIF",
+    "plain": "An image container format, used by iPhones and by Fujifilm's HIF files, that usually holds HEVC-compressed pictures plus their metadata.",
+    "src": "https://en.wikipedia.org/wiki/High_Efficiency_Image_File_Format"
+  },
+  "high-pass-filter": {
+    "label": "high-pass filter",
+    "plain": "A filter that lets frequencies above a cutoff through and weakens those below it.",
+    "src": "https://en.wikipedia.org/wiki/High-pass_filter"
+  },
+  "hill-climbing": {
+    "label": "hill climbing",
+    "plain": "A search that starts from a guess and keeps any small change that improves a score, stopping when no change helps.",
+    "src": "https://en.wikipedia.org/wiki/Hill_climbing"
+  },
+  "hmac": {
+    "label": "HMAC",
+    "plain": "A way to tag a message using a shared secret key and a hash function, so anyone holding the key can check the message wasn't changed.",
+    "src": "https://en.wikipedia.org/wiki/HMAC"
+  },
+  "hole-punching": {
+    "label": "hole punching",
+    "plain": "A trick that lets two devices behind home routers or firewalls connect directly, by having both send packets toward each other at the same time.",
+    "src": "https://en.wikipedia.org/wiki/Hole_punching_(networking)"
+  },
+  "htmlrewriter": {
+    "label": "HTMLRewriter",
+    "plain": "A Cloudflare Workers API that edits HTML while it streams through, changing elements on the fly without holding the whole page in memory.",
+    "src": "https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/"
+  },
+  "http-304": {
+    "label": "304 Not Modified",
+    "plain": "The HTTP status code saying the browser's cached copy is still current, so the server sends no body.",
+    "src": "https://www.rfc-editor.org/rfc/rfc9110.html#status.304"
+  },
+  "http-402": {
+    "label": "402 Payment Required",
+    "plain": "An HTTP status code set aside for payments and long left undefined. Some sites now send it to crawlers they want to charge.",
+    "src": "https://www.rfc-editor.org/rfc/rfc9110.html#status.402"
+  },
+  "http-403": {
+    "label": "403 Forbidden",
+    "plain": "The HTTP status code meaning the server understood the request and refuses to serve it.",
+    "src": "https://www.rfc-editor.org/rfc/rfc9110.html#status.403"
+  },
+  "http-cache": {
+    "label": "HTTP cache",
+    "plain": "The browser's store of earlier responses, which it reuses instead of downloading again for as long as the server's cache headers allow.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching"
+  },
+  "http-message-signatures": {
+    "label": "HTTP Message Signatures",
+    "plain": "A standard way to sign parts of an HTTP request, so the receiver can check who sent it and that nobody altered it on the way.",
+    "src": "https://www.rfc-editor.org/rfc/rfc9421.html"
+  },
+  "huffman-coding": {
+    "label": "Huffman coding",
+    "plain": "A lossless coding method that gives short bit codes to common symbols and longer ones to rare symbols, shrinking the total.",
+    "src": "https://en.wikipedia.org/wiki/Huffman_coding"
+  },
+  "hydration": {
+    "label": "hydration",
+    "plain": "Making server-rendered HTML interactive by running a framework's JavaScript over it in the browser to attach state and event handlers.",
+    "src": "https://en.wikipedia.org/wiki/Hydration_(web_development)"
+  },
+  "hypermedia": {
+    "label": "hypermedia",
+    "plain": "Hypertext extended with images, sound and video; on the web, pages whose links and forms tell the reader what they can do next.",
+    "src": "https://en.wikipedia.org/wiki/Hypermedia"
+  },
+  "icc-profile": {
+    "label": "ICC profile",
+    "plain": "A block of data in an image file that describes its colour space, so software knows how to turn the stored numbers into real colours.",
+    "src": "https://en.wikipedia.org/wiki/ICC_profile"
+  },
+  "image-histogram": {
+    "label": "histogram",
+    "plain": "A graph of how many pixels in an image fall at each brightness level, from shadows on the left to highlights on the right.",
+    "src": "https://en.wikipedia.org/wiki/Image_histogram"
+  },
+  "image-scaling": {
+    "label": "Resampling",
+    "plain": "Computing a new grid of pixels for an image at a different size, estimating each new pixel from the old ones around it.",
+    "src": "https://en.wikipedia.org/wiki/Image_scaling"
+  },
+  "immutable": {
+    "label": "immutable",
+    "plain": "A Cache-Control setting that tells the browser a file will never change, so it can skip checking for a newer copy.",
+    "src": "https://www.rfc-editor.org/rfc/rfc8246.html"
+  },
+  "imperative-programming": {
+    "label": "imperative programming",
+    "plain": "Writing code as step-by-step commands that change state directly, such as create this element, then move it.",
+    "src": "https://en.wikipedia.org/wiki/Imperative_programming"
+  },
+  "intel-sgx": {
+    "label": "Intel SGX",
+    "plain": "Software Guard Extensions: Intel processor instructions that let a program create an enclave, a region of memory the rest of the system can't read.",
+    "src": "https://en.wikipedia.org/wiki/Software_Guard_Extensions"
+  },
+  "jailbreak": {
+    "label": "jailbreaking",
+    "plain": "Removing the software limits Apple puts on its devices, usually through a security flaw, so the owner can run code Apple hasn't approved.",
+    "src": "https://en.wikipedia.org/wiki/IOS_jailbreaking"
+  },
+  "jpeg": {
+    "label": "JPEG",
+    "plain": "The standard photo format since 1992. It shrinks images by discarding fine detail the eye is unlikely to miss.",
+    "src": "https://en.wikipedia.org/wiki/JPEG"
+  },
+  "jpeg-xl": {
+    "label": "JPEG XL",
+    "plain": "A newer image format from the JPEG committee. It compresses well, decodes in parallel, and can repack an existing JPEG losslessly into a smaller file.",
+    "src": "https://en.wikipedia.org/wiki/JPEG_XL"
+  },
+  "jpegli": {
+    "label": "jpegli",
+    "plain": "Google's JPEG library, a drop-in libjpeg replacement that writes ordinary JPEG files smaller than older encoders at the same visual quality.",
+    "src": "https://github.com/google/jpegli"
+  },
+  "jspi": {
+    "label": "JSPI",
+    "plain": "JavaScript Promise Integration: a WebAssembly feature that lets synchronous Wasm code pause while it waits on a JavaScript promise, then resume.",
+    "src": "https://v8.dev/blog/jspi"
+  },
+  "jwks": {
+    "label": "JWKS",
+    "plain": "JSON Web Key Set: a standard JSON document that publishes one or more public keys so others can verify signatures.",
+    "src": "https://www.rfc-editor.org/rfc/rfc7517.html"
+  },
+  "kasiski-examination": {
+    "label": "Kasiski examination",
+    "plain": "A way to find a repeating key's length by measuring the gaps between repeated chunks of ciphertext; the key length usually divides those gaps.",
+    "src": "https://en.wikipedia.org/wiki/Kasiski_examination"
+  },
+  "key-agreement": {
+    "label": "key agreement",
+    "plain": "The step where two parties who share no secret yet create one together over an open network, then use it to encrypt what follows.",
+    "src": "https://en.wikipedia.org/wiki/Key-agreement_protocol"
+  },
+  "keyframes": {
+    "label": "keyframes",
+    "plain": "The CSS rule that lists an animation's waypoints, such as 0% and 100%, and the styles the browser animates between them.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@keyframes"
+  },
+  "kryptos": {
+    "label": "Kryptos",
+    "plain": "A sculpture at CIA headquarters, made by Jim Sanborn in 1990, that carries four encrypted passages.",
+    "src": "https://en.wikipedia.org/wiki/Kryptos"
+  },
+  "lambda-calculus": {
+    "label": "lambda term",
+    "plain": "A tiny formal language where every computation is built by defining functions and applying them to arguments.",
+    "src": "https://en.wikipedia.org/wiki/Lambda_calculus"
+  },
+  "lanczos-resampling": {
+    "label": "Lanczos resampling",
+    "plain": "A resizing filter that weights nearby pixels with a windowed sinc curve. Lanczos3 reaches three pixels out on each side and keeps images sharp.",
+    "src": "https://en.wikipedia.org/wiki/Lanczos_resampling"
+  },
+  "lattice": {
+    "label": "lattice",
+    "plain": "A regular grid of points in many dimensions. Some problems on lattices, like finding the nearest grid point, are hard enough to build encryption on.",
+    "src": "https://en.wikipedia.org/wiki/Lattice-based_cryptography"
+  },
+  "lattice-cryptography": {
+    "label": "lattice-based cryptography",
+    "plain": "Cryptography built on hard problems about points in a grid with hundreds of dimensions, believed hard even for quantum computers. ML-KEM and ML-DSA use it.",
+    "src": "https://en.wikipedia.org/wiki/Lattice-based_cryptography"
+  },
+  "lcp": {
+    "label": "Largest Contentful Paint",
+    "plain": "How long after a page starts loading its biggest image or block of text appears on screen.",
+    "src": "https://developer.mozilla.org/en-US/docs/Glossary/Largest_contentful_paint"
+  },
+  "leading": {
+    "label": "leading",
+    "plain": "The extra space between lines of text. CSS splits it into two halves, one above the letters and one below, called half-leading.",
+    "src": "https://en.wikipedia.org/wiki/Leading"
+  },
+  "libavif": {
+    "label": "libavif",
+    "plain": "The reference library for reading and writing AVIF files. Its avifenc and avifdec tools wrap whichever AV1 or AV2 codec it was built with.",
+    "src": "https://github.com/AOMediaCodec/libavif"
+  },
+  "linear-light": {
+    "label": "Linear light",
+    "plain": "Pixel values proportional to the actual amount of light. Ordinary image files store gamma-encoded values, so averaging those directly gets brightness wrong.",
+    "src": "https://en.wikipedia.org/wiki/Gamma_correction"
+  },
+  "log-profile": {
+    "label": "Log profile",
+    "plain": "A camera recording curve that stores light on a logarithmic scale to keep shadow and highlight detail. Footage looks flat until it is graded.",
+    "src": "https://en.wikipedia.org/wiki/Log_profile"
+  },
+  "low-pass-filter": {
+    "label": "Low-pass filter",
+    "plain": "A filter that keeps broad, slow changes and removes fine, rapid ones. Downscaling needs one so detail too small for the new size doesn't become artifacts.",
+    "src": "https://en.wikipedia.org/wiki/Low-pass_filter"
+  },
+  "luna": {
+    "label": "Luna",
+    "plain": "The default visual style of Windows XP, with blue title bars, a green Start button and rounded, glossy controls.",
+    "src": "https://en.wikipedia.org/wiki/Windows_XP_visual_styles"
+  },
+  "main-thread": {
+    "label": "main thread",
+    "plain": "The single thread where a browser runs a page's JavaScript, handles input and lays out the page, so long work there freezes everything.",
+    "src": "https://developer.mozilla.org/en-US/docs/Glossary/Main_thread"
+  },
+  "masonry": {
+    "label": "Masonry layout",
+    "plain": "A layout that stacks items in columns at their natural heights, each filling the gap under the one above, like bricks in a wall.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Grid_lanes"
+  },
+  "mathematical-induction": {
+    "label": "induction",
+    "plain": "Proving a statement for every natural number by proving it for 0, then proving that whenever it holds for n it holds for n + 1.",
+    "src": "https://en.wikipedia.org/wiki/Mathematical_induction"
+  },
+  "mcp": {
+    "label": "MCP",
+    "plain": "Model Context Protocol: an open standard for offering tools and data to AI models through one common interface.",
+    "src": "https://modelcontextprotocol.io/"
+  },
+  "media-queries": {
+    "label": "Media queries",
+    "plain": "CSS rules that apply only when the screen matches a condition, such as a width range, so a page can rearrange itself.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Media_queries"
+  },
+  "merkle-tree": {
+    "label": "Merkle tree",
+    "plain": "A tree of hashes where each parent hashes its children, so one root hash vouches for every piece below it.",
+    "src": "https://en.wikipedia.org/wiki/Merkle_tree"
+  },
+  "minification": {
+    "label": "minification",
+    "plain": "Stripping spaces, comments and long names out of code so it downloads smaller and still runs the same.",
+    "src": "https://en.wikipedia.org/wiki/Minification_(programming)"
+  },
+  "ml-dsa": {
+    "label": "ML-DSA",
+    "plain": "A post-quantum digital signature standard from NIST (FIPS 204), built on lattice math. Its keys and signatures are far larger than classical ones.",
+    "src": "https://csrc.nist.gov/pubs/fips/204/final"
+  },
+  "ml-kem": {
+    "label": "ML-KEM",
+    "plain": "A post-quantum standard from NIST (FIPS 203) for two parties to set up a shared secret key, built on lattice math.",
+    "src": "https://csrc.nist.gov/pubs/fips/203/final"
+  },
+  "mozjpeg": {
+    "label": "mozjpeg",
+    "plain": "Mozilla's JPEG encoder, which makes smaller standard JPEG files than the reference libjpeg at the same quality.",
+    "src": "https://github.com/mozilla/mozjpeg"
+  },
+  "mpc": {
+    "label": "MPC",
+    "plain": "Secure multi-party computation: several parties jointly compute a result from their private inputs without any of them revealing its input to the others.",
+    "src": "https://en.wikipedia.org/wiki/Secure_multi-party_computation"
+  },
+  "n-gram": {
+    "label": "n-gram",
+    "plain": "A run of n letters in a row; a quadgram is four. Scoring text by how common its quadgrams are in English measures how language-like it reads.",
+    "src": "https://en.wikipedia.org/wiki/N-gram"
+  },
+  "nextjs": {
+    "label": "Next.js",
+    "plain": "A web framework built on React, with server rendering and routing built in.",
+    "src": "https://en.wikipedia.org/wiki/Next.js"
+  },
+  "nodejs": {
+    "label": "Node.js",
+    "plain": "A program that runs JavaScript outside the browser, widely used for servers and build tools.",
+    "src": "https://en.wikipedia.org/wiki/Node.js"
+  },
+  "normal-mode": {
+    "label": "vibration mode",
+    "plain": "A pattern in which an object vibrates at one frequency, with some regions moving and others standing still.",
+    "src": "https://en.wikipedia.org/wiki/Normal_mode"
+  },
+  "nyquist-frequency": {
+    "label": "Nyquist frequency",
+    "plain": "The finest detail a sampling grid can record: half its sampling rate. In an image, a pattern that alternates every pixel.",
+    "src": "https://en.wikipedia.org/wiki/Nyquist_frequency"
+  },
+  "oauth": {
+    "label": "OAuth",
+    "plain": "A standard that lets you grant an app limited access to your account on another service without giving it your password.",
+    "src": "https://www.rfc-editor.org/rfc/rfc6749.html"
+  },
+  "oblivious-transfer": {
+    "label": "oblivious transfer",
+    "plain": "A protocol where a sender offers several messages and the receiver gets exactly one, without the sender learning which one was taken.",
+    "src": "https://en.wikipedia.org/wiki/Oblivious_transfer"
+  },
+  "oem": {
+    "label": "OEM",
+    "plain": "Original equipment manufacturer: here, the company that builds and sells the phone, such as OnePlus or Samsung.",
+    "src": "https://en.wikipedia.org/wiki/Original_equipment_manufacturer"
+  },
+  "oklch": {
+    "label": "OKLCH",
+    "plain": "A CSS color notation built from lightness, chroma and hue, arranged so equal steps in the numbers look like equal steps to the eye.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/oklch"
+  },
+  "open-graph": {
+    "label": "Open Graph",
+    "plain": "Meta tags a page uses to name the title, description and preview image that apps show when someone shares its link.",
+    "src": "https://ogp.me/"
+  },
+  "oversampling": {
+    "label": "oversampling",
+    "plain": "Running a converter at many times the needed sample rate, so filtering and noise can move to frequencies far above hearing.",
+    "src": "https://en.wikipedia.org/wiki/Oversampling"
+  },
+  "parallax-scrolling": {
+    "label": "parallax scrolling",
+    "plain": "A scrolling effect where background layers move slower than foreground ones, creating a sense of depth.",
+    "src": "https://en.wikipedia.org/wiki/Parallax_scrolling"
+  },
+  "pay-per-crawl": {
+    "label": "pay per crawl",
+    "plain": "A Cloudflare feature that lets a site charge AI crawlers for each page they fetch, answering crawlers that haven't paid with HTTP 402.",
+    "src": "https://developers.cloudflare.com/ai-crawl-control/features/pay-per-crawl/what-is-pay-per-crawl/"
+  },
+  "peer-to-peer": {
+    "label": "peer-to-peer",
+    "plain": "A network where devices talk directly to each other as equals, instead of each one going through a central server.",
+    "src": "https://en.wikipedia.org/wiki/Peer-to-peer"
+  },
+  "percentile": {
+    "label": "percentile",
+    "plain": "The value a given share of measurements fall at or under; p75 is the value 75 out of every 100 visits meet or beat.",
+    "src": "https://en.wikipedia.org/wiki/Percentile"
+  },
+  "plaintext": {
+    "label": "plaintext",
+    "plain": "The readable message before it is encrypted, or after it is decrypted.",
+    "src": "https://en.wikipedia.org/wiki/Plaintext"
+  },
+  "plonk": {
+    "label": "PLONK",
+    "plain": "A general-purpose SNARK from 2019 that proves a computation was done correctly, with one setup reusable for any circuit up to a size limit.",
+    "src": "https://eprint.iacr.org/2019/953"
+  },
+  "popover-api": {
+    "label": "Popover API",
+    "plain": "A browser API for showing content above the rest of the page, such as menus and tooltips, with built-in show, hide and dismiss behavior.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Popover_API"
+  },
+  "post-quantum-cryptography": {
+    "label": "post-quantum cryptography",
+    "plain": "Cryptography designed to stay secure against large quantum computers, which could break the public-key schemes in common use today.",
+    "src": "https://en.wikipedia.org/wiki/Post-quantum_cryptography"
+  },
+  "postcard": {
+    "label": "postcard",
+    "plain": "A compact binary format for Rust that turns data structures into short byte strings and back.",
+    "src": "https://docs.rs/postcard/latest/postcard/"
+  },
+  "prefers-reduced-motion": {
+    "label": "prefers-reduced-motion",
+    "plain": "A CSS media feature that tells a page the user has asked their system to minimize animation.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/prefers-reduced-motion"
+  },
+  "preload": {
+    "label": "preload",
+    "plain": "A link hint that tells the browser to start downloading a file it will need soon, before it would otherwise discover it.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preload"
+  },
+  "private-key": {
+    "label": "private key",
+    "plain": "The secret half of a key pair in public-key cryptography, used to sign or decrypt; its public partner can be shared freely.",
+    "src": "https://en.wikipedia.org/wiki/Public-key_cryptography"
+  },
+  "progressive-enhancement": {
+    "label": "progressive enhancement",
+    "plain": "Building a page so its core content works in any browser, then layering extra features on top for browsers that support them.",
+    "src": "https://en.wikipedia.org/wiki/Progressive_enhancement"
+  },
+  "progressive-jpeg": {
+    "label": "Progressive JPEG",
+    "plain": "A JPEG saved as several passes over the whole image, coarse first, so a browser can show a rough picture before the download finishes.",
+    "src": "https://en.wikipedia.org/wiki/JPEG#JPEG_compression"
+  },
+  "pseudo-class": {
+    "label": "pseudo-class",
+    "plain": "A CSS selector keyword starting with a colon that matches elements in a certain state, like :hover or :popover-open.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/Pseudo-classes"
+  },
+  "pseudo-element": {
+    "label": "pseudo-element",
+    "plain": "A CSS selector for a part of an element that has no tag of its own, such as ::before or a dropdown's picker icon, so it can be styled.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/Pseudo-elements"
+  },
+  "psnr": {
+    "label": "PSNR",
+    "plain": "Peak signal-to-noise ratio: a simple score, in decibels, of how far a compressed image's pixels drift from the original. Higher means closer.",
+    "src": "https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio"
+  },
+  "public-key-cryptography": {
+    "label": "public-key cryptography",
+    "plain": "Cryptography with a key pair: a public key anyone can see and a private key kept secret. What one key signs or locks, the other checks or opens.",
+    "src": "https://en.wikipedia.org/wiki/Public-key_cryptography"
+  },
+  "puppeteer": {
+    "label": "Puppeteer",
+    "plain": "A JavaScript library for controlling Chrome or Firefox from code: opening pages, clicking, filling forms and taking screenshots.",
+    "src": "https://pptr.dev/"
+  },
+  "pwa": {
+    "label": "PWA",
+    "plain": "Progressive web app: a website built to install and behave like an app, with offline support, a home-screen icon and its own window.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps"
+  },
+  "quantization": {
+    "label": "Quantization",
+    "plain": "The lossy step in compression: rounding values to a coarser set of levels. The quantizer setting decides how coarse, trading file size against detail.",
+    "src": "https://en.wikipedia.org/wiki/Quantization_(image_processing)"
+  },
+  "quic": {
+    "label": "QUIC",
+    "plain": "A transport protocol that runs fast, encrypted connections over UDP, with many streams sharing one connection. HTTP/3 is built on it.",
+    "src": "https://www.rfc-editor.org/rfc/rfc9000.html"
+  },
+  "r2": {
+    "label": "R2",
+    "plain": "Cloudflare's object storage for files. It speaks Amazon S3's API and charges nothing for downloading data back out.",
+    "src": "https://developers.cloudflare.com/r2/"
+  },
+  "raf": {
+    "label": "requestAnimationFrame",
+    "plain": "A browser API that runs a callback just before the next screen repaint, the usual way to sync JavaScript animation with the display.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame"
+  },
+  "react": {
+    "label": "React",
+    "plain": "A JavaScript library from Meta for building user interfaces out of reusable components.",
+    "src": "https://en.wikipedia.org/wiki/React_(software)"
+  },
+  "react-suspense": {
+    "label": "Suspense",
+    "plain": "A React feature that shows a fallback, such as a spinner, while part of the page waits for code or data to load.",
+    "src": "https://react.dev/reference/react/Suspense"
+  },
+  "reactive-programming": {
+    "label": "reactivity",
+    "plain": "A programming style where values that depend on other values update automatically whenever those change.",
+    "src": "https://en.wikipedia.org/wiki/Reactive_programming"
+  },
+  "reconstruction-filter": {
+    "label": "reconstruction filter",
+    "plain": "The low-pass filter after a DAC that smooths its stepped output into a continuous wave and removes copies of the signal above the audio band.",
+    "src": "https://en.wikipedia.org/wiki/Reconstruction_filter"
+  },
+  "reef-knot": {
+    "label": "reef knot",
+    "plain": "A knot made of two opposite half-knots, right over left then left over right, that lies flat and holds. Also called a square knot.",
+    "src": "https://en.wikipedia.org/wiki/Reef_knot"
+  },
+  "reflow": {
+    "label": "Reflow",
+    "plain": "The browser recomputing the size and position of elements on a page, which makes content jump when something like an image finishes loading.",
+    "src": "https://developer.mozilla.org/en-US/docs/Glossary/Reflow"
+  },
+  "render-blocking": {
+    "label": "render-blocking",
+    "plain": "A file, usually CSS or JavaScript, that the browser must download and process before it can show the page.",
+    "src": "https://developer.mozilla.org/en-US/docs/Glossary/Render_blocking"
+  },
+  "request-destination": {
+    "label": "Request destination",
+    "plain": "A label the browser attaches to each request saying what it's for, such as document, image or script. Requests made with fetch() leave it empty.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Request/destination"
+  },
+  "resonance": {
+    "label": "resonance",
+    "plain": "The tendency of an object to vibrate much more strongly at certain frequencies; in a speaker it shows up as peaks at those pitches.",
+    "src": "https://en.wikipedia.org/wiki/Resonance"
+  },
+  "response": {
+    "label": "Response",
+    "plain": "The JavaScript object a web server or Worker builds to describe its reply: status code, headers and body.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Response"
+  },
+  "rest-api": {
+    "label": "REST",
+    "plain": "A common style of web API where each URL names a resource and standard HTTP methods such as GET and POST act on it.",
+    "src": "https://en.wikipedia.org/wiki/REST"
+  },
+  "reverse-dns": {
+    "label": "reverse DNS",
+    "plain": "Looking up the hostname that belongs to an IP address, the opposite of a normal DNS lookup. Big crawlers use it to prove where a request came from.",
+    "src": "https://en.wikipedia.org/wiki/Reverse_DNS_lookup"
+  },
+  "reverse-proxy": {
+    "label": "reverse proxy",
+    "plain": "A server that sits in front of websites and receives their incoming requests, often adding caching and security on the way.",
+    "src": "https://en.wikipedia.org/wiki/Reverse_proxy"
+  },
+  "rom": {
+    "label": "ROM",
+    "plain": "Read-only memory: storage whose contents are set when the chip is made and can't be rewritten by software.",
+    "src": "https://en.wikipedia.org/wiki/Read-only_memory"
+  },
+  "root-of-trust": {
+    "label": "root of trust",
+    "plain": "The small piece of hardware or firmware, often holding a built-in secret key, that every other security check on a device ultimately relies on.",
+    "src": "https://csrc.nist.gov/glossary/term/roots_of_trust"
+  },
+  "round-trip-time": {
+    "label": "round trip",
+    "plain": "One request travelling to a server plus its reply coming back; the time this takes is the round-trip time.",
+    "src": "https://en.wikipedia.org/wiki/Round-trip_delay"
+  },
+  "rsa": {
+    "label": "RSA",
+    "plain": "A public-key system from 1977 for encryption and signatures, secure because factoring the product of two large primes is hard.",
+    "src": "https://en.wikipedia.org/wiki/RSA_cryptosystem"
+  },
+  "rust-crate": {
+    "label": "crate",
+    "plain": "Rust's name for a package: a unit of code that compiles together and can be published for other programs to use.",
+    "src": "https://doc.rust-lang.org/book/ch07-01-packages-and-crates.html"
+  },
+  "safari-technology-preview": {
+    "label": "Safari Technology Preview",
+    "plain": "Apple's early-release Safari for developers, updated every few weeks with web features that haven't reached regular Safari yet.",
+    "src": "https://developer.apple.com/safari/technology-preview/"
+  },
+  "same-origin": {
+    "label": "same-origin policy",
+    "plain": "The browser rule that treats a page's own scheme, host and port as one site, and limits what pages from other origins can read.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy"
+  },
+  "sample": {
+    "label": "sample",
+    "plain": "One measurement of a signal's level at an instant. Digital audio stores sound as tens of thousands of these per second.",
+    "src": "https://en.wikipedia.org/wiki/Sampling_(signal_processing)"
+  },
+  "samsung-knox": {
+    "label": "Samsung Knox",
+    "plain": "Samsung's security platform for its phones and tablets, covering secure boot, encrypted storage and a separate secure folder.",
+    "src": "https://en.wikipedia.org/wiki/Samsung_Knox"
+  },
+  "scroll-anchoring": {
+    "label": "scroll anchoring",
+    "plain": "A browser behavior that keeps what you are reading in place when content loads or grows above it, so the page doesn't jump.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Scroll_anchoring"
+  },
+  "service-bindings": {
+    "label": "Service bindings",
+    "plain": "A Cloudflare link that lets one Worker call another directly, without a trip over the public internet.",
+    "src": "https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/"
+  },
+  "service-worker": {
+    "label": "Service worker",
+    "plain": "A script a site installs in the browser that sits between its pages and the network and can answer requests from a local cache.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API"
+  },
+  "sha-256": {
+    "label": "SHA-256",
+    "plain": "A hash function that turns any input into a 256-bit fingerprint. Change one byte of the input and the fingerprint changes completely.",
+    "src": "https://en.wikipedia.org/wiki/SHA-2"
+  },
+  "shamir-secret-sharing": {
+    "label": "Shamir's secret sharing",
+    "plain": "A way to split a secret into n shares so that any k of them rebuild it, while fewer than k reveal nothing about it.",
+    "src": "https://en.wikipedia.org/wiki/Shamir%27s_secret_sharing"
+  },
+  "shebang": {
+    "label": "shebang",
+    "plain": "The #! line at the top of a script that tells the operating system which program should run it.",
+    "src": "https://en.wikipedia.org/wiki/Shebang_(Unix)"
+  },
+  "shim": {
+    "label": "shim",
+    "plain": "A small layer of code that makes one interface behave like another, so code written for the old one keeps working.",
+    "src": "https://en.wikipedia.org/wiki/Shim_(computing)"
+  },
+  "shoelace-knot": {
+    "label": "shoelace knot",
+    "plain": "The bow used to tie shoes: a reef knot tied with two loops, so pulling a free end undoes it.",
+    "src": "https://en.wikipedia.org/wiki/Shoelace_knot"
+  },
+  "side-channel-attack": {
+    "label": "side-channel attack",
+    "plain": "An attack that learns secrets by measuring a system's physical side effects while it runs, such as timing, power draw, heat or sound.",
+    "src": "https://en.wikipedia.org/wiki/Side-channel_attack"
+  },
+  "signal-quantization": {
+    "label": "quantization",
+    "plain": "Rounding a signal's values to a fixed set of levels. The gap between the true value and the rounded one is the quantization error.",
+    "src": "https://en.wikipedia.org/wiki/Quantization_(signal_processing)"
+  },
+  "simd": {
+    "label": "SIMD",
+    "plain": "Single instruction, multiple data: CPU instructions that do the same operation on several values at once, packed side by side in one wide register.",
+    "src": "https://en.wikipedia.org/wiki/Single_instruction,_multiple_data"
+  },
+  "sinc-filter": {
+    "label": "sinc filter",
+    "plain": "The ideal low-pass filter: it passes everything below a cutoff and nothing above, but its response ripples on forever in time.",
+    "src": "https://en.wikipedia.org/wiki/Sinc_filter"
+  },
+  "single-page-application": {
+    "label": "SPA",
+    "plain": "A web app that loads one page and then rewrites it with JavaScript as you move around, instead of fetching new pages.",
+    "src": "https://en.wikipedia.org/wiki/Single-page_application"
+  },
+  "single-precision": {
+    "label": "f32",
+    "plain": "A 32-bit floating-point number, which keeps about seven significant decimal digits.",
+    "src": "https://en.wikipedia.org/wiki/Single-precision_floating-point_format"
+  },
+  "skippable-frame": {
+    "label": "Skippable frame",
+    "plain": "A block inside a zstd stream that carries extra data and is marked so every decoder steps over it without reading it.",
+    "src": "https://www.rfc-editor.org/rfc/rfc8878.html#name-skippable-frames"
+  },
+  "slh-dsa": {
+    "label": "SLH-DSA",
+    "plain": "A post-quantum digital signature standard from NIST (FIPS 205) that relies only on hash functions. Its public keys are tiny; its signatures are large and slow to make.",
+    "src": "https://csrc.nist.gov/pubs/fips/205/final"
+  },
+  "smart-contract": {
+    "label": "smart contract",
+    "plain": "A program stored on a blockchain that runs automatically when called, moving funds or data by its own rules.",
+    "src": "https://en.wikipedia.org/wiki/Smart_contract"
+  },
+  "smt-solver": {
+    "label": "SMT solver",
+    "plain": "A program that checks whether a set of logical constraints over numbers and data can all hold at once, and if so finds values that satisfy them.",
+    "src": "https://en.wikipedia.org/wiki/Satisfiability_modulo_theories"
+  },
+  "snr": {
+    "label": "SNR",
+    "plain": "Signal-to-noise ratio: how much stronger the wanted signal is than the background noise, usually given in decibels.",
+    "src": "https://en.wikipedia.org/wiki/Signal-to-noise_ratio"
+  },
+  "soc": {
+    "label": "SoC",
+    "plain": "System on a chip: one chip holding a device's processor, graphics, memory controller and other parts that once sat on separate chips.",
+    "src": "https://en.wikipedia.org/wiki/System_on_a_chip"
+  },
+  "software-alpha": {
+    "label": "alpha",
+    "plain": "An early stage of software, before beta, when features are still incomplete and bugs and breaking changes are expected.",
+    "src": "https://en.wikipedia.org/wiki/Software_release_life_cycle"
+  },
+  "solidity": {
+    "label": "Solidity",
+    "plain": "The main programming language for writing smart contracts on Ethereum.",
+    "src": "https://en.wikipedia.org/wiki/Solidity"
+  },
+  "speculation-rules": {
+    "label": "Speculation Rules API",
+    "plain": "A browser API where a page lists links the browser may fetch or fully render ahead of time, so the next page appears instantly on click.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API"
+  },
+  "square-wave": {
+    "label": "square wave",
+    "plain": "A waveform that jumps between two fixed levels. Mathematically it is a tone plus only its odd harmonics.",
+    "src": "https://en.wikipedia.org/wiki/Square_wave_(waveform)"
+  },
+  "srgb": {
+    "label": "sRGB",
+    "plain": "The standard colour space for screens and the web. Its values are gamma-encoded, so code 128 holds about a fifth of the light of 255.",
+    "src": "https://en.wikipedia.org/wiki/SRGB"
+  },
+  "ssim": {
+    "label": "SSIM",
+    "plain": "Structural similarity: a score up to 1 that compares local brightness, contrast and structure between two images. Closer to 1 means more alike.",
+    "src": "https://en.wikipedia.org/wiki/Structural_similarity_index_measure"
+  },
+  "ssimulacra2": {
+    "label": "SSIMULACRA2",
+    "plain": "A perceptual image quality score from Cloudinary, built to match how people judge compressed photos. Higher is better, and about 90 is hard to tell from the original.",
+    "src": "https://github.com/cloudinary/ssimulacra2"
+  },
+  "ssr": {
+    "label": "server-side rendering",
+    "plain": "Building a page's HTML on the server for each request, so the browser receives finished markup ready to display.",
+    "src": "https://developer.mozilla.org/en-US/docs/Glossary/SSR"
+  },
+  "stale-while-revalidate": {
+    "label": "stale-while-revalidate",
+    "plain": "A caching rule: hand out the saved copy right away even after it expires, then fetch a fresh one in the background for next time.",
+    "src": "https://www.rfc-editor.org/rfc/rfc5861.html"
+  },
+  "standard-streams": {
+    "label": "stdin",
+    "plain": "A program's standard input, the stream it reads from by default. A tool that talks over stdin and stdout can be driven by another program.",
+    "src": "https://en.wikipedia.org/wiki/Standard_streams"
+  },
+  "symbolic-link": {
+    "label": "Symlink",
+    "plain": "A file that points to another file or folder by path, so opening it opens the target.",
+    "src": "https://en.wikipedia.org/wiki/Symbolic_link"
+  },
+  "tabula-recta": {
+    "label": "tabula recta",
+    "plain": "A 26 by 26 table of alphabets, each row shifted one letter from the last, used to encrypt and decrypt Vigenère-style ciphers by lookup.",
+    "src": "https://en.wikipedia.org/wiki/Tabula_recta"
+  },
+  "tc39": {
+    "label": "TC39",
+    "plain": "The committee that designs JavaScript. Proposals advance through numbered stages, and stage 4 means finished and added to the language.",
+    "src": "https://tc39.es/"
+  },
+  "tee": {
+    "label": "TEE",
+    "plain": "Trusted execution environment: a walled-off area of a processor where code and data stay hidden from the rest of the machine, including the operating system.",
+    "src": "https://en.wikipedia.org/wiki/Trusted_execution_environment"
+  },
+  "temporal": {
+    "label": "Temporal",
+    "plain": "A new built-in JavaScript API for dates and times, with proper time zones and calendars, meant to replace the error-prone Date object.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal"
+  },
+  "thd": {
+    "label": "THD",
+    "plain": "Total harmonic distortion: how much of a device's output is harmonics it added to the original tone, as a share of that tone.",
+    "src": "https://en.wikipedia.org/wiki/Total_harmonic_distortion"
+  },
+  "tls-handshake": {
+    "label": "TLS handshake",
+    "plain": "The opening exchange of a secure web connection, where browser and server agree on encryption keys and the server proves its identity.",
+    "src": "https://www.rfc-editor.org/rfc/rfc8446.html"
+  },
+  "trace-span": {
+    "label": "trace span",
+    "plain": "One timed step inside a traced request, with a name, a start time, a duration and attributes. Nested spans show where the time went.",
+    "src": "https://opentelemetry.io/docs/concepts/signals/traces/"
+  },
+  "transferable-streams": {
+    "label": "transferable streams",
+    "plain": "Streams that can be handed from one thread to another, such as to a worker, so the data moves without being copied.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects"
+  },
+  "tree-shaking": {
+    "label": "tree shaking",
+    "plain": "A build step that drops code a program never uses, so the shipped bundle contains only what runs.",
+    "src": "https://en.wikipedia.org/wiki/Tree_shaking"
+  },
+  "trellis-quantization": {
+    "label": "Trellis quantization",
+    "plain": "An encoder search that tries alternative rounding choices for each block and keeps whichever gives the best trade of file size against error.",
+    "src": "https://en.wikipedia.org/wiki/Trellis_quantization"
+  },
+  "trustzone": {
+    "label": "TrustZone",
+    "plain": "An Arm processor feature that splits the chip into a normal world and a secure world, so sensitive code runs isolated from the main operating system.",
+    "src": "https://www.arm.com/technologies/trustzone-for-cortex-a"
+  },
+  "ttfb": {
+    "label": "TTFB",
+    "plain": "Time to first byte: how long a browser waits after sending a request before the first byte of the response arrives.",
+    "src": "https://en.wikipedia.org/wiki/Time_to_first_byte"
+  },
+  "ttl": {
+    "label": "TTL",
+    "plain": "Time to live: how long a cached or stored copy counts as fresh before it expires and has to be fetched again.",
+    "src": "https://en.wikipedia.org/wiki/Time_to_live"
+  },
+  "type-inference": {
+    "label": "type inference",
+    "plain": "A compiler working out the types of values from how they are written and used, without the programmer spelling them out.",
+    "src": "https://en.wikipedia.org/wiki/Type_inference"
+  },
+  "typescript": {
+    "label": "TypeScript",
+    "plain": "JavaScript with type annotations, checked by a compiler that catches mismatched types before the code runs.",
+    "src": "https://en.wikipedia.org/wiki/TypeScript"
+  },
+  "undefined-behavior": {
+    "label": "undefined behavior",
+    "plain": "Program operations a language standard gives no meaning to, such as reading past the end of an array, so a compiler may do anything with them.",
+    "src": "https://en.wikipedia.org/wiki/Undefined_behavior"
+  },
+  "user-agent": {
+    "label": "User-Agent",
+    "plain": "The request header where a browser or bot names itself on every web request. It is plain text, so any client can claim any name.",
+    "src": "https://www.rfc-editor.org/rfc/rfc9110.html#field.user-agent"
+  },
+  "vary": {
+    "label": "Vary",
+    "plain": "A response header telling caches which request headers changed the answer, so they keep a separate copy for each variant.",
+    "src": "https://www.rfc-editor.org/rfc/rfc9110.html#field.vary"
+  },
+  "view-transitions": {
+    "label": "View Transition API",
+    "plain": "A browser API that animates the change between two views or two pages by snapshotting the old one and morphing into the new.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API"
+  },
+  "viewport": {
+    "label": "viewport",
+    "plain": "The part of a web page currently visible in the browser window; anything outside it needs scrolling to see.",
+    "src": "https://developer.mozilla.org/en-US/docs/Glossary/Viewport"
+  },
+  "vinext": {
+    "label": "Vinext",
+    "plain": "A Vite plugin from Cloudflare that reimplements the Next.js API, so Next.js apps can build with Vite and deploy to Workers or elsewhere.",
+    "src": "https://github.com/cloudflare/vinext"
+  },
+  "virtual-dom": {
+    "label": "virtual DOM",
+    "plain": "An in-memory copy of the page's structure that a framework compares against, to work out the smallest set of real changes to make.",
+    "src": "https://en.wikipedia.org/wiki/Virtual_DOM"
+  },
+  "vmaf": {
+    "label": "VMAF",
+    "plain": "Netflix's video quality score, which combines several measurements into one 0 to 100 number that predicts how viewers would rate the picture.",
+    "src": "https://en.wikipedia.org/wiki/Video_Multimethod_Assessment_Fusion"
+  },
+  "voice-coil": {
+    "label": "voice coil",
+    "plain": "A coil of wire fixed to a speaker cone that moves in a magnet's field when audio current flows through it, driving the cone.",
+    "src": "https://en.wikipedia.org/wiki/Voice_coil"
+  },
+  "voltage-divider": {
+    "label": "voltage divider",
+    "plain": "Resistors in series that output a fixed fraction of the input voltage, set by the ratio of their resistances.",
+    "src": "https://en.wikipedia.org/wiki/Voltage_divider"
+  },
+  "web-bot-auth": {
+    "label": "Web Bot Auth",
+    "plain": "A proposed standard where a bot signs each HTTP request with its private key and publishes the public key, so websites can check which bot sent it.",
+    "src": "https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/"
+  },
+  "web-crawler": {
+    "label": "web crawler",
+    "plain": "A program that fetches web pages automatically, for a search engine, an AI company or an archive.",
+    "src": "https://en.wikipedia.org/wiki/Web_crawler"
+  },
+  "web-crypto": {
+    "label": "Web Crypto",
+    "plain": "The browser's built-in cryptography toolkit for scripts, offering hashing, encryption and signatures.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API"
+  },
+  "web-font": {
+    "label": "web font",
+    "plain": "A font file a site sends along with its pages, so text shows in that typeface even when the reader's device lacks it.",
+    "src": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Text_styling/Web_fonts"
+  },
+  "webassembly": {
+    "label": "WebAssembly",
+    "plain": "A compact binary format for code that browsers and other runtimes run at near-native speed, usually compiled from languages like Rust or C++.",
+    "src": "https://developer.mozilla.org/en-US/docs/WebAssembly"
+  },
+  "webkit": {
+    "label": "WebKit",
+    "plain": "The open-source browser engine that powers Safari.",
+    "src": "https://en.wikipedia.org/wiki/WebKit"
+  },
+  "webp": {
+    "label": "WebP",
+    "plain": "Google's image format for the web. It usually compresses better than JPEG and not as well as AVIF.",
+    "src": "https://en.wikipedia.org/wiki/WebP"
+  },
+  "worker-isolate": {
+    "label": "isolate",
+    "plain": "A lightweight sandbox inside one runtime process where a Cloudflare Worker's code runs, walled off from other code and reused across requests.",
+    "src": "https://developers.cloudflare.com/workers/reference/how-workers-works/"
+  },
+  "workerd": {
+    "label": "workerd",
+    "plain": "Cloudflare's open-source runtime that runs Workers code, both in production and on a developer's own machine.",
+    "src": "https://github.com/cloudflare/workerd"
+  },
+  "workers-ai": {
+    "label": "Workers AI",
+    "plain": "Cloudflare's service for running machine-learning models, such as language and vision models, on its own GPUs, called directly from a Worker.",
+    "src": "https://developers.cloudflare.com/workers-ai/"
+  },
+  "workers-cache-api": {
+    "label": "Workers Cache API",
+    "plain": "The interface a Cloudflare Worker uses to store responses in the local data center's cache and serve them on later requests.",
+    "src": "https://developers.cloudflare.com/workers/runtime-apis/cache/"
+  },
+  "workers-free": {
+    "label": "Workers Free",
+    "plain": "Cloudflare's no-cost Workers plan. It allows 100,000 requests a day and 10 ms of CPU time per request.",
+    "src": "https://developers.cloudflare.com/workers/platform/limits/"
+  },
+  "workers-kv": {
+    "label": "Workers KV",
+    "plain": "Cloudflare's key-value store: values saved under names and copied worldwide, so reads are fast everywhere while a new write can take a minute to spread.",
+    "src": "https://developers.cloudflare.com/kv/"
+  },
+  "workers-logs": {
+    "label": "Workers Logs",
+    "plain": "Cloudflare's built-in log store for Workers. It collects each request's log lines so you can search and filter them in the dashboard.",
+    "src": "https://developers.cloudflare.com/workers/observability/logs/workers-logs/"
+  },
+  "wrangler": {
+    "label": "Wrangler",
+    "plain": "Cloudflare's command-line tool for developing, configuring and deploying Workers.",
+    "src": "https://developers.cloudflare.com/workers/wrangler/"
+  },
+  "wwdc": {
+    "label": "WWDC",
+    "plain": "Apple's Worldwide Developers Conference, held each June, where it announces new operating systems and developer tools.",
+    "src": "https://en.wikipedia.org/wiki/Worldwide_Developers_Conference"
+  },
+  "xslt": {
+    "label": "XSLT",
+    "plain": "A language for transforming XML documents into other formats, such as HTML. Browsers have been able to run it natively for decades.",
+    "src": "https://en.wikipedia.org/wiki/XSLT"
+  },
+  "zenjpeg": {
+    "label": "zenjpeg",
+    "plain": "A JPEG encoder and decoder in Rust from Imazen. It began as a port of Google's jpegli and adds perceptual tuning and trellis quantization.",
+    "src": "https://github.com/imazen/zenjpeg"
+  },
+  "zlib": {
+    "label": "zlib",
+    "plain": "A widely used compression library. Node.js names its built-in compression module after it, and that module also covers brotli and zstd.",
+    "src": "https://en.wikipedia.org/wiki/Zlib"
+  },
+  "zstd": {
+    "label": "zstd",
+    "plain": "Zstandard, a compression algorithm from Meta built for very fast decompression. Browsers accept it as a way to shrink web pages in transit.",
+    "src": "https://en.wikipedia.org/wiki/Zstd"
+  },
+  "zstd-trained-dictionary": {
+    "label": "Trained dictionary",
+    "plain": "A zstd dictionary built by zstd --train from sample files. It holds their most common byte patterns and an ID that each compressed frame records.",
+    "src": "https://github.com/facebook/zstd#dictionary-compression-via-training"
+  },
+  "zwj": {
+    "label": "zero-width joiner",
+    "plain": "An invisible Unicode character that joins its neighbors, used to combine several emoji into one, such as a family.",
+    "src": "https://en.wikipedia.org/wiki/Zero-width_joiner"
+  }
+}
