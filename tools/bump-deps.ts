@@ -59,7 +59,8 @@ function manifestPaths(): string[] {
 async function fetchDoc(pkg: string): Promise<RegistryDoc | null> {
   // The FULL document, because the abbreviated install document carries no
   // per-version `time`, and age is the one field the policy cannot do without.
-  const res = await fetch(`${REGISTRY}/${pkg.replace("/", "%2F")}`, { headers: { accept: "application/json" } });
+  // A scoped name is `@scope/name`, and the registry wants the slash encoded.
+  const res = await fetch(`${REGISTRY}/${pkg.replaceAll("/", "%2F")}`, { headers: { accept: "application/json" } });
   if (!res.ok) {
     console.error(`  registry ${res.status} for ${pkg}; skipped`);
     return null;
