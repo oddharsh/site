@@ -10,6 +10,13 @@
 
    Render like 2003, author like 2026: these resolve to period-correct Luna
    blues and beiges, but the source reads modern and gets wide-gamut depth on P3.
+
+   That claim went unmeasured from 2026-06-05, when these came in with a
+   generated design system, until 2026-10-06: the chrome sat up to dE 0.040
+   from its hex (--darkshadow) and the title blues up to 0.042 (--blue-95).
+   Each comment that names a hex now states its measured distance, and
+   tools/contract-design-tokens-reach-every-page.test.mjs holds the four
+   chrome and four title values to it.
    ============================================================================ */
 
 :root {
@@ -18,36 +25,36 @@
      frames) at once; --hue-chrome to warm/cool the beige control face; the
      -boost knobs push saturation on P3. This is the "toneshift later" surface. */
   --hue-luna:    263;     /* @kind other */ /* the Luna blue family (title, frames, links) */
-  --hue-chrome:   95;     /* @kind other */ /* warm hue of the beige ButtonFace + greys     */
+  --hue-chrome:   96.85;  /* @kind other */ /* warm hue of the beige ButtonFace + greys     */
   --hue-danger:   25;     /* @kind other */ /* close-button / error red                     */
   --hue-go:      145;     /* @kind other */ /* success / shipped green                       */
   --hue-warn:  47.10;     /* @kind other */ /* warning / "under construction" amber (matches shipped) */
   --hue-rowhover: 95.44;  /* @kind other */ /* warm-yellow row hover tint (distinct from amber)        */
-  --chroma-luna: 0.225;   /* @kind other */ /* peak chroma of the saturated blue             */
-  --chroma-chrome: 0.018; /* @kind other */ /* how warm the beige chrome reads               */
+  --chroma-luna: 0.2274;  /* @kind other */ /* peak chroma of the saturated blue             */
+  --chroma-chrome: 0.0228; /* @kind other */ /* how warm the beige chrome reads              */
 
   /* ── BLUE RAMP — the saturated Luna accent, derived off --hue-luna ───────
      Canonical: ActiveTitle #0054E3 · GradientActiveTitle #3D95FF ·
      InactiveTitle #7A96DF · Highlight #316AC5. */
-  --blue-95: oklch(70% 0.150 calc(var(--hue-luna) - 5));   /* title-grad top, bright   */
+  --blue-95: oklch(66.95% 0.178 calc(var(--hue-luna) - 7.83)); /* title-grad top = #3D95FF, dE 0.0001 */
   --blue-80: oklch(60% 0.200 calc(var(--hue-luna) - 2));   /* title-grad upper         */
-  --blue-65: oklch(51% var(--chroma-luna) var(--hue-luna));/* title-grad core ≈ #0054E3*/
+  --blue-65: oklch(50.49% var(--chroma-luna) calc(var(--hue-luna) - 1.37)); /* title-grad core = #0054E3, dE 0.0000 */
   --blue-60: oklch(50% var(--chroma-luna) var(--hue-luna));/* title-grad lower         */
   --blue-55: oklch(58% 0.180 calc(var(--hue-luna) - 3));   /* title-grad bottom lip    */
-  --blue-50: oklch(52% 0.160 var(--hue-luna));             /* Highlight/selection ≈ #316AC5 */
+  --blue-50: oklch(53.54% 0.1543 calc(var(--hue-luna) - 3.54)); /* Highlight/selection = #316AC5, dE 0.0001 */
   --blue-45: oklch(47.12% 0.0555 253.58);                  /* strong frame / sunken TL */
   --blue-40: oklch(41.92% 0.0962 250.51);                  /* navy heading / inner edge*/
-  --blue-inactive: oklch(66% 0.090 var(--hue-luna));       /* InactiveTitle ≈ #7A96DF  */
+  --blue-inactive: oklch(68.2% 0.113 calc(var(--hue-luna) + 4.4)); /* InactiveTitle = #7A96DF, dE 0.0001 */
   --frame:   oklch(61.14% 0.0611 253.60);                  /* 1px window/photo frame   */
 
   /* ── CHROME RAMP — the beige Luna "face", derived off --hue-chrome ───────
      Canonical: ButtonFace #ECE9D8 · ButtonLight #F1EFE2 · ButtonShadow #ACA899
      · 3D dark shadow #716F64. */
-  --face:        oklch(92.5% var(--chroma-chrome) var(--hue-chrome));  /* #ECE9D8 */
-  --face-light:  oklch(94.0% calc(var(--chroma-chrome) - 0.002) var(--hue-chrome)); /* #F1EFE2 */
+  --face:        oklch(93.18% var(--chroma-chrome) var(--hue-chrome));  /* #ECE9D8, dE 0.0007 */
+  --face-light:  oklch(95.01% calc(var(--chroma-chrome) - 0.0054) var(--hue-chrome)); /* #F1EFE2, dE 0.0008 */
   --highlight:   oklch(100% 0 0);                                       /* #FFFFFF */
-  --shadow:      oklch(71.5% 0.014 var(--hue-chrome));                  /* #ACA899 */
-  --darkshadow:  oklch(50.0% 0.012 var(--hue-chrome));                  /* #716F64 */
+  --shadow:      oklch(73.07% 0.0216 var(--hue-chrome));                /* #ACA899, dE 0.0008 */
+  --darkshadow:  oklch(54.01% 0.0169 var(--hue-chrome));                /* #716F64, dE 0.0005 */
 
   /* ── NEUTRALS — window/field background + text greys ─────────────────────*/
   --window:    oklch(100% 0 0);          /* #FFFFFF content + input field bg   */
