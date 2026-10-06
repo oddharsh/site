@@ -109,7 +109,7 @@ test("encode judges chroma and depth against this site's own measurements", asyn
   assert.equal(judgeEncode({ format: "avif", bitDepth: 10, subsampling: "4:2:0" }, 30000).warns.length, 0);
 });
 
-test("the ramp never double-parses wrangler's already-parsed JSON", async () => {
+test("the ramp never double-parses the D1 helper's already-parsed rows", async () => {
   // A ramp writes its changelog row exactly once, at 100%, and a failure there
   // is caught and downgraded to a printed note on purpose — traffic has already
   // moved, and unwinding a good release over a missing log row would be worse.
@@ -121,19 +121,22 @@ test("the ramp never double-parses wrangler's already-parsed JSON", async () => 
   // reported that D1 was unreachable and skipped its own write. D1 was answering
   // the whole time; `bun run checkpoints:check` queried it fine minutes later.
   //
-  // Asserted as source text because the alternative is spawning wrangler against
+  // Asserted as source text because the alternative is spawning cf against
   // production D1 from the test suite, which no contract test should ever do.
+  // The read moved from wrangler to tools/lib/cf.ts's d1Rows() on 2026-10-06;
+  // the trap is the same one.
   const src = await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8");
+  const helper = await readFile(new URL("./tools/lib/cf.ts", ROOT), "utf8");
 
-  assert.ok(/const rows = \(await wrangler\(/.test(src),
-    "the D1 read must consume wrangler's parsed result directly");
-  assert.equal(/JSON\.parse\(\s*await wrangler\(/.test(src), false,
-    "wrangler(..., { json: true }) already returns parsed JSON — a second JSON.parse throws on the object");
+  assert.ok(/const rows = await d1Rows\(/.test(src),
+    "the D1 read must consume d1Rows()'s parsed rows directly");
+  assert.equal(/JSON\.parse\(\s*await (d1Rows|cf)\(/.test(src), false,
+    "d1Rows() and cf() already return parsed JSON — a second JSON.parse throws on the object");
 
   // The helper's contract is the other half: if it ever stops parsing, the call
-  // site above silently starts handing a string to [0].results instead.
-  assert.ok(/return json \? JSON\.parse\(stdout\) : stdout;/.test(src),
-    "wrangler() must keep parsing when { json: true } — the call site depends on it");
+  // site above silently starts handing a string to the row reader instead.
+  assert.ok(/parsed = JSON\.parse\(stdout\);/.test(helper) && /return first\.results;/.test(helper),
+    "cf() must keep parsing and d1Rows() must keep returning the results array — the call site depends on it");
 
   // FRESHNESS. Workers Builds uploads a couple of minutes after a merge, and a
   // ramp inside that window targets the PREVIOUS release while every downstream

@@ -38,15 +38,13 @@
 // day and not a week: a stale local capture outliving the outage it covered is
 // the failure mode to avoid.
 
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
 import { chromeChannel } from "./lib/browser-channel.ts";
-import { wranglerCommand } from "./lib/wrangler-bin.ts";
-import { siteWranglerArgs } from "./lib/site-config.ts";
+import { cf } from "./lib/cf.ts";
 import { lensChipTargets } from "./lib/lens-chips.ts";
 import { readDocument } from "./lib/html-to-md.ts";
 import { documentTally } from "../src/worker/lens-render.ts";
@@ -292,21 +290,14 @@ async function keyUrl(url) {
   return url;
 }
 
-// The site config for the account pin, resolved once: `kv key put` refuses
-// --x-new-config, so this is `-c` on the generated legacy file (lib/site-config.ts).
-const SITE_CONFIG_ARGS = await siteWranglerArgs([]);
-
-function kvPut(key, file, label) {
-  // Through wranglerCommand, which names the RUNTIME rather than a package
-  // manager. This spawned "pnpm" until 2026-08-23, three days after main became
-  // a bun tree, so every seed run died on "This project is configured to use
-  // bun". It is the same quoted-argument blind spot gotcha 29 records, and the
-  // guard that catches it (contract-the-typescript-quarantine) had this file as
-  // its one recorded exception, on a reason that described driving a package
-  // SCRIPT while the code reached through a manager to another binary.
-  execFileSync(...wranglerCommand(["kv", "key", "put", key, "--path", file,
-    "--namespace-id", NAMESPACE, "--remote", "--ttl", String(TTL), ...SITE_CONFIG_ARGS]),
-    { stdio: ["ignore", "ignore", "inherit"] });
+async function kvPut(key, file, label) {
+  // Through cf (tools/lib/cf.ts) since 2026-10-06, which takes the account from
+  // its own default rather than the site config wrangler needed `-c` for. This
+  // spawned "pnpm" until 2026-08-23, three days after main became a bun tree,
+  // so every seed run died on "This project is configured to use bun"; the
+  // guard that catches that (contract-the-typescript-quarantine) still applies.
+  await cf(["kv", "keys", "put", key, "--namespace-id", NAMESPACE,
+    "--expiration-ttl", String(TTL), "--file", file]);
   process.stdout.write(`      wrote ${label} -> ${key}\n`);
 }
 
@@ -358,11 +349,11 @@ try {
     const hash = sha256(target);
     const jsonFile = join(scratch, `${hash}.json`);
     writeFileSync(jsonFile, json);
-    kvPut(`lens:browser:${hash}`, jsonFile, "render");
+    await kvPut(`lens:browser:${hash}`, jsonFile, "render");
     if (png) {
       const pngFile = join(scratch, `${hash}.png`);
       writeFileSync(pngFile, png);
-      kvPut(`lens:shot:${hash}`, pngFile, `shot (${bytes(png.length)})`);
+      await kvPut(`lens:shot:${hash}`, pngFile, `shot (${bytes(png.length)})`);
     }
 
     // A SECOND page load, deliberately. The render capture above reads the page
@@ -375,7 +366,7 @@ try {
         const wire = await captureWire(browser, target);
         const wireFile = join(scratch, `${hash}.wire.json`);
         writeFileSync(wireFile, JSON.stringify(wire));
-        kvPut(`lens:wire:${hash}`, wireFile,
+        await kvPut(`lens:wire:${hash}`, wireFile,
           `wire (${wire.requests} reqs, ${bytes(wire.bytes)}, ${wire.thirdParty.bytesPct}% third-party)`);
       } catch (e) {
         // The render is the load-bearing half and it is already seeded. A wire

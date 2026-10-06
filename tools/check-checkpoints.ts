@@ -17,19 +17,15 @@
 //   bun run checkpoints:check         compare the committed file against D1
 //   bun run checkpoints:sync          rewrite the file from D1 (then commit it)
 //
-// Needs a D1 read. Locally that is your normal wrangler login. In CI it would need
+// Needs a D1 read. Locally that is your `cf auth login` (tools/lib/cf.ts). In CI it would need
 // a D1:Read token, which is why this is NOT wired into the PR job by default — see
 // the note at the bottom.
 
-import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
-import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { wranglerCommand } from "./lib/wrangler-bin.ts";
-import { siteWranglerArgs } from "./lib/site-config.ts";
+import { D1, d1Rows } from "./lib/cf.ts";
 
-const run = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FILE = path.join(ROOT, "src/worker/checkpoints.json");
 const SYNC = process.argv.includes("--sync");
@@ -42,10 +38,7 @@ const QUERY = "SELECT vnum, ymd, version, slug, title FROM checkpoints ORDER BY 
 
 let live;
 try {
-  const { stdout } = await run(...wranglerCommand(await siteWranglerArgs([
-    "d1", "execute", "aadhar-restore", "--remote", "--json", "--command", QUERY,
-  ])), { cwd: ROOT, maxBuffer: 32 * 1024 * 1024 });
-  live = JSON.parse(stdout)[0].results;
+  live = await d1Rows(D1["aadhar-restore"], QUERY);
 } catch (e) {
   // An unreachable D1 is an availability problem, not drift. Say so and do not
   // fail a PR over someone else's outage or a missing local login.

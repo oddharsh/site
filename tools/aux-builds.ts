@@ -7,17 +7,14 @@
 //   bun tools/aux-builds.ts            plan: print what would be created
 //   bun tools/aux-builds.ts --apply    create the missing triggers
 //
-// Log in first (`bunx cf auth login`) or export a token with
-// "Workers Builds Configuration: Edit" as CLOUDFLARE_API_TOKEN. Each Worker
+// Log in first (`bun run cf auth login`) or export a token with "Workers Builds
+// Configuration: Edit" as CLOUDFLARE_API_TOKEN. cf runs through tools/lib/cf.ts. Each Worker
 // borrows the repository connection and build token from aadhar-sh's existing
 // production trigger, so the repo connection the site already uses is reused.
 // A Worker that already has a trigger is skipped, so a re-run is safe.
 
-import { tmpdir } from "node:os";
+import { cf } from "./lib/cf.ts";
 
-const CF = ["bunx", "cf@1.0.0-beta.12"];
-// The account every Worker here lives on (also in lwe-ask/cloudflare.config.ts).
-const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? "1c99acdb6141579023fb97d24261ea58";
 const APPLY = process.argv.includes("--apply");
 
 const DEPLOY = "bash .github/deploy-wrangler.sh deploy --x-provision=false --x-auto-create=false";
@@ -28,27 +25,6 @@ const WORKERS = [
   { name: "lens-reader", dir: "lens-reader", paths: ["lens-reader/*", ...SHARED] },
   { name: "aadhar-counter", dir: "counter", paths: ["counter/*", "cal/src/reservation.ts", ...SHARED] },
 ];
-
-async function cf(args: string[]): Promise<any> {
-  // Run outside the repo: cf loads ./cloudflare.config.ts from its working
-  // directory, and nothing here needs the site's config. That also means the
-  // account comes from ACCOUNT rather than from a config file.
-  const proc = Bun.spawn([...CF, ...args], {
-    cwd: tmpdir(),
-    env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: ACCOUNT },
-    stdout: "pipe",
-    stderr: "inherit",
-  });
-  const out = await new Response(proc.stdout).text();
-  if ((await proc.exited) !== 0) throw new Error(`cf ${args.slice(0, 3).join(" ")} failed`);
-  let parsed: any = null;
-  try {
-    parsed = out.trim() ? JSON.parse(out) : null;
-  } catch {
-    throw new Error(`cf ${args.slice(0, 3).join(" ")} printed something other than JSON:\n${out.slice(0, 500)}`);
-  }
-  return parsed?.result ?? parsed;
-}
 
 async function tagOf(name: string): Promise<string> {
   const found: any[] = (await cf(["workers", "scripts", "search", "--name", name])) ?? [];

@@ -71,20 +71,18 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { releaseCredentialError } from "./lib/release-guard.ts";
 import { promisify } from "node:util";
-import { wranglerCommand } from "./lib/wrangler-bin.ts";
-import { siteWranglerArgs } from "./lib/site-config.ts";
+import { cf, d1Rows, D1 } from "./lib/cf.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
 // The four version-reading probes, lifted out on 2026-09-22 so soak-canary.ts
 // can ask the same questions without this module's credentialed module-scope
 // setup. Their comments moved with them; see that file's header.
 import { probePinned, sampleSplit } from "./lib/version-probe.ts";
-import { wranglerErrorLines } from "./lib/wrangler-error.ts";
 
 const exec = promisify(execFile);
 
 const DEFAULT_STEPS = [10, 50, 100];
 // Propagation, then re-sampling. 5s was the original settle and it measured the
-// old world: `wrangler versions deploy` returns when the split is RECORDED, not
+// old world: creating a deployment returns when the split is RECORDED, not
 // when the edge routes on it. See the retry loop for the ramp this got wrong.
 const SETTLE_MS = 20000;
 const RESAMPLE_MS = 25000;
@@ -109,34 +107,43 @@ const has = (name) => argv.includes(`--${name}`);
 const credentialError = releaseCredentialError();
 if (credentialError) die(credentialError);
 
-// ------------------------------------------------------------- wrangler ----
+// ------------------------------------------------------------------- cf ----
 
-async function wrangler(args, { json = false } = {}) {
+// Every Cloudflare call goes through the `cf` CLI (tools/lib/cf.ts) since
+// 2026-10-06. Those commands are thin API wrappers, so what comes back is the
+// API's own JSON, and the readers below normalize it in one place each.
+async function cfOrDie(args) {
   try {
-    const [cmd, argv] = wranglerCommand(await siteWranglerArgs(args));
-    const { stdout } = await exec(cmd, argv, {
-      maxBuffer: 16 * 1024 * 1024,
-      env: process.env,
-    });
-    return json ? JSON.parse(stdout) : stdout;
+    return await cf(args);
   } catch (e) {
-    // Report what wrangler actually said, not a Node spawn dump. The first real
-    // ramp died here and printed thirty lines of ChildProcess internals around
-    // one line of usable error, which is a poor way to learn that traffic did
-    // not move. wrangler puts its diagnostics on stderr. The reading lives in
-    // lib/wrangler-error.ts so a test can exercise it; this frames the result.
-    const said = wranglerErrorLines(e).join("\n    ");
-    die(`\`wrangler ${args.slice(0, 2).join(" ")}\` failed:\n    ${said}\n\n  Nothing was changed — wrangler validates before it moves traffic.\n  Check \`bun run deploy:promote --status\` to confirm.`);
+    // Report what cf actually said, not a Node spawn dump. The first real ramp
+    // died here and printed thirty lines of ChildProcess internals around one
+    // line of usable error, which is a poor way to learn that traffic did not
+    // move. lib/cf.ts cuts stderr to its first real lines; this frames it.
+    die(`${e.message}\n\n  Nothing was changed: Cloudflare validates a deployment before it moves traffic.\n  Check \`bun run deploy:promote --status\` to confirm.`);
   }
 }
 
+/** Put `specs` ([{ id, pct }], totalling 100) on traffic as one deployment. */
+async function deployVersions(specs, message) {
+  const worker = await workerName();
+  const body = {
+    strategy: "percentage",
+    versions: specs.map((v) => ({ version_id: v.id, percentage: v.pct })),
+    annotations: { "workers/message": message },
+  };
+  await cfOrDie(["workers", "deployments", "create", "--worker", worker, "--body", JSON.stringify(body)]);
+}
+
 async function currentDeployment() {
-  const status = await wrangler(["deployments", "status", "--json"], { json: true });
-  // Shape: { versions: [{ version_id, percentage }], ... }. Normalized here so a
-  // wrangler field rename fails loudly at one place instead of silently reading
-  // undefined into a percentage comparison.
-  const versions = status?.versions;
-  if (!Array.isArray(versions)) die("could not read the current deployment (wrangler deployments status --json returned no `versions` array)");
+  // The deployments API is per Worker, so even --status reads the Worker's
+  // name from infra.json. The first deployment listed is the one serving.
+  const listed = await cfOrDie(["workers", "deployments", "list", "--worker", await workerName()]);
+  // Shape: { deployments: [{ versions: [{ version_id, percentage }] }] }.
+  // Normalized here so a field rename fails loudly at one place instead of
+  // silently reading undefined into a percentage comparison.
+  const versions = (listed?.deployments ?? listed)?.[0]?.versions;
+  if (!Array.isArray(versions)) die("could not read the current deployment (cf workers deployments list returned no `versions` array)");
   return versions.map((v) => ({
     id: v.version_id || v.id,
     pct: Number(v.percentage ?? 0),
@@ -186,19 +193,27 @@ async function productionAlias() {
 // Memoized, because two things read it now: the alias filter below, and the
 // freshness check, which needs `created_on` for whatever target was resolved —
 // including one passed as `--version`, where newestVersion() never runs.
+//
+// The list is the newest LIST_SIZE uploads. wrangler capped this at 10 with no
+// paging, which is how branch builds used to bury the production one; the API
+// pages, so this asks for one large page instead.
+const LIST_SIZE = 100;
 let versionListCache: any[] | null = null;
 async function versionList() {
   if (!versionListCache) {
-    const list = await wrangler(["versions", "list", "--json"], { json: true });
+    const listed = await cfOrDie(["workers", "versions", "list", "--worker-id", await workerName(), "--per-page", String(LIST_SIZE)]);
+    const list = listed?.items ?? listed;
     if (!Array.isArray(list) || !list.length) die("no uploaded versions found");
-    versionListCache = list;
+    // created_on sits at the top level in this API and under `metadata` in the
+    // older one wrangler read; accept either rather than guess which answers.
+    versionListCache = list.map((v) => ({ ...v, created_on: v.created_on ?? v.metadata?.created_on }));
   }
   return versionListCache;
 }
 
 function createdOnFor(list, id) {
   const short = String(id).slice(0, 8);
-  const raw = list.find((v) => String(v.id).slice(0, 8) === short)?.metadata?.created_on;
+  const raw = list.find((v) => String(v.id).slice(0, 8) === short)?.created_on;
   const at = raw ? new Date(raw) : null;
   return at && !Number.isNaN(at.getTime()) ? at : null;
 }
@@ -206,24 +221,23 @@ function createdOnFor(list, id) {
 async function newestVersion() {
   const productionAliasName = await productionAlias();
   const list = await versionList();
-  // wrangler lists newest first; sort defensively on the timestamp it carries.
+  // Sort on the timestamp rather than trusting the API's order.
   const sorted = [...list].sort((a, b) =>
-    String(b.metadata?.created_on || "").localeCompare(String(a.metadata?.created_on || "")));
+    String(b.created_on || "").localeCompare(String(a.created_on || "")));
 
   const aliasOf = (v) => (v.annotations || {})["workers/alias"] || "(no alias)";
   const production = sorted.filter((v) => aliasOf(v) === productionAliasName);
 
   if (!production.length) {
-    // FAIL CLOSED, and this is a case that will really happen. `wrangler
-    // versions list` is hard-capped at the 10 most recent with no pagination
-    // flag, so on a busy day ten branch pushes can bury the production build
-    // entirely. Guessing here is exactly the bug being fixed, so name the
-    // candidates and let a human choose.
-    const seen = sorted.map((v) => `    ${v.id.slice(0, 8)}  ${aliasOf(v)}`).join("\n");
+    // FAIL CLOSED. Under wrangler's 10-version cap this really happened on
+    // busy days; at LIST_SIZE it takes a hundred branch pushes, or a version
+    // list that carries no `workers/alias` annotation. Guessing here is
+    // exactly the bug being fixed, so name the candidates and let a human
+    // choose.
+    const seen = sorted.slice(0, 20).map((v) => `    ${v.id.slice(0, 8)}  ${aliasOf(v)}`).join("\n");
     die(
       `no \`${productionAliasName}\` build among the ${sorted.length} most recent versions.\n\n` +
-      `  wrangler lists only the 10 newest and cannot page, so a run of branch\n` +
-      `  builds can push the production one off the end. What is listed:\n\n${seen}\n\n` +
+      `  The newest of what is listed:\n\n${seen}\n\n` +
       `  Pick the one you mean and pass it explicitly:\n` +
       `    bun run deploy:promote --version <id>`,
     );
@@ -313,12 +327,12 @@ async function reportTargetFreshness(targetId) {
     return;
   }
   if (!built) {
-    // `wrangler versions list` is hard-capped at 10 with no pagination, so any
-    // target older than the last ten uploads lands here. That is not an error,
-    // and on a busy day it is the normal answer for a deliberately old target.
+    // Only the newest LIST_SIZE uploads are listed, so an older target lands
+    // here. That is not an error; it is the normal answer for a deliberately
+    // old target.
     console.log(
       `freshness:        unknown (${String(targetId).slice(0, 8)} is not among the ` +
-      `${list.length} versions wrangler lists, so it has no timestamp to compare)\n`);
+      `${list.length} newest versions, so it has no timestamp to compare)\n`);
     return;
   }
   const gap = built.getTime() - head.at.getTime();
@@ -377,11 +391,11 @@ if (has("rollback")) {
   const newest = await newestVersion();
   const older = active.filter((v) => v.id.slice(0, 8) !== newest.slice(0, 8));
   if (!older.length) {
-    die(`nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`bun run wrangler versions deploy <id>@100 --yes\`, or re-upload the previous commit.`);
+    die(`nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`bun run deploy:promote --version <id> --to 100\`, or re-upload the previous commit.`);
   }
   const to = older.sort((a, b) => b.pct - a.pct)[0];
   console.log(`rolling back: 100% to ${to.id.slice(0, 8)}`);
-  await wrangler(["versions", "deploy", `${to.id}@100`, "--yes", "--message", "rollback via deploy:promote"]);
+  await deployVersions([{ id: to.id, pct: 100 }], "rollback via deploy:promote");
   console.log("done. verify with --status.");
   process.exit(0);
 }
@@ -436,8 +450,8 @@ const worker = await workerName();
 
 for (const pct of steps) {
   console.log(`── ${pct}% ───────────────────────────────────────────`);
-  // BOTH SIDES OF THE SPLIT, ALWAYS. `wrangler versions deploy` requires the
-  // percentages to total exactly 100 and refuses the command otherwise:
+  // BOTH SIDES OF THE SPLIT, ALWAYS. A deployment's percentages must total
+  // exactly 100, and wrangler refused the command otherwise:
   //
   //   ✘ The specified traffic percentages add up to 10%, but must total
   //     exactly 100%.
@@ -449,18 +463,12 @@ for (const pct of steps) {
   // step, which is to say the ramp could only ever have gone straight to 100%,
   // which is the one thing this script exists to avoid.
   //
-  // Below 100 the remainder goes explicitly to the version that is serving now.
-  // Wrangler would also accept a bare `<previous>` and infer the remainder, but
-  // saying the number out loud is what makes the intent reviewable in the log.
+  // Below 100 the remainder goes explicitly to the version that is serving now,
+  // which also keeps the intent reviewable in the log.
   const specs = pct >= 100 || !previous
-    ? [`${target}@100`]
-    : [`${target}@${pct}`, `${previous}@${100 - pct}`];
-  await wrangler([
-    "versions", "deploy",
-    ...specs,
-    "--yes",
-    "--message", `deploy:promote ramp to ${pct}%`,
-  ]);
+    ? [{ id: target, pct: 100 }]
+    : [{ id: target, pct }, { id: previous, pct: 100 - pct }];
+  await deployVersions(specs, `deploy:promote ramp to ${pct}%`);
 
   // Let the change propagate before believing a sample of it, then RETRY rather
   // than trusting one window.
@@ -470,7 +478,7 @@ for (const pct of steps) {
   // is 5% against a 10% target and entirely ordinary. Two things made a healthy
   // ramp look dead:
   //
-  //   1. FIVE SECONDS IS NOT PROPAGATION. `wrangler versions deploy` returns as
+  //   1. FIVE SECONDS IS NOT PROPAGATION. Creating a deployment returns as
   //      soon as the split is recorded, and the edge takes longer than that to
   //      route on it. The early samples were measuring the old world.
   //   2. ZERO IS NOT RARE ENOUGH AT n=40. At a true 10%, 0.9^40 is ~1.5% — small
@@ -602,19 +610,15 @@ if (steps[steps.length - 1] === 100) {
   let staged: { vnum: number, ymd: string, version: string, slug: string, title: string }[] = [];
   try {
     const committed = JSON.parse(await readFile(file, "utf8"));
-    // `wrangler(..., { json: true })` already returns parsed JSON. Wrapping it in
-    // a second JSON.parse stringifies the object to "[object Object]" and throws,
-    // which the catch below then reported as D1 being unreachable — so every ramp
-    // since the staged-projection refactor skipped its own changelog write while
-    // printing a message that blamed the database. D1 was fine every time.
-    const rows = (await wrangler(
-      ["d1", "execute", "aadhar-restore", "--remote", "--json", "--command", "SELECT vnum FROM checkpoints;"],
-      { json: true },
-    ))[0].results;
+    // d1Rows() returns parsed rows. A second JSON.parse here once stringified
+    // the object to "[object Object]" and threw, which the catch below then
+    // reported as D1 being unreachable, so every ramp skipped its own changelog
+    // write while blaming a database that was fine every time.
+    const rows = await d1Rows(D1["aadhar-restore"], "SELECT vnum FROM checkpoints;");
     const known = new Set(rows.map((r) => r.vnum));
     staged = committed.filter((r) => !known.has(r.vnum)).sort((a, b) => a.vnum - b.vnum);
   } catch (e) {
-    // Do NOT name a cause here. This block covers a local file read, a wrangler
+    // Do NOT name a cause here. This block covers a local file read, a cf
     // spawn, and the shape of what comes back; asserting "D1 is unreachable" sent
     // the one person reading it to check a database that was answering fine.
     console.log(`\ncould not work out what to log (${String(e.message || e).slice(0, 90)}).`);
@@ -623,8 +627,8 @@ if (steps[steps.length - 1] === 100) {
   for (const row of staged) {
     const ts = Math.floor(Date.now() / 1000);
     try {
-      await wrangler(["d1", "execute", "aadhar-restore", "--remote", "--command",
-        `INSERT INTO checkpoints (vnum, ts, ymd, version, slug, title) VALUES (${row.vnum}, ${ts}, '${row.ymd}', '${row.version}', '${row.slug}', '${row.title}');`]);
+      await d1Rows(D1["aadhar-restore"],
+        `INSERT INTO checkpoints (vnum, ts, ymd, version, slug, title) VALUES (${row.vnum}, ${ts}, '${row.ymd}', '${row.version}', '${row.slug}', '${row.title}');`);
       console.log(`logged: v${row.vnum} ${row.version}`);
     } catch (e) {
       // Not fatal. Traffic already moved, and a missing log row is a changelog

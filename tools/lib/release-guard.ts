@@ -20,13 +20,14 @@
 //
 // So the question is no longer "is this CI" but "can this process authenticate".
 export function releaseCredentialError(env = process.env) {
-  // Interactively, wrangler's stored OAuth login is the credential and no
+  // Interactively, the stored `cf auth login` is the credential (wrangler's
+  // login until 2026-10-06, when the ramp moved to tools/lib/cf.ts) and no
   // environment variable is expected. Requiring a token here would break every
   // workstation ramp this repo has ever done.
   if (!env.CI) return null;
 
   if (!env.CLOUDFLARE_API_TOKEN) {
-    return "deploy:promote needs CLOUDFLARE_API_TOKEN in CI: there is no interactive wrangler login "
+    return "deploy:promote needs CLOUDFLARE_API_TOKEN in CI: there is no interactive cf login "
       + "to fall back on, so without it the ramp fails partway with an auth error instead of here. "
       + "Scope it to Workers Scripts:Edit + D1:Edit and hold it as an ENVIRONMENT secret, never a repo secret.";
   }

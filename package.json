@@ -31,6 +31,7 @@
     "deps:audit": "bun audit",
     "check-wrangler": "bun tools/check-wrangler.ts",
     "wrangler:site": "bun tools/wrangler-site.ts",
+    "cf": "bun tools/cf.ts",
     "routes:check": "node tools/check-routes-harness.ts",
     "routes:check:remote": "node tools/check-routes-harness.ts --remote",
     "infra:check": "bun tools/check-infra.ts",
