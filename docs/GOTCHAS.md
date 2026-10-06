@@ -216,6 +216,11 @@ by renumbering. The long-form history of each one is in git
     rule that no deploy path creates resources. The tests, `routes:check` and
     `gen-runtime-types` use wrangler as a library (`createTestHarness`,
     `wrangler types`), which cf has no stand-in for. And cf's CLI half pins its
-    own miniflare (5.20260930.0-alpha), a second workerd in the tree. Use `cf`
-    for account work it already owns (`cf builds`, `tools/aux-builds.ts`);
-    re-audit when cf ships a no-provision switch.
+    own miniflare (5.20260930.0-alpha), a second workerd in the tree. Account
+    work goes through `cf` via `tools/lib/cf.ts` (deploy:promote, D1 reads,
+    KV seeding, Browser Run, Workers Builds), with two exceptions. The photo
+    upload stays on `wrangler r2 object put`, because `cf r2 objects put
+    --dry-run` shows `/` in a key sent as `%2F`, and R2's API says slashes
+    must go literally.
+    The Workers AI evals keep `wrangler auth token`, because cf has no command
+    that prints its token. Re-audit when cf ships a no-provision switch.

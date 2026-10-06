@@ -6,12 +6,8 @@
 // binding. The script discovers WebMCP tools without executing them, prints a
 // short-lived Live View URL, and closes the session unless --keep-open is set.
 
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { wranglerCommand } from "./lib/wrangler-bin.ts";
-import { siteWranglerArgs } from "./lib/site-config.ts";
+import { cf } from "./lib/cf.ts";
 
-const execFileAsync = promisify(execFile);
 const args = process.argv.slice(2);
 const keepOpen = args.includes("--keep-open");
 const target = args.find((arg) => !arg.startsWith("--"));
@@ -45,19 +41,19 @@ try {
   fail(error && error.message ? error.message : String(error));
 } finally {
   if (sessionId && !keepOpen) {
-    try { await execFileAsync(...wranglerCommand(await siteWranglerArgs(["browser", "close", sessionId])), { cwd: process.cwd(), maxBuffer: 2 * 1024 * 1024 }); }
+    try { await cf(["browser-run", "devtools", "browser", "delete", sessionId]); }
     catch (error) { process.stderr.write("Could not close Browser Run session " + sessionId + ": " + (error.message || error) + "\n"); }
   }
 }
 
+// Through cf (tools/lib/cf.ts): the Browser Run devtools API, which takes the
+// keep-alive in milliseconds where wrangler's flag took seconds.
 async function createSession(seconds) {
-  const { stdout } = await execFileAsync(...wranglerCommand(await siteWranglerArgs([
-    "browser", "create", "--lab", "--keepAlive", String(seconds), "--open", "false", "--json",
-  ])), { cwd: process.cwd(), maxBuffer: 8 * 1024 * 1024 });
-  const start = stdout.indexOf("{");
-  const end = stdout.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("Wrangler did not return Browser Run session JSON.");
-  return JSON.parse(stdout.slice(start, end + 1));
+  const created = await cf([
+    "browser-run", "devtools", "browser", "create", "--lab", "--targets", "--keep-alive", String(seconds * 1000),
+  ]);
+  if (!created?.sessionId) throw new Error("cf did not return a Browser Run session id.");
+  return created;
 }
 
 async function probePage(wsUrl, targetUrl) {

@@ -189,7 +189,7 @@ cf-garage, lwe-ask, lens-reader and aadhar-counter each get their own Workers
 Builds trigger, connected to this repository. `bun tools/aux-builds.ts` prints
 the plan and `--apply` creates them through Cloudflare's `cf` CLI; it skips a
 Worker that already has a trigger. Run it from a workstation logged in with
-`bunx cf auth login`, because nothing in CI can do this: its token is read-only
+`bun run cf auth login`, because nothing in CI can do this: its token is read-only
 by design. The dashboard path (Workers & Pages > the Worker > Settings > Builds)
 works too. Every trigger uses the same settings except the variable and the
 watch paths:
@@ -295,7 +295,7 @@ For a workstation ramp, inspect the target first:
 ```bash
 bun run deploy:promote --dry-run
 bun run deploy:promote --status
-bun run wrangler:site versions list
+bun run cf workers versions list --worker-id aadhar-sh
 bun run deploy:promote --version <version-id> --to 10
 # Inspect the canary and Workers Logs before continuing:
 bun run deploy:promote --version <version-id> --steps 50,100
@@ -1388,7 +1388,8 @@ brew install mozjpeg libavif pkgconf          # JPEG tools plus native AVIF libr
 # zenc --avif-version reports the library and codec actually linked at runtime
 # (the zenc-avif entry in config/tools.json).
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
-bun run wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
+bun run wrangler login                                         # Cloudflare auth for deploys and the R2 photo upload
+bun run cf auth login                                          # Cloudflare auth for deploy:promote, D1 reads and KV seeding (tools/lib/cf.ts)
 
 # the study pages, which are NOT needed to add a photo
 brew install webp ffmpeg                              # cwebp for the encoding grids; ffmpeg for their PNG -> PPM step

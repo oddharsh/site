@@ -36,6 +36,7 @@
 // Bios leave this machine for Workers AI under --clef, the same place the
 // Worker would send them. The token is CLOUDFLARE_API_TOKEN when set, else
 // wrangler's own OAuth login. Without labels it prints counts only, never a bio.
+// The bios themselves come from D1 through cf (tools/lib/cf.ts).
 
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -45,7 +46,8 @@ import { promisify } from "node:util";
 import { roleTier } from "../serendipity/serendipity.ts";
 import { ROLE_LABELS, ROLE_MODEL, buildRoleRequest, parseRoleAnswer, type RolePrediction } from "../serendipity/roles.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
-import { siteConfig, siteWranglerArgs } from "./lib/site-config.ts";
+import { siteConfig } from "./lib/site-config.ts";
+import { D1, d1Rows } from "./lib/cf.ts";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const run = promisify(execFile);
@@ -200,10 +202,7 @@ function fnv(s: string): number {
 
 async function readBios(): Promise<Bio[]> {
   const sql = "SELECT id, bio_short AS bio FROM attendees WHERE bio_short IS NOT NULL AND trim(bio_short) <> ''";
-  const { stdout } = await run(...wranglerCommand(await siteWranglerArgs([
-    "d1", "execute", "serendipity", "--remote", "--json", "--command", sql,
-  ])), { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 });
-  return JSON.parse(stdout)[0].results;
+  return d1Rows(D1.serendipity, sql);
 }
 
 const pct = (n: number, d: number) => (d ? `${(100 * n / d).toFixed(0)}%` : "n/a");
