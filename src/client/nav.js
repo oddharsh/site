@@ -909,10 +909,66 @@
     D.addEventListener("focusin", onFocus);
   }
 
+  // ── hold Alt for the exact value ────────────────────────────────────────────
+  // A rounded figure that knows its exact self carries it as
+  // <data value="4,182,733 bytes">4.0 MB</data>; holding Alt (Option on a Mac)
+  // shows every value on the page and letting go puts the rounding back. The
+  // markup is the opt-in, so nothing is computed here and nothing is guessed:
+  // a figure with no <data> around it simply stays as written. XP hid its
+  // keyboard underlines until Alt the same way, detail for whoever asks for it.
+  //
+  // Tooltips render while the key may already be down, so the observer swaps
+  // whatever appears mid-hold, and it only exists for the length of the hold.
+  function initExact() {
+    var held = false, showed = false, mo = /** @type {MutationObserver | null} */ (null);
+    var swap = (root) => {
+      var list = root.querySelectorAll ? root.querySelectorAll("data[value]") : [];
+      for (var i = 0; i < list.length; i++) {
+        var d = /** @type {HTMLDataElement} */ (list[i]);
+        if (d.dataset.shown == null && d.value) { d.dataset.shown = d.textContent || ""; d.textContent = d.value; showed = true; }
+      }
+    };
+    var set = (on) => {
+      if (on === held) return;
+      held = on;
+      if (on) showed = false;
+      D.documentElement.classList.toggle("exact", on);
+      if (on) {
+        swap(D);
+        mo = new MutationObserver((recs) => {
+          recs.forEach((r) => r.addedNodes.forEach((n) => { if (n.nodeType === 1) swap(n); }));
+        });
+        mo.observe(D.body, { childList: true, subtree: true });
+        return;
+      }
+      if (mo) { mo.disconnect(); mo = null; }
+      var list = D.querySelectorAll("data[data-shown]");
+      for (var i = 0; i < list.length; i++) {
+        var d = /** @type {HTMLElement} */ (list[i]);
+        d.textContent = d.dataset.shown || "";
+        delete d.dataset.shown;
+      }
+    };
+    D.addEventListener("keydown", (e) => {
+      if (e.key === "Alt" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.shiftKey) set(true);
+      else if (held && e.key !== "Alt") set(false);
+    });
+    D.addEventListener("keyup", (e) => {
+      if (e.key !== "Alt" || !held) return;
+      var swallow = showed;
+      set(false);
+      // Firefox on Windows raises its menu bar when a bare Alt comes back up.
+      // Only a hold that actually showed something swallows that.
+      if (swallow) e.preventDefault();
+    });
+    // Alt-Tab away and the keyup lands in another window.
+    addEventListener("blur", () => set(false));
+  }
+
   function boot() {
     var bar = D.getElementById("axp-taskbar");
     if (!bar || !D.getElementById("axp-desktop")) return;
-    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize();  initCloseBack(); initWindowControls(); initInfotips(); initSaver(); initTips();
+    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize();  initCloseBack(); initWindowControls(); initInfotips(); initSaver(); initTips(); initExact();
   }
   function bootAfterStaticPaint() {
     // Generated/static pages and Worker-rendered shells already carry the desktop

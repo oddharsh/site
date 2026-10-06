@@ -1008,35 +1008,35 @@ window.__horizonCaps = (function () {
     </p>
     <p class="note">
       <strong>Last swept 2026-08-10</strong>, against Chrome&nbsp;151&ndash;153, Safari&nbsp;26.6
-      plus Technology&nbsp;Preview&nbsp;249, and Firefox&nbsp;153&ndash;154; two cards moved on
+      plus <a class="term" data-t="safari-technology-preview" href="https://developer.apple.com/safari/technology-preview/" title="Apple's early-release Safari for developers, updated every few weeks with web features that haven't reached regular Safari yet." rel="external">Technology&nbsp;Preview</a>&nbsp;249, and Firefox&nbsp;153&ndash;154; two cards moved on
       2026-09-17 from a canary reading rather than a sweep (below). A page like this rots in two directions
       and only one of them is obvious: features arrive, and features I already wrote up
       quietly change status underneath me. The 07-26 sweep moved four cards
-      (<code>InstallEvent.addRoutes()</code>, compression dictionaries,
-      <code>appearance: base-select</code>, Temporal) and demoted one of them off
+      (<code>InstallEvent.addRoutes()</code>, <a class="term" data-t="compression-dictionaries" href="https://www.rfc-editor.org/rfc/rfc9842.html" title="A scheme where the browser keeps an earlier copy of a file and the server sends only a compressed difference against it." rel="external">compression dictionaries</a>,
+      <code>appearance: base-select</code>, <a class="term" data-t="temporal" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal" title="A new built-in JavaScript API for dates and times, with proper time zones and calendars, meant to replace the error-prone Date object." rel="external">Temporal</a>) and demoted one of them off
       &quot;shipped on the site&quot; entirely, which is the more interesting half. Dates
       here are when I checked, never when I guessed.
     </p>
     <p class="note">
       The 08-10 pass found a <em>fourth</em> direction, and unlike the other three it
       is a flaw in the method rather than in the sources. Every line here was written
-      reading Chrome first, so a feature that shipped in WebKit or Gecko years earlier
+      reading Chrome first, so a feature that shipped in WebKit or <a class="term" data-t="gecko" href="https://en.wikipedia.org/wiki/Gecko_(software)" title="The browser engine inside Firefox that turns HTML, CSS and JavaScript into the page you see." rel="external">Gecko</a> years earlier
       gets recorded as &quot;Chrome&nbsp;N, others no&quot; and stays wrong until
       something forces a re-read. Two cards were exactly that. Separately, Safari
       <strong>Technology Preview&nbsp;249</strong> moved six cards in one build, which
       no &quot;New in Safari&nbsp;N&quot; post will ever mention, and one card
       (<code>CloseWatcher</code>) turned out to have had <em>both</em> of its version
       numbers wrong since it was written. Nine new cards, ten corrected status lines,
-      and the <code>&lt;install&gt;</code> card retired: aadhar.sh is not a PWA and
+      and the <code>&lt;install&gt;</code> card retired: aadhar.sh is not a <a class="term" data-t="pwa" href="https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps" title="Progressive web app: a website built to install and behave like an app, with offline support, a home-screen icon and its own window." rel="external">PWA</a> and
       isn&apos;t becoming one, so a card forecasting an install button for it was
       forecasting nothing.
     </p>
     <p class="note">
       Since 2026-09-14 the page no longer waits for me to sweep it. A nightly job runs
-      every probe below in stable Chromium, Firefox and WebKit and again in Chrome Beta
+      every probe below in stable <a class="term" data-t="chromium" href="https://en.wikipedia.org/wiki/Chromium_(web_browser)" title="The open-source browser project that Chrome, Edge, Brave and Opera are built on." rel="external">Chromium</a>, Firefox and WebKit and again in Chrome Beta
       and Edge Dev, and files one issue per leg naming any probe that answers
       differently in the prerelease. Its first two findings moved the
-      <code>margin-trim</code> and JPEG&nbsp;XL cards on 2026-09-17: both flip on in
+      <code>margin-trim</code> and <a class="term" data-t="jpeg-xl" href="https://en.wikipedia.org/wiki/JPEG_XL" title="A newer image format from the JPEG committee. It compresses well, decodes in parallel, and can repack an existing JPEG losslessly into a smaller file." rel="external">JPEG&nbsp;XL</a> cards on 2026-09-17: both flip on in
       Chrome&nbsp;155, three weeks before stable, and a third moved the CSS
       <code>random()</code> card on 2026-09-30, the day Chrome&nbsp;156 reached beta. That catches the direction a sweep
       structurally cannot, a feature that ships between sweeps, and it catches it
@@ -1054,7 +1054,7 @@ window.__horizonCaps = (function () {
       release notes structurally cannot see them. It also caught a wrong claim on
       the <a href="#patching-card">document-patching card</a>, corrected in
       place. Version numbers in the new batch come from MDN&apos;s
-      browser-compat-data v8.0.8 rather than chromestatus, whose Safari and
+      <a class="term" data-t="browser-compat-data" href="https://github.com/mdn/browser-compat-data" title="MDN's open dataset recording which version of each browser supports each web feature." rel="external">browser-compat-data</a> v8.0.8 rather than chromestatus, whose Safari and
       Firefox columns are filled in by the Chrome feature author and had drifted
       on three of them.
     </p>
@@ -1071,7 +1071,7 @@ window.__horizonCaps = (function () {
       </h2>
       <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
-        Trims the half-leading above the cap line and below the baseline, so
+        Trims the <a class="term" data-t="leading" href="https://en.wikipedia.org/wiki/Leading" title="The extra space between lines of text. CSS splits it into two halves, one above the letters and one below, called half-leading." rel="external">half-leading</a> above the cap line and below the baseline, so
         text sits flush in its box. The highlight shows the line box; on the
         right it hugs the actual letters.
       </p>
@@ -1119,7 +1119,7 @@ window.__horizonCaps = (function () {
       <p class="replaces">
         On the site: serendipity derives each attendee avatar&apos;s text colour from
         its hue with <code>contrast-color()</code> (behind an <code>@supports</code>
-        guard). Baseline since April&nbsp;2026: Chrome&nbsp;147,
+        guard). <a class="term" data-t="baseline" href="https://developer.mozilla.org/en-US/docs/Glossary/Baseline/Compatibility" title="A label for web features that work in the current versions of all the major browsers: Chrome, Edge, Firefox and Safari." rel="external">Baseline</a> since April&nbsp;2026: Chrome&nbsp;147,
         Safari&nbsp;26, Firefox&nbsp;146. The homepage title bars deliberately
         <em>don&apos;t</em> use it: that Luna blue sits right on the black/white
         contrast crossover, so the hand-picked white is the safer call there.
@@ -1134,10 +1134,10 @@ window.__horizonCaps = (function () {
         <span class="stat contested">Chrome 142 &middot; Safari opposes &middot; FF no</span>
       </h2>
       <p class="note">
-        The declarative dream: <code>interestfor="id"</code> shows a popover on
+        The declarative dream: <code>interestfor="id"</code> shows a <a class="term" data-t="popover-api" href="https://developer.mozilla.org/en-US/docs/Web/API/Popover_API" title="A browser API for showing content above the rest of the page, such as menus and tooltips, with built-in show, hide and dismiss behavior." rel="external">popover</a> on
         hover / focus / long-press, with built-in (configurable) delay and
-        accessibility wiring, and <strong>zero JavaScript</strong>. Anchor
-        positioning places it relative to the link. The demo sets
+        accessibility wiring, and <strong>zero JavaScript</strong>. <a class="term" data-t="anchor-positioning" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Anchor_positioning" title="A CSS feature that places one element relative to another, such as a tooltip pinned to its button, without JavaScript measuring positions." rel="external">Anchor
+        positioning</a> places it relative to the link. The demo sets
         <code>interest-delay: 0s</code> so tooltips spawn instantly,
         matching the site&apos;s cursor tooltips (the default is <code>0.5s</code>).
         Hover a car below:
@@ -1908,7 +1908,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
         close: the Pinterest / contact-sheet look, but native. After years
         of a syntax fight (a <code>grid-template-rows: masonry</code> shorthand
         vs. a separate <code>display: masonry</code>), it has converged into
-        <strong>Grid Lanes</strong>: masonry expressed <em>inside</em> CSS Grid so
+        <strong>Grid Lanes</strong>: <a class="term" data-t="masonry" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Grid_lanes" title="A layout that stacks items in columns at their natural heights, each filling the gap under the one above, like bricks in a wall." rel="external">masonry</a> expressed <em>inside</em> CSS Grid so
         you keep <code>grid-template-columns</code>, gaps, and (eventually)
         subgrid. <strong>Safari&nbsp;26.4 shipped it</strong> as <code>display: grid-lanes</code> (on by default) with a <code>flow-tolerance</code> knob (the old <code>item-tolerance</code>, renamed); Chrome keeps it behind the experimental flag. The grid below is <em>real</em> grid-lanes where the engine supports it (you, on Safari&nbsp;26.4+) and falls back to a CSS multi-column mockup elsewhere: the mockup reads down-then-across, true masonry packs into the shortest lane.
       </p>
@@ -2822,7 +2822,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="note">
         The long-awaited replacement for <code>Date</code>: immutable objects,
         first-class time zones and calendars, no more month-zero footguns. It reached
-        <strong>TC39 stage&nbsp;4</strong> in March&nbsp;2026, after the 2026 edition&apos;s
+        <strong><a class="term" data-t="tc39" href="https://tc39.es/" title="The committee that designs JavaScript. Proposals advance through numbered stages, and stage 4 means finished and added to the language." rel="external">TC39</a> stage&nbsp;4</strong> in March&nbsp;2026, after the 2026 edition&apos;s
         feature set had closed, so it lands in ECMAScript&nbsp;2027 and already sits in the
         living draft at <a href="https://tc39.es/ecma262/">tc39.es/ecma262</a>. Shipping is a separate
         question from standardising, and Safari is the reminder: Blink and Gecko both
@@ -5036,7 +5036,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="note">
         Every card on this page is something arriving. This one is the other direction,
         and a page about a 2003 aesthetic ought to carry at least one. Browsers have
-        shipped an XSLT&nbsp;1.0 processor since 2000; it is a large, unsandboxed,
+        shipped an <a class="term" data-t="xslt" href="https://en.wikipedia.org/wiki/XSLT" title="A language for transforming XML documents into other formats, such as HTML. Browsers have been able to run it natively for decades." rel="external">XSLT</a>&nbsp;1.0 processor since 2000; it is a large, unsandboxed,
         rarely-exercised C++ surface that has produced a steady drip of security bugs,
         and Chromium, WebKit and Gecko have all now agreed to take it out. Chromium has
         the deprecation staged across 2026.

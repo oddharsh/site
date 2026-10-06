@@ -68,17 +68,17 @@
     <p class="lede">
       How systems store and sync big files by their <em>content</em>, not their
       name, and why a one-byte edit re-sends the whole file under
-      naïve chunking, but almost nothing under content-defined chunking.
+      naïve chunking, but almost nothing under <a class="term" data-t="content-defined-chunking" href="https://en.wikipedia.org/wiki/Rolling_hash#Content-based_slicing_using_a_rolling_hash" title="Splitting a file wherever its own bytes match a pattern, so an insertion only moves the boundaries near it and the other chunks stay identical." rel="external">content-defined chunking</a>.
     </p>
 
     <hr>
 
     <p class="note">
-      This site already runs on content-addressing: every photo is served at a
-      content-stable URL with a <code>?v=N</code> cache-bust, the service worker
+      This site already runs on <a class="term" data-t="content-addressing" href="https://en.wikipedia.org/wiki/Content-addressable_storage" title="Naming each piece of data by a hash of its bytes, so the same content always gets the same name and any change gets a new one." rel="external">content-addressing</a>: every photo is served at a
+      content-stable URL with a <code>?v=N</code> cache-bust, the <a class="term" data-t="service-worker" href="https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API" title="A script a site installs in the browser that sits between its pages and the network and can answer requests from a local cache." rel="external">service worker</a>
       treats <code>/images/*</code> as immutable (cache-first), and the originals
-      live in R2. That's the <em>idea</em>. The systems-grade version (chunk a
-      file by content, address each chunk by its hash, ship only the chunks that
+      live in <a class="term" data-t="r2" href="https://developers.cloudflare.com/r2/" title="Cloudflare's object storage for files. It speaks Amazon S3's API and charges nothing for downloading data back out." rel="external">R2</a>. That's the <em>idea</em>. The systems-grade version (chunk a
+      file by content, address each chunk by its <a class="term" data-t="cryptographic-hash-function" href="https://en.wikipedia.org/wiki/Cryptographic_hash_function" title="A short fingerprint computed from data. The same data always gives the same hash, and any change, even one byte, gives a different one." rel="external">hash</a>, ship only the chunks that
       changed, and verify a slice without the whole) is what
       <a href="https://github.com/officialunofficial/mkit" rel="external">mkit</a>
       does. Everything below re-creates those primitives, self-contained and
@@ -92,7 +92,7 @@
       top</strong>. Watch the two strategies diverge: under
       <strong>fixed-size</strong> chunks every boundary shifts and almost every
       chunk's hash changes (so you'd re-upload the whole file); under
-      <strong>FastCDC</strong> the boundaries ride the content, so only the
+      <strong><a class="term" data-t="fastcdc" href="https://www.usenix.org/conference/atc16/technical-sessions/presentation/xia" title="A fast content-defined chunking algorithm from a 2016 USENIX paper. It uses a cheap gear hash and tuned masks to pick cut points." rel="external">FastCDC</a></strong> the boundaries ride the content, so only the
       chunks near your edit change.
     </p>
 
@@ -139,7 +139,7 @@
   return cuts;
 }</pre>
     <p class="note">
-      A rolling <em>gear hash</em> slides over the bytes, and wherever its low
+      A rolling <em><a class="term" data-t="gear-hash" href="https://en.wikipedia.org/wiki/Rolling_hash#Gear_hashing" title="A rolling hash that updates with one shift and one table lookup per byte, cheap enough to run over every byte of a file." rel="external">gear hash</a></em> slides over the bytes, and wherever its low
       bits come up zero, that is a boundary. Because the cut points follow the
       <em>data</em>, inserting or deleting bytes only disturbs the boundaries
       you touched. The rest line up exactly as before.
@@ -161,9 +161,9 @@
     <p class="note">
       Content-addressing earns its keep on large blobs. Drop any file (it
       never leaves your machine) and your browser FastCDC-chunks it locally
-      (avg 8&nbsp;KB), then SHA-256's each chunk into a content ID. The blocks
+      (avg 8&nbsp;KB), then <a class="term" data-t="sha-256" href="https://en.wikipedia.org/wiki/SHA-2" title="A hash function that turns any input into a 256-bit fingerprint. Change one byte of the input and the fingerprint changes completely." rel="external">SHA-256</a>'s each chunk into a content ID. The blocks
       run proportional to size so you can see the variable-length cuts; the
-      demo counts out identical chunks (a <code>ChunkedBlob</code>'s dedup win).
+      demo counts out identical chunks (a <code>ChunkedBlob</code>'s <a class="term" data-t="data-deduplication" href="https://en.wikipedia.org/wiki/Data_deduplication" title="Storing identical pieces of data once and pointing to that one copy wherever else they appear." rel="external">dedup</a> win).
     </p>
     <div class="drop" id="drop" tabindex="0" role="button">
       Drop a file here, or click to choose. Stays local.
@@ -177,8 +177,8 @@
       Once both sides address chunks by hash, sync is a set difference: the
       sender lists its chunk IDs, the receiver names the few it lacks, and only
       those bytes cross the wire: the <strong>delta wire format</strong>.
-      The last piece is trust: <strong>Bao verified slices</strong> wrap a
-      BLAKE3 tree so you can stream-verify <em>any</em> byte range against the
+      The last piece is trust: <strong><a class="term" data-t="bao" href="https://github.com/oconnor663/bao" title="A format and tool built on BLAKE3 that lets you verify any slice of a file against its root hash while streaming it." rel="external">Bao</a> verified slices</strong> wrap a
+      <a class="term" data-t="blake3" href="https://github.com/BLAKE3-team/BLAKE3" title="A fast cryptographic hash function. It hashes a file as a tree of chunks, so work runs in parallel and parts can be verified alone." rel="external">BLAKE3</a> <a class="term" data-t="merkle-tree" href="https://en.wikipedia.org/wiki/Merkle_tree" title="A tree of hashes where each parent hashes its children, so one root hash vouches for every piece below it." rel="external">tree</a> so you can stream-verify <em>any</em> byte range against the
       root hash without fetching the whole file. <code>crypto.subtle</code> has
       no BLAKE3, so the demos above use SHA-256 for the content IDs; the shape of
       the argument is identical, and mkit uses BLAKE3 + Bao for the real thing.
@@ -199,7 +199,7 @@
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>FastCDC + content-addressing re-created in pure JS + Web Crypto · concepts credit officialunofficial/mkit</small></p>
+      <p><small>FastCDC + content-addressing re-created in pure JS + <a class="term" data-t="web-crypto" href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API" title="The browser's built-in cryptography toolkit for scripts, offering hashing, encryption and signatures." rel="external">Web Crypto</a> · concepts credit officialunofficial/mkit</small></p>
     </footer>
     <hr>
     <section id="luq" aria-label="understanding check"></section>

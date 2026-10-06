@@ -179,12 +179,12 @@
     {
       "who": "you",
       "time": "23:01",
-      "html": "<p>the garage page runs one photo through jpeg, zenjpeg, and avif and prints three different sizes. before I trust those numbers, tell me why one image even gives three sizes.</p>"
+      "html": "<p>the garage page runs one photo through <a class=\"term\" data-t=\"jpeg\" href=\"https://en.wikipedia.org/wiki/JPEG\" title=\"The standard photo format since 1992. It shrinks images by discarding fine detail the eye is unlikely to miss.\" rel=\"external\">jpeg</a>, <a class=\"term\" data-t=\"zenjpeg\" href=\"https://github.com/imazen/zenjpeg\" title=\"A JPEG encoder and decoder in Rust from Imazen. It began as a port of Google's jpegli and adds perceptual tuning and trellis quantization.\" rel=\"external\">zenjpeg</a>, and <a class=\"term\" data-t=\"avif\" href=\"https://en.wikipedia.org/wiki/AVIF\" title=\"An image format that stores a picture compressed with the AV1 video codec. Every current major browser can display it.\" rel=\"external\">avif</a> and prints three different sizes. before I trust those numbers, tell me why one image even gives three sizes.</p>"
     },
     {
       "who": "bot",
       "time": "23:01",
-      "html": "<p>An encoder throws away the detail your eye skips, then packs what survives. The three differ in how hard they push each step.</p><p><b>JPEG</b> (1992) cuts the photo into 8x8 blocks, runs a cosine transform, and rounds off the high-frequency parts. <b>jpegli</b> (Google, 2024) keeps the exact JPEG format but rounds smarter, so it fits roughly 25% more quality into the same bytes as the old mozjpeg encoder. <b>AVIF</b> borrows AV1's video tricks, larger blocks and sharper prediction, so it usually wins on bytes-per-pixel outright.</p>"
+      "html": "<p>An encoder throws away the detail your eye skips, then packs what survives. The three differ in how hard they push each step.</p><p><b>JPEG</b> (1992) cuts the photo into 8x8 blocks, runs a <a class=\"term\" data-t=\"dct\" href=\"https://en.wikipedia.org/wiki/Discrete_cosine_transform\" title=\"Discrete cosine transform: math that rewrites a block of pixels as a sum of smooth wave patterns. JPEG stores those wave strengths instead of pixels.\" rel=\"external\">cosine transform</a>, and rounds off the high-frequency parts. <b>jpegli</b> (Google, 2024) keeps the exact JPEG format but rounds smarter, so it fits roughly 25% more quality into the same bytes as the old <a class=\"term\" data-t=\"mozjpeg\" href=\"https://github.com/mozilla/mozjpeg\" title=\"Mozilla's JPEG encoder, which makes smaller standard JPEG files than the reference libjpeg at the same quality.\" rel=\"external\">mozjpeg</a> encoder. <b>AVIF</b> borrows <a class=\"term\" data-t=\"av1\" href=\"https://en.wikipedia.org/wiki/AV1\" title=\"A royalty-free video codec from the Alliance for Open Media. AVIF images are single AV1 frames stored in an image file.\" rel=\"external\">AV1</a>'s video tricks, larger blocks and sharper prediction, so it usually wins on bytes-per-pixel outright.</p>"
     },
     {
       "who": "you",
@@ -263,7 +263,7 @@
     {
       "who": "bot",
       "time": "23:07",
-      "html": "<p>It models your eye instead of trusting the fixed 1992 quantization tables. jpegli works in the XYB color space, which spaces colors the way you perceive them, sets the quantization adaptively per block by what you would actually notice, and rounds with adaptive dead-zones. The output is still a standard JPEG that any decoder reads, but more bits land where your eye looks and fewer on detail you would never see. That is the rough 25% it gains over the old mozjpeg encoder.</p><p>The site rode jpegli for exactly that reason, then moved to <b>zenjpeg</b> in 2026-07. It reaches the same goal by a different road: hybrid trellis quantization plus a search across 64 candidate progressive scan scripts, which lands a few percent under jpegli at matched quality.</p>"
+      "html": "<p>It models your eye instead of trusting the fixed 1992 <a class=\"term\" data-t=\"quantization\" href=\"https://en.wikipedia.org/wiki/Quantization_(image_processing)\" title=\"The lossy step in compression: rounding values to a coarser set of levels. The quantizer setting decides how coarse, trading file size against detail.\" rel=\"external\">quantization tables</a>. jpegli works in the XYB color space, which spaces colors the way you perceive them, sets the quantization adaptively per block by what you would actually notice, and rounds with adaptive dead-zones. The output is still a standard JPEG that any decoder reads, but more bits land where your eye looks and fewer on detail you would never see. That is the rough 25% it gains over the old mozjpeg encoder.</p><p>The site rode jpegli for exactly that reason, then moved to <b>zenjpeg</b> in 2026-07. It reaches the same goal by a different road: hybrid <a class=\"term\" data-t=\"trellis-quantization\" href=\"https://en.wikipedia.org/wiki/Trellis_quantization\" title=\"An encoder search that tries alternative rounding choices for each block and keeps whichever gives the best trade of file size against error.\" rel=\"external\">trellis quantization</a> plus a search across 64 candidate progressive scan scripts, which lands a few percent under jpegli at matched quality.</p>"
     },
     {
       "who": "you",
@@ -341,7 +341,7 @@
     {
       "who": "bot",
       "time": "23:11",
-      "html": "<p>That&apos;s the model, and the garage page measured it. With no compression at all, halving a tile&apos;s color and restoring it scores 93.1 to 93.5 on SSIMULACRA2, against 96.3 for the same round trip on a crop at native size. The downscale is what makes subsampling expensive.</p><p>Keeping it costs almost nothing, because color in a shrunken photo is smooth and AV1 codes smooth planes cheaply. At the same file size, 4:4:4 scored higher on 18 of 24 photos at the 600px tier; 4:2:0 needs a median 2.2% more bytes to catch up.</p>",
+      "html": "<p>That&apos;s the model, and the garage page measured it. With no compression at all, halving a tile&apos;s color and restoring it scores 93.1 to 93.5 on <a class=\"term\" data-t=\"ssimulacra2\" href=\"https://github.com/cloudinary/ssimulacra2\" title=\"A perceptual image quality score from Cloudinary, built to match how people judge compressed photos. Higher is better, and about 90 is hard to tell from the original.\" rel=\"external\">SSIMULACRA2</a>, against 96.3 for the same round trip on a crop at native size. The downscale is what makes subsampling expensive.</p><p>Keeping it costs almost nothing, because color in a shrunken photo is smooth and AV1 codes smooth planes cheaply. At the same file size, 4:4:4 scored higher on 18 of 24 photos at the 600px tier; 4:2:0 needs a median 2.2% more bytes to catch up.</p>",
       "cite": {
         "url": "/garage/encoding",
         "title": "garage encoding study, the chroma section"
@@ -355,7 +355,7 @@
     {
       "who": "bot",
       "time": "23:11",
-      "html": "<p>Under red light. Red carries only 0.299 of the brightness in the BT.601 matrix these files use, so in a red scene the fine detail lives in the color planes rather than in luma. One night frame of bare branches against red windows, the one the real-photo grid above is cut from, needs 35% more bytes at 4:2:0 to match 4:4:4.</p>"
+      "html": "<p>Under red light. Red carries only 0.299 of the brightness in the <a class=\"term\" data-t=\"bt-601\" href=\"https://en.wikipedia.org/wiki/Rec._601\" title=\"A video standard whose matrix converts red, green and blue into one brightness and two colour channels, with red weighted at 0.299 of brightness.\" rel=\"external\">BT.601</a> matrix these files use, so in a red scene the fine detail lives in the color planes rather than in luma. One night frame of bare branches against red windows, the one the real-photo grid above is cut from, needs 35% more bytes at 4:2:0 to match 4:4:4.</p>"
     },
     {
       "who": "you",
@@ -401,7 +401,7 @@
     {
       "who": "bot",
       "time": "23:14",
-      "html": "<p>It depends on the script, and the three sizes above show it. A progressive AC scan can code a long run of all-zero blocks as one symbol, and each scan can carry Huffman tables fitted to its own statistics, which usually beats one table set for everything. Refinement scans pay some of that back in correction bits. On this photo libjpeg's standard 10-scan script comes out <b>1.7% larger</b> than baseline, while zenjpeg's searched 7-scan order comes out <b>0.6% smaller</b>. So a smaller progressive file is a property of a good script, and the search that found this one scored bytes alone.</p>"
+      "html": "<p>It depends on the script, and the three sizes above show it. A progressive AC scan can code a long run of all-zero blocks as one symbol, and each scan can carry <a class=\"term\" data-t=\"huffman-coding\" href=\"https://en.wikipedia.org/wiki/Huffman_coding\" title=\"A lossless coding method that gives short bit codes to common symbols and longer ones to rare symbols, shrinking the total.\" rel=\"external\">Huffman</a> tables fitted to its own statistics, which usually beats one table set for everything. Refinement scans pay some of that back in correction bits. On this photo libjpeg's standard 10-scan script comes out <b>1.7% larger</b> than baseline, while zenjpeg's searched 7-scan order comes out <b>0.6% smaller</b>. So a smaller progressive file is a property of a good script, and the search that found this one scored bytes alone.</p>"
     },
     {
       "who": "you",

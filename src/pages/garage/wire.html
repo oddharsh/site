@@ -93,7 +93,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
     <p class="lede">
       This site was no-build on principle: every page inline, every byte committed
       the way it ships. This is the story of the first build step that earned its
-      place anyway, the brotli rabbit hole that led there, the
+      place anyway, the <a class="term" data-t="brotli" href="https://en.wikipedia.org/wiki/Brotli" title="A compression algorithm from Google built for the web. It ships with a built-in dictionary of common web text, which helps on small files." rel="external">brotli</a> rabbit hole that led there, the
       <a href="https://github.com/oxc-project/oxc" rel="external">Oxc</a> and
       <a href="https://github.com/parcel-bundler/lightningcss" rel="external">Lightning CSS</a>
       knobs that survived contact with the real site, and the cache layer that finally
@@ -104,10 +104,10 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
     <h2>Where compression actually happens</h2>
     <p>The naive model says "Cloudflare serves brotli, so the bytes are as small as
       brotli gets." The real model has tiers. Brotli has quality levels 0 to 11:
-      level 11 is the slow, offline, squeeze-everything setting, and no CDN runs it
+      level 11 is the slow, offline, squeeze-everything setting, and no <a class="term" data-t="cdn" href="https://en.wikipedia.org/wiki/Content_delivery_network" title="A content delivery network: servers spread around the world that keep copies of a site's files close to visitors so pages load faster." rel="external">CDN</a> runs it
       on the fly, because compressing at q11 costs more time than it saves.
       Cloudflare's edge compresses dynamic and pass-through responses at roughly
-      <strong>gzip quality</strong>. Measured on the homepage: the edge served
+      <strong><a class="term" data-t="gzip" href="https://en.wikipedia.org/wiki/Gzip" title="The oldest compression format every browser accepts for web pages. It's fast and universal, and its files come out larger than brotli's or zstd's." rel="external">gzip</a> quality</strong>. Measured on the homepage: the edge served
       <code class="m">31,360</code> bytes as brotli and <code class="m">31,188</code>
       as gzip, nearly identical. A local brotli q11 of the same document:
       <code class="m">25,099</code>. That gap, roughly 12 to 16% on every text asset,
@@ -140,8 +140,8 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
         <code class="m">content-encoding: br</code> and
         <code class="m">encodeBody: "manual"</code>, which tells the runtime the body
         is already compressed. But that means the asset goes back through the worker
-        (undoing the zero-invocation edge-direct routing), plus Accept-Encoding
-        negotiation and Vary correctness, to beat the edge's own brotli by ~3KB on a
+        (undoing the zero-invocation edge-direct routing), plus <a class="term" data-t="accept-encoding" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept-Encoding" title="The HTTP request header where a browser lists the compression formats it can decode, such as gzip, br and zstd." rel="external">Accept-Encoding
+        negotiation</a> and <a class="term" data-t="vary" href="https://www.rfc-editor.org/rfc/rfc9110.html#field.vary" title="A response header telling caches which request headers changed the answer, so they keep a separate copy for each variant." rel="external">Vary</a> correctness, to beat the edge's own brotli by ~3KB on a
         file that was about to get much smaller anyway. Rejected, narrowly, with the
         next section as the reason.</li>
     </ul>
@@ -154,7 +154,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       nothing in git and a meaningful part of the 82.8KB source file. Compression
       does not forgive all of that prose.</p>
     <p>So the split, and the compromise that finally justified a build: <strong>the
-      authoring stays buildless, the serving gets minified.</strong> One script
+      authoring stays buildless, the serving gets <a class="term" data-t="minification" href="https://en.wikipedia.org/wiki/Minification_(programming)" title="Stripping spaces, comments and long names out of code so it downloads smaller and still runs the same." rel="external">minified</a>.</strong> One script
       (<code class="m">build.ts</code>) stages a copy of the site, runs Oxc Minify
       <code class="m">0.140.0</code> over six independent client scripts, runs Lightning
       CSS <code class="m">1.32.0</code> over the shared stylesheet and marked Worker
@@ -190,7 +190,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
         <strong>tripwires</strong>: it fails the deploy if CSS emits a warning,
         loses a required route marker, or breaks the stylesheet's known-good rules, so
         "the transform broke something silently" is structurally impossible. And
-        Cloudflare's asset storage is content-addressed, so on the first minified
+        Cloudflare's asset storage is <a class="term" data-t="content-addressing" href="https://en.wikipedia.org/wiki/Content-addressable_storage" title="Naming each piece of data by a hash of its bytes, so the same content always gets the same name and any change gets a new one." rel="external">content-addressed</a>, so on the first minified
         deploy the six <code class="m">.src.js</code> twins uploaded as "already
         uploaded": their bytes were identical to the shells the previous deploy had
         shipped. The readable originals were already in storage, just under a
@@ -208,7 +208,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       <code class="m">@minify-html/node</code> handles document structure with its own
       JavaScript and CSS transforms disabled. Before that pass, homepage inline CSS goes
       through the existing Lightning CSS settings and executable inline JavaScript goes
-      through the existing Oxc settings. JSON-LD and speculation rules are data, not
+      through the existing Oxc settings. JSON-LD and <a class="term" data-t="speculation-rules" href="https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API" title="A browser API where a page lists links the browser may fetch or fully render ahead of time, so the next page appears instantly on click." rel="external">speculation rules</a> are data, not
       JavaScript, so they remain untouched.</p>
     <div class="callout">
       <strong>Structure gets smaller; meaning stays put.</strong> The served copy may lose
@@ -284,7 +284,7 @@ transition:filter 60ms ease-out}</pre></figure>
         <tr><td>shared external <code>luna.css</code></td><td>64.2KB &rarr; 36.0KB</td><td class="y">16.3KB &rarr; 7.4KB</td><td class="y">shipped: render-blocking + comment-heavy</td></tr>
         <tr><td>the CSS strings inside nav.js</td><td>&minus;703 bytes</td><td class="n">GREW by 44 bytes</td><td class="n">rejected by the measurement itself</td></tr>
       </tbody>
-      <caption>The CSS-in-JS row is the fun one: minified CSS is higher-entropy per byte, and inside
+      <caption>The CSS-in-JS row is the fun one: minified CSS is <a class="term" data-t="entropy" href="https://en.wikipedia.org/wiki/Entropy_(information_theory)" title="A measure of how unpredictable data is. The less predictable the bytes, the less a compressor can shrink them." rel="external">higher-entropy</a> per byte, and inside
         an already-minified JS file it compresses WORSE than the verbose original. Brotli voted no.</caption>
     </table>
 
@@ -402,8 +402,8 @@ transition:filter 60ms ease-out}</pre></figure>
       header was decorative. Every visit to <a href="/lens">/lens</a> re-assembled a
       byte-identical shell; every visit to <a href="/writing">/writing</a> re-fetched
       every post's text just to print character counts.</p>
-    <p>The fix is the Workers Cache API, <code class="m">caches.default</code>: on miss,
-      render and store; on hit, serve from the colo. Three rules carried over from
+    <p>The fix is the <a class="term" data-t="workers-cache-api" href="https://developers.cloudflare.com/workers/runtime-apis/cache/" title="The interface a Cloudflare Worker uses to store responses in the local data center's cache and serve them on later requests." rel="external">Workers Cache API</a>, <code class="m">caches.default</code>: on miss,
+      render and store; on hit, serve from the <a class="term" data-t="colo" href="https://en.wikipedia.org/wiki/Colocation_centre" title="Short for colocation center, a shared data center. At Cloudflare it means one of the data centers that answers visitors nearby." rel="external">colo</a>. Three rules carried over from
       this site's scar tissue: <strong>only status 200 is ever stored</strong> (this
       site once served homepage HTML at thumbnail URLs with a year-long cache header,
       and does not repeat mistakes it has written down), TTLs stay short and honest
@@ -431,8 +431,8 @@ transition:filter 60ms ease-out}</pre></figure>
       at deploy, where q11 costs nothing, and fetch only the part that actually changes, as
       a small fragment after load.</p>
     <p>A document built at deploy gets four things a Worker response can't have: a q11 twin,
-      a <a href="/garage/compression">dcz delta</a> against the family dictionary, an ETag
-      that turns a return visit into a 304 with no body, and sha256 hashes in its script
+      a <a href="/garage/compression">dcz delta</a> against the family dictionary, an <a class="term" data-t="etag" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag" title="An HTTP response header that names one exact version of a file, so a cache can ask whether its copy is still current." rel="external">ETag</a>
+      that turns a return visit into a <a class="term" data-t="http-304" href="https://www.rfc-editor.org/rfc/rfc9110.html#status.304" title="The HTTP status code saying the browser's cached copy is still current, so the server sends no body." rel="external">304</a> with no body, and <a class="term" data-t="sha-256" href="https://en.wikipedia.org/wiki/SHA-2" title="A hash function that turns any input into a 256-bit fingerprint. Change one byte of the input and the fingerprint changes completely." rel="external">sha256</a> hashes in its script
       policy. The fragment loses nothing, because the whole page was already going out at
       the edge's quality.</p>
     <p>The homepage took this road first, on 2026-08-31. Its random photo grid and its
@@ -444,7 +444,7 @@ transition:filter 60ms ease-out}</pre></figure>
     <div class="callout">
       The shape lives in one module, <code class="m">lib/island.ts</code>. The placeholder
       comes from the same renderer as the fragment, so the swap moves nothing. The fragment
-      is preloaded from <code class="m">&lt;head&gt;</code> with
+      is <a class="term" data-t="preload" href="https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preload" title="A link hint that tells the browser to start downloading a file it will need soon, before it would otherwise discover it." rel="external">preloaded</a> from <code class="m">&lt;head&gt;</code> with
       <code class="m">crossorigin</code>, which is load-bearing even same-origin: without it
       the preload can't satisfy the script's fetch and the fragment downloads twice. The
       loader refuses any response missing an <code class="m">x-island</code> marker, since an
@@ -479,7 +479,7 @@ transition:filter 60ms ease-out}</pre></figure>
       read per request, yet it went out marked <code class="m">no-store</code>, so baking it
       took 34% off a first visit outright.</p>
     <p>The return visit is where it pays: a 304 for the shell, then a fragment of 479 bytes to
-      7KB, against the whole page again. The quieter win is latency. The dyno used to hold its
+      <data value="7,428 bytes">7KB</data>, against the whole page again. The quieter win is latency. The dyno used to hold its
       entire response behind a fetch to GitHub, with a 3-second budget, on every cold cache;
       now only the chart waits.</p>
     <p>Some pages don't fit, and the build names them. <a href="/reading">/reading</a> stays

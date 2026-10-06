@@ -89,7 +89,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
   </div><!-- /axp:window -->
   <div class="content prose">
     <h1>A masonry contact sheet</h1>
-    <p class="lede">The homepage grid crops every photo to a 1:1 square: <code>object-fit: cover</code> drops each one into the same cell. <strong><a href="https://drafts.csswg.org/css-grid-3/" rel="external">CSS Grid Lanes</a></strong> (<code>display: grid-lanes</code>, shipped in Safari&nbsp;27; see <a href="/garage/safari27">the Safari 27 notes</a>) lays the columns on a grid but stacks the rows masonry-style, so a portrait and a landscape sit side by side at their true heights. No JavaScript lays anything out, no media queries fire.</p>
+    <p class="lede">The homepage grid crops every photo to a 1:1 square: <code>object-fit: cover</code> drops each one into the same cell. <strong><a href="https://drafts.csswg.org/css-grid-3/" rel="external">CSS Grid Lanes</a></strong> (<code>display: grid-lanes</code>, shipped in Safari&nbsp;27; see <a href="/garage/safari27">the Safari 27 notes</a>) lays the columns on a grid but stacks the rows <a class="term" data-t="masonry" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Grid_lanes" title="A layout that stacks items in columns at their natural heights, each filling the gap under the one above, like bricks in a wall." rel="external">masonry</a>-style, so a portrait and a landscape sit side by side at their true heights. No JavaScript lays anything out, no <a class="term" data-t="media-queries" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Media_queries" title="CSS rules that apply only when the screen matches a condition, such as a width range, so a page can rearrange itself." rel="external">media queries</a> fire.</p>
 
     <div class="bar">
       <span class="chip" id="cap">checking <code>display: grid-lanes</code>…</span>
@@ -103,7 +103,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
     <div class="sheet masonry" id="sheet" aria-label="photo contact sheet"><p class="empty">Loading the pool…</p></div>
 
     <hr>
-    <p style="font-size:9pt;color:oklch(45% 0 0)">Same markup both ways. One line differs: <code>display: grid-lanes</code> behind an <code>@supports</code> guard, with EXIF pinning each photo's <code>aspect-ratio</code> so nothing reflows as the images load. Browsers without Grid Lanes fall back to the squares. Still a prototype: the live homepage ships the squares.</p>
+    <p style="font-size:9pt;color:oklch(45% 0 0)">Same markup both ways. One line differs: <code>display: grid-lanes</code> behind an <code>@supports</code> guard, with <a class="term" data-t="exif" href="https://en.wikipedia.org/wiki/Exif" title="Metadata a camera writes into a photo: exposure settings, date, lens, and an Orientation tag saying which way up to show it." rel="external">EXIF</a> pinning each photo's <code>aspect-ratio</code> so nothing <a class="term" data-t="reflow" href="https://developer.mozilla.org/en-US/docs/Glossary/Reflow" title="The browser recomputing the size and position of elements on a page, which makes content jump when something like an image finishes loading." rel="external">reflows</a> as the images load. Browsers without Grid Lanes fall back to the squares. Still a prototype: the live homepage ships the squares.</p>
     <hr>
     <section id="luq" aria-label="understanding check"></section>
   </div>

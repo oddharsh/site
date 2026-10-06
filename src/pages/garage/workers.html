@@ -57,9 +57,9 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
   <div class="content prose">
     <h1>Off Pages, onto Workers</h1>
     <p class="lede">
-      This site ran on <b>Cloudflare Pages</b> its whole life: a static
+      This site ran on <b><a class="term" data-t="cloudflare-pages" href="https://developers.cloudflare.com/pages/" title="Cloudflare's hosting service for static websites and front-end apps, deployed straight from a Git repository." rel="external">Cloudflare Pages</a></b> its whole life: a static
       <code class="m">index.html</code> plus a <code class="m">_worker.js</code> in Pages
-      advanced mode. On <b>2026-06-30</b> it moved to <b>Cloudflare Workers with static
+      advanced mode. On <b>2026-06-30</b> it moved to <b><a class="term" data-t="cloudflare-workers" href="https://developers.cloudflare.com/workers/" title="Code that runs on Cloudflare's servers around the world and answers each request directly, with no server of the site's own." rel="external">Cloudflare Workers</a> with static
       assets</b>. Same <code class="m">www/</code> folder, same worker code, byte-for-byte
       identical responses (I diffed them before flipping the domain). What changed is
       everything <em>around</em> the bytes: how it deploys, what it can bind, and where its
@@ -76,8 +76,8 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       where the shell is live and the brain is missing.</p>
 
     <h2>The real unlock: configuration as code</h2>
-    <p>On Pages, the project&apos;s wiring lived in the dashboard. The KV namespace, the R2
-      bucket, the D1 database, the Durable Object, the environment variables: all clicked in
+    <p>On Pages, the project&apos;s wiring lived in the dashboard. The <a class="term" data-t="workers-kv" href="https://developers.cloudflare.com/kv/" title="Cloudflare's key-value store: values saved under names and copied worldwide, so reads are fast everywhere while a new write can take a minute to spread." rel="external">KV namespace</a>, the <a class="term" data-t="r2" href="https://developers.cloudflare.com/r2/" title="Cloudflare's object storage for files. It speaks Amazon S3's API and charges nothing for downloading data back out." rel="external">R2</a>
+      bucket, the <a class="term" data-t="d1" href="https://developers.cloudflare.com/d1/" title="Cloudflare's SQL database for Workers, built on SQLite." rel="external">D1 database</a>, the <a class="term" data-t="durable-object" href="https://developers.cloudflare.com/durable-objects/" title="A Cloudflare Workers object with its own built-in storage, where each named instance lives in one place so every request to it is coordinated." rel="external">Durable Object</a>, the environment variables: all clicked in
       through a web UI, invisible to git, undocumented outside my own memory, impossible to diff
       or review. Rebuilding the project meant remembering every toggle I had ever flipped.</p>
     <p>On Workers, all of it is one checked-in file, <code class="m">wrangler.jsonc</code>. One
@@ -112,9 +112,9 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
 
     <div class="cf-feat">
       <h2>1 &middot; Granular routing (already shipped)</h2>
-      <p>That <code class="m">run_worker_first</code> array is a denylist. The worker sees every
+      <p>That <code class="m">run_worker_first</code> array is a <a class="term" data-t="denylist" href="https://en.wikipedia.org/wiki/Blacklist_(computing)" title="A list of things to block, where anything not on the list is allowed through by default." rel="external">denylist</a>. The worker sees every
         request except the paths I negate with <code class="m">!</code>, which serve straight from
-        the edge and never wake it. I just cut the <b>avif thumbnails</b> loose: they are the
+        the edge and never wake it. I just cut the <b><a class="term" data-t="avif" href="https://en.wikipedia.org/wiki/AVIF" title="An image format that stores a picture compressed with the AV1 video codec. Every current major browser can display it." rel="external">avif</a> thumbnails</b> loose: they are the
         primary, highest-volume image format (every modern browser takes the avif
         <code class="m">&lt;source&gt;</code>), so serving them edge-direct drops a worker
         invocation off the busiest request on the site.</p>
@@ -145,7 +145,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
         The old Pages hazard was a deploy race: a real thumbnail could 404 for a blink during a
         deploy, and Cloudflare&apos;s edge would then cache that 404 for hours. Atomic deploys
         remove the blink, so there is no transient miss of a file that actually exists. Workers
-        also supports versioned, gradual rollouts (ship a version to 10% of traffic first), which
+        also supports versioned, <a class="term" data-t="gradual-deployments" href="https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/" title="Moving live traffic to a new version of a Worker a percentage at a time, so the old and new versions serve side by side." rel="external">gradual rollouts</a> (ship a version to 10% of traffic first), which
         Pages never offered for production.</p>
     </div>
 
@@ -163,15 +163,15 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
     <p>Things the move makes reachable that I have not built yet, kept honest because none of them
       ship today:</p>
     <ul class="tight">
-      <li><b>Cron Triggers.</b> A Worker can run on a schedule; Pages cannot. The Spotify
+      <li><b><a class="term" data-t="cron-triggers" href="https://developers.cloudflare.com/workers/configuration/cron-triggers/" title="Cloudflare's way to run a Worker on a schedule, like every hour, written in cron syntax." rel="external">Cron Triggers</a>.</b> A Worker can run on a schedule; Pages cannot. The Spotify
         now-playing cache, the <a href="/around">/around</a> crawl, and the (undeployed)
         <code class="m">cal/</code> booking sweep are all lazy-on-request today. Any of them could
         move to a scheduled handler that warms the cache before a visitor ever asks.</li>
-      <li><b>Service bindings, Queues, Workflows, Containers.</b> All bindable from the same
+      <li><b><a class="term" data-t="service-bindings" href="https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/" title="A Cloudflare link that lets one Worker call another directly, without a trip over the public internet." rel="external">Service bindings</a>, <a class="term" data-t="cloudflare-queues" href="https://developers.cloudflare.com/queues/" title="Cloudflare's message queue: one Worker drops tasks in, and another works through them later, in batches and with retries." rel="external">Queues</a>, <a class="term" data-t="cloudflare-workflows" href="https://developers.cloudflare.com/workflows/" title="A Cloudflare Workers feature for multi-step jobs that saves progress after each step and retries the ones that fail." rel="external">Workflows</a>, Containers.</b> All bindable from the same
         config, none of which fit Pages advanced mode cleanly. I do not need them for a personal
         site, but the ceiling moved.</li>
       <li><b>Compression.</b> Left at the platform default in this move. The old plan to ship
-        precompressed brotli twins died on Pages (it ignored uploaded <code class="m">.br</code>
+        precompressed <a class="term" data-t="brotli" href="https://en.wikipedia.org/wiki/Brotli" title="A compression algorithm from Google built for the web. It ships with a built-in dictionary of common web text, which helps on small files." rel="external">brotli</a> twins died on Pages (it ignored uploaded <code class="m">.br</code>
         siblings). On Workers it is revisitable, just not done.</li>
     </ul>
 

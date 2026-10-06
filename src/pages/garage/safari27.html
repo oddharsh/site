@@ -98,7 +98,7 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
   </div><!-- /axp:window -->
   <div class="content prose">
     <h1>Safari 27, through this site&apos;s lens</h1>
-    <p class="lede">WWDC26 shipped <strong>Safari 27</strong> (macOS&nbsp;27 "Golden Gate," iOS/iPadOS&nbsp;27, visionOS&nbsp;27): ~58 new web-platform features. This site already leans on a bunch of them, so this cut shows where the platform caught up rather than the whole changelog. Source: the WebKit team&apos;s <a href="https://webkit.org/blog/17967/news-from-wwdc26-webkit-in-safari-27-beta/" rel="external">News from WWDC26: WebKit in Safari&nbsp;27 beta</a>.</p>
+    <p class="lede"><a class="term" data-t="wwdc" href="https://en.wikipedia.org/wiki/Worldwide_Developers_Conference" title="Apple's Worldwide Developers Conference, held each June, where it announces new operating systems and developer tools." rel="external">WWDC26</a> shipped <strong>Safari 27</strong> (macOS&nbsp;27 "Golden Gate," iOS/iPadOS&nbsp;27, visionOS&nbsp;27): ~58 new web-platform features. This site already leans on a bunch of them, so this cut shows where the platform caught up rather than the whole changelog. Source: the <a class="term" data-t="webkit" href="https://en.wikipedia.org/wiki/WebKit" title="The open-source browser engine that powers Safari." rel="external">WebKit</a> team&apos;s <a href="https://webkit.org/blog/17967/news-from-wwdc26-webkit-in-safari-27-beta/" rel="external">News from WWDC26: WebKit in Safari&nbsp;27 beta</a>.</p>
 
     <p class="lede" style="font-size:9.5pt">Every card says what Safari&nbsp;27 brings, and the strip below runs a <strong>live check of <em>your</em> browser</strong>. This whole site bets on high-octane fuel: when the engine has a feature it burns it, otherwise it falls back. "Not in your browser" never means broken.</p>
 
@@ -108,7 +108,7 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
 
     <section class="demo">
       <h2><span><code>appearance: base-select</code></span> <span class="stat stable" data-feat="base-select">now stable</span></h2>
-      <p class="sub">Style a real <code>&lt;select&gt;</code>, dropdown and all, with CSS. No JS rebuild, no accessibility loss. Safari&nbsp;27 takes it stable and adds the <code>::picker-icon</code> and <code>::checkmark</code> pseudo-elements.</p>
+      <p class="sub">Style a real <code>&lt;select&gt;</code>, dropdown and all, with CSS. No JS rebuild, no accessibility loss. Safari&nbsp;27 takes it stable and adds the <code>::picker-icon</code> and <code>::checkmark</code> <a class="term" data-t="pseudo-element" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/Pseudo-elements" title="A CSS selector for a part of an element that has no tag of its own, such as ::before or a dropdown's picker icon, so it can be styled." rel="external">pseudo-elements</a>.</p>
       <label>Film simulation:
         <select class="s27-sel" aria-label="film simulation">
           <option>Provia / Standard</option>
@@ -118,20 +118,20 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
           <option>Nostalgic Neg.</option>
         </select>
       </label>
-      <p class="ours">On this site: the homepage and the <a href="/garage/horizon">horizon</a> demo already ship a Luna-styled base-select with a beveled drop-button, behind an <code>@supports</code> guard, so browsers without it get the native dropdown. Safari going stable just means more visitors see the styled one, with zero code change here.</p>
+      <p class="ours">On this site: the homepage and the <a href="/garage/horizon">horizon</a> demo already ship a Luna-styled <a class="term" data-t="customizable-select" href="https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Customizable_select" title="The CSS value appearance: base-select, which lets a page fully style a native select dropdown, including its open list of options." rel="external">base-select</a> with a beveled drop-button, behind an <code>@supports</code> guard, so browsers without it get the native dropdown. Safari going stable just means more visitors see the styled one, with zero code change here.</p>
     </section>
 
     <section class="demo">
       <h2><span>Anchor positioning upgrades</span> <span class="stat" data-feat="anchor">Safari 27</span></h2>
       <p class="sub">Safari&nbsp;27 makes anchored elements follow <em>transformed</em> positions, and adds <code>position-anchor: normal | none</code> plus refined <code>anchor-valid</code> / <code>anchor-visible</code> matching.</p>
       <p class="s27-anchor-wrap"><button type="button" class="xp-button compact s27-anchor-btn">hover me</button><span class="s27-note" role="note">I&apos;m pinned to that button with <code>position-anchor</code> + <code>anchor()</code>, no JS measuring. In Safari&nbsp;27 I&apos;d track it even through CSS transforms.</span></p>
-      <p class="ours">On this site: the photo and track tooltips use CSS anchor positioning as the JS-free keyboard fallback. Transform-aware anchoring matters here because windows move via <code>transform</code> when you drag them, so an anchored popover can stay glued to a window mid-drag.</p>
+      <p class="ours">On this site: the photo and track tooltips use CSS <a class="term" data-t="anchor-positioning" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Anchor_positioning" title="A CSS feature that places one element relative to another, such as a tooltip pinned to its button, without JavaScript measuring positions." rel="external">anchor positioning</a> as the JS-free keyboard fallback. Transform-aware anchoring matters here because windows move via <code>transform</code> when you drag them, so an anchored <a class="term" data-t="popover-api" href="https://developer.mozilla.org/en-US/docs/Web/API/Popover_API" title="A browser API for showing content above the rest of the page, such as menus and tooltips, with built-in show, hide and dismiss behavior." rel="external">popover</a> can stay glued to a window mid-drag.</p>
     </section>
 
     <section class="demo">
       <h2><span>Scroll anchoring</span> <span class="stat" data-feat="scroll-anchor">Safari 27</span></h2>
       <p class="sub">When content loads <em>above</em> the viewport, the browser keeps your scroll position instead of jumping. Controlled with <code>overflow-anchor</code>.</p>
-      <p class="ours">On this site: every page is a pinned window whose <code>.content</code> scrolls internally. When content lands above the fold late (a lazy image, the server-injected tracklist), scroll anchoring kills exactly that jump, native in Safari now, no JS scroll-restoration to hand-write.</p>
+      <p class="ours">On this site: every page is a pinned window whose <code>.content</code> scrolls internally. When content lands above the fold late (a lazy image, the server-injected tracklist), <a class="term" data-t="scroll-anchoring" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Scroll_anchoring" title="A browser behavior that keeps what you are reading in place when content loads or grows above it, so the page doesn't jump." rel="external">scroll anchoring</a> kills exactly that jump, native in Safari now, no JS scroll-restoration to hand-write.</p>
     </section>
 
     <section class="demo">
@@ -152,18 +152,18 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
 color: revert-rule;      /* roll one cascade rule back, not the whole property */
 contain: style;          /* scope CSS counters / quotes to a subtree    */
 color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre>
-      <p class="ours">On this site: <code>contain: style</code> is the honest version of the quote/counter scoping we avoid; the linear color spaces pair with the OKLCH + P3 work already in the homepage.</p>
+      <p class="ours">On this site: <code>contain: style</code> is the honest version of the quote/counter scoping we avoid; the linear color spaces pair with the <a class="term" data-t="oklch" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/oklch" title="A CSS color notation built from lightness, chroma and hue, arranged so equal steps in the numbers look like equal steps to the eye." rel="external">OKLCH</a> + P3 work already in the homepage.</p>
     </section>
 
     <section class="demo">
       <h2><span>Platform &amp; worker upgrades</span> <span class="stat" data-feat="platform">Safari 27</span></h2>
       <p class="sub">The structural, less visible upgrades:</p>
       <ul style="margin:0 0 8px 0; padding-left:20px; font-size:9.5pt">
-        <li><strong>Top-level <code>await</code></strong>, off a full ESM-loader rewrite for standards compliance.</li>
-        <li><strong>WebAssembly JSPI</strong>, so synchronous Wasm can suspend and await JS promises.</li>
-        <li><strong>Service Worker static routing</strong>, routing rules that skip the SW entirely.</li>
-        <li><strong>Transferable streams</strong>, plus <code>ReadableStream.from()</code> and async iteration.</li>
-        <li><strong>Cookie Store API <code>maxAge</code></strong>.</li>
+        <li><strong>Top-level <code>await</code></strong>, off a full <a class="term" data-t="es-module" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules" title="JavaScript's built-in module format, where files share code through import and export statements." rel="external">ESM</a>-loader rewrite for standards compliance.</li>
+        <li><strong><a class="term" data-t="jspi" href="https://v8.dev/blog/jspi" title="JavaScript Promise Integration: a WebAssembly feature that lets synchronous Wasm code pause while it waits on a JavaScript promise, then resume." rel="external">WebAssembly JSPI</a></strong>, so synchronous Wasm can suspend and await JS promises.</li>
+        <li><strong><a class="term" data-t="service-worker" href="https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API" title="A script a site installs in the browser that sits between its pages and the network and can answer requests from a local cache." rel="external">Service Worker</a> static routing</strong>, routing rules that skip the SW entirely.</li>
+        <li><strong><a class="term" data-t="transferable-streams" href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects" title="Streams that can be handed from one thread to another, such as to a worker, so the data moves without being copied." rel="external">Transferable streams</a></strong>, plus <code>ReadableStream.from()</code> and async iteration.</li>
+        <li><strong><a class="term" data-t="cookie-store-api" href="https://developer.mozilla.org/en-US/docs/Web/API/Cookie_Store_API" title="A promise-based browser API for reading and writing cookies, usable from service workers as well as pages." rel="external">Cookie Store API</a> <code>maxAge</code></strong>.</li>
       </ul>
       <p class="ours">On this site: Service Worker static routing is the one I keep eyeing for <code>sw.js</code>. The cache-first / SWR / network-only split lives in JS in the fetch handler today; static routes could declare some of it and skip waking the worker at all.</p>
     </section>
@@ -178,7 +178,7 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
       <h2><span>The talks</span> <span class="stat">WWDC26</span></h2>
       <p class="sub">WebKit&apos;s <a href="https://webkit.org/blog/17974/web-technology-sessions-at-wwdc26/" rel="external">web-technology sessions roundup</a>. Six worth a watch; I flag the two that land squarely on this site.</p>
       <ul style="margin:0; padding-left:20px; font-size:9.5pt">
-        <li><a href="https://developer.apple.com/videos/play/wwdc2026/314/" rel="external"><strong>Grid Lanes</strong></a>: CSS-only masonry, no JavaScript.
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/314/" rel="external"><strong>Grid Lanes</strong></a>: CSS-only <a class="term" data-t="masonry" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Grid_lanes" title="A layout that stacks items in columns at their natural heights, each filling the gap under the one above, like bricks in a wall." rel="external">masonry</a>, no JavaScript.
           <span class="ours" style="display:block;margin:3px 0 8px">On this site: the <a href="/garage/horizon">horizon</a> page flagged masonry as "not shipped" mid-2026, and here it is shipping. A direct fit for the photo grid: a ragged-height contact sheet, no fixed-square crop.</span>
         </li>
         <li><a href="https://developer.apple.com/videos/play/wwdc2026/315/" rel="external"><strong>Customizable Select</strong></a>: the full <code>appearance: base-select</code> deep dive.

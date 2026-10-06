@@ -66,8 +66,8 @@ li { margin: 3px 0; }
     <h1>pretext: text measurement off the DOM <span class="badge idle">watching</span></h1>
     <p class="lede">
       <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
-      measures &amp; lays out multiline text using the <strong>canvas</strong> as
-      ground truth instead of the DOM, so you never trigger a reflow just to
+      measures &amp; lays out multiline text using the <strong><a class="term" data-t="canvas-api" href="https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API" title="The browser's drawing surface for scripts. Its drawImage call can copy an image onto it at a new size." rel="external">canvas</a></strong> as
+      ground truth instead of the DOM, so you never trigger a <a class="term" data-t="reflow" href="https://developer.mozilla.org/en-US/docs/Glossary/Reflow" title="The browser recomputing the size and position of elements on a page, which makes content jump when something like an image finishes loading." rel="external">reflow</a> just to
       ask &quot;how tall is this paragraph at 320px?&quot;
     </p>
 
@@ -80,13 +80,13 @@ li { margin: 3px 0; }
       reads <em>force a synchronous reflow</em>: the browser must lay out
       the page right then to answer. Do it once and it&apos;s fine; do it in a
       loop (virtualized lists, measuring hundreds of items, re-measuring on every
-      resize frame) and a reflow becomes one of the costliest things on the main
-      thread. pretext splits the work in two:
+      resize frame) and a reflow becomes one of the costliest things on the <a class="term" data-t="main-thread" href="https://developer.mozilla.org/en-US/docs/Glossary/Main_thread" title="The single thread where a browser runs a page's JavaScript, handles input and lays out the page, so long work there freezes everything." rel="external">main
+      thread</a>. pretext splits the work in two:
     </p>
     <ul>
       <li><strong><code>prepare(text, font)</code></strong>: the one-time
-        cost: normalize whitespace, segment (graphemes, not just chars, since it
-        handles CJK, Arabic, emoji, ZWJ), then measure each segment with canvas
+        cost: normalize whitespace, segment (<a class="term" data-t="grapheme-cluster" href="https://www.unicode.org/reports/tr29/" title="What a reader sees as one character, even when it is stored as several code points, such as an accented letter or an emoji with a skin tone." rel="external">graphemes</a>, not just chars, since it
+        handles <a class="term" data-t="cjk-characters" href="https://en.wikipedia.org/wiki/CJK_characters" title="Chinese, Japanese and Korean, grouped in computing because their writing systems share a large set of Chinese-derived characters." rel="external">CJK</a>, Arabic, emoji, <a class="term" data-t="zwj" href="https://en.wikipedia.org/wiki/Zero-width_joiner" title="An invisible Unicode character that joins its neighbors, used to combine several emoji into one, such as a family." rel="external">ZWJ</a>), then measure each segment with canvas
         <code>measureText</code>. Cache it. Never re-run for the same text+font.</li>
       <li><strong><code>layout(prepared, width, lineHeight)</code></strong>:
         the cheap part: <em>pure arithmetic</em> over the cached widths. Re-run
@@ -174,7 +174,7 @@ li { margin: 3px 0; }
         attendee lists ever get <em>virtualized</em> (only render what&apos;s
         on-screen), you need accurate row heights without mounting every row.
         That&apos;s pretext&apos;s home turf.</li>
-      <li><strong>CLS / scroll anchoring:</strong> measure incoming text
+      <li><strong><a class="term" data-t="cls" href="https://developer.mozilla.org/en-US/docs/Glossary/CLS" title="A score for how much visible content jumps around while a page loads; lower is better, and 0 means nothing moved." rel="external">CLS</a> / <a class="term" data-t="scroll-anchoring" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Scroll_anchoring" title="A browser behavior that keeps what you are reading in place when content loads or grows above it, so the page doesn't jump." rel="external">scroll anchoring</a>:</strong> measure incoming text
         before it paints to reserve the exact box, instead of <code>aspect-ratio</code>
         guesses. Niche here, but real.</li>
       <li><strong>The Fuji-LCD tooltip</strong> could pre-size itself to its
@@ -184,7 +184,7 @@ li { margin: 3px 0; }
 
     <h2>7 · Tradeoffs (why it stays &quot;watching&quot;)</h2>
     <ul>
-      <li><strong>Fonts must be loaded first.</strong> Measure before the webfont
+      <li><strong>Fonts must be loaded first.</strong> Measure before the <a class="term" data-t="web-font" href="https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Text_styling/Web_fonts" title="A font file a site sends along with its pages, so text shows in that typeface even when the reader's device lacks it." rel="external">webfont</a>
         swaps and every number is wrong. (aadhar.sh dodges this: it uses
         system Tahoma/Verdana, no webfont, which is also why the demo above
         agrees so closely.)</li>
@@ -213,9 +213,9 @@ li { margin: 3px 0; }
     <p class="replaces">
       <strong>On the dependency:</strong> this page runs the real
       <a href="https://github.com/chenglou/pretext" rel="external">github.com/chenglou/pretext</a>,
-      bundled to a single 12&nbsp;KB-brotli ES module and <em>vendored same-origin</em>
+      bundled to a single 12&nbsp;KB-brotli <a class="term" data-t="es-module" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules" title="JavaScript's built-in module format, where files share code through import and export statements." rel="external">ES module</a> and <em>vendored <a class="term" data-t="same-origin" href="https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy" title="The browser rule that treats a page's own scheme, host and port as one site, and limits what pages from other origins can read." rel="external">same-origin</a></em>
       at <code>/garage/pretext.lib.js</code>. Because it&apos;s served from
-      <code>'self'</code>, the existing CSP needs <em>no change</em>, so
+      <code>'self'</code>, the existing <a class="term" data-t="csp" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP" title="A header that tells the browser which sources a page may load scripts, styles and other resources from, to block injected code." rel="external">CSP</a> needs <em>no change</em>, so
       pretext&apos;s bytes load only when you open this page and never touch the
       homepage or any other page. The only other demo here that&apos;s mine is the
       naïve <code>split(/\\s+/)</code> wrapper in section 4, kept deliberately bad
