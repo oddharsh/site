@@ -25,7 +25,7 @@
 
 <link rel="stylesheet" href="/prose.css">
 <style>.title-bar .icon { width:14px; height:14px;
-  background: linear-gradient(135deg, #166aee 0 50%, #ff9500 50% 100%); border:1px solid #001ea0; }
+  background: linear-gradient(135deg, var(--luna-56) 0 50%, #ff9500 50% 100%); border:1px solid var(--luna-34); }
 
 p { margin: 0 0 12px; }
 code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
@@ -33,12 +33,12 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
 /* ── controls row: chip + a segmented toggle ─────────────────────────── */
 .bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
 .chip { font-family: var(--font-mono); font-size: var(--text-micro); font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
-  color: var(--ink-dim); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
+  color: var(--ink-dim); border-color: var(--grey-70); background: oklch(97% 0 0); }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
 .chip.yes::before { content: "\2713 "; } .chip.no::before { content: "\2717 "; }
-.seg { display: inline-flex; border: 1px solid oklch(50% 0.04 263); border-radius: 3px; overflow: hidden; }
+.seg { display: inline-flex; border: 1px solid var(--slate-50); border-radius: 3px; overflow: hidden; }
 .seg button { font: inherit; font-size: var(--text-sm); padding: 3px 12px; border: 0; cursor: pointer; color: var(--ink);
-  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); }
+  background: linear-gradient(180deg, oklch(99% 0 0), var(--mist-92)); }
 .seg button + button { border-left: 1px solid oklch(70% 0.03 263); }
 .seg button[aria-pressed="true"] { color: oklch(100% 0 0);
   background: linear-gradient(180deg, var(--blue-80), var(--blue-60)); box-shadow: inset 1px 1px 2px oklch(36% 0.16 263); }

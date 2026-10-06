@@ -20,13 +20,13 @@
 <meta name="twitter:image" content="https://aadhar.sh/og/lwe-tee.jpg">
 
 <link rel="stylesheet" href="/lwe-base.css">
-<style>:root{--accent:#475569;--accent-soft:#eef1f5;--glyph:"🔒";--icon-glyph-size:9px;--ava-glyph-size:15px;--pic-glyph-size:12px;--icon-border:#44505f;--head-g0:#fbfdff;--head-g1:var(--surface-desktop);--head-rule:#c0c8d2;--ava-border:#44505f;--name-color:#334155;--disclosure-ink:#7a6a16;--pic-g0:#6b7889;--pic-g1:#475569;--pic-border:#334155;--bar-g0:var(--surface-desktop);--bar-g1:#d8dee6;--compose-rule:#c0c8d2;--compose-g0:var(--row-alt);--compose-g1:var(--surface-desktop)}
+<style>:root{--accent:var(--slate-45);--accent-soft:var(--mist-96);--glyph:"🔒";--icon-glyph-size:9px;--ava-glyph-size:15px;--pic-glyph-size:12px;--icon-border:#44505f;--head-g0:#fbfdff;--head-g1:var(--surface-desktop);--head-rule:var(--slate-82);--ava-border:#44505f;--name-color:#334155;--disclosure-ink:var(--amber-52);--pic-g0:#6b7889;--pic-g1:var(--slate-45);--pic-border:#334155;--bar-g0:var(--surface-desktop);--bar-g1:#d8dee6;--compose-rule:var(--slate-82);--compose-g0:var(--row-alt);--compose-g1:var(--surface-desktop)}
 /* the lock is a color emoji, so it keeps its own ink and weight rather than the concept's white bold glyph */
 .title-bar .icon::before { color: #fff; filter: grayscale(.3); }
 .msgr-head .ava::before, .msg.bot .pic::before { color: inherit; font-weight: normal; font-family: inherit; }
-.msg .cite { display: inline-block; margin-top: 4px; font-size: var(--text-2xs); color: #6b7280; text-decoration: none; border-bottom: 1px dotted #9aa3b2; }
+.msg .cite { display: inline-block; margin-top: 4px; font-size: var(--text-2xs); color: var(--slate-55); text-decoration: none; border-bottom: 1px dotted var(--slate-71); }
 .msg .cite::before { content: "▸ "; } .msg .cite:hover { color: #334155; border-color: #334155; }
-.msg.ai-note .bubble { background: #f3f0fb; border: 1px solid #d7cdef; border-radius: 4px; padding: 7px 9px; }
+.msg.ai-note .bubble { background: var(--violet-96); border: 1px solid #d7cdef; border-radius: 4px; padding: 7px 9px; }
 .msg.ai-note .tagai { display: inline-block; font-size: var(--text-3xs); font-weight: bold; color: #6b4ec2; background: #ece5fb; border: 1px solid #d0c3f0; border-radius: 9px; padding: 0 6px; margin-bottom: 4px; letter-spacing: .03em; }
 
 
@@ -36,11 +36,11 @@
 .enclave .secret { font-family: var(--font-mono); font-size: 20px; letter-spacing: 4px; margin: 6px 0 2px; color: #6b7d93; }
 .enclave .secret.leaked { color: #ff9d6e; text-shadow: 0 0 8px rgba(255,120,60,.5); }
 .atk { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
-.trace { margin-top: 8px; min-height: 46px; border: 1px solid var(--accent); border-radius: 4px; background: #0f1722; padding: 8px 10px; font-family: var(--font-mono); font-size: var(--text-micro); color: #7ee0a0; overflow: hidden; }
+.trace { margin-top: 8px; min-height: 46px; border: 1px solid var(--accent); border-radius: 4px; background: var(--slate-20); padding: 8px 10px; font-family: var(--font-mono); font-size: var(--text-micro); color: #7ee0a0; overflow: hidden; }
 .trace .t-title { color: #9fb6cf; margin-bottom: 4px; } .trace .t-title b { color:#fff }
 .trace .bars { display: flex; align-items: flex-end; gap: 2px; height: 22px; }
 .trace .bars i { display: block; width: 6px; background: #4fd1a0; }
-.note { font-size: var(--text-micro); color: #4a5568; margin-top: 8px; } .note b { color:#15243f }
+.note { font-size: var(--text-micro); color: var(--slate-45); margin-top: 8px; } .note b { color:var(--slate-26) }
 
 </style>
 <link rel="stylesheet" href="/luna.css">

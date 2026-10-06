@@ -81,9 +81,9 @@ export function renderRun({ cmd = "", notFound = false } = {}) {
     robots: "noindex",
     css: `/*min*/
   .run-lede { display: flex; gap: 10px; align-items: flex-start; margin: 2px 0 12px; }
-  .run-ico { flex: 0 0 32px; width: 32px; height: 32px; background: oklch(69.58% 0.2043 43.49); position: relative; }
-  .run-ico::before { content: ""; position: absolute; inset: 4px 7px; background: oklch(87.82% 0.0877 66.27); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-  .run-lede p { margin: 2px 0 0; font-size: var(--text-ui); color: oklch(30% 0 0); }
+  .run-ico { flex: 0 0 32px; width: 32px; height: 32px; background: var(--amber-70); position: relative; }
+  .run-ico::before { content: ""; position: absolute; inset: 4px 7px; background: var(--amber-88); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .run-lede p { margin: 2px 0 0; font-size: var(--text-ui); color: var(--grey-28); }
   form { display: flex; gap: 8px; align-items: center; margin: 0 0 4px; }
   label { font-size: var(--text-ui); }
   input[type=text] {

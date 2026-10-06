@@ -24,9 +24,9 @@
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-safari27.jpg">
 
 <link rel="stylesheet" href="/prose.css">
-<style>.title-bar .icon { border-radius: 50%; background: oklch(100% 0 0); border: 1.5px solid #001ea0; }
+<style>.title-bar .icon { border-radius: 50%; background: oklch(100% 0 0); border: 1.5px solid var(--luna-34); }
 .title-bar .icon::before { content: ""; position: absolute; left: 6.5px; top: 2px; width: 0; height: 0;
-  border: 3px solid transparent; border-bottom-color: #e45f3e; }
+  border: 3px solid transparent; border-bottom-color: var(--red-65); }
 .title-bar .icon::after { content: ""; position: absolute; left: 6.5px; bottom: 2px; width: 0; height: 0;
   border: 3px solid transparent; border-top-color: #8fa6d8; }
 
@@ -36,11 +36,11 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
 
 .cap-strip { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 18px; }
 .chip { font-family: var(--font-mono); font-size: var(--text-micro); font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
-  color: var(--ink-dim); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
+  color: var(--ink-dim); border-color: var(--grey-70); background: oklch(97% 0 0); }
 .chip::before { content: "… "; }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
 .chip.yes::before { content: "\2713 "; }
-.chip.no { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.chip.no { color: var(--ink-dim); border-color: var(--grey-70); background: oklch(96% 0 0); }
 .chip.no::before { content: "\2717 "; }
 
 .demo { content-visibility: auto; contain-intrinsic-size: auto 320px; border: 1px solid var(--frame); border-top-color: var(--blue-45); border-left-color: var(--blue-45);
@@ -62,7 +62,7 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
   border: 2px solid; border-color: oklch(55% 0.02 250) var(--surface-desktop) var(--surface-desktop) oklch(55% 0.02 250); box-shadow: inset 1px 1px 1px oklch(0% 0 0 / .12);
   padding: 3px 3px 3px 8px; min-width: 0; max-width: 100%; display: inline-flex; align-items: stretch; gap: 8px; }
 .s27-sel::picker-icon { margin-left: auto; align-self: stretch; width: 16px; display: inline-flex; align-items: center; justify-content: center; color: oklch(24% 0.02 255);
-  background: linear-gradient(180deg, oklch(99% 0 0), oklch(84% 0.02 255)); border: 1px solid; border-color: oklch(100% 0 0) oklch(52% 0.03 255) oklch(52% 0.03 255) oklch(100% 0 0); border-radius: 1px; transition: rotate var(--xp-transition-move); }
+  background: linear-gradient(180deg, oklch(99% 0 0), oklch(84% 0.02 255)); border: 1px solid; border-color: oklch(100% 0 0) var(--slate-52) var(--slate-52) oklch(100% 0 0); border-radius: 1px; transition: rotate var(--xp-transition-move); }
 .s27-sel:open::picker-icon { rotate: 180deg; }
 .s27-sel::picker(select) { appearance: base-select; background: oklch(100% 0 0); border: 1px solid var(--frame); box-shadow: 3px 3px 0 oklch(from var(--frame) l c h / .35); padding: 2px; margin-top: 2px; }
 .s27-sel option { font-family: var(--font-ui); font-size: var(--text-ui); padding: 4px 8px; cursor: pointer; }

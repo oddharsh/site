@@ -23,34 +23,34 @@
 <style>ul { margin: 0 0 14px; padding-left: 20px; font-size: var(--text-ui); color: var(--ink-soft); }
 li { margin: 3px 0; }
 .badge { display: inline-block; font-family: var(--font-mono); font-size: var(--text-micro); font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; vertical-align: middle; }
-.badge.idle { color: oklch(45% 0.05 250); border-color: oklch(62% 0.06 250); background: oklch(96% 0.01 250); }
+.badge.idle { color: oklch(45% 0.05 250); border-color: oklch(62% 0.06 250); background: var(--mist-96); }
 
 /* demo */
-.dm-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; font-size: var(--text-sm); color: oklch(42% 0 0); }
+.dm-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; font-size: var(--text-sm); color: var(--grey-42); }
 .dm-controls input[type=range] { flex: 1; min-width: 160px; accent-color: #0855dd; }
-.measure-wrap { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: var(--paper-cool); padding: 0; overflow: hidden; }
+.measure-wrap { position: relative; border: 1px solid var(--slate-80); border-radius: 4px; background: var(--paper-cool); padding: 0; overflow: hidden; }
 /* the SAME text rendered two ways at the chosen width, for visual A/B + validation */
 .col { padding: 10px 12px; }
 .col h3 { margin: 0 0 6px; font-size: var(--text-sm); font-family: var(--font-caption); color: oklch(42% 0.06 250); display: flex; justify-content: space-between; gap: 8px; }
-.col h3 .n { font-family: var(--font-mono); color: oklch(35% 0 0); font-weight: normal; }
+.col h3 .n { font-family: var(--font-mono); color: var(--grey-35); font-weight: normal; }
 .flow { font-family: var(--font-ui); font-size: 15px; line-height: 22px; color: var(--ink); }
 #dom-flow { white-space: normal; overflow-wrap: break-word; }
 #cv-lines div { white-space: pre; overflow: hidden; }
-.ruler { height: 6px; background: repeating-linear-gradient(90deg, oklch(70% 0.04 250) 0 1px, transparent 1px 20px); border-bottom: 1px solid oklch(80% 0.02 250); }
-.race-out { font-family: var(--font-mono); font-size: var(--text-sm); background: oklch(96% 0.01 250); border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; margin-top: 8px; color: oklch(25% 0 0); min-height: 1.5em; }
+.ruler { height: 6px; background: repeating-linear-gradient(90deg, oklch(70% 0.04 250) 0 1px, transparent 1px 20px); border-bottom: 1px solid var(--slate-80); }
+.race-out { font-family: var(--font-mono); font-size: var(--text-sm); background: var(--mist-96); border: 1px solid var(--slate-80); border-radius: 4px; padding: 10px 12px; margin-top: 8px; color: oklch(25% 0 0); min-height: 1.5em; }
 .race-out b { color: oklch(40% 0.16 150); }
 .verdict { font-size: var(--text-ui); background: oklch(98% 0.02 95); border-left: 3px solid oklch(60% 0.13 75); padding: 8px 12px; margin: 14px 0; color: oklch(32% 0.05 75); }
-.replaces { font-size: var(--text-sm); color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+.replaces { font-size: var(--text-sm); color: var(--grey-35); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
 @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr !important; } }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; }
-.grid2 > .col + .col { border-left: 1px solid oklch(85% 0.02 250); }
+.grid2 > .col + .col { border-left: 1px solid var(--slate-85); }
 /* dynamic-wrap-around-float demo */
-.float-stage { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: var(--paper-cool); margin-top: 8px; overflow: hidden; padding: 0; }
+.float-stage { position: relative; border: 1px solid var(--slate-80); border-radius: 4px; background: var(--paper-cool); margin-top: 8px; overflow: hidden; padding: 0; }
 .float-box { position: absolute; top: 8px; left: 8px; z-index: 1; border-radius: 3px; color: #fff; font-size: 9px; line-height: 1.15; font-weight: bold; text-align: center; display: flex; align-items: center; justify-content: center; text-shadow: 0 1px 1px rgba(0,0,0,.4); background: repeating-linear-gradient(45deg, oklch(70% 0.13 255) 0 8px, oklch(60% 0.15 258) 8px 16px); }
 .float-stage canvas { display: block; width: 100%; }
 /* i18n demo line rows */
 .i18n-out .ln { white-space: nowrap; overflow: hidden; font-size: 15px; line-height: 22px; }
-.i18n-out.naive .ln.over { background: oklch(93% 0.07 30); color: oklch(46% 0.19 29); border-radius: 2px; }
+.i18n-out.naive .ln.over { background: oklch(93% 0.07 30); color: var(--danger-deep); border-radius: 2px; }
 
 </style>
 <link rel="stylesheet" href="/luna.css">

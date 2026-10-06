@@ -28,7 +28,7 @@ export function renderBotPage() {
   h2 { font-family: var(--font-caption); font-size: var(--text-h2); color: var(--blue-40); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
   h2::after { content: ""; display: block; height: 1px; background: var(--rule); margin-top: 8px; }
   a:link { color: var(--link); text-decoration: underline; } a:visited { color: var(--link-visited); } a:hover { color: var(--link-hover); }
-  code { font-family: var(--font-mono); background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; }
+  code { font-family: var(--font-mono); background: oklch(96.72% 0 0); border: 1px solid var(--grey-88); padding: 0 3px; }
   .lede { color: var(--ink-soft); font-size: var(--text-body); margin: 0 0 12px; }
   dl.fields { display: grid; grid-template-columns: 11em 1fr; gap: 1px; margin: 4px 0 14px; background: oklch(85.04% 0.0283 248.16); border: 1px solid var(--frame); border-top-color: var(--blue-45); border-left-color: var(--blue-45); font-size: var(--text-ui); }
   dl.fields dt { background: var(--surface-desktop); color: var(--blue-40); font-weight: bold; padding: 4px 8px; }

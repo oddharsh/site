@@ -98,7 +98,7 @@
 
   /* ── SEMANTIC ACCENTS — status + interactive color ───────────────────────*/
   --danger:      oklch(58% 0.200 var(--hue-danger));   /* close red / error      */
-  --danger-deep: oklch(46.34% 0.190 var(--hue-danger));/* error text             */
+  --danger-deep: oklch(46.34% 0.1902 calc(var(--hue-danger) + 4.23)); /* error text = #AA0000, dE 0.0000 */
   --go:          oklch(49.32% 0.168 var(--hue-go));    /* success / shipped      */
   --warn:        oklch(54.44% 0.150 var(--hue-warn));  /* under-construction amber*/
   --gold:        oklch(86.52% 0.177 90.38);            /* counter / odometer LCD  */
@@ -112,6 +112,85 @@
   --selection:      var(--blue-50);
   --selection-text: oklch(100% 0 0);
 
+  /* ── SHARED PALETTE — colours the site already wrote by hand in 5+ files ──
+     Named 2026-10-06 from usage, not invented: each value is the most-used
+     colour of a cluster (members within dE 0.01), so its own uses move by
+     nothing. Names are family + OKLCH lightness (--slate-84 is a slate at
+     L 84%), so a name says what it looks like and a new step slots in. Hues
+     hang off the knobs above, so a knob turn retunes these too. Nine clusters
+     within dE 0.01 of an existing token were left out rather than named twice.
+     Merged the same day, on the owner's call: --grey-30 into --grey-28,
+     --grey-33 into --grey-35 and --grey-72 into --grey-70 (each pair sat 0.02
+     apart, the just-noticeable difference), and --red-46 into --danger-deep,
+     which now resolves to the #AA0000 the site wrote by hand from day one. */
+  /* neutral greys */
+  --grey-95:      oklch(95.00% 0 0);                               /* was oklch(95% 0 0), 7 files */
+  --grey-94:      oklch(94.00% 0 0);                               /* was oklch(94% 0 0), 6 files */
+  --grey-88:      oklch(88.22% 0 0);                               /* was oklch(88.22% 0 0), 14 files */
+  --grey-70:      oklch(70.00% 0 0);                               /* was oklch(70% 0 0), 6 files */
+  --grey-60:      oklch(59.99% 0 0);                               /* was #808080, 9 files */
+  --grey-48:      oklch(48.00% 0 0);                               /* was oklch(48% 0 0), 5 files */
+  --grey-42:      oklch(42.00% 0 0);                               /* was oklch(42% 0 0), 5 files */
+  --grey-35:      oklch(35.00% 0 0);                               /* was oklch(35% 0 0), 8 files */
+  --grey-28:      oklch(28.00% 0 0);                               /* was oklch(28% 0 0), 5 files */
+  /* cool near-neutrals */
+  --mist-96:      oklch(96.00% 0.0100 calc(var(--hue-luna) - 13.00)); /* was oklch(96% 0.01 250), 20 files */
+  --mist-92:      oklch(92.00% 0.0080 calc(var(--hue-luna) - 13.00)); /* was oklch(92% 0.008 250), 8 files */
+  /* blue-greys: borders, panel fills, secondary text */
+  --slate-96:     oklch(96.00% 0.0300 calc(var(--hue-luna) - 13.00)); /* was oklch(96% 0.03 250), 5 files */
+  --slate-94:     oklch(94.27% 0.0218 calc(var(--hue-luna) - 6.27)); /* was #e3edfb, 5 files */
+  --slate-92-b:   oklch(92.23% 0.0347 calc(var(--hue-luna) - 14.80)); /* was #d4e8fc, 6 files */
+  --slate-92:     oklch(91.59% 0.0202 calc(var(--hue-luna) - 5.53)); /* was #dbe4f1, 11 files */
+  --slate-90:     oklch(90.19% 0.0181 calc(var(--hue-luna) - 1.66)); /* was #d8dfeb, 14 files */
+  --slate-88:     oklch(87.96% 0.0216 calc(var(--hue-luna) - 3.81)); /* was #cfd8e6, 10 files */
+  --slate-85:     oklch(85.00% 0.0200 calc(var(--hue-luna) - 13.00)); /* was oklch(85% 0.02 250), 14 files */
+  --slate-84:     oklch(84.08% 0.0240 calc(var(--hue-luna) + 1.44)); /* was #c3cbdb, 13 files */
+  --slate-82:     oklch(82.00% 0.0200 calc(var(--hue-luna) - 13.00)); /* was oklch(82% 0.02 250), 6 files */
+  --slate-81:     oklch(81.04% 0.0286 calc(var(--hue-luna) - 4.63)); /* was #b6c2d4, 6 files */
+  --slate-80:     oklch(80.00% 0.0200 calc(var(--hue-luna) - 13.00)); /* was oklch(80% 0.02 250), 12 files */
+  --slate-73:     oklch(72.68% 0.0349 calc(var(--hue-luna) - 6.21)); /* was #99a8bd, 13 files */
+  --slate-71:     oklch(71.31% 0.0241 calc(var(--hue-luna) - 2.29)); /* was #9aa3b2, 9 files */
+  --slate-67:     oklch(67.46% 0.0280 calc(var(--hue-luna) - 9.36)); /* was #8b98a8, 5 files */
+  --slate-63:     oklch(63.17% 0.0407 calc(var(--hue-luna) + 0.49)); /* was #7d8aa3, 7 files */
+  --slate-55:     oklch(55.10% 0.0234 calc(var(--hue-luna) + 1.36)); /* was #6b7280, 19 files */
+  --slate-54:     oklch(54.13% 0.0237 calc(var(--hue-luna) - 8.00)); /* was #66707d, 8 files */
+  --slate-52:     oklch(52.00% 0.0300 calc(var(--hue-luna) - 8.00)); /* was oklch(52% 0.03 255), 9 files */
+  --slate-50:     oklch(50.00% 0.0400 calc(var(--hue-luna) - 3.00)); /* was oklch(50% 0.04 260), 5 files */
+  --slate-45:     oklch(44.74% 0.0343 calc(var(--hue-luna) - 1.68)); /* was #4a5568, 19 files */
+  --slate-40:     oklch(40.38% 0.0396 calc(var(--hue-luna) - 8.73)); /* was #3a4a5e, 5 files */
+  --slate-38:     oklch(37.53% 0.0501 calc(var(--hue-luna) + 0.06)); /* was #33415c, 6 files */
+  --slate-30:     oklch(30.00% 0.0200 calc(var(--hue-luna) - 13.00)); /* was oklch(30% 0.02 250), 7 files */
+  --slate-26:     oklch(26.22% 0.0549 calc(var(--hue-luna) - 1.62)); /* was #15243f, 13 files */
+  --slate-20:     oklch(20.32% 0.0246 calc(var(--hue-luna) - 3.74)); /* was #101722, 6 files */
+  /* the Luna window-frame blues */
+  --luna-56:      oklch(55.93% 0.2133 calc(var(--hue-luna) - 2.85)); /* was #166aee, 6 files */
+  --luna-44:      oklch(43.93% 0.2509 calc(var(--hue-luna) + 1.57)); /* was #0831d9, 9 files */
+  --luna-34:      oklch(34.47% 0.2038 calc(var(--hue-luna) + 1.07)); /* was #001ea0, 8 files */
+  --luna-31:      oklch(30.54% 0.1896 calc(var(--hue-luna) + 1.19)); /* was #00138c, 5 files */
+  --luna-30:      oklch(30.29% 0.1850 calc(var(--hue-luna) + 4.77)); /* was #0f1089, 5 files */
+  --luna-29:      oklch(29.48% 0.1261 calc(var(--hue-luna) + 1.24)); /* was #0a246a, 5 files */
+  /* violet tint */
+  --violet-96:    oklch(96.06% 0.0149 calc(var(--hue-luna) + 35.57)); /* was #f3f0fb, 8 files */
+  /* reds: the close button, error text */
+  --red-95:       oklch(95.22% 0.0207 calc(var(--hue-danger) - 7.48)); /* was #fdeaea, 6 files */
+  --red-70:       oklch(69.69% 0.1432 calc(var(--hue-danger) + 9.32)); /* was #e8795f, 5 files */
+  --red-65:       oklch(64.91% 0.1729 calc(var(--hue-danger) + 10.11)); /* was #e45f3e, 7 files */
+  --red-59:       oklch(59.03% 0.1944 calc(var(--hue-danger) + 9.09)); /* was #d8401c, 5 files */
+  --red-55:       oklch(54.86% 0.1791 calc(var(--hue-danger) + 0.34)); /* was #c43636, 6 files */
+  --red-50:       oklch(50.13% 0.1667 calc(var(--hue-danger) + 9.66)); /* was #ae3110, 7 files */
+  /* ambers: status, warnings */
+  --amber-96:     oklch(96.46% 0.0301 calc(var(--hue-chrome) - 6.52)); /* was #fbf3dd, 6 files */
+  --amber-88:     oklch(87.82% 0.0877 calc(var(--hue-warn) + 19.17)); /* was oklch(87.82% 0.0877 66.27), 5 files */
+  --amber-74:     oklch(73.59% 0.1589 calc(var(--hue-warn) + 14.79)); /* was #ef8f24, 11 files */
+  --amber-70:     oklch(69.58% 0.2043 calc(var(--hue-warn) - 3.61)); /* was oklch(69.58% 0.2043 43.49), 5 files */
+  --amber-56:     oklch(56.10% 0.1107 calc(var(--hue-chrome) - 21.59)); /* was #9a6a16, 7 files */
+  --amber-52:     oklch(52.44% 0.1000 calc(var(--hue-chrome) + 0.81)); /* was #7a6a16, 6 files */
+  --amber-49:     oklch(49.38% 0.0869 calc(var(--hue-chrome) - 14.85)); /* was #7a5c1e, 5 files */
+  --amber-49-b:   oklch(49.01% 0.1144 calc(var(--hue-warn) + 11.14)); /* was #8f4d06, 11 files */
+  /* greens: status */
+  --green-97:     oklch(96.53% 0.0219 calc(var(--hue-go) - 12.47)); /* was #eef7e8, 8 files */
+  --green-95:     oklch(95.00% 0.0100 calc(var(--hue-go) + 0.00)); /* was oklch(95% 0.01 145), 7 files */
+  --green-51:     oklch(51.49% 0.1277 calc(var(--hue-go) + 0.70)); /* was #2c7a36, 7 files */
   /* ── SEMANTIC SURFACE / ROLE ALIASES — author against these ──────────────*/
   --surface-desktop:  oklch(94.66% 0.0114 252.09); /* the page "desktop" wash  */
   --surface-window:   var(--window);               /* white content area       */
@@ -419,8 +498,8 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
 .window>.content::-webkit-scrollbar-track,.window>.body::-webkit-scrollbar-track,.window>.body>.content::-webkit-scrollbar-track,.np-text::-webkit-scrollbar-track{background:oklch(92% 0.015 250);box-shadow:inset 1px 0 0 oklch(72% 0.03 250),inset -1px 0 0 oklch(100% 0 0)}
 .window>.content::-webkit-scrollbar-thumb,.window>.body::-webkit-scrollbar-thumb,.window>.body>.content::-webkit-scrollbar-thumb,.np-text::-webkit-scrollbar-thumb{border:1px solid;border-color:oklch(88% 0.05 256) oklch(46% 0.15 260) oklch(46% 0.15 260) oklch(88% 0.05 256);background:linear-gradient(90deg,oklch(80% 0.08 256),oklch(63% 0.16 257));box-shadow:inset 1px 1px 0 oklch(92% 0.06 250)}
 .window>.content::-webkit-scrollbar-thumb:hover,.window>.body::-webkit-scrollbar-thumb:hover,.window>.body>.content::-webkit-scrollbar-thumb:hover,.np-text::-webkit-scrollbar-thumb:hover{background:linear-gradient(90deg,oklch(84% 0.09 256),oklch(67% 0.17 257))}
-.window>.content::-webkit-scrollbar-button:single-button,.window>.body::-webkit-scrollbar-button:single-button,.window>.body>.content::-webkit-scrollbar-button:single-button,.np-text::-webkit-scrollbar-button:single-button{height:16px;border:1px solid;border-color:oklch(100% 0 0) oklch(50% 0.04 260) oklch(50% 0.04 260) oklch(100% 0 0);background-color:oklch(94% 0.02 255);background-image:linear-gradient(180deg,oklch(98% 0.01 255),var(--rule));background-repeat:no-repeat;background-position:center}
-.window>.content::-webkit-scrollbar-button:single-button:active,.window>.body::-webkit-scrollbar-button:single-button:active,.window>.body>.content::-webkit-scrollbar-button:single-button:active,.np-text::-webkit-scrollbar-button:single-button:active{border-color:oklch(50% 0.04 260) oklch(100% 0 0) oklch(100% 0 0) oklch(50% 0.04 260)}
+.window>.content::-webkit-scrollbar-button:single-button,.window>.body::-webkit-scrollbar-button:single-button,.window>.body>.content::-webkit-scrollbar-button:single-button,.np-text::-webkit-scrollbar-button:single-button{height:16px;border:1px solid;border-color:oklch(100% 0 0) var(--slate-50) var(--slate-50) oklch(100% 0 0);background-color:var(--slate-94);background-image:linear-gradient(180deg,oklch(98% 0.01 255),var(--rule));background-repeat:no-repeat;background-position:center}
+.window>.content::-webkit-scrollbar-button:single-button:active,.window>.body::-webkit-scrollbar-button:single-button:active,.window>.body>.content::-webkit-scrollbar-button:single-button:active,.np-text::-webkit-scrollbar-button:single-button:active{border-color:var(--slate-50) oklch(100% 0 0) oklch(100% 0 0) var(--slate-50)}
 .window>.content::-webkit-scrollbar-button:single-button:vertical:decrement,.window>.body::-webkit-scrollbar-button:single-button:vertical:decrement,.window>.body>.content::-webkit-scrollbar-button:single-button:vertical:decrement,.np-text::-webkit-scrollbar-button:single-button:vertical:decrement{background-image:linear-gradient(180deg,oklch(98% 0.01 255),var(--rule)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4'%3E%3Cpath d='M3.5 0 7 4H0Z' fill='%23343e52'/%3E%3C/svg%3E");background-blend-mode:multiply}
 .window>.content::-webkit-scrollbar-button:single-button:vertical:increment,.window>.body::-webkit-scrollbar-button:single-button:vertical:increment,.window>.body>.content::-webkit-scrollbar-button:single-button:vertical:increment,.np-text::-webkit-scrollbar-button:single-button:vertical:increment{background-image:linear-gradient(180deg,oklch(98% 0.01 255),var(--rule)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4'%3E%3Cpath d='M3.5 4 0 0h7Z' fill='%23343e52'/%3E%3C/svg%3E");background-blend-mode:multiply}
 .window>.content::-webkit-scrollbar-corner,.window>.body::-webkit-scrollbar-corner,.window>.body>.content::-webkit-scrollbar-corner,.np-text::-webkit-scrollbar-corner{background:oklch(92% 0.015 250)}
@@ -440,12 +519,12 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
 @media (color-gamut: p3){@supports (color: oklch(0% 0 0)){#axp-desktop{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 120' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-color='oklch(59.1%25 0.172 254.5)'/%3E%3Cstop offset='.42' stop-color='oklch(70.2%25 0.117 251.5)'/%3E%3Cstop offset='.62' stop-color='oklch(87.9%25 0.052 240.5)'/%3E%3Cstop offset='.67' stop-color='oklch(94.2%25 0.026 244.1)'/%3E%3C/linearGradient%3E%3ClinearGradient id='g' x2='0' y2='1'%3E%3Cstop stop-color='oklch(76.1%25 0.197 126.8)'/%3E%3Cstop offset='.35' stop-color='oklch(68.9%25 0.198 131.2)'/%3E%3Cstop offset='1' stop-color='oklch(52.7%25 0.171 137.4)'/%3E%3C/linearGradient%3E%3CradialGradient id='sn' cy='.64' r='.55'%3E%3Cstop stop-color='%23fffbe6' stop-opacity='.5'/%3E%3Cstop offset='1' stop-color='%23fffbe6' stop-opacity='0'/%3E%3C/radialGradient%3E%3Cfilter id='bl' x='-30%25' y='-30%25' width='160%25' height='160%25'%3E%3CfeGaussianBlur stdDeviation='1.1'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='200' height='120' fill='url(%23s)'/%3E%3Crect width='200' height='120' fill='url(%23sn)'/%3E%3Cg fill='%23fff' filter='url(%23bl)'%3E%3Cg opacity='.92'%3E%3Cellipse cx='34' cy='25' rx='18' ry='4.6'/%3E%3Cellipse cx='41' cy='20' rx='11' ry='4.2'/%3E%3Cellipse cx='25' cy='22' rx='8' ry='3.6'/%3E%3C/g%3E%3Cg opacity='.8'%3E%3Cellipse cx='151' cy='18' rx='14' ry='3.8'/%3E%3Cellipse cx='158' cy='14' rx='7' ry='3.2'/%3E%3C/g%3E%3Cellipse opacity='.6' cx='98' cy='31' rx='22' ry='3'/%3E%3Cellipse opacity='.75' cx='123' cy='42' rx='11' ry='2.6'/%3E%3C/g%3E%3Cpath d='M0 79c36-10 70 6 104-3 36-9 68 2 96-4V120H0z' fill='url(%23g)'/%3E%3Cpath d='M0 79c36-10 70 6 104-3 36-9 68 2 96-4' fill='none' stroke='oklch(85.1%25 0.177 122.8)' stroke-width='1.1' opacity='.5'/%3E%3C/svg%3E")}}}
 /* accessory windows — small built-in apps (a Clock for now) that float over the */
 /* desktop, composite, drag, and click-to-front. plain DOM windows, no iframes. */
-.axp-acc{position:fixed;z-index:40;min-width:170px;background:var(--paper);border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
-.axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-ui);text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,var(--blue-95),var(--blue-65) 60%,var(--blue-55))}
+.axp-acc{position:fixed;z-index:40;min-width:170px;background:var(--paper);border:2px solid var(--luna-44);border-right-color:var(--luna-34);border-bottom-color:var(--luna-34);border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 var(--luna-56),inset -1px -1px 0 var(--luna-31),3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
+.axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-ui);text-shadow:1px 1px var(--luna-30);background:linear-gradient(180deg,var(--blue-95),var(--blue-65) 60%,var(--blue-55))}
 .axp-acc>.tb .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.axp-acc>.tb .x{width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;border:1px solid #d8401c;border-radius:3px;background:linear-gradient(180deg,#e8795f,#ae3110);font-size:9px;cursor:pointer}.axp-acc>.tb .x:hover{filter:brightness(1.12)}
+.axp-acc>.tb .x{width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;border:1px solid var(--red-59);border-radius:3px;background:linear-gradient(180deg,var(--red-70),var(--red-50));font-size:9px;cursor:pointer}.axp-acc>.tb .x:hover{filter:brightness(1.12)}
 .axp-acc>.bd{padding:8px;background:var(--face)}
-.clk{text-align:center;padding:5px 12px}.clk-t{font-family:var(--font-mono);font-size:22pt;font-weight:bold;color:#15243f;letter-spacing:1px}.clk-d{font-size:var(--text-micro);color:#4a5568;margin-top:3px;white-space:nowrap}
+.clk{text-align:center;padding:5px 12px}.clk-t{font-family:var(--font-mono);font-size:22pt;font-weight:bold;color:var(--slate-26);letter-spacing:1px}.clk-d{font-size:var(--text-micro);color:var(--slate-45);margin-top:3px;white-space:nowrap}
 /* windows drag by their title bar */
 .title-bar,.np-titlebar{cursor:move}
 .axp-dragging{user-select:none;will-change:transform}.axp-dragging .title-bar,.axp-dragging .np-titlebar,.axp-acc.axp-dragging>.tb{cursor:grabbing}
@@ -506,9 +585,9 @@ box-shadow:inset 1px 1px 0 oklch(86% 0.13 140),inset -1px -1px 0 oklch(38% 0.13 
 .axp-ico .t{font-size:11px;line-height:1.18;text-align:center;color:oklch(100% 0 0);text-shadow:0 1px 2px oklch(18% 0.04 263),0 0 3px oklch(18% 0.04 263);max-width:82px;overflow-wrap:anywhere}
 /* My Pictures glyph: a tiny framed Bliss — sky, sun, rolling hill */
 /* Notepad glyph: white ruled page with a folded corner */
-.axp-ico .note{background:linear-gradient(135deg,oklch(99% 0 0) 0 80%,oklch(82% 0.02 250) 80% 100%);position:relative}
+.axp-ico .note{background:linear-gradient(135deg,oklch(99% 0 0) 0 80%,var(--slate-82) 80% 100%);position:relative}
 .axp-ico .note::before{content:'';position:absolute;left:7px;right:7px;top:9px;height:1px;background:oklch(58% 0.13 250);box-shadow:0 4px 0 oklch(58% 0.13 250),0 8px 0 oklch(58% 0.13 250),0 12px 0 oklch(58% 0.13 250)}
-.axp-ico .note::after{content:'';position:absolute;right:0;top:0;border-width:6px;border-style:solid;border-color:oklch(82% 0.02 250) oklch(99% 0 0) oklch(99% 0 0) oklch(82% 0.02 250)}
+.axp-ico .note::after{content:'';position:absolute;right:0;top:0;border-width:6px;border-style:solid;border-color:var(--slate-82) oklch(99% 0 0) oklch(99% 0 0) var(--slate-82)}
 /* generic camera glyph for the photo app (rounded body + lens + flash nub) */
 .axp-ico .cam{width:15px;height:11px;border:1.8px solid oklch(100% 0 0);border-radius:2px;position:relative;box-sizing:border-box}
 .axp-ico .cam::before{content:'';position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border:1.8px solid oklch(100% 0 0);border-radius:50%;box-sizing:border-box}
@@ -592,8 +671,8 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   /* flex:1 keeps the title left-aligned: the back/forward cluster is a third
      title-bar child, and space-between would center an un-flexed title span. */
   :where(.title-bar .title-text) { display: flex; align-items: center; flex: 1; min-width: 0; }
-  :where(.title-bar .icon) { display: inline-block; width: 16px; height: 16px; margin-right: 6px; background: oklch(69.58% 0.2043 43.49); position: relative; flex-shrink: 0; }
-  :where(.title-bar .icon)::before { content: ""; position: absolute; inset: 2px 4px; background: oklch(87.82% 0.0877 66.27); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  :where(.title-bar .icon) { display: inline-block; width: 16px; height: 16px; margin-right: 6px; background: var(--amber-70); position: relative; flex-shrink: 0; }
+  :where(.title-bar .icon)::before { content: ""; position: absolute; inset: 2px 4px; background: var(--amber-88); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
   /* 2px is Luna's own caption spacing. It fails the target-size audit (21x21
      buttons, 23px apart, where the rule wants 24), and that is a deliberate
      hold: this is XP window chrome, and widening it to satisfy an audit costs
@@ -627,8 +706,8 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 }
 /* CLOSE = red at rest */
 :where(.title-bar .controls .close), :where(.np-controls .close) {
-  border-color: #d8401c; background-color: #e45f3e;
-  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+  border-color: var(--red-59); background-color: var(--red-65);
+  background-image: linear-gradient(180deg, var(--red-70) 0%, var(--red-65) 30%, var(--red-65) 52%, #e2552a 80%, var(--red-50) 100%);
 }
 :where(.title-bar .controls .close:hover), :where(.np-controls .close:hover), :where(.title-bar .controls .close:focus-visible), :where(.np-controls .close:focus-visible) {
   border-color: #ff7a66; background-color: #ff957c;
@@ -699,11 +778,11 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
    the document down 19px. */
 @media (scripting: none), (width < 720px) { .axp-histnav { display: none; } }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-:where(.title-bar) { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+:where(.title-bar) { text-shadow: 1px 1px var(--luna-30); border-top-left-radius: 8px; border-top-right-radius: 8px; }
 :where(.window) {
-  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border: 2px solid var(--luna-44); border-right-color: var(--luna-34); border-bottom-color: var(--luna-34);
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
-  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
+  box-shadow: inset 1px 1px 0 var(--luna-56), inset 2px 2px 0 #0855dd, inset -1px -1px 0 var(--luna-31), inset -2px -2px 0 #003bda, 4px 4px 0 oklch(from var(--luna-34) l c h / .35);
 }
 /* THE Luna command button + sunken field. One component for every page and
    client script: the /rn form, /dotfiles, the quiz, the Run and Notepad
@@ -714,7 +793,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   display: inline-block; min-width: 75px; padding: 3px 12px;
   font: var(--text-2xs)/1.4 var(--font-ui); color: #000;
   text-align: center; text-decoration: none; cursor: pointer; user-select: none;
-  border: 1px solid #8e9dad; border-radius: 3px;
+  border: 1px solid var(--slate-67); border-radius: 3px;
   background: var(--grad-raised);
   box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px rgba(255,255,255,.4);
 }
@@ -789,8 +868,8 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
    class instead of carrying the two rules. */
 :where(*) { box-sizing: border-box; }
 :where(.window) { max-width: var(--axp-maxw, 720px); }
-:where(.title-bar .icon.play) { background: oklch(87.82% 0.0877 66.27); }
-:where(.title-bar .icon.play)::before { inset: 3px; background: oklch(69.58% 0.2043 43.49); clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%); }
+:where(.title-bar .icon.play) { background: var(--amber-88); }
+:where(.title-bar .icon.play)::before { inset: 3px; background: var(--amber-70); clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%); }
 
 /* ───────────────── homepage music island (below the fold) ─────────────────
    Kept in the immutable shared sheet so a dynamic homepage reload does not
@@ -820,7 +899,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   font-family: var(--font-ui);
   font-size: var(--text-xs);
   font-weight: normal;
-  color: oklch(52% 0.03 255);
+  color: var(--slate-52);
   white-space: nowrap;
 }
 .now-playing h2 a:hover {
@@ -893,7 +972,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   font-size: var(--text-2xs);
   font-weight: bold;
   color: var(--ink-dim);
-  background: oklch(94.91% 0 0);
+  background: var(--grey-95);
   border: 1px solid oklch(84.52% 0 0);
   padding: 0 3px;
   margin-left: 4px;
@@ -1002,16 +1081,16 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   background: oklch(100% 0 0);
 }
 .xp-tooltip .cam .hist-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.xp-tooltip .cam .hist-svg .luma { fill: oklch(35% 0 0); opacity: 0.35; }
+.xp-tooltip .cam .hist-svg .luma { fill: var(--grey-35); opacity: 0.35; }
 .xp-tooltip .cam .hist-svg polyline { fill: none; stroke-width: 1; vector-effect: non-scaling-stroke; mix-blend-mode: multiply; }
 .xp-tooltip .cam .hist-svg .r { stroke: oklch(45% 0.22 25); }
 .xp-tooltip .cam .hist-svg .g { stroke: oklch(50% 0.20 145); }
 .xp-tooltip .cam .hist-svg .b { stroke: oklch(45% 0.22 260); }
 .xp-tooltip .cam .body { padding: 6px 9px 4px; }
 .xp-tooltip .cam .exposure { font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: bold; color: oklch(15% 0 0); letter-spacing: 0.02em; }
-.xp-tooltip .cam .meta-strip { font-size: 9.5px; color: oklch(48% 0 0); margin: 1px 0 5px; }
+.xp-tooltip .cam .meta-strip { font-size: 9.5px; color: var(--grey-48); margin: 1px 0 5px; }
 .xp-tooltip .cam .recipe-rows { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 1px; margin: 0; font-size: 10.5px; }
-.xp-tooltip .cam .recipe-rows dt { color: oklch(48% 0 0); white-space: nowrap; }
+.xp-tooltip .cam .recipe-rows dt { color: var(--grey-48); white-space: nowrap; }
 .xp-tooltip .cam .recipe-rows dd { margin: 0; color: oklch(18% 0 0); text-align: right; }
 .xp-tooltip .cam .footer {
   display: flex;
@@ -1067,7 +1146,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   display: block;
   margin-top: 1px;
   font-size: var(--text-3xs);
-  color: oklch(58% 0 0);
+  color: var(--grey-60);
 }
 a.car-link:link,
 a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
@@ -1112,7 +1191,7 @@ a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
   body { display: block !important; padding: 0 !important; }
   .window, .np-window {
     max-height: none !important; height: auto !important;
-    box-shadow: none !important; border: 1px solid #999 !important;
+    box-shadow: none !important; border: 1px solid var(--grey-70) !important;
     border-radius: 0 !important; margin: 0 !important; transform: none !important;
   }
   .content, .np-text { overflow: visible !important; max-height: none !important; }
@@ -1176,7 +1255,7 @@ a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
 .axp-well a{color:oklch(42.61% 0.30 263.74);text-decoration:none}
 .axp-well a:hover{text-decoration:underline}
 .axp-here{color:var(--ink);font-weight:700}
-.axp-sep{padding:0 1px;color:oklch(60% 0 0)}
+.axp-sep{padding:0 1px;color:var(--grey-60)}
 
 /* task pane — Luna's pale-blue group boxes: gel caption, rounded top only. */
 .axp-pane{display:flex;flex-direction:column;gap:10px;font:11px/1.45 var(--font-ui)}

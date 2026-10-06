@@ -44,12 +44,12 @@ pre {
 .chip {
   font-family: var(--font-mono); font-size: var(--text-micro); font-weight: bold;
   padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
-  color: var(--ink-dim); border-color: oklch(72% 0 0); background: oklch(97% 0 0);
+  color: var(--ink-dim); border-color: var(--grey-70); background: oklch(97% 0 0);
 }
 .chip::before { content: "… "; }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
 .chip.yes::before { content: "\2713 "; }
-.chip.no  { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.chip.no  { color: var(--ink-dim); border-color: var(--grey-70); background: oklch(96% 0 0); }
 .chip.no::before  { content: "\2717 "; }
 
 /* ── per-feature card ────────────────────────────────────────────────── */
@@ -77,17 +77,17 @@ pre {
 .stat.cross    { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
 .stat.chrome   { color: var(--warn);  border-color: var(--warn);  background: oklch(98% 0.03 95);  }
 .stat.trial    { color: var(--link); border-color: var(--link); background: oklch(97% 0.03 264); }
-.stat.contested{ color: oklch(46.34% 0.1902 29.23);  border-color: oklch(46.34% 0.1902 29.23);  background: oklch(98% 0.03 30);  }
+.stat.contested{ color: var(--danger-deep);  border-color: var(--danger-deep);  background: oklch(98% 0.03 30);  }
 /* WebKit standards-position chip: what Safari's team actually said, sourced
    from webkit.org/standards-positions (the authoritative signal, vs. the
    secondhand chromestatus "Safari view" column). */
 .wk { font-family: var(--font-mono); font-size: var(--text-3xs); font-weight: bold;
   padding: 0 4px; border: 1px solid; border-radius: 2px; white-space: nowrap; margin-right: 5px; }
 .wk.sup { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
-.wk.opp { color: oklch(46.34% 0.1902 29.23);  border-color: oklch(46.34% 0.1902 29.23);  background: oklch(98% 0.03 30); }
-.wk.non { color: var(--ink-dim); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
+.wk.opp { color: var(--danger-deep);  border-color: var(--danger-deep);  background: oklch(98% 0.03 30); }
+.wk.non { color: var(--ink-dim); border-color: var(--grey-70); background: oklch(97% 0 0); }
 .demo .note { font-size: var(--text-sm); color: var(--ink-soft); margin: 8px 0 0; }
-.demo .replaces { font-size: var(--text-sm); color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+.demo .replaces { font-size: var(--text-sm); color: var(--grey-35); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
 .unsupported { display: none; font-size: var(--text-sm); color: oklch(46% 0.10 50); margin-top: 8px; }
 .demo.no-support .unsupported { display: block; }
 /* "shipped" = not just feasible, but actually live in production on the real
@@ -102,7 +102,7 @@ pre {
 /* ── text-box-trim demo ──────────────────────────────────────────────── */
 .tb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 @media (max-width: 520px) { .tb-grid { grid-template-columns: 1fr; } }
-.tb-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 0 0 4px; }
+.tb-cap { font-size: var(--text-micro); color: var(--grey-48); margin: 0 0 4px; }
 .tb-line {
   font-family: var(--font-caption); font-size: 26px; line-height: 2.4;
   /* inline-block (NOT inline) so the highlight fills the element's BOX, which
@@ -151,15 +151,15 @@ pre {
 .watch li { padding: 7px 0; border-bottom: 1px solid var(--surface-desktop); display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; }
 .watch li:last-child { border-bottom: none; }
 .watch .name { font-family: var(--font-mono); font-size: var(--text-mono); font-weight: bold; color: oklch(38% 0.04 250); }
-.watch .desc { font-size: var(--text-sm); color: oklch(35% 0 0); }
-.watch .desc .s { font-style: italic; color: oklch(48% 0 0); }
-.stat.early { color: var(--ink-quiet); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.watch .desc { font-size: var(--text-sm); color: var(--grey-35); }
+.watch .desc .s { font-style: italic; color: var(--grey-48); }
+.stat.early { color: var(--ink-quiet); border-color: var(--grey-70); background: oklch(96% 0 0); }
 .engine { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--surface-desktop); }
 .engine h3 {
   font-family: var(--font-caption); font-size: var(--text-lede); font-weight: bold;
   color: var(--blue-40); margin: 0 0 4px; display: flex; align-items: baseline; gap: 8px;
 }
-.engine p { font-size: var(--text-sm); color: oklch(33% 0 0); margin: 0 0 6px; }
+.engine p { font-size: var(--text-sm); color: var(--grey-35); margin: 0 0 6px; }
 
 
 /* ════════ feature-card demos (added by workflow) ════════ */
@@ -191,7 +191,7 @@ pre {
   background: var(--grad-title);
   padding: 2px 7px;
 }
-.anc-pop .bd { padding: 6px 8px; color: oklch(33% 0 0); }
+.anc-pop .bd { padding: 6px 8px; color: var(--grey-35); }
 
 /* only when the engine supports it: tether to the button + flip on overflow.
    position-area does the placement; position-try-fallbacks flips to the
@@ -252,7 +252,7 @@ pre {
 /* each row reveals on its own view-timeline as it crosses the scrollport */
 .sd-row {
   margin: 7px 0; padding: 7px 9px; background: oklch(100% 0 0);
-  border: 1px solid oklch(86% 0.02 250); font-size: var(--text-sm); color: oklch(30% 0.02 250);
+  border: 1px solid oklch(86% 0.02 250); font-size: var(--text-sm); color: var(--slate-30);
   font-family: var(--font-caption);
   animation: sd-reveal linear both;
   animation-timeline: view();
@@ -301,13 +301,13 @@ pre {
   color: oklch(100% 0 0); font-family: var(--font-caption); font-weight: bold;
   font-size: var(--text-micro); padding: 2px 6px;
 }
-.ph-pop .ph-body { padding: 6px 8px; color: oklch(35% 0 0); }
+.ph-pop .ph-body { padding: 6px 8px; color: var(--grey-35); }
 .ph-pop .ph-body code { font-size: var(--text-micro); }
 /* card: field-sizing */
 /* ── field-sizing demo ───────────────────────────────────────────────── */
 .fs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 @media (max-width: 520px) { .fs-grid { grid-template-columns: 1fr; } }
-.fs-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 0 0 4px; }
+.fs-cap { font-size: var(--text-micro); color: var(--grey-48); margin: 0 0 4px; }
 /* sunken XP field: dark top-left, light bottom-right, the inverse of a raised
    button bevel, exactly like the homepage inputs. */
 .fs-field {
@@ -315,9 +315,9 @@ pre {
   line-height: 1.5; color: var(--ink); padding: 5px 7px; resize: none;
   background: oklch(100% 0 0);
   border: 2px solid;
-  border-top-color: oklch(58% 0 0); border-left-color: oklch(58% 0 0);
-  border-bottom-color: oklch(94% 0 0); border-right-color: oklch(94% 0 0);
-  outline: 1px solid oklch(72% 0 0); outline-offset: -3px;
+  border-top-color: var(--grey-60); border-left-color: var(--grey-60);
+  border-bottom-color: var(--grey-94); border-right-color: var(--grey-94);
+  outline: 1px solid var(--grey-70); outline-offset: -3px;
 }
 .fs-field:focus { outline-color: oklch(49.72% 0.1129 250.87); }
 /* the whole point: the textarea's box tracks its text content instead of a
@@ -327,8 +327,8 @@ pre {
 .fs-input {
   font-family: var(--font-ui); font-size: var(--text-ui); padding: 4px 7px;
   background: oklch(100% 0 0); border: 2px solid;
-  border-top-color: oklch(58% 0 0); border-left-color: oklch(58% 0 0);
-  border-bottom-color: oklch(94% 0 0); border-right-color: oklch(94% 0 0);
+  border-top-color: var(--grey-60); border-left-color: var(--grey-60);
+  border-bottom-color: var(--grey-94); border-right-color: var(--grey-94);
   field-sizing: content; min-width: 6ch; max-width: 100%;
 }
 .fs-input:focus { outline: 1px solid oklch(49.72% 0.1129 250.87); }
@@ -375,14 +375,14 @@ placeholder
   color: oklch(24% 0.02 255);
   background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(91% 0.01 255) 46%, oklch(84% 0.02 255) 100%);
   border: 1px solid;
-  border-color: oklch(100% 0 0) oklch(52% 0.03 255) oklch(52% 0.03 255) oklch(100% 0 0);
+  border-color: oklch(100% 0 0) var(--slate-52) var(--slate-52) oklch(100% 0 0);
   border-radius: 1px;
   transition: rotate var(--xp-transition-move);
 }
 .bsel-field:open::picker-icon {
   rotate: 180deg;
   background: linear-gradient(180deg, oklch(84% 0.02 255), var(--surface-desktop));
-  border-color: oklch(52% 0.03 255) oklch(100% 0 0) oklch(100% 0 0) oklch(52% 0.03 255);
+  border-color: var(--slate-52) oklch(100% 0 0) oklch(100% 0 0) var(--slate-52);
 }
 
 /* The popup itself: a real XP window dropping out of the field. */
@@ -455,7 +455,7 @@ placeholder
   color: oklch(100% 0 0); font-family: var(--font-caption); font-weight: bold;
   font-size: var(--text-lede); padding: 6px 10px;
 }
-.cs-frame .body { padding: 8px 10px; font-size: var(--text-xs); color: oklch(35% 0 0); }
+.cs-frame .body { padding: 8px 10px; font-size: var(--text-xs); color: var(--grey-35); }
 
 /* unsupported browsers: the @supports block never applies, so the cells keep
    their plain rounded border-radius and we surface the fallback note. */
@@ -551,7 +551,7 @@ placeholder
 }
 .sy-track.blocked .tap { left: 48%; }
 .sy-track.yielded .tap { left: 48%; }
-.sy-leg { font-size: var(--text-2xs); color: oklch(48% 0 0); margin: 3px 0 0; }
+.sy-leg { font-size: var(--text-2xs); color: var(--grey-48); margin: 3px 0 0; }
 .sy-leg .red { color: var(--warn); font-weight: bold; }
 @media (--p3) {
   .sy-track .tap { background: oklch(58.99% 0.2604 26.30); }
@@ -570,7 +570,7 @@ placeholder
 /* ── HTML-in-Canvas (drawElement) demo ───────────────────────────────── */
 .hic-stage { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; align-items: start; }
 @media (max-width: 520px) { .hic-stage { grid-template-columns: 1fr; } }
-.hic-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 0 0 4px; }
+.hic-cap { font-size: var(--text-micro); color: var(--grey-48); margin: 0 0 4px; }
 /* the live DOM source: a real XP title bar we will rasterize into canvas */
 .hic-src {
   background: var(--grad-title);
@@ -587,7 +587,7 @@ placeholder
   border: 1px solid var(--frame); background: var(--row-alt);
   display: block; width: 100%; height: auto; image-rendering: auto;
 }
-.hic-note2 { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 6px 0 0; }
+.hic-note2 { font-size: var(--text-micro); color: var(--grey-48); margin: 6px 0 0; }
 .hic-fail { display: none; }
 .demo.no-support .hic-fail { display: block; }
 .demo.no-support .hic-stage { opacity: .5; }
@@ -618,7 +618,7 @@ placeholder
   border: 1px solid var(--frame);
   /* contact-sheet frame, same vocabulary as the homepage photo grid */
   background:
-    linear-gradient(180deg, oklch(96% 0.01 250) 0%, oklch(91% 0.02 250) 100%);
+    linear-gradient(180deg, var(--mist-96) 0%, oklch(91% 0.02 250) 100%);
   box-shadow: 1px 1px 0 oklch(from var(--frame) l c h / 0.35);
   display: flex; align-items: flex-end; justify-content: flex-start;
   padding: 4px 5px;
@@ -628,9 +628,9 @@ placeholder
 /* varied aspect ratios = the whole point of masonry: portrait + landscape
    Fuji frames packing without the gridlock of equal-height rows */
 .mas-mock .t1 { aspect-ratio: 3 / 4;  background: linear-gradient(160deg, oklch(62% 0.124 252), oklch(50% 0.113 251)); color: oklch(100% 0 0); }
-.mas-mock .t2 { aspect-ratio: 4 / 3;  background: linear-gradient(160deg, oklch(88% 0.088 66), oklch(70% 0.20 43)); }
+.mas-mock .t2 { aspect-ratio: 4 / 3;  background: linear-gradient(160deg, var(--amber-88), oklch(70% 0.20 43)); }
 .mas-mock .t3 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, var(--surface-desktop), oklch(72% 0.06 250)); }
-.mas-mock .t4 { aspect-ratio: 2 / 3;  background: linear-gradient(160deg, oklch(59% 0.234 26), oklch(46% 0.19 29)); color: oklch(100% 0 0); }
+.mas-mock .t4 { aspect-ratio: 2 / 3;  background: linear-gradient(160deg, oklch(59% 0.234 26), var(--danger-deep)); color: oklch(100% 0 0); }
 .mas-mock .t5 { aspect-ratio: 16 / 9; background: linear-gradient(160deg, oklch(91% 0.02 250), oklch(80% 0.05 250)); }
 .mas-mock .t6 { aspect-ratio: 4 / 5;  background: linear-gradient(160deg, var(--row-hover), oklch(85% 0.10 90)); }
 .mas-mock .t7 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, oklch(50% 0.113 251), oklch(42% 0.118 255)); color: oklch(100% 0 0); }
@@ -667,17 +667,17 @@ placeholder
 .jxl-bar { height: 9px; background: oklch(86% 0.06 250); border: 1px solid var(--frame); margin: 4px 0; }
 .jxl-bar > i { display: block; height: 100%; background: var(--grad-title); }
 .jxl-fmt .jxl-kb { font-size: var(--text-micro); color: var(--ink-quiet); }
-.jxl-fmt .jxl-ships { font-size: var(--text-2xs); font-family: var(--font-mono); color: oklch(48% 0 0); margin-top: 3px; }
+.jxl-fmt .jxl-ships { font-size: var(--text-2xs); font-family: var(--font-mono); color: var(--grey-48); margin-top: 3px; }
 .jxl-fmt.win { background: oklch(98% 0.04 142); border-color: oklch(49.32% 0.1678 142.50); }
 .jxl-fmt.win .jxl-bar > i { background: linear-gradient(180deg, oklch(62% 0.16 142), oklch(49.32% 0.1678 142.50)); }
 .jxl-feat { list-style: none; padding: 0; margin: 10px 0 0; }
-.jxl-feat li { font-size: var(--text-xs); color: oklch(35% 0 0); padding: 2px 0 2px 16px; position: relative; }
+.jxl-feat li { font-size: var(--text-xs); color: var(--grey-35); padding: 2px 0 2px 16px; position: relative; }
 .jxl-feat li::before { content: "\25B8"; position: absolute; left: 2px; color: oklch(49.72% 0.1129 250.87); }
 /* card: hdr-agtm */
 /* ── HDR adaptive tone-mapping (AGTM) mockup ─────────────────────────── */
 .hdr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 @media (max-width: 520px) { .hdr-grid { grid-template-columns: 1fr; } }
-.hdr-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 0 0 4px; }
+.hdr-cap { font-size: var(--text-micro); color: var(--grey-48); margin: 0 0 4px; }
 .hdr-swatch {
   aspect-ratio: 5 / 3; border: 1px solid oklch(from var(--ink-dim) l c h / .4);
   display: flex; align-items: flex-end; justify-content: center;
@@ -706,7 +706,7 @@ placeholder
 /* headroom bar: SDR ceiling line + hatched "extra nits AGTM maps into" */
 .hdr-room {
   position: relative; height: 16px; margin-top: 8px;
-  background: linear-gradient(90deg, oklch(82% 0.02 250) 0 60%, transparent 60%);
+  background: linear-gradient(90deg, var(--slate-82) 0 60%, transparent 60%);
   border: 1px solid oklch(70% 0.02 250);
 }
 .hdr-room .head {
@@ -728,7 +728,7 @@ placeholder
 .rm-mock { margin-top: 10px; }
 .rm-bar {
   display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--blue-45);
-  background: linear-gradient(180deg, oklch(96% 0.006 250) 0%, oklch(90% 0.01 250) 100%);
+  background: linear-gradient(180deg, var(--mist-96) 0%, oklch(90% 0.01 250) 100%);
   font-family: var(--font-caption); font-size: var(--text-ui);
 }
 .rm-bar .rm-tab {
@@ -745,18 +745,18 @@ placeholder
   border-top-color: var(--blue-40);
   box-shadow: inset 0 -2px 0 oklch(from var(--blue-40) l c h / .6);
 }
-.rm-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 6px 0 0; }
+.rm-cap { font-size: var(--text-micro); color: var(--grey-48); margin: 6px 0 0; }
 
 /* the QUERY card: a measured table rather than a live probe, because the thing
    being measured is an origin's edge and this page cannot re-run that on load. */
 .hq-probe { margin: 10px 0 0; }
 .hq-table { border-collapse: collapse; width: 100%; font-size: var(--text-micro); margin: 6px 0 0; }
-.hq-table th, .hq-table td { text-align: left; padding: 3px 8px 3px 0; border-bottom: 1px solid oklch(88% 0 0); vertical-align: top; }
-.hq-table th { font-weight: 700; color: var(--ink-soft); border-bottom-color: oklch(72% 0 0); }
+.hq-table th, .hq-table td { text-align: left; padding: 3px 8px 3px 0; border-bottom: 1px solid var(--grey-88); vertical-align: top; }
+.hq-table th { font-weight: 700; color: var(--ink-soft); border-bottom-color: var(--grey-70); }
 .hq-table td.mono { white-space: nowrap; }
 .hq-table .hq-y { color: oklch(48% 0.13 145); font-weight: 700; }
 .hq-table .hq-n { color: oklch(52% 0.16 27); font-weight: 700; }
-.hq-cap { font-size: var(--text-micro); color: oklch(48% 0 0); margin: 8px 0 0; }
+.hq-cap { font-size: var(--text-micro); color: var(--grey-48); margin: 8px 0 0; }
 </style>
 <link rel="stylesheet" href="/luna.css">
 <script>
@@ -2233,7 +2233,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <!-- ─────────── 2026 frontier batch: carousel · invoker · scope · highlight · until-found ─────────── -->
     <style>
       /* --- CSS Carousel (::scroll-marker / ::scroll-button) --- */
-      .cc-rail { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; padding: 6px; border: 1px solid oklch(80% 0.02 250); background: oklch(96% 0.01 250); border-radius: 4px; scroll-marker-group: after; }
+      .cc-rail { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; padding: 6px; border: 1px solid var(--slate-80); background: var(--mist-96); border-radius: 4px; scroll-marker-group: after; }
       .cc-slide { flex: 0 0 100%; height: 130px; scroll-snap-align: center; display: grid; place-items: center; color: #fff; font: bold 16pt var(--font-caption); text-shadow: 0 1px 3px rgba(0,0,0,.45); background: var(--c); border-radius: 3px; }
       .cc-rail::scroll-marker-group { display: flex; justify-content: center; align-items: center; gap: 7px; padding-top: 9px; }
       .cc-slide::scroll-marker { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1px solid oklch(45% 0.10 250); background: oklch(90% 0.02 250); cursor: pointer; transition: background var(--xp-transition-move), transform var(--xp-transition-move); }
@@ -2253,16 +2253,16 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .scope-inner { border: 1px dashed oklch(60% 0.16 30); border-radius: 3px; padding: 8px 10px; }
       .scope-inner p { margin: 0; }
       /* --- Custom Highlight --- */
-      .hl-text { font-size: var(--text-ui); line-height: 1.55; color: oklch(28% 0 0); margin: 6px 0 0; }
+      .hl-text { font-size: var(--text-ui); line-height: 1.55; color: var(--grey-28); margin: 6px 0 0; }
       ::highlight(frontier) { background: oklch(88% 0.17 95); color: oklch(28% 0.10 60); text-shadow: 0 1px 0 rgba(255,255,255,.5); }
       /* --- hidden=until-found --- */
       .huf { font-size: var(--text-sm); color: oklch(30% 0.06 145); background: oklch(96% 0.04 145); border-left: 3px solid oklch(50% 0.15 145); padding: 8px 12px; border-radius: 0 3px 3px 0; margin: 8px 0 0; }
       /* --- grouped <details name> --- */
-      .dgroup { margin: 8px 0 0; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; overflow: hidden; }
+      .dgroup { margin: 8px 0 0; border: 1px solid var(--slate-80); border-radius: 4px; overflow: hidden; }
       .dgroup details + details { border-top: 1px solid oklch(86% 0.02 250); }
       .dgroup summary { cursor: pointer; padding: 7px 10px; font: bold var(--text-sm) var(--font-ui); color: oklch(35% 0.08 255); background: linear-gradient(180deg, #fff, #f4f3ee); }
       .dgroup summary:hover { color: oklch(45% 0.16 30); }
-      .dgroup details p { margin: 0; padding: 8px 10px; font-size: var(--text-sm); color: oklch(30% 0 0); background: oklch(99% 0.006 250); }
+      .dgroup details p { margin: 0; padding: 8px 10px; font-size: var(--text-sm); color: var(--grey-28); background: oklch(99% 0.006 250); }
       kbd { font: var(--text-micro) var(--font-mono); background: oklch(96% 0 0); border: 1px solid oklch(80% 0 0); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; }
     </style>
 
@@ -2493,19 +2493,19 @@ navigation.addEventListener("navigate", (e) =&gt; {
       @keyframes hz-spin { to { --hz-ang: 360deg; } }
       .demo.no-support .prop-demo { animation: none; }
 
-      .ss-pop { margin: 0; border: 2px solid #0831d9; background: var(--row-alt); color: var(--ink); padding: 12px 14px; border-radius: 4px; max-width: 300px; font-size: var(--text-sm); opacity: 0; translate: 0 -10px; /* @motion demo: the @starting-style entry is the exhibit */ transition: opacity .35s ease, translate .35s ease, overlay .35s allow-discrete, display .35s allow-discrete; }
+      .ss-pop { margin: 0; border: 2px solid var(--luna-44); background: var(--row-alt); color: var(--ink); padding: 12px 14px; border-radius: 4px; max-width: 300px; font-size: var(--text-sm); opacity: 0; translate: 0 -10px; /* @motion demo: the @starting-style entry is the exhibit */ transition: opacity .35s ease, translate .35s ease, overlay .35s allow-discrete, display .35s allow-discrete; }
       .ss-pop:popover-open { opacity: 1; translate: 0 0; }
       @starting-style { .ss-pop:popover-open { opacity: 0; translate: 0 -10px; } }
 
       .ld-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-      .ld-row .ld { flex: 1 1 130px; padding: 16px 12px; border-radius: 4px; font-size: var(--text-sm); border: 1px solid oklch(70% 0.03 250); background: light-dark(oklch(93% 0.03 255), oklch(26% 0.05 255)); color: light-dark(var(--ink), oklch(95% 0 0)); }
+      .ld-row .ld { flex: 1 1 130px; padding: 16px 12px; border-radius: 4px; font-size: var(--text-sm); border: 1px solid oklch(70% 0.03 250); background: light-dark(oklch(93% 0.03 255), oklch(26% 0.05 255)); color: light-dark(var(--ink), var(--grey-95)); }
       .ld-row .ld.l { color-scheme: light; }
       .ld-row .ld.d { color-scheme: dark; }
 
       .dsd-host { margin-top: 10px; display: block; }
-      .model-mock { margin-top: 10px; height: 88px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); color: oklch(38% 0.02 250); background: repeating-linear-gradient(45deg, oklch(92% 0.02 250) 0 10px, oklch(88% 0.02 250) 10px 20px); border: 1px dashed oklch(60% 0.05 250); }
+      .model-mock { margin-top: 10px; height: 88px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); color: oklch(38% 0.02 250); background: repeating-linear-gradient(45deg, var(--slate-92) 0 10px, var(--slate-88) 10px 20px); border: 1px dashed oklch(60% 0.05 250); }
 
-      .cw-panel { margin-top: 10px; border: 2px solid #0831d9; background: var(--row-alt); padding: 12px; border-radius: 4px; font-size: var(--text-sm); display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+      .cw-panel { margin-top: 10px; border: 2px solid var(--luna-44); background: var(--row-alt); padding: 12px; border-radius: 4px; font-size: var(--text-sm); display: flex; align-items: center; gap: 10px; justify-content: space-between; }
       .cw-panel[hidden] { display: none; }
 
       .sw-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: var(--text-sm); }
@@ -2518,15 +2518,15 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .sst-scroll { margin-top: 10px; max-height: 120px; overflow: auto; border: 1px solid oklch(75% 0.03 250); border-radius: 4px; container-type: scroll-state; }
       .sst-sticky { position: sticky; top: 0; background: oklch(90% 0.02 250); color: oklch(25% 0 0); padding: 8px 10px; font-size: var(--text-sm); font-weight: bold; border-bottom: 1px solid oklch(75% 0.03 250); transition: background var(--xp-transition-move), color var(--xp-transition-move); }
       @container scroll-state(stuck: top) { .sst-sticky { background: var(--blue-65); color: #fff; } }
-      .sst-scroll p { margin: 8px 10px; font-size: var(--text-xs); color: oklch(42% 0 0); }
+      .sst-scroll p { margin: 8px 10px; font-size: var(--text-xs); color: var(--grey-42); }
 
       .rf-row { display: flex; gap: 6px; margin-top: 10px; reading-flow: flex-visual; }
       .rf-row a { flex: 1; text-align: center; padding: 10px; border-radius: 4px; background: oklch(93% 0.03 255); font-size: var(--text-sm); color: oklch(30% 0.10 263); text-decoration: none; border: 1px solid oklch(75% 0.03 250); }
-      .rf-row a:focus-visible { outline: 2px solid #e45f3e; }
+      .rf-row a:focus-visible { outline: 2px solid var(--red-65); }
       .rf-row a:nth-child(1) { order: 3; } .rf-row a:nth-child(2) { order: 1; } .rf-row a:nth-child(3) { order: 2; }
 
       .pip-content { margin-top: 10px; background: oklch(95% 0.02 255); border: 1px solid oklch(75% 0.03 250); border-radius: 4px; padding: 12px; font-size: var(--text-sm); }
-      .tmp-out { margin-top: 10px; font-family: var(--font-mono); font-size: var(--text-sm); background: oklch(96% 0.01 250); border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; color: oklch(25% 0 0); white-space: pre-line; }
+      .tmp-out { margin-top: 10px; font-family: var(--font-mono); font-size: var(--text-sm); background: var(--mist-96); border: 1px solid var(--slate-80); border-radius: 4px; padding: 10px 12px; color: oklch(25% 0 0); white-space: pre-line; }
     </style>
 
     <!-- ───────────────────── relative color syntax ───────────────────── -->
@@ -3975,14 +3975,14 @@ navigation.addEventListener("navigate", (e) =&gt; {
 
     <style>
       /* ── 2026-07-30 sweep ── */
-      .out { margin-top: 10px; font-family: var(--font-mono); font-size: var(--text-mono); background: oklch(96% 0.01 250);
-        border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; color: oklch(25% 0 0);
+      .out { margin-top: 10px; font-family: var(--font-mono); font-size: var(--text-mono); background: var(--mist-96);
+        border: 1px solid var(--slate-80); border-radius: 4px; padding: 10px 12px; color: oklch(25% 0 0);
         white-space: pre-wrap; overflow-x: auto; }
 
       .san-in { width: 100%; box-sizing: border-box; margin-bottom: 6px; font-family: var(--font-mono); font-size: var(--text-micro); }
       .san-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-      .san-out { font-family: var(--font-mono); font-size: var(--text-micro); background: oklch(96% 0.01 250);
-        border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 8px 10px; margin: 0;
+      .san-out { font-family: var(--font-mono); font-size: var(--text-micro); background: var(--mist-96);
+        border: 1px solid var(--slate-80); border-radius: 4px; padding: 8px 10px; margin: 0;
         color: oklch(25% 0 0); white-space: pre-wrap; word-break: break-all; min-height: 3.4em; }
 
       /* 8x8 source bitmap, scaled 12x. the point of the card is that the two
@@ -3995,15 +3995,15 @@ navigation.addEventListener("navigate", (e) =&gt; {
 
       .si-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
       .si-line { font-size: var(--text-lg); text-decoration: underline; text-decoration-thickness: 2px;
-        text-underline-offset: 1px; margin: 0; color: oklch(28% 0 0); }
+        text-underline-offset: 1px; margin: 0; color: var(--grey-28); }
       .si-line.si-all { text-decoration-skip-ink: all; }
 
       .mt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
       .mt-box { background: oklch(95% 0.02 255); border: 1px solid oklch(75% 0.03 250); border-radius: 4px; padding: 10px; }
-      .mt-box p { margin: 12px 0; font-size: var(--text-sm); color: oklch(32% 0 0); background: oklch(88% 0.05 255); padding: 4px 8px; border-radius: 3px; }
+      .mt-box p { margin: 12px 0; font-size: var(--text-sm); color: var(--grey-35); background: oklch(88% 0.05 255); padding: 4px 8px; border-radius: 3px; }
       .mt-box.trim { margin-trim: block; }
 
-      .sar-out p { margin: 10px 0 0; font-size: var(--text-xs); color: oklch(48% 0 0); }
+      .sar-out p { margin: 10px 0 0; font-size: var(--text-xs); color: var(--grey-48); }
     </style>
 
     <!-- ─────────── 2026-07-30 sweep: the cross-engine batch this page had missed ─────────── -->
@@ -4715,15 +4715,15 @@ navigation.addEventListener("navigate", (e) =&gt; {
       @supports (color: AccentColor) { .s8-chipbox.accent { background: AccentColor; color: AccentColorText; } }
       .s8-chipbox.luna { background: var(--blue-60); color: oklch(100% 0 0); }
       .s8-caret { /* @type demo: a console caret wants the console font */ font: var(--text-lede) "Lucida Console", var(--font-mono); padding: 5px 8px; width: 260px; background: oklch(18% 0.01 250); color: oklch(88% 0.14 145); border: 1px solid oklch(45% 0.02 250); caret-shape: block; }
-      .s8-find { font-size: var(--text-sm); line-height: 1.6; color: oklch(28% 0 0); margin: 8px 0 0; }
+      .s8-find { font-size: var(--text-sm); line-height: 1.6; color: var(--grey-28); margin: 8px 0 0; }
       .s8-find::search-text { background: oklch(85% 0.17 95); color: oklch(25% 0.08 60); }
       .s8-rr { border: 1px dashed var(--frame); border-radius: 4px; padding: 10px 12px; margin-top: 8px; font-size: var(--text-sm); }
       .s8-attr { margin-top: 8px; display: flex; align-items: flex-end; gap: 6px; height: 74px; }
       .s8-attr i { display: block; width: 34px; background: linear-gradient(180deg, oklch(66% 0.16 258), oklch(48% 0.20 263)); border: 1px solid oklch(38% 0.14 263); border-radius: 2px 2px 0 0; height: attr(data-h type(<length>), 8px); }
       .s8-attr b { font: var(--text-2xs) var(--font-ui); color: var(--ink-quiet); align-self: center; }
-      .s8-tdi { font-size: var(--text-lede); color: oklch(28% 0 0); margin-top: 8px; }
+      .s8-tdi { font-size: var(--text-lede); color: var(--grey-28); margin-top: 8px; }
       .s8-tdi u { text-decoration: underline 1px oklch(55% 0.20 30); text-decoration-inset: 4px; text-underline-offset: 3px; }
-      .s8-out { font: var(--text-mono) var(--font-mono); white-space: pre-wrap; background: oklch(97% 0 0); border: 1px solid oklch(80% 0 0); padding: 8px 10px; margin-top: 8px; color: oklch(30% 0 0); }
+      .s8-out { font: var(--text-mono) var(--font-mono); white-space: pre-wrap; background: oklch(97% 0 0); border: 1px solid oklch(80% 0 0); padding: 8px 10px; margin-top: 8px; color: var(--grey-28); }
       @media (--p3) {
         .s8-chipbox.luna { background: oklch(50% 0.26 263); }
       }

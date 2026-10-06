@@ -665,7 +665,7 @@ const SHEET_CSS = `/*min*/
   .ph-open { display: block; text-decoration: none; }
   .ph picture, .ph img {
   display: block; width: 100%; height: auto; aspect-ratio: 1;
-  border: 1px solid oklch(80% 0.02 250); background: oklch(96.72% 0 0);
+  border: 1px solid var(--slate-80); background: oklch(96.72% 0 0);
   box-sizing: border-box;
   }
   .ph:hover img { border-color: oklch(41.92% 0.13 250.51); }

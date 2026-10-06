@@ -24,7 +24,7 @@
   /* The chrome, ink, link and status colors are luna.css's tokens (--face,
      --shadow, --ink, --link, --go, ...). Only what the site palette has no
      close match for is declared here. */
-  --navy:#0a246a; --navy2:#3a6ea5;
+  --navy:var(--luna-29); --navy2:#3a6ea5;
   --s2:#0b57c9; --bt:#c8811c;   /* the two metric identities: ssimulacra2 blue, butteraugli amber */
   /* --bt is the chart/border identity; as TEXT the amber only hits 3.06:1 on the
      panel, so text uses this darker sibling (4.8:1) and the graphics keep --bt. */
@@ -78,10 +78,10 @@ b{color:var(--ink)}
 .seg .xp-button[aria-pressed=true]{font-weight:700}
 .banner{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid;border-radius:2px;font-size:var(--text-ui);margin:10px 0;line-height:1.45}
 .banner .g{font-weight:700;flex:0 0 auto}
-.banner.ok{background:#eaf5e6;border-color:#a9cf9c;color:#2c5720}
+.banner.ok{background:var(--green-97);border-color:#a9cf9c;color:#2c5720}
 .banner.no{background:#faeae7;border-color:#e0a89e;color:#8f2a1c}
-.banner.split{background:#fbf3e3;border-color:#e6cf9a;color:#7a5a1c}
-.banner.info{background:#eef3fb;border-color:#a9c1e6;color:#294a7a}
+.banner.split{background:#fbf3e3;border-color:#e6cf9a;color:var(--amber-49)}
+.banner.info{background:var(--mist-96);border-color:#a9c1e6;color:#294a7a}
 .chapters{display:flex;gap:5px;align-items:center;font-size:var(--text-mono);color:var(--ink-dim);font-family:var(--font-mono)}
 .dot{width:9px;height:9px;border-radius:50%;border:1px solid var(--shadow);background:var(--window);box-shadow:var(--bevel-sunken)}
 .dot.on{background:var(--blue-65);border-color:var(--navy)} .dot.done{background:var(--go);border-color:#245018}
@@ -103,7 +103,7 @@ a{color:var(--link)}
 .uq-opt{display:block;width:100%;text-align:left;font-family:var(--font-ui);font-size:var(--text-sm);color:var(--ink);background:var(--grad-button);border:1px solid var(--darkshadow);box-shadow:var(--bevel-raised);padding:5px 10px;margin:0 0 4px;cursor:pointer;border-radius:2px;transition:var(--xp-transition)}
 .uq-opt:hover:not([disabled]){background:var(--grad-btn-hover);border-color:var(--navy2)}
 .uq-opt[disabled]{cursor:default}
-.uq-opt.correct{border-color:var(--go);box-shadow:0 0 0 1px var(--go),var(--bevel-raised);background:#eef7ea;font-weight:700}
+.uq-opt.correct{border-color:var(--go);box-shadow:0 0 0 1px var(--go),var(--bevel-raised);background:var(--green-97);font-weight:700}
 .uq-opt.wrong{border-color:var(--danger);box-shadow:0 0 0 1px var(--danger),var(--bevel-raised);background:#fbeeeb}
 .uq-why{display:none;font-size:var(--text-micro);color:var(--ink-soft);font-family:var(--font-mono);margin:0 0 9px 6px;line-height:1.45}
 .uq-why.show{display:block}
