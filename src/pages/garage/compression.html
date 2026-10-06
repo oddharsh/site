@@ -21,18 +21,18 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='3'%20y='6'%20width='7'%20height='20'%20rx='1'%20fill='%230855dd'/%3E%3Crect%20x='12'%20y='6'%20width='5'%20height='20'%20rx='1'%20fill='%23166aee'/%3E%3Crect%20x='19'%20y='6'%20width='10'%20height='20'%20rx='1'%20fill='%23003bda'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/prose.css">
 <style>.badge {
-  display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
+  display: inline-block; font-family: var(--font-mono); font-size: var(--text-micro);
   font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
   border-radius: 2px; text-transform: uppercase; vertical-align: middle;
 }
 
-.replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+.replaces { font-size: var(--text-sm); color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
 
 
 /* comparison tables + the winning-cell tint, matching the convention the other
    garage pages use (wire.html, workers.html). Kept inline per page: the garage HTML
    is never minified, so View Source stays the authoring source. */
-.cmp { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; }
+.cmp { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: var(--text-sm); }
 .cmp th, .cmp td { border: 1px solid oklch(85% 0.02 250); padding: 5px 8px; text-align: left; vertical-align: top; }
 .cmp th { background: oklch(96% 0.01 250); font-family: var(--font-caption); color: var(--blue-40); font-weight: normal; }
 .cmp td:first-child { font-family: var(--font-caption); color: oklch(33% 0 0); }

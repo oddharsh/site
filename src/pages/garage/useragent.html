@@ -21,30 +21,30 @@
 <link rel="stylesheet" href="/prose.css">
 <style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
 .content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
-.garage-intro{font-size:11pt;color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:8.5pt;color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
+.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
 .ua-ids{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;margin:0 0 10px;padding:2px 0}
-.ua-ids .row{display:grid;grid-template-columns:10em 6.5em 1fr;gap:8px;align-items:baseline;padding:3px 10px;font-size:8.8pt;border-bottom:1px solid #e4eaf3}
+.ua-ids .row{display:grid;grid-template-columns:10em 6.5em 1fr;gap:8px;align-items:baseline;padding:3px 10px;font-size:var(--text-xs);border-bottom:1px solid #e4eaf3}
 .ua-ids .row:last-child{border-bottom:0}
 .ua-ids .row.ctl{background:#eef3fa}
 .ua-ids b{font-family:var(--font-mono);color:#20406e}
-.ua-ids .who{color:#69758a;font-size:8.2pt}
-.ua-ids .ua{font-family:var(--font-mono);font-size:8pt;color:#4a5870;word-break:break-all}
-.ua-ids .tag{display:inline-block;margin-left:5px;padding:0 4px;border-radius:2px;font-size:7pt;text-transform:uppercase;letter-spacing:.04em;color:#31527d;background:#cddcf2}
-.ua-note{font-size:9pt;color:#5b6879}
+.ua-ids .who{color:#69758a;font-size:var(--text-2xs)}
+.ua-ids .ua{font-family:var(--font-mono);font-size:var(--text-2xs);color:#4a5870;word-break:break-all}
+.ua-ids .tag{display:inline-block;margin-left:5px;padding:0 4px;border-radius:2px;font-size:var(--text-4xs);text-transform:uppercase;letter-spacing:.04em;color:#31527d;background:#cddcf2}
+.ua-note{font-size:var(--text-xs);color:#5b6879}
 .ua-demo{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;margin:0 0 14px}
-.ua-demo-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,#eaf0f9,#dbe4f1);border-bottom:1px solid #b6c2d4;padding:5px 9px;font-family:var(--font-caption);font-weight:bold;font-size:9.5pt;color:#20406e}
-.ua-toggle button{font:inherit;font-size:8.5pt;font-weight:normal;font-family:var(--font-ui);padding:2px 8px;cursor:pointer;background:linear-gradient(180deg,#fff,#e4e9f2);border:1px solid #8c9ab0;border-radius:3px;color:#243}
+.ua-demo-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,#eaf0f9,#dbe4f1);border-bottom:1px solid #b6c2d4;padding:5px 9px;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-sm);color:#20406e}
+.ua-toggle button{font:inherit;font-size:var(--text-micro);font-weight:normal;font-family:var(--font-ui);padding:2px 8px;cursor:pointer;background:linear-gradient(180deg,#fff,#e4e9f2);border:1px solid #8c9ab0;border-radius:3px;color:#243}
 .ua-toggle button.on{background:linear-gradient(180deg,#cddcf2,#aec4e6);border-color:#5a7398;box-shadow:inset 1px 1px 2px rgba(0,0,0,.18)}
 .ua-scroll{overflow-x:auto}
-.ua-matrix{border-collapse:collapse;font-size:8.2pt;width:100%}
+.ua-matrix{border-collapse:collapse;font-size:var(--text-2xs);width:100%}
 .ua-matrix th{background:#eaf0f9;border:1px solid #c3ceE0;padding:3px 5px;text-align:left;font-family:var(--font-caption);font-weight:normal;white-space:nowrap}
 .ua-matrix th.ctl{background:#d9e5f6}
 .ua-matrix td{border:1px solid #d8dfeb;padding:3px 5px;white-space:nowrap;font-family:var(--font-mono)}
 .ua-matrix td.site{font-family:var(--font-ui);max-width:15em;white-space:normal}
 .ua-matrix td.site b{color:#20406e}
-.ua-matrix td.site span{display:block;color:#69758a;font-size:7.8pt}
+.ua-matrix td.site span{display:block;color:#69758a;font-size:var(--text-2xs)}
 .ua-matrix tr.unmeasurable td{background:#f2f2f2;color:#8b96a6}
 .ua-matrix tr.unmeasurable td.site b{color:#69758a}
 .ua-matrix .ok{color:#1d6b1d}
@@ -52,30 +52,30 @@
 .ua-matrix .sh{color:#9a6a08}
 .ua-matrix td.ctl{background:#f4f8fd}
 .ua-matrix tr.unmeasurable td.ctl{background:#ededed}
-.ua-verdict{font-family:var(--font-ui);font-size:7.8pt;text-transform:uppercase;letter-spacing:.04em}
-.ua-legend{margin:0;padding:6px 10px 8px;font-size:8.2pt;color:#5b6879;border-top:1px solid #ccd6e4}
-.ua-quote{font-family:var(--font-mono);font-size:8.6pt;background:#fffbe8;border:1px solid #e5d9a8;padding:1px 5px}
+.ua-verdict{font-family:var(--font-ui);font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.04em}
+.ua-legend{margin:0;padding:6px 10px 8px;font-size:var(--text-2xs);color:#5b6879;border-top:1px solid #ccd6e4}
+.ua-quote{font-family:var(--font-mono);font-size:var(--text-micro);background:#fffbe8;border:1px solid #e5d9a8;padding:1px 5px}
 .ua-selfharm{border-left:3px solid #a32b13;background:#fdf2ef;padding:8px 10px;margin:0 0 14px}
 .ua-selfharm p{margin:0}
 .ua-falsify{border-left:3px solid #c9a227;background:#fffbe8;padding:8px 10px;margin:14px 0 0}
 .ua-falsify p{margin:0}
 @media(max-width:620px){.ua-ids .row{grid-template-columns:1fr;row-gap:1px}}
 .ua-wba{border:1px solid #99a8bd;background:#f8fafd;box-shadow:inset 1px 1px 0 #fff;margin:0 0 12px;padding:2px 0}
-.ua-wba .r{display:grid;grid-template-columns:11em 1fr 1fr;gap:8px;align-items:center;padding:4px 10px;font-size:8.8pt;border-bottom:1px solid #e4eaf3}
+.ua-wba .r{display:grid;grid-template-columns:11em 1fr 1fr;gap:8px;align-items:center;padding:4px 10px;font-size:var(--text-xs);border-bottom:1px solid #e4eaf3}
 .ua-wba .r:last-child{border-bottom:0}
-.ua-wba .r.h{background:#eaf0f9;font-family:var(--font-caption);color:#20406e;font-size:8.4pt}
+.ua-wba .r.h{background:#eaf0f9;font-family:var(--font-caption);color:#20406e;font-size:var(--text-micro)}
 .ua-wba .t{font-family:var(--font-mono);color:#20406e}
 .ua-wba .v{font-family:var(--font-mono)}
 .ua-wba .same{color:#5b6879}
 .ua-wba .diff{color:#a32b13;font-weight:bold}
-.ua-wba .verdict{padding:6px 10px;font-size:8.6pt;color:#33455f;border-top:1px solid #ccd6e4;background:#eef3fa}
+.ua-wba .verdict{padding:6px 10px;font-size:var(--text-micro);color:#33455f;border-top:1px solid #ccd6e4;background:#eef3fa}
 @media(max-width:620px){.ua-wba .r{grid-template-columns:1fr}}
 
 .ua-sep{display:inline-block;width:1px;height:13px;background:#b6c2d4;margin:0 3px;vertical-align:-2px}
 .ua-matrix.compact{width:auto;min-width:100%}
 .ua-scroll{padding-right:2.2em}
-.ua-matrix.compact td.c{text-align:center;width:1.75em;padding:3px 1px;font-size:10.5pt;line-height:1.15;font-family:var(--font-ui)}
-.ua-matrix.compact td.c .s{display:block;font-family:var(--font-mono);font-size:6.6pt;line-height:1;color:inherit;opacity:.72}
+.ua-matrix.compact td.c{text-align:center;width:1.75em;padding:3px 1px;font-size:var(--text-body);line-height:1.15;font-family:var(--font-ui)}
+.ua-matrix.compact td.c .s{display:block;font-family:var(--font-mono);font-size:var(--text-4xs);line-height:1;color:inherit;opacity:.72}
 .ua-matrix.compact .ok{color:#1d6b1d}
 .ua-matrix.compact .no{color:#a32b13}
 .ua-matrix.compact .sh{color:#9a6a08}
@@ -83,15 +83,15 @@
    to fit a 760px window. A horizontal header needs ~7em a column and there is not
    7em x 16 anywhere on this page. */
 .ua-matrix.compact th.rot{height:7em;vertical-align:bottom;padding:0 0 4px;width:1.75em;position:relative}
-.ua-matrix.compact th.rot>span{display:block;transform-origin:left bottom;transform:translateX(1.35em) rotate(-60deg);white-space:nowrap;font-size:7.8pt;text-align:left;width:0}
+.ua-matrix.compact th.rot>span{display:block;transform-origin:left bottom;transform:translateX(1.35em) rotate(-60deg);white-space:nowrap;font-size:var(--text-2xs);text-align:left;width:0}
 .ua-matrix.compact th.hsite{vertical-align:bottom}
 .ua-matrix.compact th.ctl>span{font-weight:bold;color:#20406e}
 .ua-matrix.compact td.site{max-width:11em}
 .ua-matrix.compact td,.ua-matrix.compact th{padding-left:2px;padding-right:2px}
 @media(max-width:620px){
   .ua-matrix.compact th.rot{height:6.4em}
-  .ua-matrix.compact th.rot>span{font-size:7pt}
-  .ua-matrix.compact td.c{width:1.85em;font-size:9.5pt}
+  .ua-matrix.compact th.rot>span{font-size:var(--text-4xs)}
+  .ua-matrix.compact td.c{width:1.85em;font-size:var(--text-sm)}
 }
 
 </style>

@@ -325,14 +325,14 @@ export function renderWhoareyouValues(data, ua, rdap) {
   return html`
     <div style="border:1px solid #9aa7bd;background:#fff;box-shadow:inset 1px 1px 0 #eef2f8;margin:8px 0 2px">
       <div style="background:linear-gradient(#fbfdff,#eaf0f9);border-bottom:1px solid #cfd8e6;padding:5px 9px;font-weight:bold;color:#0a246a">🖥 Device Manager &middot; this connection</div>
-      <ul style="list-style:none;margin:0;padding:7px 12px;line-height:1.95;font-size:9.5pt">
+      <ul style="list-style:none;margin:0;padding:7px 12px;line-height:1.95;font-size:var(--text-sm)">
         <li>🖧 <b>Network adapter</b> &nbsp;Anycast edge, colo <b>${data.colo}</b> <span class="dim">(${data.asOrg}, AS${data.asn})</span></li>
         <li>🔒 <b>Security coprocessor</b> &nbsp;<b>${data.tlsVersion}</b> <span class="dim">${data.tlsCipher}</span></li>
         <li>🌐 <b>Transport</b> &nbsp;<b>${data.httpProtocol}</b>${data.httpProtocol === "HTTP/3" ? html` <span class="dim">over QUIC</span>` : ""}</li>
         <li>🌍 <b>Region</b> &nbsp;${data.city}, ${data.country} <span class="dim">(${data.timezone})</span></li>
         <li>🖥 <b>Client</b> &nbsp;${ua.browser} on ${ua.os} <span class="dim">${ua.device}</span></li>
       </ul>
-      <div style="border-top:1px solid #cfd8e6;padding:5px 10px;font-size:8.5pt;color:#6b7280">What guards all this: <a href="/security">Security Center</a></div>
+      <div style="border-top:1px solid #cfd8e6;padding:5px 10px;font-size:var(--text-micro);color:#6b7280">What guards all this: <a href="/security">Security Center</a></div>
     </div>
 
     <hr>
@@ -418,12 +418,12 @@ export function renderWhoareyouPage() {
 
 /* whoareyou-specific title-bar extra: the boxed _ □ × controls get a touch
    more letter-spacing. (title flex comes from xpChromeCss site-wide.) */
-.title-bar .controls { letter-spacing: 2px; font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
+.title-bar .controls { letter-spacing: 2px; font-family: var(--font-ui); font-size: var(--text-xs); }
 
 h1 { letter-spacing: -0.01em; }
 h2 {
-  font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
-  font-size: 12pt;
+  font-family: var(--font-caption);
+  font-size: var(--text-h2);
   color: var(--blue-40);
   margin: 18px 0 6px;
   font-weight: bold;
@@ -442,7 +442,7 @@ h2::after {
   margin-top: 8px;
 }
 
-.lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
+.lede { margin: 0 0 14px; color: var(--ink-soft); font-size: var(--text-body); }
 p { margin: 0 0 12px; }
 ul { margin: 0 0 12px 22px; padding: 0; }
 li { margin-bottom: 4px; }
@@ -460,8 +460,8 @@ hr {
 }
 
 code, .mono {
-  font-family: "Courier New", Courier, monospace;
-  font-size: 10pt;
+  font-family: var(--font-mono);
+  font-size: var(--text-ui);
   background: oklch(96.72% 0 0);
   border: 1px solid oklch(88.22% 0 0);
   padding: 0 3px;
@@ -477,25 +477,25 @@ code, .mono {
   border: 1px solid var(--frame);
   border-top-color: var(--blue-45);
   border-left-color: var(--blue-45);
-  font-size: 10pt;
+  font-size: var(--text-ui);
 }
 .field-grid dt {
   background: var(--surface-desktop);
   color: var(--blue-40);
   font-weight: bold;
   padding: 4px 8px;
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-family: var(--font-ui);
 }
 .field-grid dd {
   background: oklch(100.00% 0 0);
   margin: 0;
   padding: 4px 8px;
-  font-family: "Courier New", Courier, monospace;
-  font-size: 9.5pt;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
   word-break: break-all;
   color: var(--ink);
 }
-.field-grid dd .dim { color: var(--ink-faint); font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
+.field-grid dd .dim { color: var(--ink-faint); font-family: var(--font-ui); font-size: var(--text-xs); }
 .field-grid dd.muted { color: var(--ink-quiet); }
 
 /* little raised "pill" — looks like a tiny 3D button */
@@ -505,8 +505,8 @@ code, .mono {
   border: 1px solid var(--frame);
   background: var(--surface-desktop);
   color: var(--blue-40);
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
-  font-size: 8.5pt;
+  font-family: var(--font-ui);
+  font-size: var(--text-micro);
   font-weight: bold;
   margin-right: 4px;
   border-radius: 2px;
@@ -518,7 +518,7 @@ code, .mono {
   background: oklch(98.81% 0.0263 99.90);
   padding: 8px 12px;
   margin: 14px 0;
-  font-size: 10pt;
+  font-size: var(--text-ui);
   box-shadow: 1px 1px 0 oklch(from var(--frame) l c h / 0.3);
 }
 .callout::before {
@@ -530,8 +530,8 @@ code, .mono {
 /* footer */
 footer {
   text-align: center;
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
-  font-size: 9pt;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
   color: var(--ink-quiet);
   margin: 18px 0 0;
   padding-top: 14px;
@@ -541,7 +541,7 @@ footer .signature { font-style: italic; margin-top: 4px; }
 footer .signature small { color: oklch(56.93% 0 0); }
 
 /* the island's failure note, shown only if the values request failed */
-.wy-fail { display: none; color: var(--ink-faint); font-size: 9pt; }
+.wy-fail { display: none; color: var(--ink-faint); font-size: var(--text-xs); }
 #wy-values[data-state="failed"] + .wy-fail { display: block; }
 `,
     body: html`

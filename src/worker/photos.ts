@@ -653,7 +653,7 @@ function renderTile(p, altMap, i: number, extra: Html = EMPTY): Html {
 
 const SHEET_CSS = `/*min*/
   h1 { font-size: 18pt; }
-  .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
+  .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: var(--text-body); }
   .sheet {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 12px; margin: 8px 0 16px;
@@ -670,13 +670,13 @@ const SHEET_CSS = `/*min*/
   }
   .ph:hover img { border-color: oklch(41.92% 0.13 250.51); }
   .ph-name {
-  display: block; margin-top: 3px; font-size: 7.5pt; color: var(--ink-quiet);
+  display: block; margin-top: 3px; font-size: var(--text-3xs); color: var(--ink-quiet);
   font-family: var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .ph:hover .ph-name { color: var(--link); }
-  .ph-fmt { display: block; font-size: 7.5pt; font-family: var(--font-ui); color: var(--ink-quiet); }
+  .ph-fmt { display: block; font-size: var(--text-3xs); font-family: var(--font-ui); color: var(--ink-quiet); }
   .ph-fmt a { margin: 0 2px; }
-  footer { text-align: center; font-size: 9pt; color: var(--ink-quiet); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule); }
+  footer { text-align: center; font-size: var(--text-xs); color: var(--ink-quiet); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule); }
   footer address { font-style: italic; margin-top: 4px; }
   a { color: var(--link); }
 `;

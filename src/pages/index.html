@@ -77,6 +77,13 @@
   --font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;
   --font-ui:Tahoma,Verdana,Geneva,sans-serif;
   --font-mono:"Courier New",Courier,monospace;
+  /* the sizes this page sets before luna.css lands; a var() with nothing behind
+     it would paint at the browser default and then jump */
+  --text-h1:14pt;
+  --text-body:10.5pt;
+  --text-ui:10pt;
+  --text-xs:9pt;
+  --text-mono:9pt;
 }
 /* ─── personal homepage, circa 2003 ────────────────────────────────────
    period cues: verdana body, trebuchet headings, web-safe blues, 3D
@@ -126,7 +133,7 @@ body {
       oklch(88% 0.05 232) 60%,
       oklch(60% 0.16 140) 100%) fixed;
   font-family: var(--font-ui);
-  font-size: 10.5pt;
+  font-size: var(--text-body);
   line-height: 1.5;
   /* modern line-breaking: fewer orphans + less ragged last lines. progressive —
      ignored where unsupported. (also set globally via nav.js for every page.) */
@@ -147,7 +154,7 @@ body {
   background: var(--grad-title);
   color: oklch(100.00% 0 0);
   font-family: var(--font-caption);
-  font-size: 10pt;
+  font-size: var(--text-ui);
   font-weight: bold;
   padding: 4px 8px;
   border-bottom: 1px solid var(--blue-40);
@@ -257,7 +264,7 @@ body {
 
 h1 {
   font-family: var(--font-caption);
-  font-size: 14pt;
+  font-size: var(--text-h1);
   color: var(--blue-40);
   margin: 0 0 4px;
   font-weight: bold;
@@ -267,7 +274,7 @@ h1 {
 .lede {
   margin: 0 0 14px;
   color: var(--ink-soft);
-  font-size: 10.5pt;
+  font-size: var(--text-body);
   /* pretty: avoids orphan/short last lines in the prose. supported
      Chrome 117+/Safari 17.5+; treated as `normal` elsewhere (no harm). */
   text-wrap: pretty;
@@ -350,7 +357,7 @@ hr {
 footer {
   text-align: center;
   font-family: var(--font-ui);
-  font-size: 9pt;
+  font-size: var(--text-xs);
   color: var(--ink-quiet);
   margin: 18px 0 0;
   padding-top: 14px;
@@ -364,7 +371,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
 .under-construction {
   text-align: center;
   font-family: var(--font-caption);
-  font-size: 9pt;
+  font-size: var(--text-xs);
   color: var(--warn);
   font-weight: bold;
   letter-spacing: 0.05em;
@@ -415,7 +422,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
   background: var(--ink);
   color: var(--gold);
   font-family: var(--font-mono);
-  font-size: 9pt;
+  font-size: var(--text-mono);
   font-weight: bold;
   padding: 1px 6px;
   border: 1px solid var(--ink-quiet);

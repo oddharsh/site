@@ -276,7 +276,7 @@ export function renderDynoPage() {
     head: islandPreload(PULLS_URL),
     css: `/*min*/
 h1{margin:0 0 3px}
-.lede{font-size:9pt;color:#4a5568;margin:0 0 13px;line-height:1.5}
+.lede{font-size:var(--text-xs);color:#4a5568;margin:0 0 13px;line-height:1.5}
 .chart{width:100%;height:auto;display:block;margin:2px 0 4px;overflow:visible}
 .chart .grid{stroke:#e2e8f0;stroke-width:1}
 .chart .axis{stroke:#b6c2d2;stroke-width:1}
@@ -294,25 +294,25 @@ h1{margin:0 0 3px}
 .chart circle.s-worker{fill:#7a4eb0}
 .chart circle.s-pages{fill:#2f6fb5}
 .chart circle.s-assets{fill:#3c8f24}
-.legend{list-style:none;display:flex;flex-wrap:wrap;gap:4px 14px;margin:0 0 13px;padding:0;font-size:8pt;color:#5a6a7d}
+.legend{list-style:none;display:flex;flex-wrap:wrap;gap:4px 14px;margin:0 0 13px;padding:0;font-size:var(--text-2xs);color:#5a6a7d}
 .legend li{display:flex;align-items:center;gap:5px}
 .legend i{width:13px;height:3px;border-radius:2px;flex:0 0 13px}
 .legend i.s-worker{background:#7a4eb0}
 .legend i.s-pages{background:#2f6fb5}
 .legend i.s-assets{background:#3c8f24}
 .legend i.s-dash{background:repeating-linear-gradient(90deg,#8b98a8 0 4px,transparent 4px 7px)}
-.callout{border:1px solid #c7d4e4;background:linear-gradient(180deg,#f4f8fd,#e8f0f9);border-radius:4px;padding:10px 12px;margin:0 0 13px;font-size:9pt;color:#33415c;line-height:1.55}
+.callout{border:1px solid #c7d4e4;background:linear-gradient(180deg,#f4f8fd,#e8f0f9);border-radius:4px;padding:10px 12px;margin:0 0 13px;font-size:var(--text-xs);color:#33415c;line-height:1.55}
 .callout b{font-family:var(--font-caption);color:#1e3a5f}
-table{width:100%;border-collapse:collapse;font-size:8.5pt}
-th{text-align:left;font-family:var(--font-caption);font-size:8pt;color:#5a6a7d;border-bottom:1px solid #c7d4e4;padding:4px 6px}
+table{width:100%;border-collapse:collapse;font-size:var(--text-micro)}
+th{text-align:left;font-family:var(--font-caption);font-size:var(--text-2xs);color:#5a6a7d;border-bottom:1px solid #c7d4e4;padding:4px 6px}
 th.num,td.num{text-align:right}
 td{padding:4px 6px;border-bottom:1px solid #eef2f7;color:#33415c}
-.mono{font-family:var(--font-mono);font-size:8pt}
+.mono{font-family:var(--font-mono);font-size:var(--text-2xs)}
 td.sha{color:#7a4eb0}
-td.src{font-size:7.5pt;color:#8b98a8}
-.foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:9px;margin-top:13px;line-height:1.55}
+td.src{font-size:var(--text-3xs);color:#8b98a8}
+.foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid #e2e8f0;padding-top:9px;margin-top:13px;line-height:1.55}
 /* the island's failure note, shown only if the pulls request failed */
-.dy-fail{display:none;font-size:8.5pt;color:#6b7280;margin:0 0 13px}
+.dy-fail{display:none;font-size:var(--text-micro);color:#6b7280;margin:0 0 13px}
 #dy-pulls[data-state="failed"] + .dy-fail{display:block}
 `,
     body: html`

@@ -21,29 +21,29 @@
 
 <link rel="stylesheet" href="/lwe-base.css">
 <style>:root{--accent:#9a6a16;--accent-soft:#fbf3dd;--glyph:"字";--glyph-font:Georgia,serif;--name-color:#7a5410;--disclosure-ink:#7a6a16;--pic-g0:#d8a32e;--pic-g1:#b8860b;--pic-border:#7a5410}
-.msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
+.msg .bubble code { font-family: var(--font-mono); font-size: var(--text-sm); background: #f1ece0; padding: 0 3px; border-radius: 2px; }
 
 .enc-in { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
-.enc-in input { font-family: var(--font-mono); font-size: 13pt; padding: 4px 8px; width: 170px; border: 1px solid #7d8aa3; box-shadow: inset 1px 1px 0 #c3cbdb; }
-.enc-in .preset { font-family: var(--font-ui); font-size: 12pt; padding: 2px 8px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; }
+.enc-in input { font-family: var(--font-mono); font-size: var(--text-lg); padding: 4px 8px; width: 170px; border: 1px solid #7d8aa3; box-shadow: inset 1px 1px 0 #c3cbdb; }
+.enc-in .preset { font-family: var(--font-ui); font-size: var(--text-h2); padding: 2px 8px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; }
 .enc-in .preset:hover { border-color: var(--accent); background: linear-gradient(to bottom,#fff,#fbf3dd); }
-table.enc { width: 100%; border-collapse: collapse; font-size: 9pt; }
-table.enc th { text-align: left; color: #6b7280; font-weight: bold; font-size: 8pt; border-bottom: 1px solid #e0cf9e; padding: 3px 5px; }
+table.enc { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+table.enc th { text-align: left; color: #6b7280; font-weight: bold; font-size: var(--text-2xs); border-bottom: 1px solid #e0cf9e; padding: 3px 5px; }
 table.enc td { padding: 3px 5px; border-bottom: 1px solid #f0e9d6; vertical-align: top; }
-table.enc .ch { font-size: 14pt; } table.enc .cp { font-family: var(--font-mono); color: #7a5410; }
+table.enc .ch { font-size: var(--text-h1); } table.enc .cp { font-family: var(--font-mono); color: #7a5410; }
 table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na { color: #c43636; font-family: var(--font-mono); }
 .totals { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-top: 10px; }
 .tcard { border: 1px solid #e0cf9e; border-radius: 4px; padding: 6px 7px; background: #fffdf6; text-align: center; }
-.tcard b { display: block; font-size: 8pt; color: #7a5410; } .tcard .n { font-family: var(--font-mono); font-size: 13pt; font-weight: bold; color: #15243f; } .tcard .u { font-size: 7.5pt; color:#66707d; }
+.tcard b { display: block; font-size: var(--text-2xs); color: #7a5410; } .tcard .n { font-family: var(--font-mono); font-size: var(--text-lg); font-weight: bold; color: #15243f; } .tcard .u { font-size: var(--text-3xs); color:#66707d; }
 .tcard.win { background: #eef7e8; border-color: #9cc97f; } .tcard.win b { color: #2c7a36; }
 .tcard.na .n { color: #c43636; }
 
 /* UTF-8 anatomy */
 .anat { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-.byte { font-family: var(--font-mono); font-size: 13pt; border: 1px solid #c3cbdb; border-radius: 4px; padding: 5px 7px; background: #0f1722; }
+.byte { font-family: var(--font-mono); font-size: var(--text-lg); border: 1px solid #c3cbdb; border-radius: 4px; padding: 5px 7px; background: #0f1722; }
 .byte .mark { color: #6b7d93; } .byte .pay { color: #ffd479; font-weight: bold; }
-.byte .lab { display: block; font-size: 7pt; color:#66707d; margin-top: 3px; font-family: var(--font-ui); text-align: center; }
-.reassemble { font-family: var(--font-mono); font-size: 9pt; color: #4a5568; margin-top: 6px; } .reassemble b { color: #15243f; } .reassemble .pay { color: #b8860b; font-weight: bold; }
+.byte .lab { display: block; font-size: var(--text-4xs); color:#66707d; margin-top: 3px; font-family: var(--font-ui); text-align: center; }
+.reassemble { font-family: var(--font-mono); font-size: var(--text-mono); color: #4a5568; margin-top: 6px; } .reassemble b { color: #15243f; } .reassemble .pay { color: #b8860b; font-weight: bold; }
 
 @media (max-width: 520px){ .totals{grid-template-columns:repeat(2,1fr)} }
 </style>

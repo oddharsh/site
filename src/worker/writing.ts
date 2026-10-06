@@ -22,7 +22,7 @@ body.np-page{margin:0;color:oklch(21% 0 0);font-family:var(--font-ui);font-size:
 border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;
 box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35)}
 .np-titlebar{flex:0 0 auto;display:flex;align-items:center;gap:5px;padding:4px 6px 4px 7px;color:oklch(100% 0 0);
-font-family:var(--font-caption);font-weight:bold;font-size:10pt;text-shadow:1px 1px #0f1089;border-bottom:1px solid var(--blue-40);
+font-family:var(--font-caption);font-weight:bold;font-size:var(--text-ui);text-shadow:1px 1px #0f1089;border-bottom:1px solid var(--blue-40);
 background:var(--grad-title)}
 .np-ico{flex:0 0 auto;width:14px;height:15px;background:oklch(100% 0 0);border:1px solid var(--ink-quiet);border-radius:1px;position:relative}
 .np-ico::before{content:"";position:absolute;left:2px;right:3px;top:3px;height:1px;background:oklch(55% 0.16 258);box-shadow:0 3px 0 oklch(55% 0.16 258),0 6px 0 oklch(55% 0.16 258),0 9px 0 oklch(55% 0.16 258)}
@@ -79,7 +79,7 @@ border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;
 .np-about-body{padding:12px 14px}.np-about-body p{margin:0 0 9px;line-height:1.45}
 .np-about-btns{display:flex;justify-content:flex-end}
 @media print{body.np-page{padding:0;background:none}#axp-taskbar,.np-titlebar,.np-menubar,.np-status{display:none}
-.np-window{border:0;box-shadow:none;height:auto;max-width:none}.np-text{font-size:11pt;color:#000}}
+.np-window{border:0;box-shadow:none;height:auto;max-width:none}.np-text{font-size:var(--text-lede);color:#000}}
 `;
 
 export function writingShell(o) {
