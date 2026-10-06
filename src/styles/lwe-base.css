@@ -5,9 +5,9 @@
  * :root (see "per-concept chrome" at the bottom); the rules that draw it live
  * here once. Page-only demo and content rules stay inline beside their markup. */
 html, body { margin: 0; padding: 0; }
-body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0); }
+body { font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: var(--ink); }
 .window { --axp-maxw: 640px; }
-.content { background: oklch(99% 0.005 95); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
+.content { background: var(--paper); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
 .msgr { display: flex; flex-direction: column; }
 /* an h1 (the page heading), styled as the plain buddy line it replaced */
 .msgr-head .who { flex: 1; min-width: 0; margin: 0; font: inherit; color: inherit; }

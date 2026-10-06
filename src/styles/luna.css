@@ -789,7 +789,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   content: "";
   display: block;
   height: 1px;
-  background: oklch(86.67% 0.0294 259.59);
+  background: var(--rule);
   margin-top: 8px;
 }
 .now-playing h2 a {
@@ -804,7 +804,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   white-space: nowrap;
 }
 .now-playing h2 a:hover {
-  color: oklch(62.80% 0.2577 29.23);
+  color: var(--link-hover);
   text-decoration: underline;
 }
 .np-list {
@@ -835,7 +835,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
    inner link. Keep one cursor across both so a vertical sweep does not alternate
    arrow/hand twice per row. Empty/error rows remain ordinary. */
 .np-list li[data-track-title] { cursor: pointer; }
-.np-list li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
+.np-list li:nth-child(even) { background: var(--row-alt); }
 .np-list li:last-child { border-bottom: none; }
 .np-list .np-empty {
   color: var(--ink-faint);
@@ -849,7 +849,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   display: block;
 }
 .np-list a:hover { background: var(--row-hover); }
-.np-list a:hover .np-title { color: oklch(62.80% 0.2577 29.23); }
+.np-list a:hover .np-title { color: var(--link-hover); }
 /* Scoped to the tracklist on purpose. The Notepad caption on /writing is also
    a .np-title, inside a white title bar, and a bare selector painted it navy. */
 .np-list .np-title {
@@ -864,7 +864,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .np-artist-link { cursor: pointer; }
 .np-artist-link:hover,
 .np-artist-link:focus-visible {
-  color: oklch(42.61% 0.2353 263.74);
+  color: var(--link);
   text-decoration: underline;
 }
 .np-explicit {
@@ -997,7 +997,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   display: flex;
   justify-content: space-between;
   padding: 3px 9px 4px;
-  border-top: 1px solid oklch(86.67% 0.0294 259.59);
+  border-top: 1px solid var(--rule);
   margin-top: 5px;
   font-size: 9px;
   color: oklch(52% 0 0);

@@ -385,7 +385,7 @@ function shellCss() {
      often place text/faces near an edge that object-fit:cover would chop. height:
      auto follows the image; max-height caps a rare portrait cover, with contain
      letterboxing inside it (bg fills) rather than distorting. */
-  #ev-tip img{display:block;width:300px;height:auto;max-height:340px;object-fit:contain;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid oklch(61% 0.061 253);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
+  #ev-tip img{display:block;width:300px;height:auto;max-height:340px;object-fit:contain;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid var(--frame);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
   @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}
 `;
 }

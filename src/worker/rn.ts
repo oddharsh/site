@@ -1262,9 +1262,9 @@ export function setPage(status, title, bodyHtml) {
     robots: "noindex",
     css: `
   h1 { font-size: 16pt; margin: 0 0 8px; }
-  a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
-  a:visited { color: oklch(42.09% 0.1935 328.36); }
-  a:hover   { color: oklch(62.80% 0.2577 29.23); }
+  a:link    { color: var(--link); text-decoration: underline; }
+  a:visited { color: var(--link-visited); }
+  a:hover   { color: var(--link-hover); }
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); padding: 0 3px; border: 1px solid oklch(88.22% 0 0); }
 `,
     body: unsafeHtml(`

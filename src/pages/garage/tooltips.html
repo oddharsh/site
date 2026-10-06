@@ -48,7 +48,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   text-transform: uppercase;
   vertical-align: middle;
 }
-.badge.review  { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+.badge.review  { color: var(--warn); border-color: var(--warn); background: oklch(98% 0.03 95); }
 .badge.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
 .badge.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
 .badge.ref     { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
@@ -76,7 +76,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   background: oklch(100% 0 0);
   padding: 4px;
   border: 1px solid var(--frame);
-  box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
+  box-shadow: 1px 1px 0 oklch(from var(--frame) l c h / 0.3);
   line-height: 0;
   aspect-ratio: 4 / 5;
   position: relative;
@@ -298,7 +298,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   cursor: pointer;
 }
 .vinyl-demo li:last-child { border-bottom: none; }
-.vinyl-demo li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
+.vinyl-demo li:nth-child(even) { background: var(--row-alt); }
 .vinyl-demo .title { font-weight: bold; color: var(--blue-40); }
 .vinyl-demo .sep { color: var(--ink-faint); margin: 0 6px; }
 .vinyl-demo .artist { color: var(--ink-soft); }
@@ -499,7 +499,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   -webkit-backface-visibility: hidden;
   background: oklch(100% 0 0);
   border: 1px solid var(--frame);
-  box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
+  box-shadow: 1px 1px 0 oklch(from var(--frame) l c h / 0.3);
   padding: 4px;
   line-height: 0;
 }
@@ -567,7 +567,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .anchor-pop .row-line { display: block; color: oklch(38% 0 0); font-size: 10.5px; }
 .anchor-fallback {
   font-size: 9.5pt;
-  color: oklch(54.44% 0.1504 47.10);
+  color: var(--warn);
   background: oklch(98% 0.03 95);
   border: 1px solid oklch(70% 0.1 75);
   padding: 6px 10px;

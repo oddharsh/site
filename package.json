@@ -37,6 +37,7 @@
     "infra:apply": "bun tools/apply-infra.ts",
     "labels:sync": "bun tools/sync-labels.ts",
     "pages:check": "bun tools/check-page-contracts.ts",
+    "colors:drift": "bun tools/color-drift.ts",
     "tools:check": "bun tools/check-tools.ts",
     "derive:check": "bun tools/check-derivations.ts",
     "ua:survey": "bun tools/ua-survey.ts",

@@ -574,29 +574,29 @@ export function renderAroundPage() {
     font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
   }
   table.scout tbody td { padding: 6px 8px; border-bottom: 1px solid oklch(92.73% 0.0139 247.98); vertical-align: top; }
-  table.scout tbody tr:nth-child(even) td { background: oklch(97.50% 0.0062 255.47); }
+  table.scout tbody tr:nth-child(even) td { background: var(--row-alt); }
   table.scout .firm { font-weight: bold; color: var(--blue-40); width: 22%; }
   table.scout .host { font-family: "Courier New", Courier, monospace; color: var(--ink-faint); font-size: 9pt; font-weight: normal; }
   table.scout .status { font-family: "Courier New", Courier, monospace; width: 8%; text-align: center; }
   table.scout .ok   { color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
-  table.scout .warn { color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
+  table.scout .warn { color: var(--warn); font-weight: bold; }
   table.scout .bad  { color: oklch(46.34% 0.1902 29.23); font-weight: bold; }
   table.scout .title { color: var(--ink); }
   table.scout .desc { color: var(--ink-dim); font-size: 9.5pt; margin-top: 3px; }
   table.scout .latency { font-family: "Courier New", Courier, monospace; color: var(--ink-soft); width: 9%; text-align: right; }
   table.scout .link { width: 5%; text-align: center; }
-  table.scout .link a { color: oklch(42.61% 0.2353 263.74); text-decoration: none; font-weight: bold; }
-  table.scout .link a:hover { color: oklch(62.80% 0.2577 29.23); text-decoration: underline; }
+  table.scout .link a { color: var(--link); text-decoration: none; font-weight: bold; }
+  table.scout .link a:hover { color: var(--link-hover); text-decoration: underline; }
   .meta {
     font-size: 9.5pt; color: var(--ink-dim);
     border: 1px solid var(--frame); background: oklch(98.81% 0.0263 99.90);
     padding: 6px 10px; margin: 12px 0;
   }
   .meta code { font-family: "Courier New", Courier, monospace; background: oklch(100.00% 0 0); border: 1px solid oklch(89.75% 0 0); padding: 0 3px; }
-  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
-  a { color: oklch(42.61% 0.2353 263.74); }
+  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule); }
+  a { color: var(--link); }
   .dim { color: var(--ink-faint); }
-  hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 12px 0; height: 0; }
+  hr { border: 0; border-top: 2px groove var(--rule); margin: 12px 0; height: 0; }
   .pending { border: 1px solid var(--frame); background: oklch(96.72% 0 0);
     color: var(--ink-dim); padding: 18px 16px; margin: 16px 0; cursor: progress; }
   /* the island's failure note, shown only if the snapshot request failed */

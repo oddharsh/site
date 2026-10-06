@@ -29,7 +29,7 @@ p { margin: 0 0 12px; }
 code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
 pre {
   font-family: var(--font-mono); font-size: 10.5pt; line-height: 1.5;
-  background: oklch(97.5% 0.006 255); border: 1px solid oklch(86.67% 0.0294 259.59);
+  background: var(--row-alt); border: 1px solid var(--rule);
   padding: 8px 10px; margin: 8px 0;
   /* wrap long code lines instead of forcing a sideways scroll on narrow
      viewports. that was the "weird horizontal scrollover" on the cards.
@@ -44,7 +44,7 @@ pre {
 .chip {
   font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold;
   padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
-  color: oklch(51% 0 0); border-color: oklch(72% 0 0); background: oklch(97% 0 0);
+  color: var(--ink-dim); border-color: oklch(72% 0 0); background: oklch(97% 0 0);
 }
 .chip::before { content: "… "; }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
@@ -75,8 +75,8 @@ pre {
   padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; white-space: nowrap;
 }
 .stat.cross    { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
-.stat.chrome   { color: oklch(54.44% 0.1504 47.10);  border-color: oklch(54.44% 0.1504 47.10);  background: oklch(98% 0.03 95);  }
-.stat.trial    { color: oklch(42.61% 0.2353 263.74); border-color: oklch(42.61% 0.2353 263.74); background: oklch(97% 0.03 264); }
+.stat.chrome   { color: var(--warn);  border-color: var(--warn);  background: oklch(98% 0.03 95);  }
+.stat.trial    { color: var(--link); border-color: var(--link); background: oklch(97% 0.03 264); }
 .stat.contested{ color: oklch(46.34% 0.1902 29.23);  border-color: oklch(46.34% 0.1902 29.23);  background: oklch(98% 0.03 30);  }
 /* WebKit standards-position chip: what Safari's team actually said, sourced
    from webkit.org/standards-positions (the authoritative signal, vs. the
@@ -85,7 +85,7 @@ pre {
   padding: 0 4px; border: 1px solid; border-radius: 2px; white-space: nowrap; margin-right: 5px; }
 .wk.sup { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
 .wk.opp { color: oklch(46.34% 0.1902 29.23);  border-color: oklch(46.34% 0.1902 29.23);  background: oklch(98% 0.03 30); }
-.wk.non { color: oklch(51% 0 0); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
+.wk.non { color: var(--ink-dim); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
 .demo .note { font-size: 9.5pt; color: oklch(40% 0 0); margin: 8px 0 0; }
 .demo .replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
 .unsupported { display: none; font-size: 9.5pt; color: oklch(46% 0.10 50); margin-top: 8px; }
@@ -134,7 +134,7 @@ pre {
 .ifor-demo a { text-decoration-style: dotted; text-underline-offset: 2px; interest-delay: 0s; }
 .ifor-pop {
   margin: 0; padding: 0; border: 1px solid var(--frame);
-  background: oklch(100% 0 0); box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
+  background: oklch(100% 0 0); box-shadow: 3px 3px 0 oklch(from var(--frame) l c h / .35);
 }
 .ifor-pop .cap {
   font-size: 8.5pt; color: oklch(38% 0 0); padding: 3px 6px;
@@ -167,7 +167,7 @@ pre {
 /* ── anchor positioning demo ─────────────────────────────────────────── */
 .anc-stage {
   position: relative; margin-top: 12px; padding: 22px;
-  border: 1px solid oklch(86.67% 0.0294 259.59);
+  border: 1px solid var(--rule);
   background:
     repeating-linear-gradient(0deg, oklch(97% 0.004 240) 0 11px, oklch(95% 0.006 240) 11px 12px);
   display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap;
@@ -183,7 +183,7 @@ pre {
   margin: 0; padding: 0; inset: auto;
   border: 1px solid var(--blue-40);
   background: oklch(100% 0 0);
-  box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
+  box-shadow: 3px 3px 0 oklch(from var(--frame) l c h / .35);
   font-size: 8.5pt; max-width: 200px;
 }
 .anc-pop .hd {
@@ -293,7 +293,7 @@ pre {
   margin: 0; padding: 0; inset: auto; position: fixed; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   border: 1px solid var(--frame);
-  background: oklch(100% 0 0); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+  background: oklch(100% 0 0); box-shadow: 4px 4px 0 oklch(from var(--frame) l c h / 0.35);
   font-size: 9pt; min-width: 150px;
 }
 .ph-pop .ph-bar {
@@ -390,7 +390,7 @@ placeholder
   appearance: base-select;
   background: oklch(100% 0 0);
   border: 1px solid var(--frame);
-  box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+  box-shadow: 3px 3px 0 oklch(from var(--frame) l c h / 0.35);
   padding: 2px;
   margin-top: 2px;
 }
@@ -404,7 +404,7 @@ placeholder
   cursor: pointer;
 }
 /* Outlook-Express alternating rows: impossible on a native <option>. */
-.bsel-field option:nth-of-type(even) { background: oklch(97.5% 0.006 255); }
+.bsel-field option:nth-of-type(even) { background: var(--row-alt); }
 .bsel-field option:hover,
 .bsel-field option:focus {
   background: var(--grad-title);
@@ -552,7 +552,7 @@ placeholder
 .sy-track.blocked .tap { left: 48%; }
 .sy-track.yielded .tap { left: 48%; }
 .sy-leg { font-size: 8pt; color: oklch(48% 0 0); margin: 3px 0 0; }
-.sy-leg .red { color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
+.sy-leg .red { color: var(--warn); font-weight: bold; }
 @media (--p3) {
   .sy-track .tap { background: oklch(58.99% 0.2604 26.30); }
 }
@@ -564,7 +564,7 @@ placeholder
 .sy-meter { font-size: 8.5pt; color: oklch(45% 0 0); margin: 0; }
 .sy-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
 .sy-out { font-size: 8.5pt; color: oklch(38% 0 0); margin: 8px 0 0; min-height: 2.6em; }
-.sy-out .hi { color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
+.sy-out .hi { color: var(--warn); font-weight: bold; }
 .sy-out .lo { color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
 /* card: html-in-canvas */
 /* ── HTML-in-Canvas (drawElement) demo ───────────────────────────────── */
@@ -619,7 +619,7 @@ placeholder
   /* contact-sheet frame, same vocabulary as the homepage photo grid */
   background:
     linear-gradient(180deg, oklch(96% 0.01 250) 0%, oklch(91% 0.02 250) 100%);
-  box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+  box-shadow: 1px 1px 0 oklch(from var(--frame) l c h / 0.35);
   display: flex; align-items: flex-end; justify-content: flex-start;
   padding: 4px 5px;
   font-family: var(--font-mono); font-size: 8pt;
@@ -743,7 +743,7 @@ placeholder
   background: var(--grad-title);
   color: oklch(100% 0 0); font-weight: bold;
   border-top-color: var(--blue-40);
-  box-shadow: inset 0 -2px 0 oklch(41.92% 0.0962 250.51 / .6);
+  box-shadow: inset 0 -2px 0 oklch(from var(--blue-40) l c h / .6);
 }
 .rm-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
 
@@ -2498,7 +2498,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       @starting-style { .ss-pop:popover-open { opacity: 0; translate: 0 -10px; } }
 
       .ld-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-      .ld-row .ld { flex: 1 1 130px; padding: 16px 12px; border-radius: 4px; font-size: 9.5pt; border: 1px solid oklch(70% 0.03 250); background: light-dark(oklch(93% 0.03 255), oklch(26% 0.05 255)); color: light-dark(oklch(22% 0 0), oklch(95% 0 0)); }
+      .ld-row .ld { flex: 1 1 130px; padding: 16px 12px; border-radius: 4px; font-size: 9.5pt; border: 1px solid oklch(70% 0.03 250); background: light-dark(oklch(93% 0.03 255), oklch(26% 0.05 255)); color: light-dark(var(--ink), oklch(95% 0 0)); }
       .ld-row .ld.l { color-scheme: light; }
       .ld-row .ld.d { color-scheme: dark; }
 

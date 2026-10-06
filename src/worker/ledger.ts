@@ -377,7 +377,7 @@ export function renderLedgerPage() {
   const css = `/*min*/
 h1 { font-size:13pt; margin:0 0 2px; }
 .lg-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:10pt; }
-.lg-lede a { color:oklch(42.61% 0.2353 263.74); }
+.lg-lede a { color:var(--link); }
 
 /* the invoice paper */
 .lg-paper { position:relative; background:#fff; border:1px solid oklch(80% 0.01 250); box-shadow:2px 2px 0 oklch(88% 0.01 250); padding:18px 20px 16px; max-width:640px; margin:0 auto; }
@@ -410,8 +410,8 @@ table.lg .empty { color:oklch(50% 0 0); font-size:9pt; padding:14px 4px; text-al
 .lg-terms b { color:oklch(35% 0 0); }
 .lg-terms ul { margin:4px 0 0; padding-left:18px; }
 .lg-terms li { margin:2px 0; }
-footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:14px; padding-top:11px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
-footer a { color:oklch(42.61% 0.2353 263.74); }
+footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:14px; padding-top:11px; border-top:1px solid var(--rule); }
+footer a { color:var(--link); }
 @media (max-width:560px){ .lg-stamp{ font-size:14pt; top:110px; right:12px; } }
 /* the island's failure note, shown only if the line-items request failed */
 .lg-fail { display:none; color:oklch(50% 0 0); font-size:8.6pt; margin:8px 0 0; }

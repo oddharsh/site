@@ -491,7 +491,7 @@ export const CENSUS_CSS = `/*min*/
 .cx-surf { font-family:"Courier New",monospace; font-size:7.6pt; color:oklch(35% 0.06 150); background:oklch(95% 0.03 150); border:1px solid oklch(82% 0.05 150); border-radius:3px; padding:0 5px; margin:0 3px 2px 0; display:inline-block; }
 .cx-none { color:oklch(60% 0 0); font-size:8pt; }
 .cx-foot { margin-top:10px; padding-top:8px; border-top:1px solid oklch(88% 0.02 250); font-size:8.6pt; color:oklch(42% 0.02 255); line-height:1.5; }
-.cx-foot a { color:oklch(42.61% 0.2353 263.74); }
+.cx-foot a { color:var(--link); }
 .cx-empty { padding:22px 10px; text-align:center; color:oklch(52% 0 0); font-size:9.5pt; }
 `;
 
@@ -572,9 +572,9 @@ function censusPage(exhibit, extra = {}) {
 .lx-badge.off { background:oklch(60% 0 0); }
 h1 { font-size:13pt; margin:0 0 2px; }
 .cx-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:10pt; line-height:1.5; }
-.cx-lede a { color:oklch(42.61% 0.2353 263.74); }
-footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:16px; padding-top:11px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
-footer a { color:oklch(42.61% 0.2353 263.74); }
+.cx-lede a { color:var(--link); }
+footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:16px; padding-top:11px; border-top:1px solid var(--rule); }
+footer a { color:var(--link); }
 `,
     body: html`
     <h1>The census</h1>

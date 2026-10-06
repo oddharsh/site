@@ -438,7 +438,7 @@ h2::after {
   content: "";
   display: block;
   height: 1px;
-  background: oklch(86.67% 0.0294 259.59);
+  background: var(--rule);
   margin-top: 8px;
 }
 
@@ -447,14 +447,14 @@ p { margin: 0 0 12px; }
 ul { margin: 0 0 12px 22px; padding: 0; }
 li { margin-bottom: 4px; }
 
-a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
-a:visited { color: oklch(42.09% 0.1935 328.36); }
-a:hover   { color: oklch(62.80% 0.2577 29.23); }
-a:active  { color: oklch(62.80% 0.2577 29.23); }
+a:link    { color: var(--link); text-decoration: underline; }
+a:visited { color: var(--link-visited); }
+a:hover   { color: var(--link-hover); }
+a:active  { color: var(--link-hover); }
 
 hr {
   border: 0;
-  border-top: 2px groove oklch(86.67% 0.0294 259.59);
+  border-top: 2px groove var(--rule);
   margin: 16px 0;
   height: 0;
 }
@@ -519,7 +519,7 @@ code, .mono {
   padding: 8px 12px;
   margin: 14px 0;
   font-size: 10pt;
-  box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
+  box-shadow: 1px 1px 0 oklch(from var(--frame) l c h / 0.3);
 }
 .callout::before {
   content: "ⓘ ";
@@ -535,7 +535,7 @@ footer {
   color: oklch(44.95% 0 0);
   margin: 18px 0 0;
   padding-top: 14px;
-  border-top: 1px solid oklch(86.67% 0.0294 259.59);
+  border-top: 1px solid var(--rule);
 }
 footer .signature { font-style: italic; margin-top: 4px; }
 footer .signature small { color: oklch(56.93% 0 0); }
