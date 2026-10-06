@@ -18,8 +18,8 @@ description: >-
 #
 # Mint it LAST, after every gate. bun-pin and wrangler-pin run a candidate
 # toolchain published hours ago, and that code should not share a process tree
-# with a token that can push. Same argument dependabot-relock.yml makes for
-# `--no-gates`. The calling job's checkout passes `persist-credentials: false`,
+# with a token that can push. deps-pin.yml makes the same argument for its
+# `--ignore-scripts` relock. The calling job's checkout passes `persist-credentials: false`,
 # so nothing before this step holds a write credential at all.
 
 inputs:

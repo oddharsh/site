@@ -1,4 +1,4 @@
-// `bun run deps:relock` rewrites the version claims in docs/DEPENDENCIES.md, and
+// `bun run deps:pin` rewrites the version claims in docs/DEPENDENCIES.md, and
 // the audit beside it reads them back. The two share findClaims on purpose, so
 // what this pins is that the WRITER lands on the same spans the READER matches.
 //
