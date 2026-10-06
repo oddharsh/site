@@ -42,10 +42,17 @@ const SEPARATE = ["config/tsconfig.lens-reader.json", "config/tsconfig.lens-read
 
 /** Execute the running Bun's checker; crashes and incomplete checks fail closed. */
 function check(root: string, config: string, flags: string[], executable: string) {
-  const result = spawnSync(executable, ["check", "-p", config, "--no-pretty", ...flags], {
+  // --all because `bun check` groups identical errors above 50. Piped
+  // --no-pretty output listed all 80 of 80 without it (measured 2026-10-06 on
+  // bbdc5a519), but the baseline counts lines, so it must not depend on that.
+  const result = spawnSync(executable, ["check", "-p", config, "--no-pretty", "--all", ...flags], {
     encoding: "utf8", cwd: root, maxBuffer: 64 << 20,
   });
   const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  // A Bun that predates the checker reads `check` as a package.json script.
+  if (/Script not found "check"/.test(result.stderr ?? "")) {
+    throw new Error(`${executable} has no \`bun check\` (gotcha 52); install the pinned Bun with \`bash .github/install-bun.sh ~/.bun/bin\``);
+  }
   const diagnostics = (result.stdout ?? "").split("\n").filter((line) => /^.+?\(\d+,\d+\): error TS\d+:/.test(line));
   if (result.error || result.signal || result.status === null ||
       (result.status !== 0 && (result.status !== 1 || diagnostics.length === 0)) ||
