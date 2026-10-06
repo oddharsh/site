@@ -29,7 +29,7 @@
   /* The chrome, ink, link and status colors are luna.css's tokens (--face,
      --shadow, --ink, --link, --danger, ...). Only what the site palette has no
      close match for is declared here. */
-  --navy:#0a246a; --navy2:#3a6ea5;
+  --navy:var(--luna-29); --navy2:#3a6ea5;
   --amber:#c8811c; --sel-soft:#d6e4f7;
   --grad-btn-hover:linear-gradient(180deg,#ffffff 0%,#f3f4ff 100%);
   /* The five device states, borrowed wholesale from Device Manager. The mapping IS
@@ -93,7 +93,7 @@ small,.meta{font-size:var(--text-mono);color:var(--ink-dim);font-family:var(--fo
 .seg{display:flex;box-shadow:var(--bevel-raised);border:1px solid var(--darkshadow);background:var(--grad-button)}
 .seg button{font:inherit;font-size:calc(var(--text-sm) * var(--sc));color:var(--ink);background:transparent;border:0;padding:4px 11px;cursor:pointer}
 .seg button+button{border-left:1px solid var(--shadow)}
-.seg button[aria-pressed=true]{background:linear-gradient(180deg,#c9d9f0,#e4ecf9);box-shadow:var(--bevel-sunken);font-weight:700}
+.seg button[aria-pressed=true]{background:linear-gradient(180deg,#c9d9f0,var(--slate-94));box-shadow:var(--bevel-sunken);font-weight:700}
 .seg button:hover{background:var(--grad-btn-hover)}
 /* luna's command button, scaled with the chrome like everything above */
 .xp-button{font-size:calc(var(--text-2xs) * var(--sc))}.xp-button.compact{font-size:calc(var(--text-xs) * var(--sc))}
@@ -205,7 +205,7 @@ svg.graph{margin:0 auto}
 @keyframes march{to{stroke-dashoffset:-14}}
 .dev{cursor:pointer}
 .dev .box{fill:var(--face-light);stroke:var(--shadow);stroke-width:1}
-.dev:hover .box{fill:#eef3fc;stroke:var(--navy2)}
+.dev:hover .box{fill:var(--mist-96);stroke:var(--navy2)}
 .dev.sel .box{fill:#dbe7fa;stroke:var(--navy);stroke-width:2}
 .dev .nm{font-size:9.5px;fill:var(--ink)}
 .dev .sub{font-family:var(--font-mono);font-size:8px;fill:#55554e}
@@ -240,7 +240,7 @@ svg.graph{margin:0 auto}
 #tip.anchored{position-anchor:--xp-tip;position-area:bottom span-right;top:auto;left:auto;transform:none;margin:6px 0 0}
 #tip .t{font-weight:700;color:var(--navy);display:block;margin-bottom:2px}
 #tip .st{display:block;font-family:var(--font-mono);font-size:calc(var(--text-micro) * var(--sc));color:#5a5a52;margin-bottom:4px}
-#tip .x{display:block;margin-top:4px;font-family:var(--font-mono);font-size:calc(var(--text-micro) * var(--sc));color:#4a4a4a}
+#tip .x{display:block;margin-top:4px;font-family:var(--font-mono);font-size:calc(var(--text-micro) * var(--sc));color:var(--grey-42)}
 #tip .bl{display:block;margin-top:4px;color:#8a2f20}
 #tip .bet{display:block;margin-top:4px;color:#4a3b7a}
 /* the skill-tooltip pair: what the pick buys, what it spends */
@@ -253,10 +253,10 @@ svg.graph{margin:0 auto}
 
 /* properties sheet */
 dialog.props{border:2px solid var(--navy);padding:0;background:var(--face);max-width:calc(530px * var(--sc));width:calc(100vw - 32px);box-shadow:3px 4px 12px rgba(0,20,90,.4);color:var(--ink)}
-dialog.props::backdrop{background:rgba(10,36,106,.28)}
-.props .tb{display:flex;align-items:center;gap:6px;padding:4px 5px 4px 8px;color:#fff;font-family:var(--font-caption);font-weight:700;font-size:calc(var(--text-lede) * var(--sc));text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,#5a86d8,#2f55b8 60%,#3f66c4)}
+dialog.props::backdrop{background:oklch(from var(--luna-29) l c h / .28)}
+.props .tb{display:flex;align-items:center;gap:6px;padding:4px 5px 4px 8px;color:#fff;font-family:var(--font-caption);font-weight:700;font-size:calc(var(--text-lede) * var(--sc));text-shadow:1px 1px var(--luna-30);background:linear-gradient(180deg,#5a86d8,#2f55b8 60%,#3f66c4)}
 .props .tb .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.props .tb .x{width:19px;height:17px;display:grid;place-items:center;border:1px solid #d8401c;border-radius:3px;background:linear-gradient(180deg,#e8795f,#ae3110);font-size:9px;color:#fff;cursor:pointer;font-family:var(--font-ui)}
+.props .tb .x{width:19px;height:17px;display:grid;place-items:center;border:1px solid var(--red-59);border-radius:3px;background:linear-gradient(180deg,var(--red-70),var(--red-50));font-size:9px;color:#fff;cursor:pointer;font-family:var(--font-ui)}
 .props .tb .x:hover{filter:brightness(1.12)}
 .props .tabs{display:flex;gap:2px;padding:6px 8px 0;background:var(--face)}
 .props .tabs button{font:inherit;font-size:calc(var(--text-sm) * var(--sc));padding:3px 11px;border:1px solid var(--shadow);border-bottom:0;border-radius:3px 3px 0 0;background:linear-gradient(180deg,#e3e0d2,#d7d4c6);color:var(--ink-soft);cursor:pointer;position:relative;top:1px}

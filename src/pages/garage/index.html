@@ -26,13 +26,13 @@
   /* wrench / spanner, built from CSS instead of an SVG so the title
      bar stays one HTTP request. silhouette matches a hex-key wrench
      viewed end-on; reads as one at 16px even though it isn't literally a wrench. */
-  background: oklch(87.82% 0.0877 66.27);
+  background: var(--amber-88);
 }
 .title-bar .icon::before {
   content: "";
   position: absolute;
   inset: 3px;
-  background: oklch(69.58% 0.2043 43.49);
+  background: var(--amber-70);
   clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
 }
 
@@ -86,11 +86,11 @@ p { margin: 0 0 12px; }
 }
 .shelf .badge.review  { color: var(--warn); border-color: var(--warn); background: oklch(98% 0.03 95); }
 .shelf .badge.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
-.shelf .badge.idle    { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
-.shelf .badge.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
+.shelf .badge.idle    { color: var(--ink-dim); border-color: var(--grey-70); background: oklch(96% 0 0); }
+.shelf .badge.dead    { color: var(--red-46); border-color: var(--red-46); background: oklch(98% 0.03 30); }
 .shelf .desc {
   font-size: var(--text-body);
-  color: oklch(28% 0 0);
+  color: var(--grey-28);
 }
 .shelf .meta {
   margin-top: 4px;

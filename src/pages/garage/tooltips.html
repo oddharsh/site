@@ -33,7 +33,7 @@
 
 /* shared XP window chrome */
 h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.toy { font: var(--text-sm)/1.5 var(--font-mono); color: oklch(30% 0.02 250); background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 8px 10px; margin: 4px 0 10px; overflow-x: auto; }
+.toy { font: var(--text-sm)/1.5 var(--font-mono); color: var(--slate-30); background: oklch(96.72% 0 0); border: 1px solid var(--grey-88); padding: 8px 10px; margin: 4px 0 10px; overflow-x: auto; }
 
 /* status pills (match garage/index.html styling) */
 .badge {
@@ -50,19 +50,19 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 }
 .badge.review  { color: var(--warn); border-color: var(--warn); background: oklch(98% 0.03 95); }
 .badge.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
-.badge.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
-.badge.ref     { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.badge.dead    { color: var(--red-46); border-color: var(--red-46); background: oklch(98% 0.03 30); }
+.badge.ref     { color: var(--ink-dim); border-color: var(--grey-70); background: oklch(96% 0 0); }
 
 /* rejection callout: small box explaining why a variant didn't ship */
 .rejection {
   font-size: var(--text-ui);
   background: oklch(98% 0.02 30);
-  border-left: 3px solid oklch(46.34% 0.1902 29.23);
+  border-left: 3px solid var(--red-46);
   padding: 8px 12px;
   margin: 0 0 14px;
   color: oklch(30% 0.03 30);
 }
-.rejection strong { color: oklch(46.34% 0.1902 29.23); }
+.rejection strong { color: var(--red-46); }
 
 /* three-slot photo row */
 .row {
@@ -117,7 +117,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   top: 0; left: 0;
   width: 240px;
   background: oklch(8% 0 0);
-  border: 1px solid oklch(35% 0 0);
+  border: 1px solid var(--grey-35);
   color: oklch(96% 0.01 80);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -137,7 +137,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .lcd-tip .histogram {
   height: 32px;
   background: oklch(15% 0 0);
-  border-bottom: 1px solid oklch(35% 0 0);
+  border-bottom: 1px solid var(--grey-35);
   position: relative;
   overflow: hidden;
 }
@@ -173,9 +173,9 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   inset: 0;
   background:
     linear-gradient(90deg,
-      transparent 4%, oklch(95% 0 0) 5% 7%,
-      transparent 7% 11%, oklch(95% 0 0) 12% 14%,
-      transparent 14% 18%, oklch(95% 0 0) 18% 21%,
+      transparent 4%, var(--grey-95) 5% 7%,
+      transparent 7% 11%, var(--grey-95) 12% 14%,
+      transparent 14% 18%, var(--grey-95) 18% 21%,
       transparent 21% 100%);
   mask-image: linear-gradient(180deg, transparent 25%, oklch(0% 0 0) 100%);
   -webkit-mask-image: linear-gradient(180deg, transparent 25%, oklch(0% 0 0) 100%);
@@ -186,12 +186,12 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   inset: 0;
   background:
     linear-gradient(90deg,
-      transparent 24%, oklch(95% 0 0) 26% 28%,
-      transparent 28% 32%, oklch(95% 0 0) 33% 36%,
-      transparent 36% 42%, oklch(95% 0 0) 43% 47%,
-      transparent 47% 54%, oklch(95% 0 0) 55% 60%,
-      transparent 60% 68%, oklch(95% 0 0) 69% 72%,
-      transparent 72% 80%, oklch(95% 0 0) 81% 86%,
+      transparent 24%, var(--grey-95) 26% 28%,
+      transparent 28% 32%, var(--grey-95) 33% 36%,
+      transparent 36% 42%, var(--grey-95) 43% 47%,
+      transparent 47% 54%, var(--grey-95) 55% 60%,
+      transparent 60% 68%, var(--grey-95) 69% 72%,
+      transparent 72% 80%, var(--grey-95) 81% 86%,
       transparent 86% 100%);
   mask-image: linear-gradient(180deg, transparent 6%, oklch(0% 0 0) 100%);
   -webkit-mask-image: linear-gradient(180deg, transparent 6%, oklch(0% 0 0) 100%);
@@ -199,13 +199,13 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .lcd-tip .body { padding: 8px 9px 6px; }
 .lcd-tip .stem {
   font-weight: bold;
-  color: oklch(95% 0 0);
+  color: var(--grey-95);
   letter-spacing: 0.04em;
   font-size: 11px;
 }
 .lcd-tip .meta-line {
   font-size: 9.5px;
-  color: oklch(72% 0 0);
+  color: var(--grey-72);
   margin-top: 2px;
 }
 .lcd-tip .exposure {
@@ -228,7 +228,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 }
 .lcd-tip .cell {
   background: var(--ink);
-  border: 1px solid oklch(35% 0 0);
+  border: 1px solid var(--grey-35);
   padding: 2px 4px;
   display: flex;
   justify-content: space-between;
@@ -236,13 +236,13 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   gap: 4px;
   font-size: 9px;
 }
-.lcd-tip .cell .label { color: oklch(60% 0 0); letter-spacing: 0.04em; }
+.lcd-tip .cell .label { color: var(--grey-60); letter-spacing: 0.04em; }
 .lcd-tip .cell .val   { color: oklch(98% 0 0); font-weight: bold; }
 .lcd-tip .footer-row {
   display: flex;
   justify-content: space-between;
   font-size: 9px;
-  color: oklch(60% 0 0);
+  color: var(--grey-60);
   border-top: 1px solid oklch(25% 0 0);
   padding-top: 4px;
   margin-top: 2px;
@@ -359,8 +359,8 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .balloon-tip::before { top: -8px; border-width: 0 8px 8px; border-color: transparent transparent oklch(52% 0.05 90); }
 .balloon-tip::after  { top: -6px; border-width: 0 7px 7px; border-color: transparent transparent var(--row-hover); }
 .balloon-tip .bln-title  { font-weight: bold; color: oklch(33% 0.06 260); margin-bottom: 1px; }
-.balloon-tip .bln-artist { color: oklch(30% 0 0); }
-.balloon-tip .bln-meta   { margin-top: 5px; font-size: 10px; color: oklch(48% 0 0); }
+.balloon-tip .bln-artist { color: var(--grey-30); }
+.balloon-tip .bln-meta   { margin-top: 5px; font-size: 10px; color: var(--grey-48); }
 
 .xp-cam-tip .header {
   background: linear-gradient(180deg, var(--surface-desktop), oklch(85.04% 0.0283 248.16));
@@ -406,7 +406,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   height: 100%;
 }
 .xp-cam-tip .hist-svg .luma {
-  fill: oklch(35% 0 0);
+  fill: var(--grey-35);
   opacity: 0.35;
 }
 .xp-cam-tip .hist-svg polyline {

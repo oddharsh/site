@@ -171,7 +171,7 @@ function pathOf(target, origin) {
 function slugOf(path) { return path.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root"; }
 
 const OE_CSS = `/*min*/
-.oe-sub{font-size:var(--text-xs);color:#4a5568;margin:0 0 12px;max-width:64ch;line-height:1.5}
+.oe-sub{font-size:var(--text-xs);color:var(--slate-45);margin:0 0 12px;max-width:64ch;line-height:1.5}
 .oe-panes{display:grid;grid-template-columns:186px 1fr;gap:9px;align-items:start}
 .oe-tree{border:1px solid #7f9db9;background:#fff;padding:6px 4px;min-height:220px}
 .oe-tree ul{list-style:none;margin:0;padding:0}
@@ -181,12 +181,12 @@ const OE_CSS = `/*min*/
 .oe-root{font-weight:bold}
 .oe-muted{color:#8a94a6}
 .oe-fico{width:15px;height:12px;flex:0 0 15px;border-radius:1px 2px 2px 1px;background:linear-gradient(180deg,#ffd88a,#eda42c);border:1px solid #c07f14;box-shadow:inset 0 1px 0 #fff6}
-.oe-count{margin-left:auto;font-family:var(--font-mono);font-size:var(--text-3xs);color:#5a6b85;background:#eef2f8;border:1px solid #dbe3ee;border-radius:8px;padding:0 5px}
+.oe-count{margin-left:auto;font-family:var(--font-mono);font-size:var(--text-3xs);color:#5a6b85;background:var(--mist-96);border:1px solid var(--slate-92);border-radius:8px;padding:0 5px}
 .oe-list{border:1px solid #7f9db9;background:#fff;overflow:hidden}
 .oe-head,.oe-row{display:grid;grid-template-columns:1.1fr 2fr .7fr .9fr .7fr;gap:8px;align-items:baseline}
 .oe-head{background:linear-gradient(180deg,var(--row-alt),var(--surface-desktop));border-bottom:1px solid #b9c8dc;padding:4px 8px;font-size:var(--text-2xs);color:#42506b;font-weight:bold}
 .oe-rows{list-style:none;margin:0;padding:0}
-.oe-row{padding:6px 8px;border-bottom:1px solid #eef2f7;font-size:var(--text-xs);color:#22314d}
+.oe-row{padding:6px 8px;border-bottom:1px solid var(--mist-96);font-size:var(--text-xs);color:#22314d}
 .oe-row:nth-child(even){background:var(--paper-cool)}
 .oe-row.oe-light{color:#5a6b85;font-size:var(--text-micro)}
 .oe-row.oe-none{display:block;color:#5a6b85;font-size:var(--text-xs);padding:14px 10px}
@@ -194,12 +194,12 @@ const OE_CSS = `/*min*/
 .oe-subject a{color:#0b3fa8;text-decoration:none}
 .oe-subject a:hover{text-decoration:underline}
 .oe-kind{font-size:var(--text-2xs);color:#5a6b85}
-.oe-target{font-family:var(--font-mono);font-size:var(--text-3xs);color:#6b7280}
-.oe-date{font-family:var(--font-mono);font-size:var(--text-2xs);color:#6b7280}
+.oe-target{font-family:var(--font-mono);font-size:var(--text-3xs);color:var(--slate-55)}
+.oe-date{font-family:var(--font-mono);font-size:var(--text-2xs);color:var(--slate-55)}
 .oe-excerpt{grid-column:1 / -1;margin:5px 0 1px;padding-left:9px;border-left:3px solid var(--rule);color:#41506c;font-size:var(--text-micro);line-height:1.5}
-.oe-foot{font-size:var(--text-micro);color:#6b7280;border-top:1px solid var(--surface-desktop);padding-top:8px;margin-top:12px}
+.oe-foot{font-size:var(--text-micro);color:var(--slate-55);border-top:1px solid var(--surface-desktop);padding-top:8px;margin-top:12px}
 .oe-foot code{font-family:var(--font-mono);font-size:var(--text-2xs)}
 @media (max-width:640px){.oe-panes{grid-template-columns:1fr}.oe-head{display:none}.oe-row{grid-template-columns:1fr;gap:2px}}
-.oe-fail{display:none;font-size:var(--text-micro);color:#6b7280;margin:10px 0 0}
+.oe-fail{display:none;font-size:var(--text-micro);color:var(--slate-55);margin:10px 0 0}
 #oe-mail[data-state="failed"] + .oe-fail{display:block}
 `;

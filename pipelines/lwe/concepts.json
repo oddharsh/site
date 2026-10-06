@@ -126,7 +126,7 @@
       "pm": "AVIF vs JPEG vs jpegli: bytes-per-pixel, from the garage study",
       "navHint": "image encoding: avif, jpeg, jpegli, bytes-per-pixel",
       "accent": "#5f7da3",
-      "accentSoft": "#eef2f7",
+      "accentSoft": "var(--mist-96)",
       "glyph": "▦",
       "glyphSize": 14,
       "picGrad": [

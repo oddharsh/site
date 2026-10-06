@@ -85,6 +85,85 @@
   --selection:      var(--blue-50);
   --selection-text: oklch(100% 0 0);
 
+  /* ── SHARED PALETTE — colours the site already wrote by hand in 5+ files ──
+     Named 2026-10-06 from usage, not invented: each value is the most-used
+     colour of a cluster (members within dE 0.01), so its own uses move by
+     nothing. Names are family + OKLCH lightness (--slate-84 is a slate at
+     L 84%), so a name says what it looks like and a new step slots in. Hues
+     hang off the knobs above, so a knob turn retunes these too. Nine clusters
+     within dE 0.01 of an existing token were left out rather than named twice. */
+  /* neutral greys */
+  --grey-95:      oklch(95.00% 0 0);                               /* was oklch(95% 0 0), 7 files */
+  --grey-94:      oklch(94.00% 0 0);                               /* was oklch(94% 0 0), 6 files */
+  --grey-88:      oklch(88.22% 0 0);                               /* was oklch(88.22% 0 0), 14 files */
+  --grey-72:      oklch(72.00% 0 0);                               /* was oklch(72% 0 0), 5 files */
+  --grey-70:      oklch(70.00% 0 0);                               /* was oklch(70% 0 0), 6 files */
+  --grey-60:      oklch(59.99% 0 0);                               /* was #808080, 9 files */
+  --grey-48:      oklch(48.00% 0 0);                               /* was oklch(48% 0 0), 5 files */
+  --grey-42:      oklch(42.00% 0 0);                               /* was oklch(42% 0 0), 5 files */
+  --grey-35:      oklch(35.00% 0 0);                               /* was oklch(35% 0 0), 8 files */
+  --grey-33:      oklch(33.00% 0 0);                               /* was oklch(33% 0 0), 8 files */
+  --grey-30:      oklch(30.00% 0 0);                               /* was oklch(30% 0 0), 6 files */
+  --grey-28:      oklch(28.00% 0 0);                               /* was oklch(28% 0 0), 5 files */
+  /* cool near-neutrals */
+  --mist-96:      oklch(96.00% 0.0100 calc(var(--hue-luna) - 13.00)); /* was oklch(96% 0.01 250), 20 files */
+  --mist-92:      oklch(92.00% 0.0080 calc(var(--hue-luna) - 13.00)); /* was oklch(92% 0.008 250), 8 files */
+  /* blue-greys: borders, panel fills, secondary text */
+  --slate-96:     oklch(96.00% 0.0300 calc(var(--hue-luna) - 13.00)); /* was oklch(96% 0.03 250), 5 files */
+  --slate-94:     oklch(94.27% 0.0218 calc(var(--hue-luna) - 6.27)); /* was #e3edfb, 5 files */
+  --slate-92-b:   oklch(92.23% 0.0347 calc(var(--hue-luna) - 14.80)); /* was #d4e8fc, 6 files */
+  --slate-92:     oklch(91.59% 0.0202 calc(var(--hue-luna) - 5.53)); /* was #dbe4f1, 11 files */
+  --slate-90:     oklch(90.19% 0.0181 calc(var(--hue-luna) - 1.66)); /* was #d8dfeb, 14 files */
+  --slate-88:     oklch(87.96% 0.0216 calc(var(--hue-luna) - 3.81)); /* was #cfd8e6, 10 files */
+  --slate-85:     oklch(85.00% 0.0200 calc(var(--hue-luna) - 13.00)); /* was oklch(85% 0.02 250), 14 files */
+  --slate-84:     oklch(84.08% 0.0240 calc(var(--hue-luna) + 1.44)); /* was #c3cbdb, 13 files */
+  --slate-82:     oklch(82.00% 0.0200 calc(var(--hue-luna) - 13.00)); /* was oklch(82% 0.02 250), 6 files */
+  --slate-81:     oklch(81.04% 0.0286 calc(var(--hue-luna) - 4.63)); /* was #b6c2d4, 6 files */
+  --slate-80:     oklch(80.00% 0.0200 calc(var(--hue-luna) - 13.00)); /* was oklch(80% 0.02 250), 12 files */
+  --slate-73:     oklch(72.68% 0.0349 calc(var(--hue-luna) - 6.21)); /* was #99a8bd, 13 files */
+  --slate-71:     oklch(71.31% 0.0241 calc(var(--hue-luna) - 2.29)); /* was #9aa3b2, 9 files */
+  --slate-67:     oklch(67.46% 0.0280 calc(var(--hue-luna) - 9.36)); /* was #8b98a8, 5 files */
+  --slate-63:     oklch(63.17% 0.0407 calc(var(--hue-luna) + 0.49)); /* was #7d8aa3, 7 files */
+  --slate-55:     oklch(55.10% 0.0234 calc(var(--hue-luna) + 1.36)); /* was #6b7280, 19 files */
+  --slate-54:     oklch(54.13% 0.0237 calc(var(--hue-luna) - 8.00)); /* was #66707d, 8 files */
+  --slate-52:     oklch(52.00% 0.0300 calc(var(--hue-luna) - 8.00)); /* was oklch(52% 0.03 255), 9 files */
+  --slate-50:     oklch(50.00% 0.0400 calc(var(--hue-luna) - 3.00)); /* was oklch(50% 0.04 260), 5 files */
+  --slate-45:     oklch(44.74% 0.0343 calc(var(--hue-luna) - 1.68)); /* was #4a5568, 19 files */
+  --slate-40:     oklch(40.38% 0.0396 calc(var(--hue-luna) - 8.73)); /* was #3a4a5e, 5 files */
+  --slate-38:     oklch(37.53% 0.0501 calc(var(--hue-luna) + 0.06)); /* was #33415c, 6 files */
+  --slate-30:     oklch(30.00% 0.0200 calc(var(--hue-luna) - 13.00)); /* was oklch(30% 0.02 250), 7 files */
+  --slate-26:     oklch(26.22% 0.0549 calc(var(--hue-luna) - 1.62)); /* was #15243f, 13 files */
+  --slate-20:     oklch(20.32% 0.0246 calc(var(--hue-luna) - 3.74)); /* was #101722, 6 files */
+  /* the Luna window-frame blues */
+  --luna-56:      oklch(55.93% 0.2133 calc(var(--hue-luna) - 2.85)); /* was #166aee, 6 files */
+  --luna-44:      oklch(43.93% 0.2509 calc(var(--hue-luna) + 1.57)); /* was #0831d9, 9 files */
+  --luna-34:      oklch(34.47% 0.2038 calc(var(--hue-luna) + 1.07)); /* was #001ea0, 8 files */
+  --luna-31:      oklch(30.54% 0.1896 calc(var(--hue-luna) + 1.19)); /* was #00138c, 5 files */
+  --luna-30:      oklch(30.29% 0.1850 calc(var(--hue-luna) + 4.77)); /* was #0f1089, 5 files */
+  --luna-29:      oklch(29.48% 0.1261 calc(var(--hue-luna) + 1.24)); /* was #0a246a, 5 files */
+  /* violet tint */
+  --violet-96:    oklch(96.06% 0.0149 calc(var(--hue-luna) + 35.57)); /* was #f3f0fb, 8 files */
+  /* reds: the close button, error text */
+  --red-95:       oklch(95.22% 0.0207 calc(var(--hue-danger) - 7.48)); /* was #fdeaea, 6 files */
+  --red-70:       oklch(69.69% 0.1432 calc(var(--hue-danger) + 9.32)); /* was #e8795f, 5 files */
+  --red-65:       oklch(64.91% 0.1729 calc(var(--hue-danger) + 10.11)); /* was #e45f3e, 7 files */
+  --red-59:       oklch(59.03% 0.1944 calc(var(--hue-danger) + 9.09)); /* was #d8401c, 5 files */
+  --red-55:       oklch(54.86% 0.1791 calc(var(--hue-danger) + 0.34)); /* was #c43636, 6 files */
+  --red-50:       oklch(50.13% 0.1667 calc(var(--hue-danger) + 9.66)); /* was #ae3110, 7 files */
+  --red-46:       oklch(46.34% 0.1902 calc(var(--hue-danger) + 4.23)); /* was oklch(46.34% 0.1902 29.23), 5 files */
+  /* ambers: status, warnings */
+  --amber-96:     oklch(96.46% 0.0301 calc(var(--hue-chrome) - 6.52)); /* was #fbf3dd, 6 files */
+  --amber-88:     oklch(87.82% 0.0877 calc(var(--hue-warn) + 19.17)); /* was oklch(87.82% 0.0877 66.27), 5 files */
+  --amber-74:     oklch(73.59% 0.1589 calc(var(--hue-warn) + 14.79)); /* was #ef8f24, 11 files */
+  --amber-70:     oklch(69.58% 0.2043 calc(var(--hue-warn) - 3.61)); /* was oklch(69.58% 0.2043 43.49), 5 files */
+  --amber-56:     oklch(56.10% 0.1107 calc(var(--hue-chrome) - 21.59)); /* was #9a6a16, 7 files */
+  --amber-52:     oklch(52.44% 0.1000 calc(var(--hue-chrome) + 0.81)); /* was #7a6a16, 6 files */
+  --amber-49:     oklch(49.38% 0.0869 calc(var(--hue-chrome) - 14.85)); /* was #7a5c1e, 5 files */
+  --amber-49-b:   oklch(49.01% 0.1144 calc(var(--hue-warn) + 11.14)); /* was #8f4d06, 11 files */
+  /* greens: status */
+  --green-97:     oklch(96.53% 0.0219 calc(var(--hue-go) - 12.47)); /* was #eef7e8, 8 files */
+  --green-95:     oklch(95.00% 0.0100 calc(var(--hue-go) + 0.00)); /* was oklch(95% 0.01 145), 7 files */
+  --green-51:     oklch(51.49% 0.1277 calc(var(--hue-go) + 0.70)); /* was #2c7a36, 7 files */
   /* ── SEMANTIC SURFACE / ROLE ALIASES — author against these ──────────────*/
   --surface-desktop:  oklch(94.66% 0.0114 252.09); /* the page "desktop" wash  */
   --surface-window:   var(--window);               /* white content area       */

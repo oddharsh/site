@@ -1265,7 +1265,7 @@ export function setPage(status, title, bodyHtml) {
   a:link    { color: var(--link); text-decoration: underline; }
   a:visited { color: var(--link-visited); }
   a:hover   { color: var(--link-hover); }
-  code { font-family: var(--font-mono); background: oklch(96.72% 0 0); padding: 0 3px; border: 1px solid oklch(88.22% 0 0); }
+  code { font-family: var(--font-mono); background: oklch(96.72% 0 0); padding: 0 3px; border: 1px solid var(--grey-88); }
 `,
     body: unsafeHtml(`
     <h1>${esc(title)}</h1>

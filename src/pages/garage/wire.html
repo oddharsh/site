@@ -21,7 +21,7 @@
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-wire.jpg">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20d='M3%2020%20C8%2010%2012%2026%2016%2016%20S24%208%2029%2014'%20stroke='%23166aee'%20stroke-width='2.6'%20fill='none'%20stroke-linecap='round'/%3E%3Ccircle%20cx='3'%20cy='20'%20r='2.4'%20fill='%23166aee'/%3E%3Ccircle%20cx='29'%20cy='14'%20r='2.4'%20fill='%23166aee'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/prose.css">
-<style>.note code, p code, li code, td code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: var(--text-sm); }
+<style>.note code, p code, li code, td code { background: oklch(96.72% 0 0); border: 1px solid var(--grey-88); padding: 0 4px; font-family: var(--font-mono); font-size: var(--text-sm); }
 p { margin: 8px 0; }
 ul.tight { margin: 8px 0; padding-left: 22px; }
 ul.tight li { margin: 5px 0; }
@@ -30,18 +30,18 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
 .cf-feat { border: 1px solid var(--frame); background: var(--paper-cool); padding: 4px 14px 14px; margin: 14px 0; }
 .cf-feat h2 { margin-top: 12px; font-size: var(--text-h2); }
 .cf-feat > .xp-button { margin: 4px 0; }
-.cf-code { font: var(--text-mono) var(--font-mono); color: oklch(40% 0.04 145); background: oklch(95% 0.01 145); border: 1px solid oklch(80% 0.03 145);
+.cf-code { font: var(--text-mono) var(--font-mono); color: oklch(40% 0.04 145); background: var(--green-95); border: 1px solid oklch(80% 0.03 145);
   padding: 5px 8px; margin: 8px 0 0; overflow-x: auto; white-space: pre; }
 
 /* byte bars (kin to the encoding study's comparison bars) */
 .bars { margin: 10px 0 2px; }
 .bar-row { display: grid; grid-template-columns: 168px 1fr 76px; gap: 8px; align-items: center; margin: 4px 0; font-size: var(--text-sm); }
 .bar-row .lbl { font-family: var(--font-mono); font-size: var(--text-micro); color: oklch(35% 0.02 250); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar-row .track { height: 15px; background: oklch(96% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 2px; position: relative; }
+.bar-row .track { height: 15px; background: oklch(96% 0.005 250); border: 1px solid var(--slate-85); border-radius: 2px; position: relative; }
 .bar-row .fill { position: absolute; inset: -1px auto -1px -1px; border-radius: 2px; background: linear-gradient(180deg, oklch(64% 0.18 255), oklch(50% 0.20 258)); }
 .bar-row.win .fill { background: linear-gradient(180deg, oklch(62% 0.15 150), oklch(46% 0.16 150)); }
 .bar-row.dead .fill { background: linear-gradient(180deg, oklch(70% 0.02 250), oklch(56% 0.02 250)); }
-.bar-row .val { text-align: right; font-family: var(--font-mono); font-size: var(--text-micro); color: oklch(35% 0 0); }
+.bar-row .val { text-align: right; font-family: var(--font-mono); font-size: var(--text-micro); color: var(--grey-35); }
 .bar-cap { font-size: var(--text-micro); color: var(--ink-dim); margin: 4px 0 0; }
 
 /* before/after snippet cards (teardown vocabulary) */
@@ -66,13 +66,13 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
 .knob-panel dt:first-child { margin-top: 0; }
 .knob-panel dd { margin: 1px 0 0; font-size: var(--text-xs); line-height: 1.42; }
 .knob-panel code { font-family: var(--font-mono); font-size: var(--text-micro); }
-.knob-panel .knob-foot { margin: 9px 0 0; padding-top: 7px; border-top: 1px solid oklch(85% 0.02 250); font-size: var(--text-xs); color: var(--ink-quiet); }
+.knob-panel .knob-foot { margin: 9px 0 0; padding-top: 7px; border-top: 1px solid var(--slate-85); font-size: var(--text-xs); color: var(--ink-quiet); }
 .knob-panel .tag { display: inline-block; margin-right: 4px; padding: 0 4px; border: 1px solid oklch(70% 0.10 150); background: oklch(94% 0.04 150); color: oklch(38% 0.12 150); font: bold var(--text-2xs) var(--font-mono); }
 
 .cmp { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: var(--text-sm); }
-.cmp th, .cmp td { border: 1px solid oklch(85% 0.02 250); padding: 5px 8px; text-align: left; vertical-align: top; }
-.cmp th { background: oklch(96% 0.01 250); font-family: var(--font-caption); color: var(--blue-40); font-weight: normal; }
-.cmp td:first-child { font-family: var(--font-caption); color: oklch(33% 0 0); }
+.cmp th, .cmp td { border: 1px solid var(--slate-85); padding: 5px 8px; text-align: left; vertical-align: top; }
+.cmp th { background: var(--mist-96); font-family: var(--font-caption); color: var(--blue-40); font-weight: normal; }
+.cmp td:first-child { font-family: var(--font-caption); color: var(--grey-33); }
 .cmp .y { color: oklch(43% 0.16 150); font-weight: bold; }
 .cmp .n { color: oklch(50% 0.19 38); font-weight: bold; }
 .cmp caption { caption-side: bottom; font-size: var(--text-xs); color: var(--ink-dim); padding-top: 6px; text-align: left; }

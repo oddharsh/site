@@ -282,7 +282,7 @@ function shellCss() {
      fills the full window height (no mid-scroll cutoff / "weird spot"). */
   .window>.body{overflow:hidden !important}
   .body>.content{overflow:auto;min-height:0}
-  .pane{width:200px;flex:0 0 auto;border-right:2px solid #7a96c8;background:linear-gradient(180deg,oklch(90% 0.055 245),oklch(93% 0.038 245));padding:12px}
+  .pane{width:200px;flex:0 0 auto;border-right:2px solid #7a96c8;background:linear-gradient(180deg,oklch(90% 0.055 245),var(--slate-92-b));padding:12px}
   .pane .brand{display:block;padding:2px 4px 10px;color:oklch(16% 0 0);text-decoration:none}
   .pane .brand b{font:600 16pt var(--font-caption);display:block;line-height:1}
   .pane .brand span{font-size:10px;color:oklch(45% 0.01 250)}
@@ -306,13 +306,13 @@ function shellCss() {
   .count{font-size:11px;color:oklch(42% 0.02 255)}
   .badge{display:inline-block;font:bold 9px var(--font-ui);padding:1px 6px;border:1px solid;border-radius:0;text-transform:uppercase;letter-spacing:.04em}
   .badge.via{background:oklch(96% 0.02 250);color:oklch(42% 0.03 255);border-color:oklch(80% 0.04 250);font-weight:normal;text-transform:none}
-  .badge.past{background:oklch(95% 0 0);color:var(--ink-quiet);border-color:oklch(78% 0 0)}
+  .badge.past{background:var(--grey-95);color:var(--ink-quiet);border-color:oklch(78% 0 0)}
   .badge.browsed{background:oklch(95% 0.03 75);color:oklch(46% 0.08 60);border-color:oklch(83% 0.06 75);font-weight:normal;text-transform:none}
   .ev.disc{opacity:.5;background:oklch(98.5% 0 0)}
   .ev.disc:hover{opacity:1}
   /* attendee row */
   .alist{border:1px solid oklch(80% 0.035 250);border-radius:0;background:#fff}
-  .att{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid oklch(92% 0.02 250)}
+  .att{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--slate-92)}
   .att:first-child{border-top:0}
   .ava{display:inline-flex;align-items:center;justify-content:center;border-radius:0;background:var(--ab);color:#fff;font-weight:bold;flex:0 0 auto;text-shadow:0 1px 1px rgba(0,0,0,.3)}
   /* contrast-color() (Safari 26 + Firefox) auto-picks black/white per hue — fixes
@@ -331,11 +331,11 @@ function shellCss() {
   .att .soc{display:flex;gap:6px;flex:0 0 auto}
   .att .soc a{font-size:10px}
   .empty{text-align:center;color:oklch(50% 0.01 250);padding:34px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250)}
-  .xp-button{display:inline-block;min-width:73px;padding:4px 14px;font:var(--text-2xs)/1.3 var(--font-ui);color:#000;cursor:pointer;border:1px solid #8e9dad;border-radius:0;text-decoration:none;background:var(--grad-raised)}
+  .xp-button{display:inline-block;min-width:73px;padding:4px 14px;font:var(--text-2xs)/1.3 var(--font-ui);color:#000;cursor:pointer;border:1px solid var(--slate-67);border-radius:0;text-decoration:none;background:var(--grad-raised)}
   .xp-button:hover{border-color:#e9994a;box-shadow:inset 0 0 0 1px #fdd78b,0 0 3px 1px rgba(255,199,60,.55)}
   .xp-button.primary{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#3f81e8 12%,var(--blue-55) 50%,#2a64d4 88%,#2a60cc)}
   .note{font-size:11px;color:oklch(42% 0.01 250)}
-  code{font-family:var(--font-mono);font-size:11px;background:oklch(96% 0.01 250);border:1px solid oklch(88% 0.02 250);padding:0 3px;border-radius:0}
+  code{font-family:var(--font-mono);font-size:11px;background:var(--mist-96);border:1px solid var(--slate-88);padding:0 3px;border-radius:0}
   ol.steps{margin:8px 0;padding-left:20px}ol.steps li{margin:4px 0}
   .xp-field{box-sizing:border-box;width:100%;font-family:var(--font-ui);font-size:11px;color:var(--ink);background:#fff;padding:5px 7px;border:1px solid #7f9db9;border-radius:0;box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff;margin:0 0 8px}
   .xp-field:focus{outline:none;border-color:var(--blue-50);box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff,0 0 0 1px var(--blue-50)}
@@ -350,7 +350,7 @@ function shellCss() {
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
   .toolbar .search{flex:1;min-width:170px;margin:0}
   .chips{display:flex;gap:4px;flex-wrap:wrap}
-  .chip{font:var(--text-micro) var(--font-ui);padding:3px 11px;border:1px solid #8e9dad;border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
+  .chip{font:var(--text-micro) var(--font-ui);padding:3px 11px;border:1px solid var(--slate-67);border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
   .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,var(--blue-55) 60%,#2a60cc)}
   .ev[hidden],.grp[hidden]{display:none}
   .toolbar:has(+ [data-island] .empty){display:none}
@@ -460,7 +460,7 @@ function eventCard(e, isPast) {
     <div class="meta">${eventTime(d)}${isPast && d ? ` · ${esc(relativeTime(d))}` : ""}${e.location ? " · " + esc(e.location) : ""}</div>
     <div class="row">
       ${going ? "" : `<span class="badge browsed" title="synced from a browsed feed — not RSVP'd">browsed</span>`}
-      ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:oklch(60% 0 0)">${going ? "no guest list yet" : "not RSVP&rsquo;d"}</span>`}
+      ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:var(--grey-60)">${going ? "no guest list yet" : "not RSVP&rsquo;d"}</span>`}
       ${contributors.slice(0, 3).map((c) => `<span class="badge via">via ${esc(c)}</span>`).join("")}
       ${contributors.length > 3 ? `<span class="count">+${contributors.length - 3}</span>` : ""}
     </div>
@@ -729,7 +729,7 @@ function renderMcpInfo(path) {
     </div>
     <div class="grp">Connect</div>
     <p class="note" style="margin:0 0 8px">Add it to an MCP client config:</p>
-    <pre class="code-block" style="font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;background:oklch(97% 0 0);border:1px solid oklch(82% 0.02 250);border-radius:3px;padding:10px;overflow:auto;margin:0 0 12px">{
+    <pre class="code-block" style="font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;background:oklch(97% 0 0);border:1px solid var(--slate-82);border-radius:3px;padding:10px;overflow:auto;margin:0 0 12px">{
   "mcpServers": {
     "serendipity": { "url": "${ep}" }
   }

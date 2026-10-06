@@ -35,7 +35,7 @@ export async function sendApprovalRequest(env, booking, approveUrl, declineUrl, 
     <p><strong>when:</strong> ${esc(when)}<br>
        ${area ? `<strong>where they are:</strong> ${esc(area)}<br>` : ""}
        <strong>what about:</strong></p>
-    <blockquote style="border-left:3px solid var(--ink-faint);padding-left:.8em;margin-left:0;color:#333">
+    <blockquote style="border-left:3px solid var(--ink-faint);padding-left:.8em;margin-left:0;color:var(--grey-33)">
       ${esc(topic).replace(/\n/g, "<br>")}
     </blockquote>
     <p>
@@ -165,7 +165,7 @@ export async function sendHostCopy(
     <p><strong>${esc(name)}</strong> &lt;${esc(email)}&gt;${updated ? ", updated" : ""}.</p>
     <p><strong>when:</strong> ${esc(when)}<br>
        <strong>where:</strong> ${esc(location || "still to set")}</p>
-    <blockquote style="border-left:3px solid var(--ink-faint);padding-left:.8em;margin-left:0;color:#333">
+    <blockquote style="border-left:3px solid var(--ink-faint);padding-left:.8em;margin-left:0;color:var(--grey-33)">
       ${esc(topic).replace(/\n/g, "<br>")}
     </blockquote>
     ${cancelled

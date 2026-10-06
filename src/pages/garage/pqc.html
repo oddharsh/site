@@ -19,17 +19,17 @@
 <meta property="og:image:alt" content="The aadhar.sh/garage/pqc interactive demo, screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-pqc.jpg">
 <link rel="stylesheet" href="/prose.css">
-<style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
+<style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid var(--amber-49-b)}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--amber-74);text-shadow:none}
 .content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
 .garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
 .pqc-tiers{border-collapse:collapse;width:100%;margin:0 0 14px;font-size:var(--text-sm)}
 .pqc-tiers th{text-align:left;background:var(--surface-desktop);border:1px solid var(--rule);padding:4px 7px;font-family:var(--font-caption)}
-.pqc-tiers td{border:1px solid #d8dfeb;padding:4px 7px;vertical-align:top}
+.pqc-tiers td{border:1px solid var(--slate-90);padding:4px 7px;vertical-align:top}
 .pqc-tiers tr.mine td{background:#fffbe8}
-.pqc-demo,.pqc-live{border:1px solid #99a8bd;background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;margin:0 0 14px}
-.pqc-demo-head,.pqc-live-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,var(--surface-desktop),#dbe4f1);border-bottom:1px solid #b6c2d4;padding:5px 9px;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-sm);color:#20406e}
+.pqc-demo,.pqc-live{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;margin:0 0 14px}
+.pqc-demo-head,.pqc-live-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,var(--surface-desktop),var(--slate-92));border-bottom:1px solid var(--slate-81);padding:5px 9px;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-sm);color:#20406e}
 .pqc-toggle button{font:inherit;font-size:var(--text-micro);font-weight:normal;font-family:var(--font-ui);padding:2px 8px;cursor:pointer;background:linear-gradient(180deg,#fff,var(--surface-desktop));border:1px solid #8c9ab0;border-radius:3px;color:#243}
 .pqc-toggle button.on{background:linear-gradient(180deg,#cddcf2,#aec4e6);border-color:#5a7398;box-shadow:inset 1px 1px 2px rgba(0,0,0,.18)}
 .pqc-bars{list-style:none;margin:0;padding:10px 12px 4px;display:grid;grid-template-columns:max-content 1fr auto;gap:7px 8px;font-size:var(--text-xs)}
@@ -39,12 +39,12 @@
 .pqc-bars li.now .t{background:linear-gradient(180deg,#8fd98f,#3ea23e);border-color:#2c7a2c}
 .pqc-bars li.native .t{background:linear-gradient(180deg,#e6b45c,#c8880f);border-color:#9a6a08}
 .pqc-native{border-top:1px solid #ccd6e4;padding:8px 12px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.pqc-native-note{font-size:var(--text-micro);color:#5b6879;flex:1;min-width:14em}
+.pqc-native-note{font-size:var(--text-micro);color:var(--slate-52);flex:1;min-width:14em}
 .pqc-bars .v{font-family:var(--font-mono);font-size:var(--text-micro);color:#4a5870;white-space:nowrap}
-.pqc-read{margin:0;padding:2px 12px 10px;font-size:var(--text-micro);color:#5b6879}
+.pqc-read{margin:0;padding:2px 12px 10px;font-size:var(--text-micro);color:var(--slate-52)}
 .pqc-live-body{padding:8px 10px;font-family:var(--font-mono);font-size:var(--text-micro);color:#33455f;word-break:break-all;line-height:1.6}
 .pqc-live-body b{font-family:var(--font-ui)}
-.pqc-retired{border-left:3px solid var(--blue-40);background:oklch(96.5% 0.012 250.51);padding:8px 10px;margin:0 0 14px}
+.pqc-retired{border-left:3px solid var(--blue-40);background:var(--mist-96);padding:8px 10px;margin:0 0 14px}
 .pqc-retired p{margin:0}
 .pqc-falsify{border-left:3px solid #c9a227;background:#fffbe8;padding:8px 10px;margin:14px 0 0}
 @media(max-width:620px){.pqc-bars{grid-template-columns:max-content 1fr}.pqc-bars li{row-gap:2px}.pqc-bars .v{grid-column:2}}

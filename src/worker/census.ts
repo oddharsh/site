@@ -482,15 +482,15 @@ export const CENSUS_CSS = `/*min*/
 .cx-site a { font-family:var(--font-mono); color:oklch(40% 0.11 255); text-decoration:none; }
 .cx-site a:hover { text-decoration:underline; }
 .cx-num { font-family:var(--font-mono); white-space:nowrap; color:oklch(30% 0.04 255); }
-.cx-num span { color:oklch(58% 0 0); font-size:var(--text-3xs); }
+.cx-num span { color:var(--grey-60); font-size:var(--text-3xs); }
 .cx-up { color:oklch(45% 0.14 150); margin-left:3px; }
 .cx-down { color:oklch(52% 0.19 27); margin-left:3px; }
 .cx-flat { color:var(--ink-faint); margin-left:3px; }
 .cx-spark { font-family:var(--font-mono); font-size:var(--text-h2); letter-spacing:1px; color:oklch(45% 0.12 255); }
 .cx-surfs { line-height:1.7; }
 .cx-surf { font-family:var(--font-mono); font-size:var(--text-3xs); color:oklch(35% 0.06 150); background:oklch(95% 0.03 150); border:1px solid oklch(82% 0.05 150); border-radius:3px; padding:0 5px; margin:0 3px 2px 0; display:inline-block; }
-.cx-none { color:oklch(60% 0 0); font-size:var(--text-2xs); }
-.cx-foot { margin-top:10px; padding-top:8px; border-top:1px solid oklch(88% 0.02 250); font-size:var(--text-micro); color:oklch(42% 0.02 255); line-height:1.5; }
+.cx-none { color:var(--grey-60); font-size:var(--text-2xs); }
+.cx-foot { margin-top:10px; padding-top:8px; border-top:1px solid var(--slate-88); font-size:var(--text-micro); color:oklch(42% 0.02 255); line-height:1.5; }
 .cx-foot a { color:var(--link); }
 .cx-empty { padding:22px 10px; text-align:center; color:var(--ink-dim); font-size:var(--text-sm); }
 `;
@@ -569,7 +569,7 @@ function censusPage(exhibit, extra = {}) {
 .lx-badge { font-family:var(--font-mono); font-size:var(--text-3xs); color:#fff; background:oklch(52% 0.13 255); border-radius:8px; padding:1px 7px; }
 .lx-badge.warn { background:oklch(60% 0.16 50); }
 .lx-badge.ok { background:oklch(52% 0.13 150); }
-.lx-badge.off { background:oklch(60% 0 0); }
+.lx-badge.off { background:var(--grey-60); }
 h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .cx-lede { margin:0 0 12px; color:var(--ink-soft); font-size:var(--text-ui); line-height:1.5; }
 .cx-lede a { color:var(--link); }

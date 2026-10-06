@@ -174,7 +174,7 @@ body {
   width: 16px; height: 16px;
   margin-right: 6px;
   vertical-align: middle;
-  background: oklch(69.58% 0.2043 43.49);
+  background: var(--amber-70);
   position: relative;
   flex-shrink: 0;
 }
@@ -182,7 +182,7 @@ body {
   content: "";
   position: absolute;
   inset: 2px 4px;
-  background: oklch(87.82% 0.0877 66.27);
+  background: var(--amber-88);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 .title-bar .title-text { flex: 1; padding-left: 4px; }
@@ -219,8 +219,8 @@ body {
 }
 /* CLOSE = red at rest */
 .title-bar .controls .close {
-  border-color: #d8401c; background-color: #e45f3e;
-  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+  border-color: var(--red-59); background-color: var(--red-65);
+  background-image: linear-gradient(180deg, var(--red-70) 0%, var(--red-65) 30%, var(--red-65) 52%, #e2552a 80%, var(--red-50) 100%);
 }
 .title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
   border-color: #ff7a66; background-color: #ff957c;
@@ -249,13 +249,13 @@ body {
 .title-bar .controls .close::before { transform: rotate(45deg); }
 .title-bar .controls .close::after  { transform: rotate(-45deg); }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.title-bar { text-shadow: 1px 1px var(--luna-30); border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .window {
-  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border: 2px solid var(--luna-44); border-right-color: var(--luna-34); border-bottom-color: var(--luna-34);
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
-  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
-              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
-              4px 4px 0 rgba(0,30,160,.35);
+  box-shadow: inset 1px 1px 0 var(--luna-56), inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 var(--luna-31), inset -2px -2px 0 #003bda,
+              4px 4px 0 oklch(from var(--luna-34) l c h / .35);
 }
 
 .content {

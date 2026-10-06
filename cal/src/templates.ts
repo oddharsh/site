@@ -199,7 +199,7 @@ button.xp-button {
   font-family: var(--font-ui);
   font-size: var(--text-ui);
   color: var(--ink);
-  background: linear-gradient(to bottom, oklch(99% 0 0) 0%, oklch(92% 0.005 240) 100%);
+  background: linear-gradient(to bottom, oklch(99% 0 0) 0%, var(--mist-92) 100%);
   border: 1px solid var(--shadow);
   border-radius: 0;
   cursor: pointer;
@@ -262,7 +262,7 @@ button.xp-button.primary {
 button.xp-button.primary:disabled,
 button.xp-button:disabled {
   color: var(--ink-faint);
-  background: linear-gradient(to bottom, oklch(95% 0 0), oklch(88% 0 0));
+  background: linear-gradient(to bottom, var(--grey-95), var(--grey-88));
   border-color: oklch(75% 0 0);
   cursor: not-allowed;
   text-shadow: none;

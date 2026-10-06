@@ -323,8 +323,8 @@ export function renderWhoareyouValues(data, ua, rdap) {
   const pending = data.ip === PENDING;
   const dim = (text) => html` <span class="dim">(${text})</span>`;
   return html`
-    <div style="border:1px solid #9aa7bd;background:#fff;box-shadow:inset 1px 1px 0 #eef2f8;margin:8px 0 2px">
-      <div style="background:linear-gradient(#fbfdff,var(--surface-desktop));border-bottom:1px solid #cfd8e6;padding:5px 9px;font-weight:bold;color:#0a246a">🖥 Device Manager &middot; this connection</div>
+    <div style="border:1px solid var(--slate-73);background:#fff;box-shadow:inset 1px 1px 0 var(--mist-96);margin:8px 0 2px">
+      <div style="background:linear-gradient(#fbfdff,var(--surface-desktop));border-bottom:1px solid var(--slate-88);padding:5px 9px;font-weight:bold;color:var(--luna-29)">🖥 Device Manager &middot; this connection</div>
       <ul style="list-style:none;margin:0;padding:7px 12px;line-height:1.95;font-size:var(--text-sm)">
         <li>🖧 <b>Network adapter</b> &nbsp;Anycast edge, colo <b>${data.colo}</b> <span class="dim">(${data.asOrg}, AS${data.asn})</span></li>
         <li>🔒 <b>Security coprocessor</b> &nbsp;<b>${data.tlsVersion}</b> <span class="dim">${data.tlsCipher}</span></li>
@@ -332,7 +332,7 @@ export function renderWhoareyouValues(data, ua, rdap) {
         <li>🌍 <b>Region</b> &nbsp;${data.city}, ${data.country} <span class="dim">(${data.timezone})</span></li>
         <li>🖥 <b>Client</b> &nbsp;${ua.browser} on ${ua.os} <span class="dim">${ua.device}</span></li>
       </ul>
-      <div style="border-top:1px solid #cfd8e6;padding:5px 10px;font-size:var(--text-micro);color:#6b7280">What guards all this: <a href="/security">Security Center</a></div>
+      <div style="border-top:1px solid var(--slate-88);padding:5px 10px;font-size:var(--text-micro);color:var(--slate-55)">What guards all this: <a href="/security">Security Center</a></div>
     </div>
 
     <hr>
@@ -463,7 +463,7 @@ code, .mono {
   font-family: var(--font-mono);
   font-size: var(--text-ui);
   background: oklch(96.72% 0 0);
-  border: 1px solid oklch(88.22% 0 0);
+  border: 1px solid var(--grey-88);
   padding: 0 3px;
 }
 
