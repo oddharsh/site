@@ -90,3 +90,12 @@ the key comes back up. `nav.js` does the swap; the markup is the opt-in:
   page (a table, a footnote) or in the data the page was built from. Never
   work one backwards from a rounded number.
 - Skip figures that are already exact. "36,980 bytes" has nothing to reveal.
+- When the rounded figure stands for a summary (a median, a range), the value
+  says so: `median 1,268 bytes (1,178 to 1,672)` beats a bare number.
+- Same measurement, or no wrap: a figure and a table cell can share a number
+  and still describe different runs, settings or files. If the page doesn't
+  make the link plain, leave the figure alone.
+
+`contract-exact-figures-are-honest-wraps` checks the shape (a non-empty value
+that differs from the text, never in a heading or JSON data). Whether the
+value is the right number is on the author.

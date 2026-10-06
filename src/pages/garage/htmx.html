@@ -65,7 +65,7 @@
   </div><!-- /axp:window -->
   <div class="content prose">
 <h1>Break-even at three submits</h1>
-<p class="garage-intro"><a href="https://github.com/bigskysoftware/htmx" rel="external">htmx</a> shipped <a href="https://four.htmx.org/announcements/2026-08-28-htmx-4.0.0-is-released" rel="external">4.0.0</a> on the day this page was written, and it is a real improvement on 2.x: 36,716 bytes <a class="term" data-t="minification" href="https://en.wikipedia.org/wiki/Minification_(programming)" title="Stripping spaces, comments and long names out of code so it downloads smaller and still runs the same." rel="external">minified</a> against 50,917, with the history cache dropped and <code>XMLHttpRequest</code> traded for <code>fetch</code>. The size is the easy question. The one that decides adoption is how much of your existing JavaScript the library can delete, and that turns on whether your code is already shaped like a request and a swap. This site's mostly isn't. So the measurement went to the one page where htmx should have won, and it lost by a factor of three.</p>
+<p class="garage-intro"><a href="https://github.com/bigskysoftware/htmx" rel="external">htmx</a> shipped <a href="https://four.htmx.org/announcements/2026-08-28-htmx-4.0.0-is-released" rel="external">4.0.0</a> on the day this page was written, and it is a real improvement on 2.x: 36,716 bytes <a class="term" data-t="minification" href="https://en.wikipedia.org/wiki/Minification_(programming)" title="Stripping spaces, comments and long names out of code so it downloads smaller and still runs the same." rel="external">minified</a> against 50,917, with the history cache dropped and <code>XMLHttpRequest</code> traded for <code>fetch</code>. The size is the easy question. The one that decides adoption is how much of your existing JavaScript the library can delete, and that turns on whether your code is already shaped like a request and a swap. This site's mostly isn't. So the measurement went to the one page where htmx should have won, and it lost by <data value="2.96x (11,735 bytes of library vs 3,968 saved per submit)">a factor of three</data>.</p>
 
 <h2>The library is priced per visitor, never per repo</h2>
 <p>A <a class="term" data-t="hypermedia" href="https://en.wikipedia.org/wiki/Hypermedia" title="Hypertext extended with images, sound and video; on the web, pages whose links and forms tell the reader what they can do next." rel="external">hypermedia</a> library moves rendering to the server and sends HTML fragments back. That trade is good when a page holds many interactions, because the download amortizes across all of them. It is bad when a page holds one, because the visitor pays the whole library to save one response.</p>
@@ -111,7 +111,7 @@
     <tr class="hb-total"><td>saved per submit</td><td>16,486</td><td>4,810</td><td>3,968</td></tr>
   </tbody>
 </table></div>
-<p>95% off the wire on that response. If the argument were only about response size, htmx would win this page outright.</p>
+<p><data value="3,968 of 4,187 bytes (Brotli q11)">95%</data> off the wire on that response. If the argument were only about response size, htmx would win this page outright.</p>
 
 <h2>The arithmetic that closes it</h2>
 <p>11,735 bytes of library against 3,968 bytes saved per submit is a break-even at <b>2.96 submits per visitor</b>. A booking form is submitted at most once, so the third submit never arrives.</p>

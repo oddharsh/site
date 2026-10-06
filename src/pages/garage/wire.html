@@ -479,7 +479,7 @@ transition:filter 60ms ease-out}</pre></figure>
       read per request, yet it went out marked <code class="m">no-store</code>, so baking it
       took 34% off a first visit outright.</p>
     <p>The return visit is where it pays: a 304 for the shell, then a fragment of 479 bytes to
-      7KB, against the whole page again. The quieter win is latency. The dyno used to hold its
+      <data value="7,428 bytes">7KB</data>, against the whole page again. The quieter win is latency. The dyno used to hold its
       entire response behind a fetch to GitHub, with a 3-second budget, on every cold cache;
       now only the chart waits.</p>
     <p>Some pages don't fit, and the build names them. <a href="/reading">/reading</a> stays

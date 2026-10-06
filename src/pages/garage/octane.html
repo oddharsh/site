@@ -94,7 +94,7 @@
 <p>Now the complication I would rather state than bury. Every script this site serves, summed across all 43 pages, is 49.0 KiB gzip, which is <em>more</em> than Nextane's 43.0. A visitor never downloads that sum, and a Nextane visitor pays 43.0 on their first page, so per page load the gap is real and roughly 3x. As a whole-site total the comparison reverses. Both numbers are true, they answer different questions, and only the per-page one describes what a browser does.</p>
 
 <h2>The chunk is the framework, not the glue</h2>
-<p>The obvious objection is that most of that 125 KB is Next.js compatibility <a class="term" data-t="shim" href="https://en.wikipedia.org/wiki/Shim_(computing)" title="A small layer of code that makes one interface behave like another, so code written for the old one keeps working." rel="external">shim</a>, which a plain Octane app would never load. I counted identifiers in the shipped chunk rather than arguing about it:</p>
+<p>The obvious objection is that most of that <data value="125,152 bytes">125 KB</data> is Next.js compatibility <a class="term" data-t="shim" href="https://en.wikipedia.org/wiki/Shim_(computing)" title="A small layer of code that makes one interface behave like another, so code written for the old one keeps working." rel="external">shim</a>, which a plain Octane app would never load. I counted identifiers in the shipped chunk rather than arguing about it:</p>
 <table class="oct-table">
   <tr><th>Identifier in <code>router-bwM-JHXE.js</code></th><th>Occurrences</th></tr>
   <tr><td><code>effect</code></td><td>48</td></tr>
