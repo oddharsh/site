@@ -277,7 +277,8 @@ import { appendFileSync, existsSync, readFileSync, readdirSync, mkdirSync, write
 const args = process.argv.slice(2);
 const key = args[3];
 const file = args.find(a => a.startsWith('--file=')).slice(7);
-if (args.slice(0,3).join(' ') !== 'r2 object put' || !args.includes('--content-type=image/jpeg') || !args.includes('--remote')) process.exit(98);
+const type = key.endsWith('.jxl') ? 'image/jxl' : 'image/jpeg';
+if (args.slice(0,3).join(' ') !== 'r2 object put' || !args.includes('--content-type=' + type) || !args.includes('--remote')) process.exit(98);
 const root = process.env.FIXTURE_ROOT;
 const log = value => appendFileSync(root + '/uploads', JSON.stringify(value) + '\\n');
 const progressive = readFileSync(root + '/progressive-paths', 'utf8').split('\\n').map(line => line.split('\\t')).find(([src]) => src === file)?.[1];
@@ -295,6 +296,17 @@ log({ event: 'end', key, failed });
 process.exit(failed ? 9 : 0);
 `);
     await f.command("node_modules/.bin/wrangler", `exec "${process.execPath}" "$FIXTURE_ROOT/upload.mjs" "$@"`);
+    // The JPEG XL twin, stubbed so the body says what it was made from: cjxl
+    // wraps its input in "jxl:", and djxl unwraps it, so the rebuild matches the
+    // upload unless BAD_REBUILD makes it differ by one byte.
+    await f.command("bin/cjxl", `
+for last in "$@"; do :; done
+for a in "$@"; do case "$a" in -*|9) ;; *) [ "$a" = "$last" ] || src="$a" ;; esac; done
+echo "cjxl $*" >> "$TRACE"
+{ printf 'jxl:'; cat "$src"; } > "$last"`);
+    await f.command("bin/djxl", `
+tail -c +5 "$1" > "$2"
+[ "\${BAD_REBUILD:-0}" != 1 ] || printf x >> "$2"`);
     const uploads = async () => (await f.read("uploads")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
     const ingest = (args = ["source"], env = {}) => f.shell("add-photos.sh", args, { REMOTE_RENDER_ONLY: "0", ...env });
     await run({ ...f, ingest, uploads });
@@ -324,7 +336,10 @@ test("failed source or HEIF-companion uploads stop before hashing and index writ
     assert.deepEqual(sent.sort((a,b) => a.key.localeCompare(b.key)), [
       // A HIF's archive is zenc's re-encode AFTER jpegtran's DC-first reorder.
       { key: "aadhar-photos/companion.jpg", body: "progressive" },
+      // Each twin wraps the exact bytes its JPEG uploaded, not the source.
+      { key: "aadhar-photos/companion.jxl", body: "jxl:progressive" },
       { key: "aadhar-photos/frame.jpg", body: "progressive" },
+      { key: "aadhar-photos/frame.jxl", body: "jxl:progressive" },
     ]);
     assert.equal(await read("source/frame.jpg"), "source fixture");
     assert.equal(await read("source/companion.HIF"), "HEIF original");
@@ -357,7 +372,33 @@ test("a HIF archive whose DC-first reorder fails is never uploaded", async () =>
     const good = ingest(["source/companion.HIF"]);
     assert.equal(good.status, 23, good.stderr + good.stdout);
     const sent = (await uploads()).filter(row => row.event === "start");
-    assert.deepEqual(sent.map(({ key, body }) => ({ key, body })), [{ key: "aadhar-photos/companion.jpg", body: "progressive" }]);
+    assert.deepEqual(sent.map(({ key, body }) => ({ key, body })), [
+      { key: "aadhar-photos/companion.jpg", body: "progressive" },
+      { key: "aadhar-photos/companion.jxl", body: "jxl:progressive" },
+    ]);
+  });
+});
+
+// A twin is only worth linking if it IS the JPEG, so one whose rebuild differs
+// by a byte must never reach R2, and the photo fails the way a failed HEIF
+// upload does: before hashing, with the index untouched.
+test("a JPEG XL twin that does not rebuild the uploaded JPEG is never uploaded", async () => {
+  await uploadFixture(async ({ put, read, ingest, uploads }) => {
+    await put("src/worker/photo-index.json", '{"existing":{"full":"existing.jpg"}}');
+    const bad = ingest(["source/frame.jpg"], { BAD_REBUILD: "1" });
+    assert.equal(bad.status, 1, bad.stderr + bad.stdout);
+    assert.match(bad.stderr, /phase 3 incomplete/);
+    assert.match(bad.stderr, /JPEG XL twin failed .*aadhar-photos\/frame\.jxl/);
+    const keys = (await uploads()).filter(row => row.event === "start").map(row => row.key);
+    assert.deepEqual(keys, ["aadhar-photos/frame.jpg"], "the JPEG went up, its twin did not");
+    assert.doesNotMatch(await read("trace"), /downstream-hash/);
+    assert.equal(await read("src/worker/photo-index.json"), '{"existing":{"full":"existing.jpg"}}');
+    // Control: an exact rebuild uploads the twin with its own content type.
+    await put("uploads", "");
+    const good = ingest(["source/frame.jpg"]);
+    assert.equal(good.status, 23, good.stderr + good.stdout);
+    assert.deepEqual((await uploads()).filter(row => row.event === "start").map(row => row.key),
+      ["aadhar-photos/frame.jpg", "aadhar-photos/frame.jxl"]);
   });
 });
 
@@ -375,9 +416,11 @@ test("upload batching stays at four regardless of encoder concurrency", async ()
     }
     assert.equal(maximum, 4);
     assert.equal(active, 0);
-    assert.equal(keys.length, 9);
-    assert.equal(new Set(keys).size, 9);
+    // nine photos, each a JPEG and its twin, uploaded in that order per photo
+    assert.equal(keys.length, 18);
+    assert.equal(new Set(keys).size, 18);
     assert.ok(keys.includes("aadhar-photos/extra 0.jpg"));
+    assert.ok(keys.includes("aadhar-photos/extra 0.jxl"));
   });
 });
 
@@ -410,9 +453,10 @@ test("ingest and rerender both use one HEIF pixel source and one JPEG click obje
       const result = ingest([input]);
       assert.equal(result.status, 23, result.stderr + result.stdout);
       const sent = (await uploads()).filter(row => row.event === "start");
-      assert.equal(sent.length, 1);
+      assert.equal(sent.length, 2);
       assert.equal(sent[0].key, "aadhar-photos/frame.jpg");
       assert.equal(sent[0].body, "progressive");
+      assert.deepEqual([sent[1].key, sent[1].body], ["aadhar-photos/frame.jxl", "jxl:progressive"]);
       if (input.endsWith("hIf")) {
         assert.ok((await read("trace")).includes(`-Orientation ${root}/source/frame.hIf`));
         assert.doesNotMatch(await read("trace"), /-Orientation .*frame\.jpg/);
@@ -493,9 +537,11 @@ test("the shell input plan preserves filename whitespace and JPEG companion exte
     const result = ingest([`source/${stem}.hEiC`]);
     assert.equal(result.status, 23, result.stderr + result.stdout);
     const sent = (await uploads()).filter(row => row.event === "start");
-    assert.equal(sent.length, 1);
+    assert.equal(sent.length, 2);
     assert.equal(sent[0].key, `aadhar-photos/${stem}.jpeg`);
     assert.equal(sent[0].body, "progressive");
+    // the twin's key is the original's, tab and newline intact, with .jxl
+    assert.deepEqual([sent[1].key, sent[1].body], [`aadhar-photos/${stem}.jxl`, "jxl:progressive"]);
   });
 });
 

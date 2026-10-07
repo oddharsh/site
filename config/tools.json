@@ -249,6 +249,37 @@
       "recorded": "libavif 1.4.2, aom 3.15.1"
     },
     {
+      "bin": "cjxl",
+      "install": "brew install jpeg-xl",
+      "why": "each full-resolution original's JPEG XL twin, a lossless transcode (--lossless_jpeg=1 -e 9) that browsers with JPEG XL are linked to instead of the JPEG",
+      "required_by": [
+        "tools/photos/add-photos.sh",
+        "tools/photos/jxl-originals.ts"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "cjxl v(\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": true,
+      "recorded": "0.12.0"
+    },
+    {
+      "bin": "djxl",
+      "install": "brew install jpeg-xl",
+      "why": "the twin's proof: it rebuilds the original JPEG from the twin, and the twin uploads only if cmp finds the rebuilt bytes identical",
+      "required_by": [
+        "tools/photos/add-photos.sh",
+        "tools/photos/jxl-originals.ts"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "djxl v(\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "recorded": "0.12.0",
+      "bytes_why": "Decode only. It checks a twin and writes nothing that ships."
+    },
+    {
       "bin": "cwebp",
       "install": "brew install webp",
       "why": "the WebP point on the /garage/encoding format grid",

@@ -8,6 +8,7 @@ import { ARCHIVE_VERSION } from "./lib/const.ts";
 import { errorResp, escAttr, escHtml, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
 import { commonPairs, compareCodepoints, queryTerms, scoreFields } from "./lib/text.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
+import { JXL_SWAP, jxlUrl } from "./lib/photo-jxl.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
 // R2 key, byte size, upload date; written by add-photos.sh at upload time) and
 // hashes.json (the content-hash map the /i/ URLs are minted from). esbuild
@@ -32,6 +33,8 @@ type PhotoRecord = {
   album?: string | null;
   /** R2 key of the HEIF original, when one was uploaded beside the JPEG */
   heif?: string | null;
+  /** R2 key of the original's lossless JPEG XL twin (lib/photo-jxl.ts) */
+  jxl?: string | null;
   camera?: string | number | null;
   lens?: string | number | null;
   film?: string | number | null;
@@ -73,7 +76,7 @@ export async function servePhotoFromR2(request, env, ctx) {
   const key = url.pathname.replace(/^\/images\/full\//, "");
   // allow letters, digits, `_`, `-`, `.` in the stem; require a known
   // image extension. forbids `/`, `..`, and other escape characters.
-  if (!/^[A-Za-z0-9_.-]+\.(?:jpe?g|png|heic|heif|hif|avif|gif)$/i.test(key)) {
+  if (!/^[A-Za-z0-9_.-]+\.(?:jpe?g|png|heic|heif|hif|avif|gif|jxl)$/i.test(key)) {
     return errorResp("not found", 404);
   }
 
@@ -139,7 +142,8 @@ export async function servePhotoFromR2(request, env, ctx) {
 
   const headers = new Headers();
   obj.writeHttpMetadata(headers);
-  headers.set("content-type",  obj.httpMetadata?.contentType || "image/jpeg");
+  // A twin goes up as image/jxl; the extension covers a put that set no type.
+  headers.set("content-type",  obj.httpMetadata?.contentType || (/\.jxl$/i.test(key) ? "image/jxl" : "image/jpeg"));
   headers.set("etag",          obj.httpEtag);
   headers.set("cache-control", "public, max-age=31536000, immutable");
   headers.set("accept-ranges", "bytes");
@@ -237,6 +241,7 @@ export function derivePhotoPool(index: PhotoIndexMap, hashes: ThumbHashMap) {
       // read null as "the site-wide pool, JPEG only" rather than as a gap.
       album:      p.album || null,
       heif:       p.heif || null,           // R2 key, like `full`; the URL is built at render
+      jxl:        p.jxl || null,            // R2 key of the lossless JPEG XL twin, likewise
     }];
   }).sort((a, b) => (a.full < b.full ? -1 : a.full > b.full ? 1 : 0));
 }
@@ -691,7 +696,7 @@ function renderTile(p, altMap, i: number, extra: Html = EMPTY): Html {
 <img src="${p.thumb_jpg}" alt="${alt}" width="400" height="400" loading="lazy" decoding="async">
 </picture></noscript>`;
   return html`<div class="ph">
-<a class="ph-open" href="${fullUrl(p.full)}">
+<a class="ph-open" href="${fullUrl(p.full)}"${p.jxl ? html` data-jxl="${jxlUrl(p.jxl)}"` : EMPTY}>
 ${picture}
 </a>
 <span class="ph-name">${p.stem}</span>${extra}
@@ -790,7 +795,7 @@ export function renderPhotosPage(photos, altMap) {
   </p>
   <div class="sheet">
 ${tiles}
-  </div>${GALLERY_DEFER.html}
+  </div>${GALLERY_DEFER.html}${JXL_SWAP.html}
   <footer>
     &larr; <a href="/">aadhar.sh</a> &middot; press <b>&#8984;K</b> anywhere to search these by name
     <address>handwritten worker at aadhar.sh</address>
@@ -822,6 +827,7 @@ export function renderAlbumPage(album: Album, photos, altMap) {
     // `download`: the tile opens the JPEG in the browser, the format links save
     // it. Same-origin, so the attribute is honoured; the filename is the R2 key.
     const links = [html`<a href="${fullUrl(p.full)}" download>JPEG</a>`];
+    if (p.jxl) links.push(html`<a href="${fullUrl(p.jxl)}" download>JPEG XL</a>`);
     if (p.heif) links.push(html`<a href="${fullUrl(p.heif)}" download>HEIF</a>`);
     return renderTile(p, altMap, i, html`
 <span class="ph-fmt">${joinHtml(links, " &middot; ")}</span>`);
@@ -843,7 +849,7 @@ export function renderAlbumPage(album: Album, photos, altMap) {
   </p>
   <div class="sheet">
 ${tiles}
-  </div>${GALLERY_DEFER}
+  </div>${GALLERY_DEFER}${JXL_SWAP}
   <footer>
     &larr; <a href="/photos">all photos</a> &middot; <a href="/">aadhar.sh</a>
     <address>handwritten worker at aadhar.sh</address>

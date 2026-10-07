@@ -243,11 +243,16 @@ if [ ! -x "$WRANGLER" ]; then
   echo "  run: pnpm install" >&2
   exit 1
 fi
-for cmd in sips exif-sooc; do
+# cjxl and djxl make and check each original's JPEG XL twin in phase 3, which a
+# remote render skips, so only an uploading run needs them.
+NEEDED=(sips exif-sooc)
+[ "${REMOTE_RENDER_ONLY:-0}" = "1" ] || NEEDED+=(cjxl djxl)
+for cmd in "${NEEDED[@]}"; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "error: $cmd not found in PATH" >&2
     case "$cmd" in
       exif-sooc) echo "  install with: cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc" >&2 ;;
+      cjxl|djxl) echo "  install with: brew install jpeg-xl" >&2 ;;
     esac
     exit 1
   fi
@@ -360,7 +365,8 @@ echo ""
 # ── phase 2: prepare the exact full-resolution bytes ────────────────
 echo "phase 2 — full-resolution JPEGs (parallel $JOBS)"
 FULLS="$TMP/full-resolution"; RECEIPTS="$TMP/full-paths"; HEIF_RECEIPTS="$TMP/heif-keys"
-mkdir -p "$FULLS" "$RECEIPTS" "$HEIF_RECEIPTS"
+JXLS="$TMP/jxl-twins"; JXL_RECEIPTS="$TMP/jxl-keys"
+mkdir -p "$FULLS" "$RECEIPTS" "$HEIF_RECEIPTS" "$JXLS" "$JXL_RECEIPTS"
 st_init "$TMP/status2"
 prepare_one() {  # source, index, existing JPEG, object key, stem
   local f="$1" idx="$2" original="$3" full="$4" stem="$5" out tmppng
@@ -446,6 +452,26 @@ else
           printf '%s' "$heif" > "$HEIF_RECEIPTS/$idx" ;;
       esac
     fi
+    # The JPEG XL twin: the exact bytes just uploaded, transcoded losslessly.
+    # It goes up only after djxl rebuilds those bytes from it, compared with
+    # cmp, so a twin in R2 is always the same file in a smaller wrapping.
+    # Effort 9: on two originals (2026-10-07) it saved 0.15-0.25% over e7 at
+    # 10-25x the time, about 20 s for a 26 MB frame, paid once per photo for
+    # every later click. The receipt, like the HEIF one, is what phase 4 reads,
+    # so the index names a twin only when this put succeeded. The page links
+    # it only for browsers that decode JPEG XL (photo-jxl.ts).
+    jxl="${full%.*}.jxl"; twin="$JXLS/$jxl"
+    if ! cjxl --quiet --lossless_jpeg=1 -e 9 "$send" "$twin" >/dev/null 2>&1 \
+       || ! djxl "$twin" "$twin.rebuilt.jpg" >/dev/null 2>&1 \
+       || ! cmp -s "$send" "$twin.rebuilt.jpg" \
+       || ! "$WRANGLER" r2 object put "aadhar-photos/$jxl" --file="$twin" --content-type="image/jxl" --remote >/dev/null 2>&1; then
+      rm -f "$twin" "$twin.rebuilt.jpg"
+      mark fail "$idx"; printf "✗"
+      echo "error: JPEG XL twin failed (transcode, exact rebuild, or upload): aadhar-photos/$jxl" >&2
+      return
+    fi
+    rm -f "$twin" "$twin.rebuilt.jpg"
+    printf '%s' "$jxl" > "$JXL_RECEIPTS/$idx"
     mark ok "$idx"; printf "."
   }
   st_init "$TMP/status3"
@@ -475,7 +501,7 @@ echo "phase 4 — hash tiers + photo index + metadata regen"
 # upload dates survive a rerender.
 INDEX_FILE="$PROJECT_DIR/src/worker/photo-index.json"
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
-# Entries spool as NUL-separated fields, five per photo, and one node call at
+# Entries spool as NUL-separated fields, six per photo, and one node call at
 # the end merges them all. It was one jaq call per photo building a JSON
 # object, then a second jaq merging that object in; the JSON engine left the
 # pipeline on 2026-09-15 (pipeline-json.ts names the filters it replaced).
@@ -489,10 +515,13 @@ while read_input; do
   obj=$(cat "$RECEIPTS/$idx")
   size=$(wc -c < "$obj" | tr -d '[:space:]')
   heif=""; [ -s "$HEIF_RECEIPTS/$idx" ] && heif=$(cat "$HEIF_RECEIPTS/$idx")
-  # `album` and `heif` are written only when set, so an entry for the site-wide
-  # pool keeps the three-key shape it has always had and photo-index.json diffs
-  # stay legible. An empty string is never written as a value.
-  printf '%s\0%s\0%s\0%s\0%s\0' "$stem" "$full" "$size" "$ALBUM" "$heif" >> "$NEW_ENTRIES"
+  jxl=""; [ -s "$JXL_RECEIPTS/$idx" ] && jxl=$(cat "$JXL_RECEIPTS/$idx")
+  # `album`, `heif` and `jxl` are written only when set, so an entry for the
+  # site-wide pool keeps the three-key shape it has always had and
+  # photo-index.json diffs stay legible. An empty string is never written as a
+  # value. A remote render names no twin, and index-merge keeps the old one
+  # while the original is unchanged.
+  printf '%s\0%s\0%s\0%s\0%s\0%s\0' "$stem" "$full" "$size" "$ALBUM" "$heif" "$jxl" >> "$NEW_ENTRIES"
   META_SOURCES+=("$f")
 done < "$INPUTS"
 # writes beside and renames, so a failure here leaves the committed index as it was
