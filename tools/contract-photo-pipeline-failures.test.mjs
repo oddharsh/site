@@ -47,7 +47,7 @@ async function fixture(run) {
       .tools.flatMap((t) => t.required_by ?? []);
     // pipeline-json.ts is the shells' JSON since 2026-09-15 and runs for real
     // under the fixture's node, with the one module it imports.
-    const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts", "tools/photos/pipeline-json.ts", "tools/lib/photo-indexes.ts", ...new Set(declared)];
+    const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts", "tools/photos/pipeline-json.ts", "tools/photos/r2-budget.ts", "tools/lib/photo-indexes.ts", ...new Set(declared)];
     for (const rel of execFileSync("git", ["ls-files", "-z", ...corpus], { cwd: REPO, encoding: "utf8" }).split("\0").filter(Boolean)) {
       await put(rel, await readFile(path.join(REPO, rel), "utf8"));
     }
@@ -275,6 +275,11 @@ printf progressive > "$out"
     await f.put("upload.mjs", `
 import { appendFileSync, existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
 const args = process.argv.slice(2);
+// r2-budget.ts asks how full the bucket is before phase 3 uploads anything.
+if (args.slice(0,3).join(' ') === 'r2 bucket info') {
+  process.stdout.write(JSON.stringify({ name: 'aadhar-photos', bucket_size: process.env.BUCKET_SIZE || '1 GB' }));
+  process.exit(0);
+}
 const key = args[3];
 const file = args.find(a => a.startsWith('--file=')).slice(7);
 const type = key.endsWith('.jxl') ? 'image/jxl' : 'image/jpeg';
@@ -376,6 +381,27 @@ test("a HIF archive whose DC-first reorder fails is never uploaded", async () =>
       { key: "aadhar-photos/companion.jpg", body: "progressive" },
       { key: "aadhar-photos/companion.jxl", body: "jxl:progressive" },
     ]);
+  });
+});
+
+// The owner's rule is that the photo bucket never passes R2's 10 GB free tier.
+// Cloudflare's reported size lags, so this case reports a bucket already at
+// 9.6 GB: ingest must refuse before the first put and leave the index alone.
+test("ingest refuses before any upload when the batch would pass the R2 budget cap", async () => {
+  await uploadFixture(async ({ put, read, ingest, uploads }) => {
+    await put("src/worker/photo-index.json", '{"existing":{"full":"existing.jpg","size":1}}');
+    const full = ingest(["source/frame.jpg"], { BUCKET_SIZE: "9.6 GB" });
+    assert.equal(full.status, 1, full.stderr + full.stdout);
+    assert.match(full.stderr, /would pass the 9\.50 GB cap/);
+    assert.match(full.stderr, /refused before any upload/);
+    assert.deepEqual(await uploads(), [], "nothing reached R2");
+    assert.doesNotMatch(await read("trace"), /downstream-hash/);
+    assert.equal(await read("src/worker/photo-index.json"), '{"existing":{"full":"existing.jpg","size":1}}');
+    // Control: the same batch into a bucket with room uploads the JPEG and its twin.
+    const room = ingest(["source/frame.jpg"], { BUCKET_SIZE: "2 GB" });
+    assert.equal(room.status, 23, room.stderr + room.stdout);
+    assert.deepEqual((await uploads()).filter(row => row.event === "start").map(row => row.key),
+      ["aadhar-photos/frame.jpg", "aadhar-photos/frame.jxl"]);
   });
 });
 

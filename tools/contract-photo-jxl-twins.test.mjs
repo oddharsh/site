@@ -9,6 +9,27 @@ import vm from "node:vm";
 import { assert, derivePhotoPool, readFile, renderPhotoSlots, ROOT, test } from "./contract-shared.ts";
 import { JXL_SWAP } from "../src/worker/lib/photo-jxl.ts";
 import { servePhotoFromR2 } from "../src/worker/photos.ts";
+import { CAP, HEIF_RATIO, TWIN_RATIO, UNINDEXED, indexFloor, parseSize } from "./photos/r2-budget.ts";
+
+// ── the R2 budget ───────────────────────────────────────────────────
+// The bucket must stay inside R2's free tier, and Cloudflare's own size lags
+// uploads by many minutes, so the guard also trusts a floor computed from the
+// index. These pin the arithmetic both upload paths rely on.
+test("the R2 budget reads wrangler's sizes and floors the bucket from the index", () => {
+  assert.equal(parseSize("10.2 GB"), 10.2e9);
+  assert.equal(parseSize("512 MB"), 512e6);
+  assert.equal(parseSize("0 B"), 0);
+  assert.throws(() => parseSize("about ten gigs"), /unreadable/);
+  const floor = indexFloor({
+    A: { full: "A.jpg", size: 100 },
+    B: { full: "B.jpg", size: 100, jxl: "B.jxl" },
+    C: { full: "C.jpg", size: 100, jxl: "C.jxl", heif: "C.HIF" },
+  });
+  assert.equal(floor, UNINDEXED + 300 + 200 * TWIN_RATIO + 100 * HEIF_RATIO);
+  // Control: the cap sits under the free tier, and the twin ratio over every
+  // measured twin (worst 0.943), so the floor can only overstate.
+  assert.ok(CAP < 10e9 && TWIN_RATIO > 0.943);
+});
 
 const row = (extra = {}) => ({
   full: "X1.jpg", stem: "X1", size: 10, uploaded: null,

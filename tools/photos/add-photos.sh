@@ -427,6 +427,27 @@ echo ""
 if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
   echo "phase 3 — R2 uploads skipped (source is already remote)"
 else
+  # The bucket stays inside R2's free tier (r2-budget.ts): this batch's JPEGs,
+  # their twins at the same 0.95 the budget's floor uses (integer shell math),
+  # and any HEIF going up, all counted before the first put. A refusal here
+  # uploads nothing and leaves the index as it was.
+  ADDING=0
+  idx=0
+  while read_input; do
+    idx=$((idx+1))
+    [ -s "$RECEIPTS/$idx" ] || continue
+    jpg=$(wc -c < "$(cat "$RECEIPTS/$idx")" | tr -d '[:space:]')
+    ADDING=$((ADDING + jpg + jpg * 95 / 100))
+    if [ "$HEIF" = "1" ]; then
+      case "${f##*.}" in
+        [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff]) ADDING=$((ADDING + $(wc -c < "$f" | tr -d '[:space:]'))) ;;
+      esac
+    fi
+  done < "$INPUTS"
+  if ! bun "$SCRIPT_DIR/r2-budget.ts" check --adding "$ADDING"; then
+    echo "error: phase 3 refused before any upload: the batch would pass the R2 budget cap" >&2
+    exit 1
+  fi
   echo "phase 3 — R2 uploads (parallel 4)"
   upload_one() {
     local f="$1" idx="$2" full="$4" send heif

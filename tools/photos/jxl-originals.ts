@@ -33,6 +33,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type IndexEntry, pretty, sortKeysDeep } from "./pipeline-json.ts";
+import { CAP, standing } from "./r2-budget.ts";
 
 const ROOT = path.resolve(import.meta.dir, "../..");
 const INDEX = path.join(ROOT, "src/worker/photo-index.json");
@@ -72,10 +73,21 @@ const todo = (stems.length ? stems : Object.keys(index))
   .slice(0, limit);
 
 console.log(`${todo.length} originals without a JPEG XL twin${dryRun ? " (dry run)" : ""}, ${jobs} at a time`);
+
+// The bucket must stay inside R2's free tier (r2-budget.ts). Each twin reserves
+// its exact bytes from this headroom synchronously, before its upload starts,
+// so parallel workers can't jointly overshoot; the first twin that doesn't fit
+// stops the run, and a rerun after space is freed picks up from there.
+const budget = standing(index);
+let headroom = CAP - budget.current;
+const gb = (n: number) => `${(n / 1e9).toFixed(2)} GB`;
+console.log(`bucket: Cloudflare reports ${gb(budget.reported)}, index floor ${gb(budget.floor)}; ${headroom >= 0 ? `${gb(headroom)} under` : `${gb(-headroom)} OVER`} the ${gb(CAP)} cap`);
 if (dryRun) {
   for (const s of todo) console.log(`  ${index[s].full} -> ${twinKey(index[s].full)}`);
   process.exit(0);
 }
+class OverBudget extends Error {}
+let stopped = false;
 
 // One write at a time: each success updates the in-memory index and replaces
 // the file whole, so the chain only has to keep two renames from interleaving.
@@ -112,12 +124,20 @@ async function twin(stem: string): Promise<void> {
     run(["djxl", jxl, rebuilt]);
     if (!bytes.equals(fs.readFileSync(rebuilt))) throw new Error(`${key} does not rebuild ${full} byte for byte`);
 
-    run([WRANGLER, "r2", "object", "put", `${BUCKET}/${key}`, `--file=${jxl}`, "--content-type=image/jxl", "--remote"]);
     const twinSize = fs.statSync(jxl).size;
+    if (twinSize > headroom) throw new OverBudget(`${key} is ${gb(twinSize)} and only ${gb(Math.max(0, headroom))} is left under the cap`);
+    headroom -= twinSize;
+    run([WRANGLER, "r2", "object", "put", `${BUCKET}/${key}`, `--file=${jxl}`, "--content-type=image/jxl", "--remote"]);
     await record(stem, key);
     done++; jpegBytes += size; jxlBytes += twinSize;
     console.log(`  ✓ ${key}  ${(twinSize / 1e6).toFixed(2)} MB, ${((twinSize / size - 1) * 100).toFixed(2)}%`);
   } catch (e) {
+    if (e instanceof OverBudget) {
+      // Not a failed photo: the bucket is full. Stop handing out work.
+      if (!stopped) console.error(`  ■ stopping at ${stem}: ${e.message}`);
+      stopped = true;
+      return;
+    }
     failed++;
     console.error(`  ✗ ${stem}: ${(e as Error).message}`);
   } finally {
@@ -127,11 +147,12 @@ async function twin(stem: string): Promise<void> {
 
 const queue = [...todo];
 await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () => {
-  for (let s = queue.shift(); s; s = queue.shift()) await twin(s);
+  for (let s = queue.shift(); s && !stopped; s = queue.shift()) await twin(s);
 }));
 await writing;
 fs.rmSync(work, { recursive: true, force: true });
 
 const saved = jpegBytes ? ((1 - jxlBytes / jpegBytes) * 100).toFixed(2) : "0";
 console.log(`twins: ${done} uploaded, ${failed} failed; ${(jpegBytes / 1e9).toFixed(2)} GB of JPEG as ${(jxlBytes / 1e9).toFixed(2)} GB of JPEG XL (-${saved}%)`);
-process.exit(failed ? 1 : 0);
+if (stopped) console.error(`stopped at the ${gb(CAP)} cap with ${queue.length + 1} or more originals left; free space, then rerun`);
+process.exit(failed ? 1 : stopped ? 3 : 0);
