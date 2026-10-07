@@ -86,6 +86,48 @@ test("renderAlbumPage is pure over the committed pool and never invents a format
   assert.equal(albumPool(curatedPool(pool), Object.values(ALBUMS)[0]).length, 0, "curated and album pools are disjoint");
 });
 
+// The contact sheets load their first screen with the page and every later tile
+// as it nears view. loading="lazy" was what they used before 2026-10-07, and it
+// let Chrome fetch 47 tiles (563 KB) on a desktop visit to /photos where 12 were
+// meant to be eager; the IntersectionObserver swap in photos.ts brought that to
+// 22 (290 KB) with no tile empty while scrolling. Each property below is one way
+// that saving quietly disappears: a deferred <img> under a live <source srcset>
+// still fetches the AVIF, a lazy tile hands the distance back to Chrome, and a
+// deferred tile with no <noscript> twin is a hole for a reader without scripts.
+test("the contact sheets defer every tile past the first screen", async () => {
+  const index = JSON.parse(await readFile(new URL("src/worker/photo-index.json", ROOT), "utf8"));
+  const hashes = JSON.parse(await readFile(new URL("public/images/hashes.json", ROOT), "utf8"));
+  const alt = JSON.parse(await readFile(new URL("public/images/alt.json", ROOT), "utf8"));
+  const pool = derivePhotoPool(index, hashes);
+  const sheets = [["/photos", await renderPhotosPage(pool, alt).text()]];
+  for (const album of Object.values(ALBUMS)) {
+    if (albumPool(pool, album).length) sheets.push([albumPath(album), await renderAlbumPage(album, pool, alt).text()]);
+  }
+  const EAGER = 12;
+  for (const [path, doc] of sheets) {
+    // each tile ends at its own </div>; the last one would otherwise run on into the shell
+    const tiles = doc.split('<div class="ph">').slice(1).map((t) => t.slice(0, t.indexOf("</div>")));
+    // what the browser parses with scripts on: <noscript> content is inert text then
+    const live = (tile) => tile.replace(/<noscript>[\s\S]*?<\/noscript>/g, "");
+    tiles.forEach((tile, i) => {
+      const where = `${path} tile ${i}`;
+      assert.ok(!live(tile).includes('loading="lazy"'), `${where}: loading="lazy" hands the fetch distance back to the browser`);
+      if (i < EAGER) {
+        assert.ok(!tile.includes("data-defer"), `${where}: the first ${EAGER} tiles load with the page`);
+        assert.match(tile, /<source type="image\/avif" srcset="[^"]+">/, `${where}: an eager tile names its AVIF`);
+      } else {
+        assert.ok(live(tile).includes("<picture data-defer>"), `${where}: a tile past the first screen is deferred`);
+        assert.ok(!/ (srcset|src)="/.test(live(tile).replace(/ (href)="[^"]*"/g, "")), `${where}: a deferred tile names no URL the browser would fetch`);
+        assert.match(live(tile), /<source type="image\/avif" data-srcset="[^"]+">/, `${where}: the AVIF source is deferred too, or the browser fetches it anyway`);
+        assert.match(live(tile), /<img data-src="[^"]+"/, `${where}: the JPEG fallback is deferred`);
+        assert.match(tile, /<noscript><picture>\s*<source type="image\/avif" srcset="[^"]+">\s*<img src="[^"]+"/, `${where}: a reader without scripts still gets the photo`);
+      }
+    });
+    assert.equal(doc.split("picture[data-defer]{display:none}").length - 1, 1, `${path}: without scripts the empty deferred tile is hidden, once`);
+    assert.equal(doc.split('rootMargin:"25%"').length - 1, 1, `${path}: one swap script, at the measured 25% margin`);
+  }
+});
+
 test("renderBotPage takes no arguments and is deterministic", async () => {
   const { renderBotPage } = await import("../src/worker/bot.ts");
   assert.equal(renderBotPage.length, 0, "any parameter is a door for runtime state");
