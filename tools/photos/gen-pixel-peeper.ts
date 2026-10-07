@@ -189,8 +189,17 @@ export const CANDIDATES: Record<Axis, [Intent, number, string[]]> = {
   // because a format difference at equal bytes shows first in what each codec
   // chooses to smooth: AVIF's deblocking eats grain and fine texture, JXL
   // keeps texture and rings.
-  // Each stem yields one trial per budget tier (FORMAT_TIER_ANCHOR).
-  format: ["detail", 6, [
+  // Each stem yields one trial per budget tier (FORMAT_TIERS). The keep count
+  // is split evenly across the tiers and set above anything a tier has built
+  // (13 calls cleared the gate on 2026-10-07), because the axis also feeds the
+  // JPEG XL vs AVIF run: a cap of 3 a tier dropped the one tight-budget call
+  // JPEG XL won, for having a smaller margin than AVIF's three.
+  //
+  // The last three stems joined 2026-10-07, when the axis grew from two tiers
+  // to four and needed a deeper pool. They come from the encoder and chroma
+  // lists and stay clear of codec-knob-probe's HOLDOUT, which is why that
+  // probe now pins its TRAIN set to the first eight by name.
+  format: ["detail", 24, [
     "XT507494",   // chrome grille, fine mesh
     "XT509794",   // brick road texture
     "XT508890",   // blossom, foliage is encoder-hard
@@ -199,6 +208,9 @@ export const CANDIDATES: Record<Axis, [Intent, number, string[]]> = {
     "XT507517",   // license plate lettering
     "XT509509",   // train livery lettering
     "XT508756",   // knit + jacket texture
+    "XT509276",   // red car, white wheel
+    "XT509446",   // staircase, yellow line
+    "XT509892",   // two cars, mixed texture
   ]],
 };
 
@@ -206,7 +218,7 @@ type Option = { label: string; bytes: number; s2: number | null; butter: number 
 // `spread` is absent on a tradeoff trial, as it was in the Python: that axis
 // ranks on the metric split and the penalty, and the manifest carries neither
 // a spread it did not measure nor a placeholder.
-type Trial = { axis: Axis; crop: string; options: Option[]; disagree: boolean; spread?: number; budget?: number; budget_drift?: number; penalty?: number; rejected?: string[]; crop_score?: number; tier?: string };
+type Trial = { axis: Axis; crop: string; options: Option[]; disagree: boolean; spread?: number; budget?: number; budget_drift?: number; penalty?: number; rejected?: string[]; crop_score?: number; tier?: string; lossless?: { jxl: number; avif: number } };
 
 // How each axis ranks its survivors: bigger sorts first, so ships first.
 //
@@ -708,14 +720,21 @@ function buildResample(src: Source, tmp: string): Built {
 //      number. cjxl's distance is continuous. So AVIF is encoded first and its
 //      ACTUAL output size becomes the budget JXL is searched onto, which it can
 //      hit to well under 1%.
-//   2. TWO BUDGETS, each taken from what this site ships rather than picked.
-//      The ranking between these formats is known to depend on bitrate (AVIF's
+//   2. FOUR TIERS, each budget taken from what this site ships rather than
+//      picked. The ranking between these formats depends on bitrate (AVIF's
 //      reputation is built low, JXL's high), so one budget would teach whichever
 //      half of that the budget happened to favour.
+//        low-tier:  the shipped 600px AVIF tier's median bits per pixel, spent
+//                   on this crop. AVIF is searched onto it.
 //        avif-tier: avifenc at the photo pipeline's own flags, -q 63. The AVIF
 //                   tile IS the shipping encode, no search at all.
 //        jpeg-tier: what zenc spends at q84, the shipping JPEG fallback. AVIF
 //                   is then searched onto that.
+//        repack:    JXL's home ground. You start from the shipping JPEG, as
+//                   most of the web must: JXL repacks it losslessly, AVIF has
+//                   to decode it and encode again. AVIF is searched onto the
+//                   repack's size. Scored against the ORIGINAL crop, so the
+//                   JPEG's own damage counts against both.
 //   3. EACH FORMAT AT A SERIOUS SETTING, NOT A DEFAULT. AVIF gets the shipping
 //      flags (10-bit, speed 2, 4:4:4). JXL gets effort 9 with decoder smoothing off (JXL_ARGS
 //      says why), effort 9 being near the top of cjxl's range the way speed
@@ -739,15 +758,36 @@ export const FORMAT_TIER_ANCHOR = {
   "avif-tier": { enc: "avif", q: 63 },                 // add-photos.sh's AVIF tiers
   "jpeg-tier": { enc: "zenc", q: 84, chroma: "420" },  // add-photos.sh's JPEG fallback
 } as const;
-// Two higher tiers were MEASURED and left out, 2026-09-26, over the 8 crops below:
-//   zenc q94: all three formats (WebP was still in the race) land within
-//     1.8-3.4 s2 on every crop (s2 86-92), so the legibility gate drops all 8.
-//     Near transparency they converge.
-//   zenc q100 4:2:2, the /images/full companion: dropped because lossy WebP
-//     could not reach that budget at all. With WebP gone that reason is gone
-//     too, and JXL against AVIF at q100 has not been measured.
-type FormatTier = keyof typeof FORMAT_TIER_ANCHOR;
-const FORMAT_TIERS = Object.keys(FORMAT_TIER_ANCHOR) as FormatTier[];
+// FORMAT_TIER_ANCHOR holds only the two tiers read off a shipping ENCODE,
+// because codec-knob-probe.ts tunes flags on exactly those budgets and its
+// recorded tables are over them. The axis builds these four.
+const FORMAT_TIERS = ["low-tier", "avif-tier", "jpeg-tier", "repack"] as const;
+type FormatTier = (typeof FORMAT_TIERS)[number];
+// Median bits per pixel of the shipped 600px AVIF tiles in public/i, 255 Fuji
+// frames on 2026-10-07 (mean 0.70). A whole-frame average spent on the
+// densest window in the frame squeezes both formats hard, which is the
+// regime AVIF's reputation was built in.
+const LOW_TIER_BPP = 0.66;
+// Higher tiers were MEASURED and left out:
+//   zenc q94, 2026-09-26: all three formats (WebP was still in the race) land
+//     within 1.8-3.4 s2 on every crop (s2 86-92). Near transparency they converge.
+//   zenc q100 4:2:2, the /images/full companion, 2026-10-07 over 16 crops
+//     (5.8 bpp): JXL minus AVIF ran -0.7 to +0.1 s2, both formats at s2 95-96.
+//     Nobody can call that tile, and the reputation that JXL wins up there is
+//     at best a tie on these photos.
+// Per-tier flags were measured the same day (train / holdout, 8 crops each)
+// and changed nothing: JXL_ARGS beat plain effort 9 at every tier, by the
+// most at 0.45 bpp (+1.3 / +1.8 s2), --resampling=2 lost 8-11 s2 wherever it
+// was tried, and AVIF's 4:4:4 beat 4:2:0 at every tier (+0.2 to +0.9). Each
+// format's best flags are the same at every budget, so "each format where it
+// is strong" is a matter of BUDGET and STARTING POINT, which the tiers vary.
+// Generation loss (decode, re-encode at one setting, 30 times) was measured as
+// a possible JXL showcase, 2026-10-07, 16 crops, and dropped. Mean s2 after 30
+// saves at -q 63 / -q 80 budgets: AVIF 69.2 / 81.4, JXL_ARGS 49.7 / 65.1,
+// cjxl's default effort 7 60.6 / 78.1. AVIF holds best, and JXL's own effort
+// choice moves it 11-13 points, so a call would teach a preset as much as a
+// format. The bytes drift too: by save 30 JXL files run up to 38% smaller
+// than at save 1, AVIF's at most 8%, so equal bytes do not survive the chain.
 // Knob ranges, and whether a HIGHER knob means MORE bytes. Continuous knobs get
 // a fixed number of bisection steps; the integer one stops when it runs out.
 const FMT_KNOB: Record<Fmt, { lo: number; hi: number; up: boolean; int: boolean }> = {
@@ -810,30 +850,84 @@ export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jx
 const knobLabel = (fmt: Fmt, knob: number): string =>
   fmt === "jxl" ? `JPEG XL · distance ${knob.toFixed(2)}` : `AVIF · q${Math.round(knob)}`;
 
+/** Both formats' LOSSLESS size for the crop. Not a call, since identical
+ *  pixels make no eye test, but it is the one place the gap is large (JXL ran
+ *  53-79% of AVIF's bytes over 16 crops, 2026-10-07), so the page states it
+ *  as a number beside the call. AVIF lossless is 8-bit RGB through the
+ *  identity matrix, which is what avifenc -l writes. */
+function losslessBytes(png: string, tmp: string): { jxl: number; avif: number } {
+  const jxl = path.join(tmp, "lossless.jxl"), avif = path.join(tmp, "lossless.avif");
+  run([CJXL as string, png, jxl, "-d", "0", "-e", "9", "--quiet"]);
+  run([AVIFENC as string, "-l", "-d", "8", "--speed", "2", "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, avif]);
+  for (const f of [jxl, avif]) if (!fs.existsSync(f)) throw new Error(`lossless encode wrote no ${path.basename(f)}`);
+  return { jxl: fs.statSync(jxl).size, avif: fs.statSync(avif).size };
+}
+
 function buildFormat(cropId: string, srcs: Srcs, refPng: string, tmp: string): Built[] {
+  const lossless = losslessBytes(srcs.png, tmp);
   return FORMAT_TIERS.map((tier): Built => {
-    try { return buildFormatTier(tier, cropId, srcs, refPng, tmp); }
-    catch (e) { return [null, `${tier}: ${e instanceof Error ? e.message : String(e)}`]; }   // one tier failing keeps the other
+    try {
+      const built = buildFormatTier(tier, cropId, srcs, refPng, tmp);
+      if (built[0]) built[0].lossless = lossless;
+      return built;
+    }
+    catch (e) { return [null, `${tier}: ${e instanceof Error ? e.message : String(e)}`]; }   // one tier failing keeps the others
   });
+}
+
+type Got = { knob: number; bytes: number; path: string };
+
+/** The repack tier's two files. JXL's is the shipping JPEG repacked
+ *  losslessly (cjxl --lossless_jpeg=1, which is the default for a JPEG input,
+ *  spelled out), without the reconstruction box: a browser decodes pixels and
+ *  never needs the original JPEG bytes back, so the box is overhead, and
+ *  codec-knob-probe measured dropping it at +0.37 s2 at matched bytes. AVIF
+ *  gets what any re-encoder gets, the JPEG's decoded pixels. */
+function repackPair(srcs: Srcs, sub: string): [Got, Got] {
+  const jpg = path.join(sub, "have.jpg");
+  encode("zenc", srcs, jpg, 84, "420");
+  const jxl = path.join(sub, "repack.jxl");
+  const r = run([CJXL as string, jpg, jxl, "--lossless_jpeg=1", "-e", "9", "--allow_jpeg_reconstruction=0", "--quiet"]);
+  if (!fs.existsSync(jxl)) throw new Error(`cjxl repack failed: ${(r.stderr || "").trim().slice(0, 200)}`);
+  const pixels = toPng(jpg, path.join(sub, "have-dec.png"));
+  const target = fs.statSync(jxl).size;
+  return [{ knob: 0, bytes: target, path: jxl }, searchFmt("avif", pixels, sub, target)];
 }
 
 function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: string, tmp: string): Built {
   {
     const sub = path.join(tmp, tier);
     fs.mkdirSync(sub, { recursive: true });
-    const a = FORMAT_TIER_ANCHOR[tier];
-    const avif = a.enc === "avif"
-      ? (() => { const p = path.join(sub, "ship.avif"); return { knob: a.q, bytes: encodeFmt("avif", srcs.png, p, a.q), path: p }; })()
-      : searchFmt("avif", srcs.png, sub, encode("zenc", srcs, path.join(sub, "jpeg-anchor.jpg"), a.q, a.chroma));
-    const target = avif.bytes;   // decision 1: the coarse knob's real output is the budget
-    const got: [Fmt, { knob: number; bytes: number; path: string }][] = [["avif", avif], ["jxl", searchFmt("jxl", srcs.png, sub, target)]];
+    let got: [Fmt, Got][];
+    if (tier === "repack") {
+      const [jxl, avif] = repackPair(srcs, sub);
+      got = [["jxl", jxl], ["avif", avif]];   // here the JXL file sets the budget, since its size is fixed
+    } else {
+      const avif = tier === "avif-tier"
+        ? (() => { const a = FORMAT_TIER_ANCHOR[tier]; const p = path.join(sub, "ship.avif"); return { knob: a.q, bytes: encodeFmt("avif", srcs.png, p, a.q), path: p }; })()
+        : tier === "jpeg-tier"
+          ? (() => { const a = FORMAT_TIER_ANCHOR[tier]; return searchFmt("avif", srcs.png, sub, encode("zenc", srcs, path.join(sub, "jpeg-anchor.jpg"), a.q, a.chroma)); })()
+          : (() => {
+            // A light crop's shipping AVIF can already sit at or under this
+            // budget (XT509509's is 8,398 B against 8,448), and then the
+            // "tight" tier is the shipping tier twice over.
+            const low = Math.round((TILE * TILE * LOW_TIER_BPP) / 8);
+            const ship = encodeFmt("avif", srcs.png, path.join(sub, "ship-check.avif"), FORMAT_TIER_ANCHOR["avif-tier"].q);
+            if (ship <= low * (1 + BUDGET_TOL)) throw new Error(`shipping AVIF is already ${ship}B, no tighter than the ${low}B tier`);
+            return searchFmt("avif", srcs.png, sub, low);
+          })();
+      // decision 1: the coarse knob's real output is the budget
+      got = [["avif", avif], ["jxl", searchFmt("jxl", srcs.png, sub, avif.bytes)]];
+    }
+    const target = got[0][1].bytes;
     const rejected: string[] = [];
     const options: Option[] = [];
     for (const [fmt, g] of got) {
       const drift = Math.abs(g.bytes - target) / target;
       if (drift > BUDGET_TOL) { rejected.push(`${fmt}: closest was ${g.bytes}B, ${(drift * 100).toFixed(1)}% off ${target}B`); continue; }
       const dec = decodeFmt(fmt, g.path, path.join(sub, `${fmt}-dec.png`));
-      options.push({ label: knobLabel(fmt, g.knob), bytes: g.bytes, s2: ssim2(refPng, dec), butter: butter(refPng, dec), q: Number(g.knob.toFixed(4)), path: g.path, decoded: dec });
+      const label = tier === "repack" ? (fmt === "jxl" ? "JPEG XL · the JPEG, repacked losslessly" : `AVIF · q${Math.round(g.knob)}, re-encoded from the JPEG`) : knobLabel(fmt, g.knob);
+      options.push({ label, bytes: g.bytes, s2: ssim2(refPng, dec), butter: butter(refPng, dec), q: Number(g.knob.toFixed(4)), path: g.path, decoded: dec });
     }
     if (options.length < 2) return [null, `${tier}: only ${options.length} format(s) hit ${target}B; ${JSON.stringify(rejected)}`];
     options.sort((a, b) => (a.s2 as number) - (b.s2 as number));

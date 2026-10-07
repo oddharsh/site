@@ -102,7 +102,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  AVIF_ARGS, bestCrop, butter, CANDIDATES, decodeFmt, encode, encodeFmt, FORMAT_TIER_ANCHOR, JXL_ARGS, loadSource, searchFmt, ssim2,
+  AVIF_ARGS, bestCrop, butter, decodeFmt, encode, encodeFmt, FORMAT_TIER_ANCHOR, JXL_ARGS, loadSource, searchFmt, ssim2,
 } from "./gen-pixel-peeper.ts";
 
 // The baseline is whatever the format axis ships, so a variant's delta is the
@@ -270,7 +270,10 @@ function avmVariant(name: string): string[] | null {
   return [...AVM_ARGS, ...pairs.flatMap((p) => ["-a", p])];
 }
 
-export const TRAIN = CANDIDATES.format[2];
+// Pinned by name, 2026-10-07: the format axis grew three stems that day, and
+// every table above was measured on these eight. A TRAIN that followed the
+// candidate list would quietly change what "train" means under old results.
+export const TRAIN = ["XT507494", "XT509794", "XT508890", "XT509986", "XT509721", "XT507517", "XT509509", "XT508756"];
 export const HOLDOUT = ["XT509278", "XT507955", "XT508055", "XT509535", "XT509965", "XT509848", "XT509388", "XT509540"];
 const TIERS = Object.keys(FORMAT_TIER_ANCHOR) as (keyof typeof FORMAT_TIER_ANCHOR)[];
 
