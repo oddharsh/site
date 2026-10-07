@@ -60,7 +60,11 @@ function runSwap(naturalWidth) {
   let probe;
   class Image { constructor() { probe = this; this.naturalWidth = 0; } }
   const ctx = { Element, Image, addEventListener: (type, fn, capture) => listeners.push({ type, fn, capture }) };
-  vm.runInNewContext(JXL_SWAP.html.replace(/^<script>|<\/script>$/g, ""), ctx);
+  // JXL_SWAP is one static literal, so its tags are exact strings to slice off
+  // rather than HTML to filter.
+  const open = "<script>", close = "</script>";
+  assert.ok(JXL_SWAP.html.startsWith(open) && JXL_SWAP.html.endsWith(close), "JXL_SWAP is exactly one inline script");
+  vm.runInNewContext(JXL_SWAP.html.slice(open.length, -close.length), ctx);
   assert.match(probe.src, /^data:image\/jxl;base64,/);
   probe.naturalWidth = naturalWidth;
   probe.onload();
