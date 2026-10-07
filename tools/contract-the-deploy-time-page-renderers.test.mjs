@@ -71,7 +71,7 @@ test("renderAlbumPage is pure over the committed pool and never invents a format
     assert.equal(a.split('class="ph"').length - 1, members.length, `${album.slug}: one tile per member`);
     // An original is a JPEG or, once migrate-originals.ts moved it, JPEG XL,
     // and the label names whichever the key holds.
-    const jxl = members.filter((p) => /\.jxl$/i.test(p.full)).length;
+    const jxl = members.filter((p) => /\.jxl$/i.test(p.full ?? "")).length;
     assert.equal(a.split(">JPEG</a>").length - 1, members.length - jxl, `${album.slug}: every JPEG original downloads as JPEG`);
     assert.equal(a.split(">JPEG XL</a>").length - 1, jxl, `${album.slug}: every JPEG XL original downloads as JPEG XL`);
     assert.equal(a.split(">HEIF</a>").length - 1, members.filter((p) => p.heif).length, `${album.slug}: a HEIF link only where the index records one`);
