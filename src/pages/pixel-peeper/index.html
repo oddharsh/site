@@ -129,6 +129,11 @@ a{color:var(--link)}
 .fmtcard{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:var(--text-2xs);color:var(--ink)}
 .fmtcard th{text-align:left;font-weight:700;color:var(--ink-dim);border-bottom:1px solid var(--shadow);padding:2px 4px}
 .fmtcard td{padding:2px 4px;border-bottom:1px dotted var(--shadow)}
+/* the showdown's closing questions */
+.fmtq{margin:0}
+.fmtq dt{font-weight:700;color:var(--ink);margin:10px 0 3px}
+.fmtq dt:first-child{margin-top:0}
+.fmtq dd{margin:0}
 .sharecard{display:block;width:100%;height:auto;margin:8px 0 0;border:1px solid var(--shadow);box-shadow:var(--bevel-sunken)}
 /* metric-alignment axis (the hero) */
 .axiswrap{margin:4px 2px 2px}
@@ -187,6 +192,21 @@ const FMT={
 // The shared footnote rides on a run's FIRST format call only: on every call it
 // tripled the reveal and said the same thing each time.
 const FMT_TAIL=`every pair here is the same file size to within 2%. with more bytes the two converge, and WebP sat out after coming last on every call it entered. both judges come from the JPEG XL project, so if the scoring leans, it leans toward JPEG XL.`;
+
+// The question the showdown asks, answered once the picks are in. Every number
+// is measured: the repack and lossless spans from this axis's own probes
+// (#1207), AV2 from /garage/av2's tile and crop probes (#989), and the WebP
+// line from the 9 lossless figures /garage/av2 ships, re-encoded 2026-10-07 as
+// lossless JPEG XL (cjxl -d 0 -e 9, 308,008 B) and AVIF (avifenc -l -s 3,
+// 518,344 B) against the shipped WebP's 341,842 B.
+const FMT_QS=[
+  {q:`why pick JPEG XL over AVIF?`,
+   a:`when the picture already exists as a JPEG, or has to come back bit for bit. JPEG XL repacks a JPEG with every pixel identical and 6 to 13% smaller on this site's photos, while AVIF can only re-encode it and stack its damage on the JPEG's. lossless, JPEG XL lands at 53 to 79% of AVIF's bytes. squeeze a fresh photo into a thumbnail budget and AVIF wins instead, and with more bytes the two converge. the cost is reach: only Chrome 155+ and Safari 17+ decode it, so it ships with an AVIF or JPEG behind it.`},
+  {q:`where does AV2 fit?`,
+   a:`on AVIF's turf, a notch thinner. AV2 succeeds AV1, the codec inside every AVIF. at the bytes this site's 600px photos ship at, it beat AVIF on 28 of 38. on this exam's 16 dense crops it lost, and the flip sits near half a bit per pixel. it does nothing for JPEG XL's turf: it can't repack a JPEG, and its lossless files ran 29% larger than AV1's. no browser decodes it yet, and served under the AVIF name it draws as a broken image. <a href="/garage/av2">the long version</a>.`},
+  {q:`is WebP still worth anything?`,
+   a:`for lossy photos, no. it came last on all 14 calls it entered here. its last job is lossless. on the 9 figures /garage/av2 ships, lossless WebP came in 34% smaller than lossless AVIF and 11% larger than JPEG XL, and every browser draws it. that's why those figures are WebP.`},
+];
 
 // How many calls of each axis one play gets. A QUOTA, not a floor, and its shape
 // IS the difficulty fix: the first cut of this test spent 9 of its 18 trials on
@@ -334,7 +354,7 @@ function screenIntro(){
    <div class="gb"><span class="gb-legend">or: JPEG XL vs AVIF</span>
      <p style="margin:0">${state.noJxl
        ?`your browser can't decode JPEG XL yet, so this run is off. Chrome 155+ and Safari 17+ can.`
-       :`Chrome 155 decodes JPEG XL now, so here are ${SHOWDOWN_SIZE} calls with nothing but JPEG XL against AVIF, every pair at one file size. the budgets run from a tight squeeze, where AVIF made its name, to repacking a JPEG, which only JPEG XL can do.`}</p>
+       :`Chrome 155 decodes JPEG XL now, so here are ${SHOWDOWN_SIZE} calls with nothing but JPEG XL against AVIF, every pair at one file size. the budgets run from a tight squeeze, where AVIF made its name, to repacking a JPEG, which only JPEG XL can do. the question underneath: when should a photo ship as JPEG XL instead of AVIF? the answer comes at the end, along with where AV2 and WebP land.`}</p>
    </div>
    <div class="row spread" style="margin-top:12px">
      <small>hover any tile to pixel-peep · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> or click</small>
@@ -506,7 +526,9 @@ function showdownHTML(t){
   return `<div class="gb" style="margin-top:14px"><span class="gb-legend">call by call</span>
       <table class="fmtcard"><thead><tr><th>#</th><th>budget</th><th>size</th><th>you</th><th>metrics</th><th>gap, s2</th><th></th></tr></thead><tbody>${rows}</tbody></table>
       <p class="meta" style="margin:6px 0 0">both tiles in every call were the same size to within 2%. "gap" is how far apart ssimulacra2 scored them, and 3.5 is the least a call needed to make this test.</p></div>
-    <div class="banner info"><span class="g">the takeaway</span><span>you picked JPEG XL ${t.pj} times and AVIF ${t.pa}. ${turfLine("avif","tight budgets")}${turfLine("jxl","repacking a JPEG")}the metrics' winner was AVIF on ${t.ma} of these calls and JPEG XL on ${t.mj}${t.ma&&t.mj?", which is the split Chrome's own advice points at: try both":", and a different draw of photos would split them"}. on these photos AVIF wins tight web budgets, JPEG XL wins anything that starts life as a JPEG, and with more bytes they converge until nobody can tell.</span></div>`;
+    <div class="banner info"><span class="g">the takeaway</span><span>you picked JPEG XL ${t.pj} times and AVIF ${t.pa}. ${turfLine("avif","tight budgets")}${turfLine("jxl","repacking a JPEG")}the metrics' winner was AVIF on ${t.ma} of these calls and JPEG XL on ${t.mj}${t.ma&&t.mj?", which is the split Chrome's own advice points at: try both":", and a different draw of photos would split them"}.</span></div>
+    <div class="gb"><span class="gb-legend">so which one ships?</span>
+      <dl class="fmtq">${FMT_QS.map(x=>`<dt>${x.q}</dt><dd>${x.a}</dd>`).join("")}</dl></div>`;
 }
 function bar(label,val,sub,gold){
   const w=val===null?0:val.pct, n=val===null?"n/a":`${val.pct}% of ${val.n}`;
