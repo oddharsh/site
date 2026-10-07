@@ -313,10 +313,7 @@ function parseICSDate(value, params = "") {
 function icsZoneOffsetMinutes(ms, tzid) {
   if (!tzid) return NaN;
   try {
-    const d = new Date(ms);
-    const utc   = d.toLocaleString("en-US", { timeZone: "UTC",  hour12: false });
-    const local = d.toLocaleString("en-US", { timeZone: tzid,   hour12: false });
-    return (Date.parse(utc) - Date.parse(local)) / 60000;
+    return tzOffsetMinutes(new Date(ms), tzid);
   } catch { return NaN; }
 }
 
@@ -409,30 +406,79 @@ function intersectsAny(start, end, intervals) {
 
 // timezone helpers using Intl. enough for our purposes — we don't need
 // arbitrary tz math, just "what's the local day/hour for this instant?"
+//
+// ONE FORMATTER PER ZONE, reused. Every toLocaleString/toLocaleDateString call
+// that names a timeZone builds a fresh Intl.DateTimeFormat, and generateSlots
+// made several per day across the lookahead window: /coffee/availability.json
+// cost 16 ms of CPU on a cold isolate, the worst route on the site (build-off
+// CPU sweep, 2026-10-07). The helpers below read numeric fields off one cached
+// formatter with formatToParts instead.
+//
+// They also rebuild each wall clock with Date.UTC and read it back with the
+// UTC getters. The old code parsed the formatted string, which reads it in the
+// PROCESS's local zone, so around the process's own DST change an offset came
+// out an hour wrong (run cal's tests with TZ=America/Los_Angeles on the old
+// code and the New York offset at 2026-11-01T06:30Z reads 240, not 300). The
+// Workers runtime runs in UTC, where the two readings are identical: 1.08
+// million old-against-new comparisons under TZ=UTC (nine zones, every 37
+// minutes of 2026 and each DST transition minute by minute, bun and node) found
+// no difference. cal/test/availability.test.js pins the helpers against known
+// values at both 2026 New York transitions, in any process zone.
+const ZONE_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+function zoneFormatter(tz: string): Intl.DateTimeFormat {
+  let f = ZONE_FORMATTERS.get(tz);
+  if (!f) {
+    // Throws RangeError on an unknown zone, as toLocaleString did; callers that
+    // tolerate junk TZIDs (icsZoneOffsetMinutes) catch it.
+    f = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hourCycle: "h23",
+      year: "numeric", month: "numeric", day: "numeric",
+      hour: "numeric", minute: "numeric", second: "numeric",
+    });
+    ZONE_FORMATTERS.set(tz, f);
+  }
+  return f;
+}
+// The wall-clock fields of `ms` in `tz`: month is 1-based, as formatted.
+function wallParts(ms: number, tz: string) {
+  // UTC needs no time-zone data, so it skips ICU entirely. The UTC getters give
+  // exactly what a UTC formatter would (whole seconds, milliseconds dropped).
+  if (tz === "UTC") {
+    const d = new Date(ms);
+    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds() };
+  }
+  const p = { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0 };
+  for (const { type, value } of zoneFormatter(tz).formatToParts(ms)) {
+    if (type in p) p[type] = +value;
+  }
+  return p;
+}
+// The wall clock of `ms` in `tz`, encoded as if it were a UTC instant, so the
+// UTC getters read its fields back and two of them subtract with no process
+// zone in between.
+function wallAsUtc(ms: number, tz: string): number {
+  const p = wallParts(ms, tz);
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+}
+const pad2 = (n: number) => String(n).padStart(2, "0");
 function ymd(ms, tz) {
-  const d = new Date(ms);
-  return d.toLocaleDateString("en-CA", { timeZone: tz });  // YYYY-MM-DD
+  const p = wallParts(ms, tz);
+  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;  // YYYY-MM-DD, as en-CA formatted it
 }
 function yw(ms, tz) {
   // approximate ISO week — fine for our daily/weekly limit purposes
-  const d = new Date(ms);
-  const localDate = new Date(d.toLocaleString("en-US", { timeZone: tz }));
-  const onejan = new Date(localDate.getFullYear(), 0, 1);
-  // .getTime() rather than subtracting the Dates directly: identical at runtime
-  // (subtraction coerces through valueOf) and it says the units out loud.
-  const week = Math.ceil(((localDate.getTime() - onejan.getTime()) / 86400000 + onejan.getDay() + 1) / 7);
-  return `${localDate.getFullYear()}-W${week}`;
+  const local = new Date(wallAsUtc(ms, tz));
+  const year = local.getUTCFullYear();
+  const onejan = new Date(Date.UTC(year, 0, 1));
+  const week = Math.ceil(((local.getTime() - onejan.getTime()) / 86400000 + onejan.getUTCDay() + 1) / 7);
+  return `${year}-W${week}`;
 }
 function dayOfWeek(ms, tz) {
-  const d = new Date(ms);
-  return new Date(d.toLocaleString("en-US", { timeZone: tz })).getDay();
+  return new Date(wallAsUtc(ms, tz)).getUTCDay();
 }
 function startOfDay(ms, tz) {
   // local midnight, expressed as unix-ms
-  const d = new Date(ms);
-  const local = d.toLocaleString("en-CA", { timeZone: tz, hour12: false }); // YYYY-MM-DD HH:MM:SS
-  const [date] = local.split(",");
-  return atLocalHour(Date.parse(date + "T00:00:00Z"), tz, 0);
+  return atLocalHour(Date.parse(ymd(ms, tz) + "T00:00:00Z"), tz, 0);
 }
 function addDays(ms, days) { return ms + days * 86400000; }
 function atLocalHour(dayStartMs, tz, hour) {
@@ -444,9 +490,12 @@ function atLocalHour(dayStartMs, tz, hour) {
   const offsetMin = tzOffsetMinutes(wallTime, tz);
   return wallTime.getTime() + offsetMin * 60000;
 }
+// Test seam, never called by the worker: the helpers above are module-private,
+// and the test pins them against known offsets and day boundaries.
+export const TZ_HELPERS_FOR_TEST = { ymd, yw, dayOfWeek, startOfDay, atLocalHour, tzOffsetMinutes, icsZoneOffsetMinutes };
+
 function tzOffsetMinutes(date, tz) {
   // distance between UTC and local at this instant, in minutes (positive = west of UTC)
-  const utc = date.toLocaleString("en-US", { timeZone: "UTC", hour12: false });
-  const local = date.toLocaleString("en-US", { timeZone: tz, hour12: false });
-  return (Date.parse(utc) - Date.parse(local)) / 60000;
+  const ms = date.getTime();
+  return (wallAsUtc(ms, "UTC") - wallAsUtc(ms, tz)) / 60000;
 }
