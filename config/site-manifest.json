@@ -1097,7 +1097,7 @@
       "title": "AV2, before anyone can see it",
       "section": "garage",
       "kind": "content",
-      "description": "AV2 still images scored against the AVIF this site ships at matched bytes: ahead on the sparsest third of thumbnails, behind on denser ones and dense detail, and why an AV2 file behind a picture fallback still breaks.",
+      "description": "AV2 still images scored against the AVIF this site ships at matched bytes: ahead on sparse thumbnails, about even across the shipped tier, behind on dense detail, and why an AV2 file behind a picture fallback still breaks.",
       "hint": "AV2 stills vs shipped AVIF, and the picture fallback trap",
       "flags": {
         "run": true,
