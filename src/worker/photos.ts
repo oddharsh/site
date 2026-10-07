@@ -664,19 +664,56 @@ const fullUrl = (key: string | undefined) => `/images/full/${encodeURIComponent(
 // an <a> inside an <a> is invalid HTML and the parser hoists it out (gotcha 8).
 // Built with the `html` tag, so every interpolation is escaped by construction
 // and the album page below opens no unescaped door at all.
+//
+// The first EAGER_TILES load with the page. Every later tile names its URLs in
+// data-srcset and data-src, so the browser has nothing to fetch until
+// GALLERY_DEFER swaps them in as the tile nears the screen. Both halves of the
+// <picture> are deferred: with only the <img> deferred, the browser still picks
+// the AVIF <source> and fetches it at once. A <noscript> twin keeps every photo
+// for a reader without JavaScript.
+//
+// This replaced loading="lazy" on 2026-10-07. Chrome resolves lazy images
+// within about 1,250 px of the screen on a fast link, so a desktop visit to
+// /photos fetched 47 tiles (563 KB) where 12 were meant to be eager.
+const EAGER_TILES = 12;
 function renderTile(p, altMap, i: number, extra: Html = EMPTY): Html {
-  const eager = i < 12;
   const alt = (altMap && altMap[p.stem]) || p.stem;
+  const picture = i < EAGER_TILES
+    ? html`<picture>
+<source type="image/avif" srcset="${p.thumb_small}">
+<img src="${p.thumb_jpg}" alt="${alt}" width="400" height="400" decoding="async">
+</picture>`
+    : html`<picture data-defer>
+<source type="image/avif" data-srcset="${p.thumb_small}">
+<img data-src="${p.thumb_jpg}" alt="${alt}" width="400" height="400" decoding="async">
+</picture><noscript><picture>
+<source type="image/avif" srcset="${p.thumb_small}">
+<img src="${p.thumb_jpg}" alt="${alt}" width="400" height="400" loading="lazy" decoding="async">
+</picture></noscript>`;
   return html`<div class="ph">
 <a class="ph-open" href="${fullUrl(p.full)}">
-<picture>
-<source type="image/avif" srcset="${p.thumb_small}">
-<img src="${p.thumb_jpg}" alt="${alt}" width="400" height="400"${eager ? EMPTY : html` loading="lazy"`} decoding="async">
-</picture>
+${picture}
 </a>
 <span class="ph-name">${p.stem}</span>${extra}
 </div>`;
 }
+
+// Swaps a deferred tile's URLs in once it comes within a quarter of a screen of
+// view. It starts one frame after first paint, so it never delays it.
+//
+// The root is the sheet's scrolling ancestor. Luna pages scroll inside
+// `.window > .content`, and a rootMargin only enlarges the root: with the
+// viewport as root, the scroller still clips each tile to its visible area, and
+// the quarter-screen lead would shrink to nothing. `body` and `html` are skipped,
+// because their overflow can propagate to the viewport, and observing against
+// them would count every tile as in view.
+//
+// Without JavaScript the deferred <picture> is hidden and its <noscript> twin
+// shows. The 25% margin is the cheapest that left no tile empty while scrolling
+// at 1,000 and 2,000 px/s, measured across 0, 25, 50 and 100% in the build-off
+// merge (buildoff/merge, 44e6c344) and again on this sheet.
+// A static `html` literal: it interpolates nothing, so it opens no unescaped door.
+const GALLERY_DEFER = html`<noscript><style>picture[data-defer]{display:none}</style></noscript><script>requestAnimationFrame(()=>setTimeout(()=>{let r=document.querySelector(".sheet");while((r=r.parentElement)&&r!==document.body&&!/auto|scroll/.test(getComputedStyle(r).overflowY));if(r===document.body)r=null;const o=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){const p=e.target;for(const s of p.querySelectorAll("[data-srcset]"))s.srcset=s.dataset.srcset;const i=p.querySelector("img");i.src=i.dataset.src;o.unobserve(p)}},{root:r,rootMargin:"25%"});for(const p of document.querySelectorAll("picture[data-defer]"))o.observe(p)}))</script>`;
 
 const SHEET_CSS = `/*min*/
   h1 { font-size: 18pt; }
@@ -753,7 +790,7 @@ export function renderPhotosPage(photos, altMap) {
   </p>
   <div class="sheet">
 ${tiles}
-  </div>
+  </div>${GALLERY_DEFER.html}
   <footer>
     &larr; <a href="/">aadhar.sh</a> &middot; press <b>&#8984;K</b> anywhere to search these by name
     <address>handwritten worker at aadhar.sh</address>
@@ -806,7 +843,7 @@ export function renderAlbumPage(album: Album, photos, altMap) {
   </p>
   <div class="sheet">
 ${tiles}
-  </div>
+  </div>${GALLERY_DEFER}
   <footer>
     &larr; <a href="/photos">all photos</a> &middot; <a href="/">aadhar.sh</a>
     <address>handwritten worker at aadhar.sh</address>
