@@ -33,3 +33,16 @@
 # CI install of an already-committed lock. `bun run deps:pin` (deps-pin.yml)
 # reads the root's window and proposes nothing younger, for this manifest too.
 minimumReleaseAge = 86400
+
+[test]
+
+# The root suite's network tripwire, shared rather than copied, as cal and
+# cf-garage take it. reader.test.mjs stubs every fetch it makes; this turns a
+# stub somebody forgets into a red run instead of a request to a real page.
+#
+# NO `timeout` KEY, because bun ignores one here: measured 2026-10-07, a 200ms
+# test passed under `timeout = 50` in this section and failed under
+# `--timeout=50` on the command line. The 30s budget lives in package.json's
+# `test` script for that reason, and a bare `bun test` in this directory runs
+# under bun's 5s default, which the corpus differential test outgrows.
+preload = ["../tools/lib/no-network.ts"]

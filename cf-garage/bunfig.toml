@@ -1,0 +1,11 @@
+# cf-garage's bun settings. `bun test` reads bunfig.toml from the directory it
+# runs in and never walks up, so the root file's preload governs nothing here.
+# Run the suite from THIS directory (`bun run test`, or a bare `bun test`).
+[test]
+# The root suite's network tripwire, shared rather than copied, the same way
+# cal/bunfig.toml takes it. Every test here hands the Worker a stub binding, so
+# a fetch that leaves the process is a stub somebody forgot. The guard records
+# the attempt and fails the run at exit even when the code under test swallows
+# the refusal. Control, 2026-10-07: a test that called fetch inside a
+# try/catch passed on its own and failed the run with this preload (exit 1).
+preload = ["../tools/lib/no-network.ts"]

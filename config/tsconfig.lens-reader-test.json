@@ -1,11 +1,11 @@
 {
   // tsconfig.lens-reader-test.json — the Reader lens's behavioural suite.
   //
-  // NODE GLOBALS, for the reason tsconfig.cf-garage-test.json's header gives:
-  // the source runs on workerd and the test runs on node, so the two cannot
+  // BUN GLOBALS, for the reason tsconfig.cf-garage-test.json's header gives:
+  // the source runs on workerd and the test runs on bun, so the two cannot
   // share one `types` entry without declaring a union that is true of neither.
   // Importing ../src/reader.ts also checks the shared public-fetch.ts module
-  // against node globals. The scoped checker owns test diagnostics; the Worker
+  // against bun globals. The scoped checker owns test diagnostics; the Worker
   // program checks that imported source against its actual runtime.
   //
   // IT ONLY RESOLVES WHERE lens-reader/node_modules EXISTS, which is the same
@@ -14,7 +14,8 @@
   // TS2307 on readability and linkedom while every workstation that has run an
   // install in lens-reader/ stays green — the split CLAUDE.md records about the
   // root contract suite, arriving through a third door. It runs from
-  // lens-reader/ instead, after the install CI already does for its tests.
+  // lens-reader/ instead, after an install there. CI stopped running this
+  // directory's install, typecheck and tests on 2026-09-28 (#1001).
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,
