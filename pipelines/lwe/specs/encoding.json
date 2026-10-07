@@ -205,7 +205,7 @@
       "demo": {
         "id": "demo-bpp",
         "bar": "bytes-per-pixel, measured live",
-        "html": "<p class=\"lead\">The same 400&times;266 photo (106,400 pixels), run through every encoder. These sizes are <b>fetched live</b> from the files the garage study actually produced, so the bytes are real. The last column is size against the lossless PNG.</p><div class=\"bpp-wrap\"><img src=\"/garage/enc/c-zc84.jpg?v=3\" width=\"196\" height=\"130\" alt=\"sample photo, zenjpeg q84\" class=\"bpp-img\" decoding=\"async\"><table class=\"bpp-tbl\"><thead><tr><th>encoder</th><th>size</th><th>b/px</th><th>vs PNG</th></tr></thead><tbody id=\"bpp-body\"><tr><td colspan=\"4\" class=\"dim\">measuring real files…</td></tr></tbody></table></div>"
+        "html": "<p class=\"lead\">The same 400&times;266 photo (106,400 pixels), run through every encoder. These sizes are <b>fetched live</b> from the files the garage study actually produced, so the bytes are real. The last column is size against the lossless PNG.</p><div class=\"bpp-wrap\"><img src=\"/garage/enc/c-zc84.jpg?v=3\" width=\"196\" height=\"130\" alt=\"sample photo, zenjpeg q84\" class=\"bpp-img\" loading=\"lazy\" decoding=\"async\"><table class=\"bpp-tbl\"><thead><tr><th>encoder</th><th>size</th><th>b/px</th><th>vs PNG</th></tr></thead><tbody id=\"bpp-body\"><tr><td colspan=\"4\" class=\"dim\">measuring real files…</td></tr></tbody></table></div>"
       }
     },
     {
