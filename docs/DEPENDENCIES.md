@@ -25,6 +25,14 @@ window and an exact pin gets no fallback (measured 2026-08-24 on bun 1.4.0,
 with the policy off). The job also runs `bun audit` and reports advisories in
 its summary, since an advisory on a transitive pin needs a person.
 
+Dependabot ALERTS are a separate lane, and they need help too. GitHub's
+dependency graph reads `package.json` and not `bun.lock`, so on its own it sees
+the direct pins and none of the ~150 packages under them (the sharp 0.35.4 high
+under miniflare raised no alert). [`dependency-snapshot.yml`](../.github/workflows/dependency-snapshot.yml)
+posts the resolved tree of both lockfiles through the dependency submission API
+whenever one moves on main. `bun run deps:snapshot` prints the same snapshot
+locally without sending it.
+
 Keep the composite-action glob in `dependabot.yml`: the root directory entry
 alone does not reach actions nested under `.github/actions/`.
 

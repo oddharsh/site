@@ -1,0 +1,65 @@
+name: Dependency snapshot
+
+# Hand GitHub the resolved npm tree, because its dependency graph cannot read
+# bun.lock. Measured 2026-10-07: the graph listed the seven package.json files
+# and no lockfile, so Dependabot alerts covered 18 direct pins and none of the
+# ~150 packages under them. The sharp 0.35.4 high under miniflare
+# (GHSA-wq5f-xc86-pv6w) raised no alert at all. tools/lib/dependency-snapshot.ts
+# has the rest.
+#
+# A submitted snapshot stands until the next one with the same correlator, so
+# this runs only when a lockfile (or the code that reads one) moves on main.
+# After a merge that changes neither, the last snapshot still describes main.
+#
+# NOTHING FROM THE TREE RUNS HERE. The snapshot is built by reading two JSON
+# files; no install happens, so no package code shares a process with the write
+# token. That token is the job's own GITHUB_TOKEN with `contents: write`, which
+# the submission endpoint requires, scoped to this one job.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - bun.lock
+      - lens-reader/bun.lock
+      - tools/dependency-snapshot.ts
+      - tools/lib/dependency-snapshot.ts
+      - .github/workflows/dependency-snapshot.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-snapshot
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    name: Submit the bun.lock tree to the dependency graph
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # the dependency submission endpoint, and nothing else here writes
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      # --no-install turns off bun's auto-install, which would otherwise fetch
+      # any npm import this script grew into from the registry, right here. It
+      # did once, before EXACT_PIN moved out of dependency-docs.ts (smol-toml).
+      - name: Build the snapshot
+        run: |
+          set -euo pipefail
+          bun --no-install tools/dependency-snapshot.ts --out snapshot.json 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Submit it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/$GITHUB_REPOSITORY/dependency-graph/snapshots" --method POST --input snapshot.json

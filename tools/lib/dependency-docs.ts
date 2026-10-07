@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseToml } from "smol-toml";
 import { asRecord, asText } from "../../src/worker/lib/parse.ts";
+import { EXACT_PIN } from "./exact-pin.ts";
 
 // Default to THIS repo, so callers cannot pass the wrong kind of root. The
 // contract-test caller holds a URL rather than a path, and path.join on a URL
@@ -378,12 +379,9 @@ export async function checkDependencyDocs(root = REPO_ROOT) {
   });
 }
 
-// An exact pin is the only shape the prose can be wrong ABOUT: a range names a
-// set, and the doc states one number. EXPORTED because tools/lib/lockfile-pins.ts
-// asks the same question of the same manifests for a different reason, and two
-// spellings of "exact pin" is the drift that would let one checker cover a
-// declaration the other silently skips.
-export const EXACT_PIN = /^\d+\.\d+\.\d+[\w.-]*$/;
+// Re-exported for the callers that already import it from here;
+// tools/lib/exact-pin.ts holds the one definition and says why it moved.
+export { EXACT_PIN };
 
 type DocAlias = { prose: string; pkg: string };
 // What findClaims hands back: the prose name, the package it maps to, the version

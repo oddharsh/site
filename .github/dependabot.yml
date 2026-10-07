@@ -24,8 +24,12 @@ updates:
   # from deps-plan.ts, and deps-pin.yml can go. The bun updater writes bun.lock
   # itself, so the relock workflow this file once leaned on does not come back.
   #
-  # Dependabot ALERTS still cover every npm manifest: the dependency graph
-  # reads them regardless of this file. Only the update PRs moved.
+  # Dependabot ALERTS are not governed by this file, and on their own they are
+  # thinner than they look: the dependency graph parses package.json but not
+  # bun.lock (read 2026-10-07: seven package.json manifests, no lockfile), so it
+  # saw the direct pins and none of the ~150 packages beneath them. The sharp
+  # 0.35.4 high under miniflare raised no alert. dependency-snapshot.yml now
+  # submits both lockfiles' resolved trees, which is what alerts match against.
   # Keep the action toolchain current too; its PRs get the same review note.
   #
   # `directories` RATHER THAN `directory`, BECAUSE "/" DOES NOT REACH A COMPOSITE
