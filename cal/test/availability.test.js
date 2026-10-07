@@ -8,7 +8,7 @@
 // fake timers, which were unreliable under the workers runtime and are not
 // worth reintroducing on the host.
 import { describe, it, expect, mock, afterEach } from "bun:test";
-import { fetchBusySWR, generateSlots, CAL_FRESH_MS } from "../src/availability.js";
+import { fetchBusySWR, generateSlots, CAL_FRESH_MS, TZ_HELPERS_FOR_TEST } from "../src/availability.js";
 import { stubFetch } from "./harness.ts";
 
 const TZ = "America/New_York";
@@ -193,5 +193,55 @@ describe("generateSlots — invariants", () => {
   it("yields no slots when the working window is empty (start ≥ end)", () => {
     expect(generateSlots({ ...baseEnv, WORKING_HOURS_START: "18", WORKING_HOURS_END: "18" }, []))
       .toHaveLength(0);
+  });
+});
+
+// The timezone helpers read one cached Intl.DateTimeFormat per zone instead of
+// building a formatter on every call (2026-10-07: /coffee/availability.json cost
+// 16 ms of CPU cold, the worst route on the site). These pin them against known
+// values, so a change to how they read the wall clock cannot quietly move a
+// slot by an hour at a DST change or put a booking on the wrong day.
+describe("timezone helpers — known offsets and day boundaries", () => {
+  const { ymd, dayOfWeek, startOfDay, atLocalHour, tzOffsetMinutes, icsZoneOffsetMinutes } = TZ_HELPERS_FOR_TEST;
+  const at = (iso) => Date.parse(iso);
+  const off = (iso, tz) => tzOffsetMinutes(new Date(at(iso)), tz);
+
+  it("New York's offset on both sides of the 2026 transitions (positive = west of UTC)", () => {
+    expect(off("2026-07-01T12:00:00Z", TZ)).toBe(240); // EDT
+    expect(off("2026-12-01T12:00:00Z", TZ)).toBe(300); // EST
+    expect(off("2026-03-08T06:30:00Z", TZ)).toBe(300); // DST starts at 07:00Z (02:00 EST)
+    expect(off("2026-03-08T07:30:00Z", TZ)).toBe(240);
+    expect(off("2026-11-01T05:30:00Z", TZ)).toBe(240); // DST ends at 06:00Z (02:00 EDT)
+    expect(off("2026-11-01T06:30:00Z", TZ)).toBe(300);
+  });
+
+  it("half-hour and 45-minute zones, and UTC", () => {
+    expect(off("2026-01-15T12:00:00Z", "Australia/Lord_Howe")).toBe(-660); // +11 in its summer
+    expect(off("2026-07-15T12:00:00Z", "Australia/Lord_Howe")).toBe(-630); // +10:30, a 30-minute DST
+    expect(off("2026-07-15T12:00:00Z", "Asia/Kathmandu")).toBe(-345);
+    expect(off("2026-01-15T12:00:00Z", "America/St_Johns")).toBe(210);
+    expect(off("2026-07-15T12:00:00Z", "UTC")).toBe(0);
+  });
+
+  it("the local day turns over at New York midnight, not UTC's", () => {
+    expect(ymd(at("2026-10-07T03:59:59Z"), TZ)).toBe("2026-10-06");
+    expect(ymd(at("2026-10-07T04:00:00Z"), TZ)).toBe("2026-10-07");
+    expect(dayOfWeek(at("2026-10-07T03:59:59Z"), TZ)).toBe(2); // Tuesday
+    expect(dayOfWeek(at("2026-10-07T04:00:00Z"), TZ)).toBe(3); // Wednesday
+    // local midnight on the day DST ends is still EDT: 04:00Z
+    expect(startOfDay(at("2026-11-01T15:00:00Z"), TZ)).toBe(at("2026-11-01T04:00:00Z"));
+  });
+
+  it("10:00 local is 10:00 on either side of a transition", () => {
+    expect(atLocalHour(at("2026-03-06T00:00:00Z"), TZ, 10)).toBe(at("2026-03-06T15:00:00Z")); // Fri, EST
+    expect(atLocalHour(at("2026-03-09T00:00:00Z"), TZ, 10)).toBe(at("2026-03-09T14:00:00Z")); // Mon, EDT
+    expect(atLocalHour(at("2026-10-30T00:00:00Z"), TZ, 10)).toBe(at("2026-10-30T14:00:00Z")); // Fri, EDT
+    expect(atLocalHour(at("2026-11-02T00:00:00Z"), TZ, 10)).toBe(at("2026-11-02T15:00:00Z")); // Mon, EST
+  });
+
+  it("an ICS TZID the runtime does not know yields NaN, so the caller keeps the raw time", () => {
+    expect(icsZoneOffsetMinutes(at("2026-07-01T12:00:00Z"), "Eastern Standard Time")).toBeNaN();
+    expect(icsZoneOffsetMinutes(at("2026-07-01T12:00:00Z"), "")).toBeNaN();
+    expect(icsZoneOffsetMinutes(at("2026-07-01T12:00:00Z"), TZ)).toBe(240);
   });
 });
