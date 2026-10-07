@@ -11,6 +11,23 @@
 // lib/chrome.js and lib/cache.js to render its page, and the photo query has no
 // business dragging a page renderer into its module graph.
 
+// No ICU on a request path. The first localeCompare in an isolate builds a
+// collator and the first toLocaleString builds a number formatter, and each
+// costs more CPU than the rest of a query: measured in node on 2026-10-07, a
+// cold /ledger/lines.html took 10.8ms, and 2.0ms once ICU was already warm,
+// against Workers Free's 10ms. photos.ts derivePhotoPool hit the same thing at
+// module scope. These two cover what the request paths used ICU for.
+//
+// A code-unit order, which is what a bare .sort() does to strings. It agrees
+// with collation on every key the callers sort today (URLs, stems, dates,
+// facet names; checked pairwise), and where it would differ (case, accents)
+// it still gives a total order, which is all a tie-break needs.
+export const compareCodepoints = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+// 1234567 -> "1,234,567", what toLocaleString("en-US") prints for an integer.
+// The same regex writing.ts and the lens islands already use client-side.
+export const groupThousands = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
 // The original tokenizer, byte-for-byte. Site search is pinned on its behaviour
 // (length > 1 drops "a"/"I", 12 terms caps the fan-out), so it moved houses
 // without changing.
@@ -87,19 +104,36 @@ export function queryTerms(query, max = 12) {
 //
 // Prefix matching also carries plural and inflected forms: field "bridges"
 // answers query "bridge", and query "bridges" answers field "bridge" via stem.
+//
+// It never splits the field into tokens, though, because that was the cost:
+// commonPairs plus scoreFields call this once per (term, field, record), up to
+// 8,256 times for a two-term query over 258 photos, and splitting on each call
+// was 5-10ms of every request. Each rule is a statement about where a token
+// starts, so indexOf finds the candidates and a boundary check confirms them.
+// Checked against the splitting version on 2026-10-07: 3,380 terms (every
+// token in the archive, its prefixes, plurals) against all 2,064 photo fields
+// plus accented, astral and titlecase strings, 7,010,120 pairs, no difference.
 export function fieldMatches(value, term) {
   const haystack = String(value || "").toLowerCase();
   if (!haystack || !term) return false;
   const stem = normalize(term);
-  for (const token of haystack.split(/[^\p{L}\p{N}]+/u)) {
-    if (!token) continue;
-    if (token === term || token === stem) return true;
-    if (token.startsWith(term) || token.startsWith(stem)) return true;
-    // The query as the longer string ("monochrome" against "monochrom"). Length
-    // -gated because short tokens are prefixes of far too much: an ungated rule
-    // lets the token "neg" answer a query for "negative", and "Nostalgic Neg"
-    // and "Classic Negative" are two different film simulations here.
-    if (token.length >= 5 && term.startsWith(token)) return true;
+  // token === term or token.startsWith(term), and the same for the stem. A
+  // probe with a non-word character in it can never begin a token.
+  if (isWord(term) && someTokenStartsWith(haystack, term)) return true;
+  if (stem !== term && isWord(stem) && someTokenStartsWith(haystack, stem)) return true;
+  // The query as the longer string ("monochrome" against "monochrom"). Length
+  // -gated because short tokens are prefixes of far too much: an ungated rule
+  // lets the token "neg" answer a query for "negative", and "Nostalgic Neg"
+  // and "Classic Negative" are two different film simulations here. Such a
+  // token starts with the term's first five characters, so those are the probe.
+  if (term.length > 5) {
+    const probe = term.slice(0, 5);
+    for (let i = haystack.indexOf(probe); i !== -1; i = haystack.indexOf(probe, i + 1)) {
+      if (!tokenStartsAt(haystack, i)) continue;
+      let end = i;
+      while (end < haystack.length && wordAt(haystack, end)) end += (haystack.codePointAt(end) ?? 0) > 0xffff ? 2 : 1;
+      if (end - i >= 5 && term.startsWith(haystack.slice(i, end))) return true;
+    }
   }
   // The exception, and the reason this is not just a token-set test: model
   // designations live INSIDE a larger alphanumeric run with no separator —
@@ -107,6 +141,35 @@ export function fieldMatches(value, term) {
   // digit, because that is what distinguishes a part number from a word, and
   // an ungated substring fallback would let "chrome" back into "Monochrome".
   return /\d/.test(term) && haystack.includes(term);
+}
+
+// The tokenizer's own definition of a word character (terms() splits on its
+// complement), applied one code point at a time so astral letters count.
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+const NON_WORD = /[^\p{L}\p{N}]/u;
+const isWord = (text: string) => !NON_WORD.test(text);
+const wordAt = (text: string, i: number) => {
+  const cp = text.codePointAt(i);
+  return cp !== undefined && WORD_CHAR.test(String.fromCodePoint(cp));
+};
+
+// A token starts at i when no word character ends just before it.
+function tokenStartsAt(text: string, i: number) {
+  if (i === 0) return true;
+  let j = i - 1;
+  const unit = text.charCodeAt(j);
+  if (unit >= 0xdc00 && unit <= 0xdfff && j > 0) {
+    const high = text.charCodeAt(j - 1);
+    if (high >= 0xd800 && high <= 0xdbff) j -= 1;
+  }
+  return !wordAt(text, j);
+}
+
+function someTokenStartsWith(text: string, prefix: string) {
+  for (let i = text.indexOf(prefix); i !== -1; i = text.indexOf(prefix, i + 1)) {
+    if (tokenStartsAt(text, i)) return true;
+  }
+  return false;
 }
 
 // The one place that knows how a (term, field) pair is keyed. NUL rather than

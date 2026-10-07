@@ -23,6 +23,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
+import { groupThousands } from "./lib/text.ts";
 import { LEDGER_LINES_URL } from "./routes.ts";
 
 const RATE_USD = 0.01;      // the site's posted price (the /llms-full.txt cent), not a market quote
@@ -335,7 +336,7 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
       <tr>
         <td class="mono">${esc(r.bot)}</td>
         <td>${esc(r.owner)}<br><span class="dim">${esc(KIND_LABEL[r.kind] || r.kind)}</span></td>
-        <td class="num">${r.hits.toLocaleString("en-US")}</td>
+        <td class="num">${groupThousands(r.hits)}</td>
         <td class="num">$${RATE_USD.toFixed(2)}</td>
         <td class="num">$${r.amountUsd.toFixed(2)}</td>
       </tr>`).join("");
@@ -368,7 +369,7 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
         <tr><th>crawler</th><th>operator</th><th class="num">pages</th><th class="num">rate</th><th class="num">amount</th></tr>
         ${tableRows}
       </table>
-      <div class="lg-total"><span>Total due</span> <b>$${pending ? dots : totalUsd.toFixed(2)}</b> <span class="dim" style="font-size:var(--text-micro); align-self:center;">(${pending ? dots : totalHits.toLocaleString("en-US")} pages)</span></div>
+      <div class="lg-total"><span>Total due</span> <b>$${pending ? dots : totalUsd.toFixed(2)}</b> <span class="dim" style="font-size:var(--text-micro); align-self:center;">(${pending ? dots : groupThousands(totalHits)} pages)</span></div>
       ${costLine}`);
 }
 
