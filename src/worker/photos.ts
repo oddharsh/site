@@ -6,7 +6,7 @@ import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
 import { errorResp, escAttr, escHtml, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
-import { commonPairs, queryTerms, scoreFields } from "./lib/text.ts";
+import { commonPairs, compareCodepoints, queryTerms, scoreFields } from "./lib/text.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
 // R2 key, byte size, upload date; written by add-photos.sh at upload time) and
@@ -322,6 +322,8 @@ export function _resetPhotoCaches() {
   _altMap = undefined;
   _thumbHashes = undefined;
   _histograms = undefined;
+  _photoJson.clear();
+  _preparedFields = undefined;
 }
 
 const PHOTO_PUBLIC_FIELDS = [
@@ -335,10 +337,21 @@ const PHOTO_PUBLIC_FIELDS = [
   "recipe",
 ];
 
+// metadata.json (263 KB) and semantics.json (50 KB) are immutable for a
+// Worker version, and queryPhotos used to fetch and parse both on every
+// request. Memoised per isolate like _altMap, with one difference: only a
+// successful read is kept, so a transient ASSETS failure costs one request its
+// answer instead of pinning an empty archive to the isolate.
+const _photoJson = new Map<string, unknown>();
+
 async function getStaticPhotoJson<T>(env, path, fallback: T): Promise<T> {
+  if (_photoJson.has(path)) return _photoJson.get(path) as T;
   try {
     const r = await env.ASSETS.fetch(`https://assets.local/${path}`);
-    return r.ok ? await r.json() as T : fallback;
+    if (!r.ok) return fallback;
+    const value = await r.json() as T;
+    _photoJson.set(path, value);
+    return value;
   } catch { return fallback; }
 }
 
@@ -366,7 +379,7 @@ const PHOTO_FIELD_WEIGHTS = [
   ["stem", 1],
 ];
 
-function photoFields(stem, record, alt, expansion) {
+function photoFields(stem, record, alt, expansion): Record<string, string> {
   const date = String(record.date || "").slice(0, 10).replaceAll(":", "-");
   return {
     film: String(record.film || ""),
@@ -378,6 +391,23 @@ function photoFields(stem, record, alt, expansion) {
     recipe: Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${asScalarText(v)}`).join(" "),
     stem: String(stem),
   };
+}
+
+// Every photo's scoring fields, built and lowercased once per isolate rather
+// than on every request: the recipe card alone is a join over each photo's
+// settings, and fieldMatches lowercases whatever it is handed (a no-op on these).
+// Keyed on the identity of the three inputs, which are per-isolate memos
+// themselves, so a test that resets or restubs them gets fresh fields.
+let _preparedFields: { metadata: object; altMap: unknown; semantics: unknown; byStem: Map<string, Record<string, string>> } | undefined;
+
+function preparedFieldsFor(metadata: Record<string, PhotoRecord>, altMap, semantics) {
+  const cached = _preparedFields;
+  if (cached && cached.metadata === metadata && cached.altMap === altMap && cached.semantics === semantics) return cached.byStem;
+  const byStem = new Map(Object.entries(metadata).map(([stem, record]) => [stem, Object.fromEntries(
+    Object.entries(photoFields(stem, record, altMap?.[stem], semantics?.[stem]?.terms)).map(([name, text]) => [name, text.toLowerCase()]),
+  )]));
+  _preparedFields = { metadata, altMap, semantics, byStem };
+  return byStem;
 }
 
 // Shared photo query used by /photos/query.json and the site MCP tool. GPS and
@@ -427,11 +457,8 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
   let common = [];
 
   if (q) {
-    const candidates = kept.map(([stem, record]) => ({
-      stem,
-      record,
-      fields: photoFields(stem, record, altMap?.[stem], semantics?.[stem]?.terms),
-    }));
+    const prepared = preparedFieldsFor(metadata || {}, altMap, semantics);
+    const candidates = kept.map(([stem, record]) => ({ stem, record, fields: prepared.get(stem) }));
     // Measured against the set that survived the filters, not the whole archive:
     // inside `film=Classic Chrome` the word "chrome" IS in every candidate and
     // genuinely stops discriminating, which is the right answer there.
@@ -463,8 +490,8 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
   const dateOf = (record) => String(record.date || "").slice(0, 10).replaceAll(":", "-");
   ranked.sort((a, b) =>
     (b.scored?.score || 0) - (a.scored?.score || 0)
-    || dateOf(b.record).localeCompare(dateOf(a.record))
-    || a.stem.localeCompare(b.stem));
+    || compareCodepoints(dateOf(b.record), dateOf(a.record))
+    || compareCodepoints(a.stem, b.stem));
 
   const rows = ranked.map(({ stem, record, scored }) => {
     const manifestPhoto = manifestByStem.get(stem);
@@ -541,7 +568,7 @@ export async function photoFacets(env) {
     bump(tally.year, String(record.date || "").slice(0, 4) || null);
   }
   // Counts descending, then name, so a redraw of the same archive is byte-identical.
-  const rank = (map) => [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name, count]) => ({ name, count }));
+  const rank = (map) => [...map.entries()].sort((a, b) => b[1] - a[1] || compareCodepoints(a[0], b[0])).map(([name, count]) => ({ name, count }));
   return { total: records.length, camera: rank(tally.camera), lens: rank(tally.lens), film: rank(tally.film), year: rank(tally.year) };
 }
 

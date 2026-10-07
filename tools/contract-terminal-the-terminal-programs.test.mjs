@@ -16,6 +16,7 @@ import {
   testGlobals,
   tokenizeKeys,
 } from "./contract-shared.ts";
+import { _resetPhotoCaches } from "../src/worker/photos.ts";
 
 // ── the terminal programs ──────────────────────────────────────────────────────
 // The renderer is pure and the apps are readers, so these run with stub assets
@@ -238,6 +239,9 @@ test("the tui frame never renders a photo field the public projection withholds"
   // renders `photo.metadata`, so it inherits that projection — but it renders
   // the RECIPE card by iterating keys, and an iteration is exactly the shape
   // that picks up a field somebody adds later without meaning to publish it.
+  // metadata.json is memoised per isolate, which is per process here, so an
+  // earlier test's archive would answer instead of this one's.
+  _resetPhotoCaches();
   const env = { ASSETS: staticAssets({
     ...TERMINAL_ASSETS,
     "/images/metadata.json": {

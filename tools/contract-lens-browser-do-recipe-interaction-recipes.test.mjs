@@ -31,6 +31,7 @@ import {
 } from "./contract-shared.ts";
 import { imageCompare, photoRecipe } from "../src/worker/image-tools.ts";
 import { _resetSearchIndex } from "../src/worker/search.ts";
+import { fieldMatches } from "../src/worker/lib/text.ts";
 import { buildImageFingerprints } from "./lib/photo-indexes.ts";
 import { createHash } from "node:crypto";
 
@@ -418,6 +419,31 @@ test("word boundaries keep chrome out of monochrome", async () => {
   const lens = await queryPhotos(rankingEnv(), { q: "27mm" });
   assert.equal(lens.total, 1);
   assert.equal(lens.photos[0].stem, "A");
+});
+
+test("fieldMatches finds token starts without splitting, astral letters included", () => {
+  // fieldMatches stopped splitting fields into tokens on 2026-10-07 (the split
+  // was most of a photo query's CPU) and decides each rule with indexOf plus a
+  // boundary check instead. Every answer here is what the splitting version
+  // gave. The astral rows are the part a UTF-16 boundary check gets wrong:
+  // U+1D49C is a letter, so "x𝒜lpha" is ONE token and "𝒜lpha" does not start it.
+  const cases = [
+    ["Monochrome", "chrome", false],
+    ["LEICA M MONOCHROM", "monochrome", true],
+    ["Classic Negative", "neg", true],
+    ["Nostalgic Neg", "negative", false],
+    ["XF27mmF2.8 R WR", "27mm", true],
+    ["a bridge", "bridges", true],
+    ["x\u{1D49C}lpha", "\u{1D49C}lpha", false],
+    ["the \u{1D49C}lpha", "\u{1D49C}lpha", true],
+    ["\u{1D49C}\u{1D49C}beta", "\u{1D49C}beta", false],
+    // a term with a separator in it never starts a token, but its first word
+    // can still be a whole token the term begins with
+    ["Classic Chrome", "chrome-x", true],
+  ];
+  for (const [field, term, expected] of cases) {
+    assert.equal(fieldMatches(field, term), expected, `fieldMatches(${JSON.stringify(field)}, ${JSON.stringify(term)})`);
+  }
 });
 
 test("photo query drops stopwords and says which it dropped", async () => {
