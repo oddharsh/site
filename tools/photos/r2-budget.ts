@@ -21,7 +21,13 @@
 //     1.57 GB against 2.02 GB of JPEG, 0.78),
 //   - UNINDEXED, the objects R2 holds that the index names nowhere: 8.39 GB
 //     before any twin, less 5.59 GB of indexed JPEG and 1.57 GB of HEIF.
-// The floor is deliberately conservative; it may only overstate.
+// The floor is deliberately conservative about what the index names. It cannot
+// see objects that left the index before they left R2: removing a photo from
+// the site comes first, so its R2 objects aren't linked when they're deleted,
+// and in that window the floor undercounts them. Measured 2026-10-07 after the
+// cota-wec removal merged: floor 5.63 GB, Cloudflare 10.20 GB. Taking the
+// larger figure is what covers it, so delete the R2 objects before any upload
+// that needs the room.
 import fs from "node:fs";
 import path from "node:path";
 import type { IndexEntry } from "./pipeline-json.ts";
