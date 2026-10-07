@@ -163,7 +163,7 @@ const AXES={
   chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. here's the honest part: on most photos this is free. fourteen saturated crops were built and measured for this test and <b>twelve were thrown out</b> because 4:2:0 cost them nothing you could see. what survives is a high-contrast two-tone edge, which is where the halved color plane can't keep up — and butteraugli (a color model) punishes that far harder than ssimulacra2. that's also why you only get one of these per run.`},
   encoder: {teach:`same photo, same byte budget. every tile in that call was searched onto one file size and landed within 2% of it, so the only thing that varied was the encoder's math. newer coders (zenc, jpegli) fit more picture into those bytes than mozjpeg, and sips fits the least. that gap is free quality — same size, better image, for picking a different tool.`},
   resample:{teach:`same photo, same byte budget, same encoder — only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
-  format:  {teach:t=>`${FMT[t.tier].teach} ${FMT_TAIL}`+(t.lossless?` <b>lossless</b>, this photo is ${kb(t.lossless.jxl)} as JPEG XL and ${kb(t.lossless.avif)} as AVIF. that's JPEG XL's biggest lead, and no eye test can show it, because both files decode to the same pixels.`:``)},
+  format:  {teach:t=>FMT[t.tier].teach+(state.log.filter(l=>l.axis==="format").length===1?` ${FMT_TAIL}`:``)+(t.lossless?` <b>lossless</b>, this photo is ${kb(t.lossless.jxl)} as JPEG XL and ${kb(t.lossless.avif)} as AVIF: JPEG XL's biggest lead, and one no eye test can show.`:``)},
   tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
 };
 const teachFor=t=>typeof AXES[t.axis].teach==="function"?AXES[t.axis].teach(t):AXES[t.axis].teach;
@@ -172,12 +172,14 @@ const teachFor=t=>typeof AXES[t.axis].teach==="function"?AXES[t.axis].teach(t):A
 // on how many bytes there are and on what you start from. `turf` names the
 // format that tier is home ground for; the JPEG tier is nobody's.
 const FMT={
-  "low-tier":{name:"tight budget",turf:"avif",teach:`JPEG XL against AVIF on a tight budget: what this site's own 600px photos spend per pixel, spent on the busiest corner of the frame. both tiles are the same file size to within 2%. this is where AVIF made its name. it smooths away what it can't afford, which reads as clean, while JPEG XL tries to keep the texture and lets it break up. JPEG XL still takes the odd call down here, on tiles that are all fine repeating texture, like knit.`},
-  "avif-tier":{name:"this site's AVIF",turf:"avif",teach:`JPEG XL against AVIF at the exact size of this site's own AVIF of the photo, with JPEG XL searched onto it to within 2%. AVIF's smoothing still wins on grain and busy texture at this budget. JPEG XL led on lettering and knit, but by less than an eye can see.`},
-  "jpeg-tier":{name:"this site's JPEG",turf:null,teach:`JPEG XL against AVIF at the size of this site's JPEG fallback, a little more room than its AVIF, with both searched onto it to within 2%. by here the gap is closing, and most photos land too close to call.`},
-  "repack":{name:"JPEG repack",turf:"jxl",teach:`this one started from a JPEG, which is what most of the web already is. JPEG XL can repack a JPEG with no loss at all: every pixel identical, about 8% smaller. AVIF can't. it has to decode the JPEG and compress it again, stacking its own damage on top of the JPEG's, and here it had to do that in the repack's exact byte count. that's JPEG XL's home ground. the honest footnote: handed the original photo instead of the JPEG, AVIF beat the repack on 6 of the 9 photos where it could match its size, so this lead holds when the JPEG is all you have.`},
+  "low-tier":{name:"tight budget",turf:"avif",teach:`a tight budget: what this site's 600px photos spend per pixel, spent on the busiest corner of the frame. this is where AVIF made its name. it smooths away what it can't afford, which reads as clean, while JPEG XL keeps the texture and lets it break up. JPEG XL still wins the odd call down here, on all-over texture like knit.`},
+  "avif-tier":{name:"this site's AVIF",turf:"avif",teach:`the budget is this site's own AVIF of the photo, byte for byte. AVIF's smoothing still wins on grain and busy texture here. JPEG XL led on lettering and knit, but by less than an eye can see.`},
+  "jpeg-tier":{name:"this site's JPEG",turf:null,teach:`the budget is this site's JPEG fallback, a little more room than its AVIF. by here the gap is closing, and most photos land too close to call.`},
+  "repack":{name:"JPEG repack",turf:"jxl",teach:`this one started from a JPEG, like most of the web. JPEG XL repacks a JPEG with no loss, every pixel identical and about 8% smaller. AVIF has to decode it and compress it again at that same size, stacking its damage on the JPEG's. that's JPEG XL's home ground. given the original photo instead, AVIF beat the repack on 6 of 9.`},
 };
-const FMT_TAIL=`with more bytes the two converge: at the size of this site's full-resolution downloads, every photo landed within a point. WebP isn't in the race, because it came last on every call it entered. one caveat: both judges here come from the JPEG XL project, and butteraugli is the exact target JPEG XL's encoder aims at, so if the scoring leans, it leans toward JPEG XL.`;
+// The shared footnote rides on a run's FIRST format call only: on every call it
+// tripled the reveal and said the same thing each time.
+const FMT_TAIL=`every pair here is the same file size to within 2%. with more bytes the two converge, and WebP sat out after coming last on every call it entered. both judges come from the JPEG XL project, so if the scoring leans, it leans toward JPEG XL.`;
 
 // How many calls of each axis one play gets. A QUOTA, not a floor, and its shape
 // IS the difficulty fix: the first cut of this test spent 9 of its 18 trials on
@@ -710,6 +712,13 @@ void main(){
   o=vec4(min(v,vec3(1.)),1.);
 }`;
 const DIFF_MODES=[["both",0],["detail",1],["color",2]];
+// Format calls differ by very different amounts per tier (mean 2.4-4.9 levels
+// on a tight budget, 0.6-1.7 on a repack, measured 2026-10-07), so no one gain
+// shows both: x8 left a repack map black, and x32 clips a tight-budget map to
+// white. 48 keeps the tight budgets at x8-x16 and lifts repacks to x32, and
+// the opening gain never drops below the x8 every other call opens at. 24 was
+// tried first and opened one tight-budget map at x4, darker than before.
+const AUTO_GAIN_MEAN=48;
 // One context for the page's whole life. A context per call would pass the
 // browser's live-context cap inside a single play, and the oldest one is lost.
 let DIFF;
@@ -781,10 +790,14 @@ function wireDiff(gl,tiles,trial,order,pos){
   const g=()=>2**+gain.value;
   const press=(sel,on)=>document.querySelectorAll(`#diff [${sel}]`).forEach(b=>b.setAttribute("aria-pressed",String(b.getAttribute(sel)===on)));
   const redraw=()=>{gv.textContent=g();gl.draw(g(),mode);};
+  // A format call opens at the gain that lands its mean difference near
+  // AUTO_GAIN_MEAN levels, once; the slider is the visitor's after that.
+  let auto=trial.axis==="format";
   const load=()=>{
     const [a,b]=pair.map(p=>tiles[p].querySelector("img"));
     if(!a.complete||!b.complete||!a.naturalWidth){stat.textContent="tiles still loading";return;}
     const s=gl.load(a,b),f=v=>`max ${v.max}, avg ${v.mean.toFixed(1)}`;
+    if(auto){auto=false;gain.value=String(Math.min(+gain.max,Math.max(+gain.value,Math.round(Math.log2(AUTO_GAIN_MEAN/Math.max(s.y.mean,s.c.mean,.01))))));}
     stat.textContent=`${nm(pair[0])} vs ${nm(pair[1])}, in levels of 255 · detail ${f(s.y)} · color ${f(s.c)}`;
     gl.cv.setAttribute("aria-label",`difference between ${nm(pair[0])} and ${nm(pair[1])}: ${stat.textContent}`);
     press("data-pair",pair.join(","));redraw();};
