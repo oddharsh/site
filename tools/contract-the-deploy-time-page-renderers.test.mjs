@@ -14,6 +14,15 @@ import {
   test,
 } from "./contract-shared.ts";
 
+// The album registry is empty since 2026-10-07, when /cota-wec left the site to
+// keep the photo bucket inside R2's 10 GB free tier. A fixture album stamped
+// onto three real pool rows keeps the album renderer under test until the next
+// album is registered, and the registry loops below still cover every real one.
+const FIXTURE_ALBUM = { slug: "fixture-album", title: "Fixture Album", lede: ["A first line", "and a second's"], description: "a test album" };
+const withFixtureAlbum = (pool) => pool.map((p, i) =>
+  i < 3 ? { ...p, album: FIXTURE_ALBUM.slug, heif: i === 0 ? `${p.stem}.HIF` : null } : p);
+const albumsUnderTest = () => [...Object.values(ALBUMS), FIXTURE_ALBUM];
+
 // ── the deploy-time page renderers ──────────────────────────────────
 // build.ts step 1e runs these in Node and writes photos.html / bot.html, which
 // step 8 then turns into the q11 twin and the dcz deltas. The whole scheme rests on
@@ -45,7 +54,7 @@ test("renderPhotosPage is pure over the committed pool", async () => {
   const empty = renderPhotosPage([], alt);
   assert.equal(empty.status, 503, "an empty pool must refuse rather than ship bare frames");
   // and so is a pool holding ONLY album photos: /photos would be a page of links
-  const albumOnly = renderPhotosPage([{ ...pool[0], album: "cota-wec" }], alt);
+  const albumOnly = renderPhotosPage([{ ...pool[0], album: FIXTURE_ALBUM.slug }], alt);
   assert.equal(albumOnly.status, 503, "a pool with no curated photo must refuse too");
 });
 
@@ -58,10 +67,9 @@ test("renderAlbumPage is pure over the committed pool and never invents a format
   const index = JSON.parse(await readFile(new URL("src/worker/photo-index.json", ROOT), "utf8"));
   const hashes = JSON.parse(await readFile(new URL("public/images/hashes.json", ROOT), "utf8"));
   const alt = JSON.parse(await readFile(new URL("public/images/alt.json", ROOT), "utf8"));
-  const pool = derivePhotoPool(index, hashes);
-  assert.ok(Object.keys(ALBUMS).length >= 1, "at least one album is registered");
+  const pool = withFixtureAlbum(derivePhotoPool(index, hashes));
 
-  for (const album of Object.values(ALBUMS)) {
+  for (const album of albumsUnderTest()) {
     const members = albumPool(pool, album);
     // build.ts step 1e refuses an empty album for the same reason
     assert.ok(members.length > 0, `${album.slug}: registered in albums.ts but no photo-index.json entry carries it; run add-photos.sh with ALBUM=${album.slug}`);
@@ -83,7 +91,9 @@ test("renderAlbumPage is pure over the committed pool and never invents a format
   // contributes nothing to any album
   const none = renderAlbumPage({ slug: "nope", title: "Nope", lede: [], description: "" }, pool, alt);
   assert.equal(none.status, 503, "an album nobody ran the pipeline for must refuse rather than ship an empty sheet");
-  assert.equal(albumPool(curatedPool(pool), Object.values(ALBUMS)[0]).length, 0, "curated and album pools are disjoint");
+  assert.equal(albumPool(curatedPool(pool), FIXTURE_ALBUM).length, 0, "curated and album pools are disjoint");
+  // Control: the fixture really is an album the renderer sees, with one HEIF.
+  assert.equal(albumPool(pool, FIXTURE_ALBUM).length, 3);
 });
 
 // The contact sheets load their first screen with the page and every later tile
@@ -100,8 +110,9 @@ test("the contact sheets defer every tile past the first screen", async () => {
   const alt = JSON.parse(await readFile(new URL("public/images/alt.json", ROOT), "utf8"));
   const pool = derivePhotoPool(index, hashes);
   const sheets = [["/photos", await renderPhotosPage(pool, alt).text()]];
-  for (const album of Object.values(ALBUMS)) {
-    if (albumPool(pool, album).length) sheets.push([albumPath(album), await renderAlbumPage(album, pool, alt).text()]);
+  const albumSheetPool = withFixtureAlbum(pool);
+  for (const album of albumsUnderTest()) {
+    if (albumPool(albumSheetPool, album).length) sheets.push([albumPath(album), await renderAlbumPage(album, albumSheetPool, alt).text()]);
   }
   const EAGER = 12;
   for (const [path, doc] of sheets) {
