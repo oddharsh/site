@@ -61,9 +61,23 @@ Grid photos have four content-addressed tiers under `public/i/`: a 600px JPEG,
 a 600px AVIF, a 400px AVIF, and a 200px AVIF. Source EXIF orientation is baked
 into the pixels; the thumbnails carry no camera metadata.
 
+Every full-resolution original is a JPEG, and each gets a JPEG XL twin beside
+it in R2 (`<stem>.jxl`): a lossless transcode (`cjxl --lossless_jpeg=1 -e 9`)
+that rebuilds the JPEG byte for byte and runs about 8% smaller. Ingest uploads
+a twin only after `djxl` rebuilds the uploaded JPEG from it and `cmp` finds
+them identical; a twin that fails any step fails the photo. The page links the
+JPEG, and `src/worker/lib/photo-jxl.ts` follows the twin instead, only in a
+browser that has just decoded JPEG XL. The tiers stay AVIF: a resize is a
+re-encode, so no tier can be lossless, and at matched bytes AVIF beat the
+transcode on 6 of 9 photos given the original pixels (/pixel-peeper).
+`bun tools/photos/jxl-originals.ts` backfills any published original without
+a twin, with the same download check (MD5 against R2's ETag), rebuild check
+and upload; it needs R2 write access, so it runs from a workstation.
+
 The committed records are:
 
-- `src/worker/photo-index.json`: published stems and their full-resolution R2 keys;
+- `src/worker/photo-index.json`: published stems, their full-resolution R2 keys,
+  and each original's JPEG XL twin key (`jxl`) once that twin is in R2;
 - `public/images/hashes.json`: the four tier identities;
 - `public/images/metadata.json`: EXIF and Fuji recipe records;
 - `public/images/histograms.json`: four packed 64-bin channels per photo;

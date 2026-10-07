@@ -16,6 +16,7 @@
 // build time.
 import { EMPTY, html, joinHtml, type Html } from "./html.ts";
 import { asNumber } from "./parse.ts";
+import { jxlUrl } from "./photo-jxl.ts";
 
 // WHICH tiles carry a real `src` depends on which caller is rendering, and the
 // reason is the same one in both directions: a URL should only be in the markup
@@ -200,7 +201,10 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
       ? html`<img data-photo-deferred alt="${alt}" width="184" height="184" data-src="${thumb}"${srcsetValue ? html` data-srcset="${srcsetValue}" sizes="184px"` : EMPTY} loading="eager"${pri} decoding="async">`
       : html`<img alt="${alt}" width="184" height="184" src="${thumb}"${srcsetValue ? html` srcset="${srcsetValue}" sizes="184px"` : EMPTY} loading="eager"${pri} decoding="async">`;
 
-    return html`<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener" data-full="${p.full}"${sizeAttr}${upAttr}${histAttr}>${image}${noScript}</a>`;
+    // data-jxl names the original's lossless JPEG XL twin; index.html's copy of
+    // JXL_SWAP (lib/photo-jxl.ts) follows it only where JPEG XL decodes.
+    const jxlAttr = p.jxl ? html` data-jxl="${jxlUrl(p.jxl)}"` : EMPTY;
+    return html`<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener" data-full="${p.full}"${jxlAttr}${sizeAttr}${upAttr}${histAttr}>${image}${noScript}</a>`;
   }));
 }
 

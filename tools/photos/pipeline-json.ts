@@ -25,9 +25,10 @@
 //       the add-photos.sh entry build plus
 //       jaq -S '. as $idx | ($new[0] | with_entries(.value += {uploaded:
 //         ($idx[.key].uploaded // $now)})) | $idx + .'
-//       <spool> is NUL-separated fields, five per entry: stem, full, size,
-//       album, heif; album and heif are written only when non-empty, so an
-//       entry for the site-wide pool keeps the three-key shape it always had.
+//       <spool> is NUL-separated fields, six per entry: stem, full, size,
+//       album, heif, jxl; the last three are written only when non-empty, so
+//       an entry for the site-wide pool keeps the three-key shape it always
+//       had. A twin the spool doesn't name survives the merge (see mergeIndex).
 //   pipeline-json.ts prune <file.json> --published <hashes.json> --out <pruned>
 //       jaq 'with_entries(select(.key as $k | $pub[0] | has($k)))', and the
 //       dropped keys on stdout, one per line, which was a second jaq call
@@ -94,36 +95,51 @@ export function jqUri(s: string): string {
   )).join("");
 }
 
-export type IndexEntry = { full: string; size: number; uploaded?: string; album?: string; heif?: string };
+/** `jxl` is the R2 key of the original's lossless JPEG XL transcode, written
+ *  only after the twin decoded back to the JPEG's exact bytes and uploaded. */
+export type IndexEntry = { full: string; size: number; uploaded?: string; album?: string; heif?: string; jxl?: string };
+const SPOOL_FIELDS = 6;
 
-/** The entry build from add-photos.sh's loop, five NUL-separated fields per
+/** The entry build from add-photos.sh's loop, six NUL-separated fields per
  *  photo, in the order the shell wrote them. A trailing NUL after the last
  *  field is what printf '%s\0' produces, so an empty spool is zero entries and
- *  a partial record (a count not divisible by five) is refused rather than
+ *  a partial record (a count not divisible by six) is refused rather than
  *  read as a photo with a blank size. */
 export function parseSpool(spool: Buffer): Record<string, Omit<IndexEntry, "uploaded">> {
   const fields = spool.toString("utf8").split("\0");
   if (fields.at(-1) === "") fields.pop();
-  if (fields.length % 5 !== 0) throw new Error(`entries spool holds ${fields.length} fields, not a multiple of 5`);
+  if (fields.length % SPOOL_FIELDS !== 0) throw new Error(`entries spool holds ${fields.length} fields, not a multiple of ${SPOOL_FIELDS}`);
   const out: Record<string, Omit<IndexEntry, "uploaded">> = {};
-  for (let i = 0; i < fields.length; i += 5) {
-    const [stem, full, sizeText, album, heif] = fields.slice(i, i + 5);
+  for (let i = 0; i < fields.length; i += SPOOL_FIELDS) {
+    const [stem, full, sizeText, album, heif, jxl] = fields.slice(i, i + SPOOL_FIELDS);
     const size = Number(sizeText);
     if (!stem || !full || !Number.isInteger(size) || size < 0) throw new Error(`bad spool record for ${JSON.stringify(stem)}: full=${JSON.stringify(full)} size=${JSON.stringify(sizeText)}`);
-    // `album` and `heif` are written only when set, never as an empty string.
+    // `album`, `heif` and `jxl` are written only when set, never as an empty string.
     const entry: Omit<IndexEntry, "uploaded"> = { full, size };
     if (album) entry.album = album;
     if (heif) entry.heif = heif;
+    if (jxl) entry.jxl = jxl;
     out[stem] = entry;
   }
   return out;
 }
 
 /** `$idx + .` with `.value += {uploaded: ($idx[.key].uploaded // $now)}`: a
- *  new entry replaces the old one whole, keeping only the upload date it had. */
+ *  new entry replaces the old one whole, keeping only the upload date it had,
+ *  and its JPEG XL twin while that twin still describes the same original. A
+ *  remote rerender uploads nothing, so its spool names no twin; dropping the
+ *  key there would unlink every .jxl in R2 on the next reencode-thumbnails
+ *  run. The same key and byte size is the test, because an original is never
+ *  overwritten in place (photos.ts) and a re-prepared one that changed size is
+ *  a different file whose old twin would decode to the wrong bytes. */
 export function mergeIndex(index: Record<string, IndexEntry>, entries: Record<string, Omit<IndexEntry, "uploaded">>, now: string): Record<string, IndexEntry> {
   const merged: Record<string, IndexEntry> = { ...index };
-  for (const [stem, entry] of Object.entries(entries)) merged[stem] = { ...entry, uploaded: index[stem]?.uploaded ?? now };
+  for (const [stem, entry] of Object.entries(entries)) {
+    const old = index[stem];
+    const row: IndexEntry = { ...entry, uploaded: old?.uploaded ?? now };
+    if (!row.jxl && old?.jxl && old.full === entry.full && old.size === entry.size) row.jxl = old.jxl;
+    merged[stem] = row;
+  }
   return sortKeysDeep(merged as Json) as Record<string, IndexEntry>;
 }
 

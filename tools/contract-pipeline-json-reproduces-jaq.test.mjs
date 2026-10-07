@@ -30,7 +30,7 @@ test("index-merge with no entries reproduces the committed photo index byte for 
 
 test("index-merge keeps an existing stem's upload date, mints one for a new stem, and writes album and heif only when set", () => {
   const index = { B: { full: "B.jpg", size: 1, uploaded: "2026-07-27T00:00:00.000Z" } };
-  const spool = Buffer.from(["B", "B.jpg", "424242", "", "", "A", "A.jpg", "2", "cota-wec", "A.HIF"].join("\0") + "\0");
+  const spool = Buffer.from(["B", "B.jpg", "424242", "", "", "", "A", "A.jpg", "2", "cota-wec", "A.HIF", ""].join("\0") + "\0");
   const merged = mergeIndex(index, parseSpool(spool), "NOW");
   assert.deepEqual(Object.keys(merged), ["A", "B"], "sorted, so the new stem sorts first");
   assert.deepEqual(merged.B, { full: "B.jpg", size: 424242, uploaded: "2026-07-27T00:00:00.000Z" });
@@ -38,8 +38,34 @@ test("index-merge keeps an existing stem's upload date, mints one for a new stem
   assert.deepEqual(Object.keys(merged.A), ["album", "full", "heif", "size", "uploaded"], "nested keys sort too, as jaq -S sorts them");
   // Controls: a torn spool and a non-integer size are refused rather than
   // read as a photo with a blank size.
-  assert.throws(() => parseSpool(Buffer.from("A\0A.jpg\0")), /not a multiple of 5/);
-  assert.throws(() => parseSpool(Buffer.from("A\0A.jpg\0big\0\0\0")), /bad spool record/);
+  assert.throws(() => parseSpool(Buffer.from("A\0A.jpg\0")), /not a multiple of 6/);
+  assert.throws(() => parseSpool(Buffer.from("A\0A.jpg\0big\0\0\0\0")), /bad spool record/);
+  // A five-field record, the width before the JPEG XL twin, is refused too.
+  assert.throws(() => parseSpool(Buffer.from("A\0A.jpg\x002\0\0\0")), /not a multiple of 6/);
+});
+
+test("index-merge records a fresh JPEG XL twin and keeps an old one only while the original is unchanged", () => {
+  const T = "2026-07-27T00:00:00.000Z";
+  const index = {
+    Same: { full: "Same.jpg", size: 10, uploaded: T, jxl: "Same.jxl" },
+    Grew: { full: "Grew.jpg", size: 10, uploaded: T, jxl: "Grew.jxl" },
+    Renamed: { full: "Renamed.jpg", size: 10, uploaded: T, jxl: "Renamed.jxl" },
+  };
+  const rec = (...f) => f.join("\0") + "\0";
+  const spool = Buffer.from(
+    rec("Same", "Same.jpg", "10", "", "", "") +          // a remote rerender: no twin named, same original
+    rec("Grew", "Grew.jpg", "11", "", "", "") +          // the original changed size: its twin is stale
+    rec("Renamed", "Renamed.JPG", "10", "", "", "") +    // a different key is a different object
+    rec("New", "New.jpg", "5", "", "", "New.jxl"));      // ingest uploaded a twin
+  const merged = mergeIndex(index, parseSpool(spool), "NOW");
+  assert.equal(merged.Same.jxl, "Same.jxl", "a rerender must not unlink a twin that still matches");
+  assert.equal(merged.Grew.jxl, undefined, "a twin of different bytes must not survive");
+  assert.equal(merged.Renamed.jxl, undefined);
+  assert.equal(merged.New.jxl, "New.jxl");
+  assert.deepEqual(Object.keys(merged.Same), ["full", "jxl", "size", "uploaded"]);
+  // Control: without the carry-forward the rerender row would come out bare,
+  // which is what a whole-entry replace did before the twin existed.
+  assert.deepEqual(Object.keys(merged.Grew), ["full", "size", "uploaded"]);
 });
 
 test("prune reproduces the committed metadata byte for byte when every stem is published", async () => {

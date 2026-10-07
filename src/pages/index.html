@@ -804,6 +804,10 @@ footer .signature small { color: oklch(56.93% 0 0); }
       }
     })();
     </script>
+    <!-- A tile links its JPEG original; a browser that decodes JPEG XL follows
+         the original's lossless JPEG XL twin instead. Byte-identical to
+         JXL_SWAP in src/worker/lib/photo-jxl.ts, which explains it. -->
+    <script>(()=>{const i=new Image();i.onload=()=>{if(i.naturalWidth!==1)return;const swap=e=>{const a=e.target instanceof Element&&e.target.closest("a[data-jxl]");if(a){a.href=a.dataset.jxl;a.removeAttribute("data-jxl")}};for(const t of["pointerdown","focusin","click"])addEventListener(t,swap,true)};i.src="data:image/jxl;base64,/woAEBBQXAgIAAEALABLGIsVwklBHoAAAA=="})()</script>
 
     <!-- The Worker selects all 12 photos in one fragment; the swap never changes
          the random draw, only which twelve are on the page. -->
