@@ -36,6 +36,13 @@
    own private copy of that chrome, which is exactly the drift the shared shell
    exists to prevent. What stays here is only what's unique to the eye exam. */
 .window{--axp-maxw:720px;font-family:var(--font-ui);font-size:var(--text-body);color:var(--ink)}
+/* The scrollbar is always there, the way IE6 kept a disabled one on every page.
+   The window is sized to its content, so each pick's feedback banner pushed it
+   past full height and a 16px scrollbar arrived; Next took it away. That was 23
+   toggles per exam at 1280x900, 1440x900, 1366x768 and 1280x720, and every one
+   slid the tiles 8 to 9px sideways at the moment of judging them. A permanent
+   bar keeps the field one width for the whole exam. */
+#stage{overflow-y:scroll}
 h1{font-family:var(--font-caption);font-size:17pt;font-weight:700;color:var(--navy);margin:0 0 2px;letter-spacing:-.01em;text-wrap:balance}
 h2{font-family:var(--font-caption);font-size:var(--text-h2);font-weight:700;color:var(--navy2);margin:0}
 p{margin:0 0 10px;line-height:1.5;color:var(--ink-soft)}
