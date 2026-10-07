@@ -98,8 +98,8 @@
       },
       "regenerate": "bash tools/photos/hash-thumbnails.sh",
       "recorded": {
-        "inputs": "8a8192fdcf91bf89b1dae39f0630f7fc35f9153801bb277c19e4935dee334830",
-        "count": 1032
+        "inputs": "e6b7bc8f7ffdae5e6aaeab153abf95bd24d46c17cbb528865acdb9f18a3014c3",
+        "count": 660
       }
     },
     {
@@ -119,8 +119,8 @@
       },
       "regenerate": "tools/photos/zenc/target/release/zenc histogram --root public && bun tools/photos/build-histogram-index.ts (inside a photo add: bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\")",
       "recorded": {
-        "inputs": "1a7794939ed47f4c164f7a989edbf557589ef51846b672cfbd9e0d3615a8d0ca",
-        "count": 258
+        "inputs": "9923f8c5e4851493b5a4392c46f6ac4f81d4833d537bf4fa79f17c56f830c082",
+        "count": 165
       }
     },
     {
@@ -142,8 +142,8 @@
       "covers": "public/images/alt.json",
       "regenerate": "bun tools/photos/gen-alt-text.ts",
       "recorded": {
-        "inputs": "d457e90604ddd1fb8206e0c374a39c372596c678b116defb5cd4a84b973666fb",
-        "count": 258
+        "inputs": "57c4119ad420a7e405a9fe8a515135c0dbc7b0a7ec22e4f6cc7031a80638fa23",
+        "count": 165
       }
     },
     {
@@ -169,8 +169,8 @@
       "covers": "public/images/semantics.json",
       "regenerate": "bun tools/photos/gen-photo-semantics.ts   # add --vision for the model tier",
       "recorded": {
-        "inputs": "5583c46f67eb93c81299b82f981539a1a814b682f2f617a0c03cffee7de10dbe",
-        "count": 260
+        "inputs": "70af9b2bfc0bdfc85521b856d797b3f501252edc67f8bbae9a57a6231e550d13",
+        "count": 167
       }
     },
     {
@@ -190,7 +190,7 @@
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "a4adf5e770429ca0e449d0c0c1ad5a018aac2899d363e1af24561b4d67571e17",
+        "inputs": "7d82776f626d34d48de624bac63d3221c5a4e78974c7b65bf87382c9a39f15be",
         "count": 2
       }
     },

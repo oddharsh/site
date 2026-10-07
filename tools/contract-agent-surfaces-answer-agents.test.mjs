@@ -49,7 +49,7 @@ test("every agents surface the source tree cannot twin is one the build generate
   // pins the source-side list so a new miss shows up here without a build.
   const { files, committed } = buildTwins(root);
   const missing = agentSurfacesWithoutTwin(readManifest(root).surfaces, [...files.keys(), ...committed]).sort();
-  assert.deepEqual(missing, ["/cota-wec", "/photos", "/restore", "/updates"],
+  assert.deepEqual(missing, ["/photos", "/restore", "/updates"],
     "a new agents:true surface has no Markdown twin: add a hand twin in src/content/md/, declare mimeType for a live representation, or drop flags.agents");
 });
 
