@@ -84,9 +84,12 @@
 //
 // THE CROPS ARE THE DENSE END. These are /pixel-peeper's detail
 // crops, the hardest native-resolution window per photo, at about 1.08 bits per
-// pixel. The shipped 600px tier averages 0.46, and there AV2 WINS: +0.77 s2 on
-// 28 of 38 whole-frame tiles (av2-tile-probe.ts, 2026-09-28). Read a number
-// from this probe as the worst case, never as the verdict for the tier.
+// pixel. av2-tile-probe.ts's 38 whole-frame tiles average 0.46, and there AV2
+// WINS: +0.77 s2 on 28 of 38 (2026-09-28). The shipped 600px tier sits denser
+// than that sample (median 0.67 over 255 frames, 2026-10-07): 82 of 255 fall
+// under 0.5 bpp, where AV2 won 23 of 24 pooled calls, and the other 173 fall
+// where it lost. Read a number from this probe as the worst case, and the tile
+// probe's as the sparse third, never either as the verdict for the tier.
 //
 // TUNING, 2026-09-27/28, on build.sh --tuned with sb-size=128 pinned (base vs
 // AVIF -1.57 train, -2.12 holdout). Only per-segment QM held on the holdout:
