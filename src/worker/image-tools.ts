@@ -287,7 +287,8 @@ function archiveStemFromUrl(rawUrl, hashes) {
     const url = new URL(rawUrl);
     if (url.hostname.toLowerCase() !== CANONICAL_HOST) return null;
     const full = decodeURIComponent(url.pathname.replace(/^\/images\/full\//, ""));
-    for (const [stem, entry] of Object.entries(photoIndex)) if (entry.full === full) return { stem, kind: "archive-url" };
+    // `jpeg`: a link from before the original moved to JPEG XL still names its photo.
+    for (const [stem, entry] of Object.entries(photoIndex)) if (entry.full === full || (entry as { jpeg?: string }).jpeg === full) return { stem, kind: "archive-url" };
     const match = url.pathname.match(/^\/i\/([A-Za-z0-9_-]+?)(-400)?\.([a-f0-9]{8})\.(avif|jpg)$/i);
     if (match && hashes[match[1]]) {
       const entry = hashes[match[1]];

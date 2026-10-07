@@ -61,9 +61,34 @@ Grid photos have four content-addressed tiers under `public/i/`: a 600px JPEG,
 a 600px AVIF, a 400px AVIF, and a 200px AVIF. Source EXIF orientation is baked
 into the pixels; the thumbnails carry no camera metadata.
 
+Every full-resolution original in R2 is JPEG XL (`<stem>.jxl`): a lossless
+transcode (`cjxl --lossless_jpeg=1 -e 9`) of the JPEG ingest prepared, about 8%
+smaller, from which `djxl` rebuilds that JPEG byte for byte. Ingest uploads
+the .jxl only after `djxl` rebuilds the prepared JPEG from it and `cmp` finds
+them identical, and never uploads the JPEG, so the bucket holds one copy per
+photo and stays inside R2's 10 GB free tier. A failure at any step fails the
+photo. Browsers without JPEG XL (Chrome before 155, and Firefox until it turns
+it on, planned for 158) can't open an original; the grid tiers are unaffected.
+The tiers stay AVIF: a resize is a re-encode, so no tier can be lossless, and
+at matched bytes AVIF beat the transcode on 6 of 9 photos given the original
+pixels (/pixel-peeper).
+
+The remote pipeline downloads the .jxl and `djxl` rebuilds the JPEG beside it
+(`download-remote-photos.sh`), so zenc and exif-sooc read exactly the bytes
+they always did and rerendered tiers come out byte-identical.
+
+`bun tools/photos/migrate-originals.ts` moves the originals published as JPEGs:
+it downloads each JPEG (MD5 against R2's ETag), takes or makes its .jxl, proves
+the rebuild, records the move in the index (`full` is the .jxl, `jpeg` the
+retired key) and, with `--delete`, deletes the JPEG. The Worker answers the
+retired URL with a 301 to the .jxl, so old links keep working; `--delete`
+refuses to run until production does. It needs R2 write access, so it runs from
+a workstation.
+
 The committed records are:
 
-- `src/worker/photo-index.json`: published stems and their full-resolution R2 keys;
+- `src/worker/photo-index.json`: published stems, their full-resolution R2 keys
+  and sizes, and for a migrated photo the JPEG key it retired (`jpeg`);
 - `public/images/hashes.json`: the four tier identities;
 - `public/images/metadata.json`: EXIF and Fuji recipe records;
 - `public/images/histograms.json`: four packed 64-bin channels per photo;

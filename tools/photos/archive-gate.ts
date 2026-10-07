@@ -39,8 +39,13 @@ const maxPct = Number(flag("--max") ?? 10);
 const prefix = Number(flag("--prefix-mb") ?? 3) * 1024 * 1024;
 const index = JSON.parse(readFileSync(new URL("../../src/worker/photo-index.json", import.meta.url), "utf8")) as Record<string, { full: string; size?: number }>;
 const only = flag("--stems")?.split(",");
-const stems = only ?? Object.keys(index).sort();
-for (const s of stems) if (!index[s]) { console.error(`archive-gate: ${s} is not in the photo index`); process.exit(2); }
+for (const s of only ?? []) if (!index[s]) { console.error(`archive-gate: ${s} is not in the photo index`); process.exit(2); }
+// The gate is a JPEG rule. An original moved to JPEG XL is skipped: Chrome
+// painted the lossless JPEG XL copy of a progressive JPEG from 5% of the file
+// (2026-09-27), the same point as the progressive JPEG it came from.
+const stems = (only ?? Object.keys(index).sort()).filter((s) => !/\.jxl$/i.test(index[s].full));
+const skipped = (only ?? Object.keys(index)).length - stems.length;
+if (skipped) console.error(`archive-gate: ${skipped} JPEG XL originals skipped; this reads JPEG scan order`);
 
 type Row = PaintGate & { stem: string; size: number; pct: number | null; kind: string; error?: string };
 const rows: Row[] = [];

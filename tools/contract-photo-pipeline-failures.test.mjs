@@ -277,7 +277,8 @@ import { appendFileSync, existsSync, readFileSync, readdirSync, mkdirSync, write
 const args = process.argv.slice(2);
 const key = args[3];
 const file = args.find(a => a.startsWith('--file=')).slice(7);
-if (args.slice(0,3).join(' ') !== 'r2 object put' || !args.includes('--content-type=image/jpeg') || !args.includes('--remote')) process.exit(98);
+const type = key.endsWith('.jxl') ? 'image/jxl' : 'image/jpeg';
+if (args.slice(0,3).join(' ') !== 'r2 object put' || !args.includes('--content-type=' + type) || !args.includes('--remote')) process.exit(98);
 const root = process.env.FIXTURE_ROOT;
 const log = value => appendFileSync(root + '/uploads', JSON.stringify(value) + '\\n');
 const progressive = readFileSync(root + '/progressive-paths', 'utf8').split('\\n').map(line => line.split('\\t')).find(([src]) => src === file)?.[1];
@@ -295,6 +296,21 @@ log({ event: 'end', key, failed });
 process.exit(failed ? 9 : 0);
 `);
     await f.command("node_modules/.bin/wrangler", `exec "${process.execPath}" "$FIXTURE_ROOT/upload.mjs" "$@"`);
+    // The JPEG XL original, stubbed so the body says what it was made from:
+    // cjxl wraps its input in "jxl:", and djxl unwraps it, so the rebuild
+    // matches unless BAD_REBUILD makes it differ by one byte. cjxl also notes
+    // whether jpegtran's rejected copy of its input still exists, the check the
+    // uploader made when the JPEG itself went up.
+    await f.command("bin/cjxl", `
+for last in "$@"; do :; done
+for a in "$@"; do case "$a" in -*|9) ;; *) [ "$a" = "$last" ] || src="$a" ;; esac; done
+echo "cjxl $*" >> "$TRACE"
+copy=$(awk -F'\\t' -v s="$src" '$1 == s { print $2 }' "$FIXTURE_ROOT/progressive-paths" 2>/dev/null) || copy=""
+[ -z "$copy" ] || [ ! -e "$copy" ] || echo "discarded-copy-exists" >> "$TRACE"
+{ printf 'jxl:'; cat "$src"; } > "$last"`);
+    await f.command("bin/djxl", `
+tail -c +5 "$1" > "$2"
+[ "\${BAD_REBUILD:-0}" != 1 ] || printf x >> "$2"`);
     const uploads = async () => (await f.read("uploads")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
     const ingest = (args = ["source"], env = {}) => f.shell("add-photos.sh", args, { REMOTE_RENDER_ONLY: "0", ...env });
     await run({ ...f, ingest, uploads });
@@ -305,7 +321,7 @@ test("failed source or HEIF-companion uploads stop before hashing and index writ
   await uploadFixture(async ({ put, read, ingest, uploads }) => {
     await put("source/companion.HIF", "HEIF original");
     await put("src/worker/photo-index.json", '{"existing":{"full":"existing.jpg"}}');
-    for (const key of ["aadhar-photos/frame.jpg", "aadhar-photos/companion.jpg"]) {
+    for (const key of ["aadhar-photos/frame.jxl", "aadhar-photos/companion.jxl"]) {
       await put("trace", ""); await put("uploads", "");
       const failed = ingest(["source"], { FAIL_UPLOAD: key });
       assert.equal(failed.status, 1, failed.stderr + failed.stdout);
@@ -322,9 +338,10 @@ test("failed source or HEIF-companion uploads stop before hashing and index writ
     assert.match(await read("trace"), /downstream-hash/);
     const sent = (await uploads()).filter(row => row.event === "start").map(({key,body}) => ({key,body}));
     assert.deepEqual(sent.sort((a,b) => a.key.localeCompare(b.key)), [
-      // A HIF's archive is zenc's re-encode AFTER jpegtran's DC-first reorder.
-      { key: "aadhar-photos/companion.jpg", body: "progressive" },
-      { key: "aadhar-photos/frame.jpg", body: "progressive" },
+      // Only the JPEG XL goes up, wrapping the prepared JPEG: for a HIF that is
+      // zenc's re-encode AFTER jpegtran's DC-first reorder, never the source.
+      { key: "aadhar-photos/companion.jxl", body: "jxl:progressive" },
+      { key: "aadhar-photos/frame.jxl", body: "jxl:progressive" },
     ]);
     assert.equal(await read("source/frame.jpg"), "source fixture");
     assert.equal(await read("source/companion.HIF"), "HEIF original");
@@ -336,8 +353,9 @@ test("progressive-copy failure uploads the untouched source and removes the reje
     const result = ingest(["source/frame.jpg"], { COPY_FAIL: "1" });
     assert.equal(result.status, 23, result.stderr + result.stdout);
     const [sent] = (await uploads()).filter(row => row.event === "start");
-    assert.equal(sent.body, "source fixture");
-    assert.equal(sent.discardedCopyStillExists, false);
+    assert.equal(sent.body, "jxl:source fixture");
+    assert.match(await read("trace"), /cjxl /, "the probe below only means something if cjxl ran");
+    assert.doesNotMatch(await read("trace"), /discarded-copy-exists/);
     assert.equal(await read("source/frame.jpg"), "source fixture");
   });
 });
@@ -357,7 +375,31 @@ test("a HIF archive whose DC-first reorder fails is never uploaded", async () =>
     const good = ingest(["source/companion.HIF"]);
     assert.equal(good.status, 23, good.stderr + good.stdout);
     const sent = (await uploads()).filter(row => row.event === "start");
-    assert.deepEqual(sent.map(({ key, body }) => ({ key, body })), [{ key: "aadhar-photos/companion.jpg", body: "progressive" }]);
+    assert.deepEqual(sent.map(({ key, body }) => ({ key, body })), [
+      { key: "aadhar-photos/companion.jxl", body: "jxl:progressive" },
+    ]);
+  });
+});
+
+// The .jxl is the only copy R2 will hold, so one whose rebuild differs from the
+// prepared JPEG by a byte must never reach R2, and the photo fails the way a
+// failed HEIF upload does: before hashing, with the index untouched.
+test("a JPEG XL original that does not rebuild the prepared JPEG is never uploaded", async () => {
+  await uploadFixture(async ({ put, read, ingest, uploads }) => {
+    await put("src/worker/photo-index.json", '{"existing":{"full":"existing.jpg"}}');
+    const bad = ingest(["source/frame.jpg"], { BAD_REBUILD: "1" });
+    assert.equal(bad.status, 1, bad.stderr + bad.stdout);
+    assert.match(bad.stderr, /phase 3 incomplete/);
+    assert.match(bad.stderr, /JPEG XL original failed .*aadhar-photos\/frame\.jxl/);
+    assert.deepEqual(await uploads(), [], "nothing went up, the JPEG included");
+    assert.doesNotMatch(await read("trace"), /downstream-hash/);
+    assert.equal(await read("src/worker/photo-index.json"), '{"existing":{"full":"existing.jpg"}}');
+    // Control: an exact rebuild uploads it, with its own content type.
+    await put("uploads", "");
+    const good = ingest(["source/frame.jpg"]);
+    assert.equal(good.status, 23, good.stderr + good.stdout);
+    assert.deepEqual((await uploads()).filter(row => row.event === "start").map(row => row.key),
+      ["aadhar-photos/frame.jxl"]);
   });
 });
 
@@ -375,9 +417,10 @@ test("upload batching stays at four regardless of encoder concurrency", async ()
     }
     assert.equal(maximum, 4);
     assert.equal(active, 0);
+    // nine photos, one JPEG XL original each
     assert.equal(keys.length, 9);
     assert.equal(new Set(keys).size, 9);
-    assert.ok(keys.includes("aadhar-photos/extra 0.jpg"));
+    assert.ok(keys.includes("aadhar-photos/extra 0.jxl"));
   });
 });
 
@@ -410,9 +453,7 @@ test("ingest and rerender both use one HEIF pixel source and one JPEG click obje
       const result = ingest([input]);
       assert.equal(result.status, 23, result.stderr + result.stdout);
       const sent = (await uploads()).filter(row => row.event === "start");
-      assert.equal(sent.length, 1);
-      assert.equal(sent[0].key, "aadhar-photos/frame.jpg");
-      assert.equal(sent[0].body, "progressive");
+      assert.deepEqual(sent.map(({ key, body }) => [key, body]), [["aadhar-photos/frame.jxl", "jxl:progressive"]]);
       if (input.endsWith("hIf")) {
         assert.ok((await read("trace")).includes(`-Orientation ${root}/source/frame.hIf`));
         assert.doesNotMatch(await read("trace"), /-Orientation .*frame\.jpg/);
@@ -467,6 +508,34 @@ test("remote ingest preserves the existing JPEG key and refuses a HEIF that woul
   });
 });
 
+// The remote pipeline gets a migrated original as its .jxl plus the JPEG djxl
+// rebuilt beside it. The JPEG feeds the encoders; the index has to keep naming
+// the .jxl and its size, or a rerender would point every link at a key R2 no
+// longer holds.
+test("remote ingest of a JPEG XL original records the .jxl key and size, not the rebuilt JPEG", async () => {
+  await uploadFixture(async ({ root, put, command, ingest, read, uploads }) => {
+    await put("moved/Moved.jpg", "rebuilt JPEG bytes");
+    await put("moved/Moved.jxl", "jxl:x");
+    const jpg = path.join(root, "moved/Moved.jpg");
+    const jxl = path.join(root, "moved/Moved.jxl");
+    assert.deepEqual(await photoInputs([path.join(root, "moved")], { remote: true }), [
+      { stem: "Moved", source: jpg, original: jxl, full: "Moved.jxl" },
+    ]);
+    // Control: a local ingest of the same folder ignores the .jxl entirely.
+    assert.deepEqual(await photoInputs([path.join(root, "moved")]), [
+      { stem: "Moved", source: jpg, original: jpg, full: "Moved.jpg" },
+    ]);
+    await put("src/worker/photo-index.json", '{"Moved":{"full":"Moved.jxl","jpeg":"Moved.JPG","size":5,"uploaded":"2026-07-27T00:00:00.000Z"}}');
+    await command("tools/photos/hash-thumbnails.sh", "exit 0");
+    await command("tools/photos/extract-photo-metadata.sh", "exit 31");
+    const result = ingest(["moved"], { REMOTE_RENDER_ONLY: "1" });
+    assert.equal(result.status, 31, result.stderr + result.stdout);
+    assert.deepEqual(await uploads(), []);
+    assert.deepEqual(JSON.parse(await read("src/worker/photo-index.json")).Moved,
+      { full: "Moved.jxl", jpeg: "Moved.JPG", size: 5, uploaded: "2026-07-27T00:00:00.000Z" });
+  });
+});
+
 test("input selection keeps published-only rerenders and rejects unsupported or conflicting sources", async () => {
   await fixture(async ({ root, put }) => {
     await put("source/png.png", "PNG fixture");
@@ -493,9 +562,8 @@ test("the shell input plan preserves filename whitespace and JPEG companion exte
     const result = ingest([`source/${stem}.hEiC`]);
     assert.equal(result.status, 23, result.stderr + result.stdout);
     const sent = (await uploads()).filter(row => row.event === "start");
-    assert.equal(sent.length, 1);
-    assert.equal(sent[0].key, `aadhar-photos/${stem}.jpeg`);
-    assert.equal(sent[0].body, "progressive");
+    // the key is the companion JPEG's, tab and newline intact, with .jxl
+    assert.deepEqual(sent.map(({ key, body }) => [key, body]), [[`aadhar-photos/${stem}.jxl`, "jxl:progressive"]]);
   });
 });
 

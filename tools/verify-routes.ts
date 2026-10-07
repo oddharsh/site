@@ -58,7 +58,8 @@ const remoteRows = isProd || process.env.VERIFY_REMOTE === "1";
 const SLUG = "in-flux";
 const THUMB = "L1000069_3-400.avif";   // legacy thumb shape (now a 301 into /i/)
 const META = "L1000069_3";             // /images/meta/<stem>.json
-const FULL = "L1000069_3.jpg";         // /images/full/<key>
+const FULL = "L1000069_3.jxl";         // /images/full/<key>, a lossless JPEG XL original
+const FULL_JPEG = "L1000069_3.jpg";    // the JPEG it replaced, which 301s to it
 
 // the content-addressed twin of META's main avif, read from the same
 // hashes.json the worker bakes manifests from, so this row tracks re-encodes.
@@ -463,8 +464,10 @@ const ROUTES = [
   { path: "/images/manifest.json", status: 200, ct: "application/json", encoding: "br" },
   { path: "/images/metadata.json", status: 200, ct: "application/json", encoding: "br" },
   { path: `/images/meta/${META}.json`, status: 200, ct: "application/json" },
-  // the SOOC original: ~3GB of R2 that is deliberately not in the repo.
-  { path: `/images/full/${FULL}`, status: 200, ct: "image/jpeg", remote: true },
+  // the SOOC original: ~5GB of R2 that is deliberately not in the repo.
+  { path: `/images/full/${FULL}`, status: 200, ct: "image/jxl", remote: true },
+  // its retired JPEG URL redirects from the bundled index, before R2 is asked
+  { path: `/images/full/${FULL_JPEG}`, status: 301 },
   // legacy thumb URL 301s into /i/; the hashed twin serves immutable bytes
   { path: `/images/${THUMB}`, status: 301 },
   ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
