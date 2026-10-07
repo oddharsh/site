@@ -42,6 +42,25 @@ test("index-merge keeps an existing stem's upload date, mints one for a new stem
   assert.throws(() => parseSpool(Buffer.from("A\0A.jpg\0big\0\0\0")), /bad spool record/);
 });
 
+// The Worker 301s a migrated photo's old JPEG URL from the `jpeg` key, and a
+// remote rerender spools only `full`. Dropping the key there would quietly
+// downgrade every old link to an R2 head() per request.
+test("index-merge keeps a migrated photo's retired JPEG key only while the entry names the same original", () => {
+  const T = "2026-07-27T00:00:00.000Z";
+  const index = {
+    Same: { full: "Same.jxl", jpeg: "Same.JPG", size: 9, uploaded: T },
+    Other: { full: "Other.jxl", jpeg: "Other.jpg", size: 9, uploaded: T },
+  };
+  const rec = (...f) => f.join("\0") + "\0";
+  const merged = mergeIndex(index, parseSpool(Buffer.from(
+    rec("Same", "Same.jxl", "9", "", "") +       // a remote rerender of the moved photo
+    rec("Other", "Other.jpg", "11", "", ""))),   // a different original under the stem
+  "NOW");
+  assert.deepEqual(merged.Same, { full: "Same.jxl", jpeg: "Same.JPG", size: 9, uploaded: T });
+  // Control: a new original doesn't inherit a redirect from the old one.
+  assert.deepEqual(merged.Other, { full: "Other.jpg", size: 11, uploaded: T });
+});
+
 test("prune reproduces the committed metadata byte for byte when every stem is published", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "pipeline-json-"));
   const out = path.join(dir, "pruned.json");

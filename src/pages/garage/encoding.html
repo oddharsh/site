@@ -335,13 +335,13 @@
 
     <p class="note">It matters at <a href="/photos">the full-size archive</a>. <code>/images/full/</code>
       is the one image surface here with no AVIF tier and no <code>&lt;picture&gt;</code> around it:
-      the worker streams a median 21.6&nbsp;MB from R2 as bare <code>image/jpeg</code>, and that single
-      file is the whole payload. That is also the awkward part of the format story, because <b>AVIF
+      the worker streams a median 21.6&nbsp;MB progressive JPEG from R2 (since October 2026 as its
+      lossless JPEG XL copy, about 8% smaller), and that single file is the whole payload. That is also the awkward part of the format story, because <b>AVIF
       structurally cannot do this</b>. Its layered mode caps at four stages, is effectively
       Chromium-only, and is staged rather than incremental the way a JPEG scan script is; nothing
       here emits layered AVIF anyway. So the format that wins every byte comparison on this page
       loses the one property that matters when a single large image <em>is</em> the page. Both are
-      true at once, which is why the grid is AVIF and the archive is JPEG.</p>
+      true at once, which is why the grid is AVIF and the archive is a progressive JPEG.</p>
 
     <h3>A fifth of the archive had the order wrong <span class="badge shipped">fixed</span></h3>
     <p class="note">The gate applies to the archive too, where it costs seconds. Each of the 258 files
@@ -522,9 +522,16 @@
       <code>&lt;source&gt;</code> would either never be picked or make the tiles worse. The JPG
       fallback only reaches browsers without AVIF, which rules JPEG XL out there too. The archive is
       the one real opening: a lossless copy would be <data value="8.17%">8%</data> smaller, decode about 5&times; faster in
-      Chrome, and still paint early. It isn&apos;t shipped, because a visitor saving the original
-      would get JPEG XL bytes behind a <code>.jpg</code> link, and serving it means two R2 objects per
-      photo and a cache keyed on <code>Accept</code>.</p>
+      Chrome, and still paint early. It wasn&apos;t shipped at first, because a visitor saving the
+      original would get JPEG XL bytes behind a <code>.jpg</code> link, and serving it meant two R2
+      objects per photo and a cache keyed on <code>Accept</code>.</p>
+    <p class="note"><b>Update, 2026-10-07: the archive is JPEG XL now.</b> Chrome 155 shipped JPEG XL
+      the day before, and both objections came from keeping the JPEG. Each original now lives in R2
+      as <code>&lt;stem&gt;.jxl</code> only, under its own URL, so a saved file is named for what it
+      holds and nothing varies on <code>Accept</code>. The JPEG isn&apos;t lost: <code>djxl</code>
+      rebuilds it byte for byte, which every upload proves with <code>cmp</code> before it lands. The
+      old <code>.jpg</code> links answer 301. The cost is a browser without JPEG XL, which can&apos;t
+      open an original: Chrome before 155, and Firefox until it turns JPEG XL on (planned for 158).</p>
 
     <h2>What aadhar.sh actually ships</h2>
     <ul class="enc-ships">
@@ -743,16 +750,16 @@
       ]
     },
     {
-      "q": "AVIF beats JPEG by ~34-36% at every resolution on this page, and the grid is AVIF-primary because of it. So why is the full-size archive at /images/full/ a JPEG?",
+      "q": "AVIF beats JPEG by ~34-36% at every resolution on this page, and the grid is AVIF-primary because of it. So why isn't the full-size archive at /images/full/ AVIF?",
       "options": [
         {
-          "t": "A ~20 MB file is served as bare image/jpeg with no <picture> around it, so scan order IS the loading experience, and AVIF cannot render incrementally the way a progressive JPEG can.",
+          "t": "A ~20 MB file is served bare with no <picture> around it, so scan order IS the loading experience, and AVIF cannot render incrementally the way a progressive JPEG (or its lossless JPEG XL copy) can.",
           "ok": true,
-          "why": "Both facts hold at once. AVIF wins every byte comparison here, and it still loses the one property that matters when a single large image is the whole payload: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is JPEG because rendering order dominates at 20 MB."
+          "why": "Both facts hold at once. AVIF wins every byte comparison here, and it still loses the one property that matters when a single large image is the whole payload: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is a progressive JPEG, stored since October 2026 as its lossless JPEG XL copy, because rendering order dominates at 20 MB."
         },
         {
           "t": "AVIF loses its byte advantage at full resolution, so JPEG is simply smaller there.",
-          "why": "The resolution table shows the opposite: AVIF holds a steady ~34-36% lead at every size tested. The archive is JPEG despite AVIF being smaller, not because it is bigger."
+          "why": "The resolution table shows the opposite: AVIF holds a steady ~34-36% lead at every size tested. The archive skips AVIF despite it being smaller, not because it is bigger."
         },
         {
           "t": "Browsers cannot decode AVIF above a certain resolution, so a fallback is required.",

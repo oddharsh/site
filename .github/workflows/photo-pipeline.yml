@@ -61,7 +61,9 @@ jobs:
         run: |
           # Grid tiers link Homebrew's libavif directly through zenc. pkgconf
           # supplies build discovery; avifenc remains the byte-parity oracle.
-          brew install ffmpeg libavif pkgconf mozjpeg webp
+          # jpeg-xl's djxl rebuilds the JPEG inside each JPEG XL original
+          # (download-remote-photos.sh).
+          brew install ffmpeg libavif pkgconf mozjpeg webp jpeg-xl
           # exif-sooc reads and writes every EXIF the pipeline touches, and
           # replaced exiftool on 2026-08-14. It was NOT installed here when the
           # extractor moved onto it in #390, so this workflow would have failed

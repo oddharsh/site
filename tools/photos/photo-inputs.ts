@@ -1,4 +1,4 @@
-import { readdir, realpath, stat } from "node:fs/promises";
+import { access, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 const JPEG = new Set([".jpg", ".jpeg"]);
@@ -69,11 +69,18 @@ export async function photoInputs(
       throw new Error(`ambiguous photo stem ${stem}; select one source or one same-folder HEIF/JPEG pair:\n  ${group.join("\n  ")}`);
     }
     const source = heif[0] ?? group[0];
-    const original = jpeg[0] ?? null;
+    let original = jpeg[0] ?? null;
     if (remote && HEIF.has(extension(source))) {
       throw new Error(`remote ingest needs the existing JPEG object for ${stem}; select that key instead of its HEIF original`);
     }
-    const full = original ? (remote ? path.basename(original) : `${stem}${extension(original)}`) : `${stem}.jpg`;
+    let full = original ? (remote ? path.basename(original) : `${stem}${extension(original)}`) : `${stem}.jpg`;
+    // A remote JPEG XL original arrives as the .jxl plus the JPEG djxl rebuilt
+    // from it (download-remote-photos.sh). The JPEG feeds the encoders; the
+    // .jxl is the R2 object, so it names the key and its bytes give the size.
+    if (remote && original) {
+      const jxl = path.join(path.dirname(original), `${stem}.jxl`);
+      if (await access(jxl).then(() => true, () => false)) { original = jxl; full = path.basename(jxl); }
+    }
     plan.push({ stem, source, original, full });
   }
   if (plan.length === 0) throw new Error("no eligible photos selected");

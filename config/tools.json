@@ -249,6 +249,38 @@
       "recorded": "libavif 1.4.2, aom 3.15.1"
     },
     {
+      "bin": "cjxl",
+      "install": "brew install jpeg-xl",
+      "why": "each full-resolution original, a lossless JPEG XL transcode (--lossless_jpeg=1 -e 9) of the JPEG it replaces in R2",
+      "required_by": [
+        "tools/photos/add-photos.sh",
+        "tools/photos/migrate-originals.ts"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "cjxl v(\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": true,
+      "recorded": "0.12.0"
+    },
+    {
+      "bin": "djxl",
+      "install": "brew install jpeg-xl",
+      "why": "the original's proof: it rebuilds the JPEG from the .jxl, which uploads only if cmp finds the rebuilt bytes identical; the remote pipeline uses it to get the JPEG back for its encoders",
+      "required_by": [
+        "tools/photos/add-photos.sh",
+        "tools/photos/download-remote-photos.sh",
+        "tools/photos/migrate-originals.ts"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "djxl v(\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "recorded": "0.12.0",
+      "bytes_why": "Decode only. It rebuilds a JPEG that zenc and exif-sooc read, and that JPEG is the exact one the .jxl was made from, whatever the djxl version."
+    },
+    {
       "bin": "cwebp",
       "install": "brew install webp",
       "why": "the WebP point on the /garage/encoding format grid",

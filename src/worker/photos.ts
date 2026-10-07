@@ -64,6 +64,18 @@ type PhotoQueryOptions = {
 // header rides on the convention that an original is never overwritten in place
 // (a new photo is a new filename), not on the URL naming its bytes. validation is
 // permissive on stem but strict on extension and forbids any path traversal characters.
+// A migrated entry records the JPEG key it retired (`jpeg`), so this maps the
+// exact old URL, casing included, to the original that replaced it.
+const MOVED_JPEGS = new Map(Object.values(photoIndex as Record<string, { full?: string; jpeg?: string }>)
+  .flatMap((p) => (p.jpeg && p.full ? [[p.jpeg, p.full] as const] : [])));
+
+// A day rather than a year: a permanent redirect cached for a year is the one
+// thing here a rollback couldn't take back.
+const movedTo = (url: URL, key: string) => new Response(null, {
+  status: 301,
+  headers: { location: `${url.origin}/images/full/${key}`, "cache-control": "public, max-age=86400" },
+});
+
 export async function servePhotoFromR2(request, env, ctx) {
   if (!env.PHOTOS_R2) {
     return errorResp("R2 bucket not bound", 503);
@@ -73,9 +85,19 @@ export async function servePhotoFromR2(request, env, ctx) {
   const key = url.pathname.replace(/^\/images\/full\//, "");
   // allow letters, digits, `_`, `-`, `.` in the stem; require a known
   // image extension. forbids `/`, `..`, and other escape characters.
-  if (!/^[A-Za-z0-9_.-]+\.(?:jpe?g|png|heic|heif|hif|avif|gif)$/i.test(key)) {
+  if (!/^[A-Za-z0-9_.-]+\.(?:jpe?g|png|heic|heif|hif|avif|gif|jxl)$/i.test(key)) {
     return errorResp("not found", 404);
   }
+
+  // A JPEG original that moved to JPEG XL keeps its old URL as a redirect, so
+  // links from before the move (search engines, the sitemap, other sites) land
+  // on the same photo. The index answers from module memory; the head() below
+  // covers the window when migrate-originals.ts has deleted a JPEG and the
+  // deploy recording its .jxl hasn't shipped yet, and costs a subrequest only
+  // on a miss.
+  const recorded = MOVED_JPEGS.get(key);
+  if (recorded) return movedTo(url, recorded);
+  const moved = /\.jpe?g$/i.test(key) ? key.replace(/\.jpe?g$/i, ".jxl") : null;
 
   const ifNoneMatch = request.headers.get("if-none-match");
   const range       = request.headers.get("range");
@@ -134,12 +156,15 @@ export async function servePhotoFromR2(request, env, ctx) {
         });
       }
     }
+    if (moved && await env.PHOTOS_R2.head(moved)) return movedTo(url, moved);
     return errorResp("not found", 404);
   }
 
   const headers = new Headers();
   obj.writeHttpMetadata(headers);
-  headers.set("content-type",  obj.httpMetadata?.contentType || "image/jpeg");
+  // A JPEG XL original goes up as image/jxl; the extension covers a put that
+  // set no type.
+  headers.set("content-type",  obj.httpMetadata?.contentType || (/\.jxl$/i.test(key) ? "image/jxl" : "image/jpeg"));
   headers.set("etag",          obj.httpEtag);
   headers.set("cache-control", "public, max-age=31536000, immutable");
   headers.set("accept-ranges", "bytes");
@@ -819,9 +844,10 @@ export function renderAlbumPage(album: Album, photos, altMap) {
     });
   }
   const tiles = joinHtml(members.map((p, i) => {
-    // `download`: the tile opens the JPEG in the browser, the format links save
-    // it. Same-origin, so the attribute is honoured; the filename is the R2 key.
-    const links = [html`<a href="${fullUrl(p.full)}" download>JPEG</a>`];
+    // `download`: the tile opens the original in the browser, the format links
+    // save it. Same-origin, so the attribute is honoured; the filename is the R2
+    // key. An original is a JPEG until migrate-originals.ts moves it to JPEG XL.
+    const links = [html`<a href="${fullUrl(p.full)}" download>${/\.jxl$/i.test(p.full ?? "") ? "JPEG XL" : "JPEG"}</a>`];
     if (p.heif) links.push(html`<a href="${fullUrl(p.heif)}" download>HEIF</a>`);
     return renderTile(p, altMap, i, html`
 <span class="ph-fmt">${joinHtml(links, " &middot; ")}</span>`);

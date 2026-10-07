@@ -72,8 +72,23 @@ while IFS= read -r key || [ -n "$key" ]; do
     "${ORIGIN%/}/images/full/$encoded" \
     --output "$output"
 
+  # A JPEG XL original is a lossless transcode of the JPEG it replaced, so djxl
+  # gives back that JPEG byte for byte and every tool downstream reads it as
+  # before: zenc rebuilds identical tiers, exif-sooc the same metadata. The
+  # .jxl stays beside it, where photo-inputs.ts finds the R2 key and size an
+  # index entry records; exif-sooc skips it.
+  pixels="$output"
+  case "$key" in
+    *.jxl)
+      pixels="$DEST_DIR/$stem.jpg"
+      if ! command -v djxl >/dev/null 2>&1 || ! djxl "$output" "$pixels" >/dev/null 2>&1; then
+        echo "error: could not rebuild the JPEG inside $key (djxl, brew install jpeg-xl)" >&2
+        exit 1
+      fi ;;
+  esac
+
   if [ ! -s "$output" ] ||
-     ! exif-sooc -q -s3 -ImageWidth -ImageHeight "$output" | grep -Eq '[0-9]'; then
+     ! exif-sooc -q -s3 -ImageWidth -ImageHeight "$pixels" | grep -Eq '[0-9]'; then
     echo "error: downloaded object is not a readable image: $key" >&2
     exit 1
   fi

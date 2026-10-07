@@ -243,11 +243,16 @@ if [ ! -x "$WRANGLER" ]; then
   echo "  run: pnpm install" >&2
   exit 1
 fi
-for cmd in sips exif-sooc; do
+# cjxl and djxl make and check each original's JPEG XL upload in phase 3, which
+# a remote render skips, so only an uploading run needs them.
+NEEDED=(sips exif-sooc)
+[ "${REMOTE_RENDER_ONLY:-0}" = "1" ] || NEEDED+=(cjxl djxl)
+for cmd in "${NEEDED[@]}"; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "error: $cmd not found in PATH" >&2
     case "$cmd" in
       exif-sooc) echo "  install with: cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc" >&2 ;;
+      cjxl|djxl) echo "  install with: brew install jpeg-xl" >&2 ;;
     esac
     exit 1
   fi
@@ -360,7 +365,8 @@ echo ""
 # ── phase 2: prepare the exact full-resolution bytes ────────────────
 echo "phase 2 — full-resolution JPEGs (parallel $JOBS)"
 FULLS="$TMP/full-resolution"; RECEIPTS="$TMP/full-paths"; HEIF_RECEIPTS="$TMP/heif-keys"
-mkdir -p "$FULLS" "$RECEIPTS" "$HEIF_RECEIPTS"
+JXLS="$TMP/jxl-originals"; JXL_RECEIPTS="$TMP/jxl-paths"
+mkdir -p "$FULLS" "$RECEIPTS" "$HEIF_RECEIPTS" "$JXLS" "$JXL_RECEIPTS"
 st_init "$TMP/status2"
 prepare_one() {  # source, index, existing JPEG, object key, stem
   local f="$1" idx="$2" original="$3" full="$4" stem="$5" out tmppng
@@ -423,13 +429,28 @@ if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
 else
   echo "phase 3 — R2 uploads (parallel 4)"
   upload_one() {
-    local f="$1" idx="$2" full="$4" send heif
+    local f="$1" idx="$2" full="$4" send heif jxl jxlfile
     send=$(cat "$RECEIPTS/$idx")
-    if ! "$WRANGLER" r2 object put "aadhar-photos/$full" --file="$send" --content-type="image/jpeg" --remote >/dev/null 2>&1; then
+    # The original goes up as JPEG XL, never as the JPEG: a lossless transcode
+    # of the exact bytes prepared above, which djxl turns back into those bytes
+    # (cmp proves it before the put). Effort 9: on two originals (2026-10-07) it
+    # saved 0.15-0.25% over e7 at 10-25x the time, about 20 s for a 26 MB
+    # frame, paid once per photo for every later click. The JPEG stays local,
+    # so the bucket holds one copy per photo (the 10 GB free tier, and why
+    # migrate-originals.ts deletes the JPEGs it moved). The receipt names the
+    # .jxl, and phase 4 records its key and length.
+    jxl="${full%.*}.jxl"; jxlfile="$JXLS/$jxl"
+    if ! cjxl --quiet --lossless_jpeg=1 -e 9 "$send" "$jxlfile" >/dev/null 2>&1 \
+       || ! djxl "$jxlfile" "$jxlfile.rebuilt.jpg" >/dev/null 2>&1 \
+       || ! cmp -s "$send" "$jxlfile.rebuilt.jpg" \
+       || ! "$WRANGLER" r2 object put "aadhar-photos/$jxl" --file="$jxlfile" --content-type="image/jxl" --remote >/dev/null 2>&1; then
+      rm -f "$jxlfile" "$jxlfile.rebuilt.jpg"
       mark fail "$idx"; printf "✗"
-      echo "error: R2 upload failed: aadhar-photos/$full" >&2
+      echo "error: JPEG XL original failed (transcode, exact rebuild, or upload): aadhar-photos/$jxl" >&2
       return
     fi
+    rm -f "$jxlfile.rebuilt.jpg"
+    printf '%s' "$jxlfile" > "$JXL_RECEIPTS/$idx"
     # HEIF=1: the source itself goes up too, byte-for-byte, under its own name.
     # The key is written to a receipt phase 4 reads, so the index records a
     # HEIF only when this put actually succeeded. A JPEG-only source writes no
@@ -487,6 +508,9 @@ META_SOURCES=()
 while read_input; do
   idx=$((idx+1))
   obj=$(cat "$RECEIPTS/$idx")
+  # An uploading run sent the .jxl, so that is the object the index names. A
+  # remote render uploads nothing, and its receipt is already the R2 object.
+  if [ -s "$JXL_RECEIPTS/$idx" ]; then obj=$(cat "$JXL_RECEIPTS/$idx"); full="${full%.*}.jxl"; fi
   size=$(wc -c < "$obj" | tr -d '[:space:]')
   heif=""; [ -s "$HEIF_RECEIPTS/$idx" ] && heif=$(cat "$HEIF_RECEIPTS/$idx")
   # `album` and `heif` are written only when set, so an entry for the site-wide

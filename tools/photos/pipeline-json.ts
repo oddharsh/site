@@ -94,7 +94,10 @@ export function jqUri(s: string): string {
   )).join("");
 }
 
-export type IndexEntry = { full: string; size: number; uploaded?: string; album?: string; heif?: string };
+/** `jpeg` is the R2 key a JPEG original had before migrate-originals.ts moved
+ *  it to JPEG XL (`full` is then the .jxl). The Worker redirects that old URL,
+ *  so the key outlives the object it named. */
+export type IndexEntry = { full: string; size: number; uploaded?: string; album?: string; heif?: string; jpeg?: string };
 
 /** The entry build from add-photos.sh's loop, five NUL-separated fields per
  *  photo, in the order the shell wrote them. A trailing NUL after the last
@@ -120,10 +123,18 @@ export function parseSpool(spool: Buffer): Record<string, Omit<IndexEntry, "uplo
 }
 
 /** `$idx + .` with `.value += {uploaded: ($idx[.key].uploaded // $now)}`: a
- *  new entry replaces the old one whole, keeping only the upload date it had. */
+ *  new entry replaces the old one whole, keeping only the upload date it had,
+ *  and the retired `jpeg` key while the entry still names the same original.
+ *  A remote rerender of a migrated photo spools its .jxl and nothing else, and
+ *  dropping `jpeg` there would turn every old link to it into a head() on R2. */
 export function mergeIndex(index: Record<string, IndexEntry>, entries: Record<string, Omit<IndexEntry, "uploaded">>, now: string): Record<string, IndexEntry> {
   const merged: Record<string, IndexEntry> = { ...index };
-  for (const [stem, entry] of Object.entries(entries)) merged[stem] = { ...entry, uploaded: index[stem]?.uploaded ?? now };
+  for (const [stem, entry] of Object.entries(entries)) {
+    const old = index[stem];
+    const row: IndexEntry = { ...entry, uploaded: old?.uploaded ?? now };
+    if (old?.jpeg && old.full === entry.full) row.jpeg = old.jpeg;
+    merged[stem] = row;
+  }
   return sortKeysDeep(merged as Json) as Record<string, IndexEntry>;
 }
 
