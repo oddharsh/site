@@ -6,11 +6,19 @@
 // resolution, chosen to be the hardest thing an encoder sees. The 600px tier this
 // site ships is something else, a whole frame reduced about 8x, and the two sit
 // at different densities: the crops average 1.08 bits per pixel at the AVIF
-// tier's budget, the tiles 0.46. AV2's standing against AV1 turns on exactly
-// that. Measured 2026-09-28 on 38 tiles, pooling both: under 0.3 bpp AV2 won
-// 12 of 12, and over 1.2 bpp it won 0 of 5. A verdict read off the crops alone
-// described the dense end and was reported as the whole answer on /garage/av2
-// for a day.
+// tier's budget, this probe's 38 tiles 0.46. AV2's standing against AV1 turns
+// on exactly that. Measured 2026-09-28 on 38 tiles, pooling both: under 0.3 bpp
+// AV2 won 12 of 12, and over 1.2 bpp it won 0 of 5. A verdict read off the crops
+// alone described the dense end and was reported as the whole answer on
+// /garage/av2 for a day.
+//
+// THE 38 ARE NOT THE TIER. The shipped 600px tier itself (255 XT*.avif in
+// public/i, 2026-10-07) has a median of 0.67 and a mean of 0.70, and buckets
+// 30 / 52 / 71 / 86 / 16 across the five bands main() prints. 82 of 255 sit
+// under 0.5, where AV2 won 23 of 24 pooled calls; 173 sit above it, where it
+// won 6 of 30. The budgets are right (the control below matched 38 of 38); the
+// SAMPLE is thin. See WHICH PHOTOS. /garage/av2 then said the tier was a win
+// for nine days, until the 2026-10-07 correction.
 //
 // WHAT IT DOES. Each tile is cut the way add-photos.sh cuts the 600px tier, by
 // `zenc square` (EXIF orientation applied, box filter, linear light). Its budget
@@ -49,6 +57,12 @@
 // WHICH PHOTOS. Fuji JPEGs in --src, minus the 16 crop stems the knob probe uses
 // (so nothing here was tuned on, JXL_ARGS included) and XT507495, a burst
 // neighbour of the train crop XT507494. --stems overrides that with an explicit list.
+// Only .JPG originals qualify, because `zenc square` cuts a tile from a JPEG.
+// In the photo inbox those are 43 frames shot August to December 2025, before
+// the camera moved to HEIF, and they ship sparse: mean 0.48 bpp, against 0.67
+// for the 119 HIF frames beside them and 0.74 for the tier minus all 43. A
+// verdict for the tier needs tiles cut from the HIFs too (a sips decode, the
+// way codec-knob-probe.ts cuts its crops) or a sample stratified by shipped bpp.
 //
 // usage: bun tools/photos/av2-tile-probe.ts --src <originals> [--codec avm|jxl]
 //          [--stems a,b] [--configs base,qmseg12] [--parallel n] [--build <dir>] [--json out]
