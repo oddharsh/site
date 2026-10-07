@@ -1483,7 +1483,12 @@ HEIF stays local and the photo joins the site-wide pool.
 uses and FAILS the build on an album with no members, so declare the album and
 run the pipeline in the same PR. `check-photo-pipeline.ts` refuses an `album`
 the registry does not declare and a `heif` key that is not the stem's own.
-The first album is `/cota-wec` (2026-09-12).
+The first album, `/cota-wec` (2026-09-12), was removed on 2026-10-07 with its
+93 photos and their HEIF originals, so the `aadhar-photos` bucket stays inside
+R2's 10 GB free tier once every JPEG original has its JPEG XL twin. The
+registry is empty until the next album. Count an album's R2 cost before adding
+it: each photo is its JPEG original, about 0.92x that again as a twin, and its
+HEIF if one goes up.
 
 ### Regenerate just the EXIF metadata (photos already uploaded)
 ```bash

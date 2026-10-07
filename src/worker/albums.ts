@@ -28,16 +28,10 @@ export type Album = {
   description: string;
 };
 
-export const ALBUMS: Record<string, Album> = {
-  "cota-wec": {
-    slug: "cota-wec",
-    title: "Lone Star Le Mans",
-    lede: [
-      "6 hrs of WEC at Circuit of the Americas, 9/4/26 - 9/6/26",
-      "With friends old and new, straight out of camera on a FUJIFILM X-T50 + 50mm f/2",
-    ],
-    description: "Lone Star Le Mans 2026: the FIA World Endurance Championship at Circuit of the Americas, straight out of camera, every frame as JPEG and HEIF.",
-  },
-};
+// Empty since 2026-10-07. The first album, /cota-wec (93 frames, each with a
+// HEIF original), left the site with its photos so the photo bucket stays
+// inside R2's 10 GB free tier once every JPEG original has its JPEG XL twin.
+// The machinery stays: the next album is one entry here plus ALBUM= on ingest.
+export const ALBUMS: Record<string, Album> = {};
 
 export const albumPath = (album: Album) => `/${album.slug}`;

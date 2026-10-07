@@ -453,10 +453,9 @@ const ROUTES = [
   // plain body here means the route fell back to the per-request handler.
   { path: "/photos", status: 200, ct: "text/html", marker: "handwritten worker", remote: true },
   { path: "/photos/", status: 301 },
-  // the first album (src/worker/albums.ts): generated at deploy like /photos,
-  // every tile carrying a JPEG download and, for a HEIF source, a HEIF one
-  { path: "/cota-wec", status: 200, ct: "text/html", marker: ">HEIF</a>" },
-  { path: "/cota-wec/", status: 301 },
+  // the first album, removed 2026-10-07 with its photos so the photo bucket fits
+  // R2's 10 GB free tier: its page must be gone, not served empty
+  { path: "/cota-wec", status: 404 },
   { path: "/run", status: 200, ct: "text/html", marker: "datalist" },
   { path: "/run?cmd=garage", status: 302 },
   { path: "/run?cmd=xyzzy-not-a-page", status: 200, ct: "text/html", marker: "cannot find" },

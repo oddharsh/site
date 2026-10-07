@@ -159,7 +159,11 @@ test("exact routes win first, then the prefix table in routes.ts's order", async
 
 test("album pages route from the registry, and the slashed twin redirects", async () => {
   const albums = Object.values(ALBUMS);
-  assert.ok(albums.length >= 1, "the check needs a registered album");
+  // The registry has been empty since /cota-wec left on 2026-10-07, so the loop
+  // below covers whichever album comes next. Until then the registry still
+  // decides the allowlist the other way: an album it no longer names is a path
+  // nothing claims, which verify-routes.ts's 404 row checks end to end.
+  assert.ok(!EXACT_PATHS.includes("/cota-wec") && !EXACT_PATHS.includes("/cota-wec/"), "a removed album must leave the route allowlist");
   const r = rig();
   for (const album of albums) {
     r.calls.length = 0;

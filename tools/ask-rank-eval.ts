@@ -41,7 +41,6 @@ export const ASK_EVAL: readonly (readonly [string, readonly string[]])[] = [
   ["how does fully homomorphic encryption work", ["/lwe/fhe"]],
   ["explain secure enclaves and the side channels that leak them", ["/lwe/tee"]],
   ["what does the site compress its responses with", ["/garage/compression", "/garage/wire"]],
-  ["photos from the endurance race in Austin", ["/cota-wec"]],
   ["how should I downscale images without making them darker", ["/garage/resample"]],
   ["can I see how a website looks to an AI crawler", ["/lens"]],
   ["what events are worth going to", ["/serendipity"]],
