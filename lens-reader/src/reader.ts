@@ -1,5 +1,5 @@
 // lens-reader/src/reader.ts — the extraction itself, kept free of any Worker
-// entrypoint concern so `node --test` can import it directly.
+// entrypoint concern so the test suite can import it directly.
 //
 // The split is not stylistic. A Worker entrypoint module may export ONLY the
 // default handler and Durable Object / Workflow classes: workerd rejects a

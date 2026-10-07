@@ -1,11 +1,11 @@
 {
-  // tsconfig.cf-garage-test.json — the Garage demo Worker's `node --test` suite.
+  // tsconfig.cf-garage-test.json — the Garage demo Worker's `bun test` suite.
   //
-  // NODE GLOBALS, unlike tsconfig.cf-garage.json beside it, and the split is the
+  // BUN GLOBALS, unlike tsconfig.cf-garage.json beside it, and the split is the
   // whole reason this is a second program: the SOURCE runs on workerd and the
-  // TEST runs on node, so no single `types` entry is right for both. Declaring
-  // the union instead would let a Workers-only call pass in a node file and a
-  // node-only call pass in a Worker, which is the accuracy every program header
+  // TEST runs on bun, so no single `types` entry is right for both. Declaring
+  // the union instead would let a Workers-only call pass in a host file and a
+  // host-only call pass in a Worker, which is the accuracy every program header
   // in this directory is protecting.
   //
   // The consequence is that importing the Worker pulls cf-garage/src in against
@@ -23,7 +23,7 @@
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "lib": ["esnext"],
-    // bun-types carries node's globals, which is what these tests run on. Same
+    // bun-types carries bun's globals and node's, which is what these tests run on. Same
     // entry tsconfig.tools.json uses, for the same reason.
     "types": ["bun"],
     "resolveJsonModule": true,
