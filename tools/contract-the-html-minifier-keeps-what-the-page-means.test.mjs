@@ -3,6 +3,7 @@
 // whole-build byte diff (68 of 69 pages identical); these pin the two calls
 // where the replacement deliberately or narrowly differs, plus the rules the
 // rest of the build reads its output by (unquoted attributes, raw blocks).
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
   assert,
@@ -40,6 +41,33 @@ test("raw and whitespace-sensitive content keeps its bytes", () => {
   assert.equal(minifyHtml("<script>if (a < b) x()</script>"), "<script>if (a < b) x()</script>");
   assert.equal(minifyHtml("<p>a   b\n c</p>"), "<p>a b c", "flow whitespace collapses to one space");
   assert.equal(minifyHtml("<p>a<!-- gone --><!--#keep-->b</p>"), "<p>a<!--#keep-->b", "SSI markers survive, comments go");
+});
+
+test("malformed markup reads the way the regex tokenizer read it", () => {
+  // The scanner replaced a TOKEN regex; these pin the shapes where a hand
+  // scanner and that regex most easily part ways. A "<" that starts no tag is
+  // text; an attribute glued to a quoted value spoils the whole tag; an
+  // unterminated comment runs to the next ">" (the regex's `<![^>]*>` arm).
+  assert.equal(minifyHtml("<p>a < b</p>"), "<p>a < b");
+  assert.equal(minifyHtml("<p>1 <2 and 3> 0</p>"), "<p>1 <2 and 3> 0");
+  assert.equal(minifyHtml('<div><a b="x"c>d</div>'), '<div><a b="x"c>d</div>');
+  assert.equal(minifyHtml("<p>x<!-- open > y</p>"), "<p>x y");
+});
+
+test("a raw element whose end tag never closes ends the document instead of hanging", () => {
+  // The regex version set lastIndex from indexOf(">") + 1, which is 0 when no
+  // ">" follows the end tag, and rescanned from the top forever. That loop is
+  // synchronous, so the runner's per-test timeout never fires and the whole
+  // suite hangs (measured: killed by timeout(1), exit 124). A child process
+  // with a deadline turns that into a failure here.
+  const probe = `import { minifyHtml } from ${JSON.stringify(new URL("lib/html-minify.ts", import.meta.url).pathname)};
+    console.log(JSON.stringify([minifyHtml("<p>a<script>x</script"), minifyHtml("<title>t</TITLE")]));`;
+  const run = spawnSync(process.execPath, ["-e", probe], {
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  assert.notEqual(run.signal, "SIGTERM", "the minifier did not return within 5 s on an unterminated raw end tag");
+  assert.deepEqual(JSON.parse(run.stdout), ["<p>a<script>x</script>", "<title>t</title>"]);
 });
 
 test("attributes come out in the order and quoting the build's readers expect", () => {
