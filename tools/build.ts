@@ -57,6 +57,7 @@ import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, h
 import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
 import { hashClientAssets } from "./lib/hash-client-assets.ts";
+import { foldLongProse } from "./lib/prose-fold.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 
 const OUT = ".build";
@@ -1474,6 +1475,10 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
       const at = group.index + group[0].length;
       out = out.slice(0, at) + String(taskRow({ href: twin, label: "Read this as Markdown", glyph: "≡" })) + out.slice(at);
     }
+    // Long essays fold their later sections below the first screen (prose-fold.ts).
+    // Here, because every staged page and its readable twin pass through this one
+    // function, so the twin keeps being the same program as the page it explains.
+    out = foldLongProse(out);
     return { html: out, addedLink, addedChrome };
   };
 
