@@ -490,6 +490,27 @@ const RELABEL_SCRIPT = `(function(){function u(t){var b=document.getElementById(
 const PENDING_DAYS = 5;
 const PENDING_PER_DAY = 8;
 
+// ONE FORMATTER PER ZONE AND SHAPE, reused, as availability.ts does for its
+// arithmetic. toLocaleDateString and toLocaleTimeString build a fresh
+// Intl.DateTimeFormat on every call, about 33 µs each under node, and a slot
+// listing made two per slot: 8 ms of the 18 ms /coffee/slots.html cost on a
+// cold isolate (route-cpu, 2026-10-08). A cached formatter's format() is the
+// same string by spec, since both shapes name their own fields and so take no
+// defaults; cal/test/templates.test.js holds the two together across both
+// 2026 New York transitions.
+const SLOT_LABELS = new Map<string | undefined, { day: Intl.DateTimeFormat; time: Intl.DateTimeFormat }>();
+export function slotLabels(tz: string | undefined) {
+  let l = SLOT_LABELS.get(tz);
+  if (!l) {
+    l = {
+      day:  new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric" }),
+      time: new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }),
+    };
+    SLOT_LABELS.set(tz, l);
+  }
+  return l;
+}
+
 type SlotModel = { pending: true } | { slots: { start: number, end: number }[] };
 
 /** The slot listing, live or placeholder. The island body, and the inline list
@@ -502,11 +523,10 @@ export function renderSlotList(model: SlotModel, env) {
     return day.repeat(PENDING_DAYS);
   }
   // Slots bucketed by day label, so the keys are dates the feed supplied.
+  const labels = slotLabels(env.HOST_TIMEZONE);
   const groups: Record<string, any[]> = {};
   for (const s of model.slots) {
-    const dayKey = new Date(s.start).toLocaleDateString("en-US", {
-      timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
-    });
+    const dayKey = labels.day.format(s.start);
     (groups[dayKey] = groups[dayKey] || []).push(s);
   }
   if (Object.keys(groups).length === 0) {
@@ -515,9 +535,7 @@ export function renderSlotList(model: SlotModel, env) {
   return Object.entries(groups).map(([day, list]) => `
         <div class="xp-day-label">${esc(day)}</div>
         <ul class="slots">${list.map(s => {
-          const t = new Date(s.start).toLocaleTimeString("en-US", {
-            timeZone: env.HOST_TIMEZONE, hour: "numeric", minute: "2-digit",
-          });
+          const t = labels.time.format(s.start);
           // `required` on the group is what the browser checks on submit; the
           // aria-label names the day too, since the visible label is only the time.
           return `<li><label class="slot-btn"><input type="radio" name="start" value="${esc(s.start)}" form="bookform" required aria-label="${esc(day)}, ${esc(t)}"><span>${esc(t)}</span></label></li>`;
@@ -739,11 +757,10 @@ export function reschedulePage(booking, env, action, sig, slots) {
   });
   const live = booking.status === "confirmed";
 
+  const labels = slotLabels(env.HOST_TIMEZONE);
   const groups: Record<string, any[]> = {};
   for (const sl of slots) {
-    const dayKey = new Date(sl.start).toLocaleDateString("en-US", {
-      timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
-    });
+    const dayKey = labels.day.format(sl.start);
     (groups[dayKey] = groups[dayKey] || []).push(sl);
   }
 
@@ -755,9 +772,7 @@ export function reschedulePage(booking, env, action, sig, slots) {
         <div class="xp-day-label">${esc(day)}</div>
         <ul class="slots">
           ${list.map(sl => {
-            const t = new Date(sl.start).toLocaleTimeString("en-US", {
-              timeZone: env.HOST_TIMEZONE, hour: "numeric", minute: "2-digit",
-            });
+            const t = labels.time.format(sl.start);
             return `<li><label class="slot-radio">
               <input type="radio" name="start" value="${sl.start}" required> ${esc(t)}
             </label></li>`;
