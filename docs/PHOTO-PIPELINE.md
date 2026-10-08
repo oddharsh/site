@@ -61,21 +61,43 @@ Grid photos have four content-addressed tiers under `public/i/`: a 600px JPEG,
 a 600px AVIF, a 400px AVIF, and a 200px AVIF. Source EXIF orientation is baked
 into the pixels; the thumbnails carry no camera metadata.
 
-Every full-resolution original in R2 is JPEG XL (`<stem>.jxl`): a lossless
-transcode (`cjxl --lossless_jpeg=1 -e 9`) of the JPEG ingest prepared, about 8%
-smaller, from which `djxl` rebuilds that JPEG byte for byte. Ingest uploads
-the .jxl only after `djxl` rebuilds the prepared JPEG from it and `cmp` finds
-them identical, and never uploads the JPEG, so the bucket holds one copy per
-photo and stays inside R2's 10 GB free tier. A failure at any step fails the
-photo. Browsers without JPEG XL (Chrome before 155, and Firefox until it turns
-it on, planned for 158) can't open an original; the grid tiers are unaffected.
-The tiers stay AVIF: a resize is a re-encode, so no tier can be lossless, and
-at matched bytes AVIF beat the transcode on 6 of 9 photos given the original
+Every full-resolution original in R2 is JPEG XL (`<stem>.jxl`), one copy per
+photo, so the bucket stays inside R2's 10 GB free tier. It comes in two kinds:
+
+- **A JPEG photo** (Leica, or a Fuji shot with no HIF): a lossless transcode
+  (`cjxl --lossless_jpeg=1 -e 9`) of the JPEG ingest prepared, about 8% smaller,
+  uploaded only after `djxl` rebuilds that JPEG and `cmp` finds it identical.
+  This is the floor: on 8 photos `-e 10` came out larger and compressing the
+  metadata boxes saved 7 KB in all.
+- **A HIF photo**: encoded from the HIF's own 10-bit pixels by
+  `tools/photos/hif-archive.ts`. The JPEG ingest prepares (zenc's q100 4:2:2
+  export, or the camera's JPEG) is only the bar. The encoder bisects cjxl's
+  distance for the fewest bytes that still beat that JPEG on both ssimulacra2
+  and butteraugli, then copies the HIF's EXIF and XMP on with exif-sooc 0.4.0,
+  because sips keeps 40 of 75 tags and none of the Fujifilm maker notes.
+  Measured on all 119 HIF photos (2026-10-08, 60 train and 59 holdout, which
+  agreed within a point): about -33% bytes, both metrics better on every
+  photo. Where nothing beats the bar, it falls back to the lossless transcode.
+  Settings: `-e 7 -p --compress_boxes=0`. Progressive keeps a 20 MB download
+  painting early (+1.3% bytes); effort 9 saved 0.1% for 40% more time; and
+  cjxl Brotli-compresses metadata by default, which exif-sooc cannot read.
+  About four minutes a photo.
+
+Browsers without JPEG XL (Chrome before 155, and Firefox until it turns it on,
+planned for 158) can't open an original; the grid tiers are unaffected. The
+tiers stay AVIF: a resize is a re-encode, so no tier can be lossless, and at
+matched bytes AVIF beat the transcode on 6 of 9 photos given the original
 pixels (/pixel-peeper).
 
-The remote pipeline downloads the .jxl and `djxl` rebuilds the JPEG beside it
-(`download-remote-photos.sh`), so zenc and exif-sooc read exactly the bytes
-they always did and rerendered tiers come out byte-identical.
+The remote pipeline (`download-remote-photos.sh`) tells the two kinds apart by
+their boxes (`pipeline-json.ts jxl-kind`), since djxl asked for a .jpg will
+silently encode one from a file with no JPEG inside. A transcode rebuilds its
+JPEG, so zenc and exif-sooc read the exact bytes they always did, and its .jxl
+moves to `<dest>.r2/`: exif-sooc 0.4.0 reads .jxl, and that one's metadata is
+Brotli-compressed. A HIF photo's archive decodes to a 16-bit PNG, orientation
+applied, and its .jxl stays as the metadata source. `reencode-thumbnails` and
+`refresh-metadata` handle both kinds; remote `add-photo` refuses a HIF photo by
+name, because its archive already is what ingest would make.
 
 `bun tools/photos/migrate-originals.ts` moves the originals published as JPEGs:
 it downloads each JPEG (MD5 against R2's ETag), takes or makes its .jxl, proves
@@ -84,6 +106,16 @@ retired key) and, with `--delete`, deletes the JPEG. The Worker answers the
 retired URL with a 301 to the .jxl, so old links keep working; `--delete`
 refuses to run until production does. It needs R2 write access, so it runs from
 a workstation.
+
+`bun tools/photos/reencode-hif-archives.ts --hif-dir <dir> --backup <dir>` moves
+the HIF photos published before 2026-10 onto the same encoder. For each it
+reads the archive from R2, skips it if it is already direct (so a rerun
+resumes), keeps the old bytes in `--backup`, scores against the JPEG inside,
+overwrites the SAME key, reads it back, and records the new size. `--dry-run`
+writes nothing. The key does not move, so this is an in-place overwrite: after
+the run, ship the index with `ARCHIVE_VERSION` bumped in
+`src/worker/lib/const.ts`, then Purge Everything once. Bumping before the run
+would let visitors re-cache the old bytes under the new key.
 
 The committed records are:
 

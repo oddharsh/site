@@ -46,6 +46,22 @@ export async function photoInputs(
     }
   }
 
+  // A HIF photo's archive is JPEG XL encoded from the HIF (hif-archive.ts), so
+  // the downloader leaves a .jxl and a decoded PNG and no JPEG. Remote ingest
+  // has nothing to re-ingest there: the original is already what ingest would
+  // make. Say so, rather than dropping the photo from the plan without a word.
+  if (remote) {
+    const jpegStems = new Set([...files].filter((file) => JPEG.has(extension(file))).map(stemOf));
+    for (const input of inputs) {
+      const dir = path.resolve(input);
+      const entries = (await stat(dir)).isDirectory() ? await readdir(dir) : [];
+      const direct = entries.filter((e) => extension(e) === ".jxl" && !jpegStems.has(stemOf(e)));
+      if (direct.length) {
+        throw new Error(`remote ingest cannot re-ingest ${direct.map(stemOf).join(", ")}: the archive is JPEG XL encoded from the HIF, with no JPEG behind it. Rerender tiles with reencode-thumbnails and metadata with refresh-metadata.`);
+      }
+    }
+  }
+
   const groups = new Map<string, string[]>();
   for (const file of [...files].sort()) {
     const stem = stemOf(file);
@@ -75,11 +91,15 @@ export async function photoInputs(
     }
     let full = original ? (remote ? path.basename(original) : `${stem}${extension(original)}`) : `${stem}.jpg`;
     // A remote JPEG XL original arrives as the .jxl plus the JPEG djxl rebuilt
-    // from it (download-remote-photos.sh). The JPEG feeds the encoders; the
-    // .jxl is the R2 object, so it names the key and its bytes give the size.
+    // from it (download-remote-photos.sh), which keeps the .jxl in <dir>.r2 so
+    // exif-sooc never scans it (an older layout kept it beside the JPEG). The
+    // JPEG feeds the encoders; the .jxl is the R2 object, so it names the key
+    // and its bytes give the size.
     if (remote && original) {
-      const jxl = path.join(path.dirname(original), `${stem}.jxl`);
-      if (await access(jxl).then(() => true, () => false)) { original = jxl; full = path.basename(jxl); }
+      const dir = path.dirname(original);
+      for (const jxl of [path.join(`${dir}.r2`, `${stem}.jxl`), path.join(dir, `${stem}.jxl`)]) {
+        if (await access(jxl).then(() => true, () => false)) { original = jxl; full = path.basename(jxl); break; }
+      }
     }
     plan.push({ stem, source, original, full });
   }
