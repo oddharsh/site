@@ -13,7 +13,7 @@
 // makes a scanner this small acceptable. Every value lunaPage interpolates goes
 // through lib/html.ts's escaping, so a `<script` or a `>` can only appear in the
 // markup a page author wrote. The build's scanner (tools/lib/csp-scan.ts) is a
-// real parser because it reads minified bytes, where minify-html unquotes
+// real parser because it reads minified bytes, where the HTML minifier unquotes
 // attributes and decodes entities; nothing here is minified. The contract test
 // holds the two scanners together on rendered pages and on adversarial markup.
 //

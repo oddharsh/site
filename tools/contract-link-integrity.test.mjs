@@ -58,7 +58,7 @@ test("the link resolver rejects a page that moved", async () => {
 // the node twin the day #497 landed — invisibly, because CI ran only bun.
 test("the ref scanner reads unquoted attributes, which is how the site ships", { skip: typeof HTMLRewriter === "undefined" && "needs bun's HTMLRewriter" }, async () => {
   const { internalRefs } = await import("./lib/link-integrity.ts");
-  // minify-html unquotes what it can, so the served bytes look like the first two.
+  // the HTML minifier unquotes what it can, so the served bytes look like the first two.
   // A scanner written against href="..." reported 33 refs where there were 2645.
   const refs = await internalRefs('<a href=/coffee>x</a><img src=/i/a.avif><a href="/garage/wire">y</a>'
     + "<a href='/terminal'>z</a><a href=/updates#now>w</a><a href=/rn?v=2>v</a>");

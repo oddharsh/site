@@ -143,7 +143,7 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     //
     // The range holds no character needing escaping, so the escape is a no-op here
     // by construction rather than by luck. It DOES hold a backtick (96), one of
-    // the characters that forces minify-html to keep the quotes: measured on the
+    // the characters that forces the HTML minifier to keep the quotes: measured on the
     // staged document, 7 of 12 tiles quoted and 5 unquoted, all 12 intact at 256
     // characters. Both forms are spec-legal and dataset reads them identically;
     // noted because an attribute whose quoting varies per value looks like a bug

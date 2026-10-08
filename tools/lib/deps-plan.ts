@@ -88,7 +88,7 @@ export const GROUPS: Group[] = [
   // oxc-minify 0.144.0 -> 0.145.0: 10 hashed /a/ assets re-minted for 22 B of
   // brotli, and a new hash costs returning visitors the shell dictionary tier
   // until dictionary-roll.yml catches up that night.
-  { name: "minifiers", patterns: ["oxc-minify", "lightningcss", "@minify-html/node"] },
+  { name: "minifiers", patterns: ["oxc-minify", "lightningcss"] },
 ];
 export const CATCH_ALL = "minor-and-patch";
 

@@ -40,7 +40,7 @@ test("extraction moves the payload byte-for-byte and leaves an empty reference",
 });
 
 test("the reader recognises the minifier's unquoted, reordered form", () => {
-  // minify-html sorts attributes and unquotes them; this is the shape the build
+  // the HTML minifier sorts attributes and unquotes them; this is the shape the build
   // actually serves, taken from a real staged page.
   const served = `<script data-src=/a/quiz-lwe-tee.caa9af0c.json id=luq-data type=application/json></script>`;
   assert.deepEqual(quizReference(served), { inline: "", src: "/a/quiz-lwe-tee.caa9af0c.json" });

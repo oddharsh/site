@@ -28,7 +28,7 @@ import {
 // members that are sentences. Every naive scanner this repo has written over
 // its own source has been caught the same way, by content that looks like
 // syntax: the CSP attribute scanner read a demo XSS payload as an event
-// handler, the link scanner read 33 of 2645 refs because minify-html unquotes
+// handler, the link scanner read 33 of 2645 refs because the HTML minifier unquotes
 // attributes.
 //
 // Bun's checker supplies diagnostics and file discovery, but exposes no AST

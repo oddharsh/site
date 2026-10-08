@@ -6,7 +6,7 @@
 // `escHtml` and `escAttr` are correct functions applied by discipline: 84 call
 // sites, and the failure mode of forgetting one is an injection rather than a
 // broken build. Three naive scanners have already been caught by this
-// repository's own minified output (CLAUDE.md's minify-html trap, the CSP
+// repository's own minified output (the unquoted-attribute trap, the CSP
 // attribute scanner, the link-integrity quote-awareness bug), which is the same
 // lesson from the reading side: HTML is not a string, and treating it as one is
 // where the bugs live.

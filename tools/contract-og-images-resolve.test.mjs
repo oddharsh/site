@@ -36,7 +36,7 @@ test("the card-image scanner reads what a crawler reads", { skip: noRewriter }, 
   const html = [
     '<meta property="og:image" content="https://aadhar.sh/og/a.jpg">',
     '<meta name="twitter:image" content="https://aadhar.sh/og/a.jpg?v=2">',
-    // minify-html unquotes attributes, so the served form must read too
+    // the HTML minifier unquotes attributes, so the served form must read too
     "<meta property=og:image:secure_url content=https://aadhar.sh/og/b.jpg>",
     '<meta property="og:image" content="/og/c.jpg">',
     // metadata about the image, not a URL
