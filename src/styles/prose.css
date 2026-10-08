@@ -22,3 +22,17 @@ body { font-family: var(--font-ui); font-size: var(--text-body); line-height: 1.
 :where(.prose) a { color: var(--blue-40); }
 :where(.prose) .callout { font-size: var(--text-ui); background: oklch(97% 0.025 255); border-left: 3px solid var(--blue-65); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
 :where(.prose) footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove var(--rule); font-size: var(--text-sm); color: var(--ink-quiet); }
+/* Long essays fold below the first screen: the build wraps their later blocks
+ * in <section class="fold"> (tools/lib/prose-fold.ts), and the browser skips
+ * laying out each one until it nears the screen. Containment stops margins
+ * collapsing across a fold's edge, so the gap above a fold's opening h2 would be
+ * the block above's bottom margin PLUS the h2's top margin, where the unfolded
+ * page had the larger of the two. So the block right before an h2 fold drops its
+ * bottom margin, and the h2 keeps its own top margin, whatever the page set it
+ * to (24px on some essays, 28px here). The gap is then the h2's margin, as it
+ * was wherever the block above had the smaller margin, which is every boundary
+ * on the site today. A fold opening on a .demo card needs nothing: a card has no
+ * top margin, so the gap was always the card's own bottom margin. */
+:where(.prose) > .fold { content-visibility: auto; }
+:where(.prose) > :not(.fold, script, style, template):has(+ .fold > h2:first-child),
+:where(.prose) > .fold:has(+ .fold > h2:first-child) > :nth-last-child(1 of :not(script, style, template)) { margin-bottom: 0; }

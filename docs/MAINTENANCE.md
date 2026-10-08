@@ -73,6 +73,29 @@ git ls-files --stage | awk '$1 == 120000 { print }'
 Before committing, `git status --short` should show only intentional source
 changes, and `git ls-files --others --exclude-standard` should be empty.
 
+### Where a build spends its time
+
+Every build ends with one `phases:` line naming its five slowest steps, and
+writes the whole table to `.build/phases.json`: wall and CPU milliseconds for
+each numbered step of `tools/build.ts`. CPU above wall means the zlib pool or
+the zstd workers ran in parallel; CPU well below wall means a subprocess or the
+disk. Read it before optimizing anything.
+
+Local builds keep their brotli q11 twins, zstd frames and minified inline
+blocks and pages in `node_modules/.cache/aadhar-build/` (`tools/lib/build-cache.ts`). Each entry is
+keyed on its input, the encoder's parameters and `Bun.revision`, and decoded
+against its input before use, so a cached build stages the same bytes as a cold
+one. Measured 2026-10-08: an unchanged rebuild drops from about 3.0 s to 1.6 s,
+and a one-word page edit to 1.7 s. CI and Workers Builds never enable it
+(`CI`, `WORKERS_CI`), and `wrangler.config.ts` builds with `BUILD_CACHE=0`, so a
+hand-run `deploy:direct` or `versions upload` builds cold too. To time a cold build locally, run
+`BUILD_CACHE=0 bun run build`; deleting the directory is always safe.
+
+The previous `.build/` is renamed into `node_modules/.cache/aadhar-build-trash/`
+and deleted by a background `rm -rf` while the next build runs, which took the
+220 ms the delete cost off the front of every build. A build killed mid-sweep
+leaves its trash there for the next build to take.
+
 ## Conflicts on machine-owned files
 
 Regenerate a derived file rather than hand-merging it: `bun install` for a
