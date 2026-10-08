@@ -40,6 +40,14 @@
 //
 // The index is rewritten after every success (beside, then renamed), so an
 // interrupted run keeps what it finished and a rerun picks up the rest.
+//
+// A run stops itself after STOP_AFTER failures in a row that say the network
+// or the credentials are gone rather than something about one photo. The
+// 2026-10-07 run lost DNS and then wrangler's OAuth refresh partway through
+// and logged 105 doomed attempts over three hours before exiting. Stopping
+// early loses nothing: photos already in flight finish, nothing new starts,
+// and a photo a failure caught between recording and deleting is a leftover
+// the rerun after `bun run wrangler:site login` deletes.
 // Uploading and deleting are workstation jobs: CI's Cloudflare token is
 // read-only.
 import { createHash } from "node:crypto";
@@ -71,9 +79,16 @@ const isJpeg = (key: string) => /\.jpe?g$/i.test(key);
 const jxlKey = (full: string) => `${full.replace(/\.[^.]+$/, "")}.jxl`;
 const url = (key: string) => `${ORIGIN}/images/full/${encodeURIComponent(key)}`;
 
+// wrangler ends its stderr with "Logs were written to ...", so the last line
+// says nothing about the failure; its ERROR line does.
+const reason = (stderr: string) => {
+  const lines = stderr.trim().split("\n").filter(Boolean);
+  return lines.find((l) => /ERROR/.test(l)) ?? lines.at(-1) ?? "";
+};
+
 function run(cmd: string[]): void {
   const r = Bun.spawnSync(cmd, { stdout: "pipe", stderr: "pipe" });
-  if (r.exitCode !== 0) throw new Error(`${path.basename(cmd[0])} exited ${r.exitCode}: ${r.stderr.toString().trim().split("\n").at(-1)}`);
+  if (r.exitCode !== 0) throw new Error(`${path.basename(cmd[0])} exited ${r.exitCode}: ${reason(r.stderr.toString())}`);
 }
 
 for (const bin of ["cjxl", "djxl"]) {
@@ -124,9 +139,26 @@ const record = (stem: string, row: IndexEntry) => {
 const remove = (key: string) => run([WRANGLER, "r2", "object", "delete", `${BUCKET}/${key}`, "--remote"]);
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "migrate-originals-"));
-let moved = 0, skipped = 0, failed = 0, deleted = 0, jpegBytes = 0, jxlBytes = 0;
+let moved = 0, skipped = 0, failed = 0, deleted = 0, started = 0, jpegBytes = 0, jxlBytes = 0;
+
+// Failures that name the connection or the login, as wrangler and fetch word
+// them, rather than one photo's bytes.
+const SYSTEMIC = /auth token has expired|not authenticated|Unable to resolve Cloudflare|fetch failed|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|socket connection was closed/i;
+const STOP_AFTER = 3;
+let streak = 0;
+// Typed by assertion: it is only ever set inside failure(), so flow analysis
+// would narrow it to null at every read below.
+let halted = null as string | null;
+const succeeded = () => { streak = 0; };
+const failure = (stem: string, message: string) => {
+  failed++;
+  console.error(`  ✗ ${stem}: ${message}`);
+  streak = SYSTEMIC.test(message) ? streak + 1 : 0;
+  if (streak >= STOP_AFTER && !halted) halted = message;
+};
 
 async function move(stem: string): Promise<void> {
+  started++;
   const entry = index[stem];
   const { full, size } = entry;
   const key = jxlKey(full);
@@ -137,8 +169,9 @@ async function move(stem: string): Promise<void> {
     // first run read all 258 as missing, the 114 #1216 uploaded included.
     const get = Bun.spawnSync([WRANGLER, "r2", "object", "get", `${BUCKET}/${key}`, `--file=${jxl}`, "--remote"], { stdout: "pipe", stderr: "pipe" });
     const missing = get.exitCode !== 0 && /The specified key does not exist/.test(get.stderr.toString());
-    if (get.exitCode !== 0 && !missing) throw new Error(`r2 get ${key}: ${get.stderr.toString().trim().split("\n")[0]}`);
+    if (get.exitCode !== 0 && !missing) throw new Error(`r2 get ${key}: ${reason(get.stderr.toString())}`);
     if (missing && !del) {
+      succeeded();
       skipped++;
       console.log(`  · ${stem}: no .jxl in R2 yet; --delete makes one`);
       return;
@@ -164,28 +197,35 @@ async function move(stem: string): Promise<void> {
     const jxlSize = fs.statSync(jxl).size;
     await record(stem, { ...entry, full: key, size: jxlSize, jpeg: full });
     if (del) { remove(full); deleted++; }
+    succeeded();
     moved++; jpegBytes += size; jxlBytes += jxlSize;
     console.log(`  ✓ ${full} -> ${key}  ${(jxlSize / 1e6).toFixed(2)} MB, ${((jxlSize / size - 1) * 100).toFixed(2)}%${made ? ", uploaded" : ""}${del ? ", JPEG deleted" : ""}`);
   } catch (e) {
-    failed++;
-    console.error(`  ✗ ${stem}: ${(e as Error).message}`);
+    failure(stem, (e as Error).message);
   } finally {
     for (const f of [jpg, jxl, rebuilt]) fs.rmSync(f, { force: true });
   }
 }
 
 for (const stem of leftover) {
-  try { remove(index[stem].jpeg as string); deleted++; console.log(`  ✓ deleted ${index[stem].jpeg}`); }
-  catch (e) { failed++; console.error(`  ✗ ${stem}: ${(e as Error).message}`); }
+  if (halted) break;
+  try { remove(index[stem].jpeg as string); succeeded(); deleted++; console.log(`  ✓ deleted ${index[stem].jpeg}`); }
+  catch (e) { failure(stem, (e as Error).message); }
 }
 
-const queue = [...pending];
+// Each worker checks for a halt before it takes the next photo, so the ones
+// already in flight finish and nothing new starts.
+const queue = halted ? [] : [...pending];
 await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () => {
-  for (let s = queue.shift(); s; s = queue.shift()) await move(s);
+  while (!halted && queue.length) await move(queue.shift() as string);
 }));
 await writing;
 fs.rmSync(work, { recursive: true, force: true });
 
 const saved = jpegBytes ? ((1 - jxlBytes / jpegBytes) * 100).toFixed(2) : "0";
 console.log(`moved ${moved}, skipped ${skipped}, failed ${failed}, JPEGs deleted ${deleted}; ${(jpegBytes / 1e9).toFixed(2)} GB of JPEG as ${(jxlBytes / 1e9).toFixed(2)} GB of JPEG XL (-${saved}%)`);
+if (halted) {
+  console.error(`stopped after ${STOP_AFTER} connection or login failures in a row, ${pending.length - started} photos not attempted: ${halted}`);
+  console.error("  a failed photo is untouched, or recorded with its JPEG still in R2; check the connection, run `bun run wrangler:site login`, and rerun to finish both");
+}
 process.exit(failed ? 1 : 0);
