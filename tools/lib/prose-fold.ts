@@ -25,18 +25,67 @@
 // needs no fix. An h2 starts a new fold every
 // time; a card starts one once the current fold holds FOLD_EVERY_CHARS of text.
 //
+// The /garage shelf is one 16,000-character list, so no fold could open inside
+// it. splitShelf cuts it first into runs of about SHELF_RUN_CHARS, and a run
+// that continues the list opens a fold the way a card does. Measured 2026-10-07
+// with the build-off's emulation, 25 runs a variant on a phone: /garage first
+// paint -14.8 ms against a 0.0 ms floor, CLS 0, the first screen pixel-identical.
+// Each run holds an even number of items, so the page's nth-child(even) striping
+// carries on across a cut. A run that continues below carries class "open", one
+// that continues from above "cont", and the page's own CSS hides the seam with
+// them (classes rather than sibling selectors, since a fold can sit between two
+// runs). shortcut: only ul.shelf splits; another long list would need its own
+// seam CSS, and an <ol> its start numbers.
+//
 // It runs on readable, authored HTML, so it parses with HTMLRewriter (lol-html)
 // rather than a regex: authored pages leave <p> unclosed in places, and a tag
 // counter would misplace a section boundary inside a paragraph.
 
 export const FOLD_AFTER_CHARS = 3000;
 export const FOLD_EVERY_CHARS = 4000;
+export const SHELF_RUN_CHARS = 1500;
+const SHELF = ".content.prose > ul.shelf";
 // The blocks a fold may open on, as direct children of `.content.prose`.
-const STARTS = ".content.prose > h2, .content.prose > section.demo";
+const STARTS = ".content.prose > h2, .content.prose > section.demo, .content.prose > ul.shelf.cont";
 // Phone-width height per character of text, from the fold sections measured on
 // /garage/horizon and /garage/compression (0.5 to 0.9 px, median about 0.6).
 // `auto` replaces it with the real height once a section has rendered.
 export const PX_PER_CHAR = 0.6;
+
+/** The shelf cut into runs of whole items, or the page unchanged when it has no long shelf. */
+function splitShelf(html: string): string {
+  if (html.includes("shelf cont")) return html; // already split
+  const items: number[] = [];
+  let lists = 0;
+  new HTMLRewriter()
+    .on(SHELF, { element() { lists++; } })
+    .on(`${SHELF} > li`, { element() { items.push(0); }, text(t) { items[items.length - 1] += t.text.replace(/\s+/g, " ").length; } }) // rendered text, as the measurement counted it
+    .transform(html);
+  if (lists !== 1) return html; // one shelf on the site today; two would need their items counted apart
+  const cuts: number[] = [];
+  for (let i = 0, run = 0, count = 0; i < items.length - 1; i++) {
+    run += items[i]; count++;
+    if (run >= SHELF_RUN_CHARS && count % 2 === 0) { cuts.push(i + 1); run = 0; count = 0; }
+  }
+  if (!cuts.length) return html;
+  let attrs = "", i = -1;
+  return new HTMLRewriter()
+    .on(SHELF, {
+      element(e) {
+        attrs = [...e.attributes].filter(([n]) => n !== "class").map(([n, v]) => ` ${n}="${v.replace(/"/g, "&quot;")}"`).join("");
+        e.setAttribute("class", `${e.getAttribute("class")} open`);
+      },
+    })
+    .on(`${SHELF} > li`, {
+      element(e) {
+        i++;
+        if (!cuts.includes(i)) return;
+        const open = i === cuts[cuts.length - 1] ? "" : " open";
+        e.before(`</ul><ul class="shelf${open} cont"${attrs}>`, { html: true });
+      },
+    })
+    .transform(html);
+}
 
 type Plan = { starts: number[]; sizes: number[] };
 
@@ -48,6 +97,9 @@ function plan(html: string): Plan | null {
     .on(".content.prose", { element() { sawProse = true; }, text(t) { text += t.text.length; } })
     // script, style and template text is in the count above; take it back out
     .on(".content.prose script, .content.prose style, .content.prose template", { text(t) { hidden += t.text.length; } })
+    // the shelf's indentation too: its source is far more whitespace than an essay's,
+    // so its raw length overstated each fold's height by about 40%
+    .on(SHELF, { text(t) { hidden += t.text.length - t.text.replace(/\s+/g, " ").length; } })
     .on(STARTS, { element(e) { at.push({ h2: e.tagName === "h2", chars: text - hidden }); } })
     .transform(html);
   if (!sawProse) return null;
@@ -66,6 +118,7 @@ function plan(html: string): Plan | null {
 /** The page with its long essay folded, or the page unchanged when it has nothing to fold. */
 export function foldLongProse(html: string): string {
   if (html.includes('class="fold"')) return html; // already folded: the twin writer re-dresses pages
+  html = splitShelf(html);
   const p = plan(html);
   if (!p) return html;
   const open = (k: number) =>
