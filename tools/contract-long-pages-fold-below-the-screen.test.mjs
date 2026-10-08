@@ -22,8 +22,15 @@ const needsParser = { skip: typeof HTMLRewriter === "undefined" && "needs bun's 
 const ROOT = new URL("../", import.meta.url);
 const pages = (dir) => readdirSync(new URL(dir, ROOT)).filter((f) => f.endsWith(".html")).map((f) => [`${dir}${f}`, readFileSync(new URL(`${dir}${f}`, ROOT), "utf8")]);
 const OPEN = /<section class="fold" style="contain-intrinsic-block-size:auto (\d+)px">/g;
-// visible text: tags, comments, scripts and styles out
-const visible = (html) => html.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style|template)\b[\s\S]*?<\/\1>/gi, "").replace(/<[^>]+>/g, "");
+// The page's visible text, read by the same parser the fold uses rather than
+// stripped with regexes: script, style and template elements go first, then
+// every remaining text node is collected (comments are not text nodes).
+const visible = (html) => {
+  const bare = new HTMLRewriter().on("script, style, template", { element(e) { e.remove(); } }).transform(html);
+  let text = "";
+  new HTMLRewriter().onDocument({ text(t) { text += t.text; } }).transform(bare);
+  return text;
+};
 
 test("folding a garage essay only adds section tags, never moves or changes a word", needsParser, () => {
   let folded = 0;
