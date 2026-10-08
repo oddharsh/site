@@ -17,7 +17,14 @@
 // A fresh process reads the staged tree as it stands now, whatever any earlier
 // step imported, and build.ts checks the result (tools/lib/twin-links.ts).
 //
-//   bun tools/bake-worker-pages.ts [.build]
+//   bun tools/bake-worker-pages.ts [.build] [pages-dir]
+//
+// It READS the staged tree under <.build>/public and WRITES its pages under
+// pages-dir, which defaults to that same public/. build.ts passes a private
+// directory so it can start this process early and run it beside steps 1h to
+// 4: none of those steps can then see a page before step 5b moves it into
+// public/, where it would land anyway. (Step 1g4 skips a page that is not
+// staged yet, /garage/dyno among them, so an early page would change bytes.)
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -25,6 +32,8 @@ import { pathToFileURL } from "node:url";
 import { siteConfig } from "./lib/site-config.ts";
 
 const OUT = process.argv[2] ?? ".build";
+const PAGES = process.argv[3] ?? `${OUT}/public`;
+await mkdir(`${PAGES}/garage`, { recursive: true });
 
 const root = resolve(OUT, "public");
 const assets = {
@@ -50,19 +59,19 @@ const writing = await import(pathToFileURL(resolve(OUT, "src/worker/writing.ts")
 
 const lensResponse = lens.renderLensShell();
 if (lensResponse.status !== 200) throw new Error(`static /lens renderer returned ${lensResponse.status}`);
-await writeFile(`${OUT}/public/lens.html`, await lensResponse.text());
+await writeFile(`${PAGES}/lens.html`, await lensResponse.text());
 
 const runResponse = run.renderRun();
 if (runResponse.status !== 200) throw new Error(`static /run renderer returned ${runResponse.status}`);
 const runHtml = await runResponse.text();
 if (!runHtml.includes('form action="/run"')) throw new Error("static /run renderer lost its no-JS form");
-await writeFile(`${OUT}/public/run.html`, runHtml);
+await writeFile(`${PAGES}/run.html`, runHtml);
 
 const searchResponse = search.renderSearchPage();
 if (searchResponse.status !== 200) throw new Error(`static /search renderer returned ${searchResponse.status}`);
 const searchHtml = await searchResponse.text();
 if (!searchHtml.includes('form method="get" action="/search"')) throw new Error("static /search renderer lost its blank search form");
-await writeFile(`${OUT}/public/search.html`, searchHtml);
+await writeFile(`${PAGES}/search.html`, searchHtml);
 // /security, since 2026-09-16. Three placeholders and the one script that
 // fills them from /security.json are what make a per-request page bakeable;
 // both are asserted, because a render that lost either would ship a page
@@ -75,7 +84,7 @@ for (const key of ["colo", "httpProtocol", "tlsVersion"]) {
   if (!securityHtml.includes(`data-sc="${key}"`)) throw new Error(`static /security renderer lost its ${key} placeholder`);
 }
 if (!securityHtml.includes('fetch("/security.json"')) throw new Error("static /security renderer lost the script that fills its connection values");
-await writeFile(`${OUT}/public/security.html`, securityHtml);
+await writeFile(`${PAGES}/security.html`, securityHtml);
 // /whoareyou, since 2026-09-25: the same move with an island (lib/island.ts)
 // in place of three placeholders, since its live part is rows rather than
 // scalars. The mount, its URL, the shared loader and the preload are asserted,
@@ -91,7 +100,7 @@ if (!whoareyouHtml.includes(`data-island="${valuesUrl}"`)) throw new Error("stat
 if (!whoareyouHtml.includes(`rel="preload" as="fetch" href="${valuesUrl}" crossorigin`)) throw new Error("static /whoareyou renderer lost the preload for its values island");
 if (!whoareyouHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /whoareyou renderer lost the island loader");
 if (/TLSv1\.[23]|\d{4}-\d\d-\d\dT\d\d:/.test(whoareyouHtml)) throw new Error("static /whoareyou bake carries a per-request value");
-await writeFile(`${OUT}/public/whoareyou.html`, whoareyouHtml);
+await writeFile(`${PAGES}/whoareyou.html`, whoareyouHtml);
 // /garage/dyno, the same day and the same shape: the chart and table are the
 // island. What must never reach the bake is a series point, since the build
 // cannot read perf-history and a baked chart would be one build's snapshot
@@ -105,7 +114,7 @@ if (!dynoHtml.includes(`data-island="${pullsUrl}"`)) throw new Error("static /ga
 if (!dynoHtml.includes(`rel="preload" as="fetch" href="${pullsUrl}" crossorigin`)) throw new Error("static /garage/dyno renderer lost the preload for its pulls island");
 if (!dynoHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /garage/dyno renderer lost the island loader");
 if (/<polyline|<td class="mono sha">[0-9a-f]{7}/.test(dynoHtml)) throw new Error("static /garage/dyno bake carries a series point");
-await writeFile(`${OUT}/public/garage/dyno.html`, dynoHtml);
+await writeFile(`${PAGES}/garage/dyno.html`, dynoHtml);
 // /ledger and /around, the same day and the same shape, so they take one loop
 // with the same assertions. Each names what its bake must never carry: the
 // build has no Analytics Engine token and no crawl snapshot, so a crawler row,
@@ -137,8 +146,8 @@ for (const page of [
   if (!body.includes('querySelectorAll("[data-island]")')) throw new Error(`static /${page.module} renderer lost the island loader`);
   if (page.live.test(body)) throw new Error(`static /${page.module} bake carries a live value`);
   // /lens/census stages below a directory nothing else writes to.
-  await mkdir(resolve(OUT, "public", page.out, ".."), { recursive: true });
-  await writeFile(`${OUT}/public/${page.out}`, body);
+  await mkdir(resolve(PAGES, page.out, ".."), { recursive: true });
+  await writeFile(`${PAGES}/${page.out}`, body);
 }
 // /serendipity's dashboard, the same day. Staged beside src/, so it imports
 // from .build/serendipity. The build has no D1, so an event card (always an
@@ -153,15 +162,15 @@ if (!serendipityHtml.includes(`data-island="${eventsUrl}"`)) throw new Error("st
 if (!serendipityHtml.includes(`rel="preload" as="fetch" href="${eventsUrl}" crossorigin`)) throw new Error("static /serendipity renderer lost the preload for its events island");
 if (!serendipityHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /serendipity renderer lost the island loader");
 if (/<a class="ev|\d+ events? in the pool|data-cover=/.test(serendipityHtml)) throw new Error("static /serendipity bake carries a pool value");
-await writeFile(`${OUT}/public/serendipity.html`, serendipityHtml);
+await writeFile(`${PAGES}/serendipity.html`, serendipityHtml);
 // /serendipity/mcp-info, the same day: a plain bake with no island, since the
 // page is a fixed tool list. Two renders must agree, or the build would bake
 // whichever it got.
 const mcpInfoHtml = await serendipity.renderMcpInfoPage().text();
 if (mcpInfoHtml !== await serendipity.renderMcpInfoPage().text()) throw new Error("static /serendipity/mcp-info renderer is not deterministic");
 if (!mcpInfoHtml.includes("list_events")) throw new Error("static /serendipity/mcp-info renderer lost its tool list");
-await mkdir(`${OUT}/public/serendipity`, { recursive: true });
-await writeFile(`${OUT}/public/serendipity/mcp-info.html`, mcpInfoHtml);
+await mkdir(`${PAGES}/serendipity`, { recursive: true });
+await writeFile(`${PAGES}/serendipity/mcp-info.html`, mcpInfoHtml);
 // /coffee, 2026-09-30. cal renders its own templates, staged beside src/ like
 // serendipity, so it imports from .build/cal. Its env is the Worker's own vars
 // from cloudflare.config.ts (HOST_*, MAX_LOOKAHEAD_DAYS), and BASE_PATH is the
@@ -191,20 +200,20 @@ await writeFile(`${OUT}/public/serendipity/mcp-info.html`, mcpInfoHtml);
     ? coffeeHtml.replace(/<\/head>/i, `<link rel="alternate" type="text/markdown" title="markdown source" href="${coffeeTwin}">\n</head>`)
     : coffeeHtml;
   if (coffeeTwin && coffeeOut === coffeeHtml) throw new Error("static /coffee: no </head> to anchor its Markdown link to");
-  await writeFile(`${OUT}/public/coffee.html`, coffeeOut);
+  await writeFile(`${PAGES}/coffee.html`, coffeeOut);
   console.log(`static render: /coffee shell (${coffeeHtml.length} bytes) with its slots at ${slotsUrl}`);
 }
 
 const env = { ASSETS: assets };
 const indexResponse = await writing.renderWritingIndex(env);
 if (indexResponse.status !== 200) throw new Error(`static /writing renderer returned ${indexResponse.status}`);
-await mkdir(`${OUT}/public/writing`, { recursive: true });
-await writeFile(`${OUT}/public/writing/index.html`, await indexResponse.text());
+await mkdir(`${PAGES}/writing`, { recursive: true });
+await writeFile(`${PAGES}/writing/index.html`, await indexResponse.text());
 
 const posts = JSON.parse(await readFile(`${OUT}/public/writing/posts.json`, "utf8"));
 for (const post of posts) {
   const response = await writing.renderWritingPost(post.slug, env);
   if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
-  await writeFile(`${OUT}/public/writing/${post.slug}.html`, await response.text());
+  await writeFile(`${PAGES}/writing/${post.slug}.html`, await response.text());
 }
 console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /reading + /coffee + /writing index + ${posts.length} notes staged from canonical Worker renderers, in a fresh process`);
