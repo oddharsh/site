@@ -1032,9 +1032,10 @@ window.__horizonCaps = (function () {
       so Safari answers &quot;will Safari ever do this&quot; instead of me inferring it.
     </p>
     <p class="note">
-      <strong>Last swept 2026-08-10</strong>, against Chrome&nbsp;151&ndash;153, Safari&nbsp;26.6
-      plus <a class="term" data-t="safari-technology-preview" href="https://developer.apple.com/safari/technology-preview/" title="Apple's early-release Safari for developers, updated every few weeks with web features that haven't reached regular Safari yet." rel="external">Technology&nbsp;Preview</a>&nbsp;249, and Firefox&nbsp;153&ndash;154; two cards moved on
-      2026-09-17 from a canary reading rather than a sweep (below). A page like this rots in two directions
+      <strong>Last swept 2026-10-08</strong>, against Chrome&nbsp;155 (156 in beta), Safari&nbsp;27
+      plus <a class="term" data-t="safari-technology-preview" href="https://developer.apple.com/safari/technology-preview/" title="Apple's early-release Safari for developers, updated every few weeks with web features that haven't reached regular Safari yet." rel="external">Technology&nbsp;Preview</a>, and Firefox&nbsp;157 (158 in beta), with every
+      card&apos;s badge checked against MDN browser-compat-data&nbsp;8.1.5. The sweep before
+      it was 2026-08-10, and three cards moved between the two from a canary reading (below). A page like this rots in two directions
       and only one of them is obvious: features arrive, and features I already wrote up
       quietly change status underneath me. The 07-26 sweep moved four cards
       (<code>InstallEvent.addRoutes()</code>, <a class="term" data-t="compression-dictionaries" href="https://www.rfc-editor.org/rfc/rfc9842.html" title="A scheme where the browser keeps an earlier copy of a file and the server sends only a compressed difference against it." rel="external">compression dictionaries</a>,
@@ -1051,6 +1052,22 @@ window.__horizonCaps = (function () {
       moved three cards: Safari&nbsp;27 and Firefox&nbsp;157 are stable now, so
       <code>appearance: base-select</code>, <code>:heading</code> and
       <code>@supports at-rule()</code> lost a &quot;beta&quot; or gained an engine.
+    </p>
+    <p class="note">
+      <strong>The 10-08 sweep</strong> then read every card&apos;s badge against MDN&apos;s
+      compat data instead of only the cards I expected to move, and 25 badges changed.
+      Seven cards reached a second stable engine: JPEG&nbsp;XL and <code>margin-trim</code>
+      in Chrome&nbsp;155, typed <code>attr()</code> and <code>font-width</code> in
+      Firefox&nbsp;155, multi-colour <code>color-mix()</code> in Safari&nbsp;27, text module
+      imports in Firefox&nbsp;153 and Chrome&nbsp;155, and Document Picture-in-Picture in
+      Firefox&nbsp;151. Five were never right, and they are the useful half. Three were
+      wrong when written: Firefox&nbsp;146 took <code>-webkit-fill-available</code> rather
+      than <code>stretch</code>, Firefox shipped <code>shape()</code> in 148 rather than 136,
+      and text imports shipped unflagged rather than behind a pref. Two were forecasts
+      that didn&apos;t land: Firefox&nbsp;157 shipped without JPEG&nbsp;XL, and Chrome moved
+      the media pseudo-classes from 152 to 158. One feature went backwards, which no
+      release post frames as news: Firefox&nbsp;155 pulled most of its
+      <code>::-webkit-scrollbar</code> subset.
     </p>
     <p class="note" id="install-note">
       The 08-10 pass found a <em>fourth</em> direction, and unlike the other three it
@@ -1339,14 +1356,17 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="popover-hint">
       <h2>
         <span>popover=<span class="mono">hint</span></span>
-        <span class="stat cross">Chrome 133 &middot; FF 149 &middot; Safari TP 249</span>
+        <span class="stat cross">Chrome 151 &middot; FF 153 &middot; Safari TP 249</span>
       </h2>
       <p class="note">
         A third popover <em>type</em>, sitting between <code>auto</code> and
         <code>manual</code>, purpose-built for tooltips. WebKit had said nothing
         about it for two years; Technology&nbsp;Preview&nbsp;249 added it, which is
         the whole difference between &quot;a third engine may never come&quot; and
-        &quot;this is one Safari release from Baseline&quot;. A <code>hint</code>
+        &quot;this is one Safari release from Baseline&quot;. Safari&nbsp;27 then shipped
+        without it, so it is still Technology Preview only. The other two versions
+        moved as well: Chrome&nbsp;133 and Firefox&nbsp;149 implemented an older draft,
+        and the current behaviour arrived in Chrome&nbsp;151 and Firefox&nbsp;153. A <code>hint</code>
         popover is light-dismissed (click outside, <kbd>Esc</kbd>) <strong>and</strong>
         won&apos;t force-close an open <code>auto</code> popover the way another
         <code>auto</code> would, so a hover-tip can float over a menu
@@ -1583,7 +1603,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" id="corner-shape" data-cap="corner-shape">
       <h2>
         <span>corner-shape <span class="mono">+ superellipse()</span></span>
-        <span class="stat chrome">Chrome 139 &middot; Safari positive &middot; FF no</span>
+        <span class="stat chrome">Chrome 139 &middot; Safari TP &middot; FF Nightly</span>
       </h2>
       <p class="note">
         A second axis for <code>border-radius</code>. The radius sets <em>where</em>
@@ -2005,15 +2025,14 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
     <section class="demo" id="jpeg-xl" data-cap="jpeg-xl">
       <h2>
         <span>JPEG XL <span class="mono">image/jxl</span></span>
-        <span class="stat trial">Safari &middot; Chrome 155 beta &middot; Firefox 157 beta</span>
+        <span class="stat cross">Safari 17 &middot; Chrome 155 &middot; Firefox Nightly</span>
       </h2>
       <p class="note">
         The format the photo pipeline actually wants: smaller than AVIF at the
         <em>high</em> quality end (where this site lives), genuinely progressive
         (a low-res preview paints from the first few KB, then sharpens), and it
         can losslessly <em>re-wrap</em> an existing JPEG ~20% smaller with the
-        original bytes recoverable. No live decode below: Chrome stable (153,
-        my daily driver) still won&apos;t decode JXL without a flag, and there&apos;s no
+        original bytes recoverable. No live decode below: there&apos;s no
         <code>.jxl</code> asset on the site, so this is an honest mock plus the wiring it&apos;d take.
         The probe table on this page cannot carry the decode check either, because
         an image decode is asynchronous and every probe here is a synchronous
@@ -2039,7 +2058,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
           <h3>JPEG XL</h3>
           <div class="jxl-bar"><i style="width:62%"></i></div>
           <p class="jxl-kb">smaller still at the high-q end + progressive</p>
-          <p class="jxl-ships">Saf 16.4+ &middot; Cr 155 &middot; FF 157</p>
+          <p class="jxl-ships">Saf 17+ &middot; Cr 155+ &middot; FF Nightly</p>
         </div>
       </div>
       <p class="note" style="font-size:8.5pt">
@@ -2056,7 +2075,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
       <details name="sketch">
         <summary class="note" style="cursor:pointer">how it&apos;d slot into the &lt;picture&gt; ladder (a 4th, top-priority source)</summary>
 <pre>&lt;!-- add jxl ABOVE avif; browser picks the first type it claims to support.
-     Safari takes jxl, Chrome/FF skip to avif, ancient takes the jpg src. --&gt;
+     Safari and Chrome take jxl, Firefox skips to avif, ancient takes the jpg src. --&gt;
 &lt;picture&gt;
   &lt;source type="image/jxl"  srcset="/images/&lt;stem&gt;.jxl?v=11"&gt;
   &lt;source type="image/avif" srcset="/images/&lt;stem&gt;.avif?v=11"&gt;
@@ -2075,33 +2094,33 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
         <code>add-photos.sh</code> after the jpegli encode and another stem
         format in <code>public/i/</code> (120 stems &times; <em>3</em>
         formats). But the <code>&lt;picture&gt;</code> type-fallback decode trap
-        from the CLAUDE.md gotcha applies double here: the format split is
-        wildly uneven today and stops being so in three weeks. Only Safari decodes
-        it by default in a stable build. Chrome dropped it in 2023, reintroduced a
-        decoder (the Rust <code>jxl-rs</code>) behind
-        <code>#enable-jxl-image-format</code> in Chrome&nbsp;145, and turns it on in
-        Chrome&nbsp;155: chromestatus names milestone&nbsp;155 for desktop and Android,
-        Beta&nbsp;155 has been out since 09-16, and stable lands 2026-10-06. Measured
-        rather than read off the milestone: on 2026-09-17 the nightly canary fed the
-        same 190-byte <code>data:image/jxl</code> to Chromium&nbsp;153 and Chrome
-        Beta&nbsp;155, and only the Beta decoded it, with a PNG control decoding in
-        both. Firefox&nbsp;152 shipped the same <code>jxl-rs</code> decoder behind a
-        Labs flag and Firefox&nbsp;157 flips it on, 2026-09-29. So by early October
-        every engine decodes it unflagged. <strong>Still parked, for three more
-        weeks</strong>: a Beta reading is a claim about a build that can still be
-        pulled. The day both stables land it becomes a graduation candidate,
-        the first card here to get there on a canary reading, given the SOOC originals
-        already live in R2 to re-encode from.
+        from the CLAUDE.md gotcha applies double here, because the format split is
+        uneven. Safari has decoded it by default since Safari&nbsp;17. Chrome dropped it
+        in 2023, reintroduced a decoder (the Rust <code>jxl-rs</code>) behind
+        <code>#enable-jxl-image-format</code> in Chrome&nbsp;145, and turned it on in
+        Chrome&nbsp;155, stable since 2026-10-06. That flip was measured before it
+        shipped: on 2026-09-17 the nightly canary fed the same 190-byte
+        <code>data:image/jxl</code> to Chromium&nbsp;153 and Chrome Beta&nbsp;155, and only
+        the Beta decoded it, with a PNG control decoding in both. Firefox is the half
+        this card got wrong. Firefox&nbsp;152 shipped the same <code>jxl-rs</code>
+        decoder behind a Labs flag, Nightly has had it on by default since 153, and
+        this card said Firefox&nbsp;157 would flip it on for everyone on 2026-09-29.
+        It didn&apos;t: the Firefox&nbsp;157 release notes never mention JPEG&nbsp;XL, and
+        MDN&apos;s compat data (8.1.5, 2026-10-08) still lists Firefox as Nightly only.
+        So it ships in two stable engines, which clears this page&apos;s bar, and it is
+        the first graduation candidate here to reach that point on a canary reading.
+        The SOOC originals already live in R2 to re-encode from, and Firefox visitors
+        would keep getting the AVIF source.
       </p>
 
       <p class="unsupported">
         Nothing to decode live regardless of your browser, this card is a
         static mock by design. To actually <em>view</em> a <code>.jxl</code>
-        today you need Safari 16.4+, Chrome&nbsp;155 Beta, or Firefox&nbsp;157 Beta. In
+        today you need Safari&nbsp;17+, Chrome&nbsp;155+, or Firefox Nightly. In
         Chrome&nbsp;145&ndash;154 enable
-        <code>chrome://flags#enable-jxl-image-format</code>; in Firefox&nbsp;153&ndash;156
-        set the <code>image.jxl.enabled</code> pref, which Nightly has carried on by
-        default since 153.
+        <code>chrome://flags#enable-jxl-image-format</code>; in Firefox stable (157
+        included) set the <code>image.jxl.enabled</code> pref, which Nightly has carried
+        on by default since 153.
       </p>
     </section>
 
@@ -2830,12 +2849,13 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="doc-pip">
       <h2>
         <span>Document Picture-in-Picture</span>
-        <span class="stat chrome">Chrome 116 &middot; others no</span>
+        <span class="stat cross">Chrome 116 &middot; FF 151 desktop &middot; Safari no</span>
       </h2>
       <p class="note">
         An <em>always-on-top window you fill with arbitrary HTML</em>, going beyond a
-        video frame. Click below to pop this box into a floating mini-window
-        (close it to bring it home):
+        video frame. Firefox&nbsp;151 shipped it on desktop, which makes it two engines;
+        Safari has no implementation. Click below to pop this box into a floating
+        mini-window (close it to bring it home):
       </p>
       <p><button class="xp-button" id="pip-btn">Pop out &#8599;</button></p>
       <div id="pip-content" class="pip-content">A real DOM node living in a Picture-in-Picture window. Peak resto-mod desktop-OS energy.</div>
@@ -2919,7 +2939,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="patching-card">
       <h2>
         <span>Document patching <span class="mono">/ declarative partial updates</span></span>
-        <span class="stat early">Chrome 150&ndash;153 proposed &middot; flag</span>
+        <span class="stat chrome">Chrome 150 streaming &middot; methods flag</span>
       </h2>
       <p class="note">
         Out-of-order HTML streaming and in-place DOM patching as a browser primitive
@@ -2927,7 +2947,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <code>&lt;?marker&gt;</code> / <code>&lt;?start&gt;</code> / <code>&lt;?end&gt;</code>
         processing instructions stream HTML into named targets with no script
         (Chrome&nbsp;150, and the processing-instruction parsing underneath it has
-        positive positions from both Mozilla and WebKit). A separate explainer in the
+        positive positions from both Mozilla and WebKit). That half is on by default:
+        on 2026-10-08, Chromium&nbsp;152 with no flags parsed <code>&lt;?marker?&gt;</code>
+        as a processing-instruction node where older parsers make a bogus comment,
+        and a <code>&lt;template for&gt;</code> landed its content at the marker. A separate explainer in the
         same repo revamps imperative insertion: positional methods that take HTML
         (<code>before</code> / <code>after</code> / <code>append</code> /
         <code>prepend</code> / <code>replaceWith</code>, retiring
@@ -2966,13 +2989,14 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo">
       <h2>
         <span>WebMCP <span class="mono">/ page tools for agents</span></span>
-        <span class="stat trial">Origin trial Ch149</span>
+        <span class="stat trial">Origin trial Ch149-156</span>
       </h2>
       <p class="note">
         A proposed open standard that lets a page expose structured tools (JavaScript
         functions and HTML forms) to browser-resident agents, so an in-browser agent
         calls a site&apos;s own actions instead of scraping the DOM. The origin trial
-        began in Chrome&nbsp;149. Early and Chrome-led, no other engine yet.
+        began in Chrome&nbsp;149 and chromestatus lists it running through 156. Early
+        and Chrome-led, no other engine yet.
       </p>
       <p class="replaces">
         On the site: a machine-facing sibling to the <a href="/bot">AadharshBot</a>
@@ -3087,18 +3111,18 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="css-random" data-cap="css-random">
       <h2>
         <span>CSS <span class="mono">random()</span></span>
-        <span class="stat trial">Safari 26.2 &middot; Chrome 156 beta &middot; FF no</span>
+        <span class="stat trial">Safari 26.2 &middot; Chrome 156 beta &middot; FF Nightly</span>
       </h2>
       <p class="note">
         A random value straight in CSS: <code>random(25%, 100%)</code> resolves to a
         number in that range at computed-value time, with an element-scoped keyword so
         each element can draw its own. Shipped in <strong>Safari&nbsp;26.2</strong>,
-        and nothing in Firefox. Chrome kept it behind the experimental flag from about
+        and only Nightly in Firefox. Chrome kept it behind the experimental flag from about
         148 until chromestatus named milestone&nbsp;156 (stable 2026-10-20), and the
         nightly browser canary measured the flip on 2026-09-30: this card&apos;s
         <code>CSS.supports("width: random(1px, 2px)")</code> probe reads false in
-        Chromium&nbsp;153 and true in Chrome Beta&nbsp;156. So it is two engines in
-        three weeks, and a Safari-first CSS Values&nbsp;5 feature until then.
+        Chromium&nbsp;153 and true in Chrome Beta&nbsp;156. So it is two engines on
+        2026-10-20, and a Safari-first CSS Values&nbsp;5 feature until then.
       </p>
       <p class="replaces">
         On the site: pure decoration, filed next to WebGPU under &quot;because we can.&quot;
@@ -3118,7 +3142,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="sizes-auto">
       <h2>
         <span>sizes=&quot;auto&quot; <span class="mono">on lazy images</span></span>
-        <span class="stat cross">Chrome 126 &middot; FF 150 &middot; Safari 27 beta</span>
+        <span class="stat cross">Chrome 126 &middot; FF 150 &middot; Safari 27</span>
       </h2>
       <p class="note">
         A responsive-images <code>sizes</code> attribute is normally a promise you
@@ -3149,7 +3173,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
         reflected string, so assigning <code>"auto"</code> and reading it back returns
         <code>"auto"</code> everywhere; an honest test has to lay out a lazy image and wait
         on <code>currentSrc</code>, which is more machinery than a chip deserves. Chrome
-        126+ and Firefox 150+ have it; Safari 27 beta adds it.
+        126+ and Firefox 150+ have it, and Safari 27 ships it with one known bug: an SVG
+        image that sets both <code>sizes="auto"</code> and <code>object-fit</code> renders
+        distorted (<a href="https://webkit.org/b/324661" rel="external">webkit.org/b/324661</a>).
+        The photo tiers are raster, so that bug misses this site.
       </p>
     </section>
 
@@ -3235,7 +3262,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="stretch-sizing">
       <h2>
         <span>width: stretch <span class="mono">sizing keyword</span></span>
-        <span class="stat cross">Chrome 138 &middot; Safari 27 &middot; FF 146</span>
+        <span class="stat cross">Chrome 138 &middot; Safari 27 &middot; FF alias only</span>
       </h2>
       <p class="note">
         <code>width: 100%</code> resolves against the containing block and then adds your
@@ -3244,15 +3271,19 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <em>margin</em> box, so the margins come out of the width instead of adding to it.
         It standardises two old prefixes that did the same job:
         <code>-webkit-fill-available</code> and <code>-moz-available</code>. Chromium
-        shipped it first, Safari&nbsp;27 beta unprefixes it, and Firefox&nbsp;146 did too, so
-        <code>-moz-available</code> is now the legacy spelling rather than the only one.
+        shipped it first and Safari&nbsp;27 unprefixes it. Firefox&nbsp;146 took a different
+        step: it accepts <code>-webkit-fill-available</code> as an alias, and its release
+        notes say the unprefixed <code>stretch</code> isn&apos;t supported yet. This card
+        read Firefox&nbsp;146 as unprefixing until the 2026-10-08 sweep checked MDN&apos;s
+        compat data.
       </p>
       <p class="replaces">
         On the site: the <code>calc(100% - 2 * var(--pad))</code> pattern shows up wherever
         a pane has to fill its window and keep its inset, and every one of those is a
-        subtraction the browser could do. All three engines take the keyword now, which
-        collapses that family of arithmetic and retires the &quot;once Firefox
-        unprefixes&quot; caveat this card carried for months.
+        subtraction the browser could do. Two engines take the keyword, and all three take
+        <code>-webkit-fill-available</code>, so a two-line declaration
+        (<code>width: -webkit-fill-available; width: stretch;</code>) would cover every
+        engine today, and the first line can go the day Firefox unprefixes.
       </p>
       <p class="unsupported">Your browser doesn&apos;t support the unprefixed <code>stretch</code> keyword.</p>
     </section>
@@ -3261,28 +3292,32 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="wk-scrollbar">
       <h2>
         <span>::-webkit-scrollbar <span class="mono">the compat surrender</span></span>
-        <span class="stat trial">Chromium &middot; Safari &middot; FF 153 subset</span>
+        <span class="stat trial">Chromium &middot; Safari &middot; FF 155 site list</span>
       </h2>
       <p class="note">
         Firefox&nbsp;153 began implementing a limited subset of
-        <code>::-webkit-scrollbar</code>. Not because it is a good API (it is a vendor
+        <code>::-webkit-scrollbar</code>, and Firefox&nbsp;155 pulled most of it back. Not because it is a good API (it is a vendor
         prefix from 2009 that never became a standard), but because enough of the web
         styles scrollbars through it that ignoring it was the bigger compat problem.
         The subset is deliberately narrow: a rule with a non-zero
         <code>width</code>/<code>height</code> disables overlay scrollbars, and
-        <code>display: none</code> behaves like <code>scrollbar-width: none</code>. The
-        standard <code>scrollbar-width</code> and <code>scrollbar-color</code> remain
-        the actual answer.
+        <code>display: none</code> behaves like <code>scrollbar-width: none</code>. It
+        still broke sites, because they styled the other <code>-webkit-scrollbar-*</code>
+        pseudo-elements Firefox never took. So Firefox&nbsp;155 limits the subset to a
+        short list of domains in the <code>layout.css.fake-webkit-scrollbar.enabled-domains</code>
+        pref, and everywhere else the selector is unknown again. The standard
+        <code>scrollbar-width</code> and <code>scrollbar-color</code> remain the actual answer.
       </p>
       <p class="replaces">
         On the site: <code>nav.js</code> paints a custom XP scrollbar through the
         <code>::-webkit-scrollbar</code> family, since a Luna scrollbar needs a raised
         3D thumb and stepper arrows that <code>scrollbar-color</code> cannot express.
         Firefox visitors get the standards-track properties and a plain scrollbar. This
-        change does <em>not</em> fix that, and the card is here mostly as a warning about
-        its own chip: <code>@supports</code> now answers yes in Firefox for a selector
-        whose styling still mostly does not land, so feature-detecting it tells you the
-        selector parsed and nothing about whether the thumb rendered.
+        change never fixed that, and the card stays as a warning about its own chip. In
+        Firefox&nbsp;153 and 154, <code>@supports</code> answered yes for a selector whose
+        styling mostly did not land, so feature-detecting it told you the selector
+        parsed and nothing about whether the thumb rendered. Firefox&nbsp;155 answers no
+        again outside its domain list, so the chip reads no in current Firefox.
       </p>
       <p class="unsupported">Your browser doesn&apos;t recognise the <code>::-webkit-scrollbar</code> selector at all.</p>
     </section>
@@ -3291,7 +3326,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="reference-target" data-cap="reference-target">
       <h2>
         <span>Reference Target <span class="mono">cross-root ARIA</span></span>
-        <span class="stat chrome">Chrome 151 &middot; Safari 26 flag &middot; FF 144 flag</span>
+        <span class="stat chrome">Chrome 152 &middot; Safari 26 flag &middot; FF 144 flag</span>
       </h2>
       <p class="note">
         The oldest real hole in shadow DOM: an ID reference cannot cross the shadow
@@ -3307,7 +3342,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
       <p class="note">
         Unusually for this page, <strong>all three engines have it behind a
-        flag</strong>: Chromium since&nbsp;133 and default-on in&nbsp;151, WebKit
+        flag</strong>: Chromium since&nbsp;133 and default-on in&nbsp;152, WebKit
         since Safari&nbsp;26, Gecko since Firefox&nbsp;144. That is a better sign
         than the &quot;Safari/FF no&quot; this card carried before the 08-10 sweep,
         because a flag is an implementation somebody wrote and an absence is not.
@@ -3328,7 +3363,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="scoped-registries">
       <h2>
         <span>Scoped custom element registries</span>
-        <span class="stat cross">Chrome 146 &middot; Safari 26 &middot; FF no</span>
+        <span class="stat cross">Chrome 146 &middot; Safari 26 &middot; FF Nightly</span>
       </h2>
       <p class="note">
         <code>customElements.define()</code> writes into one global map keyed by tag name,
@@ -3358,7 +3393,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="wasm-jspi">
       <h2>
         <span>WebAssembly JSPI <span class="mono">JS Promise Integration</span></span>
-        <span class="stat cross">Chrome &middot; FF 153 &middot; Safari 27 beta</span>
+        <span class="stat cross">Chrome 137 &middot; FF 153 &middot; Safari 27</span>
       </h2>
       <p class="note">
         Wasm code is synchronous and the web is not, so any Wasm module that wants to
@@ -3367,9 +3402,9 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <em>suspend</em> on a JavaScript Promise and resume when it settles:
         <code>WebAssembly.Suspending</code> wraps the async import,
         <code>WebAssembly.promising</code> wraps the export, and the C code in between
-        keeps its blocking call. Firefox&nbsp;153 turned it on by default and
-        Safari&nbsp;27 beta implements it, so this went cross-engine in about six weeks
-        and is an Interop&nbsp;2026 focus area.
+        keeps its blocking call. Chrome&nbsp;137 shipped it, Firefox&nbsp;153 turned it on
+        by default on 2026-07-21, and Safari&nbsp;27 shipped it on 2026-09-14, so it went
+        from one engine to all three in eight weeks. It is an Interop&nbsp;2026 focus area.
       </p>
       <p class="replaces">
         On the site: no Wasm ships here, so this changes nothing directly. It matters
@@ -3387,7 +3422,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="import-text">
       <h2>
         <span>Text module imports <span class="mono">with { type: &quot;text&quot; }</span></span>
-        <span class="stat trial">TC39 stage 3 &middot; Chrome &middot; FF 153</span>
+        <span class="stat cross">TC39 stage 3 &middot; Chrome 155 &middot; FF 153</span>
       </h2>
       <p class="note">
         Import attributes gave JSON modules a safe syntax
@@ -3396,8 +3431,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
         you the file as a string, with the type asserted at load time so a server that
         answers with something else fails the import instead of executing it. That
         assertion is the entire security argument for import attributes, and it is why
-        this is a language feature rather than a bundler trick. Firefox&nbsp;153 has it
-        behind <code>javascript.options.experimental.import_text</code>.
+        this is a language feature rather than a bundler trick. Firefox&nbsp;153 shipped
+        it unflagged and Chrome&nbsp;155 followed, so it is two engines now. (This card
+        said Firefox kept it behind a pref until the 2026-10-08 sweep read MDN&apos;s
+        compat data and the 153 release notes.)
       </p>
       <p class="replaces">
         On the site: <code>/writing</code> is plain <code>.txt</code> files plus a
@@ -3406,8 +3443,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         text module it would be an import the bundler can see, which matters because the
         worker is bundled at deploy: a post would become a build-time dependency instead
         of a runtime read, and a missing file would fail the deploy rather than the
-        request. Tempting. Also a real coupling change, so it waits until it is not
-        flag-gated.
+        request. Tempting. Also a real coupling change, and with two engines
+        unflagged, the coupling is the only thing it still waits on.
       </p>
     </section>
 
@@ -3471,7 +3508,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="css-shape">
       <h2>
         <span>shape() <span class="mono">responsive clip-path</span></span>
-        <span class="stat cross">Chrome 119 &middot; Safari 18.2 &middot; Firefox 136</span>
+        <span class="stat cross">Chrome 135 &middot; Safari 18.4 &middot; Firefox 148</span>
       </h2>
       <p class="note">
         A <code>path()</code> you can write with percentages and any length unit, so the clip
@@ -3555,13 +3592,13 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="sw-static-routing">
       <h2>
         <span>SW static routing <span class="mono">InstallEvent.addRoutes()</span></span>
-        <span class="stat cross">Chrome &middot; Safari 27 beta &middot; Gecko positive</span>
+        <span class="stat cross">Chrome 123 &middot; Safari 27 &middot; Gecko positive</span>
       </h2>
       <p class="note">
         Declare routing rules at install time so the browser can <em>skip booting the service
         worker entirely</em> for paths that always go the same place (straight to network or
-        straight to cache), shaving the SW startup cost off those requests. Safari&nbsp;27 beta
-        implements it, which moves this from Chrome-only to two engines.
+        straight to cache), shaving the SW startup cost off those requests. Safari&nbsp;27
+        ships it, which moves this from Chrome-only to two engines.
       </p>
       <p class="replaces">
         On the site: <strong>it used to be, and the feature outlived the thing it optimised.</strong>
@@ -3753,14 +3790,16 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="pq-webcrypto">
       <h2>
         <span>Post-quantum WebCrypto <span class="mono">ML-KEM &middot; ML-DSA &middot; X-Wing</span></span>
-        <span class="stat trial">Origin trial Ch151 &middot; not shipped</span>
+        <span class="stat chrome">Chrome 155 &middot; FF Nightly &middot; Safari no</span>
       </h2>
       <p class="note">
         The Web Cryptography API is getting the NIST post-quantum primitives natively:
         <strong>ML-KEM</strong> (key encapsulation, formerly Kyber),
         <strong>ML-DSA</strong> (signatures, formerly Dilithium), the
         <strong>X-Wing</strong> hybrid key exchange, and ChaCha20-Poly1305 alongside them.
-        Origin trial in Chrome&nbsp;151. The two halves carry very different urgency, and
+        Chrome ran an origin trial in 151&ndash;154 and ships it in Chrome&nbsp;155, stable
+        since 2026-10-06; Firefox Nightly has the new encapsulate and decapsulate
+        methods. The two halves carry very different urgency, and
         conflating them is the usual mistake. Key exchange is urgent because of
         harvest-now-decrypt-later: traffic recorded today is decryptable the day a
         cryptographically relevant quantum computer exists, so hybrid key agreement had to
@@ -3867,7 +3906,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="container-timing">
       <h2>
         <span>Container Timing <span class="mono">containertiming attribute</span></span>
-        <span class="stat trial">Chrome flag &middot; WICG</span>
+        <span class="stat trial">Chrome flag &middot; FF 156 flag &middot; WICG</span>
       </h2>
       <p class="note">
         Largest Contentful Paint tells you when the single biggest element painted, which is
@@ -3875,7 +3914,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         a subtree with <code>containertiming</code> and get a
         <code>PerformanceObserver</code> entry when <em>that section</em> finishes its
         initial paint, the way <code>elementtiming</code> works for one element. Behind the
-        experimental flag in Chrome; a WICG proposal rather than a shipped feature.
+        experimental flag in Chrome and a pref in Firefox since 156; a WICG proposal rather than a shipped feature.
       </p>
       <p class="replaces">
         On the site: the homepage&apos;s LCP is a photo tile, so LCP is already roughly
@@ -4101,7 +4140,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="media-pseudo">
       <h2>
         <span>Media element pseudo-classes <span class="mono">:playing &middot; :paused &middot; :buffering</span></span>
-        <span class="stat cross">Safari 15.4 &middot; FF 150 &middot; Chrome 152</span>
+        <span class="stat cross">Safari 15.4 &middot; FF 150 &middot; Chrome 158 planned</span>
       </h2>
       <p class="note">
         <code>:playing</code>, <code>:paused</code>, <code>:seeking</code>,
@@ -4110,10 +4149,12 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <code>&lt;video&gt;</code> by their actual state, so a custom transport
         control can style itself from CSS instead of from a pile of
         <code>timeupdate</code> and <code>waiting</code> listeners keeping a
-        class in sync. This is one of only two features in the whole 2026 set
-        that names <strong>Interop&nbsp;2026</strong> as a focus area, and it is
+        class in sync. It was one of only two features in chromestatus&apos;s 2026
+        set that names <strong>Interop&nbsp;2026</strong> as a focus area, and it is
         the older feature on this page by some margin: Safari has had it since
-        March&nbsp;2022.
+        March&nbsp;2022. This card said Chrome&nbsp;152; chromestatus now names
+        Chrome&nbsp;158, and Chromium&nbsp;152 does not parse <code>:playing</code>
+        (measured 2026-10-08).
       </p>
       <p class="replaces">
         On the site: nothing here plays media, so this is a card about the sweep
@@ -4268,7 +4309,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="margin-trim" data-cap="margin-trim">
       <h2>
         <span>margin-trim</span>
-        <span class="stat trial">Safari 16.4 &middot; Chrome 155 beta &middot; FF no</span>
+        <span class="stat cross">Safari 16.4 &middot; Chrome 155 &middot; FF no</span>
       </h2>
       <p class="note">
         Drops the margin on a container&apos;s first and last children, so a box
@@ -4277,9 +4318,9 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <code>:first-child</code> / <code>:last-child</code> pair per component,
         which every stylesheet on the web has written at least once.
         Safari-only since 16.4, which made it the inverse of most cards here:
-        WebKit shipped it three years ago and nobody followed, until Chrome&nbsp;155.
-        chromestatus names milestone&nbsp;155 (stable 2026-10-06), and the nightly
-        browser canary measured the flip on 2026-09-17: this card&apos;s own
+        WebKit shipped it three years ago and nobody followed, until Chrome&nbsp;155
+        reached stable on 2026-10-06. The nightly
+        browser canary measured the flip three weeks earlier, on 2026-09-17: this card&apos;s own
         <code>CSS.supports("margin-trim", "block")</code> probe reads false in
         Chromium&nbsp;153 and Edge&nbsp;153 and true in Chrome Beta&nbsp;155 and Edge
         Dev&nbsp;155. Firefox has a positive position and no milestone.
@@ -4291,11 +4332,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="replaces">
         On the site: the <code>.content</code> workspace inside every XP window
         carries exactly the hand-written first-child/last-child pair this
-        replaces. It stays hand-written through October, because one engine is
-        one engine until the second one is in a stable build, and the fallback
+        replaces, and it is still hand-written as of this sweep. The fallback
         here is not graceful in the way most of this page&apos;s cards are:
         without support the margins collide and the window padding looks wrong,
-        rather than merely unstyled. Once Chrome&nbsp;155 is stable the pair can go
+        rather than merely unstyled. With Chrome&nbsp;155 stable, the pair can go
         behind <code>@supports not (margin-trim: block)</code> and the property
         takes over in two engines, with Firefox still on the hand-written path.
       </p>
@@ -4503,7 +4543,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="paint-time">
       <h2>
         <span>paintTime / presentationTime <span class="mono">on paint, LCP + LoAF entries</span></span>
-        <span class="stat cross">Chrome 145 &middot; FF 140 &middot; Safari no</span>
+        <span class="stat cross">Chrome 145 &middot; FF 140 &middot; Safari 26.2 LCP only</span>
       </h2>
       <p class="note">
         Paint timing entries have reported one timestamp, and it has been
@@ -4528,7 +4568,11 @@ navigation.addEventListener("navigate", (e) =&gt; {
         client-side fix for it: the homepage&apos;s LCP is a photo tile, and
         &quot;when did the tile paint&quot; and &quot;when did the visitor see
         the tile&quot; have been the same field. Two engines, so the RUM beacon
-        could start reading it.
+        could start reading it, with one catch for exactly this use. Safari&nbsp;26.2
+        added <code>paintTime</code> to its new LCP entries, but on LCP entries both
+        Safari and Firefox expose <code>presentationTime</code> and always return
+        <code>null</code>, so for the homepage&apos;s LCP tile only Chrome reports when
+        the visitor saw it.
       </p>
       <p class="unsupported">No <code>paintTime</code> on this browser&apos;s paint entries; the output shows what is there instead.</p>
     </section>
@@ -4537,10 +4581,14 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="soft-nav">
       <h2>
         <span>Soft navigations <span class="mono">+ interaction-contentful-paint</span></span>
-        <span class="stat trial">Origin trial Ch151 &middot; Chrome only</span>
+        <span class="stat chrome">Chrome 151 &middot; Safari/FF no</span>
       </h2>
       <p class="note">
-        Two new <code>PerformanceEntry</code> types.
+        Two new <code>PerformanceEntry</code> types, shipped in Chrome&nbsp;151 after an
+        origin trial in 139&ndash;144. Chromium&nbsp;152 lists
+        <code>soft-navigation</code> in <code>PerformanceObserver.supportedEntryTypes</code>
+        on a page with no trial token (measured 2026-10-08), even though chromestatus
+        still labels the feature &quot;Origin trial&quot;.
         <code>soft-navigation</code> marks a JS-driven navigation that changed
         the URL and re-rendered without a document load, which every Core Web
         Vital currently cannot see: LCP is measured once, at the real
@@ -4938,7 +4986,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="attr-type">
       <h2>
         <span>attr() <span class="mono">with type() outside content</span></span>
-        <span class="stat chrome">Chrome 133 &middot; Safari TP 249 &middot; FF 149 flag</span>
+        <span class="stat cross">Chrome 133 &middot; FF 155 &middot; Safari TP 249</span>
       </h2>
       <p class="note">
         <code>attr()</code> has existed since CSS&nbsp;2 and has been useless since
@@ -4960,7 +5008,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         computed height into a style attribute per element. This turns that into markup
         the server can emit and the browser can lay out with no script at all, which is
         worth more here than it sounds: those bars are the one thing on the page that
-        currently needs JS to have a shape. Two engines and a flag away.
+        currently needs JS to have a shape. Firefox&nbsp;155 shipped it, so it is two
+        engines now, with Safari&apos;s in Technology Preview.
       </p>
       <p class="unsupported">No typed <code>attr()</code> here, so the bars fall back to their 8px default height.</p>
     </section>
@@ -5141,7 +5190,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="color-mix-variadic">
       <h2>
         <span><span class="mono">color-mix()</span> with any number of colours</span>
-        <span class="stat trial">FF 150 &middot; Chrome no &middot; Safari no</span>
+        <span class="stat cross">FF 150 &middot; Safari 27 &middot; Chrome no</span>
       </h2>
       <p class="note">
         <code>color-mix()</code> shipped everywhere taking exactly two colours. CSS
@@ -5149,8 +5198,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <code>color-mix(in oklch, red 20%, blue, green)</code> weights them and
         blends the set, and the one-colour form is a colour-space conversion in
         disguise (<code>color-mix(in oklch, var(--x))</code> hands back
-        <code>--x</code> as OKLCH). Firefox 150 is the only engine with it, so the
-        chip reads yes on exactly one browser today.
+        <code>--x</code> as OKLCH). Firefox&nbsp;150 shipped it first and Safari&nbsp;27
+        followed, so the chip reads yes in two engines and no in Chrome.
       </p>
       <p class="replaces">
         On the site: nothing needs it, which is the honest answer for most of the
@@ -5166,22 +5215,23 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="font-width">
       <h2>
         <span><span class="mono">font-width</span> <span class="mono">/ the property font-stretch became</span></span>
-        <span class="stat trial">Safari 18.4 &middot; Chrome no &middot; FF no</span>
+        <span class="stat cross">Safari 18.4 &middot; FF 155 &middot; Chrome no</span>
       </h2>
       <p class="note">
         CSS Fonts 4 renamed <code>font-stretch</code> to <code>font-width</code>,
         because it never stretched anything: it selects a face from a family&apos;s
         width axis (<code>condensed</code>, <code>expanded</code>, or a percentage on
         a variable font). Safari 18.4 ships the new name with the old one kept as
-        an alias. Chrome and Firefox still answer only to <code>font-stretch</code>,
-        so this is the rare card where the OLD spelling is the safe one.
+        an alias, and Firefox&nbsp;155 followed. Chrome still answers only to
+        <code>font-stretch</code>, so this is the rare card where the OLD spelling is
+        the safe one.
       </p>
       <p class="replaces">
         On the site: nothing, and the card is here to say so. Tahoma, Verdana and
         Trebuchet MS carry no width axis, and the site ships zero font bytes, so
         there is no face for either property to select. It stays on the page so
-        the rename shows up in the canary diff the day Chrome or Firefox follow
-        Safari, rather than in a stylesheet that quietly stopped matching.
+        the rename shows up in the canary diff the day Chrome follows, rather than
+        in a stylesheet that quietly stopped matching.
       </p>
       <p class="unsupported">Your browser doesn&apos;t know <code>font-width</code>; write <code>font-stretch</code> and both spellings resolve to the same face wherever a family has one.</p>
     </section>
@@ -5534,7 +5584,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions + MDN browser-compat-data &middot; last swept 2026-08-10, two cards moved by the nightly canary 2026-09-17, Interop 2027 index 2026-10-08</small></p>
+      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions + MDN browser-compat-data &middot; last swept 2026-10-08 against MDN browser-compat-data 8.1.5, Interop 2027 index 2026-10-08</small></p>
     </footer>
 
     <hr>
