@@ -179,10 +179,10 @@ anything a `.test.mjs` file imports, or spawns with `process.execPath`, runs
 under node too, so a `Bun.` reference there fails `test:node` and passes every
 local run.** That is why 22 tools walk directories with `readdirSync` rather than
 `Bun.Glob`, why `check-tools.ts` walks `PATH` by hand rather than calling
-`Bun.which`, and why `smol-toml` stays a dependency: its three consumers
-(`tools/lib/dependency-docs.ts`, `tools/lib/retired.ts` and
+`Bun.which`, and why TOML is read by `tools/lib/toml.ts` rather than `Bun.TOML`:
+its three consumers (`tools/lib/dependency-docs.ts`, `tools/lib/retired.ts` and
 `contract-osv-ignore-names-a-url-pin.test.mjs`) are each a test or imported by
-one, so `Bun.TOML` cannot replace it. Two files are audited exceptions today, each
+one. That module replaced `smol-toml` on 2026-10-08. Two files are audited exceptions today, each
 run only by bun and spawned by nothing: `gen-runtime-types.ts` (`Bun.TOML`)
 and `gen-repo-card.ts` (`Bun.WebView`, `Bun.write`). No scanner enforces this. `bun run test:node` in CI is the
 enforcement, and it fails by name.
@@ -384,9 +384,11 @@ does not make a failed write safe to ignore.
 
 ## Current baseline
 
-- `smol-toml` 1.9.0 parses Cargo manifests for the dependency audit and relock
-  writer under both Node and Bun. It is a development dependency with no
-  transitive dependencies. The census retains Git and path dependencies without
+- `tools/lib/toml.ts` parses Cargo manifests for the dependency audit and relock
+  writer under both Node and Bun. It replaced `smol-toml` 1.9.0 on 2026-10-08:
+  the same output on all 8 TOML files in the tree, one package fewer, and a
+  one-shot tool loads it in 0.4 ms against 2.4 ms for smol-toml's 9-module
+  ES build. The census retains Git and path dependencies without
   inventing semantic versions; each needs an explicit versionless policy.
 - Wrangler is pinned to a COMMIT of `cloudflare/workers-sdk` main since
   2026-09-14, as a pkg.pr.new tarball URL naming the sha (the wrangler line
