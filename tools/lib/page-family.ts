@@ -102,9 +102,11 @@ export async function writeCommittedFamily(bytes: Uint8Array, dir = FAMILY_DICT_
 
 // The family tier's wire cost for one dictionary: every page's zstd frame against
 // it, at the level the build ships. Frames are returned too, so a caller that goes
-// on to ship these bytes does not encode them twice.
-export async function familyFrames(pages: Uint8Array[], dictionary: Uint8Array): Promise<Buffer[]> {
-  return zstdCompressDictionaryBatch(pages.map((bytes) => ({ bytes, dictionary })));
+// on to ship these bytes does not encode them twice. `encode` is the batch
+// encoder; the build passes one with its cache in front (tools/lib/build-cache.ts).
+export type ZstdBatch = (jobs: Array<{ bytes: Uint8Array; dictionary: Uint8Array }>) => Promise<Buffer[]>;
+export async function familyFrames(pages: Uint8Array[], dictionary: Uint8Array, encode: ZstdBatch = zstdCompressDictionaryBatch): Promise<Buffer[]> {
+  return encode(pages.map((bytes) => ({ bytes, dictionary })));
 }
 
 export type FamilyChoice = {
@@ -122,15 +124,15 @@ export type FamilyChoice = {
 // the next roll commits it. With nothing committed, fresh ships (first run, or a
 // deliberate re-mint).
 export async function chooseFamilyDictionary(
-  { fresh, committed, pages, threshold = FAMILY_DRIFT }:
-  { fresh: Uint8Array; committed: Uint8Array | null; pages: Uint8Array[]; threshold?: number },
+  { fresh, committed, pages, threshold = FAMILY_DRIFT, encode = zstdCompressDictionaryBatch }:
+  { fresh: Uint8Array; committed: Uint8Array | null; pages: Uint8Array[]; threshold?: number; encode?: ZstdBatch },
 ): Promise<FamilyChoice> {
-  const freshFrames = await familyFrames(pages, fresh);
+  const freshFrames = await familyFrames(pages, fresh, encode);
   const freshTotal = freshFrames.reduce((n, f) => n + f.length, 0);
   if (!committed) {
     return { dictionary: Buffer.from(fresh), source: "fresh", frames: freshFrames, freshTotal, committedTotal: null, drift: null, threshold };
   }
-  const committedFrames = await familyFrames(pages, committed);
+  const committedFrames = await familyFrames(pages, committed, encode);
   const committedTotal = committedFrames.reduce((n, f) => n + f.length, 0);
   const drift = committedTotal / freshTotal - 1;
   if (drift <= threshold) {

@@ -56,13 +56,15 @@ test("the slack is 1% with an 8 B floor, between measured drift and the edge's q
   assert.ok(q11Slack(156709) < 188404 - 156709, "the edge's /llms-full.txt must not fit inside it");
 });
 
-test("q11() is build.ts's brotliQ11, so a served twin reads as q11", async () => {
+test("q11() is build.ts's compressQ11, so a served twin reads as q11", async () => {
   // A drift in either copy of the settings reads every served twin as a
   // finding. Assert the settings in the build's source rather than trust that
-  // both copies were edited together.
+  // both copies were edited together. compressQ11 is the encoder; brotliQ11 is
+  // the build cache in front of it, keyed on compressQ11's source text.
   const { readFile } = await import("node:fs/promises");
   const build = await readFile(new URL("build.ts", import.meta.url), "utf8");
-  const fn = build.match(/function brotliQ11\([\s\S]*?\n}\n/)?.[0] ?? "";
+  assert.match(build, /createHash\("sha256"\)\.update\(compressQ11\.toString\(\)\)/, "the cache key names the encoder's settings");
+  const fn = build.match(/function compressQ11\([\s\S]*?\n}\n/)?.[0] ?? "";
   assert.match(fn, /BROTLI_PARAM_QUALITY\]: 11/);
   assert.match(fn, /BROTLI_PARAM_LGWIN\]: 24/);
   assert.match(fn, /BROTLI_PARAM_SIZE_HINT\]: bytes\.length/);
