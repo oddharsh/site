@@ -166,17 +166,19 @@ async function main() {
     process.exit(2);
   }
   // The env the Worker is deployed with: its vars, and a stub for every binding.
-  let env: Record<string, unknown> = {}, bindings: Record<string, string> = {}, routes: string[];
+  // Read even when --routes names the routes: a route measured without its
+  // bindings measures a crash, or a path the deployed Worker never takes.
+  const { siteConfig } = await import("./lib/site-config.ts");
+  const c = await siteConfig();
+  const env: Record<string, unknown> = { ...c.vars }, bindings: Record<string, string> = {};
+  const add = (list: { binding?: string; name?: string }[] | undefined, kind: string) => { for (const b of list ?? []) bindings[b.binding ?? b.name!] = kind; };
+  add(c.kv_namespaces, "kv"); add(c.d1_databases, "d1"); add(c.r2_buckets, "r2"); add(c.analytics_engine_datasets, "ae");
+  add(c.ratelimits, "ratelimit"); add(c.durable_objects?.bindings, "do"); add(c.workflows, "workflow");
+  for (const k of ["browser", "images", "ai", "analytics"]) if (c[k]?.binding) bindings[c[k].binding] = k;
+  if (c.version_metadata?.binding) bindings[c.version_metadata.binding] = "version";
+  let routes: string[];
   if (values.routes) routes = values.routes.split(",");
   else {
-    const { siteConfig } = await import("./lib/site-config.ts");
-    const c = await siteConfig();
-    env = { ...c.vars };
-    const add = (list: { binding?: string; name?: string }[] | undefined, kind: string) => { for (const b of list ?? []) bindings[b.binding ?? b.name!] = kind; };
-    add(c.kv_namespaces, "kv"); add(c.d1_databases, "d1"); add(c.r2_buckets, "r2"); add(c.analytics_engine_datasets, "ae");
-    add(c.ratelimits, "ratelimit"); add(c.durable_objects?.bindings, "do"); add(c.workflows, "workflow");
-    for (const k of ["browser", "images", "ai", "analytics"]) if (c[k]?.binding) bindings[c[k].binding] = k;
-    if (c.version_metadata?.binding) bindings[c.version_metadata.binding] = "version";
     const surfaces: { path: string }[] = JSON.parse(readFileSync("config/site-manifest.json", "utf8")).surfaces;
     routes = [...new Set([...surfaces.map((s) => s.path), ...QUERIES])];
   }

@@ -16,8 +16,11 @@ import {
 const TOOL = new URL("route-cpu.ts", import.meta.url).pathname;
 
 // Spins on CPU time, not wall time, so a busy machine can't shorten the work.
-const WORKER = `export default { async fetch(request) {
+// /env answers 500 unless the run handed it the deployed bindings: --routes once
+// skipped reading them, and every named route measured a crash.
+const WORKER = `export default { async fetch(request, env) {
   const path = new URL(request.url).pathname;
+  if (path === "/env") return new Response(null, { status: env.BOOKINGS?.list && env.HOST_TIMEZONE ? 200 : 500 });
   if (path === "/spin") { const t0 = process.cpuUsage(); while (true) { const d = process.cpuUsage(t0); if (d.user + d.system >= 12000) break; } }
   return new Response("ok", { status: 200 });
 } };`;
@@ -51,4 +54,10 @@ test("a run with nothing over the line passes --strict", { timeout: 180_000 }, (
   const { status, out } = run("/fast", true);
   assert.equal(out.rows[0].route, "/fast");
   assert.equal(status, 0);
+});
+
+test("a run that names its routes still gets the deployed env and bindings", { timeout: 180_000 }, () => {
+  const { out, stderr } = run("/env", false);
+  assert.ok(out, `no report was written: ${stderr.slice(-400)}`);
+  assert.equal(out.rows[0].status, 200, "/env saw no BOOKINGS binding or HOST_TIMEZONE var");
 });
