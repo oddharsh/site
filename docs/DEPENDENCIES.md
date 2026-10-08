@@ -406,7 +406,7 @@ does not make a failed write safe to ignore.
 - @cloudflare/config 0.24.0 is the exact root pin for the helpers
   `cloudflare.config.ts` and `cf-garage/cloudflare.config.ts` author with. It
   moved from 0.20.0 on 2026-10-05 for `bindings.analyticsSQL()` (new in
-  0.22.0), which declares the site's `ANALYTICS` binding. workers-sdk#15914 moved them
+  0.22.0, renamed `bindings.analytics()` in 0.24.0), which declares the site's `ANALYTICS` binding. workers-sdk#15914 moved them
   out of `wrangler/experimental-config` and into the `cf` CLI as `cf/config`,
   which is a one-line re-export of `@cloudflare/config/public`. Depending on
   `cf` instead would break the one-Miniflare, one-Workerd property above: it

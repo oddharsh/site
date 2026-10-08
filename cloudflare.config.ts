@@ -280,7 +280,7 @@ const worker = defineWorker({
     // binding (workers-sdk#15685), so a read needs no token. ledger.ts tries it
     // first and falls back to ANALYTICS_READ_TOKEN, and each JSON reply names
     // the door that answered in `via`.
-    ANALYTICS: bindings.analyticsSQL(),
+    ANALYTICS: bindings.analytics(),
     // The bot ledger: identified AI-crawler hits tick in here (ledger.ts);
     // /ledger reads them back through ANALYTICS.
     BOT_LEDGER: bindings.analyticsEngineDataset({ name: "aadhar_bot_ledger" }),
