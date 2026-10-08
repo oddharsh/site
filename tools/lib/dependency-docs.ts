@@ -21,7 +21,7 @@ export const BASELINE_HEADING = "## Current baseline";
 
 // prose name -> manifest key. This mapping is the one copy the check adds, and
 // it is the thing the check exists to hold, so it is explicit rather than
-// inferred (nobody writes "@minify-html/node" or "lightningcss" in a sentence).
+// inferred (nobody writes "oxc-minify" or "lightningcss" in a sentence).
 export const DOC_ALIASES = [
   // wrangler left this table on 2026-09-14, when the pin became a pkg.pr.new
   // COMMIT of workers-sdk main rather than a release number; see VERSIONLESS.
@@ -30,7 +30,6 @@ export const DOC_ALIASES = [
   { prose: "Oxlint", pkg: "oxlint" },
   { prose: "oxlint-tsgolint", pkg: "oxlint-tsgolint" },
   { prose: "@oxlint/plugins", pkg: "@oxlint/plugins" },
-  { prose: "minify-html", pkg: "@minify-html/node" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "smol-toml", pkg: "smol-toml" },
   { prose: "@cloudflare/config", pkg: "@cloudflare/config" },

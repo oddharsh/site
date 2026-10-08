@@ -42,7 +42,6 @@ import { promisify } from "node:util";
 import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import { siteConfig } from "./lib/site-config.ts";
 import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision, type ServedTreePlan } from "./lib/served-tree.ts";
-import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
@@ -58,6 +57,7 @@ import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
 import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
+import { minifyHtml } from "./lib/html-minify.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 
 const OUT = ".build";
@@ -974,41 +974,20 @@ const minifyJavaScript = (filename, sourceText, options: typeof OXC_MINIFY_OPTIO
 // cannot pass one CSS check and fail the other. See that file for why.
 const minifyCss = (filename, sourceText) => parseCss(filename, sourceText, { minify: true });
 
-// Homepage HTML uses minify-html for structure only; inline CSS/JS are passed
-// through the same Lightning CSS and Oxc settings used everywhere else in the
-// build. JSON-LD, speculation rules and the understanding-check payloads remain
-// data, not JavaScript: they go through lib/json-script.ts, which strips
+// HTML minification is structure only (lib/html-minify.ts); inline CSS/JS are
+// passed through the same Lightning CSS and Oxc settings used everywhere else in
+// the build. JSON-LD, speculation rules and the understanding-check payloads
+// remain data, not JavaScript: they go through lib/json-script.ts, which strips
 // whitespace and guards the two byte sequences that can end a script element.
-const HTML_MINIFY_CFG = {
-  allow_noncompliant_unquoted_attribute_values: false,
-  allow_optimal_entities: false,
-  allow_removing_spaces_between_attributes: false,
-  // Measured 2026-09-02 over all 54 staged documents: this is the ONLY html
-  // option that helps after brotli, and it saves 1,192 B (22 B per page). It
-  // was declined then because it re-mints every page and page dictionary; this
-  // change is already paying that cost, so it rides along.
-  keep_closing_tags: false,
-  keep_comments: false,
-  keep_html_and_head_opening_tags: true,
-  keep_input_type_text_attr: true,
-  keep_ssi_comments: true,
-  minify_css: false,
-  minify_doctype: false,
-  minify_js: false,
-  // The template-passthrough pair, both at the library default. They are here
-  // so the 15 options @minify-html/node 0.18.1 declares are 15 DECISIONS: this
-  // block enumerated 13 and inherited 2, and an inherited default is a byte
-  // change nobody reviews the day upstream flips one. Nothing here authors in
-  // a `{{ }}` or `<% %>` template language, and /garage/horizon ships hostile
-  // demo payloads as content, so a passthrough that swallowed source until a
-  // matching close brace would be a parser this build cannot see into.
-  // Verified as a no-op: 1614 staged files, byte-identical, measured
-  // 2026-08-27. A moved byte would re-mint an `/a/` URL (gotcha 35).
-  preserve_brace_template_syntax: false,
-  preserve_chevron_percent_template_syntax: false,
-  remove_bangs: false,
-  remove_processing_instructions: false,
-};
+//
+// Until 2026-10-07 this was @minify-html/node 0.18.1 under a 15-option config,
+// each option a recorded decision. lib/html-minify.ts reproduces that config's
+// output byte for byte on every staged page but one, and its header lists the
+// choices: closing tags omitted where a parser infers them (the 2026-09-02
+// measurement found that the one option that helps after brotli, 1,192 B
+// across 54 documents), comments dropped except SSI markers, the html and head
+// opening tags kept, no template-syntax passthrough. The one page it differs on
+// is /garage/horizon, where minify-html broke `hidden="until-found"`.
 const RAW_HTML_TAGS = new Set(["pre", "script", "style", "textarea"]);
 
 const findHtmlTagEnd = (source, start) => {
@@ -1104,10 +1083,7 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
 const minifiedPage = (staged, rel) => {
   const twinRel = rel.replace(/\.html$/, ".src.html");
   const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
-  return banner + minifyHtml.minify(
-    Buffer.from(transformInlineHtmlBlocks(staged, `public/${rel}`)),
-    HTML_MINIFY_CFG,
-  ).toString();
+  return banner + minifyHtml(transformInlineHtmlBlocks(staged, `public/${rel}`));
 };
 
 const inlineProbe = transformInlineHtmlBlocks(
@@ -1668,7 +1644,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
   const srcPath = "/index.src.html";
   const banner = `<!-- minified at deploy; readable source: ${srcPath} -->\n`;
   const inlineMinified = transformInlineHtmlBlocks(staged, "src/pages/index.html");
-  const body = minifyHtml.minify(Buffer.from(inlineMinified), HTML_MINIFY_CFG).toString();
+  const body = minifyHtml(inlineMinified);
   const min = banner + body;
   for (const [label, marker] of HTML_MARKERS) {
     if (!marker.test(min)) throw new Error("index.html: HTML minifier lost required marker " + label);
@@ -2388,7 +2364,7 @@ let freshFamily: Buffer | null = null;
     .sort();
 
   // The understanding check's payload left the document at 5d, and what stays is
-  // an empty luq-data element whose data-src names the file. minify-html walks
+  // an empty luq-data element whose data-src names the file. The HTML minifier walks
   // the whole document and unquotes attributes, so prove the reference survived
   // with its URL intact, and that no body came back, rather than assume either.
   // A lost data-src is a quiz that silently never appears.

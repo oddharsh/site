@@ -456,8 +456,13 @@ does not make a failed write safe to ignore.
   and `bun why esbuild` reports one position now. Dropping the root pin had
   removed the root's path to it without shrinking the store; do not read that
   removal as the disk saving, the vitest removal is.
-- minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
-  `index.html` and the worker shells.
+- The deploy-time HTML pass over `index.html` and the staged pages has no
+  dependency since 2026-10-07: `tools/lib/html-minify.ts` replaced
+  @minify-html/node 0.18.1, matching its output byte for byte on 68 of the 69
+  staged pages. The 69th, `/garage/horizon`, is where minify-html had rewritten
+  `hidden="until-found"` to a bare `hidden` and broken the page's
+  find-in-page demo. Dropping it removed 6 lockfile packages and a 16 MB native
+  binary.
 - Bun supplies the no-emit checker for the programs in `config/` through
   `bun check`. The standalone TypeScript CLI dependency has been removed.
   Node and Bun load authored TypeScript, and Wrangler erases types when
