@@ -90,7 +90,9 @@ test("the check accepts both the rendered and the minified shapes, and only in <
 
 test("build.ts bakes 5b in a fresh process, completes the panes 1g2 did not draw, and checks every page", async () => {
   const build = await src("tools/build.ts");
-  assert.match(build, /spawnSync\(process\.execPath, \["tools\/bake-worker-pages\.ts", OUT\]/);
+  // a child process either way: spawnSync until 2026-10-08, then spawn, started
+  // early beside steps 1h to 4 (contract-the-early-bake-writes-only-where-it-is-told)
+  assert.match(build, /spawn(?:Sync)?\(process\.execPath, \["tools\/bake-worker-pages\.ts", OUT/);
   // An in-process import of the bake would put it back in the stale graph.
   assert.doesNotMatch(build, /import\([^)]*bake-worker-pages/);
   assert.doesNotMatch(build, /import[^;]*from "\.\/bake-worker-pages/);
