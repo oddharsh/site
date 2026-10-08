@@ -14,7 +14,12 @@ export default defineWranglerConfig({
   // one build instead of running it twice. Local dev must NOT use this config (it
   // would pay the full public/ -> .build copy on every reload); config/dev/wrangler.config.ts
   // is its tooling, serving source code and staged .dev-assets.
-  build: { command: "bun tools/build.ts" },
+  //
+  // BUILD_CACHE=0: anything wrangler publishes is built cold. The local build
+  // cache (tools/lib/build-cache.ts) is off in CI and Workers Builds already;
+  // this extends that to a hand-run `deploy:direct` or `versions upload`, so no
+  // published byte ever comes from a cache entry.
+  build: { command: "BUILD_CACHE=0 bun tools/build.ts" },
   assetsDirectory: ".build/public",
 
   // Deploy-only. Measured 2026-08-16: 274.45 -> 227.67 KiB gzip (17.0% off).
