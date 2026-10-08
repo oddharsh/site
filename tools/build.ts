@@ -60,6 +60,7 @@ import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 import { phaseClock, phaseSummary } from "./lib/build-phases.ts";
+import { cloneTree } from "./lib/clone-tree.ts";
 import { repoPathTokens } from "./lib/repo-path-tokens.ts";
 import { buildCache, buildCacheEnabled } from "./lib/build-cache.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
@@ -828,7 +829,8 @@ await Promise.all([
 // can fetch. Its STAGED position is unchanged: cloudflare.config.ts still points its entrypoint
 // at .build/src/worker/index.ts, and every deploy path and content hash
 // downstream is therefore untouched by the move.
-  cp("src/worker", `${OUT}/src/worker`, { recursive: true }),
+  // a whole tree, so one clonefile(2) where it can (tools/lib/clone-tree.ts)
+  cloneTree(resolve("src/worker"), resolve(`${OUT}/src/worker`)).then(async (cloned) => { if (!cloned) await cp("src/worker", `${OUT}/src/worker`, { recursive: true }); }),
 // The client islands and stylesheets author in src/ beside the Worker, and stage
 // back to the ROOT of the served tree because their public URLs are /nav.js and
 // /luna.css. Source layout and URL layout are different questions; only the first
@@ -839,7 +841,7 @@ await Promise.all([
 // paths, so /writing/<slug>.txt, /index.md and the rest answer exactly where they
 // did. Source layout and URL layout are different questions, and only the first
 // one moved.
-  cp("cal/src", `${OUT}/cal/src`, { recursive: true }),
+  cloneTree(resolve("cal/src"), resolve(`${OUT}/cal/src`)).then(async (cloned) => { if (!cloned) await cp("cal/src", `${OUT}/cal/src`, { recursive: true }); }),
 // Every module in serendipity/, rather than serendipity.ts by name. It was one
 // file until jev.ts (event-tags.ts since 2026-10-01) arrived beside it, and the
 // by-name copy left the staged import dangling: the build passed and only the
