@@ -1,4 +1,5 @@
-// build-cache.ts: a content-addressed cache in front of the build's compressors.
+// build-cache.ts: a content-addressed cache in front of the build's compressors
+// (many) and its minifiers (memo, at the bottom).
 //
 // The twin stages are most of a clean build's CPU: brotli q11 for every page
 // and static text file, zstd level 19 for the family-dictionary choice and the
@@ -14,11 +15,13 @@
 // also decoded and compared with its input before it is used, so a truncated or
 // foreign entry costs a recompression and never ships.
 //
-// Local builds only. CI and Workers Builds (CI, WORKERS_CI) run cold, so the
-// release path's bytes come from the encoders exactly as before.
+// Local builds only. CI and Workers Builds (CI, WORKERS_CI) run cold, and so
+// does anything wrangler publishes from a workstation: wrangler.config.ts's
+// build command sets BUILD_CACHE=0. No published byte comes from an entry.
 
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 
 export const BUILD_CACHE_DIR = "node_modules/.cache/aadhar-build";
 
@@ -43,6 +46,8 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
   // Two staged files can hold the same bytes, and with them the same key: they
   // share one lookup, so the bytes encode once and the entry is written once.
   const inFlight = new Map<string, Promise<Buffer>>();
+  // every key this build read or wrote, which prune() never removes
+  const used = new Set<string>();
   const made = enabled ? mkdir(dir, { recursive: true }) : null;
 
   async function read(key: string, ok: (out: Buffer) => boolean): Promise<Buffer | null> {
@@ -52,14 +57,14 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
     let valid = false;
     try { valid = ok(out); } catch { /* a decoder that throws is a miss */ }
     if (!valid) return null;
-    const now = new Date();
-    await utimes(path, now, now).catch(() => {});
+    used.add(key);
     return out;
   }
 
   async function write(key: string, out: Buffer) {
     await made;
     // write then rename, so a build killed mid-write leaves no torn entry
+    used.add(key);
     const tmp = `${dir}/${key}.${process.pid}.${writes++}.tmp`;
     await writeFile(tmp, out);
     await rename(tmp, `${dir}/${key}`);
@@ -103,18 +108,68 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
     return Promise.all(results);
   }
 
-  // Entries a build reads keep a fresh mtime; anything unread for maxAgeDays
-  // goes, which holds the directory near one build's worth.
-  async function prune(maxAgeDays = 14): Promise<number> {
-    if (!enabled) return 0;
-    const cutoff = Date.now() - maxAgeDays * 86_400_000;
-    let removed = 0;
-    for (const name of await readdir(dir).catch(() => [] as string[])) {
-      const s = await stat(`${dir}/${name}`).catch(() => null);
-      if (s && s.mtimeMs < cutoff) { await rm(`${dir}/${name}`, { force: true }); removed++; }
+  // The synchronous form, for a pure transform whose output cannot be decoded
+  // back into its input (a minifier). `name` must carry everything besides the
+  // input that the output depends on: the tool's installed version, its options,
+  // and the source of any repo code wrapped around it. With nothing to decode,
+  // an entry carries the digest of its own text, so a damaged file is a miss.
+  // A transform that throws is never cached, so a failure always repeats.
+  const memos = new Map<string, string>();
+  function memo(name: string, parts: Array<string | Uint8Array>, produce: () => string): string {
+    const h = createHash("sha256").update(name);
+    for (const part of parts) h.update("\0").update(part);
+    const key = h.digest("hex");
+    const known = memos.get(key);
+    if (known !== undefined) { hits++; return known; }
+    if (enabled) {
+      const path = `${dir}/${key}`;
+      try {
+        const file = readFileSync(path, "utf8");
+        const cut = file.indexOf("\n");
+        const text = file.slice(cut + 1);
+        if (cut === 64 && file.slice(0, 64) === createHash("sha256").update(text).digest("hex")) {
+          hits++;
+          memos.set(key, text);
+          used.add(key);
+          return text;
+        }
+      } catch { /* a miss */ }
     }
-    return removed;
+    misses++;
+    const text = produce();
+    memos.set(key, text);
+    if (enabled) {
+      mkdirSync(dir, { recursive: true });
+      used.add(key);
+      const tmp = `${dir}/${key}.${process.pid}.${writes++}.tmp`;
+      writeFileSync(tmp, `${createHash("sha256").update(text).digest("hex")}\n${text}`);
+      renameSync(tmp, `${dir}/${key}`);
+    }
+    return text;
   }
 
-  return { many, prune, stats: () => ({ hits, misses }) };
+  // At most once a day, remove every entry this build did not use that was
+  // written more than maxAgeDays ago: the current tree's entries always
+  // survive, and another branch's go two weeks after they were made. A hit
+  // used to refresh its entry's mtime instead, which cost a syscall per hit,
+  // and the sweep stat'd every entry on every build (about 1,200 files).
+  async function prune(maxAgeDays = 14): Promise<number> {
+    if (!enabled) return 0;
+    const stamp = `${dir}/.pruned`;
+    const last = await stat(stamp).catch(() => null);
+    if (last && Date.now() - last.mtimeMs < 86_400_000) return 0;
+    const cutoff = Date.now() - maxAgeDays * 86_400_000;
+    const names = (await readdir(dir).catch(() => [] as string[])).filter((n) => n !== ".pruned" && !used.has(n));
+    const gone = await Promise.all(names.map(async (name) => {
+      const s = await stat(`${dir}/${name}`).catch(() => null);
+      if (!s || s.mtimeMs >= cutoff) return false;
+      await rm(`${dir}/${name}`, { force: true });
+      return true;
+    }));
+    await mkdir(dir, { recursive: true });
+    await writeFile(stamp, "");
+    return gone.filter(Boolean).length;
+  }
+
+  return { many, memo, prune, stats: () => ({ hits, misses }) };
 }
