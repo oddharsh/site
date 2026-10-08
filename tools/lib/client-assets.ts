@@ -341,6 +341,15 @@ export function hashOrder(assets: readonly ClientAsset[] = CLIENT_ASSETS): Clien
 const esc = (s: string): string => s.replace(/[\\/.*+?^${}()|[\]]/g, "\\$&");
 const QUOTE = "([\"'`])";
 
+// The literals at least one of which every loaderRewrites() pattern for this
+// loader contains verbatim: the asset's path, and for an import() its `also`
+// specifiers. A file holding none of them cannot match, so hashClientAssets
+// skips it before running a pattern. Keep the two functions together; a new
+// loader shape whose pattern can match without one of these must widen this.
+export function loaderNeedles(a: ClientAsset, loader: Loader): string[] {
+  return loader.via === "import" && loader.also?.length ? [`/${a.file}`, ...loader.also] : [`/${a.file}`];
+}
+
 // The rewrites that point one loader shape at `to`, as [pattern, replacement].
 export function loaderRewrites(a: ClientAsset, loader: Loader, to: string): Array<[RegExp, string]> {
   const path = `/${a.file}`;

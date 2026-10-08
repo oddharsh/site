@@ -24,7 +24,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import {
-  CLIENT_ASSETS, assetBase, assetExt, hashOrder, loaderRewrites, registryProblems, stagedPath,
+  CLIENT_ASSETS, assetBase, assetExt, hashOrder, loaderNeedles, loaderRewrites, registryProblems, stagedPath,
   type ClientAsset,
 } from "./client-assets.ts";
 
@@ -72,6 +72,17 @@ export async function hashClientAssets(
   for (const rel of publicFiles) if (rel.endsWith(".html") && !rel.endsWith(".src.html")) attrTargets.push(`public/${rel}`);
   for (const rel of await under("src/worker", true)) if (rel.endsWith(".js") || rel.endsWith(".ts")) attrTargets.push(`src/worker/${rel}`);
 
+  // Every target is read ONCE and held as text. The loop below used to re-read
+  // all of them for every loader of every asset and run each pattern over each,
+  // nearly always to change nothing: about 670 ms of CPU, step 6 entire, on
+  // 2026-10-08. A rewrite now edits the held copy and writes that one file
+  // straight away, so disk and memory never disagree, and an asset that is
+  // itself a target (nav.js) is still hashed from its rewritten bytes.
+  const text = new Map<string, string | null>();
+  await Promise.all([...new Set([...stringTargets, ...attrTargets])].map(async (rel) => {
+    text.set(rel, await readFile(`${root}/${rel}`, "utf8").catch(() => null));
+  }));
+
   const urls: Record<string, string> = {};
   let filesTouched = 0;
   for (const a of order) {
@@ -92,13 +103,16 @@ export async function hashClientAssets(
 
     for (const loader of a.load) {
       const reps = loaderRewrites(a, loader, to);
+      const needles = loaderNeedles(a, loader);
       const targets = loader.via === "attr" ? attrTargets : stringTargets;
       const touched = await Promise.all(targets.map(async (rel) => {
-        let before: string;
-        try { before = await readFile(`${root}/${rel}`, "utf8"); } catch { return null; }
+        const before = text.get(rel);
+        // no pattern can match a file without one of its literals
+        if (before == null || !needles.some((n) => before.includes(n))) return null;
         let after = before;
         for (const [re, sub] of reps) after = after.replace(re, sub);
         if (after === before) return null;
+        text.set(rel, after);
         await writeFile(`${root}/${rel}`, after);
         return rel;
       }));
