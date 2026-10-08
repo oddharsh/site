@@ -266,3 +266,14 @@ by renumbering. The long-form history of each one is in git
     with `gen-runtime-types.ts`, which deletes and rewrites cf-garage's types
     on a fresh checkout. Before backgrounding a step, list what it writes and
     what reads it; `contract-ci-required-gate` holds the edges known today.
+
+55. **A tripwire that walks `servedFiles()` never reads `src/client` or
+    `src/styles`.** `servedFiles()` walks `AUTHORED_ROOTS` (`public`,
+    `src/pages`, `src/content`), the roots that used to be `www/`. Islands and
+    stylesheets left them in the 2026-08-18 split, so the taste scan
+    (invariant 9) never read luna.css or any island. A web font in `prose.css`
+    built clean until #1249. Checks 3 and 10 named both roots but read them
+    flat, missing `src/client/garage/` and `src/client/lwe/`. A tripwire takes
+    those roots from `shellFiles()` in `tools/build.ts`, and proves its reach
+    by planting a violation in a file only the new list covers. A widened scan
+    that reports nothing new looks exactly like one that reads nothing.

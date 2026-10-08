@@ -182,7 +182,8 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
 // Recursive, because src/client/garage/ and src/client/lwe/ serve at /garage/
 // and /lwe/. Every tripwire that reads these roots reads them through here;
 // until 2026-10-08 the taste scan never named them at all, so a web font in
-// prose.css built clean, and the flat readdirs elsewhere missed both subtrees.
+// prose.css built clean, and the flat readdirs elsewhere missed both subtrees
+// (gotcha 55).
 const shellFiles = async (): Promise<string[]> => [
   ...(await readdir("src/client", { recursive: true })).filter((r) => r.endsWith(".js")).map((r) => `src/client/${r}`),
   ...(await readdir("src/styles", { recursive: true })).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
