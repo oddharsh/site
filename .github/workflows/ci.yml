@@ -214,6 +214,15 @@ jobs:
           path: served-manifest.json
           if-no-files-found: error
 
+      # Report-only, from 2026-10-08: CPU per request on a cold isolate, route by
+      # route, against Workers Free's 10 ms (tools/cpu-sweep.ts). It reads
+      # .build/.perfbudget and .build/public, writes only .build/cpu-sweep.json,
+      # and exits 0 whatever it finds; the table goes to the job summary.
+      - name: Report CPU per route
+        id: cpu
+        run: node tools/cpu-sweep.ts --markdown >> "$GITHUB_STEP_SUMMARY"
+        background: true
+
       # Reads .build/.perfbudget and writes only .wrangler.site.local.jsonc,
       # which nothing in the suite touches, so the two overlap.
       - name: Verify route surface against a local Worker

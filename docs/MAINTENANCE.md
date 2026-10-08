@@ -860,6 +860,23 @@ largest single module); a run over the advisory threshold prints the top 5 with
 sizes, so "the bundle grew" arrives with the modules that grew it instead of a
 number to bisect by hand.
 
+### CPU per route (`bun run cpu:sweep`)
+
+Workers Free allows 10 ms of CPU per request. `tools/cpu-sweep.ts` times every
+manifest page and the query routes on the bundle `perf-budget` builds, each in a
+fresh node process (V8, workerd's engine) as that isolate's first request, and
+prints the routes over 4 ms against a `/robots.txt` control. Run `perf-budget`
+first; the sweep reads `.build/.perfbudget/index.js`.
+
+CI runs it report-only, into the job summary, and nothing fails on it yet. The
+first sweep (2026-10-08) read four routes over 8 ms: `/agent-ready` 16.5 ms
+(its error path, since outbound fetch is refused), the two photo queries 14.6 and
+10.8 ms, and `/finger` 9.3 ms, against a 0.18 ms floor. `--gate` fails on any
+median over 8 ms; turn it on in CI once an allowlist holds those routes, and add a
+calibration workload first so a slow runner can't fail it. Locally, KV, D1 and R2
+are empty, so data routes time their fallback, and `/coffee/availability.json`
+answers 503 without its calendar secret.
+
 ### The wire-size diff (the differential half)
 
 Everything above is ABSOLUTE: a number against a constant somebody typed. That
