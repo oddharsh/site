@@ -234,7 +234,17 @@ const siteConfigText = async (): Promise<string> => JSON.stringify(await siteCon
 // duplicated text only WARN (exit 0), because a false positive on the one
 // deploy path would get the whole guard commented out.
 async function checkInvariants() {
-  const read = (p) => readFile(p, "utf8");
+  // Every check here only reads, so a file is read once however many checks
+  // look at it: #3, #9 and #10 all walk the served pages, and #9 and #10 the
+  // Worker. A failed read is remembered too, and still throws for each caller.
+  const reads = new Map<string, Promise<string>>();
+  const read = (p: string): Promise<string> => {
+    let text = reads.get(p);
+    if (!text) reads.set(p, text = readFile(p, "utf8"));
+    return text;
+  };
+  // A loop's files read concurrently, in its own order; null where a read fails.
+  const readAll = (files: string[]): Promise<(string | null)[]> => Promise.all(files.map((f) => read(f).catch(() => null)));
   // Annotated because a bare `[]` infers never[], which made EVERY `.push(msg)`
   // in this function a TS2345 — 87 of the file's 91 baseline diagnostics, all of
   // them noise sitting on top of the one check that blocks the deploy.
@@ -301,8 +311,10 @@ async function checkInvariants() {
     ...(await shellFiles()),
     "cal/src/templates.ts", "serendipity/serendipity.ts", "pipelines/lwe/generate.mjs",
   ];
-  for (const f of vtSources) {
-    let s; try { s = await read(f); } catch { continue; }
+  const vtTexts = await readAll(vtSources);
+  for (const [i, f] of vtSources.entries()) {
+    const s = vtTexts[i];
+    if (s === null) continue;
     // Stripping comments only removes text, so a file that never spells
     // "@view-transition" cannot match below, and most files skip the strip:
     // the line-comment regex alone was 53 ms of this phase on 2026-10-08.
@@ -565,8 +577,10 @@ async function checkInvariants() {
     // traced back to the source line and checked for a taste-ok marker.
     const blank = (s) => s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
 
-    for (const f of served) {
-      let raw; try { raw = await read(f); } catch { continue; }
+    const servedTexts = await readAll(served);
+    for (const [i, f] of served.entries()) {
+      const raw = servedTexts[i];
+      if (raw === null) continue;
       const src = blank(raw);
       // split on first use: only a finding asks which line it sits on
       let lines: string[] | null = null;
@@ -665,9 +679,13 @@ async function checkInvariants() {
       ...await flat("serendipity", /\.js$/),
     ];
     const MARKER = /^(<{7} |={7}$|>{7} )/;
-    for (const f of files) {
-      let src; try { src = await read(f); } catch { continue; }
+    const conflictTexts = await readAll(files);
+    for (const [i0, f] of files.entries()) {
+      const src = conflictTexts[i0];
+      if (src === null) continue;
       conflictScanned++;
+      // a marker line holds one of these, so a file with none cannot match
+      if (!src.includes("<<<<<<< ") && !src.includes("=======") && !src.includes(">>>>>>> ")) continue;
       const lines = src.split("\n");
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].replace(/\r$/, "");
@@ -2716,20 +2734,28 @@ phase("7b paths");
 
   const cited = new Map<string, Set<string>>();
   let scanned = 0;
+  // Read concurrently, scanned in listing order. One file at a time, the reads
+  // were 61 to 74 ms of this step's 77 on 2026-10-08 (698 files, 11.8 MB); the
+  // scanner itself is about 5. A directory entry fails its read and is skipped,
+  // as before. The report sorts what it finds, so order cannot reach it.
+  const listed: string[] = [];
   for (const root of ["public", "src"]) {
     for (const rel of await readdir(`${OUT}/${root}`, { recursive: true })) {
-      if (BINARY.test(rel)) continue;
-      let body: string;
-      try { body = await readFile(`${OUT}/${root}/${rel}`, "utf8"); } catch { continue; }
-      scanned++;
-      for (const token of new Set(repoPathTokens(body))) {
-        const path = token.replace(/[,;:)\]]+$/, "").replace(/\.$/, "");
-        if (!NAMES_A_FILE.test(path)) continue;
-        if (ELSEWHERE.some((r) => r.test(path))) continue;
-        if (existsSync(path)) continue;
-        if (!cited.has(path)) cited.set(path, new Set());
-        cited.get(path)!.add(`${root}/${rel}`);
-      }
+      if (!BINARY.test(rel)) listed.push(`${root}/${rel}`);
+    }
+  }
+  const bodies = await Promise.all(listed.map((file) => readFile(`${OUT}/${file}`, "utf8").catch(() => null)));
+  for (const [i, file] of listed.entries()) {
+    const body = bodies[i];
+    if (body === null) continue;
+    scanned++;
+    for (const token of new Set(repoPathTokens(body))) {
+      const path = token.replace(/[,;:)\]]+$/, "").replace(/\.$/, "");
+      if (!NAMES_A_FILE.test(path)) continue;
+      if (ELSEWHERE.some((r) => r.test(path))) continue;
+      if (existsSync(path)) continue;
+      if (!cited.has(path)) cited.set(path, new Set());
+      cited.get(path)!.add(file);
     }
   }
 
