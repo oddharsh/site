@@ -2038,12 +2038,14 @@ phase("5c custom properties");
     .filter((f) => !/\.src\.(css|html|js)$/.test(f))
     .filter((f) => !f.startsWith("src/dict/"));
 
-  const before = new Map<string, string>();
-  for (const rel of staged) {
+  // Read concurrently, then entered in listing order, the order the plan saw
+  // when this read one file at a time (21 ms of the step's 55 on 2026-10-08).
+  const texts = await Promise.all(staged.map(async (rel) => {
     const full = `${OUT}/${rel}`;
-    if (!(await stat(full)).isFile()) continue;
-    before.set(rel, await readFile(full, "utf8"));
-  }
+    return (await stat(full)).isFile() ? readFile(full, "utf8") : null;
+  }));
+  const before = new Map<string, string>();
+  staged.forEach((rel, i) => { const text = texts[i]; if (text !== null) before.set(rel, text); });
 
   // A name assembled at runtime is the one input a find-and-replace cannot
   // follow, so it is a build failure rather than a silent miss.
@@ -2057,12 +2059,9 @@ phase("5c custom properties");
   // reporting a clean pass, the same argument as the twin and CSP-hash floors.
   assertIntegrity(before, after, map, 80);
 
-  let touched = 0;
-  for (const [rel, text] of after) {
-    if (text === before.get(rel)) continue;
-    await writeFile(`${OUT}/${rel}`, text);
-    touched++;
-  }
+  const changed = [...after].filter(([rel, text]) => text !== before.get(rel));
+  await Promise.all(changed.map(([rel, text]) => writeFile(`${OUT}/${rel}`, text)));
+  const touched = changed.length;
   console.log(`custom properties: ${map.size} renamed across ${touched} staged files (${RESERVED.size} reserved for the DOM calls that name them)`);
 }
 
