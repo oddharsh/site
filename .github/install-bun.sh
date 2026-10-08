@@ -58,22 +58,79 @@ esac
 # The owner selected the rolling GitHub canary to adopt bun check before npm's
 # daily publication. Resolve one metadata snapshot, verify its bytes and full
 # commit, and keep that identity beside the binary for runtime comparisons.
+#
+# TWO VIEWS OF ONE RELEASE, because the API is rate limited per IP. Workers
+# Builds runs on shared Cloudflare addresses with no GitHub token, where other
+# tenants drain the unauthenticated 60 requests an hour; build 8358ea90
+# (2026-10-08) died on four 403s two seconds apart, and the reset was up to an
+# hour away, so no retry or bounded wait outlasts it. github.com renders the
+# same release, with the commit in the body and each asset's SHA-256 digest in
+# its copy button (all 34 equal to the API's, measured 2026-10-08), and its
+# pages are not on the API's budget. So any API failure reads those pages
+# instead. The digest is still GitHub's own asset digest, never
+# SHASUMS256.txt (gotcha 52), and the zip hash and binary revision checks
+# below run unchanged on either path. A token in the environment (GitHub
+# Actions passes github.token) moves the API call onto the repo's budget.
+# INSTALL_BUN_METADATA=pages forces the fallback, so canary.yml can prove
+# nightly that GitHub's markup still parses rather than learning it mid-outage.
 if [ "$pin" = "canary" ]; then
   mkdir -p "$dir"
   work=$(mktemp -d "$dir/.install.XXXXXX")
   trap 'rm -rf "$work"' EXIT
-  curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 -o "$work/release.json" "https://api.github.com/repos/oven-sh/bun/releases/tags/canary"
-  node - "$work/release.json" "$platform" "$work/resolved.json" <<'NODE'
+  via="${INSTALL_BUN_METADATA:-api}"
+  case "$via" in api|pages) ;; *) echo "install-bun.sh: INSTALL_BUN_METADATA must be api or pages, not $via" >&2; exit 1 ;; esac
+  if [ "$via" = api ]; then
+    # Without -f, so the status and rate-limit headers stay readable. --retry
+    # still covers 408, 429 and 5xx; a 403 answers at once instead of
+    # burning three more requests from an empty budget.
+    auth=()
+    token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+    if [ -n "$token" ]; then
+      (umask 077 && printf 'Authorization: Bearer %s\n' "$token" > "$work/auth")
+      auth=(-H "@$work/auth")
+    fi
+    status=$(curl -sSL --retry 3 --retry-delay 2 -H "Accept: application/vnd.github+json" ${auth[@]+"${auth[@]}"} \
+      -D "$work/api.headers" -o "$work/release.json" -w '%{http_code}' \
+      "https://api.github.com/repos/oven-sh/bun/releases/tags/canary") || true
+    if [ "$status" != 200 ]; then
+      limits=$(grep -iE '^(x-ratelimit-(remaining|reset)|retry-after):' "$work/api.headers" 2>/dev/null | tr -d '\r' | tr '\n' ' ' || true)
+      echo "install-bun.sh: GitHub API answered ${status:-nothing} ${limits:+($limits)}; reading the canary from its release pages" >&2
+      via=pages
+    fi
+  fi
+  if [ "$via" = pages ]; then
+    curl -fsSL --retry 3 --retry-delay 2 -o "$work/release.html" "https://github.com/oven-sh/bun/releases/tag/canary"
+    curl -fsSL --retry 3 --retry-delay 2 -o "$work/assets.html" "https://github.com/oven-sh/bun/releases/expanded_assets/canary"
+  fi
+  node - "$via" "$work" "$platform" "$work/resolved.json" <<'NODE'
 const fs = require("node:fs");
-const [file, platform, out] = process.argv.slice(2);
-const release = JSON.parse(fs.readFileSync(file, "utf8"));
-const asset = release.assets?.find((entry) => entry.name === `${platform}.zip`);
-const revision = /commit:\s*([0-9a-f]{40})\b/.exec(release.body ?? "")?.[1];
-const expectedUrl = `https://github.com/oven-sh/bun/releases/download/canary/${platform}.zip`;
-if (release.tag_name !== "canary" || !revision || asset?.browser_download_url !== expectedUrl || !/^sha256:[0-9a-f]{64}$/.test(asset?.digest ?? "")) {
-  throw new Error("install-bun.sh: canary metadata lacks a supported URL, full commit, or SHA-256 digest");
+const [via, work, platform, out] = process.argv.slice(2);
+const read = (name) => fs.readFileSync(`${work}/${name}`, "utf8");
+const name = `${platform}.zip`;
+const expectedUrl = `https://github.com/oven-sh/bun/releases/download/canary/${name}`;
+const only = (values) => (new Set(values).size === 1 ? values[0] : undefined);
+let tag, revision, url, digest;
+if (via === "api") {
+  const release = JSON.parse(read("release.json"));
+  const asset = release.assets?.find((entry) => entry.name === name);
+  tag = release.tag_name;
+  revision = /commit:\s*([0-9a-f]{40})\b/.exec(release.body ?? "")?.[1];
+  url = asset?.browser_download_url;
+  digest = asset?.digest;
+} else {
+  // The page is served at the tag's own URL, so the tag is the request. Each
+  // witness must appear exactly once: markup that drifts fails closed here.
+  const page = read("release.html");
+  const assets = read("assets.html");
+  tag = "canary";
+  revision = only([...page.matchAll(/corresponds to the commit:\s*<a [^>]*href="https:\/\/github\.com\/oven-sh\/bun\/commit\/([0-9a-f]{40})"/g)].map((m) => m[1]));
+  url = assets.includes(`href="/oven-sh/bun/releases/download/canary/${name}"`) ? expectedUrl : undefined;
+  digest = only([...assets.matchAll(/aria-label="Copy to clipboard digest for ([^"]+)"[^>]*\bvalue="(sha256:[0-9a-f]{64})"/g)].filter((m) => m[1] === name).map((m) => m[2]));
 }
-fs.writeFileSync(out, JSON.stringify({ source: "canary", url: expectedUrl, revision, digest: asset.digest }));
+if (tag !== "canary" || !revision || url !== expectedUrl || !/^sha256:[0-9a-f]{64}$/.test(digest ?? "")) {
+  throw new Error(`install-bun.sh: canary metadata (${via}) lacks a supported URL, full commit, or SHA-256 digest`);
+}
+fs.writeFileSync(out, JSON.stringify({ source: "canary", url: expectedUrl, revision, digest, metadata: via }));
 NODE
   download=$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).url)' "$work/resolved.json")
   digest=$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).digest)' "$work/resolved.json")
@@ -94,7 +151,7 @@ NODE
   "$candidate" check --help >/dev/null
   install -m 0755 "$candidate" "$dir/bun"
   install -m 0644 "$work/resolved.json" "$dir/bun.install.json"
-  echo "install-bun.sh: bun $("$dir/bun" --version) ($("$dir/bun" --revision)), GitHub canary, SHA-256 verified, at $dir/bun"
+  echo "install-bun.sh: bun $("$dir/bun" --version) ($("$dir/bun" --revision)), GitHub canary via $via, SHA-256 verified, at $dir/bun"
   exit 0
 fi
 

@@ -77,7 +77,10 @@ Workers Builds use `.github/install-bun.sh` to resolve GitHub's latest canary.
 The installer reads one release metadata snapshot, checks the archive's
 SHA-256 and the binary's full commit, verifies `bun check` is available, and
 writes `bun.install.json` beside the binary. A release moving during download
-fails verification before replacing the existing installation.
+fails verification before replacing the existing installation. When the API
+refuses the read (Workers Builds has no token and shares its IPs), the
+installer takes the same digest and commit from github.com's release pages;
+the receipt's `metadata` field says which source it used (gotcha 52).
 
 Fresh installs can resolve different commits. This source deliberately skips
 the runtime's npm publication-age gate; `bunfig.toml`'s dependency age gate
