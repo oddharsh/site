@@ -8,7 +8,9 @@ import { describe, it, expect } from "bun:test";
 import { renderSlotList, slotLabels } from "../src/templates.js";
 
 const ZONES = ["America/New_York", "America/Los_Angeles", "Asia/Kolkata", "UTC", undefined];
+/** @type {Intl.DateTimeFormatOptions} */
 const DAY = { weekday: "long", month: "long", day: "numeric" };
+/** @type {Intl.DateTimeFormatOptions} */
 const TIME = { hour: "numeric", minute: "2-digit" };
 
 function instants() {
