@@ -178,6 +178,16 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
   }
   return out;
 };
+// The two roots SERVED_SOURCES leaves out: client islands and stylesheets.
+// Recursive, because src/client/garage/ and src/client/lwe/ serve at /garage/
+// and /lwe/. Every tripwire that reads these roots reads them through here;
+// until 2026-10-08 the taste scan never named them at all, so a web font in
+// prose.css built clean, and the flat readdirs elsewhere missed both subtrees
+// (gotcha 55).
+const shellFiles = async (): Promise<string[]> => [
+  ...(await readdir("src/client", { recursive: true })).filter((r) => r.endsWith(".js")).map((r) => `src/client/${r}`),
+  ...(await readdir("src/styles", { recursive: true })).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
+];
 
 // One array-of-strings, read out of a wrangler config's source text by key.
 //
@@ -298,8 +308,7 @@ async function checkInvariants() {
   const VT_DIAGNOSTIC = /^garage\/vt-(check|b)\.html$/;
   const vtSources = [
     ...(await servedFiles((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r))),
-    ...(await readdir("src/client")).filter((r) => r.endsWith(".js")).map((r) => `src/client/${r}`),
-    ...(await readdir("src/styles")).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
+    ...(await shellFiles()),
     "cal/src/templates.ts", "serendipity/serendipity.ts", "pipelines/lwe/generate.mjs",
   ];
   const vtTexts = await readAll(vtSources);
@@ -541,8 +550,9 @@ async function checkInvariants() {
     // that emits that text. The old walk decoded EVERY served byte as UTF-8,
     // including all content-addressed AVIF/JPEG tiers and every OG PNG, while
     // missing most of src/worker even though that is where generated-page CSS
-    // lives. Keep active textual assets plus the complete three Worker program
-    // trees: less work, and coverage now follows the actual authors.
+    // lives. Keep active textual assets, the client and stylesheet roots (where
+    // luna.css lives), and the complete three Worker program trees: less work,
+    // and coverage now follows the actual authors.
     const activeText = (rel: string): boolean =>
       rel === "_headers" || /\.(?:[cm]?[jt]sx?|css|html?|xhtml|xml|svg)$/i.test(rel);
     const programFiles = async (root: string): Promise<string[]> => (await readdir(root, { recursive: true }))
@@ -550,6 +560,7 @@ async function checkInvariants() {
       .map((rel) => `${root}/${rel}`);
     const served = [
       ...await servedFiles(activeText),
+      ...await shellFiles(),
       ...await programFiles("src/worker"),
       ...await programFiles("cal/src"),
       ...await programFiles("serendipity"),
@@ -558,7 +569,7 @@ async function checkInvariants() {
     // /^www\/(garage|lwe)\// until 2026-08-23, and www/ stopped existing on
     // 2026-08-18, so the exemption had been silently false for every file and
     // the build printed 14 taste warnings on demo pages on every single run.
-    const isDemo = (p) => /^(?:public|src\/pages)\/(?:garage|lwe)\//.test(p);
+    const isDemo = (p) => /^(?:public|src\/pages|src\/client)\/(?:garage|lwe)\//.test(p);
     // Blank block comments before pattern-matching (luna.css discusses @font-face
     // in prose twice, and a guard that fires on its own documentation gets
     // muted). BLANK rather than delete: same length, newlines kept, so a match
@@ -662,8 +673,7 @@ async function checkInvariants() {
       (await readdir(dir, { withFileTypes: true })).filter((e) => e.isFile() && match.test(e.name)).map((e) => `${dir}/${e.name}`);
     const files = [
       ...await collect("src/pages", /\.html$/, /^(i|images|og|cars|node_modules)$/),
-      ...await flat("src/client", /\.js$/),
-      ...await flat("src/styles", /\.css$/),
+      ...await shellFiles(),
       ...await collect("src/worker", /\.ts$/),
       ...await flat("cal/src", /\.ts$/),
       ...await flat("serendipity", /\.js$/),
