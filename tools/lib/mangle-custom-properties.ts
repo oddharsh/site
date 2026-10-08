@@ -183,16 +183,34 @@ export function planNames(files: Map<string, string>, shellFiles?: ReadonlySet<s
 export const applyMangle = (text: string, map: Map<string, string>): string =>
   text.replace(TOKEN, (token) => map.get(token) ?? token);
 
-/** Referenced somewhere and defined nowhere. Must not grow across the rename. */
-export function unresolved(files: Map<string, string>): Set<string> {
+type Scan = { defined: string[]; referenced: string[] };
+const scanOf = (text: string): Scan => ({ defined: definitionsIn(text), referenced: referencesIn(text) });
+
+// The dangling set from per-file scans. `reuse` holds scans already taken,
+// keyed by file: one is used only while that file's text is unchanged, which
+// is how assertIntegrity scans the after-tree without re-reading the files the
+// rename left alone (121 of 218 on 2026-10-08).
+function danglingFrom(files: Map<string, string>, reuse?: { text: Map<string, string>; scans: Map<string, Scan> }): {
+  dangling: Set<string>;
+  scans: Map<string, Scan>;
+} {
   const defined = new Set<string>();
   const referenced = new Set<string>();
-  for (const text of files.values()) {
-    for (const n of definitionsIn(text)) defined.add(n);
-    for (const n of referencesIn(text)) referenced.add(n);
+  const scans = new Map<string, Scan>();
+  for (const [rel, text] of files) {
+    const prior = reuse && reuse.text.get(rel) === text ? reuse.scans.get(rel) : undefined;
+    const scan = prior ?? scanOf(text);
+    scans.set(rel, scan);
+    for (const n of scan.defined) defined.add(n);
+    for (const n of scan.referenced) referenced.add(n);
   }
   for (const n of defined) referenced.delete(n);
-  return referenced;
+  return { dangling: referenced, scans };
+}
+
+/** Referenced somewhere and defined nowhere. Must not grow across the rename. */
+export function unresolved(files: Map<string, string>): Set<string> {
+  return danglingFrom(files).dangling;
 }
 
 /**
@@ -213,8 +231,9 @@ export function assertIntegrity(
   if (map.size < floor) {
     throw new Error(`mangle: only ${map.size} custom properties renamed, expected at least ${floor} — did the collector stop seeing the styles?`);
   }
-  const expected = new Set([...unresolved(before)].map((n) => map.get(n) ?? n));
-  const actual = unresolved(after);
+  const first = danglingFrom(before);
+  const expected = new Set([...first.dangling].map((n) => map.get(n) ?? n));
+  const actual = danglingFrom(after, { text: before, scans: first.scans }).dangling;
   const appeared = [...actual].filter((n) => !expected.has(n));
   const vanished = [...expected].filter((n) => !actual.has(n));
   if (appeared.length || vanished.length) {
