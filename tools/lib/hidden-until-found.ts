@@ -10,7 +10,8 @@
 // `beforematch` when it is revealed. Plain `hidden` is unreachable. So the
 // /garage/horizon demo shipped a target the browser could never find, from
 // the day the demo landed until 2026-10-07. None of the 15 options changes
-// this, and no minify-html issue or PR named it (searched 2026-10-07).
+// this. Filed upstream as wilsonzlin/minify-html#292 on 2026-10-08, after a
+// search of its issues and PRs found nothing on it.
 //
 // The repair is the sentinel swap minify-html#219 describes. Before the
 // minifier, each start tag's `hidden="until-found"` becomes a valueless
