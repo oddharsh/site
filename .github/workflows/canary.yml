@@ -130,6 +130,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bun run timbrado report --target bun --json canary.json --exit "${{ steps.leg.outputs.exit }}" --reproduce "bun run canary:bun"
 
+      - name: Read the canary from its release pages
+        # install-bun.sh falls back to github.com's release pages when the API
+        # refuses Workers Builds' shared IPs (build 8358ea90, 2026-10-08).
+        # That path only runs mid-outage, so a markup change there would
+        # surface as a failed deploy. Forcing it here every night turns the
+        # change into a red job instead. Not a canary finding, so it files
+        # nothing. Only meaningful while config/bun-pin.json says "canary";
+        # an npm pin ignores the variable.
+        if: ${{ !cancelled() }}
+        env:
+          INSTALL_BUN_METADATA: pages
+        run: bash .github/install-bun.sh "$RUNNER_TEMP/bun-pages"
+
       - name: Summary
         if: always()
         run: |

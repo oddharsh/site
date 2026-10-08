@@ -27,6 +27,11 @@ runs:
   steps:
     - name: Install the pinned bun
       shell: bash
+      env:
+        # Moves the canary metadata read onto the repo's 1,000 requests an
+        # hour, off the runner IP's shared 60. Reading a public release needs
+        # no permission, so this works under `permissions: {}` too.
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         mkdir -p "$HOME/.bun/bin"

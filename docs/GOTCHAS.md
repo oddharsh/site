@@ -244,8 +244,14 @@ by renumbering. The long-form history of each one is in git
     On 2026-10-06 the rolling archive hashed to `07b1b4b6`, matching the
     GitHub asset digest, while Bun's `SHASUMS256.txt` named `08d2883f`.
     Keep the API digest check; do not trust the manifest as a workaround for
-    an API 403. Workers Builds saw a transient 403, then passed on its next
-    build; the metadata request uses bounded retries.
+    an API 403. Retries cannot fix that 403 either: Workers Builds reads the
+    API with no token from shared Cloudflare IPs, where other tenants drain
+    the 60 requests an hour, and build 8358ea90 (2026-10-08) died on four
+    403s two seconds apart. Any API failure now reads the same digest and
+    commit from github.com's release pages (all 34 digests matched the API's
+    that day). `INSTALL_BUN_METADATA=pages` forces that path, and
+    canary.yml runs it nightly so a GitHub markup change shows up there
+    rather than in a deploy.
 
 53. **Wrangler's `--outfile` is a multipart upload, with a random boundary.**
     Two byte-identical Workers can give different upload-file hashes. Compare
