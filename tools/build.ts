@@ -34,7 +34,7 @@ import { availableParallelism } from "node:os";
 // One nonce per build for the dynamic imports below: the staged worker modules
 // are rewritten in place by later steps, so each import site needs a fresh URL.
 const BUILD_NONCE = process.hrtime.bigint().toString(36);
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -1092,6 +1092,22 @@ const HTML_MINIFY_CFG = {
 };
 const RAW_HTML_TAGS = new Set(["pre", "script", "style", "textarea"]);
 
+// Step 7b's three minifier calls go through the build cache's memo
+// (tools/lib/build-cache.ts): every inline <style> through Lightning CSS, every
+// inline <script> through Oxc, every document through minify-html. They were
+// 96 of the step's 160 ms on 2026-10-08, re-run on about 736 KB of inline code
+// that rarely changes between builds. A minified block cannot be decoded back
+// to check it, so each name carries everything its output depends on besides
+// the input: the installed version, the options, and the repo code around the
+// call (css-parse.ts and the custom media it inlines, the wrappers here). Within
+// one build, a block that repeats across pages minifies once, cache on or off:
+// 211 inline scripts are 67 distinct blocks.
+const toolVersion = (pkg: string): string => `${pkg}@${JSON.parse(readFileSync(Bun.resolveSync(`${pkg}/package.json`, import.meta.dir), "utf8")).version}`;
+const digestFile = (path: string): string => createHash("sha256").update(readFileSync(path)).digest("hex");
+const INLINE_CSS = `${toolVersion("lightningcss")} css-parse ${digestFile("tools/lib/css-parse.ts")} custom-media ${digestFile("src/styles/custom-media.css")} ${minifyCss.toString()}`;
+const INLINE_JS = `${toolVersion("oxc-minify")} ${JSON.stringify(OXC_MINIFY_OPTIONS)} ${minifyJavaScript.toString()}`;
+const DOCUMENT = `${toolVersion("@minify-html/node")} ${JSON.stringify(HTML_MINIFY_CFG)}`;
+
 const findHtmlTagEnd = (source, start) => {
   let quote = "";
   for (let i = start + 1; i < source.length; i++) {
@@ -1156,9 +1172,9 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
     const body = source.slice(cursor, closeAt);
 
     if (tag === "style") {
-      out += minifyCss(`${label} inline <style>`, body);
+      out += cache.memo(INLINE_CSS, [body], () => minifyCss(`${label} inline <style>`, body));
     } else if (tag === "script" && isJavaScriptScript(token)) {
-      out += minifyJavaScript(`${label} inline <script>`, body);
+      out += cache.memo(INLINE_JS, [body], () => minifyJavaScript(`${label} inline <script>`, body));
     } else if (tag === "script" && isJsonScriptType(scriptType(token)) && !body.trim() && /\sdata-src=/i.test(token)) {
       // An empty data block that names its payload elsewhere: the luq-data
       // element after step 5d moved the quiz to /a/. Nothing to minify, and an
@@ -1185,10 +1201,8 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
 const minifiedPage = (staged, rel) => {
   const twinRel = rel.replace(/\.html$/, ".src.html");
   const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
-  return banner + minifyHtml.minify(
-    Buffer.from(transformInlineHtmlBlocks(staged, `public/${rel}`)),
-    HTML_MINIFY_CFG,
-  ).toString();
+  const body = transformInlineHtmlBlocks(staged, `public/${rel}`);
+  return banner + cache.memo(DOCUMENT, [body], () => minifyHtml.minify(Buffer.from(body), HTML_MINIFY_CFG).toString());
 };
 
 const inlineProbe = transformInlineHtmlBlocks(
@@ -2496,7 +2510,10 @@ phase("7b minify pages");
   const { quizReference } = await import("./lib/quiz-data.ts");
 
   let before = 0, after = 0, checked = 0, generated = 0;
-  for (const rel of pages) {
+  // Pages run concurrently so their reads and writes overlap; the minifying
+  // stays on this thread either way, and every counter below is a sum. One
+  // page at a time, the awaited I/O was about 70 ms of the step.
+  await Promise.all(pages.map(async (rel) => {
     const staged = await readFile(`${OUT}/public/${rel}`, "utf8");
     const twinRel = rel.replace(/\.html$/, ".src.html");
     const min = minifiedPage(staged, rel);
@@ -2542,7 +2559,7 @@ phase("7b minify pages");
     await writeFile(`${OUT}/public/${rel}`, min);
     before += staged.length;
     after += min.length;
-  }
+  }));
   console.log(`pages(min): ${pages.length} documents ${before} -> ${after} bytes (${(((before - after) / before) * 100).toFixed(1)}% off raw), ${pages.length} .src.html twins (${generated} from staged, no authored source), ${checked} understanding-check references verified intact`);
 }
 
@@ -3045,10 +3062,11 @@ phase("text twins");
 
 phase("sweep old build");
 await sweep;
+phase("cache prune");
+const pruned = await cache.prune();
 {
   const rows = finishPhases();
   const { hits, misses } = cache.stats();
-  const pruned = await cache.prune();
   console.log(buildCacheEnabled()
     ? `build cache: ${hits} hits, ${misses} encoded${pruned ? `, ${pruned} stale entries pruned` : ""}`
     : `build cache: off (CI or BUILD_CACHE=0), ${misses} encoded`);
