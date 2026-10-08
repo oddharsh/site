@@ -2706,20 +2706,28 @@ phase("7b paths");
 
   const cited = new Map<string, Set<string>>();
   let scanned = 0;
+  // Read concurrently, scanned in listing order. One file at a time, the reads
+  // were 61 to 74 ms of this step's 77 on 2026-10-08 (698 files, 11.8 MB); the
+  // scanner itself is about 5. A directory entry fails its read and is skipped,
+  // as before. The report sorts what it finds, so order cannot reach it.
+  const listed: string[] = [];
   for (const root of ["public", "src"]) {
     for (const rel of await readdir(`${OUT}/${root}`, { recursive: true })) {
-      if (BINARY.test(rel)) continue;
-      let body: string;
-      try { body = await readFile(`${OUT}/${root}/${rel}`, "utf8"); } catch { continue; }
-      scanned++;
-      for (const token of new Set(repoPathTokens(body))) {
-        const path = token.replace(/[,;:)\]]+$/, "").replace(/\.$/, "");
-        if (!NAMES_A_FILE.test(path)) continue;
-        if (ELSEWHERE.some((r) => r.test(path))) continue;
-        if (existsSync(path)) continue;
-        if (!cited.has(path)) cited.set(path, new Set());
-        cited.get(path)!.add(`${root}/${rel}`);
-      }
+      if (!BINARY.test(rel)) listed.push(`${root}/${rel}`);
+    }
+  }
+  const bodies = await Promise.all(listed.map((file) => readFile(`${OUT}/${file}`, "utf8").catch(() => null)));
+  for (const [i, file] of listed.entries()) {
+    const body = bodies[i];
+    if (body === null) continue;
+    scanned++;
+    for (const token of new Set(repoPathTokens(body))) {
+      const path = token.replace(/[,;:)\]]+$/, "").replace(/\.$/, "");
+      if (!NAMES_A_FILE.test(path)) continue;
+      if (ELSEWHERE.some((r) => r.test(path))) continue;
+      if (existsSync(path)) continue;
+      if (!cited.has(path)) cited.set(path, new Set());
+      cited.get(path)!.add(file);
     }
   }
 
