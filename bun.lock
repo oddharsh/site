@@ -5,7 +5,7 @@
     "": {
       "name": "aadhar-sh",
       "devDependencies": {
-        "@cloudflare/config": "0.23.0",
+        "@cloudflare/config": "0.24.0",
         "@minify-html/node": "0.18.1",
         "@oxlint/plugins": "1.87.0",
         "@types/bun": "1.4.2",
@@ -53,7 +53,7 @@
     "workerd",
   ],
   "packages": {
-    "@cloudflare/config": ["@cloudflare/config@0.23.0", "", { "dependencies": { "zod": "4.4.3" } }, "sha512-oE0S7X54esZmJHr9hhCoqODR+yTxxkSYWCLtRiItQdPs0gQuqYw9a13zChhK+8DmdCUJIFBsMAR6t+mfu8g+9w=="],
+    "@cloudflare/config": ["@cloudflare/config@0.24.0", "", { "dependencies": { "zod": "4.4.3" } }, "sha512-DBKkL2fFfHIL0cdjXOoWybNzBxD5xAvuebu0nfcBphWeUiWKnSUYu8JMaboKzmAJRp6V1RGtPAdfdtXMHueqAA=="],
 
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@https://pkg.pr.new/cloudflare/workers-sdk/@cloudflare/kv-asset-handler@e3d1867", {}, "sha512-x2OfVEniw2FSYwnF5yN3RLftuugDQN0FWn3+QfqHMZyXLjDWZ02uZBknzqqrUhYF5c1ox6BSLIkRGjMMDdMZyQ=="],
 
