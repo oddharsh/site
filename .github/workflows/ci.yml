@@ -251,12 +251,13 @@ jobs:
   # CPU per request on a cold isolate, for every registered page and the heavy
   # query routes (tools/route-cpu.ts). Report only, for now: it writes a table
   # to the step summary and cannot fail the run, and --strict is there for when
-  # it gates. Its OWN job, for two measured reasons (2026-10-08): as a
-  # background step in validate it took 76 s and held the required check 40 s
-  # past the suite (validate 116 s against 50 to 63 on main), and it was
-  # measuring on the 4 vCPUs lint, typecheck and the suite were using, which
-  # read every route about 2.5x its quiet cost. It builds its own bundle
-  # through perf-budget, the same dry-run validate measures.
+  # it gates. Its OWN job because, as a background step in validate, it took
+  # 76 s and held the required check 40 s past the suite (validate 116 s
+  # against 50 to 63 on main, 2026-10-08). The runner itself reads about 2.5x a
+  # laptop: the /robots.txt control was 0.98 ms beside the suite and 0.95 ms
+  # alone, against 0.38 ms on an M-series Mac, so contention was never the
+  # cause and the 8 ms line is not calibrated for this machine yet. It builds
+  # its own bundle through perf-budget, the same dry-run validate measures.
   route-cpu:
     name: CPU per route (report)
     runs-on: ubuntu-latest
