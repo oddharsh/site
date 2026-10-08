@@ -13,8 +13,17 @@ const workflow = JSON.parse(execFileSync("bun", [
 test("CI is one required job named validate that cannot be skipped or softened", () => {
   // `attest` (2026-10-01) signs the served manifest on a push to main. It is
   // not a check anybody requires, it needs validate, and it cannot fail the run;
-  // contract-production-serves-what-ci-built holds its shape.
-  assert.deepEqual(Object.keys(workflow.jobs), ["validate", "attest"]);
+  // contract-production-serves-what-ci-built holds its shape. `route-cpu`
+  // (2026-10-08) prints CPU per route and gates nothing: run inside validate it
+  // took 76 s, pushed validate from about 55 s to 116 s, and its numbers read
+  // 2.5x high under the contention. So it gets its own runner, and it may never
+  // fail the run or hold up a job that matters.
+  assert.deepEqual(Object.keys(workflow.jobs), ["validate", "route-cpu", "attest"]);
+  const report = workflow.jobs["route-cpu"];
+  assert.equal(report["continue-on-error"], true, "the CPU report is a report; it cannot fail the run");
+  assert.equal(report.needs, undefined, "nothing waits on the report, and it waits on nothing");
+  assert.ok(!Object.values(workflow.jobs).some((job) => [job.needs].flat().includes("route-cpu")), "no job may need the report");
+  assert.ok(!report.steps.some((step) => /--strict/.test(step.run ?? "")), "--strict would make a report into a gate");
   const { validate } = workflow.jobs;
   // The `main` ruleset requires a check with exactly this name.
   assert.equal(validate.name, "validate");

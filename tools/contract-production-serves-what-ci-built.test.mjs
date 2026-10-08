@@ -165,7 +165,8 @@ test("served-manifest: CI cuts and signs it, and every release checks it", async
   assert.equal(attest.permissions["id-token"], "write");
   assert.ok(!attest.steps.some((s) => String(s.uses ?? "").startsWith("actions/checkout")), "the job holding an OIDC token runs no repository code");
   assert.ok(attest.steps.some((s) => String(s.uses).startsWith("actions/attest@") && s.with["subject-path"] === "served-manifest.json"));
-  assert.deepEqual(Object.keys(ci.jobs), ["validate", "attest"], "a third job would need its own reason; validate stays the one required check");
+  // route-cpu is the third job, and contract-ci-required-gate holds its reason.
+  assert.deepEqual(Object.keys(ci.jobs), ["validate", "route-cpu", "attest"], "a fourth job would need its own reason; validate stays the one required check");
 
   const checker = await readFile(new URL("tools/check-served.ts", ROOT), "utf8");
   assert.match(checker, /SIGNER = `\$\{values\.repo\}\/\.github\/workflows\/ci\.yml`/, "the signature must be pinned to ci.yml");

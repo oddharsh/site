@@ -221,16 +221,6 @@ jobs:
         run: bun run routes:check --prebuilt .build/.perfbudget
         background: true
 
-      # Report only, for now: CPU per request on a cold isolate, for every
-      # registered page and the heavy query routes, from the same bundle
-      # (tools/route-cpu.ts). It writes only the step summary. Its numbers are
-      # this runner's milliseconds, measured beside the steps around it, so it
-      # warns and never fails; --strict is there for when it gates.
-      - name: Report CPU per route
-        id: route-cpu
-        run: bun run route-cpu
-        background: true
-
       - name: Wait for the runtime types
         wait: types
 
@@ -257,6 +247,41 @@ jobs:
       # cleanup; the explicit step makes the failure read as a check.
       - name: Wait for every background check
         wait-all:
+
+  # CPU per request on a cold isolate, for every registered page and the heavy
+  # query routes (tools/route-cpu.ts). Report only, for now: it writes a table
+  # to the step summary and cannot fail the run, and --strict is there for when
+  # it gates. Its OWN job, for two measured reasons (2026-10-08): as a
+  # background step in validate it took 76 s and held the required check 40 s
+  # past the suite (validate 116 s against 50 to 63 on main), and it was
+  # measuring on the 4 vCPUs lint, typecheck and the suite were using, which
+  # read every route about 2.5x its quiet cost. It builds its own bundle
+  # through perf-budget, the same dry-run validate measures.
+  route-cpu:
+    name: CPU per route (report)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build the dry-run bundle
+        run: bun run perf-budget
+
+      - name: Report CPU per route
+        run: bun run route-cpu
 
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,
   # on main, at this commit, produced these URL hashes. tools/check-served.ts
