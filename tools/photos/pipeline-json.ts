@@ -50,6 +50,12 @@
 //       bytes (sort_keys, no spaces, ensure_ascii, no trailing newline), and
 //       /i/ is content-addressed, so the port was diffed byte for byte against
 //       the heredoc on the real library before it replaced it.
+//   pipeline-json.ts jxl-kind <file.jxl>
+//       NOT a jaq filter either: "transcode" when a JPEG XL carries a jbrd box,
+//       so djxl rebuilds the JPEG it was made from, and "direct" when it does
+//       not, which since 2026-10 is a HIF photo's archive (hif-archive.ts).
+//       djxl cannot answer this: asked for a .jpg it rebuilds a jbrd file and
+//       silently ENCODES a fresh JPEG from anything else. Reads box headers only.
 //   pipeline-json.ts checkpoint-add <checkpoints.json> --slug <s> --title <t> --ymd <date>
 //       the other heredoc, bump-version.sh's, found the same day by the widened
 //       test rather than by anyone looking: json.dumps(rows, indent=2,
@@ -120,6 +126,33 @@ export function parseSpool(spool: Buffer): Record<string, Omit<IndexEntry, "uplo
     out[stem] = entry;
   }
   return out;
+}
+
+/** Whether a JPEG XL container can rebuild the JPEG it was made from (a jbrd
+ *  box), read from box headers alone. Throws on anything that is not a
+ *  container, so a truncated download fails loudly instead of reading as
+ *  "direct". */
+export function jxlKind(file: string): "transcode" | "direct" {
+  const fd = fs.openSync(file, "r");
+  try {
+    const size = fs.fstatSync(fd).size, head = Buffer.alloc(16);
+    let at = 0, boxes = 0;
+    while (at + 8 <= size) {
+      fs.readSync(fd, head, 0, 16, at);
+      let len = head.readUInt32BE(0);
+      const kind = head.toString("latin1", 4, 8);
+      if (boxes === 0 && kind !== "JXL ") throw new Error(`${file} is not a JPEG XL container`);
+      if (kind === "jbrd") return "transcode";
+      if (len === 1) len = Number(head.readBigUInt64BE(8));
+      else if (len === 0) len = size - at;
+      if (len < 8 || at + len > size) throw new Error(`${file}: a box runs past the end of the file`);
+      at += len; boxes++;
+    }
+    if (boxes === 0) throw new Error(`${file} is empty`);
+    return "direct";
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 /** `$idx + .` with `.value += {uploaded: ($idx[.key].uploaded // $now)}`: a
@@ -361,6 +394,9 @@ export function main(argv: string[]): number {
     case "hash-tiers":
       for (const line of hashTiers(positional[0], need(args, "--out-dir"), need(args, "--map"))) process.stdout.write(`${line}\n`);
       return 0;
+    case "jxl-kind":
+      process.stdout.write(`${jxlKind(positional[0])}\n`);
+      return 0;
     case "checkpoint-add": {
       const [file] = positional;
       const { rows, entry } = addCheckpoint(readJson(file) as Checkpoint[], need(args, "--slug"), need(args, "--title"), need(args, "--ymd"));
@@ -369,7 +405,7 @@ export function main(argv: string[]): number {
       return 0;
     }
     default:
-      process.stderr.write("usage: pipeline-json.ts <length|index-merge|prune|unread|meta-split|manifest-keys|uri|hash-tiers|checkpoint-add> ...\n");
+      process.stderr.write("usage: pipeline-json.ts <length|index-merge|prune|unread|meta-split|manifest-keys|uri|hash-tiers|jxl-kind|checkpoint-add> ...\n");
       return 2;
   }
 }

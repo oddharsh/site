@@ -243,16 +243,20 @@ if [ ! -x "$WRANGLER" ]; then
   echo "  run: pnpm install" >&2
   exit 1
 fi
-# cjxl and djxl make and check each original's JPEG XL upload in phase 3, which
-# a remote render skips, so only an uploading run needs them.
+# cjxl and djxl make and check each original's JPEG XL upload in phase 3, and
+# for a HIF hif-archive.ts also scores it with ssimulacra2 and butteraugli
+# against djpeg's decode of the bar. A remote render skips phase 3, so only an
+# uploading run needs them.
 NEEDED=(sips exif-sooc)
-[ "${REMOTE_RENDER_ONLY:-0}" = "1" ] || NEEDED+=(cjxl djxl)
+[ "${REMOTE_RENDER_ONLY:-0}" = "1" ] || NEEDED+=(cjxl djxl djpeg ssimulacra2 butteraugli_main)
 for cmd in "${NEEDED[@]}"; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "error: $cmd not found in PATH" >&2
     case "$cmd" in
       exif-sooc) echo "  install with: cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc" >&2 ;;
       cjxl|djxl) echo "  install with: brew install jpeg-xl" >&2 ;;
+      djpeg) echo "  install with: brew install jpeg-turbo" >&2 ;;
+      ssimulacra2|butteraugli_main) echo "  build libjxl with -DJPEGXL_ENABLE_TOOLS=ON (brew's jpeg-xl does not ship it)" >&2 ;;
     esac
     exit 1
   fi
@@ -431,25 +435,42 @@ else
   upload_one() {
     local f="$1" idx="$2" full="$4" send heif jxl jxlfile
     send=$(cat "$RECEIPTS/$idx")
-    # The original goes up as JPEG XL, never as the JPEG: a lossless transcode
-    # of the exact bytes prepared above, which djxl turns back into those bytes
-    # (cmp proves it before the put). Effort 9: on two originals (2026-10-07) it
-    # saved 0.15-0.25% over e7 at 10-25x the time, about 20 s for a 26 MB
-    # frame, paid once per photo for every later click. The JPEG stays local,
-    # so the bucket holds one copy per photo (the 10 GB free tier, and why
-    # migrate-originals.ts deletes the JPEGs it moved). The receipt names the
-    # .jxl, and phase 4 records its key and length.
+    # The original goes up as JPEG XL, never as the JPEG, so the bucket holds
+    # one copy per photo (the 10 GB free tier). The receipt names the .jxl, and
+    # phase 4 records its key and length. Two kinds:
+    #
+    #   a JPEG source: a lossless transcode of the exact bytes prepared above,
+    #   which djxl turns back into those bytes (cmp proves it before the put).
+    #   Effort 9 saved 0.15-0.25% over e7 on two originals (2026-10-07), paid
+    #   once per photo; on 8 more, e10 came out LARGER and box compression
+    #   saved 7 KB in all, so this is the floor.
+    #
+    #   a HIF source: JPEG XL encoded from the HIF's own 10-bit pixels by
+    #   hif-archive.ts, at the largest distance that still beats the JPEG
+    #   prepared above on both ssimulacra2 and butteraugli. That JPEG is only
+    #   the bar now. Measured on all 119 HIF photos (2026-10-08) the search
+    #   comes to about -33% bytes with both metrics better; where nothing
+    #   beats it, hif-archive.ts falls back to the lossless transcode. About
+    #   four minutes a photo.
     jxl="${full%.*}.jxl"; jxlfile="$JXLS/$jxl"
-    if ! cjxl --quiet --lossless_jpeg=1 -e 9 "$send" "$jxlfile" >/dev/null 2>&1 \
-       || ! djxl "$jxlfile" "$jxlfile.rebuilt.jpg" >/dev/null 2>&1 \
-       || ! cmp -s "$send" "$jxlfile.rebuilt.jpg" \
+    case "${f##*.}" in
+      [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])
+        made=$(bun "$SCRIPT_DIR/hif-archive.ts" "$f" "$send" "$jxlfile" 2>>"$TMP/hif-archive.log") || made="" ;;
+      *)
+        made=""
+        if cjxl --quiet --lossless_jpeg=1 -e 9 "$send" "$jxlfile" >/dev/null 2>&1 \
+           && djxl "$jxlfile" "$jxlfile.rebuilt.jpg" >/dev/null 2>&1 \
+           && cmp -s "$send" "$jxlfile.rebuilt.jpg"; then made=transcode; fi
+        rm -f "$jxlfile.rebuilt.jpg" ;;
+    esac
+    if [ -z "$made" ] || [ ! -s "$jxlfile" ] \
        || ! "$WRANGLER" r2 object put "aadhar-photos/$jxl" --file="$jxlfile" --content-type="image/jxl" --remote >/dev/null 2>&1; then
-      rm -f "$jxlfile" "$jxlfile.rebuilt.jpg"
+      rm -f "$jxlfile"
       mark fail "$idx"; printf "✗"
-      echo "error: JPEG XL original failed (transcode, exact rebuild, or upload): aadhar-photos/$jxl" >&2
+      echo "error: JPEG XL original failed (encode, exact rebuild, or upload): aadhar-photos/$jxl" >&2
+      [ ! -s "$TMP/hif-archive.log" ] || tail -n 3 "$TMP/hif-archive.log" >&2
       return
     fi
-    rm -f "$jxlfile.rebuilt.jpg"
     printf '%s' "$jxlfile" > "$JXL_RECEIPTS/$idx"
     # HEIF=1: the source itself goes up too, byte-for-byte, under its own name.
     # The key is written to a receipt phase 4 reads, so the index records a

@@ -1407,6 +1407,7 @@ when the remote job is unavailable.
 ```bash
 # the photo pipeline
 brew install mozjpeg libavif pkgconf          # JPEG tools plus native AVIF library and build discovery
+brew install jpeg-xl jpeg-turbo               # cjxl/djxl for the JPEG XL originals; djpeg decodes a HIF archive's bar
 # Grid tiers use libavif directly from zenc. avifenc is the parity reference;
 # zenc --avif-version reports the library and codec actually linked at runtime
 # (the zenc-avif entry in config/tools.json).
@@ -1424,8 +1425,10 @@ grid ingest does not use that build.
 sips is macOS-native and needs no install. Published-photo rerenders can use
 the remote workflow above; fresh ingestion needs the credentials described below.
 
-`export-for-instagram.sh` additionally wants **ssimulacra2** and
-**butteraugli_main**, the two perceptual metrics it searches quality against.
+Ingesting a HIF photo, and `export-for-instagram.sh`, also want **ssimulacra2**
+and **butteraugli_main**, the two perceptual metrics they search quality
+against: `hif-archive.ts` uses them to find the smallest JPEG XL of the HIF
+that beats the old archive JPEG on both.
 Those are libjxl tools built with `-DJPEGXL_ENABLE_TOOLS=ON`, and Homebrew's
 `jpeg-xl` formula does not ship them, so there is no brew line for this row. The
 script falls back to `/opt/zerobrew/prefix/bin`, which is where this workstation's
