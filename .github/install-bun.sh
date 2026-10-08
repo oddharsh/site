@@ -77,7 +77,7 @@ if [ "$pin" = "canary" ]; then
   mkdir -p "$dir"
   work=$(mktemp -d "$dir/.install.XXXXXX")
   trap 'rm -rf "$work"' EXIT
-  via="${INSTALL_BUN_METADATA:-pages}"
+  via="${INSTALL_BUN_METADATA:-api}"
   case "$via" in api|pages) ;; *) echo "install-bun.sh: INSTALL_BUN_METADATA must be api or pages, not $via" >&2; exit 1 ;; esac
   if [ "$via" = api ]; then
     # Without -f, so the status and rate-limit headers stay readable. --retry
