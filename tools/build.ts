@@ -27,7 +27,7 @@
 // wrangler resolves `main` and `assets.directory` relative to the config file, so the
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
 
@@ -35,7 +35,7 @@ import { availableParallelism } from "node:os";
 // are rewritten in place by later steps, so each import site needs a fresh URL.
 const BUILD_NONCE = process.hrtime.bigint().toString(36);
 import { existsSync } from "node:fs";
-import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -60,6 +60,7 @@ import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 import { phaseClock, phaseSummary } from "./lib/build-phases.ts";
+import { repoPathTokens } from "./lib/repo-path-tokens.ts";
 import { buildCache, buildCacheEnabled } from "./lib/build-cache.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 
@@ -137,6 +138,10 @@ const zstdBatch = (jobs: ZstdJob[]) => cache.many(jobs, ZSTD);
 // arbitrary subdomain of cloudflareinsights.com is. Keep that distinction
 // explicit so this invariant checks origins rather than URL spelling.
 function containsRetiredRumHost(source) {
+  // A hostname is lowercased before its labels are compared, and the candidate
+  // pattern admits no escape that could spell one, so without these letters in
+  // any case there is nothing to find. It skips a URL parse per dotted word.
+  if (!/cloudflareinsights/i.test(source)) return false;
   const candidates = source.match(/\b(?:https?:\/\/)?(?:\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?/gi) || [];
   for (const candidate of candidates) {
     const withoutWildcard = candidate.replace(/^\*\./, "");
@@ -288,6 +293,10 @@ async function checkInvariants() {
   ];
   for (const f of vtSources) {
     let s; try { s = await read(f); } catch { continue; }
+    // Stripping comments only removes text, so a file that never spells
+    // "@view-transition" cannot match below, and most files skip the strip:
+    // the line-comment regex alone was 53 ms of this phase on 2026-10-08.
+    if (!s.includes("@view-transition")) continue;
     // Look at CSS only. /garage/horizon documents this decision at length and
     // quotes the at-rule inside <code>, so a whole-file grep flags the page
     // explaining why the rule is gone — a guard that fires on its own
@@ -547,8 +556,9 @@ async function checkInvariants() {
     for (const f of served) {
       let raw; try { raw = await read(f); } catch { continue; }
       const src = blank(raw);
-      const lines = raw.split("\n");
-      const lineAt = (off) => lines[src.slice(0, off).split("\n").length - 1] || "";
+      // split on first use: only a finding asks which line it sits on
+      let lines: string[] | null = null;
+      const lineAt = (off) => (lines ??= raw.split("\n"))[src.slice(0, off).split("\n").length - 1] || "";
       // A deliberate deviation is recorded ON THE LINE, as /* taste-ok: why */.
       // It silences the WARN-level checks only. There is no way to mark yourself
       // exempt from zero font bytes or from an overshoot curve, because those
@@ -730,6 +740,7 @@ const clientEdgeMirror = (source, decl) => {
 // returns the served-tree plan that step 1 copies below.
 const servedPlan = await checkInvariants();
 
+phase("clean .build");
 // Generated delta dirs must never exist in the SOURCE tree. They were committed under an
 // earlier design and are pure build output now, but a leftover public/ad/ gets copied in
 // by the staging step below and ships artifacts current code would never build — which is
@@ -738,7 +749,29 @@ const servedPlan = await checkInvariants();
 for (const dead of ["public/ad"]) {
   await rm(dead, { recursive: true, force: true });
 }
-await rm(OUT, { recursive: true, force: true });
+// Clear the last build by moving it aside rather than deleting it here.
+// Deleting about 2,400 staged files one by one took 220 ms (190 of them CPU)
+// before step 1 could start, on 2026-10-08. A rename is one syscall; a separate
+// rm process then deletes the old tree while this build runs, and the build
+// waits for it only at the end. The trash sits under node_modules/.cache, which
+// git ignores and which shares this filesystem; a build killed mid-sweep leaves
+// it there, and the next build's sweep takes it too. If the rename cannot
+// happen (another filesystem, say), the build deletes in place as it used to.
+const BUILD_TRASH = "node_modules/.cache/aadhar-build-trash";
+let sweep: Promise<void> = Promise.resolve();
+if (existsSync(OUT)) {
+  try {
+    await mkdir(BUILD_TRASH, { recursive: true });
+    await rename(OUT, `${BUILD_TRASH}/${process.pid}-${Date.now()}`);
+    sweep = new Promise((resolve) => {
+      const child = spawn("rm", ["-rf", BUILD_TRASH], { stdio: ["ignore", "ignore", "inherit"] });
+      child.once("error", (e) => { console.warn(`clean: could not sweep ${BUILD_TRASH}: ${e.message}`); resolve(); });
+      child.once("exit", (code) => { if (code) console.warn(`clean: rm -rf ${BUILD_TRASH} exited ${code}`); resolve(); });
+    });
+  } catch {
+    await rm(OUT, { recursive: true, force: true });
+  }
+}
 await mkdir(OUT, { recursive: true });
 
 phase("1 stage");
@@ -2611,7 +2644,10 @@ phase("7b paths");
   // /images/x, an MCP method like tools/list, or somebody else's src/ do not
   // match. The three RETIRED names are the point: www/, holding/ and scripts/ can
   // never resolve, so any surviving citation of them fails by construction.
-  const REPO_PATH = /(?<![\w./-])(www|holding|scripts|src|tools|cal|cf-garage|lens-reader|lwe-ask|pipelines|config|serendipity|public|design|docs|migrations|talks)\/[A-Za-z0-9_./-]+/g;
+  // The names and the rule are REPO_DIRS and REPO_PATH_REGEX in
+  // tools/lib/repo-path-tokens.ts; repoPathTokens() returns exactly the regex's
+  // matches, about 11x faster, because the regex gives the engine no literal to
+  // search for and so ran at every byte of 11.7 MB.
 
   // Only a token naming a FILE is a citation that has to resolve. A bare directory
   // mention is usually prose ("used to sit at www/scripts") or a build path that
@@ -2633,7 +2669,7 @@ phase("7b paths");
       let body: string;
       try { body = await readFile(`${OUT}/${root}/${rel}`, "utf8"); } catch { continue; }
       scanned++;
-      for (const token of new Set(body.match(REPO_PATH) || [])) {
+      for (const token of new Set(repoPathTokens(body))) {
         const path = token.replace(/[,;:)\]]+$/, "").replace(/\.$/, "");
         if (!NAMES_A_FILE.test(path)) continue;
         if (ELSEWHERE.some((r) => r.test(path))) continue;
@@ -3007,6 +3043,8 @@ phase("text twins");
   console.log(`text-twins: ${wins.length} brotli q11 twins for static text assets, ${(raw / 1024).toFixed(1)}KB -> ${(enc / 1024).toFixed(1)}KB`);
 }
 
+phase("sweep old build");
+await sweep;
 {
   const rows = finishPhases();
   const { hits, misses } = cache.stats();

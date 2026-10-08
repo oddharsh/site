@@ -90,6 +90,11 @@ and a one-word page edit to 1.7 s. CI and Workers Builds never enable it
 (`CI`, `WORKERS_CI`). To time a cold build locally, run
 `BUILD_CACHE=0 bun run build`; deleting the directory is always safe.
 
+The previous `.build/` is renamed into `node_modules/.cache/aadhar-build-trash/`
+and deleted by a background `rm -rf` while the next build runs, which took the
+220 ms the delete cost off the front of every build. A build killed mid-sweep
+leaves its trash there for the next build to take.
+
 ## Conflicts on machine-owned files
 
 Regenerate a derived file rather than hand-merging it: `bun install` for a
