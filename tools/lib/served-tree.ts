@@ -14,8 +14,9 @@
 // regexing cp() calls out of build.ts. The copies had already drifted: the
 // build's collision walk skipped one derived path where its copy skipped
 // three, and dev's skip set never applied at all (see linkServedTree).
-import { copyFile, mkdir, readdir, stat, symlink } from "node:fs/promises";
+import { copyFile, mkdir, readdir, rm, rmdir, stat, symlink } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
+import { cloneTree } from "./clone-tree.ts";
 
 // What a root HOLDS decides which questions it answers. The test for where a
 // new file belongs is CLAUDE.md's: a build step transforms it (src/) or it
@@ -153,22 +154,50 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
 
 type AdapterOptions = { cwd?: string };
 
+// The first root (public/, about 900 of the 1,000 staged files) cloned whole
+// with one clonefile(2) where the platform allows (tools/lib/clone-tree.ts),
+// then held to the plan: the derived paths the plan skips are deleted from the
+// clone, and the clone must hold exactly the plan's files from that root and no
+// link. Anything else deletes the clone and returns null, and the caller copies
+// every file as before, so this path can only ever produce the planned tree.
+async function cloneFirstRoot(plan: ServedTreePlan, out: string, cwd: string): Promise<string | null> {
+  const root = plan.roots[0];
+  if (!root) return null;
+  await rmdir(out).catch(() => {}); // an empty destination may exist; a full one fails the clone
+  if (!(await cloneTree(resolve(cwd, root), out))) return null;
+  const prefix = `${root}/`;
+  await Promise.all(plan.skipped.filter((p) => p.startsWith(prefix))
+    .map((p) => rm(resolve(out, p.slice(prefix.length)), { recursive: true, force: true })));
+  const want = new Set([...plan.files].filter(([rel, source]) => source === `${prefix}${rel}`).map(([rel]) => rel));
+  let same = true, seen = 0;
+  for (const entry of await readdir(out, { recursive: true, withFileTypes: true })) {
+    if (entry.isDirectory()) continue;
+    const rel = relative(out, resolve(entry.parentPath, entry.name)).split("\\").join("/");
+    if (entry.isSymbolicLink() || !want.has(rel)) { same = false; break; }
+    seen++;
+  }
+  if (same && seen === want.size) return root;
+  await rm(out, { recursive: true, force: true });
+  return null;
+}
+
 // THE BUILD ADAPTER: copy every planned file to `dest`. Directories are made
 // first, from the plan's union, so no two copies race through mkdir for a
 // directory several roots share, and an empty authored directory still ships.
 const COPY_WIDTH = 64;
-export async function copyServedTree(plan: ServedTreePlan, dest: string, options: AdapterOptions = {}): Promise<{ files: number; dirs: number }> {
+export async function copyServedTree(plan: ServedTreePlan, dest: string, options: AdapterOptions = {}): Promise<{ files: number; dirs: number; cloned: string | null }> {
   const cwd = options.cwd ?? ".";
   const out = resolve(cwd, dest);
+  const cloned = await cloneFirstRoot(plan, out, cwd);
   await Promise.all([...plan.directories.keys()].map((dir) => mkdir(resolve(out, dir), { recursive: true })));
-  const pending = [...plan.files];
+  const pending = cloned ? [...plan.files].filter(([rel, source]) => source !== `${cloned}/${rel}`) : [...plan.files];
   const worker = async () => {
     for (let next = pending.pop(); next; next = pending.pop()) {
       await copyFile(resolve(cwd, next[1]), resolve(out, next[0]));
     }
   };
   await Promise.all(Array.from({ length: COPY_WIDTH }, worker));
-  return { files: plan.files.size, dirs: plan.directories.size };
+  return { files: plan.files.size, dirs: plan.directories.size, cloned };
 }
 
 // THE DEV ADAPTER: a symlink farm at `dest`, which must not exist yet.
