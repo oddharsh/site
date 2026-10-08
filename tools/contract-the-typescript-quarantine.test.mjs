@@ -137,13 +137,19 @@ test("the nightly row's gzip figure is wrangler's, never the runtime's zlib", as
 // through the harness re-run themselves in a node child when bun collects them.
 // It spawns from a module rather than a script, so the scan below cannot see it;
 // this paragraph and the module's header are its record.
-test("node is spawned only by the wrangler bridge, the route oracle, the twin suite and the harness dispatch tests", async () => {
+//
+// THE FIFTH, taken 2026-10-08: `route-cpu` (tools/route-cpu.ts). It measures
+// CPU per request against workerd's budget, and workerd runs V8. So does node;
+// bun runs JavaScriptCore, whose JIT tiers, regex engine and ICU setup are the
+// very costs the report would otherwise be reading off a different engine. It
+// also stubs `cloudflare:workers` through node's module.registerHooks.
+test("node is spawned only by the wrangler bridge, the route oracle, the twin suite, the harness dispatch tests and the CPU report", async () => {
   const { readFileSync } = await import("node:fs");
   const { execFileSync } = await import("node:child_process");
   const root = new URL(".", ROOT).pathname;
   const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT).pathname, "utf8"));
   const nodeScripts = Object.entries(pkg.scripts).filter(([, cmd]) => /(^|&& |\| )node /.test(cmd)).map(([k]) => k).sort();
-  assert.deepEqual(nodeScripts, ["routes:check", "routes:check:remote", "test:node"]);
+  assert.deepEqual(nodeScripts, ["route-cpu", "routes:check", "routes:check:remote", "test:node"]);
   const files = execFileSync("git", ["ls-files", "-z", "*.sh", "**/*.sh", ".github/workflows/*.yml"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
   const spawns = [];
   for (const rel of files) {

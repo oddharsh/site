@@ -24,6 +24,7 @@
     "archive:gate": "bun tools/photos/archive-gate.ts",
     "captions": "bun tools/photos/gen-alt-text.ts",
     "perf-budget": "bun tools/perf-budget.ts",
+    "route-cpu": "node tools/route-cpu.ts",
     "served:manifest": "bun tools/served-manifest.ts",
     "served:check": "bun tools/check-served.ts",
     "perf:snapshot": "bun tools/perf-snapshot.ts",

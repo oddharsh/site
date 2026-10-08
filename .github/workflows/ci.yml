@@ -221,6 +221,16 @@ jobs:
         run: bun run routes:check --prebuilt .build/.perfbudget
         background: true
 
+      # Report only, for now: CPU per request on a cold isolate, for every
+      # registered page and the heavy query routes, from the same bundle
+      # (tools/route-cpu.ts). It writes only the step summary. Its numbers are
+      # this runner's milliseconds, measured beside the steps around it, so it
+      # warns and never fails; --strict is there for when it gates.
+      - name: Report CPU per route
+        id: route-cpu
+        run: bun run route-cpu
+        background: true
+
       - name: Wait for the runtime types
         wait: types
 
