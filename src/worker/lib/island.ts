@@ -33,11 +33,25 @@
 //      the edge is also text/html and also resolves fine.
 //   4. A failure leaves the placeholder and says so (data-state="failed"),
 //      because a page that shows what it read must not show a guess.
+import { cspHashed } from "./csp-policy.ts";
 import { html, type Html } from "./html.ts";
 
 // Spelled out again inside islandScript, whose text is a constant on purpose; a
 // contract test holds the two together.
 export const ISLAND_MARKER = "x-island";
+
+// A fragment's script policy: `script-src 'self'` and no inline script at all.
+// islandScript injects a fragment with innerHTML, where a <script> never runs,
+// so a fragment's inline script would be dead code on the page; this header
+// only governs a reader who opens the fragment's URL directly. Until
+// 2026-10-08 every fragment fell to the loose default (`'unsafe-inline'`),
+// since none is a built document with hashes and none comes through lunaPage.
+// Hashing each one as sent, lunaPage's way, would be wrong here: fragments
+// carry the most outside data on the site (webmentions, reading lists, event
+// pools), and a hash of what was sent would allow whatever script got into
+// it. A fixed policy allows none. 10 of 10 live fragments carried no inline
+// script, handler or javascript: URL when this landed.
+export const FRAGMENT_CSP = cspHashed([]);
 
 /** The fragment response. `no-store` because the body is one request's; a
  *  fragment everyone shares passes its own cache-control. A non-2xx `status`
@@ -53,6 +67,7 @@ export function islandResponse(body: Html, headers: Record<string, string> = {},
       "x-content-type-options": "nosniff",
       // Worth fetching, worthless in an index: a bare fragment is not a page.
       "x-robots-tag":           "noindex",
+      "content-security-policy": FRAGMENT_CSP,
       [ISLAND_MARKER]:          "1",
       ...headers,
     },

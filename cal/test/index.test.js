@@ -186,6 +186,8 @@ describe("routing", () => {
     expect(res.headers.get("x-island")).toBe("1");
     expect(res.headers.get("x-robots-tag")).toBe("noindex");
     expect(res.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=30");
+    // a fragment runs no inline script, so its policy allows none
+    expect(res.headers.get("content-security-policy")).toMatch(/script-src 'self';/);
     const html = await res.text();
     expect(html).not.toMatch(/<html|<head|<form/i);
     const { slots } = await slotsOf(await dispatch("/slots"));
