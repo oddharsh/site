@@ -756,6 +756,31 @@ placeholder
 .hq-table td.mono { white-space: nowrap; }
 .hq-table .hq-y { color: oklch(48% 0.13 145); font-weight: 700; }
 .hq-table .hq-n { color: oklch(52% 0.16 27); font-weight: 700; }
+/* Interop 2027 index: one row per proposal, grouped by stable-engine count */
+.i27-wrap { max-width: 100%; overflow-x: auto; }
+.i27-table { border-collapse: collapse; width: 100%; font-size: var(--text-micro); margin: 8px 0 0; }
+.i27-table th, .i27-table td { text-align: left; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--grey-88); vertical-align: top; }
+.i27-table thead th { color: var(--ink-soft); border-bottom-color: var(--grey-70); }
+.i27-table .i27-g th { padding-top: 12px; color: var(--blue-40); font-family: var(--font-caption); font-size: var(--text-sm); border-bottom-color: var(--grey-70); }
+.i27-table td:first-child { overflow-wrap: anywhere; }
+.i27-sub { color: var(--ink-soft); }
+.i27-card { white-space: nowrap; font-size: var(--text-2xs); }
+.i27-eng { font-family: var(--font-mono); font-size: var(--text-2xs); }
+.i27-eng span { display: block; white-space: nowrap; }
+.i27-table .i27-y { color: var(--go); }
+.i27-table .i27-n { color: var(--ink-dim); }
+.i27-table .i27-b { color: var(--warn); }
+.i27-k { color: var(--ink-dim); }
+td.i27-you { font-family: var(--font-mono); font-size: var(--text-2xs); white-space: nowrap; }
+/* phones: the title takes the full row and the engines + probe sit under it */
+@media (max-width: 520px) {
+  .i27-table thead { display: none; }
+  .i27-table tbody tr:not(.i27-g) { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; border-bottom: 1px solid var(--grey-88); padding: 4px 0; }
+  .i27-table tbody tr:not(.i27-g) td { border-bottom: 0; padding: 0; }
+  .i27-table tbody tr:not(.i27-g) td:first-child { grid-column: 1 / -1; margin-bottom: 2px; }
+  .i27-eng span { display: inline; margin-right: 6px; }
+  .i27-table .i27-g th { display: block; }
+}
 .hq-cap { font-size: var(--text-micro); color: var(--grey-48); margin: 8px 0 0; }
 </style>
 <link rel="stylesheet" href="/luna.css">
@@ -1018,6 +1043,16 @@ window.__horizonCaps = (function () {
       here are when I checked, never when I guessed.
     </p>
     <p class="note">
+      <strong>2026-10-08:</strong> the Firefox team&apos;s
+      <a href="https://interop-rank.fxdx.dev/" rel="external">Interop&nbsp;2027 ranking</a>
+      lists 100 proposals, and 61 of them had no card here. All 100 now sit in one
+      <a href="#interop-2027">index at the bottom</a>, each with engine versions read
+      from today&apos;s MDN compat data and a live probe of your browser. Reading it
+      moved three cards: Safari&nbsp;27 and Firefox&nbsp;157 are stable now, so
+      <code>appearance: base-select</code>, <code>:heading</code> and
+      <code>@supports at-rule()</code> lost a &quot;beta&quot; or gained an engine.
+    </p>
+    <p class="note" id="install-note">
       The 08-10 pass found a <em>fourth</em> direction, and unlike the other three it
       is a flaw in the method rather than in the sources. Every line here was written
       reading Chrome first, so a feature that shipped in WebKit or <a class="term" data-t="gecko" href="https://en.wikipedia.org/wiki/Gecko_(software)" title="The browser engine inside Firefox that turns HTML, CSS and JavaScript into the page you see." rel="external">Gecko</a> years earlier
@@ -1128,7 +1163,7 @@ window.__horizonCaps = (function () {
     </section>
 
     <!-- ───────────────────── interestfor + anchor positioning ───────────────────── -->
-    <section class="demo ifor-demo" data-cap="interestfor">
+    <section class="demo ifor-demo" id="interestfor" data-cap="interestfor">
       <h2>
         <span>interestfor <span class="mono">+ anchor positioning</span></span>
         <span class="stat contested">Chrome 142 &middot; Safari opposes &middot; FF no</span>
@@ -1196,7 +1231,7 @@ pointerout   -&gt; hidePopover()
     </section>
 
     <!-- ───────────────────── feature cards ───────────────────── -->
-    <section class="demo shipped" data-cap="anchor-positioning">
+    <section class="demo shipped" id="anchor-positioning" data-cap="anchor-positioning">
       <h2>
         <span>anchor positioning <span class="mono">/ position-area + position-try</span></span>
         <span class="stat cross">Chrome · Safari · Firefox</span>
@@ -1405,7 +1440,7 @@ pointerout   -&gt; hidePopover()
       </p>
     </section>
 
-    <section class="demo" data-cap="view-transitions">
+    <section class="demo" id="view-transitions" data-cap="view-transitions">
       <h2>
         <span>View Transitions <span class="mono">/ document.startViewTransition()</span></span>
         <span class="stat cross">Chrome &middot; Safari &middot; FF 144</span>
@@ -1485,10 +1520,10 @@ pointerout   -&gt; hidePopover()
       </script>
     </section>
 
-    <section class="demo" data-cap="base-select">
+    <section class="demo" id="base-select" data-cap="base-select">
       <h2>
         <span>appearance: base-select <span class="mono">/ customizable &lt;select&gt;</span></span>
-        <span class="stat cross">Chrome 135 &middot; Safari 27 beta &middot; FF 153 parser</span>
+        <span class="stat cross">Chrome 135 &middot; Safari 27 &middot; FF 153 parser</span>
       </h2>
       <p class="note">
         For two decades the <code>&lt;select&gt;</code> popup has been a sealed
@@ -1545,7 +1580,7 @@ pointerout   -&gt; hidePopover()
       </p>
     </section>
 
-    <section class="demo" data-cap="corner-shape">
+    <section class="demo" id="corner-shape" data-cap="corner-shape">
       <h2>
         <span>corner-shape <span class="mono">+ superellipse()</span></span>
         <span class="stat chrome">Chrome 139 &middot; Safari positive &middot; FF no</span>
@@ -1594,7 +1629,7 @@ pointerout   -&gt; hidePopover()
       </p>
     </section>
 
-    <section class="demo cs-demo" data-cap="interpolate-size">
+    <section class="demo cs-demo" id="interpolate-size" data-cap="interpolate-size">
       <h2>
         <span>calc-size() <span class="mono">/ interpolate-size</span></span>
         <span class="stat chrome">Chrome-only</span>
@@ -1655,7 +1690,7 @@ pointerout   -&gt; hidePopover()
       </p>
     </section>
 
-    <section class="demo" data-cap="scheduler-yield">
+    <section class="demo" id="scheduler-yield" data-cap="scheduler-yield">
       <h2>
         <span>scheduler.yield() <span class="mono">/ main-thread responsiveness</span></span>
         <span class="stat chrome">Chrome 129 &middot; FF 142 &middot; no Safari</span>
@@ -1897,7 +1932,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
       </script>
     </section>
 
-    <section class="demo" data-cap="masonry">
+    <section class="demo" id="masonry" data-cap="masonry">
       <h2>
         <span>CSS Masonry <span class="mono">/ Grid Lanes</span></span>
         <span class="stat trial">Safari 26.4 &middot; Chrome flag</span>
@@ -1967,7 +2002,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
       </p>
     </section>
 
-    <section class="demo" data-cap="jpeg-xl">
+    <section class="demo" id="jpeg-xl" data-cap="jpeg-xl">
       <h2>
         <span>JPEG XL <span class="mono">image/jxl</span></span>
         <span class="stat trial">Safari &middot; Chrome 155 beta &middot; Firefox 157 beta</span>
@@ -2266,7 +2301,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       kbd { font: var(--text-micro) var(--font-mono); background: oklch(96% 0 0); border: 1px solid oklch(80% 0 0); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; }
     </style>
 
-    <section class="demo" data-cap="css-carousel">
+    <section class="demo" id="css-carousel" data-cap="css-carousel">
       <h2>
         <span>CSS Carousel <span class="mono">::scroll-marker &middot; ::scroll-button</span></span>
         <span class="stat chrome">Chrome 135</span>
@@ -2579,7 +2614,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── @starting-style ───────────────────── -->
-    <section class="demo shipped" data-cap="starting-style">
+    <section class="demo shipped" id="starting-style" data-cap="starting-style">
       <h2>
         <span>@starting-style <span class="mono">+ transition-behavior: allow-discrete</span></span>
         <span class="stat cross">Chrome 117 &middot; Safari 18 &middot; FF 129</span>
@@ -2722,7 +2757,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── if() + sibling-index() ───────────────────── -->
-    <section class="demo" data-cap="css-if">
+    <section class="demo" id="css-if" data-cap="css-if">
       <h2>
         <span>if() &amp; sibling-index() <span class="mono">/ CSS Values 5</span></span>
         <span class="stat trial">sibling-index() cross &middot; if() Chrome + Safari TP</span>
@@ -2749,7 +2784,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── scroll-state container queries ───────────────────── -->
-    <section class="demo" data-cap="scroll-state">
+    <section class="demo" id="scroll-state" data-cap="scroll-state">
       <h2>
         <span>scroll-state container queries <span class="mono">@container scroll-state(stuck)</span></span>
         <span class="stat chrome">Chrome 133 &middot; others no</span>
@@ -2771,7 +2806,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── reading-flow ───────────────────── -->
-    <section class="demo" data-cap="reading-flow">
+    <section class="demo" id="reading-flow" data-cap="reading-flow">
       <h2>
         <span>reading-flow / reading-order</span>
         <span class="stat chrome">Chrome 137 &middot; others no</span>
@@ -2813,7 +2848,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── Temporal ───────────────────── -->
-    <section class="demo shipped" data-cap="temporal">
+    <section class="demo shipped" id="temporal" data-cap="temporal">
       <h2>
         <span>Temporal <span class="mono">/ the date/time rewrite</span></span>
         <span class="stat cross">ES2027 &middot; Chrome 144 &middot; FF 139 &middot; no Safari</span>
@@ -2965,7 +3000,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── focusgroup ───────────────────── -->
-    <section class="demo" data-cap="focusgroup">
+    <section class="demo" id="focusgroup" data-cap="focusgroup">
       <h2>
         <span>focusgroup <span class="mono">attribute</span></span>
         <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
@@ -3049,7 +3084,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── CSS random() ───────────────────── -->
-    <section class="demo" data-cap="css-random">
+    <section class="demo" id="css-random" data-cap="css-random">
       <h2>
         <span>CSS <span class="mono">random()</span></span>
         <span class="stat trial">Safari 26.2 &middot; Chrome 156 beta &middot; FF no</span>
@@ -3119,7 +3154,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── gap decorations ───────────────────── -->
-    <section class="demo" data-cap="gap-decorations">
+    <section class="demo" id="gap-decorations" data-cap="gap-decorations">
       <h2>
         <span>Gap decorations <span class="mono">column-rule / row-rule</span></span>
         <span class="stat chrome">Chrome 149 &middot; Safari TP &middot; FF no</span>
@@ -3147,7 +3182,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── border-shape ───────────────────── -->
-    <section class="demo" data-cap="border-shape">
+    <section class="demo" id="border-shape" data-cap="border-shape">
       <h2>
         <span>border-shape <span class="mono">non-rectangular borders</span></span>
         <span class="stat chrome">Chrome 147 &middot; Safari/FF no</span>
@@ -3174,15 +3209,15 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── :heading ───────────────────── -->
-    <section class="demo" data-cap="heading-pseudo">
+    <section class="demo" id="heading-pseudo" data-cap="heading-pseudo">
       <h2>
         <span>:heading <span class="mono">and :heading()</span></span>
-        <span class="stat trial">Safari 27 beta &middot; FF 142 flag &middot; Chrome no</span>
+        <span class="stat trial">Safari 27 &middot; FF 142 flag &middot; Chrome no</span>
       </h2>
       <p class="note">
         <code>:heading</code> matches any of <code>h1</code> through <code>h6</code>, and
-        <code>:heading(2, 3)</code> matches the levels you name. Selectors&nbsp;5, shipped
-        first in Safari&nbsp;27 beta, behind <code>layout.css.heading-selector.enabled</code>
+        <code>:heading(2, 3)</code> matches the levels you name. Selectors&nbsp;5. Safari&nbsp;27
+        ships <code>:heading</code> (stable since 2026-09-14) but not yet <code>:heading()</code>; it sits behind <code>layout.css.heading-selector.enabled</code>
         in Firefox, absent in Chrome.
       </p>
       <p class="replaces">
@@ -3253,7 +3288,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── Reference Target ───────────────────── -->
-    <section class="demo" data-cap="reference-target">
+    <section class="demo" id="reference-target" data-cap="reference-target">
       <h2>
         <span>Reference Target <span class="mono">cross-root ARIA</span></span>
         <span class="stat chrome">Chrome 151 &middot; Safari 26 flag &middot; FF 144 flag</span>
@@ -3377,7 +3412,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── Element.moveBefore() ───────────────────── -->
-    <section class="demo" data-cap="move-before">
+    <section class="demo" id="move-before" data-cap="move-before">
       <h2>
         <span>Element.moveBefore() <span class="mono">state-preserving move</span></span>
         <span class="stat chrome">Chrome 133 &middot; FF 144 &middot; Safari positive</span>
@@ -3473,7 +3508,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── @function ───────────────────── -->
-    <section class="demo" data-cap="css-function">
+    <section class="demo" id="css-function" data-cap="css-function">
       <h2>
         <span>@function <span class="mono">custom CSS functions</span></span>
         <span class="stat chrome">Chrome 139 &middot; Safari TP 249 &middot; FF no</span>
@@ -3544,7 +3579,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── 103 Early Hints ───────────────────── -->
-    <section class="demo" data-cap="early-hints">
+    <section class="demo" id="early-hints" data-cap="early-hints">
       <h2>
         <span>103 Early Hints <span class="mono">server-side</span></span>
         <span class="stat cross">Chrome &middot; Firefox &middot; Safari (preconnect)</span>
@@ -3563,7 +3598,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── Speculation Rules ───────────────────── -->
-    <section class="demo shipped" data-cap="speculation-rules">
+    <section class="demo shipped" id="speculation-rules" data-cap="speculation-rules">
       <h2>
         <span>Speculation Rules <span class="mono">prefetch / prerender</span></span>
         <span class="stat chrome">Chrome &middot; Safari 26.2 (off) &middot; FF no</span>
@@ -3781,7 +3816,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── Long Animation Frames ───────────────────── -->
-    <section class="demo" data-cap="loaf">
+    <section class="demo" id="loaf" data-cap="loaf">
       <h2>
         <span>Long Animation Frames <span class="mono">LoAF</span></span>
         <span class="stat chrome">Chrome 123 &middot; Safari/FF no</span>
@@ -4230,7 +4265,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── margin-trim ───────────────────── -->
-    <section class="demo" data-cap="margin-trim">
+    <section class="demo" id="margin-trim" data-cap="margin-trim">
       <h2>
         <span>margin-trim</span>
         <span class="stat trial">Safari 16.4 &middot; Chrome 155 beta &middot; FF no</span>
@@ -4397,10 +4432,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── @supports at-rule() + named-feature() ───────────────────── -->
-    <section class="demo" data-cap="supports-at-rule">
+    <section class="demo" id="supports-at-rule" data-cap="supports-at-rule">
       <h2>
         <span>@supports at-rule() <span class="mono">+ named-feature()</span></span>
-        <span class="stat chrome">Chrome 148 &middot; FF positive on named-feature &middot; Safari no</span>
+        <span class="stat cross">Chrome 148 &middot; FF 157 &middot; Safari TP</span>
       </h2>
       <p class="note">
         <code>@supports</code> has always been able to test a property/value
@@ -4424,9 +4459,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
         return <code>false</code> under a comment explaining that no synchronous
         probe exists, on the reasoning that a chip reading &quot;no&quot; is
         more honest than a probe that pretends to know. <code>at-rule()</code>
-        would convert some of that class of question into a real answer. It is
-        Chrome-only today, so the honest-false convention stays exactly as it
-        is, and this card is a note about what would retire it.
+        would convert some of that class of question into a real answer. Firefox&nbsp;157
+        shipped <code>at-rule()</code> on 2026-09-29, so it now clears two engines;
+        <code>named-feature()</code> is still Chrome&nbsp;150 only, and the honest-false
+        convention stays until a probe can actually replace each one.
       </p>
       <p class="unsupported">No <code>at-rule()</code> in this browser&apos;s <code>@supports</code>, which the probe above reports directly.</p>
     </section>
@@ -4756,7 +4792,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── AccentColor system colors ───────────────────── -->
-    <section class="demo" data-cap="accent-color">
+    <section class="demo" id="accent-color" data-cap="accent-color">
       <h2>
         <span>AccentColor <span class="mono">&middot; AccentColorText</span></span>
         <span class="stat cross">Firefox 103 &middot; Safari 16.5 &middot; Chrome 150</span>
@@ -4956,7 +4992,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── animation-trigger ───────────────────── -->
-    <section class="demo" data-cap="animation-trigger">
+    <section class="demo" id="animation-trigger" data-cap="animation-trigger">
       <h2>
         <span>animation-trigger <span class="mono">scroll-triggered, not scroll-driven</span></span>
         <span class="stat trial">Chrome 146, <code>none</code> only &middot; Safari/FF no</span>
@@ -5002,7 +5038,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── scrollIntoView promise ───────────────────── -->
-    <section class="demo" data-cap="scroll-promise">
+    <section class="demo" id="scroll-promise" data-cap="scroll-promise">
       <h2>
         <span>scrollIntoView() <span class="mono">returns a promise</span></span>
         <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
@@ -5200,6 +5236,242 @@ navigation.addEventListener("navigate", (e) =&gt; {
       })();
     </script>
 
+    <!-- ───────────────────── Interop 2027 proposals ───────────────────── -->
+    <section class="demo" id="interop-2027">
+      <h2>
+        <span>Interop 2027 proposals <span class="mono">/ all 100, indexed</span></span>
+        <span class="stat trial">proposals &middot; Oct 2026</span>
+      </h2>
+      <p class="note">
+        Each year the browser vendors pick a set of focus areas and agree to fix
+        them together, scored on shared <a href="https://wpt.fyi/" rel="external">WPT</a> tests. The Firefox team opened
+        <a href="https://interop-rank.fxdx.dev/" rel="external">public ranking</a> of the
+        100 proposals for 2027, which makes the list a map of what the engines think
+        comes next. It overlapped this page on 39 rows and missed it on 61, so every
+        proposal is now here. Each row links its proposal issue and, where one exists,
+        the card above that covers it.
+      </p>
+      <p class="note">
+        Engine versions come from MDN&apos;s browser-compat-data 8.1.5 and
+        web-features 3.41.0, both published 2026-10-08, read per feature rather than
+        typed in. A version still in beta says so and doesn&apos;t count toward the
+        row&apos;s group. &quot;A bug list&quot; rows already ship everywhere and the
+        proposal is about where engines disagree. &quot;Not in compat data&quot; means
+        MDN has no key for it yet, which is a different claim from no engine shipping
+        it. The last column probes <em>your</em> browser; <code>n/a</code> means no
+        honest synchronous probe exists, the same convention as the chips up top.
+      </p>
+      <div class="i27-wrap">
+        <table class="i27-table">
+          <thead>
+            <tr><th>proposal</th><th>stable engines</th><th>you</th></tr>
+          </thead>
+          <tbody>
+          <tr class="i27-g"><th colspan="3">Ships in all three engines (7)</th></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1465" rel="external">Trusted Types</a><br><span class="i27-sub">Ensures input has been passed through a transformation function before being passed to an API that might execute that input.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;83</span> <span class="i27-y">Firefox&nbsp;148</span> <span class="i27-y">Safari&nbsp;26</span></td><td class="i27-you" data-i27="1465">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1460" rel="external">Improve CSS <code>sibling-&#8288;count()</code> and <code>sibling-&#8288;index()</code> functions interop.</a> <a class="i27-card" href="#css-if">&uarr;&nbsp;card</a><br><span class="i27-sub">Fix remaining test failures.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;138</span> <span class="i27-y">Firefox&nbsp;154</span> <span class="i27-y">Safari&nbsp;26.2</span></td><td class="i27-you" data-i27="1460">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1447" rel="external">WebVTT</a><br><span class="i27-sub">WebVTT files are loaded using the <code>&lt;track&gt;</code> element, and the <code>VTTCue</code> API can be used to create or update cues dynamically.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;23</span> <span class="i27-y">Firefox&nbsp;31</span> <span class="i27-y">Safari&nbsp;6</span></td><td class="i27-you" data-i27="1447">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1446" rel="external">CSS <code>@counter-&#8288;style</code></a><br><span class="i27-sub">Defines custom counter styles for list items, such as a sequence of symbols instead of numbers.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;91</span> <span class="i27-y">Firefox&nbsp;33</span> <span class="i27-y">Safari&nbsp;17</span></td><td class="i27-you" data-i27="1446">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1387" rel="external"><code>ariaNotify()</code></a><br><span class="i27-sub">Requests that assistive technology, such as a screen reader, announces a message to the user.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;141</span> <span class="i27-y">Firefox&nbsp;150</span> <span class="i27-y">Safari&nbsp;27</span></td><td class="i27-you" data-i27="1387">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1378" rel="external">Improve interoperability of the WebCodecs API</a><br><span class="i27-sub">Low-level access to individual video frames and chunks of audio samples.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;94</span> <span class="i27-y">Firefox&nbsp;130</span> <span class="i27-y">Safari&nbsp;26</span></td><td class="i27-you" data-i27="1378">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1361" rel="external">CSS <code>AccentColor</code> system color reflects <code>accent-&#8288;color</code></a> <a class="i27-card" href="#accent-color">&uarr;&nbsp;card</a><br><span class="i27-sub">Provides a consistent way to style custom form controls to match native ones.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;149</span> <span class="i27-y">Firefox&nbsp;103</span> <span class="i27-y">Safari&nbsp;16.5</span></td><td class="i27-you" data-i27="1361">&hellip;</td></tr>
+          <tr class="i27-g"><th colspan="3">Ships in all three already; the proposal is a list of bugs (8)</th></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1441" rel="external">Preserve history state after cross-document navigation</a><br><span class="i27-sub">Some browsers discard <code>history.state</code> after cross-document navigations, but keep it for same-document navigations.</span></td><td class="i27-eng"><span class="i27-n">a bug list, not one feature</span></td><td class="i27-you" data-i27="1441">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1427" rel="external">Improve interoperability of pointer events on touch devices</a></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;55</span> <span class="i27-y">Firefox&nbsp;59</span> <span class="i27-y">Safari&nbsp;13</span></td><td class="i27-you" data-i27="1427">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1411" rel="external">Lazy-loaded images should not be completed by out-of-band loads</a><br><span class="i27-sub">Background loads of a lazy image&#39;s URL shouldn&#39;t leak into its <code>complete</code> state or metadata.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;77</span> <span class="i27-y">Firefox&nbsp;121</span> <span class="i27-y">Safari&nbsp;16.4</span></td><td class="i27-you" data-i27="1411">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1410" rel="external">CSS <code>align-&#8288;content</code> for centering in buttons and inputs</a><br><span class="i27-sub">Allows overriding the vertical alignment of text in form controls.</span></td><td class="i27-eng"><span class="i27-n">a bug list, not one feature</span></td><td class="i27-you" data-i27="1410">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1396" rel="external">Timing of cross-origin redirects in the Performance API</a><br><span class="i27-sub">Consistent navigation timing and resource timing entries for cross-origin redirects.</span></td><td class="i27-eng"><span class="i27-n">a bug list, not one feature</span></td><td class="i27-you" data-i27="1396">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1390" rel="external">Improve <code>createImageBitmap()</code> resizing and cropping</a><br><span class="i27-sub">Better image resizing, cropping, and thumbnailing when creating an <code>ImageBitmap</code>.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;59</span> <span class="i27-y">Firefox&nbsp;98</span> <span class="i27-y">Safari&nbsp;17.2</span></td><td class="i27-you" data-i27="1390">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1386" rel="external">JavaScript modules in more contexts</a><br><span class="i27-sub">Such as <code>&lt;script&nbsp;type=&quot;module&quot;&gt;</code> in XHTML and SVG documents, and module background scripts in web extensions.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;61</span> <span class="i27-y">Firefox&nbsp;60</span> <span class="i27-y">Safari&nbsp;11</span></td><td class="i27-you" data-i27="1386">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1334" rel="external">Correct handling of powerless and missing color components</a><br><span class="i27-sub">Fixes <code>none</code> and powerless components in <code>color-&#8288;mix()</code>, relative color syntax, and gradients.</span></td><td class="i27-eng"><span class="i27-n">a bug list, not one feature</span></td><td class="i27-you" data-i27="1334">&hellip;</td></tr>
+          <tr class="i27-g"><th colspan="3">Ships in two engines (20)</th></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1469" rel="external">Targeted SVG improvements</a><br><span class="i27-sub">SVG filters, <code>context-&#8288;fill</code>/<code>context-&#8288;stroke</code>, <code>&lt;use&gt;</code> without a fragment, and path data APIs.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;124</span> <span class="i27-y">Firefox&nbsp;111</span> <span class="i27-n">Safari&nbsp;no</span> <span class="i27-k">(status shown: context-fill/stroke)</span></td><td class="i27-you" data-i27="1469">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1467" rel="external">Brotli support in <code>CompressionStream</code> and <code>DecompressionStream</code></a></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-y">Firefox&nbsp;147</span> <span class="i27-y">Safari&nbsp;18.4</span></td><td class="i27-you" data-i27="1467">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1466" rel="external">JavaScript CSS module imports</a><br><span class="i27-sub"><code>import&nbsp;…&nbsp;with&nbsp;{&nbsp;type:&nbsp;&quot;css&quot;&nbsp;}</code> to load CSS resources as constructable stylesheets.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;123</span> <span class="i27-y">Firefox&nbsp;147</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1466">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1457" rel="external">CSS anchor positioning with transforms and animations</a> <a class="i27-card" href="#anchor-positioning">&uarr;&nbsp;card</a><br><span class="i27-sub">Anchor-positioned elements track transforms on their anchors, and changes to the calculated <code>anchor()</code> triggers transitions.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;144</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-y">Safari&nbsp;27</span></td><td class="i27-you" data-i27="1457">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1450" rel="external">CSS <code>baseline-&#8288;source</code> property</a><br><span class="i27-sub">Controls which baseline is used to align multi-line inline-level boxes with surrounding text.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;111</span> <span class="i27-y">Firefox&nbsp;115</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1450">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1434" rel="external">CSS <code>@supports&nbsp;at-&#8288;rule()</code></a> <a class="i27-card" href="#supports-at-rule">&uarr;&nbsp;card</a><br><span class="i27-sub">Checks if a CSS at-rule is supported.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;148</span> <span class="i27-y">Firefox&nbsp;157</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1434">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1428" rel="external">Media Session <code>togglecamera</code>, <code>togglemicrophone</code>, and <code>voiceactivity</code> actions</a><br><span class="i27-sub">Provides awareness of media actions on platform UI and hardware, such as muting from a picture-in-picture window.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;93</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-y">Safari&nbsp;18.4</span></td><td class="i27-you" data-i27="1428">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1417" rel="external">WebDriver BiDi</a><br><span class="i27-sub">A new protocol for browser automation, extending &#39;classic&#39; WebDriver by introducing bidirectional communication.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;126</span> <span class="i27-y">Firefox&nbsp;117</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1417">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1413" rel="external">Scheduler API</a> <a class="i27-card" href="#scheduler-yield">&uarr;&nbsp;card</a><br><span class="i27-sub">Helps chunk up main-thread work relative to other tasks.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;129</span> <span class="i27-y">Firefox&nbsp;142</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1413">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1409" rel="external">Keyboard lock in <code>requestFullscreen()</code></a><br><span class="i27-sub">Allows fullscreen pages, such as games, to prevent the Escape key from exiting fullscreen, and to handle other reserved shortcuts.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-y">Firefox&nbsp;151</span> <span class="i27-y">Safari&nbsp;26.4</span></td><td class="i27-you" data-i27="1409">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1400" rel="external"><code>103&nbsp;Early&nbsp;Hints</code> preloading</a> <a class="i27-card" href="#early-hints">&uarr;&nbsp;card</a><br><span class="i27-sub">Browsers start preconnecting and preloading resources while the server is still generating the page, with consistent resource timing entries.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;103</span> <span class="i27-y">Firefox&nbsp;123</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1400">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1399" rel="external">Multiple import maps</a><br><span class="i27-sub">Allows multiple import maps in a single document, and allows modules to load before unrelated import maps.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;133</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-y">Safari&nbsp;18.4</span></td><td class="i27-you" data-i27="1399">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1398" rel="external"><code>requestIdleCallback</code></a><br><span class="i27-sub">Queues a function that runs in idle browser time, either at the end of a frame or when the user is inactive.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;47</span> <span class="i27-y">Firefox&nbsp;55</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1398">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1393" rel="external">Customizable/stylable <code>&lt;select&gt;</code></a> <a class="i27-card" href="#base-select">&uarr;&nbsp;card</a><br><span class="i27-sub">Customize the button, selected option, picker, and options with CSS.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;135</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-y">Safari&nbsp;27</span></td><td class="i27-you" data-i27="1393">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1391" rel="external">CSS <code>box-&#8288;decoration-&#8288;break</code> without a vendor prefix</a><br><span class="i27-sub">Sets whether borders and backgrounds wrap each fragment of a box split across lines, columns, or pages.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;130</span> <span class="i27-y">Firefox&nbsp;32</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1391">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1384" rel="external">Allow CSS transitioning/animating <code>display</code> and <code>content-&#8288;visibility</code></a> <a class="i27-card" href="#starting-style">&uarr;&nbsp;card</a><br><span class="i27-sub">Useful for delaying <code>display:&nbsp;none</code> until an exit animation completes.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;117</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-y">Safari&nbsp;18</span></td><td class="i27-you" data-i27="1384">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1381" rel="external">JavaScript <code>Temporal</code></a> <a class="i27-card" href="#temporal">&uarr;&nbsp;card</a><br><span class="i27-sub">A modern and extensive date/time API to replace <code>Date</code>.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;144</span> <span class="i27-y">Firefox&nbsp;139</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1381">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1355" rel="external">DOM <code>moveBefore()</code></a> <a class="i27-card" href="#move-before">&uarr;&nbsp;card</a><br><span class="i27-sub">Relocates a node while preserving its state like focus, animation, or move an iframe without reloading its content.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;133</span> <span class="i27-y">Firefox&nbsp;144</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1355">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1342" rel="external">Deprecate customized built-in elements (via the <code>is</code> attribute)</a><br><span class="i27-sub">Remove the feature from the spec and the browsers that implement it.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;67</span> <span class="i27-y">Firefox&nbsp;63</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1342">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1336" rel="external">Sanitizer API, via <code>document.parseHTML()</code> and <code>element.setHTML()</code></a> <a class="i27-card" href="#sanitizer-card">&uarr;&nbsp;card</a><br><span class="i27-sub">Customizes the sanitization of HTML inserted into the DOM, to prevent cross-site scripting attacks.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;146</span> <span class="i27-y">Firefox&nbsp;148</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1336">&hellip;</td></tr>
+          <tr class="i27-g"><th colspan="3">Ships in one engine (44)</th></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1470" rel="external">HTML <code>&lt;iframe&nbsp;allow=&quot;cross-&#8288;origin-&#8288;isolated&quot;&gt;</code></a><br><span class="i27-sub">Allows cross-origin isolated features, such as <code>SharedArrayBuffer</code>, within iframes.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;87</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1470">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1449" rel="external">CSS <code>filter(image,&nbsp;...filters)</code></a><br><span class="i27-sub">Takes an image and a filter, and returns a new image.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-y">Safari&nbsp;9.1</span></td><td class="i27-you" data-i27="1449">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1445" rel="external">CSS grid lanes (masonry)</a> <a class="i27-card" href="#masonry">&uarr;&nbsp;card</a><br><span class="i27-sub"><code>display:&nbsp;grid-&#8288;lanes</code> creates a layout where items are tightly packed into parallel lanes.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-y">Safari&nbsp;26.4</span></td><td class="i27-you" data-i27="1445">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1444" rel="external">CSS <code>margin-&#8288;trim</code></a> <a class="i27-card" href="#margin-trim">&uarr;&nbsp;card</a><br><span class="i27-sub">Removes the margins of child elements when they meet the edges of the container.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-y">Safari&nbsp;16.4</span></td><td class="i27-you" data-i27="1444">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1443" rel="external">Responsive iframes</a><br><span class="i27-sub">The <code>frame-&#8288;sizing</code> CSS property sizes an <code>&lt;iframe&gt;</code> to its content, avoiding scrolling within the iframe.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;154</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1443">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1440" rel="external">Viewport Segments API</a><br><span class="i27-sub">Adapt layouts to devices where the display is split, such as foldables.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;138</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1440">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1439" rel="external">Device Posture API</a><br><span class="i27-sub">Reflects the posture of a device, such as whether a foldable device is folded, in both CSS and script.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;132</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1439">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1435" rel="external">Promises from programmatic scroll methods</a> <a class="i27-card" href="#scroll-promise">&uarr;&nbsp;card</a><br><span class="i27-sub"><code>scroll()</code>, <code>scrollTo()</code>, <code>scrollBy()</code>, and <code>scrollIntoView()</code> return promises that resolve when scrolling completes.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;150</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1435">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1433" rel="external">CSS scroll-triggered animations</a> <a class="i27-card" href="#animation-trigger">&uarr;&nbsp;card</a><br><span class="i27-sub"><code>timeline-&#8288;trigger</code> and <code>animation-&#8288;trigger</code> play, pause, or reverse animations when the user scrolls to a particular point.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;146</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1433">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1432" rel="external">CSS <code>symbols()</code> function</a><br><span class="i27-sub">Defines a counter style inline, such as in <code>list-&#8288;style</code>, without needing <code>@counter-&#8288;style</code>.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-y">Firefox&nbsp;35</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1432">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1429" rel="external">JavaScript self-profiling API</a><br><span class="i27-sub">The <code>Profiler</code> API records data about the execution of a page, which you can send to a server for later analysis.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;94</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1429">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1424" rel="external"><code>Connection-&#8288;Allowlist</code> header</a><br><span class="i27-sub">Limits which origins a page may connect to using fetch and other APIs.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;152</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1424">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1419" rel="external">Element-scoped view transitions</a> <a class="i27-card" href="#view-transitions">&uarr;&nbsp;card</a><br><span class="i27-sub"><code>element.startViewTransition()</code> starts a view transition that only affects that element&#39;s subtree, allowing multiple transitions to run concurrently.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;147</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1419">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1418" rel="external">CSS <code>polygon()</code> vertex rounding</a><br><span class="i27-sub">Such as <code>polygon(round&nbsp;20px,&nbsp;…)</code> to round the corners of a polygon.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;150</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1418">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1414" rel="external"><code>MediaStreamTrackProcessor</code> and <code>VideoTrackGenerator</code> APIs</a><br><span class="i27-sub">Simplifies real-time processing of video streams.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-y">Safari&nbsp;18</span></td><td class="i27-you" data-i27="1414">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1406" rel="external">CSS <code>::scroll-&#8288;marker</code> and <code>::scroll-&#8288;marker-&#8288;group</code> pseudo-elements</a> <a class="i27-card" href="#css-carousel">&uarr;&nbsp;card</a><br><span class="i27-sub">Generates navigation markers for scroll containers, for things like carousels, tabs, and tables of contents.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;135</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1406">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1405" rel="external">HTML <code>&lt;input&nbsp;type=&quot;week&quot;&gt;</code></a></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;20</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1405">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1404" rel="external">Web app manifest <code>share_target</code></a><br><span class="i27-sub">Allows an installed web app to appear in the device&#39;s share dialog as a target for shared content.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;89</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1404">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1397" rel="external"><code>NotRestoredReasons</code> in the Performance API</a><br><span class="i27-sub">Provides report data containing reasons why the current document was blocked from using the back/forward cache.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;125</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1397">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1385" rel="external">CSS <code>object-&#8288;view-&#8288;box</code> property</a><br><span class="i27-sub">Crops and zooms to an inset area of an image.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;104</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1385">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1382" rel="external">Extended lifetime <code>SharedWorker</code>s</a><br><span class="i27-sub">Gives shared workers extra time to finish work after all pages using them have closed.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;148</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1382">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1374" rel="external">CSS gap decorations</a> <a class="i27-card" href="#gap-decorations">&uarr;&nbsp;card</a><br><span class="i27-sub"><code>column-&#8288;rule</code> and <code>row-&#8288;rule</code> display decorative lines between columns and rows of a flex, grid, or multi-column layout.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;149</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1374">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1373" rel="external">CSS <code>interpolate-&#8288;size</code> property and <code>calc-&#8288;size()</code> function</a> <a class="i27-card" href="#interpolate-size">&uarr;&nbsp;card</a><br><span class="i27-sub">Allows animating to <code>height:&nbsp;auto</code>, and using intrinsic sizes in calculations.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;129</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1373">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1372" rel="external"><code>PerformanceLongAnimationFrameTiming</code> entries in the Performance API</a> <a class="i27-card" href="#loaf">&uarr;&nbsp;card</a><br><span class="i27-sub">Provides information about rendering updates that take longer than 50 milliseconds.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;123</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1372">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1371" rel="external">CSS <code>border-&#8288;shape</code> property</a> <a class="i27-card" href="#border-shape">&uarr;&nbsp;card</a><br><span class="i27-sub">Sets the geometry of the border box to a fully custom shape, changing the shape of borders, outlines, and shadows.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;147</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1371">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1368" rel="external">CSS <code>corner-&#8288;shape</code> property</a> <a class="i27-card" href="#corner-shape">&uarr;&nbsp;card</a><br><span class="i27-sub">Alternative shapes for <code>border-&#8288;radius</code>, such as squircles and bevels.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;139</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1368">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1366" rel="external">Out-of-order streaming with <code>&lt;template&nbsp;for&gt;</code></a> <a class="i27-card" href="#patching-card">&uarr;&nbsp;card</a><br><span class="i27-sub">Replaces content at a named range or insertion point, allowing partial updates to be streamed into the document out of order.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;150</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1366">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1364" rel="external">CSS container scroll-state queries</a> <a class="i27-card" href="#scroll-state">&uarr;&nbsp;card</a><br><span class="i27-sub">The <code>@container&nbsp;scroll-&#8288;state(...)</code> at-rule applies styles based on the sticky positioning, snapped, and scrollable state of the container.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;133</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1364">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1363" rel="external">CSS anchored container queries</a><br><span class="i27-sub"><code>@container&nbsp;anchored(fallback:&nbsp;…)</code> applies styles based on which position fallback an anchor-positioned element is using.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;143</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1363">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1360" rel="external">CSS <code>justify-&#8288;items</code> and <code>justify-&#8288;self</code> in block layout</a></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;130</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1360">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1358" rel="external">Interest invokers</a> <a class="i27-card" href="#interestfor">&uarr;&nbsp;card</a><br><span class="i27-sub">The <code>interestfor</code> attribute triggers actions on a target element when the user shows interest, such as via hover, focus, or long-press.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;142</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1358">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1357" rel="external">CSS <code>@function</code></a> <a class="i27-card" href="#css-function">&uarr;&nbsp;card</a><br><span class="i27-sub">Defines custom functions that take arguments and return a CSS value.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;139</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1357">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1356" rel="external">CSS <code>:has-&#8288;slotted</code> pseudo-class</a><br><span class="i27-sub">Matches <code>&lt;slot&gt;</code> elements that have slotted content, rather than showing fallback content.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-y">Firefox&nbsp;136</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1356">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1354" rel="external">CSS <code>random()</code> function</a> <a class="i27-card" href="#css-random">&uarr;&nbsp;card</a><br><span class="i27-sub">Chooses a random numeric value within a specified range.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-y">Safari&nbsp;26.2</span></td><td class="i27-you" data-i27="1354">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1353" rel="external">CSS <code>text-&#8288;size-&#8288;adjust</code> property</a><br><span class="i27-sub">Disables or modifies the browser&#39;s default text size adjustment on small screens.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;54</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1353">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1352" rel="external"><code>LayoutShift</code> entries in the Performance API</a><br><span class="i27-sub">Measures the layout stability of web pages based on movements of the elements on the page. Used to calculate cumulative layout shift (CLS).</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;84</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1352">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1350" rel="external">CSS <code>flex-&#8288;wrap:&nbsp;balance</code></a><br><span class="i27-sub">Distributes items in a multi-line flex container so each line has about the same number of items.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;150</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1350">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1349" rel="external">CSS <code>reading-&#8288;flow</code> and <code>reading-&#8288;order</code> properties</a> <a class="i27-card" href="#reading-flow">&uarr;&nbsp;card</a><br><span class="i27-sub">Sets the order in which flex or grid elements are rendered to speech or reached via focus navigation.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;137</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1349">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1347" rel="external"><code>CSSPseudoElement</code> API</a><br><span class="i27-sub">Represents pseudo-elements in JavaScript, allowing things like detecting clicks on a <code>::backdrop</code>.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;149</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1347">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1345" rel="external">CSS scroll snap events</a><br><span class="i27-sub"><code>scrollsnapchanging</code> and <code>scrollsnapchange</code> events fire when a scroll gesture changes the selected scroll snap target.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;129</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1345">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1343" rel="external">CSS <code>if()</code> function</a> <a class="i27-card" href="#css-if">&uarr;&nbsp;card</a><br><span class="i27-sub">An inline conditional value that returns a value based on a set of conditions.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;137</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1343">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1335" rel="external">Speculation Rules API</a> <a class="i27-card" href="#speculation-rules">&uarr;&nbsp;card</a><br><span class="i27-sub">Hints to the browser to proactively download pages in the background so they appear instantly when the user navigates to them.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;109</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1335">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1333" rel="external">Shadow DOM <code>referenceTarget</code></a> <a class="i27-card" href="#reference-target">&uarr;&nbsp;card</a><br><span class="i27-sub">Forwards IDrefs (such as <code>for</code> and <code>aria-&#8288;labelledby</code>) to an element inside a shadow root.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;152</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1333">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1331" rel="external">WebUSB API</a><br><span class="i27-sub">Exposes USB-compatible devices to web pages.</span></td><td class="i27-eng"><span class="i27-y">Chrome&nbsp;61</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1331">&hellip;</td></tr>
+          <tr class="i27-g"><th colspan="3">Ships in no stable engine (7)</th></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1471" rel="external">Streaming HTML insertion with sanitizing</a> <a class="i27-card" href="#patching-card">&uarr;&nbsp;card</a><br><span class="i27-sub">Methods such as <code>streamHTML()</code> and <code>streamAppendHTML()</code> return writable streams that incrementally insert sanitized HTML into an existing tree.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1471">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1462" rel="external">Contact Picker API</a><br><span class="i27-sub"><code>navigator.contacts</code> allows users to share selected entries from their contact list.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1462">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1438" rel="external">CSS <code>scroll-&#8288;snap-&#8288;type:&nbsp;pair</code></a><br><span class="i27-sub">Snap to the same element in both axes.</span></td><td class="i27-eng"><span class="i27-b">Chrome&nbsp;156 beta</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1438">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1416" rel="external">Additional sanitizing HTML methods and trusted types integration</a> <a class="i27-card" href="#patching-card">&uarr;&nbsp;card</a><br><span class="i27-sub">Such as <code>beforeHTML()</code>, <code>appendHTML()</code>, and <code>replaceWithHTML()</code>, which insert sanitized HTML into an existing tree.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1416">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1412" rel="external">HTML <code>headingoffset</code> and <code>headingreset</code> attributes</a> <a class="i27-card" href="#heading-pseudo">&uarr;&nbsp;card</a><br><span class="i27-sub">Offsets the heading level of descendant <code>&lt;h1&gt;</code>–<code>&lt;h6&gt;</code> elements. Includes the CSS <code>:heading()</code> pseudo-class.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1412">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1379" rel="external">CSS <code>line-&#8288;clamp</code> property</a><br><span class="i27-sub">Limits the text in a block container to a certain number of lines. Also allows custom end text if content overflow occurs.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1379">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1346" rel="external">CSS linked parameters</a><br><span class="i27-sub">Allows passing custom properties into external SVG resources, such as colors.</span></td><td class="i27-eng"><span class="i27-n">Chrome&nbsp;no</span> <span class="i27-n">Firefox&nbsp;no</span> <span class="i27-n">Safari&nbsp;no</span></td><td class="i27-you" data-i27="1346">&hellip;</td></tr>
+          <tr class="i27-g"><th colspan="3">Not in MDN compat data yet (14)</th></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1468" rel="external">Pause media in hidden iframes</a><br><span class="i27-sub">The <code>media-&#8288;playback-&#8288;while-&#8288;not-&#8288;visible</code> permission policy pauses audible media in iframes that are hidden.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1468">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1459" rel="external">Progressive rendering of JPEG XL and AVIF images</a> <a class="i27-card" href="#jpeg-xl">&uarr;&nbsp;card</a><br><span class="i27-sub">Displays a preview version of the image while the rest downloads.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1459">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1453" rel="external">CSS <code>inherit()</code> function</a><br><span class="i27-sub">Like <code>var()</code>, but uses the parent element&#39;s value of the custom property.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1453">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1452" rel="external">CSS <code>ident()</code> function</a><br><span class="i27-sub">Builds an identifier from strings, integers, and other identifiers, such as <code>view-&#8288;transition-&#8288;name:&nbsp;ident(&quot;item-&#8288;&quot;&nbsp;sibling-&#8288;index())</code>.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1452">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1436" rel="external">Single-axis scroll containers</a><br><span class="i27-sub">Such as <code>overflow:&nbsp;scroll&nbsp;clip</code>, which allows <code>position:&nbsp;sticky</code> to work relative to different scroll containers per axis.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1436">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1430" rel="external">Web app installation via <code>&lt;install&gt;</code> and <code>navigator.install()</code></a> <a class="i27-card" href="#install-note">&uarr;&nbsp;card</a><br><span class="i27-sub">Prompts the user to install a progressive web app.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1430">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1415" rel="external">WebRTC SFrame encryption</a><br><span class="i27-sub">Native end-to-end encryption in WebRTC, without exposing keys to JavaScript.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1415">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1403" rel="external">CSS <code>random-&#8288;item()</code> function</a> <a class="i27-card" href="#css-random">&uarr;&nbsp;card</a><br><span class="i27-sub">Picks a random item from a list of values.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1403">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1401" rel="external"><code>OpaqueRange</code> for form controls</a><br><span class="i27-sub">A live range of text within <code>&lt;textarea&gt;</code> and <code>&lt;input&gt;</code>, for things like custom highlights and positioning popovers next to text.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1401">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1395" rel="external">CSS <code>:host(:has(…))</code></a><br><span class="i27-sub">Selects a shadow host based on its light DOM descendants.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1395">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1394" rel="external">CSS color gamut mapping</a><br><span class="i27-sub">Displays out-of-gamut colors (such as from <code>oklch()</code>) closer to the intended color, rather than clipping RGB channels.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1394">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1351" rel="external">CSS anchor positioning across shadow roots</a> <a class="i27-card" href="#anchor-positioning">&uarr;&nbsp;card</a><br><span class="i27-sub">Allows elements in shadow trees to reference anchor names defined in &quot;higher&quot; trees.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1351">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1348" rel="external">HTML <code>focusgroup</code> attribute</a> <a class="i27-card" href="#focusgroup">&uarr;&nbsp;card</a><br><span class="i27-sub">Combines descendant elements into a single tab stop, with arrow-key navigation between them.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1348">&hellip;</td></tr>
+          <tr><td><a href="https://github.com/web-platform-tests/interop/issues/1344" rel="external">CSS <code>var()</code> in size container queries</a><br><span class="i27-sub">Such as <code>@container&nbsp;(width&nbsp;&gt;=&nbsp;var(-&#8288;-&#8288;min-&#8288;width))</code>.</span></td><td class="i27-eng"><span class="i27-n">not in compat data yet</span></td><td class="i27-you" data-i27="1344">&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="replaces">
+        On the site: Interop is where a one-engine feature picks up its second and
+        third engines, and two engines is this page&apos;s graduation bar. A card
+        whose feature lands in the final 2027 focus areas (announced early in the
+        year) is the strongest signal on this page that it&apos;s about to move to
+        the homepage, so the next sweep re-reads this table first.
+      </p>
+    </section>
+
+    <script>
+      /* Interop 2027 index: one live probe per row. A "cap:" entry reuses the
+         card's own probe from the head, so a row and its card can't disagree.
+         Rows with no entry have no honest synchronous probe and read n/a. */
+      (function () {
+        var caps = (window.__horizonCaps && window.__horizonCaps.state) || {};
+        var probes = {
+          1471: function () { return "streamHTML" in Element.prototype; },
+          1467: function () { return (new CompressionStream("brotli"), true); },
+          1465: function () { return "trustedTypes" in window; },
+          1462: function () { return "ContactsManager" in window; },
+          1460: function () { return CSS.supports("order: sibling-index()"); },
+          1453: function () { return CSS.supports("color: inherit(--x)"); },
+          1452: function () { return CSS.supports("animation-name: ident(\"a\" 1)"); },
+          1450: function () { return CSS.supports("baseline-source: last"); },
+          1449: function () { return CSS.supports("background-image: filter(url(a.png), blur(1px))"); },
+          1447: function () { return "VTTCue" in window; },
+          1446: function () { return "CSSCounterStyleRule" in window; },
+          1445: "cap:masonry",
+          1444: "cap:margin-trim",
+          1443: function () { return CSS.supports("frame-sizing: content-height"); },
+          1440: function () { return "viewport" in window && "segments" in window.viewport; },
+          1439: function () { return "devicePosture" in navigator; },
+          1438: function () { return CSS.supports("scroll-snap-type: pair") || CSS.supports("scroll-snap-type: pair mandatory"); },
+          1436: function () { return CSS.supports("overflow: scroll clip"); },
+          1434: "cap:supports-at-rule",
+          1433: function () { return CSS.supports("timeline-trigger: none"); },
+          1432: function () { return CSS.supports("list-style-type: symbols(cyclic \"*\")"); },
+          1430: function () { return "install" in navigator; },
+          1429: function () { return "Profiler" in window; },
+          1428: function () { return "mediaSession" in navigator && (navigator.mediaSession.setActionHandler("togglecamera", null), true); },
+          1419: function () { return "startViewTransition" in Element.prototype; },
+          1418: function () { return CSS.supports("clip-path: polygon(round 20px, 0 0, 100% 0, 0 100%)"); },
+          1416: function () { return "appendHTML" in Element.prototype; },
+          1413: "cap:scheduler-yield",
+          1412: function () { return "headingOffset" in HTMLElement.prototype; },
+          1406: "cap:css-carousel",
+          1405: function () { return (function () { var i = document.createElement("input"); i.type = "week"; return i.type === "week"; })(); },
+          1403: function () { return CSS.supports("color: random-item(--x, red, blue)") || CSS.supports("color: random-item(--x; red; blue)"); },
+          1401: function () { return "OpaqueRange" in window; },
+          1398: function () { return "requestIdleCallback" in window; },
+          1397: function () { return "PerformanceNavigationTiming" in window && "notRestoredReasons" in PerformanceNavigationTiming.prototype; },
+          1391: function () { return CSS.supports("box-decoration-break: clone"); },
+          1387: function () { return "ariaNotify" in Element.prototype; },
+          1385: function () { return CSS.supports("object-view-box: inset(10%)"); },
+          1384: function () { return CSS.supports("transition-behavior: allow-discrete"); },
+          1381: "cap:temporal",
+          1379: function () { return CSS.supports("line-clamp: 3"); },
+          1378: function () { return "VideoEncoder" in window; },
+          1374: "cap:gap-decorations",
+          1373: "cap:interpolate-size",
+          1372: "cap:loaf",
+          1371: "cap:border-shape",
+          1368: "cap:corner-shape",
+          1364: "cap:scroll-state",
+          1363: function () { return CSS.supports("container-type: anchored"); },
+          1361: "cap:accent-color",
+          1358: "cap:interestfor",
+          1357: "cap:css-function",
+          1356: function () { return CSS.supports("selector(:has-slotted)"); },
+          1355: "cap:move-before",
+          1354: "cap:css-random",
+          1353: function () { return CSS.supports("text-size-adjust: none"); },
+          1352: function () { return "LayoutShift" in window; },
+          1350: function () { return CSS.supports("flex-wrap: balance"); },
+          1349: "cap:reading-flow",
+          1347: function () { return "CSSPseudoElement" in window; },
+          1346: function () { return CSS.supports("link-parameters: none"); },
+          1345: function () { return "onscrollsnapchange" in window; },
+          1343: "cap:css-if",
+          1336: "cap:sanitizer",
+          1335: "cap:speculation-rules",
+          1333: "cap:reference-target",
+          1331: function () { return "usb" in navigator; },
+        };
+        var cells = document.querySelectorAll("td[data-i27]");
+        for (var i = 0; i < cells.length; i++) {
+          var p = probes[cells[i].getAttribute("data-i27")];
+          var v = null;
+          if (typeof p === "string") v = p.slice(4) in caps ? caps[p.slice(4)] : null;
+          else if (p) { try { v = !!p(); } catch (e) { v = false; } }
+          cells[i].textContent = v === null ? "n/a" : v ? "✓ yes" : "✗ no";
+          if (v !== null) cells[i].className += v ? " i27-y" : " i27-n";
+        }
+      })();
+    </script>
+
     <!-- ───────────────────── the long tail ───────────────────── -->
     <section class="demo">
       <h2><span>The long tail: independent engines</span></h2>
@@ -5262,7 +5534,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions + MDN browser-compat-data &middot; last swept 2026-08-10, two cards moved by the nightly canary 2026-09-17</small></p>
+      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions + MDN browser-compat-data &middot; last swept 2026-08-10, two cards moved by the nightly canary 2026-09-17, Interop 2027 index 2026-10-08</small></p>
     </footer>
 
     <hr>
