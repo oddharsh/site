@@ -36,6 +36,10 @@ const esc = (value) => String(value)
 const SPECULATION_BLOCK = /[ \t]*<script\b[^>]*\btype=["']speculationrules["'][^>]*>[\s\S]*?<\/script>\n?/gi;
 
 function stripSpeculationBlocks(input) {
+  // Every block names its type, so a page without the word holds none. The
+  // pattern opens on [ \t]* with no literal to search for, so it was tried at
+  // every position of every page: 6 ms of the startup checks on 2026-10-08.
+  if (!/speculationrules/i.test(input)) return input;
   let previous;
   let next = input;
   do {
