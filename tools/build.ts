@@ -43,6 +43,7 @@ import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdC
 import { siteConfig } from "./lib/site-config.ts";
 import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision, type ServedTreePlan } from "./lib/served-tree.ts";
 import minifyHtml from "@minify-html/node";
+import { minifyKeepingUntilFound, protectUntilFoundTag } from "./lib/hidden-until-found.ts";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
@@ -1061,7 +1062,10 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
 
     const gt = findHtmlTagEnd(source, lt);
     const token = source.slice(lt, gt + 1);
-    out += token;
+    // The one tag-level rewrite here, riding this walk because it already knows
+    // where raw text starts: minifyStagedHtml() needs every start tag's
+    // hidden="until-found" swapped for a sentinel the minifier leaves alone.
+    out += protectUntilFoundTag(token);
     cursor = gt + 1;
 
     const match = token.match(/^<\s*(\/?)\s*([A-Za-z][^\s/>]*)/);
@@ -1095,6 +1099,17 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
   return out;
 };
 
+// Inline blocks, then minify-html, then hidden="until-found" put back: the
+// minifier serves that attribute as plain `hidden`, which find-in-page cannot
+// reveal (tools/lib/hidden-until-found.ts has the why). Both HTML minify paths
+// below go through here, so no page can reach minify-html without the swap.
+const minifyStagedHtml = (staged, label) => minifyKeepingUntilFound(
+  staged,
+  transformInlineHtmlBlocks(staged, label),
+  (html) => minifyHtml.minify(Buffer.from(html), HTML_MINIFY_CFG).toString(),
+  label,
+);
+
 // The exact transform step 7b writes for every non-homepage HTML document. Kept
 // here as one function because the page-family dictionary samples the bytes the
 // browser will actually receive, before step 7b reaches the files themselves.
@@ -1103,10 +1118,7 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
 const minifiedPage = (staged, rel) => {
   const twinRel = rel.replace(/\.html$/, ".src.html");
   const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
-  return banner + minifyHtml.minify(
-    Buffer.from(transformInlineHtmlBlocks(staged, `public/${rel}`)),
-    HTML_MINIFY_CFG,
-  ).toString();
+  return banner + minifyStagedHtml(staged, `public/${rel}`);
 };
 
 const inlineProbe = transformInlineHtmlBlocks(
@@ -1662,8 +1674,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
   const staged = await readFile(`${OUT}/public/index.html`, "utf8");
   const srcPath = "/index.src.html";
   const banner = `<!-- minified at deploy; readable source: ${srcPath} -->\n`;
-  const inlineMinified = transformInlineHtmlBlocks(staged, "src/pages/index.html");
-  const body = minifyHtml.minify(Buffer.from(inlineMinified), HTML_MINIFY_CFG).toString();
+  const body = minifyStagedHtml(staged, "src/pages/index.html");
   const min = banner + body;
   for (const [label, marker] of HTML_MARKERS) {
     if (!marker.test(min)) throw new Error("index.html: HTML minifier lost required marker " + label);

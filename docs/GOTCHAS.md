@@ -260,3 +260,11 @@ by renumbering. The long-form history of each one is in git
     with `gen-runtime-types.ts`, which deletes and rewrites cf-garage's types
     on a fresh checkout. Before backgrounding a step, list what it writes and
     what reads it; `contract-ci-required-gate` holds the edges known today.
+
+55. **minify-html drops the value of every boolean attribute.** Its table
+    marks `hidden` boolean, so `hidden="until-found"` shipped as plain
+    `hidden` and /garage/horizon's find-in-page demo could never reveal its
+    target. No option turns this off. `tools/lib/hidden-until-found.ts`
+    carries that one value through a sentinel; any other boolean attribute
+    whose value starts to matter needs the same treatment. The contract test
+    compares each page's `.src.html` twin with its served copy.
