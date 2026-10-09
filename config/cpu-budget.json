@@ -1,0 +1,5 @@
+{
+  "$comment": "tools/cpu-sweep.ts reads this. `calibration` is the calibration workload's cold median on the reference machine (the CI runner), with the digest of the workload it timed; every reading is scaled to that machine. `routes` lets a route over the 8 ms gate stay up to its own ceilingMs, with the reason it costs that much today. --gate fails on an entry for a route the sweep doesn't know, and prints an entry whose route now reads under 8 ms as stale, so the list only shrinks.",
+  "calibration": null,
+  "routes": {}
+}

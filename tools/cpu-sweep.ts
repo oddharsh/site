@@ -1,7 +1,7 @@
 // cpu-sweep.ts: CPU per request, route by route, on the Worker bundle that
 // perf-budget builds.
 //
-//   node tools/cpu-sweep.ts [--gate] [--markdown] [--routes /a,/b] [--bundle path] [--out file]
+//   node tools/cpu-sweep.ts [--gate] [--markdown] [--routes /a,/b] [--bundle path] [--budget file] [--out file]
 //
 // Workers Free allows 10 ms of CPU per request, and nothing in CI read it. The
 // first sweep (2026-10-07, against a 0.22 ms floor) found five routes over 8 ms
@@ -16,33 +16,53 @@
 // process.cpuUsage(). So every timed request is that route's first in its
 // isolate, which is the cold case Workers Free bills.
 //
-// One screening sample per route; anything at SCREEN_MS or more gets SAMPLES
-// more and is judged on the median. The control, /robots.txt through the whole
-// dispatcher, gets SAMPLES too, and its interquartile range is the noise floor:
+// One screening sample per route; a route that reads CONFIRM_AT of its ceiling
+// or more gets CONFIRMS more and is judged on the median. (Confirming everything
+// over 4 ms, nine times each, took the first CI run to 112 s.) The control,
+// /robots.txt through the whole dispatcher, gets SAMPLES, and its interquartile
+// range is the noise floor:
 // a run whose floor is over FLOOR_MAX_MS is inconclusive, since the runner was
 // too busy to read.
 //
-// REPORT-ONLY for now: it prints, writes .build/cpu-sweep.json and exits 0.
-// --gate exits 1 on a median over GATE_MS, for when an allowlist holds today's
-// offenders. shortcut: raw node CPU on whatever machine runs it; add a fixed
-// calibration workload before --gate runs in CI, so a slow runner can't fail it.
+// CALIBRATION. Raw CPU milliseconds are the machine's, so a slow runner would
+// fail a route a fast laptop passes. `calibrate()` below is a fixed workload
+// (JSON, a regex, a sort, string building: what the heavy routes spend on), timed
+// cold in the same child harness, SAMPLES times, interleaved with the screening
+// so it sees the same contention the routes do. Every reading is scaled by
+// referenceMs / that median, where referenceMs is the workload's median on the
+// reference machine, recorded in config/cpu-budget.json with the workload's
+// digest. So a reported millisecond is a reference-machine millisecond. The
+// reference is the CI runner, an AMD EPYC like the servers Workers run on, which
+// a laptop's M-series core isn't. Change the workload and the digest moves, and
+// --gate refuses until referenceMs is measured again.
+//
+// THE GATE. --gate exits 1 when a route's median is over its ceiling: GATE_MS,
+// or the ceilingMs that config/cpu-budget.json allows it with a reason. An entry
+// for a route the sweep doesn't know fails too, and an entry whose route now
+// reads under GATE_MS is printed as stale, so the list only shrinks. Without
+// --gate it prints, writes .build/cpu-sweep.json and exits 0.
 //
 // What it can't see: KV, D1 and R2 are empty, so data routes render their
 // fallback; there's no calendar secret, so /coffee/availability.json answers
 // 503; and outbound fetch is refused, so /agent-ready times its error path.
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { registerHooks } from "node:module";
+import { cpus } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 const ROOT = join(import.meta.dirname, "..");
 const GATE_MS = 8;
-const SCREEN_MS = 4;
-const SAMPLES = 9;
+const SCREEN_MS = 4; // printed from here up
+const CONFIRM_AT = 0.75; // of the route's ceiling
+const CONFIRMS = 4; // so a confirmed route is the median of 5
+const SAMPLES = 9; // the control and the calibration
 const FLOOR_MAX_MS = 0.5;
 const WIDTH = 2; // children at once: CI has 4 cores, and the build's other background steps share them
 const CONTROL = "/robots.txt";
+const CALIBRATION = "@calibration"; // a sample spec no route can collide with
 // The routes that take a query, where the first sweep found the heavy ones. The
 // pages come from the site manifest.
 const QUERIES = [
@@ -55,9 +75,25 @@ const { values } = parseArgs({
   options: {
     one: { type: "string" }, gate: { type: "boolean" }, markdown: { type: "boolean" },
     routes: { type: "string" }, bundle: { type: "string", default: join(ROOT, ".build/.perfbudget/index.js") },
+    budget: { type: "string", default: join(ROOT, "config/cpu-budget.json") },
     out: { type: "string", default: join(ROOT, ".build/cpu-sweep.json") },
   },
 });
+
+// The calibration workload. Pure JavaScript with no ICU (no localeCompare, no
+// Intl), since ICU's first use costs page faults rather than CPU speed. About
+// 5.5 ms cold on an M-series laptop. Its text is digested, so any edit here asks
+// for a new referenceMs.
+function calibrate(): number {
+  let s = "";
+  for (let i = 0; i < 3000; i++) s += `{"id":${i},"title":"frame ${i % 97} on the bridge","tags":["red","car","film ${i % 13}"],"w":${(i * 7919) % 6000}},`;
+  const rows: { id: number; title: string; tags: string[]; w: number }[] = JSON.parse(`[${s.slice(0, -1)}]`);
+  const re = /\bfilm\s+(\d+)\b/;
+  let hits = 0;
+  for (const r of rows) { const m = re.exec(r.tags.join(" ")); if (m && +m[1] % 2) hits++; }
+  rows.sort((a, b) => a.w - b.w || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
+  return JSON.stringify(rows.filter((r) => r.title.includes("bridge")).map((r) => ({ id: r.id, t: r.title.toUpperCase() }))).length + hits;
+}
 
 function request(spec: string): Request {
   const [method, path, tool] = spec.startsWith("POST ") ? spec.split(" ") : ["GET", spec];
@@ -100,7 +136,7 @@ if (values.one) {
   const run = async (spec: string) => { const r = await worker.fetch(request(spec), env, ctx); await r.arrayBuffer(); return r.status; };
   await run(values.one === CONTROL ? "/favicon.ico" : CONTROL); // the warm-up is never the timed route
   const t0 = process.cpuUsage();
-  const status = await run(values.one);
+  const status = values.one === CALIBRATION ? (calibrate(), 0) : await run(values.one);
   const d = process.cpuUsage(t0);
   process.stdout.write(JSON.stringify({ ms: (d.user + d.system) / 1000, status }) + "\n");
   process.exit(0);
@@ -111,8 +147,13 @@ if (!existsSync(values.bundle!)) {
   console.error(`cpu-sweep: no bundle at ${values.bundle}; run bun run perf-budget first, which builds it`);
   process.exit(2);
 }
+type Budget = { calibration: { referenceMs: number; digest: string; machine: string } | null; routes: Record<string, { ceilingMs: number; why: string }> };
+const budget: Budget = JSON.parse(readFileSync(values.budget!, "utf8"));
+const digest = createHash("sha256").update(calibrate.toString()).digest("hex").slice(0, 16);
 const pages: string[] = JSON.parse(readFileSync(join(ROOT, "config/site-manifest.json"), "utf8")).surfaces.map((s: { path: string }) => s.path);
-const routes = values.routes ? values.routes.split(",") : [...new Set([...pages, ...QUERIES])];
+const known = new Set([...pages, ...QUERIES]);
+const routes = values.routes ? values.routes.split(",") : [...known];
+for (const r of routes) known.add(r);
 
 const sample = (spec: string) => new Promise<{ ms: number; status: number }>((resolve, reject) => {
   const child = spawn(process.execPath, [import.meta.filename, "--one", spec, "--bundle", values.bundle!], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
@@ -133,30 +174,59 @@ async function pool<T>(jobs: (() => Promise<T>)[]): Promise<T[]> {
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[xs.length >> 1];
 const iqr = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor((s.length - 1) * 0.75)] - s[Math.floor((s.length - 1) * 0.25)]; };
 
-const control = (await pool(Array.from({ length: SAMPLES }, () => () => sample(CONTROL)))).map((r) => r.ms);
+// The control and the calibration are spread through the screening, so both see
+// the load the routes see rather than a quiet first second.
+const specs = [...routes];
+for (let k = 0; k < SAMPLES; k++) for (const s of [CONTROL, CALIBRATION]) specs.splice(Math.round(((k + 0.5) * specs.length) / SAMPLES), 0, s);
+const screened = await pool(specs.map((s) => async () => ({ spec: s, ...(await sample(s)) })));
+const control = screened.filter((r) => r.spec === CONTROL).map((r) => r.ms);
+const calMs = median(screened.filter((r) => r.spec === CALIBRATION).map((r) => r.ms));
 const floor = iqr(control);
-const screen = await pool(routes.map((r) => () => sample(r)));
-const rows = await pool(routes.map((route, i) => async () => {
-  const first = screen[i];
-  const ms = [first.ms];
+// The scale, from this machine to the reference one. With no reference, or a
+// reference taken on a different workload, readings stay raw and --gate refuses.
+const calibrated = budget.calibration !== null && budget.calibration.digest === digest;
+const scale = calibrated ? budget.calibration!.referenceMs / calMs : 1;
+const screen = new Map(screened.filter((r) => r.spec !== CONTROL && r.spec !== CALIBRATION).map((r) => [r.spec, r]));
+const rows = await pool(routes.map((route) => async () => {
+  const first = screen.get(route)!;
+  const raw = [first.ms];
   // one after another, so the run never has more than WIDTH children
-  if (first.ms >= SCREEN_MS) for (let k = 0; k < SAMPLES; k++) ms.push((await sample(route)).ms);
-  return { route, status: first.status, ms: median(ms), samples: ms.length };
+  const ceilingMs = budget.routes[route]?.ceilingMs ?? GATE_MS;
+  if (first.ms * scale >= ceilingMs * CONFIRM_AT) for (let k = 0; k < CONFIRMS; k++) raw.push((await sample(route)).ms);
+  return { route, status: first.status, ms: median(raw) * scale, rawMs: median(raw), ceilingMs, samples: raw.length };
 }));
 rows.sort((a, b) => b.ms - a.ms);
-const over = rows.filter((r) => r.ms > GATE_MS);
+const over = rows.filter((r) => r.ms > r.ceilingMs);
+const unknown = Object.keys(budget.routes).filter((r) => !known.has(r));
+const stale = rows.filter((r) => budget.routes[r.route] && r.ms <= GATE_MS);
 const inconclusive = floor > FLOOR_MAX_MS;
-writeFileSync(values.out!, JSON.stringify({ gateMs: GATE_MS, control: { median: median(control), iqr: floor }, inconclusive, rows }, null, 2) + "\n");
+const machine = cpus()[0]?.model.trim() ?? "unknown";
+writeFileSync(values.out!, JSON.stringify({
+  gateMs: GATE_MS, machine, calibration: { ms: calMs, digest, calibrated, scale }, control: { median: median(control), iqr: floor }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
+}, null, 2) + "\n");
 
+const units = calibrated ? `reference ms (x${scale.toFixed(2)} from ${calMs.toFixed(2)} ms of calibration here)`
+  : budget.calibration === null ? `raw ms on this machine (no calibration recorded; the workload read ${calMs.toFixed(2)} ms, digest ${digest})`
+  : `raw ms on this machine (the calibration workload changed: digest ${digest}, recorded ${budget.calibration.digest}; it read ${calMs.toFixed(2)} ms)`;
 const verdict = inconclusive ? `inconclusive: the control's spread was ${floor.toFixed(2)} ms (over ${FLOOR_MAX_MS})`
-  : `${over.length} of ${rows.length} routes over ${GATE_MS} ms, against a ${floor.toFixed(2)} ms floor`;
-const shown = rows.filter((r) => r.ms > SCREEN_MS);
+  : `${over.length} of ${rows.length} routes over their ceiling, against a ${floor.toFixed(2)} ms floor`;
+const notes = [
+  ...unknown.map((r) => `config/cpu-budget.json allows ${r}, which the sweep doesn't know`),
+  ...stale.map((r) => `${r.route} reads ${r.ms.toFixed(2)} ms, under the ${GATE_MS} ms gate: drop its entry from config/cpu-budget.json`),
+];
+const shown = rows.filter((r) => r.ms > SCREEN_MS || r.ms > r.ceilingMs);
 if (values.markdown) {
-  console.log(`### CPU per request, cold isolate\n\n${verdict}. Report-only: nothing fails on it yet.\n`);
-  if (shown.length) console.log(`| route | status | CPU ms (median) | samples |\n|---|--:|--:|--:|\n${shown.map((r) => `| \`${r.route}\` | ${r.status} | ${r.ms.toFixed(2)} | ${r.samples} |`).join("\n")}`);
-  console.log(`\n${rows.length - shown.length} more routes read under ${SCREEN_MS} ms. The control (\`${CONTROL}\`) read ${median(control).toFixed(2)} ms.`);
+  console.log(`### CPU per request, cold isolate\n\n${verdict}. Units: ${units}, on ${machine}.\n`);
+  if (shown.length) console.log(`| route | status | CPU ms (median) | ceiling | samples |\n|---|--:|--:|--:|--:|\n${shown.map((r) => `| \`${r.route}\` | ${r.status} | ${r.ms > r.ceilingMs ? "**" + r.ms.toFixed(2) + "**" : r.ms.toFixed(2)} | ${r.ceilingMs} | ${r.samples} |`).join("\n")}`);
+  console.log(`\n${rows.length - shown.length} more routes read under ${SCREEN_MS} ms. The control (\`${CONTROL}\`) read ${(median(control) * scale).toFixed(2)} ms.`);
+  for (const n of notes) console.log(`\n- ${n}`);
 } else {
-  console.log(`cpu-sweep: ${verdict}; control ${CONTROL} ${median(control).toFixed(2)} ms`);
-  for (const r of shown) console.log(`  ${r.ms > GATE_MS ? "over " : "     "} ${r.ms.toFixed(2).padStart(6)} ms  ${String(r.status).padEnd(4)} ${r.route}`);
+  console.log(`cpu-sweep: ${verdict}; units: ${units}; ${machine}; control ${CONTROL} ${(median(control) * scale).toFixed(2)} ms`);
+  for (const r of shown) console.log(`  ${r.ms > r.ceilingMs ? "over " : "     "} ${r.ms.toFixed(2).padStart(6)} ms  ceiling ${String(r.ceilingMs).padStart(2)}  ${String(r.status).padEnd(4)} ${r.route}`);
+  for (const n of notes) console.log(`  note: ${n}`);
 }
-process.exit(values.gate && over.length && !inconclusive ? 1 : 0);
+if (values.gate && budget.calibration !== null && !calibrated) {
+  console.error(`cpu-sweep: --gate refuses: the calibration workload's digest is ${digest}, and config/cpu-budget.json recorded ${budget.calibration.digest}. Measure referenceMs again on the reference machine.`);
+  process.exit(2);
+}
+process.exit(values.gate && !inconclusive && (over.length || unknown.length) ? 1 : 0);

@@ -220,7 +220,10 @@ jobs:
       # and exits 0 whatever it finds; the table goes to the job summary.
       - name: Report CPU per route
         id: cpu
-        run: node tools/cpu-sweep.ts --markdown >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          node tools/cpu-sweep.ts --markdown | tee -a "$GITHUB_STEP_SUMMARY"
+          cat .build/cpu-sweep.json # MEASUREMENT ROUND ONLY: the raw rows, for calibrating the gate
         background: true
 
       # Reads .build/.perfbudget and writes only .wrangler.site.local.jsonc,
