@@ -58,6 +58,12 @@ p { margin: 0 0 12px; }
 }
 .shelf li:last-child { border-bottom: none; }
 .shelf li:nth-child(even) { background: var(--row-alt); }
+/* The build cuts the shelf into runs so a fold can fall between them
+   (tools/lib/prose-fold.ts): "open" continues below, "cont" from above. Each
+   seam reads as one item's separator, so the runs stack into the one list. */
+.shelf.open { margin-bottom: 0; border-bottom: 0; }
+.shelf.open > li:last-child { border-bottom: 1px solid var(--surface-desktop); }
+.shelf.cont { margin-top: 0; border-top: 0; }
 .shelf .title-row {
   display: flex;
   align-items: baseline;
