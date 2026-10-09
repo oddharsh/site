@@ -12,7 +12,7 @@
 // config/tools.json's `bin`, a Cargo manifest or lockfile, or an import
 // statement anchored at the start of a line. The ledger's own header carries
 // the long version of this argument.
-import { parse as parseToml } from "smol-toml";
+import { parse as parseToml } from "./toml.ts";
 import { asList, asRecord, asText } from "../../src/worker/lib/parse.ts";
 
 /** One retirement, as config/retired.json records it. */

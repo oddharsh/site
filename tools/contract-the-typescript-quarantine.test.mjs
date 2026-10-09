@@ -159,6 +159,8 @@ test("node is spawned only by the wrangler bridge, the route oracle, the twin su
   assert.deepEqual(spawns, [
     // the bridge Workers Builds runs, which is the whole reason node is pinned
     ".github/deploy-wrangler.sh: node \"$",
+    // the CPU sweep, report-only (the fifth, above)
+    ".github/workflows/ci.yml: node tools",
   ], `node spawns outside the allowlist: ${JSON.stringify(spawns)}`);
 });
 

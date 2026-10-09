@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parse as parseToml } from "smol-toml";
+import { parse as parseToml } from "./toml.ts";
 import { asRecord, asText } from "../../src/worker/lib/parse.ts";
 import { EXACT_PIN } from "./exact-pin.ts";
 
@@ -31,7 +31,6 @@ export const DOC_ALIASES = [
   { prose: "oxlint-tsgolint", pkg: "oxlint-tsgolint" },
   { prose: "@oxlint/plugins", pkg: "@oxlint/plugins" },
   { prose: "@types/bun", pkg: "@types/bun" },
-  { prose: "smol-toml", pkg: "smol-toml" },
   { prose: "@cloudflare/config", pkg: "@cloudflare/config" },
   // playwright-core left VERSIONLESS on 2026-09-10. Its exemption rested on two
   // claims and one had gone stale: "only gen-og-cards.ts uses it, no CI job and
@@ -59,7 +58,7 @@ export function parseCargoDeps(toml: string): DependencyVersions {
   const raw = parseToml(toml).dependencies;
   if (raw === undefined) return {};
   const dependencies = asRecord(raw);
-  if (!dependencies || raw instanceof Date) throw new Error("Cargo dependencies must be a table");
+  if (!dependencies) throw new Error("Cargo dependencies must be a table");
   return Object.fromEntries(Object.entries(dependencies).map(([name, value]) => {
     const spec = asRecord(value);
     const version = spec ? spec.version : value;
