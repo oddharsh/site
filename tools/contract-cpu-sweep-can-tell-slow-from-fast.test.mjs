@@ -73,7 +73,7 @@ test("--gate judges nothing on a CPU model with no factor, and says so", { timeo
   assert.match(stdout, /^::warning title=CPU per route::--gate judged nothing: config\/cpu-budget\.json has no factor for /m);
 });
 
-// A factor fits a model's usual runner; one runner slow all over read 33% high
+// A factor fits a model's usual runner. One runner, slow all over, read 33% high
 // on its control and failed six routes on a PR that changed no Worker byte
 // (#1273, gotcha 56). A control reference of 0.01 ms makes this machine that
 // runner. A band too wide to cross is the control: the same run is judged again.

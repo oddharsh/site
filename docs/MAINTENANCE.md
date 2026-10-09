@@ -888,9 +888,9 @@ annotation on the run. The job has `continue-on-error`, so the run stays green:
 never hold up a release. It isn't a required check; making it one is a ruleset
 change in `config/infra.json`, applied with `infra:apply`. On a model with no
 factor, a run whose `/robots.txt` control spread over 1 ms, or a run whose
-control's median, scaled, reads more than 20% off `control.ms` (the runner is
-slower or faster all over than its model's factor says; gotcha 56), it judges
-nothing and leaves a warning annotation.
+control's median, scaled, reads more than 20% off `control.ms`, it judges
+nothing and leaves a warning annotation. That last case is a runner slower or
+faster all over than its model's factor says (gotcha 56).
 
 **When the warning says a runner is off its model:** rerun the job. One such
 run is a slow host. If every run says it, on every model, the dispatcher's own

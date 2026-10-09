@@ -49,11 +49,11 @@
 // 33% over its usual 2.3 reference ms, where 29 ordinary runs on three models
 // read between 8% under and 16% over. So the control's median, scaled, is checked
 // against `control.ms` in the budget file, and a run more than `control.drift`
-// off it is inconclusive. The control doesn't replace the factor as the scale:
-// as one it spread 5.3% around what the routes said the run's scale was, against
+// off it is inconclusive. The factor stays the scale. Used as the scale, the
+// control spread 5.4% around what the routes said each run's scale was, against
 // 3.9% for the model factor, since a 2 ms route is noisy on its own. The
-// control's spread, checked above, can't see a slow host: that runner's floor
-// was 0.30 ms, because a host that is uniformly slow isn't a noisy one.
+// control's spread, checked above, missed that runner at a 0.30 ms floor,
+// because a host that is slow all over reads tight.
 //
 // THE GATE. --gate exits 1 when a route's median is over its ceiling: GATE_MS,
 // or the ceilingMs that config/cpu-budget.json allows it with a reason. An entry
