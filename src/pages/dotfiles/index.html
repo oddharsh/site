@@ -72,7 +72,7 @@ dl{margin:0 0 12px}dt{font-weight:700;margin-top:6px}dd{margin:0 0 4px 0}
   </div><!-- /axp:window -->
   <div class="content">
     <h1>macOS, the way i have it</h1>
-    <p class="lede">Every setting below is one i changed on my own Mac, read back off the machine with <code>defaults read</code> rather than from memory. Tick the ones you want, copy the script, paste it into Terminal, and restart what it tells you to. Nothing runs from this page.</p>
+    <p class="lede">Every setting below is one i changed on my own Macs, read back off the machines with <code>defaults read</code> rather than from memory. The System rows came off <code>pmset</code>, <code>nvram</code> and the firewall's own tool. Tick the ones you want, copy the script, paste it into Terminal, and restart what it tells you to. Nothing runs from this page.</p>
 
     <section class="sheet" aria-labelledby="df-cap">
       <p class="cap" id="df-cap">Advanced settings:</p>
@@ -104,18 +104,20 @@ less macos.sh
 bash macos.sh</pre>
 
     <h2>How this list was made</h2>
-    <p><code>defaults read &lt;domain&gt;</code> prints only the keys something has written, so a key that is missing is proof that setting is still at factory, and a key that is present means it was touched at some point. i read the dozen domains that dotfiles conventionally cover, kept the keys whose value differs from what a fresh account gets, and dropped the ones i could not vouch for. Where i know the factory value it sits at the right of the row.</p>
+    <p><code>defaults read &lt;domain&gt;</code> prints only the keys something has written, so a key that is missing is proof that setting is still at factory, and a key that is present means it was touched at some point. i read the dozen domains that dotfiles conventionally cover, kept the keys whose value differs from what a fresh account gets, and dropped the ones i could not vouch for. Where i know the factory value it sits at the right of the row. A second sweep on 2026-10-09 read my personal Mac the same way and added 61 rows; where the two machines disagreed, the page kept the value it already had.</p>
     <dl>
       <dt>What is deliberately missing</dt>
-      <dd>My text replacements (personal), the Dock's app list (bookmark blobs, <code>dockutil</code> territory), the Control Center menu bar layout (an opaque blob), and the Terminal profile (archived colours, exportable as a <code>.terminal</code> file instead). Also the keyboard shortcuts i turned off under Accessibility, because i could not confirm which of those ship off already.</dd>
+      <dd>My text replacements (personal), the Dock's app list (bookmark blobs, <code>dockutil</code> territory), the Control Center menu bar layout (an opaque blob), and the Terminal profile (archived colours, exportable as a <code>.terminal</code> file instead). Also the keyboard shortcuts i turned off under Accessibility, because i could not confirm which of those ship off already. Some keys stayed out because macOS no longer reads them: <code>LSQuarantine</code>, the Launchpad <code>springboard-*</code> keys, <code>no-glass</code> and <code>dashboard-in-overlay</code>. So did verbose boot, which needs reduced security on Apple Silicon. Safari, Mail, TextEdit and Preview went unswept: privacy protection keeps <code>defaults read</code> out of their settings without Full Disk Access.</dd>
       <dt>Why some rows want a logout</dt>
-      <dd>Key repeat, the press-and-hold switch, tracking speed and the sound settings are read once at login by the processes that own them, and no <code>killall</code> reaches those. The Dock, Finder, the screenshot service and the clock each restart in place.</dd>
+      <dd>Key repeat, the press-and-hold switch, tracking speed and the sound settings are read once at login by the processes that own them, and no <code>killall</code> reaches those. The Dock, Finder, the screenshot service and the clock each restart in place. The four app rows need only that app relaunched.</dd>
+      <dt>The rows that ask for more</dt>
+      <dd>Accessibility writes fail unless Terminal has Full Disk Access (System Settings, Privacy &amp; Security). The script keeps going past them and says at the end what it skipped. The System rows run as root, so a script with any of them ticked asks for your password once, before it writes anything.</dd>
       <dt>Measured on</dt>
-      <dd>macOS 26 (Darwin 27.2), 2026-09-21. Three rows are macOS 26 keys and say so, the window rows are Sonoma and Sequoia keys, and everything else predates Ventura.</dd>
+      <dd>macOS 27.2 (Darwin 27.2), 2026-09-21 and 2026-10-09. Four rows are macOS 26 keys and say so, and the wallpaper-click and tiling rows came with Sonoma and Sequoia.</dd>
     </dl>
     <p class="fine">Made in the same spirit as <a href="https://github.com/mathiasbynens/dotfiles/blob/main/.macos" rel="noopener">mathiasbynens/dotfiles</a>, which is where most of the world learned these keys. The difference is the checklist: his is a script you edit, this is a list you tick.</p>
   </div>
-  <div class="xp-statusbar"><span>folder options, for a mac</span><span>nothing runs from this page</span><span>read off the machine 2026-09-21</span></div>
+  <div class="xp-statusbar"><span>folder options, for a mac</span><span>nothing runs from this page</span><span>read off two Macs, last on 2026-10-09</span></div>
 </div>
 <script type="application/json" id="dotfiles-data">
 {
@@ -126,16 +128,46 @@ bash macos.sh</pre>
       "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "InitialKeyRepeat", "type": "int", "value": 15 }] },
     { "id": "press-and-hold", "group": "Keyboard", "label": "Hold a key to repeat it, never the accent popup", "was": "true",
       "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "ApplePressAndHoldEnabled", "type": "bool", "value": false }] },
+    { "id": "smart-quotes", "group": "Keyboard", "label": "Straight quotes and dashes, no smart substitution", "was": "true",
+      "restart": ["login"], "writes": [
+        { "domain": "NSGlobalDomain", "key": "NSAutomaticQuoteSubstitutionEnabled", "type": "bool", "value": false },
+        { "domain": "NSGlobalDomain", "key": "NSAutomaticDashSubstitutionEnabled", "type": "bool", "value": false }
+      ] },
+    { "id": "globe-key", "group": "Keyboard", "label": "Globe key switches input source", "note": "0 nothing, 1 input source, 2 emoji, 3 dictation. Set here because Tamil is the second input.",
+      "restart": ["login"], "writes": [{ "domain": "com.apple.HIToolbox", "key": "AppleFnUsageType", "type": "int", "value": 1 }] },
     { "id": "spotlight-hotkey", "group": "Keyboard", "label": "Free Cmd+Space from Spotlight", "was": "enabled", "note": "Hotkey 64 is Spotlight search. Off here because Raycast takes the chord. Search still opens from the menu bar.",
       "restart": ["settings"], "raw": ["defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 64 '{ enabled = 0; value = { parameters = (32, 49, 1048576); type = standard; }; }'"] },
+    { "id": "input-source-hotkey", "group": "Keyboard", "label": "Switch input source on Opt+Cmd+Space, Ctrl+Space freed", "was": "Ctrl+Space / Ctrl+Opt+Space", "note": "60 is previous source, 61 is next. 65 is Finder search, which used to own Opt+Cmd+Space.",
+      "restart": ["settings"], "raw": [
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 60 '{ enabled = 0; value = { parameters = (32, 49, 1048576); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 61 '{ enabled = 1; value = { parameters = (32, 49, 1572864); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 65 '{ enabled = 0; value = { parameters = (65535, 49, 1572864); type = standard; }; }'"
+      ] },
+    { "id": "ctrl-arrows", "group": "Keyboard", "label": "Plain Ctrl-arrows go to the terminal; Spaces move to Ctrl+Shift", "note": "32/33 Mission Control and App Exposé off, 34 Mission Control on Ctrl+Shift+Up, 79/81 move a Space on Ctrl+Shift+Left/Right, 80/82 their slow variants off, 35/36/37 off.",
+      "restart": ["settings"], "raw": [
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 32 '{ enabled = 0; value = { parameters = (65535, 126, 10747904); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 33 '{ enabled = 0; value = { parameters = (65535, 125, 8650752); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 34 '{ enabled = 1; value = { parameters = (65535, 126, 10878976); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 35 '{ enabled = 0; value = { parameters = (65535, 125, 8781824); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 36 '{ enabled = 0; value = { parameters = (65535, 125, 11010048); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 37 '{ enabled = 0; value = { parameters = (65535, 125, 11141120); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 79 '{ enabled = 1; value = { parameters = (65535, 123, 10878976); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 80 '{ enabled = 0; value = { parameters = (65535, 123, 8781824); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 81 '{ enabled = 1; value = { parameters = (65535, 124, 10878976); type = standard; }; }'",
+        "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 82 '{ enabled = 0; value = { parameters = (65535, 124, 8781824); type = standard; }; }'"
+      ] },
+    { "id": "help-hotkey", "group": "Keyboard", "label": "Cmd+? leaves the Help menu search alone", "was": "on",
+      "restart": ["settings"], "raw": ["defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 98 '{ enabled = 0; value = { parameters = (47, 44, 1179648); type = standard; }; }'"] },
+    { "id": "dock-hotkey", "group": "Keyboard", "label": "Opt+Cmd+D leaves Dock hiding alone", "was": "on",
+      "restart": ["settings"], "raw": ["defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 52 '{ enabled = 0; value = { parameters = (100, 2, 1572864); type = standard; }; }'"] },
 
-    { "id": "tap-to-click", "group": "Trackpad", "label": "Tap to click", "was": "off", "note": "Three writes: the built-in trackpad, a Bluetooth one, and the per-host key the login screen reads.",
+    { "id": "tap-to-click", "group": "Trackpad & mouse", "label": "Tap to click", "was": "off", "note": "Three writes: the built-in trackpad, a Bluetooth one, and the per-host key the login screen reads.",
       "restart": ["login"], "writes": [
         { "domain": "com.apple.AppleMultitouchTrackpad", "key": "Clicking", "type": "bool", "value": true },
         { "domain": "com.apple.driver.AppleBluetoothMultitouch.trackpad", "key": "Clicking", "type": "bool", "value": true },
         { "domain": "NSGlobalDomain", "key": "com.apple.mouse.tapBehavior", "type": "int", "value": 1, "host": "current" }
       ] },
-    { "id": "three-finger-drag", "group": "Trackpad", "label": "Three-finger drag", "was": "off", "note": "Lives under Accessibility, Pointer Control. Enabling it moves the space-switch swipe to four fingers, which is what the last four lines do.",
+    { "id": "three-finger-drag", "group": "Trackpad & mouse", "label": "Three-finger drag", "was": "off", "note": "Lives under Accessibility, Pointer Control. Enabling it moves the space-switch swipe to four fingers, which is what the last four lines do.",
       "restart": ["login"], "writes": [
         { "domain": "com.apple.AppleMultitouchTrackpad", "key": "TrackpadThreeFingerDrag", "type": "bool", "value": true },
         { "domain": "com.apple.driver.AppleBluetoothMultitouch.trackpad", "key": "TrackpadThreeFingerDrag", "type": "bool", "value": true },
@@ -145,8 +177,20 @@ bash macos.sh</pre>
         { "domain": "com.apple.driver.AppleBluetoothMultitouch.trackpad", "key": "TrackpadThreeFingerHorizSwipeGesture", "type": "int", "value": 0 },
         { "domain": "com.apple.driver.AppleBluetoothMultitouch.trackpad", "key": "TrackpadFourFingerHorizSwipeGesture", "type": "int", "value": 2 }
       ] },
-    { "id": "tracking-speed", "group": "Trackpad", "label": "Tracking speed all the way up", "note": "3 is the right end of the slider.",
+    { "id": "tracking-speed", "group": "Trackpad & mouse", "label": "Tracking speed all the way up", "note": "3 is the right end of the slider.",
       "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "com.apple.trackpad.scaling", "type": "float", "value": 3 }] },
+    { "id": "firm-click", "group": "Trackpad & mouse", "label": "Firm click", "was": "medium", "note": "0 light, 1 medium, 2 firm. The first key is the click, the second the force click.",
+      "restart": ["login"], "writes": [
+        { "domain": "com.apple.AppleMultitouchTrackpad", "key": "FirstClickThreshold", "type": "int", "value": 2 },
+        { "domain": "com.apple.AppleMultitouchTrackpad", "key": "SecondClickThreshold", "type": "int", "value": 2 }
+      ] },
+    { "id": "show-desktop-gesture", "group": "Trackpad & mouse", "label": "No thumb-and-three-finger spread for Show Desktop", "was": "on",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "showDesktopGestureEnabled", "type": "bool", "value": false }] },
+    { "id": "magic-mouse-right-click", "group": "Trackpad & mouse", "label": "Magic Mouse right-click", "was": "OneButton",
+      "restart": ["login"], "writes": [
+        { "domain": "com.apple.AppleMultitouchMouse", "key": "MouseButtonMode", "type": "string", "value": "TwoButton" },
+        { "domain": "com.apple.driver.AppleBluetoothMultitouch.mouse", "key": "MouseButtonMode", "type": "string", "value": "TwoButton" }
+      ] },
 
     { "id": "dark-mode", "group": "Appearance", "label": "Dark mode", "was": "Light", "note": "To go back: defaults delete NSGlobalDomain AppleInterfaceStyle. There is no Light value, only the absence of Dark.",
       "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "AppleInterfaceStyle", "type": "string", "value": "Dark" }] },
@@ -156,6 +200,32 @@ bash macos.sh</pre>
       "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSGlassTintAmount", "type": "int", "value": 0 }] },
     { "id": "menu-icons", "group": "Appearance", "label": "No icons in menu items (macOS 26)", "was": "true", "note": "No switch for this in System Settings. Apps read it when they launch.",
       "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSMenuEnableActionImages", "type": "bool", "value": false }] },
+    { "id": "scroll-bars", "group": "Appearance", "label": "Scroll bars only while scrolling", "was": "Automatic",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "AppleShowScrollBars", "type": "string", "value": "WhenScrolling" }] },
+    { "id": "scroller-jump", "group": "Appearance", "label": "Click in the scroll bar jumps to that spot", "was": "next page",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "AppleScrollerPagingBehavior", "type": "bool", "value": true }] },
+    { "id": "font-smoothing", "group": "Appearance", "label": "Light font smoothing", "note": "No switch for this in System Settings any more. 0 off, 1 light, 2 medium.",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "AppleFontSmoothing", "type": "int", "value": 1 }] },
+    { "id": "focus-ring", "group": "Appearance", "label": "No animated focus ring", "note": "No switch in System Settings.",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSUseAnimatedFocusRing", "type": "bool", "value": false }] },
+    { "id": "week-monday", "group": "Appearance", "label": "Weeks start on Monday", "was": "Sunday, for en_US",
+      "restart": ["login"], "raw": ["defaults write NSGlobalDomain AppleFirstWeekday -dict gregorian -int 2"] },
+
+    { "id": "a11y-display", "group": "Accessibility", "label": "Reduce transparency, increase contrast, button shapes", "was": "all off", "note": "Writes to this domain fail unless Terminal has Full Disk Access. The script carries on without them and says so at the end.",
+      "restart": ["login"], "fullDiskAccess": true, "writes": [
+        { "domain": "com.apple.universalaccess", "key": "reduceTransparency", "type": "bool", "value": true },
+        { "domain": "com.apple.universalaccess", "key": "increaseContrast", "type": "bool", "value": true },
+        { "domain": "com.apple.universalaccess", "key": "showToolbarButtonShapes", "type": "bool", "value": true }
+      ] },
+    { "id": "a11y-pointer", "group": "Accessibility", "label": "Orange pointer, white outline", "was": "black, white",
+      "restart": ["login"], "fullDiskAccess": true, "writes": [
+        { "domain": "com.apple.universalaccess", "key": "cursorIsCustomized", "type": "bool", "value": true }
+      ], "raw": [
+        "defaults write com.apple.universalaccess cursorFill -dict red -float 1 green -float 0.5763723254 blue -float 0 alpha -float 1",
+        "defaults write com.apple.universalaccess cursorOutline -dict red -float 1 green -float 1 blue -float 1 alpha -float 1"
+      ] },
+    { "id": "a11y-text-size", "group": "Accessibility", "label": "Smallest text size system-wide", "was": "default", "note": "Accessibility > Display > Text Size. This sets the global size only; my Mail, Messages, Notes and Calendar stay pinned at M.",
+      "restart": ["login"], "fullDiskAccess": true, "raw": ["defaults write com.apple.universalaccess FontSizeCategory -dict-add global -string 'XS'"] },
 
     { "id": "dock-autohide", "group": "Dock", "label": "Hide the Dock", "was": "shown",
       "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "autohide", "type": "bool", "value": true }] },
@@ -172,6 +242,33 @@ bash macos.sh</pre>
       ] },
     { "id": "dock-group-apps", "group": "Dock", "label": "Group windows by app in Mission Control",
       "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "expose-group-apps", "type": "bool", "value": true }] },
+    { "id": "dock-no-bouncing", "group": "Dock", "label": "No bouncing icons", "note": "No switch in System Settings. Covers both launch and attention bounces.",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "no-bouncing", "type": "bool", "value": true }] },
+    { "id": "dock-launchanim", "group": "Dock", "label": "No launch animation", "was": "true",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "launchanim", "type": "bool", "value": false }] },
+    { "id": "dock-suck", "group": "Dock", "label": "Minimize with Suck", "note": "The third effect, hidden since Tiger. Genie and Scale are the two in System Settings.",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "mineffect", "type": "string", "value": "suck" }] },
+    { "id": "dock-showhidden", "group": "Dock", "label": "Hidden apps look hidden", "note": "Translucent Dock icons for apps hidden with Cmd+H. No switch in System Settings.",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "showhidden", "type": "bool", "value": true }] },
+    { "id": "dock-recents", "group": "Dock", "label": "No recent apps in the Dock", "was": "true",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "show-recents", "type": "bool", "value": false }] },
+    { "id": "dock-mru-spaces", "group": "Dock", "label": "Don't rearrange Spaces by recent use", "was": "true",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "mru-spaces", "type": "bool", "value": false }] },
+    { "id": "dock-scroll-to-open", "group": "Dock", "label": "Scroll up on a Dock icon to see that app's windows", "note": "No switch in System Settings.",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "scroll-to-open", "type": "bool", "value": true }] },
+    { "id": "dock-stack-hilite", "group": "Dock", "label": "Highlight under the cursor in grid stacks",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "mouse-over-hilite-stack", "type": "bool", "value": true }] },
+    { "id": "dock-spring-load", "group": "Dock", "label": "Spring-loading on every Dock item", "was": "folders only",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "enable-spring-load-actions-on-all-items", "type": "bool", "value": true }] },
+    { "id": "dock-expose-speed", "group": "Dock", "label": "Faster Mission Control animation",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "expose-animation-duration", "type": "float", "value": 0.1 }] },
+    { "id": "dock-hot-corners", "group": "Dock", "label": "No hot corners", "was": "Quick Note, bottom right", "note": "1 is \"no action\".",
+      "restart": ["Dock"], "writes": [
+        { "domain": "com.apple.dock", "key": "wvous-tl-corner", "type": "int", "value": 1 },
+        { "domain": "com.apple.dock", "key": "wvous-tr-corner", "type": "int", "value": 1 },
+        { "domain": "com.apple.dock", "key": "wvous-bl-corner", "type": "int", "value": 1 },
+        { "domain": "com.apple.dock", "key": "wvous-br-corner", "type": "int", "value": 1 }
+      ] },
 
     { "id": "stage-manager", "group": "Windows", "label": "Stage Manager off",
       "restart": ["login"], "writes": [{ "domain": "com.apple.WindowManager", "key": "GloballyEnabled", "type": "bool", "value": false }] },
@@ -181,16 +278,44 @@ bash macos.sh</pre>
       "restart": ["login"], "writes": [{ "domain": "com.apple.WindowManager", "key": "EnableStandardClickToShowDesktop", "type": "bool", "value": false }] },
     { "id": "reopen-windows", "group": "Windows", "label": "Reopen an app's windows after quitting it",
       "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSQuitAlwaysKeepsWindows", "type": "bool", "value": true }] },
+    { "id": "tabs-always", "group": "Windows", "label": "Always open documents as tabs", "was": "fullscreen only",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "AppleWindowTabbingMode", "type": "string", "value": "always" }] },
+    { "id": "title-double-click", "group": "Windows", "label": "Double-clicking a title bar does nothing", "was": "Zoom",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "AppleActionOnDoubleClick", "type": "string", "value": "None" }] },
+    { "id": "resize-time", "group": "Windows", "label": "Near-instant window resize animation", "was": "0.2",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSWindowResizeTime", "type": "float", "value": 0.001 }] },
+    { "id": "drag-anywhere", "group": "Windows", "label": "Ctrl+Cmd-drag anywhere in a window to move it", "note": "No switch in System Settings. The Linux alt-drag, on a Mac.",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSWindowShouldDragOnGesture", "type": "bool", "value": true }] },
+    { "id": "close-confirms", "group": "Windows", "label": "Ask to keep changes when closing documents", "was": "false",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSCloseAlwaysConfirmsChanges", "type": "bool", "value": true }] },
+    { "id": "recent-items", "group": "Windows", "label": "Five recent items", "was": "10",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSRecentDocumentsLimit", "type": "int", "value": 5 }] },
 
     { "id": "screenshot-clipboard", "group": "Screenshots", "label": "Screenshots go to the clipboard", "was": "file on the Desktop",
       "restart": ["SystemUIServer"], "writes": [{ "domain": "com.apple.screencapture", "key": "target", "type": "string", "value": "clipboard" }] },
     { "id": "screenshot-hdr", "group": "Screenshots", "label": "Capture in SDR, never HDR",
       "restart": ["SystemUIServer"], "writes": [{ "domain": "com.apple.screencapture", "key": "captureHDR", "type": "bool", "value": false }] },
+    { "id": "screenshot-shadow", "group": "Screenshots", "label": "No shadow on window captures", "was": "shadow",
+      "restart": ["SystemUIServer"], "writes": [{ "domain": "com.apple.screencapture", "key": "disable-shadow", "type": "bool", "value": true }] },
+    { "id": "screenshot-heic", "group": "Screenshots", "label": "Save as HEIC", "was": "png",
+      "restart": ["SystemUIServer"], "writes": [{ "domain": "com.apple.screencapture", "key": "type", "type": "string", "value": "heic" }] },
+    { "id": "screenshot-cursor", "group": "Screenshots", "label": "Include the pointer", "was": "false",
+      "restart": ["SystemUIServer"], "writes": [{ "domain": "com.apple.screencapture", "key": "showsCursor", "type": "bool", "value": true }] },
 
     { "id": "clock-seconds", "group": "Menu bar", "label": "Clock shows seconds", "was": "false",
       "restart": ["ControlCenter"], "writes": [{ "domain": "com.apple.menuextra.clock", "key": "ShowSeconds", "type": "bool", "value": true }] },
     { "id": "clock-ampm", "group": "Menu bar", "label": "Clock hides AM/PM",
       "restart": ["ControlCenter"], "writes": [{ "domain": "com.apple.menuextra.clock", "key": "ShowAMPM", "type": "bool", "value": false }] },
+    { "id": "battery-percent", "group": "Menu bar", "label": "Battery percentage", "was": "hidden",
+      "restart": ["ControlCenter"], "writes": [{ "domain": "com.apple.controlcenter", "key": "BatteryShowPercentage", "type": "bool", "value": true, "host": "current" }] },
+    { "id": "spotlight-icon", "group": "Menu bar", "label": "Spotlight icon out of the menu bar", "note": "Raycast has Cmd+Space, so the icon is dead weight.",
+      "restart": ["login"], "writes": [{ "domain": "com.apple.Spotlight", "key": "MenuItemHidden", "type": "bool", "value": true, "host": "current" }] },
+
+    { "id": "clipboard-history", "group": "Spotlight", "label": "Clipboard history, kept 8 hours (macOS 26)", "was": "off", "note": "28800 seconds. The other choices in System Settings are 30 minutes and 7 days.",
+      "restart": ["login"], "writes": [
+        { "domain": "com.apple.Spotlight", "key": "PasteboardHistoryEnabled", "type": "bool", "value": true },
+        { "domain": "com.apple.Spotlight", "key": "PasteboardHistoryTimeout", "type": "int", "value": 28800 }
+      ] },
 
     { "id": "ui-sounds", "group": "Sound", "label": "Interface sound effects off", "was": "on",
       "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "com.apple.sound.uiaudio.enabled", "type": "int", "value": 0 }] },
@@ -207,9 +332,88 @@ bash macos.sh</pre>
         { "domain": "com.apple.finder", "key": "ShowExternalHardDrivesOnDesktop", "type": "bool", "value": true },
         { "domain": "com.apple.finder", "key": "ShowRemovableMediaOnDesktop", "type": "bool", "value": true }
       ] },
+    { "id": "finder-animations", "group": "Finder", "label": "No Finder animations", "note": "No switch in System Settings. Get Info panes too.",
+      "restart": ["Finder"], "writes": [
+        { "domain": "com.apple.finder", "key": "DisableAllAnimations", "type": "bool", "value": true },
+        { "domain": "com.apple.finder", "key": "AnimateInfoPanes", "type": "bool", "value": false }
+      ] },
+    { "id": "finder-quit", "group": "Finder", "label": "Cmd+Q quits Finder", "note": "Adds Quit Finder to its menu. The desktop goes empty until you click the Dock icon.",
+      "restart": ["Finder"], "writes": [{ "domain": "com.apple.finder", "key": "QuitMenuItem", "type": "bool", "value": true }] },
+    { "id": "finder-search-scope", "group": "Finder", "label": "Search the current folder", "was": "This Mac", "note": "SCcf current folder, SCev This Mac, SCsp previous scope.",
+      "restart": ["Finder"], "writes": [{ "domain": "com.apple.finder", "key": "FXDefaultSearchScope", "type": "string", "value": "SCcf" }] },
+    { "id": "finder-extension-warning", "group": "Finder", "label": "No warning when changing an extension", "was": "true",
+      "restart": ["Finder"], "writes": [{ "domain": "com.apple.finder", "key": "FXEnableExtensionChangeWarning", "type": "bool", "value": false }] },
+    { "id": "finder-trash-warning", "group": "Finder", "label": "No warning before emptying the Trash", "was": "true",
+      "restart": ["Finder"], "writes": [{ "domain": "com.apple.finder", "key": "WarnOnEmptyTrash", "type": "bool", "value": false }] },
+    { "id": "finder-trash-30-days", "group": "Finder", "label": "Empty Trash items after 30 days", "was": "false",
+      "restart": ["Finder"], "writes": [{ "domain": "com.apple.finder", "key": "FXRemoveOldTrashItems", "type": "bool", "value": true }] },
+    { "id": "finder-recent-tags", "group": "Finder", "label": "No Recent Tags in the sidebar", "was": "true",
+      "restart": ["Finder"], "writes": [{ "domain": "com.apple.finder", "key": "ShowRecentTags", "type": "bool", "value": false }] },
+    { "id": "finder-ds-store", "group": "Finder", "label": "No .DS_Store on network shares or USB drives", "note": "No switch in System Settings.",
+      "restart": ["Finder"], "writes": [
+        { "domain": "com.apple.desktopservices", "key": "DSDontWriteNetworkStores", "type": "bool", "value": true },
+        { "domain": "com.apple.desktopservices", "key": "DSDontWriteUSBStores", "type": "bool", "value": true }
+      ] },
+
+    { "id": "dmg-skip-verify", "group": "Disk images & drives", "label": "Skip disk image verification",
+      "restart": [], "writes": [
+        { "domain": "com.apple.frameworks.diskimages", "key": "skip-verify", "type": "bool", "value": true },
+        { "domain": "com.apple.frameworks.diskimages", "key": "skip-verify-locked", "type": "bool", "value": true },
+        { "domain": "com.apple.frameworks.diskimages", "key": "skip-verify-remote", "type": "bool", "value": true }
+      ] },
+    { "id": "dmg-auto-open", "group": "Disk images & drives", "label": "Open a Finder window when a disk image mounts",
+      "restart": [], "writes": [
+        { "domain": "com.apple.frameworks.diskimages", "key": "auto-open-ro-root", "type": "bool", "value": true },
+        { "domain": "com.apple.frameworks.diskimages", "key": "auto-open-rw-root", "type": "bool", "value": true }
+      ] },
+    { "id": "time-machine-new-disks", "group": "Disk images & drives", "label": "Time Machine stops asking about every new drive",
+      "restart": [], "writes": [{ "domain": "com.apple.TimeMachine", "key": "DoNotOfferNewDisksForBackup", "type": "bool", "value": true }] },
+
+    { "id": "airplay-receiver", "group": "Sharing", "label": "AirPlay Receiver off", "was": "on", "note": "Frees ports 5000 and 7000 for local dev servers.",
+      "restart": ["login"], "writes": [{ "domain": "com.apple.controlcenter", "key": "AirplayRecieverEnabled", "type": "bool", "value": false, "host": "current" }] },
+
+    { "id": "crash-dialog", "group": "Crashes", "label": "Developer crash dialog, delivered as a notification", "note": "DialogType developer shows the full report. UseUNC moves it into Notification Center.",
+      "restart": [], "writes": [
+        { "domain": "com.apple.CrashReporter", "key": "DialogType", "type": "string", "value": "developer" },
+        { "domain": "com.apple.CrashReporter", "key": "UseUNC", "type": "bool", "value": true }
+      ] },
+
+    { "id": "power-button", "group": "Power button", "label": "Tapping the power button doesn't sleep the Mac", "note": "Without this, a Touch ID tap sleeps the machine.",
+      "restart": ["login"], "writes": [{ "domain": "com.apple.loginwindow", "key": "PowerButtonSleepsSystem", "type": "bool", "value": false }] },
 
     { "id": "screensaver", "group": "Screen saver", "label": "Start after 5 minutes", "was": "20 minutes",
-      "restart": [], "writes": [{ "domain": "com.apple.screensaver", "key": "idleTime", "type": "int", "value": 300, "host": "current" }] }
+      "restart": [], "writes": [{ "domain": "com.apple.screensaver", "key": "idleTime", "type": "int", "value": 300, "host": "current" }] },
+
+    { "id": "terminal-focus-follows-mouse", "group": "Apps", "label": "Terminal: focus follows the mouse", "note": "No switch in Terminal's settings. Hovering a window focuses it without raising it.",
+      "restart": ["relaunch"], "app": "Terminal", "writes": [{ "domain": "com.apple.Terminal", "key": "FocusFollowsMouse", "type": "bool", "value": true }] },
+    { "id": "activity-monitor-cpu-icon", "group": "Apps", "label": "Activity Monitor: CPU graph in the Dock icon",
+      "restart": ["relaunch"], "app": "Activity Monitor", "writes": [{ "domain": "com.apple.ActivityMonitor", "key": "IconType", "type": "int", "value": 5 }] },
+    { "id": "disk-utility-debug", "group": "Apps", "label": "Disk Utility: Debug menu, advanced image options, APFS snapshots",
+      "restart": ["relaunch"], "app": "Disk Utility", "writes": [
+        { "domain": "com.apple.DiskUtility", "key": "DUDebugMenuEnabled", "type": "bool", "value": true },
+        { "domain": "com.apple.DiskUtility", "key": "advanced-image-options", "type": "bool", "value": true },
+        { "domain": "com.apple.DiskUtility", "key": "WorkspaceShowAPFSSnapshots", "type": "bool", "value": true }
+      ] },
+    { "id": "music-crossfade-lossless", "group": "Apps", "label": "Music: 7-second crossfade, lossless imports",
+      "restart": ["relaunch"], "app": "Music", "writes": [
+        { "domain": "com.apple.Music", "key": "crossfadeEnabled", "type": "bool", "value": true },
+        { "domain": "com.apple.Music", "key": "crossfadeSeconds", "type": "int", "value": 7 },
+        { "domain": "com.apple.Music", "key": "encoderName", "type": "string", "value": "Lossless Encoder" }
+      ] },
+
+    { "id": "startup-chime", "group": "System (sudo)", "label": "No startup chime",
+      "restart": [], "sudo": true, "raw": ["sudo nvram StartupMute=%01"] },
+    { "id": "firewall-stealth", "group": "System (sudo)", "label": "Firewall on, stealth mode on", "was": "both off", "note": "Stealth mode leaves pings and port probes unanswered.",
+      "restart": [], "sudo": true, "raw": [
+        "sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on",
+        "sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on"
+      ] },
+    { "id": "power-never-sleep", "group": "System (sudo)", "label": "Never sleep; Low Power Mode on battery", "note": "On battery the display still sleeps after 10 minutes.",
+      "restart": [], "sudo": true, "raw": [
+        "sudo pmset -a sleep 0",
+        "sudo pmset -b lowpowermode 1",
+        "sudo pmset -b displaysleep 10"
+      ] }
   ]
 }
 </script>
