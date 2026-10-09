@@ -46,8 +46,8 @@
 // slow all over: on 2026-10-09 an EPYC 9V74 read every confirmed route 1.27x
 // higher than the model's six other runs, and failed six routes on a PR that
 // changed no Worker byte (#1273). The control saw it: scaled, /robots.txt read
-// 33% over its usual 2.3 reference ms, where 29 ordinary runs on three models
-// read between 8% under and 16% over. So the control's median, scaled, is checked
+// 33% over its usual 2.3 reference ms, where 30 ordinary runs on three models
+// read between 16% under and 16% over. So the control's median, scaled, is checked
 // against `control.ms` in the budget file, and a run more than `control.drift`
 // off it is inconclusive. The factor stays the scale. Used as the scale, the
 // control spread 5.4% around what the routes said each run's scale was, against
