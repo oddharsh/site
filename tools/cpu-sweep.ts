@@ -72,12 +72,18 @@ const FLOOR_MAX_MS = 0.5;
 const WIDTH = 2; // children at once: CI has 4 cores, and the build's other background steps share them
 const CONTROL = "/robots.txt";
 const CALIBRATION = "@calibration"; // a sample spec no route can collide with
-// The routes that take a query, where the first sweep found the heavy ones. The
-// pages come from the site manifest.
+// The routes that take a query, where the first sweep found the heavy ones, then
+// the island fragments, which no manifest entry names and which render per
+// request (/coffee/slots.html read 18 ms before #1262), and three more that
+// tools/route-cpu.ts carried until the two tools became this one. The pages
+// come from the site manifest.
 const QUERIES = [
   "/photos/query.json", "/photos/query.json?q=red+car", "/photos/query.json?q=classic+chrome+bridge&limit=100",
   "/search?q=brotli", "/search.json?q=brotli", "/search.json?q=what+does+he+think+about+agents",
   "/ask?query=dictionary", "/finger", "/agent-ready", "/coffee/availability.json", "POST /mcp search_site",
+  "/coffee/slots.html", "/ledger/lines.html", "/inbox/mail.html", "/around/snapshot.html", "/reading/list.html",
+  "/whoareyou/values.html", "/garage/dyno/pulls.html", "/lens/census/table.html", "/photos/grid.html", "/rn/tracks.html",
+  "/llms-full.txt", "/this-page-does-not-exist", "POST /mcp tools/list",
 ];
 
 const { values } = parseArgs({
@@ -108,7 +114,9 @@ function calibrate(): number {
 function request(spec: string): Request {
   const [method, path, tool] = spec.startsWith("POST ") ? spec.split(" ") : ["GET", spec];
   const init: RequestInit = { method, headers: { accept: "text/html,application/json", "accept-encoding": "br", "content-type": "application/json", "mcp-protocol-version": "2025-06-18" } };
-  if (tool) init.body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: tool, arguments: { q: "brotli dictionary" } } });
+  // "tools/list" is a JSON-RPC method; any other word names a tool to call.
+  if (tool) init.body = JSON.stringify(tool === "tools/list" ? { jsonrpc: "2.0", id: 1, method: tool }
+    : { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: tool, arguments: { q: "brotli dictionary" } } });
   return new Request("https://aadhar.sh" + path, init);
 }
 
@@ -133,15 +141,45 @@ if (values.one) {
       return new Response(readFileSync(file));
     },
   };
-  // Any other binding reads as empty: a callable stub whose calls resolve to null,
+  // What each binding kind answers with nothing behind it, the way an empty
+  // namespace, database or bucket would.
+  const none = async () => null;
+  const binding = (kind: string): unknown => {
+    switch (kind) {
+      case "kv": return { get: none, getWithMetadata: async () => ({ value: null, metadata: null }), put: none, delete: none, list: async () => ({ keys: [], list_complete: true }) };
+      case "d1": {
+        const stmt = { bind: () => stmt, first: none, all: async () => ({ results: [], success: true, meta: {} }), run: async () => ({ success: true, meta: {} }), raw: async () => [] };
+        return { prepare: () => stmt, batch: async () => [], exec: async () => ({}) };
+      }
+      case "r2": return { get: none, head: none, put: none, delete: none, list: async () => ({ objects: [], truncated: false, delimitedPrefixes: [] }) };
+      case "ae": return { writeDataPoint() {} };
+      case "ratelimit": return { limit: async () => ({ success: true }) };
+      case "do": return { idFromName: () => ({}), idFromString: () => ({}), newUniqueId: () => ({}), get: () => ({ fetch: async () => new Response("no Durable Object here", { status: 503 }) }) };
+      case "workflow": return { create: async () => ({ id: "local" }), get: async () => ({ status: async () => ({ status: "unknown" }) }) };
+      case "version": return { id: "local", tag: "", timestamp: "" };
+      default: return stub();
+    }
+  };
+  // Anything else reads as empty: a callable stub whose calls resolve to null,
   // and whose D1-shaped results are empty.
   const stub = (): any => new Proxy(function () {}, {
     get: (_, k) => (k === "then" ? undefined : stub()),
     apply: () => Object.assign(Promise.resolve(null), { all: async () => ({ results: [] }), first: async () => null, run: async () => ({}) }),
   });
+  // Every binding the config declares is an OWN property, stubbed by its kind,
+  // because a route can copy env and a copy keeps only own properties: cal runs
+  // on { ...env, BASE_PATH }, and with the bindings only behind the proxy,
+  // /coffee/slots.html read env.BOOKINGS as undefined and threw. The proxy still
+  // answers any other capitalised name, which is how a secret reads.
   const { siteConfig } = await import("./lib/site-config.ts");
-  const vars = (await siteConfig()).vars ?? {};
-  const env = new Proxy({ ASSETS, ...vars } as Record<string, unknown>, { get: (t, k) => (k in t ? t[k as string] : /^[A-Z][A-Z0-9_]*$/.test(String(k)) ? stub() : undefined) });
+  const c = await siteConfig();
+  const declared: Record<string, unknown> = { ASSETS, ...c.vars };
+  const add = (list: { binding?: string; name?: string }[] | undefined, kind: string) => { for (const b of list ?? []) declared[b.binding ?? b.name!] = binding(kind); };
+  add(c.kv_namespaces, "kv"); add(c.d1_databases, "d1"); add(c.r2_buckets, "r2"); add(c.analytics_engine_datasets, "ae");
+  add(c.ratelimits, "ratelimit"); add(c.durable_objects?.bindings, "do"); add(c.workflows, "workflow");
+  for (const k of ["browser", "images", "ai", "analytics"]) if (c[k]?.binding) declared[c[k].binding] = stub();
+  if (c.version_metadata?.binding) declared[c.version_metadata.binding] = binding("version");
+  const env = new Proxy(declared, { get: (t, k) => (k in t ? t[k as string] : /^[A-Z][A-Z0-9_]*$/.test(String(k)) ? stub() : undefined) });
   const ctx = { waitUntil() {}, passThroughOnException() {} };
   const worker = (await import(values.bundle!)).default;
   const run = async (spec: string) => { const r = await worker.fetch(request(spec), env, ctx); await r.arrayBuffer(); return r.status; };

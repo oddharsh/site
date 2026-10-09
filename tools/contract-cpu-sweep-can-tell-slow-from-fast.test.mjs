@@ -78,3 +78,10 @@ test("a route's first date format is cheap in a warm process, and --cold-icu sho
   assert.ok(warm.ms < 2, `warm process: /icu read ${warm.ms} ms`);
   assert.ok(cold.ms > 5, `cold process: /icu read ${cold.ms} ms, so the warm-up proves nothing`);
 });
+
+// A route measured without its bindings measures a crash: cal copies env, and a
+// binding that lived only behind the env proxy was gone from the copy, so
+// /coffee/slots.html threw on BOOKINGS. Every declared binding is an own property.
+test("a declared binding survives a copy of env", { timeout: 60_000 }, () => {
+  assert.equal(row(sweep("/copy", UNCALIBRATED).report, "/copy").status, 200, "/copy lost BOOKINGS or HOST_TIMEZONE");
+});

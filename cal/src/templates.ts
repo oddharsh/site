@@ -494,7 +494,7 @@ const PENDING_PER_DAY = 8;
 // arithmetic. toLocaleDateString and toLocaleTimeString build a fresh
 // Intl.DateTimeFormat on every call, about 33 µs each under node, and a slot
 // listing made two per slot: 8 ms of the 18 ms /coffee/slots.html cost on a
-// cold isolate (route-cpu, 2026-10-08). A cached formatter's format() is the
+// cold isolate (a CPU sweep, 2026-10-08). A cached formatter's format() is the
 // same string by spec, since both shapes name their own fields and so take no
 // defaults; cal/test/templates.test.js holds the two together across both
 // 2026 New York transitions.
