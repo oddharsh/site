@@ -866,7 +866,10 @@ Workers Free allows 10 ms of CPU per request. `tools/cpu-sweep.ts` times every
 manifest page and the query routes on the bundle `perf-budget` builds, each in a
 fresh node process (V8, workerd's engine) as that isolate's first request, and
 prints the routes over 4 ms against a `/robots.txt` control. Run `perf-budget`
-first; the sweep reads `.build/.perfbudget/index.js`.
+first; the sweep reads `.build/.perfbudget/index.js`. Each sample warms ICU in
+a throwaway isolate first (`tools/lib/warm-icu.ts`), because workerd's shared
+processes already have it loaded; `--cold-icu` skips that, as the control. The
+island fragments are in its route list too, since no manifest entry names them.
 
 Readings are scaled to a reference runner. GitHub's runners vary: three CI runs
 (2026-10-09) landed on an EPYC 9V45, a Xeon 8573C and an EPYC 7763, and raw
@@ -875,7 +878,8 @@ timed in the same harness, scales them, and scaled they agreed within 4%.
 `config/cpu-budget.json` holds the reference (the workload's median on the Xeon,
 with its digest) and a ceiling for each route allowed over 8 ms, with the reason.
 
-CI runs it report-only, into the log and the job summary. `--gate` fails on a
+CI runs it report-only in a job of its own, into the log and the job summary,
+because inside `validate` it held the required check up by 20 to 30 s. `--gate` fails on a
 route over its ceiling, or on an allowlist entry for a route the sweep doesn't
 know; adding it to the CI step is the remaining switch. Read the verdict from CI:
 Apple silicon runs the workload relatively faster than the routes, so a laptop

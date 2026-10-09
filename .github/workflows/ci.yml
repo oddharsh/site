@@ -214,19 +214,6 @@ jobs:
           path: served-manifest.json
           if-no-files-found: error
 
-      # Report-only, from 2026-10-08: CPU per request on a cold isolate, route by
-      # route, scaled to a reference runner and read against each route's ceiling
-      # in config/cpu-budget.json (tools/cpu-sweep.ts). It reads .build/.perfbudget
-      # and .build/public, writes only .build/cpu-sweep.json, and exits 0 whatever
-      # it finds; the table goes to the log and the job summary. Adding --gate
-      # makes a route over its ceiling fail the run.
-      - name: Report CPU per route
-        id: cpu
-        run: |
-          set -o pipefail
-          node tools/cpu-sweep.ts --markdown | tee -a "$GITHUB_STEP_SUMMARY"
-        background: true
-
       # Reads .build/.perfbudget and writes only .wrangler.site.local.jsonc,
       # which nothing in the suite touches, so the two overlap.
       - name: Verify route surface against a local Worker
@@ -261,17 +248,17 @@ jobs:
       - name: Wait for every background check
         wait-all:
 
-  # CPU per request on a cold isolate, for every registered page and the heavy
-  # query routes (tools/route-cpu.ts). Report only, for now: it writes a table
-  # to the step summary and cannot fail the run, and --strict is there for when
-  # it gates. Its OWN job because, as a background step in validate, it took
-  # 76 s and held the required check 40 s past the suite (validate 116 s
-  # against 50 to 63 on main, 2026-10-08). The runner itself reads about 2.5x a
-  # laptop: the /robots.txt control was 0.98 ms beside the suite and 0.95 ms
-  # alone, against 0.38 ms on an M-series Mac, so contention was never the
-  # cause and the 8 ms line is not calibrated for this machine yet. It builds
-  # its own bundle through perf-budget, the same dry-run validate measures.
-  route-cpu:
+  # Report-only: CPU per request on a fresh isolate, route by route, scaled to
+  # a reference runner and read against each route's ceiling in
+  # config/cpu-budget.json (tools/cpu-sweep.ts). It writes only
+  # .build/cpu-sweep.json and exits 0 whatever it finds; the table goes to the
+  # log and the job summary, and adding --gate makes a route over its ceiling
+  # fail the run. Its OWN job because a CPU report inside validate held the
+  # required check up: validate ran 50 to 63 s before one, 116 s with
+  # tools/route-cpu.ts as a background step (2026-10-08), and 83 to 86 s with
+  # this sweep there (2026-10-09). It builds its own bundle through
+  # perf-budget, the same dry-run validate measures.
+  cpu-sweep:
     name: CPU per route (report)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -295,7 +282,9 @@ jobs:
         run: bun run perf-budget
 
       - name: Report CPU per route
-        run: bun run route-cpu
+        run: |
+          set -o pipefail
+          node tools/cpu-sweep.ts --markdown | tee -a "$GITHUB_STEP_SUMMARY"
 
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,
   # on main, at this commit, produced these URL hashes. tools/check-served.ts

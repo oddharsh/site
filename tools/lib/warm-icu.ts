@@ -3,8 +3,8 @@
 //
 // ICU keeps its data per PROCESS. workerd runs a great many isolates in one
 // process, so a Worker's fresh isolate finds ICU loaded by whoever came before.
-// A fresh node process per sample (route-cpu and cpu-sweep both work that way)
-// finds it cold, and charged the first date format, collation or number format
+// A fresh node process per sample, which is how tools/cpu-sweep.ts works, finds
+// it cold, and charged the first date format, collation or number format
 // in a request about 10 ms nobody pays in production. Measured 2026-10-09 under
 // node 26.11, each first use inside a fresh worker-thread isolate, in a process
 // that never touched ICU against one where another isolate had:
