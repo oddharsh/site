@@ -279,3 +279,14 @@ by renumbering. The long-form history of each one is in git
     those roots from `shellFiles()` in `tools/build.ts`, and proves its reach
     by planting a violation in a file only the new list covers. A widened scan
     that reports nothing new looks exactly like one that reads nothing.
+
+56. **A CPU factor per runner model can't see one slow runner.** The CPU
+    sweep scales each GitHub runner's CPU model to the EPYC 7763 by a fitted
+    factor. On 2026-10-09 one EPYC 9V74 read every route 1.27x higher than the
+    model's six other runs, and the gate failed six routes on #1273, a PR that
+    changed no Worker byte. Refitting the factor wouldn't have saved it: a
+    factor is a model's usual runner, and this runner was unusual. The control's
+    spread (its IQR) missed it too, at 0.30 ms, because a host that's slow all
+    over reads tight. Its median caught it, 33% over the reference where
+    ordinary runs stay within 16%, so `config/cpu-budget.json` `control` now
+    makes such a run inconclusive.

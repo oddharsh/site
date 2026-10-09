@@ -4,7 +4,8 @@
 // this runs it against a fixture Worker whose /spin burns 12 ms of CPU: report
 // mode lists it as over 8 ms and still exits 0, --gate fails on it, and the
 // allowlist and this CPU model's factor in the budget file each change that
-// verdict. With no factor for the CPU model, --gate judges nothing.
+// verdict. With no factor for the CPU model, --gate judges nothing, and on a
+// runner whose control reads off its model it judges nothing either.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -70,6 +71,28 @@ test("--gate judges nothing on a CPU model with no factor, and says so", { timeo
   assert.ok(row(report, "/spin").ms > report.gateMs, "the raw reading is still over 8 ms");
   assert.equal(code, 0, "a reading in an unknown model's milliseconds can't fail the gate");
   assert.match(stdout, /^::warning title=CPU per route::--gate judged nothing: config\/cpu-budget\.json has no factor for /m);
+});
+
+// A factor fits a model's usual runner; one runner slow all over read 33% high
+// on its control and failed six routes on a PR that changed no Worker byte
+// (#1273, gotcha 56). A control reference of 0.01 ms makes this machine that
+// runner. A band too wide to cross is the control: the same run is judged again.
+test("--gate judges nothing on a runner whose control reads off its model, and judges once the band allows it", { timeout: 90_000 }, () => {
+  const off = sweepIn({ GITHUB_ACTIONS: "true" }, "/spin", { ...atFactor(1), control: { ms: 0.01, drift: 0.2 } }, "--gate");
+  assert.ok(off.report.control.drift > 0.2, `drift read ${off.report.control.drift}`);
+  assert.equal(off.report.inconclusive, true);
+  assert.ok(row(off.report, "/spin").ms > off.report.gateMs, "the reading is still over 8 ms");
+  assert.equal(off.code, 0, "a runner off its model can't fail the gate");
+  assert.match(off.stdout, /^::warning title=CPU per route::--gate judged nothing, because the run was inconclusive: the control read [\d.]+ ms, \+\d+% off the 0\.01 ms this model's factor expects/m);
+  const within = sweep("/spin", { ...atFactor(1), control: { ms: 0.01, drift: 1e9 } }, "--gate");
+  assert.equal(within.report.inconclusive, false);
+  assert.equal(within.code, 1, "inside the band, the slow route fails");
+});
+
+test("the committed budget names a control reference, so the drift check can't go missing", () => {
+  const { control } = JSON.parse(readFileSync(new URL("config/cpu-budget.json", ROOT), "utf8"));
+  assert.ok(control?.ms > 0, "config/cpu-budget.json needs control.ms");
+  assert.ok(control.drift > 0 && control.drift < 1, `control.drift is ${control?.drift}`);
 });
 
 // The warm-up has to be what makes /icu cheap, so --cold-icu, which skips it,
