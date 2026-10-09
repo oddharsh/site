@@ -70,3 +70,11 @@ test("--gate refuses a reference taken on a different calibration workload, befo
   assert.equal(code, 2);
   assert.match(stderr, /Measure referenceMs again/);
 });
+
+// The warm-up has to be what makes /icu cheap, so --cold-icu, which skips it,
+// must read it heavy again. Raw milliseconds, uncalibrated.
+test("a route's first date format is cheap in a warm process, and --cold-icu shows the cold one", { timeout: 90_000 }, () => {
+  const warm = row(sweep("/icu", UNCALIBRATED).report, "/icu"), cold = row(sweep("/icu", UNCALIBRATED, "--cold-icu").report, "/icu");
+  assert.ok(warm.ms < 2, `warm process: /icu read ${warm.ms} ms`);
+  assert.ok(cold.ms > 5, `cold process: /icu read ${cold.ms} ms, so the warm-up proves nothing`);
+});

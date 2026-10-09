@@ -10,16 +10,9 @@
 // already writes, one esbuild module with every text import inlined, so node
 // can import it once `cloudflare:workers` resolves to a stub. Each sample is a
 // FRESH node process, standing in for the fresh isolate a visitor's request meets:
-//   0. warm ICU in a throwaway isolate (a worker thread), then let it exit. ICU
-//      keeps its data per PROCESS, and workerd runs a great many isolates in
-//      one process, so a fresh isolate there finds it loaded. Measured
-//      2026-10-09 under node 26.11: the first DateTimeFormat in a fresh isolate
-//      costs 9.5-9.8 ms in a process that never touched ICU and 0.09-0.12 ms
-//      once another isolate has; localeCompare 6.5 against 0.03, number
-//      formatting 8.5 against 0.07, a word Segmenter 7.2 against 0.06. Without
-//      this step every route that formats a date read about 10 ms high. The
-//      warm-up names no zone the site uses, so a zone's own data still costs
-//      what it costs (a second zone measured 0.06 ms);
+//   0. warm ICU in a throwaway isolate, since workerd's shared processes keep
+//      it loaded (tools/lib/warm-icu.ts has the measurements); without this
+//      every route that formats a date read about 10 ms high;
 //   1. import the bundle, with ASSETS read from .build/public and every other
 //      binding the site config declares stubbed empty (local KV, D1 and R2 are
 //      empty too, so data pages render their fallback);
@@ -46,7 +39,7 @@ import { registerHooks } from "node:module";
 import { availableParallelism } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { Worker } from "node:worker_threads";
+import { warmIcu } from "./lib/warm-icu.ts";
 
 export const OVER_MS = 8;
 const SCREEN_MS = 4;
@@ -98,17 +91,8 @@ function request(spec: string): Request {
   return new Request("https://aadhar.sh" + path, init);
 }
 
-// Step 0's warm-up: each ICU service a neighbouring tenant would have used,
-// in en-US and a zone the site never names.
-const WARM_ICU = `"b".localeCompare("a"); (1234.5).toLocaleString("en-US");
-new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(1);
-new Intl.DateTimeFormat("en-US", { timeZone: "Europe/London", dateStyle: "full", timeStyle: "long" }).format(0);
-new Date(0).toLocaleString("en-US"); [...new Intl.Segmenter("en", { granularity: "word" }).segment("a b")];
-new Intl.PluralRules("en-US").select(1); new Intl.RelativeTimeFormat("en").format(1, "day");
-new Intl.ListFormat("en").format(["a", "b"]); new Intl.DisplayNames("en", { type: "region" }).of("US");`;
-
 async function sample(spec: { worker: string; assets: string; env: Record<string, unknown>; bindings: Record<string, string>; coldIcu?: boolean }, route: string) {
-  if (!spec.coldIcu) await new Promise((done, fail) => new Worker(WARM_ICU, { eval: true }).on("exit", done).on("error", fail));
+  if (!spec.coldIcu) await warmIcu();
   registerHooks({
     resolve: (s, c, next) => s === "cloudflare:workers"
       ? { url: "data:text/javascript,export class WorkerEntrypoint{};export class WorkflowEntrypoint{};export const tracing=undefined;", shortCircuit: true }
