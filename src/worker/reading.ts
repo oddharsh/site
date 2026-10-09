@@ -267,7 +267,7 @@ export function renderReadingPage() {
 .rd-title { color:oklch(33% 0.09 263); font-weight:bold; font-size:var(--text-lede); text-decoration:none; }
 .rd-title:hover { color:var(--link-hover); text-decoration:underline; }
 .rd-star { color:oklch(72% 0.15 75); font-size:var(--text-ui); }
-.rd-meta { display:flex; align-items:center; gap:8px; margin:3px 0 0; }
+.rd-meta { display:flex; flex-wrap:wrap; align-items:center; gap:2px 8px; margin:3px 0 0; }
 .rd-dom { font-family:var(--font-mono); font-size:var(--text-micro); color:var(--blue-40); background:var(--surface-desktop); border:1px solid oklch(82% 0.03 250); border-radius:2px; padding:0 5px; }
 .rd-date { font-size:var(--text-xs); color:var(--ink-faint); }
 .rd-hn { display:inline-flex; align-items:center; gap:4px; font-size:var(--text-micro); color:oklch(33% 0.09 263); text-decoration:none; }
