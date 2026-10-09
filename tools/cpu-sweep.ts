@@ -42,6 +42,19 @@
 // laptop it spent about 40% of its CPU on GC and compiler threads where routes
 // spend about 20%, so on any one model it moved while the routes held.
 //
+// A factor is right for a model's usual runner, and one runner can still be
+// slow all over: on 2026-10-09 an EPYC 9V74 read every confirmed route 1.27x
+// higher than the model's six other runs, and failed six routes on a PR that
+// changed no Worker byte (#1273). The control saw it: scaled, /robots.txt read
+// 33% over its usual 2.3 reference ms, where 30 ordinary runs on three models
+// read between 16% under and 16% over. So the control's median, scaled, is checked
+// against `control.ms` in the budget file, and a run more than `control.drift`
+// off it is inconclusive. The factor stays the scale. Used as the scale, the
+// control spread 5.4% around what the routes said each run's scale was, against
+// 3.9% for the model factor, since a 2 ms route is noisy on its own. The
+// control's spread, checked above, missed that runner at a 0.30 ms floor,
+// because a host that is slow all over reads tight.
+//
 // THE GATE. --gate exits 1 when a route's median is over its ceiling: GATE_MS,
 // or the ceilingMs that config/cpu-budget.json allows it with a reason. An entry
 // for a route the sweep doesn't know fails too, and an entry whose route now
@@ -185,7 +198,12 @@ if (!existsSync(BUNDLE)) {
   console.error(`cpu-sweep: no bundle at ${BUNDLE}; run bun run perf-budget first, which builds it`);
   process.exit(2);
 }
-type Budget = { machines: Record<string, { factor: number; runs: number }>; routes: Record<string, { ceilingMs: number; why: string }> };
+type Budget = {
+  machines: Record<string, { factor: number; runs: number }>;
+  // the control's usual median in reference ms, and how far a run may read from it
+  control?: { ms: number; drift: number };
+  routes: Record<string, { ceilingMs: number; why: string }>;
+};
 const budget: Budget = JSON.parse(readFileSync(values.budget!, "utf8"));
 // The scale, from this CPU model to the EPYC 7763. A model with no factor reads
 // raw, and --gate judges nothing on it.
@@ -236,14 +254,22 @@ rows.sort((a, b) => b.ms - a.ms);
 const over = rows.filter((r) => r.ms > r.ceilingMs);
 const unknown = Object.keys(budget.routes).filter((r) => !known.has(r));
 const stale = rows.filter((r) => budget.routes[r.route] && r.ms < STALE_MS);
-const inconclusive = floor * scale > FLOOR_MAX_MS;
+const noisy = floor * scale > FLOOR_MAX_MS;
+// How far this run's control, scaled, reads from the reference: a runner slower
+// or faster all over than its model's factor says. Only a calibrated run has
+// reference ms to compare.
+const drift = calibrated && budget.control ? (median(control) * scale) / budget.control.ms - 1 : 0;
+const offModel = budget.control !== undefined && Math.abs(drift) > budget.control.drift;
+const inconclusive = noisy || offModel;
 writeFileSync(values.out!, JSON.stringify({
-  gateMs: GATE_MS, machine, calibration: { calibrated, scale }, control: { median: median(control), iqr: floor }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
+  gateMs: GATE_MS, machine, calibration: { calibrated, scale }, control: { median: median(control), iqr: floor, drift }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
 }, null, 2) + "\n");
 
 const units = calibrated ? `EPYC 7763 ms (x${scale.toFixed(3)} for this CPU model)`
   : `raw ms: config/cpu-budget.json has no factor for this CPU model, so the gate judges nothing`;
-const verdict = inconclusive ? `inconclusive: the control's spread was ${(floor * scale).toFixed(2)} ms (over ${FLOOR_MAX_MS})`
+const pct = (x: number) => `${x > 0 ? "+" : ""}${Math.round(x * 100)}%`;
+const verdict = noisy ? `inconclusive: the control's spread was ${(floor * scale).toFixed(2)} ms (over ${FLOOR_MAX_MS})`
+  : offModel ? `inconclusive: the control read ${(median(control) * scale).toFixed(2)} ms, ${pct(drift)} off the ${budget.control!.ms} ms this model's factor expects (over ±${Math.round(budget.control!.drift * 100)}%), so this runner is off its model`
   : `${over.length} of ${rows.length} routes over their ceiling, against a ${(floor * scale).toFixed(2)} ms floor`;
 const notes = [
   ...unknown.map((r) => `config/cpu-budget.json allows ${r}, which the sweep doesn't know`),
