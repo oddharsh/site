@@ -6,7 +6,7 @@
     "AMD EPYC 9V45 96-Core Processor": { "factor": 1.484, "runs": 2 }
   },
   "routes": {
-    "/agent-ready": { "ceilingMs": 45, "why": "the sweep refuses outbound fetch, so this times the probe's error path, not a real check; not profiled yet" },
+    "/agent-ready": { "ceilingMs": 1, "why": "the sweep refuses outbound fetch, so this times the probe's error path, not a real check; not profiled yet" },
     "/photos/query.json?q=classic+chrome+bridge&limit=100": { "ceilingMs": 41, "why": "parses the four photo JSON files (metadata, alt text, thumb hashes, semantics), prepares scoring fields for every photo and ranks them, then serializes 100; #1208 took out the ICU collator, and the next lever is scoring fields prepared at build (an owner's call)" },
     "/photos/query.json?q=red+car": { "ceilingMs": 32, "why": "the same parse, prepare and ranking as the 100-result query, serializing 25" },
     "/ask?query=dictionary": { "ceilingMs": 27, "why": "the cold search prepare /search pays, then KV reads and Analytics Engine writes it makes in production too (#1266 measured them at about 2.2 raw ms)" },
