@@ -24,17 +24,21 @@
 // a run whose floor is over FLOOR_MAX_MS is inconclusive, since the runner was
 // too busy to read.
 //
-// CALIBRATION. Raw CPU milliseconds are the machine's, so a slow runner would
-// fail a route a fast laptop passes. `calibrate()` below is a fixed workload
-// (JSON, a regex, a sort, string building: what the heavy routes spend on), timed
-// cold in the same child harness, SAMPLES times, interleaved with the screening
-// so it sees the same contention the routes do. Every reading is scaled by
-// referenceMs / that median, where referenceMs is the workload's median on the
-// reference machine, recorded in config/cpu-budget.json with the workload's
-// digest. So a reported millisecond is a reference-machine millisecond. The
-// reference is the CI runner, an AMD EPYC like the servers Workers run on, which
-// a laptop's M-series core isn't. Change the workload and the digest moves, and
-// --gate refuses until referenceMs is measured again.
+// CALIBRATION. GitHub's runners aren't one machine. Three runs of this sweep
+// (2026-10-09) landed on an AMD EPYC 9V45, an Intel Xeon Platinum 8573C and an
+// AMD EPYC 7763, and the same routes read 20 to 25% apart. `calibrate()` below
+// is a fixed workload (JSON, a regex, a sort, string building), timed cold in
+// the same harness SAMPLES times, spread through the screening so it sees the
+// load the routes see. Every reading is scaled by referenceMs / its median, and
+// referenceMs, in config/cpu-budget.json, is its median on the Xeon. Scaled, the
+// three runs agreed within 4% on every confirmed route, so a reported
+// millisecond is a reference-runner millisecond. Apple silicon runs this
+// workload relatively faster than it runs the routes, so a laptop reads about
+// 1.4x high: CI's number is the one to trust. A compile-heavy workload (250
+// generated functions, compiled and run once) was read beside it and tracked
+// worse: 5.2x slower on the EPYC 7763, where the routes were 2.6x. The
+// workload's text is digested; change it and --gate refuses until referenceMs
+// is measured again.
 //
 // THE GATE. --gate exits 1 when a route's median is over its ceiling: GATE_MS,
 // or the ceilingMs that config/cpu-budget.json allows it with a reason. An entry
@@ -51,7 +55,6 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { cpus } from "node:os";
 import { join } from "node:path";
-import { runInThisContext } from "node:vm";
 import { parseArgs } from "node:util";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -64,7 +67,6 @@ const FLOOR_MAX_MS = 0.5;
 const WIDTH = 2; // children at once: CI has 4 cores, and the build's other background steps share them
 const CONTROL = "/robots.txt";
 const CALIBRATION = "@calibration"; // a sample spec no route can collide with
-const CAL_CODE = "@calibration-code"; // EXPERIMENT: a compile-heavy candidate, read beside the first
 // The routes that take a query, where the first sweep found the heavy ones. The
 // pages come from the site manifest.
 const QUERIES = [
@@ -84,8 +86,8 @@ const { values } = parseArgs({
 
 // The calibration workload. Pure JavaScript with no ICU (no localeCompare, no
 // Intl), since ICU's first use costs page faults rather than CPU speed. About
-// 5.5 ms cold on an M-series laptop. Its text is digested, so any edit here asks
-// for a new referenceMs.
+// 5.2 ms cold on an M3 Max and 12.4 to 18.7 ms on CI's runners. Its text is
+// digested, so any edit here asks for a new referenceMs.
 function calibrate(): number {
   let s = "";
   for (let i = 0; i < 3000; i++) s += `{"id":${i},"title":"frame ${i % 97} on the bridge","tags":["red","car","film ${i % 13}"],"w":${(i * 7919) % 6000}},`;
@@ -95,16 +97,6 @@ function calibrate(): number {
   for (const r of rows) { const m = re.exec(r.tags.join(" ")); if (m && +m[1] % 2) hits++; }
   rows.sort((a, b) => a.w - b.w || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
   return JSON.stringify(rows.filter((r) => r.title.includes("bridge")).map((r) => ({ id: r.id, t: r.title.toUpperCase() }))).length + hits;
-}
-
-// EXPERIMENT: compile and first-run 250 generated functions, the shape of a cold route.
-function calibrateCode(): number {
-  let src = "";
-  for (let i = 0; i < 250; i++) src += `function f${i}(o){const a=[o.x+${i},o.y*${i % 7},"k${i}"];const m=new Map(a.map((v,j)=>[j,String(v)]));let s="";for(const [k,v] of m)s+=k+":"+v.replace(/\\d/g,"#")+";";if(o.z.length>${i % 9})s+=JSON.stringify({i:${i},s});return s.length+(o.z[${i % 5}]??0);}\n`;
-  src = `(() => {${src}return [${Array.from({ length: 250 }, (_, i) => `f${i}`).join(",")}];})()`;
-  let total = 0;
-  for (const fn of runInThisContext(src) as ((o: { x: number; y: number; z: number[] }) => number)[]) total += fn({ x: 1, y: 2, z: [1, 2, 3, 4, 5] });
-  return total;
 }
 
 function request(spec: string): Request {
@@ -148,7 +140,7 @@ if (values.one) {
   const run = async (spec: string) => { const r = await worker.fetch(request(spec), env, ctx); await r.arrayBuffer(); return r.status; };
   await run(values.one === CONTROL ? "/favicon.ico" : CONTROL); // the warm-up is never the timed route
   const t0 = process.cpuUsage();
-  const status = values.one === CALIBRATION ? (calibrate(), 0) : values.one === CAL_CODE ? (calibrateCode(), 0) : await run(values.one);
+  const status = values.one === CALIBRATION ? (calibrate(), 0) : await run(values.one);
   const d = process.cpuUsage(t0);
   process.stdout.write(JSON.stringify({ ms: (d.user + d.system) / 1000, status }) + "\n");
   process.exit(0);
@@ -194,7 +186,7 @@ const iqr = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return 
 // The control and the calibration are spread through the screening, so both see
 // the load the routes see rather than a quiet first second.
 const specs = [...routes];
-for (let k = 0; k < SAMPLES; k++) for (const s of [CONTROL, CALIBRATION, CAL_CODE]) specs.splice(Math.round(((k + 0.5) * specs.length) / SAMPLES), 0, s);
+for (let k = 0; k < SAMPLES; k++) for (const s of [CONTROL, CALIBRATION]) specs.splice(Math.round(((k + 0.5) * specs.length) / SAMPLES), 0, s);
 const screened = await pool(specs.map((s) => async () => ({ spec: s, ...(await sample(s)) })));
 const control = screened.filter((r) => r.spec === CONTROL).map((r) => r.ms);
 const calMs = median(screened.filter((r) => r.spec === CALIBRATION).map((r) => r.ms));
@@ -203,7 +195,7 @@ const floor = iqr(control);
 // reference taken on a different workload, readings stay raw and --gate refuses.
 const calibrated = budget.calibration !== null && budget.calibration.digest === digest;
 const scale = calibrated ? budget.calibration!.referenceMs / calMs : 1;
-const screen = new Map(screened.filter((r) => r.spec !== CONTROL && r.spec !== CALIBRATION && r.spec !== CAL_CODE).map((r) => [r.spec, r]));
+const screen = new Map(screened.filter((r) => r.spec !== CONTROL && r.spec !== CALIBRATION).map((r) => [r.spec, r]));
 const rows = await pool(routes.map((route) => async () => {
   const first = screen.get(route)!;
   const raw = [first.ms];
@@ -219,7 +211,7 @@ const stale = rows.filter((r) => budget.routes[r.route] && r.ms <= GATE_MS);
 const inconclusive = floor > FLOOR_MAX_MS;
 const machine = cpus()[0]?.model.trim() ?? "unknown";
 writeFileSync(values.out!, JSON.stringify({
-  gateMs: GATE_MS, machine, calibration: { ms: calMs, digest, calibrated, scale }, experiment: { calibration: screened.filter((r) => r.spec === CALIBRATION).map((r) => r.ms), code: screened.filter((r) => r.spec === CAL_CODE).map((r) => r.ms), control },  control: { median: median(control), iqr: floor }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
+  gateMs: GATE_MS, machine, calibration: { ms: calMs, digest, calibrated, scale },  control: { median: median(control), iqr: floor }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
 }, null, 2) + "\n");
 
 const units = calibrated ? `reference ms (x${scale.toFixed(2)} from ${calMs.toFixed(2)} ms of calibration here)`
@@ -228,6 +220,8 @@ const units = calibrated ? `reference ms (x${scale.toFixed(2)} from ${calMs.toFi
 const verdict = inconclusive ? `inconclusive: the control's spread was ${floor.toFixed(2)} ms (over ${FLOOR_MAX_MS})`
   : `${over.length} of ${rows.length} routes over their ceiling, against a ${floor.toFixed(2)} ms floor`;
 const notes = [
+  // measured on an M3 Max against the three CI runners (2026-10-09)
+  ...(calibrated && process.arch === "arm64" ? [`this machine is arm64, where the calibration workload runs relatively faster than the routes: readings run 1.3 to 1.4x above CI's, so trust CI's verdict`] : []),
   ...unknown.map((r) => `config/cpu-budget.json allows ${r}, which the sweep doesn't know`),
   ...stale.map((r) => `${r.route} reads ${r.ms.toFixed(2)} ms, under the ${GATE_MS} ms gate: drop its entry from config/cpu-budget.json`),
 ];

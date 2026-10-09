@@ -215,15 +215,16 @@ jobs:
           if-no-files-found: error
 
       # Report-only, from 2026-10-08: CPU per request on a cold isolate, route by
-      # route, against Workers Free's 10 ms (tools/cpu-sweep.ts). It reads
-      # .build/.perfbudget and .build/public, writes only .build/cpu-sweep.json,
-      # and exits 0 whatever it finds; the table goes to the job summary.
+      # route, scaled to a reference runner and read against each route's ceiling
+      # in config/cpu-budget.json (tools/cpu-sweep.ts). It reads .build/.perfbudget
+      # and .build/public, writes only .build/cpu-sweep.json, and exits 0 whatever
+      # it finds; the table goes to the log and the job summary. Adding --gate
+      # makes a route over its ceiling fail the run.
       - name: Report CPU per route
         id: cpu
         run: |
           set -o pipefail
           node tools/cpu-sweep.ts --markdown | tee -a "$GITHUB_STEP_SUMMARY"
-          cat .build/cpu-sweep.json # MEASUREMENT ROUND ONLY: the raw rows, for calibrating the gate
         background: true
 
       # Reads .build/.perfbudget and writes only .wrangler.site.local.jsonc,

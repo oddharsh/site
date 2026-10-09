@@ -868,14 +868,34 @@ fresh node process (V8, workerd's engine) as that isolate's first request, and
 prints the routes over 4 ms against a `/robots.txt` control. Run `perf-budget`
 first; the sweep reads `.build/.perfbudget/index.js`.
 
-CI runs it report-only, into the job summary, and nothing fails on it yet. The
-first sweep (2026-10-08) read four routes over 8 ms: `/agent-ready` 16.5 ms
-(its error path, since outbound fetch is refused), the two photo queries 14.6 and
-10.8 ms, and `/finger` 9.3 ms, against a 0.18 ms floor. `--gate` fails on any
-median over 8 ms; turn it on in CI once an allowlist holds those routes, and add a
-calibration workload first so a slow runner can't fail it. Locally, KV, D1 and R2
-are empty, so data routes time their fallback, and `/coffee/availability.json`
-answers 503 without its calendar secret.
+Readings are scaled to a reference runner. GitHub's runners vary: three CI runs
+(2026-10-09) landed on an EPYC 9V45, a Xeon 8573C and an EPYC 7763, and raw
+readings sat 20 to 25% apart. A fixed calibration workload in `cpu-sweep.ts`,
+timed in the same harness, scales them, and scaled they agreed within 4%.
+`config/cpu-budget.json` holds the reference (the workload's median on the Xeon,
+with its digest) and a ceiling for each route allowed over 8 ms, with the reason.
+
+CI runs it report-only, into the log and the job summary. `--gate` fails on a
+route over its ceiling, or on an allowlist entry for a route the sweep doesn't
+know; adding it to the CI step is the remaining switch. Read the verdict from CI:
+Apple silicon runs the workload relatively faster than the routes, so a laptop
+reads 1.3 to 1.4x high, and `--gate` fails there.
+
+**When a route gets cheaper:** the sweep prints its entry as stale once it reads
+under 8 ms. Delete the entry.
+
+**When a route gets dearer on purpose:** raise its `ceilingMs` in the same PR and
+say why in `why`. Each ceiling is the highest of three scaled CI runs plus 20%.
+
+**When you edit `calibrate()`:** its digest moves and `--gate` refuses. Read the
+new workload's median on the same CPU model, a Xeon Platinum 8573C (the report
+names the machine; rerun the job until it lands on one), so a reading still means
+a Xeon millisecond and the ceilings keep their units. Put that median
+(`calibration.ms` in `.build/cpu-sweep.json`) into `referenceMs` with the new
+digest.
+
+Locally, KV, D1 and R2 are empty, so data routes time their fallback, and
+`/coffee/availability.json` answers 503 without its calendar secret.
 
 ### The wire-size diff (the differential half)
 
