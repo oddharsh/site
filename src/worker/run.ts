@@ -100,21 +100,23 @@ export function renderRun({ cmd = "", notFound = false } = {}) {
   .run-ico { flex: 0 0 32px; width: 32px; height: 32px; background: var(--amber-70); position: relative; }
   .run-ico::before { content: ""; position: absolute; inset: 4px 7px; background: var(--amber-88); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
   .run-lede p { margin: 2px 0 0; font-size: var(--text-ui); color: var(--grey-28); }
-  form { display: flex; gap: 8px; align-items: center; margin: 0 0 4px; }
-  label { font-size: var(--text-ui); }
-  input[type=text] {
+  /* scoped to the window content: a bare "button" rule gave the taskbar's sound button
+     this page's 74px min-width, which pushed the clock off a phone screen */
+  .content form { display: flex; gap: 8px; align-items: center; margin: 0 0 4px; }
+  .content label { font-size: var(--text-ui); }
+  .content input[type=text] {
     flex: 1; font-family: var(--font-ui); font-size: var(--text-ui); padding: 3px 5px;
     border: 1px solid oklch(56.86% 0.0525 249.86);
     box-shadow: inset 1px 1px 0 oklch(80.63% 0.0281 250.85);
     background: oklch(100% 0 0);
   }
-  button {
+  .content button {
     min-width: 74px; padding: 3px 12px; font-family: var(--font-ui); font-size: var(--text-ui); cursor: pointer;
     color: oklch(18% 0 0); background: linear-gradient(180deg, var(--paper) 0%, oklch(93.5% 0.008 100) 86%, oklch(88% 0.012 95) 100%);
     border: 1px solid oklch(56.86% 0.0525 249.86); border-radius: 3px;
     box-shadow: inset 1px 1px 0 oklch(100% 0 0);
   }
-  button:active { background: oklch(88% 0.012 95); box-shadow: none; }
+  .content button:active { background: oklch(88% 0.012 95); box-shadow: none; }
   .run-err {
     border: 1px solid oklch(60% 0.16 29); background: oklch(97% 0.02 60);
     color: oklch(35% 0.05 29); padding: 8px 10px; margin: 10px 0; font-size: var(--text-sm);
