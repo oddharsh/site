@@ -63,6 +63,7 @@ const FLOOR_MAX_MS = 0.5;
 const WIDTH = 2; // children at once: CI has 4 cores, and the build's other background steps share them
 const CONTROL = "/robots.txt";
 const CALIBRATION = "@calibration"; // a sample spec no route can collide with
+const CAL_CODE = "@calibration-code"; // EXPERIMENT: a compile-heavy candidate, read beside the first
 // The routes that take a query, where the first sweep found the heavy ones. The
 // pages come from the site manifest.
 const QUERIES = [
@@ -93,6 +94,16 @@ function calibrate(): number {
   for (const r of rows) { const m = re.exec(r.tags.join(" ")); if (m && +m[1] % 2) hits++; }
   rows.sort((a, b) => a.w - b.w || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
   return JSON.stringify(rows.filter((r) => r.title.includes("bridge")).map((r) => ({ id: r.id, t: r.title.toUpperCase() }))).length + hits;
+}
+
+// EXPERIMENT: compile and first-run 250 generated functions, the shape of a cold route.
+function calibrateCode(): number {
+  let src = "";
+  for (let i = 0; i < 250; i++) src += `function f${i}(o){const a=[o.x+${i},o.y*${i % 7},"k${i}"];const m=new Map(a.map((v,j)=>[j,String(v)]));let s="";for(const [k,v] of m)s+=k+":"+v.replace(/\\d/g,"#")+";";if(o.z.length>${i % 9})s+=JSON.stringify({i:${i},s});return s.length+(o.z[${i % 5}]??0);}\n`;
+  src += `return [${Array.from({ length: 250 }, (_, i) => `f${i}`).join(",")}];`;
+  let total = 0;
+  for (const fn of new Function(src)() as ((o: { x: number; y: number; z: number[] }) => number)[]) total += fn({ x: 1, y: 2, z: [1, 2, 3, 4, 5] });
+  return total;
 }
 
 function request(spec: string): Request {
@@ -136,7 +147,7 @@ if (values.one) {
   const run = async (spec: string) => { const r = await worker.fetch(request(spec), env, ctx); await r.arrayBuffer(); return r.status; };
   await run(values.one === CONTROL ? "/favicon.ico" : CONTROL); // the warm-up is never the timed route
   const t0 = process.cpuUsage();
-  const status = values.one === CALIBRATION ? (calibrate(), 0) : await run(values.one);
+  const status = values.one === CALIBRATION ? (calibrate(), 0) : values.one === CAL_CODE ? (calibrateCode(), 0) : await run(values.one);
   const d = process.cpuUsage(t0);
   process.stdout.write(JSON.stringify({ ms: (d.user + d.system) / 1000, status }) + "\n");
   process.exit(0);
@@ -150,6 +161,11 @@ if (!existsSync(values.bundle!)) {
 type Budget = { calibration: { referenceMs: number; digest: string; machine: string } | null; routes: Record<string, { ceilingMs: number; why: string }> };
 const budget: Budget = JSON.parse(readFileSync(values.budget!, "utf8"));
 const digest = createHash("sha256").update(calibrate.toString()).digest("hex").slice(0, 16);
+// Before any sampling: a reference taken on a different workload can't scale this one.
+if (values.gate && budget.calibration !== null && budget.calibration.digest !== digest) {
+  console.error(`cpu-sweep: --gate refuses: the calibration workload's digest is ${digest}, and ${values.budget} recorded ${budget.calibration.digest}. Measure referenceMs again on the reference machine.`);
+  process.exit(2);
+}
 const pages: string[] = JSON.parse(readFileSync(join(ROOT, "config/site-manifest.json"), "utf8")).surfaces.map((s: { path: string }) => s.path);
 const known = new Set([...pages, ...QUERIES]);
 const routes = values.routes ? values.routes.split(",") : [...known];
@@ -177,7 +193,7 @@ const iqr = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return 
 // The control and the calibration are spread through the screening, so both see
 // the load the routes see rather than a quiet first second.
 const specs = [...routes];
-for (let k = 0; k < SAMPLES; k++) for (const s of [CONTROL, CALIBRATION]) specs.splice(Math.round(((k + 0.5) * specs.length) / SAMPLES), 0, s);
+for (let k = 0; k < SAMPLES; k++) for (const s of [CONTROL, CALIBRATION, CAL_CODE]) specs.splice(Math.round(((k + 0.5) * specs.length) / SAMPLES), 0, s);
 const screened = await pool(specs.map((s) => async () => ({ spec: s, ...(await sample(s)) })));
 const control = screened.filter((r) => r.spec === CONTROL).map((r) => r.ms);
 const calMs = median(screened.filter((r) => r.spec === CALIBRATION).map((r) => r.ms));
@@ -186,7 +202,7 @@ const floor = iqr(control);
 // reference taken on a different workload, readings stay raw and --gate refuses.
 const calibrated = budget.calibration !== null && budget.calibration.digest === digest;
 const scale = calibrated ? budget.calibration!.referenceMs / calMs : 1;
-const screen = new Map(screened.filter((r) => r.spec !== CONTROL && r.spec !== CALIBRATION).map((r) => [r.spec, r]));
+const screen = new Map(screened.filter((r) => r.spec !== CONTROL && r.spec !== CALIBRATION && r.spec !== CAL_CODE).map((r) => [r.spec, r]));
 const rows = await pool(routes.map((route) => async () => {
   const first = screen.get(route)!;
   const raw = [first.ms];
@@ -202,7 +218,7 @@ const stale = rows.filter((r) => budget.routes[r.route] && r.ms <= GATE_MS);
 const inconclusive = floor > FLOOR_MAX_MS;
 const machine = cpus()[0]?.model.trim() ?? "unknown";
 writeFileSync(values.out!, JSON.stringify({
-  gateMs: GATE_MS, machine, calibration: { ms: calMs, digest, calibrated, scale }, control: { median: median(control), iqr: floor }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
+  gateMs: GATE_MS, machine, calibration: { ms: calMs, digest, calibrated, scale }, experiment: { calibration: screened.filter((r) => r.spec === CALIBRATION).map((r) => r.ms), code: screened.filter((r) => r.spec === CAL_CODE).map((r) => r.ms), control },  control: { median: median(control), iqr: floor }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
 }, null, 2) + "\n");
 
 const units = calibrated ? `reference ms (x${scale.toFixed(2)} from ${calMs.toFixed(2)} ms of calibration here)`
@@ -224,9 +240,5 @@ if (values.markdown) {
   console.log(`cpu-sweep: ${verdict}; units: ${units}; ${machine}; control ${CONTROL} ${(median(control) * scale).toFixed(2)} ms`);
   for (const r of shown) console.log(`  ${r.ms > r.ceilingMs ? "over " : "     "} ${r.ms.toFixed(2).padStart(6)} ms  ceiling ${String(r.ceilingMs).padStart(2)}  ${String(r.status).padEnd(4)} ${r.route}`);
   for (const n of notes) console.log(`  note: ${n}`);
-}
-if (values.gate && budget.calibration !== null && !calibrated) {
-  console.error(`cpu-sweep: --gate refuses: the calibration workload's digest is ${digest}, and config/cpu-budget.json recorded ${budget.calibration.digest}. Measure referenceMs again on the reference machine.`);
-  process.exit(2);
 }
 process.exit(values.gate && !inconclusive && (over.length || unknown.length) ? 1 : 0);
