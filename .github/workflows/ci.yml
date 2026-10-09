@@ -261,6 +261,42 @@ jobs:
       - name: Wait for every background check
         wait-all:
 
+  # CPU per request on a cold isolate, for every registered page and the heavy
+  # query routes (tools/route-cpu.ts). Report only, for now: it writes a table
+  # to the step summary and cannot fail the run, and --strict is there for when
+  # it gates. Its OWN job because, as a background step in validate, it took
+  # 76 s and held the required check 40 s past the suite (validate 116 s
+  # against 50 to 63 on main, 2026-10-08). The runner itself reads about 2.5x a
+  # laptop: the /robots.txt control was 0.98 ms beside the suite and 0.95 ms
+  # alone, against 0.38 ms on an M-series Mac, so contention was never the
+  # cause and the 8 ms line is not calibrated for this machine yet. It builds
+  # its own bundle through perf-budget, the same dry-run validate measures.
+  route-cpu:
+    name: CPU per route (report)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build the dry-run bundle
+        run: bun run perf-budget
+
+      - name: Report CPU per route
+        run: bun run route-cpu
+
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,
   # on main, at this commit, produced these URL hashes. tools/check-served.ts
   # verifies it with `gh attestation verify --signer-workflow` before trusting
