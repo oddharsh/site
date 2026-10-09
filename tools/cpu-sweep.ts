@@ -196,10 +196,11 @@ if (values.one) {
   const worker = (await import(values.bundle!)).default;
   const run = async (spec: string) => { const r = await worker.fetch(request(spec), env, ctx); await r.arrayBuffer(); return r.status; };
   await run(values.one === CONTROL ? "/favicon.ico" : CONTROL); // the warm-up is never the timed route
-  const t0 = process.cpuUsage();
+  const t0 = process.cpuUsage(), tt0 = process.threadCpuUsage();
   const status = values.one === CALIBRATION ? (calibrate(), 0) : values.one === CAL_LEAN ? (calibrateLean(), 0) : await run(values.one);
-  const d = process.cpuUsage(t0);
-  process.stdout.write(JSON.stringify({ ms: (d.user + d.system) / 1000, status }) + "\n");
+  const d = process.cpuUsage(t0), td = process.threadCpuUsage(tt0);
+  // EXPERIMENT: the main thread alone, beside the whole process
+  process.stdout.write(JSON.stringify({ ms: (d.user + d.system) / 1000, threadMs: (td.user + td.system) / 1000, status }) + "\n");
   process.exit(0);
 }
 
@@ -221,13 +222,16 @@ const known = new Set([...pages, ...QUERIES]);
 const routes = values.routes ? values.routes.split(",") : [...known];
 for (const r of routes) known.add(r);
 
-const sample = (spec: string) => new Promise<{ ms: number; status: number }>((resolve, reject) => {
+// EXPERIMENT: every sample, with the phase it ran in
+const sampleLog: { spec: string; phase: string; ms: number; threadMs: number }[] = [];
+let phase = "screen";
+const sample = (spec: string) => new Promise<{ ms: number; threadMs: number; status: number }>((resolve, reject) => {
   const child = spawn(process.execPath, [import.meta.filename, "--one", spec, "--bundle", values.bundle!, ...(values["cold-icu"] ? ["--cold-icu"] : [])], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
   let out = "", err = "";
   child.stdout.on("data", (d) => { out += d; });
   child.stderr.on("data", (d) => { err += d; });
   child.on("close", () => {
-    try { resolve(JSON.parse(out.trim().split("\n").at(-1) ?? "")); }
+    try { const r = JSON.parse(out.trim().split("\n").at(-1) ?? ""); sampleLog.push({ spec, phase, ms: r.ms, threadMs: r.threadMs }); resolve(r); }
     catch { reject(new Error(`cpu-sweep: ${spec} produced no reading\n${err.slice(-800)}`)); }
   });
 });
@@ -254,6 +258,7 @@ const calibrated = budget.calibration !== null && budget.calibration.digest === 
 const scale = calibrated ? budget.calibration!.referenceMs / calMs : 1;
 const screen = new Map(screened.filter((r) => r.spec !== CONTROL && r.spec !== CALIBRATION && r.spec !== CAL_LEAN).map((r) => [r.spec, r]));
 const confirmCal: number[] = [], confirmLean: number[] = [];
+phase = "confirm";
 const rows = await pool(routes.map((route) => async () => {
   const first = screen.get(route)!;
   const raw = [first.ms];
@@ -274,7 +279,7 @@ const stale = rows.filter((r) => budget.routes[r.route] && r.ms <= GATE_MS);
 const inconclusive = floor > FLOOR_MAX_MS;
 const machine = cpus()[0]?.model.trim() ?? "unknown";
 writeFileSync(values.out!, JSON.stringify({
-  gateMs: GATE_MS, machine, calibration: { ms: calMs, digest, calibrated, scale }, experiment: { cal: screened.filter((r) => r.spec === CALIBRATION).map((r) => r.ms), lean: screened.filter((r) => r.spec === CAL_LEAN).map((r) => r.ms), control, confirmCal, confirmLean },  control: { median: median(control), iqr: floor }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
+  gateMs: GATE_MS, machine, calibration: { ms: calMs, digest, calibrated, scale }, experiment: { samples: sampleLog, cal: screened.filter((r) => r.spec === CALIBRATION).map((r) => r.ms), lean: screened.filter((r) => r.spec === CAL_LEAN).map((r) => r.ms), control, confirmCal, confirmLean },  control: { median: median(control), iqr: floor }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
 }, null, 2) + "\n");
 
 const units = calibrated ? `reference ms (x${scale.toFixed(2)} from ${calMs.toFixed(2)} ms of calibration here)`
