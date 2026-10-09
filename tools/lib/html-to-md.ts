@@ -104,18 +104,83 @@ const OUT_OF_FLOW = /(?:display\s*:\s*(?:block|flex|grid|list-item|table)|float\
 // self-separating in the output, so promoting them to blocks can only lose them.
 const SELF_TOKEN = new Set(["img"]);
 
-export function collectBlockClasses(html) {
-  const found = new Set();
+// A grid or flex CONTAINER makes every element child a box of its own, and the
+// children declare nothing to say so: /lwe's buddy row is `.buddy{display:grid}`
+// around a name, a tagline and a status chip, and its twin read "**eFuses**a bit
+// that goes 0 to 1 once and never comes backchat". So each child is rendered on
+// its own, and the children are laid back out the way the page shows them: a
+// flex row that doesn't wrap on one line, a grid row by row when its column
+// count can be read, and anything else (a flex column, a wrapping row, an
+// auto-fill grid) one child per line.
+const CONTAINER = /display\s*:\s*(?:flex|grid)\b/i; // inline-flex sits inside a line of text, so it stays inline
+
+export function collectBlockClasses(html) { return new Set(rulesWhere(html, OUT_OF_FLOW).keys()); }
+
+// class -> how many children share a line: Infinity for a flex row that doesn't wrap, N for a grid
+// with N readable columns, 1 otherwise
+export function collectContainerClasses(html): Map<string, number> {
+  const found = new Map<string, number>();
+  // a grid often takes its columns from a contextual rule: /garage/av2's
+  // `.dd-row{display:grid}` gets them from `.dd-speeds .dd-row{...}`
+  const columns = rulesWhere(html, /grid-template-columns/i);
+  for (const [cls, own] of rulesWhere(html, CONTAINER)) {
+    const decls = own + ";" + (columns.get(cls) ?? "");
+    const flex = /display\s*:\s*flex\b/i.test(decls);
+    // a wrapping flex row is a gallery of cards, one row per screen width, so
+    // only a row that never wraps (a title and its badge) reads as one line
+    const across = flex ? (/flex-(?:direction|flow)\s*:\s*column|flex-(?:wrap|flow)\s*:[^;]*\bwrap\b/i.test(decls) ? 1 : Infinity) : gridColumns(decls);
+    found.set(cls, Math.max(found.get(cls) ?? 1, across));
+  }
+  return found;
+}
+
+// The widest track count any `grid-template-columns` gives, or 1 when it can't
+// be read without a layout engine (auto-fill, auto-fit, a named template, none
+// at all). Widest, because a narrow-screen rule (`1fr 1fr` under 620px) is the
+// same row reflowed, and the twin reads the desktop layout.
+function gridColumns(decls: string): number {
+  let widest = 1;
+  for (const m of decls.matchAll(/grid-template-columns\s*:\s*([^;}]+)/gi)) widest = Math.max(widest, tracks(m[1]));
+  return widest;
+}
+
+function tracks(value: string): number {
+  if (/auto-(?:fill|fit)|\[|subgrid|masonry/i.test(value)) return 1;
+  const count = (v: string): number => {
+    let n = 0, depth = 0, token = "";
+    const end = () => { if (token.trim()) n += 1; token = ""; };
+    for (let i = 0; i < v.length; i++) {
+      const ch = v[i];
+      if (depth === 0 && v.startsWith("repeat(", i)) {
+        let j = i + 7, d = 1;
+        while (j < v.length && d) { if (v[j] === "(") d++; else if (v[j] === ")") d--; j++; }
+        const inner = v.slice(i + 7, j - 1), comma = inner.indexOf(",");
+        n += Number(inner.slice(0, comma)) * count(inner.slice(comma + 1));
+        token = ""; i = j - 1; continue;
+      }
+      if (ch === "(") depth++; else if (ch === ")") depth--;
+      if (depth === 0 && /\s/.test(ch)) end(); else token += ch;
+    }
+    end();
+    return n;
+  };
+  const n = count(value.trim());
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+// class -> the declarations of every rule that names it last and matches `test`
+function rulesWhere(html, test: RegExp): Map<string, string> {
+  const found = new Map<string, string>();
   for (const style of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
     // strip comments, then walk `selector { decls }` pairs
     const css = style[1].replace(/\/\*[\s\S]*?\*\//g, "");
     for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      if (!OUT_OF_FLOW.test(rule[2])) continue;
+      if (!test.test(rule[2])) continue;
       for (const sel of rule[1].split(",")) {
         // take the last simple class in the selector, so both `.enc-bpp` and
         // `.lcd .label` contribute the class that actually gets the box
         const m = /\.([A-Za-z_][\w-]*)\s*$/.exec(sel.trim());
-        if (m) found.add(m[1]);
+        if (m) found.set(m[1], (found.get(m[1]) ?? "") + ";" + rule[2]);
       }
     }
   }
@@ -319,6 +384,43 @@ const dropped = (node) => {
 };
 
 const hasClass = (node, name) => (node.attrs?.class || "").split(/\s+/).includes(name);
+// how many of this node's children share a line, if it's a grid or flex container
+const across = (node, ctx): number => {
+  let n = 0;
+  for (const c of (node.attrs?.class || "").split(/\s+/)) n = Math.max(n, ctx.containerClasses?.get(c) ?? 0);
+  return n;
+};
+const isContainer = (node, ctx) => across(node, ctx) > 0;
+
+// Tags the inline path gives a meaning of its own: a link, emphasis, code, an
+// image. A box that is one of these renders through that path so it keeps it.
+const INLINE_TOKEN = new Set(["a", "b", "strong", "em", "i", "cite", "var", "code", "kbd", "samp", "sup", "sub", "del", "s", "img"]);
+
+// Render a node's children, laid out as its CSS lays them out. Each child of a
+// container renders alone: a link, bold or image through the inline path, so it
+// keeps its meaning, and anything else (a plain <span> name cell) through the
+// block path, so a block-level part inside it (/lwe's `.pm` tagline, which is
+// `display:block`) still comes out as its own line. Then the boxes go back into rows (a flex row is one row, a grid
+// of N columns a row per N children, anything else a row per child), and a row
+// shares one line only when every box in it is one plain line. A heading, a
+// code fence, a table or a list keeps its own lines, or the Markdown breaks:
+// joining blindly fused /garage/blueprint's code onto one line.
+const STRUCTURED = /\n|^(?:#{1,6} |```|\||[-*+] |> |\d+\. )/;
+function renderChildren(node, ctx, depth) {
+  const width = across(node, ctx);
+  if (!width) return renderBlocks(node.children || [], ctx, depth);
+  const boxes = (node.children || []).filter((c) => !dropped(c) && (!isText(c) || squeeze(c.value).trim()));
+  const cells = boxes.map((c) => (isText(c) || INLINE_TOKEN.has(c.name) || BLOCK.has(c.name)
+    ? renderBlocks([c], ctx, depth) : renderChildren(c, ctx, depth)).trim());
+  const rows: string[] = [];
+  const step = Number.isFinite(width) ? width : cells.length;
+  for (let i = 0; i < cells.length; i += step) {
+    const row = cells.slice(i, i + step).filter(Boolean);
+    if (row.some((c) => STRUCTURED.test(c))) rows.push(...row);
+    else if (row.length) rows.push(row.join(" · "));
+  }
+  return rows.join("\n\n");
+}
 
 const isText = (n) => n.name === "#text";
 const EMPTY = new Set();
@@ -430,6 +532,8 @@ function renderBlocks(nodes, ctx, depth = 0) {
     // no case for it and it renders as nothing: /lwe/encoding's sample photo
     // vanished from its twin the moment `.bpp-img{flex:0 0 auto}` started
     // counting as out-of-flow. A named tag in BLOCK still wins, as before.
+    // (a block-level grid or flex container is already here: OUT_OF_FLOW reads
+    // its display, and renderChildren lays its children out below)
     const isBlock = BLOCK.has(n.name)
       || (!SELF_TOKEN.has(n.name) && cls.some((c) => promoted.has(c)));
     if (!isBlock) { run.push(n); continue; }
@@ -449,7 +553,7 @@ function renderBlocks(nodes, ctx, depth = 0) {
       // buffer into a single run and come back out as one paragraph, which is
       // the ordinary case and is unchanged.
       case "p": case "figcaption": case "summary": case "caption": {
-        const s = renderBlocks(n.children, ctx, depth).trim();
+        const s = renderChildren(n, ctx, depth).trim();
         if (!s) break;
         // A caption is one thought even when its CSS lays the parts out as
         // separate boxes ("PNG lossless", "178.7 KB", "1.72 b/px"). Rejoin them
@@ -457,6 +561,19 @@ function renderBlocks(nodes, ctx, depth = 0) {
         // promotion really did mean a new line.
         const caption = n.name === "figcaption" || n.name === "caption";
         out.push(caption ? s.replace(/\n{2,}/g, " · ") : s);
+        break;
+      }
+      // A link the page lays out as a box: a card, a buddy row. The block path
+      // rendered only its children, so the twin kept the words and lost where
+      // they pointed (every /lwe buddy). Its parts are boxes too, so render them
+      // as blocks, then put them on one line the way a caption is, since a
+      // Markdown link holds inline text only. A heading inside reads as text.
+      case "a": {
+        const inner = renderChildren(n, ctx, depth).trim()
+          .split(/\n{2,}/).map((b) => b.replace(/^#{1,6} /, "").replace(/\n/g, " ").trim()).filter(Boolean).join(" · ");
+        if (!inner) break;
+        const href = n.attrs.href || "";
+        out.push(!href || href.startsWith("#") || executesRatherThanAddresses(href) ? inner : `[${inner}](${absolute(href, ctx.origin)})`);
         break;
       }
       case "hr": out.push("---"); break;
@@ -474,7 +591,7 @@ function renderBlocks(nodes, ctx, depth = 0) {
         const items = n.children.filter((c) => c.name === "li" && !dropped(c));
         const lines = items.map((li, k) => {
           const marker = n.name === "ol" ? `${k + 1}.` : "-";
-          const body = renderBlocks(li.children, ctx, depth + 1).trim();
+          const body = renderChildren(li, ctx, depth + 1).trim();
           const pad = " ".repeat(marker.length + 1);
           return `${marker} ${body.split("\n").join("\n" + pad)}`;
         });
@@ -521,7 +638,7 @@ function renderBlocks(nodes, ctx, depth = 0) {
           if (chips.length) out.push(`Tags: ${chips.filter(Boolean).join(", ")}`);
           break;
         }
-        const inner = renderBlocks(n.children || [], ctx, depth);
+        const inner = renderChildren(n, ctx, depth);
         if (inner.trim()) out.push(inner);
       }
     }
@@ -585,15 +702,15 @@ function renderTable(table, ctx) {
 // Search needs the same content boundary as the Markdown twin, with readable
 // words rather than link syntax. Preserve inline adjacency (micro<em>scope</em>)
 // while separating block boxes, just as the Markdown renderer does.
-function renderText(nodes, ctx) {
+function renderText(nodes, ctx, items = false) {
   let out = "";
   for (const n of nodes) {
     if (isText(n)) { out += n.value; continue; }
     if (dropped(n)) continue;
     if (n.name === "img") { out += ` ${n.attrs.alt || ""} `; continue; }
     if (n.name === "br" || n.name === "hr") { out += " "; continue; }
-    const inner = renderText(n.children, ctx);
-    const block = BLOCK.has(n.name) || (n.attrs.class || "").split(/\s+/).some((c) => ctx.blockClasses.has(c));
+    const inner = renderText(n.children, ctx, isContainer(n, ctx));
+    const block = items || BLOCK.has(n.name) || (n.attrs.class || "").split(/\s+/).some((c) => ctx.blockClasses.has(c));
     out += block ? ` ${inner} ` : inner;
   }
   return out;
@@ -604,12 +721,12 @@ export function readDocument(html, { origin = "https://aadhar.sh", format = "mar
   const root = parse(html);
   const meta = collectMeta(root);
   const content = findContent(root);
-  const ctx = { origin, blockClasses: collectBlockClasses(html) };
+  const ctx = { origin, blockClasses: collectBlockClasses(html), containerClasses: collectContainerClasses(html) };
   return {
     ...meta,
     body: format === "text"
-      ? squeeze(renderText(content.children, ctx)).trim()
-      : renderBlocks(content.children, ctx).replace(/\n{3,}/g, "\n\n").trim(),
+      ? squeeze(renderText(content.children, ctx, isContainer(content, ctx))).trim()
+      : renderChildren(content, ctx, 0).replace(/\n{3,}/g, "\n\n").trim(),
   };
 }
 
