@@ -20,18 +20,20 @@ const TOOL = new URL("route-cpu.ts", import.meta.url).pathname;
 // skipped reading them, and every named route measured a crash.
 const WORKER = `export default { async fetch(request, env) {
   const path = new URL(request.url).pathname;
+  if (path === "/icu") { new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric" }).format(0); "b".localeCompare("a"); }
   if (path === "/env") return new Response(null, { status: env.BOOKINGS?.list && env.HOST_TIMEZONE ? 200 : 500 });
   if (path === "/spin") { const t0 = process.cpuUsage(); while (true) { const d = process.cpuUsage(t0); if (d.user + d.system >= 12000) break; } }
   return new Response("ok", { status: 200 });
 } };`;
 
-function run(routes, strict) {
+function run(routes, strict, extra = []) {
   const dir = mkdtempSync(join(tmpdir(), "route-cpu-"));
   try {
     writeFileSync(join(dir, "worker.mjs"), WORKER);
     const json = join(dir, "out.json");
     const args = [TOOL, "--worker", join(dir, "worker.mjs"), "--assets", dir, "--routes", routes, "--jobs", "2", "--json", json];
     if (strict) args.push("--strict");
+    args.push(...extra);
     const p = spawnSync("node", args, { encoding: "utf8", timeout: 120_000 });
     const out = existsSync(json) ? JSON.parse(readFileSync(json, "utf8")) : null;
     return { status: p.status, stdout: p.stdout, stderr: p.stderr, out };
@@ -60,4 +62,13 @@ test("a run that names its routes still gets the deployed env and bindings", { t
   const { out, stderr } = run("/env", false);
   assert.ok(out, `no report was written: ${stderr.slice(-400)}`);
   assert.equal(out.rows[0].status, 200, "/env saw no BOOKINGS binding or HOST_TIMEZONE var");
+});
+
+// ICU keeps its data per process, and workerd's processes are shared, so each
+// sample warms ICU in another isolate first. --cold-icu is the control: the
+// same route must read heavy without the warm-up, or the instrument can't tell.
+test("a route's first date format costs what a fresh isolate in a warm process pays", { timeout: 180_000 }, () => {
+  const warm = run("/icu", false).out, cold = run("/icu", false, ["--cold-icu"]).out;
+  assert.ok(warm.rows[0].cpu < 2, `warm process: /icu measured ${warm.rows[0].cpu} ms`);
+  assert.ok(cold.rows[0].cpu > 5, `cold process: /icu measured ${cold.rows[0].cpu} ms, so the warm-up proves nothing`);
 });

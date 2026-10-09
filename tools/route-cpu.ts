@@ -1,14 +1,18 @@
 // route-cpu.ts: CPU per request for every public page and the heavy query
-// routes, against Workers Free's 10 ms, on a cold isolate. Report only.
+// routes, against Workers Free's 10 ms, on a fresh isolate. Report only.
 //
 //   node tools/route-cpu.ts                  needs .build/.perfbudget (bun run perf-budget)
 //   node tools/route-cpu.ts --strict         exit 1 when a route's median is over 8 ms
+//   node tools/route-cpu.ts --cold-icu       skip step 0, for the control below
 //
 // The instrument is the build-off's (buildoff/build, then the merge's
 // measure.js), pointed at production's bundle: the dry-run file perf-budget
 // already writes, one esbuild module with every text import inlined, so node
 // can import it once `cloudflare:workers` resolves to a stub. Each sample is a
-// FRESH node process, which is the cold isolate a visitor's request meets:
+// FRESH node process, standing in for the fresh isolate a visitor's request meets:
+//   0. warm ICU in a throwaway isolate, since workerd's shared processes keep
+//      it loaded (tools/lib/warm-icu.ts has the measurements); without this
+//      every route that formats a date read about 10 ms high;
 //   1. import the bundle, with ASSETS read from .build/public and every other
 //      binding the site config declares stubbed empty (local KV, D1 and R2 are
 //      empty too, so data pages render their fallback);
@@ -35,6 +39,7 @@ import { registerHooks } from "node:module";
 import { availableParallelism } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { warmIcu } from "./lib/warm-icu.ts";
 
 export const OVER_MS = 8;
 const SCREEN_MS = 4;
@@ -86,7 +91,8 @@ function request(spec: string): Request {
   return new Request("https://aadhar.sh" + path, init);
 }
 
-async function sample(spec: { worker: string; assets: string; env: Record<string, unknown>; bindings: Record<string, string> }, route: string) {
+async function sample(spec: { worker: string; assets: string; env: Record<string, unknown>; bindings: Record<string, string>; coldIcu?: boolean }, route: string) {
+  if (!spec.coldIcu) await warmIcu();
   registerHooks({
     resolve: (s, c, next) => s === "cloudflare:workers"
       ? { url: "data:text/javascript,export class WorkerEntrypoint{};export class WorkflowEntrypoint{};export const tracing=undefined;", shortCircuit: true }
@@ -157,7 +163,7 @@ export async function measure(spec: string, routes: string[], jobs: number) {
 async function main() {
   const { values } = parseArgs({ options: {
     strict: { type: "boolean" }, worker: { type: "string" }, assets: { type: "string" }, routes: { type: "string" },
-    jobs: { type: "string" }, json: { type: "string" },
+    jobs: { type: "string" }, json: { type: "string" }, "cold-icu": { type: "boolean" },
   } });
   const worker = resolve(values.worker ?? ".build/.perfbudget/index.js");
   const assets = resolve(values.assets ?? ".build/public");
@@ -182,7 +188,7 @@ async function main() {
     const surfaces: { path: string }[] = JSON.parse(readFileSync("config/site-manifest.json", "utf8")).surfaces;
     routes = [...new Set([...surfaces.map((s) => s.path), ...QUERIES])];
   }
-  const spec = JSON.stringify({ worker, assets, env, bindings });
+  const spec = JSON.stringify({ worker, assets, env, bindings, coldIcu: values["cold-icu"] === true });
   const jobs = Number(values.jobs) || Math.max(1, Math.min(2, availableParallelism() - 1));
   const t0 = performance.now();
   const { rows, floor, floorIqr } = await measure(spec, routes, jobs);
@@ -190,7 +196,7 @@ async function main() {
   const light = rows.filter((r) => r.cpu < SCREEN_MS).map((r) => r.cpu);
   const inconclusive = floorIqr > FLOOR_IQR_MS;
   const lines = [
-    `route-cpu: ${rows.length} routes, ${rows.reduce((n, r) => n + r.samples, 0)} cold samples in ${((performance.now() - t0) / 1000).toFixed(0)} s; control ${CONTROL} ${floor.toFixed(2)} ms, IQR ${floorIqr.toFixed(2)} ms${inconclusive ? " (INCONCLUSIVE: the machine was too busy)" : ""}`,
+    `route-cpu: ${rows.length} routes, ${rows.reduce((n, r) => n + r.samples, 0)} samples in ${((performance.now() - t0) / 1000).toFixed(0)} s; control ${CONTROL} ${floor.toFixed(2)} ms, IQR ${floorIqr.toFixed(2)} ms${inconclusive ? " (INCONCLUSIVE: the machine was too busy)" : ""}`,
     `${over.length} over ${OVER_MS} ms:`,
     ...rows.filter((r) => r.cpu >= SCREEN_MS).map((r) => `  ${r.cpu.toFixed(2).padStart(6)} ms  ${String(r.status).padEnd(3)}  ${r.route}${r.cpu > OVER_MS ? "  OVER" : ""}  (${r.samples} samples)`),
     `${light.length} more under ${SCREEN_MS} ms (one sample each)${light.length ? `; median of those ${median(light).toFixed(2)} ms` : ""}`,

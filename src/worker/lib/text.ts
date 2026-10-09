@@ -11,12 +11,15 @@
 // lib/chrome.js and lib/cache.js to render its page, and the photo query has no
 // business dragging a page renderer into its module graph.
 
-// No ICU on a request path. The first localeCompare in an isolate builds a
-// collator and the first toLocaleString builds a number formatter, and each
-// costs more CPU than the rest of a query: measured in node on 2026-10-07, a
-// cold /ledger/lines.html took 10.8ms, and 2.0ms once ICU was already warm,
-// against Workers Free's 10ms. photos.ts derivePhotoPool hit the same thing at
-// module scope. These two cover what the request paths used ICU for.
+// No ICU on a request path. Measured in node on 2026-10-07, a cold
+// /ledger/lines.html took 10.8ms against 2.0ms once ICU was warm, and that
+// reading overstated production: ICU loads its data once per PROCESS, and a
+// workerd process is shared by many isolates, so a fresh isolate there pays
+// about 0.03ms for its first collator and 0.07ms for its first number
+// formatter, not the 6.5 and 8.5 a cold process does (tools/lib/warm-icu.ts,
+// 2026-10-09). These two are kept because they're still cheaper than building
+// the ICU objects and print the same thing. They cover what the request paths
+// used ICU for, photos.ts derivePhotoPool included.
 //
 // A code-unit order, which is what a bare .sort() does to strings. It agrees
 // with collation on every key the callers sort today (URLs, stems, dates,

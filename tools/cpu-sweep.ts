@@ -14,7 +14,11 @@
 // binding an empty stub, answers one warm-up request so node's own Request and
 // Response code isn't charged to the route, then times one request with
 // process.cpuUsage(). So every timed request is that route's first in its
-// isolate, which is the cold case Workers Free bills.
+// isolate, which is the cold case Workers Free bills. Before any of that it
+// warms ICU in a throwaway isolate (tools/lib/warm-icu.ts): ICU's data is per
+// process, workerd's processes are shared and already have it, and a cold
+// process charged every date-formatting route about 10 ms that production
+// doesn't pay. --cold-icu skips the warm-up, as the control.
 //
 // One screening sample per route; a route that reads CONFIRM_AT of its ceiling
 // or more gets CONFIRMS more and is judged on the median. (Confirming everything
@@ -56,6 +60,7 @@ import { registerHooks } from "node:module";
 import { cpus } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { warmIcu } from "./lib/warm-icu.ts";
 
 const ROOT = join(import.meta.dirname, "..");
 const GATE_MS = 8;
@@ -81,6 +86,7 @@ const { values } = parseArgs({
     routes: { type: "string" }, bundle: { type: "string", default: join(ROOT, ".build/.perfbudget/index.js") },
     budget: { type: "string", default: join(ROOT, "config/cpu-budget.json") },
     out: { type: "string", default: join(ROOT, ".build/cpu-sweep.json") },
+    "cold-icu": { type: "boolean" },
   },
 });
 
@@ -108,6 +114,7 @@ function request(spec: string): Request {
 
 // ── one sample, in its own process ──────────────────────────────────────────
 if (values.one) {
+  if (!values["cold-icu"]) await warmIcu();
   registerHooks({
     resolve: (spec, ctx, next) => spec === "cloudflare:workers"
       ? { url: "data:text/javascript,export class WorkerEntrypoint{};export class WorkflowEntrypoint{};export const tracing=undefined;", shortCircuit: true }
@@ -165,7 +172,7 @@ const routes = values.routes ? values.routes.split(",") : [...known];
 for (const r of routes) known.add(r);
 
 const sample = (spec: string) => new Promise<{ ms: number; status: number }>((resolve, reject) => {
-  const child = spawn(process.execPath, [import.meta.filename, "--one", spec, "--bundle", values.bundle!], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(process.execPath, [import.meta.filename, "--one", spec, "--bundle", values.bundle!, ...(values["cold-icu"] ? ["--cold-icu"] : [])], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
   let out = "", err = "";
   child.stdout.on("data", (d) => { out += d; });
   child.stderr.on("data", (d) => { err += d; });
