@@ -1,14 +1,25 @@
 // route-cpu.ts: CPU per request for every public page and the heavy query
-// routes, against Workers Free's 10 ms, on a cold isolate. Report only.
+// routes, against Workers Free's 10 ms, on a fresh isolate. Report only.
 //
 //   node tools/route-cpu.ts                  needs .build/.perfbudget (bun run perf-budget)
 //   node tools/route-cpu.ts --strict         exit 1 when a route's median is over 8 ms
+//   node tools/route-cpu.ts --cold-icu       skip step 0, for the control below
 //
 // The instrument is the build-off's (buildoff/build, then the merge's
 // measure.js), pointed at production's bundle: the dry-run file perf-budget
 // already writes, one esbuild module with every text import inlined, so node
 // can import it once `cloudflare:workers` resolves to a stub. Each sample is a
-// FRESH node process, which is the cold isolate a visitor's request meets:
+// FRESH node process, standing in for the fresh isolate a visitor's request meets:
+//   0. warm ICU in a throwaway isolate (a worker thread), then let it exit. ICU
+//      keeps its data per PROCESS, and workerd runs a great many isolates in
+//      one process, so a fresh isolate there finds it loaded. Measured
+//      2026-10-09 under node 26.11: the first DateTimeFormat in a fresh isolate
+//      costs 9.5-9.8 ms in a process that never touched ICU and 0.09-0.12 ms
+//      once another isolate has; localeCompare 6.5 against 0.03, number
+//      formatting 8.5 against 0.07, a word Segmenter 7.2 against 0.06. Without
+//      this step every route that formats a date read about 10 ms high. The
+//      warm-up names no zone the site uses, so a zone's own data still costs
+//      what it costs (a second zone measured 0.06 ms);
 //   1. import the bundle, with ASSETS read from .build/public and every other
 //      binding the site config declares stubbed empty (local KV, D1 and R2 are
 //      empty too, so data pages render their fallback);
@@ -35,6 +46,7 @@ import { registerHooks } from "node:module";
 import { availableParallelism } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { Worker } from "node:worker_threads";
 
 export const OVER_MS = 8;
 const SCREEN_MS = 4;
@@ -86,7 +98,17 @@ function request(spec: string): Request {
   return new Request("https://aadhar.sh" + path, init);
 }
 
-async function sample(spec: { worker: string; assets: string; env: Record<string, unknown>; bindings: Record<string, string> }, route: string) {
+// Step 0's warm-up: each ICU service a neighbouring tenant would have used,
+// in en-US and a zone the site never names.
+const WARM_ICU = `"b".localeCompare("a"); (1234.5).toLocaleString("en-US");
+new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(1);
+new Intl.DateTimeFormat("en-US", { timeZone: "Europe/London", dateStyle: "full", timeStyle: "long" }).format(0);
+new Date(0).toLocaleString("en-US"); [...new Intl.Segmenter("en", { granularity: "word" }).segment("a b")];
+new Intl.PluralRules("en-US").select(1); new Intl.RelativeTimeFormat("en").format(1, "day");
+new Intl.ListFormat("en").format(["a", "b"]); new Intl.DisplayNames("en", { type: "region" }).of("US");`;
+
+async function sample(spec: { worker: string; assets: string; env: Record<string, unknown>; bindings: Record<string, string>; coldIcu?: boolean }, route: string) {
+  if (!spec.coldIcu) await new Promise((done, fail) => new Worker(WARM_ICU, { eval: true }).on("exit", done).on("error", fail));
   registerHooks({
     resolve: (s, c, next) => s === "cloudflare:workers"
       ? { url: "data:text/javascript,export class WorkerEntrypoint{};export class WorkflowEntrypoint{};export const tracing=undefined;", shortCircuit: true }
@@ -157,7 +179,7 @@ export async function measure(spec: string, routes: string[], jobs: number) {
 async function main() {
   const { values } = parseArgs({ options: {
     strict: { type: "boolean" }, worker: { type: "string" }, assets: { type: "string" }, routes: { type: "string" },
-    jobs: { type: "string" }, json: { type: "string" },
+    jobs: { type: "string" }, json: { type: "string" }, "cold-icu": { type: "boolean" },
   } });
   const worker = resolve(values.worker ?? ".build/.perfbudget/index.js");
   const assets = resolve(values.assets ?? ".build/public");
@@ -182,7 +204,7 @@ async function main() {
     const surfaces: { path: string }[] = JSON.parse(readFileSync("config/site-manifest.json", "utf8")).surfaces;
     routes = [...new Set([...surfaces.map((s) => s.path), ...QUERIES])];
   }
-  const spec = JSON.stringify({ worker, assets, env, bindings });
+  const spec = JSON.stringify({ worker, assets, env, bindings, coldIcu: values["cold-icu"] === true });
   const jobs = Number(values.jobs) || Math.max(1, Math.min(2, availableParallelism() - 1));
   const t0 = performance.now();
   const { rows, floor, floorIqr } = await measure(spec, routes, jobs);
@@ -190,7 +212,7 @@ async function main() {
   const light = rows.filter((r) => r.cpu < SCREEN_MS).map((r) => r.cpu);
   const inconclusive = floorIqr > FLOOR_IQR_MS;
   const lines = [
-    `route-cpu: ${rows.length} routes, ${rows.reduce((n, r) => n + r.samples, 0)} cold samples in ${((performance.now() - t0) / 1000).toFixed(0)} s; control ${CONTROL} ${floor.toFixed(2)} ms, IQR ${floorIqr.toFixed(2)} ms${inconclusive ? " (INCONCLUSIVE: the machine was too busy)" : ""}`,
+    `route-cpu: ${rows.length} routes, ${rows.reduce((n, r) => n + r.samples, 0)} samples in ${((performance.now() - t0) / 1000).toFixed(0)} s; control ${CONTROL} ${floor.toFixed(2)} ms, IQR ${floorIqr.toFixed(2)} ms${inconclusive ? " (INCONCLUSIVE: the machine was too busy)" : ""}`,
     `${over.length} over ${OVER_MS} ms:`,
     ...rows.filter((r) => r.cpu >= SCREEN_MS).map((r) => `  ${r.cpu.toFixed(2).padStart(6)} ms  ${String(r.status).padEnd(3)}  ${r.route}${r.cpu > OVER_MS ? "  OVER" : ""}  (${r.samples} samples)`),
     `${light.length} more under ${SCREEN_MS} ms (one sample each)${light.length ? `; median of those ${median(light).toFixed(2)} ms` : ""}`,
