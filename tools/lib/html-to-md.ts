@@ -187,16 +187,23 @@ function rulesWhere(html, test: RegExp): Map<string, string> {
   return found;
 }
 
-// an open <p> is closed by any of these starting
+// an open <p> is closed by any of these starting (HTML spec 13.1.2.4, the end
+// tags a minifier may leave out; the minifier check reads whole documents, so
+// <head>, the table sections and <optgroup> are here as well as <p> and <li>)
 const IMPLIED_CLOSE = {
-  p: new Set("address article aside blockquote details div dl fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hr main nav ol p pre section table ul".split(" ")),
+  head: new Set(["body"]),
+  thead: new Set(["tbody", "tfoot"]),
+  tbody: new Set(["tbody", "tfoot"]),
+  optgroup: new Set(["optgroup"]),
+  p: new Set("address article aside blockquote details dialog div dl fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr main menu nav ol p pre search section table ul".split(" ")),
   li: new Set(["li"]),
   dt: new Set(["dt", "dd"]),
   dd: new Set(["dt", "dd"]),
-  td: new Set(["td", "th", "tr"]),
-  th: new Set(["td", "th", "tr"]),
-  tr: new Set(["tr"]),
-  option: new Set(["option"]),
+  // a new table section closes the open cell, then the row, then the section
+  td: new Set(["td", "th", "tr", "thead", "tbody", "tfoot"]),
+  th: new Set(["td", "th", "tr", "thead", "tbody", "tfoot"]),
+  tr: new Set(["tr", "thead", "tbody", "tfoot"]),
+  option: new Set(["option", "optgroup"]),
 };
 
 const ENTITIES = {
@@ -209,6 +216,10 @@ const ENTITIES = {
   auml: "\u00e4", szlig: "\u00df", ntilde: "\u00f1", minus: "\u2212", plusmn: "\u00b1",
   frac12: "\u00bd", sup2: "\u00b2", sup3: "\u00b3", micro: "\u00b5", infin: "\u221e",
   ne: "\u2260", le: "\u2264", ge: "\u2265", asymp: "\u2248", bull: "\u2022",
+  // found by the minifier check: these leaked into the twins and llms-full.txt
+  // as written ("Lesi&nacute;ski", "round &divide;1000")
+  divide: "\u00f7", rsaquo: "\u203a", lsaquo: "\u2039", nacute: "\u0144", chi: "\u03c7",
+  dagger: "\u2020", Dagger: "\u2021", approx: "\u2248", boxbox: "\u29c9", blacktriangle: "\u25b4",
 };
 
 export function decodeEntities(s) {
@@ -337,6 +348,10 @@ function readTag(html, start) {
 }
 
 // ── tree ────────────────────────────────────────────────────────────────────
+
+// Exported for the minifier check (contract-the-minifier-keeps-every-page-meaning),
+// which wants a reader written apart from the minifier to judge it.
+export { parse as parseHtml };
 
 function parse(html) {
   const root: ElementNode = { name: "#root", attrs: {}, children: [] };
