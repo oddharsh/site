@@ -47,6 +47,7 @@ import { minifySync } from "oxc-minify";
 import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
+import { spliceMinLiterals } from "./lib/css-literal.ts";
 import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
@@ -1680,27 +1681,19 @@ phase("5 worker css");
   const jsFiles = (await Promise.all(roots.map(async (dir) =>
     (await readdir(dir, { recursive: true })).filter((f) => f.endsWith(".js") || f.endsWith(".ts")).map((rel) => `${dir}/${rel}`),
   ))).flat();
-  const marker = /`(\/\*min\*\/[^`]*)`/g;
   let litCount = 0, saved = 0, fileCount = 0;
   const perRoot = new Map<string, number>();
   for (const path of jsFiles) {
     const rel = path.slice(OUT.length + 1);
     const src = await readFile(path, "utf8");
-    const matches = [...src.matchAll(marker)];
-    if (!matches.length) continue;
-    let out = "", last = 0;
-    for (const m of matches) {
-      const cssLiteral = m[1];
-      if (cssLiteral.includes("${")) throw new Error(`${rel}: a /*min*/ CSS literal carries interpolation`);
-      const min = minifyCss(rel, cssLiteral).replace(/\n+$/, "");
-      out += src.slice(last, m.index) + "`" + min + "`";
-      last = m.index + m[0].length;
-      saved += m[0].length - (min.length + 2);
-      litCount++;
-      const root = roots.find((r) => path.startsWith(r + "/"))!;
-      perRoot.set(root, (perRoot.get(root) ?? 0) + 1);
-    }
-    out += src.slice(last);
+    // Minifies each literal's runtime VALUE and escapes the result back into
+    // source. tools/lib/css-literal.ts has the two escapes this used to lose.
+    const { out, literals } = spliceMinLiterals(rel, src, (css) => minifyCss(rel, css));
+    if (!literals.length) continue;
+    const root = roots.find((r) => path.startsWith(r + "/"))!;
+    perRoot.set(root, (perRoot.get(root) ?? 0) + literals.length);
+    litCount += literals.length;
+    for (const l of literals) saved += l.source.length - l.spliced.length;
     const parsed = minifySync(rel, out, {
       module: false,
       compress: false,
