@@ -87,7 +87,8 @@ test("every definition in a built stylesheet is read somewhere", { skip: !exists
   const unread = [];
   for (const [p, text] of sheets) for (const name of definitionsIn(text)) {
     if (RESERVED.has(name)) continue;
-    const re = new RegExp(`${name.replace(/-/g, "\\-")}(?![a-z0-9-])(?!\\s*:)`);
+    // every metacharacter escaped, backslash included, though names are [a-z0-9-]
+    const re = new RegExp(`${name.replace(/[\\^$.*+?()[\]{}|-]/g, (c) => `\\${c}`)}(?![a-z0-9-])(?!\\s*:)`);
     if (!texts.some(([, t]) => re.test(t))) unread.push(`${p.slice(BUILT.length)} ${name}`);
   }
   assert.deepEqual(unread, []);
