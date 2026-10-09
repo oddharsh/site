@@ -10,16 +10,16 @@
 // the package it excuses is pinned by URL, and a PackageOverrides entry on
 // wrangler is refused outright, because that shape hides every future
 // advisory too.
-import { parse } from "smol-toml";
+import { parse } from "./lib/toml.ts";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 // The one advisory this tree ignores, and the package whose pin excuses it.
 const URL_PIN_IGNORES = { "GHSA-8c93-4hch-xgxp": "wrangler" };
 
 /**
- * An array-of-tables (`[[Name]]`) out of a parsed document, or empty. smol-toml
+ * An array-of-tables (`[[Name]]`) out of a parsed document, or empty. The parser
  * types every value as TomlValue, so this is where the shape gets narrowed.
- * @param {Record<string, import("smol-toml").TomlValue>} config
+ * @param {Record<string, import("./lib/toml.ts").TomlValue>} config
  * @param {string} key
  * @returns {Record<string, any>[]}
  */
