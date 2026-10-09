@@ -71,7 +71,8 @@ const SAMPLES = 9; // the control and the calibration
 const FLOOR_MAX_MS = 0.5;
 const WIDTH = 2; // children at once: CI has 4 cores, and the build's other background steps share them
 const CONTROL = "/robots.txt";
-const CALIBRATION = "@calibration"; // a sample spec no route can collide with
+const CALIBRATION = "@calibration";
+const CAL_LEAN = "@calibration-lean"; // EXPERIMENT: a low-allocation candidate, read beside the first // a sample spec no route can collide with
 // The routes that take a query, where the first sweep found the heavy ones, then
 // the island fragments, which no manifest entry names and which render per
 // request (/coffee/slots.html read 18 ms before #1262), and three more that
@@ -109,6 +110,17 @@ function calibrate(): number {
   for (const r of rows) { const m = re.exec(r.tags.join(" ")); if (m && +m[1] % 2) hits++; }
   rows.sort((a, b) => a.w - b.w || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
   return JSON.stringify(rows.filter((r) => r.title.includes("bridge")).map((r) => ({ id: r.id, t: r.title.toUpperCase() }))).length + hits;
+}
+
+// EXPERIMENT: integer hashing, a regex on a short string, property writes. Almost
+// no allocation, so a neighbour saturating memory bandwidth shouldn't move it.
+function calibrateLean(): number {
+  let h = 2166136261, hits = 0;
+  const re = /\bfilm\s+(\d+)\b/, text = "frame 12 on the bridge, film 7, a red car";
+  for (let i = 0; i < 150000; i++) { h = Math.imul(h ^ i, 16777619) >>> 0; if (re.test(text)) hits++; }
+  const o = { a: 1, b: 2 };
+  for (let i = 0; i < 300000; i++) o.a = (o.a + o.b * i) | 0;
+  return h + hits + o.a;
 }
 
 function request(spec: string): Request {
@@ -185,7 +197,7 @@ if (values.one) {
   const run = async (spec: string) => { const r = await worker.fetch(request(spec), env, ctx); await r.arrayBuffer(); return r.status; };
   await run(values.one === CONTROL ? "/favicon.ico" : CONTROL); // the warm-up is never the timed route
   const t0 = process.cpuUsage();
-  const status = values.one === CALIBRATION ? (calibrate(), 0) : await run(values.one);
+  const status = values.one === CALIBRATION ? (calibrate(), 0) : values.one === CAL_LEAN ? (calibrateLean(), 0) : await run(values.one);
   const d = process.cpuUsage(t0);
   process.stdout.write(JSON.stringify({ ms: (d.user + d.system) / 1000, status }) + "\n");
   process.exit(0);
@@ -231,7 +243,7 @@ const iqr = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return 
 // The control and the calibration are spread through the screening, so both see
 // the load the routes see rather than a quiet first second.
 const specs = [...routes];
-for (let k = 0; k < SAMPLES; k++) for (const s of [CONTROL, CALIBRATION]) specs.splice(Math.round(((k + 0.5) * specs.length) / SAMPLES), 0, s);
+for (let k = 0; k < SAMPLES; k++) for (const s of [CONTROL, CALIBRATION, CAL_LEAN]) specs.splice(Math.round(((k + 0.5) * specs.length) / SAMPLES), 0, s);
 const screened = await pool(specs.map((s) => async () => ({ spec: s, ...(await sample(s)) })));
 const control = screened.filter((r) => r.spec === CONTROL).map((r) => r.ms);
 const calMs = median(screened.filter((r) => r.spec === CALIBRATION).map((r) => r.ms));
@@ -240,14 +252,20 @@ const floor = iqr(control);
 // reference taken on a different workload, readings stay raw and --gate refuses.
 const calibrated = budget.calibration !== null && budget.calibration.digest === digest;
 const scale = calibrated ? budget.calibration!.referenceMs / calMs : 1;
-const screen = new Map(screened.filter((r) => r.spec !== CONTROL && r.spec !== CALIBRATION).map((r) => [r.spec, r]));
+const screen = new Map(screened.filter((r) => r.spec !== CONTROL && r.spec !== CALIBRATION && r.spec !== CAL_LEAN).map((r) => [r.spec, r]));
+const confirmCal: number[] = [], confirmLean: number[] = [];
 const rows = await pool(routes.map((route) => async () => {
   const first = screen.get(route)!;
   const raw = [first.ms];
   // one after another, so the run never has more than WIDTH children
   const ceilingMs = budget.routes[route]?.ceilingMs ?? GATE_MS;
-  if (first.ms * scale >= ceilingMs * CONFIRM_AT) for (let k = 0; k < CONFIRMS; k++) raw.push((await sample(route)).ms);
-  return { route, status: first.status, ms: median(raw) * scale, rawMs: median(raw), ceilingMs, samples: raw.length };
+  if (first.ms * scale >= ceilingMs * CONFIRM_AT) {
+    for (let k = 0; k < CONFIRMS; k++) raw.push((await sample(route)).ms);
+    // EXPERIMENT: both workloads again, in the phase the confirmed routes run in
+    confirmCal.push((await sample(CALIBRATION)).ms);
+    confirmLean.push((await sample(CAL_LEAN)).ms);
+  }
+  return { route, status: first.status, ms: median(raw) * scale, rawMs: median(raw), ceilingMs, samples: raw.length, raws: raw };
 }));
 rows.sort((a, b) => b.ms - a.ms);
 const over = rows.filter((r) => r.ms > r.ceilingMs);
@@ -256,7 +274,7 @@ const stale = rows.filter((r) => budget.routes[r.route] && r.ms <= GATE_MS);
 const inconclusive = floor > FLOOR_MAX_MS;
 const machine = cpus()[0]?.model.trim() ?? "unknown";
 writeFileSync(values.out!, JSON.stringify({
-  gateMs: GATE_MS, machine, calibration: { ms: calMs, digest, calibrated, scale },  control: { median: median(control), iqr: floor }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
+  gateMs: GATE_MS, machine, calibration: { ms: calMs, digest, calibrated, scale }, experiment: { cal: screened.filter((r) => r.spec === CALIBRATION).map((r) => r.ms), lean: screened.filter((r) => r.spec === CAL_LEAN).map((r) => r.ms), control, confirmCal, confirmLean },  control: { median: median(control), iqr: floor }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
 }, null, 2) + "\n");
 
 const units = calibrated ? `reference ms (x${scale.toFixed(2)} from ${calMs.toFixed(2)} ms of calibration here)`

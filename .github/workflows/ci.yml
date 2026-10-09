@@ -285,6 +285,7 @@ jobs:
         run: |
           set -o pipefail
           node tools/cpu-sweep.ts --markdown | tee -a "$GITHUB_STEP_SUMMARY"
+          cat .build/cpu-sweep.json # EXPERIMENT ROUND ONLY
 
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,
   # on main, at this commit, produced these URL hashes. tools/check-served.ts
