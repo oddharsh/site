@@ -295,7 +295,7 @@
       "pipelines"
     ],
     "exempt": {
-      "tools/cpu-sweep.ts": "writes only .build/cpu-sweep.json (or --out), a report of CPU per route on the bundle perf-budget just built. Nothing reads it back, nothing is committed or served from it, and every run rewrites it whole.",
+      "tools/cpu-sweep.ts": "writes only .build/cpu-sweep.json (or --out), a report of CPU per route on the bundle perf-budget just built, and appends its table to $GITHUB_STEP_SUMMARY when CI sets it. Nothing reads either back, nothing is committed or served from it, and every run rewrites it whole.",
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
       "tools/served-manifest.ts": "writes served-manifest.json, a CI artifact cut from .build/public on each push to main and signed there; it is never committed, and tools/check-served.ts is what compares it against production",
       "tools/lib/hash-client-assets.ts": "build step 6's core, called by build.ts with the staged root: writes only the /a/ copies and the repointed loaders under the directory it is handed, which is .build/ in a build and a temp dir in the contract suite",

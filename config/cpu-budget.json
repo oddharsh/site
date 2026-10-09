@@ -1,20 +1,28 @@
 {
-  "$comment": "tools/cpu-sweep.ts reads this. `calibration` is the calibration workload's cold median on the reference runner, with the digest of the workload it timed; every reading is scaled to that runner. `routes` lets a route over the 8 ms gate stay up to its own ceilingMs, with the reason it costs that much today. Each ceiling is the highest of three scaled CI runs (2026-10-09, on an EPYC 9V45, a Xeon 8573C and an EPYC 7763) plus 20%, rounded up to the half millisecond; those runs agreed within 4%. --gate fails on an entry for a route the sweep doesn't know, and prints an entry whose route now reads under 8 ms as stale, so the list only shrinks.",
-  "calibration": {
-    "referenceMs": 14.612,
-    "digest": "5d7162875fb38b67",
-    "machine": "INTEL(R) XEON(R) PLATINUM 8573C, GitHub ubuntu-latest, CI run 37871813404"
+  "$comment": "tools/cpu-sweep.ts reads this. `machines` scales each CPU model to the AMD EPYC 7763 (factor 1): a factor is the median, over routes confirmed in every run, of the route's raw median on the 7763 divided by its raw median on that model, from `runs` runs (2026-10-09). A model with no entry reads raw and --gate judges nothing on it; a model needs two runs before it gets a factor. No laptop is listed: a laptop's other work inflates every reading at once (an M3 Max read 1.7x higher on one run than the run before), so a local run reads raw and gets no verdict. `routes` lets a route stay up to its own ceilingMs, in EPYC 7763 ms, with the reason it costs that much today: the highest of 14 scaled CI runs plus 20%, rounded up to the half millisecond, for every route whose highest reading plus 20% passed the 8 ms gate. --gate fails on an entry for a route the sweep doesn't know, and prints an entry whose route reads under 4 ms as stale, so the list only shrinks.",
+  "machines": {
+    "AMD EPYC 7763 64-Core Processor": { "factor": 1, "runs": 9 },
+    "AMD EPYC 9V74 80-Core Processor": { "factor": 1.39, "runs": 3 },
+    "AMD EPYC 9V45 96-Core Processor": { "factor": 1.484, "runs": 2 }
   },
   "routes": {
-    "/photos/query.json?q=classic+chrome+bridge&limit=100": { "ceilingMs": 30.5, "why": "parses the four photo JSON files (metadata, alt text, thumb hashes, semantics), prepares scoring fields for every photo and ranks them, then serializes 100; #1208 took out the ICU collator, and the next lever is scoring fields prepared at build (an owner's call)" },
-    "/agent-ready": { "ceilingMs": 31.5, "why": "the sweep refuses outbound fetch, so this times the probe's error path, not a real check; not profiled yet" },
-    "/photos/query.json?q=red+car": { "ceilingMs": 25.5, "why": "the same parse, prepare and ranking as the 100-result query, serializing 25" },
-    "/finger": { "ceilingMs": 18, "why": "renders the finger terminal frame per request (it's in config/per-request-pages.json); not profiled yet" },
-    "/search?q=brotli": { "ceilingMs": 15, "why": "search.ts prepares every record of the site index on first use and caches it per isolate, so a cold request pays the whole prepare; not profiled since #1208" },
-    "/ask?query=dictionary": { "ceilingMs": 14.5, "why": "the same cold search prepare as /search" },
-    "/search.json?q=what+does+he+think+about+agents": { "ceilingMs": 13, "why": "the same cold search prepare as /search" },
-    "/photos/query.json": { "ceilingMs": 13, "why": "parses the four photo JSON files even with no query to score" },
-    "POST /mcp search_site": { "ceilingMs": 13, "why": "the same cold search prepare as /search, behind the MCP server's JSON-RPC handling" },
-    "/search.json?q=brotli": { "ceilingMs": 12, "why": "the same cold search prepare as /search" }
+    "/agent-ready": { "ceilingMs": 45, "why": "the sweep refuses outbound fetch, so this times the probe's error path, not a real check; not profiled yet" },
+    "/photos/query.json?q=classic+chrome+bridge&limit=100": { "ceilingMs": 41, "why": "parses the four photo JSON files (metadata, alt text, thumb hashes, semantics), prepares scoring fields for every photo and ranks them, then serializes 100; #1208 took out the ICU collator, and the next lever is scoring fields prepared at build (an owner's call)" },
+    "/photos/query.json?q=red+car": { "ceilingMs": 32, "why": "the same parse, prepare and ranking as the 100-result query, serializing 25" },
+    "/ask?query=dictionary": { "ceilingMs": 27, "why": "the cold search prepare /search pays, then KV reads and Analytics Engine writes it makes in production too (#1266 measured them at about 2.2 raw ms)" },
+    "/finger": { "ceilingMs": 23, "why": "renders the finger terminal frame per request (it's in config/per-request-pages.json); not profiled yet" },
+    "/search?q=brotli": { "ceilingMs": 19.5, "why": "search.ts prepares every record of the site index on first use and caches it per isolate, so a cold request pays the whole prepare; not profiled since #1208" },
+    "/search.json?q=what+does+he+think+about+agents": { "ceilingMs": 17.5, "why": "the same cold search prepare as /search" },
+    "POST /mcp search_site": { "ceilingMs": 17, "why": "the same cold search prepare as /search, behind the MCP server's JSON-RPC handling" },
+    "/photos/query.json": { "ceilingMs": 17, "why": "parses the four photo JSON files even with no query to score" },
+    "/reading/list.html": { "ceilingMs": 16, "why": "an island fragment rendered per request; not profiled yet" },
+    "/search.json?q=brotli": { "ceilingMs": 15, "why": "the same cold search prepare as /search" },
+    "/ledger/lines.html": { "ceilingMs": 13.5, "why": "an island fragment rendered per request; not profiled yet" },
+    "/around/snapshot.html": { "ceilingMs": 12.5, "why": "an island fragment rendered per request; not profiled yet" },
+    "/coffee/slots.html": { "ceilingMs": 11.5, "why": "an island fragment rendered per request; #1262 built its slot label formatters once per zone, and the rest is not profiled yet" },
+    "/this-page-does-not-exist": { "ceilingMs": 10, "why": "the not-found page, rendered per request; not profiled yet" },
+    "/dict": { "ceilingMs": 9.5, "why": "renders the dict terminal frame per request (it's in config/per-request-pages.json); not profiled yet" },
+    "/cache": { "ceilingMs": 8.5, "why": "renders the cache terminal frame per request (it's in config/per-request-pages.json); not profiled yet" },
+    "/encode": { "ceilingMs": 8.5, "why": "renders the encode terminal frame per request (it's in config/per-request-pages.json); not profiled yet" }
   }
 }
