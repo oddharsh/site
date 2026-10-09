@@ -871,35 +871,44 @@ a throwaway isolate first (`tools/lib/warm-icu.ts`), because workerd's shared
 processes already have it loaded; `--cold-icu` skips that, as the control. The
 island fragments are in its route list too, since no manifest entry names them.
 
-Readings are scaled to a reference runner. GitHub's runners vary: three CI runs
-(2026-10-09) landed on an EPYC 9V45, a Xeon 8573C and an EPYC 7763, and raw
-readings sat 20 to 25% apart. A fixed calibration workload in `cpu-sweep.ts`,
-timed in the same harness, scales them, and scaled they agreed within 4%.
-`config/cpu-budget.json` holds the reference (the workload's median on the Xeon,
-with its digest) and a ceiling for each route allowed over 8 ms, with the reason.
+Readings are scaled by CPU model. GitHub's runners vary: on 2026-10-09 the CPU
+job landed on five models (EPYC 7763, 9V74 and 9V45, Xeon 6973P-C and 8573C),
+and the same routes read up to 1.6x apart raw. On any one model a typical route
+held within ±6% from run to run. `config/cpu-budget.json`'s `machines` maps each
+model to a factor that scales it to the EPYC 7763 (factor 1), so a reported
+millisecond is a 7763 millisecond. The same file gives a ceiling to each route
+allowed over 8 ms, with the reason. A timed calibration workload did this job
+first (#1260) and was dropped, because on CI it moved more than the routes did.
 
-CI runs it report-only in a job of its own, into the log and the job summary,
-because inside `validate` it held the required check up by 20 to 30 s. `--gate` fails on a
-route over its ceiling, or on an allowlist entry for a route the sweep doesn't
-know; adding it to the CI step is the remaining switch. Read the verdict from CI:
-Apple silicon runs the workload relatively faster than the routes, so a laptop
-reads 1.3 to 1.4x high, and `--gate` fails there.
+CI runs it with `--gate` in a job of its own, because inside `validate` it held
+the required check up by 20 to 30 s. A route over its ceiling, or an allowlist
+entry for a route the sweep doesn't know, fails the job, and each failure is an
+annotation on the run. The job has `continue-on-error`, so the run stays green:
+`promote-production` releases only a successful run, and a CPU regression must
+never hold up a release. It isn't a required check; making it one is a ruleset
+change in `config/infra.json`, applied with `infra:apply`. On a model with no
+factor, or a run whose `/robots.txt` control spread over 1 ms, it judges nothing
+and leaves a warning annotation.
 
 **When a route gets cheaper:** the sweep prints its entry as stale once it reads
-under 8 ms. Delete the entry.
+under 4 ms, half the gate. Delete the entry.
 
 **When a route gets dearer on purpose:** raise its `ceilingMs` in the same PR and
-say why in `why`. Each ceiling is the highest of three scaled CI runs plus 20%.
+say why in `why`. Each ceiling is the highest of 14 scaled CI runs plus 20%.
 
-**When you edit `calibrate()`:** its digest moves and `--gate` refuses. Read the
-new workload's median on the same CPU model, a Xeon Platinum 8573C (the report
-names the machine; rerun the job until it lands on one), so a reading still means
-a Xeon millisecond and the ceilings keep their units. Put that median
-(`calibration.ms` in `.build/cpu-sweep.json`) into `referenceMs` with the new
-digest.
+**When the warning names a CPU model with no factor:** collect two runs on it
+(rerun the job until it lands there twice; the units line names the model) and
+two or more on an EPYC 7763. Take each route confirmed in all of them (5
+samples), divide its 7763 median by its median on the new model, and record the
+median of those ratios with the run count. On one model a typical route moves
+±6% between runs and the worst ±17%, so a factor from one run can be off by that
+much; that's why a model waits for its second.
 
-Locally, KV, D1 and R2 are empty, so data routes time their fallback, and
-`/coffee/availability.json` answers 503 without its calendar secret.
+Locally, the sweep reads raw milliseconds and gives no verdict, since no laptop
+has a factor: other work on a laptop inflates every reading at once (an M3 Max
+read 1.7x higher on one run than the run before), and the control's spread
+doesn't catch it. CI's verdict is the one that counts. KV, D1 and R2 are empty, so data routes time their
+fallback, and `/coffee/availability.json` answers 503 without its calendar secret.
 
 ### The wire-size diff (the differential half)
 

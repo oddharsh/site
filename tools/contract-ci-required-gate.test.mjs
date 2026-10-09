@@ -14,16 +14,18 @@ test("CI is one required job named validate that cannot be skipped or softened",
   // `attest` (2026-10-01) signs the served manifest on a push to main. It is
   // not a check anybody requires, it needs validate, and it cannot fail the run;
   // contract-production-serves-what-ci-built holds its shape. `cpu-sweep`
-  // prints CPU per route and gates nothing: a CPU report inside validate pushed
-  // it from about 55 s to 116 s (tools/route-cpu.ts, 2026-10-08) and to 83-86 s
-  // (this sweep, 2026-10-09). So it gets its own runner, and it may never fail
-  // the run or hold up a job that matters.
+  // checks CPU per route: inside validate it pushed the required check from
+  // about 55 s to 116 s (tools/route-cpu.ts, 2026-10-08) and to 83-86 s (this
+  // sweep, 2026-10-09), so it gets its own runner. From 2026-10-09 it runs with
+  // --gate, so a route over its ceiling fails the JOB; continue-on-error keeps
+  // the RUN's conclusion success, because promote-production releases only a
+  // successful run and a CPU regression must never hold up a release.
   assert.deepEqual(Object.keys(workflow.jobs), ["validate", "cpu-sweep", "attest"]);
   const report = workflow.jobs["cpu-sweep"];
-  assert.equal(report["continue-on-error"], true, "the CPU report is a report; it cannot fail the run");
+  assert.equal(report["continue-on-error"], true, "a CPU failure may fail its job, never the run promote-production waits on");
   assert.equal(report.needs, undefined, "nothing waits on the report, and it waits on nothing");
   assert.ok(!Object.values(workflow.jobs).some((job) => [job.needs].flat().includes("cpu-sweep")), "no job may need the report");
-  assert.ok(!report.steps.some((step) => /--gate/.test(step.run ?? "")), "--gate would make a report into a gate");
+  assert.ok(report.steps.some((step) => /cpu-sweep\.ts --gate/.test(step.run ?? "")), "the CPU job gates");
   assert.ok(!workflow.jobs.validate.steps.some((step) => /cpu-sweep/.test(step.run ?? "")), "the sweep stays out of validate, which it slows");
   const { validate } = workflow.jobs;
   // The `main` ruleset requires a check with exactly this name.

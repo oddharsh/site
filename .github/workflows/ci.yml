@@ -248,18 +248,23 @@ jobs:
       - name: Wait for every background check
         wait-all:
 
-  # Report-only: CPU per request on a fresh isolate, route by route, scaled to
-  # a reference runner and read against each route's ceiling in
-  # config/cpu-budget.json (tools/cpu-sweep.ts). It writes only
-  # .build/cpu-sweep.json and exits 0 whatever it finds; the table goes to the
-  # log and the job summary, and adding --gate makes a route over its ceiling
-  # fail the run. Its OWN job because a CPU report inside validate held the
+  # Gated, from 2026-10-09: CPU per request on a fresh isolate, route by route,
+  # scaled by the runner's CPU model to an EPYC 7763 and read against each
+  # route's ceiling in config/cpu-budget.json (tools/cpu-sweep.ts). A route over
+  # its ceiling fails this JOB, with an annotation naming it, and
+  # continue-on-error keeps the RUN green: promote-production releases only a
+  # run whose conclusion is success, and a CPU regression must never hold up a
+  # release. It isn't a required check either; that would be a ruleset change
+  # (config/infra.json, then infra:apply). On a CPU model the budget has no
+  # factor for, or a run too noisy to read, it judges nothing and leaves a
+  # warning. It writes only .build/cpu-sweep.json and appends its table to the
+  # job summary. Its OWN job because a CPU report inside validate held the
   # required check up: validate ran 50 to 63 s before one, 116 s with
   # tools/route-cpu.ts as a background step (2026-10-08), and 83 to 86 s with
   # this sweep there (2026-10-09). It builds its own bundle through
   # perf-budget, the same dry-run validate measures.
   cpu-sweep:
-    name: CPU per route (report)
+    name: CPU per route
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
@@ -281,11 +286,8 @@ jobs:
       - name: Build the dry-run bundle
         run: bun run perf-budget
 
-      - name: Report CPU per route
-        run: |
-          set -o pipefail
-          node tools/cpu-sweep.ts --markdown | tee -a "$GITHUB_STEP_SUMMARY"
-          cat .build/cpu-sweep.json # EXPERIMENT ROUND ONLY
+      - name: Check CPU per route
+        run: node tools/cpu-sweep.ts --gate --markdown
 
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,
   # on main, at this commit, produced these URL hashes. tools/check-served.ts
