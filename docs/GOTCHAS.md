@@ -279,3 +279,17 @@ by renumbering. The long-form history of each one is in git
     those roots from `shellFiles()` in `tools/build.ts`, and proves its reach
     by planting a violation in a file only the new list covers. A widened scan
     that reports nothing new looks exactly like one that reads nothing.
+
+56. **Top-level I/O in a lazily imported module works only while wrangler
+    inlines it.** Wrangler ships the Worker as one module. esbuild turns
+    `await import("./x.ts")` into an `__esm` initializer that runs inside the
+    request, so `crypto.getRandomValues`, timers and `fetch` at the module's
+    top level work. The same module runs in global scope when workerd loads
+    it as its own module: `no_bundle`, `find_additional_modules`, a split
+    build, or a test harness with one module per file. There random values
+    and timers throw "Disallowed operation called within global scope" under
+    either module registry; `fetch` throws too under the old registry, and
+    goes out under `new_module_registry`. Under that flag `process.cwd()` reads
+    `/`, where the handler sees `/bundle`. Measured 2026-10-09 on both shapes.
+    Nothing in the Worker lazy-loads today; if something does, keep its top
+    level to definitions and do the I/O in a function the handler calls.
