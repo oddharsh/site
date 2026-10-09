@@ -68,8 +68,10 @@ by renumbering. The long-form history of each one is in git
     `lib/csp-hashes.ts` ships empty and build step 7c fills it; a path with no
     entry falls back to `'unsafe-inline'`, and the build fails below 40
     covered documents. Event-handler attributes can't be hashed and fail the
-    build. Worker-rendered `lunaPage` output hashes its own. `bun run
-    csp:sweep` is the browser check; perturb one script as its control.
+    build. Worker-rendered `lunaPage` output hashes its own. Island fragments
+    (`islandResponse`, cal's slot list) send `script-src 'self'` with no
+    hashes, since `innerHTML` never runs their scripts. `bun run csp:sweep` is
+    the browser check; perturb one script as its control.
 
 18. **`scrollbar-color` inherits and disables `::-webkit-scrollbar` rules.**
     So does a non-auto `scrollbar-width` on the element itself. Reset to

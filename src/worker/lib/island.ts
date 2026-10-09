@@ -40,18 +40,17 @@ import { html, type Html } from "./html.ts";
 // contract test holds the two together.
 export const ISLAND_MARKER = "x-island";
 
-// A fragment's script policy: `script-src 'self'` and no inline script at all.
-// islandScript injects a fragment with innerHTML, where a <script> never runs,
-// so a fragment's inline script would be dead code on the page; this header
-// only governs a reader who opens the fragment's URL directly. Until
-// 2026-10-08 every fragment fell to the loose default (`'unsafe-inline'`),
-// since none is a built document with hashes and none comes through lunaPage.
-// Hashing each one as sent, lunaPage's way, would be wrong here: fragments
-// carry the most outside data on the site (webmentions, reading lists, event
-// pools), and a hash of what was sent would allow whatever script got into
-// it. A fixed policy allows none. 10 of 10 live fragments carried no inline
-// script, handler or javascript: URL when this landed.
-export const FRAGMENT_CSP = cspHashed([]);
+// The script policy every fragment carries: `script-src 'self'` and no hashes.
+// The loader injects a fragment with innerHTML, where a <script> never runs, so
+// a fragment has no inline script to allow, and none of the live ones carries
+// one (eleven checked 2026-10-08). Until then they went out with the loose
+// default, because build step 7c never sees a per-request body; a reader who
+// opened /inbox/mail.html directly got `'unsafe-inline'` on a body that holds
+// other sites' webmention text. Hashing the body as sent would have approved
+// any script that ever slipped through that text's escaping, so a fragment
+// approves none. withSecurityHeaders keeps it, as it keeps any policy that
+// isn't the loose stamp. cal's slot list imports it too.
+export const ISLAND_CSP = cspHashed([]);
 
 /** The fragment response. `no-store` because the body is one request's; a
  *  fragment everyone shares passes its own cache-control. A non-2xx `status`
@@ -67,7 +66,7 @@ export function islandResponse(body: Html, headers: Record<string, string> = {},
       "x-content-type-options": "nosniff",
       // Worth fetching, worthless in an index: a bare fragment is not a page.
       "x-robots-tag":           "noindex",
-      "content-security-policy": FRAGMENT_CSP,
+      "content-security-policy": ISLAND_CSP,
       [ISLAND_MARKER]:          "1",
       ...headers,
     },

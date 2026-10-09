@@ -47,7 +47,7 @@ import { bookingPage, slotsFragment, SLOTS_PATH, PICK_PATH, successPage,
          cancelPage, cancelledPage,
          errorPage }                       from "./templates.ts";
 import { jsonResponse } from "../../src/worker/lib/http.ts";
-import { FRAGMENT_CSP, ISLAND_MARKER }  from "../../src/worker/lib/island.ts";
+import { ISLAND_CSP, ISLAND_MARKER }    from "../../src/worker/lib/island.ts";
 
 // Re-export the expiry-timer Workflow so it resolves as a class_name both from
 // the root worker (which imports this module) and from the Vitest pool, whose
@@ -142,8 +142,8 @@ async function route_slots_html(req, env, ctx) {
     "cache-control": "public, max-age=0, s-maxage=30",
     // Worth fetching, worthless in an index: a bare fragment is not a page.
     "x-robots-tag": "noindex",
-    // No inline script runs in a fragment (lib/island.ts says why).
-    "content-security-policy": FRAGMENT_CSP,
+    // No inline script to allow, like every island (lib/island.ts).
+    "content-security-policy": ISLAND_CSP,
     // The page's loader injects only a response carrying this (island rule 3):
     // a 5xx from the edge is text/html too.
     [ISLAND_MARKER]: "1",
