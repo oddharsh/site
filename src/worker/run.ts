@@ -7,10 +7,13 @@ import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { escAttr, escHtml } from "./lib/http.ts";
+import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { PHOTO_POOL } from "./photos.ts";
 
 // Mirrors nav.js's inline pages + profiles set (kept small on purpose; photos
 // resolve dynamically against the manifest instead of bloating the datalist).
+// Every other page resolves against the site manifest below, so the datalist
+// stays a suggestion list rather than the whole map.
 const DESTS = [
   ["home",        "/",            "the homepage"],
   ["photos",      "/photos",      "every photo, Thumbnails view"],
@@ -58,6 +61,15 @@ async function resolve(cmd, env, request) {
     const hit = PHOTO_POOL.find(p => p.stem.toLowerCase() === q);
     if (hit) return `/images/full/${encodeURIComponent(hit.full).replace(/%2F/g, "/")}`;
   }
+  // any page the site registers: its path ("garage/av2"), or its last segment
+  // when only one page ends that way ("av2", "fhe"; "encoding" is two pages, so
+  // it falls through). The manifest lists public pages only, so a typed name
+  // can never land on an /a/ or /i/ file.
+  const pages = AGENT_SURFACES.map((s) => s.path);
+  const byPath = pages.find((p) => p.toLowerCase() === "/" + q.replace(/^\/+/, ""));
+  if (byPath) return byPath;
+  const bySegment = pages.filter((p) => p.toLowerCase().split("/").pop() === q);
+  if (bySegment.length === 1) return bySegment[0];
   // unique name prefix ("gar" → garage)
   const pre = DESTS.filter(([name]) => name.startsWith(q));
   if (pre.length === 1) return pre[0][1];
@@ -67,9 +79,13 @@ async function resolve(cmd, env, request) {
 export function renderRun({ cmd = "", notFound = false } = {}) {
   const options = DESTS.map(([name, path, hint]) =>
     `<option value="${escAttr(name)}">${escHtml(hint)} — ${escHtml(path)}</option>`).join("\n");
+  // XP's own Run error ends "To search for a file, click the Start button, and
+  // then click Search." Here the search is one link away, already filled in.
+  const search = `/search?q=${encodeURIComponent(cmd.trim())}`;
   const errorBanner = notFound
     ? `<div class="run-err" role="alert"><b>Windows cannot find '${escHtml(cmd)}'.</b>
-       Check the spelling and try again, or browse <a href="/photos">the photos</a> and <a href="/garage">the garage</a> directly.</div>`
+       Make sure you typed the name correctly, and then try again. To look for it,
+       <a href="${escAttr(search)}">search the site for '${escHtml(cmd.trim())}'</a>.</div>`
     : "";
 
   return lunaPage({
