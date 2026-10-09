@@ -16,14 +16,15 @@
 
 /**
  * @typedef {{ domain: string, key: string, type: "int"|"float"|"bool"|"string", value: string|number|boolean, host?: "current" }} Write
- * @typedef {{ id: string, group: string, label: string, note?: string, was?: string, restart: string[], writes?: Write[], raw?: string[] }} Option
+ * @typedef {{ id: string, group: string, label: string, note?: string, was?: string, restart: string[], writes?: Write[], raw?: string[], app?: string, sudo?: boolean, fullDiskAccess?: boolean }} Option
  * @typedef {{ options: Option[] }} Data
  */
 
 // What each `restart` token costs the visitor, and the line that pays it. The
 // killall processes are deduped into one line at the end of the script; the
-// two that are not a process get a sentence, because a script cannot log you
-// out on your behalf and should not try.
+// ones that are not a process get a sentence, because a script cannot log you
+// out on your behalf and should not try. `relaunch` names the option's `app`,
+// since quitting someone's Terminal from inside it would end the script.
 const KILLALL = new Set(["Dock", "Finder", "SystemUIServer", "ControlCenter"]);
 const ACTIVATE = "/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u";
 
@@ -66,6 +67,9 @@ export function renderScript(data, picked = null) {
     out.push("# nothing ticked, nothing to write", "");
     return out.join("\n");
   }
+  // sudo rows ask for the password here, once, before anything is written: a
+  // prompt cancelled halfway down would leave half a Mac configured.
+  if (chosen.some((o) => o.sudo)) out.push("# The System rows run as root. Ask for the password now, before any write.", "sudo -v", "");
   /** @type {string|null} */
   let group = null;
   for (const o of chosen) {
@@ -75,8 +79,12 @@ export function renderScript(data, picked = null) {
     }
     out.push(`# ${o.label}${o.was ? ` (factory: ${o.was})` : ""}`);
     if (o.note) out.push(`#   ${o.note}`);
-    for (const w of o.writes || []) out.push(writeLine(w));
-    for (const r of o.raw || []) out.push(r);
+    // Without Full Disk Access a write to com.apple.universalaccess fails, and
+    // under `set -e` that would end the script at the first one. Each line
+    // records the miss instead, and the tail says what to grant.
+    const guard = o.fullDiskAccess ? " || no_fda=1" : "";
+    for (const w of o.writes || []) out.push(writeLine(w) + guard);
+    for (const r of o.raw || []) out.push(r + guard);
     out.push("");
   }
   const restarts = new Set(chosen.flatMap((o) => o.restart));
@@ -84,12 +92,17 @@ export function renderScript(data, picked = null) {
   out.push(`# ── apply ${"─".repeat(55)}`);
   if (kills.length) out.push(`killall ${kills.join(" ")} 2>/dev/null || true`);
   if (restarts.has("settings")) out.push(ACTIVATE);
+  if (chosen.some((o) => o.fullDiskAccess)) {
+    out.push(`[ -z "\${no_fda:-}" ] || echo 'skipped the accessibility rows: give Terminal Full Disk Access in Privacy & Security, then run this again'`);
+  }
   if (restarts.has("login")) {
     // Named by GROUP rather than by row: the sentence is a reminder, and a
     // 17-item list is one nobody reads.
     const who = [...new Set(chosen.filter((o) => o.restart.includes("login")).map((o) => o.group.toLowerCase()))];
     out.push(`echo 'log out and back in for the rest: ${who.join(", ")}'`);
   }
+  const apps = [...new Set(chosen.filter((o) => o.restart.includes("relaunch") && o.app).map((o) => o.app))];
+  if (apps.length) out.push(`echo 'relaunch ${apps.join(", ")}'`);
   out.push("");
   return out.join("\n");
 }
