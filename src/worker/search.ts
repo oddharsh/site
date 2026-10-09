@@ -17,6 +17,8 @@ export type SearchRecord = {
 
 type PreparedRecord = {
   record: SearchRecord;
+  // The title and description, lowercased. The body is matched where it is,
+  // through bodyMatchers, so it has no lowercase copy.
   fields: string[];
 };
 
@@ -44,14 +46,21 @@ async function getSearchIndex(env): Promise<PreparedRecord[]> {
     // lowercasing every article for every query. Keep only completed data here:
     // an in-flight ASSETS promise belongs to the request that started it.
     //
-    // Lowercasing is the only per-record pass. A whitespace collapse used to run
-    // here too, on text the generator already collapsed, and it was the most
-    // expensive line on the route: `\s+` matches every single space, so it
-    // rebuilt all 590 KB of body text, 5.6-6.9ms of a cold isolate's CPU
-    // (2026-10-07). snippet() collapses the 220 characters it returns instead.
+    // Lowercasing the title and description is the only per-record pass. A
+    // whitespace collapse used to run here too, on text the generator already
+    // collapsed, and it was the most expensive line on the route: `\s+` matches
+    // every single space, so it rebuilt all 590 KB of body text, 5.6-6.9ms of a
+    // cold isolate's CPU (2026-10-07). snippet() collapses the 220 characters it
+    // returns instead.
+    //
+    // The body text isn't lowercased either. It's 686 KB of the index's 705 KB
+    // (63 records, 2026-10-09), and lowercasing it took 0.87-0.92 ms of a cold
+    // isolate's prepare, against 0.21 ms to search it once lowercased. A
+    // case-insensitive regex searches the original in about the same time, so
+    // the copy only cost the cold request. bodyMatchers builds those per query.
     const prepared: PreparedRecord[] = payload.records.map((record: SearchRecord) => ({
       record,
-      fields: [record.title, record.description, record.text].map((value) => String(value || "").toLowerCase()),
+      fields: [record.title, record.description].map((value) => String(value || "").toLowerCase()),
     }));
     indexCache = prepared;
     return prepared;
@@ -61,12 +70,23 @@ async function getSearchIndex(env): Promise<PreparedRecord[]> {
   }
 }
 
+// One case-insensitive matcher per query term, for the body text. Terms are
+// runs of letters and digits (lib/text.ts), so the escape is a guard against a
+// tokenizer that someday lets punctuation through, not something today's terms
+// need.
+const bodyMatchers = (queryTerms: string[]) =>
+  queryTerms.map((term) => new RegExp(term.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&"), "i"));
+
 // The excerpt comes from the body, or the description when a record has none,
-// and `lower` is the matching scoring field, so indexOf positions line up.
-function snippet({ record, fields }: PreparedRecord, queryTerms) {
-  const [source, lower] = record.text ? [record.text, fields[2]] : [String(record.description || ""), fields[1]];
+// starting near the first query term it contains. The body is searched with
+// the query's matchers, so the position is the original text's own.
+function snippet({ record, fields }: PreparedRecord, queryTerms: string[], matchers: RegExp[]) {
+  const source = record.text || String(record.description || "");
   if (!source) return "";
-  const first = queryTerms.map((term) => lower.indexOf(term)).filter((n) => n >= 0).sort((a, b) => a - b)[0] ?? 0;
+  const at = record.text
+    ? matchers.map((re) => source.search(re))
+    : queryTerms.map((term) => fields[1].indexOf(term));
+  const first = at.filter((n) => n >= 0).sort((a, b) => a - b)[0] ?? 0;
   const start = Math.max(0, first - 70);
   return (start ? "…" : "") + source.slice(start, start + 220).replace(/\s+/g, " ").trim() + (start + 220 < source.length ? "…" : "");
 }
@@ -98,13 +118,15 @@ export async function searchSiteRanked(env, query: string, limit: string | numbe
   // and reading it first charged an empty MCP search the whole cold prepare.
   if (!queryTerms.length) return { query: q, terms: [], total: 0, returned: 0, results: [] };
   const records = await getSearchIndex(env);
+  const matchers = bodyMatchers(queryTerms);
   const results = records.map((entry) => {
-    const { fields } = entry;
+    const { record, fields } = entry;
     let score = 0;
-    for (const term of queryTerms) {
+    for (let i = 0; i < queryTerms.length; i++) {
+      const term = queryTerms[i];
       if (fields[0].includes(term)) score += 8;
       if (fields[1].includes(term)) score += 4;
-      if (fields[2].includes(term)) score += 1;
+      if (record.text && matchers[i].test(record.text)) score += 1;
     }
     return score ? { entry, score } : null;
   }).filter((row) => row !== null).sort((a, b) => b.score - a.score || compareCodepoints(a.entry.record.url, b.entry.record.url));
@@ -116,7 +138,7 @@ export async function searchSiteRanked(env, query: string, limit: string | numbe
     // Only returned rows need an excerpt. Broad queries can match the whole
     // corpus, while the caller asks for as few as one result.
     results: results.slice(0, max).map(({ entry, score }) => ({
-      ...entry.record, score, snippet: snippet(entry, queryTerms),
+      ...entry.record, score, snippet: snippet(entry, queryTerms, matchers),
     })),
   };
 }
@@ -132,7 +154,8 @@ export async function searchCorpusFor(env, query: string) {
   const meaningful = queryTermsOf(q).terms;
   const queryTerms = meaningful.length ? meaningful : terms(q);
   const records = await getSearchIndex(env);
-  return records.map((entry) => ({ ...entry.record, snippet: snippet(entry, queryTerms) }));
+  const matchers = bodyMatchers(queryTerms);
+  return records.map((entry) => ({ ...entry.record, snippet: snippet(entry, queryTerms, matchers) }));
 }
 
 export async function searchSite(env, query: string, limit: string | number | null = 20) {
