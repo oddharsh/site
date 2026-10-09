@@ -51,6 +51,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { cpus } from "node:os";
 import { join } from "node:path";
+import { runInThisContext } from "node:vm";
 import { parseArgs } from "node:util";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -100,9 +101,9 @@ function calibrate(): number {
 function calibrateCode(): number {
   let src = "";
   for (let i = 0; i < 250; i++) src += `function f${i}(o){const a=[o.x+${i},o.y*${i % 7},"k${i}"];const m=new Map(a.map((v,j)=>[j,String(v)]));let s="";for(const [k,v] of m)s+=k+":"+v.replace(/\\d/g,"#")+";";if(o.z.length>${i % 9})s+=JSON.stringify({i:${i},s});return s.length+(o.z[${i % 5}]??0);}\n`;
-  src += `return [${Array.from({ length: 250 }, (_, i) => `f${i}`).join(",")}];`;
+  src = `(() => {${src}return [${Array.from({ length: 250 }, (_, i) => `f${i}`).join(",")}];})()`;
   let total = 0;
-  for (const fn of new Function(src)() as ((o: { x: number; y: number; z: number[] }) => number)[]) total += fn({ x: 1, y: 2, z: [1, 2, 3, 4, 5] });
+  for (const fn of runInThisContext(src) as ((o: { x: number; y: number; z: number[] }) => number)[]) total += fn({ x: 1, y: 2, z: [1, 2, 3, 4, 5] });
   return total;
 }
 
