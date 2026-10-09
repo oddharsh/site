@@ -137,13 +137,20 @@ test("the nightly row's gzip figure is wrangler's, never the runtime's zlib", as
 // through the harness re-run themselves in a node child when bun collects them.
 // It spawns from a module rather than a script, so the scan below cannot see it;
 // this paragraph and the module's header are its record.
-test("node is spawned only by the wrangler bridge, the route oracle, the twin suite and the harness dispatch tests", async () => {
+//
+// THE FIFTH, taken 2026-10-08: tools/cpu-sweep.ts (`bun run cpu:sweep`, and
+// a report-only step in ci.yml). It times CPU per request on the Worker bundle,
+// and the number has to come from V8, which is workerd's engine; bun runs
+// JavaScriptCore, so timing under bun would measure a different engine. Each
+// sample is a node child the sweep spawns from inside itself, which the scan
+// below can't see; this paragraph is its record.
+test("node is spawned only by the wrangler bridge, the route oracle, the twin suite, the harness dispatch tests and the CPU sweep", async () => {
   const { readFileSync } = await import("node:fs");
   const { execFileSync } = await import("node:child_process");
   const root = new URL(".", ROOT).pathname;
   const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT).pathname, "utf8"));
   const nodeScripts = Object.entries(pkg.scripts).filter(([, cmd]) => /(^|&& |\| )node /.test(cmd)).map(([k]) => k).sort();
-  assert.deepEqual(nodeScripts, ["routes:check", "routes:check:remote", "test:node"]);
+  assert.deepEqual(nodeScripts, ["cpu:sweep", "routes:check", "routes:check:remote", "test:node"]);
   const files = execFileSync("git", ["ls-files", "-z", "*.sh", "**/*.sh", ".github/workflows/*.yml"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
   const spawns = [];
   for (const rel of files) {
@@ -153,6 +160,8 @@ test("node is spawned only by the wrangler bridge, the route oracle, the twin su
   assert.deepEqual(spawns, [
     // the bridge Workers Builds runs, which is the whole reason node is pinned
     ".github/deploy-wrangler.sh: node \"$",
+    // the CPU sweep, report-only (the fifth, above)
+    ".github/workflows/ci.yml: node tools",
   ], `node spawns outside the allowlist: ${JSON.stringify(spawns)}`);
 });
 
