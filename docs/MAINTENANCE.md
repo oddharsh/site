@@ -890,7 +890,7 @@ change in `config/infra.json`, applied with `infra:apply`. On a model with no
 factor, a run whose `/robots.txt` control spread over 1 ms, or a run whose
 control's median, scaled, reads more than 20% off `control.ms`, it judges
 nothing and leaves a warning annotation. That last case is a runner slower or
-faster all over than its model's factor says (gotcha 56).
+faster all over than its model's factor says (gotcha 57).
 
 **When the warning says a runner is off its model:** rerun the job. One such
 run is a slow host. If every run says it, on every model, the dispatcher's own

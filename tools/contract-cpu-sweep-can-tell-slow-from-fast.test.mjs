@@ -75,7 +75,7 @@ test("--gate judges nothing on a CPU model with no factor, and says so", { timeo
 
 // A factor fits a model's usual runner. One runner, slow all over, read 33% high
 // on its control and failed six routes on a PR that changed no Worker byte
-// (#1273, gotcha 56). A control reference of 0.01 ms makes this machine that
+// (#1273, gotcha 57). A control reference of 0.01 ms makes this machine that
 // runner. A band too wide to cross is the control: the same run is judged again.
 test("--gate judges nothing on a runner whose control reads off its model, and judges once the band allows it", { timeout: 90_000 }, () => {
   const off = sweepIn({ GITHUB_ACTIONS: "true" }, "/spin", { ...atFactor(1), control: { ms: 0.01, drift: 0.2 } }, "--gate");
