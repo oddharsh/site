@@ -179,6 +179,59 @@ export function planNames(files: Map<string, string>, shellFiles?: ReadonlySet<s
   return map;
 }
 
+/**
+ * Drop the custom-property definitions nothing reads, from the stylesheets only.
+ *
+ * The palette is defined for people too, so luna.css carries tokens no page,
+ * script or Worker CSS ever reads: 42 of 174 on 2026-10-09, 205 B brotli of
+ * an 8.6 KB stylesheet. design/tokens stays the whole palette; only the staged
+ * copy loses the names nothing asks for.
+ *
+ * A READ is any appearance of the name that is not its definition: a var() or
+ * style() query, but also a name a script passes to getPropertyValue, or one a
+ * comment mentions. That is deliberately loose: a mention keeps a definition
+ * alive, which costs a few bytes and never a colour. A name that is only ever
+ * WRITTEN (a script's `cssText = "--x:1"`, another stylesheet's definition)
+ * is unread, since a value nothing reads does nothing. RESERVED is always kept.
+ *
+ * Only files `isStylesheet` accepts are edited, because a definition inside a
+ * script or an HTML attribute is text a regex should not cut. It runs to a fixed
+ * point: dropping `--a: var(--b)` can leave `--b` unread. It reports only what
+ * it removed, and stops when a round removes nothing: a BEM selector such as
+ * `.tab--active:hover` reads to DEFINITION as `--active:`, which the removal
+ * rightly leaves alone, and the first version looped on it forever.
+ */
+export function pruneUnread(files: Map<string, string>, isStylesheet: (rel: string) => boolean): { files: Map<string, string>; dropped: string[] } {
+  const current = new Map(files);
+  const dropped: string[] = [];
+  for (;;) {
+    const tokens = new Map<string, number>(), definitions = new Map<string, number>(), inStylesheet = new Set<string>();
+    for (const [rel, text] of current) {
+      for (const t of text.match(TOKEN) ?? []) tokens.set(t, (tokens.get(t) ?? 0) + 1);
+      for (const n of definitionsIn(text)) {
+        definitions.set(n, (definitions.get(n) ?? 0) + 1);
+        if (isStylesheet(rel)) inStylesheet.add(n);
+      }
+    }
+    const unread = [...inStylesheet].filter((n) => !RESERVED.has(n) && (tokens.get(n) ?? 0) <= (definitions.get(n) ?? 0));
+    if (!unread.length) break;
+    const names = new Set(unread), removed = new Set<string>();
+    for (const [rel, text] of current) {
+      if (!isStylesheet(rel)) continue;
+      // one declaration: the name at a token boundary, its value up to ; or }
+      const next = text.replace(/(?<![a-z0-9-])(?<!style\(\s*)(--[a-z0-9][a-z0-9-]*)\s*:[^;}]*;?/g, (decl, name) => {
+        if (!names.has(name)) return decl;
+        removed.add(name);
+        return "";
+      }).replace(/;}/g, "}");
+      if (next !== text) current.set(rel, next);
+    }
+    if (!removed.size) break;
+    dropped.push(...removed);
+  }
+  return { files: current, dropped: dropped.sort() };
+}
+
 /** Rewrite one file. Whole-token lookup, so `--blue-9` cannot match `--blue-95`. */
 export const applyMangle = (text: string, map: Map<string, string>): string =>
   text.replace(TOKEN, (token) => map.get(token) ?? token);
