@@ -82,7 +82,7 @@
   "comment:lint": "gen-runtime-types runs FIRST because tsgolint reads the real programs now (root tsconfig.json), and those programs include config/.generated/workers-runtime.d.ts. Without it every Workers global is an error type acting as `any`, which is a different lint from the one that passes locally: CI runs lint before typecheck, typecheck was the only thing generating the file, and #709 went red on 6 `error type` findings that no workstation could reproduce. 0.02s warm, 3s on a cold checkout.",
   "comment:check-fast": "Local feedback only: lint, typecheck and test are independent read-only gates, so Bun can run them concurrently. CI keeps them as named sequential steps for legible failures. Do not add build, routes, Lens or perf commands here: several share .build or intentionally run under Node.",
   "devDependencies": {
-    "@cloudflare/config": "0.23.0",
+    "@cloudflare/config": "0.24.0",
     "@oxlint/plugins": "1.87.0",
     "@types/bun": "1.4.2",
     "lightningcss": "1.33.0",
