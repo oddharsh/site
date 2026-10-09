@@ -48,7 +48,9 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
   const inFlight = new Map<string, Promise<Buffer>>();
   // every key this build read or wrote, which prune() never removes
   const used = new Set<string>();
-  const made = enabled ? mkdir(dir, { recursive: true }) : null;
+  // Made on the first write, so a cache that only memoizes or only hits leaves
+  // no mkdir in flight when its caller removes the directory afterward.
+  let made: Promise<unknown> | null = null;
 
   async function read(key: string, ok: (out: Buffer) => boolean): Promise<Buffer | null> {
     const path = `${dir}/${key}`;
@@ -62,7 +64,7 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
   }
 
   async function write(key: string, out: Buffer) {
-    await made;
+    await (made ??= mkdir(dir, { recursive: true }));
     // write then rename, so a build killed mid-write leaves no torn entry
     used.add(key);
     const tmp = `${dir}/${key}.${process.pid}.${writes++}.tmp`;

@@ -2038,7 +2038,7 @@ phase("5c custom properties");
 // The `.src.*` twins are skipped on purpose: they are the readable copy, and
 // `--surface-window` is what makes them worth reading.
 {
-  const { RESERVED, planNames, applyMangle, assertIntegrity, assertNoDynamicPropertyNames } = await import(
+  const { RESERVED, planNames, applyMangle, assertIntegrity, assertNoDynamicPropertyNames, pruneUnread, unresolved } = await import(
     "./lib/mangle-custom-properties.ts"
   );
 
@@ -2053,12 +2053,20 @@ phase("5c custom properties");
     const full = `${OUT}/${rel}`;
     return (await stat(full)).isFile() ? readFile(full, "utf8") : null;
   }));
-  const before = new Map<string, string>();
-  staged.forEach((rel, i) => { const text = texts[i]; if (text !== null) before.set(rel, text); });
+  const staged0 = new Map<string, string>();
+  staged.forEach((rel, i) => { const text = texts[i]; if (text !== null) staged0.set(rel, text); });
 
   // A name assembled at runtime is the one input a find-and-replace cannot
   // follow, so it is a build failure rather than a silent miss.
-  assertNoDynamicPropertyNames(before);
+  assertNoDynamicPropertyNames(staged0);
+
+  // Definitions nothing reads leave the stylesheets first, so they take no
+  // short name either (42 of luna.css's 174 on 2026-10-09, 205 B brotli).
+  // Pruning may never change what dangles: a dropped name was read nowhere.
+  const pruned = pruneUnread(staged0, (rel) => rel.endsWith(".css"));
+  const before = pruned.files;
+  const danglingAt = (files: Map<string, string>) => [...unresolved(files)].sort().join(" ");
+  if (danglingAt(staged0) !== danglingAt(before)) throw new Error("mangle: pruning unread definitions changed the dangling var() set");
 
   const map = planNames(before, SHELL_RANKED);
   const after = new Map<string, string>();
@@ -2068,10 +2076,10 @@ phase("5c custom properties");
   // reporting a clean pass, the same argument as the twin and CSP-hash floors.
   assertIntegrity(before, after, map, 80);
 
-  const changed = [...after].filter(([rel, text]) => text !== before.get(rel));
+  const changed = [...after].filter(([rel, text]) => text !== staged0.get(rel));
   await Promise.all(changed.map(([rel, text]) => writeFile(`${OUT}/${rel}`, text)));
   const touched = changed.length;
-  console.log(`custom properties: ${map.size} renamed across ${touched} staged files (${RESERVED.size} reserved for the DOM calls that name them)`);
+  console.log(`custom properties: ${pruned.dropped.length} unread definitions dropped, ${map.size} renamed across ${touched} staged files (${RESERVED.size} reserved for the DOM calls that name them)`);
 }
 
 phase("5d quiz data");

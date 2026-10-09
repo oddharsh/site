@@ -280,13 +280,16 @@ by renumbering. The long-form history of each one is in git
     by planting a violation in a file only the new list covers. A widened scan
     that reports nothing new looks exactly like one that reads nothing.
 
-56. **A CPU factor per runner model can't see one slow runner.** The CPU
-    sweep scales each GitHub runner's CPU model to the EPYC 7763 by a fitted
-    factor. On 2026-10-09 one EPYC 9V74 read every route 1.27x higher than the
-    model's six other runs. The gate failed six routes on #1273, a PR that
-    changed no Worker byte. Refitting the factor wouldn't have saved it: a
-    factor is a model's usual runner, and this runner was unusual. The control's
-    spread (its IQR) missed it too, at 0.30 ms, because a host that's slow all
-    over reads tight. Its median caught it, 33% over the reference where
-    ordinary runs stay within 16%, so `config/cpu-budget.json` `control` now
-    makes such a run inconclusive.
+56. **Top-level I/O in a lazily imported module works only while wrangler
+    inlines it.** Wrangler ships the Worker as one module. esbuild turns
+    `await import("./x.ts")` into an `__esm` initializer that runs inside the
+    request, so `crypto.getRandomValues`, timers and `fetch` at the module's
+    top level work. The same module runs in global scope when workerd loads
+    it as its own module: `no_bundle`, `find_additional_modules`, a split
+    build, or a test harness with one module per file. There random values
+    and timers throw "Disallowed operation called within global scope" under
+    either module registry; `fetch` throws too under the old registry, and
+    goes out under `new_module_registry`. Under that flag `process.cwd()` reads
+    `/`, where the handler sees `/bundle`. Measured 2026-10-09 on both shapes.
+    Nothing in the Worker lazy-loads today; if something does, keep its top
+    level to definitions and do the I/O in a function the handler calls.

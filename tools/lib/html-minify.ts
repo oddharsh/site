@@ -16,7 +16,12 @@
 //     loses its space); the site's layouts are flex and grid, where that space
 //     never rendered, and minify-html made the same call
 //   - attributes sort (quoted values first, then by name), lose quotes they do
-//     not need, and empty class, id, style, title, name and value attributes go
+//     not need, and empty class, id, style, title, name and value attributes go,
+//     as do empty action, src (off <script>) and meta content, and any value
+//     that equals the attribute's default (DEFAULTS). A boolean loses an empty or
+//     self-named value; a class's spacing and the spaces around a viewport's
+//     commas collapse. contract-the-minifier-keeps-every-page-meaning copies
+//     these rules, so change both together
 //   - end tags the HTML spec lets a parser infer are omitted (</p> before a
 //     block, </li> before <li>, </td>, </tr>, </option>, </body>, </html> ...)
 //   - named and numeric references decode to the characters they name, except
