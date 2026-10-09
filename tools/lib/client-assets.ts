@@ -26,7 +26,7 @@
 // /hoist.js in prose and in <code>, and a bare-path match would rewrite them.
 export type Loader =
   // src="/x.js" or href="/x.css" in markup, quoted, backslash-quoted or unquoted
-  // (minify-html unquotes). `fragment` keeps a #fragment (the icon sprite).
+  // (the HTML minifier unquotes). `fragment` keeps a #fragment (the icon sprite).
   | { via: "attr"; attr: "src" | "href"; fragment?: true }
   // import("/x.js"). `query` is a literal suffix the source carries ("?v=1");
   // `also` lists other spellings of the same specifier ("./pretext.lib.js").
@@ -356,7 +356,7 @@ export function loaderRewrites(a: ClientAsset, loader: Loader, to: string): Arra
   switch (loader.via) {
     case "attr": {
       // One pattern for quoted "x" AND backslash-escaped \"x\" (a Worker module
-      // building markup in an escaped string), a second for minify-html's
+      // building markup in an escaped string), a second for the HTML minifier's
       // unquoted form.
       const frag = loader.fragment ? "(#[\\w-]+)" : "";
       return [

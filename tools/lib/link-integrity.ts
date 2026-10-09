@@ -80,7 +80,7 @@ export function makeResolver({ files, routeKeys, allow, surfaces }: {
  * descriptors rather than swallowed whole. That is strictly more coverage than
  * the regex had, and all of it is now deliberate.
  *
- * The reason to be rid of the pattern stands: minify-html UNQUOTES every
+ * The reason to be rid of the pattern stands: the HTML minifier UNQUOTES every
  * attribute it can, and the first draft written against `href="..."` read 33
  * refs where there were 2645. A parser knows all three quoting forms because it
  * is a parser rather than a description of one.

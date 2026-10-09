@@ -5,7 +5,7 @@
 //
 // THE PARSER IS THE POINT. This was a hand-rolled tag walker inside build.ts,
 // correct only because it had been patched three times against the served bytes.
-// minify-html unquotes attributes and decodes character references inside quoted
+// the HTML minifier unquotes attributes and decodes character references inside quoted
 // values, so a scanner written against the AUTHORED HTML reads the MINIFIED HTML
 // wrong, and this build has now caught three naive scanners on its own output: a
 // `<script` search that read /garage/horizon's XSS demo payload as two real
@@ -34,7 +34,7 @@ const HANDLER_ATTR = /^on[a-z]+$/;
 // The browser resolves character references in an attribute value exactly once on
 // its way to the srcdoc document's source text, and the hash is taken over THAT
 // text. HTMLRewriter hands back the raw attribute, so the decode still belongs
-// here. In practice the staged copy already carries raw `<`, because minify-html
+// here. In practice the staged copy already carries raw `<`, because the HTML minifier
 // decodes entities inside quoted attribute values (gotcha 20a), which makes this
 // a no-op today and correct if that ever changes.
 const NAMED_REFS: Record<string, string> = { lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'", nbsp: "\u00a0", amp: "&" };

@@ -28,6 +28,8 @@ done
 
 [ -f "$KEYS_FILE" ] || { echo "error: keys file not found: $KEYS_FILE" >&2; exit 1; }
 mkdir -p "$DEST_DIR"
+# Beside the destination, never inside it: see the JPEG XL note below.
+R2_DIR="${DEST_DIR%/}.r2"
 
 NORMALIZED="$(mktemp)"
 STEMS_FILE="$(mktemp)"
@@ -72,18 +74,44 @@ while IFS= read -r key || [ -n "$key" ]; do
     "${ORIGIN%/}/images/full/$encoded" \
     --output "$output"
 
-  # A JPEG XL original is a lossless transcode of the JPEG it replaced, so djxl
-  # gives back that JPEG byte for byte and every tool downstream reads it as
-  # before: zenc rebuilds identical tiers, exif-sooc the same metadata. The
-  # .jxl stays beside it, where photo-inputs.ts finds the R2 key and size an
-  # index entry records; exif-sooc skips it.
+  # Every original is JPEG XL, in one of two kinds (pipeline-json.ts jxl-kind
+  # reads which from its boxes; djxl cannot, because asked for a .jpg it
+  # rebuilds a transcode and silently ENCODES a fresh JPEG from anything else):
+  #
+  #   transcode  a JPEG losslessly repacked. djxl gives back that JPEG byte for
+  #              byte, so every tool downstream reads it as before: zenc
+  #              rebuilds identical tiers, exif-sooc the same metadata. The
+  #              .jxl moves to $R2_DIR, OUTSIDE the scanned folder: its
+  #              metadata is Brotli-compressed, and exif-sooc 0.4.0, which reads
+  #              JPEG XL, would otherwise read the photo twice and fail once.
+  #   direct     encoded from a HIF's pixels (hif-archive.ts), so there is no
+  #              JPEG to give back. djxl decodes it to a 16-bit PNG for zenc,
+  #              orientation applied, and the .jxl stays in the folder as the
+  #              metadata source: it carries the HIF's EXIF, uncompressed.
+  #
+  # photo-inputs.ts finds the .jxl in either place for the R2 key and size an
+  # index entry records.
   pixels="$output"
   case "$key" in
     *.jxl)
-      pixels="$DEST_DIR/$stem.jpg"
-      if ! command -v djxl >/dev/null 2>&1 || ! djxl "$output" "$pixels" >/dev/null 2>&1; then
-        echo "error: could not rebuild the JPEG inside $key (djxl, brew install jpeg-xl)" >&2
-        exit 1
+      command -v djxl >/dev/null 2>&1 || { echo "error: djxl not found (brew install jpeg-xl)" >&2; exit 1; }
+      kind="$(bun "$SCRIPT_DIR/pipeline-json.ts" jxl-kind "$output")" || { echo "error: $key is not a readable JPEG XL" >&2; exit 1; }
+      if [ "$kind" = transcode ]; then
+        pixels="$DEST_DIR/$stem.jpg"
+        if ! djxl "$output" "$pixels" >/dev/null 2>&1; then
+          echo "error: could not rebuild the JPEG inside $key" >&2
+          exit 1
+        fi
+        mkdir -p "$R2_DIR"
+        mv "$output" "$R2_DIR/$key"
+        output="$R2_DIR/$key"
+      else
+        if ! djxl "$output" "$DEST_DIR/$stem.png" --bits_per_sample=16 >/dev/null 2>&1; then
+          echo "error: could not decode $key" >&2
+          exit 1
+        fi
+        # the metadata lives in the .jxl; the PNG carries pixels only
+        pixels="$output"
       fi ;;
   esac
 

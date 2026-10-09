@@ -24,7 +24,7 @@ export function lensChips() {
   const src = readFileSync(SHELL, "utf8");
   const urls = [];
   // Quote-aware on purpose: the source is a JS template literal, so the
-  // attributes are quoted here even though the SERVED bytes are not (minify-html
+  // attributes are quoted here even though the SERVED bytes are not (the HTML minifier
   // unquotes them). This reads the source, never the build output.
   for (const m of src.matchAll(/class="lx-chip"\s+data-url="([^"]+)"/g)) urls.push(m[1]);
   if (urls.length < FLOOR) {

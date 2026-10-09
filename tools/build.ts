@@ -42,7 +42,6 @@ import { promisify } from "node:util";
 import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import { siteConfig } from "./lib/site-config.ts";
 import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision, type ServedTreePlan } from "./lib/served-tree.ts";
-import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
@@ -58,6 +57,7 @@ import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
 import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
+import { minifyHtml } from "./lib/html-minify.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 import { phaseClock, phaseSummary } from "./lib/build-phases.ts";
 import { cloneTree } from "./lib/clone-tree.ts";
@@ -178,6 +178,16 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
   }
   return out;
 };
+// The two roots SERVED_SOURCES leaves out: client islands and stylesheets.
+// Recursive, because src/client/garage/ and src/client/lwe/ serve at /garage/
+// and /lwe/. Every tripwire that reads these roots reads them through here;
+// until 2026-10-08 the taste scan never named them at all, so a web font in
+// prose.css built clean, and the flat readdirs elsewhere missed both subtrees
+// (gotcha 55).
+const shellFiles = async (): Promise<string[]> => [
+  ...(await readdir("src/client", { recursive: true })).filter((r) => r.endsWith(".js")).map((r) => `src/client/${r}`),
+  ...(await readdir("src/styles", { recursive: true })).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
+];
 
 // One array-of-strings, read out of a wrangler config's source text by key.
 //
@@ -224,7 +234,17 @@ const siteConfigText = async (): Promise<string> => JSON.stringify(await siteCon
 // duplicated text only WARN (exit 0), because a false positive on the one
 // deploy path would get the whole guard commented out.
 async function checkInvariants() {
-  const read = (p) => readFile(p, "utf8");
+  // Every check here only reads, so a file is read once however many checks
+  // look at it: #3, #9 and #10 all walk the served pages, and #9 and #10 the
+  // Worker. A failed read is remembered too, and still throws for each caller.
+  const reads = new Map<string, Promise<string>>();
+  const read = (p: string): Promise<string> => {
+    let text = reads.get(p);
+    if (!text) reads.set(p, text = readFile(p, "utf8"));
+    return text;
+  };
+  // A loop's files read concurrently, in its own order; null where a read fails.
+  const readAll = (files: string[]): Promise<(string | null)[]> => Promise.all(files.map((f) => read(f).catch(() => null)));
   // Annotated because a bare `[]` infers never[], which made EVERY `.push(msg)`
   // in this function a TS2345 — 87 of the file's 91 baseline diagnostics, all of
   // them noise sitting on top of the one check that blocks the deploy.
@@ -288,12 +308,13 @@ async function checkInvariants() {
   const VT_DIAGNOSTIC = /^garage\/vt-(check|b)\.html$/;
   const vtSources = [
     ...(await servedFiles((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r))),
-    ...(await readdir("src/client")).filter((r) => r.endsWith(".js")).map((r) => `src/client/${r}`),
-    ...(await readdir("src/styles")).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
+    ...(await shellFiles()),
     "cal/src/templates.ts", "serendipity/serendipity.ts", "pipelines/lwe/generate.mjs",
   ];
-  for (const f of vtSources) {
-    let s; try { s = await read(f); } catch { continue; }
+  const vtTexts = await readAll(vtSources);
+  for (const [i, f] of vtSources.entries()) {
+    const s = vtTexts[i];
+    if (s === null) continue;
     // Stripping comments only removes text, so a file that never spells
     // "@view-transition" cannot match below, and most files skip the strip:
     // the line-comment regex alone was 53 ms of this phase on 2026-10-08.
@@ -529,8 +550,9 @@ async function checkInvariants() {
     // that emits that text. The old walk decoded EVERY served byte as UTF-8,
     // including all content-addressed AVIF/JPEG tiers and every OG PNG, while
     // missing most of src/worker even though that is where generated-page CSS
-    // lives. Keep active textual assets plus the complete three Worker program
-    // trees: less work, and coverage now follows the actual authors.
+    // lives. Keep active textual assets, the client and stylesheet roots (where
+    // luna.css lives), and the complete three Worker program trees: less work,
+    // and coverage now follows the actual authors.
     const activeText = (rel: string): boolean =>
       rel === "_headers" || /\.(?:[cm]?[jt]sx?|css|html?|xhtml|xml|svg)$/i.test(rel);
     const programFiles = async (root: string): Promise<string[]> => (await readdir(root, { recursive: true }))
@@ -538,6 +560,7 @@ async function checkInvariants() {
       .map((rel) => `${root}/${rel}`);
     const served = [
       ...await servedFiles(activeText),
+      ...await shellFiles(),
       ...await programFiles("src/worker"),
       ...await programFiles("cal/src"),
       ...await programFiles("serendipity"),
@@ -546,7 +569,7 @@ async function checkInvariants() {
     // /^www\/(garage|lwe)\// until 2026-08-23, and www/ stopped existing on
     // 2026-08-18, so the exemption had been silently false for every file and
     // the build printed 14 taste warnings on demo pages on every single run.
-    const isDemo = (p) => /^(?:public|src\/pages)\/(?:garage|lwe)\//.test(p);
+    const isDemo = (p) => /^(?:public|src\/pages|src\/client)\/(?:garage|lwe)\//.test(p);
     // Blank block comments before pattern-matching (luna.css discusses @font-face
     // in prose twice, and a guard that fires on its own documentation gets
     // muted). BLANK rather than delete: same length, newlines kept, so a match
@@ -554,8 +577,10 @@ async function checkInvariants() {
     // traced back to the source line and checked for a taste-ok marker.
     const blank = (s) => s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
 
-    for (const f of served) {
-      let raw; try { raw = await read(f); } catch { continue; }
+    const servedTexts = await readAll(served);
+    for (const [i, f] of served.entries()) {
+      const raw = servedTexts[i];
+      if (raw === null) continue;
       const src = blank(raw);
       // split on first use: only a finding asks which line it sits on
       let lines: string[] | null = null;
@@ -648,16 +673,19 @@ async function checkInvariants() {
       (await readdir(dir, { withFileTypes: true })).filter((e) => e.isFile() && match.test(e.name)).map((e) => `${dir}/${e.name}`);
     const files = [
       ...await collect("src/pages", /\.html$/, /^(i|images|og|cars|node_modules)$/),
-      ...await flat("src/client", /\.js$/),
-      ...await flat("src/styles", /\.css$/),
+      ...await shellFiles(),
       ...await collect("src/worker", /\.ts$/),
       ...await flat("cal/src", /\.ts$/),
       ...await flat("serendipity", /\.js$/),
     ];
     const MARKER = /^(<{7} |={7}$|>{7} )/;
-    for (const f of files) {
-      let src; try { src = await read(f); } catch { continue; }
+    const conflictTexts = await readAll(files);
+    for (const [i0, f] of files.entries()) {
+      const src = conflictTexts[i0];
+      if (src === null) continue;
       conflictScanned++;
+      // a marker line holds one of these, so a file with none cannot match
+      if (!src.includes("<<<<<<< ") && !src.includes("=======") && !src.includes(">>>>>>> ")) continue;
       const lines = src.split("\n");
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].replace(/\r$/, "");
@@ -1057,58 +1085,39 @@ const minifyJavaScript = (filename, sourceText, options: typeof OXC_MINIFY_OPTIO
 // cannot pass one CSS check and fail the other. See that file for why.
 const minifyCss = (filename, sourceText) => parseCss(filename, sourceText, { minify: true });
 
-// Homepage HTML uses minify-html for structure only; inline CSS/JS are passed
-// through the same Lightning CSS and Oxc settings used everywhere else in the
-// build. JSON-LD, speculation rules and the understanding-check payloads remain
-// data, not JavaScript: they go through lib/json-script.ts, which strips
+// HTML minification is structure only (lib/html-minify.ts); inline CSS/JS are
+// passed through the same Lightning CSS and Oxc settings used everywhere else in
+// the build. JSON-LD, speculation rules and the understanding-check payloads
+// remain data, not JavaScript: they go through lib/json-script.ts, which strips
 // whitespace and guards the two byte sequences that can end a script element.
-const HTML_MINIFY_CFG = {
-  allow_noncompliant_unquoted_attribute_values: false,
-  allow_optimal_entities: false,
-  allow_removing_spaces_between_attributes: false,
-  // Measured 2026-09-02 over all 54 staged documents: this is the ONLY html
-  // option that helps after brotli, and it saves 1,192 B (22 B per page). It
-  // was declined then because it re-mints every page and page dictionary; this
-  // change is already paying that cost, so it rides along.
-  keep_closing_tags: false,
-  keep_comments: false,
-  keep_html_and_head_opening_tags: true,
-  keep_input_type_text_attr: true,
-  keep_ssi_comments: true,
-  minify_css: false,
-  minify_doctype: false,
-  minify_js: false,
-  // The template-passthrough pair, both at the library default. They are here
-  // so the 15 options @minify-html/node 0.18.1 declares are 15 DECISIONS: this
-  // block enumerated 13 and inherited 2, and an inherited default is a byte
-  // change nobody reviews the day upstream flips one. Nothing here authors in
-  // a `{{ }}` or `<% %>` template language, and /garage/horizon ships hostile
-  // demo payloads as content, so a passthrough that swallowed source until a
-  // matching close brace would be a parser this build cannot see into.
-  // Verified as a no-op: 1614 staged files, byte-identical, measured
-  // 2026-08-27. A moved byte would re-mint an `/a/` URL (gotcha 35).
-  preserve_brace_template_syntax: false,
-  preserve_chevron_percent_template_syntax: false,
-  remove_bangs: false,
-  remove_processing_instructions: false,
-};
+//
+// Until 2026-10-07 this was @minify-html/node 0.18.1 under a 15-option config,
+// each option a recorded decision. lib/html-minify.ts reproduces that config's
+// output byte for byte on every staged page but one, and its header lists the
+// choices: closing tags omitted where a parser infers them (the 2026-09-02
+// measurement found that the one option that helps after brotli, 1,192 B
+// across 54 documents), comments dropped except SSI markers, the html and head
+// opening tags kept, no template-syntax passthrough. The one page it differs on
+// is /garage/horizon, where minify-html broke `hidden="until-found"`.
 const RAW_HTML_TAGS = new Set(["pre", "script", "style", "textarea"]);
 
 // Step 7b's three minifier calls go through the build cache's memo
 // (tools/lib/build-cache.ts): every inline <style> through Lightning CSS, every
-// inline <script> through Oxc, every document through minify-html. They were
+// inline <script> through Oxc, every document through lib/html-minify.ts. They were
 // 96 of the step's 160 ms on 2026-10-08, re-run on about 736 KB of inline code
 // that rarely changes between builds. A minified block cannot be decoded back
 // to check it, so each name carries everything its output depends on besides
 // the input: the installed version, the options, and the repo code around the
-// call (css-parse.ts and the custom media it inlines, the wrappers here). Within
+// call (css-parse.ts and the custom media it inlines, the wrappers here). The
+// document minifier is this repo's own code with no imports, so its key is its
+// source. Within
 // one build, a block that repeats across pages minifies once, cache on or off:
 // 211 inline scripts are 67 distinct blocks.
 const toolVersion = (pkg: string): string => `${pkg}@${JSON.parse(readFileSync(Bun.resolveSync(`${pkg}/package.json`, import.meta.dir), "utf8")).version}`;
 const digestFile = (path: string): string => createHash("sha256").update(readFileSync(path)).digest("hex");
 const INLINE_CSS = `${toolVersion("lightningcss")} css-parse ${digestFile("tools/lib/css-parse.ts")} custom-media ${digestFile("src/styles/custom-media.css")} ${minifyCss.toString()}`;
 const INLINE_JS = `${toolVersion("oxc-minify")} ${JSON.stringify(OXC_MINIFY_OPTIONS)} ${minifyJavaScript.toString()}`;
-const DOCUMENT = `${toolVersion("@minify-html/node")} ${JSON.stringify(HTML_MINIFY_CFG)}`;
+const DOCUMENT = `html-minify ${digestFile("tools/lib/html-minify.ts")}`;
 
 const findHtmlTagEnd = (source, start) => {
   let quote = "";
@@ -1204,7 +1213,7 @@ const minifiedPage = (staged, rel) => {
   const twinRel = rel.replace(/\.html$/, ".src.html");
   const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
   const body = transformInlineHtmlBlocks(staged, `public/${rel}`);
-  return banner + cache.memo(DOCUMENT, [body], () => minifyHtml.minify(Buffer.from(body), HTML_MINIFY_CFG).toString());
+  return banner + cache.memo(DOCUMENT, [body], () => minifyHtml(body));
 };
 
 const inlineProbe = transformInlineHtmlBlocks(
@@ -1860,7 +1869,7 @@ phase("2 homepage");
   const srcPath = "/index.src.html";
   const banner = `<!-- minified at deploy; readable source: ${srcPath} -->\n`;
   const inlineMinified = transformInlineHtmlBlocks(staged, "src/pages/index.html");
-  const body = minifyHtml.minify(Buffer.from(inlineMinified), HTML_MINIFY_CFG).toString();
+  const body = minifyHtml(inlineMinified);
   const min = banner + body;
   for (const [label, marker] of HTML_MARKERS) {
     if (!marker.test(min)) throw new Error("index.html: HTML minifier lost required marker " + label);
@@ -2529,7 +2538,7 @@ phase("7b minify pages");
     .sort();
 
   // The understanding check's payload left the document at 5d, and what stays is
-  // an empty luq-data element whose data-src names the file. minify-html walks
+  // an empty luq-data element whose data-src names the file. The HTML minifier walks
   // the whole document and unquotes attributes, so prove the reference survived
   // with its URL intact, and that no body came back, rather than assume either.
   // A lost data-src is a quiz that silently never appears.
@@ -2706,20 +2715,28 @@ phase("7b paths");
 
   const cited = new Map<string, Set<string>>();
   let scanned = 0;
+  // Read concurrently, scanned in listing order. One file at a time, the reads
+  // were 61 to 74 ms of this step's 77 on 2026-10-08 (698 files, 11.8 MB); the
+  // scanner itself is about 5. A directory entry fails its read and is skipped,
+  // as before. The report sorts what it finds, so order cannot reach it.
+  const listed: string[] = [];
   for (const root of ["public", "src"]) {
     for (const rel of await readdir(`${OUT}/${root}`, { recursive: true })) {
-      if (BINARY.test(rel)) continue;
-      let body: string;
-      try { body = await readFile(`${OUT}/${root}/${rel}`, "utf8"); } catch { continue; }
-      scanned++;
-      for (const token of new Set(repoPathTokens(body))) {
-        const path = token.replace(/[,;:)\]]+$/, "").replace(/\.$/, "");
-        if (!NAMES_A_FILE.test(path)) continue;
-        if (ELSEWHERE.some((r) => r.test(path))) continue;
-        if (existsSync(path)) continue;
-        if (!cited.has(path)) cited.set(path, new Set());
-        cited.get(path)!.add(`${root}/${rel}`);
-      }
+      if (!BINARY.test(rel)) listed.push(`${root}/${rel}`);
+    }
+  }
+  const bodies = await Promise.all(listed.map((file) => readFile(`${OUT}/${file}`, "utf8").catch(() => null)));
+  for (const [i, file] of listed.entries()) {
+    const body = bodies[i];
+    if (body === null) continue;
+    scanned++;
+    for (const token of new Set(repoPathTokens(body))) {
+      const path = token.replace(/[,;:)\]]+$/, "").replace(/\.$/, "");
+      if (!NAMES_A_FILE.test(path)) continue;
+      if (ELSEWHERE.some((r) => r.test(path))) continue;
+      if (existsSync(path)) continue;
+      if (!cited.has(path)) cited.set(path, new Set());
+      cited.get(path)!.add(file);
     }
   }
 

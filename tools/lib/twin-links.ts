@@ -26,7 +26,7 @@ export function twinHref(route: string): string {
 }
 
 // Attribute values arrive quoted from the renderers and unquoted after
-// minify-html, so both are read.
+// the HTML minifier, so both are read.
 const attr = (tag: string, name: string): string | null => {
   const m = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(tag);
   return m ? (m[1] ?? m[2] ?? m[3] ?? "") : null;

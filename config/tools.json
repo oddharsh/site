@@ -43,7 +43,7 @@
     {
       "bin": "exif-sooc",
       "install": "cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc",
-      "why": "every EXIF read and write in the pipeline. It emits metadata.json's record shape directly and owns the merge, which retired the 50-line jq reshape and build-recipes.py, and on 2026-08-14 it took the last of exiftool's jobs too: orientation reads, -all= strips and -TagsFromFile copies, in ExifTool's own flag spellings. Pinned at 0.3.0 by the guards in the writing scripts: 0.1.0 could not write, and its -all= truncated progressive JPEGs at the first scan, which is every JPEG this pipeline produces; 0.2.0's -TagsFromFile carried a HEIF's EXIF and silently dropped its XMP item, the only place an X-T50 records an in-camera star rating (oddharsh/exif-sooc#3)",
+      "why": "every EXIF read and write in the pipeline. It emits metadata.json's record shape directly and owns the merge, which retired the 50-line jq reshape and build-recipes.py, and on 2026-08-14 it took the last of exiftool's jobs too: orientation reads, -all= strips and -TagsFromFile copies, in ExifTool's own flag spellings. Pinned at 0.4.0 by the guards in the writing scripts: 0.1.0 could not write, and its -all= truncated progressive JPEGs at the first scan, which is every JPEG this pipeline produces; 0.2.0's -TagsFromFile carried a HEIF's EXIF and silently dropped its XMP item, the only place an X-T50 records an in-camera star rating (oddharsh/exif-sooc#3); and before 0.4.0 it could not read or write a JPEG XL, which a HIF photo's archive is since 2026-10 and which needs the HIF's own EXIF copied on, because sips keeps 40 of its 75 tags and none of the Fujifilm maker notes (oddharsh/exif-sooc#4)",
       "required_by": [
         "tools/photos/add-photos.sh",
         "tools/photos/download-remote-photos.sh",
@@ -51,16 +51,17 @@
         "tools/photos/extract-photo-metadata.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
-        "tools/photos/require-exif-sooc.sh",
-        "tools/photos/reencode-thumbnails.sh"
+        "tools/photos/hif-archive.ts",
+        "tools/photos/reencode-thumbnails.sh",
+        "tools/photos/require-exif-sooc.sh"
       ],
-      "min_version": "0.3.0",
+      "min_version": "0.4.0",
       "version": {
         "flag": "--version",
         "match": "exif-sooc (\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
-      "recorded": "0.3.0"
+      "recorded": "0.4.0"
     },
     {
       "bin": "sips",
@@ -71,6 +72,7 @@
         "tools/photos/export-for-instagram.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/hif-archive.ts",
         "tools/photos/reencode-thumbnails.sh"
       ],
       "version": {
@@ -201,6 +203,22 @@
       "recorded": "timbrado 0.2.0"
     },
     {
+      "bin": "djpeg",
+      "install": "brew install jpeg-turbo",
+      "why": "decodes the JPEG a HIF photo's archive has to beat, for scoring. It ignores EXIF orientation, so the bar is compared in the same sensor orientation as the HIF's own decode (hif-archive.ts)",
+      "required_by": [
+        "tools/photos/add-photos.sh",
+        "tools/photos/hif-archive.ts"
+      ],
+      "version": {
+        "flag": "-version",
+        "match": "libjpeg-turbo version (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "recorded": "3.2.0",
+      "bytes_why": "Decode only, for a score. Nothing it writes ships."
+    },
+    {
       "bin": "jpegtran",
       "path": "/opt/homebrew/opt/mozjpeg/bin/jpegtran",
       "install": "brew install mozjpeg",
@@ -254,6 +272,7 @@
       "why": "each full-resolution original, a lossless JPEG XL transcode (--lossless_jpeg=1 -e 9) of the JPEG it replaces in R2",
       "required_by": [
         "tools/photos/add-photos.sh",
+        "tools/photos/hif-archive.ts",
         "tools/photos/migrate-originals.ts"
       ],
       "version": {
@@ -270,6 +289,7 @@
       "required_by": [
         "tools/photos/add-photos.sh",
         "tools/photos/download-remote-photos.sh",
+        "tools/photos/hif-archive.ts",
         "tools/photos/migrate-originals.ts"
       ],
       "version": {
@@ -313,9 +333,11 @@
     {
       "bin": "ssimulacra2",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
-      "why": "the perceptual metric the Instagram export searches quality against",
+      "why": "the perceptual metric the Instagram export searches quality against; and, with butteraugli, the bar a HIF photo's JPEG XL archive has to clear (hif-archive.ts)",
       "required_by": [
-        "tools/photos/export-for-instagram.sh"
+        "tools/photos/add-photos.sh",
+        "tools/photos/export-for-instagram.sh",
+        "tools/photos/hif-archive.ts"
       ],
       "version": {
         "reports": false,
@@ -326,9 +348,11 @@
     {
       "bin": "butteraugli_main",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
-      "why": "the second metric bounding that same search",
+      "why": "the second metric bounding that same search; and the second half of the HIF archive's bar, the metric that binds (hif-archive.ts)",
       "required_by": [
-        "tools/photos/export-for-instagram.sh"
+        "tools/photos/add-photos.sh",
+        "tools/photos/export-for-instagram.sh",
+        "tools/photos/hif-archive.ts"
       ],
       "version": {
         "reports": false,

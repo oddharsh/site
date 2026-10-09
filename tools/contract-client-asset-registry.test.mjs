@@ -49,7 +49,7 @@ const FILES = {
   "public/leaf.js": "/*! leaf */export const leaf=1;",
   "public/sub/island.js": '/*! island */import("/leaf.js").then(()=>{});',
   "public/sheet.css": "/*! sheet */.a{color:red}",
-  // quoted, unquoted (minify-html) and an import() in an inline script, plus a
+  // quoted, unquoted (the HTML minifier) and an import() in an inline script, plus a
   // PROSE mention of each path that must survive untouched.
   "public/index.html": '<link rel=stylesheet href=/sheet.css><script src="/sub/island.js" defer></script><script type=module>import("/leaf.js")</script><p>the file <code>/leaf.js</code> and "/sheet.css" in prose</p>',
   "public/index.src.html": '<link rel="stylesheet" href="/sheet.css"><script src="/sub/island.js"></script>',

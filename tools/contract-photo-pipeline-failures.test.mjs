@@ -60,7 +60,7 @@ async function fixture(run) {
     await put("exports/frame.jpg", "previous export");
     await command("bin/exif-sooc", `
 case "$1" in
-  --version) echo version >> "$TRACE"; printf '%s\\n' "\${SOOC_VERSION:-exif-sooc 0.3.0}"; exit "\${SOOC_STATUS:-0}" ;;
+  --version) echo version >> "$TRACE"; printf '%s\\n' "\${SOOC_VERSION:-exif-sooc 0.4.0}"; exit "\${SOOC_STATUS:-0}" ;;
   -s) echo "orientation $*" >> "$TRACE"; echo 1 ;;
   *) echo "metadata $*" >> "$TRACE"
      [ "\${FAIL_METADATA:-0}" != 1 ] || { echo "metadata write failed" >&2; exit 7; }
@@ -110,8 +110,13 @@ printf encoded > "$last"`);
     // scan-order twins with, which have no geometry in them.
     await command("mozjpeg/bin/jpegtran", 'echo "jpegtran $*" >> "$TRACE"; case "$*" in *-revert*) printf encoded; exit 0 ;; esac; exit 1');
     await command("bin/ffmpeg", 'for last in "$@"; do :; done; printf encoded > "$last"');
-    await command("bin/ssimulacra2", "echo 95");
-    await command("bin/butteraugli_main", "echo 0.5");
+    // The metrics answer per file so a test can make a HIF's direct encode
+    // beat its JPEG bar (CAND_S2 above 95, CAND_BA below 0.5) or not. hif-archive.ts
+    // scores its candidates as cand.png; the bar is base.ppm.
+    await command("bin/ssimulacra2", 'case "$2" in *cand*) echo "${CAND_S2:-95}" ;; *) echo 95 ;; esac');
+    await command("bin/butteraugli_main", 'case "$2" in *cand*) echo "${CAND_BA:-0.5}" ;; *) echo 0.5 ;; esac');
+    // djpeg decodes the bar for hif-archive.ts; a PPM header is all it reads.
+    await command("bin/djpeg", 'while [ "$1" != -outfile ]; do shift; done; printf "P6\n400 266\n255\n" > "$2"');
     // BSD stat is used by these macOS scripts; keep the control portable in CI.
     await command("bin/stat", 'test "$1" = -f%z; test -f "$2"; echo 7');
     await command("bin/cargo", 'echo cargo >> "$TRACE"');
@@ -141,7 +146,7 @@ for (const { file, args, status } of cases) {
     await fixture(async ({ put, read, shell }) => {
       const refused = shell(file, args, { SOOC_VERSION: "exif-sooc 0.1.0" });
       assert.equal(refused.status, 1, refused.stderr);
-      assert.match(refused.stderr, /older than 0\.3\.0/);
+      assert.match(refused.stderr, /older than 0\.4\.0/);
       assert.doesNotMatch(await read("trace"), /sips|zenc|metadata|downstream|upload/);
       assert.equal(await read("public/garage/enc/c-png.png"), "published color fixture");
 
@@ -216,13 +221,14 @@ test("ingest preserves previous tiers on failure and rebuilds an incomplete cach
 
 test("the shared EXIF guard requires a successful, exact version report", async () => {
   await fixture(async ({ shell }) => {
-    for (const version of ["exif-sooc 0.3.0", "exif-sooc 0.10.0", "exif-sooc 1.0.0"]) {
+    for (const version of ["exif-sooc 0.4.0", "exif-sooc 0.10.0", "exif-sooc 1.0.0"]) {
       const result = shell("require-exif-sooc.sh", [], { SOOC_VERSION: version });
       assert.equal(result.status, 0, result.stderr);
     }
     for (const [version, status] of [
       ["exif-sooc 0.1.9", "0"], ["exif-sooc 0.2.0", "0"], ["exif-sooc 0.2.9", "0"],
-      ["exif-sooc 0.3.0", "9"],
+      ["exif-sooc 0.3.0", "0"], ["exif-sooc 0.3.9", "0"],
+      ["exif-sooc 0.4.0", "9"],
       ["exif-sooc 1..0", "0"], ["exif-sooc 2", "0"], ["exif-sooc 2.0.0.0", "0"],
       ["unknown 2.0.0", "0"], ["exif-sooc 2.0.0\nwarning", "0"], ["garbled", "0"],
     ]) {
@@ -250,11 +256,11 @@ test("tools:check still refuses missing or contradictory minimum-version guards"
     assert.equal(good.status, 0, good.stderr);
     const file = "tools/photos/require-exif-sooc.sh";
     const guard = await read(file);
-    await put(file, guard.replace("EXIF_SOOC_MIN=0.3.0", "EXIF_SOOC_MIN=0.1.0"));
+    await put(file, guard.replace("EXIF_SOOC_MIN=0.4.0", "EXIF_SOOC_MIN=0.1.0"));
     const mismatch = cli();
     assert.equal(mismatch.status, 1, mismatch.stderr);
-    assert.match(mismatch.stderr, /floors exif-sooc at 0\.1\.0 while config\/tools.json declares 0\.3\.0/);
-    await put(file, guard.replace("EXIF_SOOC_MIN=0.3.0", ""));
+    assert.match(mismatch.stderr, /floors exif-sooc at 0\.1\.0 while config\/tools.json declares 0\.4\.0/);
+    await put(file, guard.replace("EXIF_SOOC_MIN=0.4.0", ""));
     const missing = cli();
     assert.equal(missing.status, 1, missing.stderr);
     assert.match(missing.stderr, /minimum-version scanner matched 0 guards/);
@@ -403,6 +409,35 @@ test("a JPEG XL original that does not rebuild the prepared JPEG is never upload
   });
 });
 
+// A HIF photo's archive is encoded from the HIF's own pixels when that beats
+// the JPEG ingest prepared on both metrics, with the HIF's EXIF copied on
+// (sips drops every Fujifilm maker note), and is that JPEG repacked when it
+// does not. A JPEG photo is always the repack: it has no better source.
+test("a HIF photo's archive is its own pixels when they beat the JPEG bar, and the repacked JPEG when not", async () => {
+  await uploadFixture(async ({ root, put, read, ingest, uploads }) => {
+    await put("source/companion.HIF", "HEIF original");
+    const win = { CAND_S2: "96", CAND_BA: "0.4" };
+    const direct = ingest(["source"], win);
+    assert.equal(direct.status, 23, direct.stderr + direct.stdout);
+    const sent = Object.fromEntries((await uploads()).filter((r) => r.event === "start").map((r) => [r.key, r.body]));
+    // sips's PNG of the HIF ("encoded") went through cjxl, not the JPEG bar
+    assert.equal(sent["aadhar-photos/companion.jxl"], "jxl:encoded");
+    assert.equal(sent["aadhar-photos/frame.jxl"], "jxl:progressive", "a JPEG source is repacked whatever the metrics say");
+    // the HIF's EXIF goes onto the .jxl (phase 2 also copies it onto the JPEG bar)
+    assert.match(await read("trace"), new RegExp(`metadata -TagsFromFile ${root}/source/companion\\.HIF -all:all -overwrite_original \\S+\\.jxl`));
+    // Control: a candidate that wins only one metric is no win, so the HIF
+    // photo falls back to the repack.
+    for (const half of [{ CAND_S2: "96" }, { CAND_BA: "0.4" }]) {
+      await put("uploads", ""); await put("trace", "");
+      const lost = ingest(["source/companion.HIF"], half);
+      assert.equal(lost.status, 23, lost.stderr + lost.stdout);
+      assert.deepEqual((await uploads()).filter((r) => r.event === "start").map((r) => [r.key, r.body]),
+        [["aadhar-photos/companion.jxl", "jxl:progressive"]], JSON.stringify(half));
+      assert.doesNotMatch(await read("trace"), /-overwrite_original \S+\.jxl/);
+    }
+  });
+});
+
 test("upload batching stays at four regardless of encoder concurrency", async () => {
   await uploadFixture(async ({ put, ingest, uploads }) => {
     for (let i = 0; i < 8; i++) await put(`source/extra ${i}.JPG`, `source ${i}`);
@@ -533,6 +568,42 @@ test("remote ingest of a JPEG XL original records the .jxl key and size, not the
     assert.deepEqual(await uploads(), []);
     assert.deepEqual(JSON.parse(await read("src/worker/photo-index.json")).Moved,
       { full: "Moved.jxl", jpeg: "Moved.JPG", size: 5, uploaded: "2026-07-27T00:00:00.000Z" });
+  });
+});
+
+// The remote downloader meets two kinds of JPEG XL original. A transcode
+// rebuilds its JPEG, and the .jxl must leave the scanned folder: its metadata
+// is Brotli-compressed, and exif-sooc 0.4.0 reads .jxl, so beside the JPEG it
+// would be a second, failing read of the same photo. A HIF photo's direct
+// encode has no JPEG inside: it decodes to a 16-bit PNG and the .jxl stays,
+// as the only copy of the HIF's EXIF.
+test("the remote downloader rebuilds a transcode's JPEG and decodes a direct archive, keeping only the latter's .jxl in the folder", async () => {
+  await fixture(async ({ root, put, command, shell, read }) => {
+    const box = (kind, body) => { const b = Buffer.alloc(8); b.writeUInt32BE(body.length + 8); b.write(kind, 4, "latin1"); return Buffer.concat([b, Buffer.from(body)]); };
+    const jxl = (...boxes) => Buffer.concat([Buffer.from([0, 0, 0, 12, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a]), box("ftyp", "jxl \0\0\0\0jxl "), ...boxes]);
+    await mkdir(path.join(root, "r2"), { recursive: true });
+    await writeFile(path.join(root, "r2/Old.jxl"), jxl(box("jbrd", "x"), box("jxlc", "jpeg inside")));
+    await writeFile(path.join(root, "r2/New.jxl"), jxl(box("Exif", "\0\0\0\0MM"), box("jxlc", "hif pixels")));
+    await command("bin/curl", 'for a in "$@"; do case "$a" in */images/full/*) key="${a##*/}" ;; esac; prev="$a"; done\nwhile [ "$1" != --output ]; do shift; done\ncp "$FIXTURE_ROOT/r2/$key" "$2"');
+    await command("bin/djxl", 'printf "decoded %s" "$*" > "$2"');
+    await command("bin/exif-sooc", 'echo 400');
+    await put("keys", "Old.jxl\nNew.jxl\n");
+    const r = shell("download-remote-photos.sh", ["keys", "dest"]);
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const exists = (p) => readFile(path.join(root, p)).then(() => true, () => false);
+    assert.equal(await exists("dest/Old.jpg"), true, "the transcode's JPEG");
+    assert.equal(await exists("dest/Old.jxl"), false, "a transcode's .jxl must not stay where exif-sooc scans");
+    assert.equal(await exists("dest.r2/Old.jxl"), true);
+    assert.match(await read("dest/New.png"), /--bits_per_sample=16/, "a direct archive decodes to 16-bit PNG");
+    assert.equal(await exists("dest/New.jxl"), true, "a direct archive's .jxl stays, as its metadata source");
+    assert.equal(await exists("dest/New.jpg"), false, "djxl must not be asked for a JPEG it would invent");
+    // Remote ingest finds the transcode's key in its new home and refuses the
+    // direct archive by name rather than dropping it from the plan.
+    await assert.rejects(photoInputs([path.join(root, "dest")], { remote: true }), /cannot re-ingest New/);
+    await rm(path.join(root, "dest/New.jxl")); await rm(path.join(root, "dest/New.png"));
+    assert.deepEqual(await photoInputs([path.join(root, "dest")], { remote: true }), [
+      { stem: "Old", source: path.join(root, "dest/Old.jpg"), original: path.join(root, "dest.r2/Old.jxl"), full: "Old.jxl" },
+    ]);
   });
 });
 

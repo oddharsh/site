@@ -568,7 +568,7 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
   //   <iframe srcdoc="...&lt;script&gt;let n=0;setInterval(...)&lt;/script&gt;...">
   //
   // Both are entity-escaped in the source. HTML5 lets a QUOTED attribute value carry
-  // raw < and >, so minify-html decodes them (no option turns that off, and the DOM
+  // raw < and >, so the HTML minifier decodes them (no option turns that off, and the DOM
   // value is identical either way), and from 2026-07-31 every page goes through the
   // minifier. A searcher then finds `<script>bad()</script>` in the middle of an
   // attribute and demands a CSP hash for something no browser will ever execute as
@@ -623,7 +623,7 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
     for (const m of inlineScripts(html)) {
       const attrs = m.attrs;
       if (/\ssrc\s*=/i.test(attrs)) continue;
-      // minify-html UNQUOTES attribute values wherever it legally can, so the
+      // the HTML minifier UNQUOTES attribute values wherever it legally can, so the
       // staged homepage carries `type=application/ld+json` bare. A quoted-only
       // match reads that as type="" and calls a JSON-LD data block executable,
       // then fails demanding a hash for something no browser ever runs. Same
