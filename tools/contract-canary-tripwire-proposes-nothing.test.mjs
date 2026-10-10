@@ -24,7 +24,7 @@ import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { marker, plan, render, title } from "timbrado/report";
+import { isTitleFor, marker, plan, render, title } from "timbrado/report";
 import { checkWatch } from "timbrado/watch";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { chromeChannel, DEFAULT_CHROME_CHANNEL } from "./lib/browser-channel.ts";
@@ -111,7 +111,11 @@ test("the legs' reports flow through timbrado's reporter: leg-shaped JSON, the v
   assert.ok(body.includes("73 none / 73 good \\| 73 wrong"), "a pipe in a detail survives the table");
   assert.ok(body.includes("Reproduce with `bun run canary:bun`"));
   assert.deepEqual(plan(red, { number: 7, text: body }), { kind: "none" }, "the same signature already on the issue stays quiet");
-  assert.equal(title("bun"), "timbrado: bun", "the issue title moved with the reporter; nothing open carried the old one");
+  assert.equal(title("bun", "2026-10-09"), "timbrado: bun (2026-10-09)", "a filed issue carries the day it was filed");
+  // #1245 and #816 were filed undated and are still open: the reporter has to
+  // keep finding them, or the next red night files a dated twin beside each.
+  assert.ok(isTitleFor("timbrado: bun", "bun") && isTitleFor("timbrado: browsers", "browsers"), "an undated issue is still the open one");
+  assert.ok(!isTitleFor("timbrado: bun-pin (2026-10-09)", "bun"), "the bun leg never claims the bun-pin issue");
 
   const tables = tablesFor(
     [{ name: "chrome", version: "153.0.8010.37", probes: 87, true: 64 }, { name: "chrome-canary", version: "155.0.8057.0", probes: 87, true: 66 }],
