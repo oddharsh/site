@@ -520,10 +520,50 @@ test("the art warm attempts every URL even when one is already cached", async ()
 
     assert.equal(res.already, 1, "the pre-warmed URL must report as already cached, not as work done");
     assert.equal(res.warmed, 2, "a warm colo entry must not stop the other URLs from being warmed");
+    assert.equal(res.failed, 0);
     for (const u of urls) assert.ok(store.has(u), `${u} was never warmed`);
   } finally {
     testGlobals.fetch = realFetch;
     if (!hadCaches) delete globalThis.caches;
+  }
+});
+
+// REGRESSION. Until 2026-10-09 anything that wasn't a hit counted as `warmed`,
+// so the 502 handleRnArt answers when every fetch throws (the subrequest cap, in
+// production) and the untransformed fallback it never stores both read as work
+// done. A CDG trace threw "Too many subrequests" under a span reading warmed 40.
+test("the art warm counts a failed or untransformed cover as such, never as warmed", async () => {
+  const store = new Map();
+  const realFetch = globalThis.fetch;
+  const hadCaches = "caches" in globalThis;
+  testGlobals.caches = {
+    default: {
+      async match(req) { const r = store.get(req.url); return r ? r.clone() : undefined; },
+      async put(req, res) { store.set(req.url, res); },
+    },
+  };
+  // Cover 1 transforms. Cover 2's transform fails and the plain fetch works,
+  // which is the Images fallback. Cover 3 throws on every fetch, as a spent
+  // subrequest budget does.
+  const ok = () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
+  testGlobals.fetch = async (url, init) => {
+    if (String(url).includes(artHash(3))) throw new Error("Too many subrequests by single Worker invocation.");
+    if (String(url).includes(artHash(2)) && init?.cf?.image) return new Response("9422", { status: 403 });
+    return ok();
+  };
+
+  try {
+    const payload = { tracks: [1, 2, 3].map((n) => ({ image_url: `https://i.scdn.co/image/${artHash(n)}`, artists: [] })) };
+    const waits = [];
+    const res = await warmArtCache(
+      payload, new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil: (p) => waits.push(p) });
+    await Promise.all(waits);
+
+    assert.deepEqual(res, { warmed: 1, already: 0, untransformed: 1, failed: 1 });
+    assert.equal(store.size, 1, "only the transformed cover may reach the cache");
+  } finally {
+    testGlobals.fetch = realFetch;
+    if (!hadCaches) Reflect.deleteProperty(globalThis, "caches");
   }
 });
 
