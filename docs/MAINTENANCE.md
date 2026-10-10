@@ -1201,7 +1201,9 @@ build that failed. The reporter files nothing for `instrument` and the JOB goes
 red, because "the runner had no unzip" is not a finding and an issue saying so
 teaches you to close canary issues unread.
 
-**One issue per leg, titled `timbrado: <leg>`.** timbrado's reporter (the tool
+**One issue per leg, titled `timbrado: <leg> (YYYY-MM-DD)`**, the UTC day it
+was filed (issues filed before 2026-10-09 carry no date and still count as
+the open one). timbrado's reporter (the tool
 extracted from these legs, a git dependency; `bun run timbrado report`)
 creates it on the first red or changed night, comments only when the
 signature (the failing gate names, or the flipped probes) is new, and closes
