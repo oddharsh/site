@@ -420,14 +420,15 @@ export function artWarmList(payload, origin) {
 // fully warm colo pays ~28 cache lookups and zero subrequests, which is the
 // cheap case anyway. The guard bought a rounding error and cost the feature.
 export async function warmArtCache(payload, request, env, ctx) {
+  const none = { warmed: 0, already: 0, untransformed: 0, failed: 0 };
   // `caches` is a BARE GLOBAL that may not be declared at all, and referencing
   // an undeclared identifier to hand it to a parser throws ReferenceError, so
   // `typeof` is the only operator that can ask the question. This is the one
   // class lib/parse.js cannot cover.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  if (!ctx || typeof caches === "undefined") return { warmed: 0, already: 0 };
+  if (!ctx || typeof caches === "undefined") return none;
   const urls = artWarmList(payload, new URL(request.url).origin);
-  if (!urls.length) return { warmed: 0, already: 0 };
+  if (!urls.length) return none;
 
   const outcomes = await Promise.all(urls.map(async (u) => {
     try {
@@ -443,14 +444,24 @@ export async function warmArtCache(payload, request, env, ctx) {
       // actually DID rather than how many URLs it considered. That distinction
       // is the whole reason the broken guard went unnoticed: the old attribute
       // counted intent, and intent looked identical to success.
-      return res.headers.get("x-art-cache") === "hit" ? "already" : "warmed";
+      //
+      // The same mistake survived one level down until 2026-10-09: anything
+      // that wasn't a hit read as `warmed`, including handleRnArt's 502. In
+      // production that 502 is mostly the 50-subrequest cap: a cold cover costs
+      // one or two fetches, and 71 of the 79 warms traced 2026-10-02 to 10-09
+      // found nothing cached and tried all 40 (one CDG trace threw "Too many
+      // subrequests" while its span still read warmed 40). Only `miss` means a
+      // transformed cover went to cache.put. A 200 without it is the
+      // untransformed fallback, which is served but never stored.
+      const mark = res.headers.get("x-art-cache");
+      if (mark === "hit") return "already";
+      if (mark === "miss") return "warmed";
+      return res.ok ? "untransformed" : "failed";
     } catch { return "failed"; }
   }));
 
-  return {
-    warmed:  outcomes.filter((o) => o === "warmed").length,
-    already: outcomes.filter((o) => o === "already").length,
-  };
+  const count = (o: string) => outcomes.filter((x) => x === o).length;
+  return { warmed: count("warmed"), already: count("already"), untransformed: count("untransformed"), failed: count("failed") };
 }
 
 // Both representations carry `x-robots-tag: noindex`, which is what robots.txt
@@ -566,13 +577,17 @@ export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }) {
   const res = trackResponse(result.payload, result.status, "html");
   if (ctx && result.status === 200 && opts.warm) {
     ctx.waitUntil(span("rn.art.warm", async (s) => {
-      const { warmed, already } = await warmArtCache(result.payload, request, env, ctx);
-      // BOTH numbers, because either one alone is ambiguous. `warmed` 0 with
+      const { warmed, already, untransformed, failed } = await warmArtCache(result.payload, request, env, ctx);
+      // EVERY outcome, because any one alone is ambiguous. `warmed` 0 with
       // `already` 28 is a healthy warm colo; `warmed` 0 with `already` 0 is the
       // feature not running at all, and the first version of this span could not
       // tell those apart. That is precisely how the broken guard shipped green.
+      // `failed` is the subrequest cap (gotcha 36) and `untransformed` the
+      // Images fallback; the four always sum to the URLs attempted.
       s.setAttribute("rn.art.warmed", warmed);
       s.setAttribute("rn.art.already", already);
+      s.setAttribute("rn.art.untransformed", untransformed);
+      s.setAttribute("rn.art.failed", failed);
     }).catch(() => {}));
   }
   return res;
