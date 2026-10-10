@@ -10,6 +10,6 @@
     "tail": "wrangler tail lwe-ask"
   },
   "devDependencies": {
-    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@4d90f32"
+    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@fcf625d"
   }
 }
