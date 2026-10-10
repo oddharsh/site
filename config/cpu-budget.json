@@ -16,7 +16,7 @@
     "/search.json?q=what+does+he+think+about+agents": { "ceilingMs": 17.5, "why": "the same cold search prepare as /search" },
     "POST /mcp search_site": { "ceilingMs": 17, "why": "the same cold search prepare as /search, behind the MCP server's JSON-RPC handling" },
     "/photos/query.json": { "ceilingMs": 17, "why": "parses the four photo JSON files even with no query to score" },
-    "/reading/list.html": { "ceilingMs": 16, "why": "an island fragment rendered per request; not profiled yet" },
+    "/reading/list.html": { "ceilingMs": 16, "why": "an island fragment rendered per request; the sweep's empty KV times only the no-links fallback, so this ceiling says nothing about the 120-link render production does, whose per-row date formatters came out on 2026-10-09 (9.8 to 6.0 ms cold under node with the real KV values)" },
     "/search.json?q=brotli": { "ceilingMs": 15, "why": "the same cold search prepare as /search" },
     "/ledger/lines.html": { "ceilingMs": 13.5, "why": "an island fragment rendered per request; not profiled yet" },
     "/around/snapshot.html": { "ceilingMs": 12.5, "why": "an island fragment rendered per request; not profiled yet" },

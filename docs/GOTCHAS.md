@@ -304,3 +304,16 @@ by renumbering. The long-form history of each one is in git
     over reads tight. Its median caught it, 33% over the reference where
     ordinary runs stay within 16%, so `config/cpu-budget.json` `control` now
     makes such a run inconclusive.
+
+58. **Cloudflare's on-demand CPU profile reads wall time on a quiet Worker.**
+    `cf workers versions profile` samples a live isolate, and between this
+    site's requests that isolate sits idle. The idle time isn't recorded as
+    `(idle)`: each gap lands on the first JS frame that runs after it, so
+    request entries, KV and Cache API resumptions, and whatever helper happens
+    to be on the stack soak up seconds. On 2026-10-09, 10 s of `/cache`
+    traffic, which Workers Logs bills at about 1 ms a request, profiled as
+    7.85 s of CPU with 2 s on a string helper in `lib/tui.ts`. It also only
+    sees warm isolates, while a real visitor here almost always lands on a cold
+    one. Rank and cost with billed `cpuTimeMs` from Workers Logs (`cf o11y
+    telemetry query`, grouped by `$metadata.trigger`), then profile the cold
+    request in node with real KV values, the way `tools/cpu-sweep.ts` does.

@@ -189,6 +189,20 @@ export async function handleReading(request, env, ctx) {
   });
 }
 
+// toLocaleDateString with options builds a new Intl.DateTimeFormat on every
+// call, and the list made one per row plus one per month: 127 for 120 links,
+// about 4.9 ms of a 9.3 ms cold render under node (2026-10-09). Production bills
+// this fragment at a 31 ms median, because the edge copy is keyed by version and
+// a visitor nearly always misses it. A cached formatter's format() is the same
+// string by spec, since both shapes name their own fields and so take no
+// defaults (the reasoning cal's slotLabels rests on). Built on first use, so a
+// request that never renders the list doesn't pay for them.
+let rowDates: { month: Intl.DateTimeFormat; day: Intl.DateTimeFormat } | undefined;
+const readingDates = () => rowDates ??= {
+  month: new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+  day:   new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+};
+
 /** The island: the count bar, the rows and the footer, or the placeholder. */
 export function renderReadingList(payload, hn: HnMap = {}): Html {
   const pending = payload?.pending === true;
@@ -202,16 +216,17 @@ export function renderReadingList(payload, hn: HnMap = {}): Html {
     listHtml = `<div class="rd-empty">Couldn't reach Curius just now — the list refills on the next sync. It always lives at <a href="${esc(profile)}" rel="external" target="_blank">curius.app/${esc(CURIUS_HANDLE)}</a>.</div>`;
   } else {
     let curMonth = "", parts = [];
+    const dates = readingDates();
     for (const it of items) {
       const d = it.created ? new Date(it.created) : null;
       const valid = d && !isNaN(d.getTime());
       const key = valid ? `${d.getUTCFullYear()}-${d.getUTCMonth()}` : "x";
       if (key !== curMonth) {
         curMonth = key;
-        const label = pending ? "…" : valid ? d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) : "Undated";
+        const label = pending ? "…" : valid ? dates.month.format(d) : "Undated";
         parts.push(`<div class="rd-month">${esc(label)}</div>`);
       }
-      const dateStr = valid ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "";
+      const dateStr = valid ? dates.day.format(d) : "";
       const star = it.favorite ? ` <span class="rd-star" title="favorite">&#9733;</span>` : "";
       const snip = it.snippet ? `<div class="rd-snip">${esc(it.snippet)}</div>` : "";
       const hls = (it.highlights || []).map((h) => `<blockquote class="rd-hl">${esc(h)}</blockquote>`).join("");
