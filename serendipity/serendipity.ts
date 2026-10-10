@@ -75,10 +75,24 @@ function eventDate(s): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+// toLocaleDateString and toLocaleTimeString with options build a new
+// Intl.DateTimeFormat per call, and every dashboard card called both: about
+// 3.4 ms of the events island's cold render under node, against the real pool
+// (2026-10-09). A cached formatter's format() is the same string by spec, since
+// both shapes name their own fields and so take no defaults (cal's slotLabels
+// rests on the same reasoning). Built on first use, so a request that renders
+// no event never pays for them.
+let eventFormats: { day: Intl.DateTimeFormat; clock: Intl.DateTimeFormat } | undefined;
+const eventFormat = () => eventFormats ??= {
+  day:   new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }),
+  clock: new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" }),
+};
+
 function eventTime(d: Date | null): string {
   if (!d) return "date TBD";
-  const day = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
-  const clock = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" });
+  const { day: dayFormat, clock: clockFormat } = eventFormat();
+  const day = dayFormat.format(d);
+  const clock = clockFormat.format(d);
   return `<time data-event-time datetime="${d.toISOString()}">${esc(day)} · ${esc(clock)}</time>`;
 }
 
