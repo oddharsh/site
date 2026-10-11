@@ -416,7 +416,7 @@ does not make a failed write safe to ignore.
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. A bump PR's review should read their release notes for output,
   target-browser, and native-install changes.
-- Oxlint 1.87.0 and oxlint-tsgolint 7.0.2003 are exact root pins for
+- Oxlint 1.87.0 and oxlint-tsgolint 7.0.2004 are exact root pins for
   `bun run lint`, a required step in `validate`. The tsgolint version tracks the
   checker bundled with Bun: TypeScript 7.0 ships no stable programmatic
   API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint

@@ -88,7 +88,7 @@
     "lightningcss": "1.33.0",
     "oxc-minify": "0.153.0",
     "oxlint": "1.87.0",
-    "oxlint-tsgolint": "7.0.2003",
+    "oxlint-tsgolint": "7.0.2004",
     "playwright-core": "1.64.0",
     "timbrado": "github:oddharsh/timbrado#ec6c6b19dd97b922ce86f49d60711abfe5924670",
     "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@c09832d"
