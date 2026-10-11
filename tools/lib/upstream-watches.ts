@@ -287,19 +287,14 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
   // (3572193, "Unknown arguments"), so the watch would have gone on reading
   // false while the thing it stood for already shipped. The build door is a
   // GATE now (typecheck fails without its file), which is the stronger form.
-  {
-    // The revisit for Vitest in the Worker suite. #703 took the pool out, and
-    // on 2026-09-22 the owner chose to hold the harness test in its place and
-    // come back to Vitest once the plugin can ride the SAME workers-sdk commit as
-    // the wrangler pin. It depends on `wrangler: workspace:*`, so any other
-    // commit's build puts a second wrangler, miniflare and workerd in the tree.
-    // The peer range is the behaviour here rather than a version string: per
-    // workers-sdk#15618 the plugin refuses to start a Vitest outside it.
-    name: "vitest-plugin-accepts-vitest-5",
-    issue: "https://github.com/cloudflare/workers-sdk/pull/15500",
-    landed: "the @cloudflare/vitest-plugin build published at the wrangler pin's own workers-sdk commit declares a vitest peer range that admits 5.0.0, so the Worker suite can move to Vitest 5 with one wrangler, one miniflare and one workerd in the tree (#703's property)",
-    measured: "2026-09-22, via pkg.pr.new: 6906bf0 (the pin) and cd7508c (main) both `^4.1.0`, false; the control is PR #15500's own build 7b89dc4, `^4.1.11 || ^5.0.0`, true",
-  },
+  // RETIRED 2026-10-11: `vitest-plugin-accepts-vitest-5`. It held the revisit
+  // for Vitest in the Worker suite: #703 took the pool out, and on 2026-09-22
+  // the owner kept the harness test in its place until the plugin could ride the
+  // SAME workers-sdk commit as the wrangler pin. workers-sdk#16132 widened the
+  // peer range, and the pin has carried it since bd7aa67 (#1244). Re-read on
+  // the pin c09832d: `^4.1.0 || ^5.0.0`. The control, e3d1867 from before
+  // #16132, still reads `^4.1.0`. What landed is a decision rather than a fix:
+  // whether the Worker suite goes back to Vitest is the owner's call.
   {
     // Not a fix this repository filed. It watches a vendor switch that already
     // flipped once without notice: cloudflare/workerd#6907 exposed Temporal in
