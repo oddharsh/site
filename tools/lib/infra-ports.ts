@@ -168,6 +168,19 @@ async function sampleImageUrl(fetchEdge: EdgeFetch, origin: string) {
   return path.startsWith("http") ? path : `${origin}${path}`;
 }
 
+// A page the site deliberately answers in HTML whatever the Accept header says:
+// a /writing post has no Markdown twin, because its .txt is the source an agent
+// should read. Resolved from the live post list for the same reason as the
+// sample image, since a pinned slug would 404 the day the post is retired.
+async function writingPostUrl(fetchEdge: EdgeFetch, origin: string) {
+  const res = await fetchEdge(`${origin}/writing/posts.json`);
+  if (!res.ok) throw new Error(`posts.json returned HTTP ${res.status}`);
+  const posts = await res.json();
+  const slug = Array.isArray(posts) ? posts[0]?.slug : null;
+  if (!slug) throw new Error("posts.json carried no post slug");
+  return `${origin}/writing/${slug}`;
+}
+
 export type EdgePort = {
   fetchEdge: EdgeFetch;
   /** The TLS 0-RTT probe. No HTTP response can carry that answer, so it is its
@@ -184,6 +197,7 @@ export async function readEdge(edge, port: EdgePort): Promise<Map<string, EdgeOb
   const encodingOf = (res: Response) => (res.headers.get("content-encoding") || "").trim().toLowerCase();
 
   let sample: string | null = null;
+  let post: string | null = null;
   const targetUrl = async (target) => {
     if (target === "homepage") return `${origin}/`;
     if (target === "sample-image") return (sample ??= await sampleImageUrl(fetchEdge, origin));
@@ -192,6 +206,7 @@ export async function readEdge(edge, port: EdgePort): Promise<Map<string, EdgeOb
     // stable one: it is served from a committed file rather than generated, so it
     // exists on every deploy and cannot go missing the way a per-page twin could.
     if (target === "markdown-twin") return `${origin}/index.md`;
+    if (target === "writing-post") return (post ??= await writingPostUrl(fetchEdge, origin));
     throw new Error(`unknown edge target ${JSON.stringify(target)}`);
   };
 
