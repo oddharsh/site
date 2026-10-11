@@ -18,6 +18,7 @@ import {
 } from "./contract-shared.ts";
 import { readdirSync } from "node:fs";
 import { minifiedScripts } from "./lib/client-assets.ts";
+import { lensPageToolNames } from "./lib/webmcp-catalog.ts";
 
 const LENS = readFileSync("./src/client/lens.js", "utf8");
 const LENS_BOOT = readFileSync("./src/client/lens-boot.js", "utf8");
@@ -29,15 +30,10 @@ const SHELL = readFileSync("./tools/photos/shell-data.ts", "utf8");
 const CHROME = readFileSync("./src/worker/lib/desktop.ts", "utf8");
 
 // The page tools are declared in one array literal in the lightweight registrar.
-// Read that array rather than the whole file, so a `name:` in some unrelated
-// object cannot inflate the count and hide a collision.
-function pageToolNames() {
-  const start = LENS_WEBMCP.indexOf("const defs = [");
-  assert.ok(start > 0, "lens-webmcp.js no longer declares its page tools as `const defs = [` — update this scanner");
-  const end = LENS_WEBMCP.indexOf("\n  ];", start);
-  assert.ok(end > start, "could not find the end of the page-tool array");
-  return [...LENS_WEBMCP.slice(start, end).matchAll(/^\s+name:\s*"([a-z0-9_]+)",$/gm)].map((m) => m[1]);
-}
+// lensPageToolNames() reads only that array, so a `name:` in some unrelated
+// object cannot inflate the count and hide a collision. tools/webmcp-catalog.ts
+// reads the same list to check the LIVE catalog, which this file can't see.
+const pageToolNames = () => lensPageToolNames(LENS_WEBMCP);
 
 test("no Lens page tool is named after a tool /mcp already serves", () => {
   const page = pageToolNames();
