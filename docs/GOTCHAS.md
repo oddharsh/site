@@ -318,3 +318,16 @@ by renumbering. The long-form history of each one is in git
     one. Rank and cost with billed `cpuTimeMs` from Workers Logs (`cf o11y
     telemetry query`, grouped by `$metadata.trigger`), then profile the cold
     request in node with real KV values, the way `tools/cpu-sweep.ts` does.
+
+59. **Wrangler refuses to deploy beside `.cloudflare/output`, and a dry run
+    can't show it.** Since 4d90f32 (workers-sdk#16128, pinned in #1271),
+    `deploy`, `versions upload` and `preview` stop with "builds for the
+    Cloudflare CLI" when the working directory or the config's directory
+    holds `.cloudflare/output/v0/config.json`. `tools/gen-runtime-types.ts`
+    wrote exactly that in `cf-garage/` before every typecheck and lint, so a
+    workstation deploy of cf-garage after either was refused. Workers Builds
+    clones clean and never saw it. All three call sites skip the guard under
+    `--dry-run`, so the obvious check passes either way. Measured 2026-10-11
+    with no credential instead: refused with the tree, and past the guard to
+    the API-token error without it. The script now deletes the tree on every
+    run.

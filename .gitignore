@@ -6,7 +6,8 @@
 # (cf-garage/cloudflare.config.ts). tools/gen-runtime-types.ts runs that build
 # before typecheck and lint for the one file it needs, `.cloudflare/types/
 # index.d.ts` (cf-garage's Env and runtime types); `.cloudflare/output/` comes
-# along with it. Both regenerate, so neither is committed.
+# along with it, and the script deletes it at once, because wrangler refuses to
+# deploy beside it (workers-sdk#16128). Neither is committed.
 .cloudflare/
 
 # deploy-time build staging (build.ts output; regenerated every build)

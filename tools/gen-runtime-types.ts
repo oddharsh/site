@@ -131,12 +131,24 @@ export const CF_GARAGE_OUT = join(REPO, "cf-garage", ".cloudflare", "types", "in
 // wrangler owns that file and rewrites it whenever its content differs, which a
 // key line of ours would guarantee on every `wrangler dev`.
 const CF_GARAGE_KEY = join(REPO, "config", ".generated", "cf-garage-types.key");
+// The build below also writes a Build Output tree that nothing here reads, and
+// since 4d90f32 (workers-sdk#16128, #1271) its root config makes `wrangler
+// deploy`, `versions upload` and `preview` REFUSE to run from cf-garage/
+// ("builds for the Cloudflare CLI"). Measured 2026-10-11 on the pin c09832d
+// with no credential: refused with the tree present, and past the guard to the
+// API-token error with it gone. `--dry-run` skips the guard, so a dry run
+// cannot show this. Workers Builds clones clean and never sees the tree; a
+// workstation deploy after any typecheck or lint did. So the tree goes on
+// EVERY run, the cached path included, which also clears one an older run
+// left behind.
+export const CF_GARAGE_BUILD_OUTPUT = join(REPO, "cf-garage", ".cloudflare", "output");
 
 function generateCfGarage() {
   const h = createHash("sha256").update(wranglerVersion()).update("\0");
   h.update(readFileSync(join(REPO, "cf-garage", "cloudflare.config.ts")));
   const cfKey = h.digest("hex").slice(0, 16);
   if (!FORCE && existsSync(CF_GARAGE_OUT) && existsSync(CF_GARAGE_KEY) && readFileSync(CF_GARAGE_KEY, "utf8").trim() === cfKey) {
+    rmSync(CF_GARAGE_BUILD_OUTPUT, { recursive: true, force: true });
     console.log(`gen-runtime-types: cf-garage/.cloudflare/types/index.d.ts is current (key ${cfKey})`);
     return;
   }
@@ -152,7 +164,8 @@ function generateCfGarage() {
   //   - `build --x-new-config` WITHOUT the output flag is that same dry run with
   //     `--outdir=dist`, so it writes an unignored cf-garage/dist/ and no types.
   // This one reads the config, writes the types, then bundles into the ignored
-  // .cloudflare/output/ tree: 1.3 s, no credential, no network. It also spawns
+  // .cloudflare/output/ tree (deleted right after, see CF_GARAGE_BUILD_OUTPUT):
+  // 1.3 s, no credential, no network. It also spawns
   // `docker` to tidy container image tags even with no container configured,
   // which prints a daemon error on a machine without one and changes nothing.
   // WRANGLER_SEND_METRICS=false keeps the telemetry POST off the wire.
@@ -161,6 +174,7 @@ function generateCfGarage() {
     env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
     encoding: "utf8",
   });
+  rmSync(CF_GARAGE_BUILD_OUTPUT, { recursive: true, force: true });
   const text = existsSync(CF_GARAGE_OUT) ? readFileSync(CF_GARAGE_OUT, "utf8") : "";
   const at = text.indexOf(MARKER);
   if (out.status !== 0 || at < 0 || !text.includes("InferEnv<") || text.length - at < 400_000) {
