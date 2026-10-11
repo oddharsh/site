@@ -97,13 +97,13 @@ moves no traffic.
 
 ## Prerelease pins, on purpose
 
-Production builds with the rolling GitHub Bun canary (`config/bun-pin.json`,
-installed and verified by `.github/install-bun.sh`, temporarily selected on
-2026-10-06 for `bun check`) and a `pkg.pr.new` commit of wrangler. That's
-deliberate: it runs tomorrow's toolchain today and turns what breaks into
-upstream reports and fixes. The nightly bumpers (`bun:pin`, `wrangler:pin`)
-advance fixed pins only after the canary tripwire (`canary.yml`) passes its gates;
-rolling Bun resolves on each fresh installation.
+Production builds with an exact Bun pin (`config/bun-pin.json`, installed and
+verified by `.github/install-bun.sh`) and a `pkg.pr.new` commit of wrangler.
+The pin may be a dated npm canary, and from 2026-10-06 to 2026-10-11 it was
+GitHub's rolling canary, to get `bun check` before a release carried it.
+That's deliberate: it runs tomorrow's toolchain today and turns what breaks
+into upstream reports and fixes. The nightly bumpers (`bun:pin`, `wrangler:pin`)
+advance the pins only after the canary tripwire (`canary.yml`) passes its gates.
 `tools/lib/upstream-watches.ts` tracks the upstream fixes this repo is
 waiting on. [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) has the detail.
 

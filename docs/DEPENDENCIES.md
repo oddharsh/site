@@ -71,28 +71,22 @@ bun mints every content-addressed `/a/` and `/i/` URL production serves. A bump
 that changes one output byte is a dictionary roll and a CSP hash change wearing a
 version string.
 
-On 2026-10-06 the owner selected `"bun": "canary"` temporarily to adopt Bun's
-native `bun check` before the dated npm publication included it. Both CI and
-Workers Builds use `.github/install-bun.sh` to resolve GitHub's latest canary.
-The installer reads one release metadata snapshot, checks the archive's
-SHA-256 and the binary's full commit, verifies `bun check` is available, and
-writes `bun.install.json` beside the binary. A release moving during download
-fails verification before replacing the existing installation. When the API
-refuses the read (Workers Builds has no token and shares its IPs), the
-installer takes the same digest and commit from github.com's release pages;
-the receipt's `metadata` field says which source it used (gotcha 52).
+The pin is a release or a dated npm canary with its build sha. `bun run bun:pin`
+and the nightly `bun-pin.yml` select candidates on the declared channel and
+require npm publication age, zstd dictionary support, unchanged lockfile
+format, a byte-identical build and passing tests.
 
-Fresh installs can resolve different commits. This source deliberately skips
-the runtime's npm publication-age gate; `bunfig.toml`'s dependency age gate
-still applies to package installation. `bun:pin` reports the installed commit
-and leaves the rolling declaration alone. `canary:bun` compares against that
-installation's receipt, so its baseline names the runtime actually measured.
-
-To resume exact pins, declare a release or a dated npm canary with its build
-sha in `config/bun-pin.json`, then install it with the shared installer.
-For fixed pins, `bun run bun:pin` and the nightly `bun-pin.yml` select candidates
-on the declared channel and require npm publication age, zstd dictionary
-support, unchanged lockfile format, a byte-identical build and passing tests.
+From 2026-10-06 to 2026-10-11 the pin was `"bun": "canary"`, selected to adopt
+Bun's native `bun check` before npm carried it. 1.4.3 (2026-10-10) is the first
+release with the checker, and the pin returned to it. The rolling source still
+works if the owner selects it again: `.github/install-bun.sh` reads one GitHub
+release metadata snapshot, checks the archive's SHA-256 and the binary's full
+commit, verifies `bun check` is available, and writes `bun.install.json` beside
+the binary. When the API refuses the read (Workers Builds has no token and
+shares its IPs), the installer takes the same digest and commit from
+github.com's release pages (gotcha 52). That source skips the runtime's npm
+publication-age gate, fresh installs can resolve different commits, and
+`bun:pin` leaves a rolling declaration alone.
 Those gates remain in place for fixed pins. `@types/bun` stays `deps:pin`'s.
 
 ### what a frozen install does not check

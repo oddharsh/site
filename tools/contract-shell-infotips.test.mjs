@@ -122,7 +122,7 @@ test("every workflow bootstraps the Bun source that config/bun-pin.json declares
   // is content-addressed, so that re-mints URLs rather than erroring.
   //
   const declared = JSON.parse(await readFile(new URL("config/bun-pin.json", ROOT), "utf8"));
-  // Fixed sources are exact npm versions. The owner-selected rolling canary
+  // Fixed sources are exact npm versions. The rolling canary, when selected,
   // resolves its verified commit through the same installer on every build path.
   assert.match(String(declared.bun), /^(canary|\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)$/,
     `config/bun-pin.json names ${declared.bun}; it must select a supported Bun source`);

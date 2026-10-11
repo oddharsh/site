@@ -55,9 +55,9 @@ case "$(uname -s)-$(uname -m)" in
   *) echo "install-bun.sh: no bun platform package known for $(uname -s)-$(uname -m)" >&2; exit 1 ;;
 esac
 
-# The owner selected the rolling GitHub canary to adopt bun check before npm's
-# daily publication. Resolve one metadata snapshot, verify its bytes and full
-# commit, and keep that identity beside the binary for runtime comparisons.
+# `"bun": "canary"` selects the rolling GitHub canary (the pin from 2026-10-06
+# until 1.4.3 shipped bun check). Resolve one metadata snapshot, verify its bytes
+# and full commit, and keep that identity beside the binary for runtime comparisons.
 #
 # TWO VIEWS OF ONE RELEASE, because the API is rate limited per IP. Workers
 # Builds runs on shared Cloudflare addresses with no GitHub token, where other
