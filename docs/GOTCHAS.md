@@ -237,9 +237,10 @@ by renumbering. The long-form history of each one is in git
 52. **A Bun canary's `--version` does not prove it has `bun check`.** The
     installed binary and the 2026-10-06 npm canary both reported 1.4.3 but
     predated the checker. GitHub's later canary at `bbdc5a519` had it.
-    Verify the full `Bun.revision` and `bun check --help`. The owner selected
-    the rolling GitHub canary temporarily; the shared installer verifies its
-    digest and commit, then records both in `bun.install.json` beside Bun.
+    Verify the full `Bun.revision` and `bun check --help`. The pin followed
+    the rolling GitHub canary from 2026-10-06 until release 1.4.3 carried the
+    checker; when selected, the shared installer verifies its digest and
+    commit, then records both in `bun.install.json` beside Bun.
     Bun's checker also lacks `--showConfig`. Use
     `--listFilesOnly --noResolve` to discover files selected directly by a
     config, separately from the import graph.

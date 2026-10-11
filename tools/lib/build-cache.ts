@@ -10,7 +10,7 @@
 // bytes a fresh run would produce.
 //
 // The encoder string a caller passes names its parameters and the runtime by
-// Bun.revision: production builds with a rolling canary, and a new revision
+// Bun.revision: the pin may be a canary or a rolling one, and a new revision
 // misses every entry instead of trusting another encoder's output. Every hit is
 // also decoded and compared with its input before it is used, so a truncated or
 // foreign entry costs a recompression and never ships.
