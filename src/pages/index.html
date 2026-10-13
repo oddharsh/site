@@ -39,7 +39,7 @@
 <link rel="preload" as="fetch" href="/photos/grid.html" crossorigin>
 <link rel="preload" as="fetch" href="/rn/tracks.html" crossorigin>
 <title>Aadharsh Pannirselvam</title>
-<meta name="description" content="Aadharsh Pannirselvam researches and invests at Archetype, a crypto-native venture firm in New York. Photos, writing and hands-on explainers of cryptography and privacy tech.">
+<meta name="description" content="Aadharsh Pannirselvam. I research and invest in cryptography and privacy tech, and the people building it, at Archetype, a crypto-native venture firm in New York.">
 <meta name="author" content="Aadharsh Pannirselvam">
 <link rel="canonical" href="https://aadhar.sh/">
 <link rel="alternate" type="text/plain" title="llms.txt summary" href="/llms.txt">
@@ -65,7 +65,7 @@
 
 <meta property="og:type" content="profile">
 <meta property="og:title" content="Aadharsh Pannirselvam">
-<meta property="og:description" content="Aadharsh Pannirselvam researches and invests at Archetype, a crypto-native venture firm in New York. Photos, writing and hands-on explainers of cryptography and privacy tech.">
+<meta property="og:description" content="Hey! I research and invest in cryptography and privacy tech, and the people building it, at Archetype, a crypto-native venture firm in New York.">
 <meta property="og:url" content="https://aadhar.sh/">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="https://aadhar.sh/og/home.jpg">
@@ -374,6 +374,20 @@ footer .links a { margin: 0 2px; }
 footer .signature { font-style: italic; margin-top: 4px; }
 footer .signature small { color: oklch(56.93% 0 0); }
 
+.under-construction {
+  text-align: center;
+  font-family: var(--font-caption);
+  font-size: var(--text-xs);
+  color: var(--warn);
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  margin: 8px 0 0;
+}
+.under-construction::before, .under-construction::after {
+  content: " ※ ";
+  color: var(--warn);
+}
+
 /* (Tried a custom XP-style SVG cursor here — macOS browsers rasterize
    the cursor in-page rather than handing off to the OS, so it lagged
    visibly behind the hardware pointer. native cursors restore the
@@ -382,7 +396,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
 /* ─── wide-gamut overrides ────────────────────────────────────────────
    on Display P3 displays, push the user-action accents (links, hovers,
-   the traffic-cone orange, context-menu selection)
+   the traffic-cone orange, "under construction", context-menu selection)
    past the sRGB chroma envelope so they actually saturate on capable
    hardware. XP window chrome (title bar, panel borders, body text)
    stays sRGB-accurate — keeping the period-correct color intent for the
@@ -395,6 +409,8 @@ footer .signature small { color: oklch(56.93% 0 0); }
   a:hover, a:active { color: oklch(62.80% 0.33 29.23); }
 
   .title-bar .icon                  { background: oklch(69.58% 0.28 43.49); }
+
+  .under-construction               { color: oklch(54.44% 0.20 47.10); }
 
   .now-playing h2 a:hover           { color: oklch(62.80% 0.33 29.23); }
   .np-list a:hover .np-title        { color: oklch(62.80% 0.33 29.23); }
@@ -594,6 +610,8 @@ footer .signature small { color: oklch(56.93% 0 0); }
       my writing and the explainers I build to learn things. More <a href="/about">about me</a>.
     </p>
     </div>
+
+    <p class="under-construction">Always Under Construction</p>
 
     <hr>
 
