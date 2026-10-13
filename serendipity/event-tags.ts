@@ -171,12 +171,10 @@ export function parseTagAnswers(body: any): EventTag | null {
 // waited on inside a cron invocation.
 const CLEF_TIMEOUT_MS = 5000;
 
-export type TagEnv = ClefEnv;
-
 /** One call. Never throws: the caller counts outcomes by cause. The transport
  *  (gateway, deadline, error codes) is src/worker/lib/clef.ts, shared with the
  *  /lens wall check. */
-export async function askClef(request: ReturnType<typeof buildTagRequest>, env: TagEnv):
+export async function askClef(request: ReturnType<typeof buildTagRequest>, env: ClefEnv):
   Promise<{ tag: EventTag } | { error: string }> {
   const r = await runClef(env, TAG_MODEL, request, CLEF_TIMEOUT_MS);
   if ("error" in r) return r;

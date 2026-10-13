@@ -177,9 +177,10 @@ describe("sendHostCopy → the host's own PUBLISH event", () => {
     await sendHostCopy(env, { ...booking, location: "Devoción", sequence: 1 }, { updated: true });
     const { body } = calls[0];
     expect(body.subject).toContain("updated");
-    expect(icsOf()).toContain("UID:abc123def456-host@cal.aadhar.sh");
-    expect(icsOf()).toContain("SEQUENCE:1");
-    expect(icsOf()).toContain("Devoción");
+    const ics = icsOf();
+    expect(ics).toContain("UID:abc123def456-host@cal.aadhar.sh");
+    expect(ics).toContain("SEQUENCE:1");
+    expect(ics).toContain("Devoción");
   });
 
   it("carries the signed host links, and drops them once cancelled", async () => {

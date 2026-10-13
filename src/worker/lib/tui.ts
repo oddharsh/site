@@ -30,6 +30,10 @@
 
 export const COLS = 80;
 
+// The eight block glyphs a sparkline steps through, lowest first. /radar and
+// /census each scale a series onto them their own way.
+export const SPARK = "▁▂▃▄▅▆▇█";
+
 // ── palette (retired) ─────────────────────────────────────────────────────
 // There is no palette here any more, and the constraint that governed it is
 // worth keeping because it governs any future one. MID-TONES ONLY: a terminal
