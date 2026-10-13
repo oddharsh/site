@@ -315,6 +315,38 @@ test("edge: a header the zone added is a production drift; its absence passes", 
   assert.ok(drift[0].message.startsWith('production edge: speed-brain-off: speculation-rules is present ("/cdn-cgi/speculation")'));
 });
 
+// The probe goes to a page with no twin and asks for Markdown, so the zone
+// converting it is the only way text/markdown comes back. Driven through the
+// real port: a target that resolved to the homepage would hold a twin, and the
+// worker's own Markdown would read as the zone's.
+test("edge: Markdown for Agents converting a page with no twin is a drift; the page's own HTML passes", async () => {
+  const check = edgeCheck("markdown-for-agents-converts-nothing");
+  const edge = { origin: "https://aadhar.sh", checks: [check] };
+  const seen = [];
+  const portAnswering = (contentType) => ({
+    probeEarlyData: async () => ({ skip: "unused" }),
+    fetchEdge: async (url, headers = {}) => {
+      seen.push({ url, accept: headers.accept });
+      if (url.endsWith("/writing/posts.json")) return json([{ slug: "colophon" }, { slug: "in-flux" }]);
+      return new Response("body", { headers: { "content-type": contentType } });
+    },
+  });
+
+  const clean = compareEdge(edge, await readEdge(edge, portAnswering("text/html; charset=utf-8")), { hostedRunner: false });
+  assert.deepEqual(clean, [{ level: "pass", message: "edge markdown-for-agents-converts-nothing holds" }]);
+  assert.deepEqual(seen.at(-1), { url: "https://aadhar.sh/writing/colophon", accept: "text/markdown" });
+
+  const converted = compareEdge(edge, await readEdge(edge, portAnswering("text/markdown; charset=utf-8")), { hostedRunner: false });
+  assert.equal(converted[0].level, "fail");
+  assert.ok(converted[0].message.startsWith('production edge: markdown-for-agents-converts-nothing: content-type does not contain "text/html"'), converted[0].message);
+
+  // No post to probe is an unmeasured check, never a pass.
+  const empty = { probeEarlyData: async () => ({ skip: "unused" }), fetchEdge: async () => json([]) };
+  const unresolved = compareEdge(edge, await readEdge(edge, empty), { hostedRunner: false });
+  assert.equal(unresolved[0].level, "warn");
+  assert.ok(unresolved[0].message.includes("could not resolve its target: posts.json carried no post slug"), unresolved[0].message);
+});
+
 // Replaces a source-text assertion: the old test sliced check-infra.ts at
 // `if (want.earlyData)` and matched `process.env.GITHUB_ACTIONS) warn(` in the
 // slice. That passes on any code that merely SPELLS the split. Three spaced
