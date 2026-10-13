@@ -973,12 +973,17 @@
     }
     // AUTHORIZE
     var authority = (d.oauthProtectedResource && d.oauthProtectedResource.ok) || (d.oauthDiscovery && ((d.oauthDiscovery.openidConfiguration && d.oauthDiscovery.openidConfiguration.ok) || (d.oauthDiscovery.oauthAuthorizationServer && d.oauthDiscovery.oauthAuthorizationServer.ok)));
+    // A site that declares every operation keyless has no permission to scope,
+    // so a missing consent boundary there is not a gap (lensKeylessDeclaration).
+    var keyless = !authority && data.readiness && data.readiness.keyless;
     if (authority) line("ok", "Checked for a delegated-authority boundary → OAuth discovery present. A user could grant scoped access.");
+    else if (keyless) line("ok", "Checked for a consent boundary → not applicable: " + keyless + ", so there is no credential to delegate.");
     else line("warn", "Checked for a consent boundary → none. No scoped, revocable way to act on a user's behalf.");
 
     // verdict
     var verdict, vkind;
     if (action && authority) { verdict = "ACT: this site was built for agents. A task with side effects can run against a real contract."; vkind = "ok"; }
+    else if (action && keyless) { verdict = "ACT: this site was built for agents. Its contract needs no credential, so an agent calls it as itself."; vkind = "ok"; }
     else if (action) { verdict = "ACT (unsafe): an action surface exists, but with no consent boundary an agent acts without scoped permission."; vkind = "warn"; }
     else { verdict = "BLOCKED: a task needing action can't complete. An agent can read this page, but not do anything here without a human driving a browser."; vkind = "no"; }
     line(vkind, "task verdict → " + verdict);
@@ -1079,6 +1084,13 @@
     checks = checks || {};
     return !!(m && m.checks.some((n) => { return checks[n] && checks[n].status === "pass"; }));
   }
+  // Every check behind a stage was declared not applicable by the site, which
+  // satisfies the stage without claiming a surface was published.
+  function cfNotApplicable(key, checks) {
+    var m = CF_MAP[key];
+    checks = checks || {};
+    return !!(m && m.checks.every((n) => { return checks[n] && checks[n].notApplicable; }));
+  }
   // A probe that never answered (a 5xx, a timeout, the subrequest cap) grades its
   // check "unknown". Reading that as "missing" would claim the surface is absent
   // when nobody got to look, so the Delta path says so instead.
@@ -1114,7 +1126,7 @@
       { key: "markdown", label: "Clean machine text", stage: "Read", observed: canRead, signal: cfObserved("markdown", checks), detail: "Serve a deliberate text/markdown representation from the same URL." },
       { key: "semantic", label: "Entity schema", stage: "Understand", observed: !!semantic, detail: "Publish stable entities and properties a parser can validate." },
       { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), unknown: cfUnknown("contract", checks), detail: "Describe callable operations, their parameters, and side effects. In 2026 this contract is landing as MCP servers and agent CLIs, not the OpenAPI files that mostly never shipped." },
-      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), unknown: cfUnknown("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
+      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), na: cfNotApplicable("authority", checks), unknown: cfUnknown("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
       { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance. No probe measures this surface yet, so it is always shown as a projection, never as observed." },
     ];
     var controls = '<div class="lx-cf-grid">' + cf.map((x) => {
@@ -1134,7 +1146,7 @@
     var open = true, reached = null, stopStage = null;
     var path = cf.map((x) => {
       var signal = x.signal == null ? x.observed : x.signal;
-      var satisfied = x.observed || !!counterfactuals[x.key];
+      var satisfied = x.observed || !!x.na || !!counterfactuals[x.key];
       var state, copy;
       if (!open) {
         state = { text: "unreached", kind: "off" };
@@ -1146,6 +1158,9 @@
         copy = x.key === "markdown"
           ? words + " words reached an identified bot." + (signal ? " The same URL also answers text/markdown." : " There is no deliberate machine text; the switch adds one.")
           : "published signal found";
+      } else if (x.na) {
+        state = { text: "not applicable", kind: "ok" };
+        copy = "The site declares every operation keyless, so there is no authority to delegate.";
       } else if (counterfactuals[x.key]) {
         state = { text: "counterfactual", kind: "warn" };
         copy = x.detail;
@@ -1242,6 +1257,7 @@
 
   function readinessStatus(item) {
     if (item.status === "pass") return { text: "pass", kind: "ok" };
+    if (item.notApplicable) return { text: "n/a", kind: "off" };
     if (item.status === "neutral") return { text: "optional", kind: "off" };
     if (item.status === "unknown") return { text: "unknown", kind: "warn" };
     return { text: "fix", kind: "warn" };
@@ -1272,7 +1288,7 @@
       { key: "contract", label: "Action contract" },
       { key: "authority", label: "Delegated authority" },
     ];
-    var active = direct.filter((x) => { return counterfactuals[x.key] && !cfObserved(x.key, checks); });
+    var active = direct.filter((x) => { return counterfactuals[x.key] && !cfObserved(x.key, checks) && !cfNotApplicable(x.key, checks); });
     if (!active.length) return null;
     var pass = readiness.passed;
     var counted = readiness.counted;
