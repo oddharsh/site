@@ -19,7 +19,8 @@ const operations = Object.entries(spec.paths).flatMap(([path, item]) =>
 
 test("the spec is OpenAPI 3.1 for this origin, keyless", () => {
   assert.match(spec.openapi, /^3\.1\.\d+$/);
-  assert.deepEqual(spec.servers, [{ url: "https://aadhar.sh" }]);
+  assert.deepEqual(spec.servers.map((s) => s.url), ["https://aadhar.sh"]);
+  assert.match(spec.servers[0].description, /sandbox/, "production is named as the sandbox, since it is one");
   assert.deepEqual(spec.security, [], "no endpoint needs a key");
   assert.ok(spec.info.title && spec.info.version && spec.info.description);
   assert.ok(operations.length >= 10);

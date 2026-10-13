@@ -13,6 +13,10 @@
 //     a request that pins any other version is a JSON 400 (VERSION_POLICY).
 //   - deprecation. An operation marked `deprecated` answers with Deprecation
 //     (RFC 9745) and Sunset (RFC 8594), and a Link to its successor.
+//   - the rate. An operation with no limiter of its own (sharesReadBudget)
+//     bills API_READ_BUDGET per caller and names it in RateLimit-Policy on
+//     every answer; over it, a JSON 429 with Retry-After and RateLimit. The
+//     Lens doors keep their own, stricter budgets (lens-pipeline.ts).
 //
 // Every API response also carries `Link: </openapi.json>; rel="service-desc"`
 // (RFC 8631), so a client holding any one response can find the description.
@@ -20,8 +24,10 @@
 // dispatch.ts calls apiPreflight before routing and withApiContract on every
 // answer from an API path, the preflight's refusals included.
 // Node-safe (gotcha 16).
-import { API_VERSION, API_VERSION_HEADER, OPENAPI_PATH, OPERATIONS, type Deprecation, type Operation } from "./public-api.ts";
+import { API_VERSION, API_VERSION_HEADER, OPENAPI_PATH, OPERATIONS, READ_POLICY, sharesReadBudget, type Deprecation, type Operation } from "./public-api.ts";
+import { API_READ_BUDGET } from "./api-limits.ts";
 import { jsonResponse } from "./http.ts";
+import { overBudget, rateLimitPolicy, rateLimitedHeaders } from "./ratelimit.ts";
 
 const DOCS = "https://aadhar.sh/developers";
 
@@ -39,8 +45,12 @@ export function allowedMethods(ops: readonly Operation[]): string[] {
   return ["GET", "HEAD", "POST", "OPTIONS"].filter((m) => methods.has(m));
 }
 
+/** The paths whose every operation bills the shared read budget. */
+const READ_BUDGETED: ReadonlySet<string> = new Set([...BY_PATH].filter(([, ops]) => ops.every(sharesReadBudget)).map(([path]) => path));
+const READ_POLICY_HEADER = rateLimitPolicy(...READ_POLICY);
+
 /** A refusal this layer answers before the handler runs, or null to route. */
-export function apiPreflight(request: Request, pathname: string): Response | null {
+export async function apiPreflight(request: Request, pathname: string, env: unknown): Promise<Response | null> {
   const ops = BY_PATH.get(pathname);
   if (!ops) return null;
   const allow = allowedMethods(ops);
@@ -54,6 +64,12 @@ export function apiPreflight(request: Request, pathname: string): Response | nul
     return contractError(400, "unsupported_api_version",
       `${API_VERSION_HEADER} ${JSON.stringify(pinned.trim())} is not a version this server serves. The live version is ${API_VERSION}.`,
       { supported: [API_VERSION] }, {});
+  }
+  // OPTIONS is a question about the API rather than a read of it, so it is free.
+  if (request.method !== "OPTIONS" && READ_BUDGETED.has(pathname) && await overBudget(API_READ_BUDGET, request, env)) {
+    return contractError(429, "rate_limited",
+      `Over the read budget of ${API_READ_BUDGET.max} requests a minute per caller. Retry after the Retry-After seconds.`,
+      {}, rateLimitedHeaders(...READ_POLICY));
   }
   return null;
 }
@@ -69,6 +85,7 @@ export function withApiContract(response: Response, pathname: string, method: st
   const out = new Response(response.body, response);
   out.headers.set(API_VERSION_HEADER, API_VERSION);
   out.headers.append("link", SERVICE_DESC);
+  if (READ_BUDGETED.has(pathname) && !out.headers.has("ratelimit-policy")) out.headers.set("ratelimit-policy", READ_POLICY_HEADER);
   // One path can carry two operations (GET and POST /ask), and a deprecation
   // is per operation, so it follows the method this request used.
   const want = method === "HEAD" ? "get" : method.toLowerCase();

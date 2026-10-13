@@ -466,6 +466,9 @@ const ROUTES = [
   // the OpenAPI description is a static file, and the usual guesses point at it
   { path: "/openapi.json", status: 200, ct: "application/json", marker: "\"operationId\"" },
   { path: "/swagger.json", status: 301 },
+  // and so do the usual guesses at the developer guide
+  { path: "/docs", status: 301 },
+  { path: "/api-docs", status: 301 },
   // the listings are retired: every listing URL 301s to the /photos archive
   { path: "/images", status: 301 },
   { path: "/images/", status: 301 },

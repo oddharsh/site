@@ -406,6 +406,11 @@ const worker = defineWorker({
     // lexical ranking, named in `_meta.ranking`, rather than a refusal.
     // Mirrored in ASK_BUDGET.
     ASK_RL: bindings.rateLimit({ namespace: "1016", simple: { limit: 20, period: 60 } }),
+    // The shared read budget of the documented API (lib/api-contract.ts):
+    // every operation without a limiter of its own bills it, and names it in
+    // RateLimit-Policy. Generous on purpose; it states a ceiling rather than
+    // rationing reads. Mirrored in API_READ_BUDGET (lib/api-limits.ts).
+    API_RL: bindings.rateLimit({ namespace: "1017", simple: { limit: 120, period: 60 } }),
 
     // Not a secret: an account id is an identifier, and this one is already
     // committed as the default in tools/photos/gen-alt-text.ts. It is a VAR

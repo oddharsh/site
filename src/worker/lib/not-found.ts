@@ -59,7 +59,14 @@ export const MISS_LINKS = [
 // card is /.well-known/mcp/server-card.json. AGENTS.md is guidance for agents
 // written in Markdown, and /llms.txt is this site's. The OpenAPI guesses are the
 // JSON spellings only: a YAML path would be answered in a format it did not ask for.
+// The developer-guide guesses (/docs, /api-docs and the like) go to /developers,
+// the page that is that guide.
 export const DISCOVERY_ALIASES: Readonly<Record<string, string>> = {
+  "/docs": "/developers",
+  "/docs/api": "/developers",
+  "/api-docs": "/developers",
+  "/api/docs": "/developers",
+  "/developer": "/developers",
   "/swagger.json": "/openapi.json",
   "/api/openapi.json": "/openapi.json",
   "/.well-known/openapi.json": "/openapi.json",

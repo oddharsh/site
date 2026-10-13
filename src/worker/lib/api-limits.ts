@@ -6,9 +6,9 @@
 // 2026-10-13, and only the page prose had a drift check. Now the handler reads
 // the same constant the documents print, so the two cannot disagree.
 //
-// The rate budgets are not here because they already live beside the code that
-// spends them: LENS_BUDGETS (lens-pipeline.ts) and ASK_BUDGET (ask-rank.ts),
-// each held to its cloudflare.config.ts ratelimit by
+// The per-feature rate budgets live beside the code that spends them:
+// LENS_BUDGETS (lens-pipeline.ts) and ASK_BUDGET (ask-rank.ts). The one here is
+// the API's own. Each is held to its cloudflare.config.ts ratelimit by
 // contract-lens-per-ip-crawl-budgets.
 //
 // Node-safe (gotcha 16): no imports.
@@ -24,6 +24,12 @@ export const ASK_LIMITS = { topKDefault: 10, topKMax: 50, prevMax: 10 } as const
 
 /** /around/changes.json and the change_radar tool. */
 export const CHANGE_RADAR_LIMITS = { limitDefault: 50, limitMax: 100 } as const;
+
+/** The read budget every documented endpoint without a budget of its own
+ *  shares, per caller per minute (lib/api-contract.ts). Sized so a person or
+ *  an agent paging the photo archive never meets it; it exists so the API
+ *  can say what it tolerates (RateLimit-Policy) and mean it. */
+export const API_READ_BUDGET = { binding: "API_RL", max: 120 } as const;
 
 /** How long /lens/fetch waits on the target before answering 502. */
 export const LENS_FETCH_TIMEOUT_MS = 8000;
