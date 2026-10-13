@@ -70,7 +70,13 @@ function readLink(s, i) {
     if (s[j] === "[") depth++;
     else if (s[j] === "]" && --depth === 0) break;
   }
-  if (j >= s.length || s[j + 1] !== "(") return null;
+  if (j >= s.length) return null;
+  // [text][key]: a glossary term, resolved against the twin's definitions
+  if (s[j + 1] === "[") {
+    const ref = /^\[([a-z0-9]+(?:-[a-z0-9]+)*)\]/.exec(s.slice(j + 1));
+    return ref ? { text: s.slice(i + 1, j), key: ref[1], end: j + 1 + ref[0].length } : null;
+  }
+  if (s[j + 1] !== "(") return null;
   let k = j + 2, parens = 1;
   for (; k < s.length; k++) {
     if (s[k] === "(") parens++;
@@ -79,6 +85,17 @@ function readLink(s, i) {
   if (k >= s.length) return null;
   return { text: s.slice(i + 1, j), href: s.slice(j + 2, k).trim(), end: k + 1 };
 }
+
+// One render's context: the glossary its twin defines, and the origin whose
+// links come back as paths. Set by mdToHtml for the length of one call.
+const render = { terms: new Map(), origin: "" };
+
+// A link on this site comes back as a path, which is how a hand-written page
+// writes it; html-to-md made it absolute for the twin.
+const local = (href) => (render.origin && href.startsWith(render.origin + "/") ? href.slice(render.origin.length) : href);
+
+// `[key]: https://… "definition"`, the glossary html-to-md closes a twin with.
+const DEFINITION = /^\[([a-z0-9]+(?:-[a-z0-9]+)*)\]: (\S+) "((?:[^"\\]|\\.)*)"$/;
 
 export function inline(s) {
   let out = "";
@@ -124,9 +141,17 @@ export function inline(s) {
     }
     if (c === "[") {
       const l = readLink(s, i);
-      if (l) {
+      if (l && l.key) {
+        const term = render.terms.get(l.key);
+        if (term) {
+          // The markup every hand-written Garage page gives a term, byte for byte.
+          out += `<a class="term" data-t="${esc(l.key)}" href="${esc(term.href)}" title="${esc(term.title)}" rel="external">${inline(l.text)}</a>`;
+          i = l.end - 1;
+          continue;
+        }
+      } else if (l) {
         const text = inline(l.text);
-        out += executes(l.href) ? text : `<a href="${esc(l.href)}">${text}</a>`;
+        out += executes(l.href) ? text : `<a href="${esc(local(l.href))}">${text}</a>`;
         i = l.end - 1;
         continue;
       }
@@ -265,7 +290,24 @@ export function blocks(md) {
 
 /** Markdown (the twin language) to an HTML fragment. A served twin opens with
  *  YAML front matter (title, path, source); that is metadata about the page,
- *  so it stays out of the body the way <head> stays out of a page's text. */
-export function mdToHtml(md) {
-  return blocks(md.replace(/^---\n[\s\S]*?\n---\n/, ""));
+ *  so it stays out of the body the way <head> stays out of a page's text. Its
+ *  glossary renders nothing where it stands; it feeds the terms in the text.
+ *
+ *  `origin` asks for the page a hand-written Garage page would be: links on
+ *  that origin come back as paths, and the paragraph under the title is the
+ *  intro. Without it the output is the twin's own reading, links as written.
+ *  @param {string} md
+ *  @param {{ origin?: string }} [options] */
+export function mdToHtml(md, options = {}) {
+  render.terms = new Map();
+  render.origin = options.origin || "";
+  const lines = [];
+  for (const line of md.replace(/^---\n[\s\S]*?\n---\n/, "").split("\n")) {
+    const def = DEFINITION.exec(line);
+    if (def) render.terms.set(def[1], { href: def[2], title: def[3].replace(/\\(["\\])/g, "$1") });
+    else lines.push(line);
+  }
+  let html = blocks(lines.join("\n"));
+  if (render.origin) html = html.replace(/^(<h1>[^\n]*<\/h1>\n)<p>/, '$1<p class="garage-intro">');
+  return html;
 }

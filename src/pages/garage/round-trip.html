@@ -86,17 +86,10 @@
   var ORIGIN = "https://aadhar.sh";
   Promise.all([fetch("/garage/round-trip.md").then(text), lib]).then(function(got){
     var md = got[0], t0 = performance.now();
-    doc.innerHTML = got[1].mdToHtml(md);
-    // The conventions a hand-written Garage page follows, applied to what the
-    // parser made: the paragraph under the title is the intro, a link on this
-    // site is a path, and a link off it is marked external.
-    var lede = doc.querySelector("h1 + p");
-    if (lede) lede.className = "garage-intro";
-    doc.querySelectorAll("a[href]").forEach(function(a){
-      var href = a.getAttribute("href");
-      if (href.indexOf(ORIGIN + "/") === 0) a.setAttribute("href", href.slice(ORIGIN.length));
-      else if (/^https?:/.test(href)) a.setAttribute("rel", "external");
-    });
+    // With its origin, the parser writes the page a hand-written Garage page
+    // would be: the intro paragraph, links on this site as paths, and every
+    // term in the same markup, byte for byte. A contract test holds it there.
+    doc.innerHTML = got[1].mdToHtml(md, { origin: ORIGIN });
     var anchor = null;
     doc.querySelectorAll("h2").forEach(function(h){ if (!anchor && /^Take a page on the trip/.test(h.textContent)) anchor = h.nextElementSibling || h; });
     if (anchor) anchor.after(demo); else doc.after(demo);
@@ -131,7 +124,7 @@
     out.textContent = "fetching " + path + " and " + path + ".md";
     Promise.all([fetch(path).then(text), fetch(path + ".md").then(function(r){ return r.ok ? r.text() : ""; }), lib])
       .then(function(got){
-        var html = got[0], md = got[1], rebuilt = got[2].mdToHtml(md);
+        var html = got[0], md = got[1], rebuilt = got[2].mdToHtml(md, { origin: ORIGIN });
         if (!md) { out.textContent = path + " has no twin to rebuild"; return; }
         var page = new DOMParser().parseFromString(html, "text/html");
         // A page that renders from its own Markdown ships a frame, so its HTML

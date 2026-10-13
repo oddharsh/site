@@ -58,6 +58,20 @@ test("a heading keeps the parts its CSS sets apart", () => {
   assert.equal(page("<h2><b>Plain</b> <span>heading</span></h2>"), "## **Plain** heading");
 });
 
+test("a glossary term becomes a reference link, and its definition closes the twin", () => {
+  const term = (key, title, text) => `<a class="term" data-t="${key}" href="https://en.wikipedia.org/wiki/${text}" title="${title}" rel="external">${text}</a>`;
+  const md = twin(`<p>${term("srgb", "A colour space.", "sRGB")} and ${term("brotli", "Says &quot;hi&quot; with a \\ in it.", "Brotli")}, then ${term("srgb", "A colour space.", "sRGB")} again.</p>`);
+  assert.equal(md, [
+    "[sRGB][srgb] and [Brotli][brotli], then [sRGB][srgb] again.",
+    "",
+    '[srgb]: https://en.wikipedia.org/wiki/sRGB "A colour space."',
+    '[brotli]: https://en.wikipedia.org/wiki/Brotli "Says \\"hi\\" with a \\\\ in it."',
+  ].join("\n"));
+  // controls: a titled link that is no term stays an inline link, and a page
+  // with no terms has no glossary
+  assert.equal(twin('<p><a href="https://a.example/" title="hover text">plain</a></p>'), "[plain](https://a.example/)");
+});
+
 test("a table keeps its caption", () => {
   const md = twin("<table><caption>The old project is parked as a rollback.</caption><tr><th>a</th></tr><tr><td>1</td></tr></table>");
   assert.equal(md, "The old project is parked as a rollback.\n\n| a |\n| --- |\n| 1 |");

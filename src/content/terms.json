@@ -489,6 +489,11 @@
     "plain": "The moment the browser first draws anything on screen after it starts loading a page.",
     "src": "https://developer.mozilla.org/en-US/docs/Glossary/First_paint"
   },
+  "fixed-point": {
+    "label": "fixed point",
+    "plain": "A value a function hands back unchanged. A twin that converts to HTML and back to the same bytes is a fixed point of the round trip.",
+    "src": "https://en.wikipedia.org/wiki/Fixed_point_(mathematics)"
+  },
   "formal-verification": {
     "label": "formal verification",
     "plain": "Using a computer-checked mathematical proof to show a program or system meets a precise specification for every possible input.",
@@ -783,6 +788,11 @@
     "label": "main thread",
     "plain": "The single thread where a browser runs a page's JavaScript, handles input and lays out the page, so long work there freezes everything.",
     "src": "https://developer.mozilla.org/en-US/docs/Glossary/Main_thread"
+  },
+  "markdown": {
+    "label": "Markdown",
+    "plain": "A plain-text writing format where # starts a heading, two asterisks make text bold and [text](url) makes a link. CommonMark is its precise specification.",
+    "src": "https://commonmark.org/"
   },
   "masonry": {
     "label": "Masonry layout",
@@ -1268,6 +1278,11 @@
     "label": "stdin",
     "plain": "A program's standard input, the stream it reads from by default. A tool that talks over stdin and stdout can be driven by another program.",
     "src": "https://en.wikipedia.org/wiki/Standard_streams"
+  },
+  "superscript": {
+    "label": "superscript",
+    "plain": "Text set slightly above the line in smaller type, like the 2 in x squared. HTML marks it with the sup element.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/sup"
   },
   "symbolic-link": {
     "label": "Symlink",
