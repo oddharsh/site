@@ -69,7 +69,7 @@ import type { EarlyDataResult, WorkflowBlocks } from "./lib/infra-compare.ts";
 import {
   cloudflareReader, edgeFetcher, githubReader, readD1Databases, readDns, readEdge,
   readKvNamespaces, readR2Buckets, readRepository, readTokens, readVersionAffinity,
-  readWorkerScripts, readWorkersBuilds, readZoneSetting,
+  readWorkerScripts, readWorkersBuilds, readZoneSetting, servedByEdge,
 } from "./lib/infra-ports.ts";
 import { createReport } from "./lib/infra-report.ts";
 
@@ -122,17 +122,25 @@ async function probeEarlyData(host: string): Promise<EarlyDataResult> {
     // attempt 1 and pays none of this. Only a probe already heading for a drift
     // report spends the extra seconds, which is the run where being right matters.
     const BACKOFF_MS = [0, 1500, 4000];
+    // A resumption only counts as rejected when the handshake before it completed.
+    // s_client prints "New, TLSv1.3, Cipher is ..." once it has one; a host it
+    // cannot reach (a sandbox with no direct egress) prints only the error, and
+    // that run used to report "rejected on 3 spaced resumptions" as drift.
+    let resumptions = 0;
     for (let attempt = 0; attempt < BACKOFF_MS.length; attempt++) {
       if (BACKOFF_MS[attempt]) await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt]));
-      await execFileP("sh", ["-c",
-        `{ cat "${req}"; sleep 2; } | "${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_out "${sess}" >/dev/null 2>&1`,
-      ], { timeout: 20000 }).catch(() => {});
+      const first = await execFileP("sh", ["-c",
+        `{ cat "${req}"; sleep 2; } | "${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_out "${sess}" 2>&1`,
+      ], { timeout: 20000 }).catch((e) => ({ stdout: `${e.stdout || ""}${e.stderr || ""}` }));
+      if (!/^New, TLS/m.test(first.stdout || "")) continue;
+      resumptions++;
       const out = await execFileP("sh", ["-c",
         `"${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_in "${sess}" -early_data "${req}" </dev/null 2>&1`,
       ], { timeout: 20000 }).catch((e) => ({ stdout: `${e.stdout || ""}${e.stderr || ""}` }));
       if (/early data was accepted/i.test(out.stdout || "")) return { accepted: true, attempts: attempt + 1 };
     }
-    return { accepted: false, attempts: BACKOFF_MS.length };
+    if (!resumptions) return { skip: `no TLS handshake with ${host}:443 completed in ${BACKOFF_MS.length} attempts, so there was no session to resume` };
+    return { accepted: false, attempts: resumptions };
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
@@ -617,6 +625,10 @@ async function checkAgentMarkdown() {
     return;
   }
   const gaps = [];
+  // A probe Cloudflare's edge didn't answer measured nothing, so it is neither a
+  // gap nor a twin. Behind a sandbox proxy every probe got the same text/plain
+  // 403, and the six surfaces that declare text/plain counted as answering.
+  const unmeasured: string[] = [];
   for (const p of pages) {
     try {
       // redirect: "manual". Following one made this probe report the DESTINATION's
@@ -626,6 +638,10 @@ async function checkAgentMarkdown() {
       // A redirect is its own gap and says so, since an agent that follows one
       // off-origin has left the surface the registry advertised.
       const res = await fetchEdge(`${infra.edge.origin}${p.path}`, { accept: "text/markdown" }, { redirect: "manual" });
+      if (!servedByEdge(res)) {
+        unmeasured.push(`${p.path} (HTTP ${res.status} without cf-ray)`);
+        continue;
+      }
       if (res.status >= 300 && res.status < 400) {
         gaps.push(`${p.path} (${res.status} to ${res.headers.get("location") || "?"})`);
         continue;
@@ -633,12 +649,19 @@ async function checkAgentMarkdown() {
       const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
       if (ct !== agentRepresentation(p)) gaps.push(`${p.path} (${ct || "no content-type"})`);
     } catch (e) {
-      warn(`agent markdown probe failed for ${p.path}: ${e.message}`);
+      unmeasured.push(`${p.path} (${e.message})`);
     }
   }
-  gaps.length
-    ? warn(`agent markdown coverage: ${pages.length - gaps.length}/${pages.length} agents:true surfaces answer Accept: text/markdown in their declared representation. No twin: ${gaps.join(", ")}. Give each one a twin, declare the representation its route serves (mimeType), or drop flags.agents so the registry stops advertising it`)
-    : pass(`agent markdown coverage: all ${pages.length} agents:true surfaces answer an agent in their declared representation`);
+  // A pass needs every surface measured. Until 2026-10-13 a run where every
+  // probe threw left `gaps` empty and printed "all N answer".
+  if (unmeasured.length === pages.length) {
+    warn(`agent markdown coverage could not run: Cloudflare's edge answered none of the ${pages.length} probes (first: ${unmeasured[0]})`);
+    return;
+  }
+  if (unmeasured.length) warn(`agent markdown coverage left ${unmeasured.length}/${pages.length} surfaces unmeasured: ${unmeasured.join(", ")}`);
+  const measured = pages.length - unmeasured.length;
+  if (gaps.length) warn(`agent markdown coverage: ${measured - gaps.length}/${measured} measured agents:true surfaces answer Accept: text/markdown in their declared representation. No twin: ${gaps.join(", ")}. Give each one a twin, declare the representation its route serves (mimeType), or drop flags.agents so the registry stops advertising it`);
+  else if (!unmeasured.length) pass(`agent markdown coverage: all ${pages.length} agents:true surfaces answer an agent in their declared representation`);
 }
 
 // ----------------------------------------------------------------- main ----

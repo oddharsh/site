@@ -471,7 +471,9 @@ function renderInline(nodes, ctx) {
     }
     if (dropped(n)) continue;
     switch (n.name) {
-      case "br": out += "  \n"; break;
+      // Inside a table cell a hard break would end the row, so the cell keeps
+      // <br>, which GFM reads there. Elsewhere it is the Markdown hard break.
+      case "br": out += ctx.inCell ? "<br>" : "  \n"; break;
       case "code": case "kbd": case "samp": {
         const t = textOf(n);
         // pick a fence that cannot collide with backticks inside the span
@@ -499,6 +501,18 @@ function renderInline(nodes, ctx) {
         // as a citation. No page here authors one, and the check is widened
         // anyway because the cost is a regex and the input set only ever grows.
         if (!href || href.startsWith("#") || executesRatherThanAddresses(href)) { out += inner; break; }
+        // A glossary term (<a class="term" data-t="srgb" … title="…">) becomes
+        // a reference link, [sRGB][srgb], and its definition joins the glossary
+        // readDocument appends to the twin. The key, the source and the
+        // definition all survive, so a page rendered from the twin can write the
+        // term back byte for byte, and an agent gets the definitions too.
+        const key = hasClass(n, "term") ? (n.attrs["data-t"] || "") : "";
+        const title = (n.attrs.title || "").trim();
+        if (ctx.terms && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(key) && title) {
+          if (!ctx.terms.has(key)) ctx.terms.set(key, { href: absolute(href, ctx.origin), title });
+          out += `[${inner}][${key}]`;
+          break;
+        }
         out += `[${inner}](${absolute(href, ctx.origin)})`;
         break;
       }
@@ -705,7 +719,9 @@ function renderBlocks(nodes, ctx, depth = 0) {
   return out.join("\n\n");
 }
 
-function renderTable(table, ctx) {
+function renderTable(table, outer) {
+  // Cells render with inCell set, so a <br> stays <br> (see renderInline).
+  const ctx = { ...outer, inCell: true };
   // One rendered table row: its cells, and whether it was the header row.
   const rows: { cells: string[], head: boolean }[] = [];
   const walk = (node) => {
@@ -771,18 +787,24 @@ function renderText(nodes, ctx, items = false) {
   return out;
 }
 
+// The glossary that closes a twin: one CommonMark link reference definition
+// per term, in the order the page first uses them. A title is quoted, so a
+// backslash and a double quote inside it are escaped, backslash first.
+function glossary(terms: Map<string, { href: string; title: string }>): string {
+  const quote = (t: string) => t.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\s+/g, " ");
+  return [...terms].map(([key, { href, title }]) => `[${key}]: ${href} "${quote(title)}"`).join("\n");
+}
+
 /** Parse a full HTML document into { title, description, canonical, status, body }. */
 export function readDocument(html, { origin = "https://aadhar.sh", format = "markdown" }: { origin?: string; format?: "markdown" | "text" } = {}) {
   const root = parse(html);
   const meta = collectMeta(root);
   const content = findContent(root);
-  const ctx = { origin, blockClasses: collectBlockClasses(html), containerClasses: collectContainerClasses(html) };
-  return {
-    ...meta,
-    body: format === "text"
-      ? squeeze(renderText(content.children, ctx, isContainer(content, ctx))).trim()
-      : renderChildren(content, ctx, 0).replace(/\n{3,}/g, "\n\n").trim(),
-  };
+  const terms = new Map<string, { href: string; title: string }>();
+  const ctx = { origin, blockClasses: collectBlockClasses(html), containerClasses: collectContainerClasses(html), terms };
+  if (format === "text") return { ...meta, body: squeeze(renderText(content.children, ctx, isContainer(content, ctx))).trim() };
+  const body = renderChildren(content, ctx, 0).replace(/\n{3,}/g, "\n\n").trim();
+  return { ...meta, body: terms.size ? `${body}\n\n${glossary(terms)}` : body };
 }
 
 function collectMeta(root) {

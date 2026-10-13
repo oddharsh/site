@@ -167,6 +167,11 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
   { file: "garage/pretext.lib.js", kind: "module", marker: "prepareWithSegments", base: "pretext-lib", scope: "page",
     budget: "unbudgeted",
     load: [{ via: "import", also: ["./pretext.lib.js"] }], loadedBy: ["public/garage/pretext.html"] },
+  // /garage/round-trip's parser: the inverse of tools/lib/html-to-md.ts. The
+  // page imports it RELATIVELY, and the contract suite imports the source to
+  // hold every twin to the round trip. The marker is its export name.
+  { file: "garage/md-to-html.js", kind: "module", marker: "mdToHtml", scope: "page", budget: "unbudgeted",
+    load: [{ via: "import", also: ["./md-to-html.js"] }], loadedBy: ["public/garage/round-trip.html"] },
   // /garage/av2's AV2 decoder, run as a module Worker. The page names it in
   // `new Worker(...)`, so that call is the pattern; the prose's <code> mention
   // of the path has no `new Worker(` before it and stays plain. Its WASM is a

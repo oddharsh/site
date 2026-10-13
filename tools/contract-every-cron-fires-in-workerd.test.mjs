@@ -60,7 +60,7 @@
 // THE CONTROL, run before this was committed: deleting the `41 5` arm from
 // lib/cron.ts's cronJob() sends that cron to `cron.unmatched`, and this test
 // fails naming the cron and the unmatched span; restoring the arm goes green.
-import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,6 +68,7 @@ import { createTestHarness } from "wrangler";
 import { parseJsonc } from "./lib/jsonc.ts";
 import { REMOTE_ONLY_KEYS } from "./lib/site-config.ts";
 import { underNode } from "./lib/harness-dispatch.ts";
+import { linkServedTree, planServedTree } from "./lib/served-tree.ts";
 import { CENSUS_ROSTER } from "../src/worker/census.ts";
 import { NEIGHBORS } from "../src/worker/around.ts";
 import { citationsIn } from "../src/worker/webmention-send.ts";
@@ -301,11 +302,11 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   // this site's pages. A handful of symlinks rather than dev-stage's farm,
   // because that one writes .dev-assets into the repository a dev server may be
   // serving from.
+  // The farm comes from served-tree's own adapter, so a directory both roots
+  // provide (garage/, since /garage/round-trip's Markdown authors in
+  // src/content) is made for real and merged rather than linked twice.
   const assets = join(dir, "assets");
-  mkdirSync(assets);
-  for (const root of ["src/pages", "src/content"]) {
-    for (const name of readdirSync(at(root))) symlinkSync(join(at(root), name), join(assets, name));
-  }
+  await linkServedTree(await planServedTree({ cwd: at("."), roots: ["src/pages", "src/content"] }), assets, { cwd: at(".") });
   symlinkSync(at("public/images"), join(assets, "images"));
 
   writeFileSync(join(dir, "worker.js"), workerSource(at("src/worker/index.ts"), at("src/worker/lib/trace.ts")));

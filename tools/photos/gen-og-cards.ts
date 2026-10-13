@@ -118,6 +118,7 @@ const HERO = {
   // 111px it misses the single-hero floor, so it spans from its own heading.
   "garage-ig-prep":    { span: ['h2:has-text("What the chroma choice costs")', "#ig-chroma"], hero: [".ig-conf"] },
   "garage-resample":   { hero: ["#hl-demo"] },
+  "garage-round-trip": { hero: ["#rt-demo"] },
   // ── lwe ─────────────────────────────────────────────────────────────────
   "lwe-dac":      { hero: ["#demo-ladder", ".demo"] },
   "lwe-drivers":  { hero: ["#demo-motion", ".demo"] },
@@ -488,6 +489,10 @@ async function main() {
   const fb = results.filter(r => r.usedFallback).length;
   console.log(`\n${ok}/${results.length} cards written to public/og/  (${fb} used the window fallback)`);
   if (fb) console.log("fallback pages may want a hero selector in HERO{} — check the gallery.");
+  // A card that failed keeps its old JPEG, so the tree reads clean. Without a
+  // non-zero exit, og-cards.yml reported "Every card already matches what
+  // production renders" on a bake that wrote 0/1 cards (run 38481736111).
+  if (ok < results.length) process.exitCode = 1;
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

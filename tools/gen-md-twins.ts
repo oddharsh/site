@@ -296,7 +296,9 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
   }
 
   for (const section of INDEXED_SECTIONS) {
-    files.set(`/${section}/llms.txt`, renderSectionIndex(section, manifest.surfaces, { descriptions, twins: new Set(files.keys()) }));
+    // A committed twin is a twin too: /garage/round-trip renders FROM its, and
+    // listing it as "HTML only" told agents the opposite of what it is.
+    files.set(`/${section}/llms.txt`, renderSectionIndex(section, manifest.surfaces, { descriptions, twins: new Set([...files.keys(), ...committed]) }));
   }
 
   return { files, skipped, generated, committed };
