@@ -515,7 +515,7 @@ does not make a failed write safe to ignore.
 
   Review Bun checker upgrades for new checks on unchanged source and keep
   tsgolint paired with the compiler, as described above.
-- @types/bun 1.4.2 is the exact type pin for host tools and tests. It supplies
+- @types/bun 1.4.3 is the exact type pin for host tools and tests. It supplies
   Node globals as well as Bun APIs such as HTMLRewriter, so those programs use
   one `types` entry. It adds no runtime dependency or served byte.
 
