@@ -18,8 +18,10 @@ const PAGES = [
   ["/developers", trust.renderDevelopersPage],
 ];
 
+// The text between the page's <h1> and its <footer>: the document itself,
+// without the chrome. That region holds no <script> or <style> (asserted
+// below), so dropping tags is enough to read it.
 const text = (html) => html
-  .replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/g, " ")
   .replace(/<[^>]+>/g, " ")
   .replace(/&amp;/g, "&").replace(/&[a-z]+;|&#\d+;/g, " ")
   .replace(/\s+/g, " ");
@@ -30,6 +32,8 @@ for (const [route, render] of PAGES) {
     assert.equal(render.length, 0, "any parameter is a door for runtime state");
     const a = await render().text();
     assert.equal(a, await render().text(), "deterministic");
+    const region = a.slice(a.indexOf("<h1"), a.indexOf("<footer"));
+    assert.ok(!/<(script|style)\b/i.test(region), "the measured region is markup and text only");
     assert.ok(main(a).length >= 500, `${route} carries ${main(a).length} characters of text, under 500`);
     assert.ok(a.includes(`<link rel="canonical" href="https://aadhar.sh${route}">`));
     assert.ok(!/\u2014/.test(main(a)), "house voice: no em dash");
