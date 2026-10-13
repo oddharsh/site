@@ -26,8 +26,11 @@
 # contract-av2-decoder-matches-avm.test.mjs holds the shipped samples to the
 # plane hashes native AVM produced (expected.json, written by expect.ts).
 #
-# COST. About 1.76 MB, 430 KB at Brotli q11. Warm decode under Bun on an M3
-# Max: 80 to 130 ms per 600px tile. -msimd128 auto-vectorization measured no
+# COST. 1,760,696 B. Brotli q11 gets it to about 430 KB, but it ships with no
+# precompressed twin, so the edge compresses it on the fly: measured on a branch
+# preview 2026-10-13, 535,708 B br, 556,087 B zstd, 617,286 B gzip. Warm decode
+# under Bun on an M3 Max: 80 to 130 ms per 600px tile; in Chrome on the
+# preview, 39 to 92 ms. -msimd128 auto-vectorization measured no
 # faster, so it stays off.
 #
 #   ./build.sh            needs emcc (brew install emscripten) and the AVM
