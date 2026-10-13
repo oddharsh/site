@@ -24,6 +24,8 @@
 .garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
+.rt-pending{min-height:60vh}
+.rt-proof{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:14px;padding-top:6px}
 .rt-demo{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;padding:8px 10px;margin:10px 0}
 .rt-pick{font-size:var(--text-xs);margin:0 0 8px}
 .rt-legs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 8px}
@@ -48,12 +50,11 @@
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
   <div class="content prose">
+<div id="rt-doc" class="rt-pending"><noscript>
 <h1>There and back</h1>
-<p class="garage-intro">Every page on this site has a <a href="/llms.txt">Markdown twin</a> for agents, and the build writes most of them by pressing the HTML down with <code>html-to-md.ts</code>. This page runs the other direction. It takes a twin, rebuilds HTML from it with a 250-line parser, and shows what came home. On 2026-10-13 I ran all 60 twins through the trip, and it found five bugs in the converter that writes them, all fixed in <a href="https://github.com/oddharsh/site/pull/1309">#1309</a>.</p>
-
-<h2>Take a page on the trip</h2>
-<p>Pick a page. Your browser fetches the page and its twin from this site, rebuilds the twin as HTML with <a href="/garage/md-to-html.src.js"><code>md-to-html.js</code></a>, and counts what each leg kept.</p>
-<div id="rt-demo" class="rt-demo">
+<p>This page is written in <a href="/garage/round-trip.md">Markdown</a>, and your browser renders it with <a href="/garage/md-to-html.src.js"><code>md-to-html.js</code></a> when the page opens. With JavaScript off, read the Markdown itself.</p>
+</noscript></div>
+<div id="rt-demo" class="rt-demo" hidden>
 <div class="rt-pick"><label for="rt-page">Page</label> <select id="rt-page">
 <option value="/garage/octane">/garage/octane</option>
 <option value="/garage/iroh">/garage/iroh</option>
@@ -62,23 +63,9 @@
 <option value="/lwe/fhe">/lwe/fhe</option>
 <option value="/garage/round-trip">/garage/round-trip (this page)</option>
 </select></div>
-<div id="rt-out">enable JavaScript to run the trip</div>
+<div id="rt-out"></div>
 </div>
-
-<h2>The test is a fixed point</h2>
-<p>A twin is written in a small language: headings, paragraphs, lists, quotes, code fences, tables, links, images and three kinds of emphasis. If the parser reads that language exactly, then pressing its output down again has to hand back the same twin, byte for byte. That gives the trip a pass condition, and either converter can fail it.</p>
-<p>Of the 47 twins the build writes from pages in <code>src/pages/</code>, this one included, all 47 now come back byte for byte. Before the fixes below, 43 did. The 13 hand-written twins in <code>src/content/md/</code> each settle after one trip, and every change is one of form: an autolink like <code>&lt;https://…&gt;</code> comes back as a bracketed link, a table rule gains spaces, and a fence loses its <code>json</code> label because the generator never writes one. No hand twin lost a word.</p>
-
-<h2>What the trip caught</h2>
-<p>The trip carries two checks, and between them they found five bugs in the converter that writes twins. Each read like ordinary text, so a person reading the twin would not notice, and every agent that read one got it.</p>
-<p>The fixed point failed on four twins, and three of those failures were one bug. The escaper treated any text run that started like a list marker as the start of a line, even mid-sentence. On /garage/horizon and /lwe/fhe that wrote <code>\+</code>, which Markdown reads back as a plus sign. On /garage/octane it wrote <code>Next.js \16.</code>, and a backslash before a digit is not an escape, so readers saw the backslash. The fourth failure was on /garage/wire, where a line break inside a table cell became three spaces.</p>
-<p>The word count catches what the fixed point cannot, because a twin that already lost something still closes. /garage/wire and /garage/workers each lost a table caption, 197 words on wire, because the table renderer walked the rows and never visited <code>&lt;caption&gt;</code>. /garage/iroh read <code>QUIChole-punching</code>, because the converter dropped a text node that held only a space, and that one bug fused 33 pairs of words across 17 pages. The /lwe heading read <code>**Learning With Errors**explaining</code>, because its CSS sets the tagline apart as a block and the heading path never asked.</p>
-<p>The trip also caught my first fix. Keeping that lone space made the homepage twin read <code>2026&nbsp;&nbsp;· You</code>, where an HTML comment split two runs of whitespace, and the fixed point failed on it before the fix shipped.</p>
-
-<h2>What never makes the trip</h2>
-<p>Across those 47 pages the HTML weighs 2.6 MB. The twins weigh 749 KB, and the rebuilt HTML weighs 839 KB. The difference is the part of a page that does something: 202 scripts, 362 buttons, 69 form controls, 21 canvases and 58 style blocks. The converter drops all of them on purpose, because a button's label without its behavior would read to an agent as a claim.</p>
-<p>The words come through. Against the page's own reading text, the rebuilt HTML keeps every word on 45 of the 47 pages. The other two lose only superscripts: <code>2^n</code> three times on /lwe/dac and <code>2^256</code> on /lwe/lean.</p>
-<p>Two marks cannot come back. A superscript becomes <code>^2</code> and a subscript becomes <code>_2</code>, and neither has a closing mark, so the parser cannot tell them from a caret or an underscore in prose. It leaves both as text.</p>
+<p id="rt-proof" class="rt-proof" hidden></p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
   </div>
@@ -87,11 +74,49 @@
 
 <script>
 (function(){
-  // Both fetches are same-origin reads of this site's own pages. The twin goes
-  // into a <pre> as text, and the rebuilt HTML is whatever md-to-html.js emits,
-  // which escapes every character of input before it reaches the DOM.
+  // The page is its own Markdown. The HTML file holds a heading and a link to
+  // /garage/round-trip.md; this fetches that file, renders it with the same
+  // parser the demo uses, and puts the demo under its heading. md-to-html.js
+  // escapes every character of input before it reaches the DOM.
+  var doc = document.getElementById("rt-doc"), demo = document.getElementById("rt-demo"), proof = document.getElementById("rt-proof");
   var out = document.getElementById("rt-out"), pick = document.getElementById("rt-page");
-  if (!out || !pick || !window.fetch || !window.DOMParser) return;
+  if (!doc || !demo || !proof || !out || !pick || !window.fetch || !window.DOMParser) return;
+  var lib = import("./md-to-html.js");
+  var text = function(r){ if (!r.ok) throw new Error(r.url + " answered " + r.status); return r.text(); };
+  var ORIGIN = "https://aadhar.sh";
+  Promise.all([fetch("/garage/round-trip.md").then(text), lib]).then(function(got){
+    var md = got[0], t0 = performance.now();
+    doc.innerHTML = got[1].mdToHtml(md);
+    // The conventions a hand-written Garage page follows, applied to what the
+    // parser made: the paragraph under the title is the intro, a link on this
+    // site is a path, and a link off it is marked external.
+    var lede = doc.querySelector("h1 + p");
+    if (lede) lede.className = "garage-intro";
+    doc.querySelectorAll("a[href]").forEach(function(a){
+      var href = a.getAttribute("href");
+      if (href.indexOf(ORIGIN + "/") === 0) a.setAttribute("href", href.slice(ORIGIN.length));
+      else if (/^https?:/.test(href)) a.setAttribute("rel", "external");
+    });
+    var anchor = null;
+    doc.querySelectorAll("h2").forEach(function(h){ if (!anchor && /^Take a page on the trip/.test(h.textContent)) anchor = h.nextElementSibling || h; });
+    if (anchor) anchor.after(demo); else doc.after(demo);
+    doc.classList.remove("rt-pending");
+    demo.hidden = false;
+    var ms = performance.now() - t0;
+    var nav = performance.getEntriesByType && performance.getEntriesByType("navigation")[0];
+    var htmlBytes = nav && nav.decodedBodySize ? nav.decodedBodySize : document.documentElement.outerHTML.length;
+    doc.after(proof);
+    proof.textContent = "Measured on this visit: the HTML file was " + htmlBytes.toLocaleString("en-US") +
+      " bytes, the Markdown was " + new Blob([md]).size.toLocaleString("en-US") +
+      " bytes, and building this page from the Markdown took " + (ms < 1 ? "under 1" : Math.round(ms)) + " ms.";
+    proof.hidden = false;
+    run();
+  }).catch(function(e){
+    doc.classList.remove("rt-pending");
+    doc.innerHTML = '<h1>There and back</h1><p></p>';
+    doc.querySelector("p").textContent = "This page is written in Markdown, and the Markdown did not load (" + e.message + "). It lives at /garage/round-trip.md.";
+  });
+
   var fmt = function(n){ return n.toLocaleString("en-US") + " B"; };
   var words = function(s){ return (s.toLowerCase().match(/[a-z0-9]+/g) || []); };
   var recall = function(a, b){
@@ -101,26 +126,28 @@
     return a.length ? hit / a.length : 1;
   };
   var leg = function(n, lbl){ return '<div class="rt-leg"><span class="n">' + n + '</span><span class="lbl">' + lbl + '</span></div>'; };
-  var lib = import("./md-to-html.js");
   function run(){
     var path = pick.value;
     out.textContent = "fetching " + path + " and " + path + ".md";
-    Promise.all([fetch(path).then(function(r){ return r.text(); }), fetch(path + ".md").then(function(r){ return r.ok ? r.text() : ""; }), lib])
+    Promise.all([fetch(path).then(text), fetch(path + ".md").then(function(r){ return r.ok ? r.text() : ""; }), lib])
       .then(function(got){
         var html = got[0], md = got[1], rebuilt = got[2].mdToHtml(md);
         if (!md) { out.textContent = path + " has no twin to rebuild"; return; }
-        var doc = new DOMParser().parseFromString(html, "text/html");
-        var content = doc.querySelector(".content") || doc.body;
+        var page = new DOMParser().parseFromString(html, "text/html");
+        // A page that renders from its own Markdown ships a frame, so its HTML
+        // has no words to keep and the count would measure the frame.
+        var frame = !!page.getElementById("rt-doc");
+        var content = page.querySelector(".content") || page.body;
         var n = function(sel){ return content.querySelectorAll(sel).length; };
         var dropped = [["script", n("script")], ["button", n("button")], ["form control", n("input,select,textarea")], ["canvas", n("canvas")], ["svg", n("svg")]]
           .filter(function(d){ return d[1]; }).map(function(d){ return d[1] + " " + d[0] + (d[1] === 1 ? "" : "s"); });
         content.querySelectorAll("script,style,button,input,select,textarea,label,noscript,template,svg,canvas,#luq,.title-bar,.status").forEach(function(e){ e.remove(); });
         var frag = new DOMParser().parseFromString(rebuilt, "text/html").body;
-        var r = recall(words(content.textContent), words(frag.textContent));
+        var kept = frame ? "HTML rebuilt here: all of this page's words" : "HTML rebuilt here, " + (recall(words(content.textContent), words(frag.textContent)) * 100).toFixed(1) + "% of words kept";
         out.innerHTML = '<div class="rt-legs">' +
-          leg(fmt(new Blob([html]).size), "HTML, as served") +
-          leg(fmt(new Blob([md]).size), "Markdown twin") +
-          leg(fmt(new Blob([rebuilt]).size), "HTML rebuilt here, " + (r * 100).toFixed(1) + "% of words kept") +
+          leg(fmt(new Blob([html]).size), frame ? "HTML as served, a frame with no page in it" : "HTML, as served") +
+          leg(fmt(new Blob([md]).size), frame ? "Markdown, the source" : "Markdown twin") +
+          leg(fmt(new Blob([rebuilt]).size), kept) +
           '</div><div class="rt-panes"><div><div class="rt-pane"><pre></pre></div><p class="rt-cap">the twin, as an agent reads it</p></div>' +
           '<div><div class="rt-pane prose rt-rebuilt"></div><p class="rt-cap">the twin, rebuilt as HTML</p></div></div>' +
           '<p class="rt-drop"></p>';
@@ -133,7 +160,6 @@
       .catch(function(e){ out.textContent = "the trip failed: " + e.message; });
   }
   pick.addEventListener("change", run);
-  run();
 })();
 </script>
 <script type="application/json" id="luq-data">

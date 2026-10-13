@@ -382,7 +382,7 @@ export const AGENT_SURFACES = [
     "path": "/garage/round-trip",
     "title": "There and back",
     "mimeType": "text/html",
-    "description": "Rebuild a page here from its Markdown twin and convert it back. All 47 generated twins now survive the trip byte for byte, after it caught five converter bugs that agents had been reading."
+    "description": "Rebuild a page here from its Markdown twin and convert it back. All 46 generated twins survive the trip byte for byte, after it caught five converter bugs that agents had been reading."
   },
   {
     "path": "/bot",

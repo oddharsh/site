@@ -18,6 +18,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readDocument } from "./lib/html-to-md.ts";
 import { mdToHtml } from "../src/client/garage/md-to-html.js";
+import { lintAuthorText } from "../pipelines/content/page-contract.mjs";
 
 const down = (html) => readDocument(`<!doctype html><html><body><main>${html}</main></body></html>`).body;
 
@@ -52,6 +53,36 @@ test("every hand twin settles after one trip", () => {
     const once = down(mdToHtml(readFileSync(join(dir, f), "utf8").trim()));
     assert.equal(down(mdToHtml(once)), once, f);
   }
+});
+
+// /garage/round-trip ships no prose in its HTML. Its Markdown in src/content is
+// the source and the twin both, and the page renders it with mdToHtml when it
+// opens. That only keeps the page and its twin from disagreeing if the source
+// is a fixed point exactly: one byte the parser reads differently and the page
+// a person sees is not the file an agent reads.
+const RENDERS_FROM_MARKDOWN = "src/content/garage/round-trip.md";
+
+test("a page that renders from its Markdown is that Markdown's fixed point, byte for byte", () => {
+  const src = readFileSync(RENDERS_FROM_MARKDOWN, "utf8");
+  const body = src.replace(/^---\n[\s\S]*?\n---\n\n/, "").trimEnd();
+  assert.notEqual(body, src.trimEnd(), "the source should carry front matter for agents");
+  assert.equal(down(mdToHtml(src)), body);
+  // The demo mounts under this heading; without it the page renders the demo last.
+  assert.match(body, /^## Take a page on the trip$/m);
+});
+
+test("the Markdown a page renders from is held to the house voice", () => {
+  // pages:check lints a spec's bodyHtml. This page's words live in Markdown,
+  // which that lint never reads.
+  lintAuthorText(readFileSync(RENDERS_FROM_MARKDOWN, "utf8"), RENDERS_FROM_MARKDOWN);
+  assert.throws(() => lintAuthorText("a test — with a dash", "control"), /em dashes/);
+});
+
+test("the page's HTML is a frame that points at its Markdown", () => {
+  const html = readFileSync("src/pages/garage/round-trip.html", "utf8");
+  assert.match(html, /<div id="rt-doc"/);
+  assert.match(html, /href="\/garage\/round-trip\.md"/);
+  assert.match(html, /fetch\("\/garage\/round-trip\.md"\)/);
 });
 
 test("control: the fixed point fails on Markdown the parser does not read", () => {
