@@ -66,15 +66,17 @@ test("a page rebuilt from its twin writes terms, intros and links byte for byte 
   const TERM = /<a class="term"[^>]*>[\s\S]*?<\/a>/g;
   const INTRO = /<p class="garage-intro">/g;
   const LOCAL = /<a href="\/[^"]*">[\s\S]*?<\/a>/g;
+  const KINDS = [{ kind: "term", re: TERM }, { kind: "intro", re: INTRO }, { kind: "local", re: LOCAL }];
+  /** @type {Record<string, number>} */
   const totals = { term: 0, intro: 0, local: 0 };
   for (const f of readdirSync("pipelines/garage/specs").filter((x) => x.endsWith(".json") && x !== "round-trip.json")) {
     const id = f.replace(/\.json$/, "");
     const authored = JSON.parse(readFileSync(join("pipelines/garage/specs", f), "utf8")).bodyHtml;
     const twin = readDocument(readFileSync(`src/pages/garage/${id}.html`, "utf8")).body;
     const rebuilt = mdToHtml(twin, { origin: "https://aadhar.sh" });
-    for (const [kind, re] of /** @type {[keyof totals, RegExp][]} */ ([["term", TERM], ["intro", INTRO], ["local", LOCAL]])) {
-      const want = (authored.match(re) || []).sort();
-      const got = (rebuilt.match(re) || []).sort();
+    for (const { kind, re } of KINDS) {
+      const want = [...(authored.match(re) || [])].sort();
+      const got = [...(rebuilt.match(re) || [])].sort();
       // every one the hand-written page has comes back, byte for byte
       for (const tag of want) assert.ok(got.includes(tag), `${id}: ${kind} lost or changed on the trip: ${tag.slice(0, 140)}`);
       // and terms and intros come back once each, with nothing invented
