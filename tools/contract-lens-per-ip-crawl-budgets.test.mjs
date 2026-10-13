@@ -56,7 +56,9 @@ test("every rate-limit ceiling matches the ratelimits declared in the site confi
     assert.equal(rule.simple?.limit, max,
       `${config} limits ${binding} to ${rule.simple?.limit} but the 429 message says ${max}`);
     // The binding supports 10 or 60 only, and every budget here is per-minute.
-    assert.equal(rule.simple?.period, 60, `${binding} must use the 60s period`);
+    // RATE_WINDOW_S is the same number as the Retry-After every 429 sends.
+    const { RATE_WINDOW_S } = await import("../src/worker/lib/ratelimit.ts");
+    assert.equal(rule.simple?.period, RATE_WINDOW_S, `${binding} must use the ${RATE_WINDOW_S}s period Retry-After quotes`);
   }
   // No orphans: a declared limiter nothing reads is a limit nobody enforces.
   const used = new Set(Object.values(BUDGETS).map((b) => b.binding));
@@ -197,7 +199,38 @@ test("every cached lens charges its own budget on a miss, and quotes it", async 
     assert.equal(res.status, 429, `${lens.name}: a miss over budget answered ${res.status}`);
     assert.equal(calls[0], LENS_BUDGETS[lens.budget].binding, `${lens.name}: the first budget charged was ${calls[0]}`);
     assert.equal((await res.json()).error, budgetMessage(/** @type {any} */ (lens.budget)), `${lens.name}: the 429 is not the derived message`);
+    assert.equal(res.headers.get("retry-after"), "60", `${lens.name}: a 429 over our own budget says when to come back`);
   }
+});
+
+test("/lens/fetch, /lens/compare.json and webmention say when to come back, too", async () => {
+  const { LENS_BUDGETS, handleLensFetch, handleLensCompare } = await import("../src/worker/lens.ts");
+  const { RATE_LIMITED_HEADERS, RATE_WINDOW_S } = await import("../src/worker/lib/ratelimit.ts");
+  assert.deepEqual(RATE_LIMITED_HEADERS, { "retry-after": String(RATE_WINDOW_S) });
+  /** @type {Array<[handler: (req: Request, env: any, ctx: any) => Promise<Response>, path: string]>} */
+  const doors = [
+    [handleLensFetch, "/lens/fetch?url=https://example.com/"],
+    [handleLensCompare, "/lens/compare.json?left=https://example.com/&right=https://example.org/"],
+  ];
+  for (const [handler, path] of doors) {
+    const { env } = refusingEnv(fakeKv(undefined), LENS_BUDGETS);
+    const res = await handler(new Request(`https://aadhar.sh${path}`), env, context());
+    assert.equal(res.status, 429, `${path} answered ${res.status}`);
+    assert.equal(res.headers.get("retry-after"), String(RATE_WINDOW_S), `${path}: Retry-After`);
+  }
+  // A refusal that is not a rate limit never claims one.
+  const bad = await handleLensFetch(new Request("https://aadhar.sh/lens/fetch?url=http://localhost/"), refusingEnv(fakeKv(undefined), LENS_BUDGETS).env, context());
+  assert.equal(bad.status, 400);
+  assert.equal(bad.headers.get("retry-after"), null, "a bad target is not a rate limit");
+
+  const { WEBMENTION_BUDGET, handleWebmention } = await import("../src/worker/webmention.ts");
+  const { env } = refusingEnv(fakeKv(undefined), { webmention: WEBMENTION_BUDGET });
+  const form = new URLSearchParams({ source: "https://example.com/post", target: "https://aadhar.sh/writing" });
+  const res = await handleWebmention(new Request("https://aadhar.sh/webmention", {
+    method: "POST", body: form, headers: { "content-type": "application/x-www-form-urlencoded" },
+  }), env, context());
+  assert.equal(res.status, 429, `webmention answered ${res.status}: ${await res.clone().text()}`);
+  assert.equal(res.headers.get("retry-after"), String(RATE_WINDOW_S));
 });
 
 test("a cache read that throws is a miss, never the route's failure", async () => {

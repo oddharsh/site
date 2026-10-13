@@ -398,7 +398,8 @@ const ROUTES = [
   { path: "/inbox/mail.html", status: 200, ct: "text/html", marker: "Local Folders", fragment: true },
   { path: "/lens/census", status: 200, ct: "text/html", marker: "data-island=/lens/census/table.html", fullPage: true },
   { path: "/lens/census/table.html", status: 200, ct: "text/html", fragment: true },
-  { path: "/ledger.json", status: 200, ct: "application/json" },
+  // 503 where analytics is not configured (this harness), 200 where it is
+  { path: "/ledger.json", status: [200, 503], ct: "application/json" },
   // Browser RUM is retired. Keep both old ledger paths dark so a stale loader
   // cannot silently reconnect to a proxy or collector added as a static asset.
   { path: "/ledger/rum.js", status: 404 },
@@ -417,7 +418,9 @@ const ROUTES = [
   { path: "/rn.md", status: 200, ct: "text/markdown", marker: "https://aadhar.sh/rn/tracks" },
   { path: "/rn", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" },
     marker: "https://aadhar.sh/rn/tracks" },
-  { path: "/rn/tracks", status: 200, ct: "application/json", headers: { accept: "text/html" } },
+  // 503 with no playlist set (an empty local KV), 200 with one; the
+  // .html fragment below keeps its 200 either way
+  { path: "/rn/tracks", status: [200, 503], ct: "application/json", headers: { accept: "text/html" } },
   { path: "/rn/tracks.html", status: 200, ct: "text/html", fragment: true },
   { path: "/rn/admin", status: 403 },
   { path: "/bot", status: 200, ct: "text/html" },

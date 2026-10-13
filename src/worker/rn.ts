@@ -549,6 +549,12 @@ export async function handleRnTracks(request, env, ctx) {
     console.error("rn/tracks: load failed", e);
     return trackResponse({ error: "playlist read failed", code: "storage_unavailable", tracks: [] }, 503, "json");
   }
+  // No playlist set is a 200 for the homepage fragment, whose island renders an
+  // error row from it, but a machine reading this contract needs the status to
+  // say the read did not produce a playlist. Only this route remaps it.
+  if (result.status === 200 && result.payload?.error) {
+    return trackResponse({ ...result.payload, code: "no_playlist" }, 503, "json");
+  }
   return trackResponse(result.payload, result.status, "json");
 }
 

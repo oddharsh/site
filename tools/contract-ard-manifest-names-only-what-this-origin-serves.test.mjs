@@ -29,7 +29,10 @@ const MEDIA_TYPE = /^(?:application|text)\/[a-z0-9][a-z0-9.+-]*$/;
 // index.ts's source text until 2026-10-02.
 async function workerRoutes() {
   const { EXACT_PATHS } = await import("../src/worker/routes.ts");
-  return new Set(EXACT_PATHS);
+  // /openapi.json is written by build.ts from lib/openapi.ts: neither a file
+  // under public/ nor a Worker route, and served all the same.
+  const { OPENAPI_PATH } = await import("../src/worker/lib/public-api.ts");
+  return new Set([...EXACT_PATHS, OPENAPI_PATH]);
 }
 
 // The validator, as a function, so the control below can prove it rejects.
@@ -85,6 +88,7 @@ test("every ARD entry is well-formed and points at something this origin serves"
     "urn:air:aadhar.sh:agent:site",
     "urn:air:aadhar.sh:skill:serendipity-events",
     "urn:air:aadhar.sh:nlweb:ask",
+    "urn:air:aadhar.sh:api:openapi",
   ]) assert.ok(ids.has(must), `${must} left the manifest`);
 
   // CONTROL. A validator that has never gone red is decoration: the two

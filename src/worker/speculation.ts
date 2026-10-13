@@ -158,7 +158,7 @@ export function handlePrefetchActivation(request, env) {
 // ordering, which is what tools/speculation-report.ts does with it. The report
 // is also where any promotion to a more eager rule is decided; this route only
 // answers.
-import { analyticsSql, text, type AnalyticsRow } from "./ledger.ts";
+import { analyticsReadError, analyticsSql, text, type AnalyticsRow } from "./ledger.ts";
 import { jsonResponse } from "./lib/http.ts";
 
 export const SPECULATION_DATASET = "aadhar_speculation";
@@ -210,8 +210,8 @@ export async function handleSpeculationJson(request, env) {
     `FROM ${from} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
     `GROUP BY kind, path`);
   if (!read.ok) {
-    return jsonResponse({ ok: false, reason: read.reason, binding_fallback: read.binding_fallback, window_days: SPECULATION_WINDOW_DAYS },
-      read.reason === "unconfigured" ? 200 : 502);
+    const { status, error, code } = analyticsReadError(read.reason);
+    return jsonResponse({ ok: false, error, code, reason: read.reason, binding_fallback: read.binding_fallback, window_days: SPECULATION_WINDOW_DAYS }, status);
   }
   const rows = summarizeSpeculation(read.data);
   return jsonResponse({

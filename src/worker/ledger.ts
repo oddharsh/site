@@ -271,6 +271,17 @@ function priced(rows) {
 }
 
 // ── /ledger.json — the machine twin ─────────────────────────────────
+/** How a JSON endpoint reports an Analytics Engine read that did not happen.
+ *  An unconfigured deployment (a preview, or local dev, with no read token) was
+ *  a 200 until 2026-10-13, which a client reading the status took for data;
+ *  it is a 503 now, and every failure carries the site's error shape. Shared
+ *  with /ledger/speculation.json. */
+export function analyticsReadError(reason: string): { status: 502 | 503; error: string; code: string } {
+  return reason === "unconfigured"
+    ? { status: 503, error: "Analytics is not configured on this deployment.", code: "not_configured" }
+    : { status: 502, error: `The analytics read failed (${reason}).`, code: "upstream_failed" };
+}
+
 export async function handleLedgerJson(request: SiteRequest, env: Env) {
   const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
   const costBlock = cost.ok
@@ -281,8 +292,8 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
       }
     : { available: false, reason: cost.reason };
   if (!q.ok) {
-    const status = q.reason === "unconfigured" ? 200 : 502;
-    return jsonResponse({ ok: false, reason: q.reason, binding_fallback: q.binding_fallback, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock }, status, publicJsonHeaders(status), { pretty: false });
+    const { status, error, code } = analyticsReadError(q.reason);
+    return jsonResponse({ ok: false, error, code, reason: q.reason, binding_fallback: q.binding_fallback, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock }, status, publicJsonHeaders(status), { pretty: false });
   }
   const { items, totalHits, totalUsd } = priced(q.rows);
   return jsonResponse({

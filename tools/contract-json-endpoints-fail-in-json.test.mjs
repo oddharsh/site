@@ -6,7 +6,8 @@
 // answer with the site's error shape: `error` (a sentence) and `code` (a token).
 import { assert, test } from "./contract-shared.ts";
 import { handleCensusJson } from "../src/worker/census.ts";
-import { handleRnTracks } from "../src/worker/rn.ts";
+import { handleRnTracks, handleRnTracksHtml } from "../src/worker/rn.ts";
+import { handleLedgerJson } from "../src/worker/ledger.ts";
 import { handleSpeculationJson } from "../src/worker/speculation.ts";
 
 /** @param {Response} r */
@@ -45,4 +46,22 @@ test("/ledger/speculation.json answers a wrong method with a JSON 405", async ()
   const body = await assertJsonError(r, 405, "method_not_allowed");
   assert.equal(r.headers.get("allow"), "GET, HEAD");
   assert.deepEqual(body.allow, ["GET", "HEAD"]);
+});
+
+test("/rn/tracks with no playlist set is a 503 for machines and still a 200 fragment for the homepage", async () => {
+  const env = { RN_KV: { get: async () => null, put: async () => {} } };
+  const ctx = { waitUntil() {}, passThroughOnException() {} };
+  const r = await handleRnTracks(new Request("https://aadhar.sh/rn/tracks"), env, ctx);
+  const body = await assertJsonError(r, 503, "no_playlist");
+  assert.deepEqual(body.tracks, []);
+  assert.match(r.headers.get("cache-control") || "", /max-age=30/, "an error is not cached as a playlist");
+  const fragment = await handleRnTracksHtml(new Request("https://aadhar.sh/rn/tracks.html"), env, ctx);
+  assert.equal(fragment.status, 200, "the island renders its error row from a 200, so the fragment keeps it");
+});
+
+test("/ledger.json with analytics unconfigured is a 503 in the error shape", async () => {
+  const r = await handleLedgerJson(new Request("https://aadhar.sh/ledger.json"), /** @type {any} */ ({}));
+  const body = await assertJsonError(r, 503, "not_configured");
+  assert.equal(body.ok, false);
+  assert.equal(body.reason, "unconfigured", "the reason a client may already read stays");
 });

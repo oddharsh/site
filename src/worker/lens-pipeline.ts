@@ -33,7 +33,7 @@
 // thing. The guarded read lives HERE rather than in an adapter, so a fake KV
 // that throws or returns garbage exercises the guard itself.
 import { sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";
-import { overBudget } from "./lib/ratelimit.ts";
+import { overBudget, RATE_LIMITED_HEADERS } from "./lib/ratelimit.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";
@@ -385,7 +385,12 @@ export function lensJson(o: LensOutcome<any>): Response {
     return jsonResponse(o.fromCache === undefined ? { ok: true, ...o.value } : { ok: true, ...o.value, fromCache: o.fromCache });
   }
   if (o.kind === "failed") return jsonResponse(o.payload, o.status);
-  return jsonResponse({ ok: false, error: o.error, ...o.extra }, o.status);
+  return jsonResponse({ ok: false, error: o.error, ...o.extra }, o.status, refusalHeaders(o));
+}
+
+/** A refusal over our own rate budget says when to come back. */
+function refusalHeaders(o: LensOutcome<any>): Record<string, string> {
+  return o.kind === "refused" && o.status === 429 ? { ...RATE_LIMITED_HEADERS } : {};
 }
 
 // The PNG lens reports its cache state in a header, because the body is an
@@ -396,8 +401,8 @@ export function lensPng(o: LensOutcome<ArrayBuffer>): Response {
 }
 
 // The SSR shell and /lens/fetch answer a { status, payload } pair.
-export function lensStatusPayload(o: LensOutcome<any>): { status: number; payload: Record<string, unknown> } {
-  if (o.kind === "ok") return { status: 200, payload: o.value };
-  if (o.kind === "failed") return { status: o.status, payload: o.payload };
-  return { status: o.status, payload: { ok: false, error: o.error, ...o.extra } };
+export function lensStatusPayload(o: LensOutcome<any>): { status: number; payload: Record<string, unknown>; headers: Record<string, string> } {
+  if (o.kind === "ok") return { status: 200, payload: o.value, headers: {} };
+  if (o.kind === "failed") return { status: o.status, payload: o.payload, headers: {} };
+  return { status: o.status, payload: { ok: false, error: o.error, ...o.extra }, headers: refusalHeaders(o) };
 }

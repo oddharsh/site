@@ -100,7 +100,8 @@ export const SCHEMAS: Record<string, Schema> = {
     slots: arr(obj({ start: str(undefined, { format: "date-time" }), end: str(undefined, { format: "date-time" }), startMs: int(), endMs: int(), durationMinutes: int() })),
   }, ["available", "slots"]),
   Ledger: obj({
-    ok: bool(), via: str(undefined, { enum: ["binding", "token"] }), reason: str("Present when ok is false."), window_days: int(), rate_usd: num(), note: str(),
+    ok: bool(), via: str(undefined, { enum: ["binding", "token"] }), reason: str("Present when ok is false."),
+    error: str("A sentence, present when ok is false."), code: str("not_configured or upstream_failed, present when ok is false."), window_days: int(), rate_usd: num(), note: str(),
     line_items: arr(obj({ bot: str(), owner: str(), kind: str(), hits: int(), amountUsd: num() })),
     total_hits: int(), total_usd: num(), cost: open(),
   }, ["ok"]),

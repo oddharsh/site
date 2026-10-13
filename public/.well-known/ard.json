@@ -99,6 +99,19 @@
       ]
     },
     {
+      "identifier": "urn:air:aadhar.sh:api:openapi",
+      "displayName": "aadhar.sh OpenAPI description",
+      "type": "application/vnd.oai.openapi+json",
+      "url": "https://aadhar.sh/openapi.json",
+      "description": "OpenAPI 3.1 description of every keyless JSON endpoint on aadhar.sh: site search, NLWeb /ask, the photo archive and its Fuji recipes, Lens agent-readiness inspection and comparison, the weekly census, the current playlist, the crawled neighborhood, coffee availability, the crawler ledger and the resume. Each operation has an operationId, typed parameters and response schemas, so it converts to function-calling tools directly. Generated at build from the constants the handlers enforce.",
+      "tags": ["openapi", "api", "function-calling", "json"],
+      "representativeQueries": [
+        "the OpenAPI spec for aadhar.sh",
+        "what JSON endpoints does aadhar.sh have and what do they take",
+        "turn aadhar.sh's API into function-calling tools"
+      ]
+    },
+    {
       "identifier": "urn:air:aadhar.sh:catalog:api-catalog",
       "displayName": "API catalog (RFC 9727 linkset)",
       "type": "application/linkset+json",

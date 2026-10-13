@@ -851,6 +851,9 @@ test("both browser routes report an upstream 429 as a 429, not a bad gateway", a
   for (const [name, handler] of lensHandlers) {
     const response = await handler(new Request(`https://aadhar.sh/lens/${name}${url}`), env, context());
     assert.equal(response.status, 429, `/lens/${name} must pass the upstream 429 through as a 429`);
+    // Retry-After is ours to promise only for our own 60s budgets; Browser Run's
+    // window (per minute or per day) is not one this Worker can see.
+    assert.equal(response.headers.get("retry-after"), null, `/lens/${name} must not quote our window for Browser Run's limit`);
     const body = await response.json();
     assert.equal(body.ok, false);
     // The message has to name OUR budget, since that is the thing the reader can

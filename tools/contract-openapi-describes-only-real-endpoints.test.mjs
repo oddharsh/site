@@ -65,6 +65,13 @@ test("agents can find it: the API catalog and llms.txt both point at it", () => 
   const hrefs = catalog.linkset.flatMap((l) => Object.values(l).filter(Array.isArray).flat().map((x) => x.href));
   assert.ok(hrefs.includes("https://aadhar.sh/openapi.json"), "api-catalog links the spec");
   assert.match(readFileSync("public/llms.txt", "utf8"), /\(https:\/\/aadhar\.sh\/openapi\.json\)/, "llms.txt links the spec");
+  const spec = "https://aadhar.sh/openapi.json";
+  const ard = JSON.parse(readFileSync("public/.well-known/ard.json", "utf8"));
+  const entry = ard.entries.find((e) => e.url === spec);
+  assert.ok(entry, "the ARD manifest names the spec");
+  assert.equal(entry.type, "application/vnd.oai.openapi+json", "under OpenAPI's own media type, the one api-catalog uses");
+  const card = JSON.parse(readFileSync("public/.well-known/agent-card.json", "utf8"));
+  assert.equal(card["x-aadhar-sh"].discovery.openapi, spec, "the agent card's discovery map names the spec");
 });
 
 test("the published numbers are the enforced ones", () => {
@@ -78,5 +85,16 @@ test("the published numbers are the enforced ones", () => {
   assert.ok(!existsSync("public/openapi.json"), "the spec is build output; a committed copy would be a second source");
   for (const file of ["src/worker/index.ts", "src/worker/trust.ts", "src/worker/lib/public-api.ts"]) {
     assert.ok(!/from "\.\.?\/(lib\/)?openapi\.ts"/.test(readFileSync(file, "utf8")), `${file} keeps the schemas out of the Worker bundle`);
+  }
+});
+
+test("every 429 the spec documents carries the Retry-After the site sends", async () => {
+  const { RATE_WINDOW_S } = await import("../src/worker/lib/ratelimit.ts");
+  const limited = operations.filter(({ op }) => op.responses["429"]);
+  assert.ok(limited.length >= 2, "the Lens doors document their budgets");
+  for (const { path, method, op } of limited) {
+    const header = op.responses["429"].headers?.["Retry-After"];
+    assert.ok(header, `${method.toUpperCase()} ${path}: 429 documents Retry-After`);
+    assert.equal(header.schema.maximum, RATE_WINDOW_S);
   }
 });

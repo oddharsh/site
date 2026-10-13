@@ -1,5 +1,16 @@
 import { isCallable } from "./parse.ts";
 
+/** Every ratelimit binding counts over this window (cloudflare.config.ts
+ *  ratelimits; the binding accepts 10 or 60, and every budget here uses 60).
+ *  contract-lens-per-ip-crawl-budgets holds the config to it. */
+export const RATE_WINDOW_S = 60;
+
+/** The headers a 429 from overBudget carries. Retry-After is the whole window:
+ *  the limiter does not say how far into it the caller is, so the honest
+ *  answer is the longest wait that can be needed. A 429 passed through from an
+ *  upstream (Browser Run) does NOT take these, because its window is not ours. */
+export const RATE_LIMITED_HEADERS: Readonly<Record<string, string>> = { "retry-after": String(RATE_WINDOW_S) };
+
 // The site's one per-caller rate limiter. It lived in lens.ts until /mcp's five
 // spending tools and /webmention needed it too; a helper that guards three
 // surfaces should not be named after one of them, which is the move

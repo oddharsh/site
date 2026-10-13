@@ -1684,7 +1684,7 @@ export async function handleLensFetch(request, env, ctx) {
     return handleLensCloudflareScore(request, env, ctx);
   }
   const result = await inspectLensRequest(request, env, ctx);
-  return jsonResponse(result.payload, result.status);
+  return jsonResponse(result.payload, result.status, result.headers ?? {});
 }
 
 const CLOUDFLARE_AGENT_READINESS_MCP = "https://isitagentready.com/mcp";
@@ -2272,14 +2272,14 @@ export const LENS_COMPARE = defineLens({
 export async function compareLensRequest(request, env, ctx, leftRaw, rightRaw) {
   const o = await LENS_COMPARE.run({ left: leftRaw, right: rightRaw }, request, env, ctx);
   return o.kind === "ok"
-    ? { status: 200, payload: { ok: true, comparedAt: new Date().toISOString(), ...o.value } }
+    ? { status: 200, payload: { ok: true, comparedAt: new Date().toISOString(), ...o.value }, headers: {} }
     : lensStatusPayload(o);
 }
 
 export async function handleLensCompare(request, env, ctx) {
   const url = new URL(request.url);
   const result = await compareLensRequest(request, env, ctx, url.searchParams.get("left"), url.searchParams.get("right"));
-  return jsonResponse(result.payload, result.status);
+  return jsonResponse(result.payload, result.status, result.headers ?? {});
 }
 
 // the orchestrator: fetch the target, parse it, then probe the origin's

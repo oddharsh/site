@@ -16,12 +16,13 @@
 // Node-safe (gotcha 16): build.ts imports it from the staged tree.
 import { ASK_LIMITS, CHANGE_RADAR_LIMITS, LENS_FETCH_TIMEOUT_MS, PHOTO_QUERY_LIMITS, SEARCH_LIMITS } from "./api-limits.ts";
 import { ASK_BUDGET } from "../ask-rank.ts";
+import { RATE_WINDOW_S } from "./ratelimit.ts";
 import { LENS_BUDGETS } from "../lens-pipeline.ts";
 import { CENSUS_ROSTER } from "../census.ts";
 
 export type Schema = Record<string, unknown>;
 type Param = { name: string; in: "query"; required: boolean; description: string; schema: Schema };
-type Responses = Record<string, { description: string; content: Record<string, { schema: Schema }> }>;
+type Responses = Record<string, { description: string; content: Record<string, { schema: Schema }>; headers?: Record<string, Schema> }>;
 export type Operation = {
   path: string;
   method: "get" | "post";
@@ -57,6 +58,11 @@ export const ref = (name: string): Schema => ({ $ref: `#/components/schemas/${na
 const q = (name: string, schema: Schema, description: string, required = false): Param => ({ name, in: "query", required, description, schema });
 const json = (description: string, schema: Schema): Responses[string] => ({ description, content: { "application/json": { schema } } });
 const err = (description: string) => json(description, ref("Error"));
+/** A 429 from the site's own limiter, which always says when to come back. */
+const limited = (description: string): Responses[string] => ({
+  ...err(description),
+  headers: { "Retry-After": { description: `Seconds until the per-minute budget resets; at most ${RATE_WINDOW_S}.`, schema: int(undefined, { minimum: 1, maximum: RATE_WINDOW_S }) } },
+});
 const CLAMPED = "Values outside the range are clamped, and a non-number falls back to the default.";
 
 // ── operations ───────────────────────────────────────────────────────────────
@@ -136,7 +142,7 @@ export const OPERATIONS: readonly Operation[] = [
     ],
     responses: {
       200: json("The observation.", ref("LensObservation")), 400: err("The URL is missing or refused."),
-      429: err(`Over the ${inspect} per minute budget.`), 502: err(`The target timed out (${LENS_FETCH_TIMEOUT_MS / 1000} seconds) or failed.`),
+      429: limited(`Over the ${inspect} per minute budget.`), 502: err(`The target timed out (${LENS_FETCH_TIMEOUT_MS / 1000} seconds) or failed.`),
     },
     example: "url=example.com",
   },
@@ -146,7 +152,7 @@ export const OPERATIONS: readonly Operation[] = [
     parameters: [q("left", str(), "The first URL, validated like /lens/fetch.", true), q("right", str(), "The second URL.", true)],
     responses: {
       200: json("The comparison.", ref("LensComparison")), 400: err("left or right is missing or refused."),
-      429: err(`Over the ${compare} per minute budget.`), 502: err("The comparison failed."),
+      429: limited(`Over the ${compare} per minute budget.`), 502: err("The comparison failed."),
     },
     example: "left=example.com&right=aadhar.sh",
   },
@@ -160,7 +166,7 @@ export const OPERATIONS: readonly Operation[] = [
     description: "The tracks on Aadharsh's current \"rn\" Spotify playlist. Each track has a title, its artists, a song.link URL that opens in the listener's own music service, its duration, a preview URL and an explicit flag. Cached for an hour.",
     responses: {
       200: json("The playlist.", ref("Tracks")), 500: err("Storage is not configured."),
-      502: err("The playlist could not be read from Spotify."), 503: err("Storage read failed."),
+      502: err("The playlist could not be read from Spotify."), 503: err("No playlist is set (code no_playlist), or storage could not be read (code storage_unavailable)."),
     },
   },
   {
@@ -184,8 +190,12 @@ export const OPERATIONS: readonly Operation[] = [
   },
   {
     path: "/ledger.json", method: "get", operationId: "getCrawlLedger", tags: ["lens"], summary: "Read the AI-crawler ledger",
-    description: "The last 30 days of identified AI-crawler visits to this site, priced at one cent a page as commentary. ok is false with a reason when analytics is not configured.",
-    responses: { 200: json("The ledger.", ref("Ledger")), 502: json("Analytics could not be read.", ref("Ledger")) },
+    description: "The last 30 days of identified AI-crawler visits to this site, priced at one cent a page as commentary.",
+    responses: {
+      200: json("The ledger.", ref("Ledger")),
+      502: json("Analytics could not be read (code upstream_failed).", ref("Ledger")),
+      503: json("Analytics is not configured on this deployment (code not_configured).", ref("Ledger")),
+    },
   },
   {
     path: "/images/manifest.json", method: "get", operationId: "getPhotoManifest", tags: ["photos"], summary: "List every published photo",

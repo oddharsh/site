@@ -259,8 +259,7 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
   confirmed by hand.
 - [/ledger.json](https://aadhar.sh/ledger.json) (`getCrawlLedger`): Read the
   AI-crawler ledger. The last 30 days of identified AI-crawler visits to this
-  site, priced at one cent a page as commentary. ok is false with a reason
-  when analytics is not configured.
+  site, priced at one cent a page as commentary.
 - [/images/manifest.json](https://aadhar.sh/images/manifest.json)
   (`getPhotoManifest`): List every published photo. Every published photo with
   its thumbnail URLs, full-resolution key, size and upload date. The homepage
