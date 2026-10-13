@@ -22,6 +22,7 @@ import { ALBUMS, albumPath, type Album } from "./albums.ts";
 import { withBotPolicyCache } from "./lib/botauth.ts";
 import { shouldUseWorkersCache } from "./lib/cache.ts";
 import { CANONICAL_HOST, isCanonicalHost } from "./lib/const.ts";
+import { apiPreflight, withApiContract } from "./lib/api-contract.ts";
 import { earlyDataDenial } from "./lib/early-data.ts";
 import { mcpEraOf } from "./lib/mcp-protocol.ts";
 import { countMiss, recoverNotFound } from "./lib/not-found.ts";
@@ -227,7 +228,12 @@ export function createDispatch(handlers: DispatchHandlers) {
     // line is emitted on every worker-owned request; the prefix is unique across any
     // two versions that will ever be live together.
     const t0 = Date.now();
-    let response = await route(request, env, ctx);
+    // The documented API paths (lib/public-api.ts) answer a wrong method or an
+    // unserved API-Version pin before any handler runs, and every answer from
+    // one carries API-Version and the service-desc Link (lib/api-contract.ts).
+    // cal.aadhar.sh is its own host with its own handler, so it is left alone.
+    const onApiHost = url.hostname !== CAL_HOST.host;
+    let response = (onApiHost && apiPreflight(request, url.pathname)) || await route(request, env, ctx);
     // A 404 gets one more look before it leaves (lib/not-found.ts): a redirect
     // where one URL is unambiguously meant, otherwise a 404 that names the
     // sitemap and the closest real pages. cal.aadhar.sh is skipped because its
@@ -240,6 +246,7 @@ export function createDispatch(handlers: DispatchHandlers) {
     }
     // the bot ledger: identified AI-crawler hits tick into Analytics Engine
     // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
+    if (onApiHost) response = withApiContract(response, url.pathname, request.method);
     countCrawlerHit(env, request, response, url.pathname);
     // the speculation ledger's denominator: every Sec-Purpose prefetch/prerender
     // request. Its numerator (the activation beacon) arrives at /ledger/prefetch.

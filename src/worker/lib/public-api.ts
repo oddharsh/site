@@ -16,8 +16,8 @@
 // Node-safe (gotcha 16): build.ts imports it from the staged tree.
 import { ASK_LIMITS, CHANGE_RADAR_LIMITS, LENS_FETCH_TIMEOUT_MS, PHOTO_QUERY_LIMITS, SEARCH_LIMITS } from "./api-limits.ts";
 import { ASK_BUDGET } from "../ask-rank.ts";
-import { RATE_WINDOW_S } from "./ratelimit.ts";
-import { LENS_BUDGETS } from "../lens-pipeline.ts";
+import { RATE_WINDOW_S, rateLimitPolicy } from "./ratelimit.ts";
+import { LENS_BUDGETS, type LensBudget } from "../lens-pipeline.ts";
 import { CENSUS_ROSTER } from "../census.ts";
 
 export type Schema = Record<string, unknown>;
@@ -35,9 +35,32 @@ export type Operation = {
   responses: Responses;
   /** A query that answers something real, for /developers and its curl lines. */
   example?: string;
+  /** Set when the operation is on its way out. lib/api-contract.ts sends the
+   *  Deprecation (RFC 9745) and Sunset (RFC 8594) headers from it, and the
+   *  spec marks the operation deprecated. */
+  deprecated?: Deprecation;
 };
 
+/** `since` and `sunset` are YYYY-MM-DD (UTC midnight); `successor` is the
+ *  path to move to, when there is one. */
+export type Deprecation = { since: string; sunset: string; successor?: string };
+
 export const OPENAPI_PATH = "/openapi.json";
+
+// ── versioning ───────────────────────────────────────────────────────────────
+/** The API's one live version: the date of its last breaking change. Additive
+ *  changes (an endpoint, an optional parameter, a response field) ship under
+ *  the same date. lib/api-contract.ts sends it as API-Version on every API
+ *  response and refuses a request that pins any other. */
+export const API_VERSION = "2026-10-13";
+/** The least notice a breaking change gets: a deprecated operation's Sunset is
+ *  at least this many days after its Deprecation. A contract test holds every
+ *  `deprecated` entry to it. */
+export const DEPRECATION_NOTICE_DAYS = 90;
+/** The request and response header that carries API_VERSION. */
+export const API_VERSION_HEADER = "API-Version";
+/** The policy, in the words /developers and /openapi.json both print. */
+export const VERSION_POLICY = `The API has one live version, named by the date of its last breaking change (now ${API_VERSION}) and sent as the ${API_VERSION_HEADER} response header. New endpoints, optional parameters and response fields ship without a new version, so ignore fields you don't know. A breaking change (a removed or renamed endpoint or field, or a changed type) gets a new date, and the old shape is announced first: its responses carry a Deprecation header (RFC 9745) and a Sunset header (RFC 8594) at least ${DEPRECATION_NOTICE_DAYS} days before it goes, and /openapi.json marks it deprecated. To pin, send ${API_VERSION_HEADER}: ${API_VERSION}; a pin this server does not serve gets a 400 with code unsupported_api_version, so a client never reads a shape it didn't ask for. Rate budgets and caps can change under the same version; /openapi.json and the RateLimit-Policy header always carry the live numbers.`;
 
 // ── schema helpers (openapi.ts builds the component schemas with them) ───────
 /** Set `key` only when there is a value, so an absent description is absent. */
@@ -53,15 +76,27 @@ export const nullStr = (description?: string): Schema => withField({ type: ["str
 export const arr = (items: Schema, description?: string): Schema => withField({ type: "array", items }, "description", description);
 export const obj = (properties: Record<string, Schema>, required?: string[], description?: string): Schema =>
   withField(withField({ type: "object", properties }, "required", required), "description", description);
-export const open = (description?: string): Schema => withField({ type: "object", additionalProperties: true }, "description", description);
 export const ref = (name: string): Schema => ({ $ref: `#/components/schemas/${name}` });
 const q = (name: string, schema: Schema, description: string, required = false): Param => ({ name, in: "query", required, description, schema });
 const json = (description: string, schema: Schema): Responses[string] => ({ description, content: { "application/json": { schema } } });
 const err = (description: string) => json(description, ref("Error"));
+// The RateLimit fields as draft-ietf-httpapi-ratelimit-headers-11 writes them:
+// Structured Field Lists, one member per policy, named by budget.
+const policyHeader = (budgets: readonly LensBudget[]): Schema => ({
+  description: `The quota this endpoint bills, as a Structured Field List: ${budgets.map((b) => rateLimitPolicy(b, LENS_BUDGETS[b].max)).join(", ")}. q is requests and w the window in seconds.`,
+  schema: str(),
+});
+/** A 200 from a budgeted door, which names its policy. */
+const budgeted = (response: Responses[string], budgets: readonly LensBudget[]): Responses[string] =>
+  ({ ...response, headers: { "RateLimit-Policy": policyHeader(budgets) } });
 /** A 429 from the site's own limiter, which always says when to come back. */
-const limited = (description: string): Responses[string] => ({
+const limited = (description: string, budgets: readonly LensBudget[]): Responses[string] => ({
   ...err(description),
-  headers: { "Retry-After": { description: `Seconds until the per-minute budget resets; at most ${RATE_WINDOW_S}.`, schema: int(undefined, { minimum: 1, maximum: RATE_WINDOW_S }) } },
+  headers: {
+    "Retry-After": { description: `Seconds until the per-minute budget resets; at most ${RATE_WINDOW_S}. Takes precedence over RateLimit.`, schema: int(undefined, { minimum: 1, maximum: RATE_WINDOW_S }) },
+    "RateLimit-Policy": policyHeader(budgets),
+    "RateLimit": { description: `The policy that refused the request, with nothing remaining (r=0) for up to t=${RATE_WINDOW_S} seconds.`, schema: str() },
+  },
 });
 const CLAMPED = "Values outside the range are clamped, and a non-number falls back to the default.";
 
@@ -141,8 +176,8 @@ export const OPERATIONS: readonly Operation[] = [
       q("mode", str(undefined, { enum: ["cloudflare"] }), "cloudflare returns the Cloudflare Agent Readiness level instead of the full observation."),
     ],
     responses: {
-      200: json("The observation.", ref("LensObservation")), 400: err("The URL is missing or refused."),
-      429: limited(`Over the ${inspect} per minute budget.`), 502: err(`The target timed out (${LENS_FETCH_TIMEOUT_MS / 1000} seconds) or failed.`),
+      200: budgeted(json("The observation.", ref("LensObservation")), ["inspect"]), 400: err("The URL is missing or refused."),
+      429: limited(`Over the ${inspect} per minute budget.`, ["inspect"]), 502: err(`The target timed out (${LENS_FETCH_TIMEOUT_MS / 1000} seconds) or failed.`),
     },
     example: "url=example.com",
   },
@@ -151,8 +186,8 @@ export const OPERATIONS: readonly Operation[] = [
     description: `Inspect two public URLs and report the differences in status, content, readiness, tier and agent surfaces. Limited to ${compare} comparisons per caller per minute.`,
     parameters: [q("left", str(), "The first URL, validated like /lens/fetch.", true), q("right", str(), "The second URL.", true)],
     responses: {
-      200: json("The comparison.", ref("LensComparison")), 400: err("left or right is missing or refused."),
-      429: limited(`Over the ${compare} per minute budget.`), 502: err("The comparison failed."),
+      200: budgeted(json("The comparison.", ref("LensComparison")), ["compare"]), 400: err("left or right is missing or refused."),
+      429: limited(`Over the ${compare} per minute budget.`, ["compare"]), 502: err("The comparison failed."),
     },
     example: "left=example.com&right=aadhar.sh",
   },

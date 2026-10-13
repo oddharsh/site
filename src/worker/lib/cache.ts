@@ -297,6 +297,10 @@ export async function cachedRender(request, ctx, renderFn, keyPath, env) {
 export function shouldUseWorkersCache(request, cacheablePaths) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
   if (request.headers.has("range") || request.headers.has("if-none-match")) return false;
+  // A version pin has to reach lib/api-contract.ts, which refuses one this
+  // server does not serve. A cached 200 would answer it in whatever shape it
+  // holds, which is the one thing a pin asks not to get.
+  if (request.headers.has("api-version")) return false;
   // Content negotiation: any request that asks for a representation other than the
   // cached one has to reach the dispatcher. Kept as a media-type test rather than
   // "has an accept header", since every browser sends one.

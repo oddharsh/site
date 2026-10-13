@@ -178,6 +178,11 @@ test("every cached lens answers a hit without consulting a budget", async () => 
     assert.equal(res.status, 200, `${lens.name}: a cached answer was refused (${res.status})`);
     assert.deepEqual(calls, [], `${lens.name}: a hit consulted ${calls.join(", ")}`);
     assert.ok(kv.reads.length === 1 && kv.reads[0].startsWith(lens.prefix), `${lens.name}: read ${kv.reads[0]}, not a ${lens.prefix} key`);
+    // A served answer names the door's policy (draft-ietf-httpapi-ratelimit-
+    // headers-11, section 3), own budget first, the shared browser one after.
+    const policy = res.headers.get("ratelimit-policy") || "";
+    assert.ok(policy.startsWith(`"${lens.budget}";q=${LENS_BUDGETS[lens.budget].max};w=60`), `${lens.name}: RateLimit-Policy was ${policy}`);
+    assert.equal(res.headers.get("ratelimit"), null, `${lens.name}: a hit spends nothing, so it claims no remaining count`);
     if (lens.png) {
       assert.equal(res.headers.get("x-lens-cache"), "hit");
     } else {
@@ -200,13 +205,21 @@ test("every cached lens charges its own budget on a miss, and quotes it", async 
     assert.equal(calls[0], LENS_BUDGETS[lens.budget].binding, `${lens.name}: the first budget charged was ${calls[0]}`);
     assert.equal((await res.json()).error, budgetMessage(/** @type {any} */ (lens.budget)), `${lens.name}: the 429 is not the derived message`);
     assert.equal(res.headers.get("retry-after"), "60", `${lens.name}: a 429 over our own budget says when to come back`);
+    assert.equal(res.headers.get("ratelimit"), `"${lens.budget}";r=0;t=60`, `${lens.name}: the refused policy has nothing left`);
+    assert.equal(res.headers.get("ratelimit-policy"), `"${lens.budget}";q=${LENS_BUDGETS[lens.budget].max};w=60`);
   }
 });
 
 test("/lens/fetch, /lens/compare.json and webmention say when to come back, too", async () => {
   const { LENS_BUDGETS, handleLensFetch, handleLensCompare } = await import("../src/worker/lens.ts");
-  const { RATE_LIMITED_HEADERS, RATE_WINDOW_S } = await import("../src/worker/lib/ratelimit.ts");
-  assert.deepEqual(RATE_LIMITED_HEADERS, { "retry-after": String(RATE_WINDOW_S) });
+  const { rateLimitedHeaders, RATE_WINDOW_S } = await import("../src/worker/lib/ratelimit.ts");
+  // The exact strings, so a serializer slip (a missing quote, a `;` for a `,`)
+  // fails here rather than in a client's Structured Fields parser.
+  assert.deepEqual(rateLimitedHeaders("webmention", 10), {
+    "retry-after": "60",
+    "ratelimit-policy": '"webmention";q=10;w=60',
+    "ratelimit": '"webmention";r=0;t=60',
+  });
   /** @type {Array<[handler: (req: Request, env: any, ctx: any) => Promise<Response>, path: string]>} */
   const doors = [
     [handleLensFetch, "/lens/fetch?url=https://example.com/"],
@@ -217,11 +230,13 @@ test("/lens/fetch, /lens/compare.json and webmention say when to come back, too"
     const res = await handler(new Request(`https://aadhar.sh${path}`), env, context());
     assert.equal(res.status, 429, `${path} answered ${res.status}`);
     assert.equal(res.headers.get("retry-after"), String(RATE_WINDOW_S), `${path}: Retry-After`);
+    assert.match(res.headers.get("ratelimit") || "", /^"(inspect|compare)";r=0;t=60$/, `${path}: RateLimit`);
   }
   // A refusal that is not a rate limit never claims one.
   const bad = await handleLensFetch(new Request("https://aadhar.sh/lens/fetch?url=http://localhost/"), refusingEnv(fakeKv(undefined), LENS_BUDGETS).env, context());
   assert.equal(bad.status, 400);
   assert.equal(bad.headers.get("retry-after"), null, "a bad target is not a rate limit");
+  assert.equal(bad.headers.get("ratelimit"), null, "and claims no remaining count");
 
   const { WEBMENTION_BUDGET, handleWebmention } = await import("../src/worker/webmention.ts");
   const { env } = refusingEnv(fakeKv(undefined), { webmention: WEBMENTION_BUDGET });
@@ -231,6 +246,7 @@ test("/lens/fetch, /lens/compare.json and webmention say when to come back, too"
   }), env, context());
   assert.equal(res.status, 429, `webmention answered ${res.status}: ${await res.clone().text()}`);
   assert.equal(res.headers.get("retry-after"), String(RATE_WINDOW_S));
+  assert.equal(res.headers.get("ratelimit-policy"), `"webmention";q=${WEBMENTION_BUDGET.max};w=60`);
 });
 
 test("a cache read that throws is a miss, never the route's failure", async () => {

@@ -5,11 +5,27 @@ import { isCallable } from "./parse.ts";
  *  contract-lens-per-ip-crawl-budgets holds the config to it. */
 export const RATE_WINDOW_S = 60;
 
-/** The headers a 429 from overBudget carries. Retry-After is the whole window:
- *  the limiter does not say how far into it the caller is, so the honest
- *  answer is the longest wait that can be needed. A 429 passed through from an
- *  upstream (Browser Run) does NOT take these, because its window is not ours. */
-export const RATE_LIMITED_HEADERS: Readonly<Record<string, string>> = { "retry-after": String(RATE_WINDOW_S) };
+/** The RateLimit-Policy item for one budget (draft-ietf-httpapi-ratelimit-
+ *  headers-11, section 3): a String naming the policy, `q` the quota in
+ *  requests, `w` the window in seconds. Static, so it is sent on every response
+ *  a budgeted door gives, served or refused. */
+export function rateLimitPolicy(name: string, max: number): string {
+  return `"${name}";q=${max};w=${RATE_WINDOW_S}`;
+}
+
+/** The headers a 429 from overBudget carries. The binding answers a boolean,
+ *  never a count or a reset time, so the only RateLimit (section 4) this side
+ *  can state truthfully is the refused one: nothing left (r=0) within at most
+ *  the whole window (t). Retry-After says the same, and the draft lets it take
+ *  precedence. A 429 passed through from an upstream (Browser Run) does NOT
+ *  take these, because its window is not ours to promise. */
+export function rateLimitedHeaders(name: string, max: number): Record<string, string> {
+  return {
+    "retry-after": String(RATE_WINDOW_S),
+    "ratelimit-policy": rateLimitPolicy(name, max),
+    "ratelimit": `"${name}";r=0;t=${RATE_WINDOW_S}`,
+  };
+}
 
 // The site's one per-caller rate limiter. It lived in lens.ts until /mcp's five
 // spending tools and /webmention needed it too; a helper that guards three

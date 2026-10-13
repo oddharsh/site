@@ -284,13 +284,13 @@ test("the cracker reports a verdict rather than always answering", () => {
   assert.match(page, /per >= 20/, "the measured comfortable threshold is 20 letters per column");
 });
 
-test("the reader's 429 carries the site limiter's Retry-After", async () => {
+test("the reader's 429 carries the site limiter's Retry-After and RateLimit fields", async () => {
   // Source text, per this file's rule: the reader's dependencies are not
   // installed at the root, so its Worker is never imported here. The runtime
-  // behavior of RATE_LIMITED_HEADERS is driven by contract-lens-per-ip-crawl-budgets.
+  // behavior of rateLimitedHeaders is driven by contract-lens-per-ip-crawl-budgets.
   const index = readFileSync("lens-reader/src/index.ts", "utf8");
-  assert.match(index, /import \{[^}]*\bRATE_LIMITED_HEADERS\b[^}]*\} from "\.\.\/\.\.\/src\/worker\/lib\/ratelimit\.ts"/);
+  assert.match(index, /import \{[^}]*\brateLimitedHeaders\b[^}]*\} from "\.\.\/\.\.\/src\/worker\/lib\/ratelimit\.ts"/);
   const refusal = index.slice(index.indexOf("overBudget(READER_BUDGET"), index.indexOf("try {", index.indexOf("overBudget(READER_BUDGET")));
-  assert.match(refusal, /429, RATE_LIMITED_HEADERS\)/, "the 429 passes the shared Retry-After");
-  assert.equal((index.match(/RATE_LIMITED_HEADERS/g) || []).length, 2, "imported once, used once: only the 429 carries it");
+  assert.match(refusal, /429, rateLimitedHeaders\("reader", READER_LIMIT_PER_MIN\)\)/, "the 429 names the reader policy and its real quota");
+  assert.match(index, /json\(await read\(target\.url\), 200, \{ "ratelimit-policy": rateLimitPolicy\("reader", READER_LIMIT_PER_MIN\) \}\)/, "a served read names the policy too");
 });

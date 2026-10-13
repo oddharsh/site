@@ -31,7 +31,7 @@ import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget }
 import { readResponseCapped } from "./lib/crawl.ts";
 import { esc, extractMeta, extractTitle } from "./lib/http.ts";
 import { mf2All, mf2First, mf2Strings, mf2Values, parseMf2 } from "./lib/mf2.ts";
-import { overBudget, RATE_LIMITED_HEADERS } from "./lib/ratelimit.ts";
+import { overBudget, rateLimitedHeaders } from "./lib/ratelimit.ts";
 import { sign, verify } from "./lib/sign.ts";
 import { resendSend } from "../../cal/src/email.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
@@ -139,7 +139,7 @@ export async function handleWebmention(request, env, ctx) {
   if (sameOriginPath(checked.url, origin)) return text("source must be on another site.", 400);
 
   if (await overBudget(WEBMENTION_BUDGET, request, env)) {
-    return text("Too many webmentions from this address; try again in a minute.", 429, RATE_LIMITED_HEADERS);
+    return text("Too many webmentions from this address; try again in a minute.", 429, rateLimitedHeaders("webmention", WEBMENTION_BUDGET.max));
   }
 
   // Accepted: everything past here is slow (a third-party fetch, D1, email), and

@@ -450,7 +450,16 @@ const ROUTES = [
   { path: "/finger.md", status: 301 },
   { path: "/.well-known/mcp", status: 301 },
   { path: "/garage/resampe", status: 404, ct: "text/plain", marker: "/garage/resample" },
-  { path: "/.well-known/ai-plugin.json", status: 404, ct: "text/plain", marker: "/sitemap.xml" },
+  // An API-shaped miss (.json, /api/, /v1/) answers JSON to a client that does
+  // not name HTML (this sweep sends */*), and keeps the text page for a browser.
+  { path: "/.well-known/ai-plugin.json", status: 404, ct: "application/json", marker: "/sitemap.xml" },
+  { path: "/.well-known/ai-plugin.json", status: 404, ct: "text/plain", headers: { accept: "text/html,*/*;q=0.8" }, marker: "/sitemap.xml" },
+  { path: "/v1/nope", status: 404, ct: "application/json", marker: "\"code\": \"not_found\"" },
+  // The API contract (lib/api-contract.ts): a wrong method is a JSON 405, and a
+  // version pin this server does not serve is a JSON 400.
+  { path: "/search.json?q=fhe", method: "DELETE", status: 405, ct: "application/json", marker: "method_not_allowed" },
+  { path: "/search.json?q=fhe", status: 400, ct: "application/json", headers: { "api-version": "1999-01-01" }, marker: "unsupported_api_version" },
+  { path: "/search.json?q=fhe", status: 200, ct: "application/json", headers: { "api-version": "2026-10-13" }, marker: "\"results\"" },
   // the same miss in the format an agent asked for (lib/http.ts negotiation)
   { path: "/garage/resampe", status: 404, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "# 404 Not Found" },
   { path: "/garage/resampe", status: 404, ct: "application/json", headers: { accept: "application/json" }, marker: "\"code\": \"not_found\"" },

@@ -14,7 +14,8 @@
 import { lunaPage } from "./lib/chrome.ts";
 import { html, type Html } from "./lib/html.ts";
 import { missJson } from "./lib/not-found.ts";
-import { OPENAPI_PATH, OPERATIONS, exampleUrl, operation } from "./lib/public-api.ts";
+import { API_VERSION, API_VERSION_HEADER, DEPRECATION_NOTICE_DAYS, OPENAPI_PATH, OPERATIONS, exampleUrl, operation } from "./lib/public-api.ts";
+import { RATE_WINDOW_S, rateLimitPolicy } from "./lib/ratelimit.ts";
 import { ASK_BUDGET } from "./ask-rank.ts";
 import { LENS_BUDGETS } from "./lens-pipeline.ts";
 import { RDAP_CACHE_TTL_S } from "./whoareyou.ts";
@@ -357,8 +358,13 @@ export function renderDevelopersPage() {
     <h2>Limits</h2>
     <p>
       Lens inspections are limited to ${LENS_BUDGETS.inspect.max} a minute per caller, shared
-      with the MCP server, and comparisons to ${LENS_BUDGETS.compare.max} a minute. Over the
-      limit, those answer <code>429</code>. <code>/ask</code> ranks ${ASK_BUDGET.max} questions
+      with the MCP server, and comparisons to ${LENS_BUDGETS.compare.max} a minute. Each
+      answer names its quota in a <code>RateLimit-Policy</code> header
+      (<code>${rateLimitPolicy("inspect", LENS_BUDGETS.inspect.max)}</code>). Over the limit, those
+      answer <code>429</code> with <code>Retry-After: ${RATE_WINDOW_S}</code> and a
+      <code>RateLimit</code> header showing nothing left, the fields
+      <a href="https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/">the IETF
+      RateLimit draft</a> defines. <code>/ask</code> ranks ${ASK_BUDGET.max} questions
       a minute per caller with its model, then falls back to lexical ranking and says so in
       <code>_meta.ranking</code> instead of refusing. Please cache what you read; most
       endpoints send a <code>Cache-Control</code> that says for how long.
@@ -369,10 +375,30 @@ export function renderDevelopersPage() {
       Errors are JSON with at least an <code>error</code> sentence, and most add a
       <code>code</code> token. A path that does not exist answers <code>404</code> in the
       format you ask for: JSON for <code>Accept: application/json</code>, Markdown for
-      <code>Accept: text/markdown</code>, with the closest real pages. This is the body
-      the site sends for <code>/no-such-endpoint.json</code>:
+      <code>Accept: text/markdown</code>, with the closest real pages. A path that looks
+      like an API call (ending in <code>.json</code>, or under <code>/api/</code> or
+      <code>/v1/</code>) answers JSON unless you ask for HTML. A method an endpoint does
+      not serve answers <code>405</code> in the same shape, with an <code>Allow</code>
+      header. This is the body the site sends for <code>/no-such-endpoint.json</code>:
     </p>
     <pre><code>${JSON.stringify(ERROR_EXAMPLE, null, 2)}</code></pre>
+
+    <h2 id="versioning">Versioning</h2>
+    <p>
+      The API has one live version, named by the date of its last breaking change:
+      <code>${API_VERSION}</code>, sent on every response as <code>${API_VERSION_HEADER}</code>.
+      New endpoints, optional parameters and response fields ship under the same date, so
+      ignore fields you don't know. A breaking change gets a new date, and the old shape is
+      announced first: its responses carry <code>Deprecation</code> (RFC 9745) and
+      <code>Sunset</code> (RFC 8594) headers at least ${DEPRECATION_NOTICE_DAYS} days before it
+      goes, and <a href="${OPENAPI_PATH}">${OPENAPI_PATH}</a> marks it deprecated.
+    </p>
+    <p>
+      To pin, send <code>${API_VERSION_HEADER}: ${API_VERSION}</code>. A version this server
+      does not serve answers <code>400</code> with code <code>unsupported_api_version</code>,
+      so a client never reads a shape it didn't ask for. Rate limits and caps can change
+      under the same version; the numbers above and in the spec are always the live ones.
+    </p>
 
     <h2>Pages as Markdown</h2>
     <p>

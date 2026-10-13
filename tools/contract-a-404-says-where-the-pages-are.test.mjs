@@ -226,3 +226,26 @@ test("a client that asks for JSON gets the Error object /openapi.json declares",
     assert.match(plain.response.headers.get("content-type") || "", /^text\/plain/, `${accept} keeps plain text`);
   }
 });
+
+test("an API-shaped miss answers JSON unless the caller names HTML", async () => {
+  // Whatever asked for /v1/users or /data.json will parse the body, and curl,
+  // fetch() and most HTTP libraries send */* or nothing at all.
+  for (const path of ["/v1/users", "/api/things", "/api", "/no-such-endpoint.json", "/V2/x"]) {
+    for (const init of [undefined, { headers: { accept: "*/*" } }]) {
+      const r = await recover(path, env(), init);
+      assert.equal(r.response.status, 404);
+      assert.equal(r.response.headers.get("content-type"), "application/json; charset=utf-8", `${path} with ${init ? "*/*" : "no Accept"}`);
+      assert.equal((await r.response.json()).code, "not_found");
+    }
+  }
+  // A browser names text/html, and a page-shaped path stays plain text: the
+  // control that shows the test can see the other branch.
+  const browser = await recover("/v1/users", env(), { headers: { accept: "text/html,application/xhtml+xml,*/*;q=0.8" } });
+  assert.match(browser.response.headers.get("content-type") || "", /^text\/plain/, "a browser keeps the text page");
+  const page = await recover("/garage/resampe", env(), { headers: { accept: "*/*" } });
+  assert.match(page.response.headers.get("content-type") || "", /^text\/plain/, "a page-shaped miss stays text");
+  for (const notApi of ["/version1", "/apiary", "/v1x/y", "/notes.jsonl"]) {
+    const r = await recover(notApi, env());
+    assert.match(r.response.headers.get("content-type") || "", /^text\/plain/, `${notApi} is not API-shaped`);
+  }
+});

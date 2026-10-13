@@ -44,7 +44,7 @@ import { HASHED_ASSETS } from "./shell-assets.ts";
 import { AGENT_SURFACES } from "./site-manifest.ts";
 import { getThumbHashes } from "../photos.ts";
 import { matchCrawler } from "../ledger.ts";
-import { wantsJson, wantsMarkdown } from "./http.ts";
+import { namesHtml, wantsJson, wantsMarkdown } from "./http.ts";
 
 // ── where to look, on every 404 ──────────────────────────────────────────────
 export const MISS_LINKS = [
@@ -68,6 +68,12 @@ export const DISCOVERY_ALIASES: Readonly<Record<string, string>> = {
   "/agents.md": "/llms.txt",
   "/AGENTS.md": "/llms.txt",
 };
+
+// A path shaped like an API call. Its miss answers JSON unless the caller names
+// HTML, because whatever asked for /v1/users or /data.json is going to parse
+// the body, and a client that sends no Accept (or */*) still gets something it
+// can read. A browser names text/html and keeps the plain-text page.
+export const API_CALL_PATH = /\.json$|^\/api(?:\/|$)|^\/v\d+(?:\/|$)/i;
 
 // The terminal tools answer a text frame at /<tool>.txt, and agents guess .md.
 // Derived from the registry, so a new tool is covered by being registered.
@@ -282,8 +288,10 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
     if (/^(?:not found)?$/i.test(body.trim())) {
       const near = bucket === "probe" ? { section: null, pages: [] } : nearestPages(url.pathname, await sitemapPaths(env));
       // The body follows Accept the way the pages do (lib/http.ts): an agent
-      // that asked for Markdown or JSON gets it, everyone else plain text.
-      const kind = wantsMarkdown(request) ? "md" : wantsJson(request) ? "json" : "text";
+      // that asked for Markdown or JSON gets it, an API-shaped path gets JSON
+      // unless HTML was named, and everyone else plain text.
+      const json = wantsJson(request) || (API_CALL_PATH.test(url.pathname) && !namesHtml(request));
+      const kind = wantsMarkdown(request) ? "md" : json ? "json" : "text";
       const text = kind === "md" ? missMarkdown(url.origin, url.pathname, near)
         : kind === "json" ? `${JSON.stringify(missJson(url.origin, url.pathname, near), null, 2)}\n`
         : missBody(url.pathname, near);
