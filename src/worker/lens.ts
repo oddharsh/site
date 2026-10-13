@@ -18,6 +18,7 @@ import { asRecord, asText } from "./lib/parse.ts";
 import { parseMcpBody } from "./lib/mcp-protocol.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
 import { VIEW_SAMPLE, classifyWalls } from "./lens-walls.ts";
+import { lensNeed } from "./lens-need.ts";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -1350,6 +1351,8 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-next-actions div { display:grid; grid-template-columns:145px 1fr; gap:8px; padding:4px 6px; background:oklch(98% 0.01 250); border-left:3px solid oklch(60% 0.15 50); font-size:var(--text-micro); }
 .lx-next-actions b { color:oklch(34% 0.07 255); }
 .lx-next-actions span { color:var(--ink-quiet); }
+.lx-need-skip div { grid-template-columns:1fr; gap:1px; border-left-color:var(--grey-60); }
+.lx-readiness-cat strong span { font:var(--text-2xs) var(--font-mono); color:var(--grey-60); }
 .lx-bot-matrix { width:100%; border-collapse:collapse; font-size:var(--text-micro); }
 .lx-bot-matrix td, .lx-bot-matrix th { border-bottom:1px solid var(--surface-desktop); padding:4px 7px 4px 0; text-align:left; vertical-align:top; }
 .lx-bot-matrix th { font-size:var(--text-3xs); font-weight:normal; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.04em; }
@@ -2643,6 +2646,14 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       anatomy: out.anatomy,
       agent: out.agent,
       botViews,
+    });
+    // The mirror above weighs every declaration the same. This reweighs the
+    // same evidence by what the site actually serves (lens-need.ts), and so
+    // reads the mirror and field results rather than re-deriving them.
+    out.readiness.need = lensNeed({
+      status: out.status, bodyUnreadable: out.bodyUnreadable, url: out.url, finalUrl: out.finalUrl, isHtml,
+      anatomy: out.anatomy, structured: out.structured, headers, cost: out.cost,
+      readiness: out.readiness, agent: out.agent, terms: out.terms, openapi, botViews,
     });
   }
   return out;
