@@ -379,6 +379,12 @@ export const AGENT_SURFACES = [
     "description": "AV2 still images scored against the AVIF this site ships at matched bytes: ahead on the sparsest third of thumbnails, behind on denser ones and dense detail, and why an AV2 file behind a picture fallback still breaks."
   },
   {
+    "path": "/garage/round-trip",
+    "title": "There and back",
+    "mimeType": "text/html",
+    "description": "Rebuild a page here from its Markdown twin and convert it back. All 46 generated twins survive the trip byte for byte, after it caught five converter bugs that agents had been reading."
+  },
+  {
     "path": "/bot",
     "title": "AadharshBot",
     "mimeType": "text/html",
@@ -476,6 +482,7 @@ export const WEBMENTION_PATHS = [
   "/garage/workers",
   "/garage/dictionary",
   "/garage/av2",
+  "/garage/round-trip",
   "/inbox"
 ];
 export const WEBMENTION_SECTIONS = [

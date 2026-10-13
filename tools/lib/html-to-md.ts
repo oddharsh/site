@@ -471,7 +471,9 @@ function renderInline(nodes, ctx) {
     }
     if (dropped(n)) continue;
     switch (n.name) {
-      case "br": out += "  \n"; break;
+      // Inside a table cell a hard break would end the row, so the cell keeps
+      // <br>, which GFM reads there. Elsewhere it is the Markdown hard break.
+      case "br": out += ctx.inCell ? "<br>" : "  \n"; break;
       case "code": case "kbd": case "samp": {
         const t = textOf(n);
         // pick a fence that cannot collide with backticks inside the span
@@ -705,7 +707,9 @@ function renderBlocks(nodes, ctx, depth = 0) {
   return out.join("\n\n");
 }
 
-function renderTable(table, ctx) {
+function renderTable(table, outer) {
+  // Cells render with inCell set, so a <br> stays <br> (see renderInline).
+  const ctx = { ...outer, inCell: true };
   // One rendered table row: its cells, and whether it was the header row.
   const rows: { cells: string[], head: boolean }[] = [];
   const walk = (node) => {

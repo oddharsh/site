@@ -14,14 +14,16 @@ const root = fileURLToPath(ROOT);
 const mdLinks = (index) => [...index.matchAll(/\]\((https:\/\/aadhar\.sh)(\/[^)\s]+\.md)\)/g)].map((m) => m[2]);
 
 test("every .md a section index links is a twin the same build holds", () => {
-  const { files } = buildTwins(root);
+  const { files, committed } = buildTwins(root);
+  // A committed twin (/index.md, /garage/round-trip.md) is a file the build holds too.
+  const held = new Set([...files.keys(), ...committed]);
   let linked = 0;
   for (const section of INDEXED_SECTIONS) {
     const index = files.get(`/${section}/llms.txt`);
     assert.ok(index, `no index for /${section}`);
     for (const path of mdLinks(index)) {
       linked += 1;
-      assert.ok(files.has(path), `/${section}/llms.txt promises ${path} and this build holds no such twin`);
+      assert.ok(held.has(path), `/${section}/llms.txt promises ${path} and this build holds no such twin`);
     }
   }
   // A scanner that matches nothing reports a pass; the garage index alone links a dozen.
@@ -30,14 +32,15 @@ test("every .md a section index links is a twin the same build holds", () => {
 
 test("every surface in an indexed section is listed exactly once, as a twin or as HTML", async () => {
   const manifest = JSON.parse(await readFile(new URL("config/site-manifest.json", ROOT), "utf8"));
-  const { files } = buildTwins(root);
+  const { files, committed } = buildTwins(root);
+  const held = new Set([...files.keys(), ...committed]);
   for (const section of INDEXED_SECTIONS) {
     const index = files.get(`/${section}/llms.txt`);
     for (const s of manifest.surfaces.filter((x) => x.section === section)) {
       const asTwin = index.includes(`](${ORIGIN}${twinPath(s.path)})`);
       const asHtml = index.includes(`](${ORIGIN}${s.path})`);
       assert.ok(asTwin !== asHtml, `${s.path} is listed ${asTwin && asHtml ? "twice" : "nowhere"} in /${section}/llms.txt`);
-      if (asHtml) assert.ok(!files.has(twinPath(s.path)), `${s.path} has a twin and is still listed as HTML only`);
+      if (asHtml) assert.ok(!held.has(twinPath(s.path)), `${s.path} has a twin and is still listed as HTML only`);
     }
   }
 });

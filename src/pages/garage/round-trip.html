@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/round-trip: There and back</title>
+<meta name="description" content="Rebuild a page from its Markdown twin and see what the trip kept, what it dropped, and which converter bugs it caught.">
+<link rel="canonical" href="https://aadhar.sh/garage/round-trip">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/garage/round-trip: There and back">
+<meta property="og:description" content="Rebuild a page from its Markdown twin and see what the trip kept, what it dropped, and which converter bugs it caught.">
+<meta property="og:url" content="https://aadhar.sh/garage/round-trip">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-round-trip.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh/garage/round-trip interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-round-trip.jpg">
+<link rel="stylesheet" href="/prose.css">
+<style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid var(--amber-49-b)}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--amber-74);text-shadow:none}
+.content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
+@media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
+
+.rt-pending{min-height:60vh}
+.rt-proof{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:14px;padding-top:6px}
+.rt-demo{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;padding:8px 10px;margin:10px 0}
+.rt-pick{font-size:var(--text-xs);margin:0 0 8px}
+.rt-legs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 8px}
+.rt-leg{border:1px solid var(--slate-81);background:#fff;padding:6px 8px;font-size:var(--text-micro)}
+.rt-leg .n{font-family:var(--font-mono);font-size:var(--text-lede);font-weight:700;display:block}
+.rt-leg .lbl{color:var(--slate-40)}
+.rt-panes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rt-panes>div{min-width:0}
+.rt-pane{border:1px solid var(--slate-81);background:#fff;height:320px;overflow:auto;overflow-wrap:anywhere;padding:6px 8px;font-size:var(--text-micro)}
+.rt-pane pre{margin:0;white-space:pre-wrap;font-family:var(--font-mono);font-size:var(--text-2xs)}
+.rt-cap{font-size:var(--text-2xs);color:var(--slate-40);margin:2px 0 0}
+.rt-drop{font-size:var(--text-micro);margin:8px 0 0}
+@media (max-width:640px){.rt-legs,.rt-panes{grid-template-columns:1fr}}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
+    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/round-trip</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div><!-- /axp:window -->
+  <div class="content prose">
+<div id="rt-doc" class="rt-pending"><noscript>
+<h1>There and back</h1>
+<p>This page is written in <a href="/garage/round-trip.md">Markdown</a>, and your browser renders it with <a href="/garage/md-to-html.src.js"><code>md-to-html.js</code></a> when the page opens. With JavaScript off, read the Markdown itself.</p>
+</noscript></div>
+<div id="rt-demo" class="rt-demo" hidden>
+<div class="rt-pick"><label for="rt-page">Page</label> <select id="rt-page">
+<option value="/garage/octane">/garage/octane</option>
+<option value="/garage/iroh">/garage/iroh</option>
+<option value="/garage/wire">/garage/wire</option>
+<option value="/garage/resample">/garage/resample</option>
+<option value="/lwe/fhe">/lwe/fhe</option>
+<option value="/garage/round-trip">/garage/round-trip (this page)</option>
+</select></div>
+<div id="rt-out"></div>
+</div>
+<p id="rt-proof" class="rt-proof" hidden></p>
+    <section id="luq" aria-label="understanding check"></section>
+    <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
+  </div>
+  <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-10-13</span></div>
+</div>
+
+<script>
+(function(){
+  // The page is its own Markdown. The HTML file holds a heading and a link to
+  // /garage/round-trip.md; this fetches that file, renders it with the same
+  // parser the demo uses, and puts the demo under its heading. md-to-html.js
+  // escapes every character of input before it reaches the DOM.
+  var doc = document.getElementById("rt-doc"), demo = document.getElementById("rt-demo"), proof = document.getElementById("rt-proof");
+  var out = document.getElementById("rt-out"), pick = document.getElementById("rt-page");
+  if (!doc || !demo || !proof || !out || !pick || !window.fetch || !window.DOMParser) return;
+  var lib = import("./md-to-html.js");
+  var text = function(r){ if (!r.ok) throw new Error(r.url + " answered " + r.status); return r.text(); };
+  var ORIGIN = "https://aadhar.sh";
+  Promise.all([fetch("/garage/round-trip.md").then(text), lib]).then(function(got){
+    var md = got[0], t0 = performance.now();
+    doc.innerHTML = got[1].mdToHtml(md);
+    // The conventions a hand-written Garage page follows, applied to what the
+    // parser made: the paragraph under the title is the intro, a link on this
+    // site is a path, and a link off it is marked external.
+    var lede = doc.querySelector("h1 + p");
+    if (lede) lede.className = "garage-intro";
+    doc.querySelectorAll("a[href]").forEach(function(a){
+      var href = a.getAttribute("href");
+      if (href.indexOf(ORIGIN + "/") === 0) a.setAttribute("href", href.slice(ORIGIN.length));
+      else if (/^https?:/.test(href)) a.setAttribute("rel", "external");
+    });
+    var anchor = null;
+    doc.querySelectorAll("h2").forEach(function(h){ if (!anchor && /^Take a page on the trip/.test(h.textContent)) anchor = h.nextElementSibling || h; });
+    if (anchor) anchor.after(demo); else doc.after(demo);
+    doc.classList.remove("rt-pending");
+    demo.hidden = false;
+    var ms = performance.now() - t0;
+    var nav = performance.getEntriesByType && performance.getEntriesByType("navigation")[0];
+    var htmlBytes = nav && nav.decodedBodySize ? nav.decodedBodySize : document.documentElement.outerHTML.length;
+    doc.after(proof);
+    proof.textContent = "Measured on this visit: the HTML file was " + htmlBytes.toLocaleString("en-US") +
+      " bytes, the Markdown was " + new Blob([md]).size.toLocaleString("en-US") +
+      " bytes, and building this page from the Markdown took " + (ms < 1 ? "under 1" : Math.round(ms)) + " ms.";
+    proof.hidden = false;
+    run();
+  }).catch(function(e){
+    doc.classList.remove("rt-pending");
+    doc.innerHTML = '<h1>There and back</h1><p></p>';
+    doc.querySelector("p").textContent = "This page is written in Markdown, and the Markdown did not load (" + e.message + "). It lives at /garage/round-trip.md.";
+  });
+
+  var fmt = function(n){ return n.toLocaleString("en-US") + " B"; };
+  var words = function(s){ return (s.toLowerCase().match(/[a-z0-9]+/g) || []); };
+  var recall = function(a, b){
+    var bag = {}, hit = 0;
+    b.forEach(function(w){ bag[w] = (bag[w] || 0) + 1; });
+    a.forEach(function(w){ if (bag[w]) { hit++; bag[w]--; } });
+    return a.length ? hit / a.length : 1;
+  };
+  var leg = function(n, lbl){ return '<div class="rt-leg"><span class="n">' + n + '</span><span class="lbl">' + lbl + '</span></div>'; };
+  function run(){
+    var path = pick.value;
+    out.textContent = "fetching " + path + " and " + path + ".md";
+    Promise.all([fetch(path).then(text), fetch(path + ".md").then(function(r){ return r.ok ? r.text() : ""; }), lib])
+      .then(function(got){
+        var html = got[0], md = got[1], rebuilt = got[2].mdToHtml(md);
+        if (!md) { out.textContent = path + " has no twin to rebuild"; return; }
+        var page = new DOMParser().parseFromString(html, "text/html");
+        // A page that renders from its own Markdown ships a frame, so its HTML
+        // has no words to keep and the count would measure the frame.
+        var frame = !!page.getElementById("rt-doc");
+        var content = page.querySelector(".content") || page.body;
+        var n = function(sel){ return content.querySelectorAll(sel).length; };
+        var dropped = [["script", n("script")], ["button", n("button")], ["form control", n("input,select,textarea")], ["canvas", n("canvas")], ["svg", n("svg")]]
+          .filter(function(d){ return d[1]; }).map(function(d){ return d[1] + " " + d[0] + (d[1] === 1 ? "" : "s"); });
+        content.querySelectorAll("script,style,button,input,select,textarea,label,noscript,template,svg,canvas,#luq,.title-bar,.status").forEach(function(e){ e.remove(); });
+        var frag = new DOMParser().parseFromString(rebuilt, "text/html").body;
+        var kept = frame ? "HTML rebuilt here: all of this page's words" : "HTML rebuilt here, " + (recall(words(content.textContent), words(frag.textContent)) * 100).toFixed(1) + "% of words kept";
+        out.innerHTML = '<div class="rt-legs">' +
+          leg(fmt(new Blob([html]).size), frame ? "HTML as served, a frame with no page in it" : "HTML, as served") +
+          leg(fmt(new Blob([md]).size), frame ? "Markdown, the source" : "Markdown twin") +
+          leg(fmt(new Blob([rebuilt]).size), kept) +
+          '</div><div class="rt-panes"><div><div class="rt-pane"><pre></pre></div><p class="rt-cap">the twin, as an agent reads it</p></div>' +
+          '<div><div class="rt-pane prose rt-rebuilt"></div><p class="rt-cap">the twin, rebuilt as HTML</p></div></div>' +
+          '<p class="rt-drop"></p>';
+        out.querySelector("pre").textContent = md;
+        out.querySelector(".rt-rebuilt").innerHTML = rebuilt;
+        out.querySelector(".rt-drop").textContent = dropped.length
+          ? "Left behind on the way down: " + dropped.join(", ") + "."
+          : "Nothing interactive on this page, so nothing was left behind on the way down.";
+      })
+      .catch(function(e){ out.textContent = "the trip failed: " + e.message; });
+  }
+  pick.addEventListener("change", run);
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Before you close the hood, check the mechanism in three questions.",
+  "questions": [
+    {
+      "q": "Why does pressing the rebuilt HTML down again test the converter at all?",
+      "options": [
+        {
+          "t": "If the parser reads the twin language exactly, a second pass has to return the same twin, so any difference is a bug in one direction.",
+          "ok": true,
+          "why": "Right. The fixed point gives the trip a pass condition that both converters can fail."
+        },
+        {
+          "t": "Because the rebuilt HTML matches the original page byte for byte.",
+          "why": "It cannot. The trip drops every script, button and style block on purpose, so the HTML is always smaller."
+        },
+        {
+          "t": "Because a Markdown file that renders without errors is correct.",
+          "why": "Every twin rendered fine, including the ones with bugs. Rendering cannot see a dropped caption."
+        }
+      ]
+    },
+    {
+      "q": "Which twin failure would point at the inverse parser instead of the forward converter?",
+      "options": [
+        {
+          "t": "A construct the generator writes that the parser reads back as something else.",
+          "ok": true,
+          "why": "Right. That breaks the fixed point on the parser's side, which is what the dl and line-break fixes during this build were."
+        },
+        {
+          "t": "A table caption missing from the twin before the trip starts.",
+          "why": "The caption was already gone from the twin, so the forward converter lost it."
+        },
+        {
+          "t": "A hand-written twin whose autolinks come back as bracketed links.",
+          "why": "That is a change of form with no change of meaning, and the trip settles after it."
+        }
+      ]
+    },
+    {
+      "q": "What would you predict for a page whose content is all canvases and buttons?",
+      "options": [
+        {
+          "t": "A short twin, a small rebuilt page, and most of the HTML bytes left behind on the way down.",
+          "ok": true,
+          "why": "Right. The converter keeps the prose around a demo and drops the demo, so the twin holds only the words."
+        },
+        {
+          "t": "A twin that describes each button so an agent can press it.",
+          "why": "The converter drops controls on purpose, because a label without its behavior would read as a claim."
+        },
+        {
+          "t": "A failed trip, because the parser cannot rebuild a canvas.",
+          "why": "The canvas never reaches the twin, so the parser never sees it. The trip can still close."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="28"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>
