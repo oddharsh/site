@@ -14,7 +14,7 @@
 import { lunaPage } from "./lib/chrome.ts";
 import { html, type Html } from "./lib/html.ts";
 import { missJson } from "./lib/not-found.ts";
-import { API_VERSION, API_VERSION_HEADER, DEPRECATION_NOTICE_DAYS, OPENAPI_PATH, OPERATIONS, exampleUrl, operation } from "./lib/public-api.ts";
+import { API_VERSION, API_VERSION_HEADER, DEPRECATION_NOTICE_DAYS, OPENAPI_PATH, OPERATIONS, READ_POLICY, exampleUrl, operation } from "./lib/public-api.ts";
 import { RATE_WINDOW_S, rateLimitPolicy } from "./lib/ratelimit.ts";
 import { ASK_BUDGET } from "./ask-rank.ts";
 import { LENS_BUDGETS } from "./lens-pipeline.ts";
@@ -357,11 +357,13 @@ export function renderDevelopersPage() {
 
     <h2>Limits</h2>
     <p>
-      Lens inspections are limited to ${LENS_BUDGETS.inspect.max} a minute per caller, shared
+      The endpoints share a read budget of ${READ_POLICY[1]} requests a minute per caller,
+      named on each answer as <code>RateLimit-Policy: ${rateLimitPolicy(...READ_POLICY)}</code>.
+      The Lens doors have tighter budgets of their own instead: inspections are limited to ${LENS_BUDGETS.inspect.max} a minute per caller, shared
       with the MCP server, and comparisons to ${LENS_BUDGETS.compare.max} a minute. Each
       answer names its quota in a <code>RateLimit-Policy</code> header
-      (<code>${rateLimitPolicy("inspect", LENS_BUDGETS.inspect.max)}</code>). Over the limit, those
-      answer <code>429</code> with <code>Retry-After: ${RATE_WINDOW_S}</code> and a
+      (<code>${rateLimitPolicy("inspect", LENS_BUDGETS.inspect.max)}</code>). Over any limit, an
+      endpoint answers <code>429</code> with <code>Retry-After: ${RATE_WINDOW_S}</code> and a
       <code>RateLimit</code> header showing nothing left, the fields
       <a href="https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/">the IETF
       RateLimit draft</a> defines. <code>/ask</code> ranks ${ASK_BUDGET.max} questions

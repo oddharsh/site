@@ -7,7 +7,7 @@
 // tests import it, so none of it ships in the Worker bundle.
 //
 // Node-safe (gotcha 16).
-import { API_VERSION, API_VERSION_HEADER, OPERATIONS, VERSION_POLICY, arr, bool, int, nullStr, num, obj, ref, str, type Operation, type Schema } from "./public-api.ts";
+import { API_VERSION, API_VERSION_HEADER, OPERATIONS, READ_POLICY, VERSION_POLICY, arr, bool, budgeted, int, limited, nullStr, num, obj, ref, sharesReadBudget, str, type Operation, type Schema } from "./public-api.ts";
 import { allowedMethods } from "./api-contract.ts";
 
 export { OPENAPI_PATH } from "./public-api.ts";
@@ -28,7 +28,7 @@ export const SCHEMAS: Record<string, Schema> = {
   Error: obj({
     ok: bool("Always false on an error, where the endpoint uses an ok flag."),
     error: str("A sentence describing what went wrong, for a person or an agent to read."),
-    code: str("A stable machine token, where the endpoint sets one: not_found, method_not_allowed, unsupported_api_version, storage_unavailable."),
+    code: str("A stable machine token, where the endpoint sets one: not_found, method_not_allowed, unsupported_api_version, rate_limited, storage_unavailable."),
     status: int("The HTTP status, repeated in the body."),
     hint: str("What to try next."),
     suggestions: arr(str(undefined, { format: "uri" }), "Absolute URLs of the closest real pages, on a 404."),
@@ -290,6 +290,11 @@ function specOperation(op: Operation, allow: string[]) {
     ? { ...responses[400], description: `${responses[400].description} ${versionRefused}` }
     : { description: versionRefused.replace(/^Or A/, "A"), content: { "application/json": { schema: ref("Error") } } };
   responses[405] ??= { description: `A method other than ${allow.join(", ")} (code method_not_allowed). The Allow header lists them.`, content: { "application/json": { schema: ref("Error") } } };
+  // No limiter of its own, so it bills the shared read budget (api-contract.ts).
+  if (sharesReadBudget(op)) {
+    for (const status of Object.keys(responses)) if (status.startsWith("2")) responses[status] = budgeted(responses[status], [READ_POLICY]);
+    responses[429] = limited(`Over the shared read budget of ${READ_POLICY[1]} requests a minute per caller (code rate_limited).`, [READ_POLICY]);
+  }
   for (const r of Object.values(responses)) {
     r.headers = { ...r.headers, ...CONTRACT_HEADERS };
     if (deprecated) Object.assign(r.headers, DEPRECATION_HEADERS);
@@ -319,7 +324,7 @@ export function openApiDocument() {
       contact: { name: "Aadharsh Pannirselvam", email: "coffee@aadhar.sh", url: "https://aadhar.sh/contact" },
     },
     externalDocs: { description: "Developer guide", url: "https://aadhar.sh/developers" },
-    servers: [{ url: "https://aadhar.sh" }],
+    servers: [{ url: "https://aadhar.sh", description: "Production, which is also the sandbox: every endpoint is keyless and read-only, so a test call needs no account and cannot change anything." }],
     security: [],
     tags: [
       { name: "search", description: "Find pages on the site." },

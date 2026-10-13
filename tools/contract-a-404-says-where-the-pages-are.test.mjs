@@ -6,6 +6,7 @@
 import { existsSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { OPENAPI_PATH, openApiDocument } from "../src/worker/lib/openapi.ts";
+import { EXACT_PATHS } from "../src/worker/routes.ts";
 import { HASHED_ASSETS } from "../src/worker/lib/shell-assets.ts";
 import { _resetPhotoCaches } from "../src/worker/photos.ts";
 import {
@@ -87,9 +88,9 @@ test("share cards, terminal tools and MCP card probes go where the thing actuall
     assert.equal((await recover(from)).response.headers.get("location"), `https://aadhar.sh${to}`, from);
   }
   for (const to of new Set(Object.values(DISCOVERY_ALIASES))) {
-    // /openapi.json is written by build.ts from lib/public-api.ts; every other
-    // target is a file in public/
-    assert.ok(to === OPENAPI_PATH || existsSync(`public${to}`), `an alias may only point at a file this site ships: public${to}`);
+    // /openapi.json is written by build.ts from lib/public-api.ts, /developers is
+    // a Worker route; every other target is a file in public/
+    assert.ok(to === OPENAPI_PATH || EXACT_PATHS.includes(to) || existsSync(`public${to}`), `an alias may only point at something this site serves: ${to}`);
   }
   for (const honest of ["/openapi.yaml", "/.well-known/ai-plugin.json", "/.well-known/x402", "/.well-known/agents.json"]) {
     assert.equal((await recover(honest)).response.status, 404, `${honest} names a capability this site does not serve`);

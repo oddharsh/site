@@ -94,6 +94,8 @@ export interface EnvBindings {
   WEBMENTION_RL: RateLimit;
   /** /ask's Clef ranking, per IP; past it the answer is lexical (ask-rank.ts). */
   ASK_RL: RateLimit;
+  /** The documented API's shared read budget, per IP (lib/api-contract.ts). */
+  API_RL: RateLimit;
 
   BROWSER: BrowserRun;
   IMAGES: ImagesBinding;
