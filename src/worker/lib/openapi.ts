@@ -107,6 +107,7 @@ export const SCHEMAS: Record<string, Schema> = {
   ReadinessCheck: obj({
     key: str(), category: str(), label: str(), status: str(undefined, { enum: ["pass", "fail", "unknown", "neutral"] }),
     detail: str(), optional: bool(), countInScore: bool(),
+    notApplicable: bool("Present and true on a check the site has declared does not apply to it; its status is then neutral."),
   }, ["key", "status"]),
   LensObservation: obj({
     ok: bool(), url: str(undefined, { format: "uri" }), finalUrl: str(undefined, { format: "uri" }), redirected: bool(), status: int(),
@@ -174,7 +175,9 @@ export const SCHEMAS: Record<string, Schema> = {
       overall: int(undefined, { minimum: 0, maximum: 100 }), level: int(undefined, { enum: [0, 1, 3, 5] }), levelName: str(), levelNote: nullStr(),
       categories: arr(obj({ key: str(), label: str(), score: int(), passed: int(), total: int(), checkCount: int(), countInScore: bool() })),
       checks: { type: "object", description: "One entry per check, keyed by its name.", additionalProperties: ref("ReadinessCheck") },
-      counted: int(), passed: int(), scoringNote: str(), nextActions: arr(obj({ key: str(), label: str() }, ["key", "label"])), botViews: arr(ref("BotView")),
+      counted: int(), passed: int(),
+      keyless: nullStr("Why the authority checks do not apply, when the site's OpenAPI document declares every operation keyless; otherwise null."),
+      scoringNote: str(), nextActions: arr(obj({ key: str(), label: str() }, ["key", "label"])), botViews: arr(ref("BotView")),
       field: obj({ overall: intOrNull(), scoringNote: str(),
         components: arr(obj({ key: str(undefined, { enum: ["identifiedFetch", "sampledBots", "usableBody", "agentDoor"] }), label: str(), score: intOrNull(), detail: str() })) }),
     }, undefined, "The agent-readiness score and the checks behind it."),

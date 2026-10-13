@@ -3887,13 +3887,50 @@ function lensJsonVerdict(probe, validate) {
   } catch (_e) { return { status: "fail", detail: "answered, but was not valid JSON" }; }
 }
 
-function lensReadinessItem(key, status, detail) {
+type LensReadinessCheck = {
+  key: string; category: string; label: string; status: string; detail: string;
+  optional: boolean; countInScore: boolean;
+  /** Set only on a check the site has said does not apply to it, which the
+   *  grid prints as "n/a" rather than "optional" (lensKeylessDeclaration). */
+  notApplicable?: true;
+};
+
+function lensReadinessItem(key, status, detail, notApplicable = false): LensReadinessCheck {
   const meta = LENS_READINESS_META[key];
-  return {
+  const item: LensReadinessCheck = {
     key, category: meta.category, label: meta.label, status, detail,
     optional: !!meta.optional,
     countInScore: meta.countInScore !== false && !meta.optional,
   };
+  if (notApplicable) item.notApplicable = true;
+  return item;
+}
+
+// The three authority checks (OAuth discovery, OAuth Protected Resource,
+// Auth.md) ask how an agent gets scoped permission to act for a user. A site
+// whose API needs no credential at all has nothing to scope, and grading it
+// "fix" told it to bolt on OAuth that would guard nothing. aadhar.sh carried
+// exactly that, an anonymous flow issuing tokens no endpoint checked, until
+// 2026-10-13. The scanners this rubric mirrors have no such verdict, so a
+// keyless site cannot score 100 on them.
+//
+// The evidence is the site's own declaration, never an inference from
+// absence: an OpenAPI document whose top-level `security` is an explicit
+// empty array, with no security scheme defined and no operation asking for
+// one. An omitted `security` stays a fail, since a spec that never mentions
+// auth is far more often incomplete than keyless.
+export function lensKeylessDeclaration(openapi): string | null {
+  if (!openapi || !openapi.ok || openapi.truncated) return null;
+  // Parsed once at the boundary; every read below tolerates a wrong shape by
+  // landing on the conservative answer (null), never on "keyless".
+  let spec: any;
+  try { spec = JSON.parse(openapi.body || ""); } catch (_e) { return null; }
+  if (!spec?.openapi && !spec?.swagger) return null;
+  if (!Array.isArray(spec.security) || spec.security.length !== 0) return null;
+  if (Object.keys(spec.components?.securitySchemes ?? spec.securityDefinitions ?? {}).length) return null;
+  const operations: any[] = Object.values(spec.paths ?? {}).flatMap((item) => Object.values(item ?? {}));
+  if (operations.some((op) => Array.isArray(op?.security) && op.security.some((req) => Object.keys(req ?? {}).length))) return null;
+  return "the site's OpenAPI document declares every operation keyless (security: [])";
 }
 
 // What LENS itself observed on the wire. This is intentionally orthogonal to
@@ -4004,6 +4041,12 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   const ucp = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.ucp, (j) => !!(j.protocol || j.version || j.services || j.capabilities));
   const acp = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.acp, (j) => !!(j.protocol || j.api_base_url || j.capabilities || j.services));
   const ap2 = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.ap2, (j) => !!(j.protocol || j.version || j.capabilities));
+  // A pass is still a pass: a keyless site that publishes OAuth anyway gets
+  // the credit. Anything else on a declared-keyless site is not applicable.
+  const keyless = lensKeylessDeclaration(openapi);
+  const authorityItem = (key, status, detail) => keyless && status !== "pass"
+    ? lensReadinessItem(key, "neutral", "not applicable: " + keyless, true)
+    : lensReadinessItem(key, status, detail);
 
   items.robotsTxt = lensReadinessItem("robotsTxt", robots && robots.ok ? "pass" : robots && (robots.status === 404 || robots.status === 410) ? "fail" : "unknown", robots && robots.ok ? "valid response with " + robotsParsed.groups.length + " User-agent group(s)" : "robots.txt did not return a readable 200");
   // Two probes, best-of: the conventional /sitemap.xml and whatever robots.txt
@@ -4042,9 +4085,9 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   items.contentSignals = lensReadinessItem("contentSignals", terms && terms.robotsUnknown ? "unknown" : terms && terms.signals && terms.signals.length ? "pass" : "fail", terms && terms.signals && terms.signals.length ? terms.signals.length + " Content-Signal directive(s)" : "no Content-Signal directive found");
   items.webBotAuth = lensReadinessItem("webBotAuth", botAuth.status, botAuth.detail);
   items.apiCatalog = lensReadinessItem("apiCatalog", agent && agent.apiCatalog && agent.apiCatalog.present ? "pass" : agent && agent.apiCatalog && agent.apiCatalog.unknown ? "unknown" : "fail", agent && agent.apiCatalog && agent.apiCatalog.present ? agent.apiCatalog.detail : "no valid API Catalog linkset");
-  items.oauthDiscovery = lensReadinessItem("oauthDiscovery", oauthOpen.status === "pass" || oauthServer.status === "pass" ? "pass" : oauthOpen.status === "unknown" || oauthServer.status === "unknown" ? "unknown" : "fail", oauthOpen.status === "pass" || oauthServer.status === "pass" ? "OAuth or OIDC discovery metadata found" : "no valid OAuth/OIDC discovery document");
-  items.oauthProtectedResource = lensReadinessItem("oauthProtectedResource", oauthResource.status, oauthResource.detail);
-  items.authMd = lensReadinessItem("authMd", discovery && discovery.authMd && discovery.authMd.ok && String(discovery.authMd.body || "").trim() ? "pass" : discovery && discovery.authMd && discovery.authMd.error ? "unknown" : "fail", discovery && discovery.authMd && discovery.authMd.ok ? "auth.md answered" : "no auth.md registration guide");
+  items.oauthDiscovery = authorityItem("oauthDiscovery", oauthOpen.status === "pass" || oauthServer.status === "pass" ? "pass" : oauthOpen.status === "unknown" || oauthServer.status === "unknown" ? "unknown" : "fail", oauthOpen.status === "pass" || oauthServer.status === "pass" ? "OAuth or OIDC discovery metadata found" : "no valid OAuth/OIDC discovery document");
+  items.oauthProtectedResource = authorityItem("oauthProtectedResource", oauthResource.status, oauthResource.detail);
+  items.authMd = authorityItem("authMd", discovery && discovery.authMd && discovery.authMd.ok && String(discovery.authMd.body || "").trim() ? "pass" : discovery && discovery.authMd && discovery.authMd.error ? "unknown" : "fail", discovery && discovery.authMd && discovery.authMd.ok ? "auth.md answered" : "no auth.md registration guide");
   items.mcpServerCard = lensReadinessItem("mcpServerCard", mcpCard.status, mcpCard.detail);
   // Same unknown arm as apiCatalog above. lensJsonDoor has always marked an
   // unanswered agent-card probe `unknown`, and this check read only `present`,
@@ -4113,8 +4156,8 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   const nextActions = Object.values(items).filter((item) => item.status === "fail" && item.countInScore).slice(0, 5).map((item) => ({ key: item.key, label: item.label }));
   return {
     overall, level: level.number, levelName: level.name, levelNote,
-    categories, checks: items, counted: counted.length, passed,
-    scoringNote: "Passes divided by pass + fail + unknown; neutral checks are shown but excluded. Execution checks stay neutral until an agent browser has actually rendered the page, so a spent render budget never costs a site points.",
+    categories, checks: items, counted: counted.length, passed, keyless,
+    scoringNote: "Passes divided by pass + fail + unknown; neutral checks are shown but excluded. Execution checks stay neutral until an agent browser has actually rendered the page, so a spent render budget never costs a site points. The authority checks are neutral (not applicable) on a site whose OpenAPI document declares every operation keyless.",
     nextActions, botViews: botViews || [],
   };
 }
