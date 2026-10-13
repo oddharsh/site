@@ -100,6 +100,14 @@ export function wantsJson(request) {
   );
 }
 
+/** True when Accept names HTML itself (text/html or XHTML, q > 0): a browser
+ *  navigating. A bare wildcard does not count, so curl's default and most
+ *  HTTP clients read as not asking for a page. */
+export function namesHtml(request) {
+  const accept = (request.headers.get("accept") || "").toLowerCase();
+  return ["text/html", "application/xhtml+xml"].some((t) => acceptIndex(accept, t) !== Infinity && acceptQ(accept, t) > 0);
+}
+
 // Where a type is named EXACTLY in the Accept header, as an ordinal, or Infinity
 // when it is not named at all. Wildcards are deliberately not matched here even
 // though acceptQ matches them for q: `*/*` expresses no preference BETWEEN two

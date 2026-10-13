@@ -56,7 +56,9 @@ test("every rate-limit ceiling matches the ratelimits declared in the site confi
     assert.equal(rule.simple?.limit, max,
       `${config} limits ${binding} to ${rule.simple?.limit} but the 429 message says ${max}`);
     // The binding supports 10 or 60 only, and every budget here is per-minute.
-    assert.equal(rule.simple?.period, 60, `${binding} must use the 60s period`);
+    // RATE_WINDOW_S is the same number as the Retry-After every 429 sends.
+    const { RATE_WINDOW_S } = await import("../src/worker/lib/ratelimit.ts");
+    assert.equal(rule.simple?.period, RATE_WINDOW_S, `${binding} must use the ${RATE_WINDOW_S}s period Retry-After quotes`);
   }
   // No orphans: a declared limiter nothing reads is a limit nobody enforces.
   const used = new Set(Object.values(BUDGETS).map((b) => b.binding));
@@ -176,6 +178,11 @@ test("every cached lens answers a hit without consulting a budget", async () => 
     assert.equal(res.status, 200, `${lens.name}: a cached answer was refused (${res.status})`);
     assert.deepEqual(calls, [], `${lens.name}: a hit consulted ${calls.join(", ")}`);
     assert.ok(kv.reads.length === 1 && kv.reads[0].startsWith(lens.prefix), `${lens.name}: read ${kv.reads[0]}, not a ${lens.prefix} key`);
+    // A served answer names the door's policy (draft-ietf-httpapi-ratelimit-
+    // headers-11, section 3), own budget first, the shared browser one after.
+    const policy = res.headers.get("ratelimit-policy") || "";
+    assert.ok(policy.startsWith(`"${lens.budget}";q=${LENS_BUDGETS[lens.budget].max};w=60`), `${lens.name}: RateLimit-Policy was ${policy}`);
+    assert.equal(res.headers.get("ratelimit"), null, `${lens.name}: a hit spends nothing, so it claims no remaining count`);
     if (lens.png) {
       assert.equal(res.headers.get("x-lens-cache"), "hit");
     } else {
@@ -197,7 +204,49 @@ test("every cached lens charges its own budget on a miss, and quotes it", async 
     assert.equal(res.status, 429, `${lens.name}: a miss over budget answered ${res.status}`);
     assert.equal(calls[0], LENS_BUDGETS[lens.budget].binding, `${lens.name}: the first budget charged was ${calls[0]}`);
     assert.equal((await res.json()).error, budgetMessage(/** @type {any} */ (lens.budget)), `${lens.name}: the 429 is not the derived message`);
+    assert.equal(res.headers.get("retry-after"), "60", `${lens.name}: a 429 over our own budget says when to come back`);
+    assert.equal(res.headers.get("ratelimit"), `"${lens.budget}";r=0;t=60`, `${lens.name}: the refused policy has nothing left`);
+    assert.equal(res.headers.get("ratelimit-policy"), `"${lens.budget}";q=${LENS_BUDGETS[lens.budget].max};w=60`);
   }
+});
+
+test("/lens/fetch, /lens/compare.json and webmention say when to come back, too", async () => {
+  const { LENS_BUDGETS, handleLensFetch, handleLensCompare } = await import("../src/worker/lens.ts");
+  const { rateLimitedHeaders, RATE_WINDOW_S } = await import("../src/worker/lib/ratelimit.ts");
+  // The exact strings, so a serializer slip (a missing quote, a `;` for a `,`)
+  // fails here rather than in a client's Structured Fields parser.
+  assert.deepEqual(rateLimitedHeaders("webmention", 10), {
+    "retry-after": "60",
+    "ratelimit-policy": '"webmention";q=10;w=60',
+    "ratelimit": '"webmention";r=0;t=60',
+  });
+  /** @type {Array<[handler: (req: Request, env: any, ctx: any) => Promise<Response>, path: string]>} */
+  const doors = [
+    [handleLensFetch, "/lens/fetch?url=https://example.com/"],
+    [handleLensCompare, "/lens/compare.json?left=https://example.com/&right=https://example.org/"],
+  ];
+  for (const [handler, path] of doors) {
+    const { env } = refusingEnv(fakeKv(undefined), LENS_BUDGETS);
+    const res = await handler(new Request(`https://aadhar.sh${path}`), env, context());
+    assert.equal(res.status, 429, `${path} answered ${res.status}`);
+    assert.equal(res.headers.get("retry-after"), String(RATE_WINDOW_S), `${path}: Retry-After`);
+    assert.match(res.headers.get("ratelimit") || "", /^"(inspect|compare)";r=0;t=60$/, `${path}: RateLimit`);
+  }
+  // A refusal that is not a rate limit never claims one.
+  const bad = await handleLensFetch(new Request("https://aadhar.sh/lens/fetch?url=http://localhost/"), refusingEnv(fakeKv(undefined), LENS_BUDGETS).env, context());
+  assert.equal(bad.status, 400);
+  assert.equal(bad.headers.get("retry-after"), null, "a bad target is not a rate limit");
+  assert.equal(bad.headers.get("ratelimit"), null, "and claims no remaining count");
+
+  const { WEBMENTION_BUDGET, handleWebmention } = await import("../src/worker/webmention.ts");
+  const { env } = refusingEnv(fakeKv(undefined), { webmention: WEBMENTION_BUDGET });
+  const form = new URLSearchParams({ source: "https://example.com/post", target: "https://aadhar.sh/writing" });
+  const res = await handleWebmention(new Request("https://aadhar.sh/webmention", {
+    method: "POST", body: form, headers: { "content-type": "application/x-www-form-urlencoded" },
+  }), env, context());
+  assert.equal(res.status, 429, `webmention answered ${res.status}: ${await res.clone().text()}`);
+  assert.equal(res.headers.get("retry-after"), String(RATE_WINDOW_S));
+  assert.equal(res.headers.get("ratelimit-policy"), `"webmention";q=${WEBMENTION_BUDGET.max};w=60`);
 });
 
 test("a cache read that throws is a miss, never the route's failure", async () => {

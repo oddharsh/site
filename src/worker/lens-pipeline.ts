@@ -33,7 +33,7 @@
 // thing. The guarded read lives HERE rather than in an adapter, so a fake KV
 // that throws or returns garbage exercises the guard itself.
 import { sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";
-import { overBudget } from "./lib/ratelimit.ts";
+import { overBudget, rateLimitedHeaders, rateLimitPolicy } from "./lib/ratelimit.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";
@@ -142,7 +142,7 @@ export type LensRan<V> =
   | { ok: false; status: number; payload: Record<string, unknown>; outcome: string };
 
 export type LensOutcome<V> =
-  | { kind: "ok"; value: V; fromCache?: boolean }
+  | { kind: "ok"; value: V; fromCache?: boolean; budgets?: LensBudget[] }
   | { kind: "failed"; status: number; payload: Record<string, unknown> }
   | {
       kind: "refused";
@@ -296,6 +296,11 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
     // 3. The engine has to exist before a cached render is worth serving.
     if (spec.browser && !browserReady(spec.browser, env)) return refused(503, "unavailable", NO_ENGINE);
 
+    // The budgets this door bills, named on every answer it serves as
+    // RateLimit-Policy, a cache hit included: the policy is the door's, and
+    // what a hit spends (nothing) is the RateLimit field's business, unsent.
+    const budgets: LensBudget[] = spec.browser ? [spec.budget, "browserAll"] : [spec.budget];
+
     // 4. The cache. Any failure to read it is a miss, never the route's failure.
     const host = hostOf(first);
     let key: string | null = null;
@@ -314,7 +319,7 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
           s.setAttribute("lens.target_host", host);
           s.setAttribute("lens.cache", "hit");
           if (body === "png") s.setAttribute("lens.png_bytes", hit.byteLength);
-          return { kind: "ok", value: hit as V, fromCache: true };
+          return { kind: "ok", value: hit as V, fromCache: true, budgets };
         });
       }
     }
@@ -362,7 +367,7 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
           }
         }
       }
-      return { kind: "ok", value: ran.value, fromCache: spec.cache ? false : undefined };
+      return { kind: "ok", value: ran.value, fromCache: spec.cache ? false : undefined, budgets };
     });
   }
 
@@ -382,22 +387,37 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
 // uncached lens never carries the field.
 export function lensJson(o: LensOutcome<any>): Response {
   if (o.kind === "ok") {
-    return jsonResponse(o.fromCache === undefined ? { ok: true, ...o.value } : { ok: true, ...o.value, fromCache: o.fromCache });
+    return jsonResponse(o.fromCache === undefined ? { ok: true, ...o.value } : { ok: true, ...o.value, fromCache: o.fromCache }, 200, policyHeaders(o.budgets));
   }
   if (o.kind === "failed") return jsonResponse(o.payload, o.status);
-  return jsonResponse({ ok: false, error: o.error, ...o.extra }, o.status);
+  return jsonResponse({ ok: false, error: o.error, ...o.extra }, o.status, refusalHeaders(o));
+}
+
+/** A refusal over our own rate budget says when to come back, and which
+ *  policy it hit. A refusal before any budget was billed (400, 503) says
+ *  neither. */
+function refusalHeaders(o: LensOutcome<any>): Record<string, string> {
+  if (o.kind !== "refused" || o.status !== 429 || !o.budget) return {};
+  return rateLimitedHeaders(o.budget, LENS_BUDGETS[o.budget].max);
+}
+
+/** RateLimit-Policy for a served answer: one List member per budget the door
+ *  bills (draft-ietf-httpapi-ratelimit-headers-11, section 3). */
+export function policyHeaders(budgets: LensBudget[] | undefined): Record<string, string> {
+  if (!budgets || budgets.length === 0) return {};
+  return { "ratelimit-policy": budgets.map((b) => rateLimitPolicy(b, LENS_BUDGETS[b].max)).join(", ") };
 }
 
 // The PNG lens reports its cache state in a header, because the body is an
 // image; every refusal or failure is still JSON.
 export function lensPng(o: LensOutcome<ArrayBuffer>): Response {
-  if (o.kind === "ok") return new Response(o.value, { headers: lensPngHeaders(o.fromCache === true) });
+  if (o.kind === "ok") return new Response(o.value, { headers: { ...lensPngHeaders(o.fromCache === true), ...policyHeaders(o.budgets) } });
   return lensJson(o);
 }
 
 // The SSR shell and /lens/fetch answer a { status, payload } pair.
-export function lensStatusPayload(o: LensOutcome<any>): { status: number; payload: Record<string, unknown> } {
-  if (o.kind === "ok") return { status: 200, payload: o.value };
-  if (o.kind === "failed") return { status: o.status, payload: o.payload };
-  return { status: o.status, payload: { ok: false, error: o.error, ...o.extra } };
+export function lensStatusPayload(o: LensOutcome<any>): { status: number; payload: Record<string, unknown>; headers: Record<string, string> } {
+  if (o.kind === "ok") return { status: 200, payload: o.value, headers: policyHeaders(o.budgets) };
+  if (o.kind === "failed") return { status: o.status, payload: o.payload, headers: {} };
+  return { status: o.status, payload: { ok: false, error: o.error, ...o.extra }, headers: refusalHeaders(o) };
 }

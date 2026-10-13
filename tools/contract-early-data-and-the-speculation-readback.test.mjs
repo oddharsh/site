@@ -91,12 +91,14 @@ test("speculation readback: the route is wired, allowlisted, and refuses writes"
   const { handleSpeculationJson } = await import("../src/worker/speculation.ts");
   const bad = await handleSpeculationJson(new Request("https://aadhar.sh/ledger/speculation.json", { method: "POST" }), {});
   assert.equal(bad.status, 405);
-  // no token: an honest "unconfigured" 200, the same answer /ledger.json gives
+  // no token: an "unconfigured" 503 (a 200 until 2026-10-13, which a client
+  // reading the status took for data), the same answer /ledger.json gives
   const none = await handleSpeculationJson(new Request("https://aadhar.sh/ledger/speculation.json"), {});
-  assert.equal(none.status, 200);
+  assert.equal(none.status, 503);
   const body = await none.json();
   assert.equal(body.ok, false);
   assert.equal(body.reason, "unconfigured");
+  assert.equal(body.code, "not_configured");
   assert.equal(none.headers.get("cache-control"), "no-store", "an unconfigured answer must not be cached as the ledger");
 
   const idx = readFileSync("src/worker/index.ts", "utf8");

@@ -39,7 +39,7 @@
 import { EXTRACTOR, READER_LIMIT_PER_MIN, READER_NOTE, ReaderError, read } from "./reader.ts";
 import { jsonResponse } from "../../src/worker/lib/http.ts";
 import { validateLensTarget } from "../../src/worker/lib/public-fetch.ts";
-import { overBudget } from "../../src/worker/lib/ratelimit.ts";
+import { overBudget, rateLimitPolicy, rateLimitedHeaders } from "../../src/worker/lib/ratelimit.ts";
 
 // The site's own per-caller limiter (lib/ratelimit.ts), on this Worker's binding.
 // The 429 message quotes READER_LIMIT_PER_MIN, which a contract test pins to the
@@ -62,11 +62,11 @@ export default {
     if (!target.ok) return json({ ok: false, error: target.error }, 400);
 
     if (await overBudget(READER_BUDGET, request, env)) {
-      return json({ ok: false, error: `Reader extraction is limited to ${READER_LIMIT_PER_MIN} per minute per visitor. Try again shortly.` }, 429);
+      return json({ ok: false, error: `Reader extraction is limited to ${READER_LIMIT_PER_MIN} per minute per visitor. Try again shortly.` }, 429, rateLimitedHeaders("reader", READER_LIMIT_PER_MIN));
     }
 
     try {
-      return json(await read(target.url));
+      return json(await read(target.url), 200, { "ratelimit-policy": rateLimitPolicy("reader", READER_LIMIT_PER_MIN) });
     } catch (error) {
       // Only messages WE wrote for the visitor get published. Everything else is
       // an internal failure whose text is not ours to hand to an unauthenticated
@@ -84,8 +84,9 @@ export default {
   },
 };
 
-function json(body, status = 200) {
+function json(body, status = 200, extra: Readonly<Record<string, string>> = {}) {
   return jsonResponse(body, status, {
+    ...extra,
     // Third-party page content keyed by a visitor-supplied URL: private, the
     // same rule /lens/fetch follows.
     "cache-control": "private, no-store",

@@ -65,6 +65,13 @@ test("agents can find it: the API catalog and llms.txt both point at it", () => 
   const hrefs = catalog.linkset.flatMap((l) => Object.values(l).filter(Array.isArray).flat().map((x) => x.href));
   assert.ok(hrefs.includes("https://aadhar.sh/openapi.json"), "api-catalog links the spec");
   assert.match(readFileSync("public/llms.txt", "utf8"), /\(https:\/\/aadhar\.sh\/openapi\.json\)/, "llms.txt links the spec");
+  const spec = "https://aadhar.sh/openapi.json";
+  const ard = JSON.parse(readFileSync("public/.well-known/ard.json", "utf8"));
+  const entry = ard.entries.find((e) => e.url === spec);
+  assert.ok(entry, "the ARD manifest names the spec");
+  assert.equal(entry.type, "application/vnd.oai.openapi+json", "under OpenAPI's own media type, the one api-catalog uses");
+  const card = JSON.parse(readFileSync("public/.well-known/agent-card.json", "utf8"));
+  assert.equal(card["x-aadhar-sh"].discovery.openapi, spec, "the agent card's discovery map names the spec");
 });
 
 test("the published numbers are the enforced ones", () => {
@@ -79,4 +86,64 @@ test("the published numbers are the enforced ones", () => {
   for (const file of ["src/worker/index.ts", "src/worker/trust.ts", "src/worker/lib/public-api.ts"]) {
     assert.ok(!/from "\.\.?\/(lib\/)?openapi\.ts"/.test(readFileSync(file, "utf8")), `${file} keeps the schemas out of the Worker bundle`);
   }
+});
+
+test("every 429 the spec documents carries the Retry-After the site sends", async () => {
+  const { RATE_WINDOW_S } = await import("../src/worker/lib/ratelimit.ts");
+  const limited = operations.filter(({ op }) => op.responses["429"]);
+  assert.ok(limited.length >= 2, "the Lens doors document their budgets");
+  for (const { path, method, op } of limited) {
+    const header = op.responses["429"].headers?.["Retry-After"];
+    assert.ok(header, `${method.toUpperCase()} ${path}: 429 documents Retry-After`);
+    assert.equal(header.schema.maximum, RATE_WINDOW_S);
+  }
+});
+
+test("every response schema is typed all the way down", () => {
+  // A function-calling client builds its types from these. An empty schema
+  // ({}), an object with no properties to name, or additionalProperties: true
+  // all read as "anything", which is how 7 of 14 operations scored as untyped.
+  /** @returns {string[]} */
+  function untyped(node, at, seen = new Set()) {
+    if (!node || typeof node !== "object") return [];
+    if (node.$ref) {
+      const name = node.$ref.split("/").pop();
+      if (seen.has(name)) return [];
+      return untyped(spec.components.schemas[name], `#${name}`, new Set([...seen, name]));
+    }
+    const variants = node.anyOf || node.oneOf;
+    if (variants) return variants.flatMap((v, i) => untyped(v, `${at}|${i}`, seen));
+    const types = [node.type].flat();
+    if (!node.type) return [`${at}: no type`];
+    const out = [];
+    if (types.includes("object")) {
+      if (node.additionalProperties === true) out.push(`${at}: additionalProperties: true`);
+      const props = Object.entries(node.properties || {});
+      if (!props.length && typeof node.additionalProperties !== "object") out.push(`${at}: an object with nothing named`);
+      for (const [k, v] of props) out.push(...untyped(v, `${at}.${k}`, seen));
+      if (typeof node.additionalProperties === "object") out.push(...untyped(node.additionalProperties, `${at}{}`, seen));
+    }
+    if (types.includes("array")) out.push(...untyped(node.items, `${at}[]`, seen));
+    return out;
+  }
+  for (const { path, method, op } of operations) {
+    for (const [status, r] of Object.entries(op.responses)) {
+      for (const [type, c] of Object.entries(r.content || {})) {
+        const gaps = untyped(c.schema, `${method.toUpperCase()} ${path} ${status} ${type}`);
+        assert.deepEqual(gaps, [], gaps.join("\n"));
+      }
+    }
+  }
+  // The control: the walk does see an open object.
+  assert.equal(untyped({ type: "object", additionalProperties: true }, "probe").length, 2);
+  assert.equal(untyped({}, "probe").length, 1);
+});
+
+test("the Lens doors document the RateLimit fields they send", () => {
+  for (const path of ["/lens/fetch", "/lens/compare.json"]) {
+    const { responses } = spec.paths[path].get;
+    assert.ok(responses["200"].headers["RateLimit-Policy"], `${path} 200: RateLimit-Policy`);
+    assert.ok(responses["429"].headers.RateLimit && responses["429"].headers["RateLimit-Policy"], `${path} 429: RateLimit and its policy`);
+  }
+  assert.match(spec.paths["/lens/fetch"].get.responses["200"].headers["RateLimit-Policy"].description, /"inspect";q=\d+;w=60/);
 });

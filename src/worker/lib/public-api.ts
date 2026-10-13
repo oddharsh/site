@@ -16,12 +16,13 @@
 // Node-safe (gotcha 16): build.ts imports it from the staged tree.
 import { ASK_LIMITS, CHANGE_RADAR_LIMITS, LENS_FETCH_TIMEOUT_MS, PHOTO_QUERY_LIMITS, SEARCH_LIMITS } from "./api-limits.ts";
 import { ASK_BUDGET } from "../ask-rank.ts";
-import { LENS_BUDGETS } from "../lens-pipeline.ts";
+import { RATE_WINDOW_S, rateLimitPolicy } from "./ratelimit.ts";
+import { LENS_BUDGETS, type LensBudget } from "../lens-pipeline.ts";
 import { CENSUS_ROSTER } from "../census.ts";
 
 export type Schema = Record<string, unknown>;
 type Param = { name: string; in: "query"; required: boolean; description: string; schema: Schema };
-type Responses = Record<string, { description: string; content: Record<string, { schema: Schema }> }>;
+type Responses = Record<string, { description: string; content: Record<string, { schema: Schema }>; headers?: Record<string, Schema> }>;
 export type Operation = {
   path: string;
   method: "get" | "post";
@@ -34,9 +35,32 @@ export type Operation = {
   responses: Responses;
   /** A query that answers something real, for /developers and its curl lines. */
   example?: string;
+  /** Set when the operation is on its way out. lib/api-contract.ts sends the
+   *  Deprecation (RFC 9745) and Sunset (RFC 8594) headers from it, and the
+   *  spec marks the operation deprecated. */
+  deprecated?: Deprecation;
 };
 
+/** `since` and `sunset` are YYYY-MM-DD (UTC midnight); `successor` is the
+ *  path to move to, when there is one. */
+export type Deprecation = { since: string; sunset: string; successor?: string };
+
 export const OPENAPI_PATH = "/openapi.json";
+
+// ── versioning ───────────────────────────────────────────────────────────────
+/** The API's one live version: the date of its last breaking change. Additive
+ *  changes (an endpoint, an optional parameter, a response field) ship under
+ *  the same date. lib/api-contract.ts sends it as API-Version on every API
+ *  response and refuses a request that pins any other. */
+export const API_VERSION = "2026-10-13";
+/** The least notice a breaking change gets: a deprecated operation's Sunset is
+ *  at least this many days after its Deprecation. A contract test holds every
+ *  `deprecated` entry to it. */
+export const DEPRECATION_NOTICE_DAYS = 90;
+/** The request and response header that carries API_VERSION. */
+export const API_VERSION_HEADER = "API-Version";
+/** The policy, in the words /developers and /openapi.json both print. */
+export const VERSION_POLICY = `The API has one live version, named by the date of its last breaking change (now ${API_VERSION}) and sent as the ${API_VERSION_HEADER} response header. New endpoints, optional parameters and response fields ship without a new version, so ignore fields you don't know. A breaking change (a removed or renamed endpoint or field, or a changed type) gets a new date, and the old shape is announced first: its responses carry a Deprecation header (RFC 9745) and a Sunset header (RFC 8594) at least ${DEPRECATION_NOTICE_DAYS} days before it goes, and /openapi.json marks it deprecated. To pin, send ${API_VERSION_HEADER}: ${API_VERSION}; a pin this server does not serve gets a 400 with code unsupported_api_version, so a client never reads a shape it didn't ask for. Rate budgets and caps can change under the same version; /openapi.json and the RateLimit-Policy header always carry the live numbers.`;
 
 // ── schema helpers (openapi.ts builds the component schemas with them) ───────
 /** Set `key` only when there is a value, so an absent description is absent. */
@@ -52,11 +76,28 @@ export const nullStr = (description?: string): Schema => withField({ type: ["str
 export const arr = (items: Schema, description?: string): Schema => withField({ type: "array", items }, "description", description);
 export const obj = (properties: Record<string, Schema>, required?: string[], description?: string): Schema =>
   withField(withField({ type: "object", properties }, "required", required), "description", description);
-export const open = (description?: string): Schema => withField({ type: "object", additionalProperties: true }, "description", description);
 export const ref = (name: string): Schema => ({ $ref: `#/components/schemas/${name}` });
 const q = (name: string, schema: Schema, description: string, required = false): Param => ({ name, in: "query", required, description, schema });
 const json = (description: string, schema: Schema): Responses[string] => ({ description, content: { "application/json": { schema } } });
 const err = (description: string) => json(description, ref("Error"));
+// The RateLimit fields as draft-ietf-httpapi-ratelimit-headers-11 writes them:
+// Structured Field Lists, one member per policy, named by budget.
+const policyHeader = (budgets: readonly LensBudget[]): Schema => ({
+  description: `The quota this endpoint bills, as a Structured Field List: ${budgets.map((b) => rateLimitPolicy(b, LENS_BUDGETS[b].max)).join(", ")}. q is requests and w the window in seconds.`,
+  schema: str(),
+});
+/** A 200 from a budgeted door, which names its policy. */
+const budgeted = (response: Responses[string], budgets: readonly LensBudget[]): Responses[string] =>
+  ({ ...response, headers: { "RateLimit-Policy": policyHeader(budgets) } });
+/** A 429 from the site's own limiter, which always says when to come back. */
+const limited = (description: string, budgets: readonly LensBudget[]): Responses[string] => ({
+  ...err(description),
+  headers: {
+    "Retry-After": { description: `Seconds until the per-minute budget resets; at most ${RATE_WINDOW_S}. Takes precedence over RateLimit.`, schema: int(undefined, { minimum: 1, maximum: RATE_WINDOW_S }) },
+    "RateLimit-Policy": policyHeader(budgets),
+    "RateLimit": { description: `The policy that refused the request, with nothing remaining (r=0) for up to t=${RATE_WINDOW_S} seconds.`, schema: str() },
+  },
+});
 const CLAMPED = "Values outside the range are clamped, and a non-number falls back to the default.";
 
 // ── operations ───────────────────────────────────────────────────────────────
@@ -77,7 +118,7 @@ export const OPERATIONS: readonly Operation[] = [
   },
   {
     path: "/ask", method: "get", operationId: "askSite", tags: ["search"], summary: "Ask a natural-language question (NLWeb)",
-    description: `NLWeb's REST endpoint over the same corpus as /search.json, ranked by the Clef decision model with a lexical fallback. Pass streaming=0 for one JSON body; the protocol's default is a server-sent event stream. Results are ranked pages with extractive descriptions: this origin runs no generative model, so it never writes an answer. Clef ranking is limited to ${askRanked} questions per caller per minute, after which ranking falls back to lexical and _meta.ranking says so.`,
+    description: `NLWeb's REST endpoint over the same corpus as /search.json. Streaming is on by default, per the protocol: a bare GET is a server-sent event stream, and streaming=0 returns one JSON body. Results are ranked by Clef, a decision model that chooses among every page on the site, so a page can answer a question it shares no word with; score is then the probability Clef puts on that page. When Clef is slow, unavailable or past its ${askRanked} questions per caller per minute, ranking falls back to lexical and _meta.ranking says which ran. Descriptions are extractive: this origin runs no generative model, so it never writes an answer, and mode=summarize or generate is refused by name. The same answer is the ask tool on /mcp.`,
     parameters: [
       q("query", str(), "The question.", true),
       q("streaming", str(undefined, { default: "1" }), "0, false, no or off returns one JSON body. Any other value, or none, streams text/event-stream."),
@@ -111,7 +152,7 @@ export const OPERATIONS: readonly Operation[] = [
   },
   {
     path: "/photos/query.json", method: "get", operationId: "queryPhotos", tags: ["photos"], summary: "Query the photo archive",
-    description: "Filter the published photo archive by caption, camera, lens, film simulation, Fuji recipe or date. Returned EXIF is a public-safe allowlist, and every Fuji frame carries the recipe it was shot with.",
+    description: "Filter the published photo archive by caption, camera, lens, film simulation, Fuji recipe or date. Returned EXIF is a public-safe allowlist. Every Fuji frame carries a recipe card naming the settings it was shot with (film simulation, dynamic range, grain, color chrome, white balance shift, tone, color, sharpness, clarity), and recipe= matches anywhere inside it, as in recipe=DR400 or recipe=Clarity:%20-2, so a look can be read back and re-shot.",
     parameters: [
       q("q", str(undefined, { maxLength: PHOTO_QUERY_LIMITS.textMax }), "Caption search; the only ranked field."),
       q("camera", str(undefined, { maxLength: PHOTO_QUERY_LIMITS.textMax }), "Case-insensitive substring of the camera."),
@@ -135,8 +176,8 @@ export const OPERATIONS: readonly Operation[] = [
       q("mode", str(undefined, { enum: ["cloudflare"] }), "cloudflare returns the Cloudflare Agent Readiness level instead of the full observation."),
     ],
     responses: {
-      200: json("The observation.", ref("LensObservation")), 400: err("The URL is missing or refused."),
-      429: err(`Over the ${inspect} per minute budget.`), 502: err(`The target timed out (${LENS_FETCH_TIMEOUT_MS / 1000} seconds) or failed.`),
+      200: budgeted(json("The observation.", ref("LensObservation")), ["inspect"]), 400: err("The URL is missing or refused."),
+      429: limited(`Over the ${inspect} per minute budget.`, ["inspect"]), 502: err(`The target timed out (${LENS_FETCH_TIMEOUT_MS / 1000} seconds) or failed.`),
     },
     example: "url=example.com",
   },
@@ -145,8 +186,8 @@ export const OPERATIONS: readonly Operation[] = [
     description: `Inspect two public URLs and report the differences in status, content, readiness, tier and agent surfaces. Limited to ${compare} comparisons per caller per minute.`,
     parameters: [q("left", str(), "The first URL, validated like /lens/fetch.", true), q("right", str(), "The second URL.", true)],
     responses: {
-      200: json("The comparison.", ref("LensComparison")), 400: err("left or right is missing or refused."),
-      429: err(`Over the ${compare} per minute budget.`), 502: err("The comparison failed."),
+      200: budgeted(json("The comparison.", ref("LensComparison")), ["compare"]), 400: err("left or right is missing or refused."),
+      429: limited(`Over the ${compare} per minute budget.`, ["compare"]), 502: err("The comparison failed."),
     },
     example: "left=example.com&right=aadhar.sh",
   },
@@ -157,15 +198,15 @@ export const OPERATIONS: readonly Operation[] = [
   },
   {
     path: "/rn/tracks", method: "get", operationId: "getNowPlaying", tags: ["music"], summary: "Read the current playlist",
-    description: "The tracks on Aadharsh's current \"rn\" Spotify playlist, each with a song.link URL that opens in the listener's own music service. Cached for an hour.",
+    description: "The tracks on Aadharsh's current \"rn\" Spotify playlist. Each track has a title, its artists, a song.link URL that opens in the listener's own music service, its duration, a preview URL and an explicit flag. Cached for an hour.",
     responses: {
       200: json("The playlist.", ref("Tracks")), 500: err("Storage is not configured."),
-      502: err("The playlist could not be read from Spotify."), 503: err("Storage read failed."),
+      502: err("The playlist could not be read from Spotify."), 503: err("No playlist is set (code no_playlist), or storage could not be read (code storage_unavailable)."),
     },
   },
   {
     path: "/around/json", method: "get", operationId: "getNeighborhood", tags: ["around"], summary: "Read the neighborhood crawl",
-    description: "The latest AadharshBot crawl of a small list of crypto venture firm homepages: status, title, description and robots verdict for each.",
+    description: "The latest AadharshBot crawl of a small list of crypto venture firm homepages: status, title, description and robots verdict for each. The same data as the /around page.",
     responses: { 200: json("The latest snapshot.", ref("AroundReport")), 503: json("No snapshot exists yet. Retry after a day.", ref("Pending")) },
   },
   {
@@ -184,8 +225,12 @@ export const OPERATIONS: readonly Operation[] = [
   },
   {
     path: "/ledger.json", method: "get", operationId: "getCrawlLedger", tags: ["lens"], summary: "Read the AI-crawler ledger",
-    description: "The last 30 days of identified AI-crawler visits to this site, priced at one cent a page as commentary. ok is false with a reason when analytics is not configured.",
-    responses: { 200: json("The ledger.", ref("Ledger")), 502: json("Analytics could not be read.", ref("Ledger")) },
+    description: "The last 30 days of identified AI-crawler visits to this site, priced at one cent a page as commentary.",
+    responses: {
+      200: json("The ledger.", ref("Ledger")),
+      502: json("Analytics could not be read (code upstream_failed).", ref("Ledger")),
+      503: json("Analytics is not configured on this deployment (code not_configured).", ref("Ledger")),
+    },
   },
   {
     path: "/images/manifest.json", method: "get", operationId: "getPhotoManifest", tags: ["photos"], summary: "List every published photo",

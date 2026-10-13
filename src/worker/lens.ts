@@ -11,7 +11,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { documentTally, runBrowserAction } from "./lens-render.ts";
-import { LensArgsRefusal, defineLens, lensErrorText, lensSha256Hex, lensStatusPayload } from "./lens-pipeline.ts";
+import { LensArgsRefusal, defineLens, lensErrorText, lensSha256Hex, lensStatusPayload, policyHeaders } from "./lens-pipeline.ts";
 import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.ts";
 import { EXECUTION_META, executionChecks } from "./lib/agent-execution.ts";
 import { asRecord, asText } from "./lib/parse.ts";
@@ -1684,7 +1684,7 @@ export async function handleLensFetch(request, env, ctx) {
     return handleLensCloudflareScore(request, env, ctx);
   }
   const result = await inspectLensRequest(request, env, ctx);
-  return jsonResponse(result.payload, result.status);
+  return jsonResponse(result.payload, result.status, result.headers ?? {});
 }
 
 const CLOUDFLARE_AGENT_READINESS_MCP = "https://isitagentready.com/mcp";
@@ -2272,14 +2272,14 @@ export const LENS_COMPARE = defineLens({
 export async function compareLensRequest(request, env, ctx, leftRaw, rightRaw) {
   const o = await LENS_COMPARE.run({ left: leftRaw, right: rightRaw }, request, env, ctx);
   return o.kind === "ok"
-    ? { status: 200, payload: { ok: true, comparedAt: new Date().toISOString(), ...o.value } }
+    ? { status: 200, payload: { ok: true, comparedAt: new Date().toISOString(), ...o.value }, headers: policyHeaders(o.budgets) }
     : lensStatusPayload(o);
 }
 
 export async function handleLensCompare(request, env, ctx) {
   const url = new URL(request.url);
   const result = await compareLensRequest(request, env, ctx, url.searchParams.get("left"), url.searchParams.get("right"));
-  return jsonResponse(result.payload, result.status);
+  return jsonResponse(result.payload, result.status, result.headers ?? {});
 }
 
 // the orchestrator: fetch the target, parse it, then probe the origin's
