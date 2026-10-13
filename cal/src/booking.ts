@@ -66,7 +66,8 @@ export type Booking = {
 /** A half-open interval on the calendar. */
 export type Slot = { start: number; end: number };
 
-const TTL_BOOKING_DAYS = 90; // booking records expire after 90d for cleanup
+// booking records expire after 90d for cleanup; /privacy prints this number
+export const TTL_BOOKING_DAYS = 90;
 
 export async function createBooking(env, fields: Omit<Booking, "id">): Promise<Booking> {
   const id = crypto.randomUUID().replace(/-/g, "");

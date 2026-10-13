@@ -1304,6 +1304,7 @@ phase("1e photos + bot");
   const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.ts")).href + nonce);
   const bot = await import(pathToFileURL(resolve(OUT, "src/worker/bot.ts")).href + nonce);
   const trust = await import(pathToFileURL(resolve(OUT, "src/worker/trust.ts")).href + nonce);
+  const publicApi = await import(pathToFileURL(resolve(OUT, "src/worker/lib/openapi.ts")).href + nonce);
 
   const pool = photos.derivePhotoPool(
     JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
@@ -1350,6 +1351,13 @@ phase("1e photos + bot");
   const botHtml = await bot.renderBotPage().text();
   if (!botHtml.includes("AadharshBot")) throw new Error("bot page: rendered document does not name the crawler — did the copy move?");
   await writeFile(`${OUT}/public/bot.html`, botHtml);
+
+  // /openapi.json, written from the same descriptions /developers renders and
+  // the same constants the handlers enforce (lib/public-api.ts). Generated here
+  // rather than committed, so there is no second copy to drift.
+  const spec = publicApi.openApiDocument();
+  if (Object.keys(spec.paths).length < 10) throw new Error(`openapi.json: only ${Object.keys(spec.paths).length} paths described`);
+  await writeFile(`${OUT}/public${publicApi.OPENAPI_PATH}`, `${JSON.stringify(spec, null, 2)}\n`);
 
   // the trust pages (trust.ts), each held to the one sentence it exists to say
   const trustSizes: string[] = [];

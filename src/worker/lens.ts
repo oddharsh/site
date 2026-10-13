@@ -1,3 +1,4 @@
+import { LENS_FETCH_TIMEOUT_MS } from "./lib/api-limits.ts";
 import { BOT_UA, withBotPolicyCache } from "./lib/botauth.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
@@ -714,7 +715,7 @@ export const LENS_INSPECT = defineLens({
   run: async ({ target, args, env }) => ({ ok: true, value: await lensInspect(target, env, args) }),
   onThrow: (e) => ({
     status: 502,
-    payload: { ok: false, error: asRecord(e)?.name === "TimeoutError" ? "The site took too long to answer (8s timeout)." : lensErrorText(e) },
+    payload: { ok: false, error: asRecord(e)?.name === "TimeoutError" ? `The site took too long to answer (${LENS_FETCH_TIMEOUT_MS / 1000}s timeout).` : lensErrorText(e) },
   }),
 });
 
@@ -2315,7 +2316,7 @@ function safeHost(raw) {
 
 async function lensInspectInner(targetUrl, env, opts, sInspect) {
   const started = Date.now();
-  const deadline = AbortSignal.timeout(8000);
+  const deadline = AbortSignal.timeout(LENS_FETCH_TIMEOUT_MS);
   let res, body = "", truncated = false, ct = "", isTextual = false, isHtml = false, undecodable = "";
   ({ res, body, truncated, ct, isTextual, isHtml, undecodable } = await span("lens.inspect.fetch", async (s) => {
     const r0 = await lensFetch(targetUrl, env, deadline);

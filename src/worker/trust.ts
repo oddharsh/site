@@ -3,17 +3,34 @@
 // The four pages an agent (or a person) checks before trusting a site: who runs
 // it, how to reach them, what a visit leaves behind, and how to call it from
 // code. Each is a fixed document, rendered at deploy by build.ts beside
-// /bot.html and served through serveBuiltPage, with a hand-authored Markdown
-// twin in src/content/md/ that gen-md-twins.ts TWIN_FACTS holds to the facts
-// below.
+// /bot.html and served through serveBuiltPage.
 //
 // Nothing here is runtime state, so every renderer takes no arguments (the
-// deploy-time renderer contract). A claim on /privacy names the module that
-// makes it true, so a reader of this file can check it the same way.
+// deploy-time renderer contract). Every figure is the constant the code
+// enforces, imported rather than typed out, and the Markdown twins are
+// generated from these pages at build (gen-md-twins.ts, generated tier), so
+// there is no second copy to drift. A claim on /privacy with no constant
+// behind it names the module that makes it true.
 import { lunaPage } from "./lib/chrome.ts";
 import { html, type Html } from "./lib/html.ts";
+import { missJson } from "./lib/not-found.ts";
+import { OPENAPI_PATH, OPERATIONS, exampleUrl, operation } from "./lib/public-api.ts";
+import { ASK_BUDGET } from "./ask-rank.ts";
+import { LENS_BUDGETS } from "./lens-pipeline.ts";
+import { RDAP_CACHE_TTL_S } from "./whoareyou.ts";
+import { TTL_BOOKING_DAYS } from "../../cal/src/booking.ts";
+import { UID_COOKIE, UID_COOKIE_MAX_AGE_S } from "../../serendipity/serendipity.ts";
 
 export const CONTACT_EMAIL = "coffee@aadhar.sh";
+
+/** A whole number of years in words, for a cookie lifetime. Throws on a
+ *  lifetime that is not whole years, so a change gets new words, not "1.5". */
+function years(seconds: number): string {
+  const n = seconds / (365 * 86400);
+  const words = ["", "one year", "two years", "three years", "four years", "five years"];
+  if (!Number.isInteger(n) || !words[n]) throw new Error(`trust: a cookie lifetime of ${seconds}s is not a whole number of years`);
+  return words[n];
+}
 
 // The /bot page's document style, shared by all four. Tokens only.
 const CSS = `/*min*/
@@ -226,10 +243,10 @@ export function renderPrivacyPage() {
 
     <h2>Cookies and browser storage</h2>
     <p>
-      The site sets one cookie, <code>serendipity-uid</code>, and only on
+      The site sets one cookie, <code>${UID_COOKIE}</code>, and only on
       <a href="/serendipity">/serendipity</a> pages when you open an event or contribute
       one. It is a random id, <code>HttpOnly</code>, scoped to <code>/serendipity</code>,
-      and lasts two years. Some pages keep your preferences in your browser's own storage
+      and lasts ${years(UID_COOKIE_MAX_AGE_S)}. Some pages keep your preferences in your browser's own storage
       (sound on or off, tooltips, the Lens view, quiz scores, scroll position). That never
       leaves your device. Pages load scripts, styles, fonts and images from this site
       only, so your browser talks to no third party while you read.
@@ -238,7 +255,7 @@ export function renderPrivacyPage() {
     <h2>When you send something</h2>
     <ul>
       <li><strong>A coffee booking</strong> (<a href="/coffee">/coffee</a>): your name,
-        email, topic, optional neighborhood and the slot. It is stored for 90 days after
+        email, topic, optional neighborhood and the slot. It is stored for ${TTL_BOOKING_DAYS} days after
         its last change and emailed, through Resend, to me and to you.</li>
       <li><strong>A webmention</strong>: the source and target URLs, the author's name and
         URL, the title and an excerpt. Cloudflare Workers AI checks it for spam, and it is
@@ -255,7 +272,7 @@ export function renderPrivacyPage() {
         normalized response headers, never the body, with no record of who asked.</li>
       <li><strong><a href="/whoareyou">/whoareyou</a></strong>: to name your network, the
         server sends your IP address to ARIN's public RDAP service, and Cloudflare caches
-        that answer for 24 hours.</li>
+        that answer for ${RDAP_CACHE_TTL_S / 3600} hours.</li>
     </ul>
 
     <h2>Serendipity</h2>
@@ -279,10 +296,33 @@ export function renderPrivacyPage() {
 }
 
 // ── /developers ──────────────────────────────────────────────────────────────
-// The rate limits quoted here are the code's: lens-pipeline.ts LENS_RL_INSPECT
-// (30/min) and LENS_RL_COMPARE (4/min), ask-rank.ts ASK_BUDGET (20/min, after
-// which ranking falls back to lexical rather than refusing).
+// Generated from the code it documents: the endpoint list and the curl lines
+// from lib/public-api.ts (the same descriptions /openapi.json is written from),
+// the limits from LENS_BUDGETS and ASK_BUDGET (the budgets the handlers spend),
+// and the error example from missJson, the function that writes a real 404.
+
+const QUICKSTART: readonly (readonly [operationId: string, lead: string])[] = [
+  ["searchSite", "Search the site, then read the page you found as Markdown:"],
+  ["askSite", "Ask a question in plain language (NLWeb), as one JSON body:"],
+  ["inspectUrl", "See how a machine reads any public URL:"],
+  ["queryPhotos", "Find a Fuji film recipe in the photo archive:"],
+];
+export const MARKDOWN_EXAMPLE = "/lwe/fhe";
+const ERROR_EXAMPLE = missJson("https://aadhar.sh", "/no-such-endpoint.json", { section: null, pages: [] });
+
+const curl = (path: string) => `curl 'https://aadhar.sh${path}'`;
+
 export function renderDevelopersPage() {
+  const quickstart = QUICKSTART.map(([id, lead], i) => {
+    const lines = [curl(exampleUrl(operation(id)))];
+    if (i === 0) lines.push(`curl -H 'Accept: text/markdown' https://aadhar.sh${MARKDOWN_EXAMPLE}`);
+    return html`
+    <p>${lead}</p>
+    <pre><code>${lines.join("\n")}</code></pre>`;
+  });
+  const endpoints = OPERATIONS.map((op) => html`
+      <li><a href="${exampleUrl(op)}">${op.method === "post" ? "POST " : ""}${op.path}</a> (<code>${op.operationId}</code>): ${op.summary}.</li>`);
+
   return page({
     route: "/developers",
     title: "aadhar.sh for developers: API, OpenAPI and MCP",
@@ -295,37 +335,20 @@ export function renderDevelopersPage() {
     </p>
 
     <dl class="fields">
-      <dt>OpenAPI 3.1</dt><dd><a href="/openapi.json">/openapi.json</a></dd>
+      <dt>OpenAPI 3.1</dt><dd><a href="${OPENAPI_PATH}">${OPENAPI_PATH}</a></dd>
       <dt>MCP server</dt><dd><a href="/mcp">https://aadhar.sh/mcp</a> (card: <a href="/.well-known/mcp/server-card.json">server-card.json</a>)</dd>
       <dt>API catalog</dt><dd><a href="/.well-known/api-catalog">/.well-known/api-catalog</a> (RFC 9727)</dd>
       <dt>Site map for agents</dt><dd><a href="/llms.txt">/llms.txt</a></dd>
       <dt>Authentication</dt><dd>none</dd>
     </dl>
 
-    <h2>Quickstart</h2>
-    <p>Search the site, then read the page you found as Markdown:</p>
-    <pre><code>curl 'https://aadhar.sh/search.json?q=fhe&amp;limit=3'
-curl -H 'Accept: text/markdown' https://aadhar.sh/lwe/fhe</code></pre>
-    <p>Ask a question in plain language (NLWeb), as one JSON body:</p>
-    <pre><code>curl 'https://aadhar.sh/ask?query=how+does+the+site+sign+requests&amp;streaming=0'</code></pre>
-    <p>See how a machine reads any public URL:</p>
-    <pre><code>curl 'https://aadhar.sh/lens/fetch?url=example.com'</code></pre>
-    <p>Find a Fuji film recipe in the photo archive:</p>
-    <pre><code>curl 'https://aadhar.sh/photos/query.json?recipe=DR400&amp;limit=5'</code></pre>
+    <h2>Quickstart</h2>${quickstart}
 
     <h2>Endpoints</h2>
-    <ul>
-      <li><a href="/search.json?q=agents">/search.json</a>: lexical search over every public page.</li>
-      <li><a href="/ask?query=what+is+this+site&amp;streaming=0">/ask</a>: NLWeb natural-language search, ranked by a model, with extractive answers.</li>
-      <li><a href="/photos/query.json?limit=5">/photos/query.json</a> and <a href="/images/manifest.json">/images/manifest.json</a>: the photo archive, its EXIF and recipes.</li>
-      <li><a href="/lens/fetch?url=example.com">/lens/fetch</a>, <a href="/lens/compare.json?left=example.com&amp;right=aadhar.sh">/lens/compare.json</a> and <a href="/lens/census.json">/lens/census.json</a>: agent readiness for any URL, and a weekly census.</li>
-      <li><a href="/rn/tracks">/rn/tracks</a>: the playlist playing right now.</li>
-      <li><a href="/around/json">/around/json</a> and <a href="/around/changes.json">/around/changes.json</a>: a crawled neighborhood of venture firm homepages.</li>
-      <li><a href="/coffee/availability.json">/coffee/availability.json</a>: open coffee slots in New York.</li>
-      <li><a href="/ledger.json">/ledger.json</a> and <a href="/resume.json">/resume.json</a>: the AI-crawler ledger and a JSON Resume.</li>
+    <ul>${endpoints}
     </ul>
     <p>
-      Every operation in <a href="/openapi.json">/openapi.json</a> has an
+      Every operation in <a href="${OPENAPI_PATH}">${OPENAPI_PATH}</a> has an
       <code>operationId</code>, typed parameters and a response schema, so a client can
       turn it into function-calling tools directly. The <a href="/mcp">MCP server</a>
       exposes the same capabilities as tools.
@@ -333,12 +356,12 @@ curl -H 'Accept: text/markdown' https://aadhar.sh/lwe/fhe</code></pre>
 
     <h2>Limits</h2>
     <p>
-      Lens inspections are limited to 30 a minute per caller, shared with the MCP server,
-      and comparisons to 4 a minute. Over the limit, those answer <code>429</code>.
-      <code>/ask</code> ranks 20 questions a minute per caller with its model, then falls
-      back to lexical ranking and says so in <code>_meta.ranking</code> instead of
-      refusing. Please cache what you read; most endpoints send a
-      <code>Cache-Control</code> that says for how long.
+      Lens inspections are limited to ${LENS_BUDGETS.inspect.max} a minute per caller, shared
+      with the MCP server, and comparisons to ${LENS_BUDGETS.compare.max} a minute. Over the
+      limit, those answer <code>429</code>. <code>/ask</code> ranks ${ASK_BUDGET.max} questions
+      a minute per caller with its model, then falls back to lexical ranking and says so in
+      <code>_meta.ranking</code> instead of refusing. Please cache what you read; most
+      endpoints send a <code>Cache-Control</code> that says for how long.
     </p>
 
     <h2>Errors</h2>
@@ -346,16 +369,10 @@ curl -H 'Accept: text/markdown' https://aadhar.sh/lwe/fhe</code></pre>
       Errors are JSON with at least an <code>error</code> sentence, and most add a
       <code>code</code> token. A path that does not exist answers <code>404</code> in the
       format you ask for: JSON for <code>Accept: application/json</code>, Markdown for
-      <code>Accept: text/markdown</code>, with the closest real pages.
+      <code>Accept: text/markdown</code>, with the closest real pages. This is the body
+      the site sends for <code>/no-such-endpoint.json</code>:
     </p>
-    <pre><code>{
-  "ok": false,
-  "error": "/no-such-endpoint.json is not a page or endpoint on aadhar.sh.",
-  "code": "not_found",
-  "status": 404,
-  "hint": "Every page is listed in /sitemap.xml, and every JSON endpoint in /openapi.json.",
-  "docs": "https://aadhar.sh/developers"
-}</code></pre>
+    <pre><code>${JSON.stringify(ERROR_EXAMPLE, null, 2)}</code></pre>
 
     <h2>Pages as Markdown</h2>
     <p>

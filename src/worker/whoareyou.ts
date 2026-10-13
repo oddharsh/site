@@ -9,6 +9,9 @@ import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/
 import { asNumber, asRecord, asText } from "./lib/parse.ts";
 import { WHOAREYOU_VALUES_URL } from "./routes.ts";
 
+/** How long Cloudflare keeps an RDAP answer, keyed by the IP in its URL. /privacy prints it. */
+export const RDAP_CACHE_TTL_S = 86400;
+
 const RDAP_BUDGET_MS = 250;
 
 // ── /whoareyou handler ───────────────────────────────────────────────
@@ -40,7 +43,7 @@ export async function fetchRdap(ip) {
       // optional owner/CIDR/registration lines (they refill once the 24h edge
       // cache warms). RDAP is non-essential enrichment, so 2s is deliberate.
       signal: AbortSignal.timeout(2000),
-      cf: { cacheTtl: 86400, cacheEverything: true },  // 24h CF edge cache, keyed by URL
+      cf: { cacheTtl: RDAP_CACHE_TTL_S, cacheEverything: true },  // CF edge cache, keyed by URL
     });
     if (!res.ok) return null;
     const data = asRecord(await res.json());

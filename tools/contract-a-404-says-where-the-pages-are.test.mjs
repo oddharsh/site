@@ -3,8 +3,9 @@
 // must NOT be answered: a capability this site does not serve stays 404, a
 // probe gets no suggestions, and a handler's own 404 body is left alone. The
 // route oracle covers the same rules end to end through workerd.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
+import { OPENAPI_PATH, openApiDocument } from "../src/worker/lib/openapi.ts";
 import { HASHED_ASSETS } from "../src/worker/lib/shell-assets.ts";
 import { _resetPhotoCaches } from "../src/worker/photos.ts";
 import {
@@ -86,7 +87,9 @@ test("share cards, terminal tools and MCP card probes go where the thing actuall
     assert.equal((await recover(from)).response.headers.get("location"), `https://aadhar.sh${to}`, from);
   }
   for (const to of new Set(Object.values(DISCOVERY_ALIASES))) {
-    assert.ok(existsSync(`public${to}`), `an alias may only point at a file this site ships: public${to}`);
+    // /openapi.json is written by build.ts from lib/public-api.ts; every other
+    // target is a file in public/
+    assert.ok(to === OPENAPI_PATH || existsSync(`public${to}`), `an alias may only point at a file this site ships: public${to}`);
   }
   for (const honest of ["/openapi.yaml", "/.well-known/ai-plugin.json", "/.well-known/x402", "/.well-known/agents.json"]) {
     assert.equal((await recover(honest)).response.status, 404, `${honest} names a capability this site does not serve`);
@@ -211,7 +214,7 @@ test("a client that asks for JSON gets the Error object /openapi.json declares",
   assert.equal(bare.suggestions, undefined, "no near miss, no suggestions key");
   assert.match(bare.hint, /\/openapi\.json/);
 
-  const spec = JSON.parse(readFileSync("public/openapi.json", "utf8"));
+  const spec = JSON.parse(JSON.stringify(openApiDocument()));
   const declared = spec.components.schemas.Error;
   for (const key of Object.keys(bare)) assert.ok(key in declared.properties, `${key} is declared on Error`);
   for (const key of declared.required) assert.ok(key in bare, `${key} is required by Error`);

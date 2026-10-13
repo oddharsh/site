@@ -6,8 +6,9 @@
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { COMMANDS, buildUrl, run } from "../cli/aadhar.mjs";
+import { openApiDocument } from "../src/worker/lib/openapi.ts";
 
-const spec = JSON.parse(readFileSync("public/openapi.json", "utf8"));
+const spec = JSON.parse(JSON.stringify(openApiDocument()));
 
 /** A run with a canned response, capturing what was asked and what was printed. */
 async function drive(argv, response) {
