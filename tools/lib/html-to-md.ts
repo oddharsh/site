@@ -579,7 +579,16 @@ function renderBlocks(nodes, ctx, depth = 0) {
     switch (n.name) {
       case "h1": case "h2": case "h3": case "h4": case "h5": case "h6": {
         const level = Number(n.name[1]);
-        const s = renderInline(n.children, ctx).trim();
+        // A heading is one line, but its CSS can still lay a part out as a box
+        // of its own: /lwe's `<b>Learning With Errors</b><span class="tag">…`
+        // read `**Learning With Errors**explaining hard things`. When a child is
+        // promoted, render the parts as blocks and rejoin them on one line, the
+        // way a caption is; otherwise the inline path is unchanged.
+        const promotedChild = (n.children || []).some((c) => !isText(c)
+          && (c.attrs?.class || "").split(/\s+/).some((k) => (ctx.blockClasses || EMPTY).has(k)));
+        const s = (promotedChild
+          ? renderBlocks(n.children, ctx, depth).split(/\n{2,}/).map((b) => b.replace(/\n/g, " ").trim()).filter(Boolean).join(" · ")
+          : renderInline(n.children, ctx)).trim();
         if (s) out.push(`${"#".repeat(level)} ${s}`);
         break;
       }

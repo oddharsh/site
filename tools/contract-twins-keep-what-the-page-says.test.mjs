@@ -1,6 +1,6 @@
 // A Markdown twin keeps every word the page shows, in order, with nothing added.
 //
-// Four ways it did not, each live in production twins until 2026-10-13, and
+// Five ways it did not, each live in production twins until 2026-10-13, and
 // each found by rebuilding HTML from every twin and converting it back (the
 // sketch for /garage/round-trip). Every one read like ordinary text, which is
 // why reading the twins never caught them:
@@ -12,6 +12,8 @@
 //      `QUIChole-punching`, and the same bug fused words on 19 other pages.
 //   3. A <caption> never rendered: /garage/wire lost 197 words.
 //   4. A <br> in a table cell became spaces, which Markdown reads as one.
+//   5. A heading part its CSS sets apart as a block ran into the text before
+//      it: /lwe read `**Learning With Errors**explaining hard things`.
 //
 // Each case below carries its control: the escape must still fire where a
 // marker really starts a line, or the twin grows a list nobody wrote.
@@ -44,6 +46,16 @@ test("a space between inline siblings survives, and indentation does not", () =>
   // runs of it meeting across a comment still collapse to one space
   assert.equal(twin("<p>\n    <strong>lead</strong>\n</p>"), "**lead**");
   assert.equal(twin("<p><time>June 7</time>\n  <!-- note -->\n  &middot; visitor</p>"), "June 7 · visitor");
+});
+
+test("a heading keeps the parts its CSS sets apart", () => {
+  const page = (h) => readDocument(`<html><head><style>.who .tag{display:block}</style></head><body><div class="content">${h}</div></body></html>`).body;
+  assert.equal(
+    page('<h1 class="who"><b>Learning With Errors</b><span class="tag">explaining hard things</span></h1>'),
+    "# **Learning With Errors** · explaining hard things",
+  );
+  // control: a heading with no promoted part renders on the inline path as before
+  assert.equal(page("<h2><b>Plain</b> <span>heading</span></h2>"), "## **Plain** heading");
 });
 
 test("a table keeps its caption", () => {
