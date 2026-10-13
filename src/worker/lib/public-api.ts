@@ -35,32 +35,24 @@ export type Operation = {
   responses: Responses;
   /** A query that answers something real, for /developers and its curl lines. */
   example?: string;
-  /** Set when the operation is on its way out. lib/api-contract.ts sends the
-   *  Deprecation (RFC 9745) and Sunset (RFC 8594) headers from it, and the
-   *  spec marks the operation deprecated. */
-  deprecated?: Deprecation;
 };
-
-/** `since` and `sunset` are YYYY-MM-DD (UTC midnight); `successor` is the
- *  path to move to, when there is one. */
-export type Deprecation = { since: string; sunset: string; successor?: string };
 
 export const OPENAPI_PATH = "/openapi.json";
 
-// ── versioning ───────────────────────────────────────────────────────────────
-/** The API's one live version: the date of its last breaking change. Additive
- *  changes (an endpoint, an optional parameter, a response field) ship under
- *  the same date. lib/api-contract.ts sends it as API-Version on every API
- *  response and refuses a request that pins any other. */
-export const API_VERSION = "2026-10-13";
-/** The least notice a breaking change gets: a deprecated operation's Sunset is
- *  at least this many days after its Deprecation. A contract test holds every
- *  `deprecated` entry to it. */
-export const DEPRECATION_NOTICE_DAYS = 90;
-/** The request and response header that carries API_VERSION. */
-export const API_VERSION_HEADER = "API-Version";
-/** The policy, in the words /developers and /openapi.json both print. */
-export const VERSION_POLICY = `The API has one live version, named by the date of its last breaking change (now ${API_VERSION}) and sent as the ${API_VERSION_HEADER} response header. New endpoints, optional parameters and response fields ship without a new version, so ignore fields you don't know. A breaking change (a removed or renamed endpoint or field, or a changed type) gets a new date, and the old shape is announced first: its responses carry a Deprecation header (RFC 9745) and a Sunset header (RFC 8594) at least ${DEPRECATION_NOTICE_DAYS} days before it goes, and /openapi.json marks it deprecated. To pin, send ${API_VERSION_HEADER}: ${API_VERSION}; a pin this server does not serve gets a 400 with code unsupported_api_version, so a client never reads a shape it didn't ask for. Rate budgets and caps can change under the same version; /openapi.json and the RateLimit-Policy header always carry the live numbers.`;
+// ── what the API leaves out ──────────────────────────────────────────────────
+/** The machinery a public API usually carries that this one skips, and why.
+ *  /developers and /openapi.json both print it, so each absence reads as a
+ *  decision rather than a gap for the next readiness audit to fill. The site
+ *  shipped each of them for a scanner and removed them on 2026-10-13, since no
+ *  caller needed any of the three. */
+export const LEAVES_OUT: readonly { what: string; why: string }[] = [
+  { what: "Keys, accounts and OAuth",
+    why: "Every endpoint is public and read-only, so a credential would unlock nothing. The site once issued anonymous OAuth tokens that no endpoint checked, and dropped them." },
+  { what: "Version headers and pinning",
+    why: "One person maintains the API, and it has one live shape: the one /openapi.json describes. New endpoints, parameters and fields arrive without notice, so ignore fields you don't know." },
+  { what: "Deprecation and Sunset headers",
+    why: "A notice period protects clients that depend on an exact shape, and none is known here. A breaking change lands in /openapi.json the day it ships." },
+];
 
 // ── schema helpers (openapi.ts builds the component schemas with them) ───────
 /** Set `key` only when there is a value, so an absent description is absent. */

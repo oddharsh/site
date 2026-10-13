@@ -1,7 +1,7 @@
 // lib/api-contract.ts: what every documented API path promises, around its handler.
 //
 // lib/public-api.ts describes the keyless JSON API once. The handlers answer
-// for their own query parameters and bodies; three promises belong to the API
+// for their own query parameters and bodies; two promises belong to the API
 // as a whole and are kept here, so no handler can forget one:
 //
 //   - the methods. A path in OPERATIONS answers the methods listed for it, plus
@@ -9,10 +9,6 @@
 //     Allow header (RFC 9110 section 15.5.6), before the handler runs. Most of
 //     these handlers never looked at the method, so a POST to /search.json used
 //     to read like a GET.
-//   - the version. API-Version is sent on every response from an API path, and
-//     a request that pins any other version is a JSON 400 (VERSION_POLICY).
-//   - deprecation. An operation marked `deprecated` answers with Deprecation
-//     (RFC 9745) and Sunset (RFC 8594), and a Link to its successor.
 //   - the rate. An operation with no limiter of its own (sharesReadBudget)
 //     bills API_READ_BUDGET per caller and names it in RateLimit-Policy on
 //     every answer; over it, a JSON 429 with Retry-After and RateLimit. The
@@ -20,11 +16,13 @@
 //
 // Every API response also carries `Link: </openapi.json>; rel="service-desc"`
 // (RFC 8631), so a client holding any one response can find the description.
+// There is no version header and no deprecation machinery: LEAVES_OUT in
+// public-api.ts says why, and /developers prints it.
 //
 // dispatch.ts calls apiPreflight before routing and withApiContract on every
 // answer from an API path, the preflight's refusals included.
 // Node-safe (gotcha 16).
-import { API_VERSION, API_VERSION_HEADER, OPENAPI_PATH, OPERATIONS, READ_POLICY, sharesReadBudget, type Deprecation, type Operation } from "./public-api.ts";
+import { OPENAPI_PATH, OPERATIONS, READ_POLICY, sharesReadBudget, type Operation } from "./public-api.ts";
 import { API_READ_BUDGET } from "./api-limits.ts";
 import { jsonResponse } from "./http.ts";
 import { overBudget, rateLimitPolicy, rateLimitedHeaders } from "./ratelimit.ts";
@@ -59,12 +57,6 @@ export async function apiPreflight(request: Request, pathname: string, env: unkn
       `${pathname} does not answer ${request.method}. It answers ${allow.join(", ")}.`,
       { allow }, { allow: allow.join(", ") });
   }
-  const pinned = request.headers.get(API_VERSION_HEADER);
-  if (pinned !== null && pinned.trim() !== API_VERSION) {
-    return contractError(400, "unsupported_api_version",
-      `${API_VERSION_HEADER} ${JSON.stringify(pinned.trim())} is not a version this server serves. The live version is ${API_VERSION}.`,
-      { supported: [API_VERSION] }, {});
-  }
   // OPTIONS is a question about the API rather than a read of it, so it is free.
   if (request.method !== "OPTIONS" && READ_BUDGETED.has(pathname) && await overBudget(API_READ_BUDGET, request, env)) {
     return contractError(429, "rate_limited",
@@ -77,41 +69,14 @@ export async function apiPreflight(request: Request, pathname: string, env: unkn
 const SERVICE_DESC = `<${OPENAPI_PATH}>; rel="service-desc"; type="application/vnd.oai.openapi+json"`;
 
 /** The response with the API-wide headers on it. Untouched off the API paths. */
-export function withApiContract(response: Response, pathname: string, method: string): Response {
-  const ops = BY_PATH.get(pathname);
-  if (!ops) return response;
+export function withApiContract(response: Response, pathname: string): Response {
+  if (!BY_PATH.has(pathname)) return response;
   // Rebuilt with the response as its own init, which keeps encodeBody (gotcha 13);
   // headers from the asset layer or a cache are immutable in place.
   const out = new Response(response.body, response);
-  out.headers.set(API_VERSION_HEADER, API_VERSION);
   out.headers.append("link", SERVICE_DESC);
   if (READ_BUDGETED.has(pathname) && !out.headers.has("ratelimit-policy")) out.headers.set("ratelimit-policy", READ_POLICY_HEADER);
-  // One path can carry two operations (GET and POST /ask), and a deprecation
-  // is per operation, so it follows the method this request used.
-  const want = method === "HEAD" ? "get" : method.toLowerCase();
-  const deprecated = ops.find((op) => op.method === want)?.deprecated;
-  if (deprecated) {
-    for (const [name, value] of Object.entries(deprecationHeaders(deprecated))) {
-      if (name === "link") out.headers.append(name, value);
-      else out.headers.set(name, value);
-    }
-  }
   return out;
-}
-
-/** The Deprecation, Sunset and Link headers for an operation on its way out. */
-export function deprecationHeaders(d: Deprecation): Record<string, string> {
-  // RFC 9745 section 3: rel="deprecation" points at the policy; RFC 5829's
-  // successor-version at the replacement, when there is one.
-  const links = [`<${DOCS}#versioning>; rel="deprecation"; type="text/html"`];
-  if (d.successor) links.push(`<${d.successor}>; rel="successor-version"`);
-  return {
-    // RFC 9745: an Item Date, `@` and the epoch seconds it took effect.
-    deprecation: `@${Date.parse(`${d.since}T00:00:00Z`) / 1000}`,
-    // RFC 8594: an HTTP-date.
-    sunset: new Date(`${d.sunset}T00:00:00Z`).toUTCString(),
-    link: links.join(", "),
-  };
 }
 
 function contractError(status: number, code: string, error: string, extra: Record<string, unknown>, headers: Record<string, string>): Response {

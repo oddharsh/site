@@ -21,7 +21,6 @@ rather than a paragraph here.
 | `cal/`, `serendipity/` | modules the site Worker serves at `/coffee` and `/serendipity` |
 | `counter/` | `aadhar-counter`, which owns the `Counter` Durable Object |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | separately deployed auxiliary Workers (TypeScript config, gotcha 41) |
-| `cli/` | `aadhar`, a zero-dependency CLI over the public API (`private` until published) |
 | `tools/` | the build, the contract tests (`contract-*.test.mjs`), checks, generators, `photos/` |
 | `pipelines/` | page generators for `garage/` and `lwe/` |
 | `config/` | `infra.json`, `site-manifest.json`, `derivations.json`, `tools.json`, tsconfigs, `dev/` |
@@ -139,6 +138,10 @@ waiting on. [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) has the detail.
   that emits them; never lower sampling (gotcha 36).
 - **Page copy follows the house voice:** no em dashes, no AI filler, no "X,
   not Y". `pages:check` enforces part of it (gotcha 32).
+- **Agent surfaces serve readers who show up.** Check the bot ledger
+  (`/ledger.json`) before adding a protocol, and never add one to pass a
+  readiness audit. `LEAVES_OUT` in `lib/public-api.ts` names what the API
+  skips on purpose, and `/developers` prints it.
 - **Never guess metadata.** Photo EXIF fields are nullable and the tooltip
   skips nulls.
 - **AadharshBot** (`src/worker/lib/botauth.ts`) signs every outbound content

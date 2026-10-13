@@ -14,7 +14,7 @@
 import { lunaPage } from "./lib/chrome.ts";
 import { html, type Html } from "./lib/html.ts";
 import { missJson } from "./lib/not-found.ts";
-import { API_VERSION, API_VERSION_HEADER, DEPRECATION_NOTICE_DAYS, OPENAPI_PATH, OPERATIONS, READ_POLICY, exampleUrl, operation } from "./lib/public-api.ts";
+import { LEAVES_OUT, OPENAPI_PATH, OPERATIONS, READ_POLICY, exampleUrl, operation } from "./lib/public-api.ts";
 import { RATE_WINDOW_S, rateLimitPolicy } from "./lib/ratelimit.ts";
 import { ASK_BUDGET } from "./ask-rank.ts";
 import { LENS_BUDGETS } from "./lens-pipeline.ts";
@@ -385,22 +385,15 @@ export function renderDevelopersPage() {
     </p>
     <pre><code>${JSON.stringify(ERROR_EXAMPLE, null, 2)}</code></pre>
 
-    <h2 id="versioning">Versioning</h2>
+    <h2 id="leaves-out">What this API leaves out</h2>
     <p>
-      The API has one live version, named by the date of its last breaking change:
-      <code>${API_VERSION}</code>, sent on every response as <code>${API_VERSION_HEADER}</code>.
-      New endpoints, optional parameters and response fields ship under the same date, so
-      ignore fields you don't know. A breaking change gets a new date, and the old shape is
-      announced first: its responses carry <code>Deprecation</code> (RFC 9745) and
-      <code>Sunset</code> (RFC 8594) headers at least ${DEPRECATION_NOTICE_DAYS} days before it
-      goes, and <a href="${OPENAPI_PATH}">${OPENAPI_PATH}</a> marks it deprecated.
+      A public API usually carries the machinery below. This one skips each piece on
+      purpose, for the reason beside it, so a readiness audit that marks one missing is
+      reading a decision this site already made.
     </p>
-    <p>
-      To pin, send <code>${API_VERSION_HEADER}: ${API_VERSION}</code>. A version this server
-      does not serve answers <code>400</code> with code <code>unsupported_api_version</code>,
-      so a client never reads a shape it didn't ask for. Rate limits and caps can change
-      under the same version; the numbers above and in the spec are always the live ones.
-    </p>
+    <dl class="fields">${LEAVES_OUT.map(({ what, why }) => html`
+      <dt>${what}</dt><dd>${why}</dd>`)}
+    </dl>
 
     <h2>Pages as Markdown</h2>
     <p>

@@ -51,7 +51,7 @@
       "displayName": "Aadharsh Site agent card",
       "type": "application/a2a-agent-card+json",
       "url": "https://aadhar.sh/.well-known/agent-card.json",
-      "description": "Discovery-only agent card in the A2A card format, naming every machine interface this host exposes: both MCP servers, the HTTP JSON endpoints, WebMCP, and optional anonymous agent registration. This host does not expose an A2A task endpoint; the card says so and points at the MCP and JSON interfaces instead.",
+      "description": "Discovery-only agent card in the A2A card format, naming every machine interface this host exposes: both MCP servers, the HTTP JSON endpoints, and WebMCP, all keyless. This host does not expose an A2A task endpoint; the card says so and points at the MCP and JSON interfaces instead.",
       "tags": ["agent-card", "discovery"],
       "representativeQueries": [
         "what machine interfaces does aadhar.sh expose",
