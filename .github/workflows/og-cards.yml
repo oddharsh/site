@@ -8,10 +8,10 @@ name: OG cards
 # an on-the-fly render would risk a timeout and a blank card.
 #
 # DELIBERATELY NOT NIGHTLY, which is the one decision in here worth reading.
-# gen-og-cards.mjs captures PRODUCTION so that data-driven demos render populated
+# gen-og-cards.ts captures PRODUCTION so that data-driven demos render populated
 # rather than empty — its own header names the photo grid, the live counters and
 # the routing prober. Those are not deterministic between runs, so a scheduled job
-# would open a PR of changed PNGs every single night, none of which means
+# would open a PR of changed cards every single night, none of which means
 # anything. dictionary-roll.yml can be nightly because its output is a pure
 # function of the bytes production serves; this is not that.
 #
@@ -82,11 +82,32 @@ jobs:
         run: |
           set -euo pipefail
           if ! command -v google-chrome >/dev/null 2>&1; then
-            echo "::error::google-chrome is not on this runner, and gen-og-cards.mjs launches channel:\"chrome\"."
+            echo "::error::google-chrome is not on this runner, and gen-og-cards.ts launches channel:\"chrome\"."
             echo "Add a setup-chrome step, or switch the script to a downloaded chromium."
             exit 1
           fi
           google-chrome --version
+
+      # Cards are JPEGs encoded by zenc since 2026-09-16, and gen-og-cards.ts
+      # throws before opening a page when the binary isn't built. Same native
+      # setup and cache key as photos.yml, which builds the same crate.
+      - name: Set up native photo toolchain
+        id: native
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libavif-dev pkg-config
+          echo "cache-key=${ImageOS:?}-${ImageVersion:?}-$(dpkg-query --show --showformat='${Version}' libavif-dev)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore compiled Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: tools/photos/zenc -> target
+          key: ${{ steps.native.outputs.cache-key }}
+          cache-bin: false
+          cache-workspace-crates: false
+
+      - name: Build the card encoder (zenc)
+        run: cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 
       - name: Bake the cards
         env:
@@ -95,8 +116,8 @@ jobs:
         run: bun run og-cards
 
       # Idempotent, and separate from the bake on purpose: a new page needs its
-      # <head> meta as well as its PNG, and a re-bake of an existing card needs
-      # only the PNG. Running it always keeps a newly added page from shipping a
+      # <head> meta as well as its card, and a re-bake of an existing card needs
+      # only the card. Running it always keeps a newly added page from shipping a
       # card nothing references.
       - name: Add meta to any page missing it
         run: bun tools/photos/inject-og-meta.ts
@@ -164,7 +185,7 @@ jobs:
           Captured from \`${BASE_ORIGIN:-https://aadhar.sh}\`${ONLY:+, scoped to \`${ONLY}\`}.
 
           Some demos are data-driven (the photo grid, the live counters, the routing prober), so a
-          card can differ between bakes without anything having changed. Check the PNGs read the way
+          card can differ between bakes without anything having changed. Check the cards read the way
           you want before merging rather than assuming a diff means a fix."
           fi
 
