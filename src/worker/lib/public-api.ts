@@ -77,7 +77,7 @@ export const OPERATIONS: readonly Operation[] = [
   },
   {
     path: "/ask", method: "get", operationId: "askSite", tags: ["search"], summary: "Ask a natural-language question (NLWeb)",
-    description: `NLWeb's REST endpoint over the same corpus as /search.json, ranked by the Clef decision model with a lexical fallback. Pass streaming=0 for one JSON body; the protocol's default is a server-sent event stream. Results are ranked pages with extractive descriptions: this origin runs no generative model, so it never writes an answer. Clef ranking is limited to ${askRanked} questions per caller per minute, after which ranking falls back to lexical and _meta.ranking says so.`,
+    description: `NLWeb's REST endpoint over the same corpus as /search.json. Streaming is on by default, per the protocol: a bare GET is a server-sent event stream, and streaming=0 returns one JSON body. Results are ranked by Clef, a decision model that chooses among every page on the site, so a page can answer a question it shares no word with; score is then the probability Clef puts on that page. When Clef is slow, unavailable or past its ${askRanked} questions per caller per minute, ranking falls back to lexical and _meta.ranking says which ran. Descriptions are extractive: this origin runs no generative model, so it never writes an answer, and mode=summarize or generate is refused by name. The same answer is the ask tool on /mcp.`,
     parameters: [
       q("query", str(), "The question.", true),
       q("streaming", str(undefined, { default: "1" }), "0, false, no or off returns one JSON body. Any other value, or none, streams text/event-stream."),
@@ -111,7 +111,7 @@ export const OPERATIONS: readonly Operation[] = [
   },
   {
     path: "/photos/query.json", method: "get", operationId: "queryPhotos", tags: ["photos"], summary: "Query the photo archive",
-    description: "Filter the published photo archive by caption, camera, lens, film simulation, Fuji recipe or date. Returned EXIF is a public-safe allowlist, and every Fuji frame carries the recipe it was shot with.",
+    description: "Filter the published photo archive by caption, camera, lens, film simulation, Fuji recipe or date. Returned EXIF is a public-safe allowlist. Every Fuji frame carries a recipe card naming the settings it was shot with (film simulation, dynamic range, grain, color chrome, white balance shift, tone, color, sharpness, clarity), and recipe= matches anywhere inside it, as in recipe=DR400 or recipe=Clarity:%20-2, so a look can be read back and re-shot.",
     parameters: [
       q("q", str(undefined, { maxLength: PHOTO_QUERY_LIMITS.textMax }), "Caption search; the only ranked field."),
       q("camera", str(undefined, { maxLength: PHOTO_QUERY_LIMITS.textMax }), "Case-insensitive substring of the camera."),
@@ -157,7 +157,7 @@ export const OPERATIONS: readonly Operation[] = [
   },
   {
     path: "/rn/tracks", method: "get", operationId: "getNowPlaying", tags: ["music"], summary: "Read the current playlist",
-    description: "The tracks on Aadharsh's current \"rn\" Spotify playlist, each with a song.link URL that opens in the listener's own music service. Cached for an hour.",
+    description: "The tracks on Aadharsh's current \"rn\" Spotify playlist. Each track has a title, its artists, a song.link URL that opens in the listener's own music service, its duration, a preview URL and an explicit flag. Cached for an hour.",
     responses: {
       200: json("The playlist.", ref("Tracks")), 500: err("Storage is not configured."),
       502: err("The playlist could not be read from Spotify."), 503: err("Storage read failed."),
@@ -165,7 +165,7 @@ export const OPERATIONS: readonly Operation[] = [
   },
   {
     path: "/around/json", method: "get", operationId: "getNeighborhood", tags: ["around"], summary: "Read the neighborhood crawl",
-    description: "The latest AadharshBot crawl of a small list of crypto venture firm homepages: status, title, description and robots verdict for each.",
+    description: "The latest AadharshBot crawl of a small list of crypto venture firm homepages: status, title, description and robots verdict for each. The same data as the /around page.",
     responses: { 200: json("The latest snapshot.", ref("AroundReport")), 503: json("No snapshot exists yet. Retry after a day.", ref("Pending")) },
   },
   {

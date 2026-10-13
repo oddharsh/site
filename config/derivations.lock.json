@@ -994,6 +994,8 @@
     "public/i/XT509996.7c90b12d.jpg": "7c90b12dc70fc92e8f5e836e0b28248f7f07929b2df5607bf8a601b2a4b1b7c4",
     "public/images/alt.json": "d7b22babe37bf87eab5ebe3ed0d7852797b3cdf02d04d7d64e2b9e6778b2e666",
     "public/images/metadata.json": "1bdcd007583755255510c7a8887f2ace3f9711eff4e9d5456b55fd0cad2e2d0d",
+    "src/worker/lib/api-limits.ts": "1732851ea9d423d738db3d246fa08d18e273aa8db0b8354c13b6bc0115b6ddcc",
+    "src/worker/lib/public-api.ts": "bdc43748fc2086a38715050bc2fec9dc3de7172fc2edd04ea3c585a43850c1d4",
     "tools/photos/shell-data.ts": "6473e5af5fd47d81aeb80ce91ba6e8f9ec0f5ac462f4319a22dc95f7fb2f4707"
   }
 }

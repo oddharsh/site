@@ -195,6 +195,25 @@
       }
     },
     {
+      "id": "llms/endpoints",
+      "tier": "pinned",
+      "why": "gen-llms-api.ts projects the operation descriptions in src/worker/lib/public-api.ts (the same ones /openapi.json and /developers are rendered from) into the marked endpoint block of public/llms.txt, which ships byte for byte and so cannot be built at deploy. The inputs here are the two modules that hold the words and the caps; a rate budget that moves in lens-pipeline.ts or ask-rank.ts is caught by contract-llms-txt-lists-the-api, which regenerates the block and compares, rather than by listing modules that change for unrelated reasons.",
+      "outputs": [
+        "public/llms.txt"
+      ],
+      "inputs": {
+        "paths": [
+          "src/worker/lib/public-api.ts",
+          "src/worker/lib/api-limits.ts"
+        ]
+      },
+      "regenerate": "bun tools/gen-llms-api.ts",
+      "recorded": {
+        "inputs": "3988b91dfc18a8dc3127e568052fd4db7f9e6aeb8acb3a01e714b1d694ee6a9d",
+        "count": 2
+      }
+    },
+    {
       "id": "images/metadata",
       "tier": "unverifiable",
       "why": "images/metadata.json is the EXIF record keyed by stem, plus the Fujifilm recipe card, read by exif-sooc from the camera originals.",
