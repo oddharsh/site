@@ -37,8 +37,7 @@
   "include": [
     "../tools/**/*.mjs",
     "../tools/**/*.ts",
-    "../pipelines/**/*.mjs",
-    "../cli/**/*.mjs"
+    "../pipelines/**/*.mjs"
   ],
   // The two vendored encoder builds are gitignored third-party checkouts, and
   // the AV2 one fetches FlatBuffers' own TypeScript under build/, which the glob

@@ -6,6 +6,8 @@ privacy tech: FHE, MPC, zero-knowledge proofs and TEEs.
 [This site](https://aadhar.sh) is where I keep my photos, my writing and the
 explainers I build to learn things. More [about me](https://aadhar.sh/about).
 
+**Always under construction.**
+
 ---
 
 Hey, welcome to my corner of the internet! This site's modeled after the
