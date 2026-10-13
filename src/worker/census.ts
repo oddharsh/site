@@ -6,6 +6,7 @@ import { subrequestLimitIn } from "./lib/budget.ts";
 import { lensInspect } from "./lens.ts";
 import { span } from "./lib/trace.ts";
 import { CENSUS_TABLE_URL } from "./routes.ts";
+import { SPARK } from "./lib/tui.ts";
 
 // The roster: 16 sites chosen to span the open → agent-native spectrum a
 // crypto-VC audience cares about. Agent-native infra, AI labs, publishers
@@ -414,7 +415,6 @@ export async function fetchCensusLastSweep(env) {
   return summarizeCensusRuns(results || []);
 }
 
-const SPARK = "▁▂▃▄▅▆▇█";
 function sparkline(series) {
   if (!series || !series.length) return "";
   if (series.length === 1) return SPARK[Math.min(7, Math.round(series[0] / 100 * 7))];

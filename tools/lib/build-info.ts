@@ -5,12 +5,10 @@
 // the Worker and nowhere in the static tree.
 //
 // Pure and node-safe so the contract suite can drive it without running a build.
+// The record it bakes is the Worker's own BuildInfo, imported rather than
+// restated, so the two sides of the marker line cannot disagree about a field.
 
-export interface BuildInfo {
-  commit: string;
-  branch: string | null;
-  build: string | null;
-}
+import type { BuildInfo } from "../../src/worker/lib/build-info.ts";
 
 const COMMIT = /^[0-9a-f]{40}$/;
 const MARKER = /^export const BUILD_INFO: BuildInfo \| null = .*; \/\/ build:build-info$/m;

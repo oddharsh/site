@@ -16,13 +16,13 @@
 //   bun run speculation:report                # last 30 days, from aadhar.sh
 //   bun run speculation:report -- --min 20    # only paths speculated 20+ times
 
+import type { SpeculationRow } from "../src/worker/speculation.ts";
+
 const ORIGIN = process.env.SPECULATION_ORIGIN || "https://aadhar.sh";
 const minArg = process.argv.indexOf("--min");
 const MIN = minArg === -1 ? 10 : Number(process.argv[minArg + 1] || 10);
 
-type Row = { path: string; prefetch: number; prerender: number; activated: number; speculated: number; rate: number | null };
-type LedgerReport = { ok: boolean; reason?: string; window_days?: number; rows?: Row[] };
-export {};
+type LedgerReport = { ok: boolean; reason?: string; window_days?: number; rows?: SpeculationRow[] };
 
 const res = await fetch(`${ORIGIN}/ledger/speculation.json`, { headers: { accept: "application/json" } });
 const report = (await res.json()) as LedgerReport;

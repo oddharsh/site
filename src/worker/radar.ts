@@ -24,7 +24,7 @@
 //
 // The bands are findphone's, because they are field-calibrated rather than
 // derived: -45 arm's reach, -60 same table, -72 same room.
-import { COLS, blank, fit, kv, rightTo, rows, rule, s, wrap } from "./lib/tui.ts";
+import { COLS, SPARK, blank, fit, kv, rightTo, rows, rule, s, wrap } from "./lib/tui.ts";
 
 const INNER = COLS - 4;
 
@@ -83,7 +83,6 @@ export function readSamples(payload) {
   return out.sort((a, b) => b.rssi - a.rssi);
 }
 
-const SPARK = "▁▂▃▄▅▆▇█";
 /** Trend, which is the whole point when you are walking around looking for something. */
 function sparkline(history) {
   if (history.length < 2) return "";

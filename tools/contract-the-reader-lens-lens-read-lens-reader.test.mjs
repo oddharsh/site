@@ -247,7 +247,7 @@ test("the cracker's scorer matches the quadgram table it ships", () => {
   assert.equal(grams, 4000, `the page's prose and gauge thresholds were measured at 4,000 grams, got ${grams}`);
 
   const seen = new Set();
-  for (let i = 0; i < table.length; i += 4) seen.add(table.substr(i, 4));
+  for (let i = 0; i < table.length; i += 4) seen.add(table.slice(i, i + 4));
   assert.equal(seen.size, grams, "a duplicated quadgram would give one gram two ranks");
   assert.equal(table.slice(0, 4), "THAT", "the table must stay in frequency order; TOP is calibrated to the first entry");
 
