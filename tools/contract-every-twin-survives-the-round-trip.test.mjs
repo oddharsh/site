@@ -47,6 +47,52 @@ test("every generated twin comes back byte for byte", () => {
   assert.deepEqual(failed, [], `\n${failed.join("\n")}`);
 });
 
+test("the round trip also closes when the parser writes the page a Garage page would be", () => {
+  // `origin` turns this site's links into paths and marks the intro; html-to-md
+  // makes the links absolute again and reads no class, so the twin still closes.
+  for (const file of pages) {
+    const twin = readDocument(readFileSync(file, "utf8")).body;
+    assert.equal(down(mdToHtml(twin, { origin: "https://aadhar.sh" })), twin, file);
+  }
+});
+
+// The page /garage/round-trip renders must be markup a hand-written Garage page
+// would carry, byte for byte. Each authored spec is the reference: rebuild the
+// page from its twin and every term, every intro and every plain link to this
+// site must be the exact bytes the spec wrote. What a twin cannot carry is a
+// class a demo puts on its own markup (/garage/dictionary's table rows), and
+// that stays out of the comparison by construction: only bare tags are counted.
+test("a page rebuilt from its twin writes terms, intros and links byte for byte as the hand-written page", () => {
+  const TERM = /<a class="term"[^>]*>[\s\S]*?<\/a>/g;
+  const INTRO = /<p class="garage-intro">/g;
+  const LOCAL = /<a href="\/[^"]*">[\s\S]*?<\/a>/g;
+  const totals = { term: 0, intro: 0, local: 0 };
+  for (const f of readdirSync("pipelines/garage/specs").filter((x) => x.endsWith(".json") && x !== "round-trip.json")) {
+    const id = f.replace(/\.json$/, "");
+    const authored = JSON.parse(readFileSync(join("pipelines/garage/specs", f), "utf8")).bodyHtml;
+    const twin = readDocument(readFileSync(`src/pages/garage/${id}.html`, "utf8")).body;
+    const rebuilt = mdToHtml(twin, { origin: "https://aadhar.sh" });
+    for (const [kind, re] of /** @type {[keyof totals, RegExp][]} */ ([["term", TERM], ["intro", INTRO], ["local", LOCAL]])) {
+      const want = (authored.match(re) || []).sort();
+      const got = (rebuilt.match(re) || []).sort();
+      // every one the hand-written page has comes back, byte for byte
+      for (const tag of want) assert.ok(got.includes(tag), `${id}: ${kind} lost or changed on the trip: ${tag.slice(0, 140)}`);
+      // and terms and intros come back once each, with nothing invented
+      if (kind !== "local") assert.deepEqual(got, want, `${id}: ${kind}s differ`);
+      totals[kind] += want.length;
+    }
+  }
+  assert.ok(totals.term >= 100 && totals.intro >= 8 && totals.local >= 15, `compared only ${JSON.stringify(totals)}; the specs are not being read`);
+});
+
+test("control: a term written by hand in another shape is caught", () => {
+  const html = mdToHtml('[sRGB][srgb]\n\n[srgb]: https://en.wikipedia.org/wiki/SRGB "A colour space."');
+  assert.equal(html, '<p><a class="term" data-t="srgb" href="https://en.wikipedia.org/wiki/SRGB" title="A colour space." rel="external">sRGB</a></p>');
+  assert.notEqual(html, '<p><a class="term" href="https://en.wikipedia.org/wiki/SRGB" data-t="srgb" title="A colour space." rel="external">sRGB</a></p>');
+  // a reference with no definition is text, and a definition renders nothing
+  assert.equal(mdToHtml("[sRGB][nowhere]"), "<p>[sRGB][nowhere]</p>");
+});
+
 test("every hand twin settles after one trip", () => {
   const dir = "src/content/md";
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".md"))) {

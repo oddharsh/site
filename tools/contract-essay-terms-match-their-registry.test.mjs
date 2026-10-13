@@ -8,6 +8,7 @@
 // the record and this holds every page to it, byte for byte.
 import { assert, readFileSync, test } from "./contract-shared.ts";
 import { readdirSync } from "node:fs";
+import { mdToHtml } from "../src/client/garage/md-to-html.js";
 
 const ROOT_DIR = new URL("../", import.meta.url);
 const TERMS = JSON.parse(readFileSync(new URL("src/content/terms.json", ROOT_DIR), "utf8"));
@@ -22,10 +23,17 @@ const attr = (tag, name) => {
 
 const pages = readdirSync(new URL("src/pages/", ROOT_DIR), { recursive: true })
   .map(String).filter((p) => p.endsWith(".html"));
-const marked = pages.flatMap((page) => {
-  const html = readFileSync(new URL(`src/pages/${page}`, ROOT_DIR), "utf8");
-  return [...html.matchAll(/<a\b[^>]*\sclass="term"[^>]*>/g)].map((m) => ({ page, tag: m[0] }));
-});
+const termTags = (page, html) => [...html.matchAll(/<a\b[^>]*\sclass="term"[^>]*>/g)].map((m) => ({ page, tag: m[0] }));
+// A page that renders from its own Markdown (/garage/round-trip) keeps its terms
+// there, as reference links and a glossary. Rendered the way the page renders
+// them, they are held to the registry like any hand-written page's.
+const RENDERED_FROM_MARKDOWN = readdirSync(new URL("src/content/garage/", ROOT_DIR))
+  .filter((f) => f.endsWith(".md")).map((f) => `src/content/garage/${f}`);
+const marked = [
+  ...pages.flatMap((page) => termTags(page, readFileSync(new URL(`src/pages/${page}`, ROOT_DIR), "utf8"))),
+  ...RENDERED_FROM_MARKDOWN.flatMap((file) =>
+    termTags(file, mdToHtml(readFileSync(new URL(file, ROOT_DIR), "utf8"), { origin: "https://aadhar.sh" }))),
+];
 
 test("the registry's entries are well formed and in the house voice", () => {
   for (const [key, t] of Object.entries(TERMS)) {
