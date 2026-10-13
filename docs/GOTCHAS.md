@@ -331,3 +331,19 @@ by renumbering. The long-form history of each one is in git
     with no credential instead: refused with the tree, and past the guard to
     the API-token error without it. The script now deletes the tree on every
     run.
+
+60. **An edge check that asserts an absence passes on any page that isn't
+    production.** `infra:check`'s edge tier never asked who answered. On
+    2026-10-13 an agent sandbox's egress proxy answered every aadhar.sh
+    request with a 67-byte `text/plain` 403, and the run read it as the
+    zone: `speed-brain-off`, `rocket-loader-off` and `webmcp-bridge-off`
+    held, because an error page lacks every header and script, while HSTS,
+    brotli and h3 read as 8 drifts. The 0-RTT probe did the same at the
+    TLS layer and reported "rejected" for handshakes that never connected,
+    and the agent Markdown sweep counted the six `text/plain` surfaces as
+    answering. Edge reads now go through `servedByEdge`: only answers that
+    carry `cf-ray`, which Cloudflare stamps on every response it serves (a
+    401 included), are measured. The probe counts a resumption only after a
+    handshake completed, and the sweep passes only when every probe was
+    measured. Each miss is an advisory now. The contract test replays the
+    proxy's exact bytes, with and without `cf-ray`.

@@ -120,6 +120,10 @@ function matchingDns() {
 }
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+/** A response as Cloudflare's edge serves one: whatever the status, it carries
+ *  cf-ray. The edge port measures nothing that lacks it.
+ *  @param {Response} res */
+const edgeServed = (res) => { res.headers.set("cf-ray", "8f1e2d3c4b5a6978-SJC"); return res; };
 
 // ------------------------------------------------------------- repository ----
 
@@ -327,8 +331,8 @@ test("edge: Markdown for Agents converting a page with no twin is a drift; the p
     probeEarlyData: async () => ({ skip: "unused" }),
     fetchEdge: async (url, headers = {}) => {
       seen.push({ url, accept: headers.accept });
-      if (url.endsWith("/writing/posts.json")) return json([{ slug: "colophon" }, { slug: "in-flux" }]);
-      return new Response("body", { headers: { "content-type": contentType } });
+      if (url.endsWith("/writing/posts.json")) return edgeServed(json([{ slug: "colophon" }, { slug: "in-flux" }]));
+      return edgeServed(new Response("body", { headers: { "content-type": contentType } }));
     },
   });
 
@@ -341,7 +345,7 @@ test("edge: Markdown for Agents converting a page with no twin is a drift; the p
   assert.ok(converted[0].message.startsWith('production edge: markdown-for-agents-converts-nothing: content-type does not contain "text/html"'), converted[0].message);
 
   // No post to probe is an unmeasured check, never a pass.
-  const empty = { probeEarlyData: async () => ({ skip: "unused" }), fetchEdge: async () => json([]) };
+  const empty = { probeEarlyData: async () => ({ skip: "unused" }), fetchEdge: async () => edgeServed(json([])) };
   const unresolved = compareEdge(edge, await readEdge(edge, empty), { hostedRunner: false });
   assert.equal(unresolved[0].level, "warn");
   assert.ok(unresolved[0].message.includes("could not resolve its target: posts.json carried no post slug"), unresolved[0].message);
@@ -518,18 +522,48 @@ for (const [how, respond] of Object.entries(refusals)) {
   test(`edge port, ${how}: a response that carries nothing asserted is never a pass by omission`, async () => {
     const port = { fetchEdge: edgeFetcher(fetchImpl), probeEarlyData: async () => ({ skip: "fixture has no openssl" }) };
     const findings = compareEdge(infra.edge, await readEdge(infra.edge, port), { hostedRunner: false });
-    if (how === "throw") {
-      assert.deepEqual(fails(findings), []);
-      assert.deepEqual(passes(findings), []);
-      assert.equal(warns(findings).length, infra.edge.checks.length);
-    } else {
+    // Nothing here carries cf-ray, so no answer came from the edge.
+    assert.deepEqual(fails(findings), []);
+    assert.deepEqual(passes(findings), []);
+    assert.equal(warns(findings).length, infra.edge.checks.length);
+  });
+
+  if (how !== "throw") {
+    test(`edge port, ${how} from the edge itself: an observation, never a pass by omission`, async () => {
+      const port = { fetchEdge: edgeFetcher(async () => edgeServed(respond())), probeEarlyData: async () => ({ skip: "fixture has no openssl" }) };
+      const findings = compareEdge(infra.edge, await readEdge(infra.edge, port), { hostedRunner: false });
       // A 401 from production IS an observation: the edge answered, without the
       // headers the declaration requires. It must not read as "holds".
       assert.ok(fails(findings).some((m) => m.startsWith("production edge: hsts-preload: strict-transport-security is ")));
       assert.ok(!passes(findings).some((m) => m.includes("hsts-preload") || m.includes("compression-on")));
-    }
-  });
+    });
+  }
 }
+
+// Measured 2026-10-13: an agent sandbox's egress proxy answered every request to
+// aadhar.sh with exactly this, and a whole infra:check run read it as production.
+// The absence checks held and the presence checks drifted, all on a page that
+// never left the sandbox. The control stamps cf-ray on the same bytes and gets
+// the old passes back, so cf-ray is the one thing standing between them.
+test("edge port: an egress proxy's 403 is unmeasured; the same bytes from the edge are measured", async () => {
+  const proxy = () => new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', {
+    status: 403,
+    headers: { "content-type": "text/plain; charset=utf-8", "x-content-type-options": "nosniff" },
+  });
+  const absences = ["speed-brain-off", "rocket-loader-off", "webmcp-bridge-off"];
+  const edge = { origin: "https://aadhar.sh", checks: infra.edge.checks.filter((c) => absences.includes(c.id) || c.id === "hsts-preload") };
+  const port = (respond) => ({ fetchEdge: edgeFetcher(async () => respond()), probeEarlyData: async () => ({ skip: "unused" }) });
+
+  const blocked = compareEdge(edge, await readEdge(edge, port(proxy)), { hostedRunner: false });
+  assert.deepEqual(passes(blocked), []);
+  assert.deepEqual(fails(blocked), []);
+  assert.equal(warns(blocked).length, edge.checks.length);
+  assert.ok(warns(blocked).every((m) => m.includes("answered HTTP 403 without cf-ray")), warns(blocked).join("\n"));
+
+  const served = compareEdge(edge, await readEdge(edge, port(() => edgeServed(proxy()))), { hostedRunner: false });
+  assert.deepEqual(passes(served).sort(), absences.map((id) => `edge ${id} holds`).sort());
+  assert.ok(fails(served).some((m) => m.startsWith("production edge: hsts-preload: ")));
+});
 
 test("GitHub port: the Administration-gated endpoints answering 401 and 403 are advisories naming the workstation command", async () => {
   const fetchImpl = async (url) => {
