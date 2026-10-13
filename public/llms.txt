@@ -1,7 +1,9 @@
 # aadhar.sh
 
-> Aadharsh Pannirselvam's corner of the web. Researching and investing at
-> Archetype; building this site by hand in the meantime. The root is a
+> Aadharsh Pannirselvam's corner of the web. He researches and invests at
+> Archetype, a crypto-native venture firm in New York, and is most interested in
+> cryptography and privacy tech (FHE, MPC, zero-knowledge proofs, TEEs). He
+> builds this site by hand. The root is a
 > personal homepage styled after the 2003 Windows-XP era. Photographs (a
 > live photo grid) and longform writing (an editable Notepad at /writing)
 > are live. Sounds, dishes, and tinkering are still planned.

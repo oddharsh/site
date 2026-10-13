@@ -1,9 +1,10 @@
 # Aadharsh Pannirselvam
 
-Researching and investing at [Archetype](https://www.archetype.fund/). Building
-[this site](https://aadhar.sh) in the meantime.
-
-**Under construction.**
+I'm a researcher and investor at [Archetype](https://www.archetype.fund/), a
+crypto-native venture firm in New York. I'm most interested in cryptography and
+privacy tech: FHE, MPC, zero-knowledge proofs and TEEs.
+[This site](https://aadhar.sh) is where I keep my photos, my writing and the
+explainers I build to learn things. More [about me](https://aadhar.sh/about).
 
 ---
 
