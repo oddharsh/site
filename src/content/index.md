@@ -57,6 +57,9 @@ archive is browsable at `/photos`, and machine-readable at
 
 ---
 
-© 2026 Aadharsh Pannirselvam · Best viewed in any browser made since 2001.
+© 2026 Aadharsh Pannirselvam · [about](https://aadhar.sh/about) ·
+[contact](https://aadhar.sh/contact) · [privacy](https://aadhar.sh/privacy) ·
+[developers](https://aadhar.sh/developers) · Best viewed in any browser made
+since 2001.
 
 *love, aadharsh*

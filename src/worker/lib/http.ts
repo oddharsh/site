@@ -83,6 +83,23 @@ export function wantsMarkdown(request) {
   );
 }
 
+// true iff Accept explicitly names application/json and prefers it over HTML,
+// by the same rules as wantsMarkdown: a named type only (no `*/*`), q > 0, and a
+// tie goes to whichever was listed first. A browser never names it, so this
+// moves nothing for a person.
+export function wantsJson(request) {
+  const accept = (request.headers.get("accept") || "").toLowerCase();
+  if (!/(^|,)\s*application\/json\s*(?:;|,|$)/i.test(accept)) return false;
+  const jsonQ = acceptQ(accept, "application/json");
+  if (jsonQ <= 0) return false;
+  const htmlQ = Math.max(acceptQ(accept, "text/html"), acceptQ(accept, "application/xhtml+xml"));
+  if (jsonQ !== htmlQ) return jsonQ > htmlQ;
+  return acceptIndex(accept, "application/json") < Math.min(
+    acceptIndex(accept, "text/html"),
+    acceptIndex(accept, "application/xhtml+xml")
+  );
+}
+
 // Where a type is named EXACTLY in the Accept header, as an ordinal, or Infinity
 // when it is not named at all. Wildcards are deliberately not matched here even
 // though acceptQ matches them for q: `*/*` expresses no preference BETWEEN two

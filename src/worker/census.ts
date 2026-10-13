@@ -589,7 +589,15 @@ footer a { color:var(--link); }
 
 // GET /lens/census.json — the machine twin: the same grouped series as JSON.
 export async function handleCensusJson(request, env) {
-  const grouped = await fetchCensusGrouped(env);
+  // A D1 failure used to escape as Cloudflare's HTML 1101 page from a JSON
+  // endpoint. It answers in the endpoint's own error shape instead.
+  let grouped;
+  try {
+    grouped = await fetchCensusGrouped(env);
+  } catch (e) {
+    console.error("census.json: storage read failed", e);
+    return jsonResponse({ ok: false, error: "census storage read failed", code: "storage_unavailable" }, 503, { "retry-after": "60" });
+  }
   if (!grouped) return jsonResponse({ ok: false, error: "census storage is unavailable" }, 503);
   // Read beside the series: `lastYmd` says when a
   // row last landed, and `lastSweep` says what the latest sweep did, including

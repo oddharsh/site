@@ -203,7 +203,7 @@ export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
 
 export async function handleSpeculationJson(request, env) {
   if (request.method !== "GET" && request.method !== "HEAD") {
-    return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
+    return jsonResponse({ ok: false, error: "method not allowed", code: "method_not_allowed", allow: ["GET", "HEAD"] }, 405, { allow: "GET, HEAD" });
   }
   const read = await analyticsSql(env, SPECULATION_DATASET, (from, sum) =>
     `SELECT blob1 AS kind, blob2 AS path, ${sum("double1")} AS n ` +

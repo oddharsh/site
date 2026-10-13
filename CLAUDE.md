@@ -21,6 +21,7 @@ rather than a paragraph here.
 | `cal/`, `serendipity/` | modules the site Worker serves at `/coffee` and `/serendipity` |
 | `counter/` | `aadhar-counter`, which owns the `Counter` Durable Object |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | separately deployed auxiliary Workers (TypeScript config, gotcha 41) |
+| `cli/` | `aadhar`, a zero-dependency CLI over the public API (`private` until published) |
 | `tools/` | the build, the contract tests (`contract-*.test.mjs`), checks, generators, `photos/` |
 | `pipelines/` | page generators for `garage/` and `lwe/` |
 | `config/` | `infra.json`, `site-manifest.json`, `derivations.json`, `tools.json`, tsconfigs, `dev/` |

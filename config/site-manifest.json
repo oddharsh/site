@@ -1110,6 +1110,74 @@
       }
     },
     {
+      "path": "/about",
+      "title": "About",
+      "section": "identity",
+      "kind": "page",
+      "description": "Who runs aadhar.sh: Aadharsh Pannirselvam, researcher and investor at Archetype, and what the site holds.",
+      "hint": "who runs the site, and what it holds",
+      "flags": {
+        "run": false,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": false,
+        "agents": true,
+        "searchIndex": true,
+        "webmention": false
+      }
+    },
+    {
+      "path": "/contact",
+      "title": "Contact",
+      "section": "identity",
+      "kind": "page",
+      "description": "How to reach Aadharsh Pannirselvam: email, a coffee in NYC, security reports, and the crawler's opt-out.",
+      "hint": "email, coffee, security reports",
+      "flags": {
+        "run": false,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": false,
+        "agents": true,
+        "searchIndex": true,
+        "webmention": false
+      }
+    },
+    {
+      "path": "/privacy",
+      "title": "Privacy",
+      "section": "identity",
+      "kind": "page",
+      "description": "What a visit to aadhar.sh leaves behind, read from the site's code: logs, counters, the one cookie, and what happens to anything you send.",
+      "hint": "what a visit leaves behind, read from the code",
+      "flags": {
+        "run": false,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": false,
+        "agents": true,
+        "searchIndex": true,
+        "webmention": false
+      }
+    },
+    {
+      "path": "/developers",
+      "title": "Developers",
+      "section": "identity",
+      "kind": "page",
+      "description": "Call aadhar.sh from code: keyless JSON endpoints described in OpenAPI 3.1, an MCP server, Markdown twins, rate limits and the error shape.",
+      "hint": "the API, OpenAPI and MCP, for code",
+      "flags": {
+        "run": false,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": false,
+        "agents": true,
+        "searchIndex": true,
+        "webmention": false
+      }
+    },
+    {
       "path": "/inbox",
       "title": "Inbox",
       "section": "utility",

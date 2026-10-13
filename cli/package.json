@@ -1,0 +1,14 @@
+{
+  "name": "aadhar-sh",
+  "version": "0.1.0",
+  "description": "Read aadhar.sh from the terminal: search, ask, photos, Lens and Markdown pages, through its keyless public API.",
+  "type": "module",
+  "bin": { "aadhar": "bin/aadhar.mjs" },
+  "exports": "./aadhar.mjs",
+  "files": ["aadhar.mjs", "bin/aadhar.mjs", "README.md"],
+  "engines": { "node": ">=18" },
+  "homepage": "https://aadhar.sh/developers",
+  "repository": { "type": "git", "url": "git+https://github.com/oddharsh/site.git", "directory": "cli" },
+  "keywords": ["aadhar.sh", "cli", "agents", "openapi", "lens", "nlweb"],
+  "private": true
+}

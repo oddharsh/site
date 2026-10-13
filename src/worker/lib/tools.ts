@@ -27,6 +27,7 @@ import { currentPlaylistId, getTracksSWR } from "../rn.ts";
 import { NLWEB_MODES, nlwebAsk, parseAskRequest } from "../nlweb.ts";
 import { searchSite } from "../search.ts";
 import { mcpTool } from "./mcp-tools.ts";
+import { ASK_LIMITS, CHANGE_RADAR_LIMITS, PHOTO_QUERY_LIMITS, SEARCH_LIMITS } from "./api-limits.ts";
 // holding -> serendipity, which is the reverse of the established direction
 // (serendipity already imports lib/desktop.js, lib/crawl.js, lib/mcp-protocol.js).
 // It is not a cycle: nothing under serendipity/ imports this registry. It is also
@@ -75,13 +76,13 @@ const DATA_TOOL_DEFINITIONS = [
       mode: { type: "string", enum: NLWEB_MODES.known, description: "list (the only one served here); summarize and generate are refused rather than degraded" },
       prev: { type: "array", items: { type: "string" }, description: "previous queries. Received and NOT resolved, since decontextualization needs a model; send decontextualized_query instead" },
       decontextualized_query: { type: "string", description: "the fully self-contained form of a follow-up question. When present this is what gets searched" },
-      top_k: { type: "integer", minimum: 1, maximum: 50 },
+      top_k: { type: "integer", minimum: 1, maximum: ASK_LIMITS.topKMax },
     }, required: ["query"] },
   },
   {
     name: "search_site",
     description: "Search the public pages, writing, garage notes, and utility descriptions on aadhar.sh.",
-    inputSchema: { type: "object", properties: { q: { type: "string", description: "case-insensitive search query" }, limit: { type: "integer", minimum: 1, maximum: 50 } }, required: ["q"] },
+    inputSchema: { type: "object", properties: { q: { type: "string", description: "case-insensitive search query" }, limit: { type: "integer", minimum: 1, maximum: SEARCH_LIMITS.limitMax } }, required: ["q"] },
   },
   {
     name: "now_playing",
@@ -91,7 +92,7 @@ const DATA_TOOL_DEFINITIONS = [
   {
     name: "photo_query",
     description: "Query the published photo archive by caption, camera, lens, film simulation, film-recipe setting, or date range. `q` is free text scored per term across the caption, the EXIF and an offline term expansion, so \"classic chrome bridge\" matches the film simulation AND the subject; the named parameters stay exact filters. Results are ranked and carry `score` and `matched` (which fields answered). `ranking.mode` says whether every term was covered (all-terms), only some (partial), or none (no-match), and `ranking.dropped` / `ranking.common` name terms ignored as stopwords or as too widespread to tell photos apart. Each result carries a `recipe` card naming the in-camera settings the shot was made with, so a look can be read back and re-shot. GPS and unlisted EXIF fields are never returned.",
-    inputSchema: { type: "object", properties: { q: { type: "string", description: "free-text query, ranked; multiple words are scored independently" }, camera: { type: "string" }, lens: { type: "string" }, film: { type: "string", description: "film simulation name, e.g. \"Classic Chrome\", \"Nostalgic Neg\", \"Acros\"" }, recipe: { type: "string", description: "substring match anywhere in the recipe card, e.g. \"DR400\", \"Clarity: -2\", \"Grain Effect: Strong, Large\", \"+2 Red\"" }, from: { type: "string", description: "inclusive YYYY-MM-DD prefix" }, to: { type: "string", description: "inclusive YYYY-MM-DD prefix" }, limit: { type: "integer", minimum: 1, maximum: 100 }, offset: { type: "integer", minimum: 0, maximum: 10000 } } },
+    inputSchema: { type: "object", properties: { q: { type: "string", description: "free-text query, ranked; multiple words are scored independently" }, camera: { type: "string" }, lens: { type: "string" }, film: { type: "string", description: "film simulation name, e.g. \"Classic Chrome\", \"Nostalgic Neg\", \"Acros\"" }, recipe: { type: "string", description: "substring match anywhere in the recipe card, e.g. \"DR400\", \"Clarity: -2\", \"Grain Effect: Strong, Large\", \"+2 Red\"" }, from: { type: "string", description: "inclusive YYYY-MM-DD prefix" }, to: { type: "string", description: "inclusive YYYY-MM-DD prefix" }, limit: { type: "integer", minimum: 1, maximum: PHOTO_QUERY_LIMITS.limitMax }, offset: { type: "integer", minimum: 0, maximum: PHOTO_QUERY_LIMITS.offsetMax } } },
   },
   {
     name: "coffee_availability",
@@ -101,7 +102,7 @@ const DATA_TOOL_DEFINITIONS = [
   {
     name: "change_radar",
     description: "Read the bounded historical diff of the latest AadharshBot neighborhood observations. Raw crawled bodies are not stored or returned.",
-    inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 100 } } },
+    inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: CHANGE_RADAR_LIMITS.limitMax } } },
   },
   {
     name: "lens_inspect",

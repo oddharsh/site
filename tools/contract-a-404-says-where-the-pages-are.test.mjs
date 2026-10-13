@@ -3,7 +3,9 @@
 // must NOT be answered: a capability this site does not serve stays 404, a
 // probe gets no suggestions, and a handler's own 404 body is left alone. The
 // route oracle covers the same rules end to end through workerd.
+import { existsSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
+import { OPENAPI_PATH, openApiDocument } from "../src/worker/lib/openapi.ts";
 import { HASHED_ASSETS } from "../src/worker/lib/shell-assets.ts";
 import { _resetPhotoCaches } from "../src/worker/photos.ts";
 import {
@@ -84,7 +86,12 @@ test("share cards, terminal tools and MCP card probes go where the thing actuall
   for (const [from, to] of Object.entries(DISCOVERY_ALIASES)) {
     assert.equal((await recover(from)).response.headers.get("location"), `https://aadhar.sh${to}`, from);
   }
-  for (const honest of ["/openapi.json", "/.well-known/ai-plugin.json", "/.well-known/x402", "/.well-known/agents.json"]) {
+  for (const to of new Set(Object.values(DISCOVERY_ALIASES))) {
+    // /openapi.json is written by build.ts from lib/public-api.ts; every other
+    // target is a file in public/
+    assert.ok(to === OPENAPI_PATH || existsSync(`public${to}`), `an alias may only point at a file this site ships: public${to}`);
+  }
+  for (const honest of ["/openapi.yaml", "/.well-known/ai-plugin.json", "/.well-known/x402", "/.well-known/agents.json"]) {
     assert.equal((await recover(honest)).response.status, 404, `${honest} names a capability this site does not serve`);
   }
 });
@@ -125,6 +132,40 @@ test("an empty 404 names the closest pages in its own section, and the sitemap",
   assert.equal(await head.response.text(), "", "HEAD carries no body");
 });
 
+test("an agent that asks for Markdown gets the same 404 as Markdown", async () => {
+  const md = await recover("/garage/resampe", env(), { headers: { accept: "text/markdown, text/html, */*" } });
+  assert.equal(md.response.status, 404, "the status never changes with the body");
+  assert.equal(md.response.headers.get("content-type"), "text/markdown; charset=utf-8");
+  assert.equal(md.response.headers.get("vary"), "accept");
+  assert.equal(md.response.headers.get("link"), MISS_LINKS);
+  const body = await md.response.text();
+  assert.match(body, /^# 404 Not Found\n\n`\/garage\/resampe` is not a page on aadhar\.sh\./);
+  assert.match(body, /## Closest pages in \/garage\n\n- \[\/garage\/resample\]\(https:\/\/aadhar\.sh\/garage\/resample\)\n/);
+  assert.match(body, /Section index: \[\/garage\]\(https:\/\/aadhar\.sh\/garage\)/);
+  assert.match(body, /- \[\/llms\.txt\]\(https:\/\/aadhar\.sh\/llms\.txt\)/);
+  assert.match(body, /- \[\/sitemap\.xml\]\(https:\/\/aadhar\.sh\/sitemap\.xml\)/);
+
+  const bare = await (await recover("/zzzzzz-qqqq", env(), { headers: { accept: "text/markdown" } })).response.text();
+  assert.ok(!bare.includes("Closest pages"), "no near miss, no section for it");
+  assert.match(bare, /## Where the pages are/);
+
+  const probe = await recover("/.env", env(), { headers: { accept: "text/markdown" } });
+  assert.ok(!(await probe.response.text()).includes("Closest pages"), "a probe is still offered no pages");
+
+  for (const accept of ["text/html,application/xhtml+xml,*/*;q=0.8", "*/*", "text/html, text/markdown;q=0.5", "text/markdown;q=0"]) {
+    const r = await recover("/garage/resampe", env(), { headers: { accept } });
+    assert.match(r.response.headers.get("content-type") || "", /^text\/plain/, `${accept} keeps plain text`);
+  }
+
+  const head = await recover("/garage/resampe", env(), { method: "HEAD", headers: { accept: "text/markdown" } });
+  assert.equal(head.response.headers.get("content-type"), "text/markdown; charset=utf-8", "HEAD says what GET would send");
+  assert.equal(await head.response.text(), "");
+
+  const json = new Response('{"error":"not found"}', { status: 404, headers: { "content-type": "application/json" } });
+  const kept = await recover("/serendipity/event/nope", env(), { headers: { accept: "text/markdown" } }, json);
+  assert.equal(kept.response.headers.get("content-type"), "application/json", "a handler's own 404 is never rewritten");
+});
+
 test("a probe gets the pointers and nothing else; a handler's own 404 keeps its body", async () => {
   const probe = await recover("/.env");
   assert.equal(probe.bucket, "probe");
@@ -153,4 +194,35 @@ test("the counter records caller class, bucket and outcome for every miss", asyn
   assert.equal(missBucket("/a/icons.cd1fc133.svg"), "stale-asset");
   assert.equal(missBucket("/.well-known/ai-plugin.json"), "discovery");
   assert.equal(missBucket("/wp-admin/setup.php"), "probe");
+});
+
+test("a client that asks for JSON gets the Error object /openapi.json declares", async () => {
+  const r = await recover("/garage/resampe", env(), { headers: { accept: "application/json" } });
+  assert.equal(r.response.status, 404);
+  assert.equal(r.response.headers.get("content-type"), "application/json; charset=utf-8");
+  assert.equal(r.response.headers.get("vary"), "accept");
+  const error = await r.response.json();
+  assert.equal(error.ok, false);
+  assert.equal(error.code, "not_found");
+  assert.equal(error.status, 404);
+  assert.match(error.error, /\/garage\/resampe/);
+  assert.match(error.hint, /Did you mean \/garage\/resample\?/);
+  assert.deepEqual(error.suggestions, ["https://aadhar.sh/garage/resample"]);
+  assert.equal(error.docs, "https://aadhar.sh/developers");
+
+  const bare = await (await recover("/zzzzzz-qqqq", env(), { headers: { accept: "application/json" } })).response.json();
+  assert.equal(bare.suggestions, undefined, "no near miss, no suggestions key");
+  assert.match(bare.hint, /\/openapi\.json/);
+
+  const spec = JSON.parse(JSON.stringify(openApiDocument()));
+  const declared = spec.components.schemas.Error;
+  for (const key of Object.keys(bare)) assert.ok(key in declared.properties, `${key} is declared on Error`);
+  for (const key of declared.required) assert.ok(key in bare, `${key} is required by Error`);
+
+  const md = await recover("/garage/resampe", env(), { headers: { accept: "text/markdown, application/json" } });
+  assert.match(md.response.headers.get("content-type") || "", /^text\/markdown/, "Markdown is checked first");
+  for (const accept of ["text/html,application/xhtml+xml,application/json;q=0.9", "*/*", "application/json;q=0"]) {
+    const plain = await recover("/garage/resampe", env(), { headers: { accept } });
+    assert.match(plain.response.headers.get("content-type") || "", /^text\/plain/, `${accept} keeps plain text`);
+  }
 });

@@ -1303,6 +1303,8 @@ phase("1e photos + bot");
   const nonce = `?build=${BUILD_NONCE}`;
   const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.ts")).href + nonce);
   const bot = await import(pathToFileURL(resolve(OUT, "src/worker/bot.ts")).href + nonce);
+  const trust = await import(pathToFileURL(resolve(OUT, "src/worker/trust.ts")).href + nonce);
+  const publicApi = await import(pathToFileURL(resolve(OUT, "src/worker/lib/openapi.ts")).href + nonce);
 
   const pool = photos.derivePhotoPool(
     JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
@@ -1350,7 +1352,28 @@ phase("1e photos + bot");
   if (!botHtml.includes("AadharshBot")) throw new Error("bot page: rendered document does not name the crawler — did the copy move?");
   await writeFile(`${OUT}/public/bot.html`, botHtml);
 
-  console.log(`pages(gen): photos.html ${photosHtml.length}B (${photos.curatedPool(pool).length} tiles), ${albumSizes.join(", ")}${albumSizes.length ? ", " : ""}bot.html ${botHtml.length}B, sitemap-images.xml ${imageCount} images`);
+  // /openapi.json, written from the same descriptions /developers renders and
+  // the same constants the handlers enforce (lib/public-api.ts). Generated here
+  // rather than committed, so there is no second copy to drift.
+  const spec = publicApi.openApiDocument();
+  if (Object.keys(spec.paths).length < 10) throw new Error(`openapi.json: only ${Object.keys(spec.paths).length} paths described`);
+  await writeFile(`${OUT}/public${publicApi.OPENAPI_PATH}`, `${JSON.stringify(spec, null, 2)}\n`);
+
+  // the trust pages (trust.ts), each held to the one sentence it exists to say
+  const trustSizes: string[] = [];
+  for (const [name, render, marker] of [
+    ["about", trust.renderAboutPage, "Archetype"],
+    ["contact", trust.renderContactPage, trust.CONTACT_EMAIL],
+    ["privacy", trust.renderPrivacyPage, "serendipity-uid"],
+    ["developers", trust.renderDevelopersPage, "/openapi.json"],
+  ] as const) {
+    const pageHtml = await render().text();
+    if (!pageHtml.includes(marker)) throw new Error(`${name} page: rendered document does not mention ${marker} — did the copy move?`);
+    await writeFile(`${OUT}/public/${name}.html`, pageHtml);
+    trustSizes.push(`${name}.html ${pageHtml.length}B`);
+  }
+
+  console.log(`pages(gen): photos.html ${photosHtml.length}B (${photos.curatedPool(pool).length} tiles), ${albumSizes.join(", ")}${albumSizes.length ? ", " : ""}bot.html ${botHtml.length}B, ${trustSizes.join(", ")}, sitemap-images.xml ${imageCount} images`);
 }
 
 phase("1f updates + restore");

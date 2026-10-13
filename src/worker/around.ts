@@ -1,4 +1,5 @@
 import { BOT_NAME, BOT_UA, SIG_AGENT, botRobotsPolicy, BotPolicyError } from "./lib/botauth.ts";
+import { CHANGE_RADAR_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { cachedRender, deleteSWRKV, edgeKey, withWeakEtag } from "./lib/cache.ts";
 import { crawlDocument, mapWithConcurrency } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
@@ -208,8 +209,8 @@ export function diffAroundRows(current, previous) {
 // requestedLimit takes whatever a query string hands over, which is why the
 // body coerces with `Number(x) || 50`. The annotation says so; the default
 // alone would have tsc infer number and reject its only caller.
-export async function readAroundChanges(env, requestedLimit: string | number | null = 50) {
-  const limit = Math.min(100, Math.max(1, Number(requestedLimit) || 50));
+export async function readAroundChanges(env, requestedLimit: string | number | null = CHANGE_RADAR_LIMITS.limitDefault) {
+  const limit = clampParam(requestedLimit, CHANGE_RADAR_LIMITS.limitDefault, CHANGE_RADAR_LIMITS.limitMax);
   if (!env.RESTORE_DB) {
     return { ok: true, available: false, changes: [], note: "change history is not configured on this deployment" };
   }

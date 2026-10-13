@@ -79,9 +79,11 @@
       "anchor": "https://aadhar.sh/",
       "service-doc": [
         { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "llms.txt site summary" },
+        { "href": "https://aadhar.sh/developers", "type": "text/html", "title": "Developer guide: endpoints, limits, errors and examples" },
         { "href": "https://aadhar.sh/auth.md", "type": "text/markdown", "title": "Auth.md agent registration" }
       ],
       "service-desc": [
+        { "href": "https://aadhar.sh/openapi.json", "type": "application/vnd.oai.openapi+json;version=3.1", "title": "OpenAPI 3.1 description of the keyless JSON endpoints" },
         { "href": "https://aadhar.sh/.well-known/oauth-protected-resource", "type": "application/json", "title": "OAuth protected resource metadata" },
         { "href": "https://aadhar.sh/.well-known/oauth-authorization-server", "type": "application/json", "title": "OAuth authorization server metadata" },
         { "href": "https://aadhar.sh/.well-known/agent-card.json", "type": "application/json", "title": "Aadharsh site agent card" },

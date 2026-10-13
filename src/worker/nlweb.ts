@@ -44,6 +44,7 @@
 // cut. Same reasoning as the photo pipeline's nullable fields: report the thing
 // you have, name what it is, never fabricate the thing you do not.
 import { CANONICAL_HOST } from "./lib/const.ts";
+import { ASK_LIMITS } from "./lib/api-limits.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { asRecord } from "./lib/parse.ts";
 import { span } from "./lib/trace.ts";
@@ -58,8 +59,8 @@ export const NLWEB_SITE = CANONICAL_HOST;
 // worth naming rather than silently answering from the only corpus we have.
 const SITE_TOKENS = new Set(["", "all", CANONICAL_HOST, "aadhar.sh", "https://aadhar.sh"]);
 export const NLWEB_MODES = { supported: ["list"], known: ["list", "summarize", "generate"] };
-const MAX_RESULTS = 50;
-const DEFAULT_RESULTS = 10;
+const MAX_RESULTS = ASK_LIMITS.topKMax;
+const DEFAULT_RESULTS = ASK_LIMITS.topKDefault;
 
 // The site's own search records carry a `kind`; these are the schema.org types
 // those kinds actually are. A `schema_object` is the whole point of NLWeb's
@@ -181,7 +182,7 @@ export function parseAskRequest(url, body): { ok: true, params: any } | { ok: fa
   // `prev` is a comma-separated list in the legacy dialect and an array in the
   // structured one.
   const prevList = (Array.isArray(prev) ? prev : String(prev ?? "").split(","))
-    .map((s) => String(s).trim()).filter(Boolean).slice(0, 10);
+    .map((s) => String(s).trim()).filter(Boolean).slice(0, ASK_LIMITS.prevMax);
 
   const searched = String(decontextualized ?? "").trim() || text;
   const limitRaw = Number(flat.top_k ?? q.get("top_k") ?? q.get("limit"));

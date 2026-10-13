@@ -105,15 +105,18 @@ export const EXACT_ROUTES = [
   { path: READING_LIST_URL, claim: ["/reading*"] },
   // the GitHub shortcut infotip reads this (github.ts); one row of its own
   { path: "/github.json" },
-  { path: "/updates", cacheable: true },
-  { path: "/updates.json", cacheable: true },
+  // FOLDED 2026-10-13, two rows to one each, to make room for the trust pages
+  // below. Nothing static lives under /updates* or /perf*, the same reason
+  // /security* folds.
+  { path: "/updates", claim: ["/updates*"], cacheable: true },
+  { path: "/updates.json", claim: ["/updates*"], cacheable: true },
   { path: "/restore", cacheable: true },
   // /garage/* is worker-first for the section's static pages already
   { path: "/garage/dyno", claim: ["/garage/*"] },
   { path: DYNO_PULLS_URL, claim: ["/garage/*"] },
   { path: "/garage/dyno.json", claim: ["/garage/*"] },
-  { path: "/perf" },
-  { path: "/perf.json" },
+  { path: "/perf", claim: ["/perf*"] },
+  { path: "/perf.json", claim: ["/perf*"] },
 
   // FOLDED onto a wildcard 2026-08-11, from eight exact rows to two, when the
   // config sat at exactly 100 of 100 and /lens/wire could not be added at any
@@ -189,6 +192,11 @@ export const EXACT_ROUTES = [
   { path: "/rn/set" },
 
   { path: "/bot", cacheable: true },
+  // the trust pages (trust.ts): fixed documents baked at deploy, one row each
+  { path: "/about", cacheable: true },
+  { path: "/contact", cacheable: true },
+  { path: "/privacy", cacheable: true },
+  { path: "/developers", cacheable: true },
   // folds the page, its two JSON doors and its island; nothing static lives
   // under /around
   { path: "/around", claim: ["/around*"], cacheable: true },

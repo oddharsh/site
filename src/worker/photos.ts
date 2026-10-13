@@ -1,6 +1,7 @@
 // photos.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { cachedRender } from "./lib/cache.ts";
+import { PHOTO_QUERY_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
@@ -439,17 +440,18 @@ function preparedFieldsFor(metadata: Record<string, PhotoRecord>, altMap, semant
 // other unlisted EXIF fields never cross this boundary, even if the source
 // metadata grows later.
 export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = null) {
-  const q = String(options.q || "").trim().slice(0, 120).toLowerCase();
-  const camera = String(options.camera || "").trim().slice(0, 120).toLowerCase();
-  const lens = String(options.lens || "").trim().slice(0, 120).toLowerCase();
-  const film = String(options.film || "").trim().slice(0, 120).toLowerCase();
+  const { textMax, dateMax } = PHOTO_QUERY_LIMITS;
+  const q = String(options.q || "").trim().slice(0, textMax).toLowerCase();
+  const camera = String(options.camera || "").trim().slice(0, textMax).toLowerCase();
+  const lens = String(options.lens || "").trim().slice(0, textMax).toLowerCase();
+  const film = String(options.film || "").trim().slice(0, textMax).toLowerCase();
   // `recipe` matches anywhere in the derived card ("DR400", "Acros", "+2 Red"),
   // so one param answers "which shots used this look?" without a client-side scan.
-  const recipe = String(options.recipe || "").trim().slice(0, 120).toLowerCase();
-  const from = String(options.from || "").trim().slice(0, 32);
-  const to = String(options.to || "").trim().slice(0, 32);
-  const limit = Math.min(100, Math.max(1, Number(options.limit) || 25));
-  const offset = Math.min(10000, Math.max(0, Number(options.offset) || 0));
+  const recipe = String(options.recipe || "").trim().slice(0, textMax).toLowerCase();
+  const from = String(options.from || "").trim().slice(0, dateMax);
+  const to = String(options.to || "").trim().slice(0, dateMax);
+  const limit = clampParam(options.limit, PHOTO_QUERY_LIMITS.limitDefault, PHOTO_QUERY_LIMITS.limitMax);
+  const offset = clampParam(options.offset, 0, PHOTO_QUERY_LIMITS.offsetMax, 0);
   const [metadata, altMap, hashes, semantics] = await Promise.all([
     getStaticPhotoJson<Record<string, PhotoRecord>>(env, "images/metadata.json", {}),
     getAltMap(env),

@@ -2,6 +2,7 @@
 // The index is static and loaded only on this route (or by the site MCP tool),
 // keeping the homepage critical path free of search bytes and fan-out.
 import { cachedRender } from "./lib/cache.ts";
+import { SEARCH_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { escAttr, escHtml, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
@@ -105,15 +106,15 @@ export const SEARCH_TERM_MAX = 13;
  * honest when you can say what its ceiling was.
  *
  */
-export async function searchSiteRanked(env, query: string, limit: string | number | null = 20) {
-  const q = String(query || "").trim().slice(0, 160);
+export async function searchSiteRanked(env, query: string, limit: string | number | null = SEARCH_LIMITS.limitDefault) {
+  const q = String(query || "").trim().slice(0, SEARCH_LIMITS.queryMax);
   // Agents ask this in sentences ("what does he think about agents"), and every
   // stopword in one scores against the body text of nearly every page at +1.
   // Enough of them and the ranking is decided by which page is longest. Terms
   // survive if dropping them would leave nothing to search on.
   const meaningful = queryTermsOf(q).terms;
   const queryTerms = meaningful.length ? meaningful : terms(q);
-  const max = Math.min(50, Math.max(1, Number(limit) || 20));
+  const max = clampParam(limit, SEARCH_LIMITS.limitDefault, SEARCH_LIMITS.limitMax);
   // Before the index read: a query with no terms answers nothing either way,
   // and reading it first charged an empty MCP search the whole cold prepare.
   if (!queryTerms.length) return { query: q, terms: [], total: 0, returned: 0, results: [] };
@@ -150,7 +151,7 @@ export async function searchSiteRanked(env, query: string, limit: string | numbe
  * matching word still reads the same way in the answer.
  */
 export async function searchCorpusFor(env, query: string) {
-  const q = String(query || "").trim().slice(0, 160);
+  const q = String(query || "").trim().slice(0, SEARCH_LIMITS.queryMax);
   const meaningful = queryTermsOf(q).terms;
   const queryTerms = meaningful.length ? meaningful : terms(q);
   const records = await getSearchIndex(env);

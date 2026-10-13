@@ -5,6 +5,7 @@ import calWorker from "../../cal/src/index.ts";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.ts";
 import { cronAround, handleAroundChangesJson, handleAroundJson, handleAroundSnapshot, refreshAroundSnapshot, renderAroundPage } from "./around.ts";
 import { handleBotPage } from "./bot.ts";
+import { renderAboutPage, renderContactPage, renderDevelopersPage, renderPrivacyPage } from "./trust.ts";
 import { cronCensus, handleCensus, handleCensusJson, handleCensusTable, renderCensusPage } from "./census.ts";
 import { handleCoffeeAvailability } from "./coffee.ts";
 import { handleHit } from "./counter.ts";
@@ -323,6 +324,10 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/rn/set": handleRnSet,
 
   "/bot": routeBot,
+  "/about": routeTrustPage(renderAboutPage),
+  "/contact": routeTrustPage(renderContactPage),
+  "/privacy": routeTrustPage(renderPrivacyPage),
+  "/developers": routeTrustPage(renderDevelopersPage),
   "/around": routeAround,
   [AROUND_SNAPSHOT_URL]: handleAroundSnapshot,
   "/around/json": handleAroundJson,
@@ -814,6 +819,15 @@ function routeBot(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   return serveBuiltPage(request, env, {
     headers: GENERATED_PAGE_HEADERS,
     live: () => handleBotPage(request, env, ctx),
+  });
+}
+
+// The trust pages (trust.ts) are fixed documents: build.ts bakes each one, and
+// the live render is the fallback for a tree that staged nothing.
+function routeTrustPage(render: () => Response): RouteHandler {
+  return (request: SiteRequest, env: Env) => serveBuiltPage(request, env, {
+    headers: GENERATED_PAGE_HEADERS,
+    live: () => render(),
   });
 }
 

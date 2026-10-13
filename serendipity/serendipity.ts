@@ -168,7 +168,9 @@ export function attendeeScore(a) {
 }
 
 // ── identity: a long-lived per-browser uid cookie (Web Crypto, edge-native) ──
-const UID_COOKIE = "serendipity-uid";
+export const UID_COOKIE = "serendipity-uid";
+// two years; /privacy prints this number
+export const UID_COOKIE_MAX_AGE_S = 63072000;
 function readUid(request) {
   const m = (request.headers.get("cookie") || "").match(/(?:^|;\s*)serendipity-uid=([0-9a-f]+)/);
   return m ? m[1] : null;
@@ -179,7 +181,7 @@ function mintUid() {
   return b.toHex();
 }
 function uidCookie(uid) {
-  return `${UID_COOKIE}=${uid}; Path=${PREFIX}; HttpOnly; Secure; SameSite=Lax; Max-Age=63072000`;
+  return `${UID_COOKIE}=${uid}; Path=${PREFIX}; HttpOnly; Secure; SameSite=Lax; Max-Age=${UID_COOKIE_MAX_AGE_S}`;
 }
 
 // ── D1 access shim — keeps call sites as db.prepare(sql).all/get/run(...args) ─

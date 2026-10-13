@@ -531,17 +531,19 @@ export const TWIN_FACTS = [
       { label: "corpus", source: "tools/generate-search-index.ts", string: "search-index.json" },
       {
         label: "default limit",
-        source: "src/worker/search.ts",
+        // the handler clamps with SEARCH_LIMITS since 2026-10-13, the same
+        // constant /openapi.json and the search_site tool schema print
+        source: "src/worker/lib/api-limits.ts",
         derive: (src) => {
-          const d = /Number\(limit\)\s*\|\|\s*(\d+)/.exec(src)?.[1];
+          const d = /SEARCH_LIMITS\s*=\s*\{[^}]*limitDefault:\s*(\d+)/.exec(src)?.[1];
           return d ? `defaults to ${d}` : null;
         },
       },
       {
         label: "limit ceiling",
-        source: "src/worker/search.ts",
+        source: "src/worker/lib/api-limits.ts",
         derive: (src) => {
-          const max = /Math\.min\((\d+),\s*Math\.max\(1,\s*Number\(limit\)/.exec(src)?.[1];
+          const max = /SEARCH_LIMITS\s*=\s*\{[^}]*limitMax:\s*(\d+)/.exec(src)?.[1];
           return max ? `tops out at ${max}` : null;
         },
       },
