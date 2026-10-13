@@ -460,7 +460,15 @@ const escapeLineStarts = (s) => s
 function renderInline(nodes, ctx) {
   let out = "";
   for (const n of nodes) {
-    if (isText(n)) { out += ctx.raw ? n.value : escapeMd(squeeze(n.value)); continue; }
+    if (isText(n)) {
+      if (ctx.raw) { out += n.value; continue; }
+      // Whitespace collapses ACROSS text nodes, the way a browser lays it out.
+      // Two nodes can meet with a space on each side when a comment splits
+      // them: the homepage's `2026</time> <!-- … --> · You` read `2026  · You`.
+      const t = escapeMd(squeeze(n.value));
+      out += t.startsWith(" ") && /\s$/.test(out) ? t.slice(1) : t;
+      continue;
+    }
     if (dropped(n)) continue;
     switch (n.name) {
       case "br": out += "  \n"; break;

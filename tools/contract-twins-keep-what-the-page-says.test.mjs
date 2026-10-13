@@ -40,8 +40,10 @@ test("a space between inline siblings survives, and indentation does not", () =>
     "[QUIC](https://a.example/) [hole-punching](https://b.example/)",
   );
   assert.equal(twin("<p><strong>write-only</strong> <em>init</em></p>"), "**write-only** *init*");
-  // control: whitespace that only indents the source adds nothing
+  // controls: whitespace that only indents the source adds nothing, and two
+  // runs of it meeting across a comment still collapse to one space
   assert.equal(twin("<p>\n    <strong>lead</strong>\n</p>"), "**lead**");
+  assert.equal(twin("<p><time>June 7</time>\n  <!-- note -->\n  &middot; visitor</p>"), "June 7 · visitor");
 });
 
 test("a table keeps its caption", () => {
