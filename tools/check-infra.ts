@@ -122,17 +122,25 @@ async function probeEarlyData(host: string): Promise<EarlyDataResult> {
     // attempt 1 and pays none of this. Only a probe already heading for a drift
     // report spends the extra seconds, which is the run where being right matters.
     const BACKOFF_MS = [0, 1500, 4000];
+    // A resumption only counts as rejected when the handshake before it completed.
+    // s_client prints "New, TLSv1.3, Cipher is ..." once it has one; a host it
+    // cannot reach (a sandbox with no direct egress) prints only the error, and
+    // that run used to report "rejected on 3 spaced resumptions" as drift.
+    let resumptions = 0;
     for (let attempt = 0; attempt < BACKOFF_MS.length; attempt++) {
       if (BACKOFF_MS[attempt]) await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt]));
-      await execFileP("sh", ["-c",
-        `{ cat "${req}"; sleep 2; } | "${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_out "${sess}" >/dev/null 2>&1`,
-      ], { timeout: 20000 }).catch(() => {});
+      const first = await execFileP("sh", ["-c",
+        `{ cat "${req}"; sleep 2; } | "${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_out "${sess}" 2>&1`,
+      ], { timeout: 20000 }).catch((e) => ({ stdout: `${e.stdout || ""}${e.stderr || ""}` }));
+      if (!/^New, TLS/m.test(first.stdout || "")) continue;
+      resumptions++;
       const out = await execFileP("sh", ["-c",
         `"${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_in "${sess}" -early_data "${req}" </dev/null 2>&1`,
       ], { timeout: 20000 }).catch((e) => ({ stdout: `${e.stdout || ""}${e.stderr || ""}` }));
       if (/early data was accepted/i.test(out.stdout || "")) return { accepted: true, attempts: attempt + 1 };
     }
-    return { accepted: false, attempts: BACKOFF_MS.length };
+    if (!resumptions) return { skip: `no TLS handshake with ${host}:443 completed in ${BACKOFF_MS.length} attempts, so there was no session to resume` };
+    return { accepted: false, attempts: resumptions };
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }

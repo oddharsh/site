@@ -193,7 +193,18 @@ export type EdgePort = {
  *  the answer MEANS is the comparer's. */
 export async function readEdge(edge, port: EdgePort): Promise<Map<string, EdgeObservation>> {
   const { origin, checks } = edge;
-  const { fetchEdge } = port;
+  // Only an answer Cloudflare's edge served says anything about the zone, and
+  // every one of those carries cf-ray, whatever its status. Anything else came
+  // from in between: a sandbox egress proxy's 403 ("request blocked", text/plain,
+  // no cf-ray) read as production for a whole run, so speed-brain-off,
+  // rocket-loader-off and webmcp-bridge-off "held" (an error page lacks every
+  // header and script) while hsts-preload and compression-on reported drift. An
+  // answer from in between is unmeasured, which the catches below already say.
+  const fetchEdge: EdgeFetch = async (url, headers, opts) => {
+    const res = await port.fetchEdge(url, headers, opts);
+    if (!res.headers.has("cf-ray")) throw new Error(`${new URL(url).pathname} answered HTTP ${res.status} without cf-ray, so Cloudflare's edge did not serve it`);
+    return res;
+  };
   const encodingOf = (res: Response) => (res.headers.get("content-encoding") || "").trim().toLowerCase();
 
   let sample: string | null = null;
