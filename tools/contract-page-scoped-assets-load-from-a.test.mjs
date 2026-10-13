@@ -28,6 +28,8 @@ const ASSETS = [
   { plain: "garage/pretext.lib.js", base: "pretext-lib", ext: "js", loader: /import\(\s*["'`](?:\.\/|\/garage\/)pretext\.lib\.js/, pages: ["garage/pretext.html"] },
   { plain: "dotfiles.js", base: "dotfiles", ext: "js", loader: /from\s*["'`]\/dotfiles\.js/, pages: ["dotfiles/index.html"] },
   { plain: "pixel-peeper/manifest.json", base: "pixel-peeper-manifest", ext: "json", loader: /fetch\(\s*["'`]\/pixel-peeper\/manifest\.json/, pages: ["pixel-peeper/index.html"] },
+  // joined 2026-10-13: /garage/av2's AV2 decoder, started as a module Worker
+  { plain: "garage/av2-decode.js", base: "av2-decode", ext: "js", loader: /new Worker\(\s*["'`]\/garage\/av2-decode\.js/, pages: ["garage/av2.html"] },
 ];
 
 test("each page-scoped asset has one /a/ copy, byte-identical to the plain file, with a q11 twin", { skip: needsBuild }, async () => {

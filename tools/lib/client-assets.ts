@@ -167,6 +167,14 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
   { file: "garage/pretext.lib.js", kind: "module", marker: "prepareWithSegments", base: "pretext-lib", scope: "page",
     budget: "unbudgeted",
     load: [{ via: "import", also: ["./pretext.lib.js"] }], loadedBy: ["public/garage/pretext.html"] },
+  // /garage/av2's AV2 decoder, run as a module Worker. The page names it in
+  // `new Worker(...)`, so that call is the pattern; the prose's <code> mention
+  // of the path has no `new Worker(` before it and stays plain. Its WASM is a
+  // content-addressed file in public/garage/av2, outside the registry, because
+  // the /a/ route only answers js, css, svg, json and dict.
+  { file: "garage/av2-decode.js", kind: "module", marker: "av2_decode", base: "av2-decode", scope: "page",
+    budget: "unbudgeted",
+    load: [{ via: "after", prefix: "new Worker\\(\\s*" }], loadedBy: ["public/garage/av2.html"] },
   // The /dotfiles checklist, an ES module (tools/gen-dotfiles.ts imports its
   // renderer to write the committed macos.sh).
   { file: "dotfiles.js", kind: "module", marker: "dotfiles-data", scope: "page", budget: "unbudgeted",
