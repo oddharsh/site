@@ -547,6 +547,84 @@ export const TWIN_FACTS = [
       },
     ],
   },
+  {
+    // The trust pages (src/worker/trust.ts). Each figure a reader would act on
+    // is recomposed from the module that enforces it, so changing the code
+    // without the copy fails the deploy, in either copy.
+    twin: "src/content/md/about.md",
+    facts: [
+      { label: "employer", source: "src/worker/trust.ts", string: "https://www.archetype.fund/" },
+      { label: "developers link", source: "src/worker/trust.ts", string: "/developers" },
+    ],
+  },
+  {
+    twin: "src/content/md/contact.md",
+    facts: [
+      {
+        label: "contact email",
+        source: "src/worker/trust.ts",
+        derive: (src) => /CONTACT_EMAIL\s*=\s*"([^"]+)"/.exec(src)?.[1] ?? null,
+      },
+      { label: "security.txt", source: "src/worker/trust.ts", string: "/.well-known/security.txt" },
+    ],
+  },
+  {
+    twin: "src/content/md/privacy.md",
+    facts: [
+      {
+        label: "review date",
+        source: "src/worker/trust.ts",
+        derive: (src) => /PRIVACY_REVIEWED\s*=\s*"([^"]+)"/.exec(src)?.[1] ?? null,
+      },
+      { label: "the one cookie", source: "serendipity/serendipity.ts", string: "serendipity-uid" },
+      {
+        label: "booking retention",
+        source: "cal/src/booking.ts",
+        derive: (src) => {
+          const d = /TTL_BOOKING_DAYS\s*=\s*(\d+)/.exec(src)?.[1];
+          return d ? `stored for ${d} days` : null;
+        },
+      },
+      {
+        label: "cookie lifetime",
+        source: "serendipity/serendipity.ts",
+        derive: (src) => {
+          const s = Number(/\$\{UID_COOKIE\}=[^`]*Max-Age=(\d+)/.exec(src)?.[1]);
+          return s ? `lasts ${["", "one", "two", "three"][Math.round(s / 31536000)]} year` : null;
+        },
+      },
+    ],
+  },
+  {
+    twin: "src/content/md/developers.md",
+    facts: [
+      { label: "OpenAPI path", source: "src/worker/trust.ts", string: "/openapi.json" },
+      {
+        label: "Lens inspect limit",
+        source: "src/worker/lens-pipeline.ts",
+        derive: (src) => {
+          const n = /binding:\s*"LENS_RL_INSPECT",\s*max:\s*(\d+)/.exec(src)?.[1];
+          return n ? `limited to ${n} a minute` : null;
+        },
+      },
+      {
+        label: "Lens compare limit",
+        source: "src/worker/lens-pipeline.ts",
+        derive: (src) => {
+          const n = /binding:\s*"LENS_RL_COMPARE",\s*max:\s*(\d+)/.exec(src)?.[1];
+          return n ? `comparisons to ${n} a minute` : null;
+        },
+      },
+      {
+        label: "ask ranking budget",
+        source: "src/worker/ask-rank.ts",
+        derive: (src) => {
+          const n = /ASK_BUDGET\s*=\s*\{[^}]*max:\s*(\d+)/.exec(src)?.[1];
+          return n ? `ranks ${n} questions a minute` : null;
+        },
+      },
+    ],
+  },
 ];
 
 export function checkTwinFacts(root = ".") {

@@ -540,7 +540,15 @@ async function loadRnTracksInner(request, env, ctx, s) {
 // `/rn/tracks` is the stable machine contract. Keep its representation fixed
 // so callers do not need to negotiate against a browser-oriented HTML shape.
 export async function handleRnTracks(request, env, ctx) {
-  const result = await loadRnTracks(request, env, ctx);
+  // A KV throw used to escape as Cloudflare's HTML 1101 page from the
+  // machine-facing contract. It answers in the endpoint's own error shape.
+  let result;
+  try {
+    result = await loadRnTracks(request, env, ctx);
+  } catch (e) {
+    console.error("rn/tracks: load failed", e);
+    return trackResponse({ error: "playlist read failed", code: "storage_unavailable", tracks: [] }, 503, "json");
+  }
   return trackResponse(result.payload, result.status, "json");
 }
 

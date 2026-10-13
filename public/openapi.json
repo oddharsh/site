@@ -1,0 +1,2066 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "aadhar.sh public API",
+    "version": "2026-10-13",
+    "summary": "Keyless, read-only JSON endpoints on aadhar.sh.",
+    "description": "The public HTTP API of aadhar.sh, Aadharsh Pannirselvam's personal site. Every endpoint is read-only and needs no key, account or signup: production is the sandbox. Errors are JSON with at least an `error` sentence (see the Error schema). The same capabilities are tools on the MCP server at https://aadhar.sh/mcp. Guide: https://aadhar.sh/developers.",
+    "contact": {
+      "name": "Aadharsh Pannirselvam",
+      "email": "coffee@aadhar.sh",
+      "url": "https://aadhar.sh/contact"
+    }
+  },
+  "externalDocs": {
+    "description": "Developer guide",
+    "url": "https://aadhar.sh/developers"
+  },
+  "servers": [
+    {
+      "url": "https://aadhar.sh"
+    }
+  ],
+  "security": [],
+  "tags": [
+    {
+      "name": "search",
+      "description": "Find pages on the site."
+    },
+    {
+      "name": "photos",
+      "description": "The photo archive and its Fuji recipes."
+    },
+    {
+      "name": "lens",
+      "description": "How machines read the web."
+    },
+    {
+      "name": "music",
+      "description": "What is playing right now."
+    },
+    {
+      "name": "around",
+      "description": "The crawled neighborhood of venture firm homepages."
+    },
+    {
+      "name": "contact",
+      "description": "Reaching Aadharsh."
+    },
+    {
+      "name": "about",
+      "description": "Who runs the site."
+    }
+  ],
+  "paths": {
+    "/search.json": {
+      "get": {
+        "operationId": "searchSite",
+        "tags": [
+          "search"
+        ],
+        "summary": "Search the site",
+        "description": "Lexical search over the public pages, writing, garage notes and utility descriptions. Use it to find a page by topic before fetching that page's Markdown twin.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Search terms. Stopwords are dropped and at most 12 terms are used.",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum results. Values outside the range are clamped, and a non-number falls back to the default.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ranked results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResults"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "q is missing or blank.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ask": {
+      "get": {
+        "operationId": "askSite",
+        "tags": [
+          "search"
+        ],
+        "summary": "Ask a natural-language question (NLWeb)",
+        "description": "NLWeb's REST endpoint over the same corpus as /search.json, ranked by the Clef decision model with a lexical fallback. Pass streaming=0 for one JSON body; the protocol's default is a server-sent event stream. Results are ranked pages with extractive descriptions: this origin runs no generative model, so it never writes an answer. Clef ranking is limited to 20 questions per caller per minute, after which ranking falls back to lexical and _meta.ranking says so.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "The question.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "streaming",
+            "in": "query",
+            "required": false,
+            "description": "0, false, no or off returns one JSON body. Any other value, or none, streams text/event-stream.",
+            "schema": {
+              "type": "string",
+              "default": "1"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "description": "Only list is served. summarize and generate return 501 with supported_modes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "list",
+                "summarize",
+                "generate"
+              ],
+              "default": "list"
+            }
+          },
+          {
+            "name": "site",
+            "in": "query",
+            "required": false,
+            "description": "The only site is aadhar.sh.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "",
+                "all",
+                "aadhar.sh",
+                "https://aadhar.sh"
+              ]
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "description": "Maximum results. `limit` is read when top_k is absent.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10
+            }
+          },
+          {
+            "name": "prev",
+            "in": "query",
+            "required": false,
+            "description": "Earlier queries in the conversation, comma-separated, at most 10.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "decontextualized_query",
+            "in": "query",
+            "required": false,
+            "description": "If present, this string is searched instead of query.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query_id",
+            "in": "query",
+            "required": false,
+            "description": "Echoed back. A UUID is generated when absent.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One JSON body when streaming=0, otherwise an NLWeb event stream.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskResponse"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "query is missing, or site or mode is unknown.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "mode is summarize or generate.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "askSiteStructured",
+        "tags": [
+          "search"
+        ],
+        "summary": "Ask with an NLWeb v0.55 body",
+        "description": "The NLWeb v0.55 dialect: a JSON body whose query is an object selects it, and streaming answers use named start, result and complete events. Body fields win over query-string fields.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "object",
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      },
+                      "site": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  "prefer": {
+                    "type": "object",
+                    "properties": {
+                      "streaming": {
+                        "type": "boolean"
+                      },
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "list"
+                        ]
+                      }
+                    }
+                  },
+                  "context": {
+                    "type": "object",
+                    "properties": {
+                      "prev": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "query_id": {
+                    "type": "string"
+                  },
+                  "top_k": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One JSON body when prefer.streaming is false, otherwise named server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskResponse"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not JSON, or a field is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "A method other than GET, POST or HEAD.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/photos/query.json": {
+      "get": {
+        "operationId": "queryPhotos",
+        "tags": [
+          "photos"
+        ],
+        "summary": "Query the photo archive",
+        "description": "Filter the published photo archive by caption, camera, lens, film simulation, Fuji recipe or date. Returned EXIF is a public-safe allowlist, and every Fuji frame carries the recipe it was shot with.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Caption search; the only ranked field.",
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "camera",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive substring of the camera.",
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "lens",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive substring of the lens.",
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "film",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive substring of the film simulation.",
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "recipe",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive substring anywhere in the recipe card, for example DR400.",
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Earliest date, YYYY-MM-DD.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Latest date, YYYY-MM-DD.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size. Values outside the range are clamped, and a non-number falls back to the default.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching photos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoQuery"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lens/fetch": {
+      "get": {
+        "operationId": "inspectUrl",
+        "tags": [
+          "lens"
+        ],
+        "summary": "Inspect how a machine reads a URL",
+        "description": "Fetch one public URL server-side as AadharshBot and return what a machine sees: status, headers, structured data, the token cost of the HTML, per-bot robots verdicts, discovery surfaces and an agent-readiness score. Shares a 30 per minute per-caller budget with /mcp and the terminal tools.",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "description": "The public http or https URL. https:// is assumed when no scheme is given. Ports other than 80 and 443, credentials, and private or link-local hosts are refused.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "phases",
+            "in": "query",
+            "required": false,
+            "description": "page limits the scan to fields derived from the page itself (one subrequest).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "page"
+              ]
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "description": "cloudflare returns the Cloudflare Agent Readiness level instead of the full observation.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cloudflare"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The observation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LensObservation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The URL is missing or refused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Over the 30 per minute budget.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The target timed out (8 seconds) or failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lens/compare.json": {
+      "get": {
+        "operationId": "compareUrls",
+        "tags": [
+          "lens"
+        ],
+        "summary": "Compare two URLs",
+        "description": "Inspect two public URLs and report the differences in status, content, readiness, tier and agent surfaces. Limited to 4 comparisons per caller per minute.",
+        "parameters": [
+          {
+            "name": "left",
+            "in": "query",
+            "required": true,
+            "description": "The first URL, validated like /lens/fetch.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "right",
+            "in": "query",
+            "required": true,
+            "description": "The second URL.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The comparison.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LensComparison"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "left or right is missing or refused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Over the 4 per minute budget.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The comparison failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lens/census.json": {
+      "get": {
+        "operationId": "getCensus",
+        "tags": [
+          "lens"
+        ],
+        "summary": "Read the weekly agent-readiness census",
+        "description": "A weekly, longitudinal record of how agent-ready 16 representative sites are, with each site's score and tier over time.",
+        "responses": {
+          "200": {
+            "description": "The census.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Census"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Census storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rn/tracks": {
+      "get": {
+        "operationId": "getNowPlaying",
+        "tags": [
+          "music"
+        ],
+        "summary": "Read the current playlist",
+        "description": "The tracks on Aadharsh's current \"rn\" Spotify playlist, each with a song.link URL that opens in the listener's own music service. Cached for an hour.",
+        "responses": {
+          "200": {
+            "description": "The playlist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tracks"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage is not configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The playlist could not be read from Spotify.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage read failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/around/json": {
+      "get": {
+        "operationId": "getNeighborhood",
+        "tags": [
+          "around"
+        ],
+        "summary": "Read the neighborhood crawl",
+        "description": "The latest AadharshBot crawl of a small list of crypto venture firm homepages: status, title, description and robots verdict for each.",
+        "responses": {
+          "200": {
+            "description": "The latest snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AroundReport"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No snapshot exists yet. Retry after a day.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pending"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/around/changes.json": {
+      "get": {
+        "operationId": "getChangeRadar",
+        "tags": [
+          "around"
+        ],
+        "summary": "Read what changed in the neighborhood",
+        "description": "A bounded history of changes between crawls of the neighborhood: status, title, description, robots and content changes. Never returns crawled page bodies.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum change records. Values outside the range are clamped, and a non-number falls back to the default.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AroundChanges"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Change history is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/coffee/availability.json": {
+      "get": {
+        "operationId": "getCoffeeAvailability",
+        "tags": [
+          "contact"
+        ],
+        "summary": "List open coffee slots",
+        "description": "Bookable coffee slots in New York, in the host's timezone. Fails closed: when the calendar is stale or unreachable it returns no slots. Booking happens at bookingUrl and is confirmed by hand.",
+        "responses": {
+          "200": {
+            "description": "Open slots.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Availability"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The calendar is unavailable; slots is empty. Retry after 60 seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Availability"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "A method other than GET or HEAD.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ledger.json": {
+      "get": {
+        "operationId": "getCrawlLedger",
+        "tags": [
+          "lens"
+        ],
+        "summary": "Read the AI-crawler ledger",
+        "description": "The last 30 days of identified AI-crawler visits to this site, priced at one cent a page as commentary. ok is false with a reason when analytics is not configured.",
+        "responses": {
+          "200": {
+            "description": "The ledger.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ledger"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Analytics could not be read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ledger"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/images/manifest.json": {
+      "get": {
+        "operationId": "getPhotoManifest",
+        "tags": [
+          "photos"
+        ],
+        "summary": "List every published photo",
+        "description": "Every published photo with its thumbnail URLs, full-resolution key, size and upload date. The homepage grid draws from it.",
+        "responses": {
+          "200": {
+            "description": "The manifest.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoManifest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resume.json": {
+      "get": {
+        "operationId": "getResume",
+        "tags": [
+          "about"
+        ],
+        "summary": "Read the resume",
+        "description": "Aadharsh Pannirselvam's resume as JSON Resume. The same content is at /resume.md and /resume.pdf.",
+        "responses": {
+          "200": {
+            "description": "The resume.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resume"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "Always false on an error, where the endpoint uses an ok flag."
+          },
+          "error": {
+            "type": "string",
+            "description": "A sentence describing what went wrong, for a person or an agent to read."
+          },
+          "code": {
+            "type": "string",
+            "description": "A stable machine token, where the endpoint sets one: not_found, method_not_allowed, storage_unavailable."
+          },
+          "status": {
+            "type": "integer",
+            "description": "The HTTP status, repeated in the body."
+          },
+          "hint": {
+            "type": "string",
+            "description": "What to try next."
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "description": "Absolute URLs of the closest real pages, on a 404."
+          },
+          "docs": {
+            "type": "string",
+            "description": "Where the API is documented.",
+            "format": "uri"
+          },
+          "parameter": {
+            "type": "string",
+            "description": "The query parameter that was rejected (/ask)."
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "The site's error shape. Every JSON endpoint answers its errors in JSON with at least `error`. Endpoints may add their own fields (for example /ask echoes `query_id` and `results`, /rn/tracks keeps `tracks: []`)."
+      },
+      "SearchResult": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "page",
+              "writing",
+              "document",
+              "utility"
+            ]
+          },
+          "snippet": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "title",
+          "kind"
+        ]
+      },
+      "SearchResults": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Matches before the limit."
+          },
+          "returned": {
+            "type": "number",
+            "description": "Rows returned."
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            }
+          }
+        },
+        "required": [
+          "query",
+          "total",
+          "results"
+        ]
+      },
+      "AskResult": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "name": {
+            "type": "string"
+          },
+          "site": {
+            "type": "string",
+            "const": "aadhar.sh"
+          },
+          "score": {
+            "type": "integer",
+            "description": "0-100. With Clef ranking, the probability Clef puts on this page.",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "description": {
+            "type": "string",
+            "description": "An extractive snippet, never model-written."
+          },
+          "schema_object": {
+            "type": "object",
+            "properties": {
+              "@context": {
+                "type": "string"
+              },
+              "@type": {
+                "type": "string",
+                "enum": [
+                  "WebPage",
+                  "BlogPosting",
+                  "DigitalDocument",
+                  "WebAPI"
+                ]
+              },
+              "@id": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "description": "A schema.org node for the result."
+          }
+        },
+        "required": [
+          "url",
+          "name",
+          "score"
+        ]
+      },
+      "AskResponse": {
+        "type": "object",
+        "properties": {
+          "query_id": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "site": {
+            "type": "string",
+            "const": "aadhar.sh"
+          },
+          "mode": {
+            "type": "string",
+            "const": "list"
+          },
+          "decontextualized_query": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AskResult"
+            }
+          },
+          "_meta": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "dialect": {
+                "type": "string",
+                "enum": [
+                  "legacy",
+                  "0.55"
+                ]
+              },
+              "retrieval": {
+                "type": "string"
+              },
+              "ranking": {
+                "type": "string",
+                "description": "Which ranker ran: Clef, or lexical with the reason."
+              },
+              "description": {
+                "type": "string",
+                "const": "extractive"
+              },
+              "modes_supported": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "query_id",
+          "results"
+        ],
+        "description": "NLWeb /ask answer, returned as one JSON body when streaming=0."
+      },
+      "Photo": {
+        "type": "object",
+        "properties": {
+          "stem": {
+            "type": "string",
+            "description": "The photo's id."
+          },
+          "alt": {
+            "type": "string",
+            "description": "Caption, up to 240 characters."
+          },
+          "full": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Full-resolution original URL."
+          },
+          "thumb": {
+            "type": "object",
+            "properties": {
+              "avif": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "jpg": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "small": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "xs": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Public-safe EXIF and Fuji recipe fields that are present for this frame (camera, lens, aperture, shutter, iso, focal, date, film, dr, grain, recipe and others). Absent fields are omitted, never guessed.",
+            "additionalProperties": true
+          },
+          "score": {
+            "type": "number",
+            "description": "Present when q was given."
+          },
+          "matched": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Terms that matched, when q was given."
+          }
+        },
+        "required": [
+          "stem",
+          "thumb",
+          "metadata"
+        ]
+      },
+      "PhotoQuery": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "object",
+            "properties": {
+              "q": {
+                "type": "string"
+              },
+              "camera": {
+                "type": "string"
+              },
+              "lens": {
+                "type": "string"
+              },
+              "film": {
+                "type": "string"
+              },
+              "recipe": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "description": "The normalized filters, empty strings when absent."
+          },
+          "ranking": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "filters-only",
+                  "no-terms",
+                  "all-terms",
+                  "partial",
+                  "no-match"
+                ]
+              },
+              "terms": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "semantic": {
+                "type": "boolean"
+              }
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "photos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Photo"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "photos"
+        ]
+      },
+      "LensObservation": {
+        "type": "object",
+        "description": "One public URL as a machine reads it. The page-derived fields are always present; discovery, wire, terms, agent, botViews and readiness appear when the discovery pass ran. With mode=cloudflare the body is the Cloudflare Agent Readiness level instead.",
+        "required": [
+          "ok",
+          "url"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "finalUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "redirected": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "elapsedMs": {
+            "type": "integer"
+          },
+          "fetchedBy": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "anatomy": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "structured": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "ai": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "readiness": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "available": {
+            "type": "boolean",
+            "description": "mode=cloudflare only."
+          },
+          "level": {
+            "type": "integer",
+            "description": "mode=cloudflare only, 0-5.",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "score": {
+            "type": "integer",
+            "description": "mode=cloudflare only, level times 20."
+          }
+        }
+      },
+      "LensSummary": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "finalUrl": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "wordCount": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "readiness": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "level": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "surfaces": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "LensComparison": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "comparedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "left": {
+            "$ref": "#/components/schemas/LensSummary"
+          },
+          "right": {
+            "$ref": "#/components/schemas/LensSummary"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "before": {},
+                "after": {}
+              }
+            }
+          },
+          "discovery": {
+            "type": "object",
+            "properties": {
+              "left": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "deferred",
+                  "cached",
+                  "shared",
+                  "refused",
+                  "live"
+                ]
+              },
+              "right": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "deferred",
+                  "cached",
+                  "shared",
+                  "refused",
+                  "live"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "left",
+          "right",
+          "changes"
+        ]
+      },
+      "Census": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "roster": {
+            "type": "integer"
+          },
+          "snapshots": {
+            "type": "integer"
+          },
+          "firstYmd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastYmd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastSweep": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "sites": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "tier": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "number"
+                },
+                "level": {
+                  "type": "integer"
+                },
+                "doors": {
+                  "type": "integer"
+                },
+                "verdict": {
+                  "type": "string"
+                },
+                "delta": {
+                  "type": "number"
+                },
+                "series": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "ymd": {
+                        "type": "string"
+                      },
+                      "score": {
+                        "type": "number"
+                      },
+                      "tier": {
+                        "type": "string"
+                      },
+                      "doors": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "sites"
+        ]
+      },
+      "Track": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "artists_text": {
+            "type": "string"
+          },
+          "spotify_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "song_link_url": {
+            "type": "string",
+            "description": "A song.link forwarder to the listener's own music service.",
+            "format": "uri"
+          },
+          "duration_ms": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "preview_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_explicit": {
+            "type": "boolean"
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "artists": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "spotify_url": {
+                  "type": "string"
+                },
+                "image_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "song_link_url"
+        ]
+      },
+      "Tracks": {
+        "type": "object",
+        "properties": {
+          "playlist_id": {
+            "type": "string"
+          },
+          "playlist_name": {
+            "type": "string"
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Track"
+            }
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error": {
+            "type": "string",
+            "description": "Present, with an empty tracks list, when no playlist is set."
+          }
+        },
+        "required": [
+          "tracks"
+        ]
+      },
+      "AroundReport": {
+        "type": "object",
+        "properties": {
+          "crawledBy": {
+            "type": "string"
+          },
+          "crawledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "signedWith": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "finalUrl": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "robots": {
+                  "type": "string",
+                  "enum": [
+                    "allow",
+                    "disallow",
+                    "undetermined"
+                  ]
+                },
+                "skipped": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "elapsedMs": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "crawledAt",
+          "results"
+        ]
+      },
+      "Pending": {
+        "type": "object",
+        "properties": {
+          "pending": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pending",
+          "note"
+        ],
+        "description": "No snapshot exists yet."
+      },
+      "AroundChanges": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "latestObservedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetCount": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "previousObservedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "ageMs": {
+                  "type": "integer"
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                },
+                "changes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "enum": [
+                          "status",
+                          "final_url",
+                          "title",
+                          "description",
+                          "content_type",
+                          "robots",
+                          "skipped",
+                          "error",
+                          "content"
+                        ]
+                      },
+                      "before": {},
+                      "after": {},
+                      "detail": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "available",
+          "changes"
+        ]
+      },
+      "Availability": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "stale",
+              "live",
+              "none"
+            ]
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ageSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "bookingUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "error": {
+            "type": "string"
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "end": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "startMs": {
+                  "type": "integer"
+                },
+                "endMs": {
+                  "type": "integer"
+                },
+                "durationMinutes": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "available",
+          "slots"
+        ]
+      },
+      "Ledger": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "binding",
+              "token"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Present when ok is false."
+          },
+          "window_days": {
+            "type": "integer"
+          },
+          "rate_usd": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          },
+          "line_items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "bot": {
+                  "type": "string"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "hits": {
+                  "type": "integer"
+                },
+                "amountUsd": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "total_hits": {
+            "type": "integer"
+          },
+          "total_usd": {
+            "type": "number"
+          },
+          "cost": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "PhotoManifest": {
+        "type": "object",
+        "properties": {
+          "photos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "stem": {
+                  "type": "string"
+                },
+                "full": {
+                  "type": "string"
+                },
+                "thumb_avif": {
+                  "type": "string"
+                },
+                "thumb_jpg": {
+                  "type": "string"
+                },
+                "thumb_small": {
+                  "type": "string"
+                },
+                "thumb_xs": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "size": {
+                  "type": "integer"
+                },
+                "uploaded": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "album": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "heif": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "photos",
+          "count"
+        ]
+      },
+      "Resume": {
+        "type": "object",
+        "description": "A JSON Resume document (jsonresume.org).",
+        "additionalProperties": true,
+        "properties": {
+          "basics": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "work": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "education": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      }
+    }
+  }
+}

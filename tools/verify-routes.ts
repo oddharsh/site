@@ -421,6 +421,12 @@ const ROUTES = [
   { path: "/rn/tracks.html", status: 200, ct: "text/html", fragment: true },
   { path: "/rn/admin", status: 403 },
   { path: "/bot", status: 200, ct: "text/html" },
+  { path: "/about", status: 200, ct: "text/html", marker: "Archetype" },
+  { path: "/contact", status: 200, ct: "text/html", marker: "coffee@aadhar.sh" },
+  { path: "/privacy", status: 200, ct: "text/html", marker: "serendipity-uid" },
+  { path: "/developers", status: 200, ct: "text/html", marker: "/openapi.json" },
+  { path: "/developers", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "# Developers" },
+  { path: "/privacy.md", status: 200, ct: "text/markdown", marker: "# Privacy" },
   // A local KV has no snapshot, so the island is the not-built-yet panel.
   { path: "/around", status: 200, ct: "text/html", marker: "data-island=/around/snapshot.html", fullPage: true },
   { path: "/around/snapshot.html", status: 200, ct: "text/html", marker: "snapshot isn", fragment: true },
@@ -441,7 +447,13 @@ const ROUTES = [
   { path: "/finger.md", status: 301 },
   { path: "/.well-known/mcp", status: 301 },
   { path: "/garage/resampe", status: 404, ct: "text/plain", marker: "/garage/resample" },
-  { path: "/openapi.json", status: 404, ct: "text/plain", marker: "/sitemap.xml" },
+  { path: "/.well-known/ai-plugin.json", status: 404, ct: "text/plain", marker: "/sitemap.xml" },
+  // the same miss in the format an agent asked for (lib/http.ts negotiation)
+  { path: "/garage/resampe", status: 404, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "# 404 Not Found" },
+  { path: "/garage/resampe", status: 404, ct: "application/json", headers: { accept: "application/json" }, marker: "\"code\": \"not_found\"" },
+  // the OpenAPI description is a static file, and the usual guesses point at it
+  { path: "/openapi.json", status: 200, ct: "application/json", marker: "\"operationId\"" },
+  { path: "/swagger.json", status: 301 },
   // the listings are retired: every listing URL 301s to the /photos archive
   { path: "/images", status: 301 },
   { path: "/images/", status: 301 },

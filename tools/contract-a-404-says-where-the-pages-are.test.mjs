@@ -3,6 +3,7 @@
 // must NOT be answered: a capability this site does not serve stays 404, a
 // probe gets no suggestions, and a handler's own 404 body is left alone. The
 // route oracle covers the same rules end to end through workerd.
+import { existsSync, readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { HASHED_ASSETS } from "../src/worker/lib/shell-assets.ts";
 import { _resetPhotoCaches } from "../src/worker/photos.ts";
@@ -84,7 +85,10 @@ test("share cards, terminal tools and MCP card probes go where the thing actuall
   for (const [from, to] of Object.entries(DISCOVERY_ALIASES)) {
     assert.equal((await recover(from)).response.headers.get("location"), `https://aadhar.sh${to}`, from);
   }
-  for (const honest of ["/openapi.json", "/.well-known/ai-plugin.json", "/.well-known/x402", "/.well-known/agents.json"]) {
+  for (const to of new Set(Object.values(DISCOVERY_ALIASES))) {
+    assert.ok(existsSync(`public${to}`), `an alias may only point at a file this site ships: public${to}`);
+  }
+  for (const honest of ["/openapi.yaml", "/.well-known/ai-plugin.json", "/.well-known/x402", "/.well-known/agents.json"]) {
     assert.equal((await recover(honest)).response.status, 404, `${honest} names a capability this site does not serve`);
   }
 });
@@ -187,4 +191,35 @@ test("the counter records caller class, bucket and outcome for every miss", asyn
   assert.equal(missBucket("/a/icons.cd1fc133.svg"), "stale-asset");
   assert.equal(missBucket("/.well-known/ai-plugin.json"), "discovery");
   assert.equal(missBucket("/wp-admin/setup.php"), "probe");
+});
+
+test("a client that asks for JSON gets the Error object /openapi.json declares", async () => {
+  const r = await recover("/garage/resampe", env(), { headers: { accept: "application/json" } });
+  assert.equal(r.response.status, 404);
+  assert.equal(r.response.headers.get("content-type"), "application/json; charset=utf-8");
+  assert.equal(r.response.headers.get("vary"), "accept");
+  const error = await r.response.json();
+  assert.equal(error.ok, false);
+  assert.equal(error.code, "not_found");
+  assert.equal(error.status, 404);
+  assert.match(error.error, /\/garage\/resampe/);
+  assert.match(error.hint, /Did you mean \/garage\/resample\?/);
+  assert.deepEqual(error.suggestions, ["https://aadhar.sh/garage/resample"]);
+  assert.equal(error.docs, "https://aadhar.sh/developers");
+
+  const bare = await (await recover("/zzzzzz-qqqq", env(), { headers: { accept: "application/json" } })).response.json();
+  assert.equal(bare.suggestions, undefined, "no near miss, no suggestions key");
+  assert.match(bare.hint, /\/openapi\.json/);
+
+  const spec = JSON.parse(readFileSync("public/openapi.json", "utf8"));
+  const declared = spec.components.schemas.Error;
+  for (const key of Object.keys(bare)) assert.ok(key in declared.properties, `${key} is declared on Error`);
+  for (const key of declared.required) assert.ok(key in bare, `${key} is required by Error`);
+
+  const md = await recover("/garage/resampe", env(), { headers: { accept: "text/markdown, application/json" } });
+  assert.match(md.response.headers.get("content-type") || "", /^text\/markdown/, "Markdown is checked first");
+  for (const accept of ["text/html,application/xhtml+xml,application/json;q=0.9", "*/*", "application/json;q=0"]) {
+    const plain = await recover("/garage/resampe", env(), { headers: { accept } });
+    assert.match(plain.response.headers.get("content-type") || "", /^text\/plain/, `${accept} keeps plain text`);
+  }
 });

@@ -385,6 +385,30 @@ export const AGENT_SURFACES = [
     "description": "The site's branded crawler: who it is, how it signs requests, and where its keys live."
   },
   {
+    "path": "/about",
+    "title": "About",
+    "mimeType": "text/html",
+    "description": "Who runs aadhar.sh: Aadharsh Pannirselvam, researcher and investor at Archetype, and what the site holds."
+  },
+  {
+    "path": "/contact",
+    "title": "Contact",
+    "mimeType": "text/html",
+    "description": "How to reach Aadharsh Pannirselvam: email, a coffee in NYC, security reports, and the crawler's opt-out."
+  },
+  {
+    "path": "/privacy",
+    "title": "Privacy",
+    "mimeType": "text/html",
+    "description": "What a visit to aadhar.sh leaves behind, read from the site's code: logs, counters, the one cookie, and what happens to anything you send."
+  },
+  {
+    "path": "/developers",
+    "title": "Developers",
+    "mimeType": "text/html",
+    "description": "Call aadhar.sh from code: keyless JSON endpoints described in OpenAPI 3.1, an MCP server, Markdown twins, rate limits and the error shape."
+  },
+  {
     "path": "/inbox",
     "title": "Inbox",
     "mimeType": "text/html",

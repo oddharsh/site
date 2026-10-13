@@ -19,8 +19,10 @@
 // asset layer's empty one, or the clamp's "not found") gains a body listing the
 // closest pages the sitemap knows, grouped by section. An agent that guessed
 // /garage/resampe learns /garage/resample and /garage in the same response.
-// That body is plain text by default and Markdown when Accept asks for it, by
-// the same rule the pages negotiate with.
+// That body is plain text by default, and Markdown or JSON when Accept asks for
+// one, by the same rule the pages negotiate with. The JSON shape is the one
+// /openapi.json declares as Error, so a client of the API reads a miss the way
+// it reads any other failure.
 //
 // The sitemap is the authority for both halves. It is the list this site
 // already publishes of what is real, build.ts invariant #8 holds it to the
@@ -31,8 +33,10 @@
 // /images/ thumbnail redirects. One day rather than a year because the target
 // of a stale hash moves on the next release, and a cached chain is cheap to
 // re-resolve but wrong to pin. Nothing here is aliased to a resource this site
-// does not serve: /openapi.json, ai-plugin.json, x402 and the rest stay 404,
-// because answering them would advertise a capability that is not here.
+// does not serve: ai-plugin.json and the rest stay 404, because answering them
+// would advertise a capability that is not here. /openapi.json is a real file
+// since 2026-10-13 (it describes the keyless JSON endpoints), so the usual
+// guesses at an OpenAPI path now point at it.
 //
 // Node-safe (gotcha 16): the contract suite imports it outside workerd.
 
@@ -40,7 +44,7 @@ import { HASHED_ASSETS } from "./shell-assets.ts";
 import { AGENT_SURFACES } from "./site-manifest.ts";
 import { getThumbHashes } from "../photos.ts";
 import { matchCrawler } from "../ledger.ts";
-import { wantsMarkdown } from "./http.ts";
+import { wantsJson, wantsMarkdown } from "./http.ts";
 
 // ── where to look, on every 404 ──────────────────────────────────────────────
 export const MISS_LINKS = [
@@ -53,8 +57,12 @@ export const MISS_LINKS = [
 // Each target is a document this site serves in the format the guess implies.
 // /.well-known/mcp and /mcp.json are MCP server-card probes, and the site's
 // card is /.well-known/mcp/server-card.json. AGENTS.md is guidance for agents
-// written in Markdown, and /llms.txt is this site's.
+// written in Markdown, and /llms.txt is this site's. The OpenAPI guesses are the
+// JSON spellings only: a YAML path would be answered in a format it did not ask for.
 export const DISCOVERY_ALIASES: Readonly<Record<string, string>> = {
+  "/swagger.json": "/openapi.json",
+  "/api/openapi.json": "/openapi.json",
+  "/.well-known/openapi.json": "/openapi.json",
   "/.well-known/mcp": "/.well-known/mcp/server-card.json",
   "/mcp.json": "/.well-known/mcp/server-card.json",
   "/agents.md": "/llms.txt",
@@ -228,6 +236,23 @@ export function missMarkdown(origin: string, path: string, near: { section: stri
   return `${lines.join("\n")}\n`;
 }
 
+/** The same answer as the Error object /openapi.json declares: the site's
+ *  existing `{ ok: false, error }` shape, plus a machine code and a hint. */
+export function missJson(origin: string, path: string, near: { section: string | null, pages: string[] }) {
+  const body: Record<string, unknown> = {
+    ok: false,
+    error: `${path} is not a page or endpoint on ${new URL(origin).host}.`,
+    code: "not_found",
+    status: 404,
+    hint: near.pages.length
+      ? `Did you mean ${near.pages[0]}? Every page is listed in /sitemap.xml, and every JSON endpoint in /openapi.json.`
+      : "Every page is listed in /sitemap.xml, and every JSON endpoint in /openapi.json.",
+  };
+  if (near.pages.length) body.suggestions = near.pages.map((p) => `${origin}${p}`);
+  body.docs = `${origin}/developers`;
+  return body;
+}
+
 // ── the hook ─────────────────────────────────────────────────────────────────
 export type MissOutcome = { response: Response, bucket: string, outcome: string };
 
@@ -256,16 +281,19 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
     const body = request.method === "HEAD" ? "" : await response.clone().text();
     if (/^(?:not found)?$/i.test(body.trim())) {
       const near = bucket === "probe" ? { section: null, pages: [] } : nearestPages(url.pathname, await sitemapPaths(env));
-      // The body follows Accept the way the pages do (lib/http.ts wantsMarkdown):
-      // an agent that asked for Markdown gets Markdown, everyone else plain text.
-      const md = wantsMarkdown(request);
+      // The body follows Accept the way the pages do (lib/http.ts): an agent
+      // that asked for Markdown or JSON gets it, everyone else plain text.
+      const kind = wantsMarkdown(request) ? "md" : wantsJson(request) ? "json" : "text";
+      const text = kind === "md" ? missMarkdown(url.origin, url.pathname, near)
+        : kind === "json" ? `${JSON.stringify(missJson(url.origin, url.pathname, near), null, 2)}\n`
+        : missBody(url.pathname, near);
       return {
         bucket,
         outcome: near.pages.length ? "404:suggested" : "404",
-        response: new Response(request.method === "HEAD" ? null : md ? missMarkdown(url.origin, url.pathname, near) : missBody(url.pathname, near), {
+        response: new Response(request.method === "HEAD" ? null : text, {
           status: 404,
           headers: {
-            "content-type": md ? "text/markdown; charset=utf-8" : "text/plain; charset=utf-8",
+            "content-type": { md: "text/markdown", json: "application/json", text: "text/plain" }[kind] + "; charset=utf-8",
             "cache-control": "no-store",
             vary: "accept",
             link: MISS_LINKS,

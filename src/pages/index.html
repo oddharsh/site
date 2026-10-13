@@ -67,6 +67,12 @@
 <meta property="og:title" content="Aadharsh Pannirselvam">
 <meta property="og:description" content="Hey! I research and invest in interesting tech-oriented stuff and the people that make them.">
 <meta property="og:url" content="https://aadhar.sh/">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/home.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh homepage as a Windows XP window: Aadharsh Pannirselvam's name and one-line bio above a contact sheet of his photographs.">
+<meta name="twitter:image" content="https://aadhar.sh/og/home.jpg">
 
 <style>
 /* ── Luna design tokens — canonical set in design/tokens/ (keep in sync).
@@ -888,7 +894,10 @@ footer .signature small { color: oklch(56.93% 0 0); }
         &middot; You are visitor <span class="counter">000042</span><noscript><img src="/hit" alt="" width="1" height="1"></noscript>
       </p>
       <p class="signature">
-        <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>
+        <small>&copy; 2026 Aadharsh Pannirselvam &middot;
+          <a href="/about">about</a> &middot; <a href="/contact">contact</a> &middot;
+          <a href="/privacy">privacy</a> &middot; <a href="/developers">developers</a> &middot;
+          Best viewed in any browser made since 2001.</small>
       </p>
       <noscript>
         <p class="links">
@@ -935,6 +944,19 @@ footer .signature small { color: oklch(56.93% 0 0); }
       },
       "description": "Researcher and investor at Archetype, a crypto-native venture firm.",
       "email": "coffee@aadhar.sh",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "New York",
+        "addressRegion": "NY",
+        "addressCountry": "US"
+      },
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "personal inquiries",
+        "email": "coffee@aadhar.sh",
+        "url": "https://aadhar.sh/contact",
+        "availableLanguage": "en"
+      },
       "knowsAbout": [
         "cryptography",
         "privacy-enhancing technologies",
