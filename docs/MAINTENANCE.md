@@ -1904,6 +1904,20 @@ to, and `contract-av2-decoder-matches-avm.test.mjs` holds the shipped WebAssembl
 to it, so re-run it after any AV2 file or the `.wasm` changes. Moving the AVM pin
 changes the bitstream the decoder reads, so re-encode the samples with it.
 
+### Measure zensim against ssimulacra2 and butteraugli
+```bash
+bun tools/photos/zensim-probe.ts ladder            # 31 photos x 28 encodes at 1080px, ~3 min
+bun tools/photos/zensim-probe.ts archive --jobs 2  # hif-archive.ts's decision at 40 MP, ~10 min per photo per lane
+bun tools/photos/zensim-probe.ts speed
+```
+`zensim-score` in `config/tools.json` is the scorer, built on first run from
+`tools/photos/zensim-score/`. It links zensim 0.2.7 and zensim's profile B
+pinned by rev, so a rerun after moving either pin is a new measurement rather
+than a refresh. The probe header carries the findings and the instrument traps.
+Two `archive` lanes peak near 20 GB, because each 40 MP butteraugli call holds
+9 GB; don't raise `--jobs` on a 36 GB machine. Measurement only: nothing in the
+photo pipeline calls zensim.
+
 ---
 
 ## Regenerate the OG / Twitter cards
