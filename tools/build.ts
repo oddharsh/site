@@ -3099,9 +3099,9 @@ phase("text twins");
     /^section-icons\/[^/]+\.svg$/,                // favicons, "/section-icons/*"
     /^(?:writing|lens|serendipity)\/.+\.src\.html$/, // readable twins, "/*.src.*" spans slashes
   ];
-  // Two root-level .md files the Worker renders itself rather than serves from a
+  // A root-level .md file the Worker renders itself rather than serves from a
   // file, so a twin of the staged copy would describe bytes it never sends.
-  const RENDERED = new Set(["auth.md", "rn.md"]);
+  const RENDERED = new Set(["rn.md"]);
   const all = await readdir(`${OUT}/public`, { recursive: true });
   const have = new Set(all);
   const candidates = all.filter((rel) =>

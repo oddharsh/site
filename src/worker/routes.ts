@@ -74,21 +74,13 @@ type PrefixRoute = {
 export const EXACT_ROUTES = [
   { path: "/favicon.ico", cacheable: true },
 
-  { path: "/auth.md", cacheable: true },
   // The agent-discovery namespace, FOLDED from five exact rows on 2026-09-16.
-  // The fold also brings the static cards (mcp/*.json, ard.json,
-  // ai-catalog.json) to the Worker for their q11 twins, which were the one
+  // The fold also brings the static cards (mcp/*.json, ard.json) to the Worker for their q11 twins, which were the one
   // discovery surface still shipping at the edge's q4.
   { path: "/.well-known/api-catalog", claim: ["/.well-known/*"], cacheable: true },
   { path: "/.well-known/agent-card.json", claim: ["/.well-known/*"], cacheable: true },
-  { path: "/.well-known/oauth-protected-resource", claim: ["/.well-known/*"], cacheable: true },
-  { path: "/.well-known/oauth-authorization-server", claim: ["/.well-known/*"], cacheable: true },
   // signed per request (proof of possession), so it needs the Worker regardless
   { path: "/.well-known/http-message-signatures-directory", claim: ["/.well-known/*"] },
-  { path: "/agent/auth", claim: ["/agent/*"] },
-  { path: "/agent/auth/claim", claim: ["/agent/*"] },
-  { path: "/oauth2/token", claim: ["/oauth2/*"] },
-  { path: "/oauth2/revoke", claim: ["/oauth2/*"] },
 
   // ticks the visit-counter Durable Object
   { path: "/hit", writes: "get" },
@@ -319,7 +311,7 @@ export const PREFIX_ROUTES = [
     claim: ["/images/*.json"],
   },
   {
-    // a root-level Markdown twin; /auth.md and /rn.md are exact and win first
+    // a root-level Markdown twin; /rn.md is exact and wins first
     label: "/<page>.md",
     match: (pathname: string) => /^\/[^/]+\.md$/i.test(pathname),
     probe: "/index.md",

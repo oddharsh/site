@@ -140,7 +140,7 @@ test("exact routes win first, then the prefix table in routes.ts's order", async
     ["/images/exif.json", "/images/<index>.json"],
     ["/images/full/XT500010.jpg", "/images/full/<key>"],         // R2 originals before the thumbnail clamp
     ["/images/XT500010.jpg", "/images/<thumb>"],
-    ["/auth.md", "/auth.md"],                                    // exact before "/<page>.md"
+    ["/rn.md", "/rn.md"],                                        // exact before "/<page>.md"
     ["/garage.md", "/<page>.md"],
     ["/serendipity/app.src.js", "/serendipity/<path>"],          // before "/<path>.src.<ext>"
     ["/garage/horizon.src.html", "/<path>.src.<ext>"],           // before "/garage/<page>"

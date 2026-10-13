@@ -15,9 +15,9 @@
 #
 # Disallow means DO NOT FETCH, and this file used to spend it on four paths that
 # only ever wanted DO NOT INDEX. /rn/tracks, /whoareyou, /around and /around/json
-# are all advertised to agents by this same site — the homepage's
-# rel="service-desc" Link header, /.well-known/api-catalog, agent-card.json,
-# auth.md and llms.txt — so the site handed out URLs and then told every
+# are all advertised to agents by this same site (the homepage's
+# rel="service-desc" Link header, /.well-known/api-catalog, agent-card.json
+# and llms.txt), so the site handed out URLs and then told every
 # well-behaved client not to open them. A Cloudflare agent-readiness scan on
 # 2026-08-07 counted /rn/tracks toward a discoverability PASS while this file
 # forbade fetching it: sixteen such conflicts across six surfaces.

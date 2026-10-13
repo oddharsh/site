@@ -2,7 +2,6 @@ import { WorkerEntrypoint, tracing } from "cloudflare:workers";
 import type { Env, SiteRequest } from "./lib/env.ts";
 import type { SpanName } from "./lib/span-vocabulary.ts";
 import calWorker from "../../cal/src/index.ts";
-import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.ts";
 import { cronAround, handleAroundChangesJson, handleAroundJson, handleAroundSnapshot, refreshAroundSnapshot, renderAroundPage } from "./around.ts";
 import { handleBotPage } from "./bot.ts";
 import { renderAboutPage, renderContactPage, renderDevelopersPage, renderPrivacyPage } from "./trust.ts";
@@ -199,16 +198,9 @@ export default {
 const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/favicon.ico": routeFavicon,
 
-  "/auth.md": routeAuthMd,
   "/.well-known/api-catalog": routeApiCatalog,
   "/.well-known/agent-card.json": routeAgentCard,
-  "/.well-known/oauth-protected-resource": routeOAuthProtectedResource,
-  "/.well-known/oauth-authorization-server": routeOAuthAuthorizationServer,
   "/.well-known/http-message-signatures-directory": handleSignatureDirectory,
-  "/agent/auth": handleAgentAuthRegister,
-  "/agent/auth/claim": handleAgentAuthClaim,
-  "/oauth2/token": handleAgentAuthToken,
-  "/oauth2/revoke": handleAgentAuthRevoke,
 
   "/hit": handleHit,
 
@@ -584,26 +576,12 @@ function routeFavicon() {
   );
 }
 
-// Agent-discovery docs: extensionless / iterated files stay worker-first because
-// prior scanner work treats /auth.md, OAuth metadata, and live auth endpoints as
-// one coordinated surface.
-function routeAuthMd(request: SiteRequest, env: Env) {
-  return serveFreshAsset(request, env, "text/markdown; charset=utf-8");
-}
-
+// Agent-discovery docs: extensionless files need the Worker to name their type.
 function routeApiCatalog(request: SiteRequest, env: Env) {
   return serveFreshAsset(request, env, "application/linkset+json");
 }
 
 function routeAgentCard(request: SiteRequest, env: Env) {
-  return serveFreshAsset(request, env, "application/json; charset=utf-8");
-}
-
-function routeOAuthProtectedResource(request: SiteRequest, env: Env) {
-  return serveFreshAsset(request, env, "application/json; charset=utf-8");
-}
-
-function routeOAuthAuthorizationServer(request: SiteRequest, env: Env) {
   return serveFreshAsset(request, env, "application/json; charset=utf-8");
 }
 

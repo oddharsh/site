@@ -82,16 +82,13 @@ export const SECURITY_HEADERS = {
 const HOMEPAGE_DISCOVERY_LINKS = [
   '</sitemap.xml>; rel="sitemap"; type="application/xml"',
   '</llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"',
-  '</auth.md>; rel="service-doc"; type="text/markdown"; title="Auth.md agent registration"',
-  '</.well-known/oauth-protected-resource>; rel="service-desc"; type="application/json"; title="OAuth protected resource metadata"',
-  '</.well-known/oauth-authorization-server>; rel="service-desc"; type="application/json"; title="OAuth authorization server metadata"',
   '</rn/tracks>; rel="service-desc"; type="application/json"; title="current rn playlist as JSON"',
   '</.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/http-message-signatures-directory+json"',
   '</.well-known/security.txt>; rel="security-policy"; type="text/plain"',
   '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
   '</.well-known/mcp/server-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site MCP server card"',
   '</.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"',
-  '</.well-known/ard.json>; rel="ard"; type="application/json"; title="ARD manifest (also at /.well-known/ai-catalog.json)"',
+  '</.well-known/ard.json>; rel="ard"; type="application/json"; title="ARD manifest"',
   // Webmention discovery (W3C Webmention 3.1.2): a sender fetches the page it
   // linked and follows this rel. /garage/* and /lwe/* carry it from _headers and
   // /writing from its renderer, so the homepage was the one page a sender could

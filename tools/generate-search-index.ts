@@ -43,14 +43,13 @@ const ROOTS = [
       : rel.endsWith("/index.html") ? "/" + rel.slice(0, -"/index.html".length)
         : rel.endsWith(".html") ? "/" + rel.slice(0, -5)
           : null) },
-  // Authored prose. The writing posts are .txt served at /writing/<slug>; of the
-  // four Markdown files beside them only auth.md is a public URL, and index.md
-  // (the homepage's twin) deliberately is not — indexing it would enter the
-  // homepage's own words a second time under a second URL.
+  // Authored prose. The writing posts are .txt served at /writing/<slug>. The
+  // Markdown files beside them stay out: index.md is the homepage's twin, and
+  // indexing it would enter the homepage's own words a second time under a
+  // second URL.
   { dir: "src/content", route: (rel) => (
     rel.startsWith("writing/") && rel.endsWith(".txt") ? "/writing/" + rel.slice("writing/".length, -4)
-      : rel === "auth.md" ? "/auth.md"
-        : null) },
+      : null) },
   // Bytes, not documents. llms.txt is the one indexable thing in here.
   { dir: "public", route: (rel) => (rel === "llms.txt" ? "/llms.txt" : null) },
 ];

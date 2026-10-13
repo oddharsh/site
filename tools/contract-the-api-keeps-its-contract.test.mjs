@@ -1,16 +1,16 @@
 // ── every documented API path keeps the API's contract (lib/api-contract.ts) ──
-// Three promises belong to the API as a whole rather than to a handler: the
-// methods a path answers, the version it serves, and how it announces a
-// deprecation. /developers and /openapi.json print them from lib/public-api.ts;
-// this drives the layer that keeps them, and the dispatch that calls it.
+// Two promises belong to the API as a whole rather than to a handler: the
+// methods a path answers and the shared read budget. /developers and
+// /openapi.json print them from lib/public-api.ts, along with LEAVES_OUT, the
+// machinery the API skips on purpose; this drives the layer that keeps them,
+// and the dispatch that calls it.
 import { assert, test } from "./contract-shared.ts";
-import { allowedMethods, apiPreflight, deprecationHeaders, withApiContract } from "../src/worker/lib/api-contract.ts";
-import { API_VERSION, DEPRECATION_NOTICE_DAYS, OPERATIONS } from "../src/worker/lib/public-api.ts";
+import { allowedMethods, apiPreflight, withApiContract } from "../src/worker/lib/api-contract.ts";
+import { LEAVES_OUT, OPERATIONS } from "../src/worker/lib/public-api.ts";
 import { openApiDocument } from "../src/worker/lib/openapi.ts";
 import { createDispatch } from "../src/worker/dispatch.ts";
 import { API_READ_BUDGET } from "../src/worker/lib/api-limits.ts";
 import { EXACT_ROUTES, PREFIX_ROUTES } from "../src/worker/routes.ts";
-import { shouldUseWorkersCache } from "../src/worker/lib/cache.ts";
 
 const req = (path, init) => new Request(`https://aadhar.sh${path}`, init);
 
@@ -32,64 +32,29 @@ test("a method a documented path does not serve is a JSON 405 with Allow", async
   assert.equal(await apiPreflight(req("/webmention", { method: "POST" }), "/webmention", {}), null, "an undocumented path is its handler's business");
 });
 
-test("an API-Version pin is served when it is the live version and refused otherwise", async () => {
-  const pin = (v) => apiPreflight(req("/search.json?q=x", { headers: { "api-version": v } }), "/search.json", {});
-  assert.equal(await pin(API_VERSION), null);
-  assert.equal(await pin(` ${API_VERSION} `), null, "surrounding whitespace is not a different version");
-  for (const v of ["2025-01-01", "2", "latest", ""]) {
-    const r = await pin(v);
-    assert.equal(r?.status, 400, `${JSON.stringify(v)} is refused`);
-    const body = await r.json();
-    assert.equal(body.code, "unsupported_api_version");
-    assert.deepEqual(body.supported, [API_VERSION]);
-  }
-  assert.equal(await apiPreflight(req("/search.json?q=x"), "/search.json", {}), null, "no pin, no refusal");
-  assert.equal(shouldUseWorkersCache(req("/images/manifest.json", { headers: { "api-version": "2025-01-01" } }), new Set(["/images/manifest.json"])), false,
-    "a pinned request skips the edge cache, which could not refuse it");
-  assert.equal(shouldUseWorkersCache(req("/images/manifest.json"), new Set(["/images/manifest.json"])), true, "the control");
-});
-
-test("every API answer names its version and its description; nothing else changes", async () => {
+test("every API answer names its description; nothing else changes", async () => {
   const original = new Response('{"ok":true}', { headers: { "content-type": "application/json", link: '</llms.txt>; rel="alternate"' } });
-  const out = withApiContract(original, "/search.json", "GET");
-  assert.equal(out.headers.get("api-version"), API_VERSION);
+  const out = withApiContract(original, "/search.json");
   const link = out.headers.get("link") || "";
   assert.match(link, /<\/llms\.txt>; rel="alternate"/, "a Link the handler set survives");
   assert.match(link, /<\/openapi\.json>; rel="service-desc"; type="application\/vnd\.oai\.openapi\+json"/);
   assert.equal(await out.text(), '{"ok":true}');
-  assert.equal(out.headers.get("deprecation"), null, "nothing is deprecated today");
   const page = new Response("<p>");
-  assert.equal(withApiContract(page, "/garage", "GET"), page, "a non-API path is handed back untouched");
+  assert.equal(withApiContract(page, "/garage"), page, "a non-API path is handed back untouched");
 });
 
-test("a deprecation is announced in RFC 9745 and RFC 8594 terms, and the policy's notice is held", () => {
-  const h = deprecationHeaders({ since: "2026-01-01", sunset: "2026-04-01", successor: "/v2/search.json" });
-  assert.equal(h.deprecation, "@1767225600", "an Item Date: @ and epoch seconds");
-  assert.equal(h.sunset, "Wed, 01 Apr 2026 00:00:00 GMT", "an IMF-fixdate");
-  assert.match(h.link, /rel="deprecation"/);
-  assert.match(h.link, /<\/v2\/search\.json>; rel="successor-version"/);
-  assert.doesNotMatch(deprecationHeaders({ since: "2026-01-01", sunset: "2026-04-01" }).link, /successor-version/);
-  const days = (d) => (Date.parse(d.sunset) - Date.parse(d.since)) / 86400000;
-  for (const op of OPERATIONS) {
-    if (op.deprecated) assert.ok(days(op.deprecated) >= DEPRECATION_NOTICE_DAYS, `${op.operationId}: under ${DEPRECATION_NOTICE_DAYS} days of notice`);
-  }
-  assert.ok(days({ since: "2026-01-01", sunset: "2026-03-01" }) < DEPRECATION_NOTICE_DAYS, "the control: the check can fail");
-});
-
-test("the spec documents the contract on every operation", () => {
+test("the spec documents the contract on every operation, and says what it leaves out", () => {
   const spec = JSON.parse(JSON.stringify(openApiDocument()));
-  assert.equal(spec.info.version, API_VERSION);
-  assert.match(spec.info.description, new RegExp(`at least ${DEPRECATION_NOTICE_DAYS} days`));
   for (const [path, item] of Object.entries(spec.paths)) {
     for (const [method, op] of Object.entries(item)) {
       const at = `${method.toUpperCase()} ${path}`;
-      assert.ok(op.parameters.some((p) => p.in === "header" && p.name === "API-Version" && p.schema.type), `${at}: API-Version parameter`);
       assert.ok(op.responses["405"], `${at}: documents 405`);
-      assert.match(op.responses["400"].description, /unsupported_api_version/, `${at}: documents the version refusal`);
-      for (const [status, r] of Object.entries(op.responses)) assert.ok(r.headers?.["API-Version"], `${at} ${status}: API-Version header`);
+      for (const [status, r] of Object.entries(op.responses)) assert.ok(r.headers?.Link, `${at} ${status}: the service-desc Link`);
+      assert.ok(!(op.parameters ?? []).some((p) => p.in === "header"), `${at}: no header parameters, so no version pin`);
     }
   }
-  assert.ok(spec.components.headers.ApiVersion && spec.components.headers.Deprecation && spec.components.headers.Sunset);
+  // The absences are decisions, and the spec says so in LEAVES_OUT's words.
+  for (const { what } of LEAVES_OUT) assert.ok(spec.info.description.includes(what), `the spec names "${what}"`);
 });
 
 test("dispatch runs the contract around the real route table", async () => {
@@ -105,16 +70,16 @@ test("dispatch runs the contract around the real route table", async () => {
 
   const ok = await serve("/search.json?q=fhe");
   assert.equal(ok.status, 200);
-  assert.equal(ok.headers.get("api-version"), API_VERSION);
   assert.match(ok.headers.get("link") || "", /rel="service-desc"/);
   const wrong = await serve("/search.json", { method: "DELETE" });
   assert.equal(wrong.status, 405);
-  assert.equal(wrong.headers.get("api-version"), API_VERSION, "a refusal carries the version too");
+  assert.match(wrong.headers.get("link") || "", /rel="service-desc"/, "a refusal names the description too");
   assert.equal(wrong.headers.get("x-content-type-options"), "nosniff", "and the security headers");
-  assert.equal((await serve("/search.json", { headers: { "api-version": "1999-01-01" } })).status, 400);
   assert.equal(ok.headers.get("ratelimit-policy"), `"read";q=${API_READ_BUDGET.max};w=60`, "the policy reaches the wire");
+  assert.equal(ok.headers.get("api-version"), null, "no version header (LEAVES_OUT)");
+  assert.equal((await serve("/search.json?q=fhe", { headers: { "api-version": "1999-01-01" } })).status, 200, "a pin is ignored, since there is one shape");
   const page = await serve("/garage");
-  assert.equal(page.headers.get("api-version"), null, "a page is not an API answer");
+  assert.doesNotMatch(page.headers.get("link") || "", /<\/openapi\.json>/, "a page is not an API answer");
 });
 
 /** A limiter binding that refuses, and records the keys it was asked about. */
@@ -147,11 +112,11 @@ test("an endpoint with no limiter of its own bills the shared read budget and sa
   assert.equal(await apiPreflight(req("/search.json?q=x"), "/search.json", {}), null, "no binding, no refusal");
 
   // A served answer names the policy; a Lens answer keeps the one its door set.
-  const served = withApiContract(new Response("{}"), "/photos/query.json", "GET");
+  const served = withApiContract(new Response("{}"), "/photos/query.json");
   assert.equal(served.headers.get("ratelimit-policy"), `"read";q=${API_READ_BUDGET.max};w=60`);
-  const lensAnswer = withApiContract(new Response("{}", { headers: { "ratelimit-policy": '"inspect";q=30;w=60' } }), "/lens/fetch", "GET");
+  const lensAnswer = withApiContract(new Response("{}", { headers: { "ratelimit-policy": '"inspect";q=30;w=60' } }), "/lens/fetch");
   assert.equal(lensAnswer.headers.get("ratelimit-policy"), '"inspect";q=30;w=60');
-  assert.equal(withApiContract(new Response("{}"), "/lens/fetch", "GET").headers.get("ratelimit-policy"), null,
+  assert.equal(withApiContract(new Response("{}"), "/lens/fetch").headers.get("ratelimit-policy"), null,
     "the contract never names the read policy on a door that does not bill it");
 });
 

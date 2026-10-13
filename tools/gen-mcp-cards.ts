@@ -65,7 +65,6 @@ const serendipityCard = card({
 await mkdir("public/.well-known/mcp", { recursive: true });
 const outputs = new Map([
   ["public/.well-known/mcp/server-card.json", siteCard],
-  ["public/.well-known/mcp.json", serendipityCard],
   ["public/.well-known/mcp/serendipity.json", serendipityCard],
 ]);
 for (const [file, value] of outputs) {

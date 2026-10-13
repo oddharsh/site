@@ -138,6 +138,10 @@ waiting on. [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) has the detail.
   that emits them; never lower sampling (gotcha 36).
 - **Page copy follows the house voice:** no em dashes, no AI filler, no "X,
   not Y". `pages:check` enforces part of it (gotcha 32).
+- **Agent surfaces serve readers who show up.** Check the bot ledger
+  (`/ledger.json`) before adding a protocol, and never add one to pass a
+  readiness audit. `LEAVES_OUT` in `lib/public-api.ts` names what the API
+  skips on purpose, and `/developers` prints it.
 - **Never guess metadata.** Photo EXIF fields are nullable and the tooltip
   skips nulls.
 - **AadharshBot** (`src/worker/lib/botauth.ts`) signs every outbound content

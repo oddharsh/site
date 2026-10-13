@@ -370,13 +370,12 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
     "_headers":                 await read("public/_headers"),
     ".well-known/api-catalog":  await read("public/.well-known/api-catalog"),
     "agent-card.json":          await read("public/.well-known/agent-card.json"),
-    "auth.md":                  await read("src/content/auth.md"),
     "llms.txt":                 await read("public/llms.txt"),
   };
 
   for (const [name, text] of Object.entries(surfaces)) {
     const advertised = new Set();
-    // absolute URLs (auth.md, llms.txt, the JSON catalogs) …
+    // absolute URLs (llms.txt, the JSON catalogs) …
     for (const m of text.matchAll(/https:\/\/aadhar\.sh(\/[^\s"'`)>,]*)/g)) advertised.add(m[1]);
     // … and RFC 8288 Link targets, which are relative here
     for (const m of text.matchAll(/<(\/[^\s">]*)>\s*;\s*rel=/g)) advertised.add(m[1]);
