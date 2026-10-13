@@ -34,15 +34,21 @@ async function sh(cmd: string[]): Promise<string> {
   if ((await p.exited) !== 0) throw new Error(`${path.basename(cmd[0])} failed:\n${err.slice(-600)}`);
   return out;
 }
+const STEM = /^[A-Za-z0-9_-]+$/;
+const HASH8 = /^[0-9a-f]{8}$/;
 const s2 = async (ref: string, png: string) => Number.parseFloat(await sh(["ssimulacra2", ref, png]));
 
 async function sample(src: string, stem: string) {
+  if (!STEM.test(stem)) throw new Error(`${JSON.stringify(stem)} is not a photo stem like XT507488`);
   const file = path.join(src, `${stem}.JPG`);
   const o = Number(/"Orientation":\s*(\d)/.exec(await sh(["exif-sooc", "-n", "-Orientation", file]))?.[1] ?? 1);
   const tile = path.join(WORK, `${stem}.png`);
   await sh([ZENC, "square", file, "--orient", String(o >= 1 && o <= 8 ? o : 1), "--filter", "box", "--size", "600", "--out", tile]);
 
-  const shipped = fs.readdirSync(path.join(REPO, "public/i")).find((f) => new RegExp(`^${stem}\\.[0-9a-f]{8}\\.avif$`).test(f));
+  // <stem>.<hash8>.avif, matched as strings: the stem is a CLI argument, so it
+  // never becomes part of a pattern
+  const shipped = fs.readdirSync(path.join(REPO, "public/i"))
+    .find((f) => f.startsWith(`${stem}.`) && f.endsWith(".avif") && HASH8.test(f.slice(stem.length + 1, -".avif".length)));
   if (!shipped) throw new Error(`${stem}: no shipped 600px AVIF in public/i`);
   const avif = path.join(WORK, `${stem}.av1.avif`);
   await sh(["avifenc", ...AVIF, tile, avif]);
