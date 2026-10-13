@@ -339,9 +339,11 @@ by renumbering. The long-form history of each one is in git
     zone: `speed-brain-off`, `rocket-loader-off` and `webmcp-bridge-off`
     held, because an error page lacks every header and script, while HSTS,
     brotli and h3 read as 8 drifts. The 0-RTT probe did the same at the
-    TLS layer and reported "rejected" for handshakes that never connected.
-    `readEdge` now measures only answers that carry `cf-ray`, which
-    Cloudflare stamps on every response it serves (a 401 included), and the
-    probe counts a resumption only after a handshake completed. Either miss
-    is an advisory now. The contract test replays the proxy's exact bytes,
-    with and without `cf-ray`.
+    TLS layer and reported "rejected" for handshakes that never connected,
+    and the agent Markdown sweep counted the six `text/plain` surfaces as
+    answering. Edge reads now go through `servedByEdge`: only answers that
+    carry `cf-ray`, which Cloudflare stamps on every response it serves (a
+    401 included), are measured. The probe counts a resumption only after a
+    handshake completed, and the sweep passes only when every probe was
+    measured. Each miss is an advisory now. The contract test replays the
+    proxy's exact bytes, with and without `cf-ray`.
