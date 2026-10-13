@@ -125,6 +125,40 @@ test("an empty 404 names the closest pages in its own section, and the sitemap",
   assert.equal(await head.response.text(), "", "HEAD carries no body");
 });
 
+test("an agent that asks for Markdown gets the same 404 as Markdown", async () => {
+  const md = await recover("/garage/resampe", env(), { headers: { accept: "text/markdown, text/html, */*" } });
+  assert.equal(md.response.status, 404, "the status never changes with the body");
+  assert.equal(md.response.headers.get("content-type"), "text/markdown; charset=utf-8");
+  assert.equal(md.response.headers.get("vary"), "accept");
+  assert.equal(md.response.headers.get("link"), MISS_LINKS);
+  const body = await md.response.text();
+  assert.match(body, /^# 404 Not Found\n\n`\/garage\/resampe` is not a page on aadhar\.sh\./);
+  assert.match(body, /## Closest pages in \/garage\n\n- \[\/garage\/resample\]\(https:\/\/aadhar\.sh\/garage\/resample\)\n/);
+  assert.match(body, /Section index: \[\/garage\]\(https:\/\/aadhar\.sh\/garage\)/);
+  assert.match(body, /- \[\/llms\.txt\]\(https:\/\/aadhar\.sh\/llms\.txt\)/);
+  assert.match(body, /- \[\/sitemap\.xml\]\(https:\/\/aadhar\.sh\/sitemap\.xml\)/);
+
+  const bare = await (await recover("/zzzzzz-qqqq", env(), { headers: { accept: "text/markdown" } })).response.text();
+  assert.ok(!bare.includes("Closest pages"), "no near miss, no section for it");
+  assert.match(bare, /## Where the pages are/);
+
+  const probe = await recover("/.env", env(), { headers: { accept: "text/markdown" } });
+  assert.ok(!(await probe.response.text()).includes("Closest pages"), "a probe is still offered no pages");
+
+  for (const accept of ["text/html,application/xhtml+xml,*/*;q=0.8", "*/*", "text/html, text/markdown;q=0.5", "text/markdown;q=0"]) {
+    const r = await recover("/garage/resampe", env(), { headers: { accept } });
+    assert.match(r.response.headers.get("content-type") || "", /^text\/plain/, `${accept} keeps plain text`);
+  }
+
+  const head = await recover("/garage/resampe", env(), { method: "HEAD", headers: { accept: "text/markdown" } });
+  assert.equal(head.response.headers.get("content-type"), "text/markdown; charset=utf-8", "HEAD says what GET would send");
+  assert.equal(await head.response.text(), "");
+
+  const json = new Response('{"error":"not found"}', { status: 404, headers: { "content-type": "application/json" } });
+  const kept = await recover("/serendipity/event/nope", env(), { headers: { accept: "text/markdown" } }, json);
+  assert.equal(kept.response.headers.get("content-type"), "application/json", "a handler's own 404 is never rewritten");
+});
+
 test("a probe gets the pointers and nothing else; a handler's own 404 keeps its body", async () => {
   const probe = await recover("/.env");
   assert.equal(probe.bucket, "probe");

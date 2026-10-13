@@ -19,6 +19,8 @@
 // asset layer's empty one, or the clamp's "not found") gains a body listing the
 // closest pages the sitemap knows, grouped by section. An agent that guessed
 // /garage/resampe learns /garage/resample and /garage in the same response.
+// That body is plain text by default and Markdown when Accept asks for it, by
+// the same rule the pages negotiate with.
 //
 // The sitemap is the authority for both halves. It is the list this site
 // already publishes of what is real, build.ts invariant #8 holds it to the
@@ -38,6 +40,7 @@ import { HASHED_ASSETS } from "./shell-assets.ts";
 import { AGENT_SURFACES } from "./site-manifest.ts";
 import { getThumbHashes } from "../photos.ts";
 import { matchCrawler } from "../ledger.ts";
+import { wantsMarkdown } from "./http.ts";
 
 // ── where to look, on every 404 ──────────────────────────────────────────────
 export const MISS_LINKS = [
@@ -205,6 +208,26 @@ export function missBody(path: string, near: { section: string | null, pages: st
   return `${lines.join("\n")}\n`;
 }
 
+/** The same answer for a caller that asked for `text/markdown`: the pages as
+ *  absolute links, so an agent can follow them without resolving anything. */
+export function missMarkdown(origin: string, path: string, near: { section: string | null, pages: string[] }): string {
+  const link = (p: string) => `[${p}](${origin}${p})`;
+  const lines = ["# 404 Not Found", "", `\`${path}\` is not a page on ${new URL(origin).host}.`, ""];
+  if (near.pages.length) {
+    lines.push(near.section ? `## Closest pages in ${near.section}` : "## Closest pages", "", ...near.pages.map((p) => `- ${link(p)}`));
+    if (near.section) lines.push("", `Section index: ${link(near.section)}`);
+    lines.push("");
+  }
+  lines.push(
+    "## Where the pages are",
+    "",
+    `- ${link("/sitemap.xml")}: every page on this site`,
+    `- ${link("/llms.txt")}: the same map, summarized for agents`,
+    `- ${link("/.well-known/ard.json")}: the agent resources this site serves`,
+  );
+  return `${lines.join("\n")}\n`;
+}
+
 // ── the hook ─────────────────────────────────────────────────────────────────
 export type MissOutcome = { response: Response, bucket: string, outcome: string };
 
@@ -233,12 +256,20 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
     const body = request.method === "HEAD" ? "" : await response.clone().text();
     if (/^(?:not found)?$/i.test(body.trim())) {
       const near = bucket === "probe" ? { section: null, pages: [] } : nearestPages(url.pathname, await sitemapPaths(env));
+      // The body follows Accept the way the pages do (lib/http.ts wantsMarkdown):
+      // an agent that asked for Markdown gets Markdown, everyone else plain text.
+      const md = wantsMarkdown(request);
       return {
         bucket,
         outcome: near.pages.length ? "404:suggested" : "404",
-        response: new Response(request.method === "HEAD" ? null : missBody(url.pathname, near), {
+        response: new Response(request.method === "HEAD" ? null : md ? missMarkdown(url.origin, url.pathname, near) : missBody(url.pathname, near), {
           status: 404,
-          headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", link: MISS_LINKS },
+          headers: {
+            "content-type": md ? "text/markdown; charset=utf-8" : "text/plain; charset=utf-8",
+            "cache-control": "no-store",
+            vary: "accept",
+            link: MISS_LINKS,
+          },
         }),
       };
     }
