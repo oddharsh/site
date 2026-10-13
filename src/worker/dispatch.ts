@@ -229,8 +229,8 @@ export function createDispatch(handlers: DispatchHandlers) {
     // two versions that will ever be live together.
     const t0 = Date.now();
     // The documented API paths (lib/public-api.ts) answer a wrong method or an
-    // unserved API-Version pin before any handler runs, and every answer from
-    // one carries API-Version and the service-desc Link (lib/api-contract.ts).
+    // empty read budget before any handler runs, and every answer from one
+    // carries the service-desc Link (lib/api-contract.ts).
     // cal.aadhar.sh is its own host with its own handler, so it is left alone.
     const onApiHost = url.hostname !== CAL_HOST.host;
     let response = (onApiHost ? await apiPreflight(request, url.pathname, env) : null) ?? await route(request, env, ctx);
@@ -246,7 +246,7 @@ export function createDispatch(handlers: DispatchHandlers) {
     }
     // the bot ledger: identified AI-crawler hits tick into Analytics Engine
     // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
-    if (onApiHost) response = withApiContract(response, url.pathname, request.method);
+    if (onApiHost) response = withApiContract(response, url.pathname);
     countCrawlerHit(env, request, response, url.pathname);
     // the speculation ledger's denominator: every Sec-Purpose prefetch/prerender
     // request. Its numerator (the activation beacon) arrives at /ledger/prefetch.

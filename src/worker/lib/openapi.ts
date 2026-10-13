@@ -7,7 +7,7 @@
 // tests import it, so none of it ships in the Worker bundle.
 //
 // Node-safe (gotcha 16).
-import { API_VERSION, API_VERSION_HEADER, OPERATIONS, READ_POLICY, VERSION_POLICY, arr, bool, budgeted, int, limited, nullStr, num, obj, ref, sharesReadBudget, str, type Operation, type Schema } from "./public-api.ts";
+import { LEAVES_OUT, OPERATIONS, READ_POLICY, arr, bool, budgeted, int, limited, nullStr, num, obj, ref, sharesReadBudget, str, type Operation, type Schema } from "./public-api.ts";
 import { allowedMethods } from "./api-contract.ts";
 
 export { OPENAPI_PATH } from "./public-api.ts";
@@ -107,6 +107,7 @@ export const SCHEMAS: Record<string, Schema> = {
   ReadinessCheck: obj({
     key: str(), category: str(), label: str(), status: str(undefined, { enum: ["pass", "fail", "unknown", "neutral"] }),
     detail: str(), optional: bool(), countInScore: bool(),
+    notApplicable: bool("Present and true on a check the site has declared does not apply to it; its status is then neutral."),
   }, ["key", "status"]),
   LensObservation: obj({
     ok: bool(), url: str(undefined, { format: "uri" }), finalUrl: str(undefined, { format: "uri" }), redirected: bool(), status: int(),
@@ -174,7 +175,9 @@ export const SCHEMAS: Record<string, Schema> = {
       overall: int(undefined, { minimum: 0, maximum: 100 }), level: int(undefined, { enum: [0, 1, 3, 5] }), levelName: str(), levelNote: nullStr(),
       categories: arr(obj({ key: str(), label: str(), score: int(), passed: int(), total: int(), checkCount: int(), countInScore: bool() })),
       checks: { type: "object", description: "One entry per check, keyed by its name.", additionalProperties: ref("ReadinessCheck") },
-      counted: int(), passed: int(), scoringNote: str(), nextActions: arr(obj({ key: str(), label: str() }, ["key", "label"])), botViews: arr(ref("BotView")),
+      counted: int(), passed: int(),
+      keyless: nullStr("Why the authority checks do not apply, when the site's OpenAPI document declares every operation keyless; otherwise null."),
+      scoringNote: str(), nextActions: arr(obj({ key: str(), label: str() }, ["key", "label"])), botViews: arr(ref("BotView")),
       field: obj({ overall: intOrNull(), scoringNote: str(),
         components: arr(obj({ key: str(undefined, { enum: ["identifiedFetch", "sampledBots", "usableBody", "agentDoor"] }), label: str(), score: intOrNull(), detail: str() })) }),
     }, undefined, "The agent-readiness score and the checks behind it."),
@@ -265,46 +268,22 @@ export const SCHEMAS: Record<string, Schema> = {
 };
 
 // ── what lib/api-contract.ts adds to every operation ─────────────────────────
-const VERSION_PARAM = {
-  name: API_VERSION_HEADER, in: "header", required: false,
-  description: `Pin the API version. Only ${API_VERSION} is served; any other value is refused with 400 and code unsupported_api_version.`,
-  schema: str(undefined, { enum: [API_VERSION] }),
-};
-const CONTRACT_HEADERS = {
-  [API_VERSION_HEADER]: { $ref: "#/components/headers/ApiVersion" },
-  Link: { $ref: "#/components/headers/ServiceDesc" },
-};
-const DEPRECATION_HEADERS = {
-  Deprecation: { $ref: "#/components/headers/Deprecation" },
-  Sunset: { $ref: "#/components/headers/Sunset" },
-};
+const CONTRACT_HEADERS = { Link: { $ref: "#/components/headers/ServiceDesc" } };
 
-/** One operation as the spec prints it: the contract's header parameter, its
- *  400 and 405, and its response headers, on top of what public-api.ts says. */
+/** One operation as the spec prints it: the contract's 405, its read budget,
+ *  and its response headers, on top of what public-api.ts says. */
 function specOperation(op: Operation, allow: string[]) {
-  const { path: _path, method: _method, example: _example, deprecated, ...rest } = op;
+  const { path: _path, method: _method, example: _example, ...rest } = op;
   const responses: Record<string, any> = {};
   for (const [status, r] of Object.entries(op.responses)) responses[status] = { ...r };
-  const versionRefused = "Or API-Version names a version this server does not serve (code unsupported_api_version).";
-  responses[400] = responses[400]
-    ? { ...responses[400], description: `${responses[400].description} ${versionRefused}` }
-    : { description: versionRefused.replace(/^Or A/, "A"), content: { "application/json": { schema: ref("Error") } } };
   responses[405] ??= { description: `A method other than ${allow.join(", ")} (code method_not_allowed). The Allow header lists them.`, content: { "application/json": { schema: ref("Error") } } };
   // No limiter of its own, so it bills the shared read budget (api-contract.ts).
   if (sharesReadBudget(op)) {
     for (const status of Object.keys(responses)) if (status.startsWith("2")) responses[status] = budgeted(responses[status], [READ_POLICY]);
     responses[429] = limited(`Over the shared read budget of ${READ_POLICY[1]} requests a minute per caller (code rate_limited).`, [READ_POLICY]);
   }
-  for (const r of Object.values(responses)) {
-    r.headers = { ...r.headers, ...CONTRACT_HEADERS };
-    if (deprecated) Object.assign(r.headers, DEPRECATION_HEADERS);
-  }
-  const out: Record<string, unknown> = { ...rest, parameters: [...(op.parameters ?? []), VERSION_PARAM], responses };
-  if (deprecated) {
-    out.deprecated = true;
-    out.description = `${op.description} Deprecated since ${deprecated.since}; removed on ${deprecated.sunset}.${deprecated.successor ? ` Use ${deprecated.successor} instead.` : ""}`;
-  }
-  return out;
+  for (const r of Object.values(responses)) r.headers = { ...r.headers, ...CONTRACT_HEADERS };
+  return { ...rest, responses };
 }
 
 /** The document build.ts writes to /openapi.json. */
@@ -318,9 +297,11 @@ export function openApiDocument() {
     openapi: "3.1.0",
     info: {
       title: "aadhar.sh public API",
-      version: API_VERSION,
+      // The document's own revision, which OpenAPI requires. It tracks nothing a
+      // client can pin: LEAVES_OUT says why there is no API version.
+      version: "1",
       summary: "Keyless, read-only JSON endpoints on aadhar.sh.",
-      description: "The public HTTP API of aadhar.sh, Aadharsh Pannirselvam's personal site. Every endpoint is read-only and needs no key, account or signup: production is the sandbox. Errors are JSON with at least an `error` sentence (see the Error schema). The same capabilities are tools on the MCP server at https://aadhar.sh/mcp. Guide: https://aadhar.sh/developers.\n\nVersioning: " + VERSION_POLICY,
+      description: "The public HTTP API of aadhar.sh, Aadharsh Pannirselvam's personal site. Every endpoint is read-only and needs no key, account or signup: production is the sandbox. Errors are JSON with at least an `error` sentence (see the Error schema). The same capabilities are tools on the MCP server at https://aadhar.sh/mcp. Guide: https://aadhar.sh/developers.\n\nWhat it leaves out: " + LEAVES_OUT.map(({ what, why }) => `${what}. ${why}`).join(" "),
       contact: { name: "Aadharsh Pannirselvam", email: "coffee@aadhar.sh", url: "https://aadhar.sh/contact" },
     },
     externalDocs: { description: "Developer guide", url: "https://aadhar.sh/developers" },
@@ -339,10 +320,7 @@ export function openApiDocument() {
     components: {
       schemas: SCHEMAS,
       headers: {
-        ApiVersion: { description: "The API version that answered: the date of its last breaking change.", schema: str(undefined, { enum: [API_VERSION] }) },
-        ServiceDesc: { description: "Includes `</openapi.json>; rel=\"service-desc\"` (RFC 8631), and on a deprecated operation its rel=\"deprecation\" and rel=\"successor-version\" links.", schema: str() },
-        Deprecation: { description: "RFC 9745: when the operation was deprecated, as `@` and Unix seconds.", schema: str(undefined, { pattern: "^@-?[0-9]+$" }) },
-        Sunset: { description: "RFC 8594: the HTTP-date after which the operation may stop answering.", schema: str() },
+        ServiceDesc: { description: "Includes `</openapi.json>; rel=\"service-desc\"` (RFC 8631).", schema: str() },
       },
     },
   };

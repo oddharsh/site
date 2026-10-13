@@ -66,6 +66,38 @@ the wire lens on a target to fill them in.
 
 The published scoring note travels with every result and states the rule.
 
+## What a site needs
+
+The rubric above weighs every declaration the same, so a blog that serves its
+readers perfectly still loses points for OAuth it has no use for. **What this
+site needs** reweighs the same evidence by applicability, after
+[Is Agentic](https://is-agentic.com/methodology):
+
+- **Essential, 80 points**, for every public URL: words in the raw HTML,
+  agents let in, robots.txt admitting the agents a person sent, no sign-in
+  wall, clean redirects, and a canonical URL with lang and Open Graph.
+- **Recommended, 20 points**, switched on per surface the scan found: an API
+  must be described with callable operation names, an MCP server must be
+  findable, an auth flow must publish protected-resource metadata, and a store
+  must offer a machine payment protocol. Markdown counts here only when the
+  page's HTML costs at least 5x its markdown and more than 8K tokens.
+- **Emerging doors, at most 5 points** between them, however many there are.
+
+Refusing a training crawler costs nothing. Refusing ChatGPT-User or Claude-User
+refuses someone who asked for the page, and it does cost points.
+
+**Past need** lists the mirror's failures this site has no reason to fix (OAuth
+discovery with no API behind it, an MCP server card with no server) and the
+doors it built that buy little. aadhar.sh is the specimen: it publishes about a
+dozen emerging doors, and between them they're worth 5 points.
+
+Lens files every check in Is Agentic's catalog once. Some it scores, some it
+counts as a bonus, and it declines the rest with a reason. It leaves out search
+rank and directory listings (they measure fame), SDKs and pricing pages
+(business calls), and API design advice past "can an agent call it by name".
+It also leaves out anything needing an MCP session or a crawl, and serving
+agents a separate page by User-Agent, which it treats as cloaking.
+
 ## Limits, and what the scanner will not do
 
 Requests are rate-limited per visitor: 30 scans a minute, 3 screenshots, 4

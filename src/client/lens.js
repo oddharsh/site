@@ -973,12 +973,17 @@
     }
     // AUTHORIZE
     var authority = (d.oauthProtectedResource && d.oauthProtectedResource.ok) || (d.oauthDiscovery && ((d.oauthDiscovery.openidConfiguration && d.oauthDiscovery.openidConfiguration.ok) || (d.oauthDiscovery.oauthAuthorizationServer && d.oauthDiscovery.oauthAuthorizationServer.ok)));
+    // A site that declares every operation keyless has no permission to scope,
+    // so a missing consent boundary there is not a gap (lensKeylessDeclaration).
+    var keyless = !authority && data.readiness && data.readiness.keyless;
     if (authority) line("ok", "Checked for a delegated-authority boundary → OAuth discovery present. A user could grant scoped access.");
+    else if (keyless) line("ok", "Checked for a consent boundary → not applicable: " + keyless + ", so there is no credential to delegate.");
     else line("warn", "Checked for a consent boundary → none. No scoped, revocable way to act on a user's behalf.");
 
     // verdict
     var verdict, vkind;
     if (action && authority) { verdict = "ACT: this site was built for agents. A task with side effects can run against a real contract."; vkind = "ok"; }
+    else if (action && keyless) { verdict = "ACT: this site was built for agents. Its contract needs no credential, so an agent calls it as itself."; vkind = "ok"; }
     else if (action) { verdict = "ACT (unsafe): an action surface exists, but with no consent boundary an agent acts without scoped permission."; vkind = "warn"; }
     else { verdict = "BLOCKED: a task needing action can't complete. An agent can read this page, but not do anything here without a human driving a browser."; vkind = "no"; }
     line(vkind, "task verdict → " + verdict);
@@ -1079,6 +1084,13 @@
     checks = checks || {};
     return !!(m && m.checks.some((n) => { return checks[n] && checks[n].status === "pass"; }));
   }
+  // Every check behind a stage was declared not applicable by the site, which
+  // satisfies the stage without claiming a surface was published.
+  function cfNotApplicable(key, checks) {
+    var m = CF_MAP[key];
+    checks = checks || {};
+    return !!(m && m.checks.every((n) => { return checks[n] && checks[n].notApplicable; }));
+  }
   // A probe that never answered (a 5xx, a timeout, the subrequest cap) grades its
   // check "unknown". Reading that as "missing" would claim the surface is absent
   // when nobody got to look, so the Delta path says so instead.
@@ -1114,7 +1126,7 @@
       { key: "markdown", label: "Clean machine text", stage: "Read", observed: canRead, signal: cfObserved("markdown", checks), detail: "Serve a deliberate text/markdown representation from the same URL." },
       { key: "semantic", label: "Entity schema", stage: "Understand", observed: !!semantic, detail: "Publish stable entities and properties a parser can validate." },
       { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), unknown: cfUnknown("contract", checks), detail: "Describe callable operations, their parameters, and side effects. In 2026 this contract is landing as MCP servers and agent CLIs, not the OpenAPI files that mostly never shipped." },
-      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), unknown: cfUnknown("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
+      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), na: cfNotApplicable("authority", checks), unknown: cfUnknown("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
       { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance. No probe measures this surface yet, so it is always shown as a projection, never as observed." },
     ];
     var controls = '<div class="lx-cf-grid">' + cf.map((x) => {
@@ -1134,7 +1146,7 @@
     var open = true, reached = null, stopStage = null;
     var path = cf.map((x) => {
       var signal = x.signal == null ? x.observed : x.signal;
-      var satisfied = x.observed || !!counterfactuals[x.key];
+      var satisfied = x.observed || !!x.na || !!counterfactuals[x.key];
       var state, copy;
       if (!open) {
         state = { text: "unreached", kind: "off" };
@@ -1146,6 +1158,9 @@
         copy = x.key === "markdown"
           ? words + " words reached an identified bot." + (signal ? " The same URL also answers text/markdown." : " There is no deliberate machine text; the switch adds one.")
           : "published signal found";
+      } else if (x.na) {
+        state = { text: "not applicable", kind: "ok" };
+        copy = "The site declares every operation keyless, so there is no authority to delegate.";
       } else if (counterfactuals[x.key]) {
         state = { text: "counterfactual", kind: "warn" };
         copy = x.detail;
@@ -1242,6 +1257,7 @@
 
   function readinessStatus(item) {
     if (item.status === "pass") return { text: "pass", kind: "ok" };
+    if (item.notApplicable) return { text: "n/a", kind: "off" };
     if (item.status === "neutral") return { text: "optional", kind: "off" };
     if (item.status === "unknown") return { text: "unknown", kind: "warn" };
     return { text: "fix", kind: "warn" };
@@ -1272,7 +1288,7 @@
       { key: "contract", label: "Action contract" },
       { key: "authority", label: "Delegated authority" },
     ];
-    var active = direct.filter((x) => { return counterfactuals[x.key] && !cfObserved(x.key, checks); });
+    var active = direct.filter((x) => { return counterfactuals[x.key] && !cfObserved(x.key, checks) && !cfNotApplicable(x.key, checks); });
     if (!active.length) return null;
     var pass = readiness.passed;
     var counted = readiness.counted;
@@ -1354,9 +1370,43 @@
     return hero + sources + formula;
   }
 
+  // The need-weighted read (worker: lens-need.ts). Same evidence as the mirror
+  // below, reweighed by which surfaces this site actually serves, so a blog is
+  // never sent off to build OAuth and an emerging door is worth what it is.
+  function needReadiness(need) {
+    if (!need) return "";
+    var state = (c) => {
+      return c.status === "pass" ? badge("pass", "ok") : c.status === "neutral" ? badge("not measured", "off")
+        : c.status === "partial" ? badge(Math.round(c.credit * 100) + "%", "warn") : badge(c.status === "unknown" ? "unknown" : "fix", "warn");
+    };
+    var rows = (checks) => {
+      return '<div class="lx-readiness-checks">' + checks.map((c) => {
+        return '<div class="lx-readiness-check" data-status="' + esc(c.status) + '"><div class="lx-readiness-check-top"><b>' + glossify(esc(c.label)) + '</b>' + state(c) + '</div><div class="lx-readiness-detail">' + glossify(esc(c.detail || "")) + '</div></div>';
+      }).join("") + '</div>';
+    };
+    var e = need.essential, rc = need.recommended, b = need.bonus;
+    var pools = '<div class="lx-readiness-cats">' +
+      '<div class="lx-readiness-cat"><div><b>Essential</b><span>' + e.passing + "/" + e.total + '</span></div><strong>' + esc(e.earned) + '<span>/' + esc(e.available) + '</span></strong></div>' +
+      '<div class="lx-readiness-cat' + (rc.total ? "" : " is-skipped") + '"><div><b>Recommended here</b><span>' + (rc.total ? rc.passing + "/" + rc.total : "none apply") + '</span></div><strong>' + (rc.total ? esc(rc.earned) + '<span>/' + esc(rc.available) + '</span>' : "—") + '</strong></div>' +
+      '<div class="lx-readiness-cat"><div><b>Emerging doors</b><span>' + b.signals.length + ' present</span></div><strong>+' + esc(b.points) + '<span>/' + esc(b.cap) + '</span></strong></div>' +
+      '</div>';
+    var surfaces = '<ul class="lx-why">' + need.surfaces.map((s) => {
+      return '<li>' + (s.applies ? "&#10003; " : "&#8211; ") + '<b>' + esc(s.label) + '</b>: ' + esc(s.why) + '</li>';
+    }).join("") + '</ul>';
+    var past = (need.beyondNeed || []).concat(need.skip || []);
+    var pastHtml = past.length ? '<div class="lx-next-actions lx-need-skip">' + past.map((p) => {
+      return '<div><b>' + esc(p.label) + '</b><span>' + esc(p.why) + '</span></div>';
+    }).join("") + '</div>' : '<div class="lx-none">Nothing here is built past need.</div>';
+    var head = '<div class="lx-local-mirror"><b>' + (need.overall == null ? "—" : esc(need.overall)) + '/100</b> <span>need-weighted, after <a href="' + esc(need.source.url) + '" rel="noopener">' + esc(need.source.name) + '</a> (checked ' + esc(need.source.checked) + ')</span></div>';
+    return section("What this site needs", { text: (need.surfaces.filter((s) => { return s.applies; }).length) + " surfaces" }, need.scoringNote, head + pools + surfaces + rows(e.checks.concat(rc.checks))) +
+      section("Past need", { text: past.length + " items" }, "Doors this site lacks and has no reason to build, and doors it built that buy little. Build each one for a reader you can name.", pastHtml);
+  }
+
   function lensReadiness() {
     var r = data.readiness;
     if (!r) return '<div class="lx-empty">Readiness checks were unavailable for this origin.</div>';
+    var skipped = Object.create(null);
+    ((r.need && r.need.skip) || []).forEach((s) => { skipped[s.key] = s.why; });
     var levelKind = r.level >= 5 ? "ok" : r.level >= 3 ? "" : "warn";
     var projection = readinessProjection(r);
     var score = compositeReadiness(r);
@@ -1371,6 +1421,11 @@
       var state = readinessStatus(item);
       var copy = readinessCopy(item);
       var fix = copy.fix;
+      // A fail the need read calls unnecessary keeps its row (the mirror is the
+      // mirror) but says so, and stays off the Copy all fixes brief.
+      if ((item.status === "fail" || item.status === "unknown") && skipped[item.key]) {
+        return '<div class="lx-readiness-check" data-status="skip" data-label="' + esc(copy.label) + '"><div class="lx-readiness-check-top"><b>' + glossify(esc(copy.label)) + '</b>' + badge("not needed here", "off") + '</div><div class="lx-readiness-detail">' + glossify(esc(item.detail || "")) + '</div><div class="lx-readiness-consume">Skip it: ' + esc(skipped[item.key]) + '</div></div>';
+      }
       var consume = CONSUMPTION[item.key] ? '<div class="lx-readiness-consume">Who reads it: ' + glossify(esc(CONSUMPTION[item.key])) + '</div>' : "";
       // Glossify the VISIBLE strings only. data-label and data-fix stay plain:
       // one is an attribute, the other is what the Copy fix button puts on the
@@ -1406,7 +1461,8 @@
     if (data.agent && data.agent.strategy && !data.agent.strategy.action.length) gaps.push("Reading is possible; acting is not declared. An agent must drive the human page and guess at side effects.");
     if (!gaps.length) gaps.push("The main access surfaces are published. Inspect the individual checks for the remaining edge cases and bot-specific policy.");
     var gapHtml = '<ul class="lx-why">' + gaps.map((g) => { return '<li>' + esc(g) + '</li>'; }).join("") + '</ul>';
-    var next = (r.nextActions || []).length ? '<div class="lx-next-actions">' + r.nextActions.map((a) => { var copy = readinessCopy(a); return '<div><b>' + esc(copy.label) + '</b><span>' + esc(copy.fix) + '</span></div>'; }).join("") + '</div>' : '<div class="lx-none">No scored fixes are waiting.</div>';
+    var nextActions = (r.nextActions || []).filter((a) => { return !skipped[a.key]; });
+    var next = nextActions.length ? '<div class="lx-next-actions">' + nextActions.map((a) => { var copy = readinessCopy(a); return '<div><b>' + esc(copy.label) + '</b><span>' + esc(copy.fix) + '</span></div>'; }).join("") + '</div>' : '<div class="lx-none">No scored fixes are waiting.</div>';
     // The level is capped when one signal outruns the breadth of the score, and
     // the cap has to be VISIBLE or the two numbers beside each other read as a
     // contradiction. The worker ships `levelNote` on exactly those scans; the
@@ -1415,7 +1471,7 @@
     var levelWhy = r.levelNote ? '<div class="lx-level-note">' + esc(r.levelNote) + "</div>" : "";
     var localMirror = '<div class="lx-local-mirror"><b>' + esc(r.overall) + '/100</b> ' + badge("Level " + r.level, levelKind) + ' <span>' + esc(r.levelName) + '</span></div>' + levelWhy + cats;
     if (projection) localMirror += '<div class="lx-projection"><b>Local standards projection:</b> ' + esc(projection.score + "/100 if you add " + projection.labels.join(", ") + ".") + ' <span>illustrative; the origin has not changed.</span></div>';
-    return score + section("Local standards mirror", null, "The detailed checklist mirrors Cloudflare's public rubric for inspection and fixes. It is not counted again in the composite.", localMirror) +
+    return score + needReadiness(r.need) + section("Local standards mirror", null, "The detailed checklist mirrors Cloudflare's public rubric for inspection and fixes. It is not counted again in the composite.", localMirror) +
       section("The access gap", { text: "human vs bot" }, "A browser can render a page even when an agent cannot establish what it may read or do.", gapHtml) +
       section("Bot views", { text: bots.length + " sampled" }, "Read-only GETs, one per identity, reporting what each one is served. The control rows are a browser and curl: a crawler 403 is not user-agent policy until a control proves the door opens at all. Robots policy and enforcement stay deliberately separate.", botHtml) +
       section("Checks and fixes", null, "Every failed check has a concrete next move. Copy the complete implementation brief into your coding agent.", '<button class="lx-copy-all" type="button">Copy all fixes</button>' + next + checkHtml);

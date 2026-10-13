@@ -735,7 +735,7 @@ function renderTable(table, outer) {
         // third path that skips escapeMd.
         const cells = (c.children || [])
           .filter((d) => (d.name === "td" || d.name === "th") && !dropped(d))
-          .map((d) => renderInline(d.children, ctx).replace(/\|/g, "\\|").replace(/\n/g, " ").trim());
+          .map((d) => renderInline(d.children, ctx).replace(/\|/g, "\\|").replace(/ {2}\n/g, "<br>").replace(/\n/g, " ").trim());
         if (cells.length) rows.push({ cells, head: (c.children || []).some((d) => d.name === "th") });
       } else walk(c);
     }

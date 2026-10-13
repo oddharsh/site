@@ -43,7 +43,7 @@ import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdC
 import { siteConfig } from "./lib/site-config.ts";
 import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision, type ServedTreePlan } from "./lib/served-tree.ts";
 import { transform as transformCss } from "lightningcss";
-import { minifySync } from "oxc-minify";
+import { minifySync, type MinifyOptions } from "oxc-minify";
 import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
@@ -1073,7 +1073,7 @@ phase("1c minifier setup");
 // is exactly why /updates and /restore never got one. Moved below 1f, after the
 // deploy-time documents exist. See the block there.
 
-const minifyJavaScript = (filename, sourceText, options: typeof OXC_MINIFY_OPTIONS | object = OXC_MINIFY_OPTIONS) => {
+const minifyJavaScript = (filename, sourceText, options: MinifyOptions = OXC_MINIFY_OPTIONS) => {
   const result = minifySync(filename, sourceText, options);
   if (result.errors.length) {
     throw new Error(`${filename}: Oxc parse/minify failed: ${result.errors.map((e) => e.message).join("; ")}`);
@@ -3099,9 +3099,9 @@ phase("text twins");
     /^section-icons\/[^/]+\.svg$/,                // favicons, "/section-icons/*"
     /^(?:writing|lens|serendipity)\/.+\.src\.html$/, // readable twins, "/*.src.*" spans slashes
   ];
-  // Two root-level .md files the Worker renders itself rather than serves from a
+  // A root-level .md file the Worker renders itself rather than serves from a
   // file, so a twin of the staged copy would describe bytes it never sends.
-  const RENDERED = new Set(["auth.md", "rn.md"]);
+  const RENDERED = new Set(["rn.md"]);
   const all = await readdir(`${OUT}/public`, { recursive: true });
   const have = new Set(all);
   const candidates = all.filter((rel) =>

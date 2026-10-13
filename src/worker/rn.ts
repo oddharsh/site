@@ -467,7 +467,7 @@ export async function warmArtCache(payload, request, env, ctx) {
 // Both representations carry `x-robots-tag: noindex`, which is what robots.txt
 // used to try to say with `Disallow: /rn/tracks` and could not. The playlist is a
 // live JSON feed and an HTML fragment: worth FETCHING (the homepage Link header,
-// the api-catalog, auth.md and llms.txt all point agents at it) and worthless in
+// the api-catalog and llms.txt both point agents at it) and worthless in
 // a search index. Disallow blocks the fetch and so blocks its own noindex; this
 // header is the one that expresses the actual intent.
 function trackResponse(payload, status = 200, format = "json") {

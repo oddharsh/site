@@ -12,13 +12,10 @@ import { ROOT, assert, existsSync, readFile, test } from "./contract-shared.ts";
 // deep-equalled against each server's live tools/list elsewhere, so pinning to
 // the card is pinning to the server.
 //
-// The same bytes ship at /.well-known/ai-catalog.json. ARD v0.91 §5.1 makes
-// ard.json + rel="ard" the path a consumer MUST fetch and names ai-catalog.json
-// + rel="ai-catalog" as the predecessor a consumer MAY still consult, so the
-// two are one document at two URLs rather than two documents, and the first
-// assertion below is what keeps that true after somebody edits one of them.
+// ARD v0.91 §5.1 makes ard.json + rel="ard" the path a consumer MUST fetch and
+// names ai-catalog.json as a predecessor a consumer MAY consult. That path
+// 301s here (lib/not-found.ts) rather than holding a second copy.
 const ARD = "public/.well-known/ard.json";
-const ALIAS = "public/.well-known/ai-catalog.json";
 const ORIGIN = "https://aadhar.sh";
 const URN = /^urn:air:aadhar\.sh:[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)+$/;
 const MEDIA_TYPE = /^(?:application|text)\/[a-z0-9][a-z0-9.+-]*$/;
@@ -69,9 +66,10 @@ function validate(manifest, { routes, publicDir }) {
   return seen;
 }
 
-test("the ARD manifest is one document at two well-known paths", async () => {
-  const [ard, alias] = await Promise.all([ARD, ALIAS].map((p) => readFile(new URL(p, ROOT), "utf8")));
-  assert.equal(alias, ard, `${ALIAS} must be byte-identical to ${ARD} (edit ard.json, then cp it over)`);
+test("the predecessor path redirects to the manifest instead of copying it", async () => {
+  const { DISCOVERY_ALIASES } = await import("../src/worker/lib/not-found.ts");
+  assert.equal(DISCOVERY_ALIASES["/.well-known/ai-catalog.json"], "/.well-known/ard.json");
+  assert.ok(!existsSync(new URL("public/.well-known/ai-catalog.json", ROOT)), "a second copy would drift from ard.json");
 });
 
 test("every ARD entry is well-formed and points at something this origin serves", async () => {
@@ -114,9 +112,9 @@ test("each MCP entry's capabilities are the tool names on the card it points at"
   }
 });
 
-test("both manifest paths are served with CORS, and every discovery surface names the manifest", async () => {
+test("the manifest is served with CORS, and every discovery surface names it", async () => {
   const headers = await readFile(new URL("public/_headers", ROOT), "utf8");
-  for (const path of ["/.well-known/ard.json", "/.well-known/ai-catalog.json"]) {
+  for (const path of ["/.well-known/ard.json"]) {
     const block = headers.split(/\n(?=\S)/).find((b) => b.startsWith(`${path}\n`));
     assert.ok(block, `_headers has no rule for ${path}`);
     assert.match(block, /^\s+Access-Control-Allow-Origin: \*$/m, `${path} must allow any origin; the spec requires it`);

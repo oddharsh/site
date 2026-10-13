@@ -55,9 +55,10 @@ export const MISS_LINKS = [
 
 // ── discovery guesses with an honest answer ──────────────────────────────────
 // Each target is a document this site serves in the format the guess implies.
-// /.well-known/mcp and /mcp.json are MCP server-card probes, and the site's
-// card is /.well-known/mcp/server-card.json. AGENTS.md is guidance for agents
-// written in Markdown, and /llms.txt is this site's. The OpenAPI guesses are the
+// /.well-known/mcp, /.well-known/mcp.json and /mcp.json are MCP server-card
+// probes, and the site's card is /.well-known/mcp/server-card.json.
+// /.well-known/ai-catalog.json is ARD's predecessor path for ard.json.
+// AGENTS.md is guidance for agents written in Markdown, and /llms.txt is this site's. The OpenAPI guesses are the
 // JSON spellings only: a YAML path would be answered in a format it did not ask for.
 // The developer-guide guesses (/docs, /api-docs and the like) go to /developers,
 // the page that is that guide.
@@ -71,6 +72,8 @@ export const DISCOVERY_ALIASES: Readonly<Record<string, string>> = {
   "/api/openapi.json": "/openapi.json",
   "/.well-known/openapi.json": "/openapi.json",
   "/.well-known/mcp": "/.well-known/mcp/server-card.json",
+  "/.well-known/mcp.json": "/.well-known/mcp/server-card.json",
+  "/.well-known/ai-catalog.json": "/.well-known/ard.json",
   "/mcp.json": "/.well-known/mcp/server-card.json",
   "/agents.md": "/llms.txt",
   "/AGENTS.md": "/llms.txt",

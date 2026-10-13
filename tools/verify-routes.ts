@@ -123,17 +123,15 @@ const ROUTES = [
   { path: "/favicon.ico", status: 200, ct: "image/svg+xml" },
   // ?peek=1 so the oracle never advances the visitor count
   { path: "/hit?peek=1", status: 200, ct: "image/svg+xml", marker: "<svg" },
-  { path: "/auth.md", status: 200, ct: "text/markdown" },
   { path: "/.well-known/api-catalog", status: 200, ct: "application/linkset+json" },
   { path: "/.well-known/agent-card.json", status: 200, ct: "application/json", marker: "discovery-only" },
-  { path: "/.well-known/oauth-protected-resource", status: 200, ct: "application/json" },
-  { path: "/.well-known/oauth-authorization-server", status: 200, ct: "application/json" },
-  // The ARD manifest, at the spec's path and its predecessor's. `cors` is the
+  // The ARD manifest, at the spec's path; its predecessor's 301s here. `cors` is the
   // load-bearing assertion: a manifest served without Access-Control-Allow-Origin
   // returns the right body with the right type, and a registry fetching from a
   // browser context still cannot read it, so every other column reads as a pass.
   { path: "/.well-known/ard.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
-  { path: "/.well-known/ai-catalog.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
+  { path: "/.well-known/ai-catalog.json", status: 301 },
+  { path: "/.well-known/mcp.json", status: 301 },
   // The TDMRep file (W3C CG Final Report), which says text and data mining is
   // allowed site-wide. The marker is the reservation key, and `cors` holds for
   // the same reason as the ARD rows: a browser-side checker must read it.
@@ -455,11 +453,15 @@ const ROUTES = [
   { path: "/.well-known/ai-plugin.json", status: 404, ct: "application/json", marker: "/sitemap.xml" },
   { path: "/.well-known/ai-plugin.json", status: 404, ct: "text/plain", headers: { accept: "text/html,*/*;q=0.8" }, marker: "/sitemap.xml" },
   { path: "/v1/nope", status: 404, ct: "application/json", marker: "\"code\": \"not_found\"" },
-  // The API contract (lib/api-contract.ts): a wrong method is a JSON 405, and a
-  // version pin this server does not serve is a JSON 400.
+  // The API contract (lib/api-contract.ts): a wrong method is a JSON 405. There
+  // is no version to pin (LEAVES_OUT in lib/public-api.ts), so a pin changes nothing.
   { path: "/search.json?q=fhe", method: "DELETE", status: 405, ct: "application/json", marker: "method_not_allowed" },
-  { path: "/search.json?q=fhe", status: 400, ct: "application/json", headers: { "api-version": "1999-01-01" }, marker: "unsupported_api_version" },
-  { path: "/search.json?q=fhe", status: 200, ct: "application/json", headers: { "api-version": "2026-10-13" }, marker: "\"results\"" },
+  { path: "/search.json?q=fhe", status: 200, ct: "application/json", headers: { "api-version": "1999-01-01" }, marker: "\"results\"" },
+  // The anonymous OAuth surfaces left on 2026-10-13 (LEAVES_OUT): every endpoint
+  // is keyless, so there was nothing for their tokens to unlock.
+  { path: "/.well-known/oauth-protected-resource", status: 404 },
+  { path: "/.well-known/oauth-authorization-server", status: 404 },
+  { path: "/oauth2/token", status: 404 },
   // the same miss in the format an agent asked for (lib/http.ts negotiation)
   { path: "/garage/resampe", status: 404, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "# 404 Not Found" },
   { path: "/garage/resampe", status: 404, ct: "application/json", headers: { accept: "application/json" }, marker: "\"code\": \"not_found\"" },

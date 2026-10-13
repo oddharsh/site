@@ -26,8 +26,14 @@
 // `status` is a union rather than a string because the whole approve/decline
 // flow turns on it, and `expired` in particular is the value that makes a record
 // unactionable.
+
+// A held slot is the same half-open span of unix-ms that availability.ts calls
+// an Interval, and generateSlots takes both as conflict lists, so it is that
+// type rather than a second declaration of it.
+import type { Interval } from "./availability.ts";
+
 // REAL TYPE DECLARATIONS, not JSDoc @typedef. TypeScript reads JSDoc types in
-// .js files only, so the moment this module became .ts both of these went inert
+// .js files only, so the moment this module became .ts the typedefs here went inert
 // and `import("./booking.ts").Booking` resolved to nothing — which is how
 // cal/test/booking.test.js caught the conversion.
 export type Booking = {
@@ -62,9 +68,6 @@ export type Booking = {
    *  looks exactly like a delivery failure. */
   sequence?: number;
 };
-
-/** A half-open interval on the calendar. */
-export type Slot = { start: number; end: number };
 
 // booking records expire after 90d for cleanup; /privacy prints this number
 export const TTL_BOOKING_DAYS = 90;
@@ -119,7 +122,7 @@ export async function setLocation(env, id: string, location: string): Promise<Bo
 // Returns the slot it VACATED alongside the patched booking, because the old
 // start/end are gone from the record the moment this writes, and releasing a
 // hold needs exactly those two numbers.
-export async function setSchedule(env, id: string, slot: Slot): Promise<{ booking: Booking, was: Slot } | null> {
+export async function setSchedule(env, id: string, slot: Interval): Promise<{ booking: Booking, was: Interval } | null> {
   const b = await getBooking(env, id);
   if (!b) return null;
   const was = { start: b.start, end: b.end };
@@ -159,7 +162,7 @@ async function putBooking(env, b) {
 }
 
 // ── held slots ──────────────────────────────────────────────────────────
-const heldKey = (b: Slot) => `held:${b.start}:${b.end}`;
+const heldKey = (b: Interval) => `held:${b.start}:${b.end}`;
 
 // mark a slot held. Expires ~1d after the slot ends (absolute KV expiration),
 // floored to a safe minimum so KV never rejects a near-term slot.
@@ -169,7 +172,7 @@ export async function holdSlot(env, b: Booking) {
   await env.BOOKINGS.put(heldKey(b), b.id, { expiration });
 }
 
-export async function releaseSlot(env, b: Slot) {
+export async function releaseSlot(env, b: Interval) {
   await env.BOOKINGS.delete(heldKey(b));
 }
 
@@ -177,10 +180,10 @@ export async function releaseSlot(env, b: Slot) {
 // bookings hold slots; availability treats them identically (conflict + count
 // toward the caps), so a single list is all generateSlots needs. start/end are
 // encoded in the key name, so this is one list() with no per-key gets.
-export async function listHeld(env): Promise<Slot[]> {
+export async function listHeld(env): Promise<Interval[]> {
   // A REAL annotation. This was `/** @type {Slot[]} */`, which a .ts file
   // ignores, so the array inferred `never[]` the moment strictNullChecks came on.
-  const held: Slot[] = [];
+  const held: Interval[] = [];
   let cursor;
   do {
     const page = await env.BOOKINGS.list({ prefix: "held:", cursor });

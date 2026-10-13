@@ -635,13 +635,6 @@ test("published MCP server cards and discovery files stay aligned with both live
       capabilities: { tools: true, resources: true, prompts: false },
     },
     {
-      file: "public/.well-known/mcp.json",
-      endpoint: "https://aadhar.sh/serendipity/mcp",
-      live: serendipityLive.result.tools,
-      info: { name: SERENDIPITY_MCP_SERVER_INFO.name, title: SERENDIPITY_MCP_SERVER_INFO.title, version: SERENDIPITY_MCP_SERVER_INFO.version },
-      capabilities: { tools: true, resources: false, prompts: false },
-    },
-    {
       file: "public/.well-known/mcp/serendipity.json",
       endpoint: "https://aadhar.sh/serendipity/mcp",
       live: serendipityLive.result.tools,
