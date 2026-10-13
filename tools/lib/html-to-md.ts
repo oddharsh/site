@@ -444,13 +444,31 @@ const EMPTY = new Set();
 // does not inherit the source file's indentation
 const squeeze = (s) => s.replace(/\s+/g, " ");
 
-// characters that would start a markdown construct at the beginning of a line
-const escapeMd = (s) => s.replace(/([\\`*_[\]<>])/g, "\\$1").replace(/^(\s*)([#>+-]|\d+\.)\s/gm, "$1\\$2 ");
+// characters that would start a markdown construct anywhere in a line
+const escapeMd = (s) => s.replace(/([\\`*_[\]<>])/g, "\\$1");
+
+// Markers that start a block only at the start of a LINE, so they are escaped
+// once a block's text is assembled, never per text node. Per node, the rule
+// fired mid-sentence: /garage/octane's `<a>Next.js</a> 16. That…` became
+// `Next.js \16.`, and a backslash before a digit is no escape in CommonMark, so
+// every reader saw it. An ordered marker escapes its period (`16\.`), the one
+// character CommonMark will unescape there.
+const escapeLineStarts = (s) => s
+  .replace(/^(\s*)([#>+-])(?=\s)/gm, "$1\\$2")
+  .replace(/^(\s*)(\d+)\.(?=\s)/gm, "$1$2\\.");
 
 function renderInline(nodes, ctx) {
   let out = "";
   for (const n of nodes) {
-    if (isText(n)) { out += ctx.raw ? n.value : escapeMd(squeeze(n.value)); continue; }
+    if (isText(n)) {
+      if (ctx.raw) { out += n.value; continue; }
+      // Whitespace collapses ACROSS text nodes, the way a browser lays it out.
+      // Two nodes can meet with a space on each side when a comment splits
+      // them: the homepage's `2026</time> <!-- … --> · You` read `2026  · You`.
+      const t = escapeMd(squeeze(n.value));
+      out += t.startsWith(" ") && /\s$/.test(out) ? t.slice(1) : t;
+      continue;
+    }
     if (dropped(n)) continue;
     switch (n.name) {
       case "br": out += "  \n"; break;
@@ -528,14 +546,18 @@ function renderBlocks(nodes, ctx, depth = 0) {
   let run: string[] = [];
   const flush = () => {
     if (!run.length) return;
-    const s = renderInline(run, ctx).replace(/[ \t]+\n/g, "  \n").trim();
+    const s = escapeLineStarts(renderInline(run, ctx).replace(/[ \t]+\n/g, "  \n").trim());
     run = [];
     if (s) out.push(s);
   };
 
   for (const n of nodes) {
     if (isText(n)) {
-      if (squeeze(n.value).trim()) run.push(n);
+      // A space between two inline siblings is content: dropping it fused
+      // /garage/iroh's `<a>QUIC</a> <a>hole-punching</a>` into one word. One
+      // with nothing inline before it is indentation, and flush() trims one
+      // left at the end of the run.
+      if (squeeze(n.value).trim() || run.length) run.push(n);
       continue;
     }
     if (dropped(n)) continue;
@@ -557,7 +579,16 @@ function renderBlocks(nodes, ctx, depth = 0) {
     switch (n.name) {
       case "h1": case "h2": case "h3": case "h4": case "h5": case "h6": {
         const level = Number(n.name[1]);
-        const s = renderInline(n.children, ctx).trim();
+        // A heading is one line, but its CSS can still lay a part out as a box
+        // of its own: /lwe's `<b>Learning With Errors</b><span class="tag">…`
+        // read `**Learning With Errors**explaining hard things`. When a child is
+        // promoted, render the parts as blocks and rejoin them on one line, the
+        // way a caption is; otherwise the inline path is unchanged.
+        const promotedChild = (n.children || []).some((c) => !isText(c)
+          && (c.attrs?.class || "").split(/\s+/).some((k) => (ctx.blockClasses || EMPTY).has(k)));
+        const s = (promotedChild
+          ? renderBlocks(n.children, ctx, depth).split(/\n{2,}/).map((b) => b.replace(/\n/g, " ").trim()).filter(Boolean).join(" · ")
+          : renderInline(n.children, ctx)).trim();
         if (s) out.push(`${"#".repeat(level)} ${s}`);
         break;
       }
@@ -618,12 +649,21 @@ function renderBlocks(nodes, ctx, depth = 0) {
         for (const c of n.children) {
           if (dropped(c)) continue;
           if (c.name === "dt") lines.push(`- **${renderInline(c.children, ctx).trim()}**`);
-          else if (c.name === "dd") lines.push(`  ${renderInline(c.children, ctx).trim()}`);
+          else if (c.name === "dd") lines.push(`  ${escapeLineStarts(renderInline(c.children, ctx).trim())}`);
         }
         if (lines.length) out.push(lines.join("\n"));
         break;
       }
       case "table": {
+        // renderTable walks rows, so a <caption> never reached the twin:
+        // /garage/wire lost 197 words that way. It renders as the paragraph
+        // above the table, which is where a caption sits by default.
+        for (const c of n.children || []) {
+          if (c.name === "caption" && !dropped(c)) {
+            const cap = renderBlocks([c], ctx, depth);
+            if (cap) out.push(cap);
+          }
+        }
         const t = renderTable(n, ctx);
         if (t) out.push(t);
         break;
@@ -691,7 +731,7 @@ function renderTable(table, ctx) {
         // third path that skips escapeMd.
         const cells = (c.children || [])
           .filter((d) => (d.name === "td" || d.name === "th") && !dropped(d))
-          .map((d) => renderInline(d.children, ctx).replace(/\|/g, "\\|").replace(/\n/g, " ").trim());
+          .map((d) => renderInline(d.children, ctx).replace(/\|/g, "\\|").replace(/ {2}\n/g, "<br>").replace(/\n/g, " ").trim());
         if (cells.length) rows.push({ cells, head: (c.children || []).some((d) => d.name === "th") });
       } else walk(c);
     }
