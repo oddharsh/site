@@ -37,12 +37,19 @@ const ESCAPABLE = new Set("\\`*_[]<>#+-.|!~^".split(""));
 
 // ── inline ──────────────────────────────────────────────────────────────────
 
+/** The run of backticks that starts at s[i]. */
+function backtickRun(s, i) {
+  let j = i;
+  while (s[j] === "`") j++;
+  return s.slice(i, j);
+}
+
 /** Index of the next unescaped `delim` at or after `from`, skipping code spans. */
 function findClose(s, delim, from) {
   for (let i = from; i < s.length; i++) {
     if (s[i] === "\\") { i++; continue; }
     if (s[i] === "`") {
-      const run = /^`+/.exec(s.slice(i))[0];
+      const run = backtickRun(s, i);
       const end = s.indexOf(run, i + run.length);
       if (end !== -1) { i = end + run.length - 1; continue; }
     }
@@ -80,7 +87,7 @@ export function inline(s) {
     if (c === "\\" && i + 1 < s.length && ESCAPABLE.has(s[i + 1])) { out += esc(s[++i]); continue; }
     if (c === " " && s.startsWith("  \n", i)) { out += "<br>"; i += 2; continue; }
     if (c === "`") {
-      const run = /^`+/.exec(s.slice(i))[0];
+      const run = backtickRun(s, i);
       const end = s.indexOf(run, i + run.length);
       if (end !== -1) {
         let code = s.slice(i + run.length, end);
@@ -215,6 +222,7 @@ export function blocks(md) {
       const ordered = li[2] !== "-";
       const items = [];
       const termRows = [];
+      /** @type {{ dt: string, dds: string[] }[]} */
       const dlItems = [];
       while (i < lines.length) {
         const m = LIST_ITEM.exec(lines[i]);
@@ -231,7 +239,7 @@ export function blocks(md) {
         }
         const dt = /^\*\*(.*)\*\*$/.exec(body[0]);
         termRows.push(Boolean(dt) && body.slice(1).every((l) => l.trim()));
-        dlItems.push([dt ? dt[1] : "", body.slice(1)]);
+        dlItems.push({ dt: dt ? dt[1] : "", dds: body.slice(1) });
         const html = blocks(body.join("\n"));
         // a one-paragraph item is a tight item: no <p> around it
         items.push(/^<p>(?:(?!<p>)[\s\S])*<\/p>$/.test(html) ? html.slice(3, -4) : html);
@@ -240,7 +248,7 @@ export function blocks(md) {
       // it. Read that exact shape back as a <dl>: as a list it would fuse the
       // term and its definition into one line, and the trip would not close.
       if (!ordered && termRows.length && termRows.every(Boolean)) {
-        out.push(`<dl>${dlItems.map(([dt, dds]) => `<dt>${inline(dt)}</dt>${dds.map((d) => `<dd>${inline(d)}</dd>`).join("")}`).join("")}</dl>`);
+        out.push(`<dl>${dlItems.map(({ dt, dds }) => `<dt>${inline(dt)}</dt>${dds.map((d) => `<dd>${inline(d)}</dd>`).join("")}`).join("")}</dl>`);
         continue;
       }
       const tag = ordered ? "ol" : "ul";
