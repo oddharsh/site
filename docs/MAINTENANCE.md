@@ -1904,6 +1904,21 @@ to, and `contract-av2-decoder-matches-avm.test.mjs` holds the shipped WebAssembl
 to it, so re-run it after any AV2 file or the `.wasm` changes. Moving the AVM pin
 changes the bitstream the decoder reads, so re-encode the samples with it.
 
+### Re-measure photo-metrics after a pin move
+```bash
+bun tools/photos/photo-metrics-parity.ts          # 20 HIFs, one at a time
+bun tools/photos/photo-metrics-parity.ts --limit 4
+```
+`hif-archive.ts` scores every HIF archive with `photo-metrics`
+(`tools/photos/photo-metrics/`: fast-ssim2 for SSIMULACRA2, imazen's butteraugli
+for the 3-norm), built on first use. Its two pins are exact, and the dependabot
+lane for that directory is a prompt to run this before merging. It replays
+`hif-archive.ts`'s own bisection with photo-metrics and with libjxl's
+`ssimulacra2` and `butteraugli_main`, and prints PASS only when every frame
+lands on the same cjxl distance. It needs libjxl's tools on PATH, which nothing
+else in the photo pipeline does now, and about 20 minutes per frame, almost all
+of it in libjxl.
+
 ---
 
 ## Regenerate the OG / Twitter cards

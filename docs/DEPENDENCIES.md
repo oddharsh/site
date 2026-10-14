@@ -7,6 +7,7 @@ Two systems own dependency updates, split by ecosystem:
 | [`deps-pin.yml`](../.github/workflows/deps-pin.yml) | npm | `/`, its workspaces, `/lens-reader` | the shared build, test, and deploy toolchain, and the Reader lens Worker, which is outside the workspace on purpose |
 | [Dependabot](../.github/dependabot.yml) | github-actions | `/`, `/.github/actions/*` | SHA-pinned workflows and composite actions |
 | [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
+| [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/photo-metrics` | the HIF archive bar's fast-ssim2 and butteraugli pins (a bump is a re-measurement) |
 
 Dependabot owned npm too until 2026-10-06. Its npm updater has refused any
 directory holding a `bun.lock` since dependabot-core#16220 (2026-09-25), and its

@@ -73,7 +73,8 @@ photo, so the bucket stays inside R2's 10 GB free tier. It comes in two kinds:
   `tools/photos/hif-archive.ts`. The JPEG ingest prepares (zenc's q100 4:2:2
   export, or the camera's JPEG) is only the bar. The encoder bisects cjxl's
   distance for the fewest bytes that still beat that JPEG on both ssimulacra2
-  and butteraugli, then copies the HIF's EXIF and XMP on with exif-sooc 0.4.0,
+  and butteraugli (scored by `tools/photos/photo-metrics`, imazen's Rust ports,
+  since 2026-10-14; they picked libjxl's distance on 20 of 20 HIFs), then copies the HIF's EXIF and XMP on with exif-sooc 0.4.0,
   because sips keeps 40 of 75 tags and none of the Fujifilm maker notes.
   Measured on all 119 HIF photos (2026-10-08, 60 train and 59 holdout, which
   agreed within a point): about -33% bytes, both metrics better on every

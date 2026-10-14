@@ -2,6 +2,13 @@
 // hif-archive.ts — a HIF photo's full-resolution archive, as JPEG XL encoded
 // from the HIF's own 10-bit pixels.
 //
+// WHAT. Score the baseline against the HIF, then bisect cjxl's distance for
+// the LARGEST one (fewest bytes) whose encode beats the baseline on both
+// metrics. Both scores worsen monotonically as distance grows on every photo
+// swept, which is what makes bisection sound. If not even the floor distance
+// wins, the archive stays what it was: the baseline repacked losslessly. Both
+// metrics come from tools/photos/photo-metrics (see score()).
+//
 // HOW, and the traps each step avoids:
 //   - The reference is sips's 16-bit decode with its eXIf and XMP chunks
 //     stripped. sips copies the HIF's EXIF into the PNG, and cjxl would carry
@@ -21,6 +28,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const ARGS = ["-e", "7", "-p", "--compress_boxes=0"];
 export const RANGE = { lo: 0.1, hi: 0.6, floor: 0.05, tolerance: 0.025 };
@@ -81,13 +89,26 @@ function sh(cmd: string[], tolerateExit = false): Promise<string> {
   });
 }
 
+// Both metrics come from tools/photos/photo-metrics, imazen's Rust ports of
+// SSIMULACRA2 and butteraugli, in one call per image. It replaced libjxl's
+// `ssimulacra2` and `butteraugli_main` CLIs on 2026-10-14, after it picked the
+// same distance as they did on 20 of 20 HIFs; its Cargo.toml has the numbers.
+const METRICS = path.join(path.dirname(fileURLToPath(import.meta.url)), "photo-metrics");
+let metricsBin: Promise<string> | undefined;
+
+/** The scorer: PHOTO_METRICS_BIN when set (the contract tests' stub), else the
+ *  in-tree crate, built once per process like zenc. The build runs even when a
+ *  binary exists, because cargo is what checks it against the sources and lock. */
+function metrics(): Promise<string> {
+  const pinned = process.env.PHOTO_METRICS_BIN;
+  if (pinned) return Promise.resolve(pinned);
+  metricsBin ??= sh(["cargo", "build", "--release", "--locked", "--quiet", "--manifest-path", path.join(METRICS, "Cargo.toml")])
+    .then(() => path.join(METRICS, "target/release/photo-metrics"));
+  return metricsBin;
+}
+
 async function score(ref: string, img: string): Promise<Score> {
-  const s2 = Number.parseFloat(await sh(["ssimulacra2", ref, img]));
-  // butteraugli_main exits non-zero on a large distance and still prints both
-  // scores. Its 3-norm line is the one compared; a build that prints only the
-  // max-norm is compared on that.
-  const lines = (await sh(["butteraugli_main", ref, img, "--pnorm", "3"], true)).split("\n");
-  const ba3 = Number.parseFloat(lines.find((l) => /3-norm/.test(l))?.split(":")[1] ?? lines[0]);
+  const { s2, ba3 } = JSON.parse(await sh([await metrics(), ref, img])) as { s2: number; ba3: number };
   if (!Number.isFinite(s2) || !Number.isFinite(ba3)) throw new Error(`unreadable scores for ${path.basename(img)}`);
   return { s2, ba3 };
 }
