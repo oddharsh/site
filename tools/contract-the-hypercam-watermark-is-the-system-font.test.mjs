@@ -5,7 +5,8 @@
 // rectangles. This pins those rectangles to the bitmap below, which is the 16px
 // strike of Wine's System font clone (fonts/system.sfd, LGPL) set as
 // "Unregistered HyperCam 2", and pins the homepage's first-paint copy of the
-// pixel steps to luna's, so the window and icons don't move when luna lands.
+// pixel steps to luna's, so the window and icons don't move when luna lands,
+// and keeps it on the desktop layer, under every window.
 import { readFileSync } from "node:fs";
 import { ROOT, assert, test } from "./contract-shared.ts";
 
@@ -86,6 +87,18 @@ test("the box scales by whole CSS pixels and holds no text", () => {
   const luna = steps(read("src/styles/luna.css"));
   assert.ok(Object.keys(luna).length >= 2, `luna.css sets --hypercam-px at ${Object.keys(luna).length} steps`);
   for (const [at, px] of Object.entries(luna)) assert.ok(Number.isInteger(px) && px >= 1, `${px}px at ${at}px wide is not a whole pixel`);
+});
+
+test("the watermark is desktop, so windows cover it", () => {
+  // The first bitmap version sat at z-index 2147483647, over everything; the owner
+  // wanted a window dragged over it to cover it, the way it covers an icon.
+  const css = read("src/styles/luna.css");
+  const z = (selector) => Number(new RegExp(`(?:^|\\})${selector.replace(/[.()*+?[\]\\]/g, "\\$&")}\\{[^}]*z-index:(-?\\d+)`, "m").exec(css)?.[1]);
+  const mark = z("body::before"), win = z(".window,.np-window"), icons = z("#axp-icons"), desk = z("#axp-desktop");
+  for (const [name, v] of Object.entries({ mark, win, icons, desk })) assert.ok(Number.isInteger(v), `found no z-index for ${name}`);
+  assert.ok(mark < win, `the watermark (z-index ${mark}) has to sit under windows (${win})`);
+  assert.ok(mark > desk, `and over the wallpaper (${desk})`);
+  assert.ok(mark <= icons, `and no higher than the icon layer (${icons}), the desktop it belongs to`);
 });
 
 test("the homepage reserves the same band at first paint", () => {
