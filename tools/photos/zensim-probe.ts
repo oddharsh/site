@@ -71,14 +71,24 @@
 //   2048px          330 ms          760 ms          80 ms / 250 ms
 //   40 MP           5.2 s, 7.2 GB   16.2 s, 9.0 GB  1.0 s, 1.5 GB / 2.9 s
 //
-//   ARCHIVE, PRELIMINARY (4 of 20 frames; the full run replaces this):
-//   zensim B lets the JPEG XL go to d0.491 on all 4, where libjxl's
-//   both-metric bar stops at d0.319-0.413: 10.7-12.9 MB against 12.0-16.3 MB.
-//   None of B's picks clears libjxl's bar, so zensim scores the q100 4:2:2
-//   JPEG more harshly, relative to JPEG XL, than ssimulacra2 and butteraugli
-//   do. 16 bits do reach B (+1.25 to +1.47 points over the 8-bit control at
-//   d0.1). B is not monotonic in distance here: it rises 1.23 points between
-//   d0.335 and d0.35 on XT500010, the size of the margins a bisection decides.
+//   archive, 20 HIFs at 40 MP and 16 bits (hif-archive.ts's own bisection):
+//     B picks libjxl's distance                4 / 20  (9 looser, 7 stricter)
+//     bytes at B's pick vs libjxl's            median 0.0%, -22.7% to +50.1%
+//     B's pick clears libjxl's both-metric bar 11 / 20
+//     score improves as distance worsens       B 18 of 219 steps (worst
+//                                              +1.23), ssimulacra2 0 / 141,
+//                                              butteraugli 2 / 141
+//   Totals land close (279 MB at libjxl's picks, 270 MB at B's), but per photo
+//   B scatters around libjxl rather than leaning one way. The first 4 frames
+//   all ran looser and looked like a bias; the next 16 said otherwise, which
+//   is why the full run matters. B is too non-monotone at near-lossless
+//   distances to drive a bisection: its steps swing as far as the margins
+//   being decided. 16 bits do reach it (+1.25 to +1.47 points over the 8-bit
+//   control at d0.1), and they move its pick on 16 of 20 frames.
+//
+//   VERDICT: zensim does not replace libjxl in hif-archive.ts. For the
+//   Instagram search B ranks well enough, but only on its own recalibrated
+//   scale, and libjxl at 1080px costs 100-220 ms against seconds of encoding.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
