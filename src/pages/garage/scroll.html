@@ -277,8 +277,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
       <p class="how">
         <code>animation-timeline: view(); animation-range: entry 5% cover 32%;</code>
         with a <code>transform-origin: bottom</code> zoom. It finishes early
-        (within a third of the way across the viewport) so it reads as a one-shot
-        &quot;open,&quot; not a <a class="term" data-t="parallax-scrolling" href="https://en.wikipedia.org/wiki/Parallax_scrolling" title="A scrolling effect where background layers move slower than foreground ones, creating a sense of depth." rel="external">parallax</a> that keeps moving.
+        (within a third of the way across the viewport) so it reads as a one-shot &quot;open&quot; that holds still once done, where a <a class="term" data-t="parallax-scrolling" href="https://en.wikipedia.org/wiki/Parallax_scrolling" title="A scrolling effect where background layers move slower than foreground ones, creating a sense of depth." rel="external">parallax</a> would keep moving.
       </p>
     </section>
 
@@ -407,7 +406,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
         {
           "t": "It packs the whole zoom into the early part of the element's travel, so it finishes fast and then holds still.",
           "ok": true,
-          "why": "Right: the open completes within the first third of the card's trip across the viewport, so it reads as XP's snappy one-shot maximize rather than a parallax that keeps drifting."
+          "why": "Right: the open completes within the first third of the card's trip across the viewport, so it reads as XP's snappy one-shot maximize and then holds still."
         },
         {
           "t": "It delays the start by 5% of a second and caps the animation at 32% of a second.",

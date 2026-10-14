@@ -79,7 +79,7 @@
 
 <h2>Two questions, and only one of them is free</h2>
 <p>When you find an undocumented option, there are two separate things to establish, and reading the docs answers neither.</p>
-<p><b>Is it accepted?</b> Does the tool recognise the key at all, or is it dropping an unknown name on the floor. <b>Does it work?</b> Does accepting the key change the behaviour the flag claims to change.</p>
+<p><b>Is it accepted?</b> Does the tool recognise the key at all, or is it dropping an unknown name on the floor? <b>Does it work?</b> Does accepting the key change the behaviour the flag claims to change.</p>
 <p>The first question is usually free, and that is the part people skip. A tool with strict argument parsing answers it through its exit code alone, with no work performed and nothing deployed:</p>
 <pre class="hf-code"><code>$ wrangler deploy --x-bogus-flag ; echo $?
 1
@@ -113,7 +113,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
 <p>Whether the capture actually waits out the timeout is a different question, it needs a real render, and it is still open. Both halves are written down separately for that reason. An entry claiming the key works, on evidence that only shows it is accepted, is the exact error this page is about.</p>
 
 <h3>A path that routes either way</h3>
-<p>The engine selector above only functions on one of two URL spellings. Both route. Probed unauthenticated against a real account, each answers <code>10000 Authentication error</code> rather than <code>7003 Could not route to</code>. So the wrong path costs no error, no retry, and no log line. It costs the feature. One reference page documents the selector on the newer spelling while older pages show the other, so reading either one alone hands you a path that looks right.</p>
+<p>The engine selector above only functions on one of two URL spellings. Both route. Probed unauthenticated against a real account, each answers <code>10000 Authentication error</code> rather than <code>7003 Could not route to</code>. So the wrong path costs the feature, silently: no error, no retry, no log line. One reference page documents the selector on the newer spelling while older pages show the other, so reading either one alone hands you a path that looks right.</p>
 
 <h2>A flag that proves the limit is somewhere else</h2>
 <p>Among the nineteen is <code>--max-versions</code>, on the command that shifts production traffic between Worker versions. This site's release script walks a version to 10%, then 50%, then 100%, and it can only ever name two versions in a step, which shapes the whole procedure: a ramp starting from a three-way split has to drop one of them. The obvious hope is that a hidden flag raises the ceiling. The definition answers it without a single request:</p>
@@ -146,7 +146,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
 <p>And prefer reading the definition to running the experiment when the definition is in your <code>node_modules</code>. Two of the four cases here were settled by a source comment and a call site, in less time than a deploy takes, and neither answer could have been reached by watching the tool succeed.</p>
 
 <h2>What would change this</h2>
-<p>A tool that accepts unknown flags silently would break the free half outright, and the check for that is the bogus-flag control itself: an exit code of 0 on an invented name means every conclusion on this page has to be re-earned with real runs. A hidden flag becoming documented would move its row from this list to an ordinary reference, which is the outcome to hope for rather than a defeat. And a measurement showing the capture does honour <code>waitForTimeout</code> would close the one case here that is deliberately still open.</p>
+<p>A tool that accepts unknown flags silently would break the free half outright, and the check for that is the bogus-flag control itself: an exit code of 0 on an invented name means every conclusion on this page has to be re-earned with real runs. A hidden flag becoming documented would move its row from this list to an ordinary reference, which is the outcome to hope for. And a measurement showing the capture does honour <code>waitForTimeout</code> would close the one case here that is deliberately still open.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
   </div>
@@ -511,7 +511,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
         },
         {
           "t": "A hidden flag becoming documented.",
-          "why": "That moves a row to an ordinary reference page, which is the good outcome rather than a problem."
+          "why": "That moves a row to an ordinary reference page, which is the good outcome."
         },
         {
           "t": "A description turning out to be inaccurate.",

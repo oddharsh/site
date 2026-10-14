@@ -67,7 +67,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
     </p>
 
     <h2>Why it moved</h2>
-    <p>Not for a feature. For an outage. A git-connected Pages build deployed the static files
+    <p>An outage forced it. A git-connected Pages build deployed the static files
       but silently dropped the Function, so every static path answered <code class="m">200</code>
       and every worker route answered <code class="m">404</code>. From the outside the site looked
       up; underneath, half of it was gone. That failure is structural to how the Pages build
@@ -75,7 +75,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       <b>atomic</b>: the worker and its assets ship together or not at all. There is no window
       where the shell is live and the brain is missing.</p>
 
-    <h2>The real unlock: configuration as code</h2>
+    <h2>The real payoff: configuration as code</h2>
     <p>On Pages, the project&apos;s wiring lived in the dashboard. The <a class="term" data-t="workers-kv" href="https://developers.cloudflare.com/kv/" title="Cloudflare's key-value store: values saved under names and copied worldwide, so reads are fast everywhere while a new write can take a minute to spread." rel="external">KV namespace</a>, the <a class="term" data-t="r2" href="https://developers.cloudflare.com/r2/" title="Cloudflare's object storage for files. It speaks Amazon S3's API and charges nothing for downloading data back out." rel="external">R2</a>
       bucket, the <a class="term" data-t="d1" href="https://developers.cloudflare.com/d1/" title="Cloudflare's SQL database for Workers, built on SQLite." rel="external">D1 database</a>, the <a class="term" data-t="durable-object" href="https://developers.cloudflare.com/durable-objects/" title="A Cloudflare Workers object with its own built-in storage, where each named instance lives in one place so every request to it is coordinated." rel="external">Durable Object</a>, the environment variables: all clicked in
       through a web UI, invisible to git, undocumented outside my own memory, impossible to diff
@@ -98,16 +98,15 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
   "durable_objects": { "bindings": [{ "name": "COUNTER", "class_name": "Counter" }] },
   "migrations":      [{ "tag": "v1", "new_sqlite_classes": ["Counter"] }]
 }</pre>
-    <p>The binding list is now a code review, not a screenshot. A clean checkout plus one
+    <p>Changing a binding is now a code review. A clean checkout plus one
       <code class="m">wrangler deploy</code> reconstructs the entire project. There is exactly one
       honest exception: <b>secrets</b>. The signing key, the render token, and the cache-bust
       secret stay out of git on purpose, set once with <code class="m">wrangler secret put</code>.
-      A checkout is reproducible; it is deliberately not turnkey without those three.</p>
+      A checkout is reproducible; by design, it needs those three set by hand before it fully works.</p>
 
     <h2>What it opened up</h2>
     <p class="note">Given the constraint I care about most here (this site is frameworkless and
-      buildless, and staying that way), the interesting question was never &quot;which framework.&quot;
-      It was: what can the platform do once the config is code? Four things I have already used,
+      buildless, and staying that way), the interesting question was what the platform can do once the config is code. Four things I have already used,
       and a few more now in reach.</p>
 
     <div class="cf-feat">
@@ -144,7 +143,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       <p>A Worker deploy is all-or-nothing, and that is precisely what makes the avif cut safe.
         The old Pages hazard was a deploy race: a real thumbnail could 404 for a blink during a
         deploy, and Cloudflare&apos;s edge would then cache that 404 for hours. Atomic deploys
-        remove the blink, so there is no transient miss of a file that actually exists. Workers
+        remove the blink, so a file that actually exists can't 404 mid-deploy. Workers
         also supports versioned, <a class="term" data-t="gradual-deployments" href="https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/" title="Moving live traffic to a new version of a Worker a percentage at a time, so the old and new versions serve side by side." rel="external">gradual rollouts</a> (ship a version to 10% of traffic first), which
         Pages never offered for production.</p>
     </div>
@@ -182,7 +181,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
         <code class="m">immutable</code>), which is exactly why they can serve from the edge without
         the worker. The homepage comes back <b>no-cache</b>: the worker renders it on every
         request (it re-randomizes the photo grid and reads the visit counter), so it can never be
-        an edge-cached file. Nothing here is mocked; it is your browser hitting production.</p>
+        an edge-cached file. Every header is real: your browser hitting production.</p>
       <button class="xp-button compact" id="probe-btn" type="button">probe the routing</button>
       <div class="cf-out" id="probe-out"></div>
     </div>
@@ -284,7 +283,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
         {
           "t": "In one checked-in wrangler.jsonc, so a clean checkout plus one wrangler deploy rebuilds the project.",
           "ok": true,
-          "why": "Right. The binding list became a code review instead of dashboard clicks, which the page argues is the real unlock of the whole move."
+          "why": "Right. The binding list became a code review instead of dashboard clicks, which the page argues is the real payoff of the whole move."
         },
         {
           "t": "In the Cloudflare dashboard, with wrangler.jsonc kept as a read-only mirror of it.",

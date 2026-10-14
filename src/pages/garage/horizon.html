@@ -1361,7 +1361,7 @@ window.__horizonCaps = (function () {
       <p class="note">
         Auto-picks a legible (black/white) text color for a given background.
         Top label in each swatch is naive fixed-white; bottom is
-        <code>contrast-color()</code>. watch it flip to black on the
+        <code>contrast-color()</code>. Watch it flip to black on the
         light chips.
       </p>
       <div class="cc-grid">
@@ -1410,7 +1410,7 @@ window.__horizonCaps = (function () {
       <div id="pop-hwa" popover class="ifor-pop"><div class="box">[ HWA EVO ]</div><div class="cap">anchored to the link</div></div>
       <div id="pop-evo" popover class="ifor-pop"><div class="box">[ Evoluto 355 ]</div><div class="cap">interest-delay: 0s</div></div>
       <p class="note" style="margin-top:10px">
-        Delay lives in CSS, not baked into the element: <code>interest-delay-start</code>
+        Delay lives in CSS: <code>interest-delay-start</code>
         / <code>interest-delay-end</code> (shorthand <code>interest-delay</code>).
         <code>0s</code> spawns instantly like ours, but the trade is that every
         incidental hover-pass over a grid would fire a tooltip (why the 0.5s
@@ -1427,9 +1427,8 @@ window.__horizonCaps = (function () {
         default-on in Chrome&nbsp;142, Firefox hasn&apos;t), so it is <em>not</em> a migration path while the site cares about
         Safari (WebKit standards-position:
         <a href="https://github.com/WebKit/standards-positions/issues/464" rel="external">oppose, #464</a>).
-        And it anchors to the <em>element</em>, not the cursor,
-        so even in a perfect world the cursor-following <code>--x/--y</code>
-        loop stays. Strictly a forward-look.
+        And it anchors to the <em>element</em>, so the cursor-following
+        <code>--x/--y</code> loop stays even in a perfect world. Strictly a forward-look.
       </p>
       <details name="sketch">
         <summary class="note" style="cursor:pointer">what it would replace (today &rarr; declarative)</summary>
@@ -1487,16 +1486,16 @@ pointerout   -&gt; hidePopover()
         </div>
       </div>
       <p class="replaces">
-        On the site: this is <em>already live</em> here in a small dose:
-        the keyboard-focus path of the homepage tooltip tags the focused element
-        with <code>anchor-name: --xp-tip</code> and the <code>.xp-tooltip.anchored</code>
+        On the site: this is <em>already live</em> here in a small dose.
+        The keyboard-focus path of the homepage tooltip tags the focused element
+        with <code>anchor-name: --xp-tip</code>, and the <code>.xp-tooltip.anchored</code>
         rule uses <code>position-anchor</code> to tether it, so Tab-navigating
         the photo grid gets a properly-placed Fuji-LCD popover with no cursor to
         follow. It wins everywhere I&apos;d otherwise reach for JS
         positioning: a future <code>/coffee</code> slot-picker dropdown, the
         artist popovers, any menu, all could anchor + auto-flip in CSS.
         It does <strong>not</strong> replace the pointer-following
-        <code>--x/--y</code> loop (anchors attach to elements, not the cursor),
+        <code>--x/--y</code> loop (anchors attach only to elements),
         so the two coexist: cursor-tracking for mouse, anchored for keyboard.
         Now cross-engine: Chrome&nbsp;125, Safari&nbsp;26,
         Firefox&nbsp;147 (<code>position-anchor</code> FF&nbsp;151), WebKit
@@ -1544,8 +1543,8 @@ pointerout   -&gt; hidePopover()
         cursor-tooltip <code>--x/--y</code> loop). It&apos;s the rare frontier feature
         that&apos;s already <em>cross-browser</em> (Chrome&nbsp;115, Safari&nbsp;26,
         Firefox&nbsp;110+; WebKit standards-position
-        <a href="https://github.com/WebKit/standards-positions/issues/152" rel="external">support, #152</a>),
-        so it could graduate to the homepage today, strictly as decoration,
+        <a href="https://github.com/WebKit/standards-positions/issues/152" rel="external">support, #152</a>).
+        So it could graduate to the homepage today, strictly as decoration,
         gated behind <code>@supports</code> and <code>prefers-reduced-motion</code>,
         because the content must read fine with the animation pinned to its end
         state.
@@ -1602,7 +1601,7 @@ pointerout   -&gt; hidePopover()
         <code>showPopover()</code>/<code>hidePopover()</code>. Switching it to
         <code>hint</code> would buy native light-dismiss, but the site
         only has <em>one</em> tooltip and it already manages its own lifecycle,
-        so the win is marginal: I&apos;d still run the same JS to follow the
+        so the win is marginal. I&apos;d still run the same JS to follow the
         cursor and pick the content. <code>hint</code> really pays off in the
         multi-popover case (a tip that coexists with an open menu) the homepage
         doesn&apos;t have. Filed as &quot;safe to adopt, low value here.&quot;
@@ -1652,8 +1651,7 @@ pointerout   -&gt; hidePopover()
         message box on the booking form can drop its resize script
         entirely and just say <code>field-sizing: content; max-height: 9em</code>
         on the sunken XP textarea, with the layout reflowing for free. Now
-        shipped in Chrome&nbsp;123, Safari&nbsp;26.2, and Firefox&nbsp;152 (June&nbsp;2026), so it is now Baseline and can graduate to the live booking form,
-        not just the garage. Pair it with a static <code>rows</code> attribute
+        shipped in Chrome&nbsp;123, Safari&nbsp;26.2, and Firefox&nbsp;152 (June&nbsp;2026), so it is Baseline and can graduate from the garage to the live booking form. Pair it with a static <code>rows</code> attribute
         as the fallback height and there's nothing to feature-detect.
       </p>
       <p class="unsupported">
@@ -1706,7 +1704,7 @@ pointerout   -&gt; hidePopover()
         more than the animation: <code>startViewTransition</code> <em>defers</em>
         its callback, so every caller had to move focus and measurement inside
         the callback, and the ones that forgot ran a frame early against a
-        still-hidden element. The API is genuinely good, and the demo below is
+        still-hidden element. The API is genuinely good, and the demo above is
         real; this site just ran out of places where the trade paid.
       </p>
       <p class="unsupported">
@@ -1751,7 +1749,7 @@ pointerout   -&gt; hidePopover()
       </h2>
       <p class="note">
         For two decades the <code>&lt;select&gt;</code> popup has been a sealed
-        OS widget: you got the trigger, never the list. <code>appearance:
+        OS widget: you could style the trigger, and the OS drew the list. <code>appearance:
         base-select</code> opts the control into a fully styleable model: the
         popup becomes real DOM you can theme, <code>::picker(select)</code> and
         <code>::picker-icon</code> are addressable, and each <code>&lt;option&gt;</code>
@@ -1774,7 +1772,7 @@ pointerout   -&gt; hidePopover()
       </p>
       <p class="replaces">
         On the site: this natively answers the future <code>cal/</code>
-        booking dropdowns (timezone, slot length, meeting type): today
+        booking dropdowns (timezone, slot length, meeting type). Today
         those would mean a hand-rolled JS listbox to escape the un-styleable OS
         popup, or a system widget that shatters the XP illusion.
         base-select lets one real <code>&lt;select&gt;</code> carry the bevel,
@@ -1788,13 +1786,13 @@ pointerout   -&gt; hidePopover()
         nested elements inside a <code>&lt;select&gt;</code> into the DOM rather than
         discarding everything that is not an <code>&lt;option&gt;</code>,
         <code>&lt;optgroup&gt;</code>, or <code>&lt;hr&gt;</code>. That is groundwork with
-        no user-visible effect, and it is exactly what shipping this later requires.
+        no user-visible effect, but it is exactly what shipping this later requires.
         WebKit&apos;s
         <strong>golden rule</strong>: always give every <code>&lt;option&gt;</code>
         real text content or an accessible text attribute, because a base-select
         stays a genuine native <code>&lt;select&gt;</code> underneath (keyboard,
-        typeahead, form value, screen-reader text all intact) and the options are
-        display-only, never a place to nest buttons or links.
+        typeahead, form value, screen-reader text all intact). The options are
+        display-only, so keep buttons and links out of them.
       </p>
       <p class="unsupported">
         Your browser doesn&apos;t support <code>appearance: base-select</code> yet,
@@ -1924,7 +1922,7 @@ pointerout   -&gt; hidePopover()
         A promise you <code>await</code> in the middle of a long task: it hands the
         main thread back to the browser to service pending input/paint, then
         resumes your loop, and crucially resumes at the <em>front</em> of
-        the queue, not the back like <code>setTimeout(0)</code>. So you stay
+        the queue, where <code>setTimeout(0)</code> would rejoin at the back. So you stay
         responsive without losing your turn to unrelated work. It&apos;s shipped
         in Chrome and Firefox&nbsp;142 (no flag), so the demo below is live: the concept, then a
         real measured run, then the code.
@@ -2037,7 +2035,7 @@ for (const t of tracks) {
       </p>
       <p class="unsupported">
         Your browser doesn&apos;t expose <code>scheduler.yield()</code>,
-        the live demo below still runs and stays responsive, it just takes the
+        the live demo above still runs and stays responsive, it just takes the
         <code>setTimeout(0)</code> fallback path instead. To get the real
         primitive: Chrome 129+, shipped, no flag.
       </p>
@@ -2062,7 +2060,7 @@ for (const t of tracks) {
         <code>texElementImage2D</code>, WebGPU <code>copyElementImageToTexture</code>),
         after opting the element in with a <code>layoutsubtree</code> attribute.
         The element keeps real text layout, fonts,
-        and accessibility, unlike <code>foreignObject</code>+SVG, it
+        and accessibility. Unlike <code>foreignObject</code>+SVG, it
         isn&apos;t tainted, doesn&apos;t silently drop styles, and can be
         composited, transformed, and post-processed pixel-by-pixel. Below: a
         real XP title bar on the left, rasterized into the canvas on the right
@@ -2169,7 +2167,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
         vs. a separate <code>display: masonry</code>), it has converged into
         <strong>Grid Lanes</strong>: <a class="term" data-t="masonry" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Grid_lanes" title="A layout that stacks items in columns at their natural heights, each filling the gap under the one above, like bricks in a wall." rel="external">masonry</a> expressed <em>inside</em> CSS Grid so
         you keep <code>grid-template-columns</code>, gaps, and (eventually)
-        subgrid. <strong>Safari&nbsp;26.4 shipped it</strong> as <code>display: grid-lanes</code> (on by default) with a <code>flow-tolerance</code> knob (the old <code>item-tolerance</code>, renamed); Chrome keeps it behind the experimental flag. The grid below is <em>real</em> grid-lanes where the engine supports it (you, on Safari&nbsp;26.4+) and falls back to a CSS multi-column mockup elsewhere: the mockup reads down-then-across, true masonry packs into the shortest lane.
+        subgrid. <strong>Safari&nbsp;26.4 shipped it</strong> as <code>display: grid-lanes</code> (on by default) with a <code>flow-tolerance</code> knob (the old <code>item-tolerance</code>, renamed); Chrome keeps it behind the experimental flag. The grid below is <em>real</em> grid-lanes where the engine supports it (you, on Safari&nbsp;26.4+) and falls back to a CSS multi-column mockup elsewhere. The mockup reads down-then-across; true masonry packs into the shortest lane.
       </p>
       <div class="mas-mock" aria-hidden="true">
         <div class="tile t1"><span class="cap">portrait</span></div>
@@ -2221,7 +2219,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
       <p class="unsupported">
         Your browser can&apos;t show real masonry yet (only Safari&nbsp;26.4+ ships
         it by default in mid-2026). The grid above is a CSS multi-column
-        <em>approximation</em>, not the live feature; enable the Canary /
+        <em>approximation</em> of the live feature; enable the Canary /
         Safari TP flags above to drive the genuine layout.
       </p>
     </section>
@@ -2266,8 +2264,8 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
         </div>
       </div>
       <p class="note" style="font-size:8.5pt">
-        Bars are illustrative (matched perceptual quality, photographic content),
-        not measured on these specific shots.
+        Bars are illustrative (matched perceptual quality, photographic content);
+        I never measured these specific shots.
       </p>
 
       <ul class="jxl-feat">
@@ -2318,7 +2316,7 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
       </p>
 
       <p class="unsupported">
-        Nothing to decode live regardless of your browser, this card is a
+        Nothing decodes live here, whatever your browser: this card is a
         static mock by design. To actually <em>view</em> a <code>.jxl</code>
         today you need Safari&nbsp;17+, Chrome&nbsp;155+, or Firefox Nightly. In
         Chrome&nbsp;145&ndash;154 enable
@@ -2339,7 +2337,7 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
         spot should gain on a display with headroom. <strong>Adaptive Global
         Tone Mapping</strong> (AGTM, SMPTE ST&nbsp;2094-50) lets the image author
         ship a tone-mapping curve so the same file renders correctly across a
-        dim laptop, a bright phone, and a 1600-nit XDR panel: the highlights
+        dim laptop, a bright phone, and a 1600-nit XDR panel. The highlights
         bloom on capable screens and fold back gracefully on SDR ones, instead of
         either clipping to flat white or being globally dimmed. This is the next
         rung above the P3 wide-gamut already used on the photo grid: P3 buys
@@ -2349,7 +2347,7 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
         <strong>Can&apos;t be shown live here.</strong> It needs a real gain-map
         asset, an HDR-capable display, and the experimental flag all at once, and
         a screenshot would just be SDR pixels lying about it. So the cells below
-        are an honest <em>mockup</em> of the idea, not real HDR: left, an SDR
+        are an honest <em>mockup</em> of the idea, drawn in SDR: left, an SDR
         ramp whose sun clips to paper-white; right, the same scene with the
         specular headroom the gain map would restore. The bar shows where the
         SDR ceiling sits and the hatched region is the extra headroom AGTM maps
@@ -2385,8 +2383,8 @@ ultrahdr_app -m 0 -i base.jpg -g gainmap.jpg -o photo-uhdr.jpg
 @media (dynamic-range: high) { .photos img { /* let it bloom */ } }</pre>
       </details>
       <p class="replaces">
-        On the site: this doesn&apos;t replace anything, it&apos;s a
-        forward-look for the photo grid. The gain-map base layer <em>is</em> the
+        On the site: a forward-look for the photo grid, with nothing to
+        replace. The gain-map base layer <em>is</em> the
         existing SDR JPG/AVIF, so the fallback is free and the pipeline is purely
         additive: one extra encode step in <code>add-photos.sh</code>, no new
         client JS. It pairs with the <code>@media (color-gamut: p3)</code>
@@ -2396,7 +2394,7 @@ ultrahdr_app -m 0 -i base.jpg -g gainmap.jpg -o photo-uhdr.jpg
         (<code>#hdr-agtm</code>), not shipped anywhere by default, and naive HDR
         photos in a feed are a known eye-searing UX problem, so it stays
         in the garage until it ships cross-engine <em>and</em> the curves can be
-        tuned to glow, not blind.
+        tuned to glow without blinding.
       </p>
       <p class="unsupported">
         Your browser / display reports no HDR headroom
@@ -2470,17 +2468,16 @@ navigation.addEventListener("navigate", (e) =&gt; {
         the Worker&apos;s route table (<code>ROUTES</code> in
         <code>src/worker/index.ts</code>) rather than in the client. There&apos;s no SPA and no active-nav state to track. But it&apos;s
         the right thing to watch <em>if</em> the garage ever grows a shared
-        client-side nav: the cross-browser half (<code>URLPattern</code> +
+        client-side nav. The cross-browser half (<code>URLPattern</code> +
         Navigation API) could already replace any hand-rolled
-        <code>location.pathname</code> string-matching with declared patterns,
-        and the CSS half (once it ships in more than one engine)
+        <code>location.pathname</code> string-matching with declared patterns.
+        The CSS half (once it ships in more than one engine)
         would let the active garage tab style itself with no JS at all. Strictly
         a forward-look while it&apos;s Chrome-flag-only.
       </p>
       <p class="unsupported">
-        The chip above always reads &quot;no,&quot; and that is a limitation of the probe
-        rather than a claim about your browser. No engine ships the declarative CSS
-        side yet, so there is nothing for a probe to find. The building blocks are a
+        The chip above always reads &quot;no,&quot; whatever your browser does: no engine
+        ships the declarative CSS side yet, so there is nothing for a probe to find. The building blocks are a
         separate question: <code>URLPattern</code> (Chrome 95, Safari 26, Firefox 142)
         and the Navigation API (Chrome 102, Safari 26.2, Firefox 147) ship in all three
         engines, so the JS-today version above runs in any current browser. The mock tab-bar is static either way. To try the flag in Chrome:
@@ -2545,8 +2542,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </div>
       <p class="replaces">
         On the site: the photo grid could become a swipeable contact sheet with a
-        Luna dot-strip underneath, the markers and arrows are the browser&apos;s,
-        not mine. Gated behind <code>@supports (scroll-marker-group: after)</code>;
+        Luna dot-strip underneath, and the browser draws the markers and arrows. Gated behind <code>@supports (scroll-marker-group: after)</code>;
         where it&apos;s missing the same markup is just a plain scroll-snap rail
         (still swipeable, minus the dots and arrows).
       </p>
@@ -2679,7 +2675,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         A shared <code>name</code> turns a set of <code>&lt;details&gt;</code> into an
         exclusive accordion: open one and the browser closes the rest. Radio-button
         semantics for disclosures, with no <code>toggle</code> listener and no open
-        state to track. They don&apos;t have to be siblings, only in the same document.
+        state to track. They only have to share a document.
         Open the second one and watch the first fold:
       </p>
       <div class="dgroup">
@@ -3038,7 +3034,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         Decouples <em>focus order</em> from source order for flex/grid. The three
         links below are reordered visually with <code>order</code> (DOM is 1-2-3,
         you see 2-3-1). With <code>reading-flow: flex-visual</code>, <kbd>Tab</kbd>
-        follows what you <em>see</em> (left to right) not the DOM. Tab through them:
+        follows the order you <em>see</em> (left to right) and ignores the DOM order. Tab through them:
       </p>
       <div class="rf-row"><a href="#rf" tabindex="0">DOM #1</a><a href="#rf" tabindex="0">DOM #2</a><a href="#rf" tabindex="0">DOM #3</a></div>
       <p class="replaces">
@@ -3095,16 +3091,16 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="replaces">
         On the site: photo &quot;uploaded&quot; stamps in the hover card become
         zone-correct and DST-safe without a date library. This is the one card on the page
-        that breaks the two-engine rule on purpose, and the reason it gets away with it is
-        that every use is a progressive enhancement over a working <code>Date</code> path:
+        that breaks the two-engine rule on purpose. It gets away with it because
+        every use is a progressive enhancement over a working <code>Date</code> path:
         the taskbar clock, the Notepad F5 stamp and the photo tooltip all try
         <code>Temporal</code> and fall back. Safari visitors get the fallback and notice nothing.
       </p>
       <p class="replaces">
         The Worker is the exception, and it uses <code>Date</code> only. Cloudflare&apos;s
         runtime carries V8&apos;s <code>Temporal</code> switched off, with no compatibility flag
-        to turn it on, and the one time it was switched on in production
-        (<a href="https://github.com/cloudflare/workerd/issues/6907">workerd#6907</a>)
+        to turn it on. The one time it was switched on in production
+        (<a href="https://github.com/cloudflare/workerd/issues/6907">workerd#6907</a>),
         <code>Temporal.Now</code> read the Unix epoch, so a server-side
         <code>typeof Temporal</code> guard would have taken the broken branch for every
         visitor at once. The /serendipity event times dropped their <code>Temporal</code>
@@ -3134,8 +3130,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="replaces">
         On the site: it could caption the 146-photo grid or summarize a
         <a href="/lens">/lens</a> reader page entirely client-side, with no
-        cf-garage Workers-AI round trip. Chrome-only, so it would ride on top of the
-        server path as an enhancement, never replace it.
+        cf-garage Workers-AI round trip. Chrome-only, so it could only ever ride on top
+        of the server path as an enhancement.
       </p>
     </section>
 
@@ -3222,8 +3218,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         Web and TensorFlow.js. The origin trial slipped twice and now runs
         Chrome&nbsp;147 through 149 on all Blink platforms; Edge ships alongside Chromium
         and Firefox has stated intent, so it is cross-engine-bound rather than
-        Chrome-locked. Distinct from WebGPU: WebNN targets the neural accelerator, not
-        the GPU compute path.
+        Chrome-locked. Distinct from WebGPU: WebNN targets the neural accelerator,
+        where WebGPU drives the GPU compute path.
       </p>
     </section>
 
@@ -3366,16 +3362,16 @@ navigation.addEventListener("navigate", (e) =&gt; {
         did not anticipate: a resized desktop window, the Run palette&apos;s photo
         preview, a tablet in portrait. Width descriptors plus <code>sizes="auto"</code>
         would replace the guess with the measurement. Two tiers bounds the prize (there
-        are only so many wrong answers available), so this is accuracy rather than
-        bytes. It degrades perfectly: an engine that ignores <code>sizes</code> falls
+        are only so many wrong answers available), so the win is accuracy, with few
+        bytes at stake. It degrades perfectly: an engine that ignores <code>sizes</code> falls
         back to the <code>&lt;source&gt;</code> ladder already there, which is why this
         is the closest thing on this page to a graduation candidate.
       </p>
       <p class="unsupported">
-        The chip above always reads &quot;no,&quot; and that is a limitation of the probe
-        rather than a claim about your browser. <code>img.sizes</code> is an unvalidated
-        reflected string, so assigning <code>"auto"</code> and reading it back returns
-        <code>"auto"</code> everywhere; an honest test has to lay out a lazy image and wait
+        The chip above always reads &quot;no,&quot; whatever your browser does, because
+        <code>img.sizes</code> is an unvalidated reflected string: assigning
+        <code>"auto"</code> and reading it back returns <code>"auto"</code> everywhere.
+        An honest test has to lay out a lazy image and wait
         on <code>currentSrc</code>, which is more machinery than a chip deserves. Chrome
         126+ and Firefox 150+ have it, and Safari 27 ships it with one known bug: an SVG
         image that sets both <code>sizes="auto"</code> and <code>object-fit</code> renders
@@ -3403,9 +3399,9 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </div>
       <p class="replaces">
         On the site: the homepage photo grid is a literal contact sheet, and a contact
-        sheet has seams. Those seams are per-tile frames today, which means nine borders
-        drawing what is really four lines, and it means the outer edge of the sheet is
-        drawn by the same rule that draws the inside. <code>row-rule</code> and
+        sheet has seams. Those seams are per-tile frames today: nine borders drawing
+        what is really four lines, with the outer edge of the sheet drawn by the same
+        rule that draws the inside. <code>row-rule</code> and
         <code>column-rule</code> separate the two ideas: the frame belongs to the photo,
         the seam belongs to the sheet. Chrome-only for now, so the per-tile borders stay.
       </p>
@@ -3429,8 +3425,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
       <p class="replaces">
         On the site: honestly, close to nothing, and that is worth saying out loud.
-        Luna is rectilinear on purpose. A window that is not a rectangle is not a window,
-        it is a skin, and the whole point of the resto-mod is that the chrome stays
+        Luna is rectilinear on purpose. A window that isn&apos;t a rectangle reads as a
+        skin, and the whole point of the resto-mod is that the chrome stays
         period-correct. Where it could matter is the focus ring: the site&apos;s bevels
         are stacked <code>box-shadow</code>s, and an outline around a bevelled control
         currently traces the box rather than the bevel. Filed next to
@@ -3500,9 +3496,9 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </h2>
       <p class="note">
         Firefox&nbsp;153 began implementing a limited subset of
-        <code>::-webkit-scrollbar</code>, and Firefox&nbsp;155 pulled most of it back. Not because it is a good API (it is a vendor
-        prefix from 2009 that never became a standard), but because enough of the web
-        styles scrollbars through it that ignoring it was the bigger compat problem.
+        <code>::-webkit-scrollbar</code>, a vendor prefix from 2009 that never became a
+        standard. It did so because enough of the web styles scrollbars through it that
+        ignoring it was the bigger compat problem. Firefox&nbsp;155 then pulled most of it back.
         The subset is deliberately narrow: a rule with a non-zero
         <code>width</code>/<code>height</code> disables overlay scrollbars, and
         <code>display: none</code> behaves like <code>scrollbar-width: none</code>. It
@@ -3645,7 +3641,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <code>posts.json</code> registry, and the worker reads each one and seeds it into
         a Notepad <code>&lt;textarea&gt;</code>. Today that is a fetch and a string. As a
         text module it would be an import the bundler can see, which matters because the
-        worker is bundled at deploy: a post would become a build-time dependency instead
+        worker is bundled at deploy. A post would become a build-time dependency instead
         of a runtime read, and a missing file would fail the deploy rather than the
         request. Tempting. Also a real coupling change, and with two engines
         unflagged, the coupling is the only thing it still waits on.
@@ -3697,7 +3693,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         On the site: <strong>tried, then removed</strong>. It shipped here for most of
         2026 and every route opted in inline, with a hand-tuned XP minimize/restore
         instead of a cross-fade. It came out on 2026-07-30 for a reason worth stating
-        plainly, because it is the same reason twice: the Speculation-Rules prerender
+        plainly, because it is the same reason twice. The Speculation-Rules prerender
         two cards down already loads the next page on hover-intent, so by click time
         the document is rendered and activation is free. The transition then spent
         ~200ms animating over a navigation that had nothing left to hide. Two features
@@ -3808,12 +3804,12 @@ navigation.addEventListener("navigate", (e) =&gt; {
         On the site: <strong>it used to be, and the feature outlived the thing it optimised.</strong>
         <code>sw.js</code> did declare static routes sending <code>/</code>, the crawlers, and
         the JSON APIs straight to network without booting the worker. Then the service worker
-        itself retired in build&nbsp;v136 (July&nbsp;2026): immutable content-addressed assets,
+        itself retired in build&nbsp;v136 (July&nbsp;2026). Immutable content-addressed assets,
         bfcache, and speculation-rules prerender already made repeat visits instant, so the
         SW&apos;s remaining job was insurance priced at a cache-version ritual per deploy plus a
         second poisonable cache. <code>sw.js</code> is now a fifteen-line unregister stub, and
         the routes went with it. Worth keeping the card, because the lesson is the useful part:
-        static routing made a service worker cheaper to keep, and the better answer turned out
+        static routing made a service worker cheaper to keep, but the better answer turned out
         to be not having one. A feature that optimises a layer is not an argument for the layer.
       </p>
       <p class="unsupported">No <code>addRoutes()</code> on <code>InstallEvent</code> here.</p>
@@ -3878,7 +3874,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         can least predict from a desk. Cloudflare sells the managed
         version as <a href="https://developers.cloudflare.com/speed/optimization/content/speed-brain/" rel="external">Speed&nbsp;Brain</a>,
         which injects a hosted rule set from the edge via a <code>Speculation-Rules</code> response
-        header; this site sends the same header naming a hand-written rule set instead (an inline
+        header. This site sends the same header naming a hand-written rule set instead (an inline
         block on every page until September&nbsp;2026), to keep eagerness where I want it and to skip
         the two live crawlers that an opinionated edge config wouldn&apos;t know to leave alone.
       </p>
@@ -3936,8 +3932,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="replaces">
         On the site: I already hand-roll exactly this pattern in KV. The now-playing tracks carry a
         <code>tracks:&lt;id&gt;:fresh</code> freshness sentinel next to their value (the photo manifest
-        used to be the second example, until it left KV for the worker bundle entirely), and
-        <code>cal/</code>&apos;s <code>fetchBusySWR</code> keeps a last-good calendar snapshot so a slow
+        used to be the second example, until it left KV for the worker bundle entirely).
+        In <code>cal/</code>, <code>fetchBusySWR</code> keeps a last-good calendar snapshot so a slow
         ICS feed never gates the booking page. Those tracks are the cleanest candidate to
         hand back to the platform: set <code>stale-while-revalidate</code> on that cached JSON and the
         edge serves the last-good playlist instantly while it re-scrapes Spotify in the background,
@@ -3962,7 +3958,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         may stay Chrome-only forever: a fitting horizon entry.
       </p>
       <button class="xp-button" id="lf-go" type="button">enumerate my local fonts</button>
-      <div class="cf-out" id="lf-out" style="margin-top:6px;font:10pt var(--font-mono)">&mdash;</div>
+      <div class="cf-out" id="lf-out" style="margin-top:6px;font:10pt var(--font-mono)">(not run yet)</div>
       <p class="replaces">
         On the site: it could verify a visitor actually has the XP stacks installed before relying
         on them, then gracefully swap when they don&apos;t. Mostly it&apos;s here because a no-web-fonts site
@@ -4019,7 +4015,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         which puts it squarely in the &quot;not urgent&quot; column above, and the Web Bot
         Auth draft pins Ed25519 today, so switching unilaterally would produce a signature
         no verifier recognises. The half that already affects visitors is the key exchange,
-        and it is not mine to ship: TLS terminates at Cloudflare&apos;s edge, which has
+        and it is not mine to ship. TLS terminates at Cloudflare&apos;s edge, which has
         been negotiating hybrid post-quantum key agreement for a while now.
         <a href="/whoareyou">/whoareyou</a> prints the <code>kex</code> field from
         <code>/cdn-cgi/trace</code>, so you can read what your own connection actually
@@ -4082,7 +4078,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         is hidden</a>. A background tab reports nothing, so a zero here means either that
         nothing was slow or that nobody was watching, and the API will not tell you which. I
         walked into exactly that measuring this site through an automated browser whose tab
-        reported <code>hidden</code>: load, opening the Run palette, and typing into it all
+        reported <code>hidden</code>. Load, opening the Run palette, and typing into it all
         came back with zero long frames, and so did a deliberate 180ms blocking frame I
         added to check the instrument. A clean result and a dead probe look identical.
       </p>
@@ -4295,10 +4291,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
         they were missing here anyway. A page that sorts the frontier by engine
         count can still miss things that quietly finished, because nothing about
         a feature landing everywhere generates the kind of news that gets a
-        feature written up. Versions below are from MDN&apos;s
-        browser-compat-data bundle v8.0.8 (2026-07-24), not from chromestatus,
-        because chromestatus&apos;s Safari and Firefox columns are filled in by
-        the Chrome feature author and drifted on three of these.
+        feature written up. Versions below come from MDN&apos;s
+        browser-compat-data bundle v8.0.8 (2026-07-24). The Chrome feature
+        author fills in chromestatus&apos;s Safari and Firefox columns, and they
+        drifted on three of these.
       </p>
     </section>
 
@@ -4379,7 +4375,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <span class="stat cross">Chrome &middot; Safari &middot; Firefox</span>
       </h2>
       <p class="note">
-        Not upcoming at all. All three shipped in all three engines while this
+        Already finished: all three shipped in all three engines while this
         page wasn&apos;t looking. <code>Math.sumPrecise</code>
         (Chrome&nbsp;147, Safari&nbsp;26.2, Firefox&nbsp;137) sums an iterable
         without accumulating float error.
@@ -4458,8 +4454,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <div><p class="tb-cap"><code>all</code></p><p class="si-line si-all">judgment paging quietly</p></div>
       </div>
       <p class="tb-cap" style="margin-top:8px">
-        These two most likely look identical to you, and that is the honest
-        result rather than a broken demo: on Latin text at this size
+        These two most likely look identical to you, which is the honest
+        result of a working demo: on Latin text at this size
         <code>auto</code> already skips every descender that crosses the rule,
         so <code>all</code> has nothing left to do. The keyword earns its keep
         where the heuristic under-skips, which is scripts with deep or frequent
@@ -4484,8 +4480,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <span class="stat cross">Safari 18.4 &middot; FF 104 &middot; Chrome 145</span>
       </h2>
       <p class="note">
-        Programmatic focus has always had a guessing problem: the browser
-        decides whether to draw the focus ring based on a heuristic about how
+        Programmatic focus has always had a guessing problem. The browser
+        decides whether to draw the focus ring from a heuristic about how
         focus arrived, and script that moves focus deliberately has no way to
         say what it wants. <code>el.focus({ focusVisible: true })</code> forces
         the ring on and <code>false</code> forces it off, so a script that moves
@@ -4537,7 +4533,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         On the site: the <code>.content</code> workspace inside every XP window
         carries exactly the hand-written first-child/last-child pair this
         replaces, and it is still hand-written as of this sweep. The fallback
-        here is not graceful in the way most of this page&apos;s cards are:
+        here is harsher than on most of this page&apos;s cards:
         without support the margins collide and the window padding looks wrong,
         rather than merely unstyled. With Chrome&nbsp;155 stable, the pair can go
         behind <code>@supports not (margin-trim: block)</code> and the property
@@ -4572,7 +4568,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         On the site: this is the most useful thing in the sweep, because the
         speculation rules here are hand-tuned and <em>unmeasured</em>. The rules
         in <code>index.html</code> were written from reasoning about which links
-        a visitor is likely to take next, and the only evidence that they help
+        a visitor is likely to take next. The only evidence that they help
         is that the pages feel fast when I click them, which is not evidence.
         <code>on-prefetch-activation</code> is the one that fits this
         architecture best: it is a response header, so the Worker can set it
@@ -4597,7 +4593,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         intermediary may retry it after a timeout and a cache may store the
         response. Servers picked it up quickly, and a resource advertises which
         body formats it takes through a new <code>Accept-Query</code> response
-        header. The headline everywhere is &quot;a GET with a body&quot;, and
+        header. The headline everywhere is &quot;a GET with a body&quot;, but
         the interesting part of this one is the layer underneath, because a
         cache that stores a <code>QUERY</code> response has to key on the
         request <em>body</em>, and almost nothing does yet.
@@ -4683,7 +4679,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </h2>
       <p class="note">
         <code>@supports</code> has always been able to test a property/value
-        pair and a selector, and has never been able to test an <em>at-rule</em>.
+        pair and a selector, but has never been able to test an <em>at-rule</em>.
         There is no way to ask &quot;does this engine understand
         <code>@container</code>&quot; in CSS. <code>at-rule(@container)</code>
         closes that, and the companion <code>named-feature()</code> covers a
@@ -4701,7 +4697,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <code>sizes-auto</code>, <code>import-text</code>,
         <code>pq-webcrypto</code>, <code>http-query</code>) are hardcoded to
         return <code>false</code> under a comment explaining that no synchronous
-        probe exists, on the reasoning that a chip reading &quot;no&quot; is
+        probe exists. The reasoning: a chip reading &quot;no&quot; is
         more honest than a probe that pretends to know. <code>at-rule()</code>
         would convert some of that class of question into a real answer. Firefox&nbsp;157
         shipped <code>at-rule()</code> on 2026-09-29, so it now clears two engines;
@@ -4842,9 +4838,9 @@ navigation.addEventListener("navigate", (e) =&gt; {
         the photo tiers are AVIF with a JPG fallback chosen by the browser
         before any script runs. Which encoding a visitor actually received is
         currently inferred. The declarative half is the more interesting idea
-        and the further out: a response header is a shape this worker is already
+        and the further out. A response header is a shape this worker is already
         built around, and its whole pitch is capturing the sessions that die
-        before a beacon fires, which is exactly the sample RUM is missing and
+        before a beacon fires: exactly the sample RUM is missing and
         cannot know it is missing.
       </p>
       <p class="unsupported">No <code>contentType</code> on resource entries here; the grouping falls back to counting entries.</p>
@@ -5027,8 +5023,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         no&quot; and then sits there being wrong. Two cards above were exactly that:
         <a href="#border-area-card">background-clip: border-area</a> shipped in Safari&nbsp;18.2 in
         December&nbsp;2024 and Chrome only caught up in&nbsp;150, and the system-color
-        card below has been three-engine since Firefox&nbsp;103. Neither was a status
-        that changed. Both were a status I read from the wrong end.
+        card below has been three-engine since Firefox&nbsp;103. Both errors were
+        mine: I read each status from the wrong end.
       </p>
       <p class="note">
         The other half of the pass was one build. <strong>Safari Technology
@@ -5065,10 +5061,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </div>
       <p class="replaces">
         On the site: tempting and <strong>declined</strong>, and this is the clearest
-        case on the page of the doctrine beating the feature. Luna&apos;s blue is not a
-        theme, it is the subject. A title bar that turned graphite because the visitor
+        case on the page of the doctrine beating the feature. Luna&apos;s blue is the
+        subject. A title bar that turned graphite because the visitor
         set macOS to graphite would be a more &quot;native&quot; site and a worse
-        reproduction of Windows&nbsp;XP, and every bevel here derives its shade from
+        reproduction of Windows&nbsp;XP. Every bevel here derives its shade from
         that one hue by <code>oklch(from &hellip;)</code> arithmetic, so the accent
         would have to win everywhere or nowhere. Where it does belong is the
         <em>chrome around</em> the reproduction: focus rings and selection highlights
@@ -5088,8 +5084,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         The text cursor has been a thin blinking bar in every browser since there were
         browsers, and <code>caret-shape</code> is one property that makes it a filled
         block or an underscore instead. It is a small thing that is unusually load-bearing
-        for one specific look, because a block caret is not decoration on a terminal, it
-        is how you know it is a terminal. Click into the field below (Chrome&nbsp;144+ to
+        for one specific look, because on a terminal the block caret is how you know
+        it is a terminal. Click into the field below (Chrome&nbsp;144+ to
         see it):
       </p>
       <p><input class="s8-caret" value="C:\&gt; " aria-label="block caret demo" spellcheck="false"></p>
@@ -5129,7 +5125,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         cards up hit the softer version of the same gap, where the minifier warns and
         emits the selector verbatim. So the current-match rule is printed below rather
         than applied, and the lesson generalises past this selector: shipping a new one
-        needs the toolchain to have heard of it, not only the browser.
+        needs the toolchain to have heard of it as well as the browser.
       </p>
 <pre>.prose::search-text          { background: gold; }
 .prose::search-text:current  { background: orangered; color: #fff; }
@@ -5247,7 +5243,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <!-- ───────────────────── animation-trigger ───────────────────── -->
     <section class="demo" id="animation-trigger" data-cap="animation-trigger">
       <h2>
-        <span>animation-trigger <span class="mono">scroll-triggered, not scroll-driven</span></span>
+        <span>animation-trigger <span class="mono">scroll-triggered vs. scroll-driven</span></span>
         <span class="stat trial">Chrome 146, <code>none</code> only &middot; Safari/FF no</span>
       </h2>
       <p class="note">
@@ -5334,7 +5330,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         What makes it worth a card rather than a footnote is the migration story, which
         is unusually honest for a removal: the replacement is a
         <a href="https://github.com/mfreed7/xslt_polyfill" rel="external">WebAssembly build of libxslt</a>,
-        so the code doesn&apos;t disappear, it moves out of the browser&apos;s trusted
+        so the code moves out of the browser&apos;s trusted
         computing base and into the page&apos;s own sandbox. The platform loses an
         attack surface, sites that need it keep working, and it costs a download.
       </p>
@@ -5367,7 +5363,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="note">
         Set a colour&apos;s opacity without restating the colour:
         <code>alpha(from &lt;any colour&gt; / 40%)</code> takes any colour value, a
-        <code>var()</code> token included, and returns it at that alpha; the <code>from</code> is the same
+        <code>var()</code> token included, and returns it at that alpha. The <code>from</code> is the same
         keyword relative colour syntax uses, and inside the slash the old alpha is
         in scope as <code>alpha</code>, so <code>calc(alpha * 0.5)</code> halves
         whatever it was. Until now the only way to do that
@@ -8183,12 +8179,12 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo">
       <h2><span>The long tail: independent engines</span></h2>
       <p class="note">
-        &quot;The platform&quot; isn&apos;t only Chromium, Gecko, and WebKit. Two
+        &quot;The platform&quot; reaches past Chromium, Gecko, and WebKit. Two
         teams are building new engines largely from scratch, a useful reminder
         that the frontier above is the <em>front</em>, while most of the web runs
         well behind it. Both are pre-release and racing toward <em>baseline</em>
         rather than 2026 CSS, so on the features on this page they&apos;re mostly
-        &quot;not yet.&quot; Status as of mid-2026: check the live links, this moves fast.
+        &quot;not yet.&quot; Status as of mid-2026; check the live links, because this moves fast.
       </p>
 
       <div class="engine">
@@ -8491,7 +8487,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         },
         {
           "t": "Its popovers only carry plain text, so the rich Fuji-LCD tooltip content would never fit inside one.",
-          "why": "An interestfor target is a real popover holding arbitrary markup; the demo's car cards prove it. Content was never the limit, support and cursor-anchoring are."
+          "why": "An interestfor target is a real popover holding arbitrary markup; the demo's car cards prove it. The limits are support and cursor-anchoring."
         },
         {
           "t": "Tooltips would fire on every incidental hover pass across a grid, with no way to add a delay.",
@@ -8513,7 +8509,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         },
         {
           "t": "It makes the popover track the cursor as the pointer moves across the anchored element.",
-          "why": "Anchors attach to elements, never the cursor; the page is explicit that the pointer-following x/y loop survives for mouse users. What you gain is edge-aware placement around the anchored element, which is why it serves the keyboard path."
+          "why": "Anchors attach only to elements; the page is explicit that the pointer-following x/y loop survives for mouse users. What you gain is edge-aware placement around the anchored element, which is why it serves the keyboard path."
         },
         {
           "t": "It animates the popover smoothly between its candidate positions while the page scrolls.",

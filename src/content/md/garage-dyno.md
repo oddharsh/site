@@ -23,25 +23,25 @@ is the useful part for a machine and it is served as JSON:
   existed). The earliest rows come from hand notes rather than the job, carry
   only the Worker figure, and say so in `source` and `note`.
 
-## Why a nightly series and not the per-PR diff
+## What a nightly series sees that the per-PR diff can't
 
 Every pull request touching served code gets a wire-size diff against its merge
 base, commented on the PR and gating nothing. That catches the STEP a change
 makes. It structurally cannot see DRIFT, which is the failure this site actually
-had: a byte budget that was breached for weeks while every check printed green,
-because each check compared a number against a constant somebody had typed and
+had. A byte budget sat breached for weeks while every check printed green,
+because each check compared a number against a constant somebody had typed, and
 the constant had rotted. A series has no constant. Each night's row is compared
 with the row before it, and a slope is visible whether or not anyone re-baselined.
 
 ## Where the rows live
 
 On a machine-owned branch of the site's repository, `perf-history`, as one JSON
-line per night appended by a scheduled job. A branch rather than a database
-because the main branch takes no pushes from any workflow and the only database
-credential is gated behind a human reviewer for releases; a branch outside both
+line per night appended by a scheduled job. It's a branch rather than a
+database because the main branch takes no pushes from any workflow, and a human
+reviewer gates the only database credential for releases. A branch outside both
 rules is the one place a nightly job can write without weakening either. The
 page only ever reads it, caches it for six hours, and keeps the last good copy
-when the read fails, since the value of the chart is the part of the series that
-already happened.
+when the read fails. The chart's value is the part of the series that already
+happened.
 
 `/perf` and `/perf.json` are older names for the same two URLs and redirect here.

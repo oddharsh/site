@@ -70,7 +70,7 @@ export function renderBotPage() {
     <p>
       Lens also compares responses to sample browser and crawler User-Agent
       strings. Those diagnostic requests do not claim a Web Bot Auth identity
-      for the sampled bot, and still obey AadharshBot's robots.txt policy.
+      for the sampled bot, but they still obey AadharshBot's robots.txt policy.
     </p>
 
     <h2>How to verify it's really ${BOT_NAME}</h2>
@@ -79,7 +79,7 @@ export function renderBotPage() {
       and <code>Signature</code> headers per
       <a href="https://www.rfc-editor.org/rfc/rfc9421" target="_blank" rel="noopener">RFC 9421</a>
       with the Web Bot Auth profile (<code>tag="web-bot-auth"</code>). Fetch the JWKS
-      at the URL above, find the key with the matching <code>kid</code> (its RFC 7638 thumbprint), and verify the
+      at the URL above, find the key whose <code>kid</code> matches (each <code>kid</code> is its key's RFC 7638 thumbprint), and verify the
       Ed25519 signature over the canonical components listed in <code>Signature-Input</code>.
       Treat an absent, expired or invalid signature as unverified. A User-Agent
       string alone does not prove who sent a request.
@@ -114,10 +114,10 @@ export function renderBotPage() {
     </p>
     <p>
       This is its second run. The first, from 2026-07-27 to 2026-08-15, signed in pure
-      JavaScript, because Cloudflare's runtime had no ML-DSA in WebCrypto: roughly 8.5ms a
-      signature against a 10ms per-invocation budget, so the playlist scrape and the
-      <a href="/lens">/lens</a> discovery pass, which sign many times per request, failed because
-      of it. Cloudflare has since added ML-DSA to WebCrypto on Workers, where it signs in about
+      JavaScript, because Cloudflare's runtime had no ML-DSA in WebCrypto. That cost roughly
+      8.5ms a signature against a 10ms per-invocation budget, so the playlist scrape and the
+      <a href="/lens">/lens</a> discovery pass failed, since each signs many times per request.
+      Cloudflare has since added ML-DSA to WebCrypto on Workers, where it signs in about
       0.12ms. If that ever stops working, the label drops and <code>sig1</code> ships alone.
       <a href="/garage/pqc">/garage/pqc</a> has the measurements and the full argument.
     </p>
@@ -129,15 +129,15 @@ export function renderBotPage() {
       They retain the signed bot identity, bounded batches, and caching.
       Other readers, including Lens requests to Spotify, follow the policy below.
     </p>
-    <p>Add to your <code>robots.txt</code>:</p>
+    <p>Add this to your <code>robots.txt</code>:</p>
     <pre><code>User-agent: ${BOT_NAME}
 Disallow: /</code></pre>
     <p>
       Outside that exception, the signed HTTP readers read the origin's
-      <code>robots.txt</code> (cached for up to 12 hours). It skips paths disallowed
+      <code>robots.txt</code> (cached for up to 12 hours). They skip paths disallowed
       for <code>${BOT_NAME}</code> or <code>*</code>, including redirect destinations.
       If the policy is unreachable, rate-limited, or too large to read safely,
-      the fetch is skipped. A positive <code>Crawl-delay</code> also makes this bot
+      the bot skips the fetch. A positive <code>Crawl-delay</code> also makes this bot
       skip the origin. These rules apply to scheduled crawls and visitor-requested
       Lens HTTP reads. If you have a question or a complaint, email
       <!--email_off--><a href="mailto:coffee@aadhar.sh">coffee@aadhar.sh</a><!--/email_off--> and I'll reply by hand.

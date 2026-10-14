@@ -621,7 +621,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
       <a href="https://developer.mozilla.org/en-US/docs/Web/API/Popover_API" rel="external">Popover API</a> for show/hide, <code>@starting-style</code> for the entry fade, and two <a class="term" data-t="css-custom-properties" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Cascading_variables/Using_custom_properties" title="Variables written in CSS, named with two leading dashes, that other style rules can read and JavaScript can change." rel="external">custom-property</a> writes per move for cursor tracking. No <a class="term" data-t="raf" href="https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame" title="A browser API that runs a callback just before the next screen repaint, the usual way to sync JavaScript animation with the display." rel="external">rAF</a>, no layout reads.
     </p>
     <p class="lede" style="margin-top: 4px;">
-      The shipping version is roughly 100 lines. Most of the difference is the markup each variant renders, and the rest is four guards that have nothing to do with tooltips. An <code>activeSlot</code> check, so moving across a slot's children does not re-render it. A <code>:popover-open</code> test before each show and hide, so the platform call only fires on a real state change. A <code>relatedTarget</code> containment test, so moving to another element inside the grid is not read as leaving it. And the <code>clamp()</code> wrapped around each translate, which is <a class="term" data-t="viewport" href="https://developer.mozilla.org/en-US/docs/Glossary/Viewport" title="The part of a web page currently visible in the browser window; anything outside it needs scrolling to see." rel="external">viewport</a> edge handling rather than placement. Every one earns its keep and none of them is the idea.
+      The shipping version is roughly 100 lines. Most of the difference is the markup each variant renders, and the rest is four guards that have nothing to do with tooltips. An <code>activeSlot</code> check, so moving across a slot's children does not re-render it. A <code>:popover-open</code> test before each show and hide, so the platform call only fires on a real state change. A <code>relatedTarget</code> containment test, so moving to another element inside the grid is not read as leaving it. And the <code>clamp()</code> wrapped around each translate, which is <a class="term" data-t="viewport" href="https://developer.mozilla.org/en-US/docs/Glossary/Viewport" title="The part of a web page currently visible in the browser window; anything outside it needs scrolling to see." rel="external">viewport</a> edge handling, a separate job from placement. Every one earns its keep and none of them is the idea.
     </p>
     <p class="lede" style="margin-top: 4px;">
       &larr; back to <a href="/garage">garage</a>
@@ -717,23 +717,23 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
     <ol class="vinyl-demo" id="track-row">
       <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0246f9bf1154c7205b0e8b1667">
         <span class="duration">3:54</span>
-        <span class="title">Guild (feat. Mac Miller)</span><span class="sep">&mdash;</span><span class="artist">Earl Sweatshirt, Mac Miller</span>
+        <span class="title">Guild (feat. Mac Miller)</span><span class="sep">&middot;</span><span class="artist">Earl Sweatshirt, Mac Miller</span>
       </li>
       <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02f6d0c96fb83cc95f7853b9f6">
         <span class="duration">2:14</span>
-        <span class="title">GAHDAMN</span><span class="sep">&mdash;</span><span class="artist">Kairee Doty</span>
+        <span class="title">GAHDAMN</span><span class="sep">&middot;</span><span class="artist">Kairee Doty</span>
       </li>
       <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02e098f51a1a2ebb827dc6099a">
         <span class="duration">4:49</span>
-        <span class="title">1995</span><span class="sep">&mdash;</span><span class="artist">Freddie Gibbs, The Alchemist</span>
+        <span class="title">1995</span><span class="sep">&middot;</span><span class="artist">Freddie Gibbs, The Alchemist</span>
       </li>
       <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02e70d786c57a3957363561633">
         <span class="duration">3:35</span>
-        <span class="title">TRICERATOPS</span><span class="sep">&mdash;</span><span class="artist">Action Bronson, Paul Wall, Lil Yachty</span>
+        <span class="title">TRICERATOPS</span><span class="sep">&middot;</span><span class="artist">Action Bronson, Paul Wall, Lil Yachty</span>
       </li>
       <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02d269fe9d94eba18fc4a1632d">
         <span class="duration">2:04</span>
-        <span class="title">GREEN LIGHT</span><span class="sep">&mdash;</span><span class="artist">colle$ttye</span>
+        <span class="title">GREEN LIGHT</span><span class="sep">&middot;</span><span class="artist">colle$ttye</span>
       </li>
     </ol>
 
@@ -746,15 +746,15 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
     <ol class="vinyl-demo" id="balloon-row">
       <li>
         <span class="duration">3:54</span>
-        <span class="title">Guild (feat. Mac Miller)</span><span class="sep">&mdash;</span><span class="artist">Earl Sweatshirt, Mac Miller</span>
+        <span class="title">Guild (feat. Mac Miller)</span><span class="sep">&middot;</span><span class="artist">Earl Sweatshirt, Mac Miller</span>
       </li>
       <li>
         <span class="duration">4:49</span>
-        <span class="title">1995</span><span class="sep">&mdash;</span><span class="artist">Freddie Gibbs, The Alchemist</span>
+        <span class="title">1995</span><span class="sep">&middot;</span><span class="artist">Freddie Gibbs, The Alchemist</span>
       </li>
       <li>
         <span class="duration">2:04</span>
-        <span class="title">GREEN LIGHT</span><span class="sep">&mdash;</span><span class="artist">colle$ttye</span>
+        <span class="title">GREEN LIGHT</span><span class="sep">&middot;</span><span class="artist">colle$ttye</span>
       </li>
     </ol>
 
@@ -762,7 +762,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 
     <h2>Polaroid flip (photos) <span class="badge dead">rejected</span></h2>
     <div class="rejection">
-      <strong>Rejected:</strong> hover flips the slot 180&deg; via <code>transform: rotateY</code>, so you see the metadata <em>or</em> the photo, never both. The grid exists to show the photos, so a tooltip should add to what you can see, not replace it. The same fault killed the first Fuji-LCD overlay (v1, painted on top of the slot). I kept this one as a record.
+      <strong>Rejected:</strong> hover flips the slot 180&deg; via <code>transform: rotateY</code>, so you see the metadata <em>or</em> the photo, never both. The grid exists to show the photos, so a tooltip should add to what you can see. The same fault killed the first Fuji-LCD overlay (v1, painted on top of the slot). I kept this one as a record.
     </div>
     <div class="row polaroid">
       <a class="slot" href="#">
@@ -813,7 +813,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
       Element-anchored rather than cursor-anchored. <b>This shipped.</b> It's the <a href="/">homepage</a>'s <em>keyboard-focus</em> tooltip path: mouse users get the cursor-follower, but a keyboard user tabbing to a slot has no cursor to track, so on <code>:focus-visible</code> the JS sets <code>anchor-name</code> on the focused element and the <a class="term" data-t="popover-api" href="https://developer.mozilla.org/en-US/docs/Web/API/Popover_API" title="A browser API for showing content above the rest of the page, such as menus and tooltips, with built-in show, hide and dismiss behavior." rel="external">popover</a> tethers to it via <code>position-anchor</code> / <code>position-area</code> (gated on <code>CSS.supports</code>, a clean no-op where unsupported).
     </p>
     <p class="note">
-      <b>Note: this is a keyboard fallback, and a keyboard fallback only, not a JS-disabled one.</b> JS orchestrates every live tooltip (here and on serendipity): it populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and never opens: no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are <a class="term" data-t="progressive-enhancement" href="https://en.wikipedia.org/wiki/Progressive_enhancement" title="Building a page so its core content works in any browser, then layering extra features on top for browsers that support them." rel="external">progressive enhancement</a> that simply vanish without script (the photos and links still work).
+      <b>Note: this is a keyboard fallback, and only a keyboard fallback.</b> JS orchestrates every live tooltip (here and on serendipity): it populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and never opens: no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are <a class="term" data-t="progressive-enhancement" href="https://en.wikipedia.org/wiki/Progressive_enhancement" title="Building a page so its core content works in any browser, then layering extra features on top for browsers that support them." rel="external">progressive enhancement</a> that simply vanish without script (the photos and links still work).
     </p>
     <div class="anchor-fallback">
       Your browser doesn't support <code>anchor-name</code> yet. Chrome 125+ or Safari TP shows this demo.
@@ -1113,7 +1113,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
         },
         {
           "t": "It runs a rAF loop that measures the tooltip with getBoundingClientRect and flips it to the other side near the viewport edges.",
-          "why": "That was the earlier build, and the intro paragraph still describes it as a rAF loop. The comment above place() is explicit: no rAF, no getBoundingClientRect, no JS flip. clamp() pins the tip against the edge instead."
+          "why": "That was the earlier build. The comment above place() is explicit: no rAF, no getBoundingClientRect, no JS flip. clamp() pins the tip against the edge instead."
         },
         {
           "t": "It sets the tooltip's style.left and style.top directly and re-renders the tooltip's contents on every single move.",

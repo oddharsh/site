@@ -98,7 +98,7 @@
       </div>
 
       <p class="disclosure"><b>How to read this:</b> the <b>FHE</b> teacher's messages are <b>verbatim</b> excerpts from
-        <a href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">&ldquo;Privacy 2.0: PETs and the Promise of Private Shared State&rdquo;</a> by Aadharsh Pannirselvam.
+        <a href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">"Privacy 2.0: PETs and the Promise of Private Shared State"</a> by Aadharsh Pannirselvam.
         The learner's lines and the demos are AI-generated to pace the read. Scroll the conversation. ↓</p>
 
       <div class="log">
@@ -155,7 +155,7 @@
         <div class="msg bot">
           <div class="pic" aria-hidden="true"></div>
           <div><div class="who"><b>FHE</b><time>20:44</time></div>
-          <div class="bubble"><p>The concept of homomorphic encryption was first theorized in the late 1970s with &ldquo;privacy homomorphisms&rdquo; which could enable untrusted computers to perform operations on sensitive data without needing to reveal it in <a class="term" data-t="plaintext" href="https://en.wikipedia.org/wiki/Plaintext" title="The readable message before it is encrypted, or after it is decrypted." rel="external">plaintext</a>. However, homomorphic encryption would remain an open problem until 2009, when cryptographer Craig Gentry described a feasible homomorphic encryption scheme using lattices to express arbitrary <a class="term" data-t="boolean-circuit" href="https://en.wikipedia.org/wiki/Boolean_circuit" title="A computation written as a network of logic gates (AND, OR, NOT) that turns input bits into output bits." rel="external">circuits</a>&mdash;a <em>fully</em> homomorphic encryption scheme.</p>
+          <div class="bubble"><p>The concept of homomorphic encryption was first theorized in the late 1970s with "privacy homomorphisms" which could enable untrusted computers to perform operations on sensitive data without needing to reveal it in <a class="term" data-t="plaintext" href="https://en.wikipedia.org/wiki/Plaintext" title="The readable message before it is encrypted, or after it is decrypted." rel="external">plaintext</a>. However, homomorphic encryption would remain an open problem until 2009, when cryptographer Craig Gentry described a feasible homomorphic encryption scheme using lattices to express arbitrary <a class="term" data-t="boolean-circuit" href="https://en.wikipedia.org/wiki/Boolean_circuit" title="A computation written as a network of logic gates (AND, OR, NOT) that turns input bits into output bits." rel="external">circuits</a>, a <em>fully</em> homomorphic encryption scheme.</p>
           <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
         </div>
 
@@ -168,7 +168,7 @@
         <div class="msg bot">
           <div class="pic" aria-hidden="true"></div>
           <div><div class="who"><b>FHE</b><time>20:45</time></div>
-          <div class="bubble"><p>However, a core challenge in implementing this scheme came from the randomly distributed noise that enabled Gentry&rsquo;s implementation of homomorphic addition and multiplication operations. Specifically, homomorphic <em>additions</em> add small amounts of randomly generated noise to the noise accumulated over a circuit&rsquo;s execution, while homomorphic <em>multiplications</em> multiply the same accumulated noise. Critically, when an FHE program&rsquo;s noise accumulates past a certain threshold in binary, it becomes indistinguishable from the encrypted data used for the underlying computation. Simply put, adding too much noise will corrupt the encrypted data, and homomorphic multiplication will do this faster than homomorphic addition.</p>
+          <div class="bubble"><p>However, a core challenge in implementing this scheme came from the randomly distributed noise that enabled Gentry's implementation of homomorphic addition and multiplication operations. Specifically, homomorphic <em>additions</em> add small amounts of randomly generated noise to the noise accumulated over a circuit's execution, while homomorphic <em>multiplications</em> multiply the same accumulated noise. Critically, when an FHE program's noise accumulates past a certain threshold in binary, it becomes indistinguishable from the encrypted data used for the underlying computation. Simply put, adding too much noise will corrupt the encrypted data, and homomorphic multiplication will do this faster than homomorphic addition.</p>
           <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
         </div>
 
@@ -215,7 +215,7 @@
         <div class="msg bot">
           <div class="pic" aria-hidden="true"></div>
           <div><div class="who"><b>FHE</b><time>20:48</time></div>
-          <div class="bubble"><p>To mitigate this, Gentry proposed <em>bootstrapping</em>, a process that &ldquo;refreshes&rdquo; <a class="term" data-t="ciphertext" href="https://en.wikipedia.org/wiki/Ciphertext" title="The scrambled output of encryption, unreadable without the key." rel="external">ciphertexts</a> by homomorphically re-encrypting them using a different private key, effectively resetting a program&rsquo;s noise before it can bleed into the critical data and corrupt it. However, bootstrapping came at the cost of speed and computational resources&mdash;it made FHE theoretically limitless but enshrined a structural tradeoff between security and usability for complicated programs. With the rate of noise accumulation and the computational overhead in bootstrapping, this tradeoff was initially massive, as Gentry&rsquo;s initial scheme needed 30 minutes to evaluate each bit operation when it was finally implemented two years later.</p>
+          <div class="bubble"><p>To mitigate this, Gentry proposed <em>bootstrapping</em>, a process that "refreshes" <a class="term" data-t="ciphertext" href="https://en.wikipedia.org/wiki/Ciphertext" title="The scrambled output of encryption, unreadable without the key." rel="external">ciphertexts</a> by homomorphically re-encrypting them using a different private key, effectively resetting a program's noise before it can bleed into the critical data and corrupt it. However, bootstrapping came at the cost of speed and computational resources; it made FHE theoretically limitless but enshrined a structural tradeoff between security and usability for complicated programs. With the rate of noise accumulation and the computational overhead in bootstrapping, this tradeoff was initially massive, as Gentry's initial scheme needed 30 minutes to evaluate each bit operation when it was finally implemented two years later.</p>
           <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
         </div>
 
@@ -228,7 +228,7 @@
         <div class="msg bot">
           <div class="pic" aria-hidden="true"></div>
           <div><div class="who"><b>FHE</b><time>20:49</time></div>
-          <div class="bubble"><p>Given all of this, early FHE research largely focused on improving efficiency by way of noise management, both by increasing the separation between noise and information to reduce the number of bootstrapping operations and by speeding up the actual process of managing noise. The 2013 <a class="term" data-t="gsw" href="https://eprint.iacr.org/2013/340" title="A 2013 fully homomorphic encryption scheme by Gentry, Sahai and Waters, built on learning with errors, whose ciphertexts are matrices." rel="external">Gentry-Sahai-Waters (GSW) scheme</a> was a prime example of this as it accelerated FHE operations from minutes to milliseconds via &ldquo;leveled&rdquo; circuits. However, like some of the FHE schemes that followed, such as <a class="term" data-t="bgv" href="https://eprint.iacr.org/2011/277" title="A fully homomorphic encryption scheme by Brakerski, Gentry and Vaikuntanathan that computes exactly on encrypted integers and runs fixed-depth circuits without bootstrapping." rel="external">BGV</a> and <a class="term" data-t="ckks" href="https://eprint.iacr.org/2016/421" title="A homomorphic encryption scheme by Cheon, Kim, Kim and Song that computes on encrypted real numbers approximately, treating its noise as rounding error." rel="external">CKKS</a>, it fragmented FHE into standards based on differing compilers and problem spaces. This fragmentation ultimately forced developers to trade a single standard of FHE for lower levels of friction. That being said, at this stage homomorphic millisecond-level logic gates remained a million times slower than traditional computing&rsquo;s nanosecond-level operations, and as such, these early schemes were impractical for use in crypto.</p>
+          <div class="bubble"><p>Given all of this, early FHE research largely focused on improving efficiency by way of noise management, both by increasing the separation between noise and information to reduce the number of bootstrapping operations and by speeding up the actual process of managing noise. The 2013 <a class="term" data-t="gsw" href="https://eprint.iacr.org/2013/340" title="A 2013 fully homomorphic encryption scheme by Gentry, Sahai and Waters, built on learning with errors, whose ciphertexts are matrices." rel="external">Gentry-Sahai-Waters (GSW) scheme</a> was a prime example of this as it accelerated FHE operations from minutes to milliseconds via "leveled" circuits. However, like some of the FHE schemes that followed, such as <a class="term" data-t="bgv" href="https://eprint.iacr.org/2011/277" title="A fully homomorphic encryption scheme by Brakerski, Gentry and Vaikuntanathan that computes exactly on encrypted integers and runs fixed-depth circuits without bootstrapping." rel="external">BGV</a> and <a class="term" data-t="ckks" href="https://eprint.iacr.org/2016/421" title="A homomorphic encryption scheme by Cheon, Kim, Kim and Song that computes on encrypted real numbers approximately, treating its noise as rounding error." rel="external">CKKS</a>, it fragmented FHE into standards based on differing compilers and problem spaces. This fragmentation ultimately forced developers to trade a single standard of FHE for lower levels of friction. That being said, at this stage homomorphic millisecond-level logic gates remained a million times slower than traditional computing's nanosecond-level operations, and as such, these early schemes were impractical for use in crypto.</p>
           <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
         </div>
 
@@ -241,7 +241,7 @@
         <div class="msg bot">
           <div class="pic" aria-hidden="true"></div>
           <div><div class="who"><b>FHE</b><time>20:50</time></div>
-          <div class="bubble"><p>Another caveat with practically applying FHE to shared state lies in decrypting outputs for use in non-FHE applications&mdash;to do so one naturally needs a decryption key. This decryption key becomes a limiter of trust assumptions and, in practice, is either controlled by a single party or a set of nodes in an <a class="term" data-t="mpc" href="https://en.wikipedia.org/wiki/Secure_multi-party_computation" title="Secure multi-party computation: several parties jointly compute a result from their private inputs without any of them revealing its input to the others." rel="external">MPC</a> setting, which brings FHE back to the trust assumptions of MPC whilst being slower.</p>
+          <div class="bubble"><p>Another caveat with practically applying FHE to shared state lies in decrypting outputs for use in non-FHE applications: to do so one naturally needs a decryption key. This decryption key becomes a limiter of trust assumptions and, in practice, is either controlled by a single party or a set of nodes in an <a class="term" data-t="mpc" href="https://en.wikipedia.org/wiki/Secure_multi-party_computation" title="Secure multi-party computation: several parties jointly compute a result from their private inputs without any of them revealing its input to the others." rel="external">MPC</a> setting, which brings FHE back to the trust assumptions of MPC whilst being slower.</p>
           <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
         </div>
 
@@ -367,7 +367,7 @@
         },
         {
           "t": "a way to get rid of the random noise entirely",
-          "why": "The noise is load-bearing: it is the randomness that makes the scheme secure. Gentry's contribution was a way to manage it, via bootstrapping, while keeping it in place."
+          "why": "The noise is load-bearing: it is the randomness that makes the scheme secure. Gentry contributed a way to manage it, via bootstrapping, while keeping it in place."
         },
         {
           "t": "encrypted operations that ran as fast as normal ones",
@@ -429,7 +429,7 @@
         {
           "t": "someone has to hold the decryption key, and you have to trust them",
           "ok": true,
-          "why": "That is the caveat that closes the loop: outputs for non-FHE use need a decryption key, and in practice a single party or a set of MPC nodes controls it. The trust assumptions collapse back to MPC's, with FHE having been slower on the way."
+          "why": "That is the caveat that closes the loop: outputs for non-FHE use need a decryption key, and in practice a single party or a set of MPC nodes controls it. The trust assumptions collapse back to MPC's, only slower."
         },
         {
           "t": "the ciphertext just decrypts itself after enough operations",

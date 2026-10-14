@@ -5,16 +5,16 @@
   "petsLine": "Learning&nbsp;With&nbsp;Errors<br>two crossings",
   "composeNote": "This is a recorded conversation. Toggle and pull in the demo above.",
   "hasAsk": true,
-  "disclosure": "<b>Starter draft.</b> The granny-versus-square structure is standard knot lore; the demo is a schematic of the two crossings, not a rope simulation. Background paraphrased from <a href=\"https://www.fieggen.com/shoelace/ianknot.htm\" rel=\"external\">Ian's Shoelace Site</a> and Wikipedia.",
+  "disclosure": "<b>Starter draft.</b> The granny-versus-square structure is standard knot lore; the demo draws only a schematic of the two crossings. Background paraphrased from <a href=\"https://www.fieggen.com/shoelace/ianknot.htm\" rel=\"external\">Ian's Shoelace Site</a> and Wikipedia.",
   "editorial": {
     "reader": "A curious reader who knows the surface term but wants the mechanism.",
-    "problem": "The reader can recognize knots vocabulary without being able to predict what its mechanism will do.",
-    "thesis": "The page should leave the reader able to explain knots in plain language and predict its behavior.",
+    "problem": "The reader recognizes the vocabulary of shoelace knots but can't yet predict what the mechanism will do.",
+    "thesis": "The page should leave the reader able to explain shoelace knots in plain language and predict their behavior.",
     "evidence": [
       "The conversation cites its sources and the demos make the mechanism visible.",
       "The understanding check names common misconceptions and explains every answer."
     ],
-    "uncertainty": "The demos teach the model; they do not replace a measurement or a full treatment."
+    "uncertainty": "The demos teach the model and stop short of a measurement or a full treatment."
   },
   "understanding": {
     "intro": "Before you run off to re-tie those shoes, a quick check. Four questions, no stakes. If the demo did its job, you already know every answer.",
@@ -51,7 +51,7 @@
           },
           {
             "t": "they cinch tight, the slipping only shows up later",
-            "why": "The failure is immediate. On the very first pull the granny's crossings move apart, never together. A granny bow starts losing grip the moment load hits it."
+            "why": "The failure is immediate. On the very first pull the granny's crossings move apart. A granny bow starts losing grip the moment load hits it."
           },
           {
             "t": "they vanish as the ropes untie and snap straight",
@@ -67,7 +67,7 @@
         "q": "People credit the Ian knot with keeping their laces tied. What does it actually change?",
         "options": [
           {
-            "t": "nothing about the knot itself, it just gets you to the same square bow faster",
+            "t": "only the speed: it gets you to the same square bow faster",
             "ok": true,
             "why": "That is the trick. Both loops form at once and pass through each other in one motion, so you land on the same square bow in a fraction of the time. Speed method, same destination."
           },
@@ -118,7 +118,7 @@
     {
       "who": "bot",
       "time": "21:10",
-      "html": "<p>Real structure, and it is the same argument as the oldest knot in the book: <a class=\"term\" data-t=\"granny-knot\" href=\"https://en.wikipedia.org/wiki/Granny_knot\" title=\"A knot made of two identical half-knots in a row. It looks like a reef knot but slips or jams under load.\" rel=\"external\">granny</a> versus square. A knot like this is basically two crossings. If the second crossing mirrors the first you get a <a class=\"term\" data-t=\"reef-knot\" href=\"https://en.wikipedia.org/wiki/Reef_knot\" title=\"A knot made of two opposite half-knots, right over left then left over right, that lies flat and holds. Also called a square knot.\" rel=\"external\">square (reef) knot</a> that seats flat and holds. If the second repeats the first you get a granny that capsizes and slips. Most people whose laces fall open are unknowingly tying a granny bow.</p>"
+      "html": "<p>Real structure, and it is the same argument as the oldest knot in the book: <a class=\"term\" data-t=\"granny-knot\" href=\"https://en.wikipedia.org/wiki/Granny_knot\" title=\"A knot made of two identical half-knots in a row. It looks like a reef knot but slips or jams under load.\" rel=\"external\">granny</a> versus square. A knot like this is basically two crossings. If the second crossing mirrors the first you get a <a class=\"term\" data-t=\"reef-knot\" href=\"https://en.wikipedia.org/wiki/Reef_knot\" title=\"A knot made of two opposite half-knots, right over left then left over right, that lies flat and holds. Also called a square knot.\" rel=\"external\">square (reef) knot</a> that seats flat and holds. If the second repeats the first you get a granny that capsizes and slips. If your laces keep falling open, you're probably tying a granny bow without knowing it.</p>"
     },
     {
       "demo": {
@@ -159,7 +159,7 @@
     {
       "who": "bot",
       "time": "21:14",
-      "html": "<p>Bunny ears makes both loops first, then ties the two like ropes. It is easy to learn and just as prone to the granny trap: tie the two ears with the same handedness you started with and you get a granny bow. The knot does not care which method got you to the two crossings; only their handedness decides whether it holds.</p>"
+      "html": "<p>Bunny ears makes both loops first, then ties the two like ropes. It is easy to learn and just as prone to the granny trap: tie the two ears with the same handedness you started with and you get a granny bow. Whatever method got you to the two crossings, only their handedness decides whether the knot holds.</p>"
     },
     {
       "who": "you",
