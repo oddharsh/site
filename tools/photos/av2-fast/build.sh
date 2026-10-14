@@ -2,13 +2,16 @@
 # build.sh: a fast native AV2 decoder for this machine, next to a pristine one.
 #
 # WHAT IT IS. AVM 1.0.0 (the AV2 reference decoder, pinned by
-# ../libavif-avm/build.sh) built decoder-only with three accelerations, each
+# ../libavif-avm/build.sh) built decoder-only with four accelerations, each
 # bit-exact against the untouched build:
 #   patches/0001  a NEON gdf_inference_unit. GDF, AV2's learned in-loop filter,
 #                 was 71% of a single-threaded decode, and AVM has no ARM code
 #                 for it.
 #   patches/0002  the GDF frame pass across cores (Grand Central Dispatch), by
-#                 unit row: even rows, then odd rows.
+#                 unit row, packed into phases whose footprints don't overlap.
+#   patches/0003  deblocking behind reconstruction: superblock rows are
+#                 deblocked while the tiles below are still decoding, with an
+#                 unfiltered shadow for IntraBC reads (AVM_LF_PIPELINE=0 off).
 #   SIMDe         AVM's own AVX2/SSE kernels compiled for arm64 through
 #                 ../libavif-avm/simde.ts --decoder (113 dispatch entries).
 #
@@ -66,7 +69,8 @@ for p in "$HERE"/patches/*.patch; do
   patch -p1 --forward --quiet -d "$OUT/fast/src" -i "$p"
 done
 grep -q "gdf_inference_unit_neon" "$OUT/fast/src/av2/common/arm/gdf_block_neon.c" &&
-  grep -q "gdf_filter_frame_orig" "$OUT/fast/src/av2/common/gdf.c" || {
+  grep -q "gdf_filter_frame_orig" "$OUT/fast/src/av2/common/gdf.c" &&
+  grep -q "av2_lf_pipeline_start" "$OUT/fast/src/av2/decoder/decodeframe.c" || {
   echo "error: the patches did not land in $OUT/fast/src" >&2; exit 1; }
 cmake -S "$OUT/fast/src" -B "$OUT/fast/build" "${CMAKE_FLAGS[@]}" >/dev/null
 ninja -C "$OUT/fast/build" avm >/dev/null

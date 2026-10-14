@@ -1,7 +1,9 @@
 // av2bench.c: decode one AV2 OBU file REPS times with THREADS decoder threads.
 // Prints the median and minimum decode time, and an FNV-1a hash of the decoded
 // planes, byte for byte as the decoder holds them, so two builds can be
-// compared bit for bit. build.sh links it against each libavm.a.
+// compared bit for bit. Every decode is hashed; if any differs from the rest
+// the line ends in UNSTABLE and the exit status is 1. build.sh links it
+// against each libavm.a.
 //   av2bench <file.obu> <reps> <threads>
 #include <stdint.h>
 #include <stdio.h>
@@ -56,6 +58,7 @@ int main(int argc, char **argv) {
   if (reps < 1) return 2;
   double *t = malloc(sizeof(double) * reps);
   uint64_t hash = 0;
+  int unstable = 0;
   for (int r = -2; r < reps; r++) {  // two warm-up decodes
     avm_codec_ctx_t ctx;
     avm_codec_dec_cfg_t cfg = { 0 };
@@ -74,11 +77,15 @@ int main(int argc, char **argv) {
     const double t1 = now_ms();
     if (!img) return 1;
     if (r >= 0) t[r] = t1 - t0;
-    if (r == reps - 1) hash = plane_hash(img);
+    // Every decode is hashed, outside the timed span: a race in a threaded
+    // stage shows up as one decode that differs from the others.
+    const uint64_t h = plane_hash(img);
+    if (r > -2 && h != hash) unstable = 1;
+    hash = h;
     avm_codec_destroy(&ctx);
   }
   qsort(t, reps, sizeof(double), cmp);
-  printf("hash %016llx threads=%d median %.1f ms min %.1f ms\n", (unsigned long long)hash, threads,
-         t[reps / 2], t[0]);
-  return 0;
+  printf("hash %016llx threads=%d median %.1f ms min %.1f ms%s\n", (unsigned long long)hash, threads,
+         t[reps / 2], t[0], unstable ? " UNSTABLE" : "");
+  return unstable;
 }
