@@ -222,11 +222,11 @@
 <p>The same build compiles AVM's own AVX2 kernels for Apple silicon through <a href="https://github.com/simd-everywhere/simde">SIMDe</a>. AVM ships almost no NEON code, so on a Mac most of its hot loops ran in plain C. The output is byte-identical to the plain build, and a 600 px encode runs 1.35 times as fast.</p>
 
 <h2>Run it yourself</h2>
-<p>Everything above comes from three committed tools. <code>tools/photos/libavif-avm/build.sh</code> builds libavif at a pinned commit with its experimental AV2 codec switched on. No tagged libavif release carries AVM 1.0.0 yet, so the pin is a commit. <code>--tuned</code> adds the six patches and the SIMDe kernels, and refuses to finish unless the result matches the pristine build byte for byte with every option off. <code>av2-tile-probe.ts</code> runs the tile comparison and <code>codec-knob-probe.ts --codec avm</code> runs the crops. <code>tools/photos/av2-wasm/build.sh</code> compiles the decoder this page runs, and <code>samples.ts</code> beside it writes the four AV2 thumbnails, refusing any photo whose shipped AVIF it can't reproduce byte for byte.</p>
-<pre class="av2-code"><code>tools/photos/libavif-avm/build.sh --tuned
+<p>Everything above comes from committed tools. The AV2 builds live in <a href="https://github.com/oddharsh/av2-tone">av2-tone</a>, which this site pins by commit. Its <code>encoder/build.sh</code> builds libavif at a pinned commit with its experimental AV2 codec switched on. No tagged libavif release carries AVM 1.0.0 yet, so that pin is a commit too. <code>--tuned</code> adds the six patches and the SIMDe kernels, and refuses to finish unless the result matches the pristine build byte for byte with every option off. Here, <code>av2-tile-probe.ts</code> runs the tile comparison and <code>codec-knob-probe.ts --codec avm</code> runs the crops. av2-tone's <code>wasm/build.sh</code> compiles the decoder this page runs, and <code>samples.ts</code> writes the four AV2 thumbnails, refusing any photo whose shipped AVIF it can't reproduce byte for byte.</p>
+<pre class="av2-code"><code>bun run av2:build
 bun tools/photos/av2-tile-probe.ts --src &lt;a folder of originals&gt;
 bun tools/photos/codec-knob-probe.ts --codec avm --variants base,tunepsnr
-tools/photos/av2-wasm/build.sh</code></pre>
+bun run av2:wasm</code></pre>
 <p>With every scheduling and caching concern stripped out, the probe is four steps per crop. Encode the shipped AVIF and take its size as the budget. Find the two AV2 quantizer settings whose files straddle that size. Decode both and score them against the source. Interpolate the score to the exact budget. The rest of the file is caching, crop selection and parallelism, which only change how long it takes.</p>
 
 <h2>What would change this</h2>
