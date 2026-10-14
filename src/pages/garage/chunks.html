@@ -400,7 +400,7 @@
       "q": "You snapshot v1, then insert one line at the top of the text. Why does fixed-size chunking mark nearly every chunk as changed?",
       "options": [
         {
-          "t": "The insert shifts every boundary after it, so each chunk now covers different bytes and hashes to a new ID.",
+          "t": "The insert shifts every later boundary, so each chunk covers different bytes and a new hash.",
           "ok": true,
           "why": "Right. Fixed boundaries are counted from byte 0, so one insert up top slides them all; every downstream chunk re-hashes even though its text never moved relative to its neighbors."
         },
@@ -409,7 +409,7 @@
           "why": "A hash only sees the bytes it is fed, never their offset in the file. The IDs change because the sliding boundaries put different bytes into each chunk. Hover the chunk tiles in section 1 to compare."
         },
         {
-          "t": "40-byte chunks are too small, so any edit inevitably lands in most of them.",
+          "t": "40-byte chunks are too small for this text, so any single edit inevitably lands in most of them.",
           "why": "The FastCDC row in the same demo averages 40 bytes too and still keeps most chunks green after the insert. The difference is where boundaries come from: counted from byte 0 versus read out of the content."
         },
         {
@@ -422,12 +422,12 @@
       "q": "What decides where FastCDC places a chunk boundary?",
       "options": [
         {
-          "t": "A rolling gear hash slides over the bytes and cuts wherever its low bits match a target pattern.",
+          "t": "A rolling gear hash cuts wherever its low bits match a target pattern.",
           "ok": true,
-          "why": "That's the mechanism from section 2. The cut condition depends only on the bytes just behind the window, so boundaries ride the content and line back up after a local edit."
+          "why": "That's the mechanism from section 2: the gear hash slides over the bytes, and the cut condition depends only on the bytes just behind the window, so boundaries ride the content and line back up after a local edit."
         },
         {
-          "t": "It looks for newlines and other natural delimiters in the text.",
+          "t": "It looks for newlines and other natural delimiters in the text and cuts just after them.",
           "why": "The gear hash reads raw bytes and has no idea what a newline means, which is exactly why the same 60 lines chunk any dropped binary in section 3."
         },
         {
@@ -444,12 +444,12 @@
       "q": "The big-file demo chunks a dropped file locally, hashes each chunk, and sometimes reports a dedup saving. Where does that saving come from?",
       "options": [
         {
-          "t": "Chunks with identical bytes hash to the same content ID, so repeated data is stored and sent once.",
+          "t": "Identical chunks hash to the same content ID, so repeated data is stored and sent once.",
           "ok": true,
           "why": "That's the dedup win: the ID is derived from the bytes, so equal IDs mean equal content, and one stored copy stands in for every repeat."
         },
         {
-          "t": "Each chunk gets compressed before hashing, which shrinks the file.",
+          "t": "Each chunk gets compressed before it is hashed, which shrinks the stored file.",
           "why": "The demo leaves every byte untouched; no compression runs anywhere. The counter tallies chunks whose hash it has already seen, and those repeats are the entire saving."
         },
         {
@@ -457,7 +457,7 @@
           "why": "The file never leaves your machine; chunking and hashing run in your browser. The dedup count comes from repeated chunk IDs inside the one file you dropped."
         },
         {
-          "t": "Chunks below the minimum size get discarded as padding.",
+          "t": "Chunks under the minimum size get discarded as padding before anything is stored.",
           "why": "The min bound only stops the chunker from cutting too early; every byte lands in exactly one chunk and nothing is thrown away. Repeated chunks counted once are the saving."
         }
       ]
@@ -466,12 +466,12 @@
       "q": "Two machines both chunk by content and address chunks by hash. Under the delta wire format, what actually crosses the wire on sync?",
       "options": [
         {
-          "t": "Chunk-ID lists in both directions, then the bytes of only the chunks the receiver says it lacks.",
+          "t": "Chunk-ID lists first, then the bytes of only the chunks the receiver says it lacks.",
           "ok": true,
           "why": "Sync collapses to a set difference over IDs: the sender lists what it has, the receiver names the missing few, and those bytes are the whole payload."
         },
         {
-          "t": "The full new file, with the hash list attached so the receiver can verify it.",
+          "t": "The full new file, with the chunk hash list attached so the receiver can verify each piece.",
           "why": "Shipping the full file is the cost this whole page is built to avoid. The hash lists exist so both sides can compute which chunks are missing, and only those bytes move."
         },
         {
@@ -488,20 +488,20 @@
       "q": "The demos use SHA-256 for chunk IDs, but mkit's real trust story is Bao verified slices over BLAKE3. What does that tree structure add?",
       "options": [
         {
-          "t": "You can verify any byte range against the file's single root hash without fetching the whole file.",
+          "t": "Any byte range verifies against the file's single root hash without fetching the whole file.",
           "ok": true,
           "why": "That's the last piece from section 4: the tree hands you just the branch covering your range, so a streamed slice proves itself against one root hash as it arrives."
         },
         {
-          "t": "A faster hash, since SHA-256 is too slow to keep up with large files.",
+          "t": "A faster hash, since SHA-256 is too slow to keep up with multi-gigabyte files.",
           "why": "BLAKE3 is quick, but the demos run fine on SHA-256 and the argument is unchanged. The tree earns its place by making a partial fetch verifiable against the root."
         },
         {
-          "t": "Encryption of each slice, so intercepted chunks can't be read in transit.",
+          "t": "Encryption of each slice, so chunks intercepted in transit stay unreadable to an eavesdropper.",
           "why": "Hashes prove integrity and say nothing about secrecy; nothing on this page encrypts. Bao's job is letting you trust that a slice you streamed matches the root hash."
         },
         {
-          "t": "Per-chunk verification, where each chunk is checked against its own content ID.",
+          "t": "Per-chunk verification, where each chunk gets checked against its own content ID as it arrives.",
           "why": "Plain content IDs already give you that, and it requires holding the full ID list. The tree collapses trust into one root hash that vouches for any range on demand."
         }
       ]

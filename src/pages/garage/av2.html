@@ -320,17 +320,17 @@ tools/photos/av2-wasm/build.sh</code></pre>
       "q": "An AV2 file sits behind \u003csource type=\"image/avif\">, with a WebP \u003cimg> as the fallback. Why does Chrome show a broken image?",
       "options": [
         {
-          "t": "Chrome supports image/avif, so it commits to that source before decoding and has no path back when the decode fails.",
+          "t": "Chrome supports image/avif, so it commits to that source before any byte decodes.",
           "ok": true,
           "why": "Right. The fallback only covers a type the browser doesn't support. A decode failure happens after the choice is made."
         },
         {
-          "t": "The WebP fallback is larger than the AV2 file, so Chrome prefers the smaller one.",
+          "t": "The WebP fallback is larger than the AV2 file, so Chrome picks the smaller source.",
           "why": "Chrome never compares file sizes when choosing a source. It reads the declared type and the media query."
         },
         {
-          "t": "The AV2 file is corrupt, so any decoder would reject it.",
-          "why": "libavif's AV2 build decodes it cleanly, and AV2's lossless mode round-trips bit for bit. Chrome can't read it because it has no AV2 decoder."
+          "t": "libavif wrote a malformed av2C box, so any AVIF decoder would reject the file.",
+          "why": "The file is well formed: libavif's AV2 build decodes it cleanly, and AV2's lossless mode round-trips bit for bit. Chrome can't read it because it has no AV2 decoder."
         }
       ]
     },
@@ -338,16 +338,16 @@ tools/photos/av2-wasm/build.sh</code></pre>
       "q": "Why step AV2's own quantizer instead of libavif's -q setting to hit a byte budget?",
       "options": [
         {
-          "t": "libavif's -q is too coarse for AV2, so one step can move a file by 40% and miss the budget badly.",
+          "t": "One -q step can move an AV2 file by 40%, far past the budget.",
           "ok": true,
           "why": "Right. On one crop, -q 49 wrote 6,865 bytes and -q 50 wrote 9,608, so no -q setting lands near an 8,906 byte budget."
         },
         {
-          "t": "AV2 ignores -q entirely.",
+          "t": "libavif ignores -q for AV2 and encodes every file at one default quantizer.",
           "why": "It doesn't: -q moves the file size, just in steps far larger than AV1's."
         },
         {
-          "t": "Stepping the quantizer makes each encode faster.",
+          "t": "Stepping the quantizer skips libavif's quality mapping, so each encode runs faster.",
           "why": "The encode costs the same either way. Stepping the quantizer hits the budget more precisely."
         }
       ]
@@ -356,17 +356,17 @@ tools/photos/av2-wasm/build.sh</code></pre>
       "q": "On the dense detail crops, AV2 reproduces fine texture better on 21 of 32 calls, yet ssimulacra2 prefers AV1 on all 32 at speed 6. What reconciles that?",
       "options": [
         {
-          "t": "AV2's error on 8 by 8 block averages, the tone and colour of flat areas, is higher on all 32, and ssimulacra2 scores several scales and weighs colour heavily.",
+          "t": "AV2's error on 8 by 8 block averages is higher on all 32, and ssimulacra2 counts that scale.",
           "ok": true,
           "why": "Right. AV2 moved its bits from the coarse picture to the fine one, and the metric counts the coarse picture too."
         },
         {
-          "t": "AV2 smooths away sensor grain.",
+          "t": "AV2 smooths away sensor grain, and ssimulacra2 penalizes the lost fine texture.",
           "why": "That was my first guess, and measuring the decodes disproved it: AV2 tracks the source's fine texture more closely than AV1 on most calls."
         },
         {
-          "t": "ssimulacra2 only looks at file size.",
-          "why": "ssimulacra2 compares decoded pixels with the source and ignores file size entirely."
+          "t": "ssimulacra2 rewards smaller files, and AV2's files came in slightly under AV1's.",
+          "why": "ssimulacra2 compares decoded pixels with the source and ignores file size entirely. The gap also holds on the 8 calls where the two files sit within 1% of the same size."
         }
       ]
     },
@@ -374,17 +374,17 @@ tools/photos/av2-wasm/build.sh</code></pre>
       "q": "Switching libavif's AV2 tune from its SSIM default to PSNR doubles AV2's butteraugli wins. What does that tell you about reading a codec comparison?",
       "options": [
         {
-          "t": "A default the wrapper picked can decide a metric's verdict, so a comparison has to name the tune it ran.",
+          "t": "A comparison has to name the tune it ran, since the wrapper's default moved the verdict.",
           "ok": true,
           "why": "Right. The same codec, at the same speed and bytes, reads as losing or tying on butteraugli depending on a setting nobody asked for."
         },
         {
-          "t": "PSNR tuning is always better for photographs.",
+          "t": "PSNR is the better tune for photographs, since switching to it doubled AV2's butteraugli wins.",
           "why": "PSNR tuning cost AV2 about half a point of ssimulacra2 here. It moved one metric toward AV2 and the other away."
         },
         {
-          "t": "butteraugli is unreliable and should be ignored.",
-          "why": "It scored consistently. What changed was the encoder's target, and a metric that responds to that is doing its job."
+          "t": "butteraugli swings with the tune, so ssimulacra2 alone should decide a comparison.",
+          "why": "butteraugli scored consistently. What changed was the encoder's target, and a metric that responds to that is doing its job. ssimulacra2 moved with the tune too, by about half a point."
         }
       ]
     },
@@ -392,17 +392,17 @@ tools/photos/av2-wasm/build.sh</code></pre>
       "q": "On whole-frame 600 px tiles AV2 beats the shipped AVIF, and on 320 px detail crops it loses every call. What explains the disagreement?",
       "options": [
         {
-          "t": "The crops carry about twice the bits per pixel of the tiles, and AV2's margin shrinks as bits per pixel rise until it flips.",
+          "t": "The crops sit at about 2.3x the tiles' bits per pixel, past AV2's flip point.",
           "ok": true,
           "why": "Right. These 38 tiles average 0.46 bits per pixel and the crops 1.08. Pooled, AV2 wins 12 of 12 under 0.3 and 0 of 5 over 1.2."
         },
         {
-          "t": "The tiles were scored with a different metric.",
+          "t": "The tiles were scored with butteraugli alone, which favours AV2 at thumbnail scale.",
           "why": "Both sets use ssimulacra2 and butteraugli against the same shipped AVIF, at matched bytes."
         },
         {
-          "t": "AV2 got more bytes on the tiles.",
-          "why": "Every AV2 score is interpolated to the exact byte count of the shipped AVIF for the same image, so neither codec gets extra bytes."
+          "t": "AV2 got about 10% more bytes on the tiles, from libavif's coarse -q steps.",
+          "why": "The probe steps AV2's own quantizer and interpolates every score to the exact byte count of the shipped AVIF, so neither codec gets extra bytes."
         }
       ]
     },
@@ -410,16 +410,16 @@ tools/photos/av2-wasm/build.sh</code></pre>
       "q": "Which future result would most directly reverse the loss on the dense crops?",
       "options": [
         {
-          "t": "A production AV2 encoder that beats the shipped AVIF by ssimulacra2 at matched bytes on the same crops.",
+          "t": "A production AV2 encoder that wins on the same crops at matched bytes.",
           "ok": true,
           "why": "Right. The page blames the first encoder and its video-only tunes rather than the format, and that's the claim such an encoder would test."
         },
         {
-          "t": "A browser that decodes AV2.",
+          "t": "Chrome shipping an AV2 decoder, so the crops could be scored in the browser.",
           "why": "Decoder support changes whether you can ship AV2. It says nothing about how good AV2's encodes are."
         },
         {
-          "t": "A smaller lossless AV2 file.",
+          "t": "An AV2 lossless mode that comes in under AV1's 2,363,430 bytes on the 16 crops.",
           "why": "Lossless and lossy use different tools, so a lossless improvement wouldn't change a lossy comparison."
         }
       ]
@@ -428,16 +428,16 @@ tools/photos/av2-wasm/build.sh</code></pre>
       "q": "libaom's all-intra quantization-matrix curve loses on the crops, and the same curve split by texture wins. What does AV2 allow that AV1 doesn't?",
       "options": [
         {
-          "t": "Several matrix sets per frame, with each segment choosing one, so textured and smooth areas can use different matrices.",
+          "t": "Up to four matrix sets per frame, with each segment picking the one that fits it.",
           "ok": true,
           "why": "Right. AV1 signals one matrix level per plane for the whole frame. AV2 carries up to four sets and a per-segment index."
         },
         {
-          "t": "A larger transform size.",
-          "why": "AV2 does add transform tools, but none of them is involved here. The gain comes from choosing a matrix per region."
+          "t": "A 128 px superblock, so textured areas get larger transforms than smooth ones.",
+          "why": "AV1 has 128 px superblocks too, and no transform tool is involved here. The gain comes from choosing a matrix per region."
         },
         {
-          "t": "Lossless coding of the textured areas.",
+          "t": "Lossless coding for textured segments, with the curve kept for smooth ones.",
           "why": "Every encode here is lossy. The textured areas get a flatter matrix, which keeps more of their detail at the same quantizer."
         }
       ]
