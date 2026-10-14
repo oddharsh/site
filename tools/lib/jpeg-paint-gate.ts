@@ -8,17 +8,11 @@
 // decoding anything, and from a PREFIX of the file: parsing stops the moment the
 // set completes, which is what lets `archive:gate` sweep 258 archives of ~20 MB
 // each by fetching 3 MB apiece.
-//
-// Pure: bytes in, verdict out. No I/O, so the contract suite can pin it against
-// the committed /garage/enc fixtures whose gates that page quotes.
 
 export type PaintGate = {
-  /** 0xc0 baseline, 0xc2 progressive, and so on; null before any SOF was seen */
   sof: number | null;
   components: number;
-  /** offset of the first entropy byte of the scan that starts the last channel; null if the prefix ran out first */
   gate: number | null;
-  /** one entry per scan header read, "<component ids>:<Ss>-<Se>" */
   scans: string[];
 };
 
@@ -35,7 +29,7 @@ export function paintGate(b: Uint8Array): PaintGate {
     const m = b[i + 1];
     if (m === 0xff) { i++; continue; }  // fill byte
     const len = (b[i + 2] << 8) | b[i + 3];
-    if (i + 2 + len > b.length) return out;  // header cut off by the prefix
+    if (i + 2 + len > b.length) return out;
     if (isSof(m)) {
       out.sof = m;
       out.components = b[i + 9];
@@ -62,7 +56,6 @@ export function paintGate(b: Uint8Array): PaintGate {
   return out;
 }
 
-/** The scan-order family a gate belongs to, for grouping a sweep. */
 export function gateClass(g: PaintGate): string {
   if (g.components === 1) return "grayscale";
   if (g.sof === 0xc0 || g.sof === 0xc1) return "baseline";

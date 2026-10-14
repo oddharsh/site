@@ -1,11 +1,4 @@
 // ── exact figures: a <data value> on an essay says something new ──────────────
-//
-// Holding Alt shows every <data value> on a page in place of its rounded text
-// (nav.js initExact, docs/TERMS.md). Whether a value is the RIGHT exact number
-// is a judgment about which measurement a sentence describes, so no test can
-// hold it. What a test can hold is the shape: a wrap with nothing in it, or one
-// that would show the same text back, is a hold that reveals nothing, and a
-// wrap inside a heading or inside a page's JSON data never reaches a reader.
 import { assert, readFileSync, test } from "./contract-shared.ts";
 import { readdirSync } from "node:fs";
 

@@ -6,21 +6,7 @@ import {
   tui,
 } from "./contract-shared.ts";
 
-// ── lib/tui.js ───────────────────────────────────────────────────────────────
-// A fixed-80-column renderer fails SILENTLY. A frame one column wide or narrow
-// still returns a string, still serves 200, and just looks subtly wrong; nothing
-// throws and no check notices. These pin the width contract instead, because it
-// is the property every renderer in that file depends on and none of them state.
-//
-// The module is pure ON PURPOSE, which is what lets one renderer answer HTTP,
-// MCP and `node --test` (see the note at its head). Until now that purity bought
-// 3.7% line coverage: it was testable and untested.
-
 test("tui width() counts code points, never UTF-16 units", () => {
-  // The `[...text]` spreads throughout tui.js exist for exactly this. Counting
-  // .length instead would make every frame containing an emoji or a CJK name
-  // render narrow, and photo captions plus third-party page titles both flow
-  // through these frames.
   assert.equal(tui.width([tui.s("abc")]), 3);
   assert.equal(tui.width([tui.s("😀")]), 1, "an astral character is ONE column, not two");
   assert.equal("😀".length, 2, "...which is the UTF-16 length this must not use");
@@ -29,9 +15,6 @@ test("tui width() counts code points, never UTF-16 units", () => {
 });
 
 test("tui fit() is EXACTLY the requested width, whatever went in", () => {
-  // fit()'s own docblock promises this and nothing enforced it. Every framed
-  // surface (/finger, /radar, /dict, /cache, the /terminal console) is built out
-  // of it, so one off-by-one here misaligns every frame on the site at once.
   const cases = [
     ["", "empty"],
     ["short", "under"],
@@ -57,8 +40,6 @@ test("tui truncTo() reserves exactly one column for its ellipsis", () => {
 });
 
 test("tui ends() fills its line and never lets the two sides touch", () => {
-  // ends() is what draws every header row: a label left, a value right. If the
-  // gap maths is wrong the two run together and the frame reads as corrupted.
   for (const [l, r] of [["left", "right"], ["", ""], ["x".repeat(70), "y".repeat(20)], ["😀".repeat(9), "z"]]) {
     const out = tui.ends([tui.s(l)], [tui.s(r)], tui.COLS);
     assert.equal(tui.width(out), tui.COLS, `ends(${l.slice(0, 6)}…) must fill exactly ${tui.COLS}`);
@@ -72,8 +53,8 @@ test("tui wrap() never returns a line wider than the column", () => {
   const inputs = [
     "short",
     "a series of perfectly ordinary words that must be broken across several lines",
-    "https://example.com/" + "a".repeat(120),      // one unbreakable token
-    "😀".repeat(80),                                // astral, unbreakable
+    "https://example.com/" + "a".repeat(120),
+    "😀".repeat(80),
     "   collapsing\n\twhitespace   ",
     "",
   ];
@@ -99,10 +80,6 @@ test("tui table() emits rows that are all exactly the table width", () => {
 });
 
 test("tui emit() is plain text, always", () => {
-  // The header is explicit that this is the ONLY place escapes could be produced
-  // and that it deliberately produces none: an escape sequence in a model's
-  // context window is noise the model then has to be robust to, and these frames
-  // are served to MCP and to the Markdown twins as well as to a terminal.
   const painted = tui.emit([
     [tui.s("plain"), tui.s("styled", "dim")],
     tui.rule(tui.COLS, "section"),

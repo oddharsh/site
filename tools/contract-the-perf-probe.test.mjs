@@ -19,12 +19,8 @@ import {
 } from "./contract-shared.ts";
 
 test("the probe writes one positionally-stable datapoint and never throws", async () => {
-  // no PERF_PROBE binding -> a clean no-op, so preview/dev without the dataset
-  // cannot crash the scheduled() handler
   await cronHomeProbe({}, { waitUntil() {} });
 
-  // Integration with the real handlers: the grid uses the bundled photo pool,
-  // while tracks returns an error response without KV. Both returns are timed.
   const written = [];
   const env = { PERF_PROBE: { writeDataPoint: (d) => written.push(d) } };
   await cronHomeProbe(env, { waitUntil() {} });
@@ -39,8 +35,6 @@ test("the probe writes one positionally-stable datapoint and never throws", asyn
 });
 
 test("fragment probe preserves timings, missing values, cancellation and version identity", async () => {
-  // Load the unchanged module against controlled fragment handlers. This makes
-  // both failure paths reachable without adding a test-only production API.
   const root = await mkdtemp(join(tmpdir(), "fragment-probe-"));
   const now = Date.now;
   try {
@@ -94,10 +88,6 @@ test("fragment probe preserves timings, missing values, cancellation and version
         assert.equal(received, env);
       }
       assert.equal(state.requests[0].ctx, ctx);
-      // The probe runs in the :07/:37 tick that cronEnrichTracks shares, and the
-      // art warm fans out up to 40 Images fetches in whatever invocation asks
-      // for it. Asking for it here spent the tick's 50 subrequests on
-      // 2026-09-27 and stranded 3 covers and 6 artist photos.
       assert.deepEqual(state.requests[0].opts, { warm: false }, `${label}: the probe must not warm the art cache`);
     }
     for (const id of [undefined, ""]) {
@@ -125,35 +115,18 @@ test("cron dispatch survives Cloudflare's expression normalization", () => {
   // fell into the else-branch and ran the /around crawl with nothing logged.
   // The rule now matches minute+hour signatures, which normalization leaves
   // alone, so EVERY spelling must land on the census.
-  //
-  // "17 8 * * 1" IS SUNDAY, and this test used to assert MON as its alias,
-  // which is what a reader would reach for when checking the pairing. Both are
-  // asserted now, because the property is that the matcher ignores the weekday
-  // field entirely; pinning one "correct" alias is what let the wrong one sit
-  // here unquestioned.
   assert.equal(cronJob("17 8 * * 1"), "census");
   assert.equal(cronJob("17 8 * * SUN"), "census");
   assert.equal(cronJob("17 8 * * MON"), "census");
   assert.equal(cronJob("7,37 * * * *"), "home_probe");
   assert.equal(cronJob("41 5 * * *"), "daily_outbound");
   assert.equal(cronJob("23 */6 * * *"), "serendipity");
-  // "*/30 * * * *" was the /around crawl until 2026-08-14, when it folded onto
-  // the daily outbound tick. It must now be UNMATCHED rather than quietly
-  // running somebody else's job, which is the same property the census bug
-  // above is about: a retired expression is exactly as dangerous as a
-  // normalized one if the else-chain catches it.
   assert.equal(cronJob("*/30 * * * *"), null);
-  // Unknown expressions surface as null (a traced cron.unmatched event), never
-  // as somebody else's job — that silent fallback is the bug class this fixes.
   assert.equal(cronJob("0 0 * * *"), null);
   assert.equal(cronJob(""), null);
   assert.equal(cronJob(null), null);
 });
 
-// The SSRF host floor is shared by /lens, webmention verification, and
-// serendipity's cover proxy. It used to be two byte-identical copies
-// (lensHostBlocked + coverHostBlocked); this pins the set so the one that is
-// left cannot quietly narrow, which is the failure the duplication invited.
 test("the shared SSRF host floor blocks every non-public shape", () => {
   const blocked = [
     "localhost", "app.localhost", "printer.local", "db.internal", "x.onion",
@@ -171,15 +144,11 @@ test("the shared SSRF host floor blocks every non-public shape", () => {
     "172.15.0.1", "172.32.0.1",           // just OUTSIDE RFC1918's 172.16-31
     "100.63.0.1", "100.128.0.1",          // just OUTSIDE CGNAT's 100.64-127
     "223.255.255.255",                    // just below the multicast floor
-    "localhost.example.com",              // ends in a real TLD, not a bare localhost
+    "localhost.example.com",
   ];
   for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
 });
 
-// Each shape below was measured passing this floor on 2026-08-07, so these are
-// closed holes rather than hypotheticals. The v4-mapped rows are the ones worth
-// keeping honest: the whole dotted-quad table was being skipped for an address
-// spelled ::ffff:169.254.169.254, which is the metadata endpoint by another name.
 test("the SSRF floor covers the alternate spellings of a blocked host", () => {
   const blocked = [
     "localhost.", "127.0.0.1.", "db.internal.",     // trailing dot is a legal FQDN
@@ -187,31 +156,24 @@ test("the SSRF floor covers the alternate spellings of a blocked host", () => {
     "::ffff:127.0.0.1", "[::ffff:169.254.169.254]",  // v4-mapped IPv6
     "::ffff:10.0.0.1", "::ffff:192.168.1.1",
     "fe81::1", "fe9f::1", "fea0::1", "febf::1",      // fe80::/10 is 64 prefixes, not one
-    "LOCALHOST", "169.254.169.254.",                 // case and dot together
-    "",                                              // an empty host resolves to nothing good
+    "LOCALHOST", "169.254.169.254.",
+    "",
   ];
   for (const h of blocked) assert.equal(privateHostBlocked(h), true, `should block ${h}`);
 
-  // Both spellings of a v4-mapped address, because the caller decides which one
-  // this function sees and it is NOT the one written above.
   const mappedHex = ["::ffff:a9fe:a9fe", "::ffff:7f00:1", "::ffff:a00:1", "::ffff:c0a8:101"];
   for (const h of mappedHex) assert.equal(privateHostBlocked(h), true, `should block ${h}`);
 
-  // The neighbours of the widened rules must still pass, or the fix overreached.
   const allowed = ["fec0::1", "ff00::1".replace("ff00", "2001"), "::ffff:8.8.8.8", "::ffff:808:808", "example.com."];
   for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
 });
 
-// THE regression, and the reason this test exists separately from the one above.
-//
 // `new URL("https://[::ffff:169.254.169.254]/").hostname` is `[::ffff:a9fe:a9fe]`
 // — the WHATWG parser rewrites the dotted tail into hex groups. So the host this
 // guard actually receives is never the host anybody types, and a floor tested
 // only on the typed form reported a hole closed while it was open. Production
 // answered `ok: true` for the metadata address on 2026-08-08, hours after the
 // unit test above went green.
-//
-// Assert through validateLensTarget, which is the door every scan really uses.
 test("a blocked address stays blocked through the URL parser that rewrites it", () => {
   const refused = [
     "https://[::ffff:169.254.169.254]/",   // cloud metadata, the one that matters
@@ -226,13 +188,9 @@ test("a blocked address stays blocked through the URL parser that rewrites it", 
     const verdict = validateLensTarget(raw);
     assert.equal(verdict.ok, false, `${raw} normalizes to ${(() => { try { return new URL(raw).hostname; } catch { return "unparseable"; } })()} and must be refused`);
   }
-  // A public v4-mapped address is still a public address.
   assert.equal(validateLensTarget("https://[::ffff:8.8.8.8]/").ok, true);
 });
 
-// A scan republishes what it fetched, so a URL carrying credentials is refused
-// rather than stripped: stripping would scan a different resource than the one
-// that was typed, and pass the secret to the third party on the way.
 test("lens targets refuse embedded credentials", () => {
   for (const raw of ["https://user:pass@example.com/", "https://user@example.com/", "https://:pass@example.com/"]) {
     assert.equal(validateLensTarget(raw).ok, false, `should refuse ${raw}`);
@@ -240,9 +198,6 @@ test("lens targets refuse embedded credentials", () => {
   assert.equal(validateLensTarget("https://example.com/user:pass@notauth").ok, true, "a colon in the PATH is not a credential");
 });
 
-// The guard follows redirects one hop at a time so a public URL cannot bounce
-// into private space. Before this, the request to the blocked host was still
-// made; only the discovery fan-out that came after it was skipped.
 test("redirect following validates every hop, not just the landing", async () => {
   const seen = [];
   const chain = {
@@ -275,12 +230,6 @@ test("redirect following validates every hop, not just the landing", async () =>
   }
 });
 
-// Booking degrades to the old behaviour without a COUNTER binding, so that cal
-// stays runnable and testable with no Durable Object, the same way a missing
-// BOOKING_WORKFLOW only costs the expiry timer. That fallback is only acceptable
-// while production genuinely binds it: unbound, two simultaneous bookings take
-// the same slot again and nothing says so. This is the assertion that keeps the
-// degraded path from quietly becoming the real one.
 test("production binds the Durable Object the slot claim needs", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
   const config = "cloudflare.config.ts";
@@ -289,9 +238,6 @@ test("production binds the Durable Object the slot claim needs", async () => {
   const counter = bindings.find((b) => b.name === "COUNTER");
   assert.ok(counter, `${config} must bind COUNTER for the coffee slot claim`);
   assert.equal(counter.class_name, "Counter");
-  // Since step 3 of "Moving Counter out" the class lives in aadhar-counter,
-  // and a binding without script_name would name a class this Worker no
-  // longer implements.
   assert.equal(counter.script_name, "aadhar-counter",
     `${config} must bind COUNTER in aadhar-counter, which owns the class since step 3`);
 
@@ -308,9 +254,6 @@ test("production binds the Durable Object the slot claim needs", async () => {
   assert.deepEqual(classes, [],
     `${config} declares Durable Object classes ${JSON.stringify(classes)}; aadhar-sh must implement none, or it loses preview URLs`);
 
-  // The other end of the binding: aadhar-counter must actually implement the
-  // class, as a live sqlite class. It is also the ONE class the slot claim and
-  // the odometer share, on purpose: a second class is a lifecycle change.
   const target = parseJsonc(readFileSync("counter/wrangler.jsonc", "utf8"));
   assert.equal(target.name, "aadhar-counter");
   assert.deepEqual(target.exports?.Counter, { type: "durable-object", storage: "sqlite" },
@@ -320,9 +263,6 @@ test("production binds the Durable Object the slot claim needs", async () => {
     `counter/wrangler.jsonc declares Durable Object classes ${JSON.stringify(targetClasses)}; the slot claim assumes Counter is the only one`);
 });
 
-// One instance per slot is the entire exclusivity argument: two different times
-// must never share an instance, and one time must always resolve to the same
-// one. It also must not collide with the visit counter's instance name.
 test("slot reservations name one Durable Object instance per slot", () => {
   const start = Date.UTC(2026, 7, 10, 14);
   const end = start + 30 * 60_000;
@@ -339,12 +279,6 @@ test("the census cron's weekday token and the prose about it agree", async () =>
   // systems use 0 = Sunday, so "17 8 * * 1" is SUNDAY 08:17 UTC. Confirmed
   // against the live lens_census table, whose every cron-written row lands at
   // 08:17 UTC on a Sunday, back to the first sweep on 2026-07-19.
-  //
-  // Nothing in this repo could catch that: the dispatcher matches minute+hour
-  // and so is correct either way, and the day survived only in comments and in
-  // one line of shipped banner copy. This is the check that makes the pairing
-  // fail loudly instead of drifting, and it fires in both directions, so
-  // changing the SCHEDULE without changing the copy is caught too.
   const CF_WEEKDAYS = { 1: "Sunday", 2: "Monday", 3: "Tuesday", 4: "Wednesday", 5: "Thursday", 6: "Friday", 7: "Saturday" };
 
   const { parseJsonc } = await import("./lib/jsonc.ts");
@@ -358,12 +292,6 @@ test("the census cron's weekday token and the prose about it agree", async () =>
   assert.ok(day, `unrecognised weekday token ${token}; Cloudflare takes 1-7 or a 3-letter name`);
   assert.equal(day, "Sunday", `the census cron declares ${token}, which Cloudflare fires on ${day}`);
 
-  // No source file may CLAIM a different weekday for this cron. The matcher
-  // reads a claim rather than a mention, because the fix for this bug has to be
-  // able to explain the mapping it is fixing: "1 = Sunday to 7 = Saturday" names
-  // five wrong days and asserts nothing about when the census runs. A claim is
-  // the plural ("Mondays"), or the day sitting directly on the thing it
-  // schedules ("the Monday cron", "Monday sweeps", "Monday 08:17").
   const claims = (day) => new RegExp(`\\b${day}s\\b|\\b${day}s?\\s+(?:cron|census|sweep|sweeps|pass|08:17)\\b`, "i");
 
   const scanned = ["src/worker/census.ts", "src/worker/index.ts", "src/worker/lib/cron.ts"];
@@ -376,15 +304,6 @@ test("the census cron's weekday token and the prose about it agree", async () =>
     return hits;
   };
 
-  // CONTROL, because a matcher that has stopped matching reports a clean pass
-  // and this one is deliberately narrow. Every shape the repair removed must
-  // still be caught, and the explanatory prose beside it must not be.
-  //
-  // Only SCHEDULE claims are in scope. The ninth thing this repair fixed was
-  // "both spellings of Monday must land on the census", a claim about which
-  // alias means 1 rather than about when the job runs, and it is deliberately
-  // not covered: the matcher that would catch it also catches the prose two
-  // lines above explaining the mapping. It is fixed directly in the test above.
   const control = [
     'await cron("cron.census", () => cronCensus(env));   // Mondays 08:17 UTC',
     "// The Monday cron is now AWAITED by scheduled() and sweeps the whole roster",

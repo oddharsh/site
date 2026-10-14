@@ -1,23 +1,6 @@
 // Does Clef rank /ask better than the lexical pass? The measurement behind
 // src/worker/ask-rank.ts, committed so the next change to the ranking (a
 // model bump, a different floor, a longer option text) is scored the same way.
-//
-//   bun run build            # the corpus is build output (.build/public/search-index.json)
-//   bun run ask:eval         # 30 questions, lexical vs Clef, MRR and hit@1
-//
-// Each question names the page that should answer it. The questions were
-// written by the person who built the ranking, after reading the corpus, so a
-// win here is a strong signal rather than a benchmark. What keeps it honest is
-// the mix: easy keyword questions the ranking must not break, paraphrases, and
-// four whose page shares no word with the question at all.
-//
-// Measured 2026-10-01: lexical MRR 0.777, hit@1 22/30; Clef over the whole
-// corpus MRR 0.983, hit@1 29/30, one call per question, median 1.26 s. The
-// lexical columns are this script's own run of the real searchSiteRanked.
-//
-// Workstation-only: it spends Workers AI through the REST API, with
-// CLOUDFLARE_API_TOKEN when set and wrangler's own login otherwise. It writes
-// nothing.
 
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -64,7 +47,6 @@ export const ASK_EVAL: readonly (readonly [string, readonly string[]])[] = [
   ["delta-sigma versus R-2R DACs", ["/lwe/dac"]],
 ];
 
-/** 1/rank of the first acceptable page in `order`'s top 10, or 0. */
 export function reciprocalRank(order: readonly string[], want: readonly string[]): number {
   const i = order.slice(0, 10).findIndex((url) => want.includes(url));
   return i < 0 ? 0 : 1 / (i + 1);

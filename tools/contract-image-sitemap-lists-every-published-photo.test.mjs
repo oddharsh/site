@@ -33,7 +33,6 @@ test("every published photo is listed once, under /photos or its album, at its f
   }
   const all = [...pages.values()].flat();
   assert.equal(new Set(all).size, all.length, "a photo is listed twice");
-  // The floor mirrors build.ts's.
   assert.ok(all.length >= 100, `only ${all.length} images`);
 });
 

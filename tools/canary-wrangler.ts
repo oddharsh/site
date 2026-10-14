@@ -1,13 +1,6 @@
 #!/usr/bin/env bun
 // bun run canary:wrangler [--ref main|<sha>|<pr>] [--json <path>] [--keep]
 //
-// Wrangler's MAIN, or any commit or pull request of it, run through the four
-// gates this repository already holds a wrangler release to: the dry-run
-// bundle, the route oracle, cal's suite on wrangler's own test harness, and
-// the contract tests that boot that harness (lib/harness-tests.ts). The
-// fourth joined on 2026-09-30, after ddaa558 cleared the first three and
-// failed `validate` on the fourth's three files.
-//
 // WHERE THE BUILD COMES FROM. cloudflare/workers-sdk publishes every commit
 // and every PR to pkg.pr.new (their CONTRIBUTING.md, "PR Previews"), so
 // `https://pkg.pr.new/cloudflare/workers-sdk/wrangler@<ref>` is a tarball for
@@ -16,11 +9,6 @@
 // carries miniflare pinned to the same commit while `workerd` stays the npm
 // release (workerd is a separate repository and is not on pkg.pr.new, so
 // this leg cannot exercise a workerd branch; MINIFLARE_WORKERD_PATH can).
-//
-// WHAT IT BUYS OVER `npm view wrangler latest`. Addressability. A regression
-// can be bisected between two shas, a fix in a PR can be run against this
-// tree before it merges, and an issue filed upstream carries the `@<sha>` URL
-// as its reproduction pointer rather than "the nightly from Tuesday".
 //
 // WHY A DETACHED WORKTREE. The candidate has to be INSTALLED to be tested: the
 // route oracle imports `createTestHarness` from "wrangler" and cal's suite
@@ -35,13 +23,6 @@
 // day's `--frozen-lockfile` would refuse it. This script writes only into the
 // worktree it deletes.
 //
-// THE BUNDLE COMPARISON IS A FINDING RATHER THAN A GATE. A wrangler that
-// bundles the same source into different bytes has usually bumped esbuild,
-// which is news (the next wrangler pin re-mints the bundle and perf-diff will
-// say by how much) and not a failure. So it reports `changed` rather than
-// `red`, and the workflow files it once and stays quiet until it changes
-// again or goes back to identical.
-//
 // THE WATCHES, since 2026-09-15, are the two upstream threads this repository
 // is waiting on wrangler's side of: cloudflare/workerd#7106 (the runtime zstd
 // dictionary, this repository's own PR) and `wrangler types` learning
@@ -49,8 +30,6 @@
 // candidate, and a row that differs is `changed` naming the fix that
 // arrived. lib/upstream-watches.ts holds the record; the runners are here
 // because they need a tree and an entry file rather than a bun executable.
-//
-// Exit codes: 0 green, 1 red or changed, 2 the instrument could not run.
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -160,9 +139,6 @@ const cleanup = () => {
 };
 
 try {
-  // ------------------------------------------------------------------------
-  // a throwaway checkout of HEAD, installed fresh, with the candidate added
-  // ------------------------------------------------------------------------
   const add = run("git", ["worktree", "add", "--detach", wt, "HEAD"], { cwd: ROOT });
   if (add.status !== 0) {
     console.error(`git worktree add failed: ${tail(add).join(" ")}`);
@@ -194,12 +170,6 @@ try {
   console.log(`resolved:  wrangler ${subject.wrangler}, ${subject.miniflare}, workerd ${subject.workerd}\n`);
   const candidateEntry = join(wt, "node_modules", "wrangler", "bin", "wrangler.js");
 
-  // ------------------------------------------------------------------------
-  // 1. the dry-run bundle, and whether it moved a byte
-  // ------------------------------------------------------------------------
-  // Both dry-runs self-build through wrangler.config.ts's build command, so
-  // each one stages its own tree with the PINNED bun; only the bundler differs.
-  // Both pass --x-new-config, the flag the site config needs since 2026-09-28.
   {
     const out = run(NODE, [candidateEntry, "deploy", "--dry-run", "--outdir", candidateOut, "--x-new-config"], { cwd: wt, timeout: 10 * 60_000 });
     const ok = out.status === 0 && existsSync(join(candidateOut, "index.js"));
@@ -217,8 +187,6 @@ try {
       emit("instrument", subject, "the pinned wrangler could not bundle this tree, so there is no baseline");
       process.exit(2);
     }
-    // index.js alone. The sourcemap embeds paths, and the two trees sit at
-    // different absolute paths by construction.
     const a = sha256(join(pinnedOut, "index.js"));
     const b = sha256(join(candidateOut, "index.js"));
     const sizeA = statSync(join(pinnedOut, "index.js")).size;
@@ -231,9 +199,6 @@ try {
     });
   }
 
-  // ------------------------------------------------------------------------
-  // 2. the route oracle, on the candidate's own createTestHarness
-  // ------------------------------------------------------------------------
   {
     const out = run(NODE, ["tools/check-routes-harness.ts"], { cwd: wt, timeout: 10 * 60_000 });
     const text = `${out.stdout}\n${out.stderr}`;
@@ -248,9 +213,6 @@ try {
     });
   }
 
-  // ------------------------------------------------------------------------
-  // 3. cal's suite, which boots that harness under bun
-  // ------------------------------------------------------------------------
   {
     const out = run(BUN, ["run", "--filter", "cal-aadhar-sh", "test"], { cwd: wt, timeout: 5 * 60_000 });
     const text = `${out.stdout}\n${out.stderr}`;
@@ -269,10 +231,6 @@ try {
   // ------------------------------------------------------------------------
   // 4. the contract tests that boot that harness, run the way validate does
   // ------------------------------------------------------------------------
-  // lib/harness-tests.ts says why: ddaa558 cleared gates 1 to 3 and broke all
-  // three of these, because they dispatch through worker.fetch(), a door the
-  // route oracle (node, over the socket) and cal (handlers called directly)
-  // never open. Discovered in the worktree, since that is the tree they run in.
   {
     const files = harnessTests(wt);
     if (files.length < HARNESS_TEST_FLOOR) {

@@ -5,8 +5,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── tag stripping: the closers HTML allows and a regex forgets ───────────
-
 // `</script >` is a legal end tag and `--!>` legally closes a comment, so a stripper
 // spelled `</script>` or `-->` hands the body straight through. Neither one is an
 // injection here (lensMarkdown returns JSON that reaches the DOM through esc(), and an
@@ -22,8 +20,6 @@ test("a spaced end tag and an --!> comment close their elements", async () => {
   assert.ok(!lensMarkdown("<body><!-- gone --!><p>after</p></body>", "https://x/").includes("gone"),
     "--!> closes a comment");
 
-  // <head> must not swallow a page that opens with <header>, which is what a
-  // missing word boundary buys: the strip runs to the next literal </head>.
   assert.ok(lensMarkdown("<body><header><p>nav</p></header><p>body</p></body>", "https://x/").includes("body"),
     "<header> is not <head>");
 

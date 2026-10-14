@@ -1,55 +1,11 @@
 #!/usr/bin/env node
 // gen-photo-semantics.mjs — retrieval terms for every photo, written to
 // public/images/semantics.json as {stem: {terms, from}}.
-//
-// ── why this exists ───────────────────────────────────────────────────────
-// queryPhotos ranks a query against the caption and the EXIF. Both are narrow.
-// The captions are one plain sentence by design (they are ALT TEXT first, and
-// accessible alt text should not editorialise), so "A city at night with a tall
-// building and a bench" is all an agent gets for a photograph a person would
-// describe with a dozen other words. This file is the widening, kept OUT of
-// alt.json so the accessibility contract stays exactly what it was.
-//
-// ── why the model is offline ──────────────────────────────────────────────
-// The obvious build is embeddings: index the captions, embed the query, rank by
-// cosine. Embedding the QUERY is the problem — it happens per request, so it
-// puts a Workers AI credential on the live request path, which is the exact
-// dependency /ask was deleted to remove. Expanding the DOCUMENT side instead
-// moves every model call to this script: the worker keeps zero credentials,
-// zero subrequests, and works unchanged on the free plan.
-//
-// Same trade the rest of the repo already makes (markdown twins, dcz deltas):
-// precompute the expensive thing, ship the artifact, keep the runtime dumb.
-//
-// ── two tiers, and each stem records which it got ─────────────────────────
-//   derived — computed from the committed EXIF. No network, no credential, and
-//             reproducible by anyone with the repo. Mostly vocabulary repair:
-//             the metadata says "Nostalgic Neg" and "LEICA M MONOCHROM", while
-//             a person asks for "nostalgic negative" and "monochrome".
-//   vision  — a caption model looking at the committed thumbnail under a
-//             retrieval prompt rather than an alt-text one. Needs a token, so
-//             it is opt-in and the artifact is honest when it is absent.
-//
-// Usage:
-//   node tools/photos/gen-photo-semantics.ts              # derived only
-//   node tools/photos/gen-photo-semantics.ts --vision     # + model terms
-//   node tools/photos/gen-photo-semantics.ts --vision --dry-run
-//
-//   export CLOUDFLARE_API_TOKEN=...   # the same token gen-alt-text.ts uses
-//   export CLOUDFLARE_AI_GATEWAY=""   # opt OUT of gateway routing (defaults to "default")
-//
-// Resumable: --vision only calls the model for stems that have no vision terms
-// yet, so a 429 against the free daily neuron budget just means run it again.
-// Strippable: delete semantics.json and the query keeps working, one tier down.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MODEL, TOKEN, runVision, visionBody } from "./lib/workers-ai.ts";
 
-// ROOT is the REPO root, matching every sibling in this directory. It used to be
-// dirname(dirname(here)), which resolved to public/ only because this script lived
-// at public/scripts — the one script here that did not use "../..", and therefore
-// the one the move to tools/photos would have silently repointed at tools/.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const META = path.join(ROOT, "public", "images", "metadata.json");
 const HASHES = path.join(ROOT, "public", "images", "hashes.json");
@@ -58,23 +14,11 @@ const OUT = path.join(ROOT, "public", "images", "semantics.json");
 
 const WANT_VISION = process.argv.includes("--vision");
 const DRY_RUN = process.argv.includes("--dry-run");
-// The token, account, model and gateway live in lib/workers-ai.ts, shared with
-// gen-alt-text.ts since 2026-09-15 so the two callers of this one model cannot
-// drift on auth or on which per-model log their spend reports into.
 
-// Alt text answers "what is in this frame". This answers "what would someone
-// call this frame when looking for it", which is a different question and the
-// reason the two files exist separately.
 const VISION_PROMPT = "List 12 to 20 lowercase search keywords for this photo, comma separated. "
   + "Cover the subject, the setting, the time of day, the weather, the light, and the mood. "
   + "Single words or two-word phrases. No sentences, no punctuation beyond the commas.";
 
-// ── the derived tier ──────────────────────────────────────────────────────
-// Hand-written because it is vocabulary, not inference. Every entry maps a
-// string the CAMERA writes to strings a PERSON says. Fuji abbreviates film
-// simulation names in EXIF ("Nostalgic Neg"), and no amount of stemming gets
-// from "Neg" to "negative" without inventing a rule that would also collapse
-// "Nostalgic Neg" and "Classic Negative" into each other.
 const FILM_ALIASES = {
   "Nostalgic Neg": "nostalgic negative nostalgia warm",
   "Classic Negative": "classic neg superia",
@@ -84,8 +28,6 @@ const FILM_ALIASES = {
   "Eterna": "eterna cinematic film movie",
 };
 
-// Substring match against the camera string, which is verbose and vendor-shaped
-// ("Leica Camera AG LEICA M MONOCHROM (Typ 246)") in a way nobody types.
 const CAMERA_ALIASES = [
   ["X-T50", "fuji fujifilm xt50 x-t50 aps-c mirrorless"],
   ["MONOCHROM", "leica monochrome black and white bw m246 rangefinder full frame"],
@@ -107,11 +49,6 @@ const shutterSeconds = (value) => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
-// Only facts the EXIF actually supports. The tempting entries are the ones that
-// sound like photography and are guesses — "night" is not derivable from a
-// timestamp without a timezone and a location, and this archive publishes
-// neither, so it is not here. Same rule the tooltip follows: skip the line
-// rather than fabricate it.
 function derivedTerms(record) {
   const out = [];
   const film = String(record.film || "");
@@ -123,9 +60,6 @@ function derivedTerms(record) {
   for (const [needle, alias] of CAMERA_ALIASES) {
     if (camera.toUpperCase().includes(needle.toUpperCase())) { out.push(alias); break; }
   }
-  // The Fuji recipe card is a flat bag of scalars off metadata.json, so
-  // Object.entries yields unknown values that must be stringified explicitly
-  // before they reach a template.
   const card = Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${String(v)}`).join(" ");
   for (const [needle, alias] of RECIPE_ALIASES) {
     if (card.toLowerCase().includes(needle.toLowerCase())) out.push(alias);
@@ -147,17 +81,10 @@ async function visionTerms(stem, hashes) {
   const file = path.join(ROOT, "public", "i", `${stem}.${entry.j}.jpg`);
   const body = visionBody(file, VISION_PROMPT, 128);
   if (DRY_RUN) {
-    // Report the intent WITHOUT the constructed endpoint. That URL embeds the
-    // account id, which comes from the environment, and a dry run is precisely
-    // when its output gets pasted into an issue or a terminal recording. The
-    // byte count and the model are the parts worth seeing.
     console.log(`      would POST ${body.length}B to Workers AI (${MODEL})`);
     return null;
   }
   const raw = await runVision(body);
-  // The model is asked for a comma list and sometimes writes a sentence anyway.
-  // Normalising here rather than trusting the prompt keeps the artifact one
-  // shape, which is what the ranking reads.
   return raw.toLowerCase().replace(/[^a-z0-9,\s-]/g, " ")
     .split(/[,\n]/).map((part) => part.trim()).filter((part) => part && part.length < 30)
     .slice(0, 24).join(" ");
@@ -178,18 +105,10 @@ for (const stem of stems) {
   const record = metadata[stem] || {};
   const derived = derivedTerms(record);
   const prior = existing[stem] || {};
-  // The caption is folded in so one field answers the query. It is already
-  // scored on its own at a higher weight, and a duplicate hit costs nothing
-  // because each term scores once, at its best field.
-  // `vision` is attached below only when a vision pass produced one, which is
-  // the distinction the comment there is making, so it is optional here rather
-  // than absent from the shape.
   const entry: { terms: string; from: string[]; vision?: string } = {
     terms: [derived, prior.vision || "", String(alt[stem] || "").toLowerCase()].filter(Boolean).join(" "),
     from: prior.vision ? ["derived", "vision"] : ["derived"],
   };
-  // Omitted rather than empty-stringed, so a stem with no vision pass is
-  // distinguishable from one whose vision pass returned nothing.
   if (prior.vision) entry.vision = prior.vision;
   out[stem] = entry;
 }
@@ -205,14 +124,13 @@ if (WANT_VISION) {
   for (const [index, stem] of todo.entries()) {
     try {
       const terms = await visionTerms(stem, hashes);
-      if (DRY_RUN) continue;   // visionTerms already reported what it would send
+      if (DRY_RUN) continue;
       if (!terms) { console.log(`  [${index + 1}/${todo.length}] ${stem}: EMPTY`); continue; }
       out[stem].vision = terms;
       out[stem].from = ["derived", "vision"];
       out[stem].terms = [derivedTerms(metadata[stem] || {}), terms, String(alt[stem] || "").toLowerCase()].filter(Boolean).join(" ");
       done += 1;
       console.log(`  [${index + 1}/${todo.length}] ${stem}: ${terms.slice(0, 72)}`);
-      // Written every time, so an interrupted run keeps what it paid for.
       fs.writeFileSync(OUT, `${JSON.stringify(out, null, 1)}\n`);
     } catch (error) {
       console.log(`  [${index + 1}/${todo.length}] ${stem}: ${error.message}`);

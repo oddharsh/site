@@ -1,71 +1,5 @@
 #!/usr/bin/env node
 // deploy-promote.mjs — ramp an uploaded version onto production traffic.
-//
-//   bun run deploy:promote                  # newest PRODUCTION build, 10% -> 50% -> 100%
-//   bun run deploy:promote --to 25       # one step, park it at 25%
-//   bun run deploy:promote --version <id>
-//   bun run deploy:promote --dry-run     # resolve the target, move nothing
-//   bun run deploy:promote --steps 5,25,100
-//   bun run deploy:promote --rollback    # 100% back to the previously active version
-//   bun run deploy:promote --status      # what is serving right now, and nothing else
-//
-// WHY THIS EXISTS. Merging used to publish: Workers Builds ran `wrangler deploy`
-// off the `production` branch and 100% of traffic moved in one step. That is a
-// fine model right up to the moment a change is wrong, and then the only signal
-// is a visitor noticing. This site had no way to serve a change to some traffic
-// and read the result, because it had no way to serve a change at all without
-// serving it to everyone.
-//
-// Workers Builds now runs `wrangler versions upload` instead (infra.json's
-// release block). A merge produces a VERSION: fully built, fully uploaded,
-// reachable at its own preview URL, serving nobody. This script is the second
-// half — the part that decides how much of the world sees it.
-//
-// WHAT IT ACTUALLY CHECKS BETWEEN STEPS. It polls /whoareyou.json, which reports
-// the serving version per request (whoareyou.js explains why that route and not
-// /updates.json — both versions read the same D1 changelog, so the changelog
-// cannot tell them apart). TWO PROBES run per step and they answer different
-// questions, which is why neither replaces the other:
-//
-//   1. THE PINNED PROBE (probePinned). 12 requests carrying
-//      `Cloudflare-Workers-Version-Overrides`, so every one of them is handled
-//      by the version being ramped. This is the health check, and a non-200 here
-//      is conclusive. It replaced a much weaker arrangement on 2026-08-14: the
-//      sampled sweep below found errors only in whatever fraction of its 40
-//      requests happened to land on the new code, which at a 10% step is about
-//      four. A 500 in the new version had roughly four requests looking for it.
-//      Cloudflare honours the header only for a version already in the current
-//      deployment, so this necessarily runs AFTER the step, never before.
-//   2. THE SAMPLED SWEEP (sample). 40 unpinned requests, each carrying its own
-//      `Cloudflare-Workers-Version-Key`. This is the routing check: did the
-//      split actually take. The pinned probe cannot answer it, because pinning
-//      bypasses the split by construction. Sampling error is real at these
-//      counts, so the tolerance stays wide and the question stays "did it move
-//      at all" rather than "is it exactly 10%".
-//
-// The per-request version keys in (2) are not decoration. Cloudflare hashes that
-// header to pick a version, so distinct keys give a real spread from one machine
-// and no socket can pin them, which is a strict improvement on sending nothing.
-// They also survive the version-affinity Transform Rule declared in infra.json
-// under zone.version_affinity: that rule derives the same header from ip.src so
-// visitors stop getting HTML from one version with content-hashed assets from
-// another, and it exempts requests already carrying a key so that this sweep can
-// still watch a split take. Once it exists, a sweep with no keys would hash to
-// one version and read as a dead ramp.
-//
-// WHAT IT DOES NOT CHECK, SAID PLAINLY. Latency, correctness, and anything a
-// visitor would notice that still returns 200. Workers Logs is the surface for
-// that (the structured line carries `v`, the version prefix, for exactly this),
-// and the honest workflow is to hold a step, read the logs, then continue.
-// Actions pauses for approval after the canary. On a workstation, use --to for
-// that pause: the default multi-step invocation continues automatically.
-//
-// lib/release-guard.ts requires authentication. Actions uses an environment
-// secret for both ramp jobs; production-full requires reviewer approval after
-// the automatic canary. config/infra.json declares that token's scope.
-//
-// infra:apply is NOT covered by that change and still refuses to run in CI. It
-// can create and destroy zone-level DNS, which no pipeline here needs to do.
 
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -73,9 +7,6 @@ import { releaseCredentialError } from "./lib/release-guard.ts";
 import { promisify } from "node:util";
 import { cf, d1Rows, D1 } from "./lib/cf.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
-// The four version-reading probes, lifted out on 2026-09-22 so soak-canary.ts
-// can ask the same questions without this module's credentialed module-scope
-// setup. Their comments moved with them; see that file's header.
 import { probePinned, sampleSplit } from "./lib/version-probe.ts";
 
 const exec = promisify(execFile);
@@ -87,15 +18,8 @@ const DEFAULT_STEPS = [10, 50, 100];
 const SETTLE_MS = 20000;
 const RESAMPLE_MS = 25000;
 const SAMPLE_ATTEMPTS = 3;
-// One affinity key per request, namespaced per run so a re-ramp does not inherit
-// the previous run's version assignments.
 const RUN_ID = Math.random().toString(36).slice(2, 8);
-// Bind the run id once so the two call sites below read exactly as they did
-// before the extraction. The wire bytes are identical; the id is the same value
-// the module already generated, now passed rather than closed over.
 const sample = (target, previous) => sampleSplit(target, previous, RUN_ID);
-
-// ---------------------------------------------------------------- args ----
 
 const argv = process.argv.slice(2);
 const flag = (name) => {
@@ -107,24 +31,14 @@ const has = (name) => argv.includes(`--${name}`);
 const credentialError = releaseCredentialError();
 if (credentialError) die(credentialError);
 
-// ------------------------------------------------------------------- cf ----
-
-// Every Cloudflare call goes through the `cf` CLI (tools/lib/cf.ts) since
-// 2026-10-06. Those commands are thin API wrappers, so what comes back is the
-// API's own JSON, and the readers below normalize it in one place each.
 async function cfOrDie(args) {
   try {
     return await cf(args);
   } catch (e) {
-    // Report what cf actually said, not a Node spawn dump. The first real ramp
-    // died here and printed thirty lines of ChildProcess internals around one
-    // line of usable error, which is a poor way to learn that traffic did not
-    // move. lib/cf.ts cuts stderr to its first real lines; this frames it.
     die(`${e.message}\n\n  Nothing was changed: Cloudflare validates a deployment before it moves traffic.\n  Check \`bun run deploy:promote --status\` to confirm.`);
   }
 }
 
-/** Put `specs` ([{ id, pct }], totalling 100) on traffic as one deployment. */
 async function deployVersions(specs, message) {
   const worker = await workerName();
   const body = {
@@ -136,12 +50,7 @@ async function deployVersions(specs, message) {
 }
 
 async function currentDeployment() {
-  // The deployments API is per Worker, so even --status reads the Worker's
-  // name from infra.json. The first deployment listed is the one serving.
   const listed = await cfOrDie(["workers", "deployments", "list", "--worker", await workerName()]);
-  // Shape: { deployments: [{ versions: [{ version_id, percentage }] }] }.
-  // Normalized here so a field rename fails loudly at one place instead of
-  // silently reading undefined into a percentage comparison.
   const versions = (listed?.deployments ?? listed)?.[0]?.versions;
   if (!Array.isArray(versions)) die("could not read the current deployment (cf workers deployments list returned no `versions` array)");
   return versions.map((v) => ({
@@ -150,13 +59,6 @@ async function currentDeployment() {
   }));
 }
 
-// The production branch's alias, read from infra.json so it cannot drift from
-// the branch Workers Builds actually publishes.
-//
-// Called lazily from newestVersion() rather than resolved at module scope, so
-// `--status` stays what its help text promises: what is serving right now, and
-// nothing else. Reading infra.json up here would let a malformed file break the
-// one subcommand you reach for when you are trying to find out what is going on.
 async function productionAlias() {
   try {
     const infra = JSON.parse(await readFile(new URL("../config/infra.json", import.meta.url), "utf8"));
@@ -171,32 +73,6 @@ async function productionAlias() {
   }
 }
 
-// The newest PRODUCTION build, which is not the same thing as the newest upload.
-//
-// This returned the newest version outright until 2026-08-07, and that was a
-// live way to ramp somebody else's branch onto production traffic. Workers
-// Builds uploads a version for EVERY branch push, not just `production`
-// (infra.json's release.non_production_deploy_command), and several agents push
-// branches to this repo all day. Observed minutes before a real ramp: of the
-// three newest versions, the top was aliased `codex-site-cleanup-foundations`
-// and the second `fix-pin-cloudflare-account-id`, with the production build
-// third. A bare `bun run deploy:promote` at that moment would have walked a
-// feature branch to 100%.
-//
-// It would also have LOOKED fine. The sampler checks that traffic moved and
-// that the target returns 200s, and a feature branch that built and deployed
-// satisfies both. Nothing downstream of this line could have caught it.
-//
-// `workers/alias` is the branch a build came from and the only branch signal a
-// version carries — the objects hold no commit sha (checked against the live
-// API, not assumed). So the alias is what this filters on.
-// Memoized, because two things read it now: the alias filter below, and the
-// freshness check, which needs `created_on` for whatever target was resolved —
-// including one passed as `--version`, where newestVersion() never runs.
-//
-// The list is the newest LIST_SIZE uploads. wrangler capped this at 10 with no
-// paging, which is how branch builds used to bury the production one; the API
-// pages, so this asks for one large page instead.
 const LIST_SIZE = 100;
 let versionListCache: any[] | null = null;
 async function versionList() {
@@ -204,8 +80,6 @@ async function versionList() {
     const listed = await cfOrDie(["workers", "versions", "list", "--worker-id", await workerName(), "--per-page", String(LIST_SIZE)]);
     const list = listed?.items ?? listed;
     if (!Array.isArray(list) || !list.length) die("no uploaded versions found");
-    // created_on sits at the top level in this API and under `metadata` in the
-    // older one wrangler read; accept either rather than guess which answers.
     versionListCache = list.map((v) => ({ ...v, created_on: v.created_on ?? v.metadata?.created_on }));
   }
   return versionListCache;
@@ -221,7 +95,6 @@ function createdOnFor(list, id) {
 async function newestVersion() {
   const productionAliasName = await productionAlias();
   const list = await versionList();
-  // Sort on the timestamp rather than trusting the API's order.
   const sorted = [...list].sort((a, b) =>
     String(b.created_on || "").localeCompare(String(a.created_on || "")));
 
@@ -229,11 +102,6 @@ async function newestVersion() {
   const production = sorted.filter((v) => aliasOf(v) === productionAliasName);
 
   if (!production.length) {
-    // FAIL CLOSED. Under wrangler's 10-version cap this really happened on
-    // busy days; at LIST_SIZE it takes a hundred branch pushes, or a version
-    // list that carries no `workers/alias` annotation. Guessing here is
-    // exactly the bug being fixed, so name the candidates and let a human
-    // choose.
     const seen = sorted.slice(0, 20).map((v) => `    ${v.id.slice(0, 8)}  ${aliasOf(v)}`).join("\n");
     die(
       `no \`${productionAliasName}\` build among the ${sorted.length} most recent versions.\n\n` +
@@ -243,8 +111,6 @@ async function newestVersion() {
     );
   }
 
-  // Say the number out loud, the same way the ramp steps do. If this line ever
-  // reads "skipping 6 newer", that is the trap this filter exists for.
   const skipped = sorted.indexOf(production[0]);
   if (skipped > 0) {
     const names = sorted.slice(0, skipped).map(aliasOf).join(", ");
@@ -253,10 +119,6 @@ async function newestVersion() {
   return production[0].id;
 }
 
-// The Worker's name, which is half of the version-override header. Read from the
-// same declaration Workers Builds publishes under, so it cannot drift from the
-// script the dashboard actually deploys, and read lazily for the same reason
-// productionAlias() is: `--status` must not break on a malformed infra.json.
 async function workerName() {
   try {
     const infra = JSON.parse(await readFile(new URL("../config/infra.json", import.meta.url), "utf8"));
@@ -268,8 +130,6 @@ async function workerName() {
   }
 }
 
-
-// ------------------------------------------------------- target freshness ----
 
 // WHY. Workers Builds takes a couple of minutes to upload after a merge, and a
 // ramp inside that window silently targets the PREVIOUS release. Nothing
@@ -304,8 +164,6 @@ async function headCommit() {
     const at = new Date(iso);
     return sha && !Number.isNaN(at.getTime()) ? { sha, at } : null;
   } catch {
-    // No git, no repo, no HEAD: the check simply does not apply. A ramp must
-    // never fail because a workstation is arranged unusually.
     return null;
   }
 }
@@ -320,16 +178,11 @@ function humanGap(ms) {
 async function reportTargetFreshness(targetId) {
   const [head, list] = await Promise.all([headCommit(), versionList()]);
   const built = createdOnFor(list, targetId);
-  // Name WHICH input was missing. The two causes want different responses, and
-  // one line saying "unknown" for both sends you looking in the wrong place.
   if (!head) {
     console.log("freshness:        unknown (no git HEAD here)\n");
     return;
   }
   if (!built) {
-    // Only the newest LIST_SIZE uploads are listed, so an older target lands
-    // here. That is not an error; it is the normal answer for a deliberately
-    // old target.
     console.log(
       `freshness:        unknown (${String(targetId).slice(0, 8)} is not among the ` +
       `${list.length} newest versions, so it has no timestamp to compare)\n`);
@@ -352,17 +205,6 @@ async function reportTargetFreshness(targetId) {
   );
 }
 
-// ------------------------------------------------------------------ run ----
-
-// `: never` is load-bearing rather than documentation. Every caller uses this as
-// control flow ("bail unless X"), and without the annotation TypeScript keeps the
-// impossible branch alive and reports the value the caller just refused as still
-// nullable. Declaring it never is what makes those guards narrow, which is how a
-// guard is meant to read.
-//
-// An ANNOTATION rather than the `@returns {never}` this carried until #532
-// renamed the file: a .ts file ignores JSDoc types, so that form went inert the
-// moment the extension changed and every diagnostic it had cleared came back.
 function die(message: string): never {
   console.error(`deploy:promote: ${message}`);
   process.exit(1);
@@ -385,9 +227,6 @@ if (has("status")) {
 }
 
 if (has("rollback")) {
-  // The previously active version is whatever holds traffic that is NOT the
-  // newest upload. With a single active version there is nothing to roll back
-  // TO from here, and guessing would be worse than refusing.
   const newest = await newestVersion();
   const older = active.filter((v) => v.id.slice(0, 8) !== newest.slice(0, 8));
   if (!older.length) {
@@ -401,13 +240,8 @@ if (has("rollback")) {
 }
 
 const target = flag("version") || await newestVersion();
-// The remainder holder is the LARGEST incumbent; see tools/lib/ramp-split.ts
-// for the measurement that made an arbitrary pick a real hazard.
 const previous = remainderHolder(active, target);
 
-// Read once each. `flag("steps") ? flag("steps").split(…)` calls the function
-// twice, so the guard narrows nothing and the second call is still nullable —
-// which is also a (harmless) second scan of argv on the release path.
 const toFlag = flag("to");
 const stepsFlag = flag("steps");
 const steps = toFlag
@@ -427,16 +261,8 @@ console.log(`target version:   ${target.slice(0, 8)}`);
 console.log(`target version id: ${target}`);
 console.log(`serving now:      ${activeIds || "(nothing)"}`);
 console.log(`ramp:             ${steps.join("% -> ")}%`);
-// Before the dry-run exit, so it prints on BOTH paths. A warning that only
-// appears in --dry-run is worth nothing on the run that skips the dry run, and
-// skipping it is exactly what someone does when they are moving quickly.
 await reportTargetFreshness(target);
 
-// Resolve and print the target, move nothing. The point is to make the version
-// choice READABLE before it is acted on: the bug this flag ships with was one
-// where the wrong target was picked silently and every downstream check passed.
-// Also the only way to exercise the selection without moving production
-// traffic, since the surrounding module runs on import and cannot be tested.
 if (has("dry-run")) {
   console.log("--dry-run: nothing was changed.");
   process.exit(0);
@@ -470,31 +296,8 @@ for (const pct of steps) {
     : [{ id: target, pct }, { id: previous, pct: 100 - pct }];
   await deployVersions(specs, `deploy:promote ramp to ${pct}%`);
 
-  // Let the change propagate before believing a sample of it, then RETRY rather
-  // than trusting one window.
-  //
-  // The first real ramp failed here on a split that was working fine. It read
-  // 0 of 40 on a live 10% split; a hand sample minutes later read 3 of 60, which
-  // is 5% against a 10% target and entirely ordinary. Two things made a healthy
-  // ramp look dead:
-  //
-  //   1. FIVE SECONDS IS NOT PROPAGATION. Creating a deployment returns as
-  //      soon as the split is recorded, and the edge takes longer than that to
-  //      route on it. The early samples were measuring the old world.
-  //   2. ZERO IS NOT RARE ENOUGH AT n=40. At a true 10%, 0.9^40 is ~1.5% — small
-  //      until you run it on every intermediate step of every release, at which
-  //      point a false abort is a matter of when. Sampling a 4-in-40 signal and
-  //      failing hard on the low tail was never going to hold.
-  //
-  // So: sample, and if nothing lands on the target, wait and sample again before
-  // calling it. A genuinely dead ramp stays at zero across all three windows; a
-  // live one at 10% clears 0-of-40 three times running about 1 in 300,000.
   await sleep(SETTLE_MS);
 
-  // The target, asked directly. First, because a fault in the new version is the
-  // thing worth finding earliest and this is the check that actually looks for
-  // it: 12 of 12 requests handled by the code about to take the site, against
-  // roughly 4 of 40 in the sampled sweep below.
   const pinned = await probePinned(target, worker);
   const pinnedStalled = pinned.stalls ? `, ${pinned.stalls} stalled` : "";
   console.log(`   pinned ${pinned.total}: ${pinned.onTarget} answered by ${target.slice(0, 8)}, ${pinned.errors} error(s)${pinnedStalled}`);
@@ -506,11 +309,6 @@ for (const pct of steps) {
     console.error(`   roll back with: bun run deploy:promote --rollback`);
     process.exit(1);
   }
-  // The override not applying is an INSTRUMENT failure, not a fault in the
-  // release, so it reports and continues. Cloudflare only honours the header for
-  // a version that is in the current deployment; anything else and this step
-  // simply falls back to the sampled check, which is what carried the ramp
-  // before the pinned probe existed.
   if (!pinned.answered) {
     console.log(`   note: not one pinned request completed from this machine (${[...new Set(pinned.stallReasons)][0]}). Nothing was proved either way.`);
   } else if (pinned.onTarget === 0) {
@@ -518,8 +316,6 @@ for (const pct of steps) {
     console.log(`         the pinned check proved nothing this step; the sampled one below is carrying it.`);
   }
 
-  // Null until the first attempt runs, and read after the loop, so the type has
-  // to admit both. Inside the loop the assignment narrows it for free.
   let s: Awaited<ReturnType<typeof sample>> | null = null;
   for (let attempt = 1; attempt <= SAMPLE_ATTEMPTS; attempt++) {
     if (attempt > 1) await sleep(RESAMPLE_MS);
@@ -529,8 +325,6 @@ for (const pct of steps) {
     const stalled = s.stalls ? `, ${s.stalls} stalled` : "";
     console.log(`   sampled ${s.total}: ${s.onTarget} on target (${pctSeen}%), ${s.onPrevious} on previous, ${s.errors} error(s)${stalled}${note}`);
     if (s.stalls) console.log(`   note: ${s.stalls} request(s) never completed from THIS machine (${[...new Set(s.stallReasons)][0]}) — not an origin fault.`);
-    // Errors are conclusive on the first sighting: a 500 does not become a 200
-    // by waiting, and that is the failure the whole ramp exists to catch.
     if (s.errors) break;
     if (pct >= 100 || s.onTarget > 0) break;
     if (attempt < SAMPLE_ATTEMPTS) {
@@ -538,11 +332,6 @@ for (const pct of steps) {
     }
   }
 
-  // The loop runs at least once for any sane SAMPLE_ATTEMPTS, so this is a
-  // guard on the CONSTANT rather than on the network. It is worth having anyway:
-  // every check below reads `s`, and a zero there would otherwise ramp to the
-  // next step having verified nothing, which is the one outcome this script
-  // exists to prevent.
   if (!s) die(`SAMPLE_ATTEMPTS is ${SAMPLE_ATTEMPTS}, so the ${pct}% step was never sampled`);
 
   if (s.errors) {
@@ -551,12 +340,6 @@ for (const pct of steps) {
     console.error(`   roll back with: bun run deploy:promote --rollback`);
     process.exit(1);
   }
-  // Nothing came back at all. Distinct from an origin error and reported as
-  // such, because the remedy is different: check this machine's network and
-  // re-run, rather than roll back a deploy that may be perfectly healthy. It
-  // still stops the ramp, since a step nobody could measure is not a step that
-  // passed — and at 100% it is what keeps an unverified run from writing the
-  // changelog as though traffic were confirmed.
   if (!s.answered) {
     console.error(`   FAILED: not one of ${s.total} samples completed from this machine (${[...new Set(s.stallReasons)][0]}).`);
     console.error(`   this says nothing about the deploy — it could not be measured. Traffic IS at ${pct}%.`);
@@ -565,12 +348,6 @@ for (const pct of steps) {
   }
   if (pct < 100 && s.onTarget === 0) {
     console.error(`   FAILED: no sampled request reached ${target.slice(0, 8)} across ${SAMPLE_ATTEMPTS} windows. The ramp did not take.`);
-    // Name the likeliest cause rather than leaving it as a mystery. A healthy
-    // version that answers every PINNED request and none of the split ones is
-    // not a dead ramp; it is a routing question, and the version-affinity
-    // Transform Rule is the one thing on this path that can collapse a sweep
-    // onto a single version. It is supposed to skip requests already carrying
-    // Cloudflare-Workers-Version-Key, which is exactly what sample() sends.
     if (pinned.onTarget > 0) {
       console.error(`   BUT ${pinned.onTarget}/${pinned.total} requests pinned to that version answered fine, so the version is healthy`);
       console.error(`   and something is stopping the SPLIT from routing. Likeliest cause: the version-affinity`);
@@ -594,33 +371,15 @@ for (const pct of steps) {
 
 console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
 
-// ── record the release ────────────────────────────────────────────────────
-// The changelog entry was authored in the PR (bump-version.sh writes only the
-// committed projection), so /updates and /restore have been serving it since
-// this version started answering. What was still missing is D1's record that it
-// SHIPPED, and this is the only place that knows traffic actually moved.
-//
-// Deliberately after the last step and never before: a row here means the
-// version reached 100%, not that someone intended it to. A ramp that aborts at
-// 10% leaves the entry staged, which is exactly what it is.
 if (steps[steps.length - 1] === 100) {
   const file = new URL("../src/worker/checkpoints.json", import.meta.url);
-  // The changelog rows this release adds: whatever checkpoints.json carries
-  // beyond what D1 already holds.
   let staged: { vnum: number, ymd: string, version: string, slug: string, title: string }[] = [];
   try {
     const committed = JSON.parse(await readFile(file, "utf8"));
-    // d1Rows() returns parsed rows. A second JSON.parse here once stringified
-    // the object to "[object Object]" and threw, which the catch below then
-    // reported as D1 being unreachable, so every ramp skipped its own changelog
-    // write while blaming a database that was fine every time.
     const rows = await d1Rows(D1["aadhar-restore"], "SELECT vnum FROM checkpoints;");
     const known = new Set(rows.map((r) => r.vnum));
     staged = committed.filter((r) => !known.has(r.vnum)).sort((a, b) => a.vnum - b.vnum);
   } catch (e) {
-    // Do NOT name a cause here. This block covers a local file read, a cf
-    // spawn, and the shape of what comes back; asserting "D1 is unreachable" sent
-    // the one person reading it to check a database that was answering fine.
     console.log(`\ncould not work out what to log (${String(e.message || e).slice(0, 90)}).`);
     console.log("traffic is ramped; run `bun run checkpoints:check` to see what is still staged.");
   }
@@ -631,8 +390,6 @@ if (steps[steps.length - 1] === 100) {
         `INSERT INTO checkpoints (vnum, ts, ymd, version, slug, title) VALUES (${row.vnum}, ${ts}, '${row.ymd}', '${row.version}', '${row.slug}', '${row.title}');`);
       console.log(`logged: v${row.vnum} ${row.version}`);
     } catch (e) {
-      // Not fatal. Traffic already moved, and a missing log row is a changelog
-      // gap rather than an outage — reporting it beats unwinding a good release.
       console.log(`warn:   could not log v${row.vnum} (${String(e.message || e).slice(0, 90)})`);
     }
   }

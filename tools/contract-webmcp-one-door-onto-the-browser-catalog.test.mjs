@@ -4,12 +4,6 @@
 // duplicate name, offers no unregisterTool, and ignores an AbortSignal, so a
 // name is claimed once per document and a second claim is simply dropped.
 // Measured on Chrome 152, 2026-08-25.
-//
-// That makes two mistakes silent rather than loud, and this file exists for
-// both. A page tool named after a /mcp tool never registers, and nothing says
-// so. A module that reaches document.modelContext directly skips the annotation
-// channel and the consent gate, and the tool still works, which is the worst
-// possible outcome for a safety layer.
 import {
   SITE_MCP_TOOLS,
   assert,
@@ -29,20 +23,11 @@ const TRAY = readFileSync("./src/client/nav-tray.js", "utf8");
 const SHELL = readFileSync("./tools/photos/shell-data.ts", "utf8");
 const CHROME = readFileSync("./src/worker/lib/desktop.ts", "utf8");
 
-// The page tools are declared in one array literal in the lightweight registrar.
-// lensPageToolNames() reads only that array, so a `name:` in some unrelated
-// object cannot inflate the count and hide a collision. tools/webmcp-catalog.ts
-// reads the same list to check the LIVE catalog, which this file can't see.
 const pageToolNames = () => lensPageToolNames(LENS_WEBMCP);
 
 test("no Lens page tool is named after a tool /mcp already serves", () => {
   const page = pageToolNames();
-  // The whole served catalog. DATA_TOOLS is only 10 of the 25 names /mcp
-  // answers with, so checking against it would miss a collision with any of
-  // the terminal or hosted tools mcp.ts composes on top.
   const server = SITE_MCP_TOOLS.map((t) => t.name);
-  // FLOORS. A scanner that matches nothing otherwise reports a clean pass, which
-  // is the failure mode every scanner in this repo has had at least once.
   assert.ok(page.length >= 6, `expected at least 6 page tools, found ${page.length}`);
   assert.ok(server.length >= 20, `expected at least 20 server tools, found ${server.length}`);
   const clash = page.filter((name) => server.includes(name));
@@ -55,9 +40,6 @@ test("every Lens page tool states its own safety, rather than inheriting a defau
   const end = LENS_WEBMCP.indexOf("\n  ];", start);
   const body = LENS_WEBMCP.slice(start, end);
   const count = pageToolNames().length;
-  // `writes` is what arms the consent dialog and `annotations` is what feeds the
-  // description's safety line. Defaulting either one is how a tool that changes
-  // something ends up describing itself as read-only.
   assert.equal((body.match(/^\s+writes:\s/gm) || []).length, count,
     "every page tool must declare `writes` explicitly");
   assert.equal((body.match(/^\s+annotations:\s/gm) || []).length, count,
@@ -65,24 +47,8 @@ test("every Lens page tool states its own safety, rather than inheriting a defau
 });
 
 test("webmcp.js is the only client module that uses document.modelContext", () => {
-  // Anything reaching the API directly bypasses the safety note and the consent
-  // gate, and its tools would keep working, so this cannot be left to review.
-  // Going THROUGH webmcp.js (wm.registerTool) is exactly the point, so the rule
-  // is about who READS the browser object, not who calls a method named like it.
   const clients = readdirSync("./src/client").filter((f) => f.endsWith(".js"));
   assert.ok(clients.length >= 15, `expected at least 15 client modules, found ${clients.length}`);
-  // String bodies are blanked first. lens.js legitimately NAMES the API in the
-  // readiness fix copy it shows a visitor ("Expose safe browser actions with
-  // document.modelContext"), and a rule that cannot tell page copy from a call
-  // would either fail on that sentence or be silenced into uselessness.
-  // Strings FIRST, in ONE pass over all three quote styles, then comments.
-  //
-  // Both halves are load-bearing and the order is too. Three separate quote
-  // passes is wrong: the double-quote pass runs first, so a ' ... " ... " ... '
-  // string is chewed from the middle and whatever followed is exposed as if it
-  // were code. And stripping comments BEFORE strings would eat the // inside a
-  // URL literal. lens.js is the file that proves both, since it names this API
-  // in visitor-facing copy, in a comment, and in an HTML string.
   const codeOnly = (src) => src
     .replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g, '""')
     .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -90,11 +56,6 @@ test("webmcp.js is the only client module that uses document.modelContext", () =
   const mentions = clients.filter((f) => /modelContext/.test(codeOnly(readFileSync(`./src/client/${f}`, "utf8")))).sort();
   assert.deepEqual(mentions, ["lens-boot.js", "nav.js", "webmcp.js"],
     `only webmcp.js may own the WebMCP API, while nav.js and lens-boot.js may feature-check it; found: ${mentions.join(", ")}`);
-  // nav.js and lens-boot.js may READ the object to decide whether to spend an
-  // import, and may never touch anything ON it. Counting the mentions was the first version of
-  // this and it was wrong the moment a second guard appeared (the tray reader
-  // needs its own); the number was never the rule. This is: bare truthiness
-  // only, so no property access, no call, no index.
   for (const [file, source] of [["nav.js", NAV], ["lens-boot.js", LENS_BOOT]]) {
     const uses = codeOnly(source).match(/modelContext\s*[.([]/g) || [];
     assert.deepEqual(uses, [],
@@ -117,16 +78,11 @@ test("webmcp.js is the only client module that uses document.modelContext", () =
     assert.match(codeOnly(source), /modelContext\s*\|\|\s*navigator\.modelContext/,
       `${file} must feature-check navigator.modelContext as well as document.modelContext`);
   }
-  // A shim need not implement getTools(), and a registration must not depend on
-  // being able to list the catalog first: "cannot list" is not "already taken".
   assert.match(WEBMCP, /if \(!MC \|\| !MC\.getTools\) return \[\];/,
     "webmcp.js must tolerate a ModelContext with no getTools()");
 });
 
 test("a cold Lens document loads its page tools when WebMCP is available", () => {
-  // Discovery needs the six definitions before interaction, not the 80+ KiB
-  // client that executes them. The registrar must load eagerly in a capable
-  // browser while lens.js stays behind saved state, human intent, or a tool call.
   assert.match(LENS_BOOT, /\(document\.modelContext \|\| navigator\.modelContext\)\s*\? import\("\/lens-webmcp\.js"\)/,
     "lens-boot.js must load the lightweight registrar in a WebMCP browser");
   assert.match(LENS_BOOT, /if \(pageTools\) pageTools\.then\((?:function \(wm\)|\(wm\) =>) \{ return wm && wm\.boot\(load\); \}\)/,
@@ -151,9 +107,6 @@ test("the early definitions and lazy Lens handlers stay one-to-one", () => {
 });
 
 test("successful registration repaints activity observers", () => {
-  // Site tools and Lens tools register from separate async entry points. The
-  // tray cannot assume either one wins the race; every successful registration
-  // must notify it so 25 becomes 31 when the page tools arrive later.
   const start = WEBMCP.indexOf("export async function registerTool");
   assert.ok(start > 0, "registerTool moved; update this scanner");
   const body = WEBMCP.slice(start, WEBMCP.indexOf("// ---- the site's own /mcp tools", start));
@@ -173,8 +126,6 @@ test("webmcp.js ships as a minified asset with a readable twin", () => {
 });
 
 test("both entry points reach webmcp.js through an import specifier", () => {
-  // The SOURCE keeps the plain specifier; the client asset registry's import loader rewrites it to
-  // the hashed /a/ URL in the staged copies, and fails the build if it did not.
   for (const [file, source] of [["nav.js", NAV], ["lens-webmcp.js", LENS_WEBMCP]]) {
     assert.ok(/import\(\s*"\/webmcp\.js"\s*\)/.test(source),
       `${file} should load the WebMCP core with import("/webmcp.js")`);
@@ -182,9 +133,6 @@ test("both entry points reach webmcp.js through an import specifier", () => {
 });
 
 test("a tool that writes cannot reach its handler without passing the gate", () => {
-  // Structural on purpose: the gate needs a real browser and a real person, and
-  // node has neither. What IS checkable is that the one path to a writing tool's
-  // handler runs through gate() first, in the single function that builds them.
   const start = WEBMCP.indexOf("export async function registerTool");
   assert.ok(start > 0, "registerTool moved; update this scanner");
   const body = WEBMCP.slice(start);
@@ -197,9 +145,6 @@ test("a tool that writes cannot reach its handler without passing the gate", () 
 });
 
 test("the agent-activity tray icon ships HIDDEN and is unhidden by script", () => {
-  // The icon claims "an agent can drive this page", which is only true in a
-  // browser that implements WebMCP. Shipping it visible would show a Safari
-  // visitor a control for a thing their browser cannot do.
   assert.ok(/id: "axp-webmcp"[^}]*hidden: true/s.test(SHELL),
     "the webmcp tray item must declare hidden: true in shell-data.ts");
   assert.ok(/id=\\"axp-webmcp\\" class=\\"axp-trayico\\" hidden/.test(CHROME),
@@ -209,8 +154,6 @@ test("the agent-activity tray icon ships HIDDEN and is unhidden by script", () =
 });
 
 test("the tray reads the log rather than fetching it, and renders every outcome", () => {
-  // The audit log is module state in this document. A reader that fetched would
-  // be inventing an endpoint for data it already holds.
   assert.ok(/loadWebmcp/.test(NAV) && /loadWebmcp/.test(TRAY),
     "nav.js should pass a loadWebmcp reader and nav-tray.js should take it");
   assert.ok(!/fetch\(/.test(TRAY.slice(TRAY.indexOf("function renderWebmcp"), TRAY.indexOf("var BALLOON"))),
@@ -219,7 +162,6 @@ test("the tray reads the log rather than fetching it, and renders every outcome"
     assert.ok(new RegExp(`"${outcome}"`).test(TRAY),
       `the balloon must render the ${outcome} outcome`);
   }
-  // webmcp.js has to keep exporting what the tray reads.
   for (const name of ["summary", "onActivity"]) {
     assert.ok(new RegExp(`export function ${name}\\b`).test(WEBMCP),
       `webmcp.js must export ${name}; nav.js depends on it`);

@@ -19,21 +19,21 @@ test("the edge cases of the rule", () => {
   const cases = [
     "see src/worker/index.ts.",
     "tools/build.ts, tools/lib/dcz.ts; and (config/infra.json)",
-    "x/src/a.ts",                // a slash before the name: part of a longer path
-    ".src/a.ts",                 // a dot before it: a hidden directory elsewhere
-    "-src/a.ts _src/a.ts 9src/a.ts", // a word character before it
-    "cf-garage/x.ts garage/x.ts", // a listed name containing a hyphen, and its suffix alone
-    "lwe-ask/ lwe-ask/a",        // nothing after the slash, then a single character
+    "x/src/a.ts",
+    ".src/a.ts",
+    "-src/a.ts _src/a.ts 9src/a.ts",
+    "cf-garage/x.ts garage/x.ts",
+    "lwe-ask/ lwe-ask/a",
     "src//a src/./a src/../a",
-    "SRC/a.ts Src/a.ts",         // names are lowercase in the rule
+    "SRC/a.ts Src/a.ts",
     "https://github.com/x/src/main.rs",
     "<code>src/pages/garage/wire.html</code>",
-    "src/a.ts/src/b.ts",         // one token: the second name sits after a slash
+    "src/a.ts/src/b.ts",
     "public/i/x.avif\nsrc/b.ts\tdocs/c.md",
     "",
     "/",
     "srcsrc/a.ts",
-    "talks/é.md tools/naïve.ts", // the path class is ASCII; it stops at é
+    "talks/é.md tools/naïve.ts",
   ];
   for (const text of cases) assert.deepEqual(repoPathTokens(text), oracle(text), JSON.stringify(text));
 });
@@ -49,14 +49,11 @@ test("the repository's own source cites paths exactly as the regex reads them", 
       files++; tokens += want.length;
     }
   }
-  // floors, so a corpus that quietly stopped reaching files reads as a failure
   assert.ok(files > 400, `read ${files} files`);
   assert.ok(tokens > 1000, `compared ${tokens} tokens`);
 });
 
 test("random text over the characters that matter agrees with the regex", () => {
-  // Seeded, so a failure reproduces. Fragments are the names, their near
-  // misses, and every character the rule treats specially.
   let seed = 0x5eed;
   const rand = (n) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
   const parts = [...REPO_DIRS, "garage", "lwe", "srcs", "Src", "/", "/", "/", ".", "-", "_", "a", "Z", "9", " ", "\n", ",", ")", "é", ".ts", "x"];

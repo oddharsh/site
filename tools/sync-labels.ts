@@ -1,28 +1,6 @@
 #!/usr/bin/env bun
 // The write path for the label set declared in config/infra.json under
 // `repository.triage`.
-//
-// check-infra.ts answers "did it drift". This answers "put it back". Same split
-// as check-infra / apply-infra, and for the same reason: the check runs on every
-// pull request and must never be able to write, so the write code does not live
-// in the file CI executes.
-//
-//   bun tools/sync-labels.ts             plan only, no writes
-//   bun tools/sync-labels.ts --confirm   create and update declared labels
-//   bun tools/sync-labels.ts --confirm --prune   also DELETE undeclared labels
-//
-// WHY THIS EXISTS AT ALL, given that GitHub will happily invent a label on
-// demand: that is precisely the failure. POST /issues/:n/labels creates any
-// name it is handed, so a typo in a routing rule mints a near-duplicate label
-// with a colour nobody chose and reports nothing. Declaring the set makes the
-// typo a failed check instead of a second label named `area: garagee`.
-//
-// PRUNE DELETES, and a deletion takes the label off every issue and pull
-// request carrying it, historically. There is no undo. It is off by default
-// and needs --confirm alongside it.
-//
-// Refuses to run in CI, like apply-infra.ts. Nothing in the pipeline should
-// hold a credential that can rewrite repository metadata.
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -41,8 +19,6 @@ if (!triage) {
 }
 const slug = `${repo.owner}/${repo.name}`;
 
-// ------------------------------------------------------------- guardrails --
-
 if (process.env.CI) {
   console.error("refusing to run in CI.");
   console.error("");
@@ -51,10 +27,6 @@ if (process.env.CI) {
   process.exit(1);
 }
 
-// Being logged in buys nothing on its own is the trap check-infra's own docs
-// record: it reads GITHUB_TOKEN and never shells out, so a machine with a
-// perfectly good `gh auth login` still reports a tier as unverifiable. This is
-// the writer, run by hand, so it asks gh directly when the variable is unset.
 function token() {
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
   try {
@@ -69,8 +41,6 @@ if (CONFIRM && !TOKEN) {
   console.error("no credential: set GITHUB_TOKEN or run `gh auth login`.");
   process.exit(1);
 }
-
-// ------------------------------------------------------------------- api ----
 
 async function gh(path: string, init: RequestInit = {}) {
   const headers: Record<string, string> = {
@@ -100,8 +70,6 @@ async function liveLabels() {
   }
 }
 
-// ------------------------------------------------------------------ plan ----
-
 const live = new Map((await liveLabels()).map((l) => [l.name, l]));
 const plan: { verb: string; label: any; detail: string }[] = [];
 
@@ -118,8 +86,6 @@ for (const want of triage.labels) {
   if (diffs.length) plan.push({ verb: "update", label: want, detail: diffs.join(", ") });
 }
 
-// Strays are reported whether or not --prune is set, because knowing they exist
-// is the useful half and deleting them is the rare half.
 const strays = [...live.values()];
 for (const stray of strays) {
   plan.push({
@@ -145,8 +111,6 @@ if (!CONFIRM) {
   process.exit(0);
 }
 
-// ----------------------------------------------------------------- apply ----
-
 let applied = 0;
 for (const step of writes) {
   const { name, color, description } = step.label;
@@ -163,9 +127,6 @@ for (const step of writes) {
     }
     applied++;
   } catch (e) {
-    // Keep going. A partial sync is recoverable by re-running; stopping on the
-    // first failure leaves the rest of the set in an unknown state and the
-    // operator with one error instead of the list.
     console.error(`  ${step.verb} ${name} FAILED: ${(e as Error).message}`);
   }
 }

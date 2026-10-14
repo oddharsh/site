@@ -6,27 +6,6 @@
 //   new Response(r.body, r)                        keeps encodeBody
 //   new Response(r.body, { status, headers })      drops it, body encoded twice
 //   the same, with init.encodeBody set again       keeps it (security.ts's carry)
-//
-// undici implements no encodeBody, so neither runner in this suite could check
-// any of them, and the walker says so: the SOURCE was the only place the
-// invariant could be held "without booting a Worker". wrangler's own test
-// harness boots one in-process on the PINNED workerd, so this file checks the
-// claims themselves, and a wrangler pin that moves the asymmetry fails here
-// instead of shipping as a double-encoded body. The walker still owns coverage
-// of every call site; this owns the rules it applies.
-//
-// Measured 2026-09-22 on node 26.9.0 before a line of this was written, against
-// a 17,600-byte payload: the untouched and response-init rows came back as the
-// plain payload, the object-init row came back as 13 bytes of STILL-BROTLI, and
-// the same held through the harness's listening socket as well as in-process.
-// That control row is what makes the other rows mean anything: it proves the
-// instrument can see a second layer when there is one.
-//
-// The Worker is written into a temp directory rather than committed under
-// tools/fixtures, because that directory is exempt from typecheck coverage on
-// the grounds that it holds frozen DATA (tools/typecheck.ts), and a fixture
-// Worker is code. It imports the real lib/security.ts, so the two rows that
-// matter most run production's withSecurityHeaders inside workerd.
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,17 +17,6 @@ import { underNode } from "./lib/harness-dispatch.ts";
 import {
   configText, ROOT, assert, test } from "./contract-shared.ts";
 
-// Every shape the walker has an opinion about, plus production's own wrapper
-// down each of its three exits.
-//
-// THE FLAG IS READ ONCE, AT SERIALIZATION, which is why the wrapper needs two
-// noindex rows. Measured while writing this: deleting the carry on the noindex
-// rebuild (security.ts's first `init.encodeBody`) left an HTML row GREEN,
-// because the main rebuild after it sets the flag again, and an intermediate
-// Response that dropped it hands its body stream on untouched. So that first
-// carry is load-bearing only when the main rebuild never runs, which is the
-// image and redirect bails. The svg row takes the image bail and is the one row
-// that fails without it; the html row covers two rebuilds in a row.
 const workerSource = (security) => `
 import { withSecurityHeaders } from ${JSON.stringify(security)};
 
@@ -86,15 +54,11 @@ async function decodedOnce(response) {
   return response.headers.get("content-encoding") === "br" ? brotliDecompressSync(bytes) : bytes;
 }
 
-// Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.
 const DISPATCH = "encodeBody survives every rebuild shape the walker allows, measured in the pinned workerd";
 test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   const PAGE = Buffer.from("<p>encodeBody, carried or lost</p>\n".repeat(500));
   const BROTLI = brotliCompressSync(PAGE);
 
-  // Production's flags rather than a default: compatibility_flags carries
-  // new_module_registry, and a runtime behaviour measured under different
-  // flags would be a measurement of a different runtime.
   const site = parseJsonc(await configText("cloudflare.config.ts"));
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "encodebody-")));
   writeFileSync(join(dir, "worker.js"),
@@ -116,11 +80,6 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
       headers: { "accept-encoding": "br" },
     });
 
-    // THE CONTROL, first, because every row after it reads as a pass for a
-    // broken instrument too. An object init must leave one brotli layer behind
-    // after the client's decode, and exactly one: decoding it again yields the
-    // page. If this row ever reads as the plain page, workerd changed the
-    // asymmetry and the walker's RECORDED entries need re-reading, not this row.
     const lost = await decodedOnce(await send("/object-init"));
     assert.notDeepEqual(lost, PAGE,
       "an object-init rebuild came back clean, so either workerd now preserves encodeBody "
@@ -134,9 +93,6 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
         `${path}: a client decoding once did not get the page back`);
     }
 
-    // Production's wrapper. The header assertions are what stop these rows
-    // passing vacuously: a withSecurityHeaders that bailed before its rebuild
-    // would hand the body through untouched and read exactly like a carry.
     const secured = await send("/security-headers");
     assert.ok(secured.headers.get("content-security-policy"),
       "withSecurityHeaders did not reach its rebuild, so this row proves nothing");
@@ -149,9 +105,6 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
     assert.deepEqual(await decodedOnce(noindex), PAGE,
       "the noindex path double-encoded a precompressed body across its two rebuilds");
 
-    // The early rebuild ALONE. x-robots-tag says the noindex rebuild ran and a
-    // missing CSP says the image bail returned before the main one could set the
-    // flag again, so this row has exactly one carry to lean on.
     const image = await send("/security-headers-noindex-image");
     assert.ok(image.headers.get("x-robots-tag"),
       "the noindex rebuild did not run on the image row, so it proves nothing");

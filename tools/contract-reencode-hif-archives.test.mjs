@@ -31,7 +31,6 @@ async function setup() {
   await put("src/worker/photo-index.json", JSON.stringify({ X1: { full: "X1.jxl", size: TRANSCODE.length, uploaded: "2026-07-27T00:00:00.000Z" } }, null, 2) + "\n");
   await put("r2/X1.jxl", TRANSCODE);
   await put("hifs/X1.HIF", "HEIF original");
-  // R2: get copies out of r2/, put copies in, and every call is logged.
   await put("node_modules/.bin/wrangler", `#!/bin/bash
 echo "$*" >> "$FIXTURE_ROOT/calls"
 key="\${4#aadhar-photos/}"; file=""; for a in "$@"; do case "$a" in --file=*) file="\${a#--file=}" ;; esac; done
@@ -39,8 +38,6 @@ case "$3" in
   get) [ -f "$FIXTURE_ROOT/r2/$key" ] || { echo "✘ [ERROR] The specified key does not exist." >&2; exit 1; }; cp "$FIXTURE_ROOT/r2/$key" "$file" ;;
   put) cp "$file" "$FIXTURE_ROOT/r2/$key" ;;
 esac`, 0o755);
-  // cjxl writes a real container without jbrd for a lossy encode (so a rerun
-  // reads it as direct) and copies its input for a lossless repack.
   await put("bin/cjxl", `#!/bin/bash
 for last in "$@"; do :; done
 for a in "$@"; do case "$a" in -*|[0-9]*) ;; *) [ "$a" = "$last" ] || src="$a" ;; esac; done
@@ -94,7 +91,6 @@ test("a real run overwrites the same key, backs up the old bytes, records the si
   const log = await calls();
   assert.ok(log.some((c) => c.startsWith("r2 object put aadhar-photos/X1.jxl")), "uploaded under the same key");
   assert.ok(log.some((c) => /^exif-sooc -TagsFromFile \S+X1\.HIF -all:all -overwrite_original \S+\.jxl$/.test(c)), "the HIF's EXIF went onto it");
-  // a rerun finds it direct and leaves it alone
   const again = run(["--backup", "backup"], WIN);
   assert.equal(again.status, 0, again.stderr);
   assert.match(again.stdout, /X1: already encoded from its HIF/);

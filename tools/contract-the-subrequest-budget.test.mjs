@@ -6,22 +6,12 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// lib/budget.ts encodes one rule: a platform ceiling is never the current
-// item's fault. These tests are mostly about the ways that rule can be
-// accidentally undone, because every one of them has happened in production
-// here — twice on the homepage covers and once across seven Luma rosters.
-//
 // The error text is the load-bearing string in the module, so it is asserted
 // against the wording actually observed rather than against a paraphrase.
 const REAL_CAP_ERROR = "Too many subrequests by single Worker";
 
 const budget = async () => await import("../src/worker/lib/budget.ts");
 
-// A span that records what was set on it. Deliberately the SAME shape
-// lib/trace.ts's INERT stand-in has, so these assertions run against the real
-// `recordBudget` rather than against a second accessor written to be tested —
-// which is what the first version of this file did, and it left the production
-// path with no coverage at all.
 const fakeSpan = () => {
   const set = new Map();
   return { set, setAttribute: (k, v) => set.set(k, v), end() {}, isTraced: false };
@@ -32,12 +22,8 @@ test("the cap error is recognised, and ordinary failures are not", async () => {
 
   assert.equal(isSubrequestLimit(new Error(REAL_CAP_ERROR)), true);
   assert.equal(isSubrequestLimit(new Error("too many subrequests")), true, "case must not matter");
-  // Thrown non-Errors reach a catch too, and a classifier that only reads
-  // `.message` calls a bare string an item failure.
   assert.equal(isSubrequestLimit(REAL_CAP_ERROR), true, "a thrown string is still the ceiling");
 
-  // The other side, which is what keeps this from swallowing real bugs. Each of
-  // these is something this Worker genuinely throws.
   for (const other of [
     new Error("Network connection lost."),
     new Error("KV GET failed: 429 Too Many Requests"),
@@ -62,15 +48,11 @@ test("a ledger holds its reserve back and never reports a negative remainder", a
   assert.equal(b.afford(40), true);
   assert.equal(b.spent, 40);
   assert.equal(b.left, 4);
-  // The whole point of afford(): it refuses AND charges nothing, so the caller
-  // can stop before doing work rather than after failing.
   assert.equal(b.afford(5), false, "an unaffordable reservation must be refused");
   assert.equal(b.spent, 40, "a refused reservation must charge nothing");
   assert.equal(b.afford(4), true);
   assert.equal(b.exhausted, true);
 
-  // charge() records what already happened, so it may exceed the limit. `left`
-  // still must not go negative, because callers compare it against 0.
   b.charge(10);
   assert.equal(b.spent, 54);
   assert.equal(b.left, 0, "left is clamped at zero");
@@ -101,8 +83,6 @@ test("a ceiling hit while the ledger shows headroom is reported as an overrun", 
   recordBudget(leakySpan, leaky);
   assert.equal(leakySpan.set.get("budget.overrun"), true);
 
-  // Against a ledger that HAD spent its allowance, the same error is simply the
-  // ceiling arriving on schedule and says nothing about our accounting.
   const honest = createBudget(4);
   honest.afford(4);
   assert.equal(honest.fault(new Error(REAL_CAP_ERROR)), "cap");
@@ -125,11 +105,6 @@ test("recordBudget stamps a span and omits what it has nothing to say about", as
   assert.equal(s.set.get("budget.limit"), 16);
   assert.equal(s.set.get("budget.spent"), 5);
   assert.equal(s.set.get("budget.exhausted"), false);
-  // The photo pipeline's discipline, which lib/trace.ts's apply() also follows:
-  // a span that says nothing about a dimension is honest, one that says 0 or
-  // "unknown" is a lie you later read as data. `exhausted` IS said, because
-  // false is a real answer to "did this run out"; `overrun` is not, because it
-  // is only ever news.
   assert.equal(s.set.has("budget.overrun"), false);
 });
 
@@ -151,11 +126,6 @@ test("mapWithBudget will not let a per-item failure hide the ceiling", async () 
   const { createBudget, mapWithBudget } = await budget();
   const b = createBudget(50);
 
-  // THE REGRESSION TEST FOR THE ACTUAL OUTAGE. The hand-written version of this
-  // loop is `catch { failed++ }`, which counts the ceiling once per remaining
-  // item: 21 tracks in, that reported 15 upstream failures and wrote a payload
-  // of nulls, and every downstream check passed because there really were 21
-  // results. Here the run must stop and say which of the two happened.
   const seen = [];
   const run = await mapWithBudget([1, 2, 3, 4, 5, 6], b, async (n) => {
     seen.push(n);
@@ -169,8 +139,6 @@ test("mapWithBudget will not let a per-item failure hide the ceiling", async () 
   assert.equal(run.hitCap, true);
   assert.equal(run.skipped, 3, "the item the ceiling landed on counts as unattempted, with the two after it");
   assert.deepEqual(run.results, [1, 3]);
-  // And the ledger noticed the platform disagreed with its count, because the
-  // thrown cap arrived while it still had 46 units of headroom.
   assert.equal(b.overrun, true);
 });
 
@@ -179,9 +147,6 @@ test("the declared cap is one constant, not a number typed out per surface", asy
   assert.equal(SUBREQUEST_CAP_FREE, 50);
   assert.equal(SUBREQUEST_CAP_PAID, 1000);
 
-  // serendipity had `const CRON_SUBREQUEST_CAP = 50` of its own, which is how a
-  // platform ceiling ends up written down in three places and updated in one.
-  // This fails if a surface re-declares it rather than importing.
   const src = readFileSync("serendipity/serendipity.ts", "utf8");
   assert.ok(
     !/^\s*const\s+CRON_SUBREQUEST_CAP\s*=\s*\d+/m.test(src),

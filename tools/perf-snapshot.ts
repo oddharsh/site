@@ -1,49 +1,5 @@
 #!/usr/bin/env node
 // perf-snapshot.mjs — record the built tree's wire sizes, and diff two recordings.
-//
-// This is the DIFFERENTIAL half of the performance story. perf-budget.mjs asks
-// "is this number over a line somebody drew?"; this asks "did this change move
-// it, and by how much?" The two answer different questions and neither replaces
-// the other, but the diff is the one that cannot go stale.
-//
-// The reason it exists is written into perf-budget.mjs's own baseline history:
-// WORKER_BASELINE_GZIP_KIB sat at 129.23 while the real number was 204.24, so
-// the advisory fired on EVERY run for months and CI printed "hard checks green"
-// over it. A hand-maintained constant rots by construction — it records the
-// world on the day somebody typed it, and nothing makes them retype it. A diff
-// against the merge base has no constant to rot. It also cannot be silenced by
-// re-baselining, because there is nothing to re-baseline.
-//
-// Borrowed wholesale from how astral-sh/ruff runs its memory and ecosystem
-// jobs: build the merge base, build HEAD, run both, post the difference as a
-// comment, and fail on nothing. A perf number that fails a PR teaches people to
-// widen the threshold. A perf number in a comment gets read.
-//
-//   node tools/perf-snapshot.ts record <out.json> [--label <name>]
-//   node tools/perf-snapshot.ts compare <base.json> <head.json> [--out <file.md>]
-//   node tools/perf-snapshot.ts row <snapshot.json> [--date YYYY-MM-DD]
-//
-// `row` is the TREND half, and it exists because a per-PR diff catches the STEP
-// while only a series catches the DRIFT. This repo's worker bundle went 86 ->
-// 129.23 -> 204.24 -> 258.34 -> 261.74 KiB gzip, and every one of those numbers
-// was found by somebody tripping over a stale constant rather than by anyone
-// watching the slope. It emits ONE compact JSONL line, which
-// .github/workflows/perf-history.yml appends nightly to the machine-owned
-// `perf-history` branch and /garage/dyno renders.
-//
-// It deliberately drops the per-module and per-page detail the diff carries. A
-// trend is read at the shape level, the detail is what the PR comment already
-// answered on the day it mattered, and commonwarexyz/benchmarks is 89 MB of
-// exactly the retention problem worth not having.
-//
-// `record` runs `wrangler deploy --dry-run`, which self-builds `.build/public`
-// through wrangler.config.ts's build.command, so it needs no prior `bun run build`.
-//
-// Everything measured here is DETERMINISTIC: identical source bytes produce an
-// identical snapshot, so an unchanged asset contributes no row. Sampled numbers
-// (`wrangler check startup`, which wandered 9.6/7.6/6.4 ms across three
-// identical runs) are deliberately NOT recorded — a diff of two noise draws is
-// worse than no diff, because it looks like a finding.
 
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, writeFile } from "node:fs/promises";
@@ -56,9 +12,6 @@ const DRYRUN_OUT = ".build/.perfsnap";
 
 const SCHEMA = 1;
 
-// Brotli q11 because that is what the edge serves. Matching the shipped quality
-// matters more than the ~10s it costs over 50-odd files: a diff computed at a
-// different quality would report movement the wire never sees.
 const sizes = (bytes) => ({
   raw: bytes.length,
   gzip: gzipSync(bytes, { level: 9 }).length,
@@ -67,10 +20,6 @@ const sizes = (bytes) => ({
   }).length,
 });
 
-// `/a/<name>.<hash8>.<ext>` is content-addressed, so its FILENAME changes
-// whenever its bytes do. Keying the snapshot on the raw name would make every
-// asset read as "removed, and a different one added" on any change at all, which
-// is the one thing a diff must not do. Key on the logical name instead.
 const dehash = (name) => name.replace(/\.[0-9a-f]{8}\./, ".");
 
 const git = (...args) => {
@@ -96,22 +45,11 @@ async function walk(dir, filter) {
 }
 
 async function record(outPath, label) {
-  // One dry-run gives three things at once: the built tree (via build.command),
-  // the bundle's gzip total, and per-module attribution from esbuild's metafile.
-  // perf-budget.mjs runs the same command; they are separate processes because
-  // one gates the deploy and the other reports on it, and coupling them would
-  // mean a snapshot failure could redden a PR.
   // WRANGLER'S ENTRY DIRECTLY, through whatever node is running this file, so
   // the invocation does not name a package manager at all. It used to spawn
   // "pnpm" as a quoted argument, which is invisible to any sweep looking for
   // `pnpm exec` as a phrase (gotcha 29's blind spot), so it survived the swap
   // and then failed instantly on a tree with no pnpm.
-  //
-  // The failure was SILENT and that is the part worth fixing: the catch turned
-  // it into an empty snapshot, the comparison of two empty snapshots reported
-  // "No change" on every category, and the check went GREEN while measuring
-  // nothing. It is also manager-agnostic now, which this job needs because it
-  // builds two commits that can disagree about which manager exists.
   let dryOut = "";
   try {
     dryOut = execFileSync(...wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run",
@@ -122,9 +60,6 @@ async function record(outPath, label) {
     dryOut = `${e.stdout || ""}\n${e.stderr || ""}`;
   }
 
-  // Each measured file records its raw and compressed sizes; assets/pages/wire
-  // are filled per file as the staged tree is walked, so the keys are whatever
-  // the build produced.
   type Sizes = { raw?: number; gzip?: number; brotli?: number; br?: number };
   const snapshot: {
     schema: typeof SCHEMA; label: string; subject: string;
@@ -147,8 +82,6 @@ async function record(outPath, label) {
   if (gz) snapshot.worker.gzipBytes = Math.round(parseFloat(gz[1]) * 1024);
   else console.error("perf-snapshot: could not read bundle gzip from the dry-run (offline/unauth?)");
 
-  // Per-module bytes. This is the deterministic answer to "what grew", which the
-  // gzip total alone can only pose as a question.
   try {
     const meta = JSON.parse(await readFile(`${DRYRUN_OUT}/bundle-meta.json`, "utf8"));
     const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][])
@@ -160,9 +93,6 @@ async function record(outPath, label) {
     console.error(`perf-snapshot: no bundle metafile (${e.message}); skipping module attribution`);
   }
 
-  // Client assets: the top-level shipped .js/.css, minus the readable .src twins
-  // (a twin is a View Source affordance, never a byte a visitor's browser pays
-  // for on the critical path).
   for (const name of await walk(BUILD, (f) => /^[^/]+\.(js|css)$/.test(f) && !/\.src\.(js|css)$/.test(f))) {
     snapshot.assets[name] = sizes(await readFile(`${BUILD}/${name}`));
   }
@@ -171,17 +101,10 @@ async function record(outPath, label) {
     snapshot.pages[name] = sizes(await readFile(`${BUILD}/${name}`));
   }
 
-  // The /a/ tier is the one place the build emits the exact wire bytes itself
-  // (precompressed q11, served with encodeBody: "manual"). Read the emitted .br
-  // rather than recompressing: this is what actually goes over the wire.
   for (const name of await walk(`${BUILD}/a`, (f) => !f.endsWith(".br") && !f.endsWith(".dict"))) {
     let br = null;
     try { br = (await readFile(`${BUILD}/a/${name}.br`)).length; } catch {}
     const raw = (await readFile(`${BUILD}/a/${name}`)).length;
-    // The understanding-check payloads (build.ts step 5d) are one file per page,
-    // 38 of them. They fold into ONE row, because the nightly series keeps every
-    // asset key forever and a key per page would triple its width for a number a
-    // reader wants as a total: what a visitor who reaches the quiz pays.
     if (/^quiz-[\w-]+\.[0-9a-f]{8}\.json$/.test(name)) {
       const prev = snapshot.wire["quiz-data.json"];
       snapshot.wire["quiz-data.json"] = { raw: (prev?.raw ?? 0) + raw, br: (prev?.br ?? 0) + (br ?? raw) };
@@ -190,42 +113,16 @@ async function record(outPath, label) {
     snapshot.wire[dehash(name)] = { raw, br };
   }
 
-  // Dictionary deltas are a count and a total, not a per-file table. Each name
-  // carries the hash of the dictionary it was built against, so individual
-  // entries roll over constantly and mean nothing; what a reviewer wants to know
-  // is whether COVERAGE dropped.
   for (const name of await walk(`${BUILD}/pd`, (f) => f.endsWith(".dcz"))) {
     snapshot.dcz.count += 1;
     snapshot.dcz.bytes += (await readFile(`${BUILD}/pd/${name}`)).length;
   }
 
-  // The deltas are unusable until the browser downloads the family dictionary.
-  // It is a q11 asset in /a/, but deliberately not part of the ordinary client-
-  // asset total: adding it there would redefine the historical assets_br series
-  // overnight. Keep acquisition beside the deltas it enables, using the emitted
-  // twin rather than recompressing, so a corpus edit that improves one while
-  // worsening the other is visible in the same section.
-  // The family dictionary name is matched here rather than through
-  // src/worker/lib/dictionary-names.ts on purpose: perf-diff.yml runs this script
-  // against the MERGE BASE with only tools/ stashed, so it can import nothing
-  // outside tools/.
   for (const name of await walk(`${BUILD}/a`, (f) => /^page-family\.[0-9a-f]{8}\.dict\.br$/.test(f))) {
     snapshot.dcz.dictionaryBrotliBytes += (await readFile(`${BUILD}/a/${name}`)).length;
   }
 
   const n = Object.keys(snapshot.assets).length + Object.keys(snapshot.pages).length;
-  // A snapshot of nothing is never legitimate: this repo ships 40+ documents and
-  // the dry-run self-builds, so 0 files means the build never ran. It FAILS here
-  // rather than writing the file, because the comparison downstream cannot tell
-  // an empty snapshot from an unchanged one and renders two of them as "No
-  // change. 0 files" on every category. That is the exact shape this repo keeps
-  // catching elsewhere (a scanner matching nothing reporting a pass), and it hid
-  // a broken dry-run behind a green check for one full run.
-  //
-  // MODULES is the honest half, and the file count alone is NOT enough: a failed
-  // dry-run in a tree still holding a `.build` from an earlier run counts 69
-  // files off those stale bytes while reporting 0 modules. Measured both ways on
-  // 2026-08-20, which is why both halves are checked.
   const mods = Object.keys(snapshot.worker.modules).length;
   if (n === 0 || mods === 0) {
     console.error(`perf-snapshot: FAILED — recorded ${n} files and ${mods} modules, so the dry-run did not build. Its output ended:\n${dryOut.trim().slice(-800)}`);
@@ -235,43 +132,16 @@ async function record(outPath, label) {
   console.log(`perf-snapshot: recorded ${snapshot.label} — ${n} files, ${mods} modules -> ${outPath}`);
 }
 
-// ---------------------------------------------------------------------------
-// compare
-// ---------------------------------------------------------------------------
-
 const kib = (b) => `${(b / 1024).toFixed(2)} KiB`;
 const signed = (b) => `${b > 0 ? "+" : ""}${(b / 1024).toFixed(2)} KiB`;
 const pct = (base, head) => (base === 0 ? "n/a" : `${head > base ? "+" : ""}${(((head - base) / base) * 100).toFixed(1)}%`);
 
-// The one real noise source in an otherwise deterministic measurement, and it is
-// STRUCTURAL rather than random: every page references `/a/<name>.<hash8>.<ext>`,
-// so touching one shared asset flips its hash and moves the compressed size of
-// every page that names it by a byte or two. Measured on a one-line nav.js edit:
-// 38 of 46 pages "changed", none of them by more than 41 bytes, net -0.03 KiB.
-//
-// That is 38 rows of nothing in front of the one row that matters, which is how a
-// report teaches people to stop reading it. Sub-floor movers are still counted in
-// every total and still reported as an aggregate line — collapsed, never dropped.
-//
-// It applies to PAGES only, and the asymmetry is the point. An asset's bytes are
-// its own content, so nothing but editing it can move them and every byte of
-// movement is signal; a page's bytes carry references to other files' hashes, so
-// they move for reasons that have nothing to do with the page. Applying one floor
-// everywhere would have hidden the very edit that produced the noise, since the
-// nav.js change measured 50 bytes against churn of 41.
 const PAGE_NOISE_FLOOR = 128;
 
-// A row is worth printing only when the bytes moved. Everything measured here is
-// deterministic, so "moved by 0" means the file is byte-identical and a reviewer
-// learns nothing from seeing it.
 function diffRows(base, head, pick) {
   const names = [...new Set([...Object.keys(base), ...Object.keys(head)])].sort();
   const rows = [];
   for (const name of names) {
-    // `in`, not truthiness. A zero-byte entry is a legitimate measurement (an
-    // asset can compress to nothing interesting, and a module can contribute 0
-    // bytes to the bundle), and treating it as absent would report it as new or
-    // removed — the two labels a reviewer is most likely to act on.
     const b = name in base ? pick(base[name]) : null;
     const h = name in head ? pick(head[name]) : null;
     if (b === h) continue;
@@ -280,7 +150,6 @@ function diffRows(base, head, pick) {
   return rows.sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
 }
 
-// The set is a record of measured files; pick() pulls one size field off each.
 const total = (set: Record<string, unknown>, pick: (v: any) => number | undefined): number =>
   Object.values(set).reduce<number>((n, v) => n + (pick(v) ?? 0), 0);
 
@@ -302,8 +171,6 @@ function section(title, rows, base, head, pick, { unit = "Brotli", floor = 0 } =
   const count = Object.keys(head).length;
   if (!rows.length) return `### ${title}\n\nNo change. ${count} files, ${kib(h)} ${unit} total.\n`;
 
-  // A new or removed file is always listed, however small: its delta is the
-  // whole file, and "a page appeared" is never noise.
   const keep = (r) => r.base === null || r.head === null || Math.abs(r.delta) >= floor;
   const listed = rows.filter(keep);
   const collapsed = rows.filter((r) => !keep(r));
@@ -340,11 +207,6 @@ async function compare(basePath, headPath, outPath) {
     "",
   ];
 
-  // `assets` and `wire` are two views of mostly the same files: the top-level
-  // short-cached copy and the content-addressed `/a/` copy the shell actually
-  // loads. Reporting both gave two near-identical tables with the same numbers in
-  // them. Merge on the logical name, preferring the `/a/` `.br` the build emitted,
-  // because that is the byte count that leaves the edge.
   type Recorded = Record<string, { raw?: number; gzip?: number; brotli?: number; br?: number }>;
   const merge = (snap: { assets: Recorded; wire: Recorded }) => {
     const out: Record<string, number | undefined> = {};
@@ -360,9 +222,6 @@ async function compare(basePath, headPath, outPath) {
   parts.push(section("Client assets", diffRows(baseAssets, headAssets, self), baseAssets, headAssets, self));
   parts.push(section("Pages", diffRows(base.pages, head.pages, brotli), base.pages, head.pages, brotli, { floor: PAGE_NOISE_FLOOR }));
 
-  // Worker bundle. Gzip because that is the unit wrangler reports and the unit
-  // perf-budget's advisory is denominated in; switching units between the two
-  // checks would make them impossible to read together.
   const bg = base.worker.gzipBytes;
   const hg = head.worker.gzipBytes;
   parts.push("### Worker bundle", "");
@@ -410,26 +269,10 @@ async function compare(basePath, headPath, outPath) {
   else console.log(md);
 }
 
-// ---------------------------------------------------------------------------
-// row — reduce a snapshot to one JSONL line for the trend series
-// ---------------------------------------------------------------------------
-
-// Keys are short because this file is appended to forever and read by a Worker
-// that bundles nothing to parse it. One row is ~400 bytes, so a year of dailies
-// is ~146 KB — small enough to fetch whole, which is what lets /perf render the
-// entire history server-side with no pagination and no client JS.
-//
-// `source` separates a machine-recorded row from a hand-entered historical one.
-// /perf draws them differently and says so, because a number somebody typed into
-// a code comment in 2026-06 and a number a runner measured last night are not
-// the same kind of fact, and a chart that renders them identically is quietly
-// lying about which parts of its own history it can stand behind.
 async function row(snapshotPath, date) {
   const snap = JSON.parse(await readFile(snapshotPath, "utf8"));
   const sum = (set, pick) => Object.values(set).reduce((n, v) => n + (pick(v) ?? 0), 0);
 
-  // Same merge the diff uses: prefer the `/a/` precompressed bytes, which are
-  // what actually leaves the edge, and fall back to the computed brotli.
   const assets: Record<string, number | undefined> = {};
   type Sized = { raw?: number; brotli?: number; br?: number };
   for (const [name, v] of Object.entries(snap.assets) as [string, Sized][]) assets[name] = v.brotli;
@@ -451,8 +294,6 @@ async function row(snapshotPath, date) {
   };
   console.log(JSON.stringify(line));
 }
-
-// ---------------------------------------------------------------------------
 
 const [mode, ...rest] = process.argv.slice(2);
 const flag = (name) => {

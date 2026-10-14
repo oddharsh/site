@@ -2,11 +2,6 @@
 // The sprite sat off this path from #119 until 2026-09-26, for a diagnosis that never
 // reproduced; a cookie canary (#940) then proved the delta in production, and the
 // cookie came out. See DICTIONARY_TYPES in src/worker/lib/assets.ts.
-//
-// What these pin is that svg now behaves exactly like js on this path, with one
-// difference in the offer (its destination is "image"), and that nothing the canary
-// needed survives it. A leftover `Vary: cookie` would be the costly one, since it
-// keys every browser's cached sprite on whatever cookies that visitor carries.
 import { createHash } from "node:crypto";
 import { assert, test } from "./contract-shared.ts";
 
@@ -15,8 +10,6 @@ const DICT = Buffer.from("<svg>the sprite this browser already holds</svg>");
 const TAG = createHash("sha256").update(DICT).digest().subarray(0, 8).toString("hex");
 const AVAILABLE = `:${createHash("sha256").update(DICT).digest("base64")}:`;
 
-// A fake ASSETS binding holding the sprite, its q11 twin, and one delta against DICT.
-// It records every path asked for, so a test can say which file answered.
 function fakeAssets() {
   const asked = [];
   const files = new Map([
@@ -64,8 +57,6 @@ test("a browser holding the previous sprite gets the dcz delta, with no cookie",
 });
 
 test("the old canary cookie changes nothing now", async () => {
-  // Browsers that opted in during the canary still carry svg-dcz=1 for a year. Their
-  // responses must be byte-for-byte the ones everybody else gets.
   for (const headers of [{}, { "available-dictionary": AVAILABLE }]) {
     const plain = await serve(SPRITE, headers);
     const opted = await serve(SPRITE, { ...headers, cookie: "svg-dcz=1" });

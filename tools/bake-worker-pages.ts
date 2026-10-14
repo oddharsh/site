@@ -3,28 +3,6 @@
 // HTML source; the build invokes those renderers after every staged rewrite,
 // then the ordinary hashing and page precompression passes treat the results
 // exactly like garage/LWE documents.
-//
-// It runs as its OWN PROCESS, spawned by build.ts, and that is the whole reason
-// this file exists. build.ts imports staged Worker modules as early as step 1d
-// (photos.ts, which pulls in lib/chrome.ts and lib/twins.ts), and an ES module
-// is evaluated once per process: the `?build=` query on an entry point busts
-// that entry and none of its imports. So when these renderers ran inside
-// build.ts they got the copy of `lib/twins.ts` loaded before step 1g2 wrote the
-// real TWIN_PATHS, and the chrome.ts loaded before step 5 minified its CSS
-// literal. So every page baked here shipped with no Markdown alternate link and
-// no "Read this as Markdown" task while its twin answered at `.md` (found
-// 2026-09-30).
-// A fresh process reads the staged tree as it stands now, whatever any earlier
-// step imported, and build.ts checks the result (tools/lib/twin-links.ts).
-//
-//   bun tools/bake-worker-pages.ts [.build] [pages-dir]
-//
-// It READS the staged tree under <.build>/public and WRITES its pages under
-// pages-dir, which defaults to that same public/. build.ts passes a private
-// directory so it can start this process early and run it beside steps 1h to
-// 4: none of those steps can then see a page before step 5b moves it into
-// public/, where it would land anyway. (Step 1g4 skips a page that is not
-// staged yet, /garage/dyno among them, so an early page would change bytes.)
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -38,9 +16,7 @@ await mkdir(`${PAGES}/garage`, { recursive: true });
 const root = resolve(OUT, "public");
 const assets = {
   async fetch(input) {
-    // A deliberate two-shape signature (string | Request), not a wire value.
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof
-    const url = new URL(typeof input === "string" ? input : input.url);
+    const url = new URL(new Request(input).url);
     const rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
     if (!rel || rel.includes("..")) return new Response("not found", { status: 404 });
     try {
@@ -72,10 +48,6 @@ if (searchResponse.status !== 200) throw new Error(`static /search renderer retu
 const searchHtml = await searchResponse.text();
 if (!searchHtml.includes('form method="get" action="/search"')) throw new Error("static /search renderer lost its blank search form");
 await writeFile(`${PAGES}/search.html`, searchHtml);
-// /security, since 2026-09-16. Three placeholders and the one script that
-// fills them from /security.json are what make a per-request page bakeable;
-// both are asserted, because a render that lost either would ship a page
-// claiming a connection it never read.
 const security = await import(pathToFileURL(resolve(OUT, "src/worker/security.ts")).href);
 const securityResponse = security.renderSecurityCenter();
 if (securityResponse.status !== 200) throw new Error(`static /security renderer returned ${securityResponse.status}`);
@@ -85,12 +57,6 @@ for (const key of ["colo", "httpProtocol", "tlsVersion"]) {
 }
 if (!securityHtml.includes('fetch("/security.json"')) throw new Error("static /security renderer lost the script that fills its connection values");
 await writeFile(`${PAGES}/security.html`, securityHtml);
-// /whoareyou, since 2026-09-25: the same move with an island (lib/island.ts)
-// in place of three placeholders, since its live part is rows rather than
-// scalars. The mount, its URL, the shared loader and the preload are asserted,
-// and so is the absence of a per-request value: the build runs with no
-// request, so a TLS version or an ISO timestamp in the bake could only be a
-// fixture leaking into every visitor's copy.
 const whoareyou = await import(pathToFileURL(resolve(OUT, "src/worker/whoareyou.ts")).href);
 const whoareyouResponse = whoareyou.renderWhoareyouPage();
 if (whoareyouResponse.status !== 200) throw new Error(`static /whoareyou renderer returned ${whoareyouResponse.status}`);
@@ -101,10 +67,6 @@ if (!whoareyouHtml.includes(`rel="preload" as="fetch" href="${valuesUrl}" crosso
 if (!whoareyouHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /whoareyou renderer lost the island loader");
 if (/TLSv1\.[23]|\d{4}-\d\d-\d\dT\d\d:/.test(whoareyouHtml)) throw new Error("static /whoareyou bake carries a per-request value");
 await writeFile(`${PAGES}/whoareyou.html`, whoareyouHtml);
-// /garage/dyno, the same day and the same shape: the chart and table are the
-// island. What must never reach the bake is a series point, since the build
-// cannot read perf-history and a baked chart would be one build's snapshot
-// served for a week: no <polyline>, and no sha cell.
 const dyno = await import(pathToFileURL(resolve(OUT, "src/worker/dyno.ts")).href);
 const dynoResponse = dyno.renderDynoPage();
 if (dynoResponse.status !== 200) throw new Error(`static /garage/dyno renderer returned ${dynoResponse.status}`);
@@ -115,24 +77,15 @@ if (!dynoHtml.includes(`rel="preload" as="fetch" href="${pullsUrl}" crossorigin`
 if (!dynoHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /garage/dyno renderer lost the island loader");
 if (/<polyline|<td class="mono sha">[0-9a-f]{7}/.test(dynoHtml)) throw new Error("static /garage/dyno bake carries a series point");
 await writeFile(`${PAGES}/garage/dyno.html`, dynoHtml);
-// /ledger and /around, the same day and the same shape, so they take one loop
-// with the same assertions. Each names what its bake must never carry: the
-// build has no Analytics Engine token and no crawl snapshot, so a crawler row,
-// a priced total, a neighbour's name or a latency in the bake could only be a
-// fixture served to every visitor until the next deploy.
 for (const page of [
   { module: "ledger", render: "renderLedgerPage", url: "LINES_URL", out: "ledger.html",
     live: /<td class="mono">[A-Za-z]|Total due<\/span> <b>\$\d/ },
   { module: "around", render: "renderAroundPage", url: "SNAPSHOT_URL", out: "around.html",
     live: /class="firm">[A-Za-z]|class="latency">\d|\d{4}-\d\d-\d\dT\d\d:/ },
-  // /inbox and /lens/census, the same day. A mention row carries an id and a
-  // ugc link, and a census row links a site through the lens.
   { module: "inbox", render: "renderInboxPage", url: "MAIL_URL", out: "inbox.html",
     live: /id="m-\d|rel="noopener ugc external"/ },
   { module: "census", render: "renderCensusPage", url: "TABLE_URL", out: "lens/census.html",
     live: /class="cx-site"><a |<span>\/100<\/span>/ },
-  // /reading, 2026-09-29. The build has no Curius payload, so a linked title,
-  // a real link count or a sync date in the bake could only be a fixture.
   { module: "reading", render: "renderReadingPage", url: "LIST_URL", out: "reading.html",
     live: /<a class="rd-title" href=|\d+ links? &middot;|\d+ links? ·|last synced \d/ },
 ]) {
@@ -145,14 +98,9 @@ for (const page of [
   if (!body.includes(`rel="preload" as="fetch" href="${url}" crossorigin`)) throw new Error(`static /${page.module} renderer lost the preload for its island`);
   if (!body.includes('querySelectorAll("[data-island]")')) throw new Error(`static /${page.module} renderer lost the island loader`);
   if (page.live.test(body)) throw new Error(`static /${page.module} bake carries a live value`);
-  // /lens/census stages below a directory nothing else writes to.
   await mkdir(resolve(PAGES, page.out, ".."), { recursive: true });
   await writeFile(`${PAGES}/${page.out}`, body);
 }
-// /serendipity's dashboard, the same day. Staged beside src/, so it imports
-// from .build/serendipity. The build has no D1, so an event card (always an
-// <a class="ev"), a pool count, or a signed cover URL in the bake could only
-// be a fixture every visitor would read as the pool.
 const serendipity = await import(pathToFileURL(resolve(OUT, "serendipity/serendipity.ts")).href);
 const serendipityResponse = serendipity.renderSerendipityPage();
 if (serendipityResponse.status !== 200) throw new Error(`static /serendipity renderer returned ${serendipityResponse.status}`);
@@ -163,21 +111,11 @@ if (!serendipityHtml.includes(`rel="preload" as="fetch" href="${eventsUrl}" cros
 if (!serendipityHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /serendipity renderer lost the island loader");
 if (/<a class="ev|\d+ events? in the pool|data-cover=/.test(serendipityHtml)) throw new Error("static /serendipity bake carries a pool value");
 await writeFile(`${PAGES}/serendipity.html`, serendipityHtml);
-// /serendipity/mcp-info, the same day: a plain bake with no island, since the
-// page is a fixed tool list. Two renders must agree, or the build would bake
-// whichever it got.
 const mcpInfoHtml = await serendipity.renderMcpInfoPage().text();
 if (mcpInfoHtml !== await serendipity.renderMcpInfoPage().text()) throw new Error("static /serendipity/mcp-info renderer is not deterministic");
 if (!mcpInfoHtml.includes("list_events")) throw new Error("static /serendipity/mcp-info renderer lost its tool list");
 await mkdir(`${PAGES}/serendipity`, { recursive: true });
 await writeFile(`${PAGES}/serendipity/mcp-info.html`, mcpInfoHtml);
-// /coffee, 2026-09-30. cal renders its own templates, staged beside src/ like
-// serendipity, so it imports from .build/cal. Its env is the Worker's own vars
-// from cloudflare.config.ts (HOST_*, MAX_LOOKAHEAD_DAYS), and BASE_PATH is the
-// prefix the site serves it under, which is what joins the desktop shell. The
-// build has no calendar, so a radio carrying a slot value, a day label with a
-// date in it, or the no-slots note in the bake could only be one build's
-// availability shown to every visitor until the next deploy.
 {
   const cal = await import(pathToFileURL(resolve(OUT, "cal/src/templates.ts")).href);
   const vars = (await siteConfig()).vars as Record<string, string> | undefined;

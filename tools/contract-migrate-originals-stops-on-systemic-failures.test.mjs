@@ -20,7 +20,6 @@ const DNS = "✘ [ERROR] Unable to resolve Cloudflare's API hostname (api.cloudf
 const PHOTO = "✘ [ERROR] Something about this one object.";
 const MISSING = "✘ [ERROR] The specified key does not exist.";
 
-// `script` is one stderr message per wrangler call, in order; the last repeats.
 async function migrate(script) {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "migrate-originals-")));
   const put = async (rel, text, mode) => {
@@ -56,7 +55,6 @@ test("three connection or login failures in a row stop the run before it tries t
   assert.equal(status, 1, stderr);
   assert.equal(calls.length, 3, "a fourth photo was tried after the login was gone");
   assert.match(stderr, /stopped after 3 connection or login failures in a row, 7 photos not attempted: .*auth token has expired/);
-  // The failure line names wrangler's ERROR, not its log path.
   assert.match(stderr, /✗ P0: r2 get P0\.jxl: .*Unable to resolve/);
   assert.doesNotMatch(stderr, /✗ P\d: .*Logs were written/);
 });
@@ -69,7 +67,6 @@ test("failures about single photos never stop the run", async () => {
 });
 
 test("the stop needs the failures in a row: a photo that gets through resets the count", async () => {
-  // A missing .jxl is a skip without --delete, which is a photo that got through.
   const { stderr, calls } = await migrate([AUTH, AUTH, MISSING, AUTH, AUTH, MISSING, AUTH, AUTH, MISSING, AUTH]);
   assert.equal(calls.length, 10, stderr);
   assert.doesNotMatch(stderr, /stopped after/);

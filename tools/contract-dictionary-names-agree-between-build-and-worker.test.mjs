@@ -3,11 +3,6 @@
 // degrades to plain brotli, a correct page at a larger size. /garage asked for
 // `garage.<tag>.dcz` while the build wrote `garage__index.<tag>.dcz`, and it
 // cost 16% on that page until somebody measured it (2026-07-28).
-//
-// Both sides now name files through src/worker/lib/dictionary-names.ts. This
-// test plays each side with the calls that side makes and requires the reader
-// to land on the file the writer wrote. Each assertion has a control: the old
-// reader, run against the same fixtures, must MISS.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
@@ -23,11 +18,9 @@ import { dczEncode, dictionaryTag, frameDcz } from "./lib/dcz.ts";
 const sha = (bytes) => createHash("sha256").update(bytes).digest();
 // What a browser holding `dict` sends: a Structured Field Byte Sequence.
 const available = (dict) => `:${sha(dict).toString("base64")}:`;
-// The request path as serveStaticPage reduces it before any lookup.
 const relOf = (route) => route === "/" ? "index" : route.replace(/^\/+/, "").replace(/\/+$/, "");
 
 const DICT = Buffer.from("the bytes a returning browser already holds");
-// [staged asset path, the route html_handling serves it at]
 const PAGES = [
   ["index.html", "/"],
   ["garage/index.html", "/garage"],
@@ -38,13 +31,9 @@ const PAGES = [
 ];
 const SHELL = ["nav.1a2b3c4d.js", "luna.00ff00ff.css", "icons.deadbeef.svg", "nav-run.e943e545.js", "a.b.c0ffee00.js"];
 
-// The writer's half, as build.ts step 8 calls it.
 const writtenPageDelta = (page, dict) => `/pd/${pageDeltaName(pageSlug(page), frameDcz(Buffer.alloc(0), dict).tag)}`;
-// A header the Worker accepts always yields a tag; null here is a test bug.
 const tagFrom = (header) => { const tag = tagFromAvailableDictionary(header); assert.ok(tag, String(header)); return tag; };
-// The reader's half, as lib/assets.ts calls it.
 const pageLookups = (route, header) => pageDeltaPaths(relOf(route), tagFrom(header));
-// The reader before 2026-07-28: one candidate, named after the ROUTE.
 const oldPageLookups = (route, header) => [`/pd/${relOf(route).replace(/\//g, "__")}.${tagFromAvailableDictionary(header)}.dcz`];
 
 test("a page delta is found at the name the build wrote it under, section indexes included", () => {
@@ -52,7 +41,6 @@ test("a page delta is found at the name the build wrote it under, section indexe
     const written = writtenPageDelta(page, DICT);
     assert.ok(pageLookups(route, available(DICT)).includes(written), `${route}: the Worker never asks for ${written}`);
   }
-  // direct name first: a sub-page costs one lookup
   assert.equal(pageLookups("/garage/pretext", available(DICT))[0], writtenPageDelta("garage/pretext.html", DICT));
   assert.equal(writtenPageDelta("garage/index.html", DICT), `/pd/garage__index.${dictionaryTag(DICT)}.dcz`);
 });
@@ -69,11 +57,9 @@ test("a shell delta is found at the name the build wrote it under", () => {
     assert.ok(asset, name);
     const written = `/ad/${shellDeltaName(asset, dczEncode(Buffer.from("new shell bytes"), DICT).tag)}`;
     assert.equal(shellDeltaPath(`/a/${name}`, tagFrom(available(DICT))), written);
-    // control: a reader that keeps the extension in the stem asks for a file nobody wrote
     assert.notEqual(`/ad/${name}.${dictionaryTag(DICT)}.dcz`, written);
   }
   assert.equal(shellDeltaPath("/a/nav.1a2b3c4d.js", dictionaryTag(DICT)), `/ad/nav.1a2b3c4d.${dictionaryTag(DICT)}.dcz`);
-  // nothing a delta could exist for: no lookup at all
   for (const pathname of ["/a/page-family.1a2b3c4d.dict", "/a/quiz-x.1a2b3c4d.json", "/a/nav.js", "/a/nav.1a2b3c4d.js.br", "/b/nav.1a2b3c4d.js"]) {
     assert.equal(shellDeltaPath(pathname, dictionaryTag(DICT)), null, pathname);
   }
@@ -86,7 +72,6 @@ test("the tag the build writes is the tag the Worker derives from Available-Dict
   assert.equal(tagOfDigest(sha(DICT)), tag);
   assert.equal(tagFromAvailableDictionary(available(DICT)), tag);
   assert.equal(tagFromAvailableDictionary(`  ${available(DICT)} `), tag);
-  // This value selects a file path, so anything unexpected is null.
   const short = `:${Buffer.alloc(16).toString("base64")}:`;
   for (const bad of [null, undefined, "", sha(DICT).toString("base64"), short, ":../../etc/passwd:", ":%2e%2e:", `:${sha(DICT).toString("base64")}`, "::"]) {
     assert.equal(tagFromAvailableDictionary(bad), null, String(bad));
@@ -148,7 +133,6 @@ test("the dcz header is the RFC 9842 skippable frame, byte for byte", () => {
   assert.ok(parsed);
   assert.deepEqual(parsed.digest, sha(DICT));
   assert.deepEqual(parsed.frame, frame);
-  // control: one wrong byte in the magic or the length is not a dcz body
   for (const at of [0, 3, 4, 7]) {
     const broken = Buffer.from(out);
     broken[at] ^= 0xff;
@@ -176,12 +160,10 @@ test("the build and the Worker name deltas through the module, never by hand", a
   for (const [file, calls] of Object.entries(sources)) {
     const text = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
     for (const call of calls) assert.ok(text.includes(call), `${file} no longer calls ${call}`);
-    // the three restatements that existed: the slug fold, the tag slice, the frame magic
     assert.ok(!/replace(All)?\(\s*(\/\\\/\/g|"\/")\s*,\s*"__"\s*\)/.test(text), `${file} folds a page slug by hand`);
     assert.ok(!/\.slice\(0,\s*16\)/.test(text), `${file} cuts a 16-hex tag by hand`);
     assert.ok(!/0x5e,\s*0x2a/i.test(text), `${file} writes the dcz magic by hand`);
   }
-  // the Worker's copy must load outside workerd and outside node
   const names = await readFile(new URL("../src/worker/lib/dictionary-names.ts", import.meta.url), "utf8");
   assert.ok(!/from\s+"(node|cloudflare):/.test(names), "dictionary-names.ts must stay pure");
 });

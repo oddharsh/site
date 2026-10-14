@@ -1,15 +1,5 @@
 // ── Web Bot Auth: sig2, the post-quantum second label, signed natively ──
 //
-// sig2 shipped 2026-07-27 in pure JS, came out 2026-08-15 because ~8.5ms of
-// signing per request did not fit Workers Free's CPU clamp, and came back once
-// workerd shipped ML-DSA in WebCrypto behind `webcrypto_modern_algorithms`
-// (0.12ms a signature, measured 2026-10-01). lib/botauth.ts has the history.
-//
-// What this file pins is the failure POLICY, because that is what makes a
-// second label safe to carry: sig2 is optional, sig1 never changes because of
-// it, and the directory never publishes a key the Worker is not signing with.
-// Every assertion that something works has a control beside it that must fail.
-//
 // The keys here are FULL JWKs (pub and priv), because bun and node refuse a
 // priv-only AKP JWK while workerd accepts one. The production secret's bare-
 // seed shape is exercised in workerd itself, in the harness test at the end.
@@ -57,8 +47,6 @@ async function pqKey() {
   return { pair, priv, pub: { ...pub, kid: await jwkThumbprint(pub) } };
 }
 
-// Split one Dictionary header into { label: value }. Signature-Input values
-// carry quoted strings but never ", sig", so splitting on that is exact here.
 function members(header) {
   return Object.fromEntries(header.split(/, (?=sig\d+=)/).map((m) => {
     const i = m.indexOf("=");
@@ -87,12 +75,10 @@ test("with an ML-DSA key, every request carries sig1 then sig2, and each verifie
   assert.equal(sigBytes(sig.sig2).length, 2420, "an ML-DSA-44 signature is 2,420 bytes (FIPS 204)");
   assert.equal(await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("example.com", input.sig2)), true);
   assert.equal(await crypto.subtle.verify("Ed25519", ed.pair.publicKey, sigBytes(sig.sig1), requestBase("example.com", input.sig1)), true);
-  // Controls: each signature is bound to its own parameters and authority.
   assert.equal(await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("example.com", input.sig1)), false,
     "sig2 must sign a base ending in sig2's own parameters");
   assert.equal(await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("mirror.example", input.sig2)), false,
     "sig2 must not verify for another authority");
-  // Two independent nonces, so the labels are two signatures and not one reused.
   assert.notEqual(input.sig1.match(/nonce="([^"]+)"/)[1], input.sig2.match(/nonce="([^"]+)"/)[1]);
 });
 
@@ -111,7 +97,6 @@ test("jwkThumbprint reads an AKP key's alg, kty and pub, and nothing else", asyn
   const pq = await pqKey();
   const bare = { kty: "AKP", alg: "ML-DSA-44", pub: pq.pub.pub };
   assert.equal(await jwkThumbprint({ ...bare, kid: "x", use: "sig", priv: "ignored" }), await jwkThumbprint(bare));
-  // Controls: the public key bytes and the algorithm are both in the input.
   assert.notEqual(await jwkThumbprint({ ...bare, pub: (await pqKey()).pub.pub }), await jwkThumbprint(bare));
   assert.notEqual(await jwkThumbprint({ ...bare, alg: "ML-DSA-65" }), await jwkThumbprint(bare));
   // And the canonical form is the RFC 7638 one: lexicographic, no whitespace.
@@ -134,8 +119,8 @@ test("an unusable ML-DSA key drops sig2, never fails the request, and never logs
   const secretish = "SEEDSEEDSEEDSEEDSEEDSEEDSEEDSEED";
   const broken = [
     `{"kty":"AKP","alg":"ML-DSA-44","priv":"${secretish}"`, // truncated JSON: JSON.parse quotes its input
-    JSON.stringify({ kty: "AKP", alg: "ML-DSA-44", priv: secretish }), // not a 32-byte seed
-    JSON.stringify(ed.priv), // an ed25519 key in the ML-DSA slot
+    JSON.stringify({ kty: "AKP", alg: "ML-DSA-44", priv: secretish }),
+    JSON.stringify(ed.priv),
   ];
   const logged = [];
   const original = console.error;
@@ -156,11 +141,8 @@ test("an unusable ML-DSA key drops sig2, never fails the request, and never logs
     assert.match(line, /sig2 disabled/);
     assert.ok(!line.includes(secretish), `a log line carried secret material: ${line}`);
   }
-  // Control: the ed25519 half still fails closed, since without it there is no identity.
   await assert.rejects(botHeaders("https://example.com/", { RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify((await pqKey()).priv) }));
 });
-
-// ── the directory ──────────────────────────────────────────────────────
 
 function directoryEnv(keys, secrets) {
   const body = JSON.stringify({ keys });
@@ -191,8 +173,8 @@ test("with sig2 active, the directory publishes both keys and proves possession 
 test("with sig2 unavailable, the directory drops its AKP entry and still proves sig1", async () => {
   const ed = await edKey(), pq = await pqKey();
   for (const secrets of [
-    { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv) }, // unset: local dev, any preview without the secret
-    { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: "not json" }, // unusable
+    { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv) },
+    { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: "not json" },
   ]) {
     const original = console.error;
     console.error = () => {};
@@ -212,17 +194,15 @@ test("the directory refuses real drift: an active sig2 key that is missing, or n
   const ed = await edKey(), pq = await pqKey(), other = await pqKey();
   const secrets = { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(pq.priv) };
   for (const keys of [
-    [ed.pub], // sig2 signs with a key nobody can look up
-    [ed.pub, other.pub], // a rotation that updated one side
-    [ed.pub, pq.pub, other.pub], // two AKP entries
+    [ed.pub],
+    [ed.pub, other.pub],
+    [ed.pub, pq.pub, other.pub],
   ]) {
     const response = await getDirectory(directoryEnv(keys, secrets).env);
     assert.equal(response.status, 503, `keys [${keys.map((k) => k.kty).join(", ")}] must not serve`);
     assert.equal(response.headers.has("signature"), false);
   }
 });
-
-// ── what ships ─────────────────────────────────────────────────────────
 
 test("the committed directory publishes a real ML-DSA-44 public key beside the ed25519 one", async () => {
   const dir = JSON.parse(await readFile(new URL("public/.well-known/http-message-signatures-directory", ROOT), "utf8"));
@@ -236,15 +216,11 @@ test("the committed directory publishes a real ML-DSA-44 public key beside the e
 });
 
 test("production carries webcrypto_modern_algorithms, without which sig2 silently disappears", async () => {
-  // build.ts already fails when dev and production flags differ. What it cannot
-  // see is both losing the flag together: sig2 would degrade to nothing, by
-  // design, and every other check would stay green.
   const name = "cloudflare.config.ts";
   const flags = parseJsonc(await configText(name)).compatibility_flags;
   assert.ok(flags.includes("webcrypto_modern_algorithms"), `${name} must enable native ML-DSA`);
 });
 
-// Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.
 const WORKERD = "workerd signs sig2 from a bare-seed secret under production's flags, and refuses ML-DSA without the flag";
 test(WORKERD, underNode(import.meta.url, WORKERD, async () => {
   const ed = await edKey(), pq = await pqKey();
@@ -293,20 +269,11 @@ test(WORKERD, underNode(import.meta.url, WORKERD, async () => {
   assert.equal(await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("example.com", input.sig2)), true,
     "a signature workerd made must verify in another implementation");
 
-  // Control: the same Worker without the flag. The runtime refuses ML-DSA by
-  // name, sig2 drops, sig1 survives, and the refusal is logged once.
   const bare = await run(site.compatibility_flags.filter((f) => f !== "webcrypto_modern_algorithms"));
   assert.deepEqual(Object.keys(members(bare.input)), ["sig1"], "without the flag, sig2 must drop rather than fail the request");
   assert.equal(bare.errors.length, 1);
   assert.match(bare.errors[0], /sig2 disabled.*NotSupportedError/);
 }));
-
-// ── fan-out carries sig1 alone ─────────────────────────────────────────
-//
-// Measured in production on 2026-10-01 with sig2 on EVERY request: a /lens
-// scan's CPU median went from 22ms to 32ms, ~0.33ms a signature, 3x the laptop
-// figure. So the fan-out (discovery probes, the Markdown replay, the robots.txt
-// bootstrap) passes `postQuantum: false`, and only primary fetches carry sig2.
 
 test("postQuantum: false drops sig2 for that request and leaves sig1 untouched", async () => {
   const ed = await edKey(), pq = await pqKey();
@@ -314,7 +281,6 @@ test("postQuantum: false drops sig2 for that request and leaves sig1 untouched",
   const scoped = await botHeaders("https://example.com/", env, { postQuantum: false });
   assert.deepEqual(labels(scoped), ["sig1"]);
   assert.match(scoped.get("signature-input") ?? "", new RegExp(`;keyid="${ed.pub.kid}";alg="ed25519";`));
-  // Control: the same env without the option still signs both.
   assert.deepEqual(labels(await botHeaders("https://example.com/", env)), ["sig1", "sig2"]);
 });
 
@@ -331,7 +297,6 @@ test("a /lens scan's primary fetch carries sig2; its discovery probes and robots
     return new Response(new URL(url).pathname === "/robots.txt" ? "" : "{}", { status: new URL(url).pathname === "/robots.txt" ? 404 : 200 });
   }, { preconnect: realFetch.preconnect });
   try {
-    // A fresh origin per call, so the robots read is a real miss each time.
     await lensFetch("https://scan-target.example/", { ...env });
     await lensProbe("https://probe-target.example/llms.txt", { ...env });
     await lensProbeMcp("https://mcp-target.example", { ...env });

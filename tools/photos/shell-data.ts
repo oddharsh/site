@@ -1,42 +1,5 @@
 // shell-data.mjs — authored facts for the shared XP desktop.
-//
-// This module is build-time only. gen-desktop-partial.mjs projects it into the
-// static HTML partial, the icon sprite, and the small runtime tables that need
-// to stay in nav.js/nav-run.js. Keeping the facts here means the browser
-// runtime is no longer the build system's database.
 
-// The shell's Speculation Rules, and the one authored copy of them. Until
-// 2026-08-11 this block was hand-written into 26 documents plus a runtime
-// injector in nav.js, and the 27 copies had forked: garage pages excluded
-// /whoareyou alone, lwe pages carried a dead prefetch rule, lwe/encoding.html
-// carried two exclusions that two earlier commits had deliberately deleted
-// site-wide, and only the homepage and nav.js held the full list. See #338.
-//
-// "moderate" prerenders on hover or pointerdown rather than on load, so a
-// visitor who never opens /garage pays nothing for it and a visitor who does
-// gets a rendered document. That is why the cross-document View Transition could
-// come out: with the document already rendered there is no latency left for an
-// animation to cover.
-//
-// Every exclusion is here for one reason, that prerendering the path cannot
-// produce a document the next click will use:
-//
-//   /whoareyou   a per-request fingerprint, so a speculative render is a lie
-//   /run         the Start orb's JavaScript-off floor. This ruleset only exists
-//                when JS is on, and with JS on the orb opens the palette instead
-//                of navigating, so the render had no reader (#337)
-//   /rn          a 302 to Spotify built from a KV read, so the prerender spends
-//                a worker invocation and then dies at the cross-origin redirect
-//   the others   raw text and images, which are not documents
-//
-// There is deliberately NO prefetch rule. An eager /garage/* + /lwe/* one lived
-// on the 12 lwe pages and was measured fetching NOTHING, twice, by
-// tools/speculation-probe.ts: zero documents when /lwe offered it 12 matching
-// anchors at load, and zero when the Run palette injected 30 more on /lwe/utf8,
-// while the control in the same run (hover a link, moderate) reached the origin.
-// The homepage had already deleted its own copy on 2026-07-30 after measuring
-// the same nothing. Re-add one only behind a fresh measurement, never because
-// the rule reads like it ought to work.
 export const SPECULATION = {
   prerender: [{
     where: {
@@ -73,8 +36,6 @@ export const TASKBAR = [
   { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" },
 ];
 
-// TUPLES: each entry is spread into sectionTile(prefix, colors, art), and a
-// widened (string | string[])[] has no arity for the spread to satisfy.
 const ICON_DEFS: Record<string, [prefix: string, colors: string[], art: string]> = {
   garage: ["garage", ["#ffb45a", "#ef8f24", "#c2660a", "#8f4d06"], '<g fill="#fff"><rect x="14" y="5" width="4" height="22" rx="1.5"/><rect x="5" y="14" width="22" height="4" rx="1.5"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(45 16 16)"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(-45 16 16)"/><circle cx="16" cy="16" r="6.5"/></g><circle cx="16" cy="16" r="2.8" fill="#ef8f24"/>'],
   writing: ["writing", ["#6fa0ee", "#2f6bd6", "#1a4ba8", "#143c86"], '<g fill="#fff"><rect x="8" y="8" width="16" height="2.6" rx="1.3"/><rect x="8" y="14.7" width="16" height="2.6" rx="1.3"/><rect x="8" y="21.4" width="10" height="2.6" rx="1.3"/></g>'],
@@ -105,8 +66,6 @@ export const SECTION_ICONS = Object.fromEntries(
   Object.entries(ICON_DEFS).map(([name, args]) => [name, sectionTile(...args)]),
 );
 
-// These three SVGs are the authored tray art. The generator crops them into the
-// shared immutable sprite; the HTML keeps real links as its no-JS behavior.
 export const TRAY_ITEMS = [
   {
     id: "axp-sysprop", kind: "sysprop", href: "/whoareyou",
@@ -123,10 +82,6 @@ export const TRAY_ITEMS = [
     title: "Windows Update · what shipped lately", label: "Windows Update",
     svg: '<svg viewBox="0 0 24 24"><defs><filter id="upSh" x="-25%" y="-20%" width="150%" height="155%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><radialGradient id="upG" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#8eccf2"></stop><stop offset=".55" stop-color="#3f8fd0"></stop><stop offset="1" stop-color="#175a98"></stop></radialGradient><linearGradient id="upB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74cf52"></stop><stop offset="1" stop-color="#2c861d"></stop></linearGradient><radialGradient id="upGl" cx=".35" cy=".3" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".7"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient></defs><g filter="url(#upSh)"><circle cx="10.6" cy="10.6" r="8.2" fill="url(#upG)" stroke="#114e7d" stroke-width=".6"></circle><g fill="none" stroke="#dcefff" stroke-width=".55" opacity=".7"><path d="M2.5 10.6 H18.7"></path><path d="M3.6 7.1 H17.6"></path><path d="M3.6 14.1 H17.6"></path><path d="M10.6 2.4 V18.8"></path><ellipse cx="10.6" cy="10.6" rx="3.1" ry="8.2"></ellipse></g><ellipse cx="7.4" cy="7" rx="3.4" ry="2.2" fill="url(#upGl)"></ellipse><circle cx="17.8" cy="17.8" r="4.5" fill="url(#upB)" stroke="#ffffff" stroke-width=".9"></circle><path d="M17.8 15.6 A2.2 2.2 0 1 1 15.7 18.4" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"></path><path d="M16.9 14.9 L18.8 15.3 L17.5 16.8 Z" fill="#ffffff"></path></g></svg>',
   },
-  // Ships HIDDEN, like #axp-sound above it. The icon claims "an agent can drive
-  // this page", and that is only true in a browser that implements WebMCP, so
-  // webmcp.js unhides it once tools are actually registered. A tray icon that
-  // appeared for a Safari visitor with no modelContext would be decoration.
   {
     id: "axp-webmcp", kind: "webmcp", href: "/whoareyou", hidden: true,
     title: "Agent activity \u00b7 what an agent has asked this page to do", label: "Agent activity",

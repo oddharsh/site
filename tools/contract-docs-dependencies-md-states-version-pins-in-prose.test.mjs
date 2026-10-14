@@ -21,13 +21,6 @@ import {
 } from "./contract-shared.ts";
 import { spawnSync } from "node:child_process";
 
-// ── docs/DEPENDENCIES.md states version pins in prose ─────────────────────────
-// and dependabot rewrites those pins daily, so the file goes stale on a cadence
-// rather than by accident: twice in two days before this landed. These assert
-// the doc against the manifests, and then assert the CHECK itself has teeth,
-// because a version of this that only ever agreed with the current tree would
-// be the third check in this repo to pass while asserting nothing.
-
 test("docs/DEPENDENCIES.md agrees with the manifests", async () => {
   const { claims, problems } = await checkDependencyDocs();
   assert.deepEqual(problems, [], problems.join("\n"));
@@ -39,18 +32,14 @@ test("docs/DEPENDENCIES.md agrees with the manifests", async () => {
 
 test("the dependency-doc check catches every drift it exists for", () => {
   const pins = { wrangler: "4.120.1" };
-  // one rule at a time: just the alias under test, no exemptions to go stale,
-  // no floor to trip. The real policy is the default and these override it.
   const quiet = { aliases: [{ prose: "Wrangler", pkg: "wrangler" }], versionless: new Map(), floor: 0 };
   const ok = auditDependencyDocs({ doc: `${BASELINE_HEADING}\n- Wrangler 4.120.1 is the pin.`, pins, ...quiet });
   assert.deepEqual(ok.problems, [], "a matching doc must pass");
 
-  // 1. the exact bug that motivated this: a bumped pin, an unbumped sentence
   const stale = auditDependencyDocs({ doc: `${BASELINE_HEADING}\n- Wrangler 4.120.0 is the pin.`, pins, ...quiet });
   assert.equal(stale.problems.length, 1);
   assert.match(stale.problems[0], /states "Wrangler 4\.120\.0" but package\.json pins wrangler at 4\.120\.1/);
 
-  // 2. a new dependency that nobody documented
   const undocumented = auditDependencyDocs({
     doc: `${BASELINE_HEADING}\n- Wrangler 4.120.1 is the pin.`,
     pins: { ...pins, "left-pad": "1.0.0" },
@@ -59,19 +48,13 @@ test("the dependency-doc check catches every drift it exists for", () => {
   assert.equal(undocumented.problems.length, 1);
   assert.match(undocumented.problems[0], /left-pad is a root dependency/);
 
-  // 3. a claim surviving the package's removal. The message tells you to stop
-  // restating the number, because a stale version inside its own correction is
-  // still a greppable stale version.
   const removed = auditDependencyDocs({ doc: `${BASELINE_HEADING}\n- Wrangler 4.120.1 is the pin.`, pins: {}, ...quiet });
   assert.ok(removed.problems.some((p) => /wrangler is declared in DOC_ALIASES but package\.json no longer pins it/.test(p)),
     removed.problems.join("\n"));
 
-  // 4. the floor: a doc with no claims at all must fail rather than pass empty
   const empty = auditDependencyDocs({ doc: `${BASELINE_HEADING}\nno versions here`, pins: {} });
   assert.ok(empty.problems.some((p) => /below the floor/.test(p)));
 
-  // 5. Pillow is gone with the last Python (2026-09-15), so a stated version
-  //    is a claim about nothing, and the audit says so
   const pillow = auditDependencyDocs({
     doc: `${BASELINE_HEADING}\n- Wrangler 4.120.1 is the pin.\n- Pillow 12.3.0 is pinned.`,
     pins,
@@ -84,9 +67,6 @@ test("the collapsed check keeps the two rules that came from #382", () => {
   const H = BASELINE_HEADING;
   const quiet = { aliases: [{ prose: "Wrangler", pkg: "wrangler" }], versionless: new Map(), floor: 0 };
 
-  // (a) RANGE PINS. Stripping the caret and comparing would let ^1.2.3 agree
-  // with a doc claiming 1.2.3, which is a range the prose cannot honestly
-  // state. It must be moved to VERSIONLESS instead, and say so.
   const ranged = auditDependencyDocs({
     doc: `${H}\n- Wrangler 4.120.1 is the pin.`,
     pins: { wrangler: "^4.120.1" },
@@ -95,8 +75,6 @@ test("the collapsed check keeps the two rules that came from #382", () => {
   assert.ok(ranged.problems.some((p) => /range-pinned \(\^4\.120\.1\).*Move it to VERSIONLESS/s.test(p)),
     ranged.problems.join("\n"));
 
-  // (b) A DECLARED PACKAGE LOSING ITS SENTENCE. Deleting the line must not
-  // silently drop it from the check, which is what a forward-only scan does.
   const dropped = auditDependencyDocs({
     doc: `${H}\n- nothing about wrangler here.`,
     pins: { wrangler: "4.120.1" },
@@ -105,9 +83,6 @@ test("the collapsed check keeps the two rules that came from #382", () => {
   assert.ok(dropped.problems.some((p) => /no longer states a version for Wrangler/.test(p)),
     dropped.problems.join("\n"));
 
-  // (c) BASELINE SCOPING. A claim in the intro prose is not the baseline making
-  // it, so the scan must not see it, and a renamed heading must fail loudly
-  // rather than slice to one character and report a clean pass.
   assert.equal(baselineSection("no heading here"), null);
   const outside = auditDependencyDocs({
     doc: `Wrangler 9.9.9 in the intro.\n${H}\n- Wrangler 4.120.1 is the pin.`,
@@ -122,7 +97,6 @@ test("the collapsed check keeps the two rules that came from #382", () => {
 
 test("the dependency-doc check reaches the four manifests outside the root", () => {
   const H = BASELINE_HEADING;
-  // Root kept quiet so each assertion is about the sub-manifest under test.
   const quiet = { aliases: [], versionless: new Map(), floor: 0, pins: {} };
   const sub = (over = {}) => [{
     manifest: "lens-reader/package.json",
@@ -135,20 +109,13 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   const ok = auditDependencyDocs({ doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`, ...quiet, subManifests: sub() });
   assert.deepEqual(ok.problems, [], "a matching sub-manifest claim must pass");
 
-  // 1. THE BACKTICK. This doc writes package names as `code`, so a pattern that
-  //    only matched a bare name would silently match nothing for every entry in
-  //    the file's own house style, and the floor is the only thing that would
-  //    have noticed.
   const bare = auditDependencyDocs({ doc: `${H}\n- linkedom 0.18.13 supplies a DOM.`, ...quiet, subManifests: sub() });
   assert.deepEqual(bare.problems, [], "an unbackticked name must still match");
 
-  // 2. a bumped sub-manifest pin against an unbumped sentence
   const stale = auditDependencyDocs({ doc: `${H}\n- \`linkedom\` 0.18.12 supplies a DOM.`, ...quiet, subManifests: sub() });
   assert.ok(stale.problems.some((p) => /states "linkedom 0\.18\.12" but lens-reader\/package\.json pins linkedom at 0\.18\.13/.test(p)),
     stale.problems.join("\n"));
 
-  // 3. a NEW sub-manifest dependency nobody documented. This is the direction
-  //    that found serde_json, which arrived with #373 and was unmentioned.
   const undocumented = auditDependencyDocs({
     doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`,
     ...quiet,
@@ -157,8 +124,6 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   assert.ok(undocumented.problems.some((p) => /left-pad is a lens-reader\/package\.json dependency/.test(p)),
     undocumented.problems.join("\n"));
 
-  // 4. a RANGE in a sub-manifest alias table. Cargo's bare "0.25" is a caret
-  //    range, so it has to fail here exactly as a ^ would.
   const ranged = auditDependencyDocs({
     doc: `${H}\n- \`image\` 0.25 decodes input.`,
     ...quiet,
@@ -166,9 +131,6 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   });
   assert.ok(ranged.problems.some((p) => /image is range-pinned \(0\.25\)/.test(p)), ranged.problems.join("\n"));
 
-  // 5. a manifest that cannot be read must be REPORTED, never audited as {}.
-  //    An empty pin set scans clean and asserts nothing, which is how a moved
-  //    file would read as a healthy project forever.
   const missing = auditDependencyDocs({
     doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`,
     ...quiet,
@@ -177,7 +139,6 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   assert.ok(missing.problems.some((p) => /lens-reader\/package\.json is declared in SUB_MANIFEST_POLICY but could not be read/.test(p)),
     missing.problems.join("\n"));
 
-  // 6. a stale exemption in a sub-manifest, same rule the root has.
   const staleExempt = auditDependencyDocs({
     doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`,
     ...quiet,
@@ -199,15 +160,10 @@ test("the Cargo reader takes both dependency shapes and ignores the rest", () =>
   ].join("\n");
   const deps = parseCargoDeps(toml);
   assert.deepEqual(deps, { zenjpeg: "0.8.4", image: "0.25", serde_json: "1.0" });
-  // [package] and [profile.release] must not leak in: `version = "0.1.0"` sits
-  // in [package] and would otherwise read as a dependency called "version".
   assert.ok(!("version" in deps) && !("name" in deps) && !("opt-level" in deps),
     "only the [dependencies] table may be read");
   assert.deepEqual(parseCargoDeps("[package]\nname = \"x\"\n"), {}, "no [dependencies] table is an empty set");
 
-  // The [dependencies] table LAST, with no section after it. The first draft
-  // anchored on `\Z`, which JavaScript does not have, so this case returned {}
-  // and scanned clean. oxlint found it; this pins it.
   assert.deepEqual(
     parseCargoDeps('[package]\nname = "zenc"\n\n[dependencies]\nzenjpeg = "0.8.4"\n'),
     { zenjpeg: "0.8.4" },
@@ -250,9 +206,6 @@ test("the Cargo reader refuses malformed manifests instead of auditing a partial
 });
 
 test("Cargo comments at EOF cannot hang the dependency audit or relocker", () => {
-  // GHSA-7w5x-hrqm-74c2: a comment at EOF inside an unclosed array or inline
-  // table could loop forever. Isolate the actual shared reader so a regression
-  // fails within three seconds instead of hanging the entire contract suite.
   const reader = new URL("./lib/dependency-docs.ts", import.meta.url).href;
   const script = `
     const { parseCargoDeps } = await import(${JSON.stringify(reader)});
@@ -286,9 +239,6 @@ test("versionless Cargo dependencies require policy and do not look removed", ()
 });
 
 test("the dependency-doc scanner does not read prose as a version claim", () => {
-  // Every one of these appears in the real file and breaks a naive
-  // /(\w+) (\d[\d.]*)/ sweep. A two-component number is prose about a major
-  // line; the others are not packages at all.
   const prose = [
     "TypeScript 7.0 ships no stable programmatic API",
     "Oxlint 1.87 adds type-aware rules",
@@ -298,7 +248,6 @@ test("the dependency-doc scanner does not read prose as a version claim", () => 
   ].join("\n");
   assert.deepEqual(findClaims(prose), [], "prose must yield no version claims");
 
-  // and the real thing still matches, so the guard above is not just strictness
   assert.equal(findClaims("- Oxlint 1.87.0 and esbuild are pins").length, 1);
 });
 
@@ -306,7 +255,6 @@ test("a flex item is its own box, and promoting one never eats an image", () => 
   const page = (style, body) =>
     `<html><head><title>T</title><style>${style}</style></head><body><main>${body}</main></body></html>`;
 
-  // the /updates shape: the item declares `flex`, never `display`
   const welded = readDocument(
     page(".tag{flex:0 0 92px}", "<p><span class=tag>hit-route</span><span>counter tick endpoint renamed</span></p>"),
     { origin: "https://aadhar.sh" });
@@ -314,43 +262,30 @@ test("a flex item is its own box, and promoting one never eats an image", () => 
   assert.match(welded.body, /hit-route/);
   assert.match(welded.body, /counter tick endpoint renamed/);
 
-  // the /lwe/encoding regression: an <img> carrying a flex-item class renders as
-  // a token already, and the block path has no case for it, so promoting it drops
-  // the image entirely.
   const withImage = readDocument(
     page(".pic{flex:0 0 auto}", '<p>before<img src="/enc/c.jpg" alt="sample photo" class="pic">after</p>'),
     { origin: "https://aadhar.sh" });
   assert.match(withImage.body, /!\[sample photo\]\(https:\/\/aadhar\.sh\/enc\/c\.jpg\)/,
     "an image must survive its class being promoted out of the inline flow");
 
-  // container properties say nothing about THIS element and must not promote it
   const container = readDocument(
     page(".row{flex-direction:row;flex-flow:wrap}", "<p><span class=row>alpha</span><span>beta</span></p>"),
     { origin: "https://aadhar.sh" });
   assert.match(container.body, /alphabeta|alpha beta/, "flex-direction/flex-flow describe children, not this box");
 
-  // and the original heuristic still holds
   assert.ok(collectBlockClasses("<style>.x{display:block}.y{float:right}.z{flex:1}</style>").size >= 3);
 });
 
-// A twin is the agent-facing copy of a page, so an href it emits is a citation a
-// reader may follow. The converter dropped `javascript:` and nothing else, which
-// left three schemes that execute rather than address: `data:`, `vbscript:`, and
-// `JavaScript:`, since the old check was a case-SENSITIVE startsWith and a browser
-// reads a scheme case-insensitively after stripping leading control characters.
-// No page here authors one, so this asserts the floor rather than a fixed bug.
 test("a twin never emits a link on a scheme that executes", () => {
   const link = (href) =>
     readDocument(`<html><body><main><p><a href="${href}">CLICKME</a></p></main></body></html>`,
       { origin: "https://aadhar.sh" }).body;
 
-  // the text survives; only the href is refused, so the prose is never lost
   for (const href of ["javascript:alert(1)", "JavaScript:alert(1)", "vbscript:msgbox(1)",
                       "data:text/html,<script>alert(1)</script>", "\tdata:text/html;base64,PHM+"]) {
     assert.equal(link(href), "CLICKME", `${href} must render as text, never as a link`);
   }
 
-  // and an ordinary href still resolves, so the guard above is not just strictness
   assert.equal(link("https://example.com/real"), "[CLICKME](https://example.com/real)");
   assert.equal(link("/garage/horizon"), "[CLICKME](https://aadhar.sh/garage/horizon)");
 });
@@ -361,11 +296,6 @@ test("a twin never emits a link on a scheme that executes", () => {
 // 2026-07-31 (GET /garage/encoding -> text/markdown, HEAD -> text/html), which is
 // also a convincing false positive for the #195 cache bug because `curl -I` is the
 // reflex probe.
-// The homepage was the last route answering HEAD from a hand-written header set,
-// and the one header it dropped was x-markdown-tokens. It hid because `/` is
-// workers-cacheable: a plain HEAD is satisfied from the stored GET entry and never
-// runs the duplicate, so the only path that DID run it was the markdown one, which
-// bails the cache. The unwatched path is the one that drifted.
 test("the homepage HEAD carries the token count its GET sends", async () => {
   const env = {
     ASSETS: {
@@ -386,8 +316,6 @@ test("the homepage HEAD carries the token count its GET sends", async () => {
   for (const name of ["content-type", "cache-control", "vary", "link", "x-content-type-options"]) {
     assert.equal(head.headers.get(name), get.headers.get(name), `HEAD and GET must agree on ${name}`);
   }
-  // the homepage's own discovery links are the one thing this route adds over the
-  // shared negotiated response, so losing them in the delegation would be silent
   assert.match(get.headers.get("link") || "", /rel="sitemap"/);
   // and the negotiated representation must stay uncacheable, per the edge's per-URL key
   assert.match(get.headers.get("cache-control"), /no-store/);
@@ -414,14 +342,11 @@ test("HEAD advertises the same representation its GET would serve", async () => 
   assert.equal(head.status, 200);
   assert.equal(await head.text(), "", "a HEAD carries no body");
 
-  // The whole header set, not just the content-type: a HEAD that agreed on the media
-  // type but disagreed on freshness would be the same class of lie.
   for (const name of ["cache-control", "vary", "x-markdown-tokens", "x-content-type-options"]) {
     assert.equal(head.headers.get(name), get.headers.get(name), `HEAD and GET must agree on ${name}`);
   }
   assert.equal(head.headers.get("x-markdown-tokens"), get.headers.get("x-markdown-tokens"));
 
-  // A HEAD that is NOT negotiating still takes the asset layer, exactly as before.
   const plain = await serveStaticPage(new Request("https://aadhar.sh/garage/encoding", { method: "HEAD" }), env);
   assert.equal(plain.status, 200);
   assert.match(plain.headers.get("content-type"), /text\/html/);
@@ -482,11 +407,11 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   // and dropped, costing a DevTools error per navigation and buying nothing. Measured in
   // Chrome 2026-07-29 across seven policies; the table is in lib/assets.js.
   for (const cc of [
-    "public, max-age=0, s-maxage=86400",                       // today's page policy
+    "public, max-age=0, s-maxage=86400",
     "public, max-age=0, must-revalidate, s-maxage=86400",
     "max-age=0, must-revalidate, stale-while-revalidate=604800", // must-revalidate wins
     "max-age=0, must-revalidate, stale-while-revalidate=60",   // ...at any window
-    "private, no-cache, must-revalidate",                      // `/` until 2026-07-31
+    "private, no-cache, must-revalidate",
     "max-age=3600, no-cache",                                  // no-cache vetoes a live max-age
     "no-store",
   ]) {
@@ -508,10 +433,6 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
                  'match="/lwe/drivers", match-dest=("document")', `must self-offer under "${cc}"`);
   }
 
-  // The policy every deploy-time document actually ships has to be one of those, or the
-  // whole per-page tier (its /pd/ deltas, its committed p-dict snapshots, its build time)
-  // is spent on offers no browser keeps. Pinned against the live constant rather than a
-  // copy, so editing the policy runs this check instead of quietly bypassing it.
   const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.ts");
   const shipped = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
     headers: { "available-dictionary": available },
@@ -519,18 +440,12 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   assert.equal(shipped.headers.get("use-as-dictionary"),
                'match="/lwe/drivers", match-dest=("document")',
                `PAGE_CACHE_CONTROL must register as a dictionary, got "${PAGE_CACHE_CONTROL}"`);
-  // swr is the clause doing that work AND the registered dictionary's lifetime, so a
-  // future trim below a day would keep every assertion above green while shortening how
-  // long the tier keeps working. Measured 2026-07-29: swr=5 registered nothing.
   const swr = Number(PAGE_CACHE_CONTROL.match(/stale-while-revalidate=(\d+)/)?.[1] || 0);
   assert.ok(swr >= 86400, `PAGE_CACHE_CONTROL needs a useful dictionary lifetime, got swr=${swr}`);
 });
 
 test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
   const base = await readFile(new URL("src/styles/lwe-base.css", ROOT), "utf8");
-  // The concept chrome is drawn once, here, from custom properties each page sets
-  // on :root. The caption buttons are luna.css's: a `.controls .min` rule at class
-  // specificity beats luna's zero-specificity :where() and switches the hover off.
   assert.match(base, /\.msgr-head \.ava::before \{ content: var\(--glyph\)/);
   assert.doesNotMatch(base, /\.controls/);
   const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
@@ -538,18 +453,11 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
   assert.match(build, /familyDictionaryName\(hash8\(dictionary\)\)/);
   assert.match(build, /src\/dict\/p-dict/);
   assert.match(build, /site-page dictionary/);
-  // The snapshots live at src/dict/ now, OUTSIDE the served tree, which is a
-  // stronger statement than the .assetsignore entry this used to assert: an
-  // ignore line keeps a file from being uploaded, while being outside public/
-  // means the build never stages it in the first place.
   const served = await readdir(new URL("public/", ROOT));
   assert.ok(!served.includes("p-dict") && !served.includes("a-dict"),
     "dictionary snapshots are build input and must not sit in the served tree");
   const security = await readFile(new URL("src/worker/lib/security.ts", ROOT), "utf8");
   assert.match(security, /rel="compression-dictionary"/);
-  // DERIVED from the directory rather than listed. The hand-written list this
-  // replaces was missing lean, so the one page that had drifted out of every
-  // other LWE registry was also the one page these assertions never covered.
   const lwePages = (await readdir(new URL("src/pages/lwe/", ROOT)))
     .filter((f) => f.endsWith(".html")).map((f) => f.replace(/\.html$/, ""));
   assert.ok(lwePages.length >= 12, `expected the LWE section to hold pages, saw ${lwePages.length}`);

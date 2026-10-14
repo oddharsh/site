@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 # build.sh: compile AVM's reference AV2 decoder to WebAssembly for /garage/av2.
 #
-# WHAT IT WRITES. public/garage/av2/av2dec.<sha8>.wasm, named by the first 8 hex
-# of its own sha256 so the URL names exact bytes (the /pixel-peeper tile
-# convention), and removes any older av2dec.*.wasm beside it. Then update
-# WASM_URL in src/client/garage/av2-decode.js, which this script prints.
-#
 # WHAT IT IS. The AVM 1.0.0 that ../libavif-avm/build.sh pins, built
 # decoder-only, single-threaded, no SIMD, as a standalone reactor module with
 # native WebAssembly longjmp (AVM reports errors by longjmp). That leaves five
@@ -17,24 +12,6 @@
 # AVM's cmake re-enables CONFIG_TENSORFLOW_LITE for its encoder experiments and
 # prints a warning saying so, but with the encoder off no TFLite object reaches
 # libavm.a (0 of its 97 members, checked with emar t).
-#
-# CONTROLS, 2026-10-13. Decoded planes are BIT-EXACT against native avifdec on
-# 16 files (8 and 10-bit; 4:0:0, 4:2:0, 4:2:2, 4:4:4; lossless; qp 20 to 220;
-# speeds 2, 6, 9). RGBA matches avifdec's FULL-DEPTH decode rounded to 8 bits
-# on 100.00% of samples (max delta 1); against avifdec -d 8 it reads up to 3
-# off, because that build's libyuv 8-bit path is the coarse one.
-# contract-av2-decoder-matches-avm.test.mjs holds the shipped samples to the
-# plane hashes native AVM produced (expected.json, written by expect.ts).
-#
-# COST. 1,760,696 B. Brotli q11 gets it to about 430 KB, but it ships with no
-# precompressed twin, so the edge compresses it on the fly: measured on a branch
-# preview 2026-10-13, 535,708 B br, 556,087 B zstd, 617,286 B gzip. Warm decode
-# under Bun on an M3 Max: 80 to 130 ms per 600px tile; in Chrome on the
-# preview, 39 to 92 ms. -msimd128 auto-vectorization measured no
-# faster, so it stays off.
-#
-#   ./build.sh            needs emcc (brew install emscripten) and the AVM
-#                         source from ../libavif-avm/build.sh, or AVM_SRC=<dir>
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

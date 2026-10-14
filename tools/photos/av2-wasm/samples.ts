@@ -1,14 +1,4 @@
 // samples.ts: write the AV2 files /garage/av2 decodes in the browser.
-//
-// For each stem: cut the 600px tile exactly as av2-tile-probe.ts does (zenc
-// square, EXIF orientation, box filter), re-encode the shipped AVIF from it and
-// REFUSE to continue unless the bytes match the /i/ file this site serves, then
-// write the largest AV2 file at or under that size. The page puts the two side
-// by side, so the AV1 half is the real shipped file and the AV2 half never gets
-// extra bytes. Scores are ssimulacra2 against the tile, both decodes at full depth.
-//
-// usage: bun tools/photos/av2-wasm/samples.ts --src <originals> --stems a,b,c
-//          [--build <libavif-avm build dir>] [--zenc <zenc binary>]
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -24,7 +14,6 @@ const BUILD = path.resolve(arg("build") ?? path.join(HERE, "../libavif-avm/build
 const ZENC = path.resolve(arg("zenc") ?? path.join(HERE, "../zenc/target/release/zenc"));
 const OUT = path.join(REPO, "public/garage/av2");
 const WORK = fs.mkdtempSync(path.join(os.tmpdir(), "av2-samples-"));
-// av2-tile-probe.ts's base AV2 arm and its AVIF control, unchanged
 const AVM = ["-c", "avm", "-d", "10", "--speed", "6", "--yuv", "444", "-a", "sb-size=128", "--jobs", "4"];
 const AVIF = ["-q", "63", "-d", "10", "--speed", "2", "--yuv", "444", "--jobs", "4"];
 
@@ -45,8 +34,6 @@ async function sample(src: string, stem: string) {
   const tile = path.join(WORK, `${stem}.png`);
   await sh([ZENC, "square", file, "--orient", String(o >= 1 && o <= 8 ? o : 1), "--filter", "box", "--size", "600", "--out", tile]);
 
-  // <stem>.<hash8>.avif, matched as strings: the stem is a CLI argument, so it
-  // never becomes part of a pattern
   const shipped = fs.readdirSync(path.join(REPO, "public/i"))
     .find((f) => f.startsWith(`${stem}.`) && f.endsWith(".avif") && HASH8.test(f.slice(stem.length + 1, -".avif".length)));
   if (!shipped) throw new Error(`${stem}: no shipped 600px AVIF in public/i`);
@@ -56,7 +43,6 @@ async function sample(src: string, stem: string) {
   if (!want.equals(fs.readFileSync(avif))) throw new Error(`${stem}: the re-encoded AVIF differs from /i/${shipped}, so the tile is not the shipped tile's source`);
   const budget = want.length;
 
-  // a higher qp writes a smaller file: find the lowest qp that fits
   let lo = 0, hi = 255, best = -1;
   while (lo <= hi) {
     const qp = (lo + hi) >> 1, out = path.join(WORK, `${stem}.${qp}.avif`);

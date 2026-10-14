@@ -7,8 +7,6 @@ import { fetchFollowingPublicRedirects, validateLensTarget } from "../src/worker
 const start = "https://example.com/start";
 const redirectStatuses = [301, 302, 303, 307, 308];
 
-// Model automatic following as well as manual reads. A post-fetch refusal
-// must fail the no-request assertion even when it hides the fetched body.
 async function withResponses(respond, run) {
   const original = globalThis.fetch;
   const seen = [];

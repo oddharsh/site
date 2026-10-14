@@ -56,8 +56,6 @@ test("a name defined in a stylesheet and in markup loses only the stylesheet cop
 });
 
 test("a BEM selector is left alone, and the pass ends", () => {
-  // `.tab--active:hover` looks like a definition of --active to DEFINITION, and
-  // the first version looped forever trying to remove it
   const { files, dropped } = prune([["a.css", ".tab--active:hover{color:red}:root{--unread:1}"]]);
   assert.deepEqual(dropped, ["--unread"]);
   assert.equal(files.get("a.css"), ".tab--active:hover{color:red}:root{}");
@@ -69,8 +67,6 @@ test("a name is matched whole, never as a prefix of a longer one", () => {
   assert.equal(files.get("a.css"), ":root{--blue-95:2}.x{color:var(--blue-95)}");
 });
 
-// The staged tree after the build: every definition in a shipped stylesheet is
-// read by some served file, which is the property the pass is for.
 const BUILT = fileURLToPath(new URL(".build/public/", ROOT));
 test("every definition in a built stylesheet is read somewhere", { skip: !existsSync(BUILT) && "needs a built tree: bun run build" }, () => {
   const texts = [];
@@ -87,7 +83,6 @@ test("every definition in a built stylesheet is read somewhere", { skip: !exists
   const unread = [];
   for (const [p, text] of sheets) for (const name of definitionsIn(text)) {
     if (RESERVED.has(name)) continue;
-    // every metacharacter escaped, backslash included, though names are [a-z0-9-]
     const re = new RegExp(`${name.replace(/[\\^$.*+?()[\]{}|-]/g, (c) => `\\${c}`)}(?![a-z0-9-])(?!\\s*:)`);
     if (!texts.some(([, t]) => re.test(t))) unread.push(`${p.slice(BUILT.length)} ${name}`);
   }

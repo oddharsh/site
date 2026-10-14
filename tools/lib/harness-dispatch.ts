@@ -1,13 +1,5 @@
 // ── a test that calls worker.fetch() on wrangler's harness runs under NODE ──
 //
-// Wrap the body of any test that dispatches a request through
-// createTestHarness's getWorker().fetch():
-//
-//   test(NAME, underNode(import.meta.url, NAME, async () => { ... }));
-//
-// Under node it IS the body. Under bun it re-runs that one test in a node child
-// and fails with the child's output if the child did.
-//
 // WHY, measured 2026-09-30 on the wrangler pin ddaa558 (#1037). miniflare's
 // dispatchFetch used to rewrite the request URL onto the runtime's own origin
 // itself and hand undici a Dispatcher only to ADD headers. workers-sdk#15906
@@ -32,12 +24,6 @@
 // Retire this when that watch flips, or when miniflare rewrites the URL itself
 // again. The child has to exit 0 AND print `# pass 1`, because a name
 // pattern that matches nothing exits 0 having run nothing.
-//
-// The child needs the PINNED node, not whichever one is on PATH. A CI job with
-// no setup-node gets the runner's (22.23 on 2026-09-30), which knows only
-// --experimental-test-isolation, so the child died on the flag with exit 9 and
-// the gate reported "status 9" with node's own complaint cut off (#1058,
-// #1061). nodeFloor() says which node it found before spawning anything.
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

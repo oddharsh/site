@@ -13,25 +13,14 @@ import {
 } from "./lib/served-manifest.ts";
 import { buildWhoareyouGroups } from "../src/worker/whoareyou.ts";
 
-// Two builders make every release: ci.yml's `validate` (to test it) and Workers
-// Builds (to ship it). ci.yml cuts a manifest of every static URL's sha256 from
-// its build and signs it; tools/check-served.ts compares production against it.
-// The pieces only mean something together, so this file holds all of them:
-// the URL rules, the comparison, the commit production reports, and the CI and
-// release wiring that connect them.
-
 const COMMIT = "5fb917b37e5472d0586c97df64c7a72cc68252ec";
 
-// Bun parses the workflows under both runners, the way contract-ci-required-gate does.
 const yaml = (rel) => JSON.parse(execFileSync("bun", [
   "-e", "console.log(JSON.stringify(Bun.YAML.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))))",
   fileURLToPath(new URL(rel, ROOT)),
 ], { encoding: "utf8" }));
 
 test("served-manifest: canonical URLs are the ones that answer 200 without a redirect", () => {
-  // Each pairing measured against production 2026-10-01. The asset layer 307s
-  // both /garage/horizon.html and /garage/ to these; the readable twins are the
-  // exception, served at their full name because that is what each banner links.
   assert.equal(canonicalUrl("index.html"), "/");
   assert.equal(canonicalUrl("garage/index.html"), "/garage");
   assert.equal(canonicalUrl("garage/horizon.html"), "/garage/horizon");
@@ -49,15 +38,12 @@ test("served-manifest: an encoding, a config file or an ignored path is not a UR
   for (const rel of ["bot.md", "garage/custom-media.css", "markdown/x.md", "index.html", "a/luna.0dbcdba1.css"]) {
     assert.equal(isServedFile(rel, ignored), true, `${rel} is served at its own URL`);
   }
-  // Regex metacharacters in a rule are literal: "a+b.css" is that file and no other.
   const literal = parseAssetsIgnore("a+b.css\n(x)|y\n");
   assert.equal(literal("a+b.css"), true);
   assert.equal(literal("aab.css"), false);
   assert.equal(literal("a+bxcss"), false);
   assert.equal(literal("(x)|y"), true);
   assert.equal(literal("x"), false);
-  // A rule this reader would misread must fail the manifest rather than list a
-  // file the upload skips (or skip one it uploads).
   for (const rule of ["!keep.md", "a/**/b", "file?.txt", "[ab].css"]) {
     assert.throws(() => parseAssetsIgnore(rule), /does not implement/, rule);
   }
@@ -105,8 +91,6 @@ test("served-manifest: the comparison decodes, refuses redirects, and has teeth"
     seen.push(init.redirect);
     const path = new URL(url).pathname;
     if (path === "/same") return new Response(body);
-    // The control: one byte different must read as a mismatch, or a comparator
-    // that always agrees would pass every release.
     if (path === "/byte") return new Response(new TextEncoder().encode("<!doctype html>pagE"));
     if (path === "/moved") return new Response(null, { status: 307, headers: { location: "/elsewhere" } });
     return new Response("nope", { status: 404 });
@@ -126,15 +110,12 @@ test("build-info: only Workers Builds names a commit, and a malformed one fails 
   );
   assert.throws(() => buildInfoFromEnv({ WORKERS_CI_COMMIT_SHA: "5fb917b" }), /not a 40-hex commit/);
 
-  // The committed module carries the marker build.ts rewrites, and ships null.
   const source = await readFile(new URL("src/worker/lib/build-info.ts", ROOT), "utf8");
   assert.match(source, /^export const BUILD_INFO: BuildInfo \| null = null; \/\/ build:build-info$/m);
   const baked = bakeBuildInfo(source, { commit: COMMIT, branch: "production", build: null });
   assert.ok(baked.includes(`"commit":"${COMMIT}"`));
   assert.throws(() => bakeBuildInfo("export const X = 1;", null), /marker line was not found/);
 
-  // And the commit goes into the WORKER: a commit in public/ would change a
-  // served file on every deploy and break the property being verified.
   const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
   assert.match(build, /bakeBuildInfo\(await readFile\(p, "utf8"\), info\)/);
   assert.match(build, /const p = `\$\{OUT\}\/src\/worker\/lib\/build-info\.ts`;/);
@@ -165,14 +146,11 @@ test("served-manifest: CI cuts and signs it, and every release checks it", async
   assert.equal(attest.permissions["id-token"], "write");
   assert.ok(!attest.steps.some((s) => String(s.uses ?? "").startsWith("actions/checkout")), "the job holding an OIDC token runs no repository code");
   assert.ok(attest.steps.some((s) => String(s.uses).startsWith("actions/attest@") && s.with["subject-path"] === "served-manifest.json"));
-  // cpu-sweep is the third job, and contract-ci-required-gate holds its reason.
   assert.deepEqual(Object.keys(ci.jobs), ["validate", "cpu-sweep", "attest"], "a fourth job would need its own reason; validate stays the one required check");
 
   const checker = await readFile(new URL("tools/check-served.ts", ROOT), "utf8");
   assert.match(checker, /SIGNER = `\$\{values\.repo\}\/\.github\/workflows\/ci\.yml`/, "the signature must be pinned to ci.yml");
   assert.match(checker, /"--source-ref", "refs\/heads\/main"/);
-  // An empty scope verified the commit and signature and compared no bytes, and
-  // must say so rather than print "0 of 0 URLs" under a passing headline.
   assert.match(checker, /if \(!results\.length\) \{\n  console\.log\(`served:check: nothing to compare/);
 
   const promote = await readFile(new URL(".github/workflows/promote-production.yml", ROOT), "utf8");

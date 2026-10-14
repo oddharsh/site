@@ -13,8 +13,6 @@ import { assert, test } from "./contract-shared.ts";
 import { beats, codestreamBytes, RANGE, searchDistance, stripPng } from "./photos/hif-archive.ts";
 import { jxlKind } from "./photos/pipeline-json.ts";
 
-// A metric that wins at every distance up to `edge` and loses above it, the
-// monotone shape the 2026-10-08 sweep measured on all 119 photos.
 const edgeAt = (edge) => {
   const asked = [];
   return { asked, wins: async (d) => (asked.push(d), d <= edge) };
@@ -62,9 +60,6 @@ test("jxl-kind reads a jbrd box as a transcode and refuses what is not a contain
   const file = (name, bytes) => { const p = path.join(dir, name); writeFileSync(p, bytes); return p; };
   assert.equal(jxlKind(file("t.jxl", container(box("jbrd", "x"), box("jxlc", "image")))), "transcode");
   assert.equal(jxlKind(file("d.jxl", container(box("Exif", "\0\0\0\0MM"), box("jxlc", "image")))), "direct");
-  // Controls: a JPEG, and a container whose last box runs past the end, both
-  // throw rather than read as "direct", which would send a broken download
-  // down the decode path.
   assert.throws(() => jxlKind(file("j.jpg", Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]))), /not a JPEG XL container/);
   const whole = container(box("jxlc", "image"));
   assert.throws(() => jxlKind(file("cut.jxl", whole.subarray(0, whole.length - 2))), /past the end/);

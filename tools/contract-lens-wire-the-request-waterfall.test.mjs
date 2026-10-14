@@ -6,14 +6,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── /lens/wire — the request waterfall ──────────────────────────────────────
-// The Wire lens is the only surface here that opens a real CDP browser session,
-// so its tests split the way the module does: the summariser is a pure function
-// of a CDP event array and gets exercised directly, while everything needing
-// workerd is asserted structurally and says so at the assertion.
-
-// Builds the event shapes Chrome actually emits, so these tests are about our
-// accounting rather than about a fixture written by whoever wrote the reader.
 function wireEvents(specs) {
   const out = [];
   for (const s of specs) {
@@ -92,13 +84,11 @@ test("the third-party share is the headline and is computed from bytes", async (
   const { summariseWire } = await import("../src/worker/lens-wire.ts");
   const d = summariseWire(wireEvents([
     { id: "1", url: "https://news.test/", type: "Document", bytes: 10_000 },
-    { id: "2", url: "https://cdn.news.test/app.js", bytes: 10_000 },   // same site, subdomain
+    { id: "2", url: "https://cdn.news.test/app.js", bytes: 10_000 },
     { id: "3", url: "https://ads.example/t.js", bytes: 60_000 },
     { id: "4", url: "https://track.other/p.gif", type: "Image", bytes: 20_000 },
   ]), "https://news.test/");
   assert.equal(d.bytes, 100_000);
-  // A subdomain of the page's own site is FIRST party. Getting this wrong
-  // inflates the headline on exactly the sites that self-host their assets.
   assert.equal(d.thirdParty.bytes, 80_000);
   assert.equal(d.thirdParty.bytesPct, 80);
   assert.equal(d.thirdParty.hosts, 2);
@@ -108,9 +98,6 @@ test("the third-party share is the headline and is computed from bytes", async (
 
 test("the wire summary never divides by a load that fetched nothing", async () => {
   const { summariseWire } = await import("../src/worker/lens-wire.ts");
-  // A navigation that fails outright still reaches the summariser, because the
-  // budget was already spent and throwing the observation away would be worse.
-  // The percentages must be 0 rather than NaN, which renders as "NaN%".
   const d = summariseWire(wireEvents([{ id: "1", url: "https://dead.test/", failed: true }]), "https://dead.test/");
   assert.equal(d.bytes, 0);
   assert.equal(d.thirdParty.bytesPct, 0);
@@ -138,8 +125,6 @@ test("a beacon cancelled after its response is not reported as a failure", async
   assert.equal(d.aborted, 1, "...it is a cancellation, and is still reported");
   assert.equal(d.rows[0].status, 204);
 
-  // A request that never got a response IS a failure, so the discriminator has
-  // to be the presence of a status rather than the mere existence of the event.
   const dead = summariseWire([
     { method: "Network.requestWillBeSent", params: { requestId: "2", request: { url: "https://gone.test/x" }, type: "Script", timestamp: 1 } },
     { method: "Network.loadingFailed", params: { requestId: "2", errorText: "net::ERR_NAME_NOT_RESOLVED", timestamp: 1.1 } },
@@ -147,8 +132,6 @@ test("a beacon cancelled after its response is not reported as a failure", async
   assert.equal(dead.failed, 1);
   assert.equal(dead.aborted, 0);
 
-  // A CSP or client blocker refusing a tracker is the interesting case, and the
-  // reason it names the blockedReason instead of a generic error string.
   const blocked = summariseWire([
     { method: "Network.requestWillBeSent", params: { requestId: "3", request: { url: "https://ads.test/t.js" }, type: "Script", timestamp: 1 } },
     { method: "Network.loadingFailed", params: { requestId: "3", errorText: "net::ERR_BLOCKED_BY_CLIENT", blockedReason: "csp", timestamp: 1.1 } },
@@ -174,10 +157,6 @@ test("the KV-hit flag does not collide with the target's own cache count", async
   const { summariseWire } = await import("../src/worker/lens-wire.ts");
   const worker = readFileSync("./src/worker/lens-wire.ts", "utf8");
   const pane = readFileSync("./src/client/lens-wire.js", "utf8");
-  // Caught in the browser 2026-08-11, rendering as "true served from cache".
-  // The summary owns `cached` — how many of the TARGET's requests came from the
-  // browser's own cache — and the KV-hit path was spreading `cached: true` over
-  // the same key, replacing a count with a boolean. Two subjects, two keys.
   const d = summariseWire([
     { method: "Network.requestWillBeSent", params: { requestId: "1", request: { url: "https://site.test/a.js" }, type: "Script", timestamp: 1 } },
     { method: "Network.requestServedFromCache", params: { requestId: "1" } },
@@ -185,9 +164,6 @@ test("the KV-hit flag does not collide with the target's own cache count", async
   ], "https://site.test/");
   assert.equal(d.cached, 1, "`cached` is a COUNT of the target's cache-served requests");
   assert.equal(typeof d.cached, "number");
-  // The hit flag is the pipeline's to write (lens-pipeline.ts's lensJson, held
-  // behaviourally in contract-lens-per-ip-crawl-budgets), so the module itself
-  // must never spell one.
   assert.doesNotMatch(worker, /\bcached: true\b/, "lens-wire.ts writes a hit flag over the summary's count");
   assert.match(pane, /d\.fromCache \?/, "the pane must read fromCache for the KV-hit line");
 });
@@ -197,12 +173,8 @@ test("siteOf groups subdomains without a public-suffix list, and says where it i
   assert.equal(siteOf("cdn.news.test"), "news.test");
   assert.equal(siteOf("news.test"), "news.test");
   assert.equal(siteOf("a.b.c.example.com"), "example.com");
-  // The two-level suffixes worth special-casing, because reading bbc.co.uk and
-  // itv.co.uk as one site would be visible on the panel people screenshot.
   assert.equal(siteOf("www.bbc.co.uk"), "bbc.co.uk");
   assert.equal(siteOf("shop.example.co.uk"), "example.co.uk");
-  // The module must SAY it is a heuristic. This lens is about honest numbers, so
-  // an approximation presented as a fact is the failure mode that matters.
   const src = readFileSync("./src/worker/lens-wire.ts", "utf8");
   assert.match(src, /NOT a public-suffix list/, "the heuristic must be labelled as one in the source");
   const pane = readFileSync("./src/client/lens-wire.js", "utf8");
@@ -211,20 +183,11 @@ test("siteOf groups subdomains without a public-suffix list, and says where it i
 
 test("the wire lens shares the SSRF guard and reaches the browser with nothing but the URL", () => {
   const src = readFileSync("./src/worker/lens-wire.ts", "utf8");
-  // The rule lens-recipes.js is built around: this route points a real browser
-  // at a visitor-supplied address, so the ONLY caller byte that may reach it is
-  // the URL, after the shared guard has passed it.
-  // Validation happens in the pipeline, which imports the shared guard. The
-  // route only says which parameter is the target.
   assert.match(src, /from "\.\/lens-pipeline\.ts"/, "must run through the lens pipeline");
   assert.match(readFileSync("./src/worker/lens-pipeline.ts", "utf8"), /from "\.\/lib\/public-fetch\.ts"/,
     "the pipeline must import the shared guard, not reimplement it");
   assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
     "lens-wire.js redefines a guard it is supposed to be importing");
-  // Exactly one searchParams read, and it is the url. A second one is how a
-  // `js=` or `selector=` parameter would arrive, which is the hole the recipe
-  // allowlist exists to refuse. If a future parameter is genuinely wanted, this
-  // is the place to argue for it rather than the place to delete.
   const reads = src.match(/params\.get\(/g) || [];
   assert.equal(reads.length, 1, "lens-wire.js reads more than one query parameter");
   assert.match(src, /params\.get\("url"\)/);
@@ -241,9 +204,6 @@ test("a CDP session is deleted on every exit path", () => {
   const finallyAt = body.indexOf("} finally {");
   assert.ok(finallyAt > 0, "runWireSession must clean up in a finally, not on the happy path");
   assert.match(body.slice(finallyAt), /method: "DELETE"/, "the finally block must DELETE the session");
-  // The create's own 429 returns BEFORE a session exists, so it must sit outside
-  // the try — deleting a session that was never minted is a wasted subrequest on
-  // the exact path where the budget is already exhausted.
   assert.ok(body.indexOf("if (created.status === 429)") < body.indexOf("try {"),
     "the budget bail must return before the session is entered");
 });

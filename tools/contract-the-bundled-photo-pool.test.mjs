@@ -19,13 +19,6 @@ import {
   withWeakEtag,
 } from "./contract-shared.ts";
 
-// ── the bundled photo pool ──────────────────────────────────────────
-// The pool is BUILD DATA: photos.js imports photo-index.json + hashes.json and
-// derives the render-ready rows at module scope. These tests run the real
-// derivation over the real committed files, so a half-run pipeline (an index
-// entry without hashes, a hash without an index entry, a malformed /i/ URL)
-// fails here as well as in check-photo-pipeline.mjs — the worker and the
-// checker must not be able to disagree about what is published.
 test("bundled photo pool derives one well-formed row per committed stem", async () => {
   const index = JSON.parse(await readFile(new URL("src/worker/photo-index.json", ROOT), "utf8"));
   const hashes = JSON.parse(await readFile(new URL("public/images/hashes.json", ROOT), "utf8"));
@@ -38,20 +31,15 @@ test("bundled photo pool derives one well-formed row per committed stem", async 
     assert.match(p.thumb_small, new RegExp(`^/i/${p.stem}-400\\.[a-f0-9]{8}\\.avif$`));
     assert.ok(p.full.startsWith(`${p.stem}.`), `${p.stem}: full must be the stem's R2 key`);
     assert.ok(Number.isInteger(p.size) && p.size > 0, `${p.stem}: size must be positive bytes`);
-    // album and heif are carried through as null for the plain library, never
-    // as undefined: /images/manifest.json is a public shape and a key that comes
-    // and goes per photo is a key a consumer cannot rely on
     assert.ok("album" in p && "heif" in p, `${p.stem}: album and heif must be present`);
     if (p.heif !== null) assert.ok(p.heif.startsWith(`${p.stem}.`), `${p.stem}: heif must be the stem's own key`);
   }
   const fulls = pool.map((p) => p.full);
   assert.deepEqual(fulls, [...fulls].sort((a, b) => a.localeCompare(b)), "pool keeps the manifest's sort order");
-  // an incomplete hash entry is SKIPPED, never rendered as /i/undefined
   assert.equal(derivePhotoPool({ X1: { full: "X1.jpg", size: 1, uploaded: null } }, { X1: { a: "aaaaaaaa" } }).length, 0);
 });
 
 test("the manifest endpoint serves the bundled pool without bindings", async () => {
-  // no env, no ctx: the pool must not depend on any binding
   const index = JSON.parse(await readFile(new URL("src/worker/photo-index.json", ROOT), "utf8"));
   const hashes = JSON.parse(await readFile(new URL("public/images/hashes.json", ROOT), "utf8"));
   const response = handleImagesManifest();
@@ -76,13 +64,6 @@ test("both homepage fragments are preloaded, and the reason that is free still h
       `${href} must be preloaded with crossorigin, or its hydrator fetch is made twice`);
   }
 
-  // A preload can only ever be free while the fetch it names is UNCONDITIONAL.
-  // Both halves are islands now, and the one island script fetches every
-  // [data-island] mount it finds, so the premise is that both mounts ship in
-  // the document naming exactly the URLs the preloads name. If SSR ever comes
-  // back and a mount disappears, a preload starts paying for a fragment nobody
-  // fetches, so pin the premise rather than trust the comment: the last two
-  // times this stopped being true, only the comments knew.
   assert.match(page, /<section class="photos" aria-label="photographs" data-island="\/photos\/grid\.html" data-state="pending">/,
     "the grid must ship as an island mount, or the preloaded fragment goes unfetched");
   assert.match(page, /<ol class="np-list" id="np-list" data-island="\/rn\/tracks\.html" data-state="pending">/,
@@ -109,16 +90,10 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
   assert.match(worker, /pickRandom\(pool,\s*12\)/, "the per-request random draw must remain 12");
   assert.match(build, /deterministicTwelve/, "the document must carry a baked fallback grid, or `/` stops being crawlable without JS");
-  // The two renderings differ in exactly one way, so assert on the OUTPUT
-  // rather than on the source that produces it.
   const photo = [{ stem: "X1", full: "X1.jpg", thumb_jpg: "/i/X1.aaaaaaaa.jpg", thumb_avif: "/i/X1.aaaaaaaa.avif", thumb_small: "/i/X1-400.aaaaaaaa.avif", thumb_xs: "/i/X1-200.aaaaaaaa.avif", size: 1, uploaded: "2026-01-01" }];
-  // The renderer returns Html (lib/html.ts) so the fragment can go through
-  // islandResponse; .html is the markup it carries.
   const baked = renderPhotoSlots(photo, {}).html;
   const fragment = renderPhotoSlots(photo, {}, { deferred: false }).html;
 
-  // Baked: a fallback the hydrator replaces, so a real src outside the
-  // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
   assert.match(baked, /data-photo-deferred/, "baked tiles must keep their URLs in data-* until hydration decides");
   assert.match(baked, /data-src="\/i\/X1-400\.aaaaaaaa\.avif"/, "the baked tile carries its one 400px AVIF in data-src");
   assert.match(baked, /data-srcset="[^"]*200w[^"]*400w[^"]*600w[^"]*"/,
@@ -126,10 +101,6 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrcset="/,
     "a real srcset outside the twin selects and fetches before the hydrator can");
   assert.match(baked, /<noscript><img/, "every baked tile needs its script-off twin");
-  // ONE url in the twin too. <picture> here is safe but not free: 195 bytes a
-  // tile against 130, to serve a client that must be no-JS AND no-AVIF at once,
-  // when the engine this repair exists for runs JavaScript and takes the
-  // onerror path instead. Tried and reverted 2026-08-12.
   assert.doesNotMatch(baked, /<noscript>[\s\S]*?<(picture|source)/,
     "the script-off twin names one image, like every other tile on this page");
   assert.doesNotMatch(baked, /<noscript>[\s\S]*?\.jpg/,
@@ -137,18 +108,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrc="/,
     "a real src outside the noscript twin is a discarded download");
 
-  // Fragment: these tiles ARE the grid. Nothing replaces them, so they carry
-  // live URLs and start on innerHTML.
   assert.match(fragment, /\ssrc="\/i\/X1-400\.aaaaaaaa\.avif"/, "the fragment tile must carry its live 400px AVIF");
-  // ONE FORMAT, which is what the old "one browser image resource" rule was
-  // actually protecting. That rule banned `srcset=` too, because at the time one
-  // URL and one format were the same policy. They are not: <picture>/<source>
-  // select on TYPE and leave a loser to be instantiated (13 JPEG loads for one
-  // tile, 2026-08-11), while srcset selects on SIZE and resolves to a single
-  // candidate. Measured before this changed, 12 tiles and two full hover passes
-  // at DPR 1 and 2: 0 image loads beyond the initial 12, identical to a
-  // single-URL control. So the assertion now pins the invariant rather than the
-  // proxy — no type selection, no JPEG, and every candidate the same format.
   assert.doesNotMatch(fragment, /<picture|<source|\ssrc="[^"]+\.jpg"/,
     "a grid tile must not select on TYPE: that is the fallback that churns on hover");
   const cands = (/\ssrcset="([^"]+)"/.exec(fragment)?.[1] || "").split(",").map((c) => c.trim()).filter(Boolean);
@@ -157,22 +117,12 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(fragment, /\ssizes="184px"/,
     "sizes must name the fixed .photos column, or the browser guesses 100vw and picks the largest tier");
 
-  // THE FIRST BARS RIDE ON THE TILE. Measured on production before this: a photo hover
-  // stalled 135ms then 117ms waiting for /images/meta/<stem>.json, once per photo,
-  // with the histogram blank until it landed. It has to be in the markup rather
-  // than warmed by tooltip.js, because index.html loads that module on the FIRST
-  // hover on purpose, so anything it warms is too late for the hover that caused
-  // the load. The first six tiles take that path; the lower-priority six keep the
-  // per-photo fallback rather than making every fragment pay for every possible
-  // first hover.
-  const packed = "?".repeat(128) + "~".repeat(128);   // 256 chars, both ends of the safe range
+  const packed = "?".repeat(128) + "~".repeat(128);
   const withHist = renderPhotoSlots(photo, {}, { deferred: false, histograms: { X1: packed } }).html;
   assert.match(withHist, /data-hist="/, "a tile whose histogram is known carries it");
   assert.equal(/data-hist="([^"]*)"/.exec(withHist)[1], packed, "the packed histogram ships verbatim");
   assert.doesNotMatch(renderPhotoSlots(photo, {}, { histograms: { X1: packed } }).html, /data-hist=/,
     "the disposable baked grid must not carry histogram bytes a scripting browser replaces");
-  // Absent is a LEGAL state, not a failure: tooltip.js falls back to the per-photo
-  // fetch, which is what a stem baked before this existed gets.
   assert.doesNotMatch(renderPhotoSlots(photo, {}, { deferred: false }).html, /data-hist=/,
     "a tile with no known histogram omits the attribute rather than shipping an empty one");
   assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
@@ -198,13 +148,6 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.doesNotMatch(fragment, /<noscript>/, "the fragment only ever arrives via fetch(), so a script-off twin is dead bytes");
   assert.match(worker, /deferred: false/, "/photos/grid.html must render the live-URL form");
 
-  // Priority is split WITHIN the grid, and the two halves fail differently.
-  // The CEILING is the #156 invariant: the LCP element is the prose, so no tile
-  // may ever be raised to high. The FLOOR is the reason the split exists: one
-  // urgency bucket for all twelve is what makes the edge round-robin them, and
-  // AVIF has no progressive mode, so an interleaved tile paints nothing until
-  // it is whole. Assert the exact PARTITION rather than a count, because six
-  // low tiles in the wrong six is the same bug wearing the right total.
   const twelve = Array.from({ length: 12 }, (_, i) => ({ ...photo[0], stem: `X${i}`, full: `X${i}.jpg` }));
   const grid12 = renderPhotoSlots(twelve, {}, { deferred: false }).html;
   const tiles = grid12.split("<a href=").slice(1);
@@ -226,25 +169,16 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.doesNotMatch(grid12, /fetchpriority="high"/,
     "no photo may outrank the introductory prose, which is the measured LCP element at 390px and 1280px alike");
 
-  // A → B → A must move A's already-loaded nodes back into the shared surface,
-  // not parse a third image element. The HAR that motivated this recorded up to
-  // 13 memory-cache image loads for one photo and repeated album/artist AVIFs.
   assert.match(hoist, /const rendered = new Map\(\)/);
   assert.match(hoist, /node\.replaceChildren\(\.\.\.children\)/);
   assert.doesNotMatch(hoist, /node\.innerHTML\s*=\s*html/);
   assert.doesNotMatch(tooltip, /<picture><source type="image\/avif"|dataset\.(?:track|artist)Imageset/,
     "album and artist cards must not reconstruct a picture fallback set");
 
-  // The hover target includes the list padding and the grid gutters. Those used
-  // to alternate auto/pointer under a moving cursor even though one hover system
-  // owned the whole region.
   assert.match(page, /\.photos\s*\{[^}]*cursor:\s*pointer/s);
   assert.match(luna, /\.np-list li\[data-track-title\]\s*\{\s*cursor:\s*pointer;\s*\}/);
 
   assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
-  // The random twelve arrive through the one island script, byte-identical to
-  // islandScript() so a single CSP hash covers it on every island page, and a
-  // failed island (data-state="failed") must still promote the baked tiles.
   const { islandScript, islandResponse, ISLAND_MARKER } = await import("../src/worker/lib/island.ts");
   assert.ok(page.includes(islandScript().html), "the homepage must carry islandScript() byte for byte");
   assert.equal(page.split(islandScript().html).length, 2, "one island script fills both mounts");
@@ -255,11 +189,6 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   const res = islandResponse(renderPhotoSlots(photo, {}, { deferred: false }));
   assert.equal(res.headers.get(ISLAND_MARKER), "1");
   assert.equal(res.headers.get("cache-control"), "no-store, must-revalidate", "the random twelve are one request's");
-  // Removed 2026-07-29. It withheld 3 of 12 tiles to save ~34 KB out of ~136 KB,
-  // and the 9 it allowed finished 48ms apart, so the row it held back showed up
-  // as white squares on the first scroll for no measurable gain.
-  // Matches the construction, not the word, so the comment explaining why the
-  // observer is gone does not trip its own tripwire.
   assert.doesNotMatch(page, /new IntersectionObserver|rootMargin:/,
     "the photo grid must not reintroduce viewport gating; the whole set is ~136 KB off the LCP path, and the urgency split is what orders it now");
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
@@ -284,9 +213,6 @@ test("the packed histogram survives the round trip tooltip.js and build.ts do", 
   assert.ok(packed, "a complete histogram packs");
   assert.equal(packed.length, CHANNELS.length * BINS, "one character per bin, no padding");
 
-  // The exact decode tooltip.js runs: first bin absolute, then first-order
-  // deltas in modulo space. The transform changes only the wire entropy; it
-  // neither drops a level nor changes the quantisation bound.
   const decoded = [];
   for (let ci = 0; ci < CHANNELS.length; ci++) {
     let previous = 0;
@@ -302,8 +228,6 @@ test("the packed histogram survives the round trip tooltip.js and build.ts do", 
   for (const [ci, c] of CHANNELS.entries()) {
     for (let i = 0; i < BINS; i++) worst = Math.max(worst, Math.abs(decoded[ci][i] - hi[c][i]));
   }
-  // 64 levels over a 0-100 source, rendered into a 32-unit-tall SVG, so one
-  // level is half a pixel and this bound is the whole quality argument.
   assert.ok(worst <= 1, `round trip is within one unit of 100, got ${worst}`);
   assert.deepEqual(
     unpackHistogram(packed),
@@ -319,10 +243,6 @@ test("the packed histogram survives the round trip tooltip.js and build.ts do", 
       `${CHANNELS[ci]} flat tail becomes zero deltas rather than repeated absolutes`);
   }
 
-  // THE ENCODING'S SAFETY IS STRUCTURAL, not a property of the current data:
-  // 63..126 holds none of & < > " (34, 38, 60, 62), so the attribute can never
-  // need escaping. Asserted over every committed histogram rather than a
-  // fixture, because the day this breaks is the day a bin goes out of range.
   const committed = JSON.parse(readFileSync("public/images/histograms.json", "utf8"));
   const stems = Object.keys(committed);
   assert.ok(stems.length > 100, `expected the real corpus, got ${stems.length} entries`);
@@ -337,23 +257,11 @@ test("the packed histogram survives the round trip tooltip.js and build.ts do", 
     }
   }
 
-  // A malformed channel yields null rather than a plausible wrong shape, which is
-  // the same rule the photo pipeline follows everywhere: skip what you cannot
-  // state, never fabricate it.
   assert.equal(packHistogram({ l: [1, 2], r: [], g: [], b: [] }), null, "a short channel packs to null");
   assert.equal(packHistogram(null), null, "no histogram packs to null");
 });
 
 test("robots.txt never forbids a path the site advertises to agents", async () => {
-  // Found by a Cloudflare agent-readiness scan on 2026-08-07, which counted
-  // </rn/tracks>; rel="service-desc" toward a discoverability PASS while
-  // robots.txt carried `Disallow: /rn/tracks`. Sixteen conflicts across six
-  // surfaces at the time. Both sides are this site's own declarations, so one of
-  // them was always going to be a lie, and neither side can see the other.
-  //
-  // The rule is about FETCHING, not indexing: a path that should stay out of a
-  // search index says so with X-Robots-Tag, which a crawler can only read if it
-  // is allowed to fetch the response carrying it.
   const read = (p) => readFile(new URL(p, ROOT), "utf8");
   const robots = await read("public/robots.txt");
 
@@ -361,7 +269,6 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
     robots.split("\n").filter((l) => /^Disallow:/i.test(l)).map((l) => l.slice(9).trim()),
   )];
   assert.ok(disallowed.length, "robots.txt must still carry Disallow rules");
-  // The action endpoints. Nothing advertises them and nothing should.
   assert.deepEqual(disallowed.sort(), ["/lwe/ask", "/rn/admin", "/rn/set"]);
 
   const { HOMEPAGE_DISCOVERY_LINK } = await import("../src/worker/lib/security.ts");
@@ -375,13 +282,9 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
 
   for (const [name, text] of Object.entries(surfaces)) {
     const advertised = new Set();
-    // absolute URLs (llms.txt, the JSON catalogs) …
     for (const m of text.matchAll(/https:\/\/aadhar\.sh(\/[^\s"'`)>,]*)/g)) advertised.add(m[1]);
-    // … and RFC 8288 Link targets, which are relative here
     for (const m of text.matchAll(/<(\/[^\s">]*)>\s*;\s*rel=/g)) advertised.add(m[1]);
     for (const path of advertised) {
-      // robots.txt prefix semantics: /around also covers /around/json. Match the
-      // separator too, so /aroundabout would not count as blocked by /around.
       const rule = disallowed.find((d) => path === d || path.startsWith(`${d}/`) || path.startsWith(`${d}.`));
       assert.ok(!rule, `${name} advertises ${path}, which robots.txt blocks with Disallow: ${rule}`);
     }
@@ -391,19 +294,13 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
 test("browser RUM and its ledger proxy stay fully removed", async () => {
   const page = await readFile(new URL("src/pages/index.html", ROOT), "utf8");
   const worker = await readFile(new URL("src/worker/index.ts", ROOT), "utf8");
-  // The authored site config (cloudflare.config.ts + wrangler.config.ts since
-  // 2026-09-28): a RUM marker would be written into the source, not the projection.
   const wrangler = (await readFile(new URL("cloudflare.config.ts", ROOT), "utf8")) + (await readFile(new URL("wrangler.config.ts", ROOT), "utf8"));
-  // Local dev's overlay is authored source too, so it is scanned as text.
   const wranglerDev = (await readFile(new URL("config/dev/cloudflare.config.ts", ROOT), "utf8")) + (await readFile(new URL("config/dev/wrangler.config.ts", ROOT), "utf8"));
   const headers = await readFile(new URL("public/_headers", ROOT), "utf8");
   const whoareyou = await readFile(new URL("src/worker/whoareyou.ts", ROOT), "utf8");
   const whoareyouMd = await readFile(new URL("src/content/md/whoareyou.md", ROOT), "utf8");
   const securityPage = await readFile(new URL("src/worker/security.ts", ROOT), "utf8");
 
-  // The loader, both route legs, both asset allowlists, and the dedicated module
-  // are one feature. Leaving any one behind either recreates the reported 404 or
-  // keeps an unused third-party forwarder exposed.
   for (const [name, source] of [
     ["index.html", page],
     ["_worker.js/index.js", worker],
@@ -415,12 +312,6 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   assert.equal(existsSync(new URL("src/worker/rum.js", ROOT)), false,
     "the retired RUM proxy module must not remain reachable for a future import");
 
-  // The CSP must not permit the retired collector. _headers is matched as TEXT
-  // (it is a literal header line). security.js is matched on the
-  // policy it ASSEMBLES, because the per-document script-src work split the string
-  // into pieces and a source scrape would now be checking punctuation instead of
-  // the thing that reaches the browser. `/unmapped` deliberately misses the hash
-  // map, so this is the fallback policy every live worker page still gets.
   const { cspHeadersFor } = await import("../src/worker/lib/security.ts");
   const assembled = cspHeadersFor("/unmapped-probe")["content-security-policy"];
   for (const [name, text] of [["_headers", headers], ["lib/security.js", assembled]]) {
@@ -429,15 +320,10 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
     assert.doesNotMatch(policy, /cloudflareinsights\.com/, `${name}: keep the retired collector out of CSP`);
     assert.match(policy, /connect-src 'self';/, `${name}: connect-src should be back to pure 'self'`);
     assert.match(policy, /script-src 'self' 'unsafe-inline';/, `${name}: script-src should carry no external origin`);
-    // Same rule, one directive over: album art is re-hosted behind /rn/art/, so
-    // the two Spotify hosts that used to sit in img-src have nothing left to
-    // serve. rn.js's artAttrs is what makes this safe (it emits no attribute for
-    // art it cannot re-host) and the rn test asserts that end.
     assert.match(policy, /img-src 'self' data:;/, `${name}: img-src should be this origin only`);
     assert.doesNotMatch(policy, /scdn\.co|spotifycdn\.com/, `${name}: album art is first-party now`);
   }
 
-  // Public disclosures must describe the new absence, not the former proxy.
   for (const [name, source] of [["/whoareyou", whoareyou], ["/whoareyou.md", whoareyouMd]]) {
     assert.match(source, /No page loads a Web Analytics or RUM beacon/, `${name} must state that browser analytics is absent`);
     assert.match(source, /Page-load\s+timings are not\s+sent to Cloudflare/, `${name} must state the data consequence`);
@@ -447,13 +333,6 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
     "/security must keep describing the browser-facing CSP accurately");
 });
 
-// Local dev serves a SYMLINK FARM (tools/dev-stage.ts) because the served URL
-// root is composed from five authored directories and assets.directory can only
-// name one. The farm used to be a second definition of "the served tree", held
-// to build.ts by regexing its cp() calls out of the source. Both now consume one
-// plan from tools/lib/served-tree.ts, and contract-served-tree-plan.test.mjs
-// runs both adapters against it. What stays here is the wiring around the farm:
-// the dev config serves it, the dev scripts stage it, and git ignores it.
 test("local dev serves the staged farm, and stages it before wrangler boots", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
   const { ASSET_ROOTS, FARM } = await import("./dev-stage.ts");
@@ -467,20 +346,12 @@ test("local dev serves the staged farm, and stages it before wrangler boots", as
   assert.equal(devConfig.assets.directory, FARM,
     "local dev must serve the farm, not one authored root (pointing it at any single root 404s every document the others hold)");
 
-  // The farm is BUILD OUTPUT with no watcher: nothing regenerates it except the
-  // dev scripts, so a script that skips the stager serves whatever the last run
-  // left behind, or fails to start on a clean checkout.
-  // The RUNNER is not the point of these assertions; staging before a dev
-  // server boots is. Pinning it to one interpreter is what made a toolchain
-  // swap fail a test about dev-server ordering.
   assert.match(pkg.scripts["dev:remote"], /(node|bun) tools\/dev-stage\.ts/, "dev:remote must stage the farm before booting wrangler");
   assert.match(pkg.scripts.dev, /(node|bun) tools\/dev\.ts/, "dev runs through tools/dev.ts");
   const launcher = await readFile(new URL("tools/dev.ts", ROOT), "utf8");
   const staged = launcher.indexOf("await stage()");
   assert.ok(staged > 0 && staged < launcher.indexOf("spawn("), "tools/dev.ts must stage the farm before it spawns either dev server");
 
-  // It must never be committed: it is a tree of symlinks into the source, so a
-  // checkout that carried it would go stale silently rather than break.
   const ignored = await readFile(new URL(".gitignore", ROOT), "utf8");
   assert.match(ignored, new RegExp(`^${FARM}$`, "m"), `${FARM} must be gitignored`);
 });
@@ -499,11 +370,6 @@ test("production minifies the Worker without obscuring deployed stack traces", a
   assert.ok(!development.upload_source_maps,
     "local source locations need no separately uploaded map");
 
-  // Minifying moved the worker-bundle advisory from firing to silent WITHOUT the
-  // code shrinking, which is the one way to turn that check green while every
-  // constant in perf-budget.mjs holds still. The guard is a source-bytes twin
-  // that a minifier cannot move, and it is asserted HERE, beside the setting
-  // that made it necessary, so removing one while keeping the other fails.
   const budget = await readFile(new URL("tools/perf-budget.ts", ROOT), "utf8");
   assert.match(budget, /const WORKER_BASELINE_SOURCE_KIB = [\d.]+;/,
     "a minified production bundle needs a source-bytes baseline the minifier cannot move");
@@ -564,14 +430,3 @@ test("cached renders stream the first miss while tagging the background copy", a
     else testGlobals.caches = priorCaches;
   }
 });
-
-// The twin converter reads each page's own inline CSS to find elements the page
-// takes out of the inline flow, because otherwise their text welds together. It
-// looked only at the element's OWN display, which a flex or grid ITEM never
-// declares: its box comes from the parent. /updates converted
-// `<span class=wu-tag>hit-route</span><span class=wu-desc>counter tick …</span>`
-// into "hit-routecounter tick …", a string that appears nowhere on the page.
-//
-// buildTwins and friends were imported here and never called, so this file
-// asserted nothing about any of it. Same shape as the quiz test CLAUDE.md
-// describes, which read the wrong field names and passed while checking nothing.

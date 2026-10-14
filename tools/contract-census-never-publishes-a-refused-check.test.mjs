@@ -5,27 +5,7 @@ import {
   configText, ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { CENSUS_ROSTER, censusCapHit, censusInstanceId } from "../src/worker/census.ts";
 
-// THE BUG THIS PINS. Every probe in lens.ts catches its own error and returns
-// `{ ok: false, error }`, which downstream reads as "this door is absent". That
-// is right for a 404 and wrong for `Too many subrequests by single Worker`: the
-// door may be open and we never knocked. The census stored the refusal as a
-// score, so /lens/census published deflated numbers for every host that cost
-// subrequests, on the one surface whose whole claim is that it never reports a
-// failed check as a negative result.
-//
-// Measured against a live single-host scan through the same code, 2026-08-28:
-//
-//   host          census stored     one host per invocation
-//   stripe.com    0  / 0 doors      20 / 1 door
-//   shopify.com   0  / 0 doors      20 / 1 door  (three straight weeks at 0)
-//   vercel.com    13 -> 7 / 0       47 / 2 doors, tier `signaled`
-//
-// The only host that ever scored honestly was aadhar.sh, whose probes
-// self-dispatch and therefore spend no subrequest budget.
-
 test("censusCapHit finds the platform's refusal wherever a probe buried it", () => {
-  // The real shape: lensInspect returns a deep object and the refusal is an
-  // `error` string on whichever probe was unlucky.
   const contaminated = {
     readiness: { overall: 0 },
     discovery: {
@@ -35,11 +15,8 @@ test("censusCapHit finds the platform's refusal wherever a probe buried it", () 
   };
   assert.equal(censusCapHit(contaminated), true, "a cap error under discovery must be found");
 
-  // Nested two levels deeper, which is where oauthDiscovery and commerce live.
   assert.equal(censusCapHit({ discovery: { oauthDiscovery: { openidConfiguration: { ok: false, error: "Too many subrequests" } } } }), true);
 
-  // A REAL absence must stay a real absence, or the guard would refuse to
-  // publish anything and the census would go quiet in a new way.
   const honest = {
     readiness: { overall: 20 },
     discovery: {
@@ -51,7 +28,6 @@ test("censusCapHit finds the platform's refusal wherever a probe buried it", () 
   };
   assert.equal(censusCapHit(honest), false, "404s, timeouts and network errors are the site's answer, not the platform's");
 
-  // Junk in, false out. A body is a string and must never be descended into.
   assert.equal(censusCapHit(null), false);
   assert.equal(censusCapHit("Too many subrequests"), false, "a bare string is not a probe result");
   assert.equal(censusCapHit({ discovery: { robotsTxt: { ok: true, body: "Too many subrequests" } } }), false,
@@ -80,10 +56,6 @@ test("censusInstanceId is deterministic, per host per day, and legal", () => {
 });
 
 test("the cron dispatches and never scans in-line", async () => {
-  // THE REGRESSION THAT WOULD UNDO THIS. Restoring an in-line sweep, or adding a
-  // fallback for a missing binding, puts four concurrent scans back inside one
-  // 50-subrequest invocation and republishes the deflated rows. The property is
-  // structural, so it is asserted on the source.
   const src = await readFile(new URL("src/worker/census.ts", ROOT), "utf8");
   const body = src.slice(src.indexOf("async function cronCensusInner"));
   const inner = body.slice(0, body.indexOf("\n}\n") + 3);
@@ -93,20 +65,10 @@ test("the cron dispatches and never scans in-line", async () => {
   assert.doesNotMatch(inner, /Promise\.all/, "a concurrent fan-out here is the bug this replaced");
   assert.match(inner, /no_workflow/, "a missing binding must be reported, never silently worked around");
 
-  // One instance per host, so the count of creates tracks the roster rather
-  // than a batch size somebody tuned.
-  // NOT a bare /slice\(/: the dispatcher legitimately calls
-  // `toISOString().slice(0, 10)` for the census day, and matching that is the
-  // naive-scanner failure this repository has now shipped several times. The
-  // property is that the ROSTER is not carved into batches.
   assert.doesNotMatch(inner, /batchSize|CENSUS_ROSTER\.slice/, "batching hosts into one invocation is what overspent the budget");
 });
 
 test("the Workflow class is exported from the entrypoint and bound in the site config", async () => {
-  // A `workflows` binding names a class_name that must resolve on the deployed
-  // Worker. It resolves through the entrypoint's re-export, the same way
-  // BookingWorkflow and the Counter Durable Object do, and a class that is bound
-  // but not exported fails at startup rather than at review.
   const index = await readFile(new URL("src/worker/index.ts", ROOT), "utf8");
   assert.match(index, /export \{ CensusWorkflow \} from "\.\/census-workflow\.ts";/,
     "index.ts must re-export CensusWorkflow for the binding's class_name to resolve");

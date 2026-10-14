@@ -1,34 +1,5 @@
 #!/usr/bin/env bun
 // archive-gate.ts — where does Chrome first paint each full-size archive?
-//
-//   bun run archive:gate                          # every archive in the photo index, from production
-//   bun run archive:gate -- --stems XT508165,XT508887
-//   bun run archive:gate -- --origin http://localhost:8799 --max 5
-//   bun run archive:gate -- --json                # one JSON row per archive on stdout, no summary
-//   bun run archive:gate -- --bust                # read R2 past both caches, before a purge (see below)
-//
-// /images/full/<stem>.jpg is a ~20 MB progressive JPEG and the one image surface
-// here with no AVIF tier, so its scan order decides how long a visitor stares at
-// nothing. Chromium paints only once every channel has begun a scan
-// (tools/lib/jpeg-paint-gate.ts has the rule). On 2026-09-27 this sweep found 53
-// of 256 colour archives that sent all of luma before any chroma and stayed blank
-// until 66-99% of the download; `jpegtran -progressive` rewrote those and every
-// other archive zenc or the camera made (208 in all) losslessly, and add-photos.sh
-// now runs that pass on every HIF. Committed so the next
-// encoder change can be checked the same way rather than by memory.
-//
-// --bust adds a unique query string. With the Range header that reaches R2 even
-// while the CDN and the Worker's caches.default still hold the old bytes, since
-// photos.ts sends Range requests straight to R2 and the CDN keys on the query:
-// it is how an in-place overwrite is checked before the purge.
-//
-// It reads a PREFIX of each archive with a Range request and stops parsing at the
-// gate, so a full sweep moves ~40 MB rather than ~5 GB. A gate past the prefix
-// is reported as a finding, never as a number.
-//
-// Exit 0 when every archive paints within --max percent (default 10), 1 on a
-// finding, 2 when the instrument could not read an archive at all. Read-only and
-// advisory: it measures production, so it belongs beside dcz:check, never in CI.
 import { readFileSync } from "node:fs";
 import { gateClass, paintGate, type PaintGate } from "../lib/jpeg-paint-gate.ts";
 
@@ -40,9 +11,6 @@ const prefix = Number(flag("--prefix-mb") ?? 3) * 1024 * 1024;
 const index = JSON.parse(readFileSync(new URL("../../src/worker/photo-index.json", import.meta.url), "utf8")) as Record<string, { full: string; size?: number }>;
 const only = flag("--stems")?.split(",");
 for (const s of only ?? []) if (!index[s]) { console.error(`archive-gate: ${s} is not in the photo index`); process.exit(2); }
-// The gate is a JPEG rule. An original moved to JPEG XL is skipped: Chrome
-// painted the lossless JPEG XL copy of a progressive JPEG from 5% of the file
-// (2026-09-27), the same point as the progressive JPEG it came from.
 const stems = (only ?? Object.keys(index).sort()).filter((s) => !/\.jxl$/i.test(index[s].full));
 const skipped = (only ?? Object.keys(index)).length - stems.length;
 if (skipped) console.error(`archive-gate: ${skipped} JPEG XL originals skipped; this reads JPEG scan order`);
@@ -55,8 +23,6 @@ async function one(stem: string) {
   try {
     const r = await fetch(url, { headers: { range: `bytes=0-${prefix - 1}` } });
     if (r.status !== 206 && r.status !== 200) throw new Error(`HTTP ${r.status}`);
-    // The real length comes from Content-Range, since the index can trail an
-    // in-place rewrite by one deploy.
     const total = Number(r.headers.get("content-range")?.split("/")[1] ?? r.headers.get("content-length"));
     const g = paintGate(new Uint8Array(await r.arrayBuffer()));
     rows.push({ stem, size: total, ...g, kind: gateClass(g), pct: g.gate === null ? null : (100 * g.gate) / total });

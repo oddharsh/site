@@ -28,7 +28,6 @@ test("the build hands the early bake a private directory and collects it at 5b",
   const spawned = /spawn\(process\.execPath, \["tools\/bake-worker-pages\.ts", OUT, BAKED\]/;
   assert.match(build, spawned);
   assert.match(build, /const BAKED = `\$\{OUT\}\/baked`;/);
-  // started after step 5 (its last input) and collected inside 5b
   const at = (s) => build.indexOf(s);
   assert.ok(at('phase("5 worker css");') < build.search(spawned), "the bake starts after step 5 minified the Worker CSS");
   assert.ok(build.search(spawned) < at('phase("1h feeds");'), "and before the steps it overlaps");

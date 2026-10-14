@@ -22,16 +22,10 @@ test("renderSecurityCenter is deterministic and carries one placeholder per live
     assert.ok(hits >= 1, `no placeholder for ${key}`);
   }
   assert.match(a, /fetch\("\/security\.json"/, "the inline script must read /security.json");
-  // Preloaded from <head>, so the values' request starts while the document is
-  // still parsing: 70 ms sooner on a phone (2026-10-07). The script's fetch()
-  // reuses it, so this adds no request.
   const preload = islandPreload("/security.json").html;
   assert.ok(a.includes(preload), "/security.json must be preloaded from <head>");
   assert.ok(a.indexOf(preload) < a.indexOf("</head>"), "the preload belongs in <head>, ahead of the body");
-  // The no-JS reader is told where the values are rather than shown a blank.
   assert.match(a, /<noscript>[\s\S]*?whoareyou\.json[\s\S]*?<\/noscript>/);
-  // Nothing per-request may have leaked into the document: a colo code or a
-  // TLS version baked in would be a claim about a connection nobody made.
   assert.doesNotMatch(a, /TLSv1\.[23]|HTTP\/[123]\b/);
 });
 
@@ -45,13 +39,9 @@ test("/security.json answers from request.cf and nothing else, uncacheable", asy
   assert.equal(res.headers.get("cache-control"), "no-store, must-revalidate");
   assert.equal(res.headers.get("x-robots-tag"), "noindex");
   const body = await res.json();
-  // Exactly the three keys the page has placeholders for: the endpoint is not
-  // a second /whoareyou.json, and a key nothing renders is a key nobody reads.
   assert.deepEqual(Object.keys(body).sort(), [...PLACEHOLDERS].sort());
   assert.deepEqual(body, { colo: "EWR", httpProtocol: "HTTP/3", tlsVersion: "TLSv1.3" });
 
-  // An absent cf (local dev, a test harness) degrades to the glyph the page
-  // used for a missing value when it rendered live, never to undefined.
   const bare = await handleSecurityJson(new Request("https://aadhar.sh/security.json")).json();
   assert.deepEqual(bare, { colo: "—", httpProtocol: "—", tlsVersion: "—" });
 });

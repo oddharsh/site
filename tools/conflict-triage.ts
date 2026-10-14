@@ -2,76 +2,29 @@
 // which need a local checkout. Conflict by conflict, and hunk by hunk inside
 // each file.
 //
-//     bun run conflicts                  this branch against origin/main
-//     bun run conflicts -- 876           one PR
-//     bun run conflicts -- --all         every open PR that conflicts
-//     bun run conflicts -- 876 --markdown | --json
-//     bun run conflicts -- --in-progress  the merge/rebase/cherry-pick git just stopped on
-//     bun run conflicts -- 876 --html view.html [--notes notes.json]
-//
-// WHY EACH SIDE LOOKS THE WAY IT DOES. A verdict says where to resolve a
-// conflict and nothing about what the two sides were trying to do, which is
-// the thing a resolution actually needs. Every hunk therefore carries `why`:
-// the commits on each side, since the merge base, whose patches added or
-// removed the hunk's lines, ranked by how many they touched. On this repo a
-// squash subject ends in `(#N)`, so a commit names its PR, and the PR names the
-// intent. `--html` lays each hunk out as main | base | PR with those commits
-// above their columns, and `--notes` adds a plain-language reading per hunk,
-// keyed `<path>:<line>` (`<path>` for a file, `*` for the whole merge). The
-// notes are written by whoever read the sides, never generated here: this
-// file measures, and an explanation is a claim about intent it cannot check.
-//
-// `--in-progress` reads which operation stopped in the current worktree and
-// orients it the way the rest of this file does, "main" being the upstream
-// side: a merge of main INTO a branch is MERGE_HEAD against HEAD, while a
-// rebase or cherry-pick replays one commit, so it is HEAD against that commit
-// over the commit's own parent. It re-runs
-// the merge in memory, so it describes the conflict as git first stopped on
-// it, whatever has been resolved in the worktree since.
-//
 // WHAT GITHUB CAN RENDER. GitHub's editor handles "simple competing line
 // change conflicts" and greys out its Resolve button for everything else
 // (modify/delete, renames, binaries, mode changes). A derived file (a lockfile,
 // anything config/derivations.json names as output) should never be
 // hand-merged in a textarea either, since its merged text is never the answer.
-//
-// It is measured with `git merge-tree --write-tree`, which does the whole merge
-// in memory and touches no worktree, so this is safe to run in a tree other
-// sessions are using.
-//
-// For a PR the result is also checked against GitHub's own `mergeable` field,
-// which is the only outside control on the emulation there is.
-//
-// THE HUNK GRADES ARE A FIRST CUT AND NOT A MEASUREMENT. The thresholds below
-// were picked, not fitted, so every hunk prints its raw line counts beside its
-// grade and a reader who disagrees has the numbers to disagree with.
-//
-// Exit 0: nothing needs a local checkout. 1: something does. 2: the instrument
-// could not run, which is never reported as a clean result.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync, execFileSync } from "node:child_process";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
 
-// ── grades ────────────────────────────────────────────────────────────────────
-
-/** Up to this many lines across both sides, a two-sided edit reads fine in a textarea. */
 export const SMALL_EDIT = 8;
-/** Past this many lines across both sides, a hunk wants a real diff tool. */
 export const HEAVY_HUNK = 40;
-/** Past this many hunks in one file, the web editor is scrolling, not reviewing. */
 export const MANY_HUNKS = 6;
 
 export type HunkClash =
-  | "whitespace" // the two sides differ only in whitespace
-  | "add-add" // base is empty: both sides inserted at the same spot
-  | "edit-delete" // one side removed what the other side changed
-  | "edit-edit"; // both sides rewrote the same base lines
+  | "whitespace"
+  | "add-add"
+  | "edit-delete"
+  | "edit-edit";
 
 export type HunkGrade = "trivial" | "easy" | "judgment" | "heavy";
 
 export type Hunk = {
-  /** 1-based line of the `<<<<<<<` marker in the conflicted file GitHub shows. */
   line: number;
   main: number;
   base: number | null;
@@ -79,41 +32,34 @@ export type Hunk = {
   clash: HunkClash;
   grade: HunkGrade;
   preview: { main: string; pr: string };
-  /** The hunk's full text per side; `base` is null without diff3 markers. */
   sides: { main: string[]; base: string[] | null; pr: string[] };
-  /** Commits on each side whose patches wrote or removed these lines, strongest first. */
   why?: { main: Origin[]; pr: Origin[] };
 };
 
 export type Origin = {
   sha: string;
   subject: string;
-  /** The PR a squash subject names with a trailing `(#N)`. */
   pr: number | null;
-  /** How many of the hunk's distinct lines this commit's patch added or removed. */
   lines: number;
 };
 
 export type Verdict =
-  | "local-required" // GitHub cannot render it; the Resolve button is disabled
-  | "regenerate" // a derived file: re-run its generator, never hand-merge it
-  | "local-recommended" // renderable, but too big or too many hunks for a textarea
+  | "local-required"
+  | "regenerate"
+  | "local-recommended"
   | "web-ok";
 
 const VERDICT_RANK: Verdict[] = ["local-required", "regenerate", "local-recommended", "web-ok"];
 
 export type FileTriage = {
   path: string;
-  /** What GitHub is looking at. */
   github: "content" | "structural";
-  /** git's own conflict labels for the path, e.g. "modify/delete". */
   kinds: string[];
   stages: number[];
   verdict: Verdict;
   reasons: string[];
   owes: string[];
   hunks: Hunk[];
-  /** The newest commits touching the path on each side, for a conflict with no hunks to attribute (a modify/delete). */
   history: { main: Origin[]; pr: Origin[] };
 };
 
@@ -121,20 +67,15 @@ export type Report = {
   label: string;
   base: string;
   head: string;
-  /** The common ancestor both sides are measured from. */
   mergeBase: string;
-  /** `https://github.com/<owner>/<repo>`, for linking commits and PRs, when origin is on GitHub. */
   repo: string | null;
   pr?: { number: number; url: string; mergeable: string };
-  /** The merged result tree: `git cat-file -p <tree>:<path>` shows the markers. */
   tree: string;
   verdict: "clean" | "web" | "local";
   webEditorAvailable: boolean;
   files: FileTriage[];
   warnings: string[];
 };
-
-// ── git plumbing ─────────────────────────────────────────────────────────────
 
 class Instrument extends Error {}
 
@@ -202,18 +143,10 @@ function mergeTree(base: string, head: string, mergeBase?: string): MergeTree {
   return { tree, entries, messages };
 }
 
-// ── provenance: which commit wrote each side ────────────────────────────────
-
 const prOf = (subject: string) => Number(subject.match(/\(#(\d+)\)\s*$/)?.[1]) || null;
 
 type Patch = { sha: string; subject: string; added: Set<string>; removed: Set<string> };
 
-/**
- * Every non-merge commit in `from..to` that touched `path`, newest first, with
- * the lines its patch added and removed. Lines are compared trimmed: a
- * conflict hunk is cut from the merged file and a re-indent should not hide
- * the commit that wrote the line.
- */
 function patches(from: string, to: string, path: string): Patch[] {
   const text = gitTry(["log", "--no-merges", "-p", "-U0", "--no-color", "--no-ext-diff", "--format=%x00%H%x09%s", `${from}..${to}`, "--", path]);
   if (!text) return [];
@@ -236,13 +169,6 @@ function patches(from: string, to: string, path: string): Patch[] {
     });
 }
 
-/**
- * Rank a side's commits by how many of the hunk's distinct lines their patches
- * touched: lines the side now holds that a patch ADDED, plus base lines that a
- * patch REMOVED (which is how a pure deletion gets an author at all). A commit
- * that touched the file but none of these lines is left out, so an unrelated
- * edit elsewhere in the file cannot claim the hunk.
- */
 export function attribute(list: Patch[], side: string[], base: string[] | null, keep = 3): Origin[] {
   const now = new Set(side.map((l) => l.trim()).filter(Boolean));
   const was = new Set((base ?? []).map((l) => l.trim()).filter(Boolean));
@@ -254,7 +180,7 @@ export function attribute(list: Patch[], side: string[], base: string[] | null, 
       return { sha: p.sha, subject: p.subject, pr: prOf(p.subject), lines };
     })
     .filter((o) => o.lines > 0)
-    .sort((a, b) => b.lines - a.lines) // stable, so ties stay newest first
+    .sort((a, b) => b.lines - a.lines)
     .slice(0, keep);
 }
 
@@ -274,8 +200,6 @@ function githubRepo(): string | null {
   return m ? `https://github.com/${m[1]}` : null;
 }
 
-// ── repository policy, read from the BASE tree ──────────────────────────────
-
 type Derivation = { id: string; outputs?: string[]; inputs?: { paths?: string[] }; regenerate?: string };
 
 function derivations(base: string): Derivation[] {
@@ -290,8 +214,6 @@ function derivations(base: string): Derivation[] {
 
 const under = (path: string, root: string) => path === root || path.startsWith(root.endsWith("/") ? root : `${root}/`);
 
-// ── hunks ────────────────────────────────────────────────────────────────────
-
 const squash = (lines: string[]) => lines.join("\n").replace(/\s+/g, " ").trim();
 const clip = (lines: string[]) => {
   const first = lines.find((l) => l.trim() !== "") ?? "";
@@ -299,7 +221,6 @@ const clip = (lines: string[]) => {
   return one.length > 72 ? `${one.slice(0, 71)}…` : one;
 };
 
-/** Share of the shorter side's non-blank lines that also appear on the other side. */
 function overlap(a: string[], b: string[]): number {
   const norm = (lines: string[]) => lines.map((l) => l.trim()).filter(Boolean);
   const [small, large] = [norm(a), norm(b)].sort((x, y) => x.length - y.length);
@@ -315,10 +236,6 @@ export function gradeHunk(main: string[], base: string[] | null, pr: string[]): 
     const clash: HunkClash = base !== null && base.length === 0 ? "add-add" : main.length === 0 || pr.length === 0 ? "edit-delete" : "edit-edit";
     return { clash, grade: "heavy" };
   }
-  // An add/add is "keep both" only when the two insertions are different
-  // things. When they share most of their lines (two branches landing the same
-  // helper, or one branch carrying an earlier copy of the other), keeping both
-  // DUPLICATES the code, and choosing between two near-copies is a judgment.
   if (base !== null && base.length === 0) return { clash: "add-add", grade: overlap(main, pr) > 0.5 ? "judgment" : "easy" };
   if (main.length === 0 || pr.length === 0) return { clash: "edit-delete", grade: "judgment" };
   return { clash: "edit-edit", grade: size <= SMALL_EDIT ? "easy" : "judgment" };
@@ -364,9 +281,6 @@ export function parseHunks(text: string): Hunk[] {
   return hunks;
 }
 
-// ── triage ───────────────────────────────────────────────────────────────────
-
-/** Labels git uses for conflicts GitHub's editor cannot show. */
 const STRUCTURAL = /^(modify\/delete|file location|rename|file\/directory|directory\/file|distinct modes|binary|submodule|add\/add, mode)/;
 const CODE = /\.(ts|tsx|js|mjs|cjs|rs|css|html|sh)$/;
 
@@ -418,9 +332,6 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
       lift("local-required", `GitHub cannot render ${what}; its Resolve button is disabled for this`);
     }
 
-    // A derivation naming this exact file is decisive. One naming a DIRECTORY
-    // above it is not: repo/card declares all of `.github` for one PNG, so a
-    // conflict in a workflow file would read as generated. That match is a note.
     const exact = derived.find((d) => (d.outputs ?? []).includes(path));
     const byDir = exact ? undefined : derived.find((d) => (d.outputs ?? []).some((o) => under(path, o)));
     const lockfile = path.endsWith("bun.lock");
@@ -444,10 +355,7 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
         owes.push(`${d.regenerate}  (input to ${d.id})`);
       }
     }
-    if (path === "config/derivations.json") owes.push("bun run derive:check -- --lock, after reading what it vouches for");    // A merged input moves a recorded digest, so `validate` runs derive:check
-    // against a hash neither side recorded. The web editor commits and stops;
-    // it cannot run the command that clears that, so the owed step is the
-    // reason to take the file local even when every hunk is small.
+    if (path === "config/derivations.json") owes.push("bun run derive:check -- --lock, after reading what it vouches for");
     if (owes.length > 0) lift("local-recommended", "the resolution owes a command the web editor cannot run");
 
     return {
@@ -463,8 +371,6 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
     };
   });
 
-  // Attribution reads every patch on both sides, so it is skipped where no
-  // reading of the hunks is owed: a derived file is regenerated, never merged.
   for (const f of files) {
     if (f.hunks.length === 0 || f.verdict === "regenerate") continue;
     const mainPatches = patches(mergeBase, base, f.path);
@@ -479,8 +385,6 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
   const verdict: Report["verdict"] = files.length === 0 ? "clean" : files.every((f) => f.verdict === "web-ok") ? "web" : "local";
   return { label, base, head, mergeBase, repo: githubRepo(), tree: github.tree, verdict, webEditorAvailable, files, warnings };
 }
-
-// ── targets ──────────────────────────────────────────────────────────────────
 
 type PrMeta = { number: number; title: string; url: string; headRefName: string; headRefOid: string; baseRefName: string; mergeable: string };
 
@@ -505,8 +409,6 @@ function triagePr(meta: PrMeta): Report {
   }
   return report;
 }
-
-// ── output ───────────────────────────────────────────────────────────────────
 
 const ICON: Record<Verdict, string> = {
   "local-required": "LOCAL (required)",
@@ -570,12 +472,8 @@ export function renderMarkdown(r: Report): string {
   return out.join("\n");
 }
 
-// ── the three-way view ───────────────────────────────────────────────────────
-
-/** Notes keyed `<path>:<line>` (a hunk), `<path>` (a file) or `*` (the merge). Plain text; `code` spans in backticks. */
 export type Notes = Record<string, string>;
 
-/** A notes file decoded at the boundary, or null when any entry is not non-empty text. */
 function parseNotes(value: unknown): Notes | null {
   const record = asRecord(value);
   if (!record) return null;
@@ -595,10 +493,8 @@ const prose = (s: string) =>
     .map((p) => `<p>${p.replace(/`([^`\n]+)`/g, "<code>$1</code>").replaceAll("\n", "<br>")}</p>`)
     .join("");
 
-/** Past this many lines a column is cut, with the count of what was left out. */
 const VIEW_LINES = 80;
 
-/** `lines` undefined renders the commits alone, for a file-level column with no hunk text. */
 function column(label: string, lines: string[] | null | undefined, origins: Origin[] | undefined, repo: string | null): string {
   const chips = (origins ?? [])
     .map((o) => {
@@ -685,7 +581,6 @@ ${sections.join("\n")}
 `;
 }
 
-/** What `git` is in the middle of in the current worktree, oriented upstream-first. */
 function inProgress(): { base: string; head: string; mergeBase?: string; label: string } {
   const has = (name: string) => gitTry(["rev-parse", "-q", "--verify", name]) !== null;
   if (has("MERGE_HEAD")) return { base: "MERGE_HEAD", head: "HEAD", label: "merge in progress (MERGE_HEAD into HEAD)" };
@@ -697,8 +592,6 @@ function inProgress(): { base: string; head: string; mergeBase?: string; label: 
   }
   throw new Instrument("--in-progress: git is not stopped in a merge, rebase or cherry-pick here");
 }
-
-// ── cli ──────────────────────────────────────────────────────────────────────
 
 function main() {
   const args = process.argv.slice(2);
@@ -738,8 +631,6 @@ function main() {
       const parsed = parseNotes(JSON.parse(readFileSync(notesPath, "utf8")));
       if (!parsed) throw new Instrument(`--notes ${notesPath}: expected an object of non-empty strings keyed "<path>:<line>", "<path>" or "*"`);
       notes = parsed;
-      // A key that names no hunk is a note nobody will see, which reads as an
-      // explanation that was written and is simply absent from the page.
       const known = new Set(["*", ...reports.flatMap((r) => r.files.flatMap((f) => [f.path, ...f.hunks.map((h) => `${f.path}:${h.line}`)]))]);
       const stray = Object.keys(notes).filter((k) => !known.has(k));
       if (stray.length > 0) throw new Instrument(`--notes: no such hunk or file: ${stray.join(", ")}`);

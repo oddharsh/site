@@ -7,43 +7,13 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// src/worker/lib/env.ts is a DECLARATION of the Worker's binding surface, and a
-// declaration nothing diffs is a comment with extra syntax. This is the diff.
-// Same argument infra.json makes about dashboard state, one layer down: the
-// authority is cloudflare.config.ts, the readable copy is the type, and drift in
-// EITHER direction is a failure.
-//
-// The two directions catch different bugs and both have happened here. A
-// binding in cloudflare.config.ts with no member is a binding no handler can read
-// without an `any` cast, which is the state this type was written to end. A
-// member with no binding is worse: it type-checks every read of something that
-// will be `undefined` at runtime, which is precisely the cloudflare.config.ts
-// `secrets` comment naming EXA_API_KEY and PARALLEL_API_KEY while nothing set
-// or read either.
-//
-// COMMENTS ARE STRIPPED BEFORE ANY MEMBER IS READ, and that is not a
-// precaution. env.ts documents bindings in prose that is shaped exactly like a
-// member: `` `aadhar-photos`: the SOOC originals `` and `SLOT_MINUTES is "30"``
-// both match a line-anchored /^\s*(\w+)\??:/, so the naive scanner reports
-// members that are sentences. Every naive scanner this repo has written over
-// its own source has been caught the same way, by content that looks like
-// syntax: the CSP attribute scanner read a demo XSS payload as an event
-// handler, the link scanner read 33 of 2645 refs because the HTML minifier unquotes
-// attributes.
-//
 // Bun's checker supplies diagnostics and file discovery, but exposes no AST
 // API. The scanner below therefore keeps its depth-counting implementation
 // and floors, which detect a source scan that quietly stops matching.
 
 const ENV_TS = "src/worker/lib/env.ts";
-// The site config, read through its legacy-shape projection (configText), so
-// the binding shapes below keep the names cloudflare.config.ts gave them.
 const WRANGLER = "cloudflare.config.ts";
 
-// The four LEGACY-SHAPE keys that declare a binding (the projection lib/site-config.ts
-// makes of cloudflare.config.ts), since the key naming
-// the binding is not the same one in each. Anything not listed here is not a
-// binding (build config, routes, observability, compatibility flags).
 const BINDING_SOURCES = [
   { key: "kv_namespaces", name: "binding" },
   { key: "r2_buckets", name: "binding" },
@@ -53,9 +23,6 @@ const BINDING_SOURCES = [
   { key: "workflows", name: "binding" },
 ];
 
-// Drop every comment and the inside of every string, so nothing prose-shaped
-// survives to be read as a member. Quote handling is here only to stop a `//`
-// or `/*` inside a string literal from eating the rest of the file.
 function stripComments(src) {
   let out = "";
   for (let i = 0; i < src.length; ) {
@@ -72,8 +39,6 @@ function stripComments(src) {
   return out;
 }
 
-// Members of one interface body, read only at brace/paren depth 0 so a nested
-// object or function type cannot contribute one.
 function bodyMembers(body) {
   const found = [];
   let depth = 0, lineStart = true;
@@ -117,7 +82,6 @@ async function wranglerBindings() {
   for (const { key, name } of BINDING_SOURCES) {
     for (const entry of cfg[key] ?? []) names.add(entry[name]);
   }
-  // The six singletons, each declared as its own object rather than in a list.
   for (const key of ["assets", "browser", "images", "ai", "analytics", "version_metadata"]) {
     if (cfg[key]?.binding) names.add(cfg[key].binding);
   }
@@ -130,10 +94,6 @@ test("every site config binding, var and required secret has an Env member, and 
   const byInterface = await members();
   const { names: declared, cfg } = await wranglerBindings();
 
-  // FLOORS FIRST. Every assertion below is a set comparison, and two empty sets
-  // agree perfectly. A parser that silently stops finding anything is how this
-  // check reports a pass over a file it never read, which is the failure the
-  // guard scanners in tools:check carry floors for.
   assert.ok(byInterface.size >= 5, `env.ts parsed to ${byInterface.size} interfaces — the parse broke, not the file`);
   const total = [...byInterface.values()].reduce((n, ms) => n + ms.length, 0);
   assert.ok(total >= 50, `env.ts parsed to ${total} members across ${byInterface.size} interfaces — the parse broke`);
@@ -144,7 +104,6 @@ test("every site config binding, var and required secret has an Env member, and 
   const vars = tier("EnvVars");
   const secrets = tier("EnvSecrets");
 
-  // Tier 1, both directions.
   for (const name of declared) {
     assert.ok(bindings.has(name), `cloudflare.config.ts declares binding ${name}, EnvBindings has no member for it`);
   }
@@ -152,7 +111,6 @@ test("every site config binding, var and required secret has an Env member, and 
     assert.ok(declared.has(name), `EnvBindings declares ${name}, cloudflare.config.ts has no such binding`);
   }
 
-  // Tier 2 and tier 3, both directions.
   const declaredVars = new Set(Object.keys(cfg.vars ?? {}));
   assert.ok(declaredVars.size >= 10, `cloudflare.config.ts parsed to ${declaredVars.size} vars — the parse broke`);
   assert.deepEqual([...vars].sort(), [...declaredVars].sort(), "EnvVars and cloudflare.config.ts vars disagree");
@@ -167,12 +125,6 @@ test("required Env members are non-optional and degrading ones are optional", as
   const required = ["EnvBindings", "EnvVars", "EnvSecrets"];
   const degrading = ["EnvOptionalSecrets", "EnvInjected"];
 
-  // This is the assertion that carries the whole design. wrangler refuses to
-  // publish a Worker missing a declared binding or a required secret, so tiers
-  // 1 to 3 are guaranteed present and a `?` on one would make every reader
-  // write a null check for a case that cannot happen. Tiers 4 and 5 are
-  // genuinely absent in normal operation, and dropping a `?` there is the edit
-  // that silently converts a documented degradation into an unchecked read.
   for (const name of required) {
     const ms = byInterface.get(name) ?? [];
     assert.ok(ms.length, `${name} parsed to no members`);
@@ -193,12 +145,6 @@ test("no degrading or injected Env member is declared in the site config", async
   const configured = new Set([...declared, ...Object.keys(cfg.vars ?? {}), ...(cfg.secrets?.required ?? [])]);
   assert.ok(configured.size >= 20, `the site config parsed to ${configured.size} configured names — the parse broke`);
 
-  // The tiers are only meaningful if they are disjoint. A name that reaches
-  // both lists is one whose optionality now depends on which file you read, and
-  // the compiler would believe the looser of the two. Promoting a degrading
-  // secret to `secrets.required` is a real and expected change (cloudflare.config.ts
-  // says to make it the day one becomes load-bearing) — this fails until the
-  // member moves tiers with it, which is the whole point.
   for (const iface of ["EnvOptionalSecrets", "EnvInjected"]) {
     for (const { name } of byInterface.get(iface) ?? []) {
       assert.ok(

@@ -5,13 +5,7 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── /cache — the behavioral revalidation lint ───────────────────
-// judgeRevalidation is pure: the whole product is the rules, and the network
-// half dies at signing under plain node anyway.
-
 test("an ETag that changes between identical fetches is called what it is", async () => {
-  // THE failure this tool exists for. Headers look perfect, and every
-  // If-None-Match will 200 with a full body, forever.
   const { judgeRevalidation } = await import("../src/worker/cache-lint.ts");
   const v = judgeRevalidation({
     first: { status: 200, headers: { etag: '"abc-gzip"', "cache-control": "max-age=600" } },
@@ -20,8 +14,6 @@ test("an ETag that changes between identical fetches is called what it is", asyn
   });
   assert.equal(v.healthy, false);
   assert.ok(v.vetoes.some((f) => f.id === "stability"), "an unstable validator must be a veto");
-  // The 200 is consistent with the unstable ETag, so it is explained rather
-  // than double-counted as a second independent failure.
   assert.ok(v.findings.some((f) => f.id === "revalidation" && f.verdict === "bad-but-explained"));
 });
 
@@ -50,8 +42,6 @@ test("the healthy path and the no-validator path both read correctly", async () 
 });
 
 test("negotiating on Accept without saying so in Vary is flagged — the #195 trap", async () => {
-  // Hit in production on THIS site: markdown negotiation answered from a warm
-  // URL-keyed cache as HTML, because the stored Vary named only accept-encoding.
   const { judgeRevalidation } = await import("../src/worker/cache-lint.ts");
   const base = { status: 200, headers: { etag: '"x"', "content-type": "text/html", vary: "accept-encoding" } };
   const trapped = judgeRevalidation({

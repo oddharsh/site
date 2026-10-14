@@ -2,32 +2,6 @@
 // src/worker/webmention-sort.ts, committed so the next change to the sort (a
 // model bump, a reworded criterion, a field added to the input) is scored the
 // same way.
-//
-//   bun run webmention:eval              # 20 source pages, 3-way accuracy and spam calls
-//   bun run webmention:eval -- --swap    # the host-swap control below
-//
-// The production table held no mentions when this was written, so the corpus is
-// 20 source pages written to resemble the traffic the endpoint will see, by the
-// person building the sort. Read a win as a strong signal rather than a
-// benchmark. What keeps it honest is that every page goes through the REAL
-// linksTo and parseSource, so Clef reads exactly the fields production hands it,
-// and a page that would fail verification refuses to run.
-//
-// Measured 2026-10-01: 3-way 19/20, spam at 0.5 caught 7 of 8 with 0 genuine
-// mentions called spam, identical across two runs, median 0.69 s. The miss is
-// the scraped copy, read as genuine.
-//
-// --swap is the control that decides how the verdict may be used. It moves four
-// source hosts: two spam pages onto github.com and lobste.rs, and two genuine
-// posts onto a casino and a pharmacy domain. Measured the same day: the spam
-// stayed spam (0.97, 0.96) and the genuine blog post crossed to spam (0.87,
-// and 0.53 in the scratch probe that preceded this file). A host
-// can push a verdict toward spam and cannot launder one, which is why the sort
-// labels the email and never acts on its own.
-//
-// Workstation-only: it spends Workers AI through the REST API, with
-// CLOUDFLARE_API_TOKEN when set and wrangler's own login otherwise. It writes
-// nothing.
 
 import { execFile } from "node:child_process";
 import { dirname } from "node:path";
@@ -93,7 +67,6 @@ export const WEBMENTION_EVAL: readonly Sample[] = [
     html: page(`<h1>Online Pharmacy - No Prescription Needed</h1><p>Generic pills shipped worldwide, 80% off. <a href="https://aadhar.sh/lens">lens</a> discreet packaging, bitcoin accepted.</p>`, "Online Pharmacy") },
 ];
 
-// The four hosts --swap moves, each onto the other population's kind of domain.
 const SWAP: Record<string, string> = {
   casino: "https://github.com/x", pharmacy: "https://lobste.rs/x",
   "blog-encoding": "https://best-slots-review.click/x", "reply-colophon": "https://rx-online-store.top/x",

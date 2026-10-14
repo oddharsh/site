@@ -1,13 +1,5 @@
 // ── serendipity sync health ─────────────────────────────────────────
 // Shared imports live in contract-shared.ts.
-//
-// A broken Luma sync and a quiet week wrote the same log line until
-// 2026-09-30: syncEvents RETURNS a Luma 401 rather than throwing it, so the
-// cron wrapper's span read green on a dead session four times a day, and
-// Workers Logs forgets the line after three days. These pin the three halves
-// of the fix: a record in `settings` on every path (the throw included), a
-// `serendipity.sync` span whose unknowns stay off rather than reading 0, and a
-// dashboard line that goes stale after two missed ticks.
 import { configText, assert, test, testGlobals } from "./contract-shared.ts";
 import { parseJsonc } from "./lib/jsonc.ts";
 import { cronJob } from "../src/worker/lib/cron.ts";
@@ -27,9 +19,6 @@ import {
 
 const COOKIES = JSON.stringify({ cookies: [{ name: "luma.auth-session-key", value: "usr-test.secret" }] });
 
-// A D1 double that answers the statements the cron sends. `settings` is the
-// record under test; `failOn` makes one statement throw, which is how the
-// thrown path is reached without touching the record's own write.
 function fakeD1({ sets = [{ user_key: "k1", cookies_json: COOKIES, label: "test" }], pool = [5, 5], failOn = /** @type {string | null} */ (null) } = {}) {
   const settings = new Map();
   const pools = [...pool];
@@ -60,7 +49,6 @@ function fakeD1({ sets = [{ user_key: "k1", cookies_json: COOKIES, label: "test"
   };
 }
 
-// A tracer double shaped like the runtime's: records every attribute set.
 function recordingTracer() {
   const spans = [];
   return {
@@ -85,7 +73,6 @@ async function withLuma(respond, work) {
 
 const feed = (entries) => () => new Response(JSON.stringify({ entries, has_more: false }), { headers: { "content-type": "application/json" } });
 const EMPTY_FEED = feed([]);
-// Three events, returned for each of the two periods, so one pass fetches six.
 const THREE_EVENTS = feed(["evt-1", "evt-2", "evt-3"].map((api_id) => ({ api_id, event: { name: api_id } })));
 
 test("a successful tick writes both records and a span with no undefined attribute", async () => {
@@ -115,7 +102,6 @@ test("a successful tick writes both records and a span with no undefined attribu
     for (const [k, v] of Object.entries(sync.attrs)) {
       assert.notEqual(v, undefined, `${k} was set to undefined; unknowns stay off the span`);
     }
-    // The error field is unknown on a clean tick, so it must be absent rather than "".
     assert.ok(!("serendipity.error" in sync.attrs), "a clean tick carries no error attribute");
   } finally {
     installTracing(null);
@@ -138,7 +124,6 @@ test("a thrown tick still writes the attempt, keeps the last success, and rethro
     const sync = tracer.spans.find((s) => s.name === "serendipity.sync");
     assert.equal(sync.attrs["serendipity.ok"], false);
     assert.match(sync.attrs["serendipity.error"], /D1 refused/);
-    // Nothing was fetched, so the counts are unknown rather than zero.
     for (const k of ["serendipity.events_fetched", "serendipity.events_new", "serendipity.guest_events", "serendipity.fetches", "budget.spent"]) {
       assert.ok(!(k in sync.attrs), `${k} was set on a tick that never measured it`);
     }
@@ -148,8 +133,6 @@ test("a thrown tick still writes the attempt, keeps the last success, and rethro
 });
 
 test("a rejected session is a failed tick even though nothing throws", async () => {
-  // The state this whole change exists for: Luma answers 401, syncEvents
-  // returns it, and the cron completes normally.
   const db = fakeD1();
   const record = await withLuma(() => new Response("unauthorized", { status: 401 }), () => cronSerendipity(db));
   assert.equal(record.ok, false);
@@ -170,7 +153,6 @@ test("no enabled cookie set is recorded as a halt rather than skipped silently",
   assert.equal(JSON.parse(db.settings.get(SYNC_ATTEMPT_KEY)).error, "no enabled cookie sets");
 });
 
-// readSyncHealth takes the module's db() shim; this is its read half.
 function dbShim(db) {
   return {
     prepare: (sql) => ({

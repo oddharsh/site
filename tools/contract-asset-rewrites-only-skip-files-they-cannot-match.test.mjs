@@ -11,7 +11,6 @@ import {
 } from "./contract-shared.ts";
 
 const { CLIENT_ASSETS, loaderNeedles, loaderRewrites } = await import("./lib/client-assets.ts");
-// the escaping a RegExp source carries for a literal, as client-assets.ts writes it
 const esc = (s) => s.replace(/[\\/.*+?^${}()|[\]]/g, "\\$&");
 
 test("every rewrite pattern contains one of its loader's needles", () => {

@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 # build.sh — build an AV2-capable avifenc/avifdec from PINNED SOURCE.
 #
-# WHAT THIS IS FOR. Measurement, never shipping. No browser decodes AV2, and
-# the file format is experimental, so nothing this build writes may reach
-# public/. codec-knob-probe.ts's `--codec avm` arm is the consumer: it encodes
-# AV2 stills onto the /pixel-peeper format axis's own AVIF budgets and scores
-# them at matched bytes, which is how to watch where AV2 is going for photos.
-#
 # WHAT IT PRODUCES. libavif built with its experimental AVIF_CODEC_AVM (AVM is
 # the AV2 reference software from AOMedia) plus the installed aom, so ONE
 # binary encodes both: `-c avm` writes AV2, `-c aom` writes AV1. The file is
@@ -24,38 +18,6 @@
 # libavif main in d8b4e042cd (2026-05-29). The commit below is main as of
 # 2026-09-26, and libavif's cmake/Modules/LocalAvm.cmake pins AVM to v1.0.0
 # from it, so this script pins one revision and inherits the second.
-#
-# THE av02 BITSTREAM IS NOT FROZEN FOR IMAGES. libavif's own configure prints
-# "AV2 support with avm is experimental. Only use for testing." Treat a number
-# measured here as a statement about THIS pin, and re-measure after moving it.
-#
-# CONTROLS, 2026-09-27, on a 320px crop: lossless (-l) decodes BIT-EXACT against
-# the source (0 of 307,254 BMP bytes differ, 160,357 B against the PNG's
-# 174,474). Lossy -q means something else here than for aom: libavif maps
-# quality onto AV2's -48..255 quantizer, so -q 63 wrote 30,972 B where aom
-# wrote 10,360. Compare the two only at matched bytes.
-#
-# COST. The first build fetches AVM plus its TensorFlow Lite, abseil, eigen and
-# libyuv trees and takes about 2 minutes on 14 cores. Everything lands under
-# src/ and build/, both gitignored, same as the sibling libavif/ build.
-#
-#   ./build.sh            build if missing
-#   ./build.sh --force    rebuild from scratch
-#   ./build.sh --tuned    ALSO build build/tuned: the same pin plus patches/ and
-#                         the SIMDe kernels (see "THE TUNED BUILD" below)
-#
-# THE TUNED BUILD. patches/ holds five encoder-only changes to AVM, each off by
-# default and each decoded pixel-identically by the untouched reference decoder:
-#   0001 base-delta-q    the sequence DC/chroma offsets the encoder hard-zeroes
-#   0002 variance-boost  deltaq-mode=3, libaom/SVT-AV1 Variance Boost on AV2 q
-#   0003 jpegli-mask     deltaq-mode=4, jpegli adaptive-quantization field
-#   0004 qm-curves       qm-curve / qm-chroma-curve, libaom still-image QM levels
-#   0005 qm-per-segment  qmseg: two QM sets split by texture, an AV2-only syntax
-# Then simde.ts compiles AVM's own AVX2 kernels for arm64 through SIMDe. The build
-# refuses to finish unless the tuned binary, with every new option off, writes
-# BYTE-IDENTICAL files to the pristine one, and the pristine decoder reads a
-# qmseg file pixel-identically. build/ itself stays pristine on purpose: it is
-# the reference decoder every one of those controls is judged by.
 set -euo pipefail
 
 LIBAVIF_REV="768b3dfe30da63265eb31dad6f79fc7662f65b42"
@@ -79,8 +41,6 @@ for cmd in cmake ninja git pkg-config; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "error: $cmd not found (brew install cmake ninja pkgconf)" >&2; exit 1; }
 done
-# aom comes from the system so the AV1 arm of the same binary matches what the
-# pipeline links; the AV2 codec is the only thing this build adds.
 pkg-config --exists aom || {
   echo "error: aom development files not found (brew install aom)" >&2; exit 1; }
 
@@ -122,8 +82,6 @@ echo "built: $AVIFENC (and avifdec beside it)"
 fi
 [ "${1:-}" = "--tuned" ] || exit 0
 
-# ---- the tuned build ---------------------------------------------------------
-# SIMDe v0.8.2, pinned by commit like everything else here.
 SIMDE_REV="71fd833d9666141edcd1d3c109a80e228303d8d7"
 TUNED="$OUT/tuned"
 TSRC="$OUT/tuned-src"
@@ -160,7 +118,6 @@ cmake -G Ninja -S "$SRC" -B "$TUNED" \
 cmake --build "$TUNED" --target avifenc avifdec >&2
 bun "$SCRIPT_DIR/simde.ts" --src "$TSRC" --build "$TUNED" --simde "$SIMDE_DIR" --work "$OUT/simde-work" >&2
 
-# THE GATE. A committed 600px tier is the input, so it needs no fixture.
 GATE="$OUT/gate"
 rm -rf "$GATE"; mkdir -p "$GATE"
 IMGS=("$SCRIPT_DIR"/../../../public/i/*.jpg)  # a glob, not ls | head, which SIGPIPEs under pipefail

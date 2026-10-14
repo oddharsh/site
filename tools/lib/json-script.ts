@@ -5,12 +5,6 @@
 // to any consumer, and it is 38 KB raw across the staged tree, 2.3 KB after
 // brotli, 40 B a page, which is the same neighbourhood as `keep_closing_tags`.
 //
-// The serializer is the runtime's own `JSON.stringify(JSON.parse())`, and that
-// is a measured choice rather than the lazy one: against a whitespace-only
-// stripper and @swc/html's serde pass it is the smallest (canonical shortest
-// form) and the fastest (0.47 ms for every block on the site, 3x under the
-// stripper and 18x under swc).
-//
 // What it is NOT is text-preserving, and inside a `<script>` element the text
 // is what the HTML tokenizer reads first. A script element is raw text, so the
 // only byte sequences that can end or damage it are `</script` and `<!--`.
@@ -32,13 +26,6 @@ import { isDeepStrictEqual } from "node:util";
 // shape, since it parses to ...992 and re-serializes as that, and a block
 // carrying a snowflake id, a chain amount or a nanosecond timestamp is where
 // one would arrive.
-//
-// So the drift is REMOVED rather than detected. The reviver hands every number
-// back as `JSON.rawJSON` of its own source text, which JSON.stringify emits
-// verbatim, leaving this pass able to delete whitespace and nothing else.
-// Measured 2026-09-22 over the 78 committed blocks: every literal is already
-// its own shortest form, so preserving them costs 0 bytes today, and the cost
-// of the first non-canonical one is the few bytes it was authored with.
 // The reviver's third argument (ES2025). `source` is the primitive's own text,
 // which is the contract this module rests on, so it is declared rather than
 // sniffed. A JSON number is always finite, and no other JSON value is a finite
@@ -48,10 +35,6 @@ type ParseContext = { source?: string };
 const preserveNumbers = (_key: string, value: unknown, context?: ParseContext): unknown =>
   Number.isFinite(value) && context?.source !== undefined ? JSON.rawJSON(context.source) : value;
 
-// Every number literal in `text`, in document order, exactly as written. A
-// runtime with no source-text access cannot preserve anything and would leave
-// this pass quietly canonicalizing again, which is the failure the whole
-// preservation exists to end, so it fails here by name rather than degrade.
 const numberLiterals = (label: string, text: string): string[] => {
   const literals: string[] = [];
   JSON.parse(text, (_key: string, value: unknown, context?: ParseContext) => {
@@ -66,8 +49,6 @@ const numberLiterals = (label: string, text: string): string[] => {
   return literals;
 };
 
-// `importmap` is JSON too and nothing here ships one yet; listing it costs
-// nothing and means the first one is minified rather than remembered.
 const JSON_SCRIPT_TYPES = new Set(["application/json", "application/ld+json", "speculationrules", "importmap"]);
 
 export const isJsonScriptType = (type: string): boolean => JSON_SCRIPT_TYPES.has(type.toLowerCase());
@@ -82,9 +63,6 @@ export const minifyJsonScript = (label: string, body: string): string => {
   const out = JSON.stringify(JSON.parse(body, preserveNumbers))
     .replace(/<\//g, "<\\/")
     .replace(/<!--/g, "\\u003c!--");
-  // Every claim this pass makes, re-proven per block: the guard left nothing
-  // that can end the element, the escapes it added changed no value, and every
-  // number reached the output as the author wrote it.
   if (/<\/|<!--/.test(out)) throw new Error(`${label}: JSON script body still carries a sequence that ends a script element`);
   if (!isDeepStrictEqual(JSON.parse(out), value)) throw new Error(`${label}: JSON script body did not survive minification`);
   const before = numberLiterals(label, body), after = numberLiterals(label, out);

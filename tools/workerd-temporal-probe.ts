@@ -1,11 +1,6 @@
 #!/usr/bin/env node
 // node tools/workerd-temporal-probe.ts
 //
-// Does the workerd that THIS tree's wrangler ships expose a Temporal whose
-// clock agrees with Date.now(), under production's compatibility date and
-// flags? It prints one JSON line, `{ present, skewMs, date }`, and
-// `interpretTemporalProbe` in lib/upstream-watches.ts is what reads it.
-//
 // WHY IT EXISTS. V8's Temporal is compiled into workerd and switched off, and
 // no compatibility flag turns it on (measured 2026-09-23 on 1.20260921.1).
 // Cloudflare has shipped it once already: cloudflare/workerd#6907 exposed a
@@ -14,10 +9,6 @@
 // paths that week. serendipity.ts had two such guards and dropped them for
 // Date, so the site no longer changes behaviour when this flips; this probe
 // is how the canary leg notices that it did.
-//
-// The CLOCK is half the answer on purpose. "Present" alone would read landed
-// on exactly the build #6907 describes, which is the one build this repository
-// most needs to hear about as NOT landed.
 //
 // It boots the Worker through wrangler's own `createTestHarness`, the door
 // workerd-zstd-probe.ts and the route oracle use, so the workerd under test is
@@ -45,9 +36,6 @@ export default {
 };
 `;
 
-// Production's date and flags, read from the tree under test, because the
-// question is what the SITE's Worker would see rather than what the newest
-// compatibility date allows.
 const site = await siteConfig();
 const dir = mkdtempSync(join(tmpdir(), "workerd-temporal-probe-"));
 try {

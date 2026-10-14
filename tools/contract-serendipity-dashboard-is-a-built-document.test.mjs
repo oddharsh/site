@@ -16,7 +16,6 @@ const EVENTS = [
   { id: "e2", name: "Past thing", start_at: "2001-01-02T18:00:00Z", location: "SF", user_status: null, cover_url: null, attendee_count: 0, host_count: 0, contributors: "" },
 ];
 
-// A D1 that answers the dashboard's two queries and nothing else.
 /** @param {Array<Omit<(typeof EVENTS)[number], "start_at"> & {start_at: string | null}>} events */
 function fakeDb(events = EVENTS) {
   return { prepare(sql) {
@@ -25,7 +24,6 @@ function fakeDb(events = EVENTS) {
   } };
 }
 
-// caches.default, which neither test runtime provides.
 function fakeCache() {
   const store = new Map(), deleted = [];
   return { deleted, store, default: {
@@ -51,7 +49,6 @@ test("the dashboard shell is deterministic, carries its island, and bakes no poo
   assert.ok(a.includes(islandScript().html));
   assert.match(a, /id="ev-search"/, "the toolbar is in the shell, so a search typed before the swap survives it");
   assert.doesNotMatch(a, /<a class="ev|\d+ events? in the pool|data-cover=/);
-  // Placeholder cards are inert: no link to an event that does not exist.
   assert.match(a, /<div class="ev" aria-hidden="true">/);
 });
 
@@ -69,7 +66,6 @@ test("/serendipity/events.html is a cookie-free, edge-cached island", async () =
     assert.ok(body.includes("Future &lt;script&gt;") && !body.includes("Future <script>"), "event names are escaped");
     await settle();
     assert.equal(c.store.size, 1, "the fragment is stored for the next visitor in this colo");
-    // A mutation evicts the island, as it used to evict the cached dashboard.
     await handleSerendipity(new Request("https://aadhar.sh/serendipity/add-event", { method: "POST", body: new FormData() }), env, ctx);
     await settle();
     assert.ok(c.deleted.includes("https://aadhar.sh" + EVENTS_URL));
@@ -93,7 +89,6 @@ test("an empty pool hides the toolbar in both renders", async () => {
     assert.match(live, /The pool is empty/);
     assert.doesNotMatch(live, /id="ev-search"/);
   });
-  // The built shell cannot know, so a :has() rule hides it once the island says so.
   assert.match(await renderSerendipityPage().text(), /\.toolbar:has\(\+ \[data-island\] \.empty\)\{display:none\}/);
 });
 
@@ -106,8 +101,6 @@ test("serendipity's policy keeps its img-src whichever script-src it carries", (
 });
 
 test("the agents page is a deterministic bake, and the live arm still renders it", async () => {
-  // Baked by build.ts step 5b since 2026-09-25 with no island, because nothing
-  // on it is read per request. The live arm stays for local dev's missing bake.
   const a = await renderMcpInfoPage().text();
   assert.equal(a, await renderMcpInfoPage().text(), "two renders differ, so the build would bake whichever it got");
   assert.match(a, /list_events/);

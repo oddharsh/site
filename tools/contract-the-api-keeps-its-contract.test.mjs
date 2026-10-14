@@ -24,8 +24,6 @@ test("a method a documented path does not serve is a JSON 405 with Allow", async
   assert.deepEqual(body.allow, ["GET", "HEAD", "OPTIONS"]);
   assert.equal(typeof body.error, "string");
   for (const method of ["DELETE", "PUT", "PATCH"]) assert.equal((await apiPreflight(req("/lens/fetch", { method }), "/lens/fetch", {}))?.status, 405, method);
-  // The controls: what the path does serve passes through, and so does any
-  // path the description does not name.
   for (const method of ["GET", "HEAD", "OPTIONS"]) assert.equal(await apiPreflight(req("/search.json", { method }), "/search.json", {}), null, method);
   assert.equal(await apiPreflight(req("/ask", { method: "POST" }), "/ask", {}), null, "POST /ask is documented");
   assert.deepEqual(allowedMethods(OPERATIONS.filter((o) => o.path === "/ask")), ["GET", "HEAD", "POST", "OPTIONS"]);
@@ -53,7 +51,6 @@ test("the spec documents the contract on every operation, and says what it leave
       assert.ok(!(op.parameters ?? []).some((p) => p.in === "header"), `${at}: no header parameters, so no version pin`);
     }
   }
-  // The absences are decisions, and the spec says so in LEAVES_OUT's words.
   for (const { what } of LEAVES_OUT) assert.ok(spec.info.description.includes(what), `the spec names "${what}"`);
 });
 
@@ -82,7 +79,6 @@ test("dispatch runs the contract around the real route table", async () => {
   assert.doesNotMatch(page.headers.get("link") || "", /<\/openapi\.json>/, "a page is not an API answer");
 });
 
-/** A limiter binding that refuses, and records the keys it was asked about. */
 const refusing = () => {
   const keys = [];
   return { keys, env: { [API_READ_BUDGET.binding]: { async limit({ key }) { keys.push(key); return { success: false }; } } } };
@@ -99,8 +95,6 @@ test("an endpoint with no limiter of its own bills the shared read budget and sa
   assert.equal(r.headers.get("ratelimit"), '"read";r=0;t=60');
   assert.equal((await r.json()).code, "rate_limited");
 
-  // The Lens doors keep their own budgets and never bill this one; OPTIONS is
-  // free; a request the binding allows routes; no binding fails open.
   const lens = refusing();
   assert.equal(await apiPreflight(req("/lens/fetch?url=example.com"), "/lens/fetch", lens.env), null);
   assert.deepEqual(lens.keys, [], "/lens/fetch is billed by LENS_BUDGETS, not the read budget");
@@ -111,7 +105,6 @@ test("an endpoint with no limiter of its own bills the shared read budget and sa
   assert.equal(await apiPreflight(req("/search.json?q=x"), "/search.json", allowing), null);
   assert.equal(await apiPreflight(req("/search.json?q=x"), "/search.json", {}), null, "no binding, no refusal");
 
-  // A served answer names the policy; a Lens answer keeps the one its door set.
   const served = withApiContract(new Response("{}"), "/photos/query.json");
   assert.equal(served.headers.get("ratelimit-policy"), `"read";q=${API_READ_BUDGET.max};w=60`);
   const lensAnswer = withApiContract(new Response("{}", { headers: { "ratelimit-policy": '"inspect";q=30;w=60' } }), "/lens/fetch");

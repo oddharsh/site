@@ -2,24 +2,12 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, test } from "./contract-shared.ts";
 
-// Parse the real workflow with Bun's YAML parser under both test runners.
-// CI is ONE job since 2026-09-28, so the join job and its failure predicate
-// are gone: a single job named `validate` fails the required check by itself.
 const workflow = JSON.parse(execFileSync("bun", [
   "-e", "console.log(JSON.stringify(Bun.YAML.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))))",
   fileURLToPath(new URL(".github/workflows/ci.yml", ROOT)),
 ], { encoding: "utf8" }));
 
 test("CI is one required job named validate that cannot be skipped or softened", () => {
-  // `attest` (2026-10-01) signs the served manifest on a push to main. It is
-  // not a check anybody requires, it needs validate, and it cannot fail the run;
-  // contract-production-serves-what-ci-built holds its shape. `cpu-sweep`
-  // checks CPU per route: inside validate it pushed the required check from
-  // about 55 s to 116 s (tools/route-cpu.ts, 2026-10-08) and to 83-86 s (this
-  // sweep, 2026-10-09), so it gets its own runner. From 2026-10-09 it runs with
-  // --gate, so a route over its ceiling fails the JOB; continue-on-error keeps
-  // the RUN's conclusion success, because promote-production releases only a
-  // successful run and a CPU regression must never hold up a release.
   assert.deepEqual(Object.keys(workflow.jobs), ["validate", "cpu-sweep", "attest"]);
   const report = workflow.jobs["cpu-sweep"];
   assert.equal(report["continue-on-error"], true, "a CPU failure may fail its job, never the run promote-production waits on");
@@ -28,7 +16,6 @@ test("CI is one required job named validate that cannot be skipped or softened",
   assert.ok(report.steps.some((step) => /cpu-sweep\.ts --gate/.test(step.run ?? "")), "the CPU job gates");
   assert.ok(!workflow.jobs.validate.steps.some((step) => /cpu-sweep/.test(step.run ?? "")), "the sweep stays out of validate, which it slows");
   const { validate } = workflow.jobs;
-  // The `main` ruleset requires a check with exactly this name.
   assert.equal(validate.name, "validate");
   // A skipped required job reads as passing on GitHub, so nothing may skip it.
   assert.equal(validate.if, undefined);
@@ -71,28 +58,22 @@ test("background steps keep the three ordering edges and all join before the job
   const waited = (id, before) => steps.slice(0, before).some((step) =>
     step.wait === id || (Array.isArray(step.wait) && step.wait.includes(id)));
 
-  // A background step needs an id for anything to wait on or cancel it.
   for (const step of steps.filter((s) => s.background)) assert.ok(step.id, `${step.name} runs in the background without an id`);
 
-  // The suite reads .build/, and two of its tests skip without one. The build
-  // stays in the foreground so everything after it sees a finished tree.
   const build = at("bun run perf-budget");
   assert.notEqual(steps[build].background, true, "the build must finish before the manifest cut and the suite read .build/");
   assert.ok(at("bun run test") > build, "the suite must start after the build it reads");
   assert.ok(at("bun run routes:check --prebuilt .build/.perfbudget") > build, "the route oracle loads the build's bundle");
 
-  // lint and typecheck both open with the generator; it finishes, once, first.
   const gen = at("bun tools/gen-runtime-types.ts");
   for (const run of ["bun run lint", "bun run typecheck"]) {
     const i = at(run);
     assert.ok(gen < i && (!steps[gen].background || waited(steps[gen].id, i)), `generate the runtime types before \`${run}\` races to`);
   }
 
-  // The suite needs timbrado's engine finished, not merely started.
   const engine = steps.find((step) => String(step.run ?? "").includes("ensureTimbradoEngine"));
   assert.ok(engine?.id, "the engine build needs an id to wait on");
   assert.ok(!engine.background || waited(engine.id, at("bun run test")), "the suite must wait for timbrado's engine");
 
-  // Nothing ends the job unjoined: the last step waits for every background one.
   assert.ok(Object.hasOwn(steps.at(-1), "wait-all"), "validate must end with a wait-all, so a failed background check fails by name");
 });

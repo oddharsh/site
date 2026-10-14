@@ -44,7 +44,6 @@ test("the bake links no saved item and states no count or sync date", async () =
   const shell = await renderReadingPage().text();
   assert.doesNotMatch(shell, /<a class="rd-title" href=/, "a linked title in the bake would be one build's list");
   assert.doesNotMatch(shell, /\d+ links? &middot;|last synced \d/);
-  // The control: the same patterns do match a live list.
   const live = renderReadingList({ items: ITEMS, fetchedAt: "2026-09-29T00:00:00Z" }).html;
   assert.match(live, /<a class="rd-title" href=/);
   assert.match(live, /2 links &middot;[\s\S]*last synced 2026-09-29/);
@@ -59,11 +58,8 @@ test("the placeholder is the list's own markup, and nothing visible follows the 
     assert.ok(live.includes(`class="${cls}"`), `the live list lost .${cls}`);
   }
   assert.ok(mount.includes("<footer>") && live.includes("<footer>"), "the footer rides in the island");
-  // After the mount: its failure note (hidden unless the fetch failed), then the
-  // window chrome. The footer sat below the list before and would jump on swap.
   const mountEnd = shell.indexOf("</noscript></div>");
   assert.ok(mountEnd > 0 && shell.lastIndexOf("<footer>") < mountEnd, "the footer belongs inside the island");
-  // Values are escaped by construction.
   const hostile = renderReadingList({ items: [{ title: "<script>x</script>", link: "https://e.example/", domain: "e.example" }] }).html;
   assert.ok(hostile.includes("&lt;script&gt;x&lt;/script&gt;") && !hostile.includes("<script>x"));
 });
@@ -75,7 +71,6 @@ test("/reading/list.html is an island, and an empty read is cached briefly", asy
     assert.equal(res.status, 200);
     assert.equal(res.headers.get(ISLAND_MARKER), "1");
     assert.equal(res.headers.get("x-robots-tag"), "noindex");
-    // No store and no signing key: the can't-reach-Curius panel, for a minute.
     assert.equal(res.headers.get("cache-control"), "public, max-age=60");
     const body = await res.text();
     assert.match(body, /rd-empty/);

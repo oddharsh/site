@@ -1,42 +1,5 @@
 // The control a person classifier for Serendipity has to beat: attendeeScore's
 // seniority regex (ROLE_TIERS), run over the Luma bios it now reads.
-//
-//   bun run serendipity:roles                        tier spread over every bio
-//   bun run serendipity:roles -- --sample 60 > f     a fixed sample to hand-label
-//   bun run serendipity:roles -- --labels f.json     precision and recall on it
-//   bun run serendipity:roles -- --labels f.json --clef    Clef on the same labels
-//   bun run serendipity:roles -- --clef [--clef-sample 60] label spread, no labels needed
-//
-// Reads production D1 through the pinned wrangler and writes nothing. The label
-// file maps attendee id to one of LABELS and must live OUTSIDE this repository:
-// it pairs real names' ids with a judgment about them, and this repo is public.
-//
-// Measured 2026-09-23 on 5,116 bios, two 60-bio samples labelled by hand
-// (sample positions 0-59, then 60-119 as a HELD-OUT set):
-//
-//   regex                      matched     sample 0-59      held-out 60-119
-//   inherited Next-app tiers   2,177 (43%)  96% P, 55% R     92% P, 55% R
-//   + founder phrasing, investor 2,575 (50%)  94% P, 73% R    90% P, 64% R
-//
-// The second row's rules were written after reading the first sample's misses,
-// so its 73% is fitted and the held-out 64% is the number to beat. A Clef role
-// classifier has to clear 64% recall at about 90% precision. Of the 15 held-out
-// misses 9 are job functions no tier names (growth, BD, sales, GTM), which is
-// the gap a model is for; 3 are founder spellings left unfixed so the held-out
-// set stays held out ("building @ x", "Building raycast.com").
-//
-// --clef asks Clef (serendipity/roles.ts) the same question over the Workers AI
-// REST API and scores it beside the regex at several confidence thresholds,
-// because a calibrated probability is the thing a regex cannot offer: the
-// question is whether SOME threshold clears 64% recall at about 90% precision.
-// The criteria were written without reading any labelled bio, so both samples
-// are out of sample for Clef until somebody tunes the criteria against one.
-// Tune on 0-59 if you must, and keep 60-119 as the number.
-//
-// Bios leave this machine for Workers AI under --clef, the same place the
-// Worker would send them. The token is CLOUDFLARE_API_TOKEN when set, else
-// wrangler's own OAuth login. Without labels it prints counts only, never a bio.
-// The bios themselves come from D1 through cf (tools/lib/cf.ts).
 
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -52,15 +15,9 @@ import { D1, d1Rows } from "./lib/cf.ts";
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const run = promisify(execFile);
 
-// The classifier's options, so a hand label and a Clef answer are one vocabulary.
-// A contract test pins the list, since every label file ever written uses it.
 export const LABELS = ROLE_LABELS;
-// Label files are JSON somebody typed, so membership is asked of a plain string.
 const isLabel = (s: string) => (LABELS as readonly string[]).includes(s);
 
-// Which labels count as a tier being RIGHT. The tiers rank seniority rather than
-// name a kind of work, so every title tier is right for an operator or an
-// engineer. `unmatched` is never right: it is the tier declining.
 const TIER_FITS: Record<string, readonly string[]> = {
   founder: ["founder"], investor: ["investor"],
   "c-level": ["operator", "engineer"], president: ["operator"], vp: ["operator", "engineer"],
@@ -70,7 +27,6 @@ const TIER_FITS: Record<string, readonly string[]> = {
 
 type Bio = { id: string, bio: string };
 
-/** Precision over what the tiers matched, recall over bios that state a role. */
 export function scoreTiers(bios: readonly Bio[], labels: Record<string, string>) {
   let matched = 0, right = 0, stated = 0, found = 0;
   const missed: Record<string, number> = {};
@@ -90,15 +46,8 @@ export function scoreTiers(bios: readonly Bio[], labels: Record<string, string>)
   return { labelled: Object.keys(labels).length, matched, right, stated, found, missed };
 }
 
-// The labels some tier can be right about (TIER_FITS' values). The regex can
-// never be right on `researcher`, `creator` or `other`, so recall over every
-// stated role flatters a classifier that can; this is the like-for-like number.
 const TIERABLE = Object.freeze([...new Set(Object.values(TIER_FITS).flat())]);
 
-/** Clef scored the way scoreTiers scores the regex. An answer below `threshold`
- *  or of `not_stated` is an abstention, the classifier's `unmatched`: it claims
- *  nothing, so it costs recall and never precision. A missing prediction (the
- *  call failed) is an abstention too, and is counted so it cannot hide. */
 export function scoreClef(bios: readonly Bio[], labels: Record<string, string>, predictions: Record<string, RolePrediction | null>, threshold = 0) {
   let matched = 0, right = 0, stated = 0, found = 0, tierable = 0, tierFound = 0, failed = 0;
   const missed: Record<string, number> = {};
@@ -120,18 +69,12 @@ export function scoreClef(bios: readonly Bio[], labels: Record<string, string>, 
   return { threshold, matched, right, stated, found, tierable, tierFound, failed, missed };
 }
 
-/** Confidence at the given quantiles, over the predictions that came back.
- *  Clef's confidence is derived from the spread over every option, so with
- *  nine options a fixed 0.8 is a far higher bar than it reads: on the first
- *  smoke run 5 of 60 answers reached it. Sweeping at the observed quantiles
- *  keeps every row of the table about precision rather than about abstention. */
 export function confidenceQuantiles(predictions: Record<string, RolePrediction | null>, qs: readonly number[]) {
   const c = Object.values(predictions).filter((p): p is RolePrediction => !!p).map((p) => p.confidence).sort((a, b) => a - b);
   if (!c.length) return qs.map(() => null);
   return qs.map((q) => c[Math.min(c.length - 1, Math.floor(q * c.length))]);
 }
 
-/** scoreTiers' recall restricted to TIERABLE labels, for the same comparison. */
 export function tierRecallOnTierable(bios: readonly Bio[], labels: Record<string, string>) {
   let tierable = 0, found = 0;
   for (const { id, bio } of bios) {
@@ -143,7 +86,6 @@ export function tierRecallOnTierable(bios: readonly Bio[], labels: Record<string
   return { tierable, found };
 }
 
-// ── the Workers AI transport ────────────────────────────────────────────────
 async function workersAiAuth(): Promise<{ token: string, account: string }> {
   const account = String((await siteConfig()).account_id);
   if (process.env.CLOUDFLARE_API_TOKEN) return { token: process.env.CLOUDFLARE_API_TOKEN, account };
@@ -153,9 +95,6 @@ async function workersAiAuth(): Promise<{ token: string, account: string }> {
   return { token, account };
 }
 
-/** Every bio through Clef, `width` at a time. A failure is recorded as null
- *  and tallied by cause rather than thrown, so one bad call does not cost the
- *  other 119 and the failures still reach the report. */
 async function classifyAll(bios: readonly Bio[], width = 8) {
   const { token, account } = await workersAiAuth();
   const url = `https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/cloudflare/${ROLE_MODEL}`;
@@ -192,8 +131,6 @@ async function classifyAll(bios: readonly Bio[], width = 8) {
   return { predictions: out, failures };
 }
 
-/** FNV-1a over the id, so a sample is the same people on every run and every
- *  machine without storing which people they were. */
 function fnv(s: string): number {
   let x = 2166136261;
   for (let i = 0; i < s.length; i++) x = Math.imul(x ^ s.charCodeAt(i), 16777619) >>> 0;
@@ -237,7 +174,6 @@ if (import.meta.main) {
 
   if (labelPath) {
     const raw = JSON.parse(await readFile(labelPath, "utf8"));
-    // Either {id: label} or the --sample array with its `label` fields filled in.
     const labels: Record<string, string> = Array.isArray(raw)
       ? Object.fromEntries(raw.filter((r) => r.label).map((r) => [r.id, r.label]))
       : raw;
@@ -265,10 +201,6 @@ if (import.meta.main) {
       console.log(`missed at 0.0, by label: ${JSON.stringify(scoreClef(bios, labels, predictions, 0).missed)}`);
     }
   } else if (args.includes("--clef")) {
-    // No labels: run Clef over the same fixed sample --sample would print and
-    // report COUNTS ONLY, the label spread and how it lines up with the tiers.
-    // Enough to see that the pipe works and where the two disagree, without a
-    // single bio reaching the terminal.
     const n = Math.max(1, parseInt(flag("--clef-sample") || "", 10) || 60);
     const picked = [...bios].sort((a, b) => fnv(a.id) - fnv(b.id)).slice(0, n);
     const { predictions, failures } = await classifyAll(picked);

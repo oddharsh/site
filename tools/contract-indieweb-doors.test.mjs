@@ -1,19 +1,5 @@
 // ── The IndieWeb doors: webmention discovery on `/`, h-entry on every note ──
 // Two gaps, closed together on 2026-09-30.
-//
-// 1. `/` sent no rel="webmention" Link, while /garage/*, /lwe/* and /writing
-//    all did. A sender that linked the homepage had nowhere to send. The rel
-//    lives in the Link header alone, because the homepage body ships as a q11
-//    twin and a dcz delta and one <link> tag would re-mint both.
-// 2. The Notepad notes carried no h-entry, so a webmention receiver or reader
-//    parsing one of them found no post, no author and no date.
-//
-// The h-entry half is checked by PARSING the render with the small mf2 reader
-// below. A class in the wrong place (a p-name that also catches the caption's
-// ".txt" and Notepad suffix, an author whose name leaks into the entry's
-// scope) passes a grep for class names and fails every real parser. It was
-// cross-checked against microformats-parser on the built pages, which produced
-// the same properties.
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "../src/worker/lib/security.ts";
@@ -26,12 +12,9 @@ const WEBMENTION = '</webmention>; rel="webmention"';
 test("the homepage Link set advertises the webmention endpoint", () => {
   assert.ok(HOMEPAGE_DISCOVERY_LINK.split(", ").includes(WEBMENTION),
     "HOMEPAGE_DISCOVERY_LINK must carry the webmention rel");
-  // the route composes that set into its header (contract-the-speculation-ledger
-  // pins HOMEPAGE_HEADERS to it), and _headers states the same set for `/`
   const block = read("public/_headers").match(/^\/\n((?: {2}.+\n)+)/m);
   assert.ok(block, "_headers lost its `/` rule");
   assert.ok(block[1].includes(`Link: ${WEBMENTION}`), "_headers' `/` rule must carry the webmention Link too");
-  // and the endpoint it names is a real route, so the rel always leads somewhere
   assert.match(read("src/worker/index.ts"), /"\/webmention": handleWebmention,/);
 });
 
@@ -39,7 +22,6 @@ test("the homepage body carries no webmention <link>, so the rel costs no body b
   assert.doesNotMatch(read("src/pages/index.html"), /rel="?webmention/);
 });
 
-// ── a minimal microformats2 reader ─────────────────────────────────────────
 // Enough of https://microformats.org/wiki/microformats2-parsing for what these
 // pages use: h-* roots, nested h-* as property values, p-/u-/dt-/e- parsing
 // including <data value>, <time datetime> and <a href>. Textarea content is
@@ -111,7 +93,6 @@ function mf2(html) {
   return items;
 }
 
-// ── the notes ───────────────────────────────────────────────────────────────
 const env = {
   ASSETS: {
     fetch: async (url) => {
@@ -132,11 +113,9 @@ test("every note parses to one h-entry with name, published, url, content and au
     const [entry] = items;
     assert.deepEqual(entry.type, ["h-entry"]);
     const p = entry.properties;
-    // the title alone, without the caption's file extension and Notepad suffix
     assert.deepEqual(p.name, [post.title], `${post.slug}: p-name`);
     assert.deepEqual(p.published, [post.date], `${post.slug}: dt-published`);
     assert.deepEqual(p.url, [`https://aadhar.sh/writing/${post.slug}`], `${post.slug}: u-url`);
-    // the canonical text, verbatim, which the textarea carries
     assert.deepEqual(p.content, [{ value: read(`src/content/writing/${post.slug}.txt`).trim() }], `${post.slug}: e-content`);
     assert.equal(p.author?.length, 1, `${post.slug}: p-author`);
     assert.deepEqual(p.author[0].type, ["h-card"]);
@@ -165,8 +144,6 @@ test("/writing is an h-feed whose rows are the notes, and its popovers add no se
 });
 
 test("the control: a window rendered without an entry carries no microformat at all", () => {
-  // the reader has to be able to say "nothing here", or every assertion above
-  // could be passing on a parser that invents entries
   assert.deepEqual(mf2(notepadWindow("a.txt", "text", "/writing", "2026-01-01")), []);
   assert.deepEqual(mf2(notepadWindow("a.txt", "text", "/writing", "2026-01-01", "note-a")), []);
   assert.equal(mf2(notepadWindow("a.txt", "text", "/writing", "2026-01-01", undefined, { name: "a", url: "https://aadhar.sh/writing/a" })).length, 1);

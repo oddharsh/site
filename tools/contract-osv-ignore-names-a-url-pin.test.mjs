@@ -13,12 +13,9 @@
 import { parse } from "./lib/toml.ts";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
-// The one advisory this tree ignores, and the package whose pin excuses it.
 const URL_PIN_IGNORES = { "GHSA-8c93-4hch-xgxp": "wrangler" };
 
 /**
- * An array-of-tables (`[[Name]]`) out of a parsed document, or empty. The parser
- * types every value as TomlValue, so this is where the shape gets narrowed.
  * @param {Record<string, import("./lib/toml.ts").TomlValue>} config
  * @param {string} key
  * @returns {Record<string, any>[]}
@@ -29,7 +26,6 @@ function tables(config, key) {
 }
 
 /**
- * The rule, pure so the control below can feed it a semver pin.
  * @param {string} toml
  * @param {{ dependencies?: Record<string, string>, devDependencies?: Record<string, string> }} pkg
  */
@@ -63,8 +59,6 @@ test("osv-scanner.toml ignores only advisories a URL pin explains", async () => 
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
   const problems = auditOsvIgnores(toml, pkg);
   assert.deepEqual(problems, [], problems.join("\n"));
-  // The file must ignore the advisory it was written for, and nothing else,
-  // so a second entry is a deliberate act that edits URL_PIN_IGNORES too.
   const ids = tables(parse(toml), "IgnoredVulns").map((e) => e.id);
   assert.deepEqual(ids, Object.keys(URL_PIN_IGNORES));
 });
@@ -76,7 +70,6 @@ test("control: the ignore fails the day wrangler is a registry version", async (
   const problems = auditOsvIgnores(toml, semver);
   assert.equal(problems.length, 1, problems.join("\n"));
   assert.match(problems[0], /delete the ignore/);
-  // And a PackageOverrides entry on wrangler is refused whatever the pin is.
   const widened = `${toml}\n[[PackageOverrides]]\nname = "wrangler"\necosystem = "npm"\nignore = true\nreason = "x"\n`;
   assert.match(auditOsvIgnores(widened, pkg).join("\n"), /hides every advisory/);
 });

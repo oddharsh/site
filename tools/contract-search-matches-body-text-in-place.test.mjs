@@ -15,7 +15,6 @@ import { compareCodepoints, queryTerms as queryTermsOf, terms } from "../src/wor
 const INDEX = ".build/public/search-index.json";
 const built = existsSync(INDEX);
 
-// The algorithm as it stood before 2026-10-09, kept here as the oracle.
 function oldPrepare(records) {
   return records.map((record) => ({ record, fields: [record.title, record.description, record.text].map((v) => String(v || "").toLowerCase()) }));
 }
@@ -53,10 +52,7 @@ function setup() {
   return { env: { ASSETS: { fetch: async () => new Response(bytes) } }, records, prepared: oldPrepare(records) };
 }
 
-// Every 5th distinct word of the corpus (so both cases and every script it
-// holds), plus phrases that mix cases, stopwords and several terms.
 function queries(records) {
-  // terms() reads only a query's first 160 characters, so split the text here.
   const words = [...new Set(records.flatMap((r) => `${r.title} ${r.description} ${r.text}`.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 1)))].sort();
   return [
     ...words.filter((_, i) => i % 5 === 0),

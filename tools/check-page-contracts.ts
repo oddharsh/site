@@ -19,19 +19,12 @@ async function filesIn(dir) {
   return (await readdir(join(ROOT, dir))).filter((file) => file.endsWith(".html")).sort();
 }
 
-// Case-insensitive, and tolerant of every shape of end tag, because HTML accepts
-// `</script >`, `</script\t\n bar>` and `</script/>` as closes while `</scriptfoo>`
-// is a different element. The close comes from tools/lib/html-raw-text.ts so the
-// three tools that answer this question answer it the same way.
 const LUQ_BLOCK = new RegExp(
   `<script\\b[^>]*\\btype="application/json"[^>]*\\bid="luq-data"[^>]*>([\\s\\S]*?)${closeTagSource("script")}`,
   "gi",
 );
 
 function payload(html, file) {
-  // The CAPTURE GROUP is the payload. Re-stripping the delimiters off the whole
-  // match, which is what this did, means writing the same two patterns a second
-  // time and keeping them in agreement with these.
   const matches = [...html.matchAll(LUQ_BLOCK)];
   assert.equal(matches.length, 1, `${file}: expected exactly one luq-data block`);
   return JSON.parse(matches[0][1]);
@@ -54,8 +47,6 @@ async function checkPublishedPages(family, skip = new Set()) {
   }
 }
 
-// Rendering every structured LWE spec catches a future schema omission before
-// it can overwrite a page. The manually authored LWE pages are checked below.
 const lweSpecFiles = (await readdir(join(ROOT, "pipelines/lwe/specs")))
   .filter((file) => file.endsWith(".json"))
   .sort();
@@ -74,9 +65,6 @@ for (const file of lweSpecFiles) {
     assert.ok(html.includes(`<script>\n${demo}\n</script>`),
       `pipelines/lwe/specs/${file}: generator omitted its external demo program`);
   }
-  // Every LWE spec page is its generator's output byte for byte, the same pin
-  // Garage carries. It held for encoding alone until 2026-09-30, while all six
-  // spec pages already matched.
   const published = await readFile(join(ROOT, "src/pages/lwe", `${spec.id}.html`), "utf8");
   assert.equal(html, published, `src/pages/lwe/${spec.id}.html: run node pipelines/lwe/generate.mjs page ${spec.id}`);
 }
@@ -88,10 +76,7 @@ assert.ok(garageSpecFiles.length > 0, "discover Garage specs before checking the
 for (const file of garageSpecFiles) {
   const spec = JSON.parse(await readFile(join(ROOT, "pipelines/garage/specs", file), "utf8"));
   assert.equal(spec.id, file.slice(0, -5), `${file}: spec id must match its filename`);
-  const html = renderGaragePage(spec); // validates every spec, including a newly added file
-  // Every Garage spec page is the generator's output byte for byte, so a hand
-  // edit to the page (octane carried its own favicon and --axp-maxw for two
-  // months) fails here instead of being dropped by the next regeneration.
+  const html = renderGaragePage(spec);
   const published = await readFile(join(ROOT, "src/pages/garage", `${spec.id}.html`), "utf8");
   assert.equal(html, published, `src/pages/garage/${spec.id}.html: run node pipelines/garage/generate.mjs page ${spec.id}`);
 }
@@ -145,16 +130,11 @@ assert.match(garageHtml, /id="axp-desktop"/, "Garage scaffold omitted static des
 assert.match(garageHtml, /id="axp-taskbar"/, "Garage scaffold omitted static taskbar shell");
 const garageCss = garageHtml.match(/<style>([\s\S]*?)<\/style>/)?.[1];
 assert.ok(garageCss, "Garage scaffold omitted inline CSS");
-// Parsed by the SAME engine and the same tolerated-warning family the build
-// uses, so a scaffold cannot pass here and fail step 7b. This used to be
-// esbuild's CSS loader, which disagrees with Lightning in both directions.
 parseCss("garage scaffold inline <style>", garageCss);
 assert.equal((garageHtml.match(/<link rel="stylesheet" href="\/prose\.css">/g) || []).length, 1, "Garage scaffold omitted the prose kit (/prose.css)");
 assert.match(garageHtml, /<div class="content prose">/, "Garage scaffold omitted the prose class on its content");
 assert.doesNotMatch(garageCss, /(^|[}\s])\*\s*\{\s*box-sizing|(^|[}\s])body\s*\{/, "Garage scaffold re-inlined page defaults that luna.css and prose.css own");
 
-// Every windowed Garage page shares the prose kit and the page defaults rather
-// than pasting them. vt-b and vt-check are windowless view-transition fixtures.
 for (const file of (await readdir(join(ROOT, "src/pages/garage"))).filter((f) => f.endsWith(".html") && !f.startsWith("vt-"))) {
   const page = await readFile(join(ROOT, "src/pages/garage", file), "utf8");
   assert.equal((page.match(/<link rel="stylesheet" href="\/prose\.css">/g) || []).length, 1, `src/pages/garage/${file}: link /prose.css before the page's <style>`);
@@ -162,10 +142,6 @@ for (const file of (await readdir(join(ROOT, "src/pages/garage"))).filter((f) =>
   assert.doesNotMatch(inline, /(^|[}\s])\*\s*\{\s*box-sizing|(^|[}\s])body\s*\{/, `src/pages/garage/${file}: page defaults belong to luna.css and prose.css, not the page`);
 }
 
-// The same holds outside Garage: every page that links luna.css render-blocking
-// gets border-box sizing and the window measure from it, so none restates them.
-// The homepage is the exception: it loads luna.css non-blocking, so it keeps its
-// own copy for first paint.
 const restatesDefaults = /(^|[}\s])\*\s*\{\s*box-sizing|\.window\s*\{[^}]*[{;\s]max-width:\s*var\(--axp-maxw\)/;
 const pageFiles = (await readdir(join(ROOT, "src/pages"), { recursive: true }))
   .filter((f) => f.endsWith(".html") && f !== "index.html" && !f.startsWith("garage/vt-"));
@@ -174,10 +150,6 @@ for (const file of pageFiles) {
   const inline = [...page.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n");
   assert.doesNotMatch(inline, restatesDefaults, `src/pages/${file}: border-box sizing and the .window max-width come from luna.css`);
 }
-// A page's :root must not redeclare a luna.css token. luna.css links after the
-// page's <style>, so the page's value silently loses: /access once set --gold to
-// amber and rendered its "partial" rows in luna's yellow. Page-only colors get
-// page-only names. The homepage is exempt for the same first-paint reason.
 const lunaTokens = new Set([...(await readFile(join(ROOT, "src/styles/luna.css"), "utf8")).matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
 for (const file of pageFiles) {
   const page = await readFile(join(ROOT, "src/pages", file), "utf8");

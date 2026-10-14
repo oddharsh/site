@@ -4,20 +4,10 @@
 // right number of backslashes to emit depends on how many the cell already
 // carries. CodeQL's js/incomplete-sanitization reads it as a missing backslash
 // escape and is wrong here; the long argument is at renderTable.
-//
-// This pins the BYTES rather than the reasoning. Each expectation below was
-// rendered through GitHub's own GFM renderer on 2026-08-24 and came back as the
-// source content, so a refactor that "fixes" the escape has to explain why these
-// moved. The renderer is not reachable from the suite (no network), which is why
-// the measurement is recorded as constants and the recipe is written down here:
-//
-//   gh api /markdown -f mode=gfm -f text="$(cat table.md)"
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readDocument } from "./lib/html-to-md.ts";
 
-// [label, cell content, expected TEXT-cell markdown, expected CODE-cell markdown]
-// The last two columns are what GFM must receive to render the second column back.
 const CASES = [
   ["plain pipe",         "x|y",     "x\\|y",       "`x\\|y`"],
   ["backslash + pipe",   "i\\|j",   "i\\\\\\|j",   "`i\\\\|j`"],
@@ -53,8 +43,6 @@ function delimiters(row) {
 }
 
 test("no cell content can split a row", () => {
-  // The property the escape exists for: whatever a cell holds, the row carries
-  // exactly the delimiters its structure put there. Two columns is three.
   assert.equal(delimiters("| a | b |"), 3, "control: an unescaped row");
   assert.equal(delimiters("| a|b | c |"), 4, "control: an UNescaped pipe does split");
   for (const [label, content] of CASES) {

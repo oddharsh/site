@@ -1,67 +1,5 @@
 #!/usr/bin/env bash
 # add-photos.sh — process one or more SOOC photos into the site.
-#
-# per source file, this script:
-#   1. generates the grid thumbnails at public/images/<stem>.{jpg,avif} +
-#      <stem>-<SQ_SM>.avif — PRE-CROPPED CENTER SQUARES (what the grid shows:
-#      aspect-ratio:1 + object-fit:cover), metadata-stripped. mirrors
-#      reencode-thumbnails.sh exactly (keep the two encode paths in sync).
-#      One `zenc square` decodes the source once, orients it, and writes all
-#      three tiers from that same linear-light frame, so each output is ONE
-#      JPEG encode away from the source rather than three, and the 400 and 200
-#      tiers are no longer resamples of the 600.
-#   2. prepares the browser-renderable full-resolution JPEG. An existing JPEG
-#      (the requested source or a HEIF's same-folder companion) is rearranged
-#      to progressive with lossless jpegtran, preserving EXIF. A HEIF without
-#      a companion is exported at q100 4:2:2 with source EXIF restored. The
-#      original files stay untouched; HEIF originals are never uploaded.
-#   3. uploads those exact prepared bytes to R2. Input selection fixes the key
-#      once, and indexing measures the same file the upload used. Every upload
-#      must succeed before the run can reach hashing or the photo index.
-#
-# post-processing:
-#   4. regenerates public/images/metadata.json + per-stem images/meta/<stem>.json
-#      (EXIF for the tooltip) and bakes the 64-bin RGB+luma histograms into
-#      meta.hist via `zenc histogram` — the tooltip renders the bars from
-#      that field, and the metadata regen drops it, so the bake runs right after
-#   5. writes the stem's entry into src/worker/photo-index.json — the
-#      committed photo index the worker BUNDLES (which photos exist: R2 key,
-#      size, upload date). This is what makes a photo appear in the grid, and
-#      it ships at deploy like every other committed artifact. (It replaced the
-#      manifest:images KV cache over a runtime R2 list(); there is no cache to
-#      bust anymore.)
-#   6. captions anything still missing alt text (gen-alt-text.ts), rebuilds the
-#      retrieval terms queryPhotos ranks on (gen-photo-semantics.ts, which reads
-#      those captions and so must follow them), then validates the whole artifact
-#      graph — pixels, EXIF, histograms, captions, the index — via
-#      check-photo-pipeline.ts, which fails the run rather than let an
-#      unlabelled image reach a deploy
-#
-# ALBUM=<slug> stamps every index entry this run writes with that album, which
-# keeps the photos OUT of the homepage draw and /photos and puts them at /<slug>
-# (src/worker/albums.ts holds the registry; the slug must be declared there).
-# HEIF=1 also uploads each HEIF source to R2 beside its JPEG export, under the
-# source's own filename, and records the key as `heif` on the index entry so the
-# album page can offer both formats. Off by default: for the site-wide pool the
-# HEIF original stays local-only, as it always has.
-#
-# REMOTE_RENDER_ONLY=1 skips R2 uploads. The GitHub Actions pipeline uses it
-# because the source object is already in R2 and every generated artifact —
-# tiers, metadata, the index entry — comes back as a normal PR.
-#
-# safe to re-run. skips thumbnail generation when all four thumb files are
-# already newer than the source. always uploads to R2 (wrangler r2 put is
-# idempotent). to add only new shots, pass just their paths (not the whole
-# folder) so the 100+ existing originals aren't re-uploaded.
-#
-# NB: this only ADDS at the current SQ/SQ_SM. to change the square size for the
-# whole library, that's reencode-thumbnails.sh's job (then hash-thumbnails.sh
-# mints the new content-addressed /i/ URLs).
-#
-# usage:
-#   ./tools/photos/add-photos.sh /path/to/photo.HIF
-#   ./tools/photos/add-photos.sh /path/to/folder/
-#   ./tools/photos/add-photos.sh /path/a.jpg /path/b.HIF /path/folder/
 
 # pipefail is load-bearing here rather than housekeeping, and gotcha 40 is the
 # bill for its absence. Three steps below run a tool into `| tail -1` to keep
@@ -77,7 +15,6 @@
 # `#!/usr/bin/env bash` finds here. See the expansion at the metadata regen.
 set -euo pipefail
 
-# resolve from anywhere — assumes script lives at tools/photos/
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
 
@@ -93,44 +30,6 @@ WRANGLER="$PROJECT_DIR/node_modules/.bin/wrangler"
 DEST="$PROJECT_DIR/public/images"
 TMP="/tmp/aadhar-add-photos-$$"
 
-# How many photos phases 1 and 2 encode at once. Every photo is independent (its
-# own source, its own output stems), so this is the one place in the pipeline
-# where the machine's cores were sitting idle: those two loops ran one photo at
-# a time while phase 3 had been uploading four at a time for months.
-#
-# The default is deliberately BELOW the core count, and the reason is what
-# happens when the machine is NOT idle. Measured over a mixed 12-photo sample
-# (8 JPG, 4 HIF) on an otherwise quiet 14-core M-series:
-#
-#   serial  114s  1.00x        JOBS  8   29s  3.93x
-#   JOBS 2   77s  1.48x        JOBS 10   29s  3.93x
-#   JOBS 4   53s  2.15x        JOBS 12   30s  3.80x
-#   JOBS 6   48s  2.38x        JOBS 14   28s  4.07x
-#
-# It plateaus at 8 rather than turning over: past that the wall clock is the
-# SLOWEST SINGLE PHOTO (a HIF full-res export, ~28s here), so on a sample this
-# size there is no parallelism left to extract at any width. 8 reaches the
-# plateau at half the cores, which leaves headroom for the two things that scale
-# with N and are invisible in the table above. avifenc already spends `--jobs 4`
-# per photo, so N photos in flight ask for up to 4N threads. And each worker
-# holds a full-resolution frame: a 40MP linear-light f32 frame is ~480MB, on top
-# of the ~311MB TIFF phase 1 writes and the bigger PNG phase 2 writes, all of
-# which live in $TMP at once.
-#
-# THAT SECOND COST IS NOT THEORETICAL, and the same sweep on a loaded box is the
-# evidence: at a 5-minute load average of 25 on those 14 cores with 14.7GB
-# already swapped, the serial arm took 679s while JOBS=4/8/12 took 1704s, 1910s
-# and 4373s. Parallel was 2.5x to 6.4x SLOWER than serial, because serial holds
-# one frame and eight workers hold eight. A machine with other agent sessions on
-# it is the normal case in this repo (see the collaboration rule in CLAUDE.md),
-# so lower this rather than raise it when in doubt.
-#
-# The general trap is worth more than the number: a first pass took the loaded
-# figures at face value and read them as a verdict on the change. Both sweeps
-# were real measurements of different machines. Capture load and swap either side
-# of each arm, which tools/photos is now in the habit of doing, or a busy box
-# will quietly answer a question you did not ask.
-#
 # JOBS=1 costs 1% against the serial original, which is the control that says the
 # restructuring below is free: the win is concurrency and not a quiet change to
 # what the encoders are asked to do. All 48 output tiers came back byte-identical
@@ -149,21 +48,11 @@ case "$ALBUM" in
   *) echo "error: ALBUM must be a lowercase slug (got '$ALBUM')" >&2; exit 1 ;;
 esac
 
-# A worker runs in a subshell, so it cannot increment a counter in the parent.
-# Each one drops an empty file named by its loop index into a per-outcome
-# directory instead, and the parent counts files once every job has finished.
-# The index is unique per photo, so concurrent workers never write the same name
-# and none of this needs a lock.
 st_init() { ST_ROOT="$1"; rm -rf "$ST_ROOT"; mkdir -p "$ST_ROOT/ok" "$ST_ROOT/skip" "$ST_ROOT/fail" "$ST_ROOT/na"; }
 mark()    { : > "$ST_ROOT/$1/$2"; }
 tally()   { ls -1 "$ST_ROOT/$1" 2>/dev/null | wc -l | tr -d ' '; }
 
-# A worker that dies takes its outcome with it. Under `set -e` a failing command
-# used to kill the whole run, which was loud; inside a subshell it kills one
-# worker and `wait` still returns 0, which is not. So every photo records
-# exactly one outcome. A failed or missing outcome stops the pipeline before
-# the next phase can accept an incomplete set.
-reconcile() {  # reconcile <phase-label>
+reconcile() {
   local seen expected
   seen=$(( $(tally ok) + $(tally skip) + $(tally fail) + $(tally na) ))
   expected=$(cat "$ST_ROOT/launched")
@@ -179,7 +68,7 @@ read_input() {
   IFS= read -r -d '' f && IFS= read -r -d '' original &&
     IFS= read -r -d '' full && IFS= read -r -d '' stem
 }
-run_parallel() {  # run_parallel <worker-fn> [limit]
+run_parallel() {
   local fn="$1" limit="${2:-$JOBS}" pending=0 idx=0 f original full stem
   while read_input; do
     idx=$((idx+1))
@@ -191,20 +80,10 @@ run_parallel() {  # run_parallel <worker-fn> [limit]
   echo "$idx" > "$ST_ROOT/launched"
 }
 
-# square thumbnail edges (px). the file IS the displayed pixels (center square),
-# so no off-square bytes ship. MUST match reencode-thumbnails.sh + THUMB_SMALL_PX
-# in _worker.js (the -<N>.avif suffix). override per run with SQ=/SQ_SM=.
-SQ="${SQ:-600}"        # desktop square edge (the 184px tile at DPR-3)
-SQ_SM="${SQ_SM:-400}"  # DPR-2 square edge
-SQ_XS="${SQ_XS:-200}"  # DPR-1 square edge
+SQ="${SQ:-600}"
+SQ_SM="${SQ_SM:-400}"
+SQ_XS="${SQ_XS:-200}"
 
-# The three edges are the srcset candidates lib/photo-grid.js emits against a
-# fixed 184px tile: 184, 368 and 552 device pixels at DPR 1, 2 and 3. Before the
-# 200px tier existed every visitor got the 400px file, which is 2.3x what a 1x
-# display can show (measured over a 12-photo draw: 113.3 KiB served against 42.5
-# KiB displayable) while a DPR-3 phone got a 400px file for a 552px need.
-
-# preconditions
 if [ $# -eq 0 ]; then
   echo "usage: $0 <file-or-dir>..." >&2
   exit 1
@@ -221,20 +100,7 @@ fi
 # gotcha 3 measures.
 ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
-ZENC_Q=84   # The linear-light geometry preserves high-frequency energy that sips'
-            # gamma-incorrect average destroyed, so correct pixels compress worse
-            # and the quality knob had to be chosen rather than inherited.
-            #
-            # Measured over 181 photos and all four tiers, q80/avif-58 against
-            # q84/avif-63: jpg 600 +14.3%, avif 600 +21.8%, avif 400 +20.2%,
-            # avif 200 +19.4%, tier total +17.6% or +2.39 MiB. So q84 is not free.
-            #
-            # It is kept anyway, because the alternative traded encoder quality
-            # DOWN while trading geometry UP: the old corpus was sips geometry at
-            # q84/63, and q80/58 would have been better pixels with more
-            # quantization. q84/63 changes one variable instead of two, so the
-            # corpus is strictly better than what it replaced rather than better
-            # on one axis and worse on another.
+ZENC_Q=84
 MOZJPEG_DIR="$(brew --prefix mozjpeg)/bin"
 MOZ_JTRAN="$MOZJPEG_DIR/jpegtran"
 
@@ -243,10 +109,6 @@ if [ ! -x "$WRANGLER" ]; then
   echo "  run: pnpm install" >&2
   exit 1
 fi
-# cjxl and djxl make and check each original's JPEG XL upload in phase 3, and
-# for a HIF hif-archive.ts also scores it with ssimulacra2 and butteraugli
-# against djpeg's decode of the bar. A remote render skips phase 3, so only an
-# uploading run needs them.
 NEEDED=(sips exif-sooc)
 [ "${REMOTE_RENDER_ONLY:-0}" = "1" ] || NEEDED+=(cjxl djxl djpeg ssimulacra2 butteraugli_main)
 for cmd in "${NEEDED[@]}"; do
@@ -274,19 +136,16 @@ fi
 mkdir -p "$DEST" "$TMP"
 trap 'rm -rf "$TMP"' EXIT
 
-# Resolve every stem before encoding. A same-folder HEIF/JPEG pair has one
-# pixel/metadata source and one click-through source; all other collisions fail.
 INPUTS="$TMP/inputs"
 bun "$SCRIPT_DIR/photo-inputs.ts" ingest "$@" > "$INPUTS"
 TOTAL=$(( $(tr -cd '\000' < "$INPUTS" | wc -c) / 4 ))
 echo "found $TOTAL photo(s) to process"
 echo ""
 
-# ── phase 1: square thumbnails (zenc q84 JPG + 10-bit AVIF, + mobile AVIF) ──
 echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, zenc q84 + AVIF via libavif, metadata-stripped, parallel $JOBS)"
 INTER="$TMP/inter"; mkdir -p "$INTER"
 st_init "$TMP/status1"
-thumb_one() {  # thumb_one <source-file> <index>
+thumb_one() {
   local f="$1" idx="$2"
   local base stem jpg avif smavif xsavif tif input o file current stage
   base=$(basename "$f"); stem="${base%.*}"
@@ -297,25 +156,11 @@ thumb_one() {  # thumb_one <source-file> <index>
   if [ "$current" -eq 1 ]; then
     mark skip "$idx"; printf "·"; return
   fi
-  # Failed metadata or tier generation must not leave a fresh partial set for
-  # the next run to mistake for a cached success. Publish only completed tiers.
   stage="$INTER/$idx"; mkdir -p "$stage"
   jpg="$stage/${stem}.jpg"; avif="$stage/${stem}.avif"
   smavif="$stage/${stem}-${SQ_SM}.avif"; xsavif="$stage/${stem}-${SQ_XS}.avif"
-  # HEIF uses a lossless TIFF decode; tier pixels stay inside zenc.
   tif="$INTER/${stem}.tif"
 
-  # 1-3. decode → orient → all three tiers, ONE zenc invocation, in linear light.
-  # The full argument lives at the twin site in reencode-thumbnails.sh; short
-  # form: the `sips -Z 2000` first reduction was itself a gamma-incorrect
-  # resample (+27.5 ssimulacra2 mean when removed, measured against a
-  # linear-light ground truth — the earlier decline recorded here used a weaker
-  # instrument and was wrong), jpegtran's DCT rotation silently garbled
-  # non-iMCU-aligned frames (XT507876 shipped damaged), the smaller tiers were
-  # resamples of the 600 tier, and a 10-bit HIF was quantised to 8 bits before
-  # anything else happened. zenc --orient re-indexes samples in f32 (exact at
-  # any dimensions) and --transfer g22 linearises the Monochrom's Gray Gamma
-  # 2.2 with the curve its profile declares instead of sRGB.
   input="$f"
   case "${f##*.}" in
     [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])
@@ -324,20 +169,11 @@ thumb_one() {  # thumb_one <source-file> <index>
   esac
   o=$(exif-sooc -s -s -s -n -Orientation "$f" 2>/dev/null) || o=""
   case "$o" in [1-8]) ;; *) o=1 ;; esac
-  # The transfer curve is zenc's to decide, from the file's own ICC, since
-  # 2026-08-26. This used to be `sips -g profile` plus a literal match on
-  # "Gray Gamma 2.2": a 123ms process per photo whose failure direction was
-  # silent, because any other spelling falls back to sRGB and sRGB on Monochrom
-  # data is wrong by up to 4 codes in the shadows. Classification is unchanged
-  # on this corpus (2 g22, 179 srgb) and the outputs are byte-identical.
   if ! "$ZENC" square "$input" --orient "$o" --filter box \
       --size "$SQ" --avif-out "$avif" --jpeg-out "$jpg" --jpeg-quality "$ZENC_Q" \
       --size "$SQ_SM" --avif-out "$smavif" --size "$SQ_XS" --avif-out "$xsavif" >/dev/null 2>&1; then
     rm -f "$tif"; mark fail "$idx"; printf "✗"; return
   fi
-  # Deleted per photo rather than by the EXIT trap: a full-res TIFF is ~311MB
-  # (326,474,696 B for a 7728x5152 HIF, 16-bit RGBA).
-  #
   # `-s formatOptions lzw` is NOT the way to shrink that, and it reads like it
   # should be: `sips -H` documents `[lzw|packbits]` for TIFF. Measured 2026-08-27
   # on sips-316, the bare and lzw writes are BYTE-IDENTICAL at 326,474,696 B and
@@ -350,9 +186,6 @@ thumb_one() {  # thumb_one <source-file> <index>
   # value is accepted silently too, so nothing errors in any direction. Dropping
   # to 8 bits to buy the compression is the thing this door exists to avoid.
   rm -f "$tif"
-  # 4. desktop square JPG was emitted with the AVIF above (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
-  #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
-  #    formats consistent / sRGB).
   if ! exif-sooc -all= -overwrite_original "$jpg" >/dev/null; then mark fail "$idx"; printf "✗"; return; fi
   for file in "$jpg" "$avif" "$smavif" "$xsavif"; do
     if [ ! -s "$file" ]; then mark fail "$idx"; printf "✗"; return; fi
@@ -366,35 +199,22 @@ echo "  generated: $(tally ok)  skipped (current): $(tally skip)  failed: $(tall
 reconcile "phase 1"
 echo ""
 
-# ── phase 2: prepare the exact full-resolution bytes ────────────────
 echo "phase 2 — full-resolution JPEGs (parallel $JOBS)"
 FULLS="$TMP/full-resolution"; RECEIPTS="$TMP/full-paths"; HEIF_RECEIPTS="$TMP/heif-keys"
 JXLS="$TMP/jxl-originals"; JXL_RECEIPTS="$TMP/jxl-paths"
 mkdir -p "$FULLS" "$RECEIPTS" "$HEIF_RECEIPTS" "$JXLS" "$JXL_RECEIPTS"
 st_init "$TMP/status2"
-prepare_one() {  # source, index, existing JPEG, object key, stem
+prepare_one() {
   local f="$1" idx="$2" original="$3" full="$4" stem="$5" out tmppng
   out="$FULLS/$full"
   if [ -n "$original" ]; then
     if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
-      out="$original"  # these already ARE the remote bytes
+      out="$original"
     elif ! "$MOZ_JTRAN" -progressive -copy all -outfile "$out" "$original" 2>/dev/null || [ ! -s "$out" ]; then
-      # Lossless rearrangement is optional. Discard a rejected partial copy;
-      # the receipt must name the untouched bytes that are actually uploaded.
       rm -f "$out"
       out="$original"
     fi
   else
-    # This export IS the R2 share/click copy; the .HIF original stays local-only.
-    # sips decodes the 10-bit HIF to a lossless PNG (sensor-native pixels, no
-    # orientation applied), zenc re-encodes it at q100 4:2:2 (the HIF's native
-    # chroma; hybrid trellis + scan search + sharp_yuv), and exif-sooc copies the
-    # source EXIF back, including Orientation, so browsers rotate it exactly as the
-    # old sips export did. Net: better than sips q100 and source-faithful on chroma
-    # (4:4:4 fabricates horizontal chroma the sensor never sampled; 4:2:0 drops the
-    # vertical chroma it did record). By Butteraugli 4:2:2 ties/beats both; by
-    # SSIMULACRA2 it gives up ~0.1-0.5 pt vs 4:4:4 for ~14% fewer bytes. /garage/encoding.
-    #
     # jpegtran then rewrites zenc's scan script, losslessly, into one that opens
     # with every channel's DC in a single interleaved scan. zenc's search keeps
     # whichever of two scripts is smaller, and one of them sends ALL of luma before
@@ -427,7 +247,6 @@ echo "  prepared: $(tally ok)  failed: $(tally fail)"
 reconcile "phase 2"
 echo ""
 
-# ── phase 3: upload the prepared objects to R2 ───────────────────────
 if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
   echo "phase 3 — R2 uploads skipped (source is already remote)"
 else
@@ -435,23 +254,6 @@ else
   upload_one() {
     local f="$1" idx="$2" full="$4" send heif jxl jxlfile
     send=$(cat "$RECEIPTS/$idx")
-    # The original goes up as JPEG XL, never as the JPEG, so the bucket holds
-    # one copy per photo (the 10 GB free tier). The receipt names the .jxl, and
-    # phase 4 records its key and length. Two kinds:
-    #
-    #   a JPEG source: a lossless transcode of the exact bytes prepared above,
-    #   which djxl turns back into those bytes (cmp proves it before the put).
-    #   Effort 9 saved 0.15-0.25% over e7 on two originals (2026-10-07), paid
-    #   once per photo; on 8 more, e10 came out LARGER and box compression
-    #   saved 7 KB in all, so this is the floor.
-    #
-    #   a HIF source: JPEG XL encoded from the HIF's own 10-bit pixels by
-    #   hif-archive.ts, at the largest distance that still beats the JPEG
-    #   prepared above on both ssimulacra2 and butteraugli. That JPEG is only
-    #   the bar now. Measured on all 119 HIF photos (2026-10-08) the search
-    #   comes to about -33% bytes with both metrics better; where nothing
-    #   beats it, hif-archive.ts falls back to the lossless transcode. About
-    #   four minutes a photo.
     jxl="${full%.*}.jxl"; jxlfile="$JXLS/$jxl"
     case "${f##*.}" in
       [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])
@@ -472,10 +274,6 @@ else
       return
     fi
     printf '%s' "$jxlfile" > "$JXL_RECEIPTS/$idx"
-    # HEIF=1: the source itself goes up too, byte-for-byte, under its own name.
-    # The key is written to a receipt phase 4 reads, so the index records a
-    # HEIF only when this put actually succeeded. A JPEG-only source writes no
-    # receipt and its entry carries no `heif`.
     if [ "$HEIF" = "1" ]; then
       case "${f##*.}" in
         [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])
@@ -498,29 +296,11 @@ else
 fi
 echo ""
 
-# ── phase 4: content-hash the new tiers + photo index + metadata ─────
 echo "phase 4 — hash tiers + photo index + metadata regen"
-# content-address every tier into public/i/ + refresh hashes.json (the
-# worker bakes /i/ URLs from that map; idempotent, only new bytes copy)
 "$SCRIPT_DIR/hash-thumbnails.sh" 2>&1 | tail -1
 
-# ── the committed photo index (src/worker/photo-index.json) ──
-# One entry per published stem: the R2 key, its byte size, and when it was
-# uploaded. The worker BUNDLES this file (photos.js imports it), so the pool
-# read costs module memory instead of a KV round trip — and this write step is
-# what replaced the retired manifest:images KV bust: a photo goes live at
-# deploy, which was already the real gate because its /i/ tiles, hashes.json
-# entry, and caption are committed files too.
-#
-# Size comes from the same prepared-file receipt the uploader used. Object
-# keys come from input selection, including exact remote key casing. Existing
-# upload dates survive a rerender.
 INDEX_FILE="$PROJECT_DIR/src/worker/photo-index.json"
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
-# Entries spool as NUL-separated fields, five per photo, and one node call at
-# the end merges them all. It was one jaq call per photo building a JSON
-# object, then a second jaq merging that object in; the JSON engine left the
-# pipeline on 2026-09-15 (pipeline-json.ts names the filters it replaced).
 NEW_ENTRIES="$TMP/index-entries.spool"
 : > "$NEW_ENTRIES"
 [ -f "$INDEX_FILE" ] || echo '{}' > "$INDEX_FILE"
@@ -529,50 +309,15 @@ META_SOURCES=()
 while read_input; do
   idx=$((idx+1))
   obj=$(cat "$RECEIPTS/$idx")
-  # An uploading run sent the .jxl, so that is the object the index names. A
-  # remote render uploads nothing, and its receipt is already the R2 object.
   if [ -s "$JXL_RECEIPTS/$idx" ]; then obj=$(cat "$JXL_RECEIPTS/$idx"); full="${full%.*}.jxl"; fi
   size=$(wc -c < "$obj" | tr -d '[:space:]')
   heif=""; [ -s "$HEIF_RECEIPTS/$idx" ] && heif=$(cat "$HEIF_RECEIPTS/$idx")
-  # `album` and `heif` are written only when set, so an entry for the site-wide
-  # pool keeps the three-key shape it has always had and photo-index.json diffs
-  # stay legible. An empty string is never written as a value.
   printf '%s\0%s\0%s\0%s\0%s\0' "$stem" "$full" "$size" "$ALBUM" "$heif" >> "$NEW_ENTRIES"
   META_SOURCES+=("$f")
 done < "$INPUTS"
-# writes beside and renames, so a failure here leaves the committed index as it was
 bun "$SCRIPT_DIR/pipeline-json.ts" index-merge "$INDEX_FILE" --entries "$NEW_ENTRIES" --now "$NOW_ISO"
 echo "  photo index: $(bun "$SCRIPT_DIR/pipeline-json.ts" length "$INDEX_FILE") entries"
-# Ingest is always a batch update: read precisely the selected pixel sources
-# and preserve metadata for other published photos, even across input folders.
-# The standalone extractor still offers a full replacement with its own guard.
 "$SCRIPT_DIR/extract-photo-metadata.sh" --merge "${META_SOURCES[@]}" | tail -1
-
-# A SECOND `zenc histogram --root` stood here until 2026-08-29, and the comment
-# that justified it rested on a premise that expired in 2026-08. It claimed
-# extract-photo-metadata.sh "does NOT emit hist", so this "MUST run after it".
-# That script bakes at its own line 266 and then builds BOTH indexes from the
-# result, so the outer call ran after the artifacts it was supposed to feed and
-# nothing rebuilt from what it wrote.
-#
-# Verified equivalent before removal rather than assumed. The two --root values
-# spell the same path ($SCRIPT_DIR/../.. plus /public), neither passed a STEM, so
-# zenc took every key in hashes.json both times: 165 photos baked twice. Measured
-# 2026-08-29, one library: 0.954s cold, 0.332s and 0.316s warm, and the second
-# bake is always the warm one because the first left every file correct.
-#
-# Idempotence is why this was invisible and is not a reason to keep it. The one
-# thing left reading meta/ down here is check-photo-pipeline.ts, which COMPARES
-# the two indexes against it and rebuilds nothing, so a second bake that ever
-# disagreed could only turn a good run red. Keeping the bake beside the index
-# builds makes the last bake to run always the one they read.
-#
-# At removal, metadata regen was guarded on exif-sooc and jaq, so on a
-# machine missing either, this call had been the ONLY bake
-# and it wrote a meta/ carrying `hi` and no EXIF. check-photo-pipeline.ts then
-# rebuilt exif.json from that and failed 165 of 165 photos pointing at
-# build-exif-index.ts, which is not where the fault was. With no meta/ at all
-# it skips the drift tier by design and reports the real gap instead.
 
 # caption anything still missing alt text. runs AFTER hash-thumbnails.sh because
 # it reads the committed public/i/ square via hashes.json and posts those exact
@@ -596,18 +341,6 @@ bun "$SCRIPT_DIR/gen-alt-text.ts" || \
 # semantics.json at 158 of 165 and repaired the generator, which had been joining
 # a deleted www/ for a week (gotcha 40). That fixed the producer and left the hole
 # that let seven photos drift out of it, so the next add would open it again.
-#
-# It runs AFTER gen-alt-text.ts because the derived tier folds alt[stem] into
-# `terms`. Captioning second leaves a new stem carrying camera vocabulary and no
-# subject, which is the quiet half of this failure: the photo stays findable one
-# tier down and nothing errors.
-#
-# No credential and no network. It reads metadata.json, hashes.json and alt.json,
-# so unlike the captioner it cannot be rate-limited, and `set -e` makes a failure
-# stop the run rather than degrade it. Re-running over the whole library is a
-# byte-identical no-op, measured on all 165 stems at 95ms. --vision is the opt-in
-# model tier and is deliberately not passed here, since it wants a token and this
-# path has to work without one.
 bun "$PROJECT_DIR/tools/photos/gen-photo-semantics.ts"
 
 bun "$PROJECT_DIR/tools/photos/check-photo-pipeline.ts"

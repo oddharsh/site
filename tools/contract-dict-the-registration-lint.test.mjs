@@ -6,10 +6,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── /dict — the registration lint ───────────────────────────────
-// The rules ARE the product, and they are asserted as pure functions because
-// every external fetch in this repo dies at signing in a test environment.
-
 test("each Chromium veto is caught on its own, and a clean dictionary passes", async () => {
   const { auditDictionary } = await import("../src/worker/dict.ts");
   const base = { "use-as-dictionary": 'match="/a/*"' };
@@ -40,14 +36,11 @@ test("each Chromium veto is caught on its own, and a clean dictionary passes", a
   assert.ok(cancelled.warns.some((w) => w.id === "must-revalidate"), "the cancelled swr window is worth a warning");
   assert.ok(cancelled.warns.some((w) => w.id === "lifetime"));
 
-  // Missing the header at all is its own veto, not a pass by omission.
   assert.equal(auditDictionary({ "cache-control": "public, max-age=600" }).registers, false);
 
   const good = auditDictionary({ ...base, "cache-control": "public, max-age=600, stale-while-revalidate=86400" });
   assert.equal(good.registers, true);
   assert.equal(good.warns.length, 0);
-  // Every rule reports, including the ones that passed — a lint that prints only
-  // failures leaves you unsure whether it looked.
   assert.equal(good.results.length, 6);
   assert.ok(good.results.every((r) => r.detail));
 });
@@ -82,7 +75,7 @@ test("a delta served without vary: available-dictionary is flagged as a decode f
 test("dict refuses a private target before fetching, and explains itself with none", async () => {
   const idle = await (await terminalGet("/dict?plain=1")).text();
   assert.match(idle, /fail silently/);
-  assert.match(idle, /SILENTLY IGNORES/);   // the node:zlib finding is on the page, not just in source
+  assert.match(idle, /SILENTLY IGNORES/);
   const refused = await (await terminalGet("/dict?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
   assert.match(refused, /refused/);
 });

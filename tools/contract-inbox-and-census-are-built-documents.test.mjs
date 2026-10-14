@@ -37,9 +37,6 @@ test("the inbox shell names no sender, advertises the endpoint, and ends at its 
   assert.match(page.headers.get("link") || "", /<\/webmention>; rel="webmention"/);
   const shell = await page.text();
   assert.doesNotMatch(shell, /id="m-\d|rel="noopener ugc external"/, "a real mention row in the bake would be one build's mail");
-  // After the mount: its failure note (hidden unless the fetch failed) and the
-  // window chrome. The endpoint line moved into the island so nothing below it
-  // moves when the mail arrives.
   const mountEnd = shell.indexOf("</noscript></div>");
   assert.ok(mountEnd > 0 && shell.lastIndexOf('class="oe-foot"') < mountEnd, "the endpoint line belongs inside the island");
 });
@@ -68,7 +65,6 @@ test("the two islands carry the marker and their cache policies", async () => {
   assert.equal(census.headers.get(ISLAND_MARKER), "1");
   assert.equal(census.headers.get("cache-control"), "public, max-age=300, s-maxage=900");
   assert.match(await census.text(), /cx-empty/, "no store is the empty panel, never a table");
-  // Values are escaped by construction.
   const hostile = renderInboxMail([{ kind: "reply", author: "<script>x</script>", source: "https://e.example/", target: "https://aadhar.sh/", approved_at: 0 }], "ok", "https://aadhar.sh").html;
   assert.ok(hostile.includes("&lt;script&gt;x&lt;/script&gt;") && !hostile.includes("<script>x"));
 });

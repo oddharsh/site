@@ -5,15 +5,6 @@
 # page compares. Prints real byte counts + bytes-per-pixel so the figcaptions and
 # prose can be updated to match. The grayscale (g-*) set is generated separately
 # from a Leica B&W frame and is NOT touched here.
-#
-# Subject must be a genuinely COLORFUL, detailed frame (the study is about color
-# formats + chroma subsampling) — XT509338 (Porsche: red calipers, yellow car,
-# blue accent, silver wheel, cobblestone) replaces the old near-monochrome tree.
-#
-#   ./tools/photos/gen-encoding-samples.sh [STEM] [SRC_DIR_OR_FILE]
-# With no source argument, the committed 400×266 PNG fixture is used, so the
-# study can be regenerated remotely without the private SOOC archive.
-#
 set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -21,9 +12,6 @@ source "$SCRIPT_DIR/require-exif-sooc.sh"
 DEST="$( cd "$SCRIPT_DIR/../.." && pwd )/public/garage/enc"
 STEM="${1:-XT509338}"
 SOURCE_ARG="${2:-$DEST/c-png.png}"
-# zenc (zenjpeg hybrid trellis + progressive scan search) is the site's shipped
-# JPEG encoder, so the study shows it as the JPEG point. Auto-built via cargo,
-# like the pipeline scripts.
 ZENC_DIR="$(cd "$SCRIPT_DIR/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
 if [ ! -x "$ZENC" ]; then
@@ -44,8 +32,6 @@ for c in avifenc cwebp sips exif-sooc; do command -v "$c" >/dev/null 2>&1 || [ -
 
 echo "source: $src"
 
-# lossless PNG intermediate at exact 400x266 (3:2). every encoder reads this same
-# base, so the comparison is apples-to-apples.
 base="$TMP/base400.png"
 sips -s format png -Z 400 "$src" --out "$TMP/b.png" >/dev/null 2>&1
 sips -c 266 400 "$TMP/b.png" --out "$base" >/dev/null 2>&1
@@ -56,11 +42,9 @@ kb()  { awk -v b="$1" 'BEGIN{printf "%.1f", b/1024}'; }
 sz()  { stat -f%z "$1"; }
 report() { local f="$1" b; b=$(sz "$f"); printf "  %-18s %8s B   %6s KB   %s b/px\n" "$(basename "$f")" "$b" "$(kb "$b")" "$(bpp "$b")"; }
 
-# ── color set ────────────────────────────────────────────────────────────────
-cp "$base" "$DEST/c-png.png"                                                   # lossless baseline
+cp "$base" "$DEST/c-png.png"
 
 sips -s format jpeg --setProperty formatOptions 82 "$base" --out "$DEST/c-sips82.jpg" >/dev/null 2>&1
-# zenc quality ladder; q84 is the shipped thumbnail setting (≈ old jpegli q82).
 for q in 62 84 95; do "$ZENC" "$base" "$DEST/c-zc$q.jpg" -q "$q" >/dev/null 2>&1; done
 exif-sooc -all= -overwrite_original "$DEST"/c-sips82.jpg "$DEST"/c-zc62.jpg "$DEST"/c-zc84.jpg "$DEST"/c-zc95.jpg >/dev/null
 
@@ -77,12 +61,6 @@ MOZ_JTRAN="$(brew --prefix mozjpeg)/bin/jpegtran"
 
 for q in 60 80; do cwebp -q "$q" "$base" -o "$DEST/c-wp$q.webp" >/dev/null 2>&1; done
 
-# --speed 4 here, --speed 6 in gen-encoding-grids.sh, --speed 2 in the photo
-# pipeline since 2026-08-28. Left alone deliberately: this script PRINTS the
-# byte counts that get transcribed onto /garage/encoding, so changing the effort
-# without re-running it makes the script disagree with the numbers on the page,
-# which is worse on that page than three efforts are. Aligning the two study
-# scripts is a separate change that regenerates public/garage/enc.
 AV="--speed 4 --jobs 4 --ignore-icc --ignore-exif --ignore-xmp"
 avifenc -q 40 --yuv 420 $AV "$base" "$DEST/c-av40.avif" >/dev/null 2>&1
 avifenc -q 63 --yuv 420 $AV "$base" "$DEST/c-av63.avif" >/dev/null 2>&1
@@ -92,7 +70,6 @@ avifenc -q 63 --yuv 444 $AV "$base" "$DEST/c-av63-444.avif" >/dev/null 2>&1
 echo ""; echo "COLOR set (${W}x${H}, ${PX}px):"
 for f in c-png.png c-sips82.jpg c-zc62.jpg c-zc84.jpg c-zc84-baseline.jpg c-zc84-libjpeg.jpg c-zc95.jpg c-wp60.webp c-wp80.webp c-av40.avif c-av63.avif c-av85.avif c-av63-444.avif; do report "$DEST/$f"; done
 
-# ── resolution table: avif q63 4:2:0 vs zenc q84 at 400 / 800 / 1200 ─────────
 echo ""; echo "RESOLUTION table (avif q63 4:2:0  ·  zenc q84):"
 for long in 400 800 1200; do
   case $long in 400) w=400 h=266;; 800) w=800 h=533;; 1200) w=1200 h=800;; esac

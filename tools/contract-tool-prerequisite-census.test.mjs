@@ -19,9 +19,6 @@ test("AVIF version declarations read both Homebrew and Ubuntu codec reports", as
   }
 });
 
-// Run the real CLI in a small Git repository. Five scripts exercise the scanner
-// floors; a deliberately absent tool keeps the presence tier independent of the
-// host. None of the fixture shell scripts are executed.
 async function fixture(run) {
   const root = await mkdtemp(path.join(tmpdir(), "tool-census-"));
   const put = async (file, source) => {
@@ -67,8 +64,6 @@ for (const file of ["tools/photos/build inputs/line\nbreak.sh", ".github/check.s
       assert.ok(tracked.stderr.includes(`${file}: probes \`undeclared-tool\``), tracked.stderr);
       assert.doesNotMatch(tracked.stderr, /vendor-tool/);
 
-      // Node and Wrangler belong to the repository's existing runtime/package
-      // pins, even when an owned shell entrypoint checks that they are present.
       await put(file, "command -v node || exit 1\ncommand -v wrangler || exit 1\n");
       const corrected = cli();
       assert.equal(corrected.status, 0, corrected.stderr);

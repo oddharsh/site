@@ -1,34 +1,13 @@
 // served-tree.ts: the one PLAN for the served URL root.
-//
-// The served tree is authored across five directories and merged into one URL
-// root. This module owns that merge: which roots, in what order, which paths
-// are left out, and the rule that every served path has exactly one owner. It
-// yields a plan (served path -> source path) and two adapters consume it:
-//
-//   - the build COPIES the plan into .build/public        (copyServedTree)
-//   - local dev SYMLINKS the plan into .dev-assets        (linkServedTree)
-//
-// Before this module the same facts were stated four times (build.ts's
-// collision walk, its cp() calls, its skip set, and dev-stage.ts's own roots,
-// skip set and merge), and a contract test held two of the copies together by
-// regexing cp() calls out of build.ts. The copies had already drifted: the
-// build's collision walk skipped one derived path where its copy skipped
-// three, and dev's skip set never applied at all (see linkServedTree).
 import { copyFile, mkdir, readdir, rm, rmdir, stat, symlink } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { cloneTree } from "./clone-tree.ts";
 
-// What a root HOLDS decides which questions it answers. The test for where a
-// new file belongs is CLAUDE.md's: a build step transforms it (src/) or it
-// ships byte for byte (public/).
 export type ServedRoot = {
   dir: string;
   holds: "bytes" | "documents" | "prose" | "client" | "styles";
 };
 
-// The declaration. ORDER is the canonical staging order; it decides nothing
-// about the output, because a path two roots both provide is refused rather
-// than resolved by order.
 export const SERVED_ROOTS: readonly ServedRoot[] = [
   { dir: "public", holds: "bytes" },
   { dir: "src/pages", holds: "documents" },
@@ -40,27 +19,12 @@ export const SERVED_ROOTS: readonly ServedRoot[] = [
 const rootsHolding = (...kinds: ServedRoot["holds"][]): string[] =>
   SERVED_ROOTS.filter((root) => kinds.includes(root.holds)).map((root) => root.dir);
 
-// Three projections of the one declaration. They answer different questions,
-// so they stay three names rather than one list with callers picking indexes.
-
-// Every root that composes the URL root. The build and dev both stage these.
 export const STAGED_ROOTS: readonly string[] = SERVED_ROOTS.map((root) => root.dir);
 
-// The roots that used to be www/: assets, documents and prose. build.ts's
-// tripwires (the taste scan, the view-transition scan) walk these recursively.
-// The client and stylesheet roots are NOT in it: they left www/ before the
-// 2026-08-18 split, and each tripwire that wants them names them itself.
 export const AUTHORED_ROOTS: readonly string[] = rootsHolding("bytes", "documents", "prose");
 
-// The roots an absolute browser import (`import "/hoist.js"`) can resolve in.
-// config/tsconfig.browser.json maps `/*` across exactly these. JSON cannot
-// import, so a contract test holds that file to this projection.
 export const BROWSER_IMPORT_ROOTS: readonly string[] = rootsHolding("client", "styles", "bytes");
 
-// Source paths the build DERIVES rather than stages (build.ts steps 1a, 1a2).
-// Nothing writes them into the source tree any more, so a file at one of them
-// can only be a leftover from an older checkout, and staging it would make the
-// served tree depend on whatever a given machine happens to still hold.
 export const DERIVED_PATHS: readonly string[] = [
   "public/images/meta",
   "public/images/exif.json",
@@ -68,18 +32,12 @@ export const DERIVED_PATHS: readonly string[] = [
 ];
 
 export type ServedTreePlan = {
-  // The roots that were merged, in order.
   roots: string[];
-  // served path -> source path (root-relative to the working directory).
   files: Map<string, string>;
-  // served directory -> every root that provides it. "" is the URL root.
   directories: Map<string, string[]>;
-  // Derived source paths that EXIST on this machine and were left out.
   skipped: string[];
 };
 
-// One owner per served path. Thrown once, by the planner, naming every
-// contested path, so neither adapter needs a collision rule of its own.
 export class ServedTreeCollision extends Error {
   paths: string[];
   constructor(claims: Map<string, string[]>) {
@@ -91,7 +49,6 @@ export class ServedTreeCollision extends Error {
 }
 
 type PlanOptions = {
-  // Where the roots live. Defaults to the working directory.
   cwd?: string;
   roots?: readonly string[];
   derived?: readonly string[];
@@ -125,8 +82,6 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
       }
       const priorFile = files.get(child);
       if (entry.isDirectory()) {
-        // A file in one root and a directory in another is the same mistake as
-        // two files: one URL, two owners.
         if (priorFile) contest(child, priorFile.slice(0, -child.length - 1), root);
         await walk(root, child);
         continue;
@@ -139,9 +94,6 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
   };
 
   for (const root of roots) {
-    // A root renamed out from under this list is the failure dev-stage was
-    // first written to repair (dev named a deleted `www` for a day after the
-    // 2026-08-18 split). Fail by NAME rather than plan a partial tree.
     const ok = await stat(resolve(cwd, root)).then((s) => s.isDirectory()).catch(() => false);
     if (!ok) throw new Error(`served-tree: root "${root}" does not exist. Has the served tree been rearranged again? Update SERVED_ROOTS in tools/lib/served-tree.ts.`);
     await walk(root, "");
@@ -154,12 +106,6 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
 
 type AdapterOptions = { cwd?: string };
 
-// The first root (public/, about 900 of the 1,000 staged files) cloned whole
-// with one clonefile(2) where the platform allows (tools/lib/clone-tree.ts),
-// then held to the plan: the derived paths the plan skips are deleted from the
-// clone, and the clone must hold exactly the plan's files from that root and no
-// link. Anything else deletes the clone and returns null, and the caller copies
-// every file as before, so this path can only ever produce the planned tree.
 async function cloneFirstRoot(plan: ServedTreePlan, out: string, cwd: string): Promise<string | null> {
   const root = plan.roots[0];
   if (!root) return null;
@@ -181,9 +127,6 @@ async function cloneFirstRoot(plan: ServedTreePlan, out: string, cwd: string): P
   return null;
 }
 
-// THE BUILD ADAPTER: copy every planned file to `dest`. Directories are made
-// first, from the plan's union, so no two copies race through mkdir for a
-// directory several roots share, and an empty authored directory still ships.
 const COPY_WIDTH = 64;
 export async function copyServedTree(plan: ServedTreePlan, dest: string, options: AdapterOptions = {}): Promise<{ files: number; dirs: number; cloned: string | null }> {
   const cwd = options.cwd ?? ".";
@@ -200,23 +143,6 @@ export async function copyServedTree(plan: ServedTreePlan, dest: string, options
   return { files: plan.files.size, dirs: plan.directories.size, cloned };
 }
 
-// THE DEV ADAPTER: a symlink farm at `dest`, which must not exist yet.
-//
-//   - a directory ONE root provides becomes a single directory symlink, so a
-//     file created inside it later is served with no re-stage
-//   - a directory SEVERAL roots provide is made for real and recursed into,
-//     because a symlink can only point at one of them
-//
-// One more case makes a real directory: a single-owner directory that holds a
-// skipped (derived) path. A whole-directory symlink would expose the leftover,
-// which is what dev-stage.ts did until this module: its skip set only ran
-// inside merged directories, and public/images is not one, so a leftover
-// public/images/meta was served in dev while the comment above it said it
-// could not be. On a checkout with no leftovers the farm is link-for-link what
-// it was.
-//
-// Links are relative, so `ls -l .dev-assets` names the directory a file
-// authors in.
 export async function linkServedTree(plan: ServedTreePlan, dest: string, options: AdapterOptions = {}): Promise<{ links: number; dirs: number }> {
   const cwd = options.cwd ?? ".";
   const out = resolve(cwd, dest);

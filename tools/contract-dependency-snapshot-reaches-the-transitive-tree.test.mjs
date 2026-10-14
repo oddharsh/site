@@ -5,16 +5,6 @@ import { assert, test } from "./contract-shared.ts";
 import { buildSnapshot, keySegments, npmPurl, resolveKey, snapshotResolved } from "./lib/dependency-snapshot.ts";
 import { parseJsonc } from "./lib/jsonc.ts";
 
-// GitHub's dependency graph reads package.json and not bun.lock, so Dependabot
-// alerts saw 18 direct pins and none of the ~150 packages under them (the
-// sharp 0.35.4 high under miniflare raised nothing). dependency-snapshot.yml
-// posts this snapshot to close that. tools/lib/dependency-snapshot.ts has the
-// measurement.
-//
-// THE CONTROL IS THE FIRST TEST: a package two hops down, under a dependency
-// whose own head is a URL, must appear. That is the exact shape of sharp, and a
-// walker that only listed direct pins would pass every absence test below.
-
 const entry = (head, meta = {}) => [head, "", meta, "sha512-x"];
 
 test("control: a transitive package under a URL-headed dependency is snapshotted", () => {
@@ -75,8 +65,6 @@ test("the committed lockfiles snapshot sharp, and both manifests are present", (
   const lockfiles = ["bun.lock", "lens-reader/bun.lock"].map((p) => ({ path: p, parsed: parseJsonc(readFileSync(p, "utf8")) }));
   const { snapshot } = buildSnapshot({ lockfiles, sha: "0".repeat(40), ref: "refs/heads/main", runId: "1", scanned: "2026-10-07T00:00:00Z", repoUrl: "https://github.com/oddharsh/site" });
   const root = Object.values(snapshot.manifests["bun.lock"].resolved);
-  // 161 on 2026-10-07. A floor well under it catches a walker that has
-  // quietly stopped matching, without tripping on a dependency removed on purpose.
   assert.ok(root.length >= 100, `only ${root.length} packages in the bun.lock snapshot`);
   assert.ok(root.some((r) => r.package_url.startsWith("pkg:npm/sharp@")), "sharp, the package that motivated this, is missing");
   assert.ok(Object.values(snapshot.manifests["lens-reader/bun.lock"].resolved).some((r) => r.scope === "runtime"));

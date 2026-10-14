@@ -20,16 +20,6 @@ import {
   writeCommittedFamily,
 } from "./lib/page-family.ts";
 
-// The site-page dictionary is advertised by every HTML response and fetched once
-// per URL. Until 2026-09-02 its URL was the hash of a corpus derived on every
-// build from pages that carry every hashed shell reference, so most deploys
-// re-minted it and every returning visitor re-downloaded 17 KB for a dictionary
-// measured 0.1 point better than the one they held. The build now ships the
-// committed copy in src/dict/f-dict while it is within FAMILY_DRIFT of the fresh
-// derivation. These pin the three things that keep that true: the committed file
-// is well-formed and singular, the rule chooses the way its header says, and the
-// build, the roll and the nightly workflow all still know the directory exists.
-
 test("src/dict/f-dict holds exactly one well-formed dictionary", async () => {
   const names = (await readdir(FAMILY_DICT_DIR)).filter((n) => !n.startsWith("."));
   assert.equal(names.length, 1, `expected one committed family dictionary, found ${names.length}: ${names.join(", ")}`);
@@ -54,7 +44,6 @@ test("readCommittedFamily refuses two files and a lying filename", async () => {
     const ok = await readCommittedFamily(dir);
     assert.ok(ok, "a single well-formed file must read back");
     assert.equal(ok.hash8, hash8(raw));
-    // writeCommittedFamily replaces rather than accumulates: one file, always.
     const other = Buffer.alloc(FAMILY_DICT_SIZE, "<p>a different corpus</p>\n");
     await writeCommittedFamily(other, dir);
     const after = await readdir(dir);
@@ -66,8 +55,6 @@ test("readCommittedFamily refuses two files and a lying filename", async () => {
 });
 
 test("the committed dictionary ships until it drifts past the line, then the fresh one does", async () => {
-  // Pages that repeat one vocabulary; a dictionary made of that vocabulary is
-  // near-perfect, and one made of unrelated bytes is nearly useless.
   const vocab = Array.from({ length: 200 }, (_, i) => `<li class="row-${i}" data-k="${i * 7919}">entry ${i} of the fixture corpus</li>`).join("\n");
   const pages = Array.from({ length: 6 }, (_, p) => Buffer.from(`<html><body>${vocab}<p>page ${p}</p>${vocab}</body></html>`));
   const fresh = Buffer.from(vocab.slice(0, FAMILY_DICT_SIZE).padEnd(FAMILY_DICT_SIZE, "\n"));
@@ -89,8 +76,6 @@ test("the committed dictionary ships until it drifts past the line, then the fre
   assert.ok(farDrift > FAMILY_DRIFT, `drift ${farDrift} should exceed ${FAMILY_DRIFT}`);
   assert.equal(far.freshTotal, none.freshTotal, "the fresh total does not depend on what was committed");
 
-  // The threshold is the whole rule: raise it past the measured drift and the
-  // same committed bytes ship again.
   const lenient = await chooseFamilyDictionary({ fresh, committed: unrelated, pages, threshold: farDrift + 1 });
   assert.equal(lenient.source, "committed");
 });
@@ -101,7 +86,6 @@ test("the build, the roll and the nightly workflow all know the directory", () =
   assert.match(build, /chooseFamilyDictionary\(/, "build.ts no longer applies the drift rule");
   assert.match(build, /familyDictionaryName\(hash8\(dictionary\)\)/, "the shipped URL must still be the hash of the CHOSEN bytes");
   assert.match(build, /FAMILY_REPORT/, "build.ts must record its decision for the roll");
-  // The build must never write into the source tree; only the roll commits.
   assert.doesNotMatch(build, /writeCommittedFamily/);
 
   const roll = readFileSync("tools/roll-shell-dictionary.ts", "utf8");

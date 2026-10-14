@@ -1,19 +1,6 @@
 #!/usr/bin/env node
 // node tools/runtime-dcz-probe.ts [--json]
 //
-// Which registered pages does production still serve WITHOUT a shared-dictionary
-// delta, and what would a delta computed at request time have cost for each?
-// /garage/dictionary prints these numbers; this is the file that produces them.
-//
-// For every surface in config/site-manifest.json it asks production for the page
-// the way a returning Chromium visitor does: `Sec-Fetch-Dest: document` plus an
-// `Available-Dictionary` naming the live family dictionary (read off the
-// homepage's `rel="compression-dictionary"` Link). A page answering `dcz` already
-// has a build-time delta. A page answering `br` is one the Worker renders per
-// request, and for those it compresses the decoded HTML against the same
-// dictionary at zstd levels 3, 6 and 19, checks every frame round-trips, adds the
-// 40-byte dcz header (magic, length, SHA-256), and times the call.
-//
 // WHY UNDER NODE. The timing is node:zlib's `zstdCompressSync`, the exact call a
 // Worker would make, and workerd drops its `dictionary` option until
 // cloudflare/workerd#7106 ships (tools/workerd-zstd-probe.ts watches for that).
@@ -34,8 +21,6 @@ const ORIGIN = "https://aadhar.sh";
 const LEVELS = [3, 6, 19];
 
 interface Reply { status: number; encoding: string; type: string; cacheControl: string; body: Buffer }
-// One page the Worker renders: its size, the brotli it ships, and per level the
-// dcz frame size (`dcz3`) and the median milliseconds to make it (`ms3`).
 type Row = { path: string; cacheControl: string; raw: number; liveBr: number } & Record<string, number | string>;
 
 function curl(path: string, headers: string[]): Reply {

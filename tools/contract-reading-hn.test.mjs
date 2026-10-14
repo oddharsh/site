@@ -21,7 +21,6 @@ test("hnKey folds the spellings HN submitters vary on, and nothing else", () => 
     "https://PaulGraham.com/greatwork.html/#top",
     "https://paulgraham.com/greatwork.html?utm_source=curius&ref=x",
   ]) assert.equal(hnKey(spelling), key, spelling);
-  // A query parameter that names the PAGE survives, so two videos stay two.
   assert.equal(hnKey("https://www.youtube.com/watch?v=abc&si=share"), "youtube.com/watch?v=abc");
   assert.notEqual(hnKey("https://a.com/x?id=1"), hnKey("https://a.com/x?id=2"));
   assert.equal(hnKey("mailto:someone@example.com"), null);
@@ -35,9 +34,7 @@ test("pickThread takes only hits for the exact page, and the most-commented of t
     hit("https://danluu.com", "101", 40),
   ] };
   assert.deepEqual(pickThread("danluu.com", body), { id: 101, c: 40, p: 10, n: 2 });
-  // The control: the same answer for a page nobody submitted is no thread at all.
   assert.deepEqual(pickThread("danluu.com/unsubmitted", body), { id: null, c: 0, p: 0, n: 0 });
-  // An answer that is not Algolia's shape is no thread, never a throw.
   for (const junk of [null, "<html>", { hits: "x" }, { hits: [null, 3] }]) {
     assert.deepEqual(pickThread("danluu.com", junk), { id: null, c: 0, p: 0, n: 0 });
   }
@@ -57,7 +54,6 @@ test("pickPending asks never-asked links first, newest-saved first, then the sta
     "a.com/fresh": { id: 7, c: 3, p: 5, n: 1, checked: NOW - 1000 },
   });
   const keys = pickPending(items, map, NOW).map((p) => p.key);
-  // An HN link IS its thread, and a second spelling of one page is one lookup.
   assert.deepEqual(keys, ["a.com/new", "a.com/old", "a.com/stale"]);
   assert.deepEqual(pickPending(items, map, NOW, 1).map((p) => p.key), ["a.com/new"]);
 });
@@ -103,14 +99,11 @@ test("/reading shows a thread only where it has comments, and says how many link
   assert.doesNotMatch(html, /item\?id=99/, "a thread with no comments earned a badge");
   assert.match(html, /1 discussed on Hacker News/);
   assert.equal(hnThreadFor("https://b.com/", hn), null);
-  // The control: with no map the list renders exactly as it did before.
   const bare = renderReadingList({ items, fetchedAt: "2026-09-29T00:00:00Z" }).html;
   assert.doesNotMatch(bare, /Hacker News|rd-hn"/);
 });
 
 test("the HN job reads the Curius payload under the key /reading writes it to", async () => {
-  // reading-hn.ts names the key as a literal, because importing it from
-  // reading.ts would make the two modules import each other.
   const src = await readFile(new URL("src/worker/reading-hn.ts", ROOT), "utf8");
   assert.ok(src.includes(`"${CURIUS_CACHE_KEY}"`), `reading-hn.ts does not read ${CURIUS_CACHE_KEY}`);
   assert.notEqual(HN_MAP_KEY, CURIUS_CACHE_KEY);

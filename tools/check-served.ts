@@ -1,29 +1,6 @@
 // Does production serve what CI built? `bun run served:check`. Gotcha 20 is the
 // reason to ask: an edge feature that rewrites HTML after the Worker breaks
 // everything derived from the Worker's output, and only the wire shows it.
-//
-//   bun run served:check                          # every URL, production's own commit
-//   bun run served:check -- --since <commit>      # only URLs that changed since that commit
-//   bun run served:check -- --manifest m.json     # a manifest in hand (skips the download)
-//   bun run served:check -- --commit <sha>        # expect this commit (stands in when the origin cannot say)
-//   bun run served:check -- --origin <preview URL> --manifest m.json --no-attest   # a PR preview
-//
-// 1. Read the commit production reports (/whoareyou.json `build.commit`, baked in
-//    by build.ts step 5e from Workers Builds' WORKERS_CI_COMMIT_SHA).
-// 2. Fetch the served manifest CI cut and signed for that commit (the
-//    `served-manifest` artifact of ci.yml's push run), and verify the signature
-//    with `gh attestation verify`, pinned to ci.yml as the signer.
-// 3. GET every URL in it from production and compare decoded sha256.
-//
-// Exit 0 when every URL matches and the manifest is attested; 1 on a finding (a
-// mismatch, a non-200, a redirect, a commit disagreement, an unattested
-// manifest); 2 when the instrument could not run (no commit, no manifest, too few
-// URLs to mean anything). Same convention as the canary legs.
-//
-// COST. 716 of the 1850 URLs reach the Worker (2026-10-01); the rest are served
-// by the asset layer and cost nothing on the 200K/day observability quota. A full
-// run is therefore about 716 Worker invocations, which is why the per-release
-// check passes --since and the full one runs nightly.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -55,8 +32,6 @@ const downloadManifest = (commit: string) => fetchManifest(values.repo, commit);
 
 function attested(path: string): boolean {
   try {
-    // Signed by ci.yml, and by a run on main: a pull_request run of the same
-    // workflow builds a merge commit nobody ships, and it never cuts a manifest.
     gh(["attestation", "verify", path, "--repo", values.repo, "--signer-workflow", SIGNER, "--source-ref", "refs/heads/main"]);
     return true;
   } catch (e) {
@@ -75,10 +50,6 @@ const manifest: ServedManifest = parseManifest(readFileSync(path, "utf8"));
 console.log(`served:check: ${values.origin} version ${live.version?.slice(0, 8) ?? "?"}, commit ${commit.slice(0, 12)}, ${Object.keys(manifest.files).length} URLs in the manifest`);
 
 const findings: string[] = [];
-// --commit is an EXPECTATION when the origin names a commit of its own: a
-// preview that already moved to a newer push, or a release that never landed,
-// would otherwise be compared against the wrong manifest and every changed URL
-// would read as a mismatch. It only stands in for the origin when that is silent.
 if (values.commit && live.commit && live.commit !== commit) findings.push(`${values.origin} serves ${live.commit.slice(0, 12)}, not the expected ${commit.slice(0, 12)}`);
 if (manifest.commit && manifest.commit !== commit) findings.push(`the manifest is for ${manifest.commit.slice(0, 12)}, not the ${commit.slice(0, 12)} being checked`);
 if (!values["no-attest"]) {
@@ -114,9 +85,6 @@ if (findings.length) {
   console.log(`served:check: FINDING: ${findings.join("; ")}`);
   process.exit(1);
 }
-// A scoped run over a release that changed no static file compares nothing, and
-// "0 of 0 URLs" read as a pass (first seen on #1075's release, 2026-10-01).
-// What such a run DID verify is the commit and the signature, so say exactly that.
 if (!results.length) {
   console.log(`served:check: nothing to compare, no static URL changed since ${values.since?.slice(0, 12)}; verified only the commit${values["no-attest"] ? "" : " and the signature"}`);
   process.exit(0);

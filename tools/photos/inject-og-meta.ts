@@ -1,13 +1,5 @@
 // inject-og-meta.mjs — wire each garage + lwe page, and each registered page
 // directory, to its OG card image.
-//
-// Adds twitter:card=summary_large_image + og:image/twitter:image (absolute) so a
-// pasted link unfurls as the demo card, not a bare title. Idempotent: skips a page
-// that already has twitter:card, and re-points og:image if the card path changed.
-// Anchored after the page's existing og:url line (every page has one).
-//
-//     node tools/photos/inject-og-meta.ts          # write
-//     node tools/photos/inject-og-meta.ts --check   # report only, non-zero if any page is missing tags
 
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -16,14 +8,10 @@ import path from "node:path";
 import { OG_PAGE_DIRS } from "./og-pages.ts";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
-// Same split as gen-og-cards.ts: www/ is gone, and the cards and the documents
-// live in different trees now. See that file's header for what the stale
-// constant cost.
-const PUBLIC = path.join(ROOT, "public");    // the baked cards
-const PAGES = path.join(ROOT, "src/pages");  // the documents whose <head> gets the meta
+const PUBLIC = path.join(ROOT, "public");
+const PAGES = path.join(ROOT, "src/pages");
 const SITE = "https://aadhar.sh";
 const CHECK = process.argv.includes("--check");
-// diagnostic/test harnesses that get no card (must match gen-og-cards.mjs)
 const EXCLUDE = new Set(["garage-vt-b", "garage-vt-check"]);
 
 function block(id, alt) {
@@ -38,7 +26,6 @@ function block(id, alt) {
   ].join("\n");
 }
 
-// alt text: reuse the page's own og:title (falls back to a generic line)
 function altFor(html, id) {
   const m = html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i);
   const t = m ? m[1] : id.replace("-", "/");
@@ -47,8 +34,6 @@ function altFor(html, id) {
 
 let missing = 0, wrote = 0, skipped = 0;
 
-// One page, one card, whatever shape of directory it came from. `alt` overrides
-// the synthesised line for pages whose card is not a demo screenshot.
 async function wire(file, id, alt?) {
   let html = await readFile(file, "utf8");
 
@@ -70,7 +55,6 @@ async function wire(file, id, alt?) {
   wrote++;
 }
 
-// sections: many pages per directory
 for (const section of ["garage", "lwe"]) {
   const dir = path.join(PAGES, section);
   for (const f of (await readdir(dir)).sort()) {
@@ -81,7 +65,6 @@ for (const section of ["garage", "lwe"]) {
   }
 }
 
-// page directories: one index.html at a top-level route (see og-pages.mjs)
 for (const p of OG_PAGE_DIRS) {
   await wire(path.join(PAGES, p.dir, "index.html"), p.id, p.alt);
 }

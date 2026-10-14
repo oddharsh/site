@@ -19,7 +19,6 @@ test("a registered page opens by its path or by a last segment only it has", asy
   assert.equal(await opens("/lwe/fhe/"), "https://aadhar.sh/lwe/fhe");
   assert.equal(await opens("AV2"), "https://aadhar.sh/garage/av2");
   assert.equal(await opens("census"), "https://aadhar.sh/lens/census");
-  // the hand-listed names still win, and still take a unique prefix
   assert.equal(await opens("garage"), "https://aadhar.sh/garage");
   assert.equal(await opens("gar"), "https://aadhar.sh/garage");
 });

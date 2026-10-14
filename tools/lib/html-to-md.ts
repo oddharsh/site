@@ -1,21 +1,4 @@
 // html-to-md.mjs — the downleveled-render half of the Markdown twin.
-//
-// Hand-rolled on purpose. The input is a CLOSED set: the 31 static pages this
-// repo authors itself, all of them well-formed and all of them checked by
-// `bun run pages:check`. A general-purpose parser would buy robustness against
-// markup we never write, at the cost of a dependency the DEPENDENCIES.md policy
-// would have to justify forever. zenc, gen-manifest, and check-photo-pipeline
-// were all built the same way for the same reason.
-//
-// Two rules matter more than the rest:
-//   1. RAW-TEXT elements (script, style) are tokenized as opaque blobs and
-//      dropped. This is not an optimization. Every garage/lwe page carries a
-//      <script type="application/json" id="luq-data"> holding the understanding
-//      check's questions AND its answer key, so a converter that walked into
-//      script bodies would publish the answers as prose.
-//   2. Interactive controls render nothing. A <button> in a live demo is not
-//      content; its label without its behavior is a lie an agent would read as
-//      fact. The prose AROUND the demo still converts, which is the honest part.
 
 import { closeTagSource } from "./html-raw-text.ts";
 
@@ -32,41 +15,26 @@ function executesRatherThanAddresses(href) {
   return UNSAFE_SCHEME.test(href.slice(i));
 }
 
-// void elements never have children and never close
 const VOID = new Set("area base br col embed hr img input link meta param source track wbr".split(" "));
 
-// tokenized as opaque text runs: the spec says their content is not markup, and
-// for #luq-data specifically it is an answer key we must never emit
 const RAW_TEXT = new Set(["script", "style", "textarea", "title"]);
 
-// of those, the two whose text must never reach the tree at all. <title> and
-// <textarea> are raw-text for TOKENIZING reasons only; their content is real
-// page text. <script>/<style> content is not, and #luq-data's is an answer key.
 const RAW_TEXT_DISCARD = new Set(["script", "style"]);
 
-// dropped whole, children and all
 const DROP = new Set([
   "script", "style", "noscript", "template", "svg", "canvas", "iframe", "object",
   "head", "meta", "link", "form",
-  // interactive controls: label without behavior reads as a claim
   "button", "input", "select", "option", "textarea", "label", "output",
 ]);
 
-// dropped by id/class, because they are the XP desktop chrome rather than the page
 const DROP_ID = new Set(["axp-desktop", "luq"]);
 const DROP_CLASS = new Set(["title-bar", "controls", "status", "modebar", "readouts", "meter"]);
 
-// block containers whose own box we ignore while keeping their children. Being
-// block-level is what matters here: it is the signal to flush any inline run
-// buffered before it, so a <div><strong>Rule:</strong> text</div> stays ONE
-// paragraph instead of splitting bold and prose into two.
 const TRANSPARENT = new Set([
   "html", "body", "div", "section", "article", "aside", "main", "nav", "header",
   "footer", "colgroup", "tbody", "thead", "tfoot", "hgroup", "address", "fieldset",
 ]);
 
-// every element that starts a new block. Anything absent is inline and gets
-// buffered into the surrounding paragraph.
 const BLOCK = new Set([
   ...TRANSPARENT,
   "h1", "h2", "h3", "h4", "h5", "h6", "p", "hr", "pre", "blockquote",
@@ -74,70 +42,28 @@ const BLOCK = new Set([
   "details", "summary", "figure", "figcaption", "caption",
 ]);
 
-// pure ornament in the XP window vocabulary: the bay counter is a decorative
-// "01/02/03" beside a heading that already says the same thing in words
 const DROP_CLASS_INLINE = new Set(["bay-no"]);
 
-// Inline elements the page's own CSS promotes to a box of their own. Without
-// this, an encoder card's caption renders as "**PNG** lossless178.7 KB1.72 b/px"
-// because the separation lives entirely in `float:right` and `display:block`.
-//
-// Rather than name the classes (they differ per page and would rot), read the
-// page's OWN inline <style> and collect every class whose rule takes it out of
-// the inline flow. Each page carries its whole stylesheet inline, so this needs
-// no CSS engine and no second file — just the rule blocks already in hand.
-// A flex or grid ITEM is its own box while declaring no `display` of its own —
-// the layout comes from its parent, so a rule like `.wu-tag{flex:0 0 92px}` looks
-// inline to a check that only reads the element's own display. /updates found it:
-// `<span class=wu-tag>hit-route</span><span class=wu-desc>counter tick endpoint
-// renamed …</span>` converted to "hit-routecounter tick endpoint renamed …", a
-// slug welded to a title into a string that appears nowhere on the page. Same
-// failure this whole heuristic exists for, one layout mode further on.
-//
-// Matched on the item shorthand and the grid placement properties rather than on
-// a parent lookup, which would need a tree walk this deliberately does without.
-// `flex` needs the leading boundary so it cannot swallow `flex-direction` and
-// `flex-flow`, which are CONTAINER properties and say nothing about this element.
 const OUT_OF_FLOW = /(?:display\s*:\s*(?:block|flex|grid|list-item|table)|float\s*:\s*(?:left|right)|(?:^|[;{\s])flex\s*:|flex-basis\s*:|grid-(?:area|column|row)\s*:)/i;
 
-// Elements renderInline turns into a standalone Markdown token. They are already
-// self-separating in the output, so promoting them to blocks can only lose them.
 const SELF_TOKEN = new Set(["img"]);
 
-// A grid or flex CONTAINER makes every element child a box of its own, and the
-// children declare nothing to say so: /lwe's buddy row is `.buddy{display:grid}`
-// around a name, a tagline and a status chip, and its twin read "**eFuses**a bit
-// that goes 0 to 1 once and never comes backchat". So each child is rendered on
-// its own, and the children are laid back out the way the page shows them: a
-// flex row that doesn't wrap on one line, a grid row by row when its column
-// count can be read, and anything else (a flex column, a wrapping row, an
-// auto-fill grid) one child per line.
-const CONTAINER = /display\s*:\s*(?:flex|grid)\b/i; // inline-flex sits inside a line of text, so it stays inline
+const CONTAINER = /display\s*:\s*(?:flex|grid)\b/i;
 
 export function collectBlockClasses(html) { return new Set(rulesWhere(html, OUT_OF_FLOW).keys()); }
 
-// class -> how many children share a line: Infinity for a flex row that doesn't wrap, N for a grid
-// with N readable columns, 1 otherwise
 export function collectContainerClasses(html): Map<string, number> {
   const found = new Map<string, number>();
-  // a grid often takes its columns from a contextual rule: /garage/av2's
-  // `.dd-row{display:grid}` gets them from `.dd-speeds .dd-row{...}`
   const columns = rulesWhere(html, /grid-template-columns/i);
   for (const [cls, own] of rulesWhere(html, CONTAINER)) {
     const decls = own + ";" + (columns.get(cls) ?? "");
     const flex = /display\s*:\s*flex\b/i.test(decls);
-    // a wrapping flex row is a gallery of cards, one row per screen width, so
-    // only a row that never wraps (a title and its badge) reads as one line
     const across = flex ? (/flex-(?:direction|flow)\s*:\s*column|flex-(?:wrap|flow)\s*:[^;]*\bwrap\b/i.test(decls) ? 1 : Infinity) : gridColumns(decls);
     found.set(cls, Math.max(found.get(cls) ?? 1, across));
   }
   return found;
 }
 
-// The widest track count any `grid-template-columns` gives, or 1 when it can't
-// be read without a layout engine (auto-fill, auto-fit, a named template, none
-// at all). Widest, because a narrow-screen rule (`1fr 1fr` under 620px) is the
-// same row reflowed, and the twin reads the desktop layout.
 function gridColumns(decls: string): number {
   let widest = 1;
   for (const m of decls.matchAll(/grid-template-columns\s*:\s*([^;}]+)/gi)) widest = Math.max(widest, tracks(m[1]));
@@ -168,17 +94,13 @@ function tracks(value: string): number {
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
-// class -> the declarations of every rule that names it last and matches `test`
 function rulesWhere(html, test: RegExp): Map<string, string> {
   const found = new Map<string, string>();
   for (const style of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
-    // strip comments, then walk `selector { decls }` pairs
     const css = style[1].replace(/\/\*[\s\S]*?\*\//g, "");
     for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       if (!test.test(rule[2])) continue;
       for (const sel of rule[1].split(",")) {
-        // take the last simple class in the selector, so both `.enc-bpp` and
-        // `.lcd .label` contribute the class that actually gets the box
         const m = /\.([A-Za-z_][\w-]*)\s*$/.exec(sel.trim());
         if (m) found.set(m[1], (found.get(m[1]) ?? "") + ";" + rule[2]);
       }
@@ -199,7 +121,6 @@ const IMPLIED_CLOSE = {
   li: new Set(["li"]),
   dt: new Set(["dt", "dd"]),
   dd: new Set(["dt", "dd"]),
-  // a new table section closes the open cell, then the row, then the section
   td: new Set(["td", "th", "tr", "thead", "tbody", "tfoot"]),
   th: new Set(["td", "th", "tr", "thead", "tbody", "tfoot"]),
   tr: new Set(["tr", "thead", "tbody", "tfoot"]),
@@ -216,8 +137,6 @@ const ENTITIES = {
   auml: "\u00e4", szlig: "\u00df", ntilde: "\u00f1", minus: "\u2212", plusmn: "\u00b1",
   frac12: "\u00bd", sup2: "\u00b2", sup3: "\u00b3", micro: "\u00b5", infin: "\u221e",
   ne: "\u2260", le: "\u2264", ge: "\u2265", asymp: "\u2248", bull: "\u2022",
-  // found by the minifier check: these leaked into the twins and llms-full.txt
-  // as written ("Lesi&nacute;ski", "round &divide;1000")
   divide: "\u00f7", rsaquo: "\u203a", lsaquo: "\u2039", nacute: "\u0144", chi: "\u03c7",
   dagger: "\u2020", Dagger: "\u2021", approx: "\u2248", boxbox: "\u29c9", blacktriangle: "\u25b4",
 };
@@ -235,30 +154,14 @@ export function decodeEntities(s) {
   });
 }
 
-// ── tokenizer ───────────────────────────────────────────────────────────────
-// Attribute values are read with quote awareness so a ">" inside an attribute
-// (common in our inline SVG data: URIs and CSP-ish strings) cannot end the tag
-// early. That single case is why the naive /<[^>]*>/ used by the search index
-// is fine for flattening text and wrong for building a tree.
-
 type Attrs = Record<string, string>;
 
-// What the tokenizer emits. Written down rather than inferred because the
-// accumulator below is an empty literal, which infers `never[]` once
-// strictNullChecks turns off evolving-array inference.
-//
-// `raw` and `owner` are one fact rather than two optional ones: a raw-text run
-// always knows which element produced it, and that pairing is what lets the tree
-// builder drop a <script> body by owner without proving the field is there.
 type Token =
   | { t: "text", v: string, raw?: false, owner?: undefined }
   | { t: "text", v: string, raw: true, owner: string }
   | { t: "open", name: string, attrs: Attrs, self: boolean }
   | { t: "close", name: string };
 
-// The tree. A text node carries a value and no children; everything else is an
-// element. The stack only ever holds elements, which is why `top().children` is
-// safe to push into.
 type TextNode = { name: "#text", value: string };
 type ElementNode = { name: string, attrs: Attrs, children: Node[] };
 type Node = TextNode | ElementNode;
@@ -297,7 +200,6 @@ function tokenize(html) {
     tokens.push({ t: "open", name: tag.name, attrs: tag.attrs, self: tag.self });
     i = tag.end;
 
-    // raw-text elements swallow everything up to their matching close tag
     if (RAW_TEXT.has(tag.name) && !tag.self) {
       const closeRe = new RegExp(closeTagSource(tag.name), "i");
       const rest = html.slice(i);
@@ -337,8 +239,6 @@ function readTag(html, start) {
       attrs[attr] = decodeEntities(html.slice(i + 1, end === -1 ? html.length : end));
       i = end === -1 ? html.length : end + 1;
     } else {
-      // `[^\s>]*` cannot fail (it matches empty), but `exec` is typed nullable
-      // and the reader should not have to prove that to themselves twice.
       const uv = /^[^\s>]*/.exec(html.slice(i))?.[0] ?? "";
       attrs[attr] = decodeEntities(uv);
       i += uv.length;
@@ -347,27 +247,20 @@ function readTag(html, start) {
   return { name, attrs, self, end: i };
 }
 
-// ── tree ────────────────────────────────────────────────────────────────────
-
-// Exported for the minifier check (contract-the-minifier-keeps-every-page-meaning),
-// which wants a reader written apart from the minifier to judge it.
 export { parse as parseHtml };
 
 function parse(html) {
   const root: ElementNode = { name: "#root", attrs: {}, children: [] };
-  // Elements only. A text node is pushed into a parent's children and never
-  // becomes one, which is the invariant that makes `top().children` total.
   const stack: ElementNode[] = [root];
   const top = () => stack[stack.length - 1];
 
   for (const tk of tokenize(html)) {
     if (tk.t === "text") {
-      if (tk.raw && RAW_TEXT_DISCARD.has(tk.owner)) continue; // answer keys stop here
+      if (tk.raw && RAW_TEXT_DISCARD.has(tk.owner)) continue;
       top().children.push({ name: "#text", value: decodeEntities(tk.v) });
       continue;
     }
     if (tk.t === "open") {
-      // close whatever this tag implicitly ends (unclosed <p>, <li>, <td>…)
       for (;;) {
         const cur = top();
         const implied = IMPLIED_CLOSE[cur.name];
@@ -379,14 +272,11 @@ function parse(html) {
       if (!tk.self && !VOID.has(tk.name)) stack.push(node);
       continue;
     }
-    // close: unwind to the nearest matching open, tolerating stray closers
     const idx = stack.map((n) => n.name).lastIndexOf(tk.name);
     if (idx > 0) stack.length = idx;
   }
   return root;
 }
-
-// ── rendering ───────────────────────────────────────────────────────────────
 
 const dropped = (node) => {
   if (DROP.has(node.name)) return true;
@@ -399,7 +289,6 @@ const dropped = (node) => {
 };
 
 const hasClass = (node, name) => (node.attrs?.class || "").split(/\s+/).includes(name);
-// how many of this node's children share a line, if it's a grid or flex container
 const across = (node, ctx): number => {
   let n = 0;
   for (const c of (node.attrs?.class || "").split(/\s+/)) n = Math.max(n, ctx.containerClasses?.get(c) ?? 0);
@@ -407,19 +296,8 @@ const across = (node, ctx): number => {
 };
 const isContainer = (node, ctx) => across(node, ctx) > 0;
 
-// Tags the inline path gives a meaning of its own: a link, emphasis, code, an
-// image. A box that is one of these renders through that path so it keeps it.
 const INLINE_TOKEN = new Set(["a", "b", "strong", "em", "i", "cite", "var", "code", "kbd", "samp", "sup", "sub", "del", "s", "img"]);
 
-// Render a node's children, laid out as its CSS lays them out. Each child of a
-// container renders alone: a link, bold or image through the inline path, so it
-// keeps its meaning, and anything else (a plain <span> name cell) through the
-// block path, so a block-level part inside it (/lwe's `.pm` tagline, which is
-// `display:block`) still comes out as its own line. Then the boxes go back into rows (a flex row is one row, a grid
-// of N columns a row per N children, anything else a row per child), and a row
-// shares one line only when every box in it is one plain line. A heading, a
-// code fence, a table or a list keeps its own lines, or the Markdown breaks:
-// joining blindly fused /garage/blueprint's code onto one line.
 const STRUCTURED = /\n|^(?:#{1,6} |```|\||[-*+] |> |\d+\. )/;
 function renderChildren(node, ctx, depth) {
   const width = across(node, ctx);
@@ -440,11 +318,8 @@ function renderChildren(node, ctx, depth) {
 const isText = (n) => n.name === "#text";
 const EMPTY = new Set();
 
-// collapse runs of whitespace the way HTML rendering does, so markdown output
-// does not inherit the source file's indentation
 const squeeze = (s) => s.replace(/\s+/g, " ");
 
-// characters that would start a markdown construct anywhere in a line
 const escapeMd = (s) => s.replace(/([\\`*_[\]<>])/g, "\\$1");
 
 // Markers that start a block only at the start of a LINE, so they are escaped
@@ -462,9 +337,6 @@ function renderInline(nodes, ctx) {
   for (const n of nodes) {
     if (isText(n)) {
       if (ctx.raw) { out += n.value; continue; }
-      // Whitespace collapses ACROSS text nodes, the way a browser lays it out.
-      // Two nodes can meet with a space on each side when a comment splits
-      // them: the homepage's `2026</time> <!-- … --> · You` read `2026  · You`.
       const t = escapeMd(squeeze(n.value));
       out += t.startsWith(" ") && /\s$/.test(out) ? t.slice(1) : t;
       continue;
@@ -476,7 +348,6 @@ function renderInline(nodes, ctx) {
       case "br": out += ctx.inCell ? "<br>" : "  \n"; break;
       case "code": case "kbd": case "samp": {
         const t = textOf(n);
-        // pick a fence that cannot collide with backticks inside the span
         const ticks = "`".repeat(Math.max(1, longestRun(t, "`") + 1));
         out += t ? `${ticks}${t.includes("`") ? " " : ""}${t}${t.includes("`") ? " " : ""}${ticks}` : "";
         break;
@@ -495,17 +366,7 @@ function renderInline(nodes, ctx) {
         const inner = renderInline(n.children, ctx).trim();
         const href = n.attrs.href || "";
         if (!inner) break;
-        // in-page anchors carry nothing for a reader, and a script-bearing
-        // scheme carries worse than nothing: a twin is the agent-facing copy of
-        // a page, so a data:text/html href would hand a reader a payload dressed
-        // as a citation. No page here authors one, and the check is widened
-        // anyway because the cost is a regex and the input set only ever grows.
         if (!href || href.startsWith("#") || executesRatherThanAddresses(href)) { out += inner; break; }
-        // A glossary term (<a class="term" data-t="srgb" … title="…">) becomes
-        // a reference link, [sRGB][srgb], and its definition joins the glossary
-        // readDocument appends to the twin. The key, the source and the
-        // definition all survive, so a page rendered from the twin can write the
-        // term back byte for byte, and an agent gets the definitions too.
         const key = hasClass(n, "term") ? (n.attrs["data-t"] || "") : "";
         const title = (n.attrs.title || "").trim();
         if (ctx.terms && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(key) && title) {
@@ -519,7 +380,6 @@ function renderInline(nodes, ctx) {
       case "img": {
         const alt = (n.attrs.alt || "").trim();
         const src = n.attrs.src || "";
-        // a decorative image with no alt text is decoration; say nothing
         if (!src || !alt) break;
         out += `![${escapeMd(alt)}](${absolute(src, ctx.origin)})`;
         break;
@@ -554,9 +414,6 @@ export function absolute(href, origin) {
 
 function renderBlocks(nodes, ctx, depth = 0) {
   const out: string[] = [];
-  // consecutive inline-level siblings belong to one paragraph. Buffer them and
-  // flush at the next block boundary, so a bold lead-in and the sentence that
-  // follows it do not become two blocks.
   let run: string[] = [];
   const flush = () => {
     if (!run.length) return;
@@ -567,24 +424,12 @@ function renderBlocks(nodes, ctx, depth = 0) {
 
   for (const n of nodes) {
     if (isText(n)) {
-      // A space between two inline siblings is content: dropping it fused
-      // /garage/iroh's `<a>QUIC</a> <a>hole-punching</a>` into one word. One
-      // with nothing inline before it is indentation, and flush() trims one
-      // left at the end of the run.
       if (squeeze(n.value).trim() || run.length) run.push(n);
       continue;
     }
     if (dropped(n)) continue;
     const cls = (n.attrs?.class || "").split(/\s+/).filter(Boolean);
     const promoted = ctx.blockClasses || EMPTY;
-    // Class-based promotion exists to break up TEXT that would otherwise run
-    // together, so it must not reach an element that renderInline already emits
-    // as a token of its own. An <img> has no text, so the block switch below has
-    // no case for it and it renders as nothing: /lwe/encoding's sample photo
-    // vanished from its twin the moment `.bpp-img{flex:0 0 auto}` started
-    // counting as out-of-flow. A named tag in BLOCK still wins, as before.
-    // (a block-level grid or flex container is already here: OUT_OF_FLOW reads
-    // its display, and renderChildren lays its children out below)
     const isBlock = BLOCK.has(n.name)
       || (!SELF_TOKEN.has(n.name) && cls.some((c) => promoted.has(c)));
     if (!isBlock) { run.push(n); continue; }
@@ -593,11 +438,6 @@ function renderBlocks(nodes, ctx, depth = 0) {
     switch (n.name) {
       case "h1": case "h2": case "h3": case "h4": case "h5": case "h6": {
         const level = Number(n.name[1]);
-        // A heading is one line, but its CSS can still lay a part out as a box
-        // of its own: /lwe's `<b>Learning With Errors</b><span class="tag">…`
-        // read `**Learning With Errors**explaining hard things`. When a child is
-        // promoted, render the parts as blocks and rejoin them on one line, the
-        // way a caption is; otherwise the inline path is unchanged.
         const promotedChild = (n.children || []).some((c) => !isText(c)
           && (c.attrs?.class || "").split(/\s+/).some((k) => (ctx.blockClasses || EMPTY).has(k)));
         const s = (promotedChild
@@ -606,28 +446,13 @@ function renderBlocks(nodes, ctx, depth = 0) {
         if (s) out.push(`${"#".repeat(level)} ${s}`);
         break;
       }
-      // These are leaf blocks, but their children still go through renderBlocks
-      // so a child the page's CSS promoted out of the inline flow (a floated
-      // byte count in a figcaption, say) becomes its own line instead of being
-      // concatenated onto the text before it. Children that are all inline
-      // buffer into a single run and come back out as one paragraph, which is
-      // the ordinary case and is unchanged.
       case "p": case "figcaption": case "summary": case "caption": {
         const s = renderChildren(n, ctx, depth).trim();
         if (!s) break;
-        // A caption is one thought even when its CSS lays the parts out as
-        // separate boxes ("PNG lossless", "178.7 KB", "1.72 b/px"). Rejoin them
-        // on one line; a <p> keeps the blank-line split, because there the
-        // promotion really did mean a new line.
         const caption = n.name === "figcaption" || n.name === "caption";
         out.push(caption ? s.replace(/\n{2,}/g, " · ") : s);
         break;
       }
-      // A link the page lays out as a box: a card, a buddy row. The block path
-      // rendered only its children, so the twin kept the words and lost where
-      // they pointed (every /lwe buddy). Its parts are boxes too, so render them
-      // as blocks, then put them on one line the way a caption is, since a
-      // Markdown link holds inline text only. A heading inside reads as text.
       case "a": {
         const inner = renderChildren(n, ctx, depth).trim()
           .split(/\n{2,}/).map((b) => b.replace(/^#{1,6} /, "").replace(/\n/g, " ").trim()).filter(Boolean).join(" · ");
@@ -669,9 +494,6 @@ function renderBlocks(nodes, ctx, depth = 0) {
         break;
       }
       case "table": {
-        // renderTable walks rows, so a <caption> never reached the twin:
-        // /garage/wire lost 197 words that way. It renders as the paragraph
-        // above the table, which is where a caption sits by default.
         for (const c of n.children || []) {
           if (c.name === "caption" && !dropped(c)) {
             const cap = renderBlocks([c], ctx, depth);
@@ -693,9 +515,6 @@ function renderBlocks(nodes, ctx, depth = 0) {
         break;
       }
       default: {
-        // the tag-chip strip is a row of one-word <span class="chip"> badges.
-        // As blocks they read as a column of orphan words; as one line they
-        // read as what they are.
         if (hasClass(n, "cap-strip")) {
           const chips: string[] = [];
           const collect = (x) => {
@@ -713,16 +532,12 @@ function renderBlocks(nodes, ctx, depth = 0) {
     }
   }
   flush();
-  // a rule with nothing after it was separating content from the understanding
-  // check we dropped; it now separates content from nothing
   while (out.length && out[out.length - 1] === "---") out.pop();
   return out.join("\n\n");
 }
 
 function renderTable(table, outer) {
-  // Cells render with inCell set, so a <br> stays <br> (see renderInline).
   const ctx = { ...outer, inCell: true };
-  // One rendered table row: its cells, and whether it was the header row.
   const rows: { cells: string[], head: boolean }[] = [];
   const walk = (node) => {
     for (const c of node.children || []) {
@@ -768,11 +583,6 @@ function renderTable(table, outer) {
   return lines.join("\n");
 }
 
-// ── public API ──────────────────────────────────────────────────────────────
-
-// Search needs the same content boundary as the Markdown twin, with readable
-// words rather than link syntax. Preserve inline adjacency (micro<em>scope</em>)
-// while separating block boxes, just as the Markdown renderer does.
 function renderText(nodes, ctx, items = false) {
   let out = "";
   for (const n of nodes) {
@@ -787,15 +597,11 @@ function renderText(nodes, ctx, items = false) {
   return out;
 }
 
-// The glossary that closes a twin: one CommonMark link reference definition
-// per term, in the order the page first uses them. A title is quoted, so a
-// backslash and a double quote inside it are escaped, backslash first.
 function glossary(terms: Map<string, { href: string; title: string }>): string {
   const quote = (t: string) => t.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\s+/g, " ");
   return [...terms].map(([key, { href, title }]) => `[${key}]: ${href} "${quote(title)}"`).join("\n");
 }
 
-/** Parse a full HTML document into { title, description, canonical, status, body }. */
 export function readDocument(html, { origin = "https://aadhar.sh", format = "markdown" }: { origin?: string; format?: "markdown" | "text" } = {}) {
   const root = parse(html);
   const meta = collectMeta(root);
@@ -821,9 +627,6 @@ function collectMeta(root) {
     if (n.name === "link" && (n.attrs.rel || "").toLowerCase() === "canonical") {
       out.canonical = n.attrs.href || "";
     }
-    // the XP status strip at the bottom of every garage/lwe window carries the
-    // page's own provenance line ("added 2026-07-10"), which is worth keeping
-    // even though the strip itself is chrome we drop from the body
     if (n.name === "div" && (n.attrs.class || "").split(/\s+/).includes("status")) {
       for (const c of n.children || []) {
         const t = textOf(c).trim();
@@ -833,13 +636,10 @@ function collectMeta(root) {
     for (const c of n.children || []) visit(c);
   };
   visit(root);
-  // <title> is raw-text tokenized, so decode it here rather than in the tree
   out.title = decodeEntities(out.title);
   return out;
 }
 
-// the payload is `.content` when the page has one (every garage/lwe window
-// does), otherwise <main>, otherwise <body>
 function findContent(root) {
   let main = null, body = null, contentDiv = null;
   const visit = (n) => {

@@ -1,79 +1,5 @@
 #!/usr/bin/env bun
 // bun run bun:pin [--write] [--to X.Y.Z] [--from X.Y.Z] [--keep] [--json <path>]
-//
-// Keeps config/bun-pin.json current, because NOTHING ELSE DOES.
-//
-// Dependabot owns five ecosystems here and none of them owns this string. The
-// npm updater bumps `@types/bun` and never the runtime; the `bun` ecosystem
-// would not help either, since it reads bun.lock rather than the field. So the
-// one version with no updater is the one that compiles the site: cloudflare.config.ts
-// builds with `bun tools/build.ts`, and `/a/` and `/i/` URLs are content
-// addressed, so the pinned bun decides what every returning visitor's cached
-// dictionary is keyed against.
-//
-// THE ANCESTOR of this script is `.github/workflows/bun-release-watch.yml` on
-// the unmerged `ci/bun-release-watch` branch, which asked one question ("has bun
-// 1.4 shipped, so the migration can resume") and answered it on 2026-08-20. This
-// asks the general form and, unlike that one, does not stop at noticing.
-//
-// FIVE GATES, ordered so the cheapest disqualifier runs first. Gate 3 is the
-// only one that can be true and invisible at the same time, which is why it
-// runs before the two that cost a minute.
-//
-//   1. Is there a newer version ON THE PIN'S CHANNEL, and does npm carry it?
-//      A release pin follows GitHub releases; a dated-canary pin follows the
-//      newest dated canary in npm's OWN version list that is already older
-//      than gate 2's window (newestSeasonedCanary in lib/bun-pin.ts). Either
-//      way npm has to carry it, because that is where the setup-bun action
-//      installs from (an `@oven/bun-<platform>` tarball with a registry
-//      sha512) and what Cloudflare's build image resolves. The channel is the
-//      pin's own SHAPE (lib/bun-pin.ts), so this script walks one channel and
-//      never crosses to the other.
-//   2. Is it older than the install policy's own window? bunfig.toml refuses a
-//      PACKAGE published in the last 24 hours; a runtime deserves at least that.
-//      On the canary channel the resolver in gate 1 already chose with this
-//      window, so here it is the assertion for an explicit `--to`. It used
-//      to be the only place the window was read, and the candidate came from
-//      npm's `canary` dist-tag, which names the newest daily publish: that
-//      pair can never both hold, and the pin sat still for six nights
-//      (2026-09-15 to 09-21) while every run exited green.
-//   3. Does its zstd honour `dictionary`? The silent one. See lib/bun-pin.ts.
-//   4. Can it read the committed bun.lock, and does it write the same
-//      lockfileVersion? This is the gate that exists because of what 1.4 DID:
-//      it raised the lockfile from v1 to v2, which broke dependabot's bun
-//      updater for every repository on a current bun and did it silently, by
-//      discarding the file and writing the old format back. A runtime that
-//      changes the lockfile format is a migration rather than a bump.
-//   5. Is the build output BYTE-IDENTICAL, and does the suite still pass? The
-//      real bar, and higher than "the build succeeds": one differing byte mints
-//      a different URL, orphans every a-dict snapshot naming the old hash, and
-//      moves the CSP hashes documents are served under.
-//
-// Gates 3 to 5 live in lib/bun-gates.ts since 2026-09-14, because canary-bun.ts
-// runs the same five against the rolling canary every night. This script keeps
-// the decisions: whether a version is proposable at all (gates 1 and 2), and
-// what to do once it clears (write the pin). The canary script has neither.
-//
-// A RED GATE IS AN ISSUE, since 2026-09-26. bun-pin.yml leaves the job green
-// when a newer bun fails a gate, because "upstream shipped a build we cannot
-// take" is not a fault here, and that is correct for one night. It was also
-// correct for eleven: the suite gate killed a cold cargo build at bun's 5s
-// default every night from 2026-09-15, the pin never moved, and every run
-// said green. `--json` writes the verdict in timbrado's report shape, and the
-// workflow hands it to `timbrado report --target bun-pin`, which keeps ONE
-// issue open for as long as the same gates fail, comments only when the set
-// changes, and closes it the night the pin moves or is current. A candidate
-// that is merely too young (gates 1 and 2) writes no report at all: it clears
-// on its own tomorrow, and a "green again" for it would close an issue about
-// a gate that never ran.
-//
-// CONTROL, and it is permanent rather than a one-off: the PREVIOUS bun is a
-// known-bad runtime, so the script has a red input on hand forever.
-//
-//   bun run bun:pin --from 1.3.13 --to 1.3.14   # must fail at gate 3
-//
-// Without it, a run that reports "nothing to do" on a day when the pin is
-// already current proves only that the comparison ran.
 
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -127,9 +53,6 @@ const gate = (g: Gate) => {
   return g.ok;
 };
 
-// The report bun-pin.yml files through timbrado. The signature is WHICH gates
-// failed, never which candidate failed them, so a fresh candidate carrying
-// yesterday's broken gate adds nothing to the open issue.
 const jsonPath = flag("--json");
 const report = (verdict: "green" | "red", subject: Record<string, string>, reason?: string) => {
   if (!jsonPath) return;
@@ -146,14 +69,6 @@ const report = (verdict: "green" | "red", subject: Record<string, string>, reaso
   writeFileSync(jsonPath, JSON.stringify(out, null, 2) + "\n");
 };
 
-// ---------------------------------------------------------------------------
-// which bun is the baseline
-// ---------------------------------------------------------------------------
-// The running runtime IS the baseline, so it has to BE the pin. A stale bun on
-// PATH would compare the candidate against a third runtime and report a
-// byte-identical build that says nothing about production. This is the mirror
-// image of the guard the retired check-bun.ts carried, which refused to be
-// invoked through bun because that compared bun with bun.
 const pin = readPin(ROOT);
 const pretend = flag("--from");
 const baselineVersion = process.versions.bun;
@@ -170,8 +85,6 @@ if (!baseline.ok) {
   process.exit(2);
 }
 
-// The rolling source updates on installation rather than through a pin PR.
-// An explicit target must still be selected as an exact source by the owner.
 if (pin.version === "canary") {
   if (flag("--to") || pretend) {
     console.error("bun:pin: rolling canary is selected; declare an exact npm pin before comparing explicit versions");
@@ -186,23 +99,11 @@ const current = pretend || pin.version;
 console.log(`pinned:    bun@${pin.version}${pretend ? `  (comparing as if ${pretend}, so nothing will be written)` : ""}`);
 console.log(`baseline:  ${process.execPath}\n`);
 
-// ---------------------------------------------------------------------------
-// 1. is there a newer release ON THE PIN'S CHANNEL, and can every resolver see it?
-// ---------------------------------------------------------------------------
-// THE CHANNEL IS THE PIN'S SHAPE (lib/bun-pin.ts). A release pin follows
-// releases; a dated-canary pin follows npm's version list, taking the newest
-// DATED canary that has already aged past the window, since a dated canary is
-// immutable once published and the rolling tag is not. Crossing channels is a
-// hand edit of config/bun-pin.json and never something this script does on its own,
-// in either direction: a stable pin must not wake up on a canary, and a canary
-// pin must not quietly fall back to the release line the day one ships.
 const channel = channelOf(pin.version);
 const explicitTarget = flag("--to");
 let target = explicitTarget;
 let publishedAt: number | null = null;
 
-// npm has to carry the version either way, and it is also where the publish
-// time comes from, which is the field bunfig.toml's own note tells you to read.
 const npmRes = await fetch(`https://registry.npmjs.org/bun`, { headers: { accept: "application/json" } });
 const npmMeta = npmRes.ok ? await npmRes.json() : null;
 
@@ -234,10 +135,6 @@ if (!target && channel === "stable") {
 }
 
 if (!target && channel === "canary") {
-  // The dated canary npm publishes daily is an immutable version string, so
-  // unlike the GitHub tag it can be pinned, compared and re-fetched. Which one
-  // is chosen WITH gate 2's window, never checked against it afterwards: see
-  // newestSeasonedCanary for the six nights that cost.
   const window = minimumReleaseAgeSeconds(ROOT);
   const seasoned = newestSeasonedCanary(npmMeta, window);
   if (!seasoned) {
@@ -296,9 +193,6 @@ console.log(`candidate: bun@${target}  (${channel} channel)\n`);
   }
 }
 
-// ---------------------------------------------------------------------------
-// 2. the install policy's own window
-// ---------------------------------------------------------------------------
 {
   const window = minimumReleaseAgeSeconds(ROOT);
   if (publishedAt === null) {
@@ -324,16 +218,6 @@ const red = (reason?: string) => {
   if (!pretend) report("red", subject, reason);
 };
 
-// ---------------------------------------------------------------------------
-// the instrument, before anything is downloaded
-// ---------------------------------------------------------------------------
-// The contract suite RUNS every bun watch, and a watch runs on timbrado's Rust
-// engine, which lib/upstream-watches.ts builds on demand. Left to the suite,
-// that cold cargo build is billed to whichever test asks first, under the
-// candidate's clock, so a slow runner reads as a bad bun. Asked for here, as
-// canary-bun.ts does, the build is the instrument's cost, and a runner that
-// cannot build it is exit 2 (a red job) rather than a failed gate the
-// workflow reports as green.
 try {
   ensureTimbradoEngine();
 } catch (err) {
@@ -342,9 +226,6 @@ try {
   process.exit(2);
 }
 
-// ---------------------------------------------------------------------------
-// fetch the candidate
-// ---------------------------------------------------------------------------
 // A release comes from its GitHub tag, as it always has. A dated canary has no
 // per-day GitHub asset and comes from npm's `@oven/bun-<platform>` tarball,
 // whose sha512 the registry records at publish time and which is verified
@@ -391,9 +272,6 @@ try {
   }
 }
 
-// ---------------------------------------------------------------------------
-// 3. the silent one
-// ---------------------------------------------------------------------------
 if (!gate(zstdGate(candidate))) {
   console.log("\nbun:pin: NOT proposable. build.ts feature-detects the same collapse and throws, so this would");
   console.log("  fail the build 40 seconds in rather than ship no-op deltas, which is a poor way to learn it.");
@@ -402,9 +280,6 @@ if (!gate(zstdGate(candidate))) {
   process.exit(1);
 }
 
-// ---------------------------------------------------------------------------
-// 4. the lockfile, in both directions
-// ---------------------------------------------------------------------------
 gate(lockfileReadGate(candidate, ROOT));
 gate(lockfileFormatGate(candidate, process.execPath, ROOT, WORK));
 
@@ -421,7 +296,6 @@ if (results.some((r) => !r.ok)) {
 gate(byteIdenticalBuildGate(candidate, process.execPath, ROOT));
 gate(contractSuiteGate(candidate, ROOT));
 
-// ---------------------------------------------------------------------------
 if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
 
 const failed = results.filter((r) => !r.ok);
@@ -432,10 +306,6 @@ if (failed.length) {
   process.exit(1);
 }
 
-// `@types/bun` is DEPENDABOT'S, and the two are allowed to disagree for a day.
-// DEPENDENCIES.md already worked this through: the release-age policy delayed
-// the types pin behind the runtime once and it caught up on its own, which is a
-// wait rather than a fork. Say it, never enforce it.
 const types = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).devDependencies?.["@types/bun"];
 if (types && types !== target) {
   note(`@types/bun is ${types}; dependabot owns that pin and usually follows within a day.`);
@@ -446,8 +316,6 @@ if (pretend) {
   process.exit(0);
 }
 
-// Green whether or not --write moved the pin: every gate passed, so an issue
-// about a gate that failed is answered either way.
 report("green", subject);
 
 if (has("--write")) {

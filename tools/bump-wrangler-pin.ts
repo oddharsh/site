@@ -1,39 +1,5 @@
 #!/usr/bin/env bun
 // bun run wrangler:pin [--write] [--ref main|<sha>] [--json <report>]
-//
-// Keeps the wrangler pin on a COMMIT of cloudflare/workers-sdk main, the way
-// bump-bun-pin.ts keeps config/bun-pin.json on a dated bun canary.
-//
-// THE PIN IS A URL, not a version: `https://pkg.pr.new/cloudflare/workers-sdk/
-// wrangler@<sha>`. workers-sdk publishes every commit and PR to pkg.pr.new,
-// the sha form is the only one that names bytes which never move (`@main`
-// floats, and a floating pin breaks `--frozen-lockfile` the next morning), and
-// bun.lock records the tarball's sha512 beside it. Dependabot cannot bump a
-// URL, so this is the one updater the pin has, and `check-wrangler` holds the
-// URL, the lockfile and the installed version together after every move.
-//
-// THE GATES ARE THE CANARY LEG'S. canary-wrangler.ts already installs a
-// pkg.pr.new ref into a detached worktree and runs the dry-run bundle, the
-// route oracle, cal's suite and the harness-booting contract tests against
-// it, so this spawns that script with the resolved sha and reads its JSON. A
-// `changed` verdict (the bundle moved while every gate passed) is still
-// proposable, and the PR body says by how many bytes; a `red` is not.
-//
-// --json keeps the canary's report for the nightly issue reporter. It also
-// evaluates an unchanged pin, so the watches still run every night. Reporting
-// and proposing consume one evaluation of one resolved SHA. Without --json an
-// unchanged pin remains a cheap no-op; --write is still required to move it.
-//
-// RETENTION IS THE OPEN RISK, and it is worth reading before trusting this in
-// the release path. pkg.pr.new is a stackblitz-run free service whose README
-// states no retention policy. A tarball that vanishes fails `bun install
-// --frozen-lockfile` loudly on the next build (the lockfile carries its
-// sha512, so nothing can silently substitute), and the repair is one line:
-// pin a release number again and relock. Advancing nightly keeps the pinned
-// sha days old rather than months, which is the only mitigation available.
-//
-// Exit codes: 0 nothing to do or pin moved, 1 the candidate failed a gate, 2
-// the instrument could not run.
 
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -57,7 +23,6 @@ if (has("--json") && (!jsonPath || jsonPath.startsWith("--"))) {
   console.error("--json requires a report path");
   process.exit(2);
 }
-// A failed evaluation must not leave a previous run's report for the caller.
 if (jsonPath) rmSync(jsonPath, { force: true });
 
 if (!process.versions.bun) {
@@ -75,9 +40,6 @@ if (!currentSha) {
 }
 console.log(`pinned:    wrangler@${currentSha}`);
 
-// ---------------------------------------------------------------------------
-// 1. resolve the ref to a commit, from the header pkg.pr.new itself sends
-// ---------------------------------------------------------------------------
 // `x-commit-key: cloudflare:workers-sdk:<sha>` on a HEAD of `@main` is the
 // sha that tarball was built from, so the pin names a commit without
 // trusting a branch name. A ref that is already a sha is checked the same way.
@@ -104,9 +66,6 @@ if (unchanged && !jsonPath) {
   process.exit(0);
 }
 
-// ---------------------------------------------------------------------------
-// 2. the canary leg's gates, against exactly that commit
-// ---------------------------------------------------------------------------
 const scratch = mkdtempSync(join(tmpdir(), "wrangler-pin-"));
 const reportPath = join(scratch, "report.json");
 const run = spawnSync(process.execPath, ["tools/canary-wrangler.ts", "--ref", full, "--json", reportPath], {
@@ -168,11 +127,6 @@ if (!has("--write")) {
   process.exit(0);
 }
 
-// ---------------------------------------------------------------------------
-// 3. write the pin, and relock with the runtime that owns the lockfile
-// ---------------------------------------------------------------------------
-// A surgical replace of one line rather than a JSON round trip, for the reason
-// lib/bun-pin.ts gives: package.json carries paragraphs in its comment fields.
 const url = `${PKG_PR_NEW}/wrangler@${target}`;
 const text = readFileSync(join(ROOT, "package.json"), "utf8");
 const next = text.replace(`"wrangler": "${current}"`, `"wrangler": "${url}"`);
@@ -182,10 +136,6 @@ if (next === text) {
 }
 writeFileSync(join(ROOT, "package.json"), next);
 
-// A project may name wrangler too, by the root's exact string (cf-garage does,
-// for the `cf` CLI), and check-wrangler fails the moment the two disagree. So
-// every tracked manifest carrying the OLD pin moves with the root in the same
-// write, or this job would red its own PR every night.
 const manifests = spawnSync("git", ["ls-files", "-z", "--", ":(glob)**/package.json"], { cwd: ROOT, encoding: "utf8" })
   .stdout.split("\0").filter((name) => name && name !== "package.json");
 for (const manifest of manifests) {

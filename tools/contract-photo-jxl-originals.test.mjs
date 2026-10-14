@@ -48,24 +48,19 @@ test("a migrated photo's old JPEG URL answers 301 to its JPEG XL from the index,
   assert.equal(res.status, 301);
   assert.equal(res.headers.get("location"), `https://aadhar.sh/images/full/${full}`);
   assert.deepEqual(asked, [], "the index answers from module memory");
-  // Control: the .jxl itself is served, not redirected again.
   const direct = await serve(full, { get: async () => object("jxl") });
   assert.equal(direct.res.status, 200);
 });
 
 test("a JPEG deleted before its move deploys falls back to the .jxl beside it", async () => {
-  // Between migrate-originals.ts --delete and the deploy that records the
-  // move, production's index still names the JPEG, so R2 misses.
   const { res, asked } = await serve("X9.JPG", { head: async (key) => (key === "X9.jxl" ? {} : null) });
   assert.equal(res.status, 301);
   assert.equal(res.headers.get("location"), "https://aadhar.sh/images/full/X9.jxl");
   assert.deepEqual(asked, [["get", "X9.JPG"], ["head", "X9.jxl"]]);
-  // Controls: no .jxl either is a plain 404, and a JPEG still in R2 is served.
   assert.equal((await serve("X9.JPG")).res.status, 404);
   const present = await serve("X9.jpg", { get: async () => object("jpeg") });
   assert.equal(present.res.status, 200);
   assert.equal(present.res.headers.get("content-type"), "image/jpeg");
-  // A miss on a non-JPEG key asks for no fallback.
   assert.deepEqual((await serve("X9.png")).asked, [["get", "X9.png"]]);
 });
 
@@ -74,7 +69,6 @@ test("the original's route serves a .jxl key as image/jxl", async () => {
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("content-type"), "image/jxl", "an upload without a type still names its format");
   assert.deepEqual(asked, [["get", "X1.jxl"]]);
-  // Control: an unknown extension is refused before R2 is asked.
   const refused = await serve("X1.jxlz");
   assert.equal(refused.res.status, 404);
   assert.deepEqual(refused.asked, []);
@@ -98,8 +92,6 @@ test("a matching If-None-Match answers 304 from the body-less object R2 returns"
     assert.equal(res.headers.get("cache-control"), "public, max-age=31536000, immutable", "the 304 repeats the 200's freshness");
     assert.deepEqual(asked, [["get", "X1.jxl"]], "get's own answer settles it, with no head()");
   }
-  // Controls: a stale etag gets the whole original, and a missing key is
-  // still a 404 under the same header.
   const stale = await serve("X1.jxl", r2, { "if-none-match": '"old"' });
   assert.equal(stale.res.status, 200);
   assert.equal(await stale.res.text(), "jxl");

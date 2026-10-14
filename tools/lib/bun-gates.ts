@@ -1,24 +1,5 @@
 // bun-gates.ts — the gates a candidate bun has to clear, shared by the two
 // scripts that run them.
-//
-// `bump-bun-pin.ts` proposes a newer STABLE bun and carried these inline until
-// 2026-09-14, when `canary-bun.ts` wanted the same five against the rolling
-// canary. Two copies of a byte-identical-build gate agree on the day they are
-// written and rot separately after, which is the argument lib/bun-pin.ts
-// already makes for the zstd probe, so the gates moved here and both scripts
-// call them. The bumper decides WHETHER to run them (release age, npm
-// carrying the version) and what to do after (write the pin); the canary
-// script never writes anything. What they share is the middle.
-//
-// Each gate returns a record rather than printing, so a caller can render a
-// table for a terminal or a JSON file for a workflow. `ok` is the verdict,
-// `detail` is one line, `notes` are the lines worth reading under a failure.
-//
-// The build gate THROWS on a failed build rather than exiting, because
-// `process.exit()` skips `finally` and the finally is what puts `.build/`
-// back. Inherited from the retired check-bun.ts, which left the tree holding
-// a half-written `.build/` beside an orphan baseline the first time a bun
-// old enough to fail the build ran through it.
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -36,13 +17,6 @@ const run = (cmd: string, args: string[], opts: Record<string, unknown> = {}) =>
 const tail = (out: { stdout?: string | null; stderr?: string | null }, lines = 2) =>
   `${out.stderr || ""}\n${out.stdout || ""}`.trim().split("\n").slice(-lines).join(" ");
 
-/**
- * Fetch a bun binary into `work` and return its path. Two shapes: a GitHub
- * release ZIP (the rolling `canary` tag, and releases) and an npm `.tgz`
- * (`@oven/bun-<platform>`, which is where DATED canaries live). Pass the
- * registry's `integrity` for the tgz and the bytes are checked before they
- * are unpacked, which the zip path has never been able to offer. Throws.
- */
 export async function downloadBun(url: string, work: string, integrity?: string): Promise<string> {
   rmSync(work, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
@@ -84,8 +58,6 @@ export function bunIdentity(exe: string) {
   };
 }
 
-// THE SILENT ONE. See ZSTD_DICTIONARY_PROBE for why a runtime that accepts the
-// option and ignores it produces nothing an API can report.
 export function zstdGate(exe: string): Gate {
   const out = run(exe, ["-e", ZSTD_DICTIONARY_PROBE]);
   const verdict = interpretZstdProbe(out.stdout);
@@ -96,23 +68,12 @@ export function zstdGate(exe: string): Gate {
   };
 }
 
-// READ. `--dry-run` so a candidate runtime never writes into node_modules the
-// pinned one is about to build with.
 export function lockfileReadGate(exe: string, root: string): Gate {
   const out = run(exe, ["install", "--frozen-lockfile", "--dry-run"], { cwd: root });
   const ok = out.status === 0;
   return { name: "reads the committed bun.lock", ok, detail: ok ? "frozen install resolves" : tail(out) };
 }
 
-// WRITE. A mirror of the manifests alone, resolved by each runtime back to
-// back, which is what controls for registry drift: a caret range that floated
-// upstream floats for both, seconds apart, so a difference between the two is
-// attributable to the runtime rather than to the registry.
-//
-// Only the FORMAT fields fail. Comparing the whole file would fail on drift,
-// measured 2026-08-24: the pinned bun does not reproduce the committed
-// bun.lock byte-for-byte, because `vite` had moved 8.2.1 to 8.2.2 under a
-// caret since the lockfile was written. That is a fact about the registry.
 export function lockfileFormatGate(candidate: string, pinned: string, root: string, work: string): Gate {
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   const manifests = ["package.json", "bunfig.toml", ...(pkg.workspaces ?? []).map((w: string) => join(w, "package.json"))];
@@ -156,7 +117,6 @@ export function lockfileFormatGate(candidate: string, pinned: string, root: stri
   };
 }
 
-/** sha256 of every file under `dir`, keyed by relative path. */
 export function hashTree(dir: string) {
   const files = new Map<string, string>();
   const walk = (abs: string) => {
@@ -170,7 +130,6 @@ export function hashTree(dir: string) {
   return files;
 }
 
-/** The three lists that separate two hashed trees. Empty everywhere means identical. */
 export function diffTrees(a: Map<string, string>, b: Map<string, string>) {
   const onlyA = [...a.keys()].filter((k) => !b.has(k));
   const onlyB = [...b.keys()].filter((k) => !a.has(k));
@@ -178,12 +137,6 @@ export function diffTrees(a: Map<string, string>, b: Map<string, string>) {
   return { onlyA, onlyB, differing, identical: onlyA.length === 0 && onlyB.length === 0 && differing.length === 0 };
 }
 
-// THE REAL BAR, and higher than "the build succeeds": one differing byte
-// mints a different URL, orphans every a-dict snapshot naming the old hash,
-// and moves the CSP hashes documents are served under.
-//
-// Leaves `.build/` holding the PINNED output. A tree staged by a runtime this
-// repo has not adopted is not something a later `wrangler deploy` should find.
 export function byteIdenticalBuildGate(candidate: string, pinned: string, root: string): Gate {
   const BUILD = join(root, ".build");
   const SHADOW = join(root, ".build.pinned-baseline");
@@ -230,11 +183,6 @@ export function byteIdenticalBuildGate(candidate: string, pinned: string, root: 
   }
 }
 
-/**
- * The arguments `bun run test` hands to `bun test`, read out of package.json
- * rather than restated. A suite run with different flags is a different suite
- * from the one `validate` gates on, and a restated copy is how the two drift.
- */
 export function suiteArgs(root: string): string[] {
   const script = String(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts?.test ?? "");
   const [cmd, sub, ...args] = script.trim().split(/\s+/);
@@ -264,20 +212,10 @@ export function suiteCounts(text: string): { pass: number; fail: number } {
   };
 }
 
-/** A gate's one-line reading of those counts. A missing summary says so, rather than printing "-1 fail" as if a test had failed. */
 export function suiteCountsText({ pass, fail }: { pass: number; fail: number }): string {
   return fail < 0 ? "no bun test summary in the output" : `${pass} pass, ${fail} fail`;
 }
 
-// THE GATE RUNS `bun run test`'s OWN FLAGS, and restating them is what broke
-// it. It used to pass `--preload` alone, on the argument that a suite without
-// the preload is a different suite from `validate`'s. True, and the same holds
-// for `--timeout=30000`, which it dropped: the suite ran on bun's 5s per-test
-// default, so the one test that cargo-builds timbrado's engine cold was killed
-// at 5010ms every night from 2026-09-15, and the bumper proposed nothing while
-// exiting green. The notes carry the `error:` lines as well as the `(fail)`
-// ones, because a gate that names only the failing test leaves the reader to
-// reproduce it before they learn why.
 export function contractSuiteGate(exe: string, root: string, timeoutMs = 15 * 60_000): Gate {
   const out = run(exe, ["test", ...suiteArgs(root)], { cwd: root, timeout: timeoutMs });
   const text = `${out.stdout}\n${out.stderr}`;

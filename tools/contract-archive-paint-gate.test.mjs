@@ -17,7 +17,6 @@ test("the gate is the first entropy byte of the scan that starts the last channe
 
   const libjpeg = paintGate(fixture("c-zc84-libjpeg"));
   assert.deepEqual(libjpeg.scans, ["1,2,3:0-0"]);
-  // interleaved DC starts every channel in the first scan, 318 bytes in
   assert.equal(libjpeg.gate, 318);
   assert.equal(gateClass(libjpeg), "colour, interleaved DC");
 
@@ -29,6 +28,5 @@ test("a prefix that ends before the last channel starts reports no gate rather t
   const cut = paintGate(whole.subarray(0, 13760));
   assert.equal(cut.gate, null);
   assert.equal(gateClass(cut), "colour, no paint within the prefix");
-  // control: the complete scan header is enough, since the gate is where it ends
   assert.equal(paintGate(whole.subarray(0, 13763)).gate, 13763);
 });

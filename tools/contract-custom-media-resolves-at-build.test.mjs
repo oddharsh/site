@@ -8,21 +8,6 @@ import {
 } from "./contract-shared.ts";
 import { parseCss } from "./lib/css-parse.ts";
 
-// No browser implements @custom-media (cssdb 8.11: zero engines), so the
-// definitions in src/styles/custom-media.css exist only if tools/lib/css-parse.ts
-// expands them. That module is the ONE parser every served stylesheet goes
-// through (luna.css, the four first-interaction sheets, every inline <style>,
-// the Worker's /*min*/ literals, and check-page-contracts' scaffold check), so
-// proving it here proves it for all of them. Three claims, each with the
-// failure it is written against:
-//
-//   1. every declared name expands to its query, in the minified AND the
-//      unminified path, because a name that survived to the wire is a media
-//      query no engine will ever match and the rule behind it is dead;
-//   2. an unused definition ships NOTHING, which is what lets the file ride on
-//      every stylesheet for free;
-//   3. a name nothing defines FAILS, by name, rather than passing through.
-
 const DEFS_PATH = new URL("src/styles/custom-media.css", ROOT);
 const defs = readFileSync(DEFS_PATH, "utf8");
 const declared = [...defs.matchAll(/^@custom-media\s+(--[a-z0-9-]+)\s+([^;]+);/gm)].map((m) => [m[1], m[2].trim()]);
@@ -72,9 +57,6 @@ test("a name nothing defines fails the parse by name, rather than shipping a que
 });
 
 test("the append leaves the caller's line numbers alone", () => {
-  // A parse error on line 3 of the caller's CSS must report line 3, which is
-  // why the definitions are appended rather than prepended. A prepend would
-  // shift every reported line by the length of the definitions file.
   let err;
   try { parseCss("fixture.css", `.a { color: red }\n.b { color: blue }\n}\n.c { d: 1 }`, { minify: true }); } catch (e) { err = e; }
   assert.ok(err, "a stray close brace must throw");
@@ -82,11 +64,6 @@ test("the append leaves the caller's line numbers alone", () => {
 });
 
 test("a block left open at end-of-input is reported as that, not as five unknown at-rules", () => {
-  // Lightning recovers an unclosed block by closing it at EOF, which used to
-  // parse clean. With the definitions appended, EOF is now inside the caller's
-  // block and every definition reads as a nested unknown at-rule. The append
-  // turns a silent authoring bug into a failure, and parseCss names the bug
-  // rather than the symptom.
   assert.throws(
     () => parseCss("fixture.css", `.a { color: red }\n.c { d: 1 `, { minify: true }),
     /never closed/,

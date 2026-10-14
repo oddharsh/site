@@ -13,9 +13,6 @@ const steps = workflow.jobs["wire-size"].steps;
 const install = steps.find((step) => step.name === "Define the installer").run;
 const record = steps.find((step) => step.name === "Record both revisions concurrently").run;
 
-// Exercise the real workflow shell against a temporary git repository. Each
-// fake measurement must see the other start before finishing: serial execution
-// fails the barrier. Either measurement can then fail independently.
 for (const failed of ["", "base", "head"]) {
   test(`parallel wire measurements wait for both and propagate ${failed || "no"} failure`, () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "perf parallel ")));

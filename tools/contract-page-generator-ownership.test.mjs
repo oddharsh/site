@@ -63,8 +63,6 @@ test("LWE wiring uses the manifest for navigation and agent discovery", async ()
 
 test("retired Garage wiring refuses before touching a legacy shelf", async () => {
   await fixture(async ({ put, read, cli }) => {
-    // These inputs let the former implementation reach its writer, so the
-    // negative control tests the refusal rather than a missing fixture file.
     const specs = (await readdir(new URL("pipelines/garage/specs/", ROOT))).filter((f) => f.endsWith(".json"));
     const pages = [];
     for (const file of specs) {

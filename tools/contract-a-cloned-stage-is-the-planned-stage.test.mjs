@@ -16,7 +16,6 @@ import {
 
 const { copyServedTree, planServedTree } = await import("./lib/served-tree.ts");
 
-// two roots and a derived path, the shape of public/ + src/pages
 function fixture() {
   const cwd = mkdtempSync(join(tmpdir(), "stage-"));
   const put = (rel, body) => { mkdirSync(join(cwd, rel, ".."), { recursive: true }); writeFileSync(join(cwd, rel), body); };
@@ -28,11 +27,9 @@ function fixture() {
   return cwd;
 }
 const roots = ["pub", "pages"];
-// where the clone path exists at all; elsewhere every stage is the copy
 const canClone = process.platform === "darwin" && Boolean(process.versions.bun);
 const derived = ["pub/images/meta"];
 
-// every file under dir, with its bytes and whether it is a link
 function tree(dir) {
   const out = {};
   for (const rel of readdirSync(dir, { recursive: true, encoding: "utf8" })) {
@@ -62,7 +59,6 @@ test("cloning and copying stage the same planned tree", async () => {
     const copied = await stage(cwd, "out-copy", false);
     const cloned = await stage(cwd, "out-clone", true);
     assert.equal(copied.cloned, null, "BUILD_CLONE=0 copies");
-    // the clone path really ran; a fallback would pass every comparison below
     assert.equal(cloned.cloned, canClone ? "pub" : null);
     assert.deepEqual(cloned.files, copied.files);
     assert.deepEqual(Object.keys(copied.files).sort(), [".well-known/x.json", "garage/a.html", "i/one.avif", "index.css"]);

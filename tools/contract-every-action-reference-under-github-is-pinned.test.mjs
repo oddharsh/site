@@ -7,22 +7,8 @@ import { join } from "node:path";
 
 import { auditActionPins, classifyRef, scanActionRefs } from "./lib/action-pins.ts";
 
-// THIS FILE EXISTS BECAUSE THE FIRST VERSION OF THE SCAN PASSED THREE ATTACKS.
-// It lived inline in check-infra.ts, matched `/^\s*(?:-\s+)?uses:/`, and
-// reported "all 32 third-party action reference(s) in .github are
-// commit-pinned" over a flow-style step running `attacker/evil-action@main`.
-// Every fixture below is one of those attacks, kept runnable so a refactor
-// cannot reopen a hole by tidying a regex.
-//
-// The floor in infra.json catches a scan that stopped matching and CANNOT catch
-// an evasion, since a hidden ref moves the count by zero or one. These fixtures
-// are what covers that half.
-
 const root = fileURLToPath(ROOT);
 
-/** A fixture repository: a Map of repo-relative path to contents, wearing the
- *  ActionIo shape auditActionPins takes. Two methods, both repo-relative, so a
- *  fixture needs no temp directory and no cleanup. */
 function memoryIo(files) {
   const map = new Map(Object.entries(files));
   return {
@@ -30,15 +16,11 @@ function memoryIo(files) {
       return map.has(rel) ? map.get(rel) : null;
     },
     async list(dir) {
-      // An ABSENT directory is an empty list rather than a throw. That is the
-      // whole of the .github/actions repair: readdir's ENOENT used to take the
-      // required check down over a directory GitHub Actions treats as optional.
       return [...map.keys()].filter((p) => p.startsWith(`${dir}/`)).sort();
     },
   };
 }
 
-/** The real tree, through the same adapter check-infra.ts builds. */
 function diskIo() {
   const io = {
     async read(rel) {
@@ -66,8 +48,6 @@ const OK = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 
 const workflow = (body) => `name: fixture\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n${body}\n`;
 
-// ---------------------------------------------------------------- the tree --
-
 test("the walked file set is every workflow plus every composite, and nothing else", async () => {
   const audit = await auditActionPins(diskIo());
   const onDisk = (await readdir(join(root, ".github/workflows")))
@@ -75,8 +55,6 @@ test("the walked file set is every workflow plus every composite, and nothing el
     .map((f) => `.github/workflows/${f}`)
     .sort();
 
-  // PINNED as a SET rather than a count. A count goes green when one file
-  // silently replaces another, which is the failure this whole file is about.
   const walked = new Set(audit.files);
   for (const f of onDisk) assert.ok(walked.has(f), `${f} is a workflow this scan never opened`);
   assert.ok(walked.has(".github/actions/setup-bun/action.yml"), "the setup-bun composite must be scanned, not exempted for being local");
@@ -88,17 +66,10 @@ test("the walked file set is every workflow plus every composite, and nothing el
 test("the committed tree has no unpinned, unreadable or unresolvable reference", async () => {
   const audit = await auditActionPins(diskIo());
   assert.deepEqual(audit.problems, []);
-  // A floor on the scan itself: if this collapses, every assertion above is
-  // agreeing with a scanner that read nothing.
   assert.ok(audit.remote >= 24, `only ${audit.remote} third-party refs found`);
   assert.ok(audit.local >= 1, "no local ./ refs found, so the resolver never ran");
-  // 7 repositories across 8 paths, because github/codeql-action contributes
-  // `init` and `analyze` from one commit. infra.json's note says so and the
-  // printed pass line used to contradict it by calling paths "actions".
   assert.ok(audit.paths.size >= audit.repos.size, "paths can never be fewer than repositories");
 });
-
-// ------------------------------------------------------------ the attacks --
 
 test("a flow-style step cannot smuggle an unpinned action past the scan", async () => {
   const io = memoryIo({
@@ -116,8 +87,6 @@ test("a `uses:` whose value sits on the next line FAILS rather than reading as a
     ".github/workflows/ci.yml": workflow("      - name: sneaky\n        uses:\n          actions/setup-python@v7"),
   });
   const audit = await auditActionPins(io);
-  // Two findings, and both are correct: the key pass refuses the shape it
-  // cannot read, and the shape pass catches the ref sitting below it.
   assert.ok(audit.problems.some((p) => p.kind === "unreadable"), "the dangling `uses:` must fail closed");
   assert.ok(audit.problems.some((p) => p.ref === "actions/setup-python@v7"), "the scalar on the next line must still be seen");
 });
@@ -168,8 +137,6 @@ test("a cycle between two composites terminates", async () => {
   assert.equal(audit.files.length, 3);
 });
 
-// ------------------------------------------------------------ degradation --
-
 test("a repository with no .github/actions scans clean rather than throwing", async () => {
   const io = memoryIo({ ".github/workflows/ci.yml": workflow(`      - uses: ${OK}`) });
   const audit = await auditActionPins(io);
@@ -177,8 +144,6 @@ test("a repository with no .github/actions scans clean rather than throwing", as
   assert.equal(audit.remote, 1);
   assert.equal(audit.local, 0);
 });
-
-// ------------------------------------------------------------- the shapes --
 
 test("classifyRef fails closed on anything it does not recognise", () => {
   assert.equal(classifyRef(OK).kind, "pinned");

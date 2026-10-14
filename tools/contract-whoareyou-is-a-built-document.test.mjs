@@ -18,8 +18,6 @@ import { handleWhoareyouValues, renderWhoareyouPage, renderWhoareyouValues, VALU
 test("the island loader is one constant script that checks the marker the response sends", () => {
   const a = islandScript().html;
   assert.equal(a, islandScript().html);
-  // The script is a constant on purpose (one CSP hash site-wide, nothing
-  // interpolated), so the marker is spelled twice. This is what holds them.
   assert.ok(a.includes(`r.headers.get("${ISLAND_MARKER}")!=="1"`), "the loader must require the response's marker");
   assert.equal(islandResponse(html`x`).headers.get(ISLAND_MARKER), "1");
   assert.match(a, /querySelectorAll\("\[data-island\]"\)/);
@@ -48,7 +46,6 @@ test("renderWhoareyouPage is deterministic, carries its island, and bakes nothin
   assert.ok(a.includes(islandScript().html));
   assert.match(a, /<noscript>[\s\S]*?whoareyou\.json[\s\S]*?<\/noscript>/, "a no-JS reader is told where the values are");
   assert.doesNotMatch(a, /TLSv1\.[23]|\d{4}-\d\d-\d\dT\d\d:/);
-  // The claims two other contracts pin to this module's text still hold.
   assert.match(a, /none of it is stored/);
   assert.match(a, /\/webmcp\.js/);
 });
@@ -70,10 +67,8 @@ test("the placeholder and the live values share one renderer and one row set for
     const island = shell.slice(shell.indexOf('data-island='), shell.indexOf("<noscript>", shell.indexOf('data-island=')));
     const rows = (s) => (s.match(/<dt>/g) || []).length;
     assert.equal(rows(island), rows(live), "the swap would add or remove rows, which is a layout shift");
-    // Values are escaped by construction.
     assert.ok(live.includes("&lt;script&gt;x&lt;/script&gt;"));
     assert.ok(!live.includes("<script>x"));
-    // The referrer is the browser's to fill: the fragment's own Referer is the page.
     assert.ok(!live.includes("elsewhere.example"), "the fragment must not report a referrer it cannot know");
     assert.match(live, /<span data-referrer>…<\/span>/);
   });

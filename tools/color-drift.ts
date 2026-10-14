@@ -1,32 +1,10 @@
 // Literal colours that sit NEAR a design token, and literals that repeat across
 // files with no token at all. Report only: nothing here fails a build.
-//
-// The token contract (contract-design-tokens-reach-every-page) holds copies at
-// zero: a literal within COPY_DE of a token is that token retyped. Past COPY_DE
-// the answer stops being mechanical. `oklch(99% 0 0)` beside `--paper` might be
-// the paper with its warmth dropped by accident, or a neutral white on purpose,
-// and only the person who wrote the rule knows. This lists that band, from
-// COPY_DE up to the just-noticeable difference, so each one gets a decision:
-// write the token, or leave the literal because it means something else.
-//
-// The two tooltip yellows that started this land in that first list: the
-// infotip's and the tray balloon's both sit near `--row-hover` (dE 0.012 and
-// 0.008) and 0.0065 from each other, where XP drew both from one InfoBackground.
-//
-// The second list is the other kind of drift: one colour written by hand in
-// three or more files, which is a token nobody has named yet. The first one
-// this list named was `oklch(44.95% 0 0)` (#555555), a note grey between
-// `--ink-soft` and `--ink-dim` written 52 times across 19 files; it is
-// `--ink-quiet` now.
-//
-//   bun run colors:drift            near-token band + unnamed shared colours
-//   bun run colors:drift --json     the same, as JSON
 import { readFileSync } from "node:fs";
 import { COPY_DE, colorLiteralsIn, cssSources, deltaEOK, loadTokenValueMap, parseOklch, tokenCopiesIn, type Lab } from "./lib/token-literals.ts";
 
 /** CSS Color 4's just-noticeable difference in OKLab. Past this, a literal is a different colour. */
 const JND = 0.02;
-/** A colour hand-written in this many files is a token waiting for a name. */
 const SHARED_FILES = 3;
 
 const ROOT = new URL("../", import.meta.url);
@@ -39,7 +17,6 @@ for (const [value, name] of map) {
 
 interface Hit {
   file: string;
-  /** Null inside a pipeline spec, whose CSS is a JSON string. */
   line: number | null;
   literal: string;
   lab: Lab;
@@ -52,13 +29,8 @@ const lineOf = (file: string, offset: number | null, index: number) => {
   return texts.get(file)!.slice(0, offset + index).split("\n").length;
 };
 for (const s of cssSources(ROOT)) {
-  // The desktop shell is stamped into every page from src/worker/lib/desktop.ts,
-  // which is walked as a Worker source, so its icon colours count there once.
-  // Blanked rather than cut, so line numbers past it still point at the file.
   const css = s.css.replace(/<!-- axp:shell -->[\s\S]*?<!-- \/axp:shell -->/g, (m) => m.replace(/[^\n]/g, " "));
   const copies = new Set(tokenCopiesIn(css, map).map((c) => c.index));
-  // oklch(), hex and rgb() alike; until 2026-10-06 this read oklch() only and
-  // missed the 2,248 hex literals that make up most of the site's colour.
   for (const c of colorLiteralsIn(css)) {
     if (copies.has(c.index)) continue;
     hits.push({ file: s.file, line: lineOf(s.file, s.offset, c.index), literal: c.literal, lab: c.lab });
@@ -77,7 +49,6 @@ for (const h of hits) {
   else rest.push(h);
 }
 
-// Single-link clusters at COPY_DE: literals that close are the same colour written twice.
 const clusters: Hit[][] = [];
 for (const h of rest) {
   const c = clusters.find((c) => c.some((x) => deltaEOK(x.lab, h.lab) < COPY_DE));

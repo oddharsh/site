@@ -7,26 +7,6 @@
 // SIMDe (github.com/simd-everywhere/simde) implements the x86 intrinsics on
 // NEON, so AVM's own x86 files compile for arm64 unchanged.
 //
-// WHAT IT DOES, given a libavif build tree that has already been built once:
-//   1. generates AVM's rtcd dispatch headers for x86_64 with every ISA up to
-//      AVX2 required, beside the arm64 ones ninja generated;
-//   2. compiles every x86 kernel file through a shim that maps <immintrin.h>
-//      and friends onto SIMDe;
-//   3. merges the dispatch: wherever arm64 falls back to plain C and a compiled
-//      x86 variant exists, dispatch to it (NEON choices are kept), iterating
-//      until the object set is closed, since a few kernels call NASM-only
-//      routines that no C file defines;
-//   4. swaps the merged headers into the build, rebuilds, appends the objects to
-//      libavm.a and relinks avifenc/avifdec.
-//
-// THE BAR IS BYTE IDENTITY. The kernels are integer and bit-exact with their C
-// versions by AVM's own unit tests, so the output must not move by one byte.
-// build.sh checks that against the pristine build before it reports success.
-// Measured 2026-09-27: 20 of 20 encodes identical across 4 inputs and 5 option
-// sets, every decode identical, and 1.35x on a 600px encode (1.54x at 2400px,
-// about 1.27x decode). 539 dispatch entries move; 2 files are dropped because
-// they call NASM, and CDEF and disflow do not translate.
-//
 // FOUR THINGS THAT COST TIME, so nobody re-derives them:
 //   - AVM passes shift counts at run time, and SIMDe's NEON macro forms of the
 //     immediate shifts need constants; the shim undefines those macros so the
@@ -39,9 +19,6 @@
 //     the real declarations because they need AVM's types.
 //   - `grep -q` against `nm` under pipefail reports a symbol missing when it is
 //     present (SIGPIPE), which made a gate refuse a good build. Count instead.
-//
-// usage: bun simde.ts --src <patched AVM source> --build <libavif build dir>
-//                     --simde <simde checkout> --work <scratch dir>
 import fs from "node:fs";
 import path from "node:path";
 
@@ -77,7 +54,6 @@ for (const p of [SRC, CFG, LIB, path.join(SIMDE, "simde/x86/avx2.h")]) {
 }
 fs.mkdirSync(WORK, { recursive: true });
 
-// 1. the arm64 headers as ninja generated them (kept, since the swap replaces them)
 const armDir = path.join(WORK, "rtcd-arm64");
 for (const h of HEADERS) {
   const live = fs.readFileSync(path.join(CFG, `${h}.h`), "utf8");
@@ -92,7 +68,6 @@ for (const h of HEADERS) {
     `--config=${path.join(CFG, "avm_config.h")}`, path.join(SRC, DEFS[h])]));
 }
 
-// 2. the shim: every x86 intrinsic header maps onto SIMDe
 const shim = path.join(WORK, "shim");
 const undef = ["mm", "mm256"].flatMap((p) => ["slli", "srli", "srai"].flatMap((s) => ["epi16", "epi32", "epi64"].map((t) => `#undef simde_${p}_${s}_${t}`)));
 const shimBody = [
@@ -108,12 +83,10 @@ const shimBody = [
 for (const h of ["immintrin", "emmintrin", "xmmintrin", "pmmintrin", "tmmintrin", "smmintrin", "nmmintrin", "x86intrin", "mmintrin", "wmmintrin"]) {
   write(path.join(shim, `${h}.h`), shimBody);
 }
-// the config the x86 files see: same build, with the x86 ISAs switched on
 const cfgX86 = path.join(WORK, "cfg-x86/config");
 write(path.join(cfgX86, "avm_config.h"), fs.readFileSync(path.join(CFG, "avm_config.h"), "utf8")
   .replace(/^#define (HAVE_(?:MMX|SSE|SSE2|SSE3|SSSE3|SSE4_1|SSE4_2|AVX|AVX2)) 0$/gm, "#define $1 1"));
 
-// every x86 prototype, per header, for the objects' own direct calls
 const protos = (h: string): string => {
   const text = fs.readFileSync(path.join(x86Dir, `${h}.h`), "utf8").split("\n")
     .filter((l) => !l.trimStart().startsWith("#")).join("\n");
@@ -127,7 +100,6 @@ const protos = (h: string): string => {
   return [...out].join("\n");
 };
 
-// 3. merge, compile, close, until the object set stops changing
 function merge(defined: Set<string>): { headers: Record<string, string>; moved: number } {
   const headers: Record<string, string> = {};
   let moved = 0;
@@ -183,7 +155,6 @@ function symbols(file: string, definedOnly = false): Syms {
   }
   return { def, und };
 }
-// a symbol the objects may leave to the plain library or the system
 const ours = (s: string) => new RegExp(`_${ISA}$`).test(s) || /^_(avm|av2)_/.test(s);
 function close(base: Set<string>): { kept: string[]; defined: Set<string> } {
   const objs = fs.readdirSync(objDir).filter((f) => f.endsWith(".o"));
@@ -200,11 +171,9 @@ function close(base: Set<string>): { kept: string[]; defined: Set<string> } {
   return { kept: [...kept].sort(), defined };
 }
 
-// libavm.a exactly as the build made it, before anything is appended
 const baseSyms = symbols(LIB, true).def;
 let defined = new Set<string>();
 {
-  // round 0 compiles against the x86 dispatch to learn what translates at all
   for (const h of HEADERS) write(path.join(cfgX86, `${h}.h`), fs.readFileSync(path.join(x86Dir, `${h}.h`), "utf8"));
   const failed = compile();
   if (failed.length) console.error(`not translatable through SIMDe (C stays): ${failed.map((f) => path.basename(f)).join(", ")}`);
@@ -231,7 +200,6 @@ for (let round = 1; ; round++) {
   if (round >= 5) throw new Error("the SIMDe object set did not converge in 5 rounds");
 }
 
-// 4. swap, rebuild, append, relink
 for (const h of HEADERS) {
   write(path.join(CFG, `${h}.h`), merged[h]);
   const now = new Date();

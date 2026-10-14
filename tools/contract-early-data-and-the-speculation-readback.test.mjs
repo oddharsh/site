@@ -7,9 +7,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// A request that arrived as TLS early data can be replayed, so the GET-shaped
-// writes answer 425 Too Early (RFC 8470) and every other request is untouched.
-// The list is preview.ts's, on purpose: one list, two guards.
 test("early data: the GET-shaped writes answer 425, everything else passes", async () => {
   const { earlyDataDenial } = await import("../src/worker/lib/early-data.ts");
   const { PREVIEW_GET_WRITES } = await import("../src/worker/lib/preview.ts");
@@ -26,9 +23,6 @@ test("early data: the GET-shaped writes answer 425, everything else passes", asy
     assert.equal(await res.text(), "", "425 carries no body");
     assert.equal(earlyDataDenial(plain(path), path), null, `${path} without Early-Data must pass`);
   }
-  // The documents and assets stay on the fast path: this is the whole point of
-  // turning 0-RTT on, and a guard that widened past the write list would spend
-  // the round trip it exists to save.
   for (const path of ["/", "/garage/compression", "/a/nav.deadbeef.js", "/i/x.00000000.avif", "/ledger.json", "/coffee"]) {
     assert.equal(earlyDataDenial(early(path), path), null, `${path} must not be refused in early data`);
   }
@@ -36,8 +30,6 @@ test("early data: the GET-shaped writes answer 425, everything else passes", asy
   assert.equal(earlyDataDenial(new Request("https://aadhar.sh/hit", { headers: { "early-data": "0" } }), "/hit"), null);
 });
 
-// That the guard runs ahead of routing is asserted by calling the dispatcher
-// (contract-the-dispatch-pipeline); this half is the setting it exists for.
 test("early data: the zone setting the guard exists for is declared", () => {
   const infra = JSON.parse(readFileSync("config/infra.json", "utf8"));
   assert.equal(infra.zone?.zero_rtt?.setting, "0rtt", "infra.json must declare the zone setting the guard exists for");
@@ -46,17 +38,7 @@ test("early data: the zone setting the guard exists for is declared", () => {
   assert.match(check, /infra\.zone\?\.zero_rtt/, "check-infra.ts must assert the declared 0-RTT value");
 });
 
-// The edge probe for the same setting is a HARD failure on a workstation and an
-// ADVISORY on a hosted runner, keyed on GITHUB_ACTIONS. Three spaced rejections
-// from GitHub's network have read as drift on three runs while the zone was fine
-// (2026-08-20, and twice on 2026-09-02, once on main, where it left a merged PR
-// unpromoted); a workstation has never produced a false one. Pinned at the source
-// so the split cannot be tidied away into "it is an edge check, so it fails".
 test("early data: the edge probe's rejection is advisory on a hosted runner and a drift on a workstation", () => {
-  // BEHAVIOUR is asserted by calling the comparer with a rejected probe, in
-  // contract-infra-check-compares-declared-against-observed. What is pinned
-  // here is the one thing that test cannot see: the composition keys the
-  // split on GITHUB_ACTIONS and on nothing wider (CI=1 is set by hand locally).
   const check = readFileSync("tools/check-infra.ts", "utf8");
   assert.match(check, /hostedRunner: Boolean\(process\.env\.GITHUB_ACTIONS\)/, "check-infra.ts must key the hosted-runner split on GITHUB_ACTIONS");
   const infra = JSON.parse(readFileSync("config/infra.json", "utf8"));
@@ -64,9 +46,6 @@ test("early data: the edge probe's rejection is advisory on a hosted runner and 
   assert.match(entry.gotcha, /ADVISORY IN HOSTED CI/, "infra.json's entry must say the check is advisory in hosted CI, or the split is undocumented");
 });
 
-// The readback folds the ledger's per-(kind, path) rows into one row per path
-// with an activation rate. Pinned as arithmetic, because a rate that quietly
-// counted the wrong denominator would order the candidates backwards.
 test("speculation readback: rows fold per path and the rate orders them", async () => {
   const { summarizeSpeculation } = await import("../src/worker/speculation.ts");
   const rows = summarizeSpeculation([
@@ -75,9 +54,9 @@ test("speculation readback: rows fold per path and the rate orders them", async 
     { kind: "activated", path: "/garage", n: 25 },
     { kind: "prerender", path: "/lwe", n: 100 },
     { kind: "activated", path: "/lwe", n: 2 },
-    { kind: "activated", path: "/orphan", n: 3 },      // an activation with no counted speculation
-    { kind: "prerender", path: "/ghost", n: 0 },       // zero rows are not rows
-    { kind: "banana", path: "/garage", n: 999 },        // unknown kinds are ignored, never counted
+    { kind: "activated", path: "/orphan", n: 3 },
+    { kind: "prerender", path: "/ghost", n: 0 },
+    { kind: "banana", path: "/garage", n: 999 },
   ]);
   assert.deepEqual(rows.map((r) => r.path), ["/lwe", "/garage", "/orphan"], "sorted by speculations, descending");
   const garage = rows.find((r) => r.path === "/garage");
@@ -91,8 +70,6 @@ test("speculation readback: the route is wired, allowlisted, and refuses writes"
   const { handleSpeculationJson } = await import("../src/worker/speculation.ts");
   const bad = await handleSpeculationJson(new Request("https://aadhar.sh/ledger/speculation.json", { method: "POST" }), {});
   assert.equal(bad.status, 405);
-  // no token: an "unconfigured" 503 (a 200 until 2026-10-13, which a client
-  // reading the status took for data), the same answer /ledger.json gives
   const none = await handleSpeculationJson(new Request("https://aadhar.sh/ledger/speculation.json"), {});
   assert.equal(none.status, 503);
   const body = await none.json();

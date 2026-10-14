@@ -18,7 +18,6 @@ const base = {
 
 test("only an explicit, unqualified security: [] reads as keyless", () => {
   assert.match(lensKeylessDeclaration(probe(keyless)) ?? "", /security: \[\]/);
-  // The controls, each one a way a spec can look keyless without saying so.
   const omitted = { openapi: "3.1.0", paths: {} };
   const schemes = { ...keyless, components: { securitySchemes: { key: { type: "apiKey", in: "header", name: "x-key" } } } };
   const perOp = { ...keyless, paths: { "/me": { get: { security: [{ oauth: ["read"] }] } } } };

@@ -1,24 +1,5 @@
 // The wrangler pin's gates run every contract test that boots wrangler's
 // createTestHarness, since 2026-09-30.
-//
-// workers-sdk@ddaa558 cleared the three gates the nightly bumper held it to
-// (dry-run bundle, route oracle, cal's suite), was proposed as #1037, and then
-// failed `validate` on three contract tests that boot a Worker through that
-// same harness. lib/harness-tests.ts has the mechanism. The control, run with
-// canary-wrangler.ts against that exact ref from a tree carrying this gate but
-// not the underNode() repair, came back RED on the new gate alone:
-//
-//   bun run canary:wrangler -- --ref ddaa558
-//    FAIL  harness contract tests pass on the candidate harness — 1 pass, 3 fail across 3 files
-//
-// and the same command with the repair in the tree came back without that
-// FAIL. So the gate would have refused #1037, and does not refuse the fix.
-//
-// What is asserted here is what can go stale without failing: the collector
-// finding the files (a floor, plus the two prose-only files as its control),
-// the command matching `bun run test`, and the leg wiring the gate as HARD.
-// The measurement itself needs pkg.pr.new and an install, so it lives in the
-// leg rather than in a suite that runs with the network tripwire armed.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -37,9 +18,6 @@ test("the harness collector finds every contract test that boots createTestHarne
     "tools/contract-every-cron-fires-in-workerd.test.mjs",
   ]) assert.ok(found.includes(rel), `${rel} boots the harness and the collector missed it`);
 
-  // The controls: the first two name createTestHarness in prose, and this file
-  // quotes the import and the call as fixtures. None of them boots anything,
-  // and the first draft of the collector took this file for a harness test.
   for (const rel of [
     "tools/contract-every-wrangler-entry-point-exists.test.mjs",
     "tools/contract-the-typescript-quarantine.test.mjs",

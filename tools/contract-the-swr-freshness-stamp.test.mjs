@@ -13,8 +13,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// A KV fake that records ops and stores metadata beside each value, so a test
-// can tell "one read" from "two reads that happen to agree".
 function fakeKV(entries = []) {
   const store = new Map(entries);
   const ops = { get: 0, getWithMetadata: 0, put: 0, delete: 0 };
@@ -83,8 +81,6 @@ test("a lapsed stamp serves stale and rebuilds in ONE write", async () => {
   assert.equal(kv.store.get("k").value, JSON.stringify({ n: 2 }));
 });
 
-// THE MIGRATION PATH. Every entry already in production KV was written without
-// metadata, so this is what the first read after the deploy actually does.
 test("an entry with no metadata reads as stale, rebuilds once, and is fresh after", async () => {
   const kv = fakeKV([entry({ n: 1 }, null)]);
   const { kept, ctx } = collector();
@@ -123,13 +119,9 @@ test("deleteSWRKV drops the value key, and leaves a legacy sentinel to expire", 
   await deleteSWRKV({ RN_KV: kv }, "k");
 
   assert.equal(kv.ops.delete, 1, "the stamp dies with the value, so there is one key to drop");
-  // Every sentinel was written with expirationTtl, so KV reaps the last of them
-  // within one ttl of the deploy. Deleting one here would be a write against a
-  // key nothing reads.
   assert.deepEqual([...kv.store.keys()], ["k:fresh"]);
 });
 
-// ── the visit mirror, which is the same shape by hand ────────────────
 function counterStub(n) {
   return {
     idFromName: () => "homepage-visits",

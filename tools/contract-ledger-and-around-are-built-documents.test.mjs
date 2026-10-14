@@ -16,12 +16,9 @@ import { CRAWLERS, handleLedgerLines, LINES_URL, renderLedgerLines, renderLedger
 import { handleAroundSnapshot, NEIGHBORS, refreshAroundSnapshot, renderAroundPage, renderAroundSnapshot, SNAPSHOT_URL } from "../src/worker/around.ts";
 
 const mountOf = (shell) => shell.slice(shell.indexOf("data-island="), shell.indexOf("<noscript>", shell.indexOf("data-island=")));
-// No bindings at all: every read degrades to its unconfigured arm.
 const NO_BINDINGS = /** @type {import("../src/worker/lib/env.ts").Env} */ (/** @type {unknown} */ ({}));
 const count = (s, re) => (s.match(re) || []).length;
 
-// cachedRender reads and writes caches.default, which neither test runtime
-// provides. A cache that never hits is the cold-miss path every colo takes once.
 async function withColdCache(fn) {
   const real = globalThis.caches;
   const puts = [];
@@ -52,9 +49,6 @@ test("the ledger placeholder is one unread line per nameable crawler, and names 
     { bot: "GPTBot", owner: "OpenAI", kind: "train", hits: 40 },
     { bot: "ClaudeBot", owner: "Anthropic", kind: "train", hits: 30 },
   ];
-  // Production's trailing window has held every crawler the table can name, so
-  // a full read is what the placeholder is sized for. It is sized from CRAWLERS
-  // rather than from the mount, or the comparison could only agree with itself.
   const full = Array.from({ length: CRAWLERS.length }, (_, i) => ({ ...rows[i % 2], bot: `Bot${i}` }));
   const live = renderLedgerLines({ ok: true, rows: full }, { ok: false, reason: "unconfigured" }).html;
   assert.equal(count(mount, /<tr>/g), count(live, /<tr>/g), "the swap would add or remove invoice lines");
@@ -62,16 +56,12 @@ test("the ledger placeholder is one unread line per nameable crawler, and names 
   assert.doesNotMatch(mount, /<td class="mono">[A-Za-z]/, "the placeholder names no crawler");
   assert.match(mount, /Total due<\/span> <b>\$…<\/b>/);
   assert.match(live, /Total due<\/span> <b>\$\d/);
-  // Values are escaped by construction.
   const hostile = renderLedgerLines({ ok: true, rows: [{ bot: "<script>x</script>", owner: "o", kind: "train", hits: 1 }] }, { ok: false, reason: "unconfigured" }).html;
   assert.ok(hostile.includes("&lt;script&gt;x&lt;/script&gt;"));
 });
 
 test("/ledger/lines.html is an edge-cached island that degrades without tokens", async () => {
   await withColdCache(async (puts) => {
-    // cachedRender stores the fragment inside waitUntil, after hashing a weak
-    // ETag, so the test awaits those promises rather than guessing how long they
-    // take. A setTimeout(0) passed under bun and lost the race on CI's node leg.
     const waits = [];
     const res = await handleLedgerLines(new Request("https://aadhar.sh" + LINES_URL), NO_BINDINGS, { waitUntil(p) { waits.push(p); } });
     assert.equal(res.status, 200);
@@ -97,7 +87,6 @@ test("the around placeholder is one unnamed row per neighbour", async () => {
   assert.equal(count(live, /<tr>/g), NEIGHBORS.length + 1, "one row per neighbour plus the header");
   assert.equal(count(mount, /class="meta"/g), 1);
   assert.match(mount, /Last crawl:<\/strong> …/);
-  // The cron runs daily at 05:41 UTC since 2026-08-14; the page said every 30 min.
   assert.match(live, /once a day by cron/);
   assert.doesNotMatch(live, /every 30 min/);
 });
@@ -110,7 +99,6 @@ test("/around/snapshot.html refuses a wrong bust secret and serves the cached re
     const res = await handleAroundSnapshot(new Request("https://aadhar.sh" + SNAPSHOT_URL + "?bust=wrong"), env, { waitUntil(p) { return p; } });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get(ISLAND_MARKER), "1");
-    // No snapshot in KV: the pending panel, cached briefly, never a table.
     assert.equal(res.headers.get("cache-control"), "public, max-age=60");
     assert.match(await res.text(), /class="pending"/);
   });

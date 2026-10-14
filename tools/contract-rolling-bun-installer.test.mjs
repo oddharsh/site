@@ -141,8 +141,6 @@ for (const scenario of [...API_SCENARIOS, ...PAGE_SCENARIOS]) {
       assert.equal(receipt.revision, REVISION);
       assert.equal(receipt.digest, `sha256:${digest}`);
       assert.equal(receipt.metadata, expected.metadata);
-      // One API request on a 403, never the four that burned build 8358ea90,
-      // and the token goes to the API alone, never to the download host.
       assert.deepEqual(requests, expected.requests);
       assert.equal(installedMatchesPin("canary", join(root, "installed/bun"), { version: "1.4.3", revision: REVISION }).ok, true);
     } else {

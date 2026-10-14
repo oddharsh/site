@@ -3,37 +3,20 @@
 // the readable Worker source over the .dev-assets farm, with no build, no
 // minification and no Workers Cache, and reaches the three bindings that have no
 // local simulation remotely. Everything else is production's by construction.
-//
-// This replaced contract-the-dev-twin-matches-production, which held a
-// hand-kept wrangler.dev.jsonc to the production config on four comparisons.
-// That file drifted anyway (the "41 5 * * *" cron for two weeks, #876's
-// "/dotfiles" for a day), because a copy of 165 values only agrees with its
-// source while somebody remembers to copy. A spread cannot disagree, so the
-// question left is narrower: does the overlay stay an overlay? Somebody could
-// fork a binding, a route or a cron inside config/dev/ and dev would quietly
-// stop being production, which is the drift the old test caught, arriving
-// through the new door. So every leaf the two projections disagree on must be
-// one of the keys below, and the floor stops a projection that lost a block
-// from agreeing vacuously.
 import { existsSync, readFileSync } from "node:fs";
 import { assert, configText, test } from "./contract-shared.ts";
 import { parseJsonc } from "./lib/jsonc.ts";
 
-// The overlay's whole vocabulary. A key outside this list that differs between
-// the two projections is dev forking production, and it fails by name.
 const OVERLAY = [
-  /^main$/,                          // readable source, not the build-staged copy
-  /^build\./,                        // no build in the dev loop
+  /^main$/,
+  /^build\./,
   /^minify$/, /^upload_source_maps$/, /^keep_names$/,
-  /^assets\.directory$/,             // the .dev-assets farm
-  /^cache\.enabled$/,                // Workers Cache off ...
-  /^exports\.[^.]+\.cache\.enabled$/, // ... on every entrypoint
-  /^(browser|images|ai)\.remote$/,   // dev: { remote: true } on the binding
+  /^assets\.directory$/,
+  /^cache\.enabled$/,
+  /^exports\.[^.]+\.cache\.enabled$/,
+  /^(browser|images|ai)\.remote$/,
 ];
 
-// Leaves as dotted paths. Arrays of named records (ratelimits, d1_databases,
-// workflows, ...) are keyed by name rather than position, so a reorder is not a
-// difference and a renamed binding is.
 const leaves = (config) => {
   const keyed = JSON.parse(JSON.stringify(config, (_, v) =>
     Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object" && (x.binding || x.name))
@@ -62,7 +45,6 @@ const load = async () => ({
 test("the dev config differs from production only in the overlay's keys", async () => {
   const { prod, dev } = await load();
   const { compared, forked } = forks(prod, dev);
-  // 260 leaves on 2026-10-01; most of them are the 96 run_worker_first rows.
   assert.ok(compared >= 200, `compared only ${compared} leaves; a projection has lost a block`);
   assert.deepEqual(forked, [], "config/dev/ overrides keys outside the overlay, so local dev is no longer production; move the change to cloudflare.config.ts or add the key to OVERLAY with its reason");
   // run_worker_first is ORDER-sensitive (first match wins), which the leaf walk
@@ -71,9 +53,6 @@ test("the dev config differs from production only in the overlay's keys", async 
 });
 
 test("the fork check can see dev forking production, which is what it exists for", async () => {
-  // The controls. A `forks` that always returned [] would pass the test above.
-  // Each control reports only what ITS perturbation added, so a real fork in
-  // config/dev/ fails the test above by name and leaves this one green.
   const { prod, dev } = await load();
   const baseline = new Set(forks(prod, dev).forked);
   const added = (config) => forks(prod, config).forked.filter((k) => !baseline.has(k));
@@ -99,8 +78,6 @@ test("the overlay holds what dev means by it", async () => {
   }
   for (const key of ["browser", "images", "ai"]) {
     assert.equal(dev[key]?.remote, true, `dev must reach ${key} remotely; it has no local simulation`);
-    // The production projection also boots the credential-free route oracle,
-    // which a remote binding would make need a token.
     assert.equal(prod[key]?.remote, undefined, `the production projection must not carry ${key}.remote`);
   }
 });

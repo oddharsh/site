@@ -1,30 +1,5 @@
 // check-agent.mjs — is this site agent-accessible IN PRACTICE?
 //
-// Every other agent check here reads a declaration: the route oracle sweeps
-// routes, gen-mcp-cards diffs a card against tools/list, build.ts counts the
-// Markdown twins. All of them passed on 2026-08-12 while an agent browser was
-// getting a homepage with 12 blank squares and a script that threw on every
-// page. A declaration cannot catch that, because the defect is in what an
-// ENGINE does with bytes that are themselves correct.
-//
-// So this drives the engine. Cloudflare's Kitesurf is the one agents actually
-// run when they drive Cloudflare's stack, and it ships roughly 97% of the DOM,
-// which is the interesting part: the missing 3% is where a page breaks for
-// every agent while staying perfect in Chrome.
-//
-//     bun run agent:check                  # the sample, against Kitesurf
-//     bun run agent:check --all            # every page in site-manifest.json
-//     bun run agent:check --control        # add the Chrome control (see below)
-//     bun run agent:check --json           # machine output
-//
-// ── cost ──────────────────────────────────────────────────────────────────
-// FREE, and deliberately so. This talks to the public Kitesurf playground at
-// wss://kitesurf.cloudflare.app/devtools/browser, which takes no account and no
-// token, so it spends none of the 10 browser-minutes a day that /lens/shot and
-// /lens/browser share. That is the whole reason this is runnable at all: the
-// same sweep through the account's Browser Run binding would black out the
-// browser lenses for the rest of the day on its first run.
-//
 // ── the control, and why it is not optional in spirit ─────────────────────
 // gotcha 15 and gotcha 33 in CLAUDE.md are both the same lesson learned the
 // expensive way: an instrument that reports a browser feature as missing is
@@ -34,13 +9,6 @@
 // identical script passes in Chrome. `--control` runs it and prints the
 // comparison; without the flag the report says the control did not run rather
 // than implying one did.
-//
-// ── what it does NOT do ───────────────────────────────────────────────────
-// It does not gate CI. This reaches a third-party playground over the network
-// on every run, so as a required check it would redden PRs on somebody else's
-// outage. It is a workstation control in the same idiom as kitesurf:check and
-// bun:pin. Run it when touching client JavaScript, the photo pipeline, or
-// anything the shell projects into every document.
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -57,9 +25,6 @@ const WANT_ALL = process.argv.includes("--all");
 const WANT_CONTROL = process.argv.includes("--control");
 const WANT_JSON = process.argv.includes("--json");
 
-// The sample. One page per rendering path rather than one per section, because
-// what varies here is HOW a document is produced: baked static, worker-rendered,
-// client-hydrated, and the two consoles that build their own DOM.
 const SAMPLE = ["/", "/writing", "/garage", "/garage/horizon", "/lens", "/coffee", "/around"];
 
 const log = (m) => { if (!WANT_JSON) console.log(m); };
@@ -90,7 +55,6 @@ const head = async (url) => {
   } catch { return { ok: false, status: 0, type: "" }; }
 };
 
-/** The site-wide discovery probes. These are per-ORIGIN, so they run once. */
 async function probeDeclared() {
   const [llms, card, mcpCard, sitemap] = await Promise.all([
     head(`${ORIGIN}/llms.txt`),
@@ -114,15 +78,13 @@ async function probeDeclared() {
     const r = await fetch(`${ORIGIN}/robots.txt`);
     if (r.ok) {
       const t = await r.text();
-      // A crude but honest read: a global disallow-everything with no allow.
       robotsAllowsAgents = !/^\s*disallow:\s*\/\s*$/im.test(t) || /^\s*allow:/im.test(t);
     }
-  } catch { /* leave null: unread is not the same as hostile */ }
+  } catch {}
 
   return { llmsTxt: llms.ok, agentCard: card.ok && mcpCard.ok, mcp, sitemap: sitemap.ok, robotsAllowsAgents };
 }
 
-/** Evidence one engine produces for one URL. */
 async function renderOnce(page, url) {
   const errs = [];
   const onConsole = (m) => { if (m.type() === "error") errs.push(m.text().slice(0, 160)); };
@@ -131,17 +93,12 @@ async function renderOnce(page, url) {
   page.on("pageerror", onPageError);
   try {
     const r = await page.goto(url, { waitUntil: "load", timeout: 45_000 });
-    // The shell wires itself in a rAF pass, so a load event is too early to
-    // judge whether it finished. This is the same reason the speculation probe
-    // dwells rather than sampling immediately.
     await page.waitForTimeout(1500);
     const dom = await page.evaluate(() => {
       const txt = (document.body?.innerText || "").replace(/\s+/g, " ").trim();
       const imgs = [...document.querySelectorAll("img")];
       const win = document.querySelector(".window,.np-window");
       const maxBtn = document.querySelector(".max");
-      // A behavioural probe, because "the script threw" and "the page is fine"
-      // are not mutually exclusive and the difference is what a user touches.
       let maximize = "absent";
       if (maxBtn && win) {
         const before = win.classList.contains("axp-max");
@@ -154,9 +111,6 @@ async function renderOnce(page, url) {
         words: txt.split(/\s+/).filter(Boolean).length,
         totalImages: imgs.length,
         brokenImages: imgs.filter((i) => i.naturalWidth === 0).length,
-        // Three states, not two. alt="" is a DECISION (this image is
-        // decorative) and a missing alt attribute is an omission; collapsing
-        // them scores correct markup as a defect.
         imagesWithAlt: imgs.filter((i) => (i.getAttribute("alt") || "").trim().length > 0).length,
         imagesDecorative: imgs.filter((i) => i.hasAttribute("alt") && !(i.getAttribute("alt") || "").trim()).length,
         imagesMissingAlt: imgs.filter((i) => !i.hasAttribute("alt")).length,
@@ -210,24 +164,13 @@ async function main() {
     const k = await renderOnce(kpage, url);
     const c = cpage ? await renderOnce(cpage, url) : null;
 
-    // The Markdown twin is the one discovery surface that is PER ROUTE, so it
-    // is probed here rather than with the site-wide four. `/` publishes its
-    // hand-written twin at /index.md; everything else appends .md.
     const twinUrl = route === "/" ? `${ORIGIN}/index.md` : `${ORIGIN}${route.replace(/\/$/, "")}.md`;
     const twin = await head(twinUrl);
 
-    // The SAME two checks /lens scores, off the same module. This CLI
-    // deliberately publishes no overall score of its own: /lens already owns
-    // that number across twenty declared checks plus these two, and a second
-    // 0-100 in this repo would be two definitions of one claim.
     const checks = executionChecks({ ran: !k.failed, engine: "kitesurf", ...k });
     const hw = httpWords(raw);
     const legible = k.words ? Math.round((Math.min(hw, k.words) / k.words) * 100) : null;
 
-    // A defect COUNTS only when the control disagrees, or when no control ran
-    // and the failure is unambiguous (a broken image is a decode result, not an
-    // instrument artefact). A script error with a clean Chrome control is the
-    // strongest signal this script produces.
     const notes: string[] = [];
     if (k.failed) notes.push(`navigation failed: ${k.failed}`);
     if (k.consoleErrors) notes.push(c && c.consoleErrors === 0 ? `${k.consoleErrors} script error(s), Chrome control CLEAN` : `${k.consoleErrors} script error(s)${c ? ", control also errored" : ", no control"}`);
@@ -268,10 +211,6 @@ async function main() {
   process.exit(failures ? 1 : 0);
 }
 
-// Guarded so the contract suite can import httpWords without launching a browser
-// and scanning production. The behavioural test is the point: an earlier version
-// of this stripper passed a source-shape assertion while still leaking script
-// bodies into the word count.
 if (import.meta.main) {
   main().catch((e) => {
     console.error(e && e.stack ? e.stack : String(e));

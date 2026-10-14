@@ -35,10 +35,6 @@ import { fieldMatches } from "../src/worker/lib/text.ts";
 import { buildImageFingerprints } from "./lib/photo-indexes.ts";
 import { createHash } from "node:crypto";
 
-// ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
-// The feature runs JavaScript inside somebody else's page. Almost every test
-// below is about the blast radius of that rather than the feature working.
-
 const recipeEnv = (content, capture) => ({
   BROWSER: {
     async quickAction(name, input) {
@@ -53,8 +49,6 @@ test("a plain browser run is byte-for-byte what it was before recipes existed", 
   const captured = {};
   const response = await handleLensBrowser(browserReq(""), recipeEnv("<html><body>hi</body></html>", captured), context());
   const body = await response.json();
-  // The whole backwards-compatibility claim in one place: no injection is sent,
-  // and no consumer of this route sees a new key appear.
   assert.equal(captured.snapshot.addScriptTag, undefined, "a plain run must inject nothing");
   assert.equal(captured.snapshot.waitForTimeout, undefined);
   assert.equal("interaction" in body, false, "the field is absent, not null, on a plain run");
@@ -62,9 +56,6 @@ test("a plain browser run is byte-for-byte what it was before recipes existed", 
 });
 
 test("an unknown recipe is refused rather than quietly served as a plain render", async () => {
-  // Falling through to the plain render would hand back a perfectly good
-  // snapshot the caller believes is post-interaction. That is the exact failure
-  // this feature exists to avoid, so a typo has to be loud.
   for (const bad of ["", "   ", "../", "expand;", "<script>", "EXPAND", " expand", "x".repeat(10000)]) {
     let called = false;
     const env = { BROWSER: { quickAction: async () => { called = true; return Response.json({}); } } };
@@ -77,14 +68,8 @@ test("an unknown recipe is refused rather than quietly served as a plain render"
 });
 
 test("no caller byte reaches the injected script, and none ever will", async () => {
-  // THE test. `addScriptTag` runs arbitrary JS in a third-party page, so a `js=`
-  // or `selector=` parameter would make /lens an open remote-code-execution
-  // proxy running attacker code from Cloudflare IPs under this account's browser
-  // identity. The allowlist is the only thing standing there.
   for (const id of lensRecipeIds()) {
     const captured = {};
-    // Every hostile shape a caller controls, all at once: extra query params the
-    // handler must ignore, and payload-ish text inside the url itself.
     await handleLensBrowser(
       new Request("https://aadhar.sh/lens/browser?url=" + encodeURIComponent("https://example.com/?evil=</script><script>alert(1)</script>") +
         "&do=" + id + "&js=alert(9)&selector=body&script=pwn"),
@@ -101,7 +86,6 @@ test("no caller byte reaches the injected script, and none ever will", async () 
     assert.equal(/^\s*var\s/.test(sent[0].content), false, `${id} must not leak the nonce to window`);
     assert.equal(sent[0].content, lensRecipeScript(lensRecipe(id), nonce), `${id} must be the registry script verbatim`);
 
-    // Nothing the caller typed may appear anywhere in the payload except in url.
     const rest = JSON.stringify({ ...captured.snapshot, url: "" });
     for (const smuggled of ["alert(9)", "selector", "pwn", "evil"]) {
       assert.equal(rest.includes(smuggled), false, `${id} leaked "${smuggled}" into the payload`);
@@ -110,8 +94,6 @@ test("no caller byte reaches the injected script, and none ever will", async () 
 });
 
 test("two runs of one recipe never share a nonce", async () => {
-  // A fixed nonce would be discoverable by rendering the page once, which is
-  // exactly what the attacker here is already able to do.
   const seen = new Set();
   for (let i = 0; i < 5; i++) {
     const captured = {};
@@ -129,26 +111,16 @@ test("the recipe registry stays inside what it is allowed to do", async () => {
     assert.equal(ids.has(r.id), false, `${r.id} is declared twice`);
     ids.add(r.id);
     assert.ok(r.label && r.claim, `${r.id} must say what it does before it does it`);
-    // A recipe is a DOM edit, never a network actor. Any of these would turn an
-    // observation into an action taken on somebody else's behalf.
     for (const banned of ["fetch(", "XMLHttpRequest", "import(", "eval(", "new Function", "document.cookie",
       "localStorage", "sessionStorage", "sendBeacon", "location=", "location =", ".submit(", "postMessage"]) {
       assert.equal(r.script.includes(banned), false, `${r.id} must not contain ${banned}`);
     }
-    // Parses as a program. A syntax error would surface as a page that silently
-    // never interacts, which reads identically to a CSP refusal.
     new Function(r.script);
   }
 });
 
 test("no shipping recipe presses a control on somebody else's page", async () => {
   const { LENS_RECIPES } = await import("../src/worker/lens-recipes.ts");
-  // Removing a consent overlay from our own copy of the DOM sets no cookie and
-  // records no choice. Clicking "Accept all" from a Cloudflare IP would be this
-  // site manufacturing a consent record on a third party's page, which is the
-  // machine behaviour /lens was built to criticise. The distinction is the whole
-  // ethical argument for shipping `consent` at all, so it is pinned here rather
-  // than left to a reviewer noticing a `.click()` in a minified string.
   for (const r of LENS_RECIPES) {
     assert.equal(r.script.includes(".click("), false, `${r.id} must not click`);
     assert.equal(/\.(submit|requestSubmit)\(/.test(r.script), false, `${r.id} must not submit`);
@@ -162,7 +134,6 @@ test("the published scripts are the scripts that run", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(body.recipes.map((r) => r.id), LENS_RECIPES.map((r) => r.id));
   for (const published of body.recipes) {
-    // Disclosure that can drift from execution is worse than no disclosure.
     assert.equal(published.script, LENS_RECIPES.find((r) => r.id === published.id).script);
   }
 });
@@ -175,8 +146,6 @@ test("the receipt is read, then removed before anything counts or caps it", asyn
       async quickAction(name, input) {
         captured[name] = input;
         const n = input.addScriptTag[0].content.match(/"([0-9a-f]{16})"/)[1];
-        // 500 words of padding inside the receipt: if the strip happens after
-        // documentTally, they land in the word count and the delta lies.
         return Response.json({
           result: { content: `<html><body><p>one two three</p><script type="application/lens-receipt" id="lens-recipe-receipt">{"v":1,"n":"${n}","acted":4,"scanned":9,"note":"acted","pad":"${"word ".repeat(500)}"}</script></body></html>` },
           meta: { status: 200 },
@@ -194,8 +163,6 @@ test("the receipt is read, then removed before anything counts or caps it", asyn
 });
 
 test("a page cannot forge a result for a script it was not given", async () => {
-  // Without the nonce a hostile page ships its own receipt claiming Lens tore
-  // down a wall it never touched, and /lens repeats the lie in its own voice.
   const body = await (await handleLensBrowser(
     browserReq("&do=consent"),
     recipeEnv('<html><body><script type="application/lens-receipt" id="lens-recipe-receipt">{"v":1,"n":"deadbeefdeadbeef","acted":9999,"scanned":9999,"note":"acted"}</script></body></html>'),
@@ -220,16 +187,12 @@ test("nonsense counts in a receipt are clamped rather than believed", async () =
 });
 
 test("a recipe that finds nothing, or never runs, is a 200 and says which", async () => {
-  // Both are successful observations. Reporting either as an error would teach
-  // the reader to distrust the instrument on the pages where it is most useful.
   const nothing = await handleLensBrowser(
     browserReq("&do=expand"),
     recipeEnv('<html><body><script type="application/lens-receipt" id="lens-recipe-receipt">{"v":1,"n":"REPLACED","acted":0,"scanned":12,"note":"none-found"}</script></body></html>'),
     context(),
   );
   assert.equal(nothing.status, 200);
-  // The nonce will not match, so this lands as forged; what matters here is the
-  // status and that a body came back. The no-receipt path is the real case:
   const blind = await handleLensBrowser(browserReq("&do=expand"), recipeEnv("<html><body><p>a b c</p></body></html>"), context());
   const body = await blind.json();
   assert.equal(blind.status, 200);
@@ -240,9 +203,6 @@ test("a recipe that finds nothing, or never runs, is a 200 and says which", asyn
 });
 
 test("a recipe run caches beside the plain snapshot, never on top of it", async () => {
-  // The plain key keeps its exact legacy shape. Changing its format would
-  // invalidate the whole namespace in one deploy and buy a wave of fresh Quick
-  // Actions against a budget of ten browser-minutes a day.
   const writes = [];
   const kv = {
     get: async () => null,
@@ -255,17 +215,11 @@ test("a recipe run caches beside the plain snapshot, never on top of it", async 
   assert.equal(writes.length, 2);
   assert.match(writes[0][0], /^lens:browser:[0-9a-f]{64}$/, "the plain key shape is load-bearing");
   assert.equal(writes[1][0], writes[0][0] + ":expand", "a recipe appends, so the plain entry survives as the before");
-  // 6h, raised from 15 minutes on 2026-08-14. Deliberately a LITERAL rather than
-  // an imported constant: the number is the budget control for the most
-  // expensive call this site can make, so changing it should cost a visible edit
-  // here. A test that imported the value would agree with any future change.
-  // Keep it equal to /lens/shot and /lens/wire, which both sit at 21600.
   assert.equal(writes[0][1].expirationTtl, 21600);
   assert.equal(writes[1][1].expirationTtl, 21600);
 });
 
 test("the before comes from the cached plain snapshot, and is never manufactured", async () => {
-  // Rendering a before on demand would be two Quick Actions for one click.
   let quickActions = 0;
   const plain = { ok: true, tally: { words: 210, headings: 2, links: 14, images: 3, jsonld: 0 } };
   const env = {
@@ -277,7 +231,6 @@ test("the before comes from the cached plain snapshot, and is never manufactured
   assert.deepEqual(body.interaction.before, plain.tally);
   assert.equal(body.interaction.beforeSource, "kv");
 
-  // And with no plain entry, no delta is claimed rather than a zero invented.
   const bare = { ...env, RN_KV: { get: async () => null, put: async () => {} } };
   const alone = await (await handleLensBrowser(browserReq("&do=expand"), bare, context())).json();
   assert.equal(alone.interaction.before, null);
@@ -285,9 +238,6 @@ test("the before comes from the cached plain snapshot, and is never manufactured
 });
 
 test("a recipe run bills against the same two buckets as a plain one", async () => {
-  // A third bucket would let one visitor stack 3 plain + 3 recipe renders a
-  // minute while the shared ceiling is 4, so the per-IP limit would stop
-  // bounding anything. This repo has already made that mistake once.
   for (const spent of ["LENS_RL_BROWSER", "LENS_RL_BROWSER_ALL"]) {
     let called = false;
     const env = {
@@ -302,7 +252,7 @@ test("a recipe run bills against the same two buckets as a plain one", async () 
 
 
 test("site search and JSON contract share the generated corpus", async () => {
-  _resetSearchIndex(); // the corpus is memoised per process, like the photo maps
+  _resetSearchIndex();
   const env = { ASSETS: staticAssets({
     "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" }] },
   }) };
@@ -347,10 +297,6 @@ test("photo query filters public metadata and never exposes unlisted fields", as
   assert.equal(response.status, 200);
 });
 
-// The archive the ranking tests run against. B exists to be a plausible WRONG
-// answer for "classic chrome": it carries both words in its caption without
-// being a Classic Chrome frame, which is exactly the confusion a joined
-// haystack cannot resolve and a field weighting can.
 function rankingEnv() {
   _resetPhotoCaches();
   return { ASSETS: staticAssets({
@@ -369,64 +315,43 @@ function rankingEnv() {
 }
 
 test("photo query scores each term independently instead of matching one substring", async () => {
-  // The regression this whole path exists for. The old haystack joined five
-  // fields and required `q` to appear inside the result CONTIGUOUSLY, so a
-  // query naming a film simulation and a subject could never match a photo that
-  // had both — the words were present but not adjacent.
   const result = await queryPhotos(rankingEnv(), { q: "classic chrome bridge" });
   assert.equal(result.ranking.mode, "all-terms");
   assert.deepEqual(result.ranking.terms, ["classic", "chrome", "bridge"]);
   assert.equal(result.total, 1);
   assert.equal(result.photos[0].stem, "A");
-  // Scored on the film simulation AND the caption, which is the claim.
   assert.deepEqual(result.photos[0].matched.slice().sort(), ["alt", "film"]);
 });
 
 test("photo ranking prefers the film simulation over the same words in a caption", async () => {
   const result = await queryPhotos(rankingEnv(), { q: "classic chrome" });
   assert.equal(result.total, 3, "all three mention both words somewhere");
-  // A and C are genuine Classic Chrome frames and outrank B, whose caption
-  // merely contains the words. A leads C on date, both leading B on score.
   assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C", "B"]);
   assert.ok(result.photos[0].score > result.photos[2].score);
   assert.deepEqual(result.photos[2].matched, ["alt"]);
 });
 
 test("photo query reports partial coverage rather than silently widening", async () => {
-  // "sunset" is in no field, so nothing covers both terms. The partial set is
-  // still the best available answer and comes back labelled as partial.
   const result = await queryPhotos(rankingEnv(), { q: "monochrome sunset" });
   assert.equal(result.ranking.mode, "partial");
   assert.equal(result.photos[0].stem, "B");
   assert.equal(result.photos[0].matched.includes("film"), true);
-  // Nothing matched at all is a different answer from partially matched, and a
-  // caller deciding whether to broaden its query needs the two kept apart.
   const none = await queryPhotos(rankingEnv(), { q: "aurora borealis" });
   assert.equal(none.ranking.mode, "no-match");
   assert.equal(none.total, 0);
 });
 
 test("word boundaries keep chrome out of monochrome", async () => {
-  // A plain substring test passes every other assertion in this file and still
-  // scores every black-and-white frame as a Classic Chrome match, at the FILM
-  // weight — the highest there is — so the false hits outrank the true ones.
   const result = await queryPhotos(rankingEnv(), { q: "chrome" });
   assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C", "B"]);
   assert.equal(result.photos.find((photo) => photo.stem === "B").matched.includes("film"), false,
     "B is a Monochrome frame and must not match on film");
-  // The digit-gated substring escape stays open for part numbers, which live
-  // inside a larger alphanumeric run with no boundary to match on.
   const lens = await queryPhotos(rankingEnv(), { q: "27mm" });
   assert.equal(lens.total, 1);
   assert.equal(lens.photos[0].stem, "A");
 });
 
 test("fieldMatches finds token starts without splitting, astral letters included", () => {
-  // fieldMatches stopped splitting fields into tokens on 2026-10-07 (the split
-  // was most of a photo query's CPU) and decides each rule with indexOf plus a
-  // boundary check instead. Every answer here is what the splitting version
-  // gave. The astral rows are the part a UTF-16 boundary check gets wrong:
-  // U+1D49C is a letter, so "x𝒜lpha" is ONE token and "𝒜lpha" does not start it.
   const cases = [
     ["Monochrome", "chrome", false],
     ["LEICA M MONOCHROM", "monochrome", true],
@@ -437,8 +362,6 @@ test("fieldMatches finds token starts without splitting, astral letters included
     ["x\u{1D49C}lpha", "\u{1D49C}lpha", false],
     ["the \u{1D49C}lpha", "\u{1D49C}lpha", true],
     ["\u{1D49C}\u{1D49C}beta", "\u{1D49C}beta", false],
-    // a term with a separator in it never starts a token, but its first word
-    // can still be a whole token the term begins with
     ["Classic Chrome", "chrome-x", true],
   ];
   for (const [field, term, expected] of cases) {
@@ -452,29 +375,21 @@ test("photo query drops stopwords and says which it dropped", async () => {
   assert.ok(result.ranking.dropped.includes("photos"));
   assert.equal(result.total, 1);
   assert.equal(result.photos[0].stem, "A");
-  // A query that is nothing BUT stopwords must not score every photo on noise.
   const empty = await queryPhotos(rankingEnv(), { q: "show me some photos" });
   assert.equal(empty.ranking.mode, "no-terms");
   assert.equal(empty.total, 0);
 });
 
 test("photo query omits score entirely when nothing was ranked", async () => {
-  // Absent, not zero — the same rule lens follows for a phase it never ran.
   const result = await queryPhotos(rankingEnv(), { film: "classic" });
   assert.equal(result.ranking.mode, "filters-only");
   assert.equal(result.total, 2);
   assert.equal("score" in result.photos[0], false);
   assert.equal("matched" in result.photos[0], false);
-  // Filters stay exact even while `q` is ranked, so a filter cannot be widened
-  // into a near miss.
   assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C"]);
 });
 
 test("a term that matches most of the corpus in a field stops counting there", async () => {
-  // The live failure: every Fuji recipe card carries "Exposure Compensation",
-  // so "long exposure" matched "exposure" in 151 of 158 cards and returned the
-  // entire archive ranked by a word that distinguished nothing. Nothing in the
-  // archive is a long exposure, so the only correct total is zero.
   _resetPhotoCaches();
   const metadata = {};
   const alt = {};
@@ -494,17 +409,12 @@ test("a term that matches most of the corpus in a field stops counting there", a
   assert.equal(flood.ranking.mode, "no-match");
   assert.deepEqual(flood.ranking.common, ["exposure"]);
 
-  // Suppression is per FIELD, not per term. "chrome" is in all 8 recipe cards
-  // AND is the film simulation of 4 of them; killing the term outright would
-  // blind the query to exactly the photos it describes best.
   _resetPhotoCaches();
   const film = await queryPhotos(env, { q: "classic chrome" });
   assert.equal(film.total, 4);
   assert.deepEqual(film.photos[0].matched, ["film"]);
   assert.equal("common" in film.ranking, false);
 
-  // A term nothing has is ABSENT, not common, and the two must not be conflated
-  // — one says broaden your query, the other says this word is useless here.
   _resetPhotoCaches();
   const missing = await queryPhotos(env, { q: "aurora" });
   assert.equal(missing.ranking.mode, "no-match");
@@ -533,8 +443,6 @@ function coffeeEnv() {
     HOST_TIMEZONE: "America/New_York", WORKING_HOURS_START: "9", WORKING_HOURS_END: "18",
     WORKING_DAYS: "1,2,3,4,5", SLOT_MINUTES: "30", BUFFER_MINUTES: "15",
     MIN_NOTICE_HOURS: "0", MAX_LOOKAHEAD_DAYS: "2", DAILY_LIMIT: "3", WEEKLY_LIMIT: "5",
-    // listHeld pages KV with list({ prefix: "held:" }), one key per held slot.
-    // An empty first page is the "nothing booked" fixture.
     BOOKINGS: {
       async get(key, typeOrOptions) { if (key === "cal:busy" && kvType(typeOrOptions) === "json") return snapshot; return null; },
       async list() { return { keys: [], list_complete: true, cursor: null }; },
@@ -560,9 +468,6 @@ test("Lens comparison rejects invalid targets before any fetch", async () => {
 });
 
 test("site MCP exposes one read-only tool catalog and calls shared search", async () => {
-  // Its own reset, not a ride on the one above: this corpus happens to match
-  // the search test's, so it passed in file order and failed run alone after
-  // another corpus had loaded (measured 2026-09-29).
   _resetSearchIndex();
   const env = { ASSETS: staticAssets({
     "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" }] },
@@ -576,11 +481,6 @@ test("site MCP exposes one read-only tool catalog and calls shared search", asyn
   assert.equal((await handleSiteMcp(new Request("https://aadhar.sh/mcp"), env, context())).status, 405);
 });
 
-// The annotations are a CLAIM made to every client that lists this server, so
-// the test names the exceptions instead of asserting one shape over all of them.
-// A blanket "everything is read-only" assertion passed right up until the vault
-// tools landed, and would have kept passing while advertising a tool that writes
-// a D1 row as read-only.
 const MCP_WRITE_TOOLS = new Set(["representation_capture", "representation_compare"]);
 
 test("MCP tools publish honest client metadata for calling and WebMCP", async () => {
@@ -615,9 +515,6 @@ test("MCP tools publish honest client metadata for calling and WebMCP", async ()
   }
   assert.equal(listed.find((tool) => tool.name === "lens_inspect").annotations.openWorldHint, true);
   assert.equal(listed.find((tool) => tool.name === "search_site").annotations.openWorldHint, false);
-  // Every tool that can be handed a caller-supplied URL reaches off this origin,
-  // and that is the whole meaning of openWorldHint. Pinning the set here is what
-  // makes the omission loud the next time a fetching tool is added.
   for (const name of ["image_transform", "photo_recipe", "representation_capture"]) {
     assert.equal(listed.find((tool) => tool.name === name).annotations.openWorldHint, true, `${name} fetches caller-supplied URLs`);
   }
@@ -646,7 +543,6 @@ test("site MCP image workbench returns an image content block and exact receipt"
 test("image_compare encodes independent formats in one binding latency window", async () => {
   let active = 0;
   let peak = 0;
-  // All byte values, across the old 32 KiB chunk boundary and all padding cases.
   const formats = ["avif", "webp", "jpeg"];
   const encoded = Uint8Array.from({ length: 0x8000 + 2 }, (_, i) => i % 256);
   const bytesFor = (format) => encoded.subarray(0, 0x8000 + formats.indexOf(format));
@@ -683,10 +579,6 @@ test("photo_recipe only claims exact archive identities", async () => {
   const metadata = JSON.parse(readFileSync("public/images/metadata.json", "utf8"));
   const hashes = JSON.parse(readFileSync("public/images/hashes.json", "utf8"));
   const alt = JSON.parse(readFileSync("public/images/alt.json", "utf8"));
-  // DERIVED rather than read: images/fingerprints.json is build output as of
-  // 2026-08-29, so there is no committed file to load. This is the stronger
-  // shape anyway, since it runs photo_recipe against the exact map build.ts
-  // stages, rather than against a copy that could have gone stale beside it.
   const { index: fingerprints } = await buildImageFingerprints(".");
   const stem = Object.keys(metadata)[0];
   const env = { ASSETS: staticAssets({ "/images/metadata.json": metadata, "/images/hashes.json": hashes, "/images/alt.json": alt, "/images/fingerprints.json": fingerprints }) };

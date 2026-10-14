@@ -1,11 +1,5 @@
 #!/usr/bin/env bun
 // bun run deps:snapshot [--out <snapshot.json>]
-//
-// Print, or write, the dependency snapshot for both bun lockfiles.
-// tools/lib/dependency-snapshot.ts says why GitHub needs it.
-// .github/workflows/dependency-snapshot.yml posts it on every push to main that
-// moves a lockfile. Read-only, network-free, and installs nothing, so the job
-// holding the write token runs no package code.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";

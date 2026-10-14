@@ -27,7 +27,6 @@ test("remote config generation preserves literal values and refuses malformed in
   const source = join(dir, "input.jsonc");
   const output = join(dir, "output.jsonc");
   const cli = fileURLToPath(new URL("./gen-remote-config.ts", import.meta.url));
-  // This CLI only writes a local config. It does not boot a proxy or call bindings.
   const env = { ...process.env, CI: "" };
   const config = {
     vars: { LITERAL: ",]", URL: "https://example.com/a,}" },
@@ -42,7 +41,6 @@ test("remote config generation preserves literal values and refuses malformed in
     assert.deepEqual(generated, {
       ...config, kv_namespaces: [{ ...config.kv_namespaces[0], remote: true }], triggers: {},
     });
-    // A malformed replacement must not overwrite the previously generated config.
     const previous = await readFile(output, "utf8");
     await writeFile(source, '{"vars": {}, "values": [1/* split */2]}');
     const failed = spawnSync(process.execPath, [cli, source, "--out", output], { env, encoding: "utf8" });

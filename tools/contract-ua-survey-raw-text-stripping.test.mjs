@@ -4,10 +4,6 @@
 // end-tag shape each time: `</script >` and then `</script\t\n bar>`. HTML lets
 // an end tag carry whitespace and junk before the bracket, and a missed close
 // leaves the script body to be counted as prose.
-//
-// This tests BEHAVIOUR through a real import rather than reading the source for
-// a pattern, because a source-text assertion would have passed on every broken
-// version of this function.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { words } from "./ua-survey.ts";

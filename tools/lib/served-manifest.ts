@@ -1,27 +1,5 @@
 // The served manifest: every URL a built static tree serves, mapped to the
 // sha256 of the bytes a reader should get back from it.
-//
-// Two builders make the same commit here. GitHub's `validate` job builds it to
-// test it, and Workers Builds builds it again to ship it. Everything in this repo
-// that calls a build "a pure function of the commit" (the q11 twins, the dcz
-// deltas, the 0-of-1443 asset upload after the bun cutover) is a claim that
-// those two agree, and until 2026-10-01 nothing compared them. CI now cuts this
-// manifest from its own build and signs it (actions/attest-build-provenance), and
-// tools/check-served.ts fetches each URL from production and compares.
-//
-// The first comparison, 2026-10-01: a macOS build of 5fb917b3 against the Linux
-// Workers Builds build production served, 1849 of 1850 URLs identical after
-// decoding. The 1850th was a real bug: /dotfiles/index.src.html answered 307,
-// because that section postdated build.ts's text-twin allowlist.
-//
-// WHAT IT CAN AND CANNOT SEE. It covers the static tree, documents included,
-// because a built document is served byte for byte (precompressed, so nothing
-// rewrites it on the way out). It cannot cover the Worker bundle, since no public
-// URL returns those bytes, or a route the Worker renders per request. Say so
-// wherever its verdict is quoted.
-//
-// Pure and node-safe: fetch is injected, nothing reads repo globals, so it can
-// leave this repository the way timbrado and halflight did.
 
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -31,28 +9,13 @@ export const SCHEMA = "aadhar.sh/served-manifest/v1";
 
 export interface ServedManifest {
   schema: typeof SCHEMA;
-  /** The commit CI built; null for a local build of a tree nobody committed. */
   commit: string | null;
-  /** URL path -> sha256 hex of the decoded body a GET should return. */
   files: Record<string, string>;
 }
 
-// ── which staged files are URLs ──────────────────────────────────────────────
-
-// Files in the staged tree that are config or an ENCODING rather than a URL of
-// their own. A `.br` or `.dcz` is how the Worker answers for its plain sibling,
-// so the sibling's decoded body is what proves it; `_headers` is read by the
-// asset layer and never served.
 const NOT_URLS = new Set(["_headers", "_redirects", ".assetsignore"]);
 const ENCODINGS = /\.(?:br|dcz)$/;
 
-/**
- * `.assetsignore` patterns, in the subset this repo uses: a bare name matches
- * that path segment at any depth (gitignore's rule for a pattern with no
- * slash), a leading `/` anchors it to the root, and `*` matches within a
- * segment. Anything else THROWS, so a rule this reader would misread fails the
- * manifest instead of quietly listing a file the asset upload skips.
- */
 export function parseAssetsIgnore(text: string): (rel: string) => boolean {
   const rules = text.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
   const matchers = rules.map((rule) => {
@@ -61,9 +24,6 @@ export function parseAssetsIgnore(text: string): (rel: string) => boolean {
     }
     const anchored = rule.startsWith("/");
     const body = rule.replace(/^\//, "").replace(/\/$/, "");
-    // Split on the one wildcard first, then escape EVERY regex metacharacter in
-    // the literal pieces, so the escape is complete on its own rather than
-    // leaning on the syntax guard above to keep a backslash out.
     const literal = (s: string) => s.replace(/[\\^$.*+?()[\]{}|/]/g, "\\$&");
     const parts = body.split("/").map((seg) => new RegExp(`^${seg.split("*").map(literal).join("[^/]*")}$`));
     return (rel: string) => {
@@ -75,7 +35,6 @@ export function parseAssetsIgnore(text: string): (rel: string) => boolean {
   return (rel) => matchers.some((m) => m(rel));
 }
 
-/** True when a staged file is served at a URL of its own. */
 export function isServedFile(rel: string, ignored: (rel: string) => boolean): boolean {
   if (ignored(rel)) return false;
   if (NOT_URLS.has(posix.basename(rel))) return false;
@@ -97,8 +56,6 @@ export function canonicalUrl(rel: string): string {
   return `/${rel}`;
 }
 
-// ── making one ───────────────────────────────────────────────────────────────
-
 export const sha256 = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
 function walk(root: string, dir = root, out: string[] = []): string[] {
@@ -110,10 +67,9 @@ function walk(root: string, dir = root, out: string[] = []): string[] {
   return out;
 }
 
-/** Cut a manifest from a staged tree (`.build/public`). */
 export function buildManifest(root: string, commit: string | null): ServedManifest {
   let ignoreText = "";
-  try { ignoreText = readFileSync(join(root, ".assetsignore"), "utf8"); } catch { /* no file, nothing ignored */ }
+  try { ignoreText = readFileSync(join(root, ".assetsignore"), "utf8"); } catch { }
   const ignored = parseAssetsIgnore(ignoreText);
   const files: Record<string, string> = {};
   for (const rel of walk(root).sort()) {
@@ -125,16 +81,11 @@ export function buildManifest(root: string, commit: string | null): ServedManife
   return { schema: SCHEMA, commit, files };
 }
 
-/** Stable bytes, so two builds of one commit write identical manifests. */
 export function serializeManifest(m: ServedManifest): string {
   const files = Object.fromEntries(Object.keys(m.files).sort().map((k) => [k, m.files[k]]));
   return `${JSON.stringify({ schema: m.schema, commit: m.commit, files }, null, 1)}\n`;
 }
 
-/**
- * Parse and VALIDATE: a downloaded manifest is input, and one malformed entry
- * would otherwise surface as a confusing mismatch on whatever URL it named.
- */
 export function parseManifest(text: string): ServedManifest {
   const m = JSON.parse(text);
   if (m?.schema !== SCHEMA) throw new Error(`served-manifest: schema is ${JSON.stringify(m?.schema)}, expected ${SCHEMA}`);
@@ -150,12 +101,9 @@ export function parseManifest(text: string): ServedManifest {
   return { schema: SCHEMA, commit: m.commit, files };
 }
 
-/** URLs whose expected bytes differ, or that are new, in `next` against `prev`. */
 export function changedUrls(prev: ServedManifest, next: ServedManifest): string[] {
   return Object.keys(next.files).filter((u) => prev.files[u] !== next.files[u]).sort();
 }
-
-// ── checking one against an origin ───────────────────────────────────────────
 
 export type Verdict = "match" | "mismatch" | "redirect" | "status" | "error";
 
@@ -165,7 +113,6 @@ export interface CheckOptions {
   origin: string;
   urls: string[];
   concurrency?: number;
-  /** The one call this makes, so a test can stand in for the network. */
   fetch?: (url: URL, init: RequestInit) => Promise<Response>;
   headers?: Record<string, string>;
 }

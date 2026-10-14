@@ -1,73 +1,12 @@
 #!/usr/bin/env node
 // gen-pixel-peeper.ts — rebuild the /pixel-peeper trial set from the canonical
 // photo source.
-//
-// The first trial set was cut by hand and never committed a generator, which is
-// exactly how its encoder trials ended up comparing encodes at different file
-// sizes: `sips` was handed 23-43% more bytes than its rivals and then "won" the
-// metrics for it. A trial that does not hold bytes constant teaches the wrong
-// lesson, so the byte budget is enforced here by search rather than by hope.
-//
-// Three rules this script exists to enforce:
-//
-//   1. ENCODER trials share ONE byte budget. Every encoder's quality knob is
-//      binary-searched until its output lands inside BUDGET_TOL of the target,
-//      and an encoder that cannot reach the budget is dropped from the trial
-//      rather than shipped as an unequal comparison.
-//   2. QUALITY trials are picked for a WIDE, visible spread. The ladder is
-//      encoded and measured first, then three rungs are chosen by their
-//      ssimulacra2 distance from the top rung, so every quality call has a
-//      clearly-worst option no matter how forgiving the crop turns out to be.
-//   3. Trials that fail their axis's legibility threshold are REJECTED and
-//      reported, not quietly shipped. A call nobody can see is not a test.
-//
-// Usage:
-//     bun tools/photos/gen-pixel-peeper.ts                  # full rebuild
-//     bun tools/photos/gen-pixel-peeper.ts --dry-run        # measure, write nothing
-//     bun tools/photos/gen-pixel-peeper.ts --sheet x.html   # a contact sheet to eyeball
-//     bun tools/photos/gen-pixel-peeper.ts --only chroma    # one axis, implies --dry-run
-//     bun tools/photos/gen-pixel-peeper.ts --merge format   # rebuild ONE axis into the committed set
-//
-// Needs: zenc (cargo build in tools/photos/zenc), mozjpeg's cjpeg, sips,
-// ssimulacra2, butteraugli_main, and the source folder.
-//
-// ── why this is TypeScript, since 2026-09-15 ──────────────────────────────
-// It was gen-pixel-peeper.py, 849 lines, and the last Python in the tree. Its
-// Pillow did four pixel jobs: decode with the EXIF orientation applied, a
-// downscaled proxy to scan crop windows on, a native crop as PNG and PPM, and
-// JPEG decode for the metrics. All four are `zenc frame` now, the same decoder
-// and resampler the shipped tiers go through. The window SCORING is here, in
-// arithmetic over the proxy's PPM bytes, ported operation for operation from
-// Pillow (its luma weights, its FIND_EDGES kernel and border rule, its
-// population stddev), with one named difference: the 16x16 structure collapse
-// is an area average where Pillow's was lanczos, since at a 20x reduction only
-// the big regions survive either way and that is the whole point of it.
-//
-// The port is of Pillow 12.3.0 (MIT-CMU), the version requirements.txt pinned
-// when the Python left, and each function below links the exact lines it
-// follows at that tag. Checked against the tag on 2026-10-01. A link pinned to
-// a tag still reads the same source a year on, so a later Pillow change is a
-// diff against these lines rather than an argument about what "Pillow's
-// FIND_EDGES" used to mean.
-//
-// Two things changed on purpose with the port. cjpegli left the encoder
-// lineup: config/retired.json banned it in July and the Python went on calling
-// an unmanaged copy in ~/.local/bin that tools:check could not see, because
-// the declaration scanner reads shell. And the contact sheet is an HTML page
-// rather than a bitmap with drawn labels, so the browser draws the text and no
-// font rasterizer has to be built for a review artifact.
-//
-// The trial set was REGENERATED with the port, so the committed tiles are this
-// script's output, not the Python's: crop selection depends on the scorer's
-// exact arithmetic, and reproducing Pillow's bytes was never the goal.
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-// ---------------------------------------------------------------- paths + tools
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC_DIR = "/Users/aadharsh/Downloads/to post (from ssd)";
@@ -86,174 +25,113 @@ const CJPEG = which("cjpeg") ?? (() => {
 })();
 const SSIMULACRA2 = which("ssimulacra2") ?? "/opt/zerobrew/prefix/bin/ssimulacra2";
 const BUTTERAUGLI = which("butteraugli_main") ?? "/opt/zerobrew/prefix/bin/butteraugli_main";
-// The format axis. Each format is decoded by its own REFERENCE decoder for the
-// metrics, so a score describes the bitstream rather than a browser's decode.
 const CJXL = which("cjxl"), DJXL = which("djxl");
 const AVIFENC = which("avifenc"), AVIFDEC = which("avifdec");
 
-const TILE = 320;         // tile edge, cropped at NATIVE resolution: 1:1 pixels is the point
-const BUDGET_TOL = 0.02;  // equal-budget trials: every option within +/-2% of the target
-// 2% is the floor an INTEGER quality knob can actually hold. The knob moves size in
-// jumps of 2-5% near the working range, so demanding tighter than this just throws
-// away good trials to no benefit. For scale, the hand-cut set this replaces ran
-// 23-43% apart and called it an encoder comparison.
+const TILE = 320;
+const BUDGET_TOL = 0.02;
 
-// --------------------------------------------------------------- the trial plan
-//
-// The mix is deliberately lopsided AWAY from chroma. The old set ran 9 of 18
-// trials on chroma (3 "chroma" + 6 "tradeoff"), and chroma is the axis human
-// eyes are worst at: the test read as brutal because half of it was asking
-// people to see something their visual system does not resolve. Chroma is still
-// worth teaching, so it stays, as a minority, on the most saturated crops
-// available, where the effect is actually visible.
-
-// Candidates are OVER-PROVISIONED and then ranked: every one is built and measured,
-// and only the most legible `keep` survive per axis. That way the shipped set is
-// chosen on measured visibility rather than on which photo I happened to like.
 type Intent = "detail" | "color";
 type Axis = "quality" | "encoder" | "chroma" | "tradeoff" | "resample" | "format";
 export const CANDIDATES: Record<Axis, [Intent, number, string[]]> = {
   quality: ["detail", 8, [
-    "XT507494",   // chrome grille, fine mesh
-    "XT509278",   // red grille, black mesh
-    "XT507955",   // metal staircase, yellow stripes
-    "XT509986",   // subway signage, text edges
-    "XT508055",   // mountain road sign
-    "XT507517",   // license plate lettering
-    "XT509535",   // Coca-Cola livery, text on a curve
-    "XT509509",   // train livery lettering
-    "XT509965",   // pier sign
-    "XT507940",   // framed painting
-    "XT509488",   // hand + pen, skin detail
+    "XT507494",
+    "XT509278",
+    "XT507955",
+    "XT509986",
+    "XT508055",
+    "XT507517",
+    "XT509535",
+    "XT509509",
+    "XT509965",
+    "XT507940",
+    "XT509488",
   ]],
   encoder: ["detail", 6, [
-    "XT509794",   // brick road texture
-    "XT509848",   // brick + paint
-    "XT509388",   // coat of arms
-    "XT509540",   // motorcycle number plate
-    "XT508890",   // blossom, foliage is encoder-hard
-    "XT509276",   // red car, white wheel
-    "XT509446",   // staircase, yellow line
-    "XT509892",   // two cars, mixed texture
-    "XT507343",   // yellow/black sticker on glass
-    "XT509721",   // shirt + cap weave
-    "XT508756",   // knit + jacket texture
-    "XT509698",   // jersey mesh
-    "XT508790",   // roofline against sky
+    "XT509794",
+    "XT509848",
+    "XT509388",
+    "XT509540",
+    "XT508890",
+    "XT509276",
+    "XT509446",
+    "XT509892",
+    "XT507343",
+    "XT509721",
+    "XT508756",
+    "XT509698",
+    "XT508790",
   ]],
-  // Chroma is the axis where candidates die. The survivors all look the same:
-  // a HIGH-CONTRAST TWO-TONE boundary (livery stripes, signage, a painted edge
-  // against chrome), never a big saturated panel. Feed it accordingly, and
-  // expect most of this list to be rejected: that rejection IS the finding.
   chroma: ["color", 3, [
-    "XT509540",   // red/white motorcycle, livery stripes
-    "XT507343",   // yellow/black sticker on glass
-    "XT509814",   // blue car, yellow stripe
-    "XT509839",   // red car, yellow sticker
-    "XT509779",   // blue car beside a yellow taxi
-    "XT509276",   // red car, white wheel
-    "XT509085",   // yellow building, two figures
-    "XT509446",   // staircase, yellow line
-    "XT509892",   // black car beside a yellow one
-    "XT509794",   // yellow car on brick
-    "XT508947",   // beer crates, three saturated hues
-    "XT508890",   // pink blossom against sky
-    "XT509535",   // Coca-Cola red on white
-    "XT509987",   // wings sign
+    "XT509540",
+    "XT507343",
+    "XT509814",
+    "XT509839",
+    "XT509779",
+    "XT509276",
+    "XT509085",
+    "XT509446",
+    "XT509892",
+    "XT509794",
+    "XT508947",
+    "XT508890",
+    "XT509535",
+    "XT509987",
   ]],
   tradeoff: ["color", 3, [
-    "XT509987",   // wings sign
-    "XT509315",   // colourful umbrella
-    "XT509534",   // yellow car, red seat
-    "XT509535",   // Coca-Cola red
-    "XT508947",   // beer crates
-    "XT509509",   // train livery
-    "XT509809",   // yellow car, red interior
-    "XT509346",   // orange mirror
+    "XT509987",
+    "XT509315",
+    "XT509534",
+    "XT509535",
+    "XT508947",
+    "XT509509",
+    "XT509809",
+    "XT509346",
   ]],
-  // The geometry axis. Fine repeating detail is where a downscale's defects
-  // live: gamma-incorrect averaging darkens texture, and aliasing shows on
-  // anything periodic. A smooth subject would separate by nothing and the
-  // legibility gate would correctly drop it, so the stems are chosen the same
-  // way the quality axis chooses its own.
   resample: ["detail", 6, [
-    "XT507494",   // chrome grille, fine mesh
-    "XT509278",   // red grille, black mesh
-    "XT507955",   // metal staircase, yellow stripes
-    "XT509986",   // subway signage, text edges
-    "XT509509",   // train livery lettering
-    "XT507517",   // license plate lettering
-    "XT509535",   // Coca-Cola livery, text on a curve
+    "XT507494",
+    "XT509278",
+    "XT507955",
+    "XT509986",
+    "XT509509",
+    "XT507517",
+    "XT509535",
   ]],
-  // The format axis: JPEG XL against AVIF at one byte budget. Detail crops,
-  // because a format difference at equal bytes shows first in what each codec
-  // chooses to smooth: AVIF's deblocking eats grain and fine texture, JXL
-  // keeps texture and rings.
-  // Each stem yields one trial per budget tier (FORMAT_TIERS). The keep count
-  // is split evenly across the tiers and set above anything a tier has built
-  // (13 calls cleared the gate on 2026-10-07), because the axis also feeds the
-  // JPEG XL vs AVIF run: a cap of 3 a tier dropped the one tight-budget call
-  // JPEG XL won, for having a smaller margin than AVIF's three.
-  //
-  // The last three stems joined 2026-10-07, when the axis grew from two tiers
-  // to four and needed a deeper pool. They come from the encoder and chroma
-  // lists and stay clear of codec-knob-probe's HOLDOUT, which is why that
-  // probe now pins its TRAIN set to the first eight by name.
   format: ["detail", 24, [
-    "XT507494",   // chrome grille, fine mesh
-    "XT509794",   // brick road texture
-    "XT508890",   // blossom, foliage is encoder-hard
-    "XT509986",   // subway signage, text edges
-    "XT509721",   // shirt + cap weave
-    "XT507517",   // license plate lettering
-    "XT509509",   // train livery lettering
-    "XT508756",   // knit + jacket texture
-    "XT509276",   // red car, white wheel
-    "XT509446",   // staircase, yellow line
-    "XT509892",   // two cars, mixed texture
+    "XT507494",
+    "XT509794",
+    "XT508890",
+    "XT509986",
+    "XT509721",
+    "XT507517",
+    "XT509509",
+    "XT508756",
+    "XT509276",
+    "XT509446",
+    "XT509892",
   ]],
 };
 
 type Option = { label: string; bytes: number; s2: number | null; butter: number | null; q: number; path: string; chroma?: string; s2best?: boolean; butterbest?: boolean; src?: string; decoded?: string };
-// `spread` is absent on a tradeoff trial, as it was in the Python: that axis
-// ranks on the metric split and the penalty, and the manifest carries neither
-// a spread it did not measure nor a placeholder.
 type Trial = { axis: Axis; crop: string; options: Option[]; disagree: boolean; spread?: number; budget?: number; budget_drift?: number; penalty?: number; rejected?: string[]; crop_score?: number; tier?: string; lossless?: { jxl: number; avif: number } };
 
-// How each axis ranks its survivors: bigger sorts first, so ships first.
-//
-// The two colour axes rank differently ON PURPOSE. `chroma` teaches a visible
-// lesson, so it ranks on how much 4:2:0 actually costs. `tradeoff` exists to
-// FEED the metric-alignment needle, which only reads calls where the two metrics
-// disagree, so a tradeoff trial that splits them beats one that does not however
-// pretty its numbers are.
 const RANK: Record<Axis, (t: Trial) => number | [number, number]> = {
   quality: (t) => t.spread as number,
   encoder: (t) => t.spread as number,
-  chroma: (t) => t.spread as number,   // structural damage is what a person can SEE
+  chroma: (t) => t.spread as number,
   tradeoff: (t) => [t.disagree ? 1 : 0, t.penalty ?? 0],
-  resample: (t) => t.spread as number, // how far apart the two geometries land
+  resample: (t) => t.spread as number,
   format: (t) => t.spread as number,
 };
 const rankKey = (axis: Axis, t: Trial): number => { const k = RANK[axis](t); return Array.isArray(k) ? k[0] * 1e6 + k[1] : k; };
 
-// Legibility thresholds. A trial that cannot clear these is dropped, because a
-// call whose options are indistinguishable teaches nothing and just feels hard.
-const QUALITY_MID_GAP = 10.0;   // ssimulacra2 points between top rung and middle rung
-const QUALITY_LOW_GAP = 26.0;   // ...and between top rung and bottom rung
+const QUALITY_MID_GAP = 10.0;
+const QUALITY_LOW_GAP = 26.0;
 const QUALITY_MIN_SPREAD = 18.0;
-const ENCODER_MIN_SPREAD = 3.5; // s2 points between the best and worst encoder at equal bytes
-const CHROMA_MIN_BUTTER = 0.25; // butteraugli penalty 4:2:0 must take over 4:2:2
-// ...and it has to cost STRUCTURE too. 1.2 was the first guess and it was too
-// loose: it passed a flat orange panel whose two encodes are indistinguishable
-// side by side, because at that margin the "gap" is measuring grain. 3.0 is where
-// a contact sheet starts showing a difference a person can point at.
+const ENCODER_MIN_SPREAD = 3.5;
+const CHROMA_MIN_BUTTER = 0.25;
 const CHROMA_MIN_S2 = 3.0;
-const COLOR_MIN_SAT = 34.0;     // mean 0-255 saturation a 'color' crop must carry to qualify
-// Large-scale contrast a 'detail' crop must have, so pure grain is excluded.
-// Measured rather than guessed, and the gap is wide: the one ambiguous crop in
-// the shipped set (flat grainy sky) scores 0.95, while every crop that made a
-// legible call scores 16 to 58. Anywhere in between works; 12 keeps margin.
+const COLOR_MIN_SAT = 34.0;
 const DETAIL_MIN_STRUCT = 12.0;
 
 const QUALITY_LADDER = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 88, 91, 94, 96];
@@ -262,15 +140,8 @@ const log = (msg: string) => process.stderr.write(`${msg}\n`);
 const run = (cmd: string[]) => spawnSync(cmd[0], cmd.slice(1), { encoding: "utf8" });
 const zenc = (args: string[]): string => execFileSync(ZENC, args, { encoding: "utf8" });
 
-// ------------------------------------------------------------------ source load
-
 type Source = { file: string; orient: number; stem: string };
 
-/** Find a source frame and its EXIF orientation. HIF goes through sips to a
- *  lossless TIFF (PNG spends its time deflating an intermediate that is deleted
- *  a moment later: 6.17s against 0.42s on one 7728x5152 frame); a JPEG is read
- *  by zenc directly. The orientation is read off the ORIGINAL, which is what
- *  add-photos.sh does too, since sips does not promise to carry the tag. */
 export function loadSource(stem: string, tmp: string): Source {
   const match = fs.readdirSync(SRC_DIR).find((f) => path.parse(f).name === stem);
   if (!match) throw new Error(`${stem} not in ${SRC_DIR}`);
@@ -286,10 +157,6 @@ export function loadSource(stem: string, tmp: string): Source {
   }
   return { file: original, orient, stem };
 }
-
-// ---------------------------------------------------------------- crop choosing
-//
-// Pixel arithmetic over a P6 PPM, ported from Pillow operation for operation.
 
 type Rgb = { w: number; h: number; px: Uint8Array };
 
@@ -347,7 +214,6 @@ function saturation(im: Rgb): Uint8Array {
   return out;
 }
 
-/** |r - b| per pixel: ImageChops.difference on the two outer bands. */
 function redBlueDifference(im: Rgb): Uint8Array {
   const out = new Uint8Array(im.w * im.h);
   for (let i = 0, p = 0; i < out.length; i += 1, p += 3) out[i] = Math.abs(im.px[p] - im.px[p + 2]);
@@ -360,21 +226,6 @@ function window(im: Rgb, x0: number, y0: number, size: number): Rgb {
   return { w: size, h: size, px };
 }
 
-/** How much large-scale light/dark SHAPE the window has. Grain scores ~0.
- *
- *  Every edge-energy measure tried here is really a grain meter, and grain is
- *  the thing that makes a call unanswerable: three encodes of a flat noisy sky
- *  differ only in how much grain survived, and "which looks best" then has no
- *  honest answer. Both FIND_EDGES stddev and its downsampled variant ranked
- *  that sky ABOVE a two-tone racing livery whose lettering visibly softens at
- *  every quality step.
- *
- *  Collapsing to 16x16 throws away all texture and leaves only the big regions.
- *  A livery (dark panel against pale lettering) keeps a wide spread; uniform
- *  grain averages to a flat field and scores near zero. That is the distinction
- *  that matters, because shapes are what a person can actually judge. An area
- *  average does the collapse here (Pillow's was lanczos); at 20x either one
- *  leaves only the regions. */
 function structure(gray: Uint8Array, w: number, h: number): number {
   const cells = new Uint8Array(256);
   for (let cy = 0; cy < 16; cy += 1) {
@@ -389,58 +240,26 @@ function structure(gray: Uint8Array, w: number, h: number): number {
   return stats(cells).stddev;
 }
 
-/** Higher is a better tile: SHAPES for 'detail', colour-EDGY for 'color'. */
 function scoreWindow(win: Rgb, intent: Intent): number {
   const gray = toGray(win);
   const detail = stats(findEdges(gray, win.w, win.h)).stddev;
   if (intent === "detail") {
-    // Fine detail RANKS (it is what falling quality destroys, and it reliably
-    // finds grilles, brickwork and lettering). Structure only GATES. Ranking
-    // on structure instead was tried and was worse across the board: it
-    // picked big soft out-of-focus panels with one smooth boundary, which
-    // have almost no fine detail for quality to take away. The narrow failure
-    // being fixed is a crop of pure grain, nothing more.
     if (structure(gray, win.w, win.h) < DETAIL_MIN_STRUCT) return -1e6;
     return detail;
   }
-  // 4:2:0 does not damage saturated FLAT areas: halving the resolution of a
-  // field of solid red loses nothing. It damages saturated BOUNDARIES, where a
-  // hue changes faster than the halved chroma plane can carry.
-  //
-  // Two wrong cuts of this got shipped to a contact sheet before this one.
-  // Ranking by mean saturation picked big flat red panels (nothing to see).
-  // Ranking by full-resolution chroma gradient was worse and sneakier: it
-  // picked grey speckled STONE, because per-pixel colour noise has enormous
-  // chroma gradient. That crop scored a 4.45 ssimulacra2 gap between 4:2:2 and
-  // 4:2:0, a real number, measuring damage to noise nobody can see.
-  //
-  // Windows arrive here already downscaled ~5x by bestCrop's proxy, which is
-  // what suppresses the pixel noise; the fix that mattered is the SATURATION
-  // GATE below. Grey stone has huge chroma gradient and almost no saturation,
-  // so gating on saturation is what tells the two apart.
   const sat = saturation(win);
-  if (stats(sat).mean < COLOR_MIN_SAT) return -1e6;  // not a colour crop at all, whatever its gradients say
-  // Saturation is a GATE, never a multiplier. Multiplying by it (the third wrong
-  // cut) ranked a flat orange panel top of the pool: maximum saturation, no
-  // boundary, nothing for 4:2:0 to damage. The boundary term has to lead.
+  if (stats(sat).mean < COLOR_MIN_SAT) return -1e6;
   const coarse = stats(findEdges(sat, win.w, win.h)).stddev + stats(findEdges(redBlueDifference(win), win.w, win.h)).stddev;
   return coarse + detail * 0.05;
 }
 
 type Crop = { png: string; ppm: string; score: number };
 
-/** Scan candidate windows on a coarse proxy, then cut the winner at native res.
- *
- *  `boxPx` is the NATIVE window edge. It defaults to TILE, which is every axis
- *  that compares encodes of one set of pixels. The resample axis asks for a
- *  larger window because what it compares is the DOWNSCALE, so it needs real
- *  reduction to happen inside the trial rather than a 1:1 cut. */
 export function bestCrop(src: Source, intent: Intent, tmp: string, boxPx = TILE, name = "crop"): Crop {
   const proxyPpm = path.join(tmp, `${name}-proxy.ppm`);
   const dims = zenc(["frame", src.file, "--orient", String(src.orient), "--fit", "1400", "--out", proxyPpm]).trim().split(/\s+/).map(Number);
   const [W, H] = dims;
   if (W < boxPx || H < boxPx) throw new Error(`source smaller than a ${boxPx}px window: ${W}x${H}`);
-  // Score on a downscaled proxy so the scan is cheap, then map the window back.
   const scale = Math.min(1, 1400 / Math.max(W, H));
   const proxy = readPpm(proxyPpm);
   let box = Math.max(8, Math.floor(boxPx * scale));
@@ -454,7 +273,6 @@ export function bestCrop(src: Source, intent: Intent, tmp: string, boxPx = TILE,
     }
   }
   if (bestS <= -1e5 || !best) throw new Error(`no window carries enough colour (mean sat < ${COLOR_MIN_SAT})`);
-  // Map proxy coords back to native, clamped so the tile stays inside the frame.
   const nx = Math.min(W - boxPx, Math.max(0, Math.floor(best[0] / scale)));
   const ny = Math.min(H - boxPx, Math.max(0, Math.floor(best[1] / scale)));
   const png = path.join(tmp, `${name}.png`), ppm = path.join(tmp, `${name}.ppm`);
@@ -462,13 +280,10 @@ export function bestCrop(src: Source, intent: Intent, tmp: string, boxPx = TILE,
   return { png, ppm, score: bestS };
 }
 
-// -------------------------------------------------------------------- encoders
-
 const MOZ_SAMPLE: Record<string, string> = { "444": "1x1", "422": "2x1", "420": "2x2" };
 type Kind = "zenc" | "mozjpeg" | "sips";
 export type Srcs = { png: string; ppm: string };
 
-/** One encode. `srcs` carries the crop in each form an encoder can read. */
 export function encode(kind: Kind, srcs: Srcs, out: string, q: number, chroma = "420"): number {
   let r;
   if (kind === "zenc") r = run([ZENC, srcs.png, out, "-q", String(q), "--yuv", chroma]);
@@ -484,15 +299,11 @@ export function encode(kind: Kind, srcs: Srcs, out: string, q: number, chroma = 
   return fs.statSync(out).size;
 }
 
-/** Binary-search the quality knob until the output lands on `target` bytes.
- *  Returns the closest attempt, whether or not it made tolerance; the caller
- *  decides whether to keep it. */
 function searchQuality(kind: Kind, srcs: Srcs, tmp: string, target: number, chroma = "420", lo = 5, hi = 100): { q: number; bytes: number; path: string } | null {
   if (lo > hi) return null;
   if (kind === "zenc") {
     const out = path.join(tmp, "search-zenc.jpg");
     const result = JSON.parse(zenc(["jpeg-search", srcs.png, out, String(target), chroma, String(lo), String(hi)])) as { q: number; bytes: number };
-    // Keep the same returned filename/lifetime as the other encoder paths.
     const keep = path.join(tmp, `cand-zenc-${result.q}.jpg`);
     fs.copyFileSync(out, keep);
     return { ...result, path: keep };
@@ -515,8 +326,6 @@ function searchQuality(kind: Kind, srcs: Srcs, tmp: string, target: number, chro
   return best;
 }
 
-// --------------------------------------------------------------------- metrics
-
 const toPng = (jpg: string, png: string): string => { zenc(["frame", jpg, "--out", png]); return png; };
 const firstFloat = (tool: string, r: ReturnType<typeof run>): number => {
   const m = /-?\d+\.\d+/.exec(r.stdout || "");
@@ -530,9 +339,6 @@ function measure(refPng: string, jpg: string, tmp: string, both = true): [number
   return [ssim2(refPng, png), both ? butter(refPng, png) : null];
 }
 
-// ------------------------------------------------------------- trial builders
-
-/** Tag each metric's favourite and say whether the two of them split. */
 function markWinners(options: Option[]): boolean {
   const bestS2 = Math.max(...options.map((o) => o.s2 as number));
   const bestBu = Math.min(...options.map((o) => o.butter as number));  // butteraugli: lower is better
@@ -542,7 +348,6 @@ function markWinners(options: Option[]): boolean {
 
 type Built = [Trial, null] | [null, string];
 
-/** Encode the ladder, then pick three rungs spread far enough apart to SEE. */
 function buildQuality(cropId: string, srcs: Srcs, refPng: string, tmp: string): Built {
   const rungs = QUALITY_LADDER.map((q) => {
     const p = path.join(tmp, `q${q}.jpg`);
@@ -560,17 +365,14 @@ function buildQuality(cropId: string, srcs: Srcs, refPng: string, tmp: string): 
   return [{ axis: "quality", crop: cropId, options, disagree: markWinners(options), spread: Number(spread.toFixed(1)) }, null];
 }
 
-/** One byte budget, three encoders, each searched onto it. This is the fix. */
 function buildEncoder(cropId: string, srcs: Srcs, refPng: string, tmp: string): Built {
-  // The budget is whatever zenc spends at a middling quality: a real-world
-  // web-export size for this crop rather than a number picked out of the air.
   const target = encode("zenc", srcs, path.join(tmp, "budget-probe.jpg"), 72, "420");
   let options: Option[] = [];
   const rejected: string[] = [];
   for (const kind of ["zenc", "mozjpeg", "sips"] as Kind[]) {
     let got;
     try { got = searchQuality(kind, srcs, tmp, target, "420"); }
-    catch (e) { rejected.push(`${kind}: ${e instanceof Error ? e.message : String(e)}`); continue; }  // report, don't crash the run
+    catch (e) { rejected.push(`${kind}: ${e instanceof Error ? e.message : String(e)}`); continue; }
     if (got === null) { rejected.push(`${kind}: search found nothing`); continue; }
     const drift = Math.abs(got.bytes - target) / target;
     if (drift > BUDGET_TOL) { rejected.push(`${kind}: closest was ${got.bytes}B, ${(drift * 100).toFixed(1)}% off budget`); continue; }
@@ -578,9 +380,6 @@ function buildEncoder(cropId: string, srcs: Srcs, refPng: string, tmp: string): 
     options.push({ label: kind, bytes: got.bytes, s2, butter: bu, q: got.q, path: got.path });
   }
   if (options.length < 2) return [null, `only ${options.length} encoder(s) hit the budget; ${JSON.stringify(rejected)}`];
-  // Three tiles is the widest the UI lays out, so keep the most separated set:
-  // the s2 winner, the s2 loser, and whichever middle option sits furthest from
-  // both, which is what makes the call readable instead of a three-way tie.
   options.sort((a, b) => (a.s2 as number) - (b.s2 as number));
   if (options.length > 3) {
     const lo = options[0], hi = options[options.length - 1];
@@ -596,7 +395,6 @@ function buildEncoder(cropId: string, srcs: Srcs, refPng: string, tmp: string): 
   return [{ axis: "encoder", crop: cropId, options, disagree: markWinners(options), spread: Number(spread.toFixed(1)), budget: target, budget_drift: Number((budgetDrift * 100).toFixed(2)), rejected }, null];
 }
 
-/** Same quality setting, full colour vs halved. Bytes differ: that IS the axis. */
 function buildChroma(cropId: string, srcs: Srcs, refPng: string, tmp: string): Built {
   const Q = 80;
   const out: Option[] = [];
@@ -613,7 +411,6 @@ function buildChroma(cropId: string, srcs: Srcs, refPng: string, tmp: string): B
   return [{ axis: "chroma", crop: cropId, options: out, disagree: markWinners(out), penalty: Number(penalty.toFixed(3)), spread: Number(spread.toFixed(2)) }, null];
 }
 
-/** Equal bytes, forced trade: 4:2:0 buys sharpness with the colour budget. */
 function buildTradeoff(cropId: string, srcs: Srcs, refPng: string, tmp: string): Built {
   const Q422 = 80;
   const p422 = path.join(tmp, "trade-422.jpg");
@@ -630,63 +427,26 @@ function buildTradeoff(cropId: string, srcs: Srcs, refPng: string, tmp: string):
   const disagree = markWinners(options);
   const budgetDrift = Math.abs(options[0].bytes - options[1].bytes) / target;
   return [{ axis: "tradeoff", crop: cropId, options, disagree, budget: target, budget_drift: Number((budgetDrift * 100).toFixed(2)),
-    // how hard the two sides pull apart: the colour cost of 4:2:0 against the
-    // sharpness it bought. A trade nobody can feel ranks last.
     penalty: Number(Math.abs((options[0].butter as number) - (options[1].butter as number)).toFixed(3)) }, null];
 }
 
-// The reduction the trial reproduces. The pipeline takes a ~1333px short edge to
-// a 600px square, so ~2.2x; 3x here keeps the tile peepable while staying in the
-// regime the site actually runs in. A 1:1 comparison would test nothing, since
-// the whole difference between these two candidates IS the downscale.
 const RESAMPLE_REDUCTION = 3;
-// Two candidates that are meant to differ MUST separate by this much for the
-// trial to ship. Below it, nobody can call the tile and the honest answer is that
-// the difference does not survive at display size.
 const RESAMPLE_MIN_SPREAD = 8.0;
 
-/** sips against the linear-light kernel, at one byte budget.
- *
- *  NOT scored against a reference, and that is the design rather than a
- *  shortcut. Every other axis compares encodes of ONE set of pixels, so the
- *  native crop is a legitimate reference and ssimulacra2 measures encode damage.
- *  Here the candidates are different downscales of a larger region, so there is
- *  no common-size truth to score against, and manufacturing one means choosing a
- *  downscaler, which is choosing the winner. That mistake cost this repository
- *  two wrong conclusions before the probe in resample-probe.ts replaced
- *  reference-similarity with analytically-known answers.
- *
- *  So the number here is the two candidates against EACH OTHER. That is the
- *  question the page exists to answer: whether a person looking at two tiles
- *  can tell them apart at all. The TILE-sized crop the main loop cut is unused;
- *  this re-cuts a RESAMPLE_REDUCTION x larger window from the same source,
- *  because a downscale needs something to reduce. */
 function buildResample(src: Source, tmp: string): Built {
   const big = bestCrop(src, "detail", tmp, TILE * RESAMPLE_REDUCTION, "resample-src");
   const made: Record<string, string> = {};
   for (const label of ["sips", "zenc"]) {
     const out = path.join(tmp, `resample-${label}.png`);
-    // sips: the shipping chain resized the short edge, then centre-cropped. The
-    // window is already square, so this is the resize alone.
     if (label === "sips") run([SIPS, "-Z", String(TILE), big.png, "--out", out]);
     else run([ZENC, "square", big.png, "--size", String(TILE), "--out", out, "--filter", "box"]);
     if (!fs.existsSync(out)) return [null, `${label} produced no output`];
     made[label] = out;
   }
-  // One byte budget, both searched onto it, so the tile is not secretly a
-  // quality comparison. Same discipline the encoder axis uses.
   const target = encode("zenc", { png: made.sips, ppm: made.sips }, path.join(tmp, "resample-budget.jpg"), 72, "420");
   const options: Option[] = [];
   const rejected: string[] = [];
   for (const [label, png] of Object.entries(made)) {
-    // A SUBDIRECTORY PER CANDIDATE, and it is load-bearing. searchQuality names
-    // its output by encoder `kind`, and both candidates here are zenc, so a
-    // shared tmp makes them write to the same cand-zenc-<q>.jpg. When the two
-    // geometries happen to settle on the same quality the second silently
-    // overwrites the first, both options point at one file, and the spread
-    // reads exactly 0.0, which looks like "these are indistinguishable" and is
-    // really "these are the same file". Two of seven crops reported that
-    // before the split.
     const sub = path.join(tmp, `rs-${label}`);
     fs.mkdirSync(sub, { recursive: true });
     const got = searchQuality("zenc", { png, ppm: png }, sub, target, "420");
@@ -696,116 +456,27 @@ function buildResample(src: Source, tmp: string): Built {
     options.push({ label, bytes: got.bytes, q: got.q, path: got.path, s2: null, butter: null });
   }
   if (options.length !== 2) return [null, `only ${options.length} geometry hit the budget; ${JSON.stringify(rejected)}`];
-  // The legibility gate: how far apart the two DECODED tiles are. A reference
-  // is deliberately absent, so this is ssimulacra2 run candidate against
-  // candidate, which is symmetric and needs no truth.
   const spread = 100.0 - ssim2(toPng(options[0].path, path.join(tmp, "resample-a-dec.png")), toPng(options[1].path, path.join(tmp, "resample-b-dec.png")));
   if (spread < RESAMPLE_MIN_SPREAD) return [null, `the two geometries differ by only ${spread.toFixed(1)} at this budget (want ${RESAMPLE_MIN_SPREAD}); nobody could call this tile`];
   return [{ axis: "resample", crop: src.stem, options, spread: Number(spread.toFixed(1)), disagree: false, budget: target }, null];
 }
 
-// ------------------------------------------------------------------ format axis
-//
-// JPEG XL against AVIF at one byte budget. Three decisions carry the axis, and
-// one exclusion:
-//
-//   0. NO WEBP. It was the third format until 2026-09-27 and came last on all
-//      14 calls it entered, 5-6 s2 behind AVIF even with its best flags, so it
-//      made every call easy without teaching anything. The page says so in one
-//      sentence instead of spending tiles on it.
-//
-//   1. THE BUDGET IS ANCHORED ON THE COARSEST KNOB. avifenc's -q is an integer
-//      over ~64 quantizer steps, so on a 320px tile consecutive values move the
-//      file 3-6% and AVIF often cannot land inside BUDGET_TOL of an arbitrary
-//      number. cjxl's distance is continuous. So AVIF is encoded first and its
-//      ACTUAL output size becomes the budget JXL is searched onto, which it can
-//      hit to well under 1%.
-//   2. FOUR TIERS, each budget taken from what this site ships rather than
-//      picked. The ranking between these formats depends on bitrate (AVIF's
-//      reputation is built low, JXL's high), so one budget would teach whichever
-//      half of that the budget happened to favour.
-//        low-tier:  the shipped 600px AVIF tier's median bits per pixel, spent
-//                   on this crop. AVIF is searched onto it.
-//        avif-tier: avifenc at the photo pipeline's own flags, -q 63. The AVIF
-//                   tile IS the shipping encode, no search at all.
-//        jpeg-tier: what zenc spends at q84, the shipping JPEG fallback. AVIF
-//                   is then searched onto that.
-//        repack:    JXL's home ground. You start from the shipping JPEG, as
-//                   most of the web must: JXL repacks it losslessly, AVIF has
-//                   to decode it and encode again. AVIF is searched onto the
-//                   repack's size. Scored against the ORIGINAL crop, so the
-//                   JPEG's own damage counts against both.
-//   3. EACH FORMAT AT A SERIOUS SETTING, NOT A DEFAULT. AVIF gets the shipping
-//      flags (10-bit, speed 2, 4:4:4). JXL gets effort 9 with decoder smoothing off (JXL_ARGS
-//      says why), effort 9 being near the top of cjxl's range the way speed
-//      2 is near the top of aom's. Effort 7 (cjxl's default) was measured
-//      first and scored 0.0-4.5 s2 lower at equal bytes; holding JXL at its
-//      default against AVIF at its slow preset would decide the call by preset.
-//      Defaults on both would compare two speed presets and call it a format
-//      comparison.
-//
-// One caveat the page must carry: both metrics come from the JPEG XL project,
-// and cjxl's distance IS a butteraugli target. Scoring JXL with butteraugli is
-// grading it against its own answer key. ssimulacra2 is less directly coupled,
-// and the tiles, not the numbers, are what the visitor judges.
-
 export type Fmt = "jxl" | "avif";
 const FMT_EXT: Record<Fmt, string> = { jxl: "jxl", avif: "avif" };
-// Each tier names the SHIPPING encode its budget is read off. "avif" means the
-// AVIF tile is that encode itself; "zenc" means AVIF is searched onto what zenc
-// spends at that quality and chroma.
 export const FORMAT_TIER_ANCHOR = {
-  "avif-tier": { enc: "avif", q: 63 },                 // add-photos.sh's AVIF tiers
-  "jpeg-tier": { enc: "zenc", q: 84, chroma: "420" },  // add-photos.sh's JPEG fallback
+  "avif-tier": { enc: "avif", q: 63 },
+  "jpeg-tier": { enc: "zenc", q: 84, chroma: "420" },
 } as const;
-// FORMAT_TIER_ANCHOR holds only the two tiers read off a shipping ENCODE,
-// because codec-knob-probe.ts tunes flags on exactly those budgets and its
-// recorded tables are over them. The axis builds these four.
 const FORMAT_TIERS = ["low-tier", "avif-tier", "jpeg-tier", "repack"] as const;
 type FormatTier = (typeof FORMAT_TIERS)[number];
-// Median bits per pixel of the shipped 600px AVIF tiles in public/i, 255 Fuji
-// frames on 2026-10-07 (mean 0.70). A whole-frame average spent on the
-// densest window in the frame squeezes both formats hard, which is the
-// regime AVIF's reputation was built in.
 const LOW_TIER_BPP = 0.66;
-// Higher tiers were MEASURED and left out:
-//   zenc q94, 2026-09-26: all three formats (WebP was still in the race) land
-//     within 1.8-3.4 s2 on every crop (s2 86-92). Near transparency they converge.
-//   zenc q100 4:2:2, the /images/full companion, 2026-10-07 over 16 crops
-//     (5.8 bpp): JXL minus AVIF ran -0.7 to +0.1 s2, both formats at s2 95-96.
-//     Nobody can call that tile, and the reputation that JXL wins up there is
-//     at best a tie on these photos.
-// Per-tier flags were measured the same day (train / holdout, 8 crops each)
-// and changed nothing: JXL_ARGS beat plain effort 9 at every tier, by the
-// most at 0.45 bpp (+1.3 / +1.8 s2), --resampling=2 lost 8-11 s2 wherever it
-// was tried, and AVIF's 4:4:4 beat 4:2:0 at every tier (+0.2 to +0.9). Each
-// format's best flags are the same at every budget, so "each format where it
-// is strong" is a matter of BUDGET and STARTING POINT, which the tiers vary.
-// Generation loss (decode, re-encode at one setting, 30 times) was measured as
-// a possible JXL showcase, 2026-10-07, 16 crops, and dropped. Mean s2 after 30
-// saves at -q 63 / -q 80 budgets: AVIF 69.2 / 81.4, JXL_ARGS 49.7 / 65.1,
-// cjxl's default effort 7 60.6 / 78.1. AVIF holds best, and JXL's own effort
-// choice moves it 11-13 points, so a call would teach a preset as much as a
-// format. The bytes drift too: by save 30 JXL files run up to 38% smaller
-// than at save 1, AVIF's at most 8%, so equal bytes do not survive the chain.
-// Knob ranges, and whether a HIGHER knob means MORE bytes. Continuous knobs get
-// a fixed number of bisection steps; the integer one stops when it runs out.
 const FMT_KNOB: Record<Fmt, { lo: number; hi: number; up: boolean; int: boolean }> = {
   jxl: { lo: 0.1, hi: 15, up: false, int: false },   // butteraugli distance: smaller is bigger
   avif: { lo: 0, hi: 100, up: true, int: true },
 };
 
-// cjxl's flags beyond the distance, for the format axis. Effort 9 with the
-// decoder's two smoothing filters OFF (gaborish, and the edge-preserving filter):
-// the one knob codec-knob-probe.ts found that holds on BOTH metrics and on the
-// holdout, +0.40 / +0.64 s2 over plain effort 9 at matched bytes with
-// butteraugli flat (+0.04 / +0.06). It removes filtering rather than adding
-// any, which fits the rule that nothing here synthesizes content. The probe's
-// full table is in its header.
 export const JXL_ARGS = ["-e", "9", "--gaborish=0", "--epf=0"];
 
-// avifenc's flags beyond the quality: the photo pipeline's own (add-photos.sh),
-// so the AVIF tile is a shipping encode. codec-knob-probe.ts varies these.
 export const AVIF_ARGS = ["-d", "10", "--speed", "2", "--yuv", "444"];
 
 export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): number {
@@ -829,7 +500,6 @@ export function decodeFmt(fmt: Fmt, file: string, png: string): string {
   return png;
 }
 
-/** Bisect one format's knob onto `target` bytes; returns the closest attempt. */
 export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): { knob: number; bytes: number; path: string } {
   const k = FMT_KNOB[fmt];
   let lo = k.lo, hi = k.hi, best: { knob: number; bytes: number; path: string } | null = null;
@@ -840,7 +510,6 @@ export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jx
     if (best === null || Math.abs(size - target) < Math.abs(best.bytes - target)) best = { knob: mid, bytes: size, path: out };
     if (size === target || Math.abs(size - target) / target < 0.002) break;
     const tooBig = size > target;
-    // move toward fewer bytes if too big: lower knob when up, higher when not
     if (tooBig === k.up) hi = k.int ? mid - 1 : mid; else lo = k.int ? mid + 1 : mid;
     if (k.int && lo > hi) break;
   }
@@ -850,11 +519,6 @@ export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jx
 const knobLabel = (fmt: Fmt, knob: number): string =>
   fmt === "jxl" ? `JPEG XL · distance ${knob.toFixed(2)}` : `AVIF · q${Math.round(knob)}`;
 
-/** Both formats' LOSSLESS size for the crop. Not a call, since identical
- *  pixels make no eye test, but it is the one place the gap is large (JXL ran
- *  53-79% of AVIF's bytes over 16 crops, 2026-10-07), so the page states it
- *  as a number beside the call. AVIF lossless is 8-bit RGB through the
- *  identity matrix, which is what avifenc -l writes. */
 function losslessBytes(png: string, tmp: string): { jxl: number; avif: number } {
   const jxl = path.join(tmp, "lossless.jxl"), avif = path.join(tmp, "lossless.avif");
   run([CJXL as string, png, jxl, "-d", "0", "-e", "9", "--quiet"]);
@@ -871,18 +535,12 @@ function buildFormat(cropId: string, srcs: Srcs, refPng: string, tmp: string): B
       if (built[0]) built[0].lossless = lossless;
       return built;
     }
-    catch (e) { return [null, `${tier}: ${e instanceof Error ? e.message : String(e)}`]; }   // one tier failing keeps the others
+    catch (e) { return [null, `${tier}: ${e instanceof Error ? e.message : String(e)}`]; }
   });
 }
 
 type Got = { knob: number; bytes: number; path: string };
 
-/** The repack tier's two files. JXL's is the shipping JPEG repacked
- *  losslessly (cjxl --lossless_jpeg=1, which is the default for a JPEG input,
- *  spelled out), without the reconstruction box: a browser decodes pixels and
- *  never needs the original JPEG bytes back, so the box is overhead, and
- *  codec-knob-probe measured dropping it at +0.37 s2 at matched bytes. AVIF
- *  gets what any re-encoder gets, the JPEG's decoded pixels. */
 function repackPair(srcs: Srcs, sub: string): [Got, Got] {
   const jpg = path.join(sub, "have.jpg");
   encode("zenc", srcs, jpg, 84, "420");
@@ -901,22 +559,18 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
     let got: [Fmt, Got][];
     if (tier === "repack") {
       const [jxl, avif] = repackPair(srcs, sub);
-      got = [["jxl", jxl], ["avif", avif]];   // here the JXL file sets the budget, since its size is fixed
+      got = [["jxl", jxl], ["avif", avif]];
     } else {
       const avif = tier === "avif-tier"
         ? (() => { const a = FORMAT_TIER_ANCHOR[tier]; const p = path.join(sub, "ship.avif"); return { knob: a.q, bytes: encodeFmt("avif", srcs.png, p, a.q), path: p }; })()
         : tier === "jpeg-tier"
           ? (() => { const a = FORMAT_TIER_ANCHOR[tier]; return searchFmt("avif", srcs.png, sub, encode("zenc", srcs, path.join(sub, "jpeg-anchor.jpg"), a.q, a.chroma)); })()
           : (() => {
-            // A light crop's shipping AVIF can already sit at or under this
-            // budget (XT509509's is 8,398 B against 8,448), and then the
-            // "tight" tier is the shipping tier twice over.
             const low = Math.round((TILE * TILE * LOW_TIER_BPP) / 8);
             const ship = encodeFmt("avif", srcs.png, path.join(sub, "ship-check.avif"), FORMAT_TIER_ANCHOR["avif-tier"].q);
             if (ship <= low * (1 + BUDGET_TOL)) throw new Error(`shipping AVIF is already ${ship}B, no tighter than the ${low}B tier`);
             return searchFmt("avif", srcs.png, sub, low);
           })();
-      // decision 1: the coarse knob's real output is the budget
       got = [["avif", avif], ["jxl", searchFmt("jxl", srcs.png, sub, avif.bytes)]];
     }
     const target = got[0][1].bytes;
@@ -939,8 +593,6 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
   }
 }
 
-// ------------------------------------------------------------------------ main
-
 function describe(t: Trial): string {
   let bits = (t.tier ? `[${t.tier}] ` : "") + t.options.map((o) => `${o.label.split(" · ")[0]}=${o.bytes}B/s2 ${o.s2}${o.butter !== null ? `/bu ${o.butter}` : ""}`).join(" ");
   if (t.budget_drift !== undefined) bits += ` [budget ${t.budget}B, drift ${t.budget_drift}%]`;
@@ -950,16 +602,6 @@ function describe(t: Trial): string {
   return bits;
 }
 
-/** Lay every trial's options side by side at 1:1 so a HUMAN can check them.
- *
- *  This exists because the metrics lie about visibility in a specific way: a
- *  crop of grey speckled stone scored a 4.45 ssimulacra2 gap between 4:2:2 and
- *  4:2:0, a big honest number measuring damage to colour noise that nobody can
- *  see. Numbers pick the candidates; the sheet is how you find out whether the
- *  call is winnable. Look at it before shipping a threshold change.
- *
- *  An HTML page beside a directory of the tiles, so the browser draws the
- *  labels; `image-rendering: pixelated` keeps the tiles at 1:1. */
 function writeSheet(trials: Trial[], file: string): void {
   if (!trials.length) return;
   const dir = `${file}.tiles`;
@@ -967,9 +609,6 @@ function writeSheet(trials: Trial[], file: string): void {
   fs.mkdirSync(dir, { recursive: true });
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
   const rows = trials.map((t) => `<div class="row">${t.options.map((o, i) => {
-    // A format tile goes on the sheet as its REFERENCE decode, since the browser
-    // reading the sheet may not decode JXL, and a reviewer should judge the
-    // pixels the metrics scored.
     const name = `${t.axis}-${t.tier ?? ""}-${t.crop}-${i}.${o.decoded ? "png" : "jpg"}`;
     fs.copyFileSync(o.decoded ?? o.path, path.join(dir, name));
     return `<figure><figcaption>${esc(`${t.axis}${t.tier ? `[${t.tier}]` : ""}/${t.crop} ${o.label.split(" · ")[0]} ${o.bytes}B s2=${o.s2} bu=${o.butter}`)}</figcaption><img src="${esc(path.basename(dir))}/${name}" width="${TILE}" height="${TILE}" alt=""></figure>`;
@@ -993,7 +632,6 @@ function preflight(axes: string[]): void {
   }
 }
 
-/** Stage a trial's option files under content-hashed names; returns name -> bytes. */
 function stageTiles(trials: Trial[]): Map<string, Buffer> {
   const staged = new Map<string, Buffer>();
   for (const t of trials) {
@@ -1010,8 +648,6 @@ function stageTiles(trials: Trial[]): Map<string, Buffer> {
   return staged;
 }
 
-/** --merge: replace one axis's trials in the committed manifest, add its tiles,
- *  and prune only the tiles no trial references any more. */
 function writeMerged(axis: Axis, fresh: Trial[]): number {
   if (fresh.length < 2) { log(`\nrefusing to merge: only ${fresh.length} ${axis} trial(s) survived, want >= 2`); return 1; }
   const manifestFile = path.join(OUT_DIR, "manifest.json");
@@ -1030,17 +666,10 @@ function writeMerged(axis: Axis, fresh: Trial[]): number {
 
 function main(): number {
   const argv = process.argv.slice(2);
-  // --merge <axis> rebuilds ONE axis and splices it into the existing manifest,
-  // leaving every other trial and tile byte-identical. It is how an axis is
-  // added without a full rebuild re-rolling 60 unrelated tiles through encoders
-  // (sips above all) that may have moved since they were cut. The manifest
-  // stays all-or-nothing per AXIS: the merged axis replaces its old trials whole.
   const merge = argv.includes("--merge") ? argv[argv.indexOf("--merge") + 1] as Axis : null;
   if (merge && !(merge in CANDIDATES)) { log(`--merge wants one of ${Object.keys(CANDIDATES).join(", ")}`); return 2; }
   const only = merge ?? (argv.includes("--only") ? argv[argv.indexOf("--only") + 1] as Axis : null);
   if (only && !(only in CANDIDATES)) { log(`--only wants one of ${Object.keys(CANDIDATES).join(", ")}`); return 2; }
-  // --only implies --dry-run: a partial set must never be written, because the
-  // manifest is all-or-nothing. --merge is the exception, and writes one axis.
   const dryRun = argv.includes("--dry-run") || (only !== null && merge === null);
   const sheet = argv.includes("--sheet") ? argv[argv.indexOf("--sheet") + 1] : null;
   preflight(only ? [only] : Object.keys(CANDIDATES));
@@ -1051,14 +680,13 @@ function main(): number {
   try {
     for (const [axis, [intent, , stems]] of Object.entries(CANDIDATES) as [Axis, [Intent, number, string[]]][]) {
       if (only && axis !== only) continue;
-      for (const stem of [...new Set(stems)]) {          // dedupe, keep author order
+      for (const stem of [...new Set(stems)]) {
         const tmp = path.join(work, `${axis}-${stem}`);
         fs.mkdirSync(tmp);
         let src: Source, crop: Crop;
         try { src = loadSource(stem, tmp); crop = bestCrop(src, intent, tmp); }
         catch (e) { const why = `source: ${e instanceof Error ? e.message : String(e)}`; dropped.push([axis, stem, why]); log(`  x ${axis.padEnd(9)} ${stem}  ${why}`); continue; }
         const srcs: Srcs = { png: crop.png, ppm: crop.ppm };
-        // Every builder yields one trial except format, which yields one per budget tier.
         let results: Built[];
         try {
           results = axis === "format" ? buildFormat(stem, srcs, crop.png, tmp)
@@ -1077,12 +705,8 @@ function main(): number {
       }
     }
 
-    // ---- rank within each axis, keep the most legible
     const trials: Trial[] = [];
     for (const [axis, [, keep]] of Object.entries(CANDIDATES) as [Axis, [Intent, number, string[]]][]) {
-      // format keeps its quota PER TIER: ranking both tiers together on spread
-      // would ship only the low tier, where differences are biggest, and that
-      // is the one-budget bias the second tier exists to remove.
       const groups = axis === "format" ? FORMAT_TIERS.map((tier) => built.filter((t) => t.axis === axis && t.tier === tier)) : [built.filter((t) => t.axis === axis)];
       const each = Math.ceil(keep / groups.length);
       for (const g of groups) {
@@ -1092,7 +716,6 @@ function main(): number {
       }
     }
 
-    // ---- report
     log("");
     const byAxis: Record<string, number> = {};
     for (const t of trials) byAxis[t.axis] = (byAxis[t.axis] ?? 0) + 1;
@@ -1107,7 +730,6 @@ function main(): number {
     if (merge) return writeMerged(merge, trials);
     if (trials.length < 12) { log(`\nrefusing to write: only ${trials.length} trials survived, want >= 12`); return 1; }
 
-    // ---- write (only now that the whole set is known good)
     const staged = stageTiles(trials);
     fs.rmSync(TILES_DIR, { recursive: true, force: true });
     fs.mkdirSync(TILES_DIR, { recursive: true });

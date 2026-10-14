@@ -8,29 +8,14 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── the SSR deadline ────────────────────────────────────────────────
-// deadline() is what keeps a KV eviction (100-200ms, untunable) from gating
-// homepage TTFB. Two properties are load-bearing: a fast read never marks
-// itself deadlined (the timer is cleared on settle), and a slow read's
-// fallback arrives at the budget while the underlying promise keeps running
-// (so the read still warms the colo behind the response).
 test("deadline lets a fast read through unmarked", async () => {
   let marked = false;
   const v = await deadline(Promise.resolve("fast"), 50, null, () => { marked = true; });
   assert.equal(v, "fast");
-  // give the (cleared) timer a chance to prove it was cleared
   await new Promise((r) => setTimeout(r, 80));
   assert.equal(marked, false, "a settled read must never be marked deadlined");
 });
 
-// The ORDER is the property and the wall clock is a proxy for it. `settled`
-// cannot flake: both sides are timers, expired timers fire in expiry order,
-// so the 15ms budget lands before the read however long the event loop
-// stalls. The elapsed-time bound can, and did: 60ms read, 55ms bound, 40ms
-// of headroom, and the third pass of the suite (4 workers, symlinked TMPDIR)
-// stalled past it on CI for main at 16924db2 (2026-09-15), which skipped that
-// commit's promotion. 400ms against 200ms keeps the same claim (the fallback
-// arrives well before the read) with 185ms for a loaded runner.
 test("deadline ships the fallback at the budget and leaves the read running", async () => {
   let marked = false;
   let settled = false;
@@ -46,8 +31,6 @@ test("deadline ships the fallback at the budget and leaves the read running", as
 });
 
 test("deadline distinguishes fallback values for slow vs missing", async () => {
-  // counter semantics: null = a real miss (triggers the mirror reseed),
-  // undefined = merely slow (must NOT trigger it)
   const missing = await deadline(Promise.resolve(null), 50, undefined, () => {});
   assert.equal(missing, null);
   const slow = await deadline(new Promise(() => {}), 10, undefined, () => {});

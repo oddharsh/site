@@ -1,11 +1,4 @@
 // ── essay terms: every marked term is a copy of its registry entry ────────────
-//
-// A term in an essay (docs/TERMS.md) carries its definition in `title` and its
-// source in `href`, so the page works with no script and the infotip never has
-// to fetch anything. The cost of that is one copy per page, and copies drift:
-// a definition corrected in src/content/terms.json and left stale on twelve
-// pages would show a reader two answers to the same hover. So the registry is
-// the record and this holds every page to it, byte for byte.
 import { assert, readFileSync, test } from "./contract-shared.ts";
 import { readdirSync } from "node:fs";
 import { mdToHtml } from "../src/client/garage/md-to-html.js";
@@ -24,9 +17,6 @@ const attr = (tag, name) => {
 const pages = readdirSync(new URL("src/pages/", ROOT_DIR), { recursive: true })
   .map(String).filter((p) => p.endsWith(".html"));
 const termTags = (page, html) => [...html.matchAll(/<a\b[^>]*\sclass="term"[^>]*>/g)].map((m) => ({ page, tag: m[0] }));
-// A page that renders from its own Markdown (/garage/round-trip) keeps its terms
-// there, as reference links and a glossary. Rendered the way the page renders
-// them, they are held to the registry like any hand-written page's.
 const RENDERED_FROM_MARKDOWN = readdirSync(new URL("src/content/garage/", ROOT_DIR))
   .filter((f) => f.endsWith(".md")).map((f) => `src/content/garage/${f}`);
 const marked = [
@@ -69,10 +59,6 @@ test("a term is marked once per page, and every entry is used somewhere", () => 
 });
 
 test("no term is marked inside a page's JSON data", () => {
-  // A spec's quiz and editorial strings ride into the page as JSON, where a
-  // term's markup arrives escaped and renders as nothing a reader can hover.
-  // The first pass put one there by string match (lwe/drivers, a quiz `why`),
-  // and the anchor check above cannot see it, because the tag is escaped.
   for (const page of pages) {
     const html = readFileSync(new URL(`src/pages/${page}`, ROOT_DIR), "utf8");
     assert.doesNotMatch(html, /class=\\"term\\"/, `${page}: a term is marked inside JSON (quiz or editorial data)`);

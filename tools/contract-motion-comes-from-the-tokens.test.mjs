@@ -6,23 +6,12 @@
 // 120ms where the token said 90, and benchmark bars tweening for a third of a
 // second. Same shape as `--grad-title` before 2026-09-15: a token nobody read,
 // and the pages drifting away from it one reasonable number at a time.
-//
-// The rule now: a transition or animation duration names a motion token.
-// Two kinds of motion are exempt because they are not about responsiveness:
-//   - ambient: an `infinite` loop (a spinner, marching ants, a screensaver)
-//   - exhibits: a rule whose motion IS what a garage page demonstrates
-//     (interpolate-size, @starting-style, sibling-index stagger) says so with
-//     an `@motion demo` comment inside the rule, where a reviewer will see it.
-// Scroll-driven animations carry no duration, so they never trip this.
 import { ROOT, assert, test } from "./contract-shared.ts";
 import { cssSources } from "./lib/token-literals.ts";
 
-/** A motion declaration: transition, animation, or their -duration / -delay longhands. Custom properties are not. */
 const DECL = /(?<![\w-])(transition|animation)(-duration|-delay)?\s*:\s*([^;{}]+)/g;
-/** A non-zero time literal. `0s` is no motion at all, so it is never a finding. */
 const TIME = /(?<![\w.#-])(?!0+(?:\.0+)?m?s\b)(\d*\.?\d+)(ms|s)\b/g;
 
-/** Every hand-written duration in `css` that no exemption covers. */
 export function literalDurations(css) {
   const out = [];
   for (const m of css.matchAll(DECL)) {
@@ -38,7 +27,6 @@ export function literalDurations(css) {
 }
 
 test("the matcher finds a hand-written duration, and only that", () => {
-  // A finding in a fixture IS found, so an empty report below means clean and not blind.
   assert.deepEqual(literalDurations(".t{transition:opacity 120ms ease-out}").map((f) => f.literal), ["120ms"]);
   assert.deepEqual(literalDurations(".b{animation:axp-pop .09s ease-out}").map((f) => f.literal), [".09s"]);
   assert.deepEqual(literalDurations(".d{animation-delay:calc(sibling-index() * 90ms)}").map((f) => f.literal), ["90ms"]);

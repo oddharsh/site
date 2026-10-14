@@ -5,12 +5,6 @@
 // revalidated on every view. build.ts step 6 copies each into /a/ and rewrites
 // its one loader; the plain file stays, because agents, old HTML and the
 // .src.html twins still name it.
-//
-// What can quietly undo it: a loader whose spelling moves out from under the
-// rewrite (the page keeps the plain URL and nothing fails), a hashed copy whose
-// bytes are not the plain file's (compact-data used to run after step 6 and
-// would have rewritten the json), and the one new content type on /a/ drifting
-// onto the dictionary path it was measured off.
 import { brotliDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -21,14 +15,12 @@ import { SHELL_DISCOVERY_ROOTS } from "./lib/shell-roots.ts";
 const BUILT = new URL(".build/public/", ROOT);
 const needsBuild = !existsSync(BUILT) && "needs a built tree: bun run build";
 
-// [plain path, /a/ base, extension, the loader's spelling in the SERVED page, pages]
 const lwePages = ["dac", "drivers", "encoding", "fhe", "fuse", "knots", "lean", "mpc", "pcrypto", "tee", "utf8", "vigenere"].map((p) => `lwe/${p}.html`);
 const ASSETS = [
   { plain: "lwe/ask.js", base: "ask", ext: "js", loader: /src=["']?\/lwe\/ask\.js/, pages: lwePages },
   { plain: "garage/pretext.lib.js", base: "pretext-lib", ext: "js", loader: /import\(\s*["'`](?:\.\/|\/garage\/)pretext\.lib\.js/, pages: ["garage/pretext.html"] },
   { plain: "dotfiles.js", base: "dotfiles", ext: "js", loader: /from\s*["'`]\/dotfiles\.js/, pages: ["dotfiles/index.html"] },
   { plain: "pixel-peeper/manifest.json", base: "pixel-peeper-manifest", ext: "json", loader: /fetch\(\s*["'`]\/pixel-peeper\/manifest\.json/, pages: ["pixel-peeper/index.html"] },
-  // joined 2026-10-13: /garage/av2's AV2 decoder, started as a module Worker
   { plain: "garage/av2-decode.js", base: "av2-decode", ext: "js", loader: /new Worker\(\s*["'`]\/garage\/av2-decode\.js/, pages: ["garage/av2.html"] },
 ];
 
@@ -58,9 +50,6 @@ test("every page that loads one loads the /a/ copy and never the plain URL", { s
 });
 
 test("the loaders in SOURCE still name the plain URL, which is what the rewrite keys on", async () => {
-  // The inverse half of the test above. If a source page stops spelling the load
-  // the way step 6 matches it, step 6's witness fails the build; this names which
-  // page and which spelling, without needing a build to find out.
   for (const a of ASSETS) {
     for (const page of a.pages) {
       const html = await readFile(new URL(`src/pages/${page}`, ROOT), "utf8");
@@ -69,7 +58,6 @@ test("the loaders in SOURCE still name the plain URL, which is what the rewrite 
   }
 });
 
-// A fake ASSETS binding holding the manifest and its twin, recording every path asked for.
 const MANIFEST = "/a/pixel-peeper-manifest.0123abcd.json";
 function fakeAssets() {
   const asked = [];

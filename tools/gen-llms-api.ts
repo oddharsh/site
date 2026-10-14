@@ -1,14 +1,4 @@
 // gen-llms-api.ts: the JSON endpoint list in public/llms.txt, from the code.
-//
-// llms.txt ships byte for byte from public/, so it cannot be built at deploy;
-// the endpoint block is projected here instead, from the same operation
-// descriptions /openapi.json and /developers are rendered from
-// (src/worker/lib/public-api.ts), and contract-llms-txt-lists-the-api holds the
-// committed block equal to this output. Edit an endpoint's words in
-// public-api.ts and run this, never the block itself.
-//
-//     bun tools/gen-llms-api.ts           # rewrite the block
-//     bun tools/gen-llms-api.ts --check   # exit 1 if the committed block is stale
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { OPERATIONS, exampleUrl } from "../src/worker/lib/public-api.ts";
@@ -19,7 +9,6 @@ export const END = "<!-- /endpoints -->";
 const ORIGIN = "https://aadhar.sh";
 const WIDTH = 78;
 
-/** Greedy wrap at WIDTH, the width the rest of llms.txt is set at. */
 function wrap(text: string, first: string, rest: string): string {
   const lines: string[] = [];
   let line = first;
@@ -36,7 +25,6 @@ function wrap(text: string, first: string, rest: string): string {
   return lines.join("\n");
 }
 
-/** The block between BEGIN and END, markers included. */
 export function endpointBlock(): string {
   const items = OPERATIONS.map((op) => {
     const label = `${op.method === "post" ? "POST " : ""}${op.path}`;
@@ -46,8 +34,6 @@ export function endpointBlock(): string {
   return [BEGIN, ...items, END].join("\n");
 }
 
-/** llms.txt with its endpoint block replaced. Throws when the markers are gone,
- *  so a hand edit that drops them fails loudly instead of appending a copy. */
 export function withEndpointBlock(llms: string): string {
   const start = llms.indexOf(BEGIN);
   const end = llms.indexOf(END);

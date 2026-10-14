@@ -1,17 +1,4 @@
 // contract-shared.mjs — the suite's imports and its cross-section helpers.
-//
-// Split out of the single 8720-line contract-tests.test.mjs on 2026-08-20.
-//
-// The test files sit in tools/ rather than a tools/test/ subdirectory ON
-// PURPOSE. The suite carries 111 dynamic relative imports plus 6
-// `new URL("../…", import.meta.url)` reads, and every one keeps working
-// untouched at this depth. A tidier subdirectory would have meant rewriting all
-// 117 on a refactor whose whole point is making a lost test harder to miss.
-//
-// Only helpers used by MORE THAN ONE section live here, plus whatever those
-// helpers themselves reference. That transitive step is not optional: the first
-// attempt moved terminalEnv without TERMINAL_ASSETS and 44 tests failed on a
-// helper that had been left behind.
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -199,10 +186,6 @@ function kvForTracks() {
       if (key === `tracks:${PLAYLIST_ID}`) return type === "json" ? TRACKS : JSON.stringify(TRACKS);
       return null;
     },
-    // swrKV asks for the value and its freshness stamp in ONE read, so the fake
-    // has to answer that call. The stamp is now, which is what the retired
-    // `tracks:<pid>:fresh` sentinel used to say: these tests read a warm cache
-    // and must never fire a background rescrape.
     async getWithMetadata(key, typeOrOptions) {
       const value = await kv.get(key, typeOrOptions);
       return { value, metadata: value === null ? null : { t: Date.now() } };
@@ -346,26 +329,13 @@ const terminalReq = (path) => new Request(`https://aadhar.sh${path}`);
 const terminalGet = (path) => handleTool(terminalReq(path), terminalEnv(), context());
 
 
-// The globals, typed loosely for TEST DOUBLES, and this is the only cast in the
-// suite that exists for typing rather than for behaviour.
-//
 // bun types `globalThis.fetch` as `typeof fetch`, which carries a `preconnect`
 // method. A double that answers three URLs has no business implementing it, and
 // adding a stub `preconnect` to sixteen arrow functions would be inventing
 // conformance rather than testing anything. Assigning through here says what is
 // happening once: a partial stand-in is being installed on the global.
-//
-// It is deliberately NOT a general escape hatch. Reach for it to install a
-// double; anything else wants a real type.
 const testGlobals: any = globalThis;
 
-// A Worker config as TEXT, by the file name a test names. The site config is
-// cloudflare.config.ts since 2026-09-28 and is read through its legacy-shape
-// projection (lib/site-config.ts), pretty-printed, so parseJsonc and the
-// regex readers both see the shape they were written against. LOCAL DEV is
-// "config/dev", its projection with root-relative paths (the same object
-// `bun run dev` boots from .wrangler.dev.jsonc). Any other config is its bytes
-// on disk.
 async function configText(name) {
   if (name === "cloudflare.config.ts") return JSON.stringify(await siteConfig(), null, 2);
   if (name === DEV_CONFIG_DIR) return JSON.stringify(await devSiteConfig(), null, 2);

@@ -1,44 +1,6 @@
 #!/usr/bin/env node
 // gen-md-twins.mjs — the Markdown twin for every page on the site that has prose,
 // plus the per-section llms.txt indexes.
-//
-//   node tools/gen-md-twins.ts [outDir]     # default: .build/public
-//
-// WHY THIS IS BUILD OUTPUT, NOT COMMITTED SOURCE
-// A twin is a pure function of the HTML the build just produced, so generating
-// it at deploy time makes drift structurally impossible: there is no committed
-// copy that can fall behind the page it mirrors, and no step to forget. That is
-// the same argument the dcz deltas won in CLAUDE.md, and unlike sitemap.xml
-// there is no hand-tuned signal here worth preserving.
-//
-// WHAT IS AUTHORED BY HAND
-// A page that renders from the Worker keeps its prose in template literals
-// rather than in a file this script can read, so its twin is authored in
-// src/content/md/ instead. THIRTEEN are today: /around, /bot, /coffee, /lens,
-// /security, /whoareyou, /garage/dyno, and since 2026-09-30 /ledger, /inbox,
-// /reading, /lens/census, /serendipity and /search (and /terminal until
-// 2026-09-16). The set is not declared anywhere; buildTwins looks for <path>.md
-// per surface, so a page joins by someone dropping a file in and nothing
-// announces it. checkTwinFacts() below pins TEN of them so those twins cannot
-// quietly disagree with the page. /around, /coffee and /lens are unpinned, which
-// is a real gap rather than a decision: they are pinnable the same way whenever
-// someone writes the facts down.
-//
-// The six that joined on 2026-09-30 are baked by build.ts at step 5b, after the
-// twin step, so the generated tier below cannot see them; a generated twin would
-// also mirror each island's placeholder rows. agentSurfacesWithoutTwin() is the
-// check that found them, and build.ts now fails on it.
-//
-// A hand twin is also what a Worker-rendered page in an INDEXED section owes,
-// because the section index lists it. /garage/dyno sat in that state from the
-// day it shipped: registered, agents-flagged, listed in /garage/llms.txt as
-// /garage/dyno.md, and 404 there, since renderSectionIndex linked every
-// registered surface as a twin and the skipped list never reached it. The index
-// now lists only twins the build holds (the rest under "HTML only"), a contract
-// test pins that join, and the twin exists so the list is empty in practice.
-//
-// Every exported function is PURE so build.ts can re-run this in-memory; only
-// main() touches the filesystem.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -50,17 +12,12 @@ const MANIFEST = "config/site-manifest.json";
 const SITEMAP = "public/sitemap.xml";
 const HAND_DIR = "src/content/md";
 
-// the sections that earn their own index. A section index is only worth a fetch
-// when the section is big enough that the root llms.txt is the wrong grain.
 export const INDEXED_SECTIONS = ["garage", "lwe"];
-
-// ── inputs ──────────────────────────────────────────────────────────────────
 
 export function readManifest(root = ".") {
   return JSON.parse(readFileSync(join(root, MANIFEST), "utf8"));
 }
 
-/** path -> YYYY-MM-DD, read from the hand-tuned <lastmod> values in sitemap.xml. */
 export function readLastmod(root = ".") {
   const xml = readFileSync(join(root, SITEMAP), "utf8");
   const out = {};
@@ -68,12 +25,11 @@ export function readLastmod(root = ".") {
     const loc = /<loc>(.*?)<\/loc>/.exec(block[1])?.[1];
     const mod = /<lastmod>(.*?)<\/lastmod>/.exec(block[1])?.[1];
     if (!loc) continue;
-    try { out[new URL(loc).pathname.replace(/(.)\/$/, "$1") || "/"] = mod || null; } catch { /* skip */ }
+    try { out[new URL(loc).pathname.replace(/(.)\/$/, "$1") || "/"] = mod || null; } catch { }
   }
   return out;
 }
 
-/** The source HTML file backing a surface, or null when the Worker renders it. */
 export function htmlFileFor(surface, root = ".") {
   const p = surface.path;
   const candidates = p === "/"
@@ -83,20 +39,10 @@ export function htmlFileFor(surface, root = ".") {
   return null;
 }
 
-/** The URL a twin is published at: /garage/encoding -> /garage/encoding.md */
 export const twinPath = (p) => (p === "/" ? "/index.md" : `${p}.md`);
-
-// ── rendering ───────────────────────────────────────────────────────────────
 
 const yamlString = (s) => `"${String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
-/**
- * One Markdown twin. Pure.
- *
- * The preamble is the cheapest thing in this file and close to the most useful:
- * an agent that lands on a deep page from a search result gets handed the map
- * instead of having to infer that one exists.
- */
 export function renderTwin({ surface, doc, lastmod, body, note }) {
   const title = doc?.title?.trim() || surface.title;
   const description = doc?.description?.trim() || surface.description || "";
@@ -130,22 +76,6 @@ export function renderTwin({ surface, doc, lastmod, body, note }) {
   return sections.join("\n\n").replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "") + "\n";
 }
 
-/**
- * A per-section llms.txt. Same grammar as the root index, one level down.
- * Links point at the .md twins rather than the HTML, because the twin is the
- * representation an agent asked for.
- *
- * `twins` is the set of twin paths this build actually holds, and a surface
- * outside it is listed under its HTML URL rather than under a `.md` it does
- * not have. It used to link every registered surface as `<path>.md` on the
- * strength of being registered, so /garage/dyno, which is Worker-rendered off
- * the perf-history branch and has no source any walk can read, was promised at
- * /garage/dyno.md and answered 404 there. Nothing here could see it: the index
- * is built from the registry, the twin from the tree, and no assertion joined
- * the two. Found from outside, by a sweep that HEADs every URL an llms.txt
- * advertises. With no set given the old behaviour stands, for a caller that
- * has not built the twins yet.
- */
 export function renderSectionIndex(section, surfaces, { descriptions = {}, twins = null }: { descriptions?: Record<string, string>; twins?: Set<string> | null } = {}) {
   const own = surfaces.filter((s) => s.section === section);
   const head = own.find((s) => s.kind === "section") || own[0];
@@ -180,30 +110,6 @@ export function renderSectionIndex(section, surfaces, { descriptions = {}, twins
   return lines.join("\n") + "\n";
 }
 
-// ── the whole set ───────────────────────────────────────────────────────────
-
-/**
- * Build every twin + section index as { path -> contents }. Pure apart from
- * reading the source tree, which build.ts also does.
- *
- * opts.generatedRoot names a staged tree to fall back to for surfaces with no
- * prose source in `root`. That tier did not exist when this file was written:
- * /updates and /restore were Worker-rendered, so they had no twin and could not
- * have one, and when build.ts started baking them into HTML nothing here
- * noticed. They stayed on the skipped list, kept `flags.agents: true`, and kept
- * answering HTML to an agent asking for Markdown. Read only BEFORE the staged
- * pages are rewritten (hashed asset refs, minification); build.ts owns that
- * ordering and reads the source tree first for everything that has one.
- */
-/**
- * The /writing index, from the registry the page itself renders. Sorted newest
- * first, matching the folder view.
- *
- * Each post ships as plain text at `<slug>.txt` and that URL is the twin for the
- * post, so this index links to the text rather than to the Notepad window that
- * wraps it: an agent following one of these gets the prose with no chrome to
- * strip.
- */
 export function renderWritingIndex(root = ".") {
   const posts = JSON.parse(readFileSync(join(root, "src/content/writing/posts.json"), "utf8"));
   const rows = [...posts]
@@ -226,8 +132,6 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
   const descriptions = {};
   const skipped = [];
   const generated = [];
-  // Twins that ship as committed files (/index.md), which this function never
-  // writes but which are twins all the same.
   const committed: string[] = [];
 
   for (const surface of manifest.surfaces) {
@@ -235,16 +139,6 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
     const hand = join(HAND_DIR, `${surface.path === "/" ? "index" : surface.path.slice(1).replace(/\//g, "-")}.md`);
     const handAbs = join(root, hand);
 
-    // A COMMITTED twin always wins. The homepage's /index.md is hand-written
-    // prose that predates this script and reads better than any extraction of
-    // src/pages/index.html would; it also already ships as a static asset and
-    // already answers `Accept: text/markdown`. Generating over it would be a
-    // regression dressed up as consistency.
-    // Looked in public/ until the prose moved: the homepage twin is authored at
-    // src/content/index.md now and STAGES to /index.md, so the check follows the
-    // source rather than the served path. Reading the old location silently
-    // stopped finding it, and the symptom was the hand-written twin being
-    // overwritten by a generated one that is 472 bytes shorter.
     if (existsSync(join(root, "src/content", twinPath(surface.path).replace(/^\//, "")))) {
       descriptions[surface.path] = surface.description || "";
       committed.push(twinPath(surface.path));
@@ -253,11 +147,6 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
 
     let doc = null, body = "", note = null;
 
-    // A hand-authored twin outranks the generated tier below, and the order is
-    // load-bearing rather than incidental: /bot has BOTH a hand twin and staged
-    // HTML, and its hand twin is the one checkTwinFacts pins against the Worker
-    // in both directions. Preferring generated bytes there would silently swap a
-    // fact-checked file for an unchecked extraction.
     const generatedAbs = opts.generatedRoot
       ? join(opts.generatedRoot, "public", `${surface.path === "/" ? "index" : surface.path.slice(1)}.html`)
       : null;
@@ -266,25 +155,16 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
       doc = readDocument(readFileSync(join(root, rel), "utf8"), { origin: ORIGIN });
       body = doc.body;
       if (!body) {
-        // A page whose content is assembled in the browser has no prose to
-        // mirror. Say that, rather than ship a hollow file that reads as if the
-        // page were empty.
         note = "This page is an interactive tool: its content is built in the browser at runtime, so there is no static prose to mirror here. Open the source URL to use it.";
       }
     } else if (surface.path === "/writing") {
-      // /writing renders from the Worker, so there is no HTML file to mirror,
-      // and a HAND twin would be the wrong shape: the page is a LIST, and a
-      // hand-written list goes stale the next time a post is added. The registry
-      // it renders from is committed, so the twin is derived from the same bytes
-      // the page is. Same argument as every other generated twin, reaching one
-      // step further back than the HTML.
       body = renderWritingIndex(root);
     } else if (existsSync(handAbs)) {
       body = readFileSync(handAbs, "utf8").trim();
     } else if (generatedAbs && existsSync(generatedAbs)) {
       doc = readDocument(readFileSync(generatedAbs, "utf8"), { origin: ORIGIN });
       body = doc.body;
-      if (!body) continue;   // nothing to mirror and no source URL claim to make
+      if (!body) continue;
       generated.push(surface.path);
     } else {
       skipped.push(surface.path);
@@ -296,25 +176,12 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
   }
 
   for (const section of INDEXED_SECTIONS) {
-    // A committed twin is a twin too: /garage/round-trip renders FROM its, and
-    // listing it as "HTML only" told agents the opposite of what it is.
     files.set(`/${section}/llms.txt`, renderSectionIndex(section, manifest.surfaces, { descriptions, twins: new Set([...files.keys(), ...committed]) }));
   }
 
   return { files, skipped, generated, committed };
 }
 
-/**
- * The agents:true surfaces that owe a built twin and did not get one. Pure, so
- * build.ts can fail on it and a contract test can run it with a control.
- *
- * Six pages sat in this state until 2026-09-30 (/ledger, /inbox, /reading,
- * /lens/census, /serendipity, /search): build.ts bakes them at step 5b, after
- * the twin step, so they landed on the skipped list, which only feeds a log
- * line. Each kept `flags.agents` and answered an agent's `Accept:
- * text/markdown` with HTML while every check here stayed green. The skipped
- * list was the right signal pointed at nobody.
- */
 export function agentSurfacesWithoutTwin(surfaces: AgentSurface[], twins: Iterable<string>): string[] {
   const have = new Set(twins);
   return agentSurfaces(surfaces)
@@ -322,17 +189,6 @@ export function agentSurfacesWithoutTwin(surfaces: AgentSurface[], twins: Iterab
     .map((s) => s.path);
 }
 
-/**
- * The load-bearing facts a hand-authored twin shares with the Worker that
- * renders its page. A twin is allowed to be shorter than the page; it is not
- * allowed to disagree with it. build.ts fails the deploy on a mismatch.
- *
- * Each fact is checked in BOTH directions. Asserting only that the twin says
- * "AadharshBot/1.0" would keep passing after a version bump, because the twin
- * would still contain the string it always did. So the expected value is
- * recomposed from the Worker's own constants and then required in the twin: bump
- * BOT_VERSION to 1.1 and this fails until bot.md is updated to match.
- */
 export const TWIN_FACTS = [
   {
     twin: "src/content/md/bot.md",
@@ -340,8 +196,6 @@ export const TWIN_FACTS = [
       {
         label: "User-Agent",
         source: "src/worker/lib/botauth.ts",
-        // BOT_UA is a template literal over two constants, so no single source
-        // line contains the string a reader of /bot actually sees
         derive: (src) => {
           const name = /BOT_NAME\s*=\s*"([^"]+)"/.exec(src)?.[1];
           const version = /BOT_VERSION\s*=\s*"([^"]+)"/.exec(src)?.[1];
@@ -358,36 +212,16 @@ export const TWIN_FACTS = [
     facts: [
       { label: "JSON endpoint", source: "src/worker/whoareyou.ts", string: "/whoareyou.json" },
       { label: "no-storage claim", source: "src/worker/whoareyou.ts", string: "none of it is stored" },
-      // The page's whole subject is what a request reveals, so the ONE script on it
-      // that registers a tool catalogue has to be named in both copies or in neither.
-      // It used to pin `/.webmcp/bridge.js`, the edge injection, and the pin did its
-      // job: turning that injection off failed the deploy until both copies stopped
-      // describing a tag that was no longer there. What replaced it is first-party,
-      // so the pin follows the same script to its new name rather than retiring.
       { label: "WebMCP registrar", source: "src/worker/whoareyou.ts", string: "/webmcp.js" },
     ],
   },
   {
-    // /security is a page ABOUT headers, so pinning it to the page's own copy of
-    // those headers would only prove the twin agrees with prose that is itself
-    // free to rot. Every fact below is read from the modules that actually send
-    // them: the policy strings from lib/csp-policy.ts (their home since
-    // 2026-09-25), the rest from lib/security.ts. The JWKS path is the page's own
-    // claim.
     twin: "src/content/md/security.md",
     facts: [
       { label: "frame-ancestors", source: "src/worker/lib/csp-policy.ts", string: "frame-ancestors 'none'" },
       { label: "object-src",      source: "src/worker/lib/csp-policy.ts", string: "object-src 'none'" },
       { label: "Referrer-Policy", source: "src/worker/lib/security.ts", string: "strict-origin-when-cross-origin" },
       {
-        // This used to read the ENFORCE_PAGE_HASHES rollout flag and pick the
-        // sentence the twin had to carry. The flag is gone (2026-08-23), and
-        // reading the EMITTED HEADER SET is the better check anyway: a flag
-        // says what somebody intended, while this says what the module sends.
-        // /security claims 'unsafe-inline' left script-src. That claim goes
-        // false the moment a report-only twin comes back, because the twin is
-        // how the hashed policy ships without being enforced, so this fails the
-        // deploy until either the header set or the page is put right.
         label: "hashed-CSP enforcement state",
         source: "src/worker/lib/security.ts",
         derive: (src) => {
@@ -400,9 +234,6 @@ export const TWIN_FACTS = [
     ],
   },
   {
-    // A twin that DESCRIBES a chart is held to the module that draws it: the JSON
-    // door, the two series the twin names by key, the branch the rows live on,
-    // and the cache window it quotes as a number of hours.
     twin: "src/content/md/garage-dyno.md",
     facts: [
       { label: "JSON endpoint", source: "src/worker/index.ts", string: "/garage/dyno.json" },
@@ -421,11 +252,6 @@ export const TWIN_FACTS = [
       },
     ],
   },
-  // The six below are pages build.ts bakes at step 5b, AFTER the twin step, so
-  // the generated tier cannot reach them, and a generated twin would mirror an
-  // island's placeholder rows anyway. Each hand twin names the fragment its
-  // island loads and the JSON door where one exists, and each of those is
-  // pinned here to the module that serves it.
   {
     twin: "src/content/md/ledger.md",
     facts: [
@@ -510,9 +336,6 @@ export const TWIN_FACTS = [
         },
       },
       {
-        // Read from the generated card, which a contract test deep-equals against
-        // the server's own tools/list, so a tool added there fails here until the
-        // twin names it too.
         label: "tool list",
         source: "public/.well-known/mcp/serendipity.json",
         derive: (src) => {
@@ -533,8 +356,6 @@ export const TWIN_FACTS = [
       { label: "corpus", source: "tools/generate-search-index.ts", string: "search-index.json" },
       {
         label: "default limit",
-        // the handler clamps with SEARCH_LIMITS since 2026-10-13, the same
-        // constant /openapi.json and the search_site tool schema print
         source: "src/worker/lib/api-limits.ts",
         derive: (src) => {
           const d = /SEARCH_LIMITS\s*=\s*\{[^}]*limitDefault:\s*(\d+)/.exec(src)?.[1];
@@ -577,8 +398,6 @@ export function checkTwinFacts(root = ".") {
   }
   return problems;
 }
-
-// ── main ────────────────────────────────────────────────────────────────────
 
 function main() {
   const outDir = process.argv[2] || ".build/public";

@@ -7,12 +7,6 @@
 // runtime throws, every probe caught its own error, and the side that lost the
 // race read as a site with no doors. Measured with the cap enforced, two
 // byte-identical origins compared as readiness 27 against 7.
-//
-// These tests run the REAL compareLensTargets and lensInspect against counting
-// stubs for fetch, RN_KV, caches.default and the Workers AI binding, all
-// charging one ledger, so the number asserted is the number the platform would
-// bill. The AI binding is the one Clef call per live scan (lens-walls.ts), and
-// it is charged as a subrequest like every other binding call.
 import { assert, test, testGlobals } from "./contract-shared.ts";
 import { SUBREQUEST_CAP_FREE } from "../src/worker/lib/budget.ts";
 
@@ -59,8 +53,6 @@ function harness({ enforce = false, store = new Map() } = {}) {
       async put(req, res) { charge("cache"); store.set(req.url, await res.text()); },
     },
   };
-  // Every question answered "not a wall", which leaves the scan's verdicts
-  // exactly what they were before the check existed.
   const AI = {
     async run(_model, input) {
       charge("ai");
@@ -90,27 +82,20 @@ test("a cold compare stays under the cap and says which side it deferred", needs
   const env = { ...(await signingEnv()), RN_KV: h.RN_KV, AI: h.AI };
   const out = await withHarness(h, () => compareLensTargets(LEFT, RIGHT, env));
 
-  // 72 before (both sides live). One live side, one deferred side, is 41:
-  // 36 for the live side and 5 for the deferred one (robots gate 3, page 1,
-  // one cache peek). 9 of headroom, which a redirect hop or two can spend.
-  // A compare samples no bot views, so its Clef wall check never runs.
   assert.ok(h.ledger.total < SUBREQUEST_CAP_FREE,
     `cold compare spent ${h.ledger.total} subrequests (${JSON.stringify(h.ledger)}) against a cap of ${SUBREQUEST_CAP_FREE}`);
   assert.equal(h.ledger.total, 41, `the measured cold count moved: ${JSON.stringify(h.ledger)}`);
   assert.equal(h.ledger.ai, 0, "a compare samples no bot views, so it asks Clef nothing");
 
-  // Left runs live on a cold pair, so the choice is deterministic rather than a race.
   assert.equal(out.left.phases.discovery, true);
   assert.equal(out.right.phases.discovery, false);
   assert.equal(out.right.phases.discoveryDeferred, true);
   assert.equal(out.discovery.left, "live");
   assert.equal(out.discovery.right, "deferred");
 
-  // Deferred means not measured, never zero: no doors count, no surfaces, no score.
   assert.equal(out.right.readiness, null);
   assert.equal(out.right.doors, null);
   assert.equal(out.right.surfaces, null);
-  // And nothing discovery-derived is reported as a change between the two.
   for (const change of out.changes) {
     assert.ok(!/^(readiness|level|tier|doors|surfaces\.)/.test(change.field),
       `a deferred side must not produce a ${change.field} change`);
@@ -118,8 +103,6 @@ test("a cold compare stays under the cap and says which side it deferred", needs
 });
 
 test("control: two cold scans in one invocation with no board cross the cap", needsParser, async () => {
-  // The instrument has to be able to see the bug it guards against. Two
-  // unarbitrated scans are what compareLensTargets ran before, and they bill 72.
   const { lensInspect } = await import("../src/worker/lens.ts");
   const h = harness();
   const env = { ...(await signingEnv()), RN_KV: h.RN_KV, AI: h.AI };
@@ -156,17 +139,13 @@ test("a second compare of the same pair completes both sides", needsParser, asyn
   await withHarness(first, () => compareLensTargets(LEFT, RIGHT, { ...env, RN_KV: first.RN_KV, AI: first.AI }));
   assert.equal(store.size, 1, "the live side's discovery must be cached for the next compare");
 
-  // Same order: left is now cached, so the one live discovery goes to the right.
   const second = harness({ store });
   const out = await withHarness(second, () => compareLensTargets(LEFT, RIGHT, { ...env, RN_KV: second.RN_KV, AI: second.AI }));
-  // 42: the cached side is 6 (robots gate 3, page 1, cache hit 1, Markdown
-  // negotiation 1) and the live side is 36.
   assert.ok(second.ledger.total < SUBREQUEST_CAP_FREE, `warm compare spent ${second.ledger.total}`);
   assert.equal(out.discovery.left, "cached");
   assert.equal(out.discovery.right, "live");
   assert.equal(out.left.phases.discovery, true);
   assert.equal(out.right.phases.discovery, true);
-  // Byte-identical origins now score identically, which is the whole point.
   assert.equal(out.left.readiness, out.right.readiness);
   assert.equal(out.left.doors, out.right.doors);
   assert.equal(store.size, 2);
@@ -190,18 +169,11 @@ test("a single cold scan stays under the cap, with its headroom named", needsPar
   const env = { ...(await signingEnv()), RN_KV: h.RN_KV, AI: h.AI };
   const out = await withHarness(h, () => lensInspect(LEFT, env, {}));
   assert.equal(out.phases.discovery, true);
-  // 47: robots gate 3, page 1, doors cache 2, fan-out 29, Markdown negotiation
-  // 1, bot views 10, and ONE Clef call for every view's wall check. Three
-  // spare, so a target that redirects four times crosses the cap; that side
-  // then reads as refused rather than absent (below), and the wall check is
-  // skipped rather than spent.
   assert.equal(h.ledger.total, 47, `the measured single-scan count moved: ${JSON.stringify(h.ledger)}`);
   assert.equal(h.ledger.ai, 1, "ten bot views, one Clef call");
   assert.ok(SUBREQUEST_CAP_FREE - h.ledger.total >= 3);
 });
 
-// The checks that read discovery. Page-only checks (linkHeaders, webMcp) and
-// the neutral ones are left out, since the cap cannot reach bytes already held.
 const DISCOVERY_CHECKS = [
   "robotsTxt", "sitemap", "dnsAid", "markdownNegotiation", "robotsTxtAiRules", "contentSignals",
   "webBotAuth", "apiCatalog", "oauthDiscovery", "oauthProtectedResource", "authMd",
@@ -219,15 +191,12 @@ async function refusedScan(spentElsewhere) {
 
 test("a fan-out the platform cut short says so, and is never cached as complete", needsParser, async () => {
   const { isSubrequestLimit, subrequestLimitIn } = await import("../src/worker/lib/budget.ts");
-  // 30 spent elsewhere, so the cap lands partway through the fan-out, the way
-  // it landed on the right side of a cold compare.
   const { out, h } = await refusedScan(30);
   assert.equal(out.phases.discovery, true);
   assert.equal(out.phases.subrequestCap, true, "a refused fan-out must say so in phases");
   assert.ok(subrequestLimitIn(out.discovery) || subrequestLimitIn(out.agent), "the refusal must stay visible on the probes it hit");
   assert.equal(h.store.size, 0, "a blob holding refusals must not be cached as the origin's answer");
 
-  // Whichever probes the cap reached read as never answered rather than shut.
   for (const door of [out.agent.mcp, out.agent.nlweb]) {
     if (isSubrequestLimit(door.error)) assert.equal(door.verdict, "unknown");
   }
@@ -235,9 +204,6 @@ test("a fan-out the platform cut short says so, and is never cached as complete"
 });
 
 test("a probe the platform refused is never graded as absent", needsParser, async () => {
-  // 46 spent elsewhere: the robots gate and the page fit, and every discovery
-  // probe after them is refused. Each check that reads discovery must come back
-  // unknown, because the site never got asked.
   const { out } = await refusedScan(46);
   assert.equal(out.phases.subrequestCap, true);
   const checks = out.readiness.checks;

@@ -2,22 +2,6 @@
 // which inline scripts the browser will EXECUTE (so their sha256 belongs in the
 // header), and whether any inline event-handler attribute is present (which a
 // hash policy structurally cannot cover, so the build stops on one).
-//
-// THE PARSER IS THE POINT. This was a hand-rolled tag walker inside build.ts,
-// correct only because it had been patched three times against the served bytes.
-// the HTML minifier unquotes attributes and decodes character references inside quoted
-// values, so a scanner written against the AUTHORED HTML reads the MINIFIED HTML
-// wrong, and this build has now caught three naive scanners on its own output: a
-// `<script` search that read /garage/horizon's XSS demo payload as two real
-// scripts, a link scanner that found 33 refs where there were 2645, and an
-// attribute scanner that had to learn quotes for the same reason.
-//
-// HTMLRewriter is lol-html, the SAME ENGINE src/worker/ runs, so the build reads
-// a document the way the Worker does. lib/link-integrity.ts made this exact move
-// on 2026-08-20 and this is the last hand-rolled scanner in the HTML passes.
-//
-// It is a bun global with no node equivalent, which is why the requirement is
-// stated by name rather than left to fail on an undefined symbol.
 import { createHash } from "node:crypto";
 
 // A `<script>` is CSP-checked when the browser would EXECUTE it. That covers the
@@ -55,32 +39,9 @@ export function requireParser() {
 
 export type ScanResult = { hashes: string[]; handlers: string[] };
 
-/**
- * One document. Returns hashes in DOCUMENT ORDER, which is load-bearing: the map
- * is serialised into lib/csp-hashes.ts, so a reordering is a changed Worker
- * bundle for nothing.
- *
- * An `srcdoc` document INHERITS the embedding page's CSP, so its scripts are
- * hashed HERE, in the position the iframe sits at. The old walker stepped over
- * the whole attribute, which is what kept its inner `<script>` from reading as a
- * real one, so without this the hashes were silently short by exactly the
- * scripts nobody can see. Found in production 2026-08-16: /garage/horizon's
- * `#mb-frame` uptime counter is the proof that moveBefore() reparents without
- * reloading, and enforcing the policy would have frozen it at 0 with nothing
- * logged.
- *
- * Async because HTMLRewriter streams; the caller awaits per document.
- */
 export async function scanDocument(source: string, label: string): Promise<ScanResult> {
   requireParser();
 
-  // A slot is RESERVED at the script's OPEN tag and filled by the text handler
-  // afterwards, which is what keeps document order exact without needing to know
-  // when the element closed. The obvious shape is el.onEndTag(), and this avoids
-  // it deliberately: it is the newest HTMLRewriter API this module would need,
-  // lib/link-integrity.ts (the other parser caller) exercises none of it, and
-  // this build has to run in three places — a workstation, a GitHub runner, and
-  // Cloudflare's build image — only two of which anything here can measure.
   type Slot = { body: string[] } | { srcdoc: string; label: string };
   const items: Slot[] = [];
   const handlers: string[] = [];
@@ -90,11 +51,6 @@ export async function scanDocument(source: string, label: string): Promise<ScanR
     .on("*", {
       element(el) {
         const tag = el.tagName.toLowerCase();
-        // Attributes are PARSED rather than regexed off the raw tag, because
-        // garage/horizon.html carries `value="&lt;img src=x onerror=alert(1)&gt;"`
-        // as demo TEXT. To a parser that is an attribute VALUE and can never be
-        // read as a handler; to a naive /\son\w+=/ it is one, and it sends you
-        // refactoring a string literal.
         for (const [name] of el.attributes) {
           const lower = name.toLowerCase();
           if (HANDLER_ATTR.test(lower)) handlers.push(`${label}: <${tag} ${lower}=…>`);
@@ -104,7 +60,7 @@ export async function scanDocument(source: string, label: string): Promise<ScanR
         if (srcdoc) items.push({ srcdoc: decodeCharRefs(srcdoc), label: `${label}: <${tag} srcdoc>` });
 
         if (tag !== "script") return;
-        if (el.getAttribute("src") !== null) return;      // external: covered by 'self'
+        if (el.getAttribute("src") !== null) return;
         if (!isExecutableType((el.getAttribute("type") || "").toLowerCase())) return;
 
         // Reserved here, so an EMPTY <script></script> still gets its slot and

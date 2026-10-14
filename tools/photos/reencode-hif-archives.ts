@@ -1,39 +1,6 @@
 #!/usr/bin/env bun
 // reencode-hif-archives.ts — move every HIF photo's archive onto JPEG XL
 // encoded from the HIF itself.
-//
-//   bun tools/photos/reencode-hif-archives.ts --hif-dir <dir> --dry-run [--jobs N] [--limit N] [stem ...]
-//   bun tools/photos/reencode-hif-archives.ts --hif-dir <dir> --backup <dir> [--jobs N] [--limit N] [stem ...]
-//
-// Until 2026-10 a HIF photo's archive was a JPEG (zenc's q100 export, or the
-// camera's own) repacked losslessly as JPEG XL. Ingest now encodes it from
-// the HIF (hif-archive.ts, which carries the measurements); this brings the
-// archives published before that onto the same footing. All 119 HIF photos'
-// sources are local, and the bucket only shrinks: the sweep put the result at
-// about -33% bytes, both metrics better on every photo.
-//
-// Per photo, the order is the proof:
-//
-//   1. read the current archive straight from R2 (wrangler, past every cache)
-//      and skip it if it is already direct, so a rerun resumes;
-//   2. copy it to --backup, the one place the old bytes survive once the key
-//      is overwritten;
-//   3. rebuild the JPEG inside it with djxl: the bar the new encode must beat;
-//   4. hif-archive.ts: bisect for the largest distance that beats that JPEG on
-//      both ssimulacra2 and butteraugli, and copy the HIF's EXIF and XMP on;
-//      where nothing beats it, the archive is left exactly as it is;
-//   5. overwrite the same R2 key, read it back, and compare byte for byte;
-//   6. record the new size in photo-index.json.
-//
-// The key does not change, so nothing that links an original moves. What
-// does change is the bytes behind a URL the Worker caches hard, so this is an
-// in-place overwrite (src/worker/lib/const.ts): after the run, ship the index
-// with ARCHIVE_VERSION bumped, then Purge Everything once. Bumping BEFORE the
-// run would let visitors re-cache the old bytes under the new key.
-//
-// It stops itself after three connection or login failures in a row, as
-// migrate-originals.ts does, and --dry-run writes nothing anywhere.
-// Uploading is a workstation job: CI's Cloudflare token is read-only.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -62,7 +29,6 @@ if (!fs.existsSync(WRANGLER)) throw new Error(`pinned wrangler not found at ${WR
 const sooc = (spawnSync("exif-sooc", ["--version"], { encoding: "utf8" }).stdout ?? "").match(/(\d+)\.(\d+)\.(\d+)/);
 if (!sooc || Number(sooc[1]) === 0 && Number(sooc[2]) < 4) throw new Error("exif-sooc 0.4.0 or later is required to copy a HIF's EXIF onto JPEG XL");
 
-// stem -> HIF, from the folder of originals
 const hifs = new Map<string, string>();
 for (const rel of fs.readdirSync(hifDir, { recursive: true }) as string[]) {
   if (/\.(hif|heic|heif)$/i.test(rel)) hifs.set(path.basename(rel).replace(/\.[^.]+$/, ""), path.join(hifDir, rel));

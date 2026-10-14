@@ -36,7 +36,6 @@ export function preferenceModel(pages: PageBytes[], acquisition: number, hitRate
     exactFirstWorst: hitRate * exactWorst + (1 - hitRate) * brotli,
     exactHitThresholdBest: threshold(exactBest),
     exactHitThresholdWorst: threshold(exactWorst),
-    // Acquisition was absent on the first page; savings begin on later pages.
     familyPaybackSubsequentPages: meanSaving > 0 ? Math.ceil(acquisition / meanSaving) : null,
   };
 }

@@ -8,12 +8,6 @@
 // Worker through wrangler's createTestHarness, fires each configured cron once
 // through `worker.scheduled()`, and asks each job to show its work.
 //
-// THE CRON LIST IS READ FROM cloudflare.config.ts, never copied here, so a fifth cron
-// is fired by existing. A cron that reaches a job with no entry in JOB_EVIDENCE
-// fails by name, which is how the fifth one gets an observable written for it.
-// The floor of 4 stops a config reader that stops matching from passing over
-// zero crons.
-//
 // WHY A FIXTURE WORKER RATHER THAN cloudflare.config.ts ITSELF. Three things have to
 // be in the isolate before the first cron runs, and none of them can be done
 // from outside it:
@@ -34,32 +28,6 @@
 // `cloudflare:workers` is still imported by index.ts alone. The generated config
 // is cloudflare.config.ts with main, assets and the build step swapped, so bindings,
 // crons, flags and compatibility date stay production's.
-//
-// NOTHING LEAVES THE MACHINE. Bindings are the harness's local ones (KV, D1, the
-// Workflow engine), the config lives in a temp directory with no .dev.vars, and
-// the only secret is an Ed25519 key minted here for the signer. Every outbound
-// request is attributed to a job allowed to make it, and a request no job
-// accounts for, or one aimed back at this site's own origin, fails the test.
-//
-// WHAT THIS DOES NOT COVER, on purpose:
-//   - The census's per-host scan. Each Workflow instance's `scan <label>` step is
-//     MOCKED, so this proves the sweep creates one runnable instance per roster
-//     host, and not what censusScanOne does inside one. That is a scan of 16
-//     third-party origins, and census.ts's own contract tests own its logic.
-//   - Any job's success path against a real upstream. The stub serves a fixed
-//     HTML page, so Spotify's embed parse and Luma's JSON parse fail, and the
-//     test asserts they fail COUNTED (rn.track_failed, the serendipity summary
-//     line) rather than silently. What a real payload does needs a real payload.
-//   - Webmention POSTs. The stub page advertises no endpoint, so discovery ends
-//     at "none", which is the common production outcome too.
-//
-// It found a real bug on its first run: every census instance id carried the
-// dot from its host label, the Workflows binding refused all 16, and the sweep
-// reported `partial` on a span nobody reads. See censusInstanceId.
-//
-// THE CONTROL, run before this was committed: deleting the `41 5` arm from
-// lib/cron.ts's cronJob() sends that cron to `cron.unmatched`, and this test
-// fails naming the cron and the unmatched span; restoring the arm goes green.
 import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -78,8 +46,6 @@ import {
 
 const at = (rel) => fileURLToPath(new URL(rel, ROOT));
 const ORIGIN = "https://aadhar.sh";
-// A path no document or route claims, so the asset layer misses and the
-// fixture Worker answers it.
 const RECORD_PATH = "/__cron-harness";
 
 const workerSource = (index, trace) => `
@@ -146,20 +112,15 @@ export default {
 };
 `;
 
-// Seeds, so the jobs that start from stored state have some to start from. None
-// of them is a credential: the playlist and track ids are shaped like Spotify's
-// and name nothing, and the Luma "session" is a label the stub never checks.
 const PLAYLIST = "0123456789abcdefABCDEF";
 const TRACKS = ["1111111111aaaaaaaaaaAA", "2222222222bbbbbbbbbbBB"];
-// Hand-kept on purpose, like every host rule below: an allowlist derived from
-// the code under test would grow with it and could never catch a new host.
 const LUMA_HOST = "api2.luma.com";
 const SPOTIFY_HOST = "open.spotify.com";
 const ALGOLIA_HOST = "hn.algolia.com";
 const READING = ["https://example.org/first-essay", "https://example.org/second-essay"];
 const NEIGHBOR_HOSTS = new Set(NEIGHBORS.map((n) => new URL(n.url).hostname));
 
-/** What the fixture Worker hands back from RECORD_PATH for one fired cron.
+/**
  * @typedef {{ cron: string, name: string, attrs: Record<string, any>, status: string, error?: string }} RecordedSpan
  * @typedef {{ cron: string, method: string, url: string, host: string, cookie: boolean }} RecordedFetch
  * @typedef {{ spans: RecordedSpan[], outbound: RecordedFetch[], points: { cron: string, binding: string, point: any }[], tripped: { cron: string, binding: string, prop: string }[] }} Recording
@@ -172,9 +133,6 @@ const only = (spans, name) => {
   return hits[0].attrs;
 };
 
-// What each job must show for itself, keyed by the cron span the dispatcher
-// opens. `explains` claims outbound requests: every request a cron made has to
-// be claimed by one of the jobs that ran on that tick, or the test fails.
 const JOB_EVIDENCE = {
   "cron.home_probe": {
     async check({ run }) {
@@ -190,8 +148,6 @@ const JOB_EVIDENCE = {
     async check({ run }) {
       const rn = only(run.spans, "rn.enrich");
       assert.equal(rn["rn.tracks_total"], TRACKS.length, "enrich never reached the seeded playlist");
-      // The stub page has no __NEXT_DATA__, so every embed fails, and it has to
-      // fail COUNTED rather than as a cap or as nothing.
       assert.equal(rn["rn.track_failed"], TRACKS.length, "a failed embed was not counted as one");
       assert.equal(rn["rn.capped"], false);
       for (const id of TRACKS) {
@@ -205,8 +161,6 @@ const JOB_EVIDENCE = {
     async check({ run }) {
       const hn = only(run.spans, "reading.hn");
       assert.equal(hn["reading.links"], READING.length, "the HN job never reached the seeded reading list");
-      // The stub answers HTML, so every Algolia answer fails to parse, and it
-      // has to fail COUNTED rather than as a cap, a skip, or nothing.
       assert.equal(hn["reading.hn_failed"], READING.length, "a failed lookup was not counted as one");
       assert.equal(hn["reading.hn_capped"], false);
       for (const link of READING) {
@@ -234,12 +188,8 @@ const JOB_EVIDENCE = {
     async check({ run, worker, env }) {
       const send = only(run.spans, "webmention.send");
       assert.ok(send["webmention.pages_read"] >= 1, "the sender read none of this site's own pages");
-      // A marker row is written per page swept, so the table is the job's own
-      // record of what it read, independent of the span.
       const markers = await env.SOCIAL_DB.prepare("SELECT source FROM webmentions_sent WHERE source = target").all();
       assert.equal(markers.results.length, send["webmention.pages_read"], "a page read left no marker row");
-      // Re-read every page it swept through the same Worker, and hold each
-      // discovery it made to a citation on one of them.
       const cited = new Set();
       for (const { source } of markers.results) {
         const page = await worker.fetch(new URL(source).pathname);
@@ -266,9 +216,6 @@ const JOB_EVIDENCE = {
   },
   "cron.serendipity": {
     async check({ run, logs, env }) {
-      // The error the stub provokes returns rather than throws, which is the
-      // case sync health exists for: the span and the D1 record must both say
-      // the tick failed while the cron wrapper completes normally.
       const sync = only(run.spans, "serendipity.sync");
       assert.equal(sync["serendipity.ok"], false, "a sync whose every set failed read as ok");
       assert.equal(sync["serendipity.sets"], 1);
@@ -277,8 +224,6 @@ const JOB_EVIDENCE = {
       assert.equal(JSON.parse(row.value).ok, false);
       const luma = run.outbound.filter((o) => o.host === LUMA_HOST);
       assert.ok(luma.length >= 1 && luma.every((o) => o.cookie), "the sync never asked Luma with the seeded session");
-      // The summary line is the LAST thing cronSerendipity does, so it proves
-      // the sweep ran to the end rather than stopping at the first fetch.
       const summary = logs
         .map((l) => { try { return JSON.parse(l.message); } catch { return null; } })
         .find((m) => m && m.cron === "serendipity");
@@ -290,7 +235,6 @@ const JOB_EVIDENCE = {
   },
 };
 
-// Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.
 const DISPATCH = "every configured cron reaches its job, completes, and makes no request no job accounts for";
 test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   const site = parseJsonc(await configText("cloudflare.config.ts"));
@@ -298,13 +242,6 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   assert.ok(crons.length >= 4, `read ${crons.length} crons from cloudflare.config.ts; the reader has stopped matching`);
 
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "crons-")));
-  // The served tree for SELF_FETCH, which is how the webmention sender reads
-  // this site's pages. A handful of symlinks rather than dev-stage's farm,
-  // because that one writes .dev-assets into the repository a dev server may be
-  // serving from.
-  // The farm comes from served-tree's own adapter, so a directory both roots
-  // provide (garage/, since /garage/round-trip's Markdown authors in
-  // src/content) is made for real and merged rather than linked twice.
   const assets = join(dir, "assets");
   await linkServedTree(await planServedTree({ cwd: at("."), roots: ["src/pages", "src/content"] }), assets, { cwd: at(".") });
   symlinkSync(at("public/images"), join(assets, "images"));
@@ -315,15 +252,11 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
     main: "worker.js",
     minify: false,
     assets: { ...site.assets, directory: "assets" },
-    // The serendipity schema is applied by hand in production; the harness
-    // needs its migrations named to apply them.
     d1_databases: site.d1_databases.map((d) =>
       d.binding === "SERENDIPITY_DB" ? { ...d, migrations_dir: at("serendipity/migrations") } : d),
   };
   delete config.build;
   delete config.secrets;
-  // CI holds no Cloudflare credential, and a Workers AI binding cannot boot
-  // without one (REMOTE_ONLY_KEYS in tools/lib/site-config.ts has the measurement).
   for (const key of REMOTE_ONLY_KEYS) delete config[key];
   writeFileSync(join(dir, "wrangler.jsonc"), JSON.stringify(config));
 
@@ -352,8 +285,6 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
     await env.RN_KV.put("curius:links", JSON.stringify({ items: READING.map((link) => ({ link, title: link, created: "2026-09-28T00:00:00Z" })) }));
     await env.SERENDIPITY_DB.prepare("INSERT INTO user_cookies (user_key, cookies_json, label, enabled) VALUES (?, ?, ?, 1)")
       .bind("cron-test", JSON.stringify({ cookies: [{ name: "luma.auth-session-key", value: "cron-test" }] }), "cron-test").run();
-    // Created before any cron fires, since it only sees instances created after
-    // it. Each instance's one step is mocked (see the header).
     const census = await worker.introspectWorkflow("CENSUS_WORKFLOW");
     await census.modifyAll(async (m) => {
       for (const s of CENSUS_ROSTER) await m.mockStepResult({ name: `scan ${s.label}` }, { ok: true, host: s.label, mocked: true });
@@ -397,8 +328,6 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
       server.debug();
       throw error;
     }
-    // A job the table expects and no cron reached means a cron was routed
-    // somewhere else, or a trigger was deleted without its job.
     assert.deepEqual([...reached].sort(), Object.keys(JOB_EVIDENCE).sort(),
       "the configured crons did not reach exactly the jobs this test knows");
     await census.dispose();

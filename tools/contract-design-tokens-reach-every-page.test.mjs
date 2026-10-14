@@ -8,19 +8,6 @@
 // ZERO consumers. Turning `--hue-luna` moved 23 rules and left every title bar
 // where it was. DESIGN.md's DO list has said "pull every color from tokens;
 // don't re-hardcode literals" the whole time; this is the check behind it.
-//
-// Two pins. The verbatim one holds luna.css's token blocks to the design
-// files byte for byte, since luna.css claims "verbatim" in its header and
-// nothing asserted it. The copies one is a ZERO rather than a ratchet: after
-// the sweep there is no ledger to hold, and the rule for a page that wants a
-// token's colour is to write the token.
-//
-// The first version compared text, and on 2026-10-06 that turned out to have
-// missed 149 copies in 31 files: the token under an alpha (`--frame / .3`),
-// the token retyped at another rounding (`--link` as `0.2353`), and every
-// stylesheet beside luna.css. The check now matches by OKLab distance under
-// COPY_DE and walks src/styles whole. The band above COPY_DE is a person's
-// call, so `bun run colors:drift` lists it and nothing here gates on it.
 import { readdir } from "node:fs/promises";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { EMAIL_TEMPLATES, cssSources, deltaEOK, loadTokenValueMap, normalizeColor, parseOklch, parseSrgb, tokenCopiesIn, tokenValueMap } from "./lib/token-literals.ts";
@@ -48,9 +35,7 @@ test("the resolver sees the knobs, and refuses an ambiguous value", () => {
   assert.equal(map.size, 2, "a token resolving through a non-knob var() is skipped, not guessed");
   assert.equal(normalizeColor("oklch(100.00% 0 0)"), "oklch(100% 0 0)");
   assert.equal(normalizeColor("oklch(70% .15 258)"), "oklch(70% 0.15 258)", "the generator's bare .15 spelling is the same colour");
-  // A copy in a fixture IS found, so an empty report below means clean and not blind.
   assert.deepEqual(tokenCopiesIn(".x{color:oklch(51% 0.225 263)}", map).map((c) => c.token), ["--blue-65"]);
-  // The two spellings text equality missed: the token under an alpha, and the token retyped at another rounding.
   assert.deepEqual(
     tokenCopiesIn(".x{box-shadow:0 0 0 1px oklch(51% 0.225 263 / .3)}", map).map((c) => c.fix),
     ["oklch(from var(--blue-65) l c h / .3)"],
@@ -59,22 +44,17 @@ test("the resolver sees the knobs, and refuses an ambiguous value", () => {
   assert.deepEqual(tokenCopiesIn(".x{color:oklch(51.2% 0.224 263.3)}", map).map((c) => c.token), ["--blue-65"], "a rounding copy within COPY_DE is a copy");
   assert.deepEqual(tokenCopiesIn(".x{color:oklch(55% 0.225 263)}", map), [], "four points of lightness is a different colour, not a copy");
   assert.deepEqual(tokenCopiesIn('<text fill="oklch(51% 0.225 263)">', map), [], "an SVG presentation attribute cannot take var(), so it is never a copy");
-  // Hex and rgb() name the same colours in another notation.
   const hexMap = tokenValueMap(`:root{--ink-faint: oklch(62.68% 0 0);}`);
   assert.deepEqual(tokenCopiesIn(".x{color:#888}", hexMap).map((c) => c.fix), ["var(--ink-faint)"], "#888 in hex is the --ink-faint token");
   assert.deepEqual(tokenCopiesIn(".x{border-color:rgba(136,136,136,.5)}", hexMap).map((c) => c.fix), ["oklch(from var(--ink-faint) l c h / .5)"], "rgba() keeps its alpha");
   assert.deepEqual(tokenCopiesIn("#888, .y{color:red}", hexMap), [], "an id selector that spells a colour is not a declaration");
   assert.deepEqual(tokenCopiesIn(".x{border:6px solid var(--ink-faint,#888)}", hexMap), [], "a var() fallback is where a literal belongs");
   assert.deepEqual(tokenCopiesIn(".x{background:#0054e3}", hexMap), [], "a different colour in hex is not a copy");
-  // Inside COPY_DE of two tokens names neither, like an ambiguous value.
   const twins = tokenValueMap(`:root{--p: oklch(50% 0.1 250); --q: oklch(50.3% 0.1 250);}`);
   assert.deepEqual(tokenCopiesIn(".x{color:oklch(50.15% 0.1 250)}", twins), [], "a literal between two near tokens is never reported");
 });
 
 test("a token whose comment names a hex resolves to that hex", async () => {
-  // colors.css claimed period-correct Luna for four months while --darkshadow sat
-  // dE 0.040 from the #716F64 its comment named. A hex in a token's comment is
-  // now a claim this checks: within 0.002, under anything a person could see.
   const css = await read("design/tokens/colors.css");
   const root = css.slice(0, css.indexOf("@media (color-gamut: p3)"));
   const knobs = [...root.matchAll(/^\s*(--(?:hue|chroma)-[a-z]+\s*:[^;]+;)/gm)].map((m) => m[1]).join("");
@@ -119,7 +99,6 @@ test("no page <style>, Worker CSS literal or stylesheet rule carries a token's v
   assert.ok(map.size >= 25, `only ${map.size} token values resolved; the colors.css parse has collapsed`);
   const sources = cssSources(ROOT);
   const count = (kind) => new Set(sources.filter((s) => s.kind === kind).map((s) => s.file)).size;
-  // Floors on the walk itself, so a moved directory reads as blind rather than clean.
   assert.ok(count("page") >= 40, `walked ${count("page")} pages`);
   assert.ok(count("worker") >= 60, `walked ${count("worker")} Worker sources`);
   assert.ok(count("stylesheet") >= 7, `walked ${count("stylesheet")} stylesheets`);
@@ -133,9 +112,6 @@ test("the title-bar gradient is consumed as a token, not resolved by hand", asyn
   const luna = await read("src/styles/luna.css");
   assert.ok(/--grad-title:\s*linear-gradient/.test(luna), "the token is defined");
   assert.ok(luna.includes("var(--grad-title)"), "luna.css's own :where(.title-bar) consumes it");
-  // The two title bars luna.css does not draw: the homepage (luna loads without
-  // blocking its first paint) and Notepad's .np-titlebar. Every other window,
-  // garage/index included, takes luna's :where(.title-bar) and paints nothing itself.
   const sources = ["src/pages/index.html", "src/worker/writing.ts"];
   for (const rel of sources) assert.ok((await read(rel)).includes("var(--grad-title)"), `${rel} should paint its title bar from the token`);
   const resolved = /linear-gradient\(180deg,\s*oklch\(70% 0\.15 258\)/;

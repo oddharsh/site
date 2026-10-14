@@ -8,12 +8,6 @@
 // wrote the real list into it, and the `?build=` query on each later import
 // reached the entry module alone. Five pages rendered before 1g2 (/photos,
 // /bot, /cota-wec, /updates, /restore) had the link and a pane without the task.
-//
-// Three things hold it now: 5b runs in its own process
-// (tools/bake-worker-pages.ts), 1g2 adds the task to a pane it did not draw,
-// and build.ts checks every staged page against the twins it actually wrote
-// (tools/lib/twin-links.ts). This file pins the premise, the check and the
-// wiring.
 import { spawnSync } from "node:child_process";
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -39,7 +33,6 @@ test("the premise: a query re-evaluates an entry module and none of its imports,
 
     assert.equal((await import(url + "?build=1")).count, 0);
     await writeFile(dep, 'export const LIST = ["/whoareyou"];\n');
-    // The trap: a fresh entry URL, a stale import underneath it.
     assert.equal((await import(url + "?build=2")).count, 0, "the runtime now re-reads imports under a new query; the fresh-process bake is still right, but revisit why it exists");
 
     const child = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(url)}).then((m) => console.log(m.count))`], { encoding: "utf8" });
@@ -51,7 +44,6 @@ test("the premise: a query re-evaluates an entry module and none of its imports,
 });
 
 test("the check reads twins from what the build wrote, so an empty TWIN_PATHS fails it", async () => {
-  // The committed lib/twins.ts is the empty list the stale bake saw.
   assert.deepEqual(TWIN_PATHS, []);
   const stale = await lunaPage({ title: "t", route: "/whoareyou", body: unsafeHtml('<div class="content"><p>x</p></div>') }).text();
   const problems = twinLinkProblems([{ rel: "whoareyou.html", html: stale }], ["/whoareyou"]);
@@ -59,7 +51,6 @@ test("the check reads twins from what the build wrote, so an empty TWIN_PATHS fa
     'whoareyou.html: no <link rel="alternate" type="text/markdown" href="/whoareyou.md">',
     "whoareyou.html: its explorer pane does not offer /whoareyou.md",
   ]);
-  // The control: the same page is clean when no twin was written for it.
   assert.deepEqual(twinLinkProblems([{ rel: "whoareyou.html", html: stale }], []), []);
 });
 
@@ -73,9 +64,6 @@ test("the check accepts both the rendered and the minified shapes, and only in <
     assert.equal(paneOffersTwin(html, "/bot.md"), true);
     assert.deepEqual(twinLinkProblems([{ rel: "bot.html", html }], ["/bot"]), []);
   }
-  // Controls: the link in <body> is no advertisement, a pane without the task is
-  // a problem, a page with no pane owes only the link, and the wrong href is not
-  // the twin.
   assert.equal(hasAlternateLink('<head></head><body><link rel="alternate" type="text/markdown" href="/bot.md">', "/bot.md"), false);
   assert.equal(hasAlternateLink(quoted, "/photos.md"), false);
   assert.equal(paneOffersTwin(quoted.replace('<li><a href="/bot.md">Read this as Markdown</a></li>', ""), "/bot.md"), false);
@@ -90,13 +78,9 @@ test("the check accepts both the rendered and the minified shapes, and only in <
 
 test("build.ts bakes 5b in a fresh process, completes the panes 1g2 did not draw, and checks every page", async () => {
   const build = await src("tools/build.ts");
-  // a child process either way: spawnSync until 2026-10-08, then spawn, started
-  // early beside steps 1h to 4 (contract-the-early-bake-writes-only-where-it-is-told)
   assert.match(build, /spawn(?:Sync)?\(process\.execPath, \["tools\/bake-worker-pages\.ts", OUT/);
-  // An in-process import of the bake would put it back in the stale graph.
   assert.doesNotMatch(build, /import\([^)]*bake-worker-pages/);
   assert.doesNotMatch(build, /import[^;]*from "\.\/bake-worker-pages/);
-  // No 5b renderer is imported by build.ts itself any more.
   for (const mod of ["whoareyou", "dyno", "security", "search", "lens", "run", "writing", "ledger", "around", "inbox", "census", "reading"]) {
     assert.doesNotMatch(build, new RegExp(`src/worker/${mod}\\.ts\`?\\)\\)\\.href`), `build.ts imports the ${mod} renderer in-process again`);
   }

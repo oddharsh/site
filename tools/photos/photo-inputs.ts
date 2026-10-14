@@ -8,7 +8,6 @@ const stemOf = (file: string) => path.basename(file, path.extname(file));
 
 export type PhotoInput = { stem: string; source: string; original: string | null; full: string };
 
-/** Resolve each published stem once, before encoders or uploads can write it. */
 export async function photoInputs(
   inputs: string[],
   { remote = false, published }: { remote?: boolean; published?: ReadonlySet<string> } = {},
@@ -18,7 +17,6 @@ export async function photoInputs(
     (published !== undefined && extension(file) === ".png");
   const include = async (file: string) => {
     if (published && !published.has(stemOf(file))) return;
-    // Resolve directory aliases while retaining the requested filename/key.
     files.add(path.join(await realpath(path.dirname(file)), path.basename(file)));
   };
   for (const input of inputs) {
@@ -35,8 +33,6 @@ export async function photoInputs(
     }
   }
 
-  // An explicitly requested HEIF may have a camera JPEG beside it even when
-  // that JPEG was not an argument. It is the existing click-through contract.
   for (const file of [...files]) {
     if (!HEIF.has(extension(file))) continue;
     for (const entry of await readdir(path.dirname(file), { withFileTypes: true })) {
@@ -46,10 +42,6 @@ export async function photoInputs(
     }
   }
 
-  // A HIF photo's archive is JPEG XL encoded from the HIF (hif-archive.ts), so
-  // the downloader leaves a .jxl and a decoded PNG and no JPEG. Remote ingest
-  // has nothing to re-ingest there: the original is already what ingest would
-  // make. Say so, rather than dropping the photo from the plan without a word.
   if (remote) {
     const jpegStems = new Set([...files].filter((file) => JPEG.has(extension(file))).map(stemOf));
     for (const input of inputs) {
@@ -73,7 +65,6 @@ export async function photoInputs(
   for (const stem of [...(published ?? groups.keys())].sort()) {
     const group = groups.get(stem) ?? [];
     if (group.length === 0) {
-      // A partial rerender deliberately leaves missing published stems alone.
       plan.push({ stem, source: "", original: null, full: "" });
       continue;
     }
@@ -90,11 +81,6 @@ export async function photoInputs(
       throw new Error(`remote ingest needs the existing JPEG object for ${stem}; select that key instead of its HEIF original`);
     }
     let full = original ? (remote ? path.basename(original) : `${stem}${extension(original)}`) : `${stem}.jpg`;
-    // A remote JPEG XL original arrives as the .jxl plus the JPEG djxl rebuilt
-    // from it (download-remote-photos.sh), which keeps the .jxl in <dir>.r2 so
-    // exif-sooc never scans it (an older layout kept it beside the JPEG). The
-    // JPEG feeds the encoders; the .jxl is the R2 object, so it names the key
-    // and its bytes give the size.
     if (remote && original) {
       const dir = path.dirname(original);
       for (const jxl of [path.join(`${dir}.r2`, `${stem}.jxl`), path.join(dir, `${stem}.jxl`)]) {

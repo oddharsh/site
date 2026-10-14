@@ -1,55 +1,5 @@
 #!/usr/bin/env bun
 // migrate-originals.ts — move every JPEG original in R2 to lossless JPEG XL.
-//
-//   bun tools/photos/migrate-originals.ts [--dry-run] [--jobs N] [--limit N] [stem ...]
-//   bun tools/photos/migrate-originals.ts --delete [--jobs N] [--limit N] [stem ...]
-//
-// JPEG XL can carry a JPEG's own coefficients in a tighter wrapping and rebuild
-// the exact file from them, so the .jxl IS the original: 8.17% fewer bytes
-// across 12 originals (2026-09-27), and a 40 MP frame decodes in 144 ms
-// against 716 ms for the progressive JPEG in Chrome. Keeping both in R2 would
-// take the bucket past its 10 GB free tier, so a migrated photo keeps only the
-// .jxl, and `djxl` gives back the JPEG byte for byte whenever one is needed.
-//
-// Per photo, the order is the proof:
-//
-//   1. download the JPEG through the public URL and refuse it unless its MD5
-//      equals the ETag R2 serves (a single-part upload's ETag is the MD5 of its
-//      bytes) and its length equals the size photo-index.json records;
-//   2. take the .jxl already in R2 (#1216's backfill left 114) or transcode one
-//      with cjxl --lossless_jpeg=1 -e 9, the effort ingest uses;
-//   3. rebuild the JPEG from it with djxl and refuse it unless the rebuilt bytes
-//      equal the downloaded ones;
-//   4. upload it, if it was made here;
-//   5. record the move in photo-index.json: `full` becomes the .jxl, `size` its
-//      length, and `jpeg` keeps the old key, which the Worker 301s to `full`;
-//   6. with --delete, delete the JPEG from R2.
-//
-// Without --delete the run uploads nothing and deletes nothing: it moves only
-// the photos whose .jxl is already in R2, so the bucket doesn't grow. With it,
-// each photo's upload is followed by its JPEG's delete before the next photo
-// starts (per worker; --jobs of them), so the bucket never holds more than a
-// few extra files, and it also deletes the JPEGs an earlier run moved without
-// deleting. Recording comes before deleting: a run that dies between the two
-// leaves a JPEG the next --delete run removes, never an index naming a .jxl
-// that isn't there.
-//
-// --delete refuses to start until production redirects a moved JPEG's URL,
-// because a deleted JPEG's old links rely on that redirect (photos.ts). Ship
-// the index from a run without --delete first; its moves carry the redirect.
-//
-// The index is rewritten after every success (beside, then renamed), so an
-// interrupted run keeps what it finished and a rerun picks up the rest.
-//
-// A run stops itself after STOP_AFTER failures in a row that say the network
-// or the credentials are gone rather than something about one photo. The
-// 2026-10-07 run lost DNS and then wrangler's OAuth refresh partway through
-// and logged 105 doomed attempts over three hours before exiting. Stopping
-// early loses nothing: photos already in flight finish, nothing new starts,
-// and a photo a failure caught between recording and deleting is a leftover
-// the rerun after `bun run wrangler:site login` deletes.
-// Uploading and deleting are workstation jobs: CI's Cloudflare token is
-// read-only.
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -101,7 +51,6 @@ const unknown = stems.filter((s) => !index[s]);
 if (unknown.length) throw new Error(`not in photo-index.json: ${unknown.join(", ")}`);
 const scope = stems.length ? stems : Object.keys(index);
 const pending = scope.filter((s) => isJpeg(index[s].full)).slice(0, limit);
-// Moved by an earlier run that didn't delete; R2 may still hold the JPEG.
 const leftover = del ? scope.filter((s) => index[s].jpeg && !isJpeg(index[s].full)) : [];
 
 console.log(`${pending.length} JPEG originals to move${del ? `, ${leftover.length} moved JPEGs to delete` : " (no uploads or deletes without --delete)"}${dryRun ? " (dry run)" : ""}`);
@@ -112,9 +61,6 @@ if (dryRun) {
 }
 
 if (del) {
-  // A moved photo's old URL has to answer 301 before any JPEG goes. Range and a
-  // unique query reach the Worker past the CDN and caches.default (photos.ts),
-  // so this reads the deployed code, not a cached JPEG.
   const sample = Object.values(index).find((e) => e.jpeg && !isJpeg(e.full));
   if (!sample?.jpeg) throw new Error("no moved photo in photo-index.json to check the redirect with; ship a run without --delete first");
   const res = await fetch(`${url(sample.jpeg)}?redirect-check=${Date.now()}`, { redirect: "manual", headers: { range: "bytes=0-0" } });
@@ -125,8 +71,6 @@ if (del) {
   console.log(`  redirect live: ${sample.jpeg} -> ${sample.full}`);
 }
 
-// One write at a time: each success updates the in-memory index and replaces
-// the file whole, so the chain only has to keep two renames from interleaving.
 let writing = Promise.resolve();
 const record = (stem: string, row: IndexEntry) => {
   index[stem] = row;
@@ -141,8 +85,6 @@ const remove = (key: string) => run([WRANGLER, "r2", "object", "delete", `${BUCK
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "migrate-originals-"));
 let moved = 0, skipped = 0, failed = 0, deleted = 0, started = 0, jpegBytes = 0, jxlBytes = 0;
 
-// Failures that name the connection or the login, as wrangler and fetch word
-// them, rather than one photo's bytes.
 const SYSTEMIC = /auth token has expired|not authenticated|Unable to resolve Cloudflare|fetch failed|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|socket connection was closed/i;
 const STOP_AFTER = 3;
 let streak = 0;
@@ -164,9 +106,6 @@ async function move(stem: string): Promise<void> {
   const key = jxlKey(full);
   const jpg = path.join(work, full), jxl = path.join(work, key), rebuilt = `${jxl}.rebuilt.jpg`;
   try {
-    // Read through wrangler rather than the public URL: until this route ships
-    // a .jxl, production 404s every .jxl key before asking R2, which made the
-    // first run read all 258 as missing, the 114 #1216 uploaded included.
     const get = Bun.spawnSync([WRANGLER, "r2", "object", "get", `${BUCKET}/${key}`, `--file=${jxl}`, "--remote"], { stdout: "pipe", stderr: "pipe" });
     const missing = get.exitCode !== 0 && /The specified key does not exist/.test(get.stderr.toString());
     if (get.exitCode !== 0 && !missing) throw new Error(`r2 get ${key}: ${reason(get.stderr.toString())}`);
@@ -213,8 +152,6 @@ for (const stem of leftover) {
   catch (e) { failure(stem, (e as Error).message); }
 }
 
-// Each worker checks for a halt before it takes the next photo, so the ones
-// already in flight finish and nothing new starts.
 const queue = halted ? [] : [...pending];
 await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () => {
   while (!halted && queue.length) await move(queue.shift() as string);

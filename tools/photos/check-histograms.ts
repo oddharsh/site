@@ -3,11 +3,6 @@
 // Does the committed public/images/histograms.json reproduce from the committed
 // JPG tiers, with the zenc this tree builds?
 //
-//   bun run histograms:check                 build zenc --locked, bake, compare
-//   bun run histograms:check -- --zenc PATH  bake with a binary you already built
-//
-// Exit 0 reproduces, 1 the committed file differs (a finding), 2 the instrument.
-//
 // WHY THIS EXISTS. derive:check pinned this artifact to a hash of its inputs, and
 // three of those inputs were zenc's histogram.rs, pixels.rs and Cargo.lock. Every
 // zenc dependency bump therefore read as STALE, and each one was cleared by hand:
@@ -20,16 +15,6 @@
 // CI's native photo validation job runs this instead. public/i stays in the
 // digest, so a re-encode that skips the bake still fails on a machine with no
 // cargo (gotcha 46).
-//
-// It WRITES NOTHING IN THE TREE. The bake lands in a temp root whose i/ is a
-// symlink to public/i (zenc only reads it) and whose images/ is a real folder
-// holding a copy of hashes.json, so the meta files are written there rather than
-// into the pipeline's local public/images/meta.
-//
-// It builds zenc on every run by default rather than reusing whatever binary sits
-// in target/release. extract-photo-metadata.sh builds only when that binary is
-// MISSING, so a binary from an older lockfile would answer for a newer one and
-// agree with itself. cargo's rebuild is a no-op when nothing moved.
 
 import { spawnSync } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
@@ -45,14 +30,11 @@ const COMMITTED = path.join(PUBLIC, "images/histograms.json");
 const ZENC_MANIFEST = path.join(ROOT, "tools/photos/zenc/Cargo.toml");
 const ZENC_BUILT = path.join(ROOT, "tools/photos/zenc/target/release/zenc");
 
-// 258 photos today. A third below catches a collapse (an empty hashes.json, a
-// bake that skipped everything) without turning a deliberate cull into a red run.
 const FLOOR = 150;
 
 export type Index = Record<string, string>;
 export type Comparison = { same: number; changed: string[]; missing: string[]; extra: string[] };
 
-/** Stem-by-stem, both directions. `missing` is committed but not baked. */
 export function compareIndexes(committed: Index, baked: Index): Comparison {
   const out: Comparison = { same: 0, changed: [], missing: [], extra: [] };
   for (const stem of Object.keys(committed).sort()) {
@@ -66,11 +48,6 @@ export function compareIndexes(committed: Index, baked: Index): Comparison {
 
 export const reproduces = (c: Comparison): boolean => !c.changed.length && !c.missing.length && !c.extra.length;
 
-/**
- * The control: move ONE bin of ONE photo by one level, and the comparison has to
- * name exactly that stem. A comparator that cannot see this is what a pass over
- * two empty indexes, or two copies of one file, would look like.
- */
 export function controlCatchesOneBin(committed: Index): boolean {
   const stem = Object.keys(committed).sort()[0];
   if (!stem) return false;

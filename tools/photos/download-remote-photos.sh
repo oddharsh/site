@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 # download-remote-photos.sh — fetch source images from the public R2-backed
 # photo route for the GitHub-hosted photo pipeline.
-#
-# Input is one R2 object key per line. The special key "all" expands the
-# current public manifest and is intended for full thumbnail re-encodes.
-# Originals never enter the repository: this directory is disposable runner
-# state.
 
 set -euo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -28,7 +23,6 @@ done
 
 [ -f "$KEYS_FILE" ] || { echo "error: keys file not found: $KEYS_FILE" >&2; exit 1; }
 mkdir -p "$DEST_DIR"
-# Beside the destination, never inside it: see the JPEG XL note below.
 R2_DIR="${DEST_DIR%/}.r2"
 
 NORMALIZED="$(mktemp)"
@@ -52,8 +46,6 @@ count=0
 while IFS= read -r key || [ -n "$key" ]; do
   [ -n "$key" ] || continue
 
-  # The current R2 photo contract is flat filenames. Keep workflow input
-  # from becoming a path or URL injection surface.
   if [[ ! "$key" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
     echo "error: invalid flat photo key: $key" >&2
     exit 1
@@ -88,9 +80,6 @@ while IFS= read -r key || [ -n "$key" ]; do
   #              JPEG to give back. djxl decodes it to a 16-bit PNG for zenc,
   #              orientation applied, and the .jxl stays in the folder as the
   #              metadata source: it carries the HIF's EXIF, uncompressed.
-  #
-  # photo-inputs.ts finds the .jxl in either place for the R2 key and size an
-  # index entry records.
   pixels="$output"
   case "$key" in
     *.jxl)
@@ -110,7 +99,6 @@ while IFS= read -r key || [ -n "$key" ]; do
           echo "error: could not decode $key" >&2
           exit 1
         fi
-        # the metadata lives in the .jxl; the PNG carries pixels only
         pixels="$output"
       fi ;;
   esac

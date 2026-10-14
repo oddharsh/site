@@ -98,38 +98,6 @@ BUTTERAUGLI="$(command -v butteraugli_main || echo /opt/zerobrew/prefix/bin/butt
 
 OUT="$HOME/Desktop/ig-export"
 WIDTH=1080
-# 84 rather than the 70 this carried until 2026-08-25, and the reason is that
-# THE TARGET IS CALIBRATED AGAINST THE REFERENCE, so replacing the reference
-# silently rescaled it. ssimulacra2 here scores the encode against the resized
-# frame, which measures encode FIDELITY and says nothing about whether the frame
-# itself is any good. sips left aliasing the DCT could not reproduce, so 70 was
-# expensive and often unreachable; a clean reference is easy to match, so the
-# same 70 was suddenly bought at q50 and shipped a heavily compressed file.
-#
-# Scored against a common ground truth (an independent PIL Lanczos downscale in
-# linear light), delivered quality, KB beside it:
-#
-#                      old (sips)      t=70        t=78        t=84
-#     L1000069_3      76.55   73KB   69.91 24KB  75.94 29KB  80.80  39KB
-#     L1009920        76.64  235KB   67.64 60KB  74.94 84KB  80.31 133KB
-#     XT509996        64.66  155KB     --        75.50 336KB 79.38 548KB
-#     XT507399        59.67  232KB     --        72.31 380KB 77.02 585KB
-#
-# So t=70 on the new reference is WORSE than the tool it replaced, which is the
-# regression this fixes. t=84 lands ~80 on both cameras: the Leica beats the old
-# output at 43% fewer bytes, and the Fuji gains 16 points at about 3x the bytes
-# because the old tool had been delivering it at 60, not because 84 is greedy.
-#
-# Two things worth keeping past this number. A RELATIVE metric's threshold is a
-# property of the reference, so any future change to prepare_reference has to
-# re-derive it rather than inherit it. And the old tool's own report was lying in
-# BOTH directions: L1000069_3 scored 58.41 against sips' reference while scoring
-# 76.55 against truth, because JPEG's low-pass was quietly undoing some of the
-# aliasing, so a file it declared a failure was the better one.
-#
-# Expect the occasional MISSED at q95. That is the report being honest about a
-# frame the encoder cannot carry, and it is preferable to a target low enough
-# that nothing ever misses.
 TARGET=84
 QMAX=95
 QMIN=50
@@ -141,7 +109,6 @@ DRY=0
 
 LADDER="60 70 75 80 85 88 90 92 95"
 
-# ── arguments ─────────────────────────────────────────────────────────
 ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -156,9 +123,6 @@ while [ $# -gt 0 ]; do
     --max)         MODE=max; shift ;;
     --keep-exif)   KEEP_EXIF=1; shift ;;
     -n|--dry-run)  DRY=1; shift ;;
-    # the header block IS the help, read to wherever it happens to end. A
-    # hardcoded line range silently truncates the last option the day someone
-    # adds a sentence above it, which it already did once.
     -h|--help)     awk 'NR>1 && /^#/{sub(/^# ?/,""); print; next} NR>1{exit}' "$0"; exit 0 ;;
     -*)            echo "unknown option: $1" >&2; exit 1 ;;
     *)             ARGS+=("$1"); shift ;;
@@ -170,13 +134,12 @@ if [ ${#ARGS[@]} -eq 0 ]; then
   exit 1
 fi
 case "$YUV" in 444|422|420) ;; *) echo "error: --yuv must be 444, 422 or 420" >&2; exit 1 ;; esac
-whole() {  # whole <flag> <value>
+whole() {
   case "$2" in ''|*[!0-9]*) echo "error: $1 needs a whole number, got '$2'" >&2; exit 1 ;; esac
 }
 whole --width "$WIDTH"; whole --qmax "$QMAX"; whole --qmin "$QMIN"
 [ "$QMIN" -le "$QMAX" ] || { echo "error: --qmin ($QMIN) is above --qmax ($QMAX)" >&2; exit 1; }
 
-# ── preconditions ─────────────────────────────────────────────────────
 for cmd in sips exif-sooc; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: $cmd not found in PATH" >&2; exit 1; }
 done
@@ -194,8 +157,6 @@ fi
 TMP="$(mktemp -d "/tmp/ig-export-$$-XXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
-# ── helpers ───────────────────────────────────────────────────────────
-# float comparison, since the shell only does integers
 ge() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a>=b)}'; }
 le() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a<=b)}'; }
 
@@ -215,9 +176,6 @@ orient_ops() {
   esac
 }
 
-# decode → upright → width-capped PNG. This is the reference every score is
-# measured against, and the only input the encoder ever sees.
-#
 # THE RESAMPLE IS zenc's, NOT sips', AND THE REASON IS GAMMA. sips averages
 # pixels in ENCODED sRGB, which is a curve, so the mean of two samples is not
 # the mean of the light they stand for. Measured on a 1px black/white
@@ -239,62 +197,15 @@ orient_ops() {
 # 7728x5152 HIF, `sips -s format png` spends 6222ms deflating 160MB where
 # `sips -s format tiff` spends 509ms writing 311MB. Same pixels, 10.6x apart.
 #
-# WHAT IT COSTS, measured on that frame, since this is slower than what it
-# replaced and pretending otherwise would be the easy mistake:
-#
-#     old   sips -s format png --resampleWidth 1080          549 ms
-#     new   sips -s format tiff  +  zenc resize --width      937 ms
-#
-# 388ms a photo, plus a 311MB temp file that is deleted before the next one is
-# read. Paid deliberately: this is a tool whose entire job is squeezing the last
-# ssimulacra2 point out of an encode, and it was feeding that search a reference
-# that had already lost more than the search could ever win back.
-#
-# GAMMA IS NOT THE ONLY DEFECT, and the first draft of this comment claimed it
-# was. It said box is what sips was approximating so the swap is gamma alone.
-# Measured against five encoded-sRGB kernels on the same frame, sips matches
-# NONE of them: box 57.77, hamming 58.03, bilinear 59.34, bicubic 59.71,
-# lanczos 58.72. A real kernel family difference puts one of those near 90, and
-# a flat low cluster means the thing being compared is not a clean filter.
-#
-# The checkerboard says what it is. Reduced 16x, a correct average leaves ONE
-# value and therefore no variance:
-#
-#     PIL box, encoded sRGB    mean 128.00   std 0.00   range 128..128
-#     zenc box, linear light   mean 188.00   std 0.00   range 188..188
-#     sips --resampleWidth     mean 127.75   std 1.77   range  96..159
-#
-# So sips low-passes roughly right and leaves +/-32 codes of aliasing on a field
-# that has one correct answer. Two defects, and zenc fixes both. Read the low
-# ssimulacra2 between the old and new references (51-60 across three frames) as
-# sips being wrong twice rather than as box being soft.
-#
-# --filter box because the corpus pipeline already chose it and matching sips is
-# not a goal once sips is not a clean anything. Lanczos3 is available and
-# sharper, and this tool can price it directly, since it searches for the lowest
-# q clearing the target and a sharper reference costs the encoder bits. Same
-# three frames, same q on all three:
-#
-#     box        24.1 KB   292.3 KB   184.7 KB
-#     lanczos3   24.9 KB   312.9 KB   197.0 KB      +3.3%  +7.0%  +6.7%
-#
-# So lanczos3 is a real option that costs about 6% for sharpness, not a free
-# upgrade. Reach for it per-run if a frame needs it.
-#
 # Which AXIS to cap is the subtle half, and it survives the rewrite unchanged
 # because zenc reads the same stored pixels sips wrote: a frame the camera
 # tagged Orientation 5-8 is stored on its side, so capping its stored width
 # would cap the delivered HEIGHT. Same swap rule as metadata.json's (CLAUDE.md
 # gotcha 6), applied before the rotation rather than after.
-#
-# ROTATION STAYS ON sips. `-r` and `-f` move samples without inventing any, so
-# there is no averaging to get wrong, and they run on the 1080px output rather
-# than the 40MP source.
-prepare_reference() {  # prepare_reference <src> <out.png>
+prepare_reference() {
   local src="$1" ref="$2" o ops axis w h
   o=$(exif-sooc -s -s -s -n -Orientation "$src" 2>/dev/null || echo "")
   ops=$(orient_ops "$src")
-  # One spawn for both, the same shape dims() below already used.
   srcdims=$(sips -g pixelWidth -g pixelHeight "$src" 2>/dev/null)
   w=$(printf '%s\n' "$srcdims" | awk '/pixelWidth/{print $2}')
   h=$(printf '%s\n' "$srcdims" | awk '/pixelHeight/{print $2}')
@@ -306,14 +217,9 @@ prepare_reference() {  # prepare_reference <src> <out.png>
     5|6|7|8) axis="--height" ;;
     *)       axis="--width"  ;;
   esac
-  # `--width N` is a CAP rather than a target, so a source already inside it
-  # passes through untouched and there is no branch to keep in step. That is why
-  # the old if/else is gone rather than translated.
   local mid="$TMP/$(basename "$ref" .png)-mid.tiff"
   sips -s format tiff "$src" --out "$mid" >/dev/null 2>&1 || { rm -f "$mid"; return 1; }
   "$ZENC" resize "$mid" "$axis" "$WIDTH" --filter box --out "$ref" >/dev/null 2>&1 || { rm -f "$mid"; return 1; }
-  # Deleted HERE rather than by the EXIT trap: these are ~311MB apiece, and a
-  # 160-photo run holding them all would want 50GB of /tmp.
   rm -f "$mid"
   for op in $ops; do
     case "$op" in
@@ -326,14 +232,13 @@ prepare_reference() {  # prepare_reference <src> <out.png>
 
 dims() { sips -g pixelWidth -g pixelHeight "$1" 2>/dev/null | awk '/pixelWidth/{w=$2} /pixelHeight/{h=$2} END{print w"x"h}'; }
 
-# does this encode clear every gate it was given?
-clears() {  # clears <s2> <ba>
+clears() {
   ge "$1" "$TARGET" || return 1
   [ -z "$BA_MAX" ] || le "$2" "$BA_MAX" || return 1
   return 0
 }
 
-finish() {  # finish <candidate.jpg> <stem> <source> — place it, metadata handled
+finish() {
   local cand="$1" stem="$2" src="$3" dest="$OUT/$stem.jpg"
   # Edit the temporary candidate first, preserving any existing export if the
   # metadata operation fails. Explicit returns also hold inside $(finish ...),
@@ -351,7 +256,6 @@ finish() {  # finish <candidate.jpg> <stem> <source> — place it, metadata hand
   mkdir -p "$OUT" && cp "$cand" "$dest" && stat -f%z "$dest"
 }
 
-# ── enumerate inputs ──────────────────────────────────────────────────
 SOURCES="$TMP/sources.txt"; : > "$SOURCES"
 for arg in "${ARGS[@]}"; do
   if [ -d "$arg" ]; then
@@ -368,7 +272,6 @@ sort -u "$SOURCES" -o "$SOURCES"
 TOTAL=$(wc -l < "$SOURCES" | tr -d ' ')
 [ "$TOTAL" -gt 0 ] || { echo "no eligible photos found in input(s)" >&2; exit 1; }
 
-# ── report the run before it starts ───────────────────────────────────
 case "$MODE" in
   search)    echo "searching $TOTAL file(s) for the lowest q clearing ssimulacra2 >= $TARGET${BA_MAX:+ and butteraugli <= $BA_MAX}" ;;
   max)       echo "encoding $TOTAL file(s) flat at q$QMAX — the mode for handing Instagram a source it will re-encode" ;;
@@ -387,7 +290,6 @@ while IFS= read -r f; do
   fi
   size=$(dims "$ref")
 
-  # ---- calibrate: every rung as a real file, next to the reference ----
   if [ "$MODE" = calibrate ]; then
     dir="$OUT/$stem-ladder"
     [ "$DRY" -eq 0 ] && { mkdir -p "$dir"; cp "$ref" "$dir/original.png"; }
@@ -405,12 +307,10 @@ while IFS= read -r f; do
     OK=$((OK+1)); continue
   fi
 
-  # ---- the q95 baseline, so the search can report what it saved ----
   top="$TMP/$stem-top.jpg"
   "$ZENC" "$ref" "$top" -q "$QMAX" --yuv "$YUV" >/dev/null 2>&1 || { echo "  $stem — encode failed"; FAIL=$((FAIL+1)); continue; }
   top_bytes=$(stat -f%z "$top")
 
-  # ---- max: no search, hand over the cleanest source ----
   if [ "$MODE" = max ]; then
     sc=$(s2 "$ref" "$top"); bc=$(ba "$ref" "$top")
     if [ "$DRY" -eq 0 ]; then out_bytes=$(finish "$top" "$stem" "$f"); else out_bytes=$top_bytes; fi
@@ -418,18 +318,12 @@ while IFS= read -r f; do
     OK=$((OK+1)); continue
   fi
 
-  # ---- search: smallest q clearing every gate ----
-  # both gates move monotonically with q, so bisection is sound: every q above a
-  # passing one also passes, every q below a failing one also fails.
   lo=$QMIN; hi=$QMAX; best=""; best_s2=""; best_ba=""; best_file=""
   while [ "$lo" -le "$hi" ]; do
     mid=$(( (lo + hi) / 2 ))
     cand="$TMP/$stem-try.jpg"
     "$ZENC" "$ref" "$cand" -q "$mid" --yuv "$YUV" >/dev/null 2>&1 || break
     sc=$(s2 "$ref" "$cand")
-    # butteraugli runs inside the loop only when it is actually a gate. Left on
-    # unconditionally it doubled the metric cost of every probe to produce a
-    # number nothing read until the winner was already picked.
     if [ -n "$BA_MAX" ]; then bc=$(ba "$ref" "$cand"); else bc=""; fi
     if clears "$sc" "$bc"; then
       best=$mid; best_s2=$sc; best_ba=$bc
@@ -441,8 +335,6 @@ while IFS= read -r f; do
   done
 
   if [ -z "$best" ]; then
-    # nothing in range clears it. ship the ceiling and say so rather than
-    # silently writing a file that misses the bar you asked for.
     sc=$(s2 "$ref" "$top"); bc=$(ba "$ref" "$top")
     if [ "$DRY" -eq 0 ]; then out_bytes=$(finish "$top" "$stem" "$f"); else out_bytes=$top_bytes; fi
     printf "  %-14s %-11s q%-3s %-11s s2 %-7s ba %-7s MISSED target %s at q%s\n" \

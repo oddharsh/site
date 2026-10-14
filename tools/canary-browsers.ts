@@ -1,75 +1,5 @@
 #!/usr/bin/env bun
 // bun run canary:browsers [--pairs a:b,c:d,e] [--json <path>] [--page <html>]
-//
-// /garage/horizon's own feature probes, run in a STABLE engine and in that
-// engine's prerelease, and diffed. A probe that answers differently in the
-// two is a card that changed underneath the page, which is the half of a
-// horizon sweep no release note can produce (the "features that finish
-// without being news" and "cards that moved" directions in the page's own
-// lede). And a probe that flips FALSE in a prerelease is a regression in the
-// browser, which is the bug report this site is unusually well placed to
-// file: 90-odd one-line probes, each one already pinned to a card that says
-// what the feature is for.
-//
-// WHAT IS DIFFED. `window.__horizonCaps` is the object the page hoists into
-// <head> so its chip strip is correct on first paint: `checks` is the probe
-// per capability and `state` is each probe's answer. Two things are read
-// beside it. A probe whose whole body is `return (false)` is the page's
-// honest-false convention (jpeg-xl, sizes-auto, http-query, ...: no
-// synchronous probe exists, so the chip says no rather than pretending), and
-// those are EXCLUDED from every comparison, since a constant cannot flip. And
-// a `<section class="demo shipped">` is a card that graduated onto the live
-// site, which the page's own rule says needs two engines: with stable
-// chromium, firefox and webkit all in the run, a shipped card whose honest
-// probe is true in fewer than two of them is reported.
-//
-// PAIRS. `a:b` diffs b against a; a lone name is a snapshot with no control.
-// Names are Playwright's: the bare engines (chromium, firefox, webkit) launch
-// the bundled build, anything else is a `channel`. The default is what Linux
-// CI can INSTALL, which is narrower than what Playwright can launch, and it
-// moved under this leg once already: the first draft paired chromium with
-// `chromium-tip-of-tree` and firefox with `firefox-beta`, both of which
-// playwright-core 1.63's installer refuses ("Invalid installation targets"),
-// so the leg's first scheduled run on 2026-09-15 died at the install step
-// and every "first-run finding" before that came from a Mac. The installable
-// prerelease channels are Google's and Microsoft's: `chrome-beta` (one major
-// ahead of stable) and `msedge-dev` (Chromium's tip, roughly weekly), each
-// paired with its own stable. Until 2026-10-04 Chrome Beta was paired with
-// the BUNDLED chromium, which playwright-core pins (153 under 1.63) while
-// Google stable moves every four weeks: the pair spanned three majors, and a
-// flip already in stable Chrome stayed a flip until someone bumped
-// playwright, so the leg's one issue (#816) could never close itself.
-// Playwright's bundled firefox and webkit are
-// themselves built from near-trunk, so they stand alone as snapshots. On a
-// Mac with Canary, `--pairs chrome:chrome-canary` is the one-minute version
-// and needs nothing downloaded. A contract test asks the pinned installer
-// about every default name, so the next rename fails there by name.
-//
-//   node node_modules/playwright-core/cli.js install --with-deps chrome chrome-beta msedge msedge-dev firefox webkit
-//
-// THE CONTROL is the stable half of each pair, and it is two assertions: the
-// engine returned every probe the page declares, and at least one probe is
-// true. A prerelease that reports 0 of 92 is a page that did not load in it,
-// which is the instrument, and it exits 2 rather than reporting 92 flips.
-//
-// The page is loaded from the SOURCE file over file://, so this needs no
-// build and no server. The shell assets 404 there and nothing in <head>
-// depends on them; the probes run before <body> parses by design.
-//
-// TWO LIVE PROBES ride beside the page's own, since 2026-09-15, for the two
-// site features parked on a browser rather than on a card: a JXL `/i/` tier
-// (a 2x2 JPEG XL decoded from a data URI, with a PNG decoded the same way as
-// the control), and dictionary transport (a real visit to production, then a
-// second navigation, read for the `Available-Dictionary` the engine sends and
-// the `dcz` it gets back). Horizon marks jpeg-xl honest-false because no
-// synchronous probe exists, and nothing on the page can see a request header,
-// so neither could ever flip there. They are diffed exactly like the page's
-// probes: a prerelease answering true where stable answers false is the
-// feature arriving. `--offline` skips the production visit. The dictionary
-// probe's control is stable chromium, which has sent the header since 130: a
-// run where it reads false is the network, and exits 2.
-//
-// Exit codes: 0 green, 1 changed, 2 the instrument could not run.
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -103,20 +33,17 @@ type Report = {
   signature: string;
   flips: Flip[];
   belowBar: { cap: string; trueIn: string[] }[];
-  /** the findings as timbrado's reporter renders them: engines, flips, the two-engine bar */
   tables: { caption?: string; columns: string[]; rows: string[][] }[];
   reason?: string;
   ms: number;
 };
 
-/** Which Playwright engine a channel or bare name launches. */
 export function familyOf(name: string): Snapshot["family"] {
   if (name === "webkit") return "webkit";
   if (name.startsWith("firefox")) return "firefox";
   return "chromium";
 }
 
-/** The `data-cap` of every card the page marks as shipped on the site. */
 export function shippedCaps(html: string): string[] {
   const caps: string[] = [];
   for (const m of html.matchAll(/<section class="([^"]*)" data-cap="([^"]+)"/g)) {
@@ -125,17 +52,12 @@ export function shippedCaps(html: string): string[] {
   return caps;
 }
 
-/** The page's honest-false convention: a probe whose whole body returns false. */
 export const HONEST_FALSE = /\{\s*return\s*\(?\s*false\s*\)?\s*;?\s*\}\s*$/;
 
-/** A 2x2 JPEG XL, 190 bytes: `cjxl -d 0 -e 1` (libjxl 0.11) on a 2x2 RGB PNG, decoded back by djxl to the same pixels. Starts with the ff0a codestream signature. */
 export const JXL_2X2 = "/woIEBAJCAIBAMgCSxibnHGEAziAAzggSsA5BQEAIESACBABIkDk+Zd7+h5aZ+9TVXVvkiQJAXV3d3d39////1v1ZmZmZuD//Xv+e2jMOeda+9ybJElCQFVVVVVV9f///9z7uru7u+H//Xv+e2jMOeda+9ybJElCQFVVVVVV9f///9z7uru7u+H//Xv+e2jMOeda+9ybJElCQFVVVVVV9f///9z7uru7uy8QBQCH/9F/+HP0H/4c/kf/0S+YAg==";
-/** The control: a 2x1 PNG every engine decodes. */
 export const PNG_2X1 = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGNgYGD4//8/AAYBAv4CsjmuAAAAAElFTkSuQmCC";
-/** The live probes' names in the probe set, so a test and the reporter can find them. */
 export const LIVE_PROBES = ["live:jxl-decode", "live:dictionary-transport"] as const;
 
-/** Does this engine decode `data:<mime>;base64,...` into a real image? Answered by the image element, which is what a `<picture>` source would ask. */
 async function decodes(page: Page, mime: string, b64: string): Promise<boolean> {
   return page.evaluate(([m, b]) => new Promise<boolean>((resolve) => {
     const img = new Image();
@@ -146,15 +68,6 @@ async function decodes(page: Page, mime: string, b64: string): Promise<boolean> 
   }), [mime, b64]);
 }
 
-/**
- * Does this engine fetch the dictionary production offers and send it back on
- * the next navigation? Two page loads against the live site: the first is
- * where the `Link: rel="compression-dictionary"` arrives, the second is where
- * `Available-Dictionary` would go out. An engine that never fetches the
- * dictionary answers false after a bounded wait, which is the honest reading
- * for firefox and webkit today. A network failure throws, and the caller
- * treats that as the instrument.
- */
 async function dictionaryTransport(browser: Browser): Promise<{ value: boolean; note: string }> {
   const context = await browser.newContext();
   try {
@@ -203,8 +116,6 @@ async function snapshot(name: string): Promise<Snapshot> {
     }, HONEST_FALSE.source);
     if (!probes) throw new Error(`${name}: the page exposed no __horizonCaps`);
 
-    // The live probes. The PNG control is what separates "this engine does
-    // not decode JXL" from "this engine decoded nothing".
     if (!(await decodes(page, "image/png", PNG_2X1))) throw new Error(`${name}: the PNG control did not decode, so the JXL reading would be about the instrument`);
     probes["live:jxl-decode"] = { value: await decodes(page, "image/jxl", JXL_2X2), honest: true };
     if (!offline) {
@@ -218,7 +129,6 @@ async function snapshot(name: string): Promise<Snapshot> {
   }
 }
 
-/** The issue-body tables, pure so a test can render them through the reporter. */
 export function tablesFor(engines: { name: string; version: string; probes: number; true: number }[], flips: Flip[], belowBar: Report["belowBar"]): Report["tables"] {
   return [
     { columns: ["engine", "version", "probes true"], rows: engines.map((e) => [e.name, e.version, `${e.true} / ${e.probes}`]) },
@@ -278,8 +188,6 @@ for (const pair of pairs) {
       const total = Object.keys(s.probes).length;
       const truthy = Object.values(s.probes).filter((p) => p.value).length;
       console.log(`${name.padEnd(26)} ${s.version.padEnd(18)} ${truthy}/${total} probes true`);
-      // THE CONTROL. A page that did not load answers 0 of 0 or 0 of 92, and
-      // either way every later comparison would be about the instrument.
       if (total === 0 || truthy === 0) {
         console.error(`${name}: ${truthy}/${total} true reads as a page that did not load in this engine`);
         emit("instrument", snaps, flips, [], `${name} returned ${truthy}/${total}`);
@@ -320,7 +228,6 @@ for (const pair of pairs) {
   }
 }
 
-// The two-engine bar, only when the run holds enough engines to ask it.
 const belowBar: Report["belowBar"] = [];
 if (stableByFamily.size >= 2) {
   for (const cap of shipped) {

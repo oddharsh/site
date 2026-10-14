@@ -8,10 +8,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── /encode — read the container, decode nothing ─────────────────────────
-// These parse the repo's OWN committed encodes, which is the strongest test
-// available: 474 files this site's pipeline produced, with known properties.
-
 test("the JPEG parser agrees with the pipeline that made the files", async () => {
   const { parseJpeg, sniff, estimateQuality } = await import("../src/worker/encode.ts");
   const { readdirSync } = await import("node:fs");
@@ -22,18 +18,11 @@ test("the JPEG parser agrees with the pipeline that made the files", async () =>
   const files = readdirSync("public/i").filter((f) => f.endsWith(".jpg")).sort().slice(0, 12);
   assert.ok(files.length > 4, "expected committed thumbnails to test against");
 
-  // The corpus carries BOTH layouts since 2026-08-26: colour tiles at 4:2:0,
-  // and the three Leica M Monochrom tiles as true 1-component grayscale (zenc
-  // detects a gray or channel-equal input and drops the flat chroma planes —
-  // the AVIF tier had been YUV400 all along). The alphabetical first-12 sample
-  // includes the L-prefixed stems, so both arms are exercised; the counters
-  // assert that stays true rather than trusting the sort.
   let gray = 0, colour = 0;
   for (const f of files) {
     const bytes = new Uint8Array(readFileSync(`public/i/${f}`));
     assert.equal(sniff(bytes), "jpeg", `${f} should sniff as jpeg`);
     const info = parseJpeg(bytes);
-    // add-photos.sh emits 600px squares through zenc, progressive.
     assert.equal(info.width, 600, `${f} width`);
     assert.equal(info.height, 600, `${f} height`);
     if (info.components === 1) {
@@ -46,8 +35,6 @@ test("the JPEG parser agrees with the pipeline that made the files", async () =>
     assert.equal(info.progressive, true, `${f} should be progressive — zenc searches scan scripts`);
     assert.ok(info.scans > 1, `${f} progressive means multiple scans, got ${info.scans}`);
 
-    // zenjpeg ships tuned tables, so they must NOT read as scaled Annex K.
-    // If this ever flips, the encoder changed underneath the pipeline.
     const luma = info.tables.find((t) => t.id === 0);
     assert.ok(luma, `${f} must carry a luma quantization table`);
     assert.equal(estimateQuality(luma.values).standard, false,
@@ -58,10 +45,6 @@ test("the JPEG parser agrees with the pipeline that made the files", async () =>
 });
 
 test("the AVIF parser reads bit depth and subsampling, and monochrome is real", async () => {
-  // 10-bit is this site's documented choice (~6% smaller at equal quality).
-  // The monochrome flag is the one I nearly "fixed" while it was correct: the
-  // first files sampled were the two Leica black-and-white frames, so a broken
-  // parser and a right one looked identical until the sample got bigger.
   const { parseAvif, sniff } = await import("../src/worker/encode.ts");
   const { readdirSync } = await import("node:fs");
   const files = readdirSync("public/i").filter((f) => f.endsWith(".avif")).slice(0, 30);
@@ -74,17 +57,12 @@ test("the AVIF parser reads bit depth and subsampling, and monochrome is real", 
     assert.ok(info, `${f} should parse`);
     assert.equal(info.bitDepth, 10, `${f} should be 10-bit — the measured free win`);
     if (info.monochrome) mono += 1; else colour += 1;
-    // Colour AVIF tiers are 4:4:4 since 2026-09-26 (zenc/src/avif.c has the why).
     assert.ok(["4:4:4", "grayscale"].includes(info.subsampling), `${f} unexpected subsampling ${info.subsampling}`);
   }
-  // A parser that always answered "monochrome" would still pass every assertion
-  // above on a small enough sample. This is the one that catches it.
   assert.ok(colour > mono, `most frames are colour; parsed ${colour} colour vs ${mono} mono`);
 });
 
 test("encode sniffs the container from magic bytes, not content-type", async () => {
-  // A mislabelled response is common, and the parse has to match the actual
-  // bytes or it reads garbage confidently.
   const { sniff } = await import("../src/worker/encode.ts");
   assert.equal(sniff(new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0, 0])), "jpeg");
   assert.equal(sniff(new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0, 0])), "png");
@@ -92,8 +70,6 @@ test("encode sniffs the container from magic bytes, not content-type", async () 
 });
 
 test("encode judges chroma and depth against this site's own measurements", async () => {
-  // The verdicts are where the site's encoding work stops being prose. 4:4:4 at
-  // delivery size and 8-bit AVIF are the two it should always flag.
   const { judgeEncode } = await import("../src/worker/encode.ts");
   const fat = judgeEncode({ format: "jpeg", subsampling: "4:4:4", progressive: false, scans: 1, tables: [], width: 600, height: 600, icc: true }, 90000);
   const ids = fat.warns.map((w) => w.id);
@@ -110,21 +86,6 @@ test("encode judges chroma and depth against this site's own measurements", asyn
 });
 
 test("the ramp never double-parses the D1 helper's already-parsed rows", async () => {
-  // A ramp writes its changelog row exactly once, at 100%, and a failure there
-  // is caught and downgraded to a printed note on purpose — traffic has already
-  // moved, and unwinding a good release over a missing log row would be worse.
-  //
-  // That tolerance is what made this bug invisible for three releases. The D1
-  // read was written as JSON.parse(await wrangler(..., { json: true })), but the
-  // helper ALREADY parses when json is set, so the second parse received an
-  // object, stringified it to "[object Object]", and threw. Every ramp then
-  // reported that D1 was unreachable and skipped its own write. D1 was answering
-  // the whole time; `bun run checkpoints:check` queried it fine minutes later.
-  //
-  // Asserted as source text because the alternative is spawning cf against
-  // production D1 from the test suite, which no contract test should ever do.
-  // The read moved from wrangler to tools/lib/cf.ts's d1Rows() on 2026-10-06;
-  // the trap is the same one.
   const src = await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8");
   const helper = await readFile(new URL("./tools/lib/cf.ts", ROOT), "utf8");
 
@@ -133,18 +94,9 @@ test("the ramp never double-parses the D1 helper's already-parsed rows", async (
   assert.equal(/JSON\.parse\(\s*await (d1Rows|cf)\(/.test(src), false,
     "d1Rows() and cf() already return parsed JSON — a second JSON.parse throws on the object");
 
-  // The helper's contract is the other half: if it ever stops parsing, the call
-  // site above silently starts handing a string to the row reader instead.
   assert.ok(/parsed = JSON\.parse\(stdout\);/.test(helper) && /return first\.results;/.test(helper),
     "cf() must keep parsing and d1Rows() must keep returning the results array — the call site depends on it");
 
-  // FRESHNESS. Workers Builds uploads a couple of minutes after a merge, and a
-  // ramp inside that window targets the PREVIOUS release while every downstream
-  // check passes. It happened twice on 2026-08-10. The check compares the
-  // target's created_on against HEAD's commit time, and the ONE thing worth
-  // pinning is WHERE it is called: before the --dry-run exit, so it prints on
-  // both paths. A warning that only appears in --dry-run is worth nothing on the
-  // run that skips it, and skipping it is exactly what a hurry looks like.
   const freshnessAt = src.indexOf("await reportTargetFreshness(");
   const dryRunExitAt = src.indexOf('if (has("dry-run"))');
   assert.ok(freshnessAt > 0, "the ramp must report target freshness");
@@ -155,55 +107,33 @@ test("the ramp never double-parses the D1 helper's already-parsed rows", async (
   // It warns and does not refuse, on purpose: ramping something older than HEAD
   // is legitimate for a rollback and for re-ramping the serving version to write
   // a missed changelog row (gotcha 24). A die() there would block that repair.
-  assert.equal(/STALE TARGET[\s\S]{0,700}?\bdie\(/.test(src), false,
+  assert.ok(src.includes("STALE TARGET"), "the stale-target warning must still exist");
+  const staleBranch = src.slice(src.indexOf("STALE TARGET")).split("\n}\n")[0];
+  assert.equal(/\bdie\(/.test(staleBranch), false,
     "a stale target must warn, never die — that would block the gotcha-24 repair path");
 
-  // And the diagnostic must not name a cause. It covers a file read, a spawn and
-  // a shape check; blaming D1 sent the reader to check a healthy database.
   assert.equal(/when D1 is reachable/.test(src), false,
     "the catch-all note must not assert D1 is the cause — it cannot know that");
 });
 
 test("no ramp sample can hang, and a stall is never reported as an origin error", async () => {
-  // SECOND TIME the D1 changelog write has been silently skipped, by a different
-  // mechanism than the double-parse above. The v177 ramp moved traffic through
-  // 10/50/100 and then exited mid-sample with `Detected unsettled top-level
-  // await`, before the write that runs after sampling. `fetch` has no default
-  // request timeout, so one stalled socket wedges the step; the repair (`--to
-  // 100`, which moves nothing and logs) is documented, and needing it is the bug.
-  //
-  // Source text for the same reason as the test above: the alternative is
-  // spawning wrangler against production from the suite.
-  //
-  // The pair, since 2026-09-22: the sampler and the pinned probe moved to
-  // lib/version-probe.ts so `tools/soak-canary.ts` could reuse them without
-  // deploy-promote's credentialed module-scope setup. Every fetch on the ramp
-  // path is in the second file now, so reading only the first would count zero
-  // of each and pass by measuring nothing.
   const src = [
     await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8"),
     await readFile(new URL("./tools/lib/version-probe.ts", ROOT), "utf8"),
   ].join("\n");
 
-  // Counted rather than matched once, so a SECOND fetch added later without a
-  // timeout fails this instead of riding the first one's signal.
   const fetches = (src.match(/await fetch\(/g) || []).length;
   const timeouts = (src.match(/signal: AbortSignal\.timeout\(/g) || []).length;
   assert.ok(fetches > 0, "the ramp samples over the network — if this hits zero the test is measuring nothing");
   assert.equal(timeouts, fetches,
     `every network call in the ramp needs a request timeout: ${fetches} fetch(es), ${timeouts} with a signal`);
 
-  // A timeout is only safe to add because a stall is classified apart from an
-  // origin error. Conflated, a laptop's flaky wifi would trigger the ramp's
-  // roll-back advice against a healthy release.
   assert.ok(/stalls\+\+/.test(src), "a failed request must count as a stall, not an error");
   assert.ok(/errorVersions\.push/.test(src) && /stallReasons\.push/.test(src),
     "errors and stalls must be reported through separate channels");
   assert.ok(/not an origin fault/.test(src),
     "the stall note must say whose fault it is not");
 
-  // And a step nobody could measure must not pass as a step that succeeded —
-  // at 100% that is what stops an unverified run from writing the changelog.
   assert.ok(/if \(!s\.answered\)/.test(src),
     "a sample where nothing answered must stop the ramp rather than be read as success");
 });

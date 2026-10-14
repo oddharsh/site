@@ -10,21 +10,11 @@ import { parse as parseToml } from "./toml.ts";
 import { asRecord, asText } from "../../src/worker/lib/parse.ts";
 import { EXACT_PIN } from "./exact-pin.ts";
 
-// Default to THIS repo, so callers cannot pass the wrong kind of root. The
-// contract-test caller holds a URL rather than a path, and path.join on a URL
-// fails in a way that reads like a missing file.
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-// The heading the claims live under. Scoping to it keeps the intro prose, which
-// discusses review policy rather than pins, out of the scan entirely.
 export const BASELINE_HEADING = "## Current baseline";
 
-// prose name -> manifest key. This mapping is the one copy the check adds, and
-// it is the thing the check exists to hold, so it is explicit rather than
-// inferred (nobody writes "oxc-minify" or "lightningcss" in a sentence).
 export const DOC_ALIASES = [
-  // wrangler left this table on 2026-09-14, when the pin became a pkg.pr.new
-  // COMMIT of workers-sdk main rather than a release number; see VERSIONLESS.
   { prose: "Oxc Minify", pkg: "oxc-minify" },
   { prose: "Lightning CSS", pkg: "lightningcss" },
   { prose: "Oxlint", pkg: "oxlint" },
@@ -32,27 +22,14 @@ export const DOC_ALIASES = [
   { prose: "@oxlint/plugins", pkg: "@oxlint/plugins" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "@cloudflare/config", pkg: "@cloudflare/config" },
-  // playwright-core left VERSIONLESS on 2026-09-10. Its exemption rested on two
-  // claims and one had gone stale: "only gen-og-cards.ts uses it, no CI job and
-  // no deploy path touches it" was true when written and had grown to nine
-  // callers plus og-cards.yml, which drives it in CI and COMMITS the PNGs it
-  // bakes. The surviving claim, that it drives the locally installed Chrome, is
-  // an argument about the BROWSER rather than about the library, and the library
-  // is the half a lockfile can hold still.
   { prose: "playwright-core", pkg: "playwright-core" },
 ];
 
-// Documented on purpose WITHOUT a version, each for a stated reason. An entry
-// here is a decision; a package in neither list fails the reverse direction.
 export const VERSIONLESS = new Map<string, string>([
-  // A package in neither list fails the reverse direction, so the next dependency
-  // documented without a version needs an entry here and therefore a stated reason.
   ["timbrado", "a git dependency pinned to a full commit sha of github.com/oddharsh/timbrado since 2026-09-15: the tool extracted from the canary legs (the watch runner, a Rust engine built on demand since 0.2.0; the reporter; the digest), unpublished on npm like halflight, so the sha in package.json is the identity and bun.lock records the tarball's sha512. Bumping it is a hand edit of the sha plus a relock, and the prose names the shape rather than a number"],
   ["wrangler", "pinned to a COMMIT of cloudflare/workers-sdk main through a pkg.pr.new tarball URL since 2026-09-14, so there is no release number to state: the sha in the URL is the identity, bun.lock records the tarball's sha512, and `bun run check-wrangler` holds the URL, the lockfile and the installed version together. The prose names the channel and the reason; a number written there would be the tarball's own version, which the next nightly advance moves"],
 ]);
 
-// A null version keeps git/path dependencies in the census without inventing
-// a semantic version. TOML syntax is parsed once for both the audit and relocker.
 export type DependencyVersions = Record<string, string | null>;
 export function parseCargoDeps(toml: string): DependencyVersions {
   const raw = parseToml(toml).dependencies;
@@ -69,22 +46,13 @@ export function parseCargoDeps(toml: string): DependencyVersions {
   }));
 }
 
-// Each separately owned manifest has its own aliases and versionless policies.
-// Empty projects stay in the census so new dependencies require a decision.
 export const SUB_MANIFEST_POLICY = [
   {
     manifest: "lens-reader/package.json",
     kind: "npm",
     aliases: [
       { prose: "@mozilla/readability", pkg: "@mozilla/readability" },
-      // htmlparser2 became a DIRECT dependency on 2026-08-23, when src/dom.js
-      // replaced linkedom's DOM layer and left the parser underneath it. The
-      // reverse direction found it the same minute, which is the third time
-      // that direction has caught a real gap.
       { prose: "htmlparser2", pkg: "htmlparser2" },
-      // linkedom is a devDependency now, kept as the parity oracle for
-      // test/dom-differential.test.mjs. It stays claimed so a bump to the
-      // reference still has to be a documented decision.
       { prose: "linkedom", pkg: "linkedom" },
     ],
     versionless: new Map(),
@@ -93,8 +61,6 @@ export const SUB_MANIFEST_POLICY = [
     manifest: "cal/package.json",
     kind: "npm",
     aliases: [],
-    // No dependencies since 2026-09-02: the suite runs on bun:test over the
-    // root's wrangler, so there is nothing here for the prose to name.
     versionless: new Map(),
   },
   {
@@ -127,12 +93,6 @@ export const SUB_MANIFEST_POLICY = [
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-// A claim is an alias followed by a THREE-component version. Two components is
-// prose about a major line ("TypeScript 7.0 ships no stable API"), not a claim.
-// The optional backtick matters: this doc writes package names as `code` far
-// more often than bare, so requiring `name 1.2.3` would silently match nothing
-// for every entry written in the file's own house style. Found the moment the
-// sub-manifest entries were added, where every name is backticked.
 const claimPattern = (prose) =>
   new RegExp(`(?<![\\w-])${escape(prose)}\`?\\s+v?(\\d+\\.\\d+\\.\\d+[\\w.-]*)`, "gi");
 
@@ -146,36 +106,17 @@ export function findClaims(doc: string, aliases: DocAlias[] = DOC_ALIASES): DocC
   return claims;
 }
 
-// Isolate the baseline section. A missing heading is REPORTED rather than
-// silently sliced: indexOf returning -1 would make slice(-1) one character,
-// which scans clean and asserts nothing.
 export function baselineSection(doc, heading = BASELINE_HEADING) {
   const at = doc.indexOf(heading);
   return at === -1 ? null : doc.slice(at);
 }
 
-// A scanner that stops matching must not report a clean pass over no claims.
-// Each alias is also required individually; change the floor with the policy.
 export const FLOOR_CLAIMS = 13;
 
-// ONE manifest's worth of checking, in all four directions. Extracted from the
-// root path on 2026-08-14 so the four manifests outside package.json get the
-// same rules rather than a weaker second implementation, which is the trap #386
-// had just finished cleaning up after (two checks over one file, the weaker one
-// reading as coverage that was not there).
-//
-// The root's message strings are preserved BYTE-FOR-BYTE through `manifest`,
-// `membership`, `table` and `exemptList`, because the negative tests assert on
-// them and a refactor that quietly reworded them would be asserting less while
-// still passing.
 export function auditManifest({
   claims, claimed, problems, pins, aliases, versionless,
   manifest, membership, table, exemptList,
 }) {
-  // Every declared alias must still be pinned AND still be claimed. The two
-  // halves stop the alias table going stale in opposite directions: a package
-  // that leaves the manifest has to leave the table, and deleting its sentence
-  // must not silently drop it from the check.
   for (const { prose, pkg: key } of aliases) {
     const pinned = pins[key];
     if (!Object.hasOwn(pins, key)) {
@@ -186,11 +127,6 @@ export function auditManifest({
       );
       continue;
     }
-    // Exact pins only. Stripping a caret and comparing would let "^1.2.3" agree
-    // with a doc claiming "1.2.3", which is a range the doc cannot honestly
-    // state. A range-pinned package belongs in the exemption list with its
-    // reason. Cargo counts a bare `"0.25"` as a caret range too, so it fails
-    // here for the same reason a `^` would.
     if (pinned === null) {
       problems.push(`${key} has no semantic version in ${manifest}; move it to ${exemptList} with the reason.`);
       continue;
@@ -207,7 +143,6 @@ export function auditManifest({
     }
   }
 
-  // Forward: every stated version matches the manifest.
   for (const { prose, pkg: key, version } of claims) {
     const pinned = pins[key];
     if (pinned && /^\d/.test(pinned) && pinned !== version) {
@@ -218,10 +153,6 @@ export function auditManifest({
     }
   }
 
-  // Reverse: every dependency is documented, or exempted by name. This is the
-  // direction a fixed alias table structurally cannot have, and it is what makes
-  // a NEW dependency force a documentation decision rather than landing
-  // unmentioned. It is how @noble/post-quantum was found undocumented.
   for (const key of Object.keys(pins)) {
     if (claimed.has(key) || versionless.has(key)) continue;
     problems.push(
@@ -230,8 +161,6 @@ export function auditManifest({
     );
   }
 
-  // An exemption for a package that has left is stale, and a stale exemption is
-  // how a real gap gets waved through later.
   for (const key of versionless.keys()) {
     if (!Object.hasOwn(pins, key)) {
       problems.push(`${key} is exempted in ${exemptList} but is no longer ${membership}. Remove the exemption.`);
@@ -239,11 +168,6 @@ export function auditManifest({
   }
 }
 
-// PURE, so the negative cases can run against two-line fixtures. Policy
-// (aliases, exemptions, floor, heading) is a PARAMETER rather than a closed-over
-// constant, so one rule can be exercised without reconstructing the whole real
-// manifest to keep the others quiet. The defaults are the real policy, and the
-// live check overrides none of them.
 export function auditDependencyDocs({
   doc,
   pins,
@@ -272,21 +196,12 @@ export function auditDependencyDocs({
     return { claims: [], problems, pillow: null };
   }
 
-  // Claims are gathered for EVERY manifest before the floor is judged. Checking
-  // the floor against the root's claims alone would fail the moment a
-  // sub-manifest alias existed, which is exactly what it did the first time this
-  // ran: 8 root claims measured against a floor of 12 that counts all five
-  // manifests. The floor is a scanner-broke tripwire, so it has to see the whole
-  // scan.
   const claims = findClaims(baseline, aliases);
   const claimed = new Set(claims.map((c) => c.pkg));
 
   const subScans: { sub: AuditedManifest; subClaims: DocClaim[]; subClaimed: Set<string> }[] = [];
   for (const sub of subManifests) {
     if (sub.missing) continue;
-    // Per manifest, against that manifest's OWN alias table. Reusing the root's
-    // claims would scan for the root's names only, so every sub-manifest entry
-    // would read as undocumented no matter what the prose said.
     const subClaims = findClaims(baseline, sub.aliases);
     subScans.push({ sub, subClaims, subClaimed: new Set(subClaims.map((c) => c.pkg)) });
     claims.push(...subClaims);
@@ -308,10 +223,6 @@ export function auditDependencyDocs({
     exemptList: "VERSIONLESS",
   });
 
-  // The four manifests OUTSIDE the root, added 2026-08-14. Each is read with
-  // the same rules, its own alias table, and its own exemptions. Passing them in
-  // rather than closing over them is what lets a negative test exercise one
-  // manifest without reconstructing the other three.
   for (const sub of subManifests) {
     if (!sub.missing) continue;
     problems.push(
@@ -333,10 +244,6 @@ export function auditDependencyDocs({
     });
   }
 
-  // Pillow was the one non-npm pin the doc named, held to requirements.txt
-  // here until 2026-09-15, when the last Python left the tree and the pin with
-  // it. A doc that still states a Pillow version is a claim about a file that
-  // does not exist, and it reads as one now.
   if (/(?<![\w-])Pillow\s+v?\d+\.\d+/i.test(baseline)) {
     problems.push("docs/DEPENDENCIES.md states a Pillow version, and there is no Python in the tree to pin it (retired 2026-09-15).");
   }
@@ -344,7 +251,6 @@ export function auditDependencyDocs({
   return { claims, problems };
 }
 
-// The thin I/O shell. Everything decidable lives in auditDependencyDocs above.
 export async function checkDependencyDocs(root = REPO_ROOT) {
   const read = (p) => readFile(path.join(root, p), "utf8");
   const [doc, pkgRaw] = await Promise.all([
@@ -353,8 +259,6 @@ export async function checkDependencyDocs(root = REPO_ROOT) {
   ]);
   const pkg = JSON.parse(pkgRaw);
 
-  // A manifest that cannot be READ is a problem rather than an empty pin set:
-  // silently auditing {} would report a clean pass over a file somebody moved.
   const subManifests: AuditedManifest[] = [];
   for (const entry of SUB_MANIFEST_POLICY) {
     let raw;
@@ -377,13 +281,9 @@ export async function checkDependencyDocs(root = REPO_ROOT) {
   });
 }
 
-// Re-exported for the callers that already import it from here;
-// tools/lib/exact-pin.ts holds the one definition and says why it moved.
 export { EXACT_PIN };
 
 type DocAlias = { prose: string; pkg: string };
-// What findClaims hands back: the prose name, the package it maps to, the version
-// the doc states, and where the match started IN THE SLICE it was given.
 type DocClaim = { prose: string; pkg: string; version: string; index: number };
 type DocPinScan = { aliases: DocAlias[]; pins: DependencyVersions; versionless: Map<string, unknown> };
 export type DocPinEdit = { pkg: string; prose: string; from: string; to: string; start: number };
@@ -398,24 +298,6 @@ type PlanDocPinRewritesInput = {
   heading?: string;
 };
 
-// The INVERSE of the claim audit above: given the pins, say exactly which spans
-// of prose disagree and what they should read instead. `bun run deps:pin`
-// applies these; nothing else writes to the doc.
-//
-// It reuses findClaims rather than matching versions itself, and that is the
-// whole reason this lives here instead of as a sed in the relock script. The
-// claim pattern separates the prose name from the version with `\s+`, so a
-// sentence that WRAPS ("The pinned Oxlint\n1.79.0 does support…") is one claim
-// to the scanner and two unrelated lines to any line-oriented tool. Measured
-// 2026-08-26 on the oxlint 1.80.0 bump: a `s/Oxlint 1.79.0/` sweep fixed three
-// of four mentions and left the wrapped one, which the contract test then
-// caught. A rewriter that does not share the reader's pattern will keep finding
-// new ways to disagree with it.
-//
-// Offsets are BASELINE-RELATIVE, because that is the slice findClaims reads.
-// Adding the heading offset back is not bookkeeping: forgetting it silently
-// rewrites whatever sits that far into the file, which for this doc is prose
-// about something else entirely.
 export function planDocPinRewrites({
   doc,
   pins,
@@ -437,24 +319,16 @@ export function planDocPinRewrites({
   const edits: DocPinEdit[] = [];
   for (const scan of scans) {
     for (const claim of findClaims(baseline, scan.aliases)) {
-      // A deliberately versionless entry is documented WITHOUT a pin on
-      // purpose, so a version sitting next to it is not ours to move.
       if (scan.versionless?.has?.(claim.pkg)) continue;
       const want = scan.pins[claim.pkg];
-      // An unpinned or range-pinned package ("^1.62.1") has no single number
-      // the prose could be wrong about. The audit already reports those; a
-      // rewriter guessing at them would invent a pin nothing declares.
       if (!want || !EXACT_PIN.test(want)) continue;
       if (want === claim.version) continue;
-      // The version is the last thing the pattern captures, so the first
-      // occurrence at or after the match start is this claim's own.
       const rel = baseline.indexOf(claim.version, claim.index);
       if (rel === -1) continue;
       edits.push({ pkg: claim.pkg, prose: claim.prose, from: claim.version, to: want, start: at + rel });
     }
   }
 
-  // Right to left, so each splice leaves every earlier offset valid.
   edits.sort((a, b) => b.start - a.start);
   let updated = doc;
   for (const e of edits) {

@@ -13,7 +13,6 @@ const SOURCE = "https://best-slots-review.click/top-10";
 const PAGE = `<html><head><title>Top 10 Online Casinos</title></head>
   <body><p>Claim 500 free spins. Partners: <a href="${TARGET}">aadhar sh</a> <a href="https://x.example">payday loans</a></p></body></html>`;
 
-/** A Workers AI binding answering the sort with `probs`, counting calls. */
 function ai(probs, calls = []) {
   return {
     calls,
@@ -24,7 +23,6 @@ function ai(probs, calls = []) {
   };
 }
 
-/** Runs one webmention end to end and returns the email Resend was asked to send, or null. */
 async function send(env) {
   const realFetch = globalThis.fetch;
   const mails = [];
@@ -46,7 +44,7 @@ async function send(env) {
   return mails[0] ?? null;
 }
 
-/** The stored mention's moderation status. @returns {string} */
+/** @returns {string} */
 const statusOf = (/** @type {any} */ db) => db.rows[0]?.status;
 
 function mailEnv(extra = {}) {

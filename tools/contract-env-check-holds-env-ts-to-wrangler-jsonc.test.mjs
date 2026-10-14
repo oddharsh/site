@@ -11,7 +11,6 @@ test("env:check exists, runs inside typecheck, and env.ts names it", async () =>
   assert.match(pkg.scripts.typecheck, /bun tools\/check-env\.ts/, "typecheck must run check-env.ts, or a drifted env.ts reaches main");
   const env = await readFile(new URL("src/worker/lib/env.ts", ROOT), "utf8");
   assert.match(env, /bun run env:check/, "env.ts's header must name the check that holds it");
-  // The five tiers the check reads by name; renaming one silently empties a tier.
   for (const t of ["EnvBindings", "EnvVars", "EnvSecrets", "EnvOptionalSecrets", "EnvInjected"]) {
     assert.match(env, new RegExp(`export interface ${t} \\{`), `env.ts no longer exports ${t}, which check-env.ts reads by that name`);
   }

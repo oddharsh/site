@@ -5,13 +5,6 @@
 // the worker bundles, metadata, the histogram index, alt text, the hash map, and
 // all four pixel tiers. add-photos.sh runs this as its last phase, and CI runs it
 // on every PR so an incremental add cannot silently truncate the library.
-//
-// Two of the artifacts it once READ are BUILD OUTPUT now (exif.json and
-// fingerprints.json, since 2026-08-29), so it DERIVES those through
-// tools/lib/photo-indexes.ts rather than opening a committed file. Both blocks
-// below say which of their old assertions that retired and why; the short version
-// is that a claim about a committed copy disagreeing with its inputs has nothing
-// left to be true of once the build computes it from those same inputs.
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -39,13 +32,6 @@ const stems = Object.keys(hashes).sort();
 const metadataStems = Object.keys(metadata).sort();
 
 if (JSON.stringify(stems) !== JSON.stringify(metadataStems)) {
-  // Name the stems and the likely cause. This used to report the two COUNTS and
-  // nothing else, which says a set differs without saying how, and the usual
-  // cause is not a missing photo at all: the source folder is an input superset,
-  // so a full metadata regen used to write a record for every frame sitting in
-  // it, published or not. extract-photo-metadata.sh scopes to hashes.json now,
-  // and the message says so, because "165 metadata, 158 hashes" sent the last
-  // reader looking for 7 broken photos rather than 7 unpublished ones.
   const unhashed = metadataStems.filter((s) => !hashes[s]);
   const undescribed = stems.filter((s) => !metadata[s]);
   fail(`metadata/hash stem sets differ (${metadataStems.length} metadata, ${stems.length} hashes)` +
@@ -54,15 +40,6 @@ if (JSON.stringify(stems) !== JSON.stringify(metadataStems)) {
        `\n  metadata.json describes PUBLISHED photos; re-run extract-photo-metadata.sh, which scopes to hashes.json`);
 }
 
-// The photo index is the pool the worker BUNDLES (photos.js imports it): the
-// grid renders exactly these stems. It must be in perfect bijection with
-// hashes.json — an index entry without hashes would SSR a broken tile, and a
-// hashed stem without an index entry is a published photo that silently never
-// appears. Field shape is load-bearing too: home.js reads full/size/uploaded
-// verbatim into href/data-* attributes.
-// One entry per photo stem: the R2 key, its byte size, and the upload stamp.
-// Named here because `json()` answers unknown and this file's whole job is
-// asserting the shape of that record.
 const photoIndex: Record<string, { full?: string; size?: number; uploaded?: string; album?: string; heif?: string }> =
   await json(path.join(ROOT, "src/worker/photo-index.json"));
 const indexStems = Object.keys(photoIndex).sort();
@@ -84,10 +61,6 @@ for (const [stem, entry] of Object.entries(photoIndex)) {
   if (entry.uploaded !== null && Number.isNaN(Date.parse(entry.uploaded))) {
     fail(`${stem}: index uploaded must be an ISO date or null (got ${JSON.stringify(entry?.uploaded)})`);
   }
-  // Both optional (ALBUM= and HEIF=1 in add-photos.sh). An album the registry
-  // does not declare is a photo that left the homepage draw and reached no page
-  // at all, and a heif key that is not this stem's is a download link to
-  // somebody else's original, so both are asserted rather than passed through.
   if (entry.album !== undefined && !Object.hasOwn(ALBUMS, String(entry.album))) {
     fail(`${stem}: index album ${JSON.stringify(entry.album)} is not declared in src/worker/albums.ts`);
   }
@@ -99,22 +72,11 @@ for (const [stem, entry] of Object.entries(photoIndex)) {
   }
 }
 
-// The published pixel tiers are a (600 AVIF), j (600 JPG), s (400 AVIF, DPR-2),
-// x (200 AVIF, DPR-1). TIER_KEYS and the filename shape come from
-// tools/lib/photo-indexes.ts, which is what the build derives fingerprints.json
-// from, so this file and that derivation cannot disagree about which four files
-// a stem publishes.
-
 const histIndex = await json(path.join(IMAGES, "histograms.json"));
 
 const expectedFiles = new Set();
 for (const stem of stems) {
   const entry = hashes[stem];
-  // x (the 200px DPR-1 tier) is required alongside the other three. It could
-  // have been optional, since photo-grid.js degrades to two srcset candidates
-  // without it and photos.js keeps serving the stem — but "the pipeline half ran"
-  // is exactly the state this file exists to refuse, and an optional tier is one
-  // nothing would ever notice missing.
   if (!asRecord(entry) || !entry.a || !entry.j || !entry.s || !entry.x) {
     fail(`${stem}: hash entry must contain a, j, s, and x tiers`);
   }
@@ -126,32 +88,11 @@ for (const stem of stems) {
     catch { fail(`${stem}: missing hashed pixel tier ${files[tier]}`); }
   }
 
-  // The four histogram channels are asserted against the INDEX now, because
-  // images/meta/ is build output and is not in a fresh checkout. Same coverage,
-  // one representation fewer.
-  // Length is the domain check: a packed entry is 4 channels x 64 bins, one
-  // character each. A missing or wrong-typed entry has no .length and fails here
-  // the same way, so nothing needs to ask what type it is.
   const packedHist = histIndex[stem];
   if (!packedHist || packedHist.length !== 4 * 64) {
     fail(`${stem}: histograms.json must carry four 64-bin channels (got ${packedHist ? `${packedHist.length} chars` : "nothing"})`);
   }
 }
-// THREE FINGERPRINT ASSERTIONS LIVED HERE AND ARE GONE, because images/
-// fingerprints.json is BUILD OUTPUT as of 2026-08-29 and each of the three was a
-// statement about a committed file that could disagree with these bytes: a
-// digest that had drifted, a digest naming an unpublished stem, and a count that
-// no longer matched stems x tiers. A map derived from hashes.json and public/i
-// on the way into .build/ cannot hold any of those three states, so re-asserting
-// them here would be a check that can only agree with itself, which this
-// repository has shipped before and does not want again.
-//
-// One fact about that map is NOT a restatement of its own inputs: two published
-// tiers can hold identical bytes, and an inverted index cannot represent both.
-// buildImageFingerprints refuses rather than picking a winner, and running it
-// here is what puts that refusal in front of add-photos.sh instead of leaving it
-// to the next build. It re-reads the same 660 files the loop above stats, which
-// is the hashing this file used to do inline and no longer does.
 try {
   const { tiers } = await buildImageFingerprints(ROOT);
   if (tiers !== stems.length * TIER_KEYS.length) {
@@ -183,9 +124,6 @@ if (orphans.length) fail(`unreferenced hashed pixel files: ${orphans.join(", ")}
 // had not been one since the split. The first full re-encode is what found it,
 // which is the event it exists for.
 const HARDCODED_ROOTS = ["src/pages", "src/content", "src/client"];
-// A scanner whose roots stop matching reports a pass over an empty set, which is
-// what every floor in this repo refuses. 12 today, all in tooltips.html. Deleting
-// that demo is a deliberate act and lowering this number with it is one line.
 const HARDCODED_FLOOR = 12;
 const walk = async (target) => {
   const entry = await stat(target);
@@ -213,28 +151,8 @@ if (hardcoded < HARDCODED_FLOOR) {
        `  it has stopped matching. roots: ${HARDCODED_ROOTS.join(", ")}`);
 }
 
-// exif.json is BUILD OUTPUT as of 2026-08-29, so this DERIVES it rather than
-// reading it. Its coverage of the published set is asserted by the
-// metadata/hash stem-set equality at the top of this file, which is exact in
-// both directions, so the old "absent from images/exif.json" and "carries
-// unpublished stems" checks would now be re-deriving that same equality from
-// the same two files. They are gone rather than restated.
 const exifIndex = await buildExifIndex(ROOT);
 
-// TIERED, because images/meta/ is BUILD OUTPUT too and is absent from a fresh
-// checkout. Where it exists, which is a workstation that just ran the pipeline,
-// roll it up and compare.
-//
-// WHAT THAT COMPARISON MEANS has changed twice. It used to hold two committed
-// copies of one projection together. Then, from 2026-08-29, it held the two
-// IMPLEMENTATIONS of the projection to each other: a jq object literal in
-// extract-photo-metadata.sh writing these per-photo files, and EXIF_KEY_MAP in
-// tools/lib/photo-indexes.ts shipping, where a field added to one and forgotten
-// in the other was silent on both sides. Since 2026-09-15 the split calls
-// projectExifRecord too (pipeline-json.ts meta-split), so there is one
-// implementation, and what this catches is the remaining way the two files can
-// disagree: images/meta/ written from an OLDER metadata.json than the one on
-// disk. That is still worth a failure, since zenc's histogram bake reads meta/.
 const metaPresent = await stat(META).then((s) => s.isDirectory(), () => false);
 
 const histMissing = stems.filter((stem) => !histIndex[stem]);
@@ -244,8 +162,6 @@ if (histMissing.length) {
 }
 
 if (metaPresent) {
-  // The per-photo files minus their histogram channel: what the jq literal in
-  // extract-photo-metadata.sh produced for each stem.
   const rolled = {};
   for (const file of (await readdir(META)).filter((f) => f.endsWith(".json"))) {
     const { [HISTOGRAM_KEY]: _hist, ...exif } = JSON.parse(await readFile(path.join(META, file), "utf8"));
@@ -271,9 +187,6 @@ if (metaPresent) {
 const histStrays = Object.keys(histIndex).filter((stem) => !hashes[stem]);
 if (histStrays.length) fail(`images/histograms.json carries unpublished stems: ${histStrays.join(", ")}`);
 
-// alt text is a served artifact like the pixels and the EXIF, so a gap fails here
-// rather than shipping an unlabelled image. add-photos.sh generates captions just
-// above this check, so reaching it means the captioner was rate-limited or skipped.
 const uncaptioned = stems.filter((stem) => !(alt[stem] || "").trim());
 if (uncaptioned.length) {
   fail(`${uncaptioned.length} photo(s) without alt text: ${uncaptioned.slice(0, 8).join(", ")}` +

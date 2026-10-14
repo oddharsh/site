@@ -1,21 +1,6 @@
 // botHeaders signs every outbound AadharshBot request, and three quarters of
 // what it used to do per call was rederiving a constant: JSON.parse over the
 // secret, the RFC 7638 thumbprint, and importKey. Those are memoized now.
-//
-// The saving is per signature and the signature count is large: /around signs
-// twice per neighbour across 20 of them, /lens discovery fans out to 26 probes,
-// and since #746 every redirect hop signs for its own authority. A memo on that
-// path has two ways to be wrong that no existing check would see, because both
-// produce a perfectly well-formed signature:
-//
-//   - keyed too loosely, so a ROTATED secret keeps signing with retired
-//     material and the directory stops matching the keyid on the wire;
-//   - cached on failure, so the first malformed env becomes the isolate's
-//     permanent answer and a later good key never gets a chance.
-//
-// The existing keyid test signs twice in one process and cannot catch either:
-// its two envs differ only in a `kid` member the thumbprint ignores, so both
-// calls are entitled to the same answer.
 import { assert, test } from "./contract-shared.ts";
 import { botHeaders, jwkThumbprint } from "../src/worker/lib/botauth.ts";
 
@@ -41,8 +26,6 @@ test("a rotated secret derives fresh material instead of reusing the last one", 
 
   assert.equal(keyidOf(first), await jwkThumbprint(RFC8037));
   assert.equal(keyidOf(second), await jwkThumbprint(rotated));
-  // The control the memo exists to survive: two different keys in one process
-  // must not answer with one keyid, in either order.
   assert.notEqual(keyidOf(first), keyidOf(second));
   assert.equal(keyidOf(third), keyidOf(first), "rotating back must not leave the second key's material in place");
 });
@@ -52,7 +35,6 @@ test("the memoized key is the key that signs, so the signature still verifies un
   const { d: _private, ...pub } = RFC8037;
   const verifier = await crypto.subtle.importKey("jwk", { ...pub, key_ops: ["verify"] }, { name: "Ed25519" }, false, ["verify"]);
 
-  // Twice, because the second call is the one reading memoized material.
   for (const host of ["example.com", "example.org"]) {
     const headers = await botHeaders(`https://${host}/path`, env);
     const params = (headers.get("signature-input") || "").replace(/^sig1=/, "");
@@ -75,9 +57,7 @@ test("the memoized key is the key that signs, so the signature still verifies un
 test("a malformed secret fails closed on every call rather than poisoning the isolate", async () => {
   const bad = { RN_SIGNING_KEY_JWK: "{not json" };
   await assert.rejects(() => botHeaders("https://example.com/", bad));
-  // The second call is the one a cached rejection would answer from.
   await assert.rejects(() => botHeaders("https://example.com/", bad));
-  // And a good key after a bad one must still work.
   const headers = await botHeaders("https://example.com/", { RN_SIGNING_KEY_JWK: JSON.stringify(RFC8037) });
   assert.equal(keyidOf(headers), await jwkThumbprint(RFC8037));
 });
@@ -89,9 +69,6 @@ test("one secret costs one importKey however many signatures it produces", async
   let imports = 0;
   crypto.subtle.importKey = (...args) => { imports++; return real(...args); };
   try {
-    // Concurrent, because caching the RESULT rather than the promise lets every
-    // caller in a fan-out start the same derivation before the first finishes.
-    // This is the shape /lens discovery and the /around sweep actually produce.
     const headers = await Promise.all(
       Array.from({ length: 12 }, (_, i) => botHeaders(`https://h${i}.example.com/`, env)),
     );

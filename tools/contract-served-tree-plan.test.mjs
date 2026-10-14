@@ -2,11 +2,6 @@
 // tools/lib/served-tree.ts, plans that merge, and two adapters consume the
 // plan: the build copies it into .build/public, local dev symlinks it into
 // .dev-assets.
-//
-// These tests run the module and both adapters on a fixture tree. They replace
-// a test that regexed cp() calls out of build.ts to hold dev's root list to the
-// build's, which could only compare two spellings of a list and never ran
-// either merge.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rm, stat, writeFile } from "node:fs/promises";
@@ -27,9 +22,6 @@ import {
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
-// A fixture laid out like the real tree in miniature: `assets` and `pages` share
-// the root and `garage/`, `assets` alone owns `images/` and `i/`, and
-// `assets/images/meta` plays a derived path.
 const FIXTURE = {
   "assets/_headers": "headers",
   "assets/i/a.avif": "avif",
@@ -53,7 +45,6 @@ async function fixture(extra = {}) {
   return cwd;
 }
 
-// Every file reachable under `dir`, following symlinks, as served path -> bytes.
 async function servedBytes(dir) {
   const out = {};
   const walk = async (rel) => {
@@ -103,13 +94,9 @@ test("the copy adapter and the symlink adapter serve the same tree from one plan
     assert.deepEqual(await servedBytes(path.join(cwd, "farm")), expected, "the dev adapter links exactly the plan");
     assert.equal(copied.files, 7);
 
-    // The copy is real bytes: nothing under it is a link back into the source.
     assert.equal(await isLink(path.join(cwd, "out/public/i")), false);
     assert.equal(await isLink(path.join(cwd, "out/public/index.html")), false);
 
-    // The farm's SHAPE is the dev loop's contract. A directory one root owns is
-    // one directory symlink, so a file created in it later needs no re-stage. A
-    // directory several roots share is real, with one link per entry.
     assert.equal(await isLink(path.join(cwd, "farm")), false, "the URL root is shared, so it is a real directory");
     assert.equal(await isLink(path.join(cwd, "farm/garage")), false, "garage/ is shared, so it is a real directory");
     assert.equal(await isLink(path.join(cwd, "farm/i")), true, "a single-owner directory is ONE symlink");
@@ -120,8 +107,6 @@ test("the copy adapter and the symlink adapter serve the same tree from one plan
     assert.equal(await readlink(path.join(cwd, "farm/nav.js")), "../client/nav.js");
     assert.deepEqual(linked, { links: 7, dirs: 2 }, "_headers, i, images, index.html, nav.js, garage/enc, garage/horizon.html across the root and garage/");
 
-    // A file created later inside a single-owner directory is served with no
-    // re-stage, which is what the whole-directory symlink buys.
     await writeFile(path.join(cwd, "assets/i/later.avif"), "later");
     assert.equal(await readFile(path.join(cwd, "farm/i/later.avif"), "utf8"), "later");
   } finally {
@@ -130,7 +115,6 @@ test("the copy adapter and the symlink adapter serve the same tree from one plan
 });
 
 test("a served path two roots author is refused once, by the planner, with the path named", async () => {
-  // CONTROL: the same fixture without the duplicate plans cleanly (first test).
   const cwd = await fixture({ "pages/_headers": "second owner", "client/garage": "a FILE where two roots have a directory" });
   try {
     const refused = await planServedTree({ cwd, roots: ROOTS, derived: DERIVED }).then(() => null, (error) => error);
@@ -139,7 +123,6 @@ test("a served path two roots author is refused once, by the planner, with the p
     assert.match(refused.message, /served path _headers is authored by both assets and pages/);
     assert.match(refused.message, /served path garage is authored by both assets and pages and client/);
 
-    // Refused BEFORE either adapter ran: there is no plan to hand them.
     assert.deepEqual((await readdir(cwd)).sort(), ["assets", "client", "pages"]);
   } finally {
     await rm(cwd, { recursive: true, force: true });
@@ -163,14 +146,10 @@ test("a derived path is left out of BOTH adapters, even inside a single-owner di
       assert.deepEqual(Object.keys(served).filter((file) => file.startsWith("images/")), ["images/hashes.json"],
         `${tree}: the leftover under images/meta must not be served`);
     }
-    // images/ has one owner, and it still cannot be one symlink here: a link to
-    // the whole directory would carry the leftover with it.
     assert.equal(await isLink(path.join(cwd, "farm/images")), false);
     assert.equal(await isLink(path.join(cwd, "farm/images/hashes.json")), true);
     assert.equal(await isLink(path.join(cwd, "farm/i")), true, "a directory with nothing to hide is still one symlink");
 
-    // CONTROL: with no derived paths declared, the same leftovers ARE served by
-    // both adapters, so the assertions above are the skip rule and nothing else.
     const open = await planServedTree({ cwd, roots: ROOTS, derived: [] });
     await copyServedTree(open, "out-open", { cwd });
     await linkServedTree(open, "farm-open", { cwd });
@@ -197,7 +176,6 @@ test("the real tree plans cleanly, and every projection is a view of the one dec
   const plan = await planServedTree({ cwd: ROOT });
   assert.deepEqual(plan.roots, STAGED_ROOTS);
   assert.deepEqual(STAGED_ROOTS, SERVED_ROOTS.map((root) => root.dir));
-  // Floors, since every failure here is an absence: 1344 files on 2026-10-02.
   assert.ok(plan.files.size > 900, `only ${plan.files.size} served files planned`);
   assert.ok(plan.directories.get("")?.length === STAGED_ROOTS.length, "every root contributes to the URL root");
   assert.ok((plan.directories.get("garage")?.length ?? 0) > 1, "garage/ is the canonical shared directory");
@@ -214,8 +192,6 @@ test("the real tree plans cleanly, and every projection is a view of the one dec
   }
 });
 
-// config/tsconfig.browser.json maps `/*` across the roots an absolute browser
-// import can resolve in. JSON cannot import the declaration, so this holds it.
 test("tsconfig.browser.json resolves absolute imports across the plan's browser roots", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
   const mapped = (source) => parseJsonc(source).compilerOptions.paths["/*"]
@@ -225,14 +201,11 @@ test("tsconfig.browser.json resolves absolute imports across the plan's browser 
   assert.deepEqual(mapped(source), [...BROWSER_IMPORT_ROOTS].sort(),
     "tsconfig.browser.json's `/*` paths must be exactly served-tree.ts's BROWSER_IMPORT_ROOTS");
 
-  // CONTROL: a config that lost one root is told apart.
   const narrowed = source.replace(`"../src/styles/*", `, "");
   assert.notEqual(narrowed, source, "the control must actually edit the config");
   assert.notDeepEqual(mapped(narrowed), [...BROWSER_IMPORT_ROOTS].sort());
 });
 
-// The behavioural tests above prove the module. This one stops a consumer from
-// growing a second definition beside it, which is the shape this replaced.
 test("neither consumer restates the roots or the skip list", async () => {
   const build = await readFile(path.join(ROOT, "tools/build.ts"), "utf8");
   const dev = await readFile(path.join(ROOT, "tools/dev-stage.ts"), "utf8");
