@@ -18,7 +18,7 @@
 // recorded response in for the network. That second adapter is what makes
 // these seams real.
 import type {
-  DnsObservation, DnsObservations, EarlyDataResult, EdgeObservation, Read,
+  AgentAnswer, DnsObservation, DnsObservations, EarlyDataResult, EdgeObservation, Read,
   RepositoryObservation, RulesetsObservation, VersionAffinityObservation,
   WorkersBuildsObservation, ZoneSettingObservation,
 } from "./infra-compare.ts";
@@ -264,6 +264,27 @@ export async function readEdge(edge, port: EdgePort): Promise<Map<string, EdgeOb
     }
   }
   return observed;
+}
+
+/** One `Accept: text/markdown` probe per agents:true surface, in order. What
+ *  each answer MEANS is compareAgentCoverage's. */
+export async function readAgentAnswers(origin: string, pages: { path: string }[], fetchEdge: EdgeFetch): Promise<Map<string, AgentAnswer>> {
+  const answers = new Map<string, AgentAnswer>();
+  for (const p of pages) {
+    try {
+      // redirect: "manual". Following one made this probe report the DESTINATION's
+      // content-type as the site's, and it named the wrong defect for a full
+      // release: /rn was a bare 302 to Spotify, so the advisory read "/rn
+      // (text/html)" and sent a reader looking for a page that does not exist.
+      const res = await fetchEdge(`${origin}${p.path}`, { accept: "text/markdown" }, { redirect: "manual" });
+      if (!servedByEdge(res)) answers.set(p.path, { kind: "unmeasured", reason: `HTTP ${res.status} without cf-ray` });
+      else if (res.status >= 300 && res.status < 400) answers.set(p.path, { kind: "redirect", status: res.status, location: res.headers.get("location") || "" });
+      else answers.set(p.path, { kind: "answer", contentType: (res.headers.get("content-type") || "").split(";")[0].trim() });
+    } catch (e) {
+      answers.set(p.path, { kind: "unmeasured", reason: `${e.message}` });
+    }
+  }
+  return answers;
 }
 
 // ------------------------------------------------------ port: Cloudflare ----
