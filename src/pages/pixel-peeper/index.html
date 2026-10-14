@@ -185,7 +185,7 @@ const AXES={
   // answer instead: the tile the linear-light kernel made.
   resample:{answer:o=>o.label==="zenc",right:"you picked the one averaged in light",wrong:"that one averaged sRGB numbers",
     teach:`same photo, same byte budget, same encoder. only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. <b>light kept</b> under each tile is its mean brightness, measured as light, over the window it was shrunk from: averaging in light keeps exactly 100% until the JPEG rounds off a few tenths, and averaging sRGB numbers keeps less. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
-  format:  {teach:t=>FMT[t.tier].teach+av2Line(t)+(state.log.filter(l=>l.axis==="format").length===1?` ${FMT_TAIL}${av2Line(t)?FMT_TAIL_AV2:""}`:``)+(t.lossless?` <b>lossless</b>, this photo is ${kb(t.lossless.jxl)} as JPEG XL${t.lossless.av2?`, ${kb(t.lossless.avif)} as AVIF and ${kb(t.lossless.av2)} as AV2`:` and ${kb(t.lossless.avif)} as AVIF`}: JPEG XL's biggest lead, and one no eye test can show.`:``)},
+  format:  {teach:t=>(state.noJxl?`your browser can't draw JPEG XL yet, so this call left its tile out and ran the rest. `:``)+FMT[t.tier].teach+av2Line(t)+(state.log.filter(l=>l.axis==="format").length===1?` ${FMT_TAIL}${av2Line(t)?FMT_TAIL_AV2:""}`:``)+(t.lossless?` <b>lossless</b>, this photo is ${kb(t.lossless.jxl)} as JPEG XL${t.lossless.av2?`, ${kb(t.lossless.avif)} as AVIF and ${kb(t.lossless.av2)} as AV2`:` and ${kb(t.lossless.avif)} as AVIF`}: JPEG XL's biggest lead, and one no eye test can show.`:``)},
   tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
 };
 const teachFor=t=>typeof AXES[t.axis].teach==="function"?AXES[t.axis].teach(t):AXES[t.axis].teach;
@@ -431,7 +431,7 @@ const isAv2=o=>o.label.startsWith("AV2 ");
 // AV2 mention outside a call keys on it, so the page never tallies a format
 // it didn't show.
 const VS=()=>state.av2?"JPEG XL vs AVIF vs AV2":"JPEG XL vs AVIF";
-const FMT_LIST=()=>state.av2?"JPEG XL, AVIF and AV2":"JPEG XL and AVIF";
+const FMT_LIST=()=>state.noJxl?"AVIF and AV2":state.av2?"JPEG XL, AVIF and AV2":"JPEG XL and AVIF";
 let av2Worker=null,av2Next=0;const av2Waiting={},av2Png=new Map();
 function av2Decode(src){
   if(av2Png.has(src))return av2Png.get(src);
@@ -450,15 +450,17 @@ function av2Decode(src){
 // Resolves once every AV2 tile in a trial has its PNG. A trial without one
 // resolves at once.
 const av2Ready=t=>Promise.all(t.options.filter(isAv2).map(o=>av2Decode(o.src).then(u=>{o.png=u;})));
-// If the decoder can't run here, AV2 sits out the rest of the session: its
-// tiles leave every call, and each call's winners are worked out again over
-// what's left, the way the generator's markWinners does.
+// A format this browser can't draw leaves a call, and the call's winners are
+// worked out again over what's left, the way the generator's markWinners
+// does. A call left with one tile is no call, and its caller drops it.
+function dropFmt(t,is){if(!t.options.some(is))return t;
+  const options=t.options.filter(o=>!is(o)), s2=Math.max(...options.map(o=>o.s2)), bu=Math.min(...options.map(o=>o.butter));
+  const ranked=options.map(o=>({...o,s2best:o.s2===s2,butterbest:o.butter===bu}));
+  return {...t,options:ranked,disagree:ranked.find(o=>o.s2best)!==ranked.find(o=>o.butterbest)};}
+// If the decoder can't run here, AV2 sits out the rest of the session.
 function av2Off(err){
   state.av2Error=err&&err.message||String(err); state.av2=false;
-  const strip=t=>{if(!t.options.some(isAv2))return t;
-    const options=t.options.filter(o=>!isAv2(o)), s2=Math.max(...options.map(o=>o.s2)), bu=Math.min(...options.map(o=>o.butter));
-    const ranked=options.map(o=>({...o,s2best:o.s2===s2,butterbest:o.butter===bu}));
-    return {...t,options:ranked,disagree:ranked.find(o=>o.s2best)!==ranked.find(o=>o.butterbest)};};
+  const strip=t=>dropFmt(t,isAv2);
   DATA.trials=DATA.trials.map(strip).filter(t=>t.options.length>=2);
   state.trials=state.trials.map((t,i)=>i<state.i?t:strip(t)).filter((t,i)=>i<state.i||t.options.length>=2);
 }
@@ -517,7 +519,7 @@ function screenIntro(){
    </div>
    <div class="gb"><span class="gb-legend">or: ${VS()}</span>
      <p style="margin:0">${state.noJxl
-       ?`your browser can't decode JPEG XL yet, so this run is off. Chrome 155+ and Safari 17+ can.`
+       ?`your browser can't decode JPEG XL yet, so this run is off. Chrome 155+ and Safari 17+ can.${state.av2?` the exam still has format calls: AVIF against AV2, which this page decodes for you.`:``}`
        :state.av2
        ?`Chrome 155 decodes JPEG XL now, so here are ${SHOWDOWN_SIZE} calls with nothing but formats: JPEG XL, AVIF, and AV2, the codec meant to follow the AV1 inside AVIF, every tile in a call at one file size. no browser decodes AV2 yet, so this page decodes it for you, with a 550 KB reference decoder it fetches when the first AV2 tile comes up. the budgets run from a tight squeeze, where AVIF made its name, to a lossless JPEG transcode, which only JPEG XL can do. the question underneath: which format should a photo ship as, and where does AV2 change the answer? it comes at the end, along with where WebP lands.`
        :`Chrome 155 decodes JPEG XL now, so here are ${SHOWDOWN_SIZE} calls with nothing but JPEG XL against AVIF, every pair at one file size. the budgets run from a tight squeeze, where AVIF made its name, to a lossless JPEG transcode, which only JPEG XL can do. the question underneath: when should a photo ship as JPEG XL instead of AVIF? the answer comes at the end, along with where AV2 and WebP land.`}</p>
@@ -660,7 +662,7 @@ function screenResult(){
       ${bar("Sharpness",sharp,"spotting the higher-quality JPEG")}
       ${bar("Color",color,"catching chroma subsampling",true)}
       ${bar("Encoders",enc,"separating real encoders at equal bytes")}
-      ${state.noJxl?"":bar("Formats",fmt,`telling ${FMT_LIST()} apart at equal bytes`)}</div>
+      ${state.noJxl&&!state.av2?"":bar("Formats",fmt,`telling ${FMT_LIST()} apart at equal bytes`)}</div>
     <div class="banner info"><span class="g">the takeaway</span><span>the metrics agree on the obvious calls and only split at the margins, where the differences are near invisible.${colorAha} that margin is exactly where an export preset should live: the setting no human, and barely a metric, can flag.</span></div>`}
     <div class="gb"><span class="gb-legend">share your run</span>
       ${shareGridHTML(marks)}
@@ -672,7 +674,7 @@ function screenResult(){
         <button class="xp-button compact" id="showcard">Preview image</button></div>
       <div id="cardwrap"></div></div>
     <div class="gb"><span class="gb-legend">what's real, what's next</span>
-      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc${state.av2||state.av2Error?" · AVM 1.0.0":""} for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file. the format budgets are all read off what this site ships: its 600px photos' bits per pixel, its AVIF, its JPEG, and that JPEG transcoded losslessly to JPEG XL.${state.noJxl?" your browser can't decode JPEG XL yet, so the format calls sat this run out. Chrome 155+ and Safari 17+ can.":""}${state.av2Error?` the AV2 decoder couldn't run here (${state.av2Error}), so AV2 sat out the rest of this session.`:""} next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
+      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc${state.av2||state.av2Error?" · AVM 1.0.0":""} for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file. the format budgets are all read off what this site ships: its 600px photos' bits per pixel, its AVIF, its JPEG, and that JPEG transcoded losslessly to JPEG XL.${state.noJxl?state.av2?" your browser can't decode JPEG XL yet, so its tiles sat out and the format calls ran AVIF against AV2. Chrome 155+ and Safari 17+ add it.":" your browser can't decode JPEG XL yet, so the format calls sat this run out. Chrome 155+ and Safari 17+ can.":""}${state.av2Error?` the AV2 decoder couldn't run here (${state.av2Error}), so AV2 sat out the rest of this session.`:""} next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
     ${quizHTML(showdown)}
     <div class="row spread" style="margin-top:14px">
       <small>your grid spoils nothing: no photo, encoder or setting is named</small>
@@ -1046,7 +1048,10 @@ function wireDiff(gl,tiles,trial,order,pos){
 
 let DATA=null;
 Promise.all([fetch('/pixel-peeper/manifest.json').then(r=>r.json()),CAN_JXL]).then(([d,jxl])=>{
-  state.noJxl=!jxl; if(!jxl)d.trials=d.trials.filter(t=>t.axis!=="format"); DATA=d;
+  // Without JPEG XL a format call loses that tile and stays a call between
+  // what's left: AVIF against AV2, which this page decodes itself. Before the
+  // manifest carried AV2 that left one tile, so the format calls sat out.
+  state.noJxl=!jxl; if(!jxl)d.trials=d.trials.map(t=>dropFmt(t,o=>o.label.startsWith("JPEG XL"))).filter(t=>t.options.length>=2); DATA=d;
   state.av2=d.trials.some(t=>t.options.some(isAv2)); boot();}).catch(e=>{stage.innerHTML='<h1>could not load</h1><p>'+e+'</p>';});
 function boot(){ screenIntro(); }
 
