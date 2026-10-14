@@ -1,3 +1,7 @@
+// Every route the site Worker owns, as DATA: the one list the dispatcher, the
+// `run_worker_first` allowlist, Workers Cache, the preview and early-data write
+// guards, and the build's link checker all read.
+//
 // DATA ONLY, and that is the constraint the whole shape answers to. Handlers
 // stay in index.ts, bound by id in a map typed `Record<RouteId, RouteHandler>`,
 // so the compiler rejects a route with no handler and a handler with no route.

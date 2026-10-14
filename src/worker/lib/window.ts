@@ -1,3 +1,5 @@
+// lib/window.ts — the XP window's title bar, written ONCE (#1026).
+
 import { EMPTY, Html, html } from "./html.ts";
 
 export const HISTNAV = html`<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>`;

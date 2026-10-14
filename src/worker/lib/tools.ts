@@ -1,3 +1,6 @@
+// lib/tools.ts — the site's tool registry: what a caller can ASK this origin to
+// do, and the one function that does it.
+
 import { readAroundChanges } from "../around.ts";
 import { getPublicAvailability } from "../../../cal/src/slots.ts";
 import { LENS_COMPARE, LENS_INSPECT, lensObservationSummary } from "../lens.ts";

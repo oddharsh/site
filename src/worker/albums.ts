@@ -1,3 +1,6 @@
+// albums.ts — the registry of photo ALBUMS: named sets of photos that live at
+// their own page and stay OUT of the site-wide draw.
+//
 // Node-safe on purpose: build.ts imports this from the staged tree, and the
 // contract suite imports it under plain bun/node (gotcha 16).
 

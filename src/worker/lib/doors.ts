@@ -1,3 +1,5 @@
+// lib/doors.ts — read what is actually BEHIND another origin's agent doors.
+
 import { outboundRead, type OutboundRefusal } from "./outbound.ts";
 import { readResponseCapped } from "./crawl.ts";
 import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS, parseMcpBody, rpcErrorDetail } from "./mcp-protocol.ts";

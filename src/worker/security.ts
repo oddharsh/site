@@ -1,3 +1,6 @@
+// security.ts — /security, the Windows Security Center reskin, and /security.json,
+// the three connection values it fills in. Bundled by wrangler at deploy.
+
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { islandPreload } from "./lib/island.ts";

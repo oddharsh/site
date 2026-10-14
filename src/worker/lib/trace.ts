@@ -1,3 +1,7 @@
+// trace.ts — one wrapper over Workers Traces so every span in this worker has a
+// single import site and a single failure story. Bundled by wrangler at deploy;
+// not served.
+
 import { isCallable } from "./parse.ts";
 import type { Span, SpanAttrs, SpanAttrValue, SpanName } from "./span-vocabulary.ts";
 // WHY THE TRACER IS INJECTED RATHER THAN IMPORTED HERE. This module does NOT

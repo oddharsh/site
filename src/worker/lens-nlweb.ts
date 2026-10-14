@@ -1,3 +1,6 @@
+// lens-nlweb.ts — the NLWeb lens: what a foreign origin ANSWERS, not whether it
+// has a door to answer through.
+
 import { foreignNlwebAsk } from "./lib/doors.ts";
 import { defineLens } from "./lens-pipeline.ts";
 

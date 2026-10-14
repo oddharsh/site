@@ -1,3 +1,7 @@
+// span-vocabulary.ts — the span names and attribute shapes this Worker may
+// emit, as types. Bundled by wrangler at deploy; not served. Types only, so the
+// whole module erases and nothing here reaches the wire.
+
 export type SpanAttrValue = string | number | boolean | undefined;
 
 export type SpanName =

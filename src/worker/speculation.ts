@@ -1,3 +1,5 @@
+// speculation.ts — did the hand-tuned speculation rules actually pay off?
+//
 // WHY THE NUMERATOR CANNOT JUST BE COUNTED SERVER-SIDE, measured rather than
 // argued (Canary 153, local worker, 2026-07-30). Inject a URL-list prefetch of
 // /garage/horizon, then navigate to it. The browser makes two requests:

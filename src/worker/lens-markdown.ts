@@ -1,3 +1,6 @@
+// lens-markdown.ts — the Markdown lens: which representation an agent actually
+// gets back when it asks this URL for Markdown.
+
 import { mapWithConcurrency } from "./lib/crawl.ts";
 import { FAN_OUT, lensFetch } from "./lens.ts";
 import { defineLens } from "./lens-pipeline.ts";

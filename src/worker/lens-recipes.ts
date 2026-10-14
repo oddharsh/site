@@ -1,3 +1,7 @@
+// lens-recipes.ts — the fixed, published set of things /lens will do to a page
+// before it looks at it, and the plumbing that keeps the page from lying about
+// what happened.
+//
 // ── measured, not assumed (2026-08-08, wrangler dev --remote, real binding) ─
 // `env.BROWSER.quickAction` ACCEPTS `addScriptTag`, and the capture happens
 // after the injected script's synchronous mutations. Worth measuring rather

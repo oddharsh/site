@@ -1,3 +1,6 @@
+// lib/outbound.ts: one read of somebody's URL, as AadharshBot or as a named
+// unsigned probe.
+
 import { botHeaders, botRequestHeaders, botRobotsPolicy, BotPolicyError } from "./botauth.ts";
 import { CANONICAL_HOST } from "./const.ts";
 import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetch.ts";

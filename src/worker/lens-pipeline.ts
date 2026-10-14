@@ -1,3 +1,5 @@
+// lens-pipeline.ts: the one request pipeline every lens door runs through.
+
 import { sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";
 import { overBudget, rateLimitedHeaders, rateLimitPolicy } from "./lib/ratelimit.ts";
 import { jsonResponse } from "./lib/http.ts";

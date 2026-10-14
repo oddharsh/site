@@ -1,3 +1,9 @@
+// shell-assets.ts — the URLs of the two critical shell assets (luna.css,
+// nav.js), emitted as an HTTP `Link: rel=preload` header so Cloudflare Early
+// Hints can replay them as a 103 ahead of the HTML body. A 103 is worth exactly
+// the width of the think-time window it lands in, so it pays on the routes that
+// still compute before their 200 (/lens, the fragment endpoints, any cold isolate).
+//
 // Safe as a cross-request Early Hint, unlike the random homepage photo (which
 // home.js deliberately keeps OFF the Link header): these URLs are identical
 // for every visitor within a build, so a harvested 103 is never stale — a

@@ -1,3 +1,8 @@
+// The wire rules shared by /mcp and /serendipity/mcp: negotiation, validation,
+// CORS and result envelopes. Tool dispatch and data stay with each server.
+// Keep this module free of cloudflare:workers imports: both servers also run
+// in the host-runtime contract suite.
+//
 // ── the revisions ───────────────────────────────────────────────────
 // 2026-07-28 deleted the initialize handshake, deleted protocol-level sessions
 // and Mcp-Session-Id, and moved protocol version, client identity and

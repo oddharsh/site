@@ -1,3 +1,5 @@
+// lib/agent-execution.ts — what an agent BROWSER does with the page.
+
 export const EXECUTION_META = {
   agentScripts: { category: "execution", label: "Scripts survive the engine" },
   agentMedia: { category: "execution", label: "Media decodes" },

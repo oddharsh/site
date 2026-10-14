@@ -1,3 +1,5 @@
+// The site Worker's request PIPELINE, as a module anything can import.
+//
 // It lived in index.ts until 2026-10-02, and index.ts imports
 // `cloudflare:workers` (gotcha 16), so the order above could only be pinned by
 // comparing `indexOf` offsets in its source text. Here a test hands in fake

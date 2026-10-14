@@ -1,3 +1,5 @@
+// radar.ts — the instrument half of a signal radar.
+
 import { COLS, SPARK, blank, fit, kv, rightTo, rows, rule, s, wrap } from "./lib/tui.ts";
 
 const INNER = COLS - 4;

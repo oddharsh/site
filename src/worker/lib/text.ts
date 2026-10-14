@@ -1,3 +1,5 @@
+// lib/text.ts — the one tokenizer, and the scoring primitives built on it.
+
 export const compareCodepoints = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 export const groupThousands = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");

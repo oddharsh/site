@@ -1,3 +1,5 @@
+// lib/agent-webmcp.ts — the tools a page hands an agent once it RUNS.
+//
 // Chrome carries exactly ONE of MCP's five tool annotations across registration
 // (`readOnlyHint`; `destructiveHint`, `idempotentHint`, `openWorldHint` and
 // `title` are all discarded, and an `untrustedContentHint` that is in no MCP

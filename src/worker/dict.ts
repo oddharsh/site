@@ -1,3 +1,6 @@
+// dict.ts — the compression-dictionary oracle: will a browser ever actually use
+// the dictionary you are serving?
+
 import { lensProbe } from "./lens.ts";
 
 const VETO = "veto", WARN = "warn", OK = "ok";

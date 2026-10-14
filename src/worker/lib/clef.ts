@@ -1,3 +1,6 @@
+// One Clef call through the Workers AI binding, shared by every decision this
+// site asks Clef for (serendipity/event-tags.ts, lens-walls.ts).
+//
 // Never throws. A caller counts outcomes by cause, because "the gateway is
 // missing", "Free's daily allocation ran out" and "Clef was slow" need different
 // fixes and must not blur into one "failed". Node-safe (gotcha 16).

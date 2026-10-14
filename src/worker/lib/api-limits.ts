@@ -1,3 +1,5 @@
+// lib/api-limits.ts: the caps and defaults of the public JSON endpoints, once.
+//
 // Node-safe (gotcha 16): no imports.
 
 export const SEARCH_LIMITS = { queryMax: 160, limitDefault: 20, limitMax: 50 } as const;

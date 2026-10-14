@@ -1,3 +1,5 @@
+// lib/const.ts — shared constants for the worker.
+
 export const CANONICAL_HOST = "aadhar.sh";
 
 export function isCanonicalHost(hostname) {

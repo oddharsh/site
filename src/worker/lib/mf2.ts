@@ -1,3 +1,5 @@
+// mf2.ts: a small, bounded microformats2 parser for pages a stranger names.
+//
 // So this follows the parsing spec (https://microformats.org/wiki/microformats2-parsing)
 // for the parts a mention uses:
 //

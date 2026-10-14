@@ -1,3 +1,5 @@
+// early-data.ts — refuse a side-effecting GET that arrived as TLS early data.
+//
 // With 0-RTT Connection Resumption on (Speed > Protocol Optimization; off by
 // default on every plan), a returning client sends its first request inside the
 // TLS handshake and saves a round trip. The price is that early data is

@@ -1,3 +1,5 @@
+// inbox.ts — /inbox, the Outlook Express window where approved webmentions land.
+
 import { serveBuiltPage } from "./lib/built-page.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";

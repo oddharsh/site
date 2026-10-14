@@ -1,3 +1,8 @@
+// security headers applied to every worker-generated response. mirrors
+// what's set on static assets via _headers — without this wrapper, the
+// worker-rendered pages (/whoareyou, /around, /bot, /rn/admin, etc.)
+// would skip _headers entirely and ship without CSP / Permissions-Policy.
+
 import { PAGE_DICTIONARY, SPECULATION_RULES } from "./shell-assets.ts";
 import { scriptHashesFor } from "./csp-hashes.ts";
 import { CSP_LOOSE, cspHashed } from "./csp-policy.ts";

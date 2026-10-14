@@ -1,3 +1,5 @@
+// A pre-sort for the webmention moderation email, decided by Cloudflare's Clef.
+//
 // Pure apart from the runClef call, and node-safe (gotcha 16).
 
 import { runClef, type ClefEnv, type ClefModel } from "./lib/clef.ts";

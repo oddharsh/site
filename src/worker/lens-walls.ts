@@ -1,3 +1,5 @@
+// Is a bot view's 200 actually the site, or a wall served with a 200?
+//
 // Pure apart from the one runClef call, and node-safe (gotcha 16).
 
 import { runClef, type ClefEnv, type ClefModel } from "./lib/clef.ts";

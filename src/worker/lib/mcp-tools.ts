@@ -1,3 +1,5 @@
+// lib/mcp-tools.ts — the shared public metadata for MCP tool descriptors.
+
 const OPEN_WORLD_TOOLS = new Set([
   "now_playing",
   "lens_inspect",

@@ -1,3 +1,5 @@
+// lib/photo-grid.ts — the homepage photo grid's markup, in ONE place.
+
 import { EMPTY, html, joinHtml, type Html } from "./html.ts";
 import { asNumber } from "./parse.ts";
 

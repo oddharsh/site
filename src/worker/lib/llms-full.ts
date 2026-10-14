@@ -1,3 +1,5 @@
+// lib/llms-full.ts: the one assembler for /llms-full.txt.
+//
 // The build writes the whole file into the staged tree (step 1g3), where every
 // input already exists as bytes: the llms.txt map, each writing post's .txt, and
 // the Markdown twin of every Garage and LWE page. The Worker only reads it back,

@@ -1,3 +1,5 @@
+// encode.ts — what did your encoder actually do?
+
 import { COLS, blank, fit, kv, rows, rule, s, wrap } from "./lib/tui.ts";
 
 const INNER = COLS - 4;

@@ -1,3 +1,6 @@
+// whoareyou.ts — /whoareyou (System Properties), its values island, and the
+// /whoareyou.json feed the tray and the release canary read. Bundled by wrangler.
+
 import { BOT_UA } from "./lib/botauth.ts";
 import { BUILD_INFO } from "./lib/build-info.ts";
 import { deadline } from "./lib/cache.ts";

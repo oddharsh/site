@@ -1,3 +1,5 @@
+// lib/openapi.ts: the OpenAPI 3.1 document build.ts writes to /openapi.json.
+//
 // Node-safe (gotcha 16).
 import { LEAVES_OUT, OPERATIONS, READ_POLICY, arr, bool, budgeted, int, limited, nullStr, num, obj, ref, sharesReadBudget, str, type Operation, type Schema } from "./public-api.ts";
 import { allowedMethods } from "./api-contract.ts";

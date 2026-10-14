@@ -1,3 +1,8 @@
+// webmention.ts — the inbound half of Webmention (W3C REC, 2017): the open
+// web's way to tell this site "I linked to you." Spiritually a trackback, which
+// makes it period-correct for a site that renders as Windows XP, and it is the
+// only standard mechanism by which someone else's page can appear on aadhar.sh.
+
 import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget } from "./lib/public-fetch.ts";
 import { readResponseCapped } from "./lib/crawl.ts";
 import { esc, extractMeta, extractTitle } from "./lib/http.ts";

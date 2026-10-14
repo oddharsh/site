@@ -1,3 +1,6 @@
+// lens-render.ts — WHICH browser engine answers a Quick Action, and the shape
+// of what came back.
+
 import { isCallable } from "./lib/parse.ts";
 
 // Kitesurf REFUSES options it has not implemented, by name, before rendering:

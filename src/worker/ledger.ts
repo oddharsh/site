@@ -1,3 +1,9 @@
+// ledger.ts — /ledger, the AI crawl ledger ("accounts receivable"). Every
+// month AI crawlers read this site; nobody pays. This page does the
+// arithmetic anyway: every worker-served crawler hit, counted into Workers
+// Analytics Engine and priced at the same one cent /llms-full.txt charges,
+// rendered as an XP-era invoice that is issued monthly and collected never.
+
 import type { Env, SiteRequest } from "./lib/env.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";

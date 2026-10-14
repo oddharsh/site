@@ -1,3 +1,5 @@
+// github.ts — /github.json, what I've been doing on GitHub lately.
+//
 // `is:public` IS IN EVERY QUERY, and that is the privacy boundary, not a
 // filter applied afterwards. An issue search result carries no `private` flag
 // to filter on, and an authenticated search returns private repositories the

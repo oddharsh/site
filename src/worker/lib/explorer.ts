@@ -1,3 +1,5 @@
+// lib/explorer.ts — the Explorer address bar and task pane, as markup.
+//
 // Node-safe on purpose (no `cloudflare:` import), because build.ts and
 // contract-tests.mjs both import it under plain node. See gotcha 16.
 import { Html, html } from "./html.ts";

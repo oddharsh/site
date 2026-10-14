@@ -1,3 +1,5 @@
+// /ask's ranking, decided by Clef over the WHOLE corpus.
+//
 // Pure apart from the runClef call, and node-safe (gotcha 16).
 
 import { runClef, type ClefEnv, type ClefModel } from "./lib/clef.ts";

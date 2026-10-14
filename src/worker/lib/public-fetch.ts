@@ -1,3 +1,12 @@
+// URL policy and bounded redirect reads shared by the public-facing Workers.
+// The SSRF floor for every outbound fetch a visitor can aim: reject hosts that
+// resolve inside the network rather than out on the public web, cloud-metadata
+// endpoint included. It lives here, with the other bounded-fetch helpers, because
+// three callers need the SAME answer — /lens, webmention source verification, and
+// serendipity's cover proxy. It was written out twice (lensHostBlocked and
+// coverHostBlocked, byte-identical), which is one edit away from a hole that only
+// opens on one surface; consolidated 2026-07-28.
+
 export function privateHostBlocked(host) {
   const h = String(host || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
   if (!h) return true;

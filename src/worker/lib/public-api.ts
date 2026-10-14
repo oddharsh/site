@@ -1,3 +1,5 @@
+// lib/public-api.ts: the keyless JSON API, described once.
+//
 // Node-safe (gotcha 16): build.ts imports it from the staged tree.
 import { API_READ_BUDGET, ASK_LIMITS, CHANGE_RADAR_LIMITS, LENS_FETCH_TIMEOUT_MS, PHOTO_QUERY_LIMITS, SEARCH_LIMITS } from "./api-limits.ts";
 import { ASK_BUDGET } from "../ask-rank.ts";

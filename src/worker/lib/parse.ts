@@ -1,3 +1,5 @@
+// The boundary parse layer.
+
 export const asText = (value, fallback = null) =>
 	(typeof value === "string" && value !== "" ? value : fallback);
 

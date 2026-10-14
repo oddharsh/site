@@ -1,3 +1,8 @@
+// Ephemeral image tools for the site MCP. Image bytes are accepted in the MCP
+// request or fetched from one validated public URL, transformed through the
+// Cloudflare Images binding, and returned inline. Nothing is written to the
+// public photo bucket or the representation vault.
+
 import photoIndex from "./photo-index.json" with { type: "json" };
 import { CANONICAL_HOST } from "./lib/const.ts";
 import { fetchFollowingPublicRedirects, sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";

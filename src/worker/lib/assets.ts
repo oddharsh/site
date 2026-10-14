@@ -1,3 +1,6 @@
+// lib/assets.ts: the ways this worker hands out a static file when the default
+// asset path would lie.
+
 import { wantsMarkdown } from "./http.ts";
 import { notModifiedIfFresh } from "./cache.ts";
 import { pageDeltaPaths, parseFamilyDictionary, shellDeltaPath, tagFromAvailableDictionary } from "./dictionary-names.ts";

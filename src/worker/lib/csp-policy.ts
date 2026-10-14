@@ -1,3 +1,5 @@
+// lib/csp-policy.ts — the Content-Security-Policy strings, and nothing else.
+
 const CSP_SCRIPT_SRC_LOOSE = "'self' 'unsafe-inline'";
 
 // It shipped behind an ENFORCE_PAGE_HASHES rollout flag, pinned TRUE from

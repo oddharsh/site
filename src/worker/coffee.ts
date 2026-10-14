@@ -1,3 +1,7 @@
+// Public, read-only coffee availability. Booking remains delegated to cal and
+// keeps its own fail-closed validation; this route is a small machine-facing
+// view over the same slot calculation.
+
 import { getPublicAvailability } from "../../cal/src/slots.ts";
 import { jsonResponse } from "./lib/http.ts";
 

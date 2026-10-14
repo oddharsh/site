@@ -1,3 +1,7 @@
+// RFC 9309 parsing and evaluation shared by Lens policy reports and every
+// outbound AadharshBot request. crawl-delay is an extension: a positive value
+// makes our unscheduled readers decline the origin rather than ignore its rate.
+
 type RobotsRule = { allow: boolean; pattern: string };
 type RobotsGroup = { agents: string[]; rules: RobotsRule[]; signal: string | null; crawlDelay: number };
 

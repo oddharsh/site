@@ -1,3 +1,5 @@
+// dictionary-names.ts: the shared-dictionary wire contract, written once.
+//
 // PURE on purpose: no `node:` and no `cloudflare:` import, so the Worker, the
 // build and the contract suite all load the same file (docs/GOTCHAS.md gotcha 16).
 // The zstd ENCODER needs node:zlib and lives in tools/lib/dcz.ts.

@@ -1,3 +1,5 @@
+// nlweb.ts — /ask, NLWeb's REST endpoint, and the `ask` tool behind it.
+//
 // The reference implementation picks between them exactly this way: a `query`
 // that arrives as an OBJECT flags the structured request and sets the protocol
 // version to 0.55. Nothing else does. So a header, an Accept, or a query

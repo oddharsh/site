@@ -1,3 +1,7 @@
+// terminal.ts — the terminal apps at /finger, /photos, /lens, /radar, /dict, /cache,
+// /agent-ready and /encode, and the key-driven session model behind
+// them. lib/tui.ts draws the frames; this file decides what goes in them.
+
 import { agentReadyFrame } from "./agent-ready.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";

@@ -1,3 +1,5 @@
+// census-workflow.ts: one Workflow instance per census roster host.
+//
 // WHY THIS FILE EXISTS AT ALL, and why it is its own module. It imports
 // `cloudflare:workers`, which gotcha 16 forbids everywhere the node contract
 // suite can reach: that suite imports census.ts and lens.ts directly, and node's

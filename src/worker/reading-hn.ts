@@ -1,3 +1,7 @@
+// reading-hn.ts: which /reading links have a Hacker News thread, and how big.
+// Bundled by wrangler at deploy; not served, and node-safe so the contract
+// suite can import it.
+//
 // HN's own API has no URL search. Algolia's HN index does, one URL per query,
 // and /reading holds ~150 links. One query each would spend three times the
 // 50 subrequests Workers Free allows an invocation (gotcha 36), so this runs as

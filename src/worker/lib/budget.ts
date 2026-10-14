@@ -1,3 +1,6 @@
+// budget.ts — the per-invocation subrequest ledger. Bundled by wrangler at
+// deploy; not served, and node-safe so the contract suite can import it.
+
 import { asText } from "./parse.ts";
 import type { Span } from "./span-vocabulary.ts";
 

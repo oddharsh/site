@@ -1,3 +1,5 @@
+// lib/api-contract.ts: what every documented API path promises, around its handler.
+//
 // dispatch.ts calls apiPreflight before routing and withApiContract on every
 // answer from an API path, the preflight's refusals included.
 // Node-safe (gotcha 16).

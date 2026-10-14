@@ -1,3 +1,6 @@
+// cache-lint.ts — does your cache validator actually work? A BEHAVIORAL probe,
+// not a header read.
+
 import { outboundRead } from "./lib/outbound.ts";
 import { parseCacheControl } from "./dict.ts";
 

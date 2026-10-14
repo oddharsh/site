@@ -1,3 +1,6 @@
+// csp-hashes.ts — the per-document sha256 allowlist for inline <script> blocks,
+// so `script-src` can drop 'unsafe-inline' and start doing real work.
+
 export const PAGE_SCRIPT_HASHES = {}; // build:csp-hashes
 
 export function canonicalPath(pathname) {

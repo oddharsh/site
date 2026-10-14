@@ -1,3 +1,5 @@
+// What does THIS site need an agent to find, and what is it building past need?
+//
 // Pure and node-safe (gotcha 16): every input is evidence the scan already
 // holds, so this adds zero subrequests.
 

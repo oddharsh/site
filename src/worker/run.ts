@@ -1,3 +1,9 @@
+// run.ts — the zero-JS floor under the Run palette (blueprint's declarative
+// ladder). The ⌘K palette in nav.js is script; this is the same idea as a real
+// page: an <input list> + <datalist> of destinations and a GET form this
+// handler answers with a 302. Works with scripting disabled, invokers missing,
+// or dialog unsupported — the palette's own footer links here.
+
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";

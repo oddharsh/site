@@ -1,3 +1,5 @@
+// trust.ts: /about, /contact, /privacy and /developers.
+
 import { lunaPage } from "./lib/chrome.ts";
 import { html, type Html } from "./lib/html.ts";
 import { missJson } from "./lib/not-found.ts";

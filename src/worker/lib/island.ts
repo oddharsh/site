@@ -1,3 +1,6 @@
+// lib/island.ts — the site's one convention for a page that is MOSTLY fixed and
+// partly per request.
+//
 // Four rules, each learned on the homepage first:
 //   1. The placeholder comes from the SAME renderer as the fragment, fed a
 //      placeholder model, so the two share markup and the swap moves as little

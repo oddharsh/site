@@ -1,3 +1,6 @@
+// lib/inline-csp.ts — a hashed script-src for a page the Worker renders at
+// request time.
+//
 // Built documents get their hashes from build step 7c (lib/csp-hashes.ts). A page
 // rendered per request never reached that map, so every one of them shipped
 // `script-src 'self' 'unsafe-inline'` (gotcha 17). The open follow-up there was a

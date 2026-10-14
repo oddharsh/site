@@ -1,3 +1,6 @@
+// tui.ts — the frame renderer behind the terminal tools (/finger, /dict, ...). Box-drawing, ANSI SGR, and the
+// width math that keeps an 80-column frame actually 80 columns wide.
+
 export const COLS = 80;
 
 export const SPARK = "▁▂▃▄▅▆▇█";

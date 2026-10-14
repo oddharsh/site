@@ -1,3 +1,5 @@
+// lib/preview.ts — the guard that makes a Workers preview URL safe to hand out.
+//
 // Preview URLs are how a branch gets a real, servable address before it is
 // production (`previewUrls: true` in cloudflare.config.ts). The thing to understand
 // about them, because it is not obvious and it is the whole reason this file

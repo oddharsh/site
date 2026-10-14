@@ -1,3 +1,7 @@
+// /search — bounded server-side search over the generated public corpus.
+// The index is static and loaded only on this route (or by the site MCP tool),
+// keeping the homepage critical path free of search bytes and fan-out.
+
 import { cachedRender } from "./lib/cache.ts";
 import { SEARCH_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { lunaPage } from "./lib/chrome.ts";

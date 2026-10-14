@@ -1,3 +1,6 @@
+// twins.ts — which request paths have a Markdown twin, so a page can advertise
+// its own alternate representation instead of leaving agents to guess.
+
 export const TWIN_PATHS = []; // build:twins
 
 const TWINS = new Set(TWIN_PATHS);

@@ -1,3 +1,8 @@
+// env.ts — the site Worker's binding surface as ONE type, checked against
+// cloudflare.config.ts rather than remembered. Bundled by wrangler at deploy; not
+// served. Types only, so the whole module erases and nothing here reaches the
+// wire.
+//
 // WHY IT IS HAND-WRITTEN RATHER THAN `wrangler types`. That command works here
 // and its binding list is correct, so this is a choice rather than a
 // workaround. It writes 15,125 lines, of which ~15,070 re-declare the runtime

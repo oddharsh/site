@@ -1,3 +1,5 @@
+// What the Worker does with a 404, and the counter that says whether it helped.
+//
 // Node-safe (gotcha 16): the contract suite imports it outside workerd.
 
 import { HASHED_ASSETS } from "./shell-assets.ts";

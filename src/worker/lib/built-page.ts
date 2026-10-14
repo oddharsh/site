@@ -1,3 +1,5 @@
+// lib/built-page.ts: what "a built document with a live fallback" means, once.
+
 import { serveStaticPage } from "./assets.ts";
 
 type Awaitable<T> = T | Promise<T>;

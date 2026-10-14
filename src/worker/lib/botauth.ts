@@ -1,3 +1,9 @@
+// branded crawler. uses our own UA + signs every outbound request per
+// RFC 9421 (HTTP Message Signatures), profile per the Web Bot Auth IETF
+// draft. signatures cover @authority + signature-agent; receiving sites
+// can fetch the JWKS at https://aadhar.sh/.well-known/http-message-signatures-directory
+// and verify against the published public keys.
+//
 // workerd now ships ML-DSA in WebCrypto behind the `webcrypto_modern_algorithms`
 // compatibility flag, on BoringSSL. Measured 2026-10-01 on the pinned workerd:
 // 0.12ms per signature, 72x the JS figure, and 0.03ms to turn the seed into a

@@ -1,3 +1,6 @@
+// lib/html.ts — HTML as a TYPE, so escaping is structural rather than
+// remembered.
+
 export class Html {
   readonly html: string;
   constructor(value: string) {
