@@ -102,7 +102,8 @@ test("stripJpegExif drops only the Exif segment and keeps the scan byte for byte
   await writeFile(src, Buffer.concat([soi, keep[0], seg(0xe1, "Exif\0\0MM\0*orientation 8"), keep[1], keep[2], scan]));
   stripJpegExif(src, dst);
   assert.deepEqual(await readFile(dst), Buffer.concat([soi, ...keep, scan]));
-  // Control: a file that is not a JPEG throws instead of copying through.
-  await writeFile(src, Buffer.from("\x89PNG"));
-  assert.throws(() => stripJpegExif(src, dst), /not a JPEG/);
+  // A file that is not a JPEG has no Exif segment to drop: copied as is.
+  await writeFile(src, Buffer.from("\x89PNG eXIf-looking bytes"));
+  stripJpegExif(src, dst);
+  assert.deepEqual(await readFile(dst), await readFile(src));
 });

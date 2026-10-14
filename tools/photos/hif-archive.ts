@@ -92,10 +92,13 @@ export async function searchDistance(wins: (d: number) => Promise<boolean>, r = 
 }
 
 /** Copy a JPEG without its Exif APP1 segments, so the lossless repack carries
- *  no orientation. Every other segment, and the scan, is kept byte for byte. */
+ *  no orientation. Every other segment, and the scan, is kept byte for byte.
+ *  Anything that is not a JPEG has no Exif segment to drop and is copied as
+ *  is: cjxl then encodes its pixels, which is still the bar that file sets,
+ *  and the transcode fallback refuses it, since djxl cannot rebuild it. */
 export function stripJpegExif(src: string, dst: string) {
   const b = fs.readFileSync(src);
-  if (b[0] !== 0xff || b[1] !== 0xd8) throw new Error(`${path.basename(src)} is not a JPEG`);
+  if (b[0] !== 0xff || b[1] !== 0xd8) return fs.copyFileSync(src, dst);
   const out = [b.subarray(0, 2)];
   let i = 2;
   while (i + 4 <= b.length) {
@@ -202,14 +205,14 @@ export async function hifArchive(hif: string, baseline: string, out: string) {
     await sh(["cjxl", "--quiet", "--lossless_jpeg=1", "-e", "1", bare, repack]);
     await sh(["djxl", repack, base, ...DECODE]);
     const bs = pngSize(base);
-    const transcode = async (reason: string) => {
+    const transcode = async (reason: string, dest = out) => {
       // The archive stays what it was: the baseline, losslessly repacked, and
       // only once djxl gives the exact JPEG back.
       const rebuilt = path.join(work, "rebuilt.jpg");
-      await sh(["cjxl", "--quiet", "--lossless_jpeg=1", "-e", "9", "--compress_boxes=0", baseline, out]);
-      await sh(["djxl", out, rebuilt]);
+      await sh(["cjxl", "--quiet", "--lossless_jpeg=1", "-e", "9", "--compress_boxes=0", baseline, dest]);
+      await sh(["djxl", dest, rebuilt]);
       if (!fs.readFileSync(rebuilt).equals(fs.readFileSync(baseline))) throw new Error("the repacked baseline does not rebuild byte for byte");
-      return { mode: "transcode" as const, reason, bytes: fs.statSync(out).size };
+      return { mode: "transcode" as const, reason, bytes: fs.statSync(dest).size };
     };
     if (bs.w !== w || bs.h !== h) return await transcode(`baseline is ${bs.w}x${bs.h}, the HIF ${w}x${h}`);
     const baseScore = await score(ref, base);
@@ -230,6 +233,15 @@ export async function hifArchive(hif: string, baseline: string, out: string) {
     const gap = Math.abs(codestreamBytes(out) - chosen.codestream);
     if (gap > 256) throw new Error(`the oriented encode's codestream differs from the scored one by ${gap} bytes`);
     await sh(["exif-sooc", "-TagsFromFile", hif, "-all:all", "-overwrite_original", out]);
+    // Winning on quality is not enough: against the browser-decoded bar, a
+    // quarter of the photos first re-measured (6 of 24) beat it only with a
+    // file larger than the repack it would replace.
+    const direct = fs.statSync(out).size, repacked = path.join(work, "repacked.jxl");
+    const kept = await transcode("", repacked);
+    if (direct >= kept.bytes) {
+      fs.copyFileSync(repacked, out);
+      return { ...kept, reason: `the smallest encode that beats the bar (d${d}, ${direct} B) is no smaller than the repack (${kept.bytes} B)` };
+    }
     return {
       mode: "direct" as const,
       distance: d,

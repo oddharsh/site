@@ -244,20 +244,19 @@ if [ ! -x "$WRANGLER" ]; then
   exit 1
 fi
 # cjxl and djxl make and check each original's JPEG XL upload in phase 3, and
-# for a HIF hif-archive.ts also scores it against djpeg's decode of the bar.
+# for a HIF hif-archive.ts also scores it against djxl's decode of the bar.
 # Its two metrics come from tools/photos/photo-metrics, which it builds with
 # the cargo require-zenc.sh already demands, so libjxl's ssimulacra2 and
 # butteraugli_main are no longer needed here. A remote render skips phase 3,
 # so only an uploading run needs these.
 NEEDED=(sips exif-sooc)
-[ "${REMOTE_RENDER_ONLY:-0}" = "1" ] || NEEDED+=(cjxl djxl djpeg)
+[ "${REMOTE_RENDER_ONLY:-0}" = "1" ] || NEEDED+=(cjxl djxl)
 for cmd in "${NEEDED[@]}"; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "error: $cmd not found in PATH" >&2
     case "$cmd" in
       exif-sooc) echo "  install with: cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc" >&2 ;;
       cjxl|djxl) echo "  install with: brew install jpeg-xl" >&2 ;;
-      djpeg) echo "  install with: brew install jpeg-turbo" >&2 ;;
     esac
     exit 1
   fi
