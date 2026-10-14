@@ -27,7 +27,7 @@ import type { SpanAttrs } from "../src/worker/lib/span-vocabulary.ts";
 import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
-import { asRecord, asText } from "../src/worker/lib/parse.ts";
+import { asList, asRecord, asText } from "../src/worker/lib/parse.ts";
 import { EVENT_FORMATS, EVENT_TAGS_DDL, EVENT_TOPICS, TAG_MIN_CONFIDENCE, askClef, buildTagRequest, tagInputHash } from "./event-tags.ts";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
@@ -916,7 +916,7 @@ async function fetchMyEvents(auth, selfId, walked: { pages: number } | null = nu
     // invocation. Ten fetches total stays well under the cap. Four past pages
     // restores the depth the original app used; the two-page Worker port silently
     // dropped the older half of an active contributor's history.
-    let cursor = null, page = 0;
+    let cursor: string | null = null, page = 0;
     const max = period === "past" ? SERENDIPITY_SYNC_LIMITS.pastPages : SERENDIPITY_SYNC_LIMITS.futurePages;
     while (page < max) {
       page++;
@@ -925,8 +925,9 @@ async function fetchMyEvents(auth, selfId, walked: { pages: number } | null = nu
       if (cursor) p.set("pagination_cursor", cursor);
       const data = asRecord(await (await lumaFetch(`${LUMA_API}/home/get-events?${p.toString()}`, auth)).json()) ?? {};
       all.push(...parseEvents(data, selfId));
-      if (!data.has_more || !data.next_cursor) break;
-      cursor = data.next_cursor;
+      const next = asText(data.next_cursor);
+      if (!data.has_more || !next) break;
+      cursor = next;
     }
   }
   return all;
@@ -958,9 +959,13 @@ export async function fetchEventGuests(
     if (cursor) p.set("pagination_cursor", cursor);
     if (budget) budget.charge(1);
     const data = asRecord(await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p.toString()}`, auth)).json()) ?? {};
-    for (const e of (data.entries || [])) all.push(parseGuest(e.api_id, e.user || {}));
-    if (!data.has_more || !data.next_cursor) return { guests: all, done: true, cursor: null };
-    cursor = data.next_cursor;
+    for (const raw of asList(data.entries)) {
+      const e = asRecord(raw);
+      if (e) all.push(parseGuest(e.api_id, e.user || {}));
+    }
+    const next = asText(data.next_cursor);
+    if (!data.has_more || !next) return { guests: all, done: true, cursor: null };
+    cursor = next;
   }
 }
 // Luma stores the description as a ProseMirror JSON doc (top-level
@@ -2101,10 +2106,10 @@ async function drillStealth(key, attendee, knownLinkedIn) {
   const q = `${seed}${attendee.bio_short ? " " + attendee.bio_short : ""} building stealth startup — what are they working on, recent posts, tweets, interviews`;
   try {
     const data = await exaPost(key, "/search", { query: q, type: "neural", numResults: 5, startPublishedDate: new Date(Date.now() - 365 * 864e5).toISOString(), contents: { text: { maxCharacters: 3000 }, summary: { query: STEALTH_PROMPT } } });
-    const ranked = (data.results ?? []).map((r) => ({ r, p: parseStealth(r.summary) })).filter(({ p }) => p.domain || p.thesis || p.signal)
+    const ranked = asList(data.results).flatMap((raw) => { const r = asRecord(raw); return r ? [{ r, p: parseStealth(asText(r.summary)) }] : []; }).filter(({ p }) => p.domain || p.thesis || p.signal)
       .sort((a, b) => ((b.p.domain ? 1 : 0) + (b.p.thesis ? 2 : 0) + (b.p.signal ? 2 : 0)) - ((a.p.domain ? 1 : 0) + (a.p.thesis ? 2 : 0) + (a.p.signal ? 2 : 0)));
     const top = ranked[0];
-    return top ? { ...top.p, sources: ranked.slice(0, 3).map((x) => x.r.url).filter(Boolean) } : null;
+    return top ? { ...top.p, sources: ranked.slice(0, 3).flatMap(({ r }) => { const url = asText(r.url); return url ? [url] : []; }) } : null;
   } catch { return null; }
 }
 // enrich one attendee via Exa, store into enrichments. Returns {outcome, profile?}.

@@ -465,7 +465,7 @@ test("every program declared null-safe still declares it", async () => {
 // PROSE IS NOT AN ANNOTATION, which is why this matches only tags that open a
 // comment line. The notes written ABOUT this trap all mention `@type` inside a
 // `//` line and must survive; a test that failed on them would be unfixable
-// without deleting its own explanation.
+// without deleting its own explanation. Gotcha 42.
 test("no .ts file carries a JSDoc type annotation, which TypeScript ignores", async () => {
   const { execFileSync } = await import("node:child_process");
   const { fileURLToPath } = await import("node:url");

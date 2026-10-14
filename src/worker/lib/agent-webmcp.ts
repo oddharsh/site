@@ -39,7 +39,7 @@
 
 // Caps. A catalog is a stranger's data and lands in a JSON payload this site
 // serves, so every axis is bounded rather than trusted.
-import { asList, asNumber, asRecord } from "./parse.ts";
+import { asList, asNumber, asRecord, asScalarText, asText } from "./parse.ts";
 
 export const WEBMCP_LIMITS = { tools: 40, description: 300, params: 12, name: 80 };
 
@@ -134,7 +134,7 @@ export type WebmcpReading = {
 export function readWebmcpProbe(raw: unknown): WebmcpReading | null {
   const r = asRecord(raw);
   if (!r) return null;
-  if (r.probeError) return { present: null, error: String(r.probeError).slice(0, 160) };
+  if (r.probeError) return { present: null, error: asScalarText(r.probeError).slice(0, 160) };
   // Three states, and collapsing the first two is the whole failure this guards.
   // `supported:false` means the RENDERING ENGINE has no WebMCP, so nothing could
   // have been seen; `present:false` means it does and the page registered none.
@@ -151,7 +151,7 @@ export function readWebmcpProbe(raw: unknown): WebmcpReading | null {
     read: count(r.read, 0),
     write: count(r.write, 0),
     unstated: count(r.unstated, 0),
-    origins: asList(r.origins).slice(0, 8),
+    origins: asList(r.origins).flatMap((raw) => { const origin = asText(raw); return origin ? [origin] : []; }).slice(0, 8),
     truncated: r.truncated === true,
     tools,
   };

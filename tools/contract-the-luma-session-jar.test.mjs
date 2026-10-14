@@ -275,7 +275,7 @@ test("the cron enrich dispatch skips cleanly when it is not configured", async (
 });
 
 test("the cron self-dispatches skip without a loopback instead of fetching their own route", async () => {
-  // /serendipity* is a route, and a same-zone fetch() to a route goes to the
+  // Gotcha 64: /serendipity* is a route, and a same-zone fetch() to a route goes to the
   // origin, which this zone lacks: production logged 522 for every tag POST
   // until the cron was handed ctx.exports.default. No loopback must mean no
   // request, so a caller that forgets it reads as a named skip, not a 522.

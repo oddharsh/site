@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Validate the authoring contract and the page wiring for both explanatory
 // families. This stays separate from build.ts so editors can run it without
-// staging the deploy tree.
+// staging the deploy tree. `validate` doesn't run it (gotcha 32).
 
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";

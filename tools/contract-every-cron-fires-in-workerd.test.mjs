@@ -290,7 +290,7 @@ const JOB_EVIDENCE = {
       assert.ok(summary, "the serendipity sweep never logged its summary");
       assert.equal(summary.events[0]?.label, "cron-test", "the sweep did not read the seeded cookie set");
       assert.ok(summary.events[0]?.error, "the stub answers HTML, so the event sync should report an error");
-      // The tag pass is a self-dispatch, and /serendipity* is a ROUTE, which a
+      // The tag pass is a self-dispatch (gotcha 64), and /serendipity* is a ROUTE, which a
       // same-zone fetch() cannot reach: production sent all 55 tag POSTs from
       // 2026-10-02 to 10-14 to the absent origin and logged 522 for each.
       // Only a loopback through ctx.exports reaches the handler. "no AI
