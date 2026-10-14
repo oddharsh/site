@@ -1,0 +1,27 @@
+{
+ "XT507399-av2.avif": {
+  "width": 600,
+  "height": 600,
+  "sha256": "0a3f3d1cfbbc01629c802674bb477ceeb2a729e429f5db9457b759a8986e01a6"
+ },
+ "XT507488-av2.avif": {
+  "width": 600,
+  "height": 600,
+  "sha256": "24477a1100212d10e0b1ff9fc680de127fc57a7f0029377d2cd9cd81838b93af"
+ },
+ "XT507525-av2.avif": {
+  "width": 600,
+  "height": 600,
+  "sha256": "eed6b09b89e00757591b1837eb6845fd01894b97866cd5d14a4d9c4635d0f1f3"
+ },
+ "XT508319-av2.avif": {
+  "width": 600,
+  "height": 600,
+  "sha256": "94ccc7b8672790909da56ef5a289f8ddef70da04cd081e5e1a652aea19cf661d"
+ },
+ "demo-av2.avif": {
+  "width": 128,
+  "height": 128,
+  "sha256": "ea07f666341ed6ecb109c95a97066388219ae384d40839f68c65ed341a5ced86"
+ }
+}

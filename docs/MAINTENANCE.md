@@ -1887,6 +1887,23 @@ decodes AV2 and the `av02` image format is experimental, so none of this output
 can ship. The slow speeds are the expensive rows (`s3` is several times `s4`),
 so pick variants rather than running the whole list.
 
+### Rebuild /garage/av2's in-page AV2 decoder
+```bash
+tools/photos/libavif-avm/build.sh
+tools/photos/av2-wasm/build.sh
+bun tools/photos/av2-wasm/samples.ts --src "<originals>" --stems XT507488,XT507525,XT508319,XT507399
+bun tools/photos/av2-wasm/expect.ts
+```
+`build.sh` needs `emcc` (`brew install emscripten`, declared in
+`config/tools.json`) and the AVM source the first command fetches. It writes
+`public/garage/av2/av2dec.<sha8>.wasm`; then set `WASM_URL` in
+`src/client/garage/av2-decode.js` to the name it prints. `samples.ts` re-encodes
+the page's AV2 thumbnails and refuses a photo whose shipped AVIF it can't
+reproduce byte for byte. `expect.ts` records what native AVM decodes each file
+to, and `contract-av2-decoder-matches-avm.test.mjs` holds the shipped WebAssembly
+to it, so re-run it after any AV2 file or the `.wasm` changes. Moving the AVM pin
+changes the bitstream the decoder reads, so re-encode the samples with it.
+
 ---
 
 ## Regenerate the OG / Twitter cards
