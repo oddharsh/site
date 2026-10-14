@@ -61,6 +61,9 @@ int main(int argc, char **argv) {
     avm_codec_dec_cfg_t cfg = { 0 };
     cfg.threads = threads;
     if (avm_codec_dec_init(&ctx, avm_codec_av2_dx(), &cfg, 0)) return 1;
+    // AVM turns row multithreading off by default: each tile is then parsed
+    // and reconstructed by one thread. AV2BENCH_ROW_MT=1 turns it on.
+    if (getenv("AV2BENCH_ROW_MT")) avm_codec_control(&ctx, AV2D_SET_ROW_MT, 1u);
     const double t0 = now_ms();
     if (avm_codec_decode(&ctx, b, n, NULL)) {
       fprintf(stderr, "decode failed\n");
