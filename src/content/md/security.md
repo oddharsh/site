@@ -54,6 +54,11 @@ from AadharshBot can verify it really came from here. See
   enables re-opens it silently. This page names the gap because a page about
   guarantees should say where they stop; details at
   <https://aadhar.sh/whoareyou.md>.
+- **One worker, one more token**: the AV2 decoder on /garage/av2 runs as a
+  dedicated worker, and that worker script's own response adds
+  `'wasm-unsafe-eval'` so it can compile its WebAssembly. A worker enforces the
+  policy of its own script and never the page's, so no document carries the
+  token.
 - **Permissions-Policy**: camera, microphone, geolocation, USB, Topics and 10
   more, all denied.
 - **X-Frame-Options**: `DENY`.

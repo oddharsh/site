@@ -167,6 +167,30 @@
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
   Link: </webmention>; rel="webmention"
 
+# /garage/av2's AV2 decoder. Two rules, both of which must sit below /garage/*.
+#
+# The worker script's own policy adds 'wasm-unsafe-eval', which nothing else on
+# the site gets. A dedicated worker enforces the CSP of ITS OWN response and never
+# the page's (measured in Chrome 152, 2026-10-13: the page allowing WASM did not
+# let a worker whose response forbade it compile, and the reverse held too), so
+# this is the narrowest place the token can live. The page keeps the hashed
+# document policy, unchanged. No 'unsafe-inline': a worker has no inline script.
+# The /a/ copy is what the page loads; the plain one serves dev and old HTML.
+/a/av2-decode.*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+/garage/av2-decode.js
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+
+# The decoder's WebAssembly, named by the first 8 hex of its own sha256
+# (tools/photos/av2-wasm/build.sh), so a year + immutable is true, like /i/. The
+# shell preloads are dead weight on a fetched binary, so detach both.
+/garage/av2/av2dec.*
+  ! Cache-Control
+  ! Link
+  Cache-Control: public, max-age=31536000, immutable
+
 # NB: a narrow rule COMBINES with the glob below rather than overriding it, so a
 # plain second Cache-Control ships two conflicting max-ages in one field. That
 # much has been true since 2026-08-11. What this comment used to conclude, that

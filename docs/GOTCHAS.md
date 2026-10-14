@@ -348,7 +348,19 @@ by renumbering. The long-form history of each one is in git
     measured. Each miss is an advisory now. The contract test replays the
     proxy's exact bytes, with and without `cf-ray`.
 
-61. **A clean diff after a generator can't tell "unchanged" from "never
+61. **A dedicated worker enforces the CSP on its own script, never the
+    page's.** Measured in Chrome 152 on 2026-10-13 with a page and a module
+    worker that each did or didn't allow `'wasm-unsafe-eval'`: the worker's
+    WebAssembly compile followed only the worker response's header, and a
+    worker served with no CSP compiled freely under a page that forbade it.
+    So `/garage/av2`'s decoder takes the token on its worker script alone
+    (`public/_headers`, `/a/av2-decode.*`), and the page keeps the hashed
+    document policy. Two traps around it: a `_headers` CSP rule combines with
+    the `/*` one (gotcha 31), so it needs `! Content-Security-Policy` first;
+    and a module that sets `onmessage` on `globalThis` outside a worker keeps
+    Bun's event loop open, so a contract test that imports it never exits.
+
+62. **A clean diff after a generator can't tell "unchanged" from "never
     written".** `og-cards.yml` decides whether to open a PR from
     `git status` after the bake. Its first dispatch (run 38481736111,
     2026-10-13) went green and proposed nothing: cards had been zenc JPEGs

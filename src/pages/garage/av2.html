@@ -47,6 +47,13 @@
 .av2-tag{font-family:var(--font-mono);font-size:var(--text-micro);margin:4px 0}
 .av2-fig figcaption{font-size:var(--text-micro);margin-top:4px}
 .av2-note{font-size:var(--text-micro);color:var(--slate-40)}
+.av2-live-demo{margin:10px 0;font-size:var(--text-micro)}
+.av2-live-demo canvas{display:block;width:128px;height:128px;border:1px solid var(--slate-73)}
+.av2-pair{margin:14px 0}
+.av2-pairstack{cursor:pointer;width:600px;max-width:100%}
+.av2-pairstack img,.av2-pairstack canvas{display:none;width:100%;height:auto;border:1px solid var(--slate-73)}
+.av2-pairstack .on{display:block}
+.av2-pair figcaption{font-size:var(--text-micro);margin-top:4px}
 .av2-code{font-family:var(--font-mono);font-size:var(--text-micro);background:var(--row-alt);border:1px solid var(--slate-73);padding:6px 10px;overflow-x:auto}
 @media(max-width:620px){.dd-speeds .dd-row,.dd-lossless .dd-row,.dd-bpp .dd-row,.dd-tune .dd-row{grid-template-columns:1fr 1fr}}
 </style>
@@ -61,7 +68,7 @@
   </div><!-- /axp:window -->
   <div class="content prose">
 <h1>AV2, before anyone can see it</h1>
-<p class="garage-intro"><a class="term" data-t="av2" href="https://en.wikipedia.org/wiki/AV2" title="The video codec that follows AV1, from the Alliance for Open Media. Like AV1, it can also compress single still images." rel="external">AV2</a> is the successor to <a class="term" data-t="av1" href="https://en.wikipedia.org/wiki/AV1" title="A royalty-free video codec from the Alliance for Open Media. AVIF images are single AV1 frames stored in an image file." rel="external">AV1</a>, the codec inside every <a class="term" data-t="avif" href="https://en.wikipedia.org/wiki/AVIF" title="An image format that stores a picture compressed with the AV1 video codec. Every current major browser can display it." rel="external">AVIF</a> image, and its reference encoder <a href="https://github.com/AOMediaCodec/avm">shipped 1.0.0 in May</a>. AOM's own <a href="https://arxiv.org/abs/2605.15800">all-intra report</a> puts it <data value="17.82% (PSNR-Y) to 23.58% (VMAF)">18 to 24%</data> ahead of AV1 on stills. That number comes from video test sequences scored with <a class="term" data-t="psnr" href="https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio" title="Peak signal-to-noise ratio: a simple score, in decibels, of how far a compressed image's pixels drift from the original. Higher means closer." rel="external">PSNR</a>, <a class="term" data-t="ssim" href="https://en.wikipedia.org/wiki/Structural_similarity_index_measure" title="Structural similarity: a score up to 1 that compares local brightness, contrast and structure between two images. Closer to 1 means more alike." rel="external">SSIM</a> and <a class="term" data-t="vmaf" href="https://en.wikipedia.org/wiki/Video_Multimethod_Assessment_Fusion" title="Netflix's video quality score, which combines several measurements into one 0 to 100 number that predicts how viewers would rate the picture." rel="external">VMAF</a>. I wanted the answer for photographs, scored the way this site already scores its own images, at the exact byte budgets it ships. No browser can decode an AV2 image yet, so everything below is a picture your browser couldn't have drawn.</p>
+<p class="garage-intro"><a class="term" data-t="av2" href="https://en.wikipedia.org/wiki/AV2" title="The video codec that follows AV1, from the Alliance for Open Media. Like AV1, it can also compress single still images." rel="external">AV2</a> is the successor to <a class="term" data-t="av1" href="https://en.wikipedia.org/wiki/AV1" title="A royalty-free video codec from the Alliance for Open Media. AVIF images are single AV1 frames stored in an image file." rel="external">AV1</a>, the codec inside every <a class="term" data-t="avif" href="https://en.wikipedia.org/wiki/AVIF" title="An image format that stores a picture compressed with the AV1 video codec. Every current major browser can display it." rel="external">AVIF</a> image, and its reference encoder <a href="https://github.com/AOMediaCodec/avm">shipped 1.0.0 in May</a>. AOM's own <a href="https://arxiv.org/abs/2605.15800">all-intra report</a> puts it <data value="17.82% (PSNR-Y) to 23.58% (VMAF)">18 to 24%</data> ahead of AV1 on stills. That number comes from video test sequences scored with <a class="term" data-t="psnr" href="https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio" title="Peak signal-to-noise ratio: a simple score, in decibels, of how far a compressed image's pixels drift from the original. Higher means closer." rel="external">PSNR</a>, <a class="term" data-t="ssim" href="https://en.wikipedia.org/wiki/Structural_similarity_index_measure" title="Structural similarity: a score up to 1 that compares local brightness, contrast and structure between two images. Closer to 1 means more alike." rel="external">SSIM</a> and <a class="term" data-t="vmaf" href="https://en.wikipedia.org/wiki/Video_Multimethod_Assessment_Fusion" title="Netflix's video quality score, which combines several measurements into one 0 to 100 number that predicts how viewers would rate the picture." rel="external">VMAF</a>. I wanted the answer for photographs, scored the way this site already scores its own images, at the exact byte budgets it ships. No browser can decode an AV2 image yet, so the figures below are decodes I made offline, and one section brings its own decoder to draw AV2 in your browser anyway.</p>
 
 <h2>Your browser, right now</h2>
 <p>These are three copies of the same 128 px crop. The first is AV1, the codec inside the AVIF files browsers decode today. The second is AV2 in the same container, at 2,030 bytes against AV1's 2,097. The third is how you'd try to ship AV2 safely: a <code>&lt;picture&gt;</code> source typed <code>image/avif</code>, with a <a class="term" data-t="webp" href="https://en.wikipedia.org/wiki/WebP" title="Google's image format for the web. It usually compresses better than JPEG and not as well as AVIF." rel="external">WebP</a> fallback.</p>
@@ -72,6 +79,36 @@
 </div>
 <p id="av2-verdict" class="av2-verdict">Enable JavaScript and this line reports what each image did.</p>
 <p>In Chrome 154 and Canary 156 the third image is broken, and the WebP never loads. Of everything on this page, that's the finding most likely to cost somebody an afternoon, so it comes first.</p>
+<h2>Decoding it here instead</h2>
+<p>Your browser couldn't draw that second file, but this page can. The button below fetches AOM's reference decoder, AVM 1.0.0, compiled to <a class="term" data-t="webassembly" href="https://developer.mozilla.org/en-US/docs/WebAssembly" title="A compact binary format for code that browsers and other runtimes run at near-native speed, usually compiled from languages like Rust or C++." rel="external">WebAssembly</a>, and runs it on a background thread. It's about 550 KB over the wire, which is why it waits for a click. It draws exactly the pixels the native build does: I compared every decoded sample on 16 files, from 8-bit monochrome to 10-bit 4:4:4, and all of them matched.</p>
+<p><button type="button" id="av2-go">Decode the AV2 images (about 550 KB)</button></p>
+<p id="av2-run" class="av2-verdict">Nothing has been fetched yet.</p>
+<div id="av2-live" hidden>
+<figure class="av2-live-demo"><canvas id="av2-demo-canvas" width="128" height="128" aria-label="The demo's AV2 file, decoded in this page"></canvas><figcaption>The 128 px AV2 file from the second slot above</figcaption></figure>
+<p>Below are four of the 600 px thumbnails this site ships, from thin to dense. Each AV1 image is the AVIF file the site actually serves, drawn by your browser's own decoder. Each AV2 image is the largest AVM 1.0.0 encode at or under that file's size, cut from the same source and drawn by the WebAssembly decoder. Click one to flip between the two.</p>
+<figure class="av2-pair" data-av2="/garage/av2/XT507488-av2.avif" data-av1-label="AV1, the shipped file, 17,205 B" data-av2-label="AV2, 17,141 B">
+  <p class="av2-tag"></p>
+  <div class="av2-pairstack"><img class="on" src="/i/XT507488.f028baef.avif" width="600" height="600" loading="lazy" decoding="async" alt="The shipped AV1 thumbnail"><canvas width="600" height="600" aria-label="The AV2 encode at the same budget, decoded in this page"></canvas></div>
+  <figcaption>0.38 bits per pixel, the sparse end. ssimulacra2 against the source: AV2 81.63, AV1 80.11.</figcaption>
+</figure>
+<figure class="av2-pair" data-av2="/garage/av2/XT507525-av2.avif" data-av1-label="AV1, the shipped file, 28,236 B" data-av2-label="AV2, 27,899 B">
+  <p class="av2-tag"></p>
+  <div class="av2-pairstack"><img class="on" src="/i/XT507525.c937a50e.avif" width="600" height="600" loading="lazy" decoding="async" alt="The shipped AV1 thumbnail"><canvas width="600" height="600" aria-label="The AV2 encode at the same budget, decoded in this page"></canvas></div>
+  <figcaption>0.63 bits per pixel, near the tier's median of 0.67. ssimulacra2: AV2 81.27, AV1 80.70.</figcaption>
+</figure>
+<figure class="av2-pair" data-av2="/garage/av2/XT508319-av2.avif" data-av1-label="AV1, the shipped file, 52,822 B" data-av2-label="AV2, 52,000 B">
+  <p class="av2-tag"></p>
+  <div class="av2-pairstack"><img class="on" src="/i/XT508319.bf0268a0.avif" width="600" height="600" loading="lazy" decoding="async" alt="The shipped AV1 thumbnail"><canvas width="600" height="600" aria-label="The AV2 encode at the same budget, decoded in this page"></canvas></div>
+  <figcaption>1.17 bits per pixel. ssimulacra2: AV2 79.44, AV1 74.70. This one is an exception: between 0.8 and 1.2 bits per pixel, the table further down counts 2 AV2 wins in 10 calls.</figcaption>
+</figure>
+<figure class="av2-pair" data-av2="/garage/av2/XT507399-av2.avif" data-av1-label="AV1, the shipped file, 91,291 B" data-av2-label="AV2, 91,288 B">
+  <p class="av2-tag"></p>
+  <div class="av2-pairstack"><img class="on" src="/i/XT507399.9b833151.avif" width="600" height="600" loading="lazy" decoding="async" alt="The shipped AV1 thumbnail"><canvas width="600" height="600" aria-label="The AV2 encode at the same budget, decoded in this page"></canvas></div>
+  <figcaption>2.03 bits per pixel, the densest photo I could reproduce. ssimulacra2: AV2 75.90, AV1 76.76, the loss the table predicts above 1.2.</figcaption>
+</figure>
+<p class="av2-note">Every conforming AV1 decoder produces the same samples, and this AV2 decoder matches AVM's own, so what changes when you flip is the encode. Four photos I tried were left out: re-encoding them didn't reproduce the shipped file byte for byte, so I couldn't show that their AV1 and AV2 files started from the same pixels.</p>
+</div>
+
 
 <h2>Why the fallback doesn't catch it</h2>
 <p>A <code>&lt;picture&gt;</code> element chooses a source by its <i>declared type</i>, before any byte decodes. Chrome supports <code>image/avif</code>, so it commits to the source, fetches it, and finds an image it can't read. Nothing sends it back to the <code>&lt;img&gt;</code>, because the fallback only covers types a browser has never heard of.</p>
@@ -185,10 +222,11 @@
 <p>The same build compiles AVM's own AVX2 kernels for Apple silicon through <a href="https://github.com/simd-everywhere/simde">SIMDe</a>. AVM ships almost no NEON code, so on a Mac most of its hot loops ran in plain C. The output is byte-identical to the plain build, and a 600 px encode runs 1.35 times as fast.</p>
 
 <h2>Run it yourself</h2>
-<p>Everything above comes from three committed tools. <code>tools/photos/libavif-avm/build.sh</code> builds libavif at a pinned commit with its experimental AV2 codec switched on. No tagged libavif release carries AVM 1.0.0 yet, so the pin is a commit. <code>--tuned</code> adds the five patches and the SIMDe kernels, and refuses to finish unless the result matches the pristine build byte for byte with every option off. <code>av2-tile-probe.ts</code> runs the tile comparison and <code>codec-knob-probe.ts --codec avm</code> runs the crops.</p>
+<p>Everything above comes from three committed tools. <code>tools/photos/libavif-avm/build.sh</code> builds libavif at a pinned commit with its experimental AV2 codec switched on. No tagged libavif release carries AVM 1.0.0 yet, so the pin is a commit. <code>--tuned</code> adds the five patches and the SIMDe kernels, and refuses to finish unless the result matches the pristine build byte for byte with every option off. <code>av2-tile-probe.ts</code> runs the tile comparison and <code>codec-knob-probe.ts --codec avm</code> runs the crops. <code>tools/photos/av2-wasm/build.sh</code> compiles the decoder this page runs, and <code>samples.ts</code> beside it writes the four AV2 thumbnails, refusing any photo whose shipped AVIF it can't reproduce byte for byte.</p>
 <pre class="av2-code"><code>tools/photos/libavif-avm/build.sh --tuned
 bun tools/photos/av2-tile-probe.ts --src &lt;a folder of originals&gt;
-bun tools/photos/codec-knob-probe.ts --codec avm --variants base,tunepsnr</code></pre>
+bun tools/photos/codec-knob-probe.ts --codec avm --variants base,tunepsnr
+tools/photos/av2-wasm/build.sh</code></pre>
 <p>With every scheduling and caching concern stripped out, the probe is four steps per crop. Encode the shipped AVIF and take its size as the budget. Find the two AV2 quantizer settings whose files straddle that size. Decode both and score them against the source. Interpolate the score to the exact budget. The rest of the file is caching, crop selection and parallelism, which only change how long it takes.</p>
 
 <h2>What would change this</h2>
@@ -234,6 +272,43 @@ bun tools/photos/codec-knob-probe.ts --codec avm --variants base,tunepsnr</code>
       io.observe(fig);
     } else eager();
   })(figs[i]);
+
+  // Decoding here: on a click, start the AV2 worker (src/client/garage/av2-decode.js),
+  // decode the demo file and the three thumbnails, and draw each to its canvas.
+  // Nothing is fetched before the click, so a reader who skips it pays 0 bytes.
+  var go = document.getElementById("av2-go"), run = document.getElementById("av2-run"), live = document.getElementById("av2-live");
+  if (go && run && live) go.addEventListener("click", function(){
+    if (typeof Worker === "undefined" || typeof WebAssembly === "undefined") { run.textContent = "This browser has no WebAssembly or no workers, so the decoder can't run here."; return; }
+    go.disabled = true;
+    run.textContent = "Fetching the decoder...";
+    var worker = new Worker("/garage/av2-decode.js", { type: "module" }), waiting = {}, next = 0;
+    worker.onmessage = function(e){ var p = waiting[e.data.id]; delete waiting[e.data.id]; if (e.data.error) p.reject(new Error(e.data.error)); else p.resolve(e.data); };
+    worker.onerror = function(){ run.textContent = "The decoder failed to start in this browser."; go.disabled = false; };
+    var decodeTo = function(url, canvas){
+      return fetch(url).then(function(r){ if (!r.ok) throw new Error(url + ": HTTP " + r.status); return r.arrayBuffer(); }).then(function(buf){
+        return new Promise(function(resolve, reject){ var id = next++; waiting[id] = { resolve: resolve, reject: reject }; worker.postMessage({ id: id, buf: buf }, [buf]); });
+      }).then(function(d){
+        canvas.width = d.width; canvas.height = d.height;
+        canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(d.rgba), d.width, d.height), 0, 0);
+        return d.decodeMs;
+      });
+    };
+    var pairs = live.querySelectorAll(".av2-pair"), t0 = performance.now();
+    live.hidden = false;
+    // one at a time: the worker is one thread, and a queue reads clearer in the times
+    var jobs = [function(){ return decodeTo("/garage/av2/demo-av2.avif", document.getElementById("av2-demo-canvas")); }];
+    Array.prototype.forEach.call(pairs, function(fig){
+      var img = fig.querySelector("img"), canvas = fig.querySelector("canvas"), tag = fig.querySelector(".av2-tag"), k = 0;
+      var show = function(){ img.className = k ? "" : "on"; canvas.className = k ? "on" : ""; tag.textContent = fig.getAttribute(k ? "data-av2-label" : "data-av1-label") + " (click to flip)"; };
+      show();
+      fig.querySelector(".av2-pairstack").addEventListener("click", function(){ k = 1 - k; show(); });
+      jobs.push(function(){ return decodeTo(fig.getAttribute("data-av2"), canvas); });
+    });
+    var times = [];
+    jobs.reduce(function(chain, job){ return chain.then(function(){ return job().then(function(ms){ times.push(Math.round(ms)); }); }); }, Promise.resolve()).then(function(){
+      run.innerHTML = "Decoded " + times.length + " AV2 files on this device in <b>" + Math.round(performance.now() - t0) + " ms</b>, fetching and compiling the decoder included. The decodes alone took " + times.join(", ") + " ms.";
+    }, function(err){ run.textContent = "The decode failed: " + err.message; go.disabled = false; });
+  });
 })();
 </script>
 <script type="application/json" id="luq-data">

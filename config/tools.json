@@ -408,6 +408,22 @@
       },
       "bytes": false,
       "bytes_why": "writes scratch AV2 encodes for a probe and commits nothing; no browser decodes AV2, so none of its output can ship"
+    },
+    {
+      "bin": "emcc",
+      "install": "brew install emscripten",
+      "optional": true,
+      "optional_why": "only rebuilding /garage/av2's AV2 decoder needs it: tools/photos/av2-wasm/build.sh is its one caller and refuses with the install command when it is missing. The committed .wasm serves without it",
+      "why": "compiles AVM 1.0.0's decoder to the WebAssembly /garage/av2 runs in a worker (public/garage/av2/av2dec.<sha8>.wasm)",
+      "required_by": [
+        "tools/photos/av2-wasm/build.sh"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "emcc \\(Emscripten gcc/clang-like replacement \\+ linker emulating GNU ld\\) (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": true,
+      "recorded": "6.0.12"
     }
   ]
 }
