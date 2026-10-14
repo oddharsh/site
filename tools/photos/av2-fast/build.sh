@@ -17,8 +17,13 @@
 #   build/fast/       the same plus the three above -> build/av2bench
 # check.ts decodes a corpus with both and refuses any byte of difference.
 #
-# MEASURED 2026-10-13 on an M3 Max, a 1600x2400 10-bit 4:4:4 still, one
-# thread: pristine 314 ms, + NEON GDF 127 ms, + SIMDe 109 ms.
+# MEASURED on an M3 Max, a 1600x2400 10-bit 4:4:4 still with 4 tile rows,
+# best of 41 with other jobs holding about 5 of the 14 cores (2026-10-14):
+#   1 decoder thread, GDF serial    pristine 227 ms   fast 81 ms
+#   8 decoder threads               pristine 182 ms   fast 18 ms
+# On a 4:2:0 file dav2d also reads: dav2d 76.5 ms on one thread and 13.8 ms
+# on 8; fast 55.7 ms (GDF serial) and 11.0 ms. Pristine numbers drift with
+# load (227 to 314 ms on one thread across runs), so compare ratios.
 #
 #   ./build.sh    needs cmake, ninja, clang, bun, the AVM source from
 #                 ../libavif-avm/build.sh (or AVM_SRC=<dir>) and the SIMDe

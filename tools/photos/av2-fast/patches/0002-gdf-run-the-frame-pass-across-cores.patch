@@ -1,24 +1,25 @@
-From cf1241e7f4d598b5e2222d18969af110fe20bb54 Mon Sep 17 00:00:00 2001
 From: Aadharsh Pannirselvam <aadharsh@archetype.fund>
-Date: Tue, 13 Oct 2026 23:03:49 -0700
+Date: Wed, 14 Oct 2026 10:00:00 -0700
 Subject: [PATCH 2/2] gdf: run the frame pass across cores
 
 The work item is one unit row across the full frame width, with private
-scratch (lap/cls/err) and line-save buffers. Rows two apart touch disjoint
-rows of the guided copy, so even rows run concurrently, then odd rows, on
-Grand Central Dispatch; a frame whose geometry fails that check runs in
-order on one thread. AVM_GDF_ORIG=1 selects the original pass and
-AVM_GDF_SERIAL=1 the new one in order. 18 of 18 decodes bit-exact against
-pristine AVM in all three modes.
----
- av2/common/gdf.c | 348 ++++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 347 insertions(+), 1 deletion(-)
+scratch (lap/cls/err) and line-save buffers, and a footprint: the rows of
+the guided copy it may read or rewrite. Items whose footprints don't
+overlap run at once, so they are packed greedily into phases and each
+phase runs on Grand Central Dispatch. A 1600x2400 frame with 4 tile rows
+packs into 3 phases, because each tile row ends in a short stripe whose
+footprint reaches the next tile row's first one. (The first version of
+this patch ran even rows then odd ones and fell back to serial when that
+failed, which it did on every frame with more than one tile row.)
 
-diff --git a/av2/common/gdf.c b/av2/common/gdf.c
-index 78d8d6f..c9a0a17 100644
+GDF on that frame: 26 ms on one core, 3.7 ms across them. AVM_GDF_ORIG=1
+selects the original pass and AVM_GDF_SERIAL=1 this one in order; 25 of
+25 decodes bit-exact against pristine AVM in every mode.
+
+---
 --- a/av2/common/gdf.c
 +++ b/av2/common/gdf.c
-@@ -526,7 +526,7 @@ int gdf_get_qp_idx_base(const AV2_COMMON *cm) {
+@@ -526,7 +526,7 @@
    return qp_idx_base;
  }
  
@@ -27,10 +28,11 @@ index 78d8d6f..c9a0a17 100644
    uint16_t *const rec_pnt = cm->cur_frame->buf.buffers[AVM_PLANE_Y];
    const int rec_stride = cm->cur_frame->buf.y_stride;
  
-@@ -716,4 +716,350 @@ void gdf_filter_frame(AV2_COMMON *cm) {
+@@ -715,5 +715,378 @@
+     }
    }
  }
- 
++
 +
 +/* ---- Parallel GDF -------------------------------------------------------
 + *
@@ -43,18 +45,22 @@ index 78d8d6f..c9a0a17 100644
 + * rows of the guided copy above and below the unit row being processed.
 + *
 + * So the work item here is a UNIT ROW across the whole frame width, with its
-+ * own copy of the scratch and save buffers. Two rows that are two apart touch
-+ * disjoint rows of the guided copy, so all even rows run concurrently, then
-+ * all odd rows. That is checked geometrically before running; any frame that
-+ * fails the check runs the items in order on one thread instead. The result
-+ * is identical to gdf_filter_frame_orig: same units, same inputs, same writes.
-+ * AVM_GDF_ORIG=1 selects the original for A/B checks.
++ * own copy of the scratch and save buffers, and a footprint: the rows of the
++ * guided copy it may read or rewrite (its rows plus the border either side).
++ * Items whose footprints don't overlap can run at once, so they are packed
++ * into phases greedily, each item into the first phase where it overlaps
++ * nothing, and each phase runs across cores. Two phases cover most frames
++ * (even rows, odd rows); a tile row ending in a short stripe needs a third,
++ * because that stripe's footprint reaches the next tile row's first one.
++ * The result is identical to gdf_filter_frame_orig: same units, same inputs,
++ * same writes. AVM_GDF_ORIG=1 selects the original and AVM_GDF_SERIAL=1 this
++ * pass in order, for A/B checks.
 + */
 +#include <stdlib.h>
 +#if defined(__APPLE__)
 +#include <dispatch/dispatch.h>
 +#endif
-+
+ 
 +static void gdf_setup_reference_lines_gi(AV2_COMMON *cm, GdfInfo *gi, int i_min,
 +                                         int i_max, int frame_stripe,
 +                                         int copy_above, int copy_below) {
@@ -131,7 +137,7 @@ index 78d8d6f..c9a0a17 100644
 +typedef struct {
 +  AV2_COMMON *cm;
 +  const GdfRowJob *jobs;
-+  int first, step;  // job index = first + k * step
++  const int *order;  // the jobs this dispatch runs, by index into jobs
 +  int pxl_shift, err_shift, pxl_max, bit_depth, ref_dst_idx;
 +  int qp_idx_min, qp_idx_max_plus_1, scale_val;
 +} GdfRunCtx;
@@ -279,7 +285,7 @@ index 78d8d6f..c9a0a17 100644
 +    gdf_free_private_info(&gi);
 +    avm_internal_error(&c->cm->error, AVM_CODEC_MEM_ERROR, "GDF worker buffers");
 +  }
-+  gdf_run_row(c, &c->jobs[c->first + (int)k * c->step], &gi);
++  gdf_run_row(c, &c->jobs[c->order[k]], &gi);
 +  gdf_free_private_info(&gi);
 +}
 +
@@ -352,32 +358,52 @@ index 78d8d6f..c9a0a17 100644
 +  }
 +  c.jobs = jobs;
 +
-+  // Rows two apart must not share a row of the guided copy.
-+  int separable = 1;
-+  for (int k = 0; k + 2 < n; k++)
-+    if (jobs[k].foot_bot > jobs[k + 2].foot_top) separable = 0;
++  // order holds the jobs grouped by phase; phase_end[p] is where phase p ends.
++  int *order = (int *)avm_malloc((n > 0 ? n : 1) * sizeof(int));
++  int *phase_of = (int *)avm_malloc((n > 0 ? n : 1) * sizeof(int));
++  if (!order || !phase_of) avm_internal_error(&cm->error, AVM_CODEC_MEM_ERROR, "GDF jobs");
++  int phases = 0;
++  for (int k = 0; k < n; k++) {
++    int p = 0;
++    for (;; p++) {
++      int clash = 0;
++      for (int j = 0; j < k && !clash; j++)
++        clash = phase_of[j] == p && jobs[j].foot_top < jobs[k].foot_bot &&
++                jobs[k].foot_top < jobs[j].foot_bot;
++      if (!clash) break;
++    }
++    phase_of[k] = p;
++    if (p + 1 > phases) phases = p + 1;
++  }
++  int m = 0;
++  int phase_end[64];
++  for (int p = 0; p < phases && p < 64; p++) {
++    for (int k = 0; k < n; k++)
++      if (phase_of[k] == p) order[m++] = k;
++    phase_end[p] = m;
++  }
++  if (getenv("AVM_GDF_DEBUG"))
++    fprintf(stderr, "gdf: %d unit rows in %d phases\n", n, phases);
 +
 +#if defined(__APPLE__)
-+  if (separable && !getenv("AVM_GDF_SERIAL")) {
++  if (phases <= 64 && !getenv("AVM_GDF_SERIAL")) {
 +    dispatch_queue_t q = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
-+    for (int phase = 0; phase < 2; phase++) {
-+      c.first = phase;
-+      c.step = 2;
-+      const int count = (n - phase + 1) / 2;
-+      if (count > 0) dispatch_apply_f((size_t)count, q, &c, gdf_run_job);
++    for (int p = 0, start = 0; p < phases; start = phase_end[p++]) {
++      c.order = order + start;
++      dispatch_apply_f((size_t)(phase_end[p] - start), q, &c, gdf_run_job);
 +    }
++    avm_free(order);
++    avm_free(phase_of);
 +    avm_free(jobs);
 +    return;
 +  }
 +#endif
-+  (void)separable;
-+  c.first = 0;
-+  c.step = 1;
++  for (int k = 0; k < n; k++) order[k] = k;
++  c.order = order;
 +  for (int k = 0; k < n; k++) gdf_run_job(&c, (size_t)k);
++  avm_free(order);
++  avm_free(phase_of);
 +  avm_free(jobs);
 +}
 +
  #endif  // AVM_COMMON_GDF_H_
--- 
-2.54.0 (Apple Git-157)
-
