@@ -184,13 +184,19 @@ skips it.
     Grep built pages for the asset's URL to see the bill.
     Checked by: nothing (judgment).
 
-36. **Workers Free: 50 subrequests per invocation (KV counts), and CPU clamps
-    under load.** A fan-out that catches per-item errors will silently degrade
-    every item when it hits the cap. Count the failures on a span; measure CPU
+36. **Workers Free: 50 subrequests per invocation, and CPU clamps under
+    load.** Every fetch counts, and every redirect hop. KV and D1 were believed
+    to count and production says they don't: on four days in 2026-09/10 the
+    /around crawl hit the cap and its KV put and D1 batch still succeeded in
+    the same invocation (lib/budget.ts). Local workerd enforces no cap at all
+    (1,200 fetches pass), so `bun run dev` can't reproduce one. A fan-out
+    that catches per-item errors will silently degrade every item when it
+    hits the cap. Meter hops with `meteredTransport`, the only way a ledger
+    sees a redirect chain. Count the failures on a span; measure CPU
     off `cpuTime`, never status codes. Pin a version with the FULL UUID in
     `Cloudflare-Workers-Version-Overrides`. A workflow's conclusion doesn't
     say whether a release shipped: ask `bun run deploy:promote --status`.
-    Checked by: `tools/contract-lens-compare-stays-under-the-subrequest-cap.test.mjs`.
+    Checked by: `tools/contract-lens-compare-stays-under-the-subrequest-cap.test.mjs`, `tools/contract-no-cron-tick-outspends-the-subrequest-cap.test.mjs`.
 
 37. **`Bun.Image` is the OS imaging stack.** It's fine for a throwaway
     thumbnail and wrong for a served tier: fatter output, no 16-bit HEIF
@@ -463,3 +469,16 @@ skips it.
     budget). The workerd cron test couldn't see it because the harness
     has no AI binding or secrets, so the dispatch skipped before it fetched.
     Checked by: `tools/contract-every-cron-fires-in-workerd.test.mjs`, `tools/contract-the-luma-session-jar.test.mjs`.
+
+65. **A catch on the promise you await doesn't clear the one you handed
+    `ctx.waitUntil`.** index.ts's cron helper passes the same promise to
+    both, so `await cron(...).catch(() => {})` keeps the next job running
+    and still ends the invocation as `scriptThrewException`. Measured
+    2026-10-14 in local workerd: that shape reports `exception`, a bare
+    throw reports `exception`, and a catch applied before `waitUntil` sees
+    the promise reports `ok`. The daily 41 5 tick's comment said only the
+    rethrow was dropped, while its status read exception every day for a
+    month. Read that status in the GraphQL Analytics API
+    (`workersInvocationsAdaptive`), which needs no observability scope;
+    exactly 50 subrequests beside it means the Workers Free cap (gotcha 36).
+    Checked by: nothing (judgment).

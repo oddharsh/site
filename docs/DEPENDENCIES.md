@@ -399,7 +399,7 @@ does not make a failed write safe to ignore.
   clean installs) to cut median install time from 4.62 s to 3.03 s and
   `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
   rather than maintained.
-- @cloudflare/config 0.24.1 is the exact root pin for the helpers
+- @cloudflare/config 0.25.0 is the exact root pin for the helpers
   `cloudflare.config.ts` and `cf-garage/cloudflare.config.ts` author with. It
   moved from 0.20.0 on 2026-10-05 for `bindings.analyticsSQL()` (new in
   0.22.0, renamed `bindings.analytics()` in 0.24.0), which declares the site's `ANALYTICS` binding. workers-sdk#15914 moved them
@@ -411,7 +411,7 @@ does not make a failed write safe to ignore.
   `cf/config`, so `config/tsconfig.cf-garage.json` maps that specifier to this
   package. Bump it with the wrangler pin when a new wrangler commit's generated
   types need a newer version; `cf`'s own dependency on it shows which.
-- Oxc Minify 0.153.0 and Lightning CSS 1.33.0 are exact root pins for the
+- Oxc Minify 0.154.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. A bump PR's review should read their release notes for output,

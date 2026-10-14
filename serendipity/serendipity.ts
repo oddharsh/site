@@ -1639,7 +1639,7 @@ export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
 // half that matters more. A self-dispatch spends ONE subrequest here and runs
 // the batch in a FRESH invocation with its own ceiling. Same shape /lens uses to
 // self-scan, and it costs no cron trigger, which matters because Workers Free
-// caps an account at five and four are spent.
+// caps an account at five and all five are spent (since 2026-10-14).
 //
 // The dispatch MUST go through the loopback binding (ctx.exports.default, which
 // index.ts hands in), never the global fetch. /serendipity* is a ROUTE, and
