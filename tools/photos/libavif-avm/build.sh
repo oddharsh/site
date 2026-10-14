@@ -10,6 +10,7 @@
 # codec-knob-probe.ts `--codec avm` and av2-tile-probe.ts, encode AV2 stills
 # onto the /pixel-peeper format axis's own AVIF budgets and score them at
 # matched bytes, which is how to watch where AV2 is going for photos.
+#
 # WHAT IT PRODUCES. libavif built with its experimental AVIF_CODEC_AVM (AVM is
 # the AV2 reference software from AOMedia) plus the installed aom, so ONE
 # binary encodes both: `-c avm` writes AV2, `-c aom` writes AV1. The file is
@@ -27,6 +28,22 @@
 # libavif main in d8b4e042cd (2026-05-29). The commit below is main as of
 # 2026-09-26, and libavif's cmake/Modules/LocalAvm.cmake pins AVM to v1.0.0
 # from it, so this script pins one revision and inherits the second.
+#
+# THE TUNED BUILD. patches/ holds six encoder-only changes to AVM, each off by
+# default and each decoded pixel-identically by the untouched reference decoder:
+#   0001 base-delta-q    the sequence DC/chroma offsets the encoder hard-zeroes
+#   0002 variance-boost  deltaq-mode=3, libaom/SVT-AV1 Variance Boost on AV2 q
+#   0003 jpegli-mask     deltaq-mode=4, jpegli adaptive-quantization field
+#   0004 qm-curves       qm-curve / qm-chroma-curve, libaom still-image QM levels
+#   0005 qm-per-segment  qmseg: two QM sets split by texture, an AV2-only syntax
+#   0006 fwd-txfm        speed only, no option: the forward transform zeroed a
+#                        16 KB scratch per call, 20% of a speed-3 encode (1 core,
+#                        600px: 37.9 s to 30.7 s; speed 6 about 5%)
+# Then simde.ts compiles AVM's own AVX2 kernels for arm64 through SIMDe. The build
+# refuses to finish unless the tuned binary, with every new option off, writes
+# BYTE-IDENTICAL files to the pristine one, and the pristine decoder reads a
+# qmseg file pixel-identically. build/ itself stays pristine on purpose: it is
+# the reference decoder every one of those controls is judged by.
 set -euo pipefail
 
 LIBAVIF_REV="768b3dfe30da63265eb31dad6f79fc7662f65b42"
