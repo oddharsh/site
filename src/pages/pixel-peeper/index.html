@@ -595,7 +595,9 @@ function onPick(pos,order,trial){
     ${gl?diffHTML(trial,order):""}
     <div class="row" style="justify-content:flex-end"><button class="xp-button compact default" id="next">${state.i===state.trials.length-1?"See my profile ▸":"Next ▸"}</button></div>`;
   if(gl)wireDiff(gl,tiles,trial,order,pos);
-  const next=document.getElementById("next");next.focus();next.onclick=advance;
+  // focus without the scroll: Next sits under the diff map, and a plain focus()
+  // dragged it into view, which threw the tiles you just judged off the top
+  const next=document.getElementById("next");next.focus({preventScroll:true});next.onclick=advance;
   // the diff map's own buttons take Enter and Space, so those keys only advance from elsewhere
   document.onkeydown=e=>{if(typing(e)||(e.target instanceof Element&&e.target.closest("#diff")))return;if(e.key==="Enter"||e.key===" ")advance();};
 }
