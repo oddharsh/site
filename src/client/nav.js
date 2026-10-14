@@ -334,14 +334,14 @@
     // move, promoted by .axp-dragging's will-change), and the final left/top is
     // committed once, on release. Writing left/top per pointermove forced a
     // layout every frame — visible as judder on 120Hz variable-refresh panels.
-    var cur = /** @type {HTMLElement | null} */ (null), sx = 0, sy = 0, ox = 0, oy = 0, nx = 0, ny = 0, moved = false;
+    var cur = /** @type {HTMLElement | null} */ (null), sx = 0, sy = 0, ox = 0, oy = 0, nx = 0, ny = 0, maxY = 0, moved = false;
     function mv(e) {
       if (!cur) return;
       var dx = e.clientX - sx, dy = e.clientY - sy;
       if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
       moved = true; cur.classList.add("axp-dragging");
       nx = Math.max(0, Math.min(ox + dx, innerWidth - 76));
-      ny = Math.max(0, Math.min(oy + dy, innerHeight - 30 - 72));
+      ny = Math.max(0, Math.min(oy + dy, maxY));
       cur.style.transform = "translate(" + (nx - ox) + "px," + (ny - oy) + "px)";
     }
     function up() {
@@ -358,6 +358,8 @@
       var a = e.target instanceof Element && e.target.closest(".axp-ico");
       if (!(a instanceof HTMLElement)) return;
       cur = a; moved = false; sx = e.clientX; sy = e.clientY;
+      // the layer's height, not innerHeight: it starts below the HyperCam band
+      maxY = /** @type {HTMLElement} */ (e.currentTarget).clientHeight - 30 - 72;
       ox = parseFloat(a.style.left) || 0; oy = parseFloat(a.style.top) || 0;
       try { a.setPointerCapture(e.pointerId); } catch (_) {}
       D.addEventListener("pointermove", mv);

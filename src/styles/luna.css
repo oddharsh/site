@@ -1182,11 +1182,30 @@ a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
 /* The free HyperCam 2 burned "Unregistered HyperCam 2" into the top-left corner
    of every capture until Hyperionics dropped the watermark in May 2010, so a
    whole era of YouTube tutorials wears it. It's on the video rather than the
-   desktop: it sits above every window and the taskbar, lets clicks through, and
-   stays out of the accessibility tree (the alt text after the slash is empty; a
-   browser that can't parse that form keeps the plain declaration before it).
-   body::after is the homepage's pre-JS taskbar strip, so this takes ::before. */
-body::before{content:"Unregistered HyperCam 2";content:"Unregistered HyperCam 2"/"";position:fixed;left:0;top:0;z-index:2147483647;padding:1px 3px;background:var(--window);color:var(--ink);font:var(--text-2xs)/1.25 var(--font-ui);white-space:nowrap;pointer-events:none}
+   desktop: it sits above every window and the taskbar and lets clicks through.
+
+   It was never antialiased type. HyperCam drew it in Windows' bold System font
+   (2px stems, 1px bars), black on a white box the size of the 16px cell, so
+   this is that bitmap as an SVG of 118 rectangles: 168x16 pixels, from the 16px
+   strike of Wine's System font clone (fonts/system.sfd, LGPL). Native text
+   would be smoothed and wrong; empty content keeps it out of the accessibility
+   tree. One bitmap pixel is --hypercam-px, a whole number of CSS px so every
+   pixel stays square: 1 on phones, 2 from 1024px (where the desktop icons
+   appear), 3 from 1920px. That holds it near the quarter of the frame it took
+   in a 640px capture. tools/contract-the-hypercam-watermark-is-the-system-font
+   holds the path to the bitmap and the homepage's inline copy to these steps.
+
+   Nothing goes under it: the icon layer, the window column and a maximized
+   window all start below the band. body::after is the homepage's pre-JS
+   taskbar strip, so this takes ::before. */
+html{--hypercam-px:1px;--hypercam-h:calc(16 * var(--hypercam-px))}
+@media (min-width:1024px){html{--hypercam-px:2px}}
+@media (min-width:1920px){html{--hypercam-px:3px}}
+@media print{html{--hypercam-h:0px}}
+body::before{content:"";position:fixed;left:0;top:0;z-index:2147483647;width:calc(168 * var(--hypercam-px));height:var(--hypercam-h);background:var(--window) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 168 16' shape-rendering='crispEdges'%3E%3Cpath d='M1 3h2v8h-2zM7 3h2v8h-2zM40 3h2v2h-2zM81 3h2v3h-2zM89 3h2v4h-2zM95 3h2v4h-2zM130 3h4v1h-4zM162 3h4v1h-4zM52 4h2v2h-2zM129 4h2v1h-2zM133 4h2v1h-2zM161 4h2v2h-2zM165 4h2v3h-2zM128 5h2v6h-2zM134 5h2v1h-2zM11 6h5v1h-5zM19 6h4v1h-4zM25 6h4v1h-4zM33 6h5v1h-5zM40 6h2v7h-2zM45 6h4v1h-4zM51 6h4v1h-4zM57 6h4v1h-4zM64 6h4v1h-4zM70 6h4v1h-4zM78 6h5v1h-5zM98 6h2v2h-2zM104 6h2v2h-2zM107 6h5v1h-5zM116 6h4v1h-4zM123 6h4v1h-4zM138 6h4v1h-4zM145 6h9v1h-9zM11 7h2v6h-2zM15 7h2v6h-2zM19 7h3v1h-3zM24 7h2v2h-2zM28 7h2v2h-2zM32 7h2v5h-2zM36 7h2v5h-2zM44 7h2v1h-2zM48 7h2v1h-2zM52 7h2v5h-2zM56 7h2v2h-2zM60 7h2v2h-2zM64 7h3v1h-3zM69 7h2v2h-2zM73 7h2v2h-2zM77 7h2v5h-2zM81 7h2v5h-2zM89 7h8v1h-8zM107 7h2v5h-2zM111 7h2v5h-2zM115 7h2v2h-2zM119 7h2v2h-2zM123 7h3v1h-3zM137 7h2v1h-2zM141 7h2v2h-2zM145 7h2v6h-2zM149 7h2v6h-2zM153 7h2v6h-2zM164 7h2v1h-2zM19 8h2v5h-2zM45 8h2v1h-2zM64 8h2v5h-2zM89 8h2v5h-2zM95 8h2v5h-2zM99 8h2v2h-2zM103 8h2v2h-2zM123 8h2v5h-2zM163 8h2v1h-2zM24 9h5v1h-5zM46 9h2v1h-2zM56 9h5v1h-5zM69 9h5v1h-5zM115 9h5v1h-5zM138 9h5v1h-5zM162 9h2v1h-2zM24 10h2v2h-2zM47 10h2v1h-2zM56 10h2v2h-2zM69 10h2v2h-2zM100 10h4v2h-4zM115 10h2v2h-2zM134 10h2v1h-2zM137 10h2v2h-2zM141 10h2v2h-2zM161 10h2v2h-2zM2 11h2v1h-2zM6 11h2v1h-2zM28 11h2v1h-2zM44 11h2v1h-2zM48 11h2v1h-2zM60 11h2v1h-2zM73 11h2v1h-2zM119 11h2v1h-2zM129 11h2v1h-2zM133 11h2v1h-2zM3 12h4v1h-4zM25 12h4v1h-4zM33 12h5v1h-5zM45 12h4v1h-4zM53 12h2v1h-2zM57 12h4v1h-4zM70 12h4v1h-4zM78 12h5v1h-5zM101 12h2v2h-2zM107 12h5v1h-5zM116 12h4v1h-4zM130 12h4v1h-4zM138 12h5v1h-5zM161 12h6v1h-6zM36 13h2v2h-2zM107 13h2v3h-2zM32 14h2v1h-2zM100 14h2v1h-2zM33 15h4v1h-4zM99 15h2v1h-2z'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat;pointer-events:none;forced-color-adjust:none}
+#axp-icons{top:var(--hypercam-h)}
+body:has(.window),body:has(.np-window){padding-top:calc(var(--hypercam-h) + 8px) !important}
+.window.axp-max,.np-window.axp-max{top:var(--hypercam-h) !important}
 
 /* ─────────────────── print + High Contrast (phase C) ─────────────────── */
 /* print: the document inside the window is the artifact; the OS around it
