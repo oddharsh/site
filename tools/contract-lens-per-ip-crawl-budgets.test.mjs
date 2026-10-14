@@ -318,6 +318,10 @@ test("a lens is refused at definition when its spec breaks a rule the order depe
 
 test("every lens 429 is derived from LENS_BUDGETS, never typed", async () => {
   const { LENS_BUDGETS, budgetMessage } = await import("../src/worker/lens.ts");
+  // One per-visitor budget and the shared one, word for word, since the two
+  // are worded differently on purpose.
+  assert.equal(budgetMessage("wire"), "Wire traces are rate-limited to 2/min. Hang on a moment.");
+  assert.equal(budgetMessage("browserAll"), "The shared browser budget (4/min across every visitor) is spent for this minute. Try again shortly.");
   for (const name of Object.keys(LENS_BUDGETS)) {
     assert.ok(budgetMessage(/** @type {any} */ (name)).includes(`${LENS_BUDGETS[name].max}/min`), `${name}: the message does not quote its own ceiling`);
   }

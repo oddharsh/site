@@ -40,6 +40,9 @@ test("every published photo is listed once, under /photos or its album, at its f
 test("an ampersand in a key is escaped, so one odd filename cannot break the file", async () => {
   const { imageSitemapXml, PHOTO_POOL } = await import("../src/worker/photos.ts");
   const xml = imageSitemapXml([{ ...PHOTO_POOL[0], full: "R&D shoot/a.jpg" }], []);
+  // The URL is percent-encoded before it reaches the XML, so the ampersand
+  // arrives as %26 and the space as %20.
+  assert.ok(xml.includes("<image:loc>https://aadhar.sh/images/full/R%26D%20shoot/a.jpg</image:loc>"), xml);
   assert.ok(!/&(?!amp;)/.test(xml), xml);
 });
 
