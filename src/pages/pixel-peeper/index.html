@@ -173,9 +173,13 @@ a{color:var(--link)}
 // ---- data + config ----
 const AXES={
   quality: {teach:`that gap was plain JPEG quality. the encoder drops fine detail as quality falls, and below some point your eye stops noticing. that point is your ceiling: export any higher and you're spending bytes on detail you can't see.`},
-  chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. here's the honest part: on most photos this is free. fourteen saturated crops were built and measured for this test and <b>twelve were thrown out</b> because 4:2:0 cost them nothing you could see. what survives is a high-contrast two-tone edge, which is where the halved color plane can't keep up — and butteraugli (a color model) punishes that far harder than ssimulacra2. that's also why you only get one of these per run.`},
-  encoder: {teach:`same photo, same byte budget. every tile in that call was searched onto one file size and landed within 2% of it, so the only thing that varied was the encoder's math. newer coders (zenc, jpegli) fit more picture into those bytes than mozjpeg, and sips fits the least. that gap is free quality — same size, better image, for picking a different tool.`},
-  resample:{teach:`same photo, same byte budget, same encoder — only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
+  chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. here's the honest part: on most photos this is free. fourteen saturated crops were built and measured for this test and <b>twelve were thrown out</b> because 4:2:0 cost them nothing you could see. what survives is a high-contrast two-tone edge, which is where the halved color plane can't keep up, and butteraugli (a color model) punishes that far harder than ssimulacra2. that's also why you only get one of these per run.`},
+  encoder: {teach:`same photo, same byte budget. every tile in that call was searched onto one file size and landed within 2% of it, so the only thing that varied was the encoder's math. newer coders (zenc, jpegli) fit more picture into those bytes than mozjpeg, and sips fits the least. that gap is free quality: same size, better image, for picking a different tool.`},
+  // No metric scores these (gen-pixel-peeper.ts buildResample: there is no
+  // common-size reference), so the call is graded by its analytically known
+  // answer instead: the tile the linear-light kernel made.
+  resample:{answer:o=>o.label==="zenc",right:"you picked the one averaged in light",wrong:"that one averaged sRGB numbers",
+    teach:`same photo, same byte budget, same encoder. only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
   format:  {teach:t=>FMT[t.tier].teach+av2Line(t)+(state.log.filter(l=>l.axis==="format").length===1?` ${FMT_TAIL}${av2Line(t)?FMT_TAIL_AV2:""}`:``)+(t.lossless?` <b>lossless</b>, this photo is ${kb(t.lossless.jxl)} as JPEG XL${t.lossless.av2?`, ${kb(t.lossless.avif)} as AVIF and ${kb(t.lossless.av2)} as AV2`:` and ${kb(t.lossless.avif)} as AVIF`}: JPEG XL's biggest lead, and one no eye test can show.`:``)},
   tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
 };
@@ -558,7 +562,9 @@ function screenTrial(){
 function onPick(pos,order,trial){
   if(!state.picking)return;state.picking=false;
   const tiles=[...document.querySelectorAll(".tile")];
-  const s2Pos=order.findIndex(i=>trial.options[i].s2best), btPos=order.findIndex(i=>trial.options[i].butterbest);
+  // an axis with a known answer marks it as both metrics' pick would be marked
+  const answer=AXES[trial.axis].answer;
+  const s2Pos=order.findIndex(i=>answer?answer(trial.options[i]):trial.options[i].s2best), btPos=answer?s2Pos:order.findIndex(i=>trial.options[i].butterbest);
   const chosen=trial.options[order[pos]];
   const sided = chosen.s2best&&chosen.butterbest?"both":chosen.s2best?"s2":chosen.butterbest?"butter":"neither";
   document.getElementById("hint").style.visibility="hidden";
@@ -571,18 +577,19 @@ function onPick(pos,order,trial){
     if(p===pos)tile.classList.add("pick");
     const cap=document.getElementById("cap"+p);
     cap.innerHTML=`<span class="lab">${o.label.split(" · ")[0]}</span>${kb(o.bytes)}<br>`+
-      `<span class="m s2">s2 ${o.s2}${o.s2best?" ✓":""}</span><span class="m bt">bu ${o.butter}${o.butterbest?" ✓":""}</span>`+
+      (o.s2===null?``:`<span class="m s2">s2 ${o.s2}${o.s2best?" ✓":""}</span><span class="m bt">bu ${o.butter}${o.butterbest?" ✓":""}</span>`)+
       (p===pos?`<span class="yours">▲ your pick</span>`:``);
   });
-  state.log.push({axis:trial.axis,disagree:trial.disagree,sided,correct:trial.disagree?null:(chosen.s2best&&chosen.butterbest),trial,picked:chosen});
+  const right=answer?answer(chosen):chosen.s2best&&chosen.butterbest;
+  state.log.push({axis:trial.axis,disagree:trial.disagree,sided,correct:trial.disagree?null:right,trial,picked:chosen});
   const fb=document.getElementById("fb");
   let cls,head,extra;
   if(trial.disagree){cls="split";head="⚖ the metrics split here";
     extra = sided==="s2"?` your eye sided with <b style="color:var(--s2)">ssimulacra2</b> (the sharper one).`
           : sided==="butter"?` your eye sided with <b style="color:var(--bt-ink)">butteraugli</b> (the truer color).`
           : ` you picked the one <b>neither</b> metric ranked first. rebel.`;
-  } else {const right=chosen.s2best&&chosen.butterbest;
-    cls=right?"ok":"no";head=right?"✓ both metrics agree, and so did you":"✕ both metrics picked another one";extra="";}
+  } else if(answer){cls=right?"ok":"no";head=right?`✓ ${AXES[trial.axis].right}`:`✕ ${AXES[trial.axis].wrong}`;extra="";
+  } else {cls=right?"ok":"no";head=right?"✓ both metrics agree, and so did you":"✕ both metrics picked another one";extra="";}
   const gl=diffGL();
   fb.innerHTML=`<div class="banner ${cls}"><span class="g">${head}</span><span>${extra} ${teachFor(trial)}</span></div>
     ${gl?diffHTML(trial,order):""}
