@@ -1,0 +1,45 @@
+[package]
+name = "photo-metrics"
+version = "0.1.0"
+edition = "2024"
+description = "SSIMULACRA2 and butteraugli for hif-archive.ts, from imazen's Rust ports instead of libjxl's ssimulacra2 and butteraugli_main CLIs. Same numbers, one process, no libjxl tools build."
+license = "AGPL-3.0-or-later"
+publish = false
+
+[[bin]]
+name = "photo-metrics"
+path = "src/main.rs"
+
+[dependencies]
+# Both pins are exact on purpose: hif-archive.ts gates the archive on these
+# numbers, so a move is a re-measurement, not a refresh. Measured 2026-10-14
+# against libjxl 0.12.0 before the switch:
+#
+#   868 8-bit pairs (31 photos x 28 JPEG/AVIF/JXL encodes at 1080px)
+#                        fast-ssim2 vs ssimulacra2         worst |diff| 0.0019
+#                        butteraugli 3-norm vs --pnorm 3   worst |diff| 0.0002
+#   20 HIFs, 40 MP, 16-bit, hif-archive.ts's own bisection:
+#                        same cjxl distance as libjxl on 20 of 20
+#                        same win/lose verdict on 161 of 161 candidates
+#                        butteraugli 3-norm worst |diff| 0.00001
+#                        fast-ssim2 worst |diff| 0.19
+#
+# That last number is the open question. On native-resolution HIF content
+# fast-ssim2 sits up to 0.19 from libjxl, and its half of the verdict flipped
+# on 2 of 161 candidates; butteraugli decided both the same way, so no pick
+# moved. It is not bit depth (0.048 at 16 bits, 0.044 rounded to 8, same pair)
+# and not plain image size (center crops of 1000-4000 px gave -0.02 to +0.09).
+# Cause unknown. The closest ssimulacra2 margin in the 20 was 0.0021.
+#
+# rust-av's `ssimulacra2` crate was the other candidate and drifts up to 0.66.
+# A dependabot lane opens the PR; run tools/photos/photo-metrics-parity.ts
+# (the archive half above) before merging it.
+fast-ssim2 = "=0.9.0"
+butteraugli = "=0.9.3"
+# PNG for the HIF reference and djxl's decodes, PNM for djpeg's baseline.
+image = { version = "0.25", default-features = false, features = ["png", "pnm"] }
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "thin"
