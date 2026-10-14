@@ -518,7 +518,7 @@ initWhenNear("demo-progressive", function () { progressiveDemo("pj-lwe"); });
       "q": "Start from the top. One photo goes through a stack of encoders and comes out at wildly different sizes. Where does the shrink actually come from?",
       "options": [
         {
-          "t": "it throws away detail my eye would skip anyway, then packs what survives",
+          "t": "it drops detail my eye would skip anyway, then packs what survives",
           "ok": true,
           "why": "That is the whole game. Every lossy encoder discards what you would never notice, fine high-frequency detail and fine color, and the three differ in how cleverly they choose what to drop."
         },
@@ -540,7 +540,7 @@ initWhenNear("demo-progressive", function () { progressiveDemo("pj-lwe"); });
       "q": "AVIF measures smallest on the full photo, so why does each thumbnail on this site ship a zenjpeg JPEG as well?",
       "options": [
         {
-          "t": "avif needs a modern decoder, so the jpeg is the fallback anything can read",
+          "t": "the jpeg is the fallback for browsers that can't decode avif",
           "why": "Right: AVIF decodes only on recent browsers, so the picture element offers AVIF first and the zenjpeg .jpg catches everything else. Universal but larger against modern but smaller, and each visitor downloads exactly one.",
           "ok": true
         },
@@ -562,7 +562,7 @@ initWhenNear("demo-progressive", function () { progressiveDemo("pj-lwe"); });
       "q": "In the stripes demo, switching from 4:4:4 to 4:2:0 drops the stored samples to half. What did you actually see change on the canvas?",
       "options": [
         {
-          "t": "the black and white lines stayed sharp, the red-green ones dissolved",
+          "t": "the black-and-white lines held, the red-green ones dissolved",
           "ok": true,
           "why": "That is chroma subsampling in one picture: luma keeps full resolution and carries the sharpness, while the two chroma planes drop to one sample per 2x2 block. Your eye resolves brightness far better than color, so photos barely show it."
         },
@@ -571,11 +571,11 @@ initWhenNear("demo-progressive", function () { progressiveDemo("pj-lwe"); });
           "why": "Only the color band pays. Flip the demo again: the luma stripes hold razor sharp at every mode, because subsampling shrinks the two chroma planes and leaves luma at full resolution."
         },
         {
-          "t": "the colors washed out toward gray but kept their crisp edges",
+          "t": "the red and green washed out toward gray but kept their crisp edges",
           "why": "The 2x2 averaging blends neighboring red and green stripes into mud, so the color detail loses exactly its edges; edges survive only in the untouched luma plane. Toggle 4:2:0 and study the bottom band."
         },
         {
-          "t": "the picture dimmed a little, since half the samples are gone",
+          "t": "the whole picture dimmed a little, since half the samples are gone",
           "why": "Brightness survives untouched because every discarded sample is chroma. The 4:2:0 file keeps full luma plus quarter-resolution color, which is why the info line reads 50% of raw samples with zero visible dimming."
         }
       ]
@@ -589,15 +589,15 @@ initWhenNear("demo-progressive", function () { progressiveDemo("pj-lwe"); });
           "why": "Each tile pixel covers an 8.6 by 8.6 patch of the frame, which holds about four color samples across and nine down. At its own size the tile has full color, and 4:2:0 would halve it in each direction. Drag the reduction demo below 2x to see where that stops being true."
         },
         {
-          "t": "4:4:4 upsamples the camera's missing color and sharpens it",
+          "t": "4:4:4 upsamples the color the camera skipped and sharpens it back in",
           "why": "Nothing can recover color the camera never recorded. The gain is color the downscale already measured: past 2x, every tile pixel has camera samples of its own. At 1x in the demo, 4:4:4 only stores copies."
         },
         {
-          "t": "AV1 always compresses 4:4:4 better than 4:2:0",
+          "t": "AV1 codes 4:4:4 more efficiently than 4:2:0, whatever the camera recorded",
           "why": "At native size a 4:2:2 source stored at 4:4:4 just duplicates samples, so there is nothing to win. The advantage exists because the tile is 8.6x smaller than the frame, and it shrinks toward nothing as the reduction approaches 2x."
         },
         {
-          "t": "it only helps on photos lit in red",
+          "t": "it comes from the red-lit frames, where 4:2:0 smears color the worst",
           "why": "Red is where the gap is widest (one night frame needs 35% more bytes at 4:2:0), but 4:4:4 scored higher on 18 of 24 photos at the 600px tier. Red widens the effect; the downscale causes it."
         }
       ]
@@ -606,20 +606,20 @@ initWhenNear("demo-progressive", function () { progressiveDemo("pj-lwe"); });
       "q": "A baseline and a progressive version of one photo decode to identical pixels. What changes between them?",
       "options": [
         {
-          "t": "only the order the coefficients are written in, so a cut-off file shows the whole picture coarsely instead of the top rows sharply",
+          "t": "the order the coefficients arrive in, which sets what a cut-off file shows",
           "ok": true,
-          "why": "Right. jpegtran made the demo's three files from one another without decoding anything, and the finished files are pixel-identical. Scan order decides what a partial file can show."
+          "why": "Right. jpegtran made the demo's three files from one another without decoding anything, and the finished files are pixel-identical. Scan order decides what a partial file can show: the whole picture coarsely, or the top rows sharply."
         },
         {
-          "t": "the early passes use a blurrier quantization that later passes replace",
+          "t": "the early passes use a coarser quantization table that the later passes overwrite",
           "why": "Nothing is quantized twice. The early scans carry some of the same rounded numbers, or their top bits, and later scans complete them in place."
         },
         {
-          "t": "progressive always makes the file smaller",
+          "t": "progressive coding packs the coefficients tighter, so the file comes out smaller",
           "why": "On this photo libjpeg's standard script is 1.7% larger than baseline. Only zenjpeg's searched order came out smaller, because the search scored bytes."
         },
         {
-          "t": "the file stores a low-resolution copy for the browser to show first",
+          "t": "the file embeds a low-resolution preview copy for the browser to show first",
           "why": "There is no second copy. The first scan is every block's DC, which is the picture at 1/8 scale by construction; later scans add detail to the same grid."
         }
       ]
@@ -628,20 +628,20 @@ initWhenNear("demo-progressive", function () { progressiveDemo("pj-lwe"); });
       "q": "In Chrome the shipped zenjpeg file stays blank until about 85% has arrived, while the libjpeg order paints almost at once. Why?",
       "options": [
         {
-          "t": "its scan order sends all the brightness before either color plane, and chrome paints nothing until every channel has started",
+          "t": "its scan order puts both color planes last, and chrome waits for every channel to start",
           "ok": true,
-          "why": "That is the gate, measured to the byte: the first data byte of the Cr scan. zenjpeg's search picked the order for size, and on this photo size put color last."
+          "why": "That is the gate: Chrome paints nothing until every channel has started, and the demo measures it to the byte at the first data byte of the Cr scan. zenjpeg's search picked the order for size, and on this photo size put color last."
         },
         {
-          "t": "zenjpeg writes a baseline file",
+          "t": "zenjpeg writes a single-scan baseline file, so there is no coarse pass to paint early",
           "why": "It is progressive, seven scans, and the table reads them straight out of its headers. The problem is their order."
         },
         {
-          "t": "a jpeg cannot be decoded until its end marker arrives",
+          "t": "chrome won't decode a progressive jpeg until the end-of-image marker arrives",
           "why": "Every cut-off file in the demo gets an end marker appended, and the libjpeg order paints from its first few hundred bytes. What differs is which channels have started."
         },
         {
-          "t": "the zenjpeg file is larger, so it takes longer",
+          "t": "the zenjpeg file is the largest of the three, so its first scan takes longer to land",
           "why": "It is the smallest of the three, 16,234 bytes against 16,324 for baseline. The delay comes from order, and a smaller file in a worse order still paints later."
         }
       ]

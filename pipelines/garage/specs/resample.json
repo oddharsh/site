@@ -26,16 +26,16 @@
         "q": "A one pixel black and white checkerboard is reduced 16 times. Why is sRGB 188 the correct answer rather than 128?",
         "options": [
           {
-            "t": "Half the pixels are black and half are white, so the result carries half the light, and half the light encodes to about 188 in sRGB.",
+            "t": "The output must carry half the light, and half the light encodes to about 188.",
             "ok": true,
-            "why": "Right. sRGB encodes perceived brightness rather than light, so the midpoint of the codes and the midpoint of the light are different greys."
+            "why": "Right. Half the pixels are black and half are white, so the result carries half the light. sRGB encodes perceived brightness rather than light, so the midpoint of the codes and the midpoint of the light are different greys."
           },
           {
             "t": "188 is the midpoint between 128 and 255, which is where a downscale lands.",
             "why": "The number comes from converting half the light back to sRGB."
           },
           {
-            "t": "The filter adds sharpening, which raises the mean above 128.",
+            "t": "The filter's lobes overshoot at every edge, which sharpens the checkerboard and raises the mean above 128.",
             "why": "Sharpening changes contrast around edges and leaves the mean where it was. The mean moves here because the averaging happens in a different space."
           }
         ]
@@ -44,16 +44,16 @@
         "q": "The page shows that this site's kernel and the image crate's kernel agree to within 6e-7 on identical linear input. What does that rule out?",
         "options": [
           {
-            "t": "That the visible quality difference came from the filter maths, since both compute the same weights and taps.",
+            "t": "That the visible quality gap came from the filter weights and taps.",
             "ok": true,
-            "why": "Right. Agreement in linear light localises the difference to the colour conversion at the 8 bit boundary."
+            "why": "Right. Both compute the same weights and taps, so agreement in linear light localises the difference to the colour conversion at the 8 bit boundary."
           },
           {
-            "t": "That either library has a bug at all.",
+            "t": "That either library has any bug left anywhere in its default resize path.",
             "why": "It rules out a difference between their kernels. Both still average encoded values by default, which is the defect the page is about."
           },
           {
-            "t": "That the reduction ratio matters.",
+            "t": "That the reduction ratio changes the result, since both widen the filter the same way.",
             "why": "Support widening with the ratio is a separate property, and both implementations do it. The comparison holds ratio fixed."
           }
         ]
@@ -62,16 +62,16 @@
         "q": "After the reference frame was made gamma correct, the Instagram export's quality target of 70 started producing visibly worse files. Why?",
         "options": [
           {
-            "t": "The score compares the encode against its own reference, and a clean reference is easier for JPEG to match, so the same number was reached at a much lower quality setting.",
+            "t": "A clean reference is easier for JPEG to match, so the search hit 70 at a much lower quality setting.",
             "ok": true,
-            "why": "Right. The threshold was calibrated against a noisy reference, so making the reference correct silently rescaled what the number bought."
+            "why": "Right. The score compares the encode against its own reference, and the threshold was calibrated against a noisy one, so making the reference correct silently rescaled what the number bought."
           },
           {
-            "t": "Gamma correct references are inherently harder to encode, so quality dropped.",
+            "t": "Gamma correct references are harder to encode, so every file at the same setting lost quality.",
             "why": "They are harder in bytes, which is why the corpus grew 1.5%. The delivered file got worse because the search stopped earlier."
           },
           {
-            "t": "The encoder was changed at the same time.",
+            "t": "The encoder changed at the same time, and its new quantisation tables scored lower at 70.",
             "why": "The encoder was unchanged and verified byte identical on colour inputs. Only the reference moved."
           }
         ]
@@ -80,16 +80,16 @@
         "q": "What would falsify the page's claim that the linear light geometry is worth its byte cost?",
         "options": [
           {
-            "t": "A matched bytes comparison where the gamma incorrect version scores higher, meaning the extra bytes buy less than spending them on the quality setting would.",
+            "t": "A matched bytes comparison in which the gamma incorrect version scores higher.",
             "ok": true,
-            "why": "Right, and that comparison has been run once at a smaller scale and went the other way, which is why the page states the corpus size as the limit."
+            "why": "Right. If the gamma incorrect version wins at equal bytes, spending the extra bytes on the quality setting would buy more. That comparison has been run once at a smaller scale and went the other way, which is why the page states the corpus size as the limit."
           },
           {
-            "t": "Finding another library that also averages encoded values.",
+            "t": "Finding another widely used library that also averages encoded values by default.",
             "why": "That is already true of every library measured here. Being common says nothing about being correct."
           },
           {
-            "t": "A photograph where the two versions look identical.",
+            "t": "A photograph where the two versions look identical at the delivered size.",
             "why": "Flat or low texture frames should look identical, since the defect lives where neighbouring pixels differ. That result is predicted."
           }
         ]

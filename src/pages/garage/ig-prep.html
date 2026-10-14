@@ -116,16 +116,16 @@
       "q": "Why does delivering the whole frame at the target width cost nothing, even though Instagram will crop it?",
       "options": [
         {
-          "t": "Cropping a portrait to 4:5 removes height only, so the cropped frame is already the target width and has nothing left to resample.",
+          "t": "A vertical crop to 4:5 removes height and leaves the target width untouched.",
           "ok": true,
           "why": "Right. Width is unchanged by a vertical crop, so the expensive resample was already performed here."
         },
         {
-          "t": "Instagram skips resampling for any image above 1080 pixels wide.",
+          "t": "Instagram skips resampling on any image wider than 1080 pixels, its feed width.",
           "why": "It resamples whatever misses the width it wants. Size alone buys no exemption."
         },
         {
-          "t": "The crop happens on the phone, so the pixels never reach Instagram's servers.",
+          "t": "The app crops on the phone, so Instagram's servers never re-encode it.",
           "why": "The cropped frame is exactly what gets uploaded, and it is re-encoded on arrival."
         }
       ]
@@ -134,16 +134,16 @@
       "q": "A photographer pinch-zooms while cropping in the app. What did that cost them?",
       "options": [
         {
-          "t": "It changed the scale, so the frame no longer arrives at the target width and Instagram resamples it after all.",
+          "t": "The new scale moves the frame off the target width, so Instagram resamples it.",
           "ok": true,
           "why": "Right. The guarantee holds for a drag, which moves the window, and breaks for a zoom, which changes the scale."
         },
         {
-          "t": "Nothing, because the source was already downscaled carefully.",
+          "t": "Nothing, because the Lanczos3 downscale already ran here in linear light.",
           "why": "A careful downscale to the wrong final size still gets resampled, which is the step this was avoiding."
         },
         {
-          "t": "It stripped the rotation metadata.",
+          "t": "It dropped the EXIF Orientation tag, so the frame can upload sideways.",
           "why": "Cropping in the app does not touch how the file stated its rotation."
         }
       ]
@@ -152,17 +152,17 @@
       "q": "A HEIF states its rotation through both irot and EXIF Orientation, saying the same thing. What must a converter do?",
       "options": [
         {
-          "t": "Apply one of them, decided by measuring what the decoder already did, since applying both turns the photograph sideways.",
+          "t": "Apply one of them, chosen by measuring what the decoder already did.",
           "ok": true,
           "why": "Right. Different decoders apply different subsets, so the only reliable signal is whether the decoded dimensions came back as the display shape or the stored one."
         },
         {
-          "t": "Apply both, because the file states them separately and each is a real instruction.",
+          "t": "Apply both, since irot and EXIF Orientation are separate instructions.",
           "why": "That is the failure the redundancy causes. Two applications of one 90 degree turn is 180 degrees of wrong."
         },
         {
-          "t": "Apply neither, because a file saying it twice is corrupt.",
-          "why": "Saying it twice is normal and every Fujifilm HIF does it. Applying neither leaves a portrait planned as a landscape."
+          "t": "Apply neither, and trust sips, which passes the tag forward for the app.",
+          "why": "Saying it twice is normal and every Fujifilm HIF does it. sips applies neither and passes the tag on, and a program that trusts it plans a portrait as a landscape."
         }
       ]
     },
@@ -170,16 +170,16 @@
       "q": "The MCP mode returns file paths instead of image bytes. What is the reasoning?",
       "options": [
         {
-          "t": "The photographs are already on the machine the model can reach, so bytes in the result would spend context on pixels the model cannot look at.",
+          "t": "Bytes would spend the model's context on pixels it can't look at.",
           "ok": true,
           "why": "Right. A converted frame is roughly a megabyte of base64, and the caller can already open the file it named."
         },
         {
-          "t": "MCP results cannot carry binary data at all.",
+          "t": "MCP results are text-only, so image bytes would need base64 encoding.",
           "why": "The protocol has image content blocks. The limit here is what a result is worth carrying."
         },
         {
-          "t": "Returning bytes would let the model modify the originals.",
+          "t": "Returning bytes would let the model alter the originals.",
           "why": "The tool writes to an output directory and never touches a source, whichever shape the result takes."
         }
       ]
@@ -188,16 +188,16 @@
       "q": "Every grayscale JPEG failed inside the resizer with a message naming neither the file nor its colour. What was the underlying mistake?",
       "options": [
         {
-          "t": "The code read a colourspace request as a guarantee, and the decoder declined it silently for single-channel sources.",
+          "t": "The code took a colourspace request as a guarantee the decoder had quietly declined.",
           "ok": true,
           "why": "Right. The buffer came back at one byte per pixel while the code labelled it three, and the mismatch surfaced wherever that label first mattered."
         },
         {
-          "t": "The resizer cannot handle grayscale input at all.",
+          "t": "The resizer has no single-channel path, so it rejects any grayscale buffer.",
           "why": "The resizer was handed a buffer that disagreed with the dimensions it was given. Its own capabilities were never the question."
         },
         {
-          "t": "Grayscale JPEGs store their dimensions in a different header field.",
+          "t": "Grayscale JPEGs keep their dimensions in a different header field, which was misread.",
           "why": "The dimensions were read correctly. The pixel count behind them was what did not match."
         }
       ]

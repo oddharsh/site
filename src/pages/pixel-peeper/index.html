@@ -29,6 +29,9 @@
   /* --bt is the chart/border identity; as TEXT the amber only hits 3.06:1 on the
      panel, so text uses this darker sibling (4.8:1) and the graphics keep --bt. */
   --bt-ink:#9c640d;
+  /* the diff map's two sides, the first tile of a pair and the second. Kept off
+     the metric blue and amber, and mirrored by DIFF_FS's CA and CB. */
+  --da:#1fb5d6; --db:#e0479e;
   --grad-btn-hover:linear-gradient(180deg,#ffffff 0%,#f3f4ff 100%);
 }
 /* The window frame, title bar, gel caption buttons and sunken .content field all
@@ -83,6 +86,8 @@ b{color:var(--ink)}
 .diffctl input[type=range]{vertical-align:middle;width:120px}
 .seg{gap:4px}
 .seg .xp-button[aria-pressed=true]{font-weight:700}
+.dkey{display:flex;gap:12px;flex-wrap:wrap}
+.dkey i{display:inline-block;width:10px;height:10px;margin-right:4px;vertical-align:-1px;border:1px solid var(--shadow)}
 .banner{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid;border-radius:2px;font-size:var(--text-ui);margin:10px 0;line-height:1.45}
 .banner .g{font-weight:700;flex:0 0 auto}
 .banner.ok{background:var(--green-97);border-color:#a9cf9c;color:#2c5720}
@@ -179,7 +184,7 @@ const AXES={
   // common-size reference), so the call is graded by its analytically known
   // answer instead: the tile the linear-light kernel made.
   resample:{answer:o=>o.label==="zenc",right:"you picked the one averaged in light",wrong:"that one averaged sRGB numbers",
-    teach:`same photo, same byte budget, same encoder. only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
+    teach:`same photo, same byte budget, same encoder. only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. <b>light kept</b> under each tile is its mean brightness, measured as light, over the window it was shrunk from: averaging in light keeps exactly 100% until the JPEG rounds off a few tenths, and averaging sRGB numbers keeps less. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
   format:  {teach:t=>FMT[t.tier].teach+av2Line(t)+(state.log.filter(l=>l.axis==="format").length===1?` ${FMT_TAIL}${av2Line(t)?FMT_TAIL_AV2:""}`:``)+(t.lossless?` <b>lossless</b>, this photo is ${kb(t.lossless.jxl)} as JPEG XL${t.lossless.av2?`, ${kb(t.lossless.avif)} as AVIF and ${kb(t.lossless.av2)} as AV2`:` and ${kb(t.lossless.avif)} as AVIF`}: JPEG XL's biggest lead, and one no eye test can show.`:``)},
   tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
 };
@@ -577,7 +582,7 @@ function onPick(pos,order,trial){
     if(p===pos)tile.classList.add("pick");
     const cap=document.getElementById("cap"+p);
     cap.innerHTML=`<span class="lab">${o.label.split(" · ")[0]}</span>${kb(o.bytes)}<br>`+
-      (o.s2===null?``:`<span class="m s2">s2 ${o.s2}${o.s2best?" ✓":""}</span><span class="m bt">bu ${o.butter}${o.butterbest?" ✓":""}</span>`)+
+      (o.s2===null?(o.light==null?``:`<span class="m">light kept ${o.light.toFixed(1)}%</span>`):`<span class="m s2">s2 ${o.s2}${o.s2best?" ✓":""}</span><span class="m bt">bu ${o.butter}${o.butterbest?" ✓":""}</span>`)+
       (p===pos?`<span class="yours">▲ your pick</span>`:``);
   });
   const right=answer?answer(chosen):chosen.s2best&&chosen.butterbest;
@@ -595,7 +600,9 @@ function onPick(pos,order,trial){
     ${gl?diffHTML(trial,order):""}
     <div class="row" style="justify-content:flex-end"><button class="xp-button compact default" id="next">${state.i===state.trials.length-1?"See my profile ▸":"Next ▸"}</button></div>`;
   if(gl)wireDiff(gl,tiles,trial,order,pos);
-  const next=document.getElementById("next");next.focus();next.onclick=advance;
+  // focus without the scroll: Next sits under the diff map, and a plain focus()
+  // dragged it into view, which threw the tiles you just judged off the top
+  const next=document.getElementById("next");next.focus({preventScroll:true});next.onclick=advance;
   // the diff map's own buttons take Enter and Space, so those keys only advance from elsewhere
   document.onkeydown=e=>{if(typing(e)||(e.target instanceof Element&&e.target.closest("#diff")))return;if(e.key==="Enter"||e.key===" ")advance();};
 }
@@ -894,27 +901,43 @@ function attachLoupe(tile,cv,img){
    map drawn during the pick would hand over the answer the test exists to ask.
    There is no original on the page, so it compares tiles with each other.
 
-   The difference is taken in JPEG's own space, YCbCr over the decoded sRGB
-   bytes, because that is where the encoders made their choices. Luma is the
-   detail a quality drop eats; CbCr is the color that 4:2:0 halves. A fragment
-   shader does it per pixel, so the gain slider and the mode buttons are a
-   uniform change and a redraw rather than a pass over the pixels in JS. */
+   The map is SIGNED: each spot takes the color of the tile that is ahead
+   there, so it answers "which one is brighter, sharper, more colorful here"
+   rather than only "they differ here". Each mode measures one quantity per
+   tile and subtracts:
+     brighter     luma
+     sharper      local contrast, the standard deviation of luma over the 3x3
+                  around the pixel: texture a tile kept, or ringing and blocks
+                  it added, and the tiles beside the map show which
+     more color   chroma magnitude, the saturation 4:2:0 smears away
+   All three are taken in JPEG's own space, YCbCr over the decoded sRGB bytes,
+   because that is where the encoders made their choices. A fragment shader
+   does it per pixel, so the gain slider and the mode buttons are a uniform
+   change and a redraw rather than a pass over the pixels in JS. */
 const DIFF_VS=`#version 300 es
-out vec2 uv;
-void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.-1.,0.,1.);}`;
+void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,0.,1.);}`;
 const DIFF_FS=`#version 300 es
 precision highp float;
-uniform sampler2D A,B;uniform float gain;uniform int mode;
-in vec2 uv;out vec4 o;
+uniform sampler2D A,B;uniform float gain;uniform int mode;uniform bool raw;
+out vec4 o;
 const mat3 YCC=mat3(.299,-.168736,.5,.587,-.331264,-.418688,.114,.5,-.081312);
-const vec3 AMBER=vec3(1.,.645,.14);
+const vec3 CA=vec3(.122,.71,.839),CB=vec3(.878,.278,.62);   // --da, --db
+vec3 ycc(sampler2D T,ivec2 p){return YCC*texelFetch(T,clamp(p,ivec2(0),textureSize(T,0)-1),0).rgb;}
+float sig(sampler2D T,ivec2 p){
+  if(mode==1){float s=0.,q=0.;
+    for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){float l=ycc(T,p+ivec2(x,y)).x;s+=l;q+=l*l;}
+    float m=s/9.;return sqrt(max(q/9.-m*m,0.));}
+  vec3 c=ycc(T,p);return mode==2?length(c.yz):c.x;
+}
 void main(){
-  vec3 d=YCC*(texture(A,uv).rgb-texture(B,uv).rgb);
-  float y=abs(d.x)*gain,c=length(d.yz)*gain;
-  vec3 v=mode==1?vec3(y):mode==2?c*AMBER:vec3(y)+c*AMBER;
-  o=vec4(min(v,vec3(1.)),1.);
+  float s=sig(A,ivec2(gl_FragCoord.xy))-sig(B,ivec2(gl_FragCoord.xy));
+  // raw: the first tile's lead in red, the second's in green, at gain 1, for readback
+  if(raw){o=vec4(max(s,0.),max(-s,0.),0.,1.);return;}
+  o=vec4(min((max(s,0.)*CA+max(-s,0.)*CB)*gain,vec3(1.)),1.);
 }`;
-const DIFF_MODES=[["both",0],["detail",1],["color",2]];
+const DIFF_MODES=[["brighter",0],["sharper",1],["more color",2]];
+// Which question the map opens on: the one the call's axis is about.
+const diffModeFor=axis=>axis==="resample"?0:axis==="chroma"||axis==="tradeoff"?2:1;
 // Format calls differ by very different amounts per tier (mean 2.4-4.9 levels
 // on a tight budget, 0.6-1.7 on a repack, measured 2026-10-07), so no one gain
 // shows both: x8 left a repack map black, and x32 clips a tight-budget map to
@@ -935,7 +958,7 @@ function diffGL(){
   if(!gl.getProgramParameter(p,gl.LINK_STATUS))return DIFF=null;
   gl.useProgram(p);
   gl.uniform1i(gl.getUniformLocation(p,"A"),0);gl.uniform1i(gl.getUniformLocation(p,"B"),1);
-  const uGain=gl.getUniformLocation(p,"gain"), uMode=gl.getUniformLocation(p,"mode");
+  const uGain=gl.getUniformLocation(p,"gain"), uMode=gl.getUniformLocation(p,"mode"), uRaw=gl.getUniformLocation(p,"raw");
   const tex=[0,1].map(()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
     [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(k=>gl.texParameteri(gl.TEXTURE_2D,k,gl.NEAREST));
     [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(k=>gl.texParameteri(gl.TEXTURE_2D,k,gl.CLAMP_TO_EDGE));return t;});
@@ -944,18 +967,22 @@ function diffGL(){
   gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.NONE);
   cv.className="diffmap";cv.setAttribute("role","img");
   cv.addEventListener("webglcontextlost",()=>{DIFF=undefined;});
-  const draw=(gain,mode)=>{gl.viewport(0,0,cv.width,cv.height);gl.uniform1f(uGain,gain);gl.uniform1i(uMode,mode);gl.drawArrays(gl.TRIANGLES,0,3);};
-  // max and mean of one channel at gain 1, read back from the shader's own
-  // output, so the numbers and the picture cannot disagree about what differs
+  const draw=(gain,mode,raw=false)=>{gl.viewport(0,0,cv.width,cv.height);gl.uniform1f(uGain,gain);gl.uniform1i(uMode,mode);gl.uniform1i(uRaw,raw?1:0);gl.drawArrays(gl.TRIANGLES,0,3);};
+  // Each side's lead in levels of 255, read back from the shader's own raw
+  // output, so the numbers and the picture cannot disagree about who is ahead.
+  // `a` and `b` are the share of the tile where that side leads by a level or
+  // more; the rest is a tie at this precision.
   let px=null;
-  const measure=mode=>{draw(1,mode);const n=cv.width*cv.height;if(!px||px.length!==n*4)px=new Uint8Array(n*4);
+  const measure=mode=>{draw(1,mode,true);const n=cv.width*cv.height;if(!px||px.length!==n*4)px=new Uint8Array(n*4);
     gl.readPixels(0,0,cv.width,cv.height,gl.RGBA,gl.UNSIGNED_BYTE,px);
-    let max=0,sum=0;for(let i=0;i<px.length;i+=4){const v=px[i];if(v>max)max=v;sum+=v;}return{max,mean:sum/n};};
+    let max=0,sum=0,a=0,b=0;
+    for(let i=0;i<px.length;i+=4){const v=px[i]+px[i+1];if(v>max)max=v;sum+=v;if(px[i])a++;else if(px[i+1])b++;}
+    return{max,mean:sum/n,a:a/n,b:b/n};};
   return DIFF={cv,draw,
     load(a,b){cv.width=a.naturalWidth;cv.height=a.naturalHeight;
       [a,b].forEach((img,i)=>{gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,tex[i]);
         gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);});
-      return{y:measure(1),c:measure(2)};}};
+      return DIFF_MODES.map(([,m])=>measure(m));}};
 }
 // a tile's short name, the same one its caption shows once revealed: "quality 45", "zenc", "4:2:0"
 const tileName=(trial,order,p)=>trial.options[order[p]].label.split(" · ")[0];
@@ -966,9 +993,10 @@ function diffHTML(trial,order){
       <div class="diffctl">
         ${pairs.length>1?`<div class="row seg" role="group" aria-label="compare">${pairs.map(([a,b])=>`<button class="xp-button compact" data-pair="${a},${b}" aria-pressed="false">${nm(a)} vs ${nm(b)}</button>`).join("")}</div>`:""}
         <div class="row seg" role="group" aria-label="show">${DIFF_MODES.map(([t,m])=>`<button class="xp-button compact" data-mode="${m}" aria-pressed="false">${t}</button>`).join("")}</div>
+        <p class="meta dkey" id="dkey" style="margin:0"></p>
         <label class="meta">gain ×<output id="dgv"></output> <input type="range" id="dgain" min="0" max="5" step="1" value="3"></label>
         <p class="meta" id="dstat" style="margin:0"></p>
-        <p style="margin:0;font-size:9pt">black means the two tiles match. white marks a brightness difference and amber a color one, both multiplied by the gain so a one-level gap still shows.</p>
+        <p style="margin:0;font-size:9pt">each spot takes the color of the tile that's ahead there, brighter for a bigger lead, and black means they match. <b>sharper</b> is local contrast: texture a tile kept, or ringing and blocks it added, so check the tiles to see which.</p>
       </div></div></div>`;
 }
 // Which tile the map compares your pick against when it opens. Wrong on a
@@ -988,26 +1016,32 @@ function diffDefault(trial,order,pos){
 function wireDiff(gl,tiles,trial,order,pos){
   document.getElementById("diffwrap").appendChild(gl.cv);
   const other=diffDefault(trial,order,pos), nm=p=>tileName(trial,order,p);
-  let pair=[Math.min(pos,other),Math.max(pos,other)], mode=0;
-  const gain=document.getElementById("dgain"), gv=document.getElementById("dgv"), stat=document.getElementById("dstat");
-  const g=()=>2**+gain.value;
+  let pair=[Math.min(pos,other),Math.max(pos,other)], mode=diffModeFor(trial.axis), s=null;
+  const gain=document.getElementById("dgain"), gv=document.getElementById("dgv"), stat=document.getElementById("dstat"), key=document.getElementById("dkey");
+  const g=()=>2**+gain.value, pct=v=>`${Math.round(100*v)}%`;
   const press=(sel,on)=>document.querySelectorAll(`#diff [${sel}]`).forEach(b=>b.setAttribute("aria-pressed",String(b.getAttribute(sel)===on)));
-  const redraw=()=>{gv.textContent=g();gl.draw(g(),mode);};
-  // A format call opens at the gain that lands its mean difference near
-  // AUTO_GAIN_MEAN levels, once; the slider is the visitor's after that.
-  let auto=trial.axis==="format";
+  // who leads in this mode, and over how much of the tile
+  const tell=()=>{if(!s)return;const v=s[mode],[A,B]=pair.map(nm),word=DIFF_MODES[mode][0];
+    stat.textContent=`${word}: ${A} in ${pct(v.a)} of the tile, ${B} in ${pct(v.b)}, the rest within a level · lead avg ${v.mean.toFixed(1)}, max ${v.max} levels of 255`;
+    gl.cv.setAttribute("aria-label",`where each tile is ${word}, ${A} against ${B}: ${stat.textContent}`);};
+  // Until the visitor moves the slider, the gain follows the shown mode: the
+  // one that lands its mean lead near AUTO_GAIN_MEAN levels, never under x8.
+  // The modes differ as much as the format tiers do (a resample call leads by
+  // 2.4 levels on brightness and 0.9 on local contrast), so one gain per call
+  // left the sharper map black.
+  let auto=true;
+  const fit=()=>{if(auto&&s)gain.value=String(Math.min(+gain.max,Math.max(3,Math.round(Math.log2(AUTO_GAIN_MEAN/Math.max(s[mode].mean,.01))))));};
+  const redraw=()=>{fit();gv.textContent=g();gl.draw(g(),mode);tell();};
   const load=()=>{
     const [a,b]=pair.map(p=>tiles[p].querySelector("img"));
     if(!a.complete||!b.complete||!a.naturalWidth){stat.textContent="tiles still loading";return;}
-    const s=gl.load(a,b),f=v=>`max ${v.max}, avg ${v.mean.toFixed(1)}`;
-    if(auto){auto=false;gain.value=String(Math.min(+gain.max,Math.max(+gain.value,Math.round(Math.log2(AUTO_GAIN_MEAN/Math.max(s.y.mean,s.c.mean,.01))))));}
-    stat.textContent=`${nm(pair[0])} vs ${nm(pair[1])}, in levels of 255 · detail ${f(s.y)} · color ${f(s.c)}`;
-    gl.cv.setAttribute("aria-label",`difference between ${nm(pair[0])} and ${nm(pair[1])}: ${stat.textContent}`);
+    s=gl.load(a,b);
+    key.innerHTML=pair.map((p,i)=>`<span><i style="background:var(${i?"--db":"--da"})"></i>${nm(p)} ahead</span>`).join("");
     press("data-pair",pair.join(","));redraw();};
   document.querySelectorAll("#diff [data-pair]").forEach(b=>b.onclick=()=>{pair=b.dataset.pair.split(",").map(Number);load();});
   document.querySelectorAll("#diff [data-mode]").forEach(b=>b.onclick=()=>{mode=+b.dataset.mode;press("data-mode",String(mode));redraw();});
-  gain.oninput=redraw;
-  press("data-mode","0");load();
+  gain.oninput=()=>{auto=false;redraw();};
+  press("data-mode",String(mode));load();
 }
 
 let DATA=null;

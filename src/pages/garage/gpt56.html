@@ -123,9 +123,9 @@ hr{border:0;border-top:2px groove var(--slate-90);margin:16px 0;height:0}
       "q": "This page looks like itself before any JavaScript has run. Per the first-paint check, why?",
       "options": [
         {
-          "t": "The desktop and window geometry ship as static markup, the Luna sheet is preloaded, and the shell script is deferred out of the critical path.",
+          "t": "The desktop and window geometry ship as static markup, Luna is preloaded, and the shell script is deferred.",
           "ok": true,
-          "why": "Right: the identity lives in the document itself, so the browser paints it from HTML and CSS alone. JavaScript arrives later, deferred, and only adds behavior."
+          "why": "Right: the identity lives in the document itself, and the shared Luna sheet is preloaded, so the browser paints it from HTML and CSS alone. JavaScript arrives later, deferred out of the critical path, and only adds behavior."
         },
         {
           "t": "The shell script is inlined at the top of the document so it can build the window chrome before the browser's first frame.",
@@ -145,20 +145,20 @@ hr{border:0;border-top:2px groove var(--slate-90);margin:16px 0;height:0}
       "q": "Thumbnails here are served with a one-year immutable cache lifetime. What makes that safe?",
       "options": [
         {
-          "t": "Each thumbnail URL is derived from a hash of its bytes, so any change mints a new URL and old cached copies simply stop being referenced.",
+          "t": "Each thumbnail URL is derived from a hash of its bytes, so changed bytes mint a new URL.",
           "ok": true,
-          "why": "Right: the URL names exact bytes, so a cache hit is by definition the right file. Bay 02 calls this giving bytes a name."
+          "why": "Right: the URL names exact bytes, so a cache hit is by definition the right file, and old cached copies simply stop being referenced. Bay 02 calls this giving bytes a name."
         },
         {
-          "t": "A global version number gets bumped on every deploy, which forces browsers to refetch every thumbnail fresh.",
+          "t": "A global version number gets bumped on every deploy, forcing browsers to refetch every thumbnail.",
           "why": "A global bump invalidates everything on any change, including files that never moved. Content addressing keeps untouched thumbnails cached and re-fetches only what actually changed."
         },
         {
-          "t": "The edge cache expires entries quickly enough that a stale thumbnail disappears before anyone sees it.",
+          "t": "The edge cache expires entries fast enough that a stale thumbnail vanishes before anyone sees it.",
           "why": "The lifetime is a full year, so expiry offers no protection here. Safety comes from identity: the ledger's photo-bytes row says content-addressed and immutable, so the name changes when the bytes do."
         },
         {
-          "t": "The Worker compares every cached thumbnail against the original in storage before letting it be served.",
+          "t": "The Worker checks each cached thumbnail against the original in storage before serving it.",
           "why": "Checking origin on every request would cancel the benefit of the cache hit. Static assets answer directly at the edge, and the hashed URL already guarantees which bytes it names."
         }
       ]
@@ -167,7 +167,7 @@ hr{border:0;border-top:2px groove var(--slate-90);margin:16px 0;height:0}
       "q": "The build parses luna.css, checks the route mirror, and caps the gzip bundle before deploy. What does a green deploy prove?",
       "options": [
         {
-          "t": "That those invariants held at build time, so a regression they cover fails the deploy before it can ever reach the edge.",
+          "t": "That those invariants held at build time, so a regression they cover fails the deploy before reaching the edge.",
           "ok": true,
           "why": "Right: bay 03 calls it making shipping fail loud. A green deploy is a claim with evidence attached, and the evidence is the checks that had to pass first."
         },

@@ -176,7 +176,7 @@
       "q": "Start at the base layer. What is the 'root of trust' a TEE builds everything on?",
       "options": [
         {
-          "t": "a fixed secret unique to each chip that everything else gets encrypted under",
+          "t": "a fixed secret, unique to each chip, that the enclave encrypts data under",
           "ok": true,
           "why": "Right. Static but unique is the exact phrase: the secret never changes, no two chips share it, and it is the base the enclave encrypts biometrics and card data under."
         },
@@ -198,16 +198,16 @@
       "q": "The Secret Network story. Why did one processor exploit, Aepicleak, put the whole network's private state at risk?",
       "options": [
         {
-          "t": "every SGX node held the same consensus seed, basically a network-wide decryption key",
+          "t": "every SGX node held the same consensus seed, a network-wide key",
           "ok": true,
           "why": "Right, and that is the design lesson: one static secret shared across every node means a single successful extraction decrypts everything the network was protecting."
         },
         {
-          "t": "the seed passed between nodes in plaintext, so anyone sniffing traffic could grab it",
+          "t": "the seed crossed the network in plaintext, so sniffing traffic exposed it",
           "why": "The seed sat inside protected enclave memory the whole time. The attack emulated Secret Network nodes in software and pulled the seed out of that memory, no network sniffing involved."
         },
         {
-          "t": "researchers broke the encryption math, so every chain using that cipher fell with it",
+          "t": "researchers broke the encryption math, and every chain on that cipher fell",
           "why": "The cipher held. Aepicleak is a processor architecture exploit, which is this page's recurring theme: attackers go around the math by attacking the hardware that runs it."
         },
         {
@@ -220,7 +220,7 @@
       "q": "You ran the demo: 4 different probes, and the PIN fell out every time while the enclave's memory still read as ciphertext. What do timing, cache, power, and thermal attacks have in common?",
       "options": [
         {
-          "t": "they all measure physical side effects of the chip running and infer the secret from those",
+          "t": "they read physical side effects of the chip running and infer the secret",
           "ok": true,
           "why": "Exactly. Side-channels read the physics around the computation, which is why the demo's status line says no decryption key was needed: the ciphertext stays sealed while the secret walks out."
         },
@@ -242,7 +242,7 @@
       "q": "Last one, the essay's bottom line. Fully trusting a closed source TEE means trusting what, exactly?",
       "options": [
         {
-          "t": "the maker, the firmware maintainers, and a bet that the exploit costs more than the prize",
+          "t": "the maker, the firmware maintainers, and a bet the exploit costs more than the prize",
           "ok": true,
           "why": "That is the full stack. The manufacturer could feasibly keep a log matching each chip to its root of trust, and the final backstop is economic: keep the value of the secret below the cost of the attack."
         },
