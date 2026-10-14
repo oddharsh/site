@@ -359,3 +359,16 @@ by renumbering. The long-form history of each one is in git
     the `/*` one (gotcha 31), so it needs `! Content-Security-Policy` first;
     and a module that sets `onmessage` on `globalThis` outside a worker keeps
     Bun's event loop open, so a contract test that imports it never exits.
+
+62. **A clean diff after a generator can't tell "unchanged" from "never
+    written".** `og-cards.yml` decides whether to open a PR from
+    `git status` after the bake. Its first dispatch (run 38481736111,
+    2026-10-13) went green and proposed nothing: cards had been zenc JPEGs
+    since 2026-09-16, the workflow never built zenc, and
+    `gen-og-cards.ts` caught each card's error, printed `0/1 cards
+    written` and exited 0. A failed card leaves its old JPEG in place, so
+    the tree read clean and the next step printed "Every card already
+    matches what production renders". #1317 builds zenc in the workflow
+    and exits 1 when any card fails; the next dispatch built it, wrote the
+    card and opened #1318. Any generator whose output is committed owes its
+    caller an exit code, because the diff can only show what changed.
