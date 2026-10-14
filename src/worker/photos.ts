@@ -1,3 +1,7 @@
+// photos.ts: everything photo-shaped the Worker serves. Originals out of R2 at
+// /images/full, the curated and album pools, /photos and the album pages,
+// /photos/query.json, and the image manifest and sitemap.
+
 import { cachedRender } from "./lib/cache.ts";
 import { PHOTO_QUERY_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";

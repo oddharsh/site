@@ -1,3 +1,6 @@
+// updates.ts: /updates (Windows Update) and /restore (System Restore), two XP
+// views of the site's release checkpoints, plus /updates.json.
+
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";

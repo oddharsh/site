@@ -1,3 +1,7 @@
+// lib/http.ts: the HTTP kit every route shares. JSON and error responses,
+// Accept negotiation for Markdown and JSON, HTML escaping, entity decoding for
+// crawled titles, and the constant-time owner-secret check.
+
 import { escape } from "./html.ts";
 
 export function escAttr(s) {

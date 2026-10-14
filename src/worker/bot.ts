@@ -1,3 +1,6 @@
+// bot.ts: /bot, the page that tells a site owner who AadharshBot is, what it
+// reads, and how to turn it away.
+
 import { serveMarkdownTwin } from "./lib/assets.ts";
 import { BOT_NAME, BOT_UA, SIG_AGENT } from "./lib/botauth.ts";
 import { cachedRender } from "./lib/cache.ts";

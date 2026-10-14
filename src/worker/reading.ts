@@ -1,3 +1,6 @@
+// reading.ts: /reading, the links I save on Curius, fetched as AadharshBot,
+// cached in KV, and listed with their Hacker News threads.
+
 import { BOT_NAME, signedFetch } from "./lib/botauth.ts";
 import { serveBuiltPage } from "./lib/built-page.ts";
 import { cachedRender, deleteSWRKV, edgeKey, swrKV, withWeakEtag } from "./lib/cache.ts";

@@ -1,3 +1,6 @@
+// lib/chrome.ts: the Luna page shell every worker-rendered page wears
+// (lunaPage), with its share metadata and the XP chrome CSS.
+
 import { DESKTOP_CHROME, DESKTOP_TOP, SECTION_FAVICONS } from "./desktop.ts";
 import { addressBar, taskPane } from "./explorer.ts";
 import { EMPTY, Html, html, unsafeHtml } from "./html.ts";

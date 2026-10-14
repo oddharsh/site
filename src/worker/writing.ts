@@ -1,3 +1,6 @@
+// writing.ts: /writing and /writing/<slug>, the posts in posts.json drawn as
+// Notepad windows.
+
 import { cachedRender } from "./lib/cache.ts";
 import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "./lib/desktop.ts";
 import { addressBar, taskPane } from "./lib/explorer.ts";
