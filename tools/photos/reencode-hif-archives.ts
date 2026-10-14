@@ -9,8 +9,8 @@
 // camera's own) repacked losslessly as JPEG XL. Ingest now encodes it from
 // the HIF (hif-archive.ts, which carries the measurements); this brings the
 // archives published before that onto the same footing. All 119 HIF photos'
-// sources are local, and the bucket only shrinks: the sweep put the result at
-// about -33% bytes, both metrics better on every photo.
+// sources are local, and the bucket only shrinks: against the browser-decoded
+// bar (2026-10-14), 99 of 118 shrink and the HIF archives come to -8.6%.
 //
 // Per photo, the order is the proof:
 //

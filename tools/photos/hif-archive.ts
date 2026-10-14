@@ -24,6 +24,10 @@
 // Chrome ships, lands within 0.05 of libjxl. The sweep also scored its
 // candidates at 16 bits against that 8-bit baseline. Both sides are now
 // decoded the way a browser paints them: libjxl, 8 bits, its default dither.
+// Re-measured against that bar (2026-10-14, 118 of the 119; halves agree
+// within a point): the median distance falls to d0.163, 99 photos shrink
+// (median -9.4%), 19 cannot beat the bar without growing and keep their
+// repack, and the bucket's HIF archives come to -8.6%, not -33%.
 //
 // WHAT. Score the baseline against the HIF, then bisect cjxl's distance for
 // the LARGEST one (fewest bytes) whose encode beats the baseline on both

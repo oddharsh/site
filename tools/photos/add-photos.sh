@@ -448,10 +448,10 @@ else
     #   a HIF source: JPEG XL encoded from the HIF's own 10-bit pixels by
     #   hif-archive.ts, at the largest distance that still beats the JPEG
     #   prepared above on both ssimulacra2 and butteraugli. That JPEG is only
-    #   the bar now. Measured on all 119 HIF photos (2026-10-08) the search
-    #   comes to about -33% bytes with both metrics better; where nothing
-    #   beats it, hif-archive.ts falls back to the lossless transcode. About
-    #   four minutes a photo.
+    #   the bar now, decoded as a browser decodes its repack. Re-measured on
+    #   118 HIF photos (2026-10-14), 99 shrink and the total is -8.6%; where
+    #   nothing beats the bar, or only a larger file does, hif-archive.ts
+    #   falls back to the lossless transcode. About four minutes a photo.
     jxl="${full%.*}.jxl"; jxlfile="$JXLS/$jxl"
     case "${f##*.}" in
       [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])
