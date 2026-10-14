@@ -78,6 +78,8 @@ export async function servePhotoFromR2(request, env, ctx) {
     }
   }
 
+  // R2's onlyIf conditional GET returns a body-less object when the etag
+  // matches, which becomes the 304 below.
   const getOpts: R2GetOptions = {};
   if (ifNoneMatch) getOpts.onlyIf = { etagDoesNotMatch: ifNoneMatch.replace(/^W\//, "").replace(/"/g, "") };
   if (range) {
@@ -92,18 +94,20 @@ export async function servePhotoFromR2(request, env, ctx) {
   }
 
   const obj = await env.PHOTOS_R2.get(key, Object.keys(getOpts).length ? getOpts : undefined);
+  // null means the key doesn't exist. A failed precondition is a different
+  // answer: an R2Object with metadata and no body, so a matching
+  // If-None-Match lands here as an object, never as null.
   if (obj === null) {
-    if (ifNoneMatch) {
-      const head = await env.PHOTOS_R2.head(key);
-      if (head) {
-        return new Response(null, {
-          status: 304,
-          headers: { etag: head.httpEtag, "cache-control": "public, max-age=86400, immutable" },
-        });
-      }
-    }
     if (moved && await env.PHOTOS_R2.head(moved)) return movedTo(url, moved);
     return errorResp("not found", 404);
+  }
+  if (!("body" in obj)) {
+    // A 304 repeats the 200's cache-control, since a cache merges these
+    // headers into the copy it already holds.
+    return new Response(null, {
+      status: 304,
+      headers: { etag: obj.httpEtag, "cache-control": "public, max-age=31536000, immutable" },
+    });
   }
 
   const headers = new Headers();

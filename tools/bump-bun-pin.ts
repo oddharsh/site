@@ -416,7 +416,7 @@ if (results.some((r) => !r.ok)) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. the real bar
+// 5. the real bar: a pin change must preserve build bytes (gotcha 28)
 // ---------------------------------------------------------------------------
 gate(byteIdenticalBuildGate(candidate, process.execPath, ROOT));
 gate(contractSuiteGate(candidate, ROOT));
