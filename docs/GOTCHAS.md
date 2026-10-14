@@ -372,3 +372,14 @@ by renumbering. The long-form history of each one is in git
     and exits 1 when any card fails; the next dispatch built it, wrote the
     card and opened #1318. Any generator whose output is committed owes its
     caller an exit code, because the diff can only show what changed.
+
+63. **`git apply` inside this repository skips a patch meant for a copied
+    tree, and exits 0.** Run in a directory under the site checkout, it
+    resolves the patch's paths from the repository root, finds none of them,
+    and applies nothing. `tools/photos/av2-fast/build.sh` built its "fast"
+    AVM that way on 2026-10-13, and `check.ts` then passed 25 of 25 files,
+    because an unpatched build decodes exactly like pristine. The tell was
+    one number: SIMDe moved 114 dispatch entries instead of 113, since the
+    NEON kernel the patch adds wasn't there to keep its slot. Use
+    `patch -p1 -d <dir>`, and grep the patched tree for a symbol each patch
+    adds before trusting anything built from it.

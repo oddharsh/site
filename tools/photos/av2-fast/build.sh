@@ -53,9 +53,16 @@ cmake -S "$OUT/pristine/src" -B "$OUT/pristine/build" "${CMAKE_FLAGS[@]}" >/dev/
 ninja -C "$OUT/pristine/build" avm >/dev/null
 
 copy_src "$OUT/fast/src"
+# patch, never git apply: the copy sits inside this repository, and git apply
+# run there resolves the patch's paths from the repository root, finds none of
+# them, skips every hunk and exits 0. That shipped a "fast" build with no
+# patches in it once (2026-10-13), so the two greps below refuse that.
 for p in "$HERE"/patches/*.patch; do
-  (cd "$OUT/fast/src" && git apply "$p")
+  patch -p1 --forward --quiet -d "$OUT/fast/src" -i "$p"
 done
+grep -q "gdf_inference_unit_neon" "$OUT/fast/src/av2/common/arm/gdf_block_neon.c" &&
+  grep -q "gdf_filter_frame_orig" "$OUT/fast/src/av2/common/gdf.c" || {
+  echo "error: the patches did not land in $OUT/fast/src" >&2; exit 1; }
 cmake -S "$OUT/fast/src" -B "$OUT/fast/build" "${CMAKE_FLAGS[@]}" >/dev/null
 ninja -C "$OUT/fast/build" avm >/dev/null
 rm -rf "$OUT/fast/simde-work"
