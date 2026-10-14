@@ -136,6 +136,12 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
         self-seeds once from the count it had on the old one (about 2,375) instead of resetting to
         zero. Same odometer, now wired into its own dashboard.</p>
       <pre class="cf-code">export class Counter { async fetch(req){ /* atomic ++ in state.storage */ } }</pre>
+      <p class="note">Update, 2026-09-29: the class moved out again, into its own Worker,
+        <code class="m">aadhar-counter</code>, which this one binds by <code class="m">script_name</code>.
+        A Worker that exports a Durable Object gets no preview URLs, and those were worth more
+        than keeping the class in-house. It kept the same namespace, so the count carried over
+        without a reset. <code class="m">src/worker/counter.ts</code> still serves
+        <code class="m">/hit</code> and the KV mirror the homepage reads.</p>
     </div>
 
     <div class="cf-feat">
@@ -193,7 +199,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
         <tr><td>deploy</td><td>git build, could drop the Function</td><td class="y">atomic, all-or-nothing</td></tr>
         <tr><td>config</td><td class="n">dashboard clicks, off git</td><td class="y">one <code>wrangler.jsonc</code>, in git</td></tr>
         <tr><td>routing</td><td>worker saw everything</td><td class="y">per-path denylist, static skips it</td></tr>
-        <tr><td>Durable Objects</td><td class="n">not possible, cross-script only</td><td class="y">in-house class + migration</td></tr>
+        <tr><td>Durable Objects</td><td class="n">not possible, cross-script only</td><td class="y">allowed in-house; kept in its own Worker</td></tr>
         <tr><td>cron</td><td class="n">none</td><td class="y">scheduled handlers available</td></tr>
         <tr><td>bytes served</td><td>identical</td><td>identical</td></tr>
         <tr><td>secrets</td><td>dashboard</td><td>out of git, by hand (correct)</td></tr>
@@ -322,24 +328,24 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       ]
     },
     {
-      "q": "What did the move off Pages change for the homepage visit counter (the little odometer)?",
+      "q": "Where does the homepage visit counter's Counter class live today?",
       "options": [
         {
-          "t": "Its Durable Object class moved into this worker, with its migration in the same config.",
+          "t": "In aadhar-counter, its own Worker, so this one keeps its preview URLs.",
           "ok": true,
-          "why": "Right. Pages could host no Durable Object, so the counter borrowed the Counter class from the separate cf-garage worker by cross-script binding. Now it lives in src/worker/counter.ts, exported from the entry."
+          "why": "Right. The move off Pages brought the class in-house, then on 2026-09-29 it moved again: a Worker that exports a Durable Object gets no preview URLs. This worker reaches it through script_name, with the same namespace and the same count."
         },
         {
-          "t": "It moved out of a Durable Object and into KV, which Workers binds from config.",
-          "why": "It stayed a Durable Object; hosting one in-house is the whole point of feature 2. What changed is where the Counter class is allowed to live."
+          "t": "In src/worker/counter.ts, exported from this worker's entry since the Pages move.",
+          "why": "That was true from the move until 2026-09-29. Exporting the class cost this worker its preview URLs, so it moved to aadhar-counter. src/worker/counter.ts now serves only /hit and the KV mirror."
         },
         {
-          "t": "It reset to zero at the migration and started recounting from the 2026-06-30 move date.",
-          "why": "The page is specific that the new object self-seeds once from the count it had on the old one, about 2,375, to keep the number honest across the move."
+          "t": "In cf-garage still, borrowed by cross-script binding the way Pages required.",
+          "why": "Borrowing from cf-garage is what the move off Pages retired. The count was carried over from it, and the class has since lived in a Worker built for it."
         },
         {
-          "t": "It kept the cross-script binding to cf-garage but gained a faster, in-region path to it.",
-          "why": "The cross-script binding is exactly what the move retired. The class now lives in this worker's own code, wired into its own dashboard, with no reach across to another worker."
+          "t": "Nowhere: the count moved out of a Durable Object and into KV.",
+          "why": "It stayed a Durable Object, because the atomic increment needs one. KV holds only a mirror the homepage reads so the render never waits on the object."
         }
       ]
     },

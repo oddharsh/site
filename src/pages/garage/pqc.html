@@ -104,7 +104,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 
 <h2>Why the hash-based options lost</h2>
 <p>I wanted SLH-DSA to work. It rests on hash functions alone, so it survives even if lattices turn out to be broken, and its 32-byte public key is charming. It fails here twice over.</p>
-<p>The header is the harder failure. A 128f signature is 22,784 bytes once base64'd into a structured-fields value, and most servers cap total request headers around 8KB, so the crawl would start collecting 431s instead of pages. The latency is the other one: 2.65 seconds of single-threaded work per signature is not something to put in front of an HTTP request, and a Worker bills CPU time.</p>
+<p>The header is the harder failure, and it catches both. Base64'd into a structured-fields value, a 128f signature is 22,784 bytes and a 128s is 10,476. Most servers cap total request headers around 8KB, so either one would have the crawl collecting 431s instead of pages. The latency is the other failure, and it lands on 128s alone: 2.65 seconds of single-threaded work per signature is not something to put in front of an HTTP request, and a Worker bills CPU time.</p>
 <p>Stateful hash-based signatures (LMS, XMSS) fix the size problem and introduce a worse one. Reusing a one-time index is total key compromise, and a <a class="term" data-t="worker-isolate" href="https://developers.cloudflare.com/workers/reference/how-workers-works/" title="A lightweight sandbox inside one runtime process where a Cloudflare Worker's code runs, walled off from other code and reused across requests." rel="external">Worker isolate</a> is close to the worst place to keep a monotonic counter. I would need a Durable Object doing nothing but handing out indices, and a single replay would end the key. ML-DSA-44 is the only candidate that survives contact with the constraints.</p>
 
 <h2>Shipping it without a codepoint</h2>
@@ -351,9 +351,9 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
       "q": "Both SLH-DSA parameter sets were rejected. What does comparing them tell you about hash-based signatures here?",
       "options": [
         {
-          "t": "128f is too large to fit in a header, and 128s is too slow to sign.",
+          "t": "Both overflow an 8KB header, and 128s also takes 2.65 seconds to sign.",
           "ok": true,
-          "why": "Right. 128f signs in 132ms but needs 22,784 bytes of header; 128s is compact by comparison and takes 2.65 seconds. Neither is small on both axes."
+          "why": "Right. Base64'd, 128f runs 22,784 bytes and 128s runs 10,476, both past the 8KB most servers allow. 128s also spends 2.65 seconds on every signature, so it fails twice."
         },
         {
           "t": "Hash-based signatures carry large public keys, too big to publish in a JWKS.",
@@ -362,6 +362,10 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
         {
           "t": "Both verify slower than ML-DSA, so receiving sites would reject them.",
           "why": "Verification is in the same few-millisecond range for all of them. The binding constraints are signing time and signature size."
+        },
+        {
+          "t": "128f is too large to fit in a header, and 128s is too slow to sign.",
+          "why": "128s is small only next to 128f. Base64'd it still runs 10,476 bytes, past an 8KB header, so size rules out both sets and the 2.65 seconds is a second strike against 128s."
         }
       ]
     },
