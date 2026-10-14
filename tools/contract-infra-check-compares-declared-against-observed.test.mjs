@@ -123,7 +123,7 @@ function matchingDns() {
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 /** A response as Cloudflare's edge serves one: whatever the status, it carries
- *  cf-ray. The edge port measures nothing that lacks it.
+ *  cf-ray. The edge port measures nothing that lacks it (gotcha 60).
  *  @param {Response} res */
 const edgeServed = (res) => { res.headers.set("cf-ray", "8f1e2d3c4b5a6978-SJC"); return res; };
 

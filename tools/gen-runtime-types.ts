@@ -131,7 +131,7 @@ export const CF_GARAGE_OUT = join(REPO, "cf-garage", ".cloudflare", "types", "in
 // wrangler owns that file and rewrites it whenever its content differs, which a
 // key line of ours would guarantee on every `wrangler dev`.
 const CF_GARAGE_KEY = join(REPO, "config", ".generated", "cf-garage-types.key");
-// The build below also writes a Build Output tree that nothing here reads, and
+// Gotcha 59. The build below also writes a Build Output tree nothing here reads, and
 // since 4d90f32 (workers-sdk#16128, #1271) its root config makes `wrangler
 // deploy`, `versions upload` and `preview` REFUSE to run from cf-garage/
 // ("builds for the Cloudflare CLI"). Measured 2026-10-11 on the pin c09832d

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // check-q11.ts — does every brotli q11 twin the build writes reach a client AT
-// q11? (bun run q11:check [-- --url <base>] [--concurrency <n>])
+// q11? (bun run q11:check [-- --url <base>] [--concurrency <n>]) Gotcha 14 says
+// plain responses are brotli q11; this is what checks that they arrive that way.
 //
 // build.ts writes a q11 `.br` twin beside 500-odd files (the /a/ shell, every
 // page, the static text assets), and the Worker hands one over when a client

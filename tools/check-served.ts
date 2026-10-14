@@ -1,4 +1,6 @@
-// Does production serve what CI built? `bun run served:check`.
+// Does production serve what CI built? `bun run served:check`. Gotcha 20 is the
+// reason to ask: an edge feature that rewrites HTML after the Worker breaks
+// everything derived from the Worker's output, and only the wire shows it.
 //
 //   bun run served:check                          # every URL, production's own commit
 //   bun run served:check -- --since <commit>      # only URLs that changed since that commit
