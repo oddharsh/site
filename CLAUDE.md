@@ -6,7 +6,8 @@ bevels), with colors authored in OKLCH. `AGENTS.md` is a symlink to this file.
 
 Read the code before trusting prose, this file included. When you learn
 something that cost real time, add a gotcha to [docs/GOTCHAS.md](docs/GOTCHAS.md)
-rather than a paragraph here.
+rather than a paragraph here, and give it a check that fails when the mistake
+comes back (its `Checked by:` line names it).
 
 ## Layout
 

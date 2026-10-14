@@ -325,7 +325,7 @@ test("suite gates read bun's summary rows, never a test name that happens to say
   // A passing test from #1113 is named "... a renamed D1 fails", and "D1 fails"
   // contains "1 fail". The unanchored regex every gate used took that as the
   // count, so bun:pin and canary:bun each filed a RED issue (#1122, #1124)
-  // nightly from 2026-10-03 against a suite whose summary said 0 fail.
+  // nightly from 2026-10-03 against a suite whose summary said 0 fail (gotcha 49).
   const output = [
     "bun test v1.4.3-canary.1 (bc7a813b1) 4x PARALLEL",
     "(pass) a binding pointing at a resource the account does not hold fails; a renamed D1 fails [0.16ms]",

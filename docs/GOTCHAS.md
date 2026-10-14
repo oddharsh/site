@@ -6,35 +6,55 @@ has no entry, so numbers are permanent: retire an entry by deleting it, never
 by renumbering. The long-form history of each one is in git
 (`git log -p -- CLAUDE.md`, before 2026-10-03).
 
+Each entry ends with a `Checked by:` line. It names the files that fail when
+the mistake comes back, and each of those files cites the gotcha by number, so
+a deleted or renamed check breaks the link loudly. An entry nothing can check
+says `nothing (judgment)` when someone has to remember it, `nothing (fails
+loudly)` when the mistake already errors on its own, or `nothing (how to
+measure)` when it's a method rather than a rule. Some named checks run in
+`validate`; others are commands you run by hand, like `served:check`.
+`contract-gotcha-numbers-resolve` holds every line to this.
+
+When you add a gotcha, try to make it checkable before you write it down. A
+`judgment` entry is the last resort, because nothing fails when an agent
+skips it.
+
 ## Gotchas
 
 1. **Thumbnail 404s must be uncacheable.** A miss under `/images/*` would
    inherit the immutable cache rule, so `/images/<thumb>` stays worker-first
    and the Worker clamps the 404. A re-encode mints a new `/i/` URL, so there's
    no version to bump.
+   Checked by: nothing (judgment).
 
 3. **Rotate photos by sample permutation, never in the DCT domain.**
    `jpegtran -rotate` is only lossless when the constraint edge is iMCU-aligned
    and degrades silently without `-perfect`. `zenc square|resize --orient N`
    permutes decoded pixels instead, exact at any size. jpegtran stays for the
    progressive reorder of the R2 copies.
+   Checked by: `tools/contract-photo-pipeline-failures.test.mjs`.
 
 6. **EXIF orientations 5-8 swap width and height.** Transpose source
    dimensions before writing `metadata.json`.
+   Checked by: nothing (judgment).
 
 7. **`<picture>` falls back on unsupported TYPES, never on decode failures.**
    If broken-image reports appear, demote AVIF; adding `<source>` tiers won't
    help.
+   Checked by: nothing (judgment).
 
 8. **No `<a>` inside `<a>`.** Artist links inside a track row are
    `<span class="np-artist-link" role="link" tabindex="0" data-href>` plus a
    delegated click handler.
+   Checked by: nothing (judgment).
 
 10. **Gate hover features on `(hover: none)`.** Touch long-press fires
     synthetic mouseover.
+    Checked by: nothing (judgment).
 
 11. **`will-change` is earned per interaction.** Toggle it around the hover
     lifecycle; a permanent one holds a compositor layer.
+    Checked by: nothing (judgment).
 
 13. **Anything that rebuilds a Response must preserve `encodeBody`.** It's
     write-only and has no getter. `new Response(r.body, r)` keeps it;
@@ -44,6 +64,7 @@ by renumbering. The long-form history of each one is in git
     real workerd. Also: the Worker sees a rewritten `Accept-Encoding`, and the
     edge down-converts br for clients that don't take it, so don't negotiate
     compression in the Worker.
+    Checked by: `tools/contract-encodebody-survives-a-rebuild-in-workerd.test.mjs`, `tools/contract-the-speculation-ledger.test.mjs`.
 
 14. **Deltas are dcz (zstd), plain responses are brotli q11.** dcz wins on
     decode time, which scales with the reconstruction rather than the delta.
@@ -52,17 +73,20 @@ by renumbering. The long-form history of each one is in git
     (`bun run dict:roll`) reads production. Probe an engine's dictionary
     support with a no/right/wrong-dictionary control: an engine that ignores
     the option still decodes, so the failure is silent.
+    Checked by: `tools/check-q11.ts`.
 
 15. **Read a browser feature off two signals, and suspect the instrument
     first.** For Early Hints: `initiatorType === "early-hints"` plus a fetch
     duration too short for the bytes. Two
     unrelated origins failing identically means the harness is lying. Confirm
     paint claims in a visible window.
+    Checked by: nothing (how to measure).
 
 16. **Only `src/worker/index.ts` may import `cloudflare:workers`.** Everything
     else is also imported by the contract suite outside workerd. Tracing is
     injected (`installTracing`) instead. Nothing cal imports may reach
     `cloudflare:workers`, directly or transitively.
+    Checked by: `tools/contract-census-never-publishes-a-refused-check.test.mjs`.
 
 17. **`script-src` is per-document sha256 hashes, computed at build.**
     `lib/csp-hashes.ts` ships empty and build step 7c fills it; a path with no
@@ -72,6 +96,7 @@ by renumbering. The long-form history of each one is in git
     (`islandResponse`, cal's slot list) send `script-src 'self'` with no
     hashes, since `innerHTML` never runs their scripts. `bun run csp:sweep` is
     the browser check; perturb one script as its control.
+    Checked by: `tools/contract-worker-pages-hash-their-inline-scripts.test.mjs`.
 
 18. **`scrollbar-color` inherits and disables `::-webkit-scrollbar` rules.**
     So does a non-auto `scrollbar-width` on the element itself. Reset to
@@ -80,67 +105,84 @@ by renumbering. The long-form history of each one is in git
     Don't use `(-moz-appearance:none)`: Lightning CSS strips the prefix from a
     non-first operand (lightningcss#710, fix in #1316), so the arm applies
     everywhere.
+    Checked by: nothing (judgment).
 
 19. **No backticks in CSS comments inside `/*min*/` template literals.** They
     end the JS literal.
+    Checked by: nothing (fails loudly).
 
 20. **An edge feature that rewrites HTML after the Worker breaks anything
     derived from the Worker's output**, dictionaries first. Derive from the
     wire or verify the wire equals the build. Prune dictionary snapshots by
     commit time, never mtime (`git checkout` resets mtime).
+    Checked by: `tools/check-served.ts`.
 
 23. **An AI Gateway id is a hard dependency.** A wrong id fails inference
     rather than falling back, so it comes from config, never a literal.
     Gateway caching stays off where a repeated request should get a fresh
     answer.
+    Checked by: `tools/contract-serendipity-event-tags.test.mjs`.
 
 24. **`deploy:promote` reads `checkpoints.json` from your working tree.** Ramp
     from a fresh worktree at `origin/main`, or the changelog row is silently
     skipped.
+    Checked by: `tools/deploy-promote.ts`, `tools/contract-encode-read-the-container-decode-nothing.test.mjs`.
 
 25. **After changing a secret, don't ramp a version built before the change.**
     Secret versions carry no alias, so the ramp skips them; a version built
     later inherits the current secret set. Check with
     `bun run wrangler:site versions view <id>`.
+    Checked by: nothing (judgment).
 
 26. **`run_worker_first` caps at 100 RAW rows.** Duplicates count. The list is
     derived from `src/worker/routes.ts`; check for a covering wildcard before
     adding a row. `wrangler deploy --dry-run` catches an over-cap config.
+    Checked by: `tools/contract-the-route-list-derives-every-route-list.test.mjs`.
 
 27. **A red `github-advanced-security` check is usually Copilot's agent
     failing, not your diff.** The tell is `CAPIError: 400` in the job log
     (`gh run view <run-id> --log-failed`, where the run id is the middle
     number in `details_url`). It isn't required and gates nothing.
+    Checked by: nothing (judgment).
 
 28. **A bun pin change must preserve build bytes.** `/a/` and `/i/` are
     content-addressed, so `bun run bun:pin` gates a candidate on a
     byte-identical build. Keep both `bun run test` and `bun run test:node`:
     they disagree on real runtime facts.
+    Checked by: `tools/bump-bun-pin.ts`.
 
 29. **Run wrangler through `wranglerCommand()` (node plus the pinned entry
     file), never `npx` or `bun x`**, which fetch whatever they can't resolve.
     Change a Workers Builds command in the dashboard FIRST, then
     `config/infra.json`.
+    Checked by: `tools/contract-the-typescript-quarantine.test.mjs`.
 
 31. **`_headers` rules combine rather than override.** Two `Cache-Control`
     values ship as one malformed header. To replace one, put the narrow rule
     AFTER the glob and detach with `! Cache-Control` first; a detach above the
     rule it targets does nothing.
+    Checked by: nothing (judgment).
 
-32. **`bun run pages:check` lints page text and is required.** It bans em
-    dashes, AI filler and "X, not Y" negations, but only in the quiz and
-    editorial fields; lint your own diff for the rest.
+32. **`bun run pages:check` lints page text, and `validate` doesn't run it.**
+    It bans em dashes, AI filler and "X, not Y" negations, but only in the
+    quiz and editorial fields; lint your own diff for the rest. It was a CI
+    step until #1001 folded CI into one job and left it out, so run it before
+    pushing page copy.
+    Checked by: `tools/check-page-contracts.ts`.
 
 33. **A speculation rule can't be measured from the page or from an agent's
     backgrounded tab.** Count at the origin (`Sec-Purpose`) with
     `bun run speculation:probe`, and read its control line first.
+    Checked by: nothing (how to measure).
 
 34. **Read every hunk `oxlint --fix` produces.** `no-useless-spread` broke a
     `TypedArray.map` once; that rule is off.
+    Checked by: nothing (judgment).
 
 35. **Editing a hashed `/a/` asset re-mints every page that references it,
     and a comment is free.** Minification strips comments, so the hash holds.
     Grep built pages for the asset's URL to see the bill.
+    Checked by: nothing (judgment).
 
 36. **Workers Free: 50 subrequests per invocation (KV counts), and CPU clamps
     under load.** A fan-out that catches per-item errors will silently degrade
@@ -148,53 +190,64 @@ by renumbering. The long-form history of each one is in git
     off `cpuTime`, never status codes. Pin a version with the FULL UUID in
     `Cloudflare-Workers-Version-Overrides`. A workflow's conclusion doesn't
     say whether a release shipped: ask `bun run deploy:promote --status`.
+    Checked by: `tools/contract-lens-compare-stays-under-the-subrequest-cap.test.mjs`.
 
 37. **`Bun.Image` is the OS imaging stack.** It's fine for a throwaway
     thumbnail and wrong for a served tier: fatter output, no 16-bit HEIF
     decode, and `resize` differs by backend unless `Bun.Image.backend = "bun"`.
     It validates no encoder option (oven-sh/bun#40490).
+    Checked by: nothing (judgment).
 
 38. **Bun is the toolchain; node stays for wrangler and the route oracle.**
     Wrangler refuses some subcommands under bun, and miniflare's
     `dispatchFetch` needs fetch to honour `{ dispatcher }`, which bun doesn't
     (oven-sh/bun#39247). Bun tests that dispatch through the harness wrap
     their body in `underNode()`. Check support per command, never per tool.
+    Checked by: nothing (judgment).
 
 39. **A dev server on your port may belong to another checkout.** Check the
     process's cwd (`lsof -a -p <pid> -d cwd`) before trusting a response, and
     bind an explicit free port.
+    Checked by: nothing (judgment).
 
 40. **Resolve paths from a named anchor, and keep `set -euo pipefail`.**
     `$SCRIPT_DIR/..` silently changes meaning when a script moves. `$?` after a
     pipe is the LAST command's; under zsh the first stage is `$pipestatus[1]`,
     under bash `${PIPESTATUS[0]}`. An empty array under bash 3.2 `-u` needs
     `${A+"${A[@]}"}`.
+    Checked by: `tools/contract-committed-shell-scripts-fail-loudly.test.mjs`.
 
 41. **cf-garage, lwe-ask and lens-reader use wrangler's TypeScript config.**
     Commands need `--x-new-config` and must run from the Worker's own
     directory (`-c` is refused). `bun run --bun` in front of the config loader
     is refused; the `.bin` shim runs node and works.
+    Checked by: nothing (fails loudly).
 
 42. **JSDoc type tags are inert in `.ts` files.** Write real annotations; a
     contract test fails on a JSDoc type tag in `.ts`.
+    Checked by: `tools/contract-the-typescript-quarantine.test.mjs`.
 
 43. **`avifenc --jobs` changes output bytes.** 1 differs from 2+. Treat every
     concurrency flag on an encoder feeding `/i/` as a quality flag.
+    Checked by: nothing (judgment).
 
 44. **A worktree under `.claude/worktrees/` resolves modules from the
     parent's `node_modules`.** Validate dependency removals from a detached
     worktree outside the checkout with a fresh install. Only
     `rm -rf node_modules && bun install --frozen-lockfile` really removes a
     package.
+    Checked by: nothing (judgment).
 
 45. **On macOS, `mkdtemp(tmpdir())` returns `/var/...` and anything that
     canonicalises reads `/private/var/...`.** `realpath` fixture roots, and
     use `import.meta.main` for main-module guards.
+    Checked by: `tools/contract-main-module-guards-survive-a-symlinked-path.test.mjs`.
 
 46. **Anything derived from a content-addressed file must be regenerated when
     the hash moves.** `bun run derive:check` compares each derived artifact
     against the inputs recorded in `config/derivations.json`;
     `-- --lock` re-records after a deliberate regeneration.
+    Checked by: `tools/contract-derived-artifacts-name-what-they-were-made-from.test.mjs`.
 
 48. **The site config is TypeScript, and most wrangler commands can't read
     it.** `cloudflare.config.ts` + `wrangler.config.ts` are projected by
@@ -202,12 +255,14 @@ by renumbering. The long-form history of each one is in git
     `bun run wrangler:site <command>`; tools use `siteWranglerArgs()`. Local
     dev is `config/dev/`, an overlay `cf dev` reads natively (`tools/dev.ts`);
     only `dev:remote` still projects it to `.wrangler.dev.jsonc`.
+    Checked by: nothing (fails loudly).
 
 49. **Read bun test's counts from its summary rows, never from anywhere in the
     output.** An unanchored `/(\d+) fail/` matched "D1 fails" in a passing
     test's name and filed RED issues against a healthy bun for two nights
     (#1122, #1124). Use `suiteCounts()` from `tools/lib/bun-gates.ts`. A
     count with no `(fail)` row beside it is the tell.
+    Checked by: `tools/contract-the-bun-pin-is-declared-once.test.mjs`.
 
 50. **`cf` can't replace wrangler here yet; it runs wrangler underneath.**
     Audited on cf 1.0.0-beta.12 (2026-10-05). `cf build` and `cf dev` print
@@ -226,6 +281,7 @@ by renumbering. The long-form history of each one is in git
     must go literally.
     The Workers AI evals keep `wrangler auth token`, because cf has no command
     that prints its token. Re-audit when cf ships a no-provision switch.
+    Checked by: nothing (judgment).
 
 51. **A Rust compiler bump can fail strict Clippy on unchanged source.**
     Rust 1.99 adds `chunks_exact_to_as_chunks`; fixed-size pixel loops use
@@ -233,6 +289,7 @@ by renumbering. The long-form history of each one is in git
     Both retain the old iterator's treatment of a trailing partial chunk.
     Run zenc's tests and `clippy --all-targets -- -D warnings`, including its
     example, then compare encoded output and reproduce the committed histograms.
+    Checked by: nothing (judgment).
 
 52. **A Bun canary's `--version` does not prove it has `bun check`.** The
     installed binary and the 2026-10-06 npm canary both reported 1.4.3 but
@@ -255,11 +312,13 @@ by renumbering. The long-form history of each one is in git
     that day). `INSTALL_BUN_METADATA=pages` forces that path, and
     canary.yml runs it nightly so a GitHub markup change shows up there
     rather than in a deploy.
+    Checked by: `.github/install-bun.sh`, `tools/typecheck.ts`.
 
 53. **Wrangler's `--outfile` is a multipart upload, with a random boundary.**
     Two byte-identical Workers can give different upload-file hashes. Compare
     the named `index.js`, `index.js.map`, and `metadata` parts before blaming
     a Bun or bundler change; keep public asset comparisons byte-for-byte.
+    Checked by: nothing (judgment).
 
 54. **A background CI step can weaken the gate without failing it.** Since
     2026-10-06 `validate` runs independent checks as Actions `background`
@@ -269,6 +328,7 @@ by renumbering. The long-form history of each one is in git
     with `gen-runtime-types.ts`, which deletes and rewrites cf-garage's types
     on a fresh checkout. Before backgrounding a step, list what it writes and
     what reads it; `contract-ci-required-gate` holds the edges known today.
+    Checked by: `tools/contract-ci-required-gate.test.mjs`.
 
 55. **A tripwire that walks `servedFiles()` never reads `src/client` or
     `src/styles`.** `servedFiles()` walks `AUTHORED_ROOTS` (`public`,
@@ -280,6 +340,7 @@ by renumbering. The long-form history of each one is in git
     those roots from `shellFiles()` in `tools/build.ts`, and proves its reach
     by planting a violation in a file only the new list covers. A widened scan
     that reports nothing new looks exactly like one that reads nothing.
+    Checked by: `tools/build.ts`.
 
 56. **Top-level I/O in a lazily imported module works only while wrangler
     inlines it.** Wrangler ships the Worker as one module. esbuild turns
@@ -294,6 +355,7 @@ by renumbering. The long-form history of each one is in git
     `/`, where the handler sees `/bundle`. Measured 2026-10-09 on both shapes.
     Nothing in the Worker lazy-loads today; if something does, keep its top
     level to definitions and do the I/O in a function the handler calls.
+    Checked by: `tools/contract-the-worker-imports-nothing-lazily.test.mjs`.
 
 57. **A CPU factor per runner model can't see one slow runner.** The CPU
     sweep scales each GitHub runner's CPU model to the EPYC 7763 by a fitted
@@ -305,6 +367,7 @@ by renumbering. The long-form history of each one is in git
     over reads tight. Its median caught it, 33% over the reference where
     ordinary runs stay within 16%, so `config/cpu-budget.json` `control` now
     makes such a run inconclusive.
+    Checked by: `tools/contract-cpu-sweep-can-tell-slow-from-fast.test.mjs`.
 
 58. **Cloudflare's on-demand CPU profile reads wall time on a quiet Worker.**
     `cf workers versions profile` samples a live isolate, and between this
@@ -318,6 +381,7 @@ by renumbering. The long-form history of each one is in git
     one. Rank and cost with billed `cpuTimeMs` from Workers Logs (`cf o11y
     telemetry query`, grouped by `$metadata.trigger`), then profile the cold
     request in node with real KV values, the way `tools/cpu-sweep.ts` does.
+    Checked by: nothing (how to measure).
 
 59. **Wrangler refuses to deploy beside `.cloudflare/output`, and a dry run
     can't show it.** Since 4d90f32 (workers-sdk#16128, pinned in #1271),
@@ -331,6 +395,7 @@ by renumbering. The long-form history of each one is in git
     with no credential instead: refused with the tree, and past the guard to
     the API-token error without it. The script now deletes the tree on every
     run.
+    Checked by: `tools/gen-runtime-types.ts`.
 
 60. **An edge check that asserts an absence passes on any page that isn't
     production.** `infra:check`'s edge tier never asked who answered. On
@@ -347,6 +412,7 @@ by renumbering. The long-form history of each one is in git
     handshake completed, and the sweep passes only when every probe was
     measured. Each miss is an advisory now. The contract test replays the
     proxy's exact bytes, with and without `cf-ray`.
+    Checked by: `tools/contract-infra-check-compares-declared-against-observed.test.mjs`.
 
 61. **A dedicated worker enforces the CSP on its own script, never the
     page's.** Measured in Chrome 152 on 2026-10-13 with a page and a module
@@ -359,6 +425,7 @@ by renumbering. The long-form history of each one is in git
     the `/*` one (gotcha 31), so it needs `! Content-Security-Policy` first;
     and a module that sets `onmessage` on `globalThis` outside a worker keeps
     Bun's event loop open, so a contract test that imports it never exits.
+    Checked by: nothing (judgment).
 
 62. **A clean diff after a generator can't tell "unchanged" from "never
     written".** `og-cards.yml` decides whether to open a PR from
@@ -372,3 +439,4 @@ by renumbering. The long-form history of each one is in git
     and exits 1 when any card fails; the next dispatch built it, wrote the
     card and opened #1318. Any generator whose output is committed owes its
     caller an exit code, because the diff can only show what changed.
+    Checked by: `tools/photos/gen-og-cards.ts`.
