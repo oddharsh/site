@@ -65,7 +65,8 @@ probes) is in `package.json` and [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
 - Labels worth applying by hand: `hashed-asset` (the diff re-mints an `/a/`
   URL, gotcha 35) and `release-path` (it touches what decides what ships).
 - `validate` is the one required check: lint, typecheck, build under the perf
-  budget, `derive:check`, `routes:check`, the contract suite and cal's tests.
+  budget, `derive:check`, `pages:check`, `routes:check`, the contract suite and
+  cal's tests.
 - Measure before you claim, and run the control that would show your
   instrument can fail. Most gotchas are an instrument that couldn't.
 

@@ -135,6 +135,15 @@ jobs:
         run: bun run derive:check
         background: true
 
+      # The house-voice and authoring-contract lint on page text (gotcha 32).
+      # It reads authored pages and renders the generators in memory, writes
+      # nothing, and reads nothing another step writes, so it can start here.
+      # #1001 dropped it from this job without saying so; it costs about 0.4 s.
+      - name: Check page contracts and copy
+        id: pages
+        run: bun run pages:check
+        background: true
+
       - name: Test coffee Worker
         id: cal
         run: bun run --filter cal-aadhar-sh test
