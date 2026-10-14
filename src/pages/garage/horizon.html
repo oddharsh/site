@@ -8433,7 +8433,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       "q": "What has to happen before a feature demoed on this page graduates to the live homepage?",
       "options": [
         {
-          "t": "It has to ship in more than one engine; a flag turned on in my own browser means nothing to real visitors.",
+          "t": "It has to ship in more than one engine; a flag on in my own browser means nothing to visitors.",
           "ok": true,
           "why": "That is the page's whole rule, stated in the lede. Each card's status line and the WebKit standards-position chips exist to answer exactly this, with Safari's team quoted directly instead of inferred."
         },
@@ -8442,11 +8442,11 @@ navigation.addEventListener("navigate", (e) =&gt; {
           "why": "Chrome-only is exactly the trap. Several cards (interestfor, corner-shape, interpolate-size) are shipped and default-on in Chrome yet still parked here because Safari or Firefox have not landed them."
         },
         {
-          "t": "The demo has to run without errors on this page in every browser I test it in.",
+          "t": "The demo has to run without errors on this page in every browser I test it in, flags off.",
           "why": "The demos are built to degrade gracefully everywhere, so they already run clean in browsers that lack the feature. The bar is engines actually shipping it, which the chip strip and status lines track."
         },
         {
-          "t": "The spec has to reach a finalized W3C recommendation before any production use.",
+          "t": "The spec has to reach a finalized W3C recommendation before it sees any production use.",
           "why": "Spec maturity never comes up on the page. What gets tracked is shipping engines plus WebKit's stated position, because that decides whether real visitors ever see the feature."
         }
       ]
@@ -8455,16 +8455,16 @@ navigation.addEventListener("navigate", (e) =&gt; {
       "q": "What does text-box-trim actually remove, and what does that fix on this site?",
       "options": [
         {
-          "t": "The half-leading above the cap line and below the baseline, which lets the XP title bars drop their hand-tuned magic-number centering padding.",
+          "t": "Half-leading above the cap line and below the baseline, ending the title bars' padding hacks.",
           "ok": true,
-          "why": "Right: a line box normally carries invisible half-leading at top and bottom, so vertical centering reads optically off. Trimming to the cap line and baseline makes the box hug the letters, ending the Safari h2 baseline saga."
+          "why": "Right: a line box normally carries invisible half-leading at top and bottom, so vertical centering reads optically off. Trimming to the cap line and baseline makes the box hug the letters, which retires the magic-number padding on the XP title bars and ends the Safari h2 baseline saga."
         },
         {
-          "t": "It drops line-height to 1 so consecutive lines of text pack closer together in a paragraph.",
+          "t": "It drops line-height to 1 so consecutive lines of body text pack closer together in a paragraph.",
           "why": "That is the skim-level misread. Spacing between lines is untouched; the trim happens only at the box edges, above the first cap height and below the last baseline. The two-sample demo shows the highlight shrinking to the letters."
         },
         {
-          "t": "It clips glyph parts that stick out past the box edge, like overflow hidden applied to text.",
+          "t": "It clips glyph parts that stick out past the box edge, like overflow: hidden applied to the text.",
           "why": "Nothing gets clipped. The box's measured edges move in to the cap line and baseline while ascenders and descenders still render fully. Compare the highlighted line boxes in the demo: the glyphs are identical."
         },
         {
@@ -8477,16 +8477,16 @@ navigation.addEventListener("navigate", (e) =&gt; {
       "q": "interestfor handles hover, focus, delay, and accessibility with zero JS. Why does the page still file it as a forward-look instead of a migration path for the site's cursor tooltip?",
       "options": [
         {
-          "t": "Safari opposes the design so it is Chrome-only, and it anchors to the element rather than the cursor, so the pointer-following loop stays regardless.",
+          "t": "Safari opposes it and Firefox lacks it, and it anchors to the element, so cursor-following stays JS.",
           "ok": true,
-          "why": "Both halves matter: WebKit's standards-position is a stated oppose, and even in a perfect world the site's tooltip follows the pointer, which element anchoring can never do."
+          "why": "Both halves matter: WebKit's standards-position is a stated oppose and Firefox hasn't shipped it, and even in a perfect world the site's tooltip follows the pointer, which element anchoring can never do. The --x/--y loop stays."
         },
         {
-          "t": "The show and hide delays still have to be scripted in JS, so the line-count savings end up tiny.",
+          "t": "The show and hide delays still have to be scripted in JS, so the line-count savings end up being tiny.",
           "why": "The delay is pure CSS: interest-delay-start and interest-delay-end, with the demo setting interest-delay to 0s in one declaration. The blockers are engine support and the element-versus-cursor anchoring gap."
         },
         {
-          "t": "Its popovers only carry plain text, so the rich Fuji-LCD tooltip content would never fit inside one.",
+          "t": "Its popovers only carry plain text, so the rich Fuji-LCD tooltip content would never fit inside them.",
           "why": "An interestfor target is a real popover holding arbitrary markup; the demo's car cards prove it. The limits are support and cursor-anchoring."
         },
         {
@@ -8499,12 +8499,12 @@ navigation.addEventListener("navigate", (e) =&gt; {
       "q": "In the anchor positioning demo, what does position-try-fallbacks buy you when you open the tooltips near a crowded edge?",
       "options": [
         {
-          "t": "When the chosen side would overflow, the browser flips the popover to the opposite side on its own, in pure CSS.",
+          "t": "When the chosen side would overflow, the browser flips the popover to the opposite side itself.",
           "ok": true,
-          "why": "That is the killer feature: the left popover asks for top and drops below near the viewport edge, the right one asks for the right edge and flips inline when crowded. No getBoundingClientRect, no scroll or resize listeners."
+          "why": "That is the killer feature, in pure CSS: the left popover asks for top and drops below near the viewport edge, the right one asks for the right edge and flips inline when crowded. No getBoundingClientRect, no scroll or resize listeners."
         },
         {
-          "t": "It retries binding to the anchor element when the anchor has not been added to the DOM yet.",
+          "t": "It retries binding to the anchor element when the anchor hasn't been added to the DOM yet on load.",
           "why": "The try is about placement, and only placement: alternative positions attempted when the preferred one would overflow. A missing anchor is a different failure and just leaves the popover untethered."
         },
         {
@@ -8521,9 +8521,9 @@ navigation.addEventListener("navigate", (e) =&gt; {
       "q": "In the scheduler.yield() demo, both buttons run the same 600ms of work. Why does the rAF dot keep gliding on the chunked run?",
       "options": [
         {
-          "t": "Each 20ms chunk ends in an awaited yield, so the browser paints and handles input in the gaps, then the loop resumes at the front of the queue.",
+          "t": "Each 20ms chunk ends in an awaited yield, so the browser paints and handles input between chunks.",
           "ok": true,
-          "why": "Same total work, spread across gaps the browser can use. Front-of-queue resumption is the part setTimeout(0) cannot give you: a timeout rejoins at the back, behind whatever unrelated work is waiting."
+          "why": "Same total work, spread across gaps the browser can use, and the loop then resumes at the front of the queue. Front-of-queue resumption is the part setTimeout(0) cannot give you: a timeout rejoins at the back, behind whatever unrelated work is waiting."
         },
         {
           "t": "The chunked version moves the work onto a background thread, so the main thread never touches it.",

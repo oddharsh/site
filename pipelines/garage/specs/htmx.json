@@ -26,21 +26,21 @@
         "q": "Break-even came out at 2.96 submits per visitor. Which pair of numbers produces it?",
         "options": [
           {
-            "t": "The library's 11,735 Brotli bytes divided by the 3,968 bytes saved on each submit.",
+            "t": "The library's 11,735 Brotli bytes over the 3,968 each submit saves.",
             "ok": true,
             "why": "Right. The library is paid once per first visit and the saving arrives once per swap, so their ratio is the number of swaps that repay it."
           },
           {
-            "t": "The library's 36,716 raw bytes divided by the full page's 17,001 raw bytes.",
+            "t": "The library's 36,716 raw bytes over the full page's 17,001 raw bytes.",
             "why": "Those are both real measurements, and they compare a compressed-on-the-wire cost against an uncompressed page. The edge serves Brotli, so mixing the two units gives a ratio that describes no actual visitor."
           },
           {
-            "t": "The Worker bundle's 0.09 KiB growth divided by the saving.",
+            "t": "The Worker bundle's 0.09 KiB of growth divided by the saving per submit.",
             "why": "The bundle delta is the template change, which every visitor pays through the Worker regardless. It is far too small to drive the decision and it is not what the visitor downloads."
           },
           {
-            "t": "The 54 pages divided by the 17 client modules.",
-            "why": "Neither number appears in the trade. The page count and the module count describe the site's shape."
+            "t": "The 11,735-byte library over the full page's 4,187 Brotli bytes.",
+            "why": "4,187 is the whole page in Brotli. The fragment that replaces it still costs 219 bytes, so each submit saves 3,968, and that's the divisor."
           }
         ]
       },
@@ -48,7 +48,7 @@
         "q": "The htmx fragment is 95% smaller than the full page it replaces. Why doesn't that settle the question in htmx's favour?",
         "options": [
           {
-            "t": "The saving arrives only when somebody submits, and a booking form accepts one submit per visitor, so it can be collected at most once against a library paid in full.",
+            "t": "The saving arrives once per submit, and a booking form gets one submit per visitor.",
             "ok": true,
             "why": "Right. A large per-interaction saving is worth little when the interaction happens once. The size of the win and the frequency of the win are separate quantities, and only their product pays for the download."
           },
@@ -57,11 +57,11 @@
             "why": "Both figures in that table are Brotli q11, the quality the edge actually serves. The 3,968-byte saving is already a compressed comparison."
           },
           {
-            "t": "The full page would still be sent alongside the fragment.",
+            "t": "The Worker still sends the full page alongside the fragment, for crawlers.",
             "why": "The Worker branches on the HX-Request header and sends one response or the other. Nothing sends both."
           },
           {
-            "t": "The browser cannot cache a fragment, so it costs more over time.",
+            "t": "The browser can't cache a fragment, so every repeat visit pays for it in full again.",
             "why": "Neither response is cached here, and the comparison is a single submit against a single submit. Caching governs the library asset."
           }
         ]
@@ -70,20 +70,20 @@
         "q": "The site serves all 158 photographs' metadata as one 2,764-byte file warmed on idle. What does that example establish about the fragment model?",
         "options": [
           {
-            "t": "That batching a whole dataset into one cached payload beats per-item fragments when a visitor may touch many items, because the fragment design pays a round trip for each one.",
+            "t": "That one cached batch beats per-item fragments when a visitor touches many items.",
             "ok": true,
             "why": "Right. The current design spends one request covering everything a visitor might hover; the fragment design spends one request per hover. The comparison is a single warm fetch against up to 158 cold ones."
           },
           {
-            "t": "That JSON compresses better than HTML in every case.",
+            "t": "That JSON compresses better than HTML, so fragments would cost more bytes.",
             "why": "The file compresses well because its keys repeat across 158 records, which is a property of the batching rather than of the format. An HTML batch would compress well too."
           },
           {
-            "t": "That the tooltips would break under htmx.",
+            "t": "That the tooltips would break, since htmx can't swap content into a tooltip.",
             "why": "They would work. The objection is cost: the interface would still render, and it would spend a request and Worker CPU on each hover."
           },
           {
-            "t": "That htmx cannot render a photograph's metadata.",
+            "t": "That htmx can't render EXIF fields without a JSON extension.",
             "why": "It could render any of it perfectly well. What changes is where the rendering happens and how many times the network is asked."
           }
         ]
@@ -92,20 +92,20 @@
         "q": "The page argues hx-boost would be slower here than what already ships. What is it competing against?",
         "options": [
           {
-            "t": "A speculation ruleset on every document that prerenders the next page before the click lands.",
+            "t": "A speculation ruleset that prerenders the next page before the click.",
             "ok": true,
             "why": "Right. Boost improves on a full reload and loses to prerendering, because prerendering has already done the work when the click lands. The same reasoning removed this site's cross-document View Transition in July."
           },
           {
-            "t": "A service worker that caches every page.",
+            "t": "A service worker that serves every page from its cache before the network.",
             "why": "The service worker here was retired and is now a small unregister stub. Nothing on this site serves pages from it."
           },
           {
-            "t": "Server-side rendering of the destination page.",
+            "t": "Server-side rendering, which sends the destination page already built on the Worker.",
             "why": "Both designs end with a server-rendered page. What separates them is when the request happens, which is before the click in one case and after it in the other."
           },
           {
-            "t": "The dictionary deltas, which already compress the next page.",
+            "t": "The dictionary deltas, which already shrink the next page to a few KiB.",
             "why": "Dictionary compression shrinks the response, and it still requires the request to be made. Prerendering is what removes the wait."
           }
         ]
@@ -114,7 +114,7 @@
         "q": "What result would falsify this page's conclusion?",
         "options": [
           {
-            "t": "A surface on this site where one visitor performs more than three swaps, which would carry the same arithmetic to the opposite verdict.",
+            "t": "A surface here where one visitor performs more than three swaps.",
             "ok": true,
             "why": "Right. The conclusion is arithmetic, so the way to overturn it is a higher swap count. A multi-step form or a list somebody genuinely pages through would do it without any new argument."
           },

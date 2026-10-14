@@ -25,7 +25,7 @@
         "q": "A downgrade attack flashes last year's build and then exploits the bug it still carries. Why can secure boot's signature check do nothing about it?",
         "options": [
           {
-            "t": "last year's build carries a real vendor signature, and the check keeps no memory of what already ran",
+            "t": "last year's build carries a real vendor signature, and the check remembers nothing about past boots",
             "ok": true,
             "why": "Right, and both halves matter. The signature verifies today exactly as it did on release day, and a stateless check has no way to know that a newer build has since existed."
           },
@@ -34,11 +34,11 @@
             "why": "Nothing expires here. That old image verifies cleanly, which is precisely what makes the attack work; a failed signature would have been the easy case."
           },
           {
-            "t": "the attacker forges a signature for the old build",
+            "t": "the attacker forges a vendor signature onto the old build so it passes the check",
             "why": "Forgery is the one thing signatures do stop. The downgrade attack forges nothing at all, which is why it walks straight through."
           },
           {
-            "t": "secure boot only verifies the kernel and skips the bootloader stages",
+            "t": "secure boot checks the kernel image but skips the bootloader stages that run before it",
             "why": "Scope is a different worry. Even a check covering every stage would pass a genuinely signed old image, because the question it asks has no version in it."
           }
         ]
@@ -47,7 +47,7 @@
         "q": "In the ratchet demo the floor climbs and never falls. What makes that one-way, mechanically?",
         "options": [
           {
-            "t": "the counter is stored as blown fuses, so raising it adds ones and no operation clears one",
+            "t": "the counter is stored as blown fuses, and no operation clears a fuse",
             "ok": true,
             "why": "That is the ratchet. The counter is unary in the silicon: recording a higher minimum means blowing more fuses, and the hardware offers no inverse."
           },
@@ -69,20 +69,20 @@
         "q": "EDL mode talks straight to storage and has been the classic last-resort rescue. Why does it fail on a device whose fuse has blown?",
         "options": [
           {
-            "t": "the fuses are in processor silicon, so a storage write cannot reach them, and Firehose programmers are OEM-signed with their own anti-rollback versions",
+            "t": "a storage write can't reach the fuses, and the signed Firehose loaders carry rollback versions too",
             "ok": true,
-            "why": "Both doors are shut. EDL writes the wrong medium, and the loader it would need to run is itself gated by the same counter."
+            "why": "Both doors are shut. EDL writes the wrong medium, since the fuses sit in processor silicon, and the Firehose loader it needs is OEM-signed and gated by an anti-rollback version of its own."
           },
           {
-            "t": "OnePlus pulled the downgrade packages, so there is no image left to flash",
+            "t": "OnePlus pulled the downgrade packages from its servers, so there is no old image left to flash",
             "why": "The removal happened and it is a supply problem. Hand the device a perfect copy of the old image and the PBL still rejects it on the version compare."
           },
           {
-            "t": "EDL needs an unlocked bootloader, and the update relocks it",
+            "t": "EDL needs an unlocked bootloader to write storage, and the January update relocks it",
             "why": "EDL exists for a device that will not boot at all, which is why people reach for it here. The fuse stops it whatever the lock state."
           },
           {
-            "t": "blowing a fuse disables the USB stack, so the phone stops enumerating",
+            "t": "blowing a fuse switches off the USB stack, so the phone stops showing up as a 9008 device",
             "why": "The reports describe the phone showing up as Qualcomm HS-USB QDLoader 9008, which is how people diagnosed it. It enumerates fine and refuses to boot."
           }
         ]
@@ -91,20 +91,20 @@
         "q": "Samsung's Knox bit and Qualcomm's anti-rollback fuses sit on the same silicon substrate. What separates them?",
         "options": [
           {
-            "t": "Knox records that unsigned firmware was flashed and permanently withdraws features, while anti-rollback gates boot on a version number",
+            "t": "Knox records an unsigned flash and lets it boot; anti-rollback refuses to boot below a version",
             "ok": true,
             "why": "One fuse is a gate and one is a witness. Knox lets the phone boot and takes Samsung Pay and Secure Folder away for good; anti-rollback refuses the boot outright."
           },
           {
-            "t": "Knox is reversible by a Samsung service centre, anti-rollback is permanent",
+            "t": "Knox can be reset by a Samsung service centre, while anti-rollback is permanent for the board's life",
             "why": "Both are eFuses on the board, and the reporting is consistent on the remedy: a new motherboard. Neither one has a software reset."
           },
           {
-            "t": "Knox is a software flag in the bootloader, anti-rollback is hardware",
+            "t": "Knox is a software flag kept in the bootloader partition, while anti-rollback lives in hardware",
             "why": "Knox trips an eFuse too, which is why a flashed device stays flagged after a full wipe and reflash."
           },
           {
-            "t": "Knox blocks downgrades and anti-rollback blocks unsigned builds",
+            "t": "Knox blocks downgrades to older builds, and anti-rollback refuses unsigned firmware",
             "why": "That swaps their jobs. Anti-rollback is the version floor; Knox is the record that something unsigned was flashed."
           }
         ]
@@ -113,7 +113,7 @@
         "q": "Android's docs ask for tamper-evident storage. Qualcomm shipped something irreversible. What does the stronger choice buy, and what does it cost?",
         "options": [
           {
-            "t": "it buys a floor that nobody can lower, including the vendor, and it costs any path back for an owner whose device already recorded the higher number",
+            "t": "it buys a floor even the vendor can't lower, and costs the owner any way back",
             "ok": true,
             "why": "That is the trade in one line. Strength here means removing the appeal, and the appeal was the owner's too."
           },

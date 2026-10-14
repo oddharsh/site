@@ -204,12 +204,12 @@
       "q": "Start where the chat started. One secret gets partitioned across a bunch of nodes that compute on it together, BitTorrent style. What is that actually buying you?",
       "options": [
         {
-          "t": "computing on shared data while everyone's own inputs stay private",
+          "t": "computing on shared data while each input stays private",
           "ok": true,
           "why": "That's the core idea Yao and Goldreich et al. highlighted: computation that depends on shared information while preserving individual data privacy. The splitting serves privacy; any speedup is incidental."
         },
         {
-          "t": "raw throughput, like BitTorrent parallelizing a big download",
+          "t": "raw speed, like BitTorrent splitting up a big download",
           "why": "The BitTorrent line describes how the work is partitioned, and it stops there. MPC actually pays extra communication overhead, so it tends to run slower than one machine; the essay lists efficiency among its standing trade-offs."
         },
         {
@@ -226,7 +226,7 @@
       "q": "Demo time. Flip 4 of the 7 nodes to traitors and leave the colluding box unchecked. What do the two verdict cards show?",
       "options": [
         {
-          "t": "BGW breaks but SPDZ still holds",
+          "t": "BGW breaks at 3 of 7 honest, SPDZ still holds",
           "ok": true,
           "why": "3 honest of 7 misses BGW's bar of more than two-thirds honest, which needs 5 of 7, while SPDZ asks only for one honest node plus no collusion. The two cards disagreeing over the same grid is the honest-majority spectrum in one screen."
         },
@@ -248,12 +248,12 @@
       "q": "The sidekick's aside now. A leaked share surfaces, you hit trace, and the watermark points at node 4. What did traitor tracing actually accomplish?",
       "options": [
         {
-          "t": "it named the leaker after the fact, and that threat deters leaks up front",
+          "t": "it named the leaker afterward, which deters leaks up front",
           "ok": true,
           "why": "Every party holds a uniquely watermarked share, so a leaked key fingerprints its source. The leak itself still happened; what you bought is deterrence, the same lean on bad actors fearing exposure that the honest-majority assumption makes."
         },
         {
-          "t": "it stopped the leak before the key ever got out",
+          "t": "it stopped the leak before the key ever left the node",
           "why": "Tracing is forensic. The sidekick's note says a traitor can still leak and the watermark just names them afterward; prevention comes from the protocol's trust assumptions, while tracing handles the morning after."
         },
         {
@@ -261,7 +261,7 @@
           "why": "The watermark identifies a party and nothing more. Rebuilding the secret would undo the privacy the shares exist for; the demo's trace output only ever prints a watermark and a node number."
         },
         {
-          "t": "it certified the other six nodes as honest",
+          "t": "it cleared the other six nodes, since only one watermark matched",
           "why": "Tracing speaks only about the share that leaked. The remaining nodes could be traitors who simply haven't leaked yet, and the demo will happily show several red nodes while tracing just one of them."
         }
       ]
@@ -270,7 +270,7 @@
       "q": "Last one. An MPC network where most of the nodes rack up in one datacenter: what happens to its trust story?",
       "options": [
         {
-          "t": "it starts to look like a TEE or a centralized chain, one roof can steer a majority",
+          "t": "it looks like a TEE or a centralized chain, one roof steers a majority",
           "ok": true,
           "why": "The trust assumption is that a proportion of nodes aren't colluding or controlled by one malicious party. Shared geography makes a single operator's grip on a majority plausible, which is exactly the comparison the 21:09 message draws."
         },

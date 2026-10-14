@@ -742,12 +742,12 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
       "q": "Start with the opening metaphor. A UV penetrant scan on a part versus a proof about a program. What is the actual difference?",
       "options": [
         {
-          "t": "the scan samples one part for defects it can detect; the proof quantifies over every execution",
+          "t": "the scan samples one part; the proof quantifies over every execution",
           "ok": true,
           "why": "Testing is existential, hunting for a witness that something breaks. Proof is universal, ruling out that any such witness exists. Both are still bounded by the class of defect you chose to look for, which is the half of the metaphor that survived."
         },
         {
-          "t": "the scan can miss defects, while the proof cannot miss anything",
+          "t": "the scan can miss defects, while a machine-checked proof cannot miss anything",
           "why": "The proof misses everything you did not write into the property. The vacuous-spec demo is exactly that: a green, machine-checked theorem sitting next to 95 tokens minted from nothing, because nobody stated conservation."
         },
         {
@@ -755,7 +755,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
           "why": "Cost runs the other way. seL4 needed roughly 20 lines of proof per line of C. What proof buys is coverage of an unbounded input space, and you pay for it in effort."
         },
         {
-          "t": "the scan tests the real object while the proof only tests a simulation",
+          "t": "the scan tests the real object while the proof only tests a simulation of it",
           "why": "Closer than the others, but it lands on the wrong word: a proof derives. The model-versus-reality gap it leaves behind is exactly what Paradigm's spec-hunt pays people to find."
         }
       ]
@@ -764,9 +764,9 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
       "q": "In the first demo, set balance to 5 and withdraw to 100. The theorem 0 ≤ withdraw bal amt stays green. Why is that not reassuring?",
       "options": [
         {
-          "t": "Nat subtraction truncates at 0, so the property is true of every Nat and constrains nothing",
+          "t": "Nat subtraction clamps at 0, so no pair of inputs can violate it",
           "ok": true,
-          "why": "The theorem quantified over nothing. 5 - 100 clamps to 0, the invariant reads 0 ≤ 0, and 95 tokens got paid out that never existed. A specification that no input can violate carries no information."
+          "why": "The theorem quantified over nothing. Nat subtraction truncates, so 5 - 100 clamps to 0, the invariant reads 0 ≤ 0, and 95 tokens got paid out that never existed. A specification that no input can violate carries no information."
         },
         {
           "t": "the theorem is false and Lean accepted it anyway because of a kernel bug",
@@ -777,7 +777,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
           "why": "The opposite. It holds for every pair of Nats without exception, and that total, effortless truth is the tell. Conservation is the property that actually discriminates, and it is the one Lean rejects when amt exceeds bal."
         },
         {
-          "t": "balances should be signed integers, so the type is simply wrong",
+          "t": "balances should be signed integers, so the Nat type is the real bug",
           "why": "A signed type would surface the negative, but the lesson would survive the change. The point is that an invariant nothing can violate proves nothing, and you can write one of those in any type system."
         }
       ]
@@ -786,12 +786,12 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
       "q": "Second demo. Turn on 'emit cheaper side first' and pick 3 * 4 + x. The output matches, yet compileSwap_correct reads unprovable. What is going on?",
       "options": [
         {
-          "t": "the theorem ranges over all expressions, and it fails on the minus case even though this one agrees",
+          "t": "the theorem ranges over every expression, and it fails on the minus case",
           "ok": true,
-          "why": "Swapping is genuinely correct for plus and times because they commute, and those cases close via Nat.add_comm and Nat.mul_comm. It dies on one constructor out of five, which is precisely the bug a test suite full of addition would ship."
+          "why": "This one agrees, but the theorem is about all of them. Swapping is genuinely correct for plus and times because they commute, and those cases close via Nat.add_comm and Nat.mul_comm. It dies on one constructor out of five, which is precisely the bug a test suite full of addition would ship."
         },
         {
-          "t": "the proof is stale and needs rerunning against the new compiler",
+          "t": "the proof is stale and needs rerunning against the swapped compiler",
           "why": "There is nothing to refresh. Lean reports an unsolved goal with the false equation printed in it: eval env b - eval env a = eval env a - eval env b. No amount of rerunning makes subtraction commute."
         },
         {
@@ -808,16 +808,16 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
       "q": "The Collatz proof of July 2026 passed two independent Lean kernels, and #print axioms reported no axioms. What does that tell you about the trust story?",
       "options": [
         {
-          "t": "#print axioms audits a valid derivation, so it cannot see a kernel that accepted an invalid one; diversity of kernels is the real defense",
+          "t": "#print axioms cannot see a kernel that accepted a bad derivation; the defense is independent kernels",
           "ok": true,
-          "why": "The command catches sorryAx and native_decide, both of which showed up plainly in the demo output. A kernel bug produces a derivation that looks clean by construction, so the backstop is independent implementations an exploit must beat all at once."
+          "why": "#print axioms audits a valid derivation. It catches sorryAx and native_decide, both of which showed up plainly in the demo output, but a kernel bug produces a derivation that looks clean by construction, so the backstop is independent implementations an exploit must beat all at once."
         },
         {
-          "t": "the axiom check was skipped, and running it would have caught the exploit",
+          "t": "the axiom check was skipped, and running it would have flagged the proof of False",
           "why": "It was run and it came back clean, reporting that the proof of False depended on no axioms at all. That is the whole reason the incident made news."
         },
         {
-          "t": "proof assistants cannot be trusted, so formal verification does not deliver much",
+          "t": "proof assistants cannot be trusted at all, so a Lean certificate does not deliver much",
           "why": "Too strong. Both bugs were found and patched, Lean's in under 24 hours, and a v4.32.2 release went out under 3 hours after the fix merged. The lesson is about where the trust sits."
         },
         {
@@ -830,9 +830,9 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
       "q": "openai/ten-proofs ships 548,205 lines of Lean with zero sorry, and 1,765 lines of Comparator challenge statements. Which number should a mathematician spend their week on?",
       "options": [
         {
-          "t": "the 1,765, because the proof is the kernel's problem and the statements are the only claim about what got proved",
+          "t": "the 1,765, since the statements are the only claim about what got proved",
           "ok": true,
-          "why": "That is the trade verification makes. The 548,205 lines are settled by a machine that does not get tired, and what is left is a surface small enough to read properly. On the non-sofic result the whole readable surface is 39 lines, and 35 of them define what the word Sofic means."
+          "why": "That is the trade verification makes. The proof is the kernel's problem: the 548,205 lines are settled by a machine that does not get tired, and what is left is a surface small enough to read properly. On the non-sofic result the whole readable surface is 39 lines, and 35 of them define what the word Sofic means."
         },
         {
           "t": "the 548,205, because a proof that large has to be audited before anyone can rely on it",
@@ -852,9 +852,9 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
       "q": "Lean splits formal verification into two machines. What actually separates the symbolic-execution-plus-SMT side from what you did in the first two demos?",
       "options": [
         {
-          "t": "it produces no proof term at all: instructions become constraints, a solver hunts for a violating assignment, and a failure hands you a concrete input",
+          "t": "it builds no proof term: a solver searches for a violating input, and a failure hands you one",
           "ok": true,
-          "why": "That is the trade. You give up the ability to state anything about unbounded structures, and you get a push-button verdict plus a counterexample an engineer can run. The interactive side hands you a term and a type-check instead."
+          "why": "That is the trade. Instructions become constraints and a solver hunts for an assignment that breaks the property. You give up the ability to state anything about unbounded structures, and you get a push-button verdict plus a counterexample an engineer can run. The interactive side hands you a term and a type-check instead."
         },
         {
           "t": "it is the same technique with the proof search automated, so a kernel still checks the result at the end",
@@ -874,12 +874,12 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
       "q": "A model generates a thousand candidate invariants and the prover certifies 80 of them. What does the number 80 fail to tell you?",
       "options": [
         {
-          "t": "how many of the 80 are vacuous, since a candidate nothing can violate is the easiest thing for a generator to get certified",
+          "t": "how many of the 80 are vacuous, since a candidate nothing can violate is the easiest to get certified",
           "ok": true,
           "why": "The loop's reward is that the prover said yes, and 0 ≤ withdraw bal amt collects that reward for free. Satisfiability of the preconditions is a separate obligation, and the loop needs it as a scoring filter."
         },
         {
-          "t": "nothing important, because a certified invariant is a proven property and proven is the strongest word available",
+          "t": "nothing important, since a certified invariant is proven, and proven is the strongest word there is",
           "why": "Proven is exactly as strong as whatever got stated. The first demo on this page is a green theorem sitting next to 95 tokens evaporating, and a generator has no more insight into which properties carry information than the person it replaced."
         },
         {
