@@ -10,11 +10,27 @@
 // exact budget is interpolated linearly in bytes. That is a one-point
 // rate-distortion curve, and it compares every variant, base included, at the
 // same byte count to the byte.
+//
+// Usage:
+//     bun tools/photos/codec-knob-probe.ts                    # JXL, every variant, both sets
+//     bun tools/photos/codec-knob-probe.ts --codec avif
+//     bun tools/photos/codec-knob-probe.ts --codec avm --variants base,s4   # AV2; needs `bun run av2:build`
+//     bun tools/photos/codec-knob-probe.ts --set train --variants base,epf0
+//     bun tools/photos/codec-knob-probe.ts --json out.json
+//
+// AV2, `--codec avm`: where the next codec in the AV1 line stands on these
+// photos. It is scored against the SAME shipped AVIF budgets and the same AVIF
+// scores, so every row reads "AV2 at the bytes AVIF actually costs". Both files
+// are AVIF containers (AV2 writes an `av02` item), so this is file against file
+// with no container adjustment. It needs avifenc-avm, the AV2 build that
+// `bun run av2:build` makes from the pinned av2-tone, and is bracketed on -q
+// exactly like the AVIF arm. Nothing it writes can ship: no browser decodes AV2.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { AV2_BUILD, AV2_BUILD_COMMAND } from "./av2-tone.ts";
 import {
   AVIF_ARGS, bestCrop, butter, decodeFmt, encode, encodeFmt, FORMAT_TIER_ANCHOR, JXL_ARGS, loadSource, searchFmt, ssim2,
 } from "./gen-pixel-peeper.ts";
@@ -76,7 +92,7 @@ const AVIF_VARIANTS: Record<string, string[]> = {
   nofilt: AV("-a", "enable-cdef=0", "-a", "enable-restoration=0"),
 };
 
-const AVIFENC_AVM = path.join(process.env.AVM_BUILD_DIR ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "libavif-avm", "build"), "avifenc");
+const AVIFENC_AVM = path.join(process.env.AVM_BUILD_DIR ?? AV2_BUILD, "avifenc");
 const AVIFDEC_AVM = path.join(path.dirname(AVIFENC_AVM), "avifdec");
 // sb-size=128 is pinned because AVM's dynamic choice depends on frame size: at
 // speed > 1 it picks 64px superblocks when the short side is 480px or less, so the
@@ -289,7 +305,7 @@ async function main(): Promise<number> {
   const codec = (arg("--codec") ?? "jxl") as Codec;
   if (codec !== "jxl" && codec !== "avif" && codec !== "avm") { console.error("--codec wants jxl, avif or avm"); return 2; }
   if (codec === "avm" && !(fs.existsSync(AVIFENC_AVM) && fs.existsSync(AVIFDEC_AVM))) {
-    console.error(`--codec avm needs avifenc-avm, the AV2 build; run tools/photos/libavif-avm/build.sh (expected ${AVIFENC_AVM})`);
+    console.error(`--codec avm needs avifenc-avm, the AV2 build; run ${AV2_BUILD_COMMAND} (expected ${AVIFENC_AVM})`);
     return 2;
   }
   const VARIANTS = codec === "avif" ? AVIF_VARIANTS : codec === "avm" ? AVM_VARIANTS : JXL_VARIANTS;

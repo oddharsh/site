@@ -15,10 +15,14 @@
 // The originals are Fuji JPGs and HIFs (XT5*) and Leica JPGs (L1*); a Leica
 // Monochrom tile is 8-bit gray, so both codecs code it as 4:0:0, the way zenc
 // codes the shipped one.
+//
+// usage: bun tools/photos/av2-wasm/samples.ts --src <originals> --stems a,b,c
+//          [--build <av2-tone encoder build dir>] [--zenc <zenc binary>]
 
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { AV2_BUILD } from "../av2-tone.ts";
 
 const HERE = import.meta.dir;
 const REPO = path.resolve(HERE, "../../..");
@@ -27,7 +31,7 @@ const arg = (name: string): string | undefined => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? argv[i + 1] : undefined;
 };
-const BUILD = path.resolve(arg("build") ?? path.join(HERE, "../libavif-avm/build"));
+const BUILD = path.resolve(arg("build") ?? AV2_BUILD);
 const ZENC = path.resolve(arg("zenc") ?? path.join(HERE, "../zenc/target/release/zenc"));
 const OUT = path.join(REPO, "public/garage/av2");
 const WORK = fs.mkdtempSync(path.join(os.tmpdir(), "av2-samples-"));

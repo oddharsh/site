@@ -18,9 +18,28 @@ import path from "node:path";
 
 const SKIP = new Set(["node_modules", ".git", ".build", ".wrangler", ".claude", "target", ".venv", "dist", ".dev-assets"]);
 
+/**
+ * Vendored third-party trees, skipped by PATH rather than by basename.
+ *
+ * tools/photos/libavif/build.sh clones libavif and builds aom, libwebp and libyuv
+ * underneath it. Both directories are gitignored, because that is a vendored BUILD
+ * rather than source this repository owns. The census walks the filesystem, so the
+ * first person to follow build.sh got seven of those projects' own scripts reported
+ * as undeclared generators and a red derive:check on a tree with no local edits.
+ *
+ * The shell tier fires hardest, and by construction: it matches any mention of
+ * `src/`, and every C project on earth has one of those.
+ *
+ * By path because the basenames are `src` and `build`, which are the two names
+ * least safe to add to SKIP.
+ *
+ * The AV2 build was the same shape and worse (CMake fetches AVM, TensorFlow
+ * Lite, XNNPACK and abseil, whose Python read as undeclared generators by the
+ * dozen). It moved to github.com/oddharsh/av2-tone and builds inside
+ * node_modules, which the census never walks.
+ */
 const VENDORED = new Set([
   "tools/photos/libavif/src", "tools/photos/libavif/build",
-  "tools/photos/libavif-avm/src", "tools/photos/libavif-avm/build",
 ]);
 
 const SCANNED = [".ts", ".mjs", ".js", ".py"];

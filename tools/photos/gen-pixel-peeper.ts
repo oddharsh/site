@@ -12,14 +12,16 @@
 //
 // Needs: zenc (cargo build in tools/photos/zenc), mozjpeg's cjpeg, sips,
 // ssimulacra2, butteraugli_main, and the source folder. The format axis also
-// needs cjxl, djxl, avifenc, avifdec, and for AV2 the tuned libavif-avm build
-// (tools/photos/libavif-avm/build.sh --tuned).
+// needs cjxl, djxl, avifenc, avifdec, and for AV2 the tuned av2-tone build
+// (`bun run av2:build`).
+
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { AV2_BUILD_COMMAND, AV2_TUNED_BUILD } from "./av2-tone.ts";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // --src points the generator at another folder of originals, the way
@@ -44,12 +46,12 @@ const SSIMULACRA2 = which("ssimulacra2") ?? "/opt/zerobrew/prefix/bin/ssimulacra
 const BUTTERAUGLI = which("butteraugli_main") ?? "/opt/zerobrew/prefix/bin/butteraugli_main";
 const CJXL = which("cjxl"), DJXL = which("djxl");
 const AVIFENC = which("avifenc"), AVIFDEC = which("avifdec");
-// AV2 comes from the TUNED libavif-avm build (tools/photos/libavif-avm/build.sh
-// --tuned), the one that carries the qmseg patch AV2_ARGS turns on. The
+// AV2 comes from the TUNED av2-tone build (`bun run av2:build`), the one that
+// carries the qmseg patch AV2_ARGS turns on. The
 // pristine build refuses those flags one encode at a time, so preflight checks
 // for the tuned binary up front. AVM_BUILD_DIR overrides the directory, as it
 // does for codec-knob-probe.ts.
-const AV2_BUILD = process.env.AVM_BUILD_DIR ?? path.join(REPO, "tools", "photos", "libavif-avm", "build", "tuned");
+const AV2_BUILD = process.env.AVM_BUILD_DIR ?? AV2_TUNED_BUILD;
 const AVIFENC_AV2 = path.join(AV2_BUILD, "avifenc"), AVIFDEC_AV2 = path.join(AV2_BUILD, "avifdec");
 
 const TILE = 320;
@@ -833,7 +835,7 @@ function preflight(axes: string[]): void {
   if (missing.length) {
     log(`missing: ${missing.join(", ")}`);
     log("  zenc:  cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml");
-    if (missing.some((m) => m.startsWith("AV2 "))) log("  AV2:   tools/photos/libavif-avm/build.sh --tuned");
+    if (missing.some((m) => m.startsWith("AV2 "))) log(`  AV2:   ${AV2_BUILD_COMMAND}`);
     process.exit(1);
   }
 }
