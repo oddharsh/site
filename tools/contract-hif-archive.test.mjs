@@ -10,7 +10,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { assert, test } from "./contract-shared.ts";
-import { beats, codestreamBytes, RANGE, searchDistance, stripPng } from "./photos/hif-archive.ts";
+import { beats, codestreamBytes, RANGE, searchDistance, stripJpegExif, stripPng } from "./photos/hif-archive.ts";
 import { jxlKind } from "./photos/pipeline-json.ts";
 
 // A metric that wins at every distance up to `edge` and loses above it, the
@@ -88,4 +88,21 @@ test("stripPng drops eXIf and XMP and keeps every other chunk byte for byte", as
   await writeFile(src, Buffer.concat([sig, keep[0], keep[1], chunk("eXIf", "MM\0*orientation 8"), chunk("iTXt", "XML:com.adobe.xmp\0\0\0\0\0<x/>"), keep[2], keep[3]]));
   stripPng(src, dst);
   assert.deepEqual(await readFile(dst), Buffer.concat([sig, ...keep]));
+});
+
+test("stripJpegExif drops only the Exif segment and keeps the scan byte for byte", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "jpg-"));
+  const seg = (marker, body) => { const h = Buffer.from([0xff, marker, 0, 0]); h.writeUInt16BE(body.length + 2, 2); return Buffer.concat([h, Buffer.from(body, "latin1")]); };
+  const soi = Buffer.from([0xff, 0xd8]);
+  const keep = [seg(0xe0, "JFIF\0\x01\x01"), seg(0xe1, "http://ns.adobe.com/xap/1.0/\0<x/>"), seg(0xe2, "ICC_PROFILE\0..")];
+  // The scan's entropy-coded bytes may hold anything, a fake Exif segment
+  // included: nothing after the start of scan is touched.
+  const scan = Buffer.concat([seg(0xda, "\x03\x01\x00"), seg(0xe1, "Exif\0\0inside the scan"), Buffer.from([0x12, 0xff, 0x00, 0xff, 0xd9])]);
+  const src = path.join(dir, "in.jpg"), dst = path.join(dir, "out.jpg");
+  await writeFile(src, Buffer.concat([soi, keep[0], seg(0xe1, "Exif\0\0MM\0*orientation 8"), keep[1], keep[2], scan]));
+  stripJpegExif(src, dst);
+  assert.deepEqual(await readFile(dst), Buffer.concat([soi, ...keep, scan]));
+  // Control: a file that is not a JPEG throws instead of copying through.
+  await writeFile(src, Buffer.from("\x89PNG"));
+  assert.throws(() => stripJpegExif(src, dst), /not a JPEG/);
 });
