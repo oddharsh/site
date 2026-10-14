@@ -158,18 +158,19 @@ const worker = defineWorker({
     // (The old 0 4 * * 7 coffee-booking sweep is retired: each pending booking
     // now carries its own BookingWorkflow expiry timer; see the exports below.)
     triggers.scheduled({ schedule: "17 8 * * 1" }),
-    // 41 5 * * *: the DAILY OUTBOUND tick, and the only one that touches
-    // somebody else's server. Two jobs, run sequentially so they do not double
-    // the burst this site presents at one instant:
-    //   - webmention-send: read this site's own mention-enabled pages, find the
-    //     sources they cite, and tell those sources they were cited.
-    //   - around.ts cronAround: crawl the twenty-origin neighborhood and write
-    //     the KV snapshot /around reads. This had its own "*/30 * * * *" trigger
-    //     until 2026-08-14. Twenty VC homepages do not change every half hour,
-    //     and that cadence spent 960 signed third-party fetches, 960 D1
-    //     row-writes and 48 KV snapshot writes a day to find that out. Merging
-    //     cut all three by 48x and freed a trigger slot, which matters because
-    //     Workers Free caps an account at five.
+    // 41 5 * * * and 53 5 * * *: the two DAILY OUTBOUND ticks, and the only
+    // ones that touch somebody else's server. Twelve minutes apart, so the two
+    // bursts never overlap:
+    //   - 41 5, around.ts cronAround: crawl the twenty-origin neighborhood and
+    //     write the KV snapshot /around reads. This had its own "*/30 * * * *"
+    //     trigger until 2026-08-14. Twenty VC homepages do not change every half
+    //     hour, and that cadence spent 960 signed third-party fetches, 960 D1
+    //     row-writes and 48 KV snapshot writes a day to find that out.
+    //   - 53 5, webmention-send: read this site's own mention-enabled pages,
+    //     find the sources they cite, and tell those sources they were cited.
+    // They shared 41 5 until 2026-10-14, and one invocation could not hold both
+    // inside Workers Free's 50 subrequests (lib/cron.ts has the numbers). 53 5
+    // is the account's fifth and last cron slot.
     // The crawl stays on a CRON rather than moving to the request path, and that
     // is load-bearing rather than incidental: dbbd44f moved it here so that no
     // visitor, crawler or speculative prerender can make this site fetch twenty
@@ -179,6 +180,7 @@ const worker = defineWorker({
     // third-party hosts, and neither a citation graph nor a fund's homepage
     // changes by the half hour.
     triggers.scheduled({ schedule: "41 5 * * *" }),
+    triggers.scheduled({ schedule: "53 5 * * *" }),
     // 7,37 * * * *: the homepage perf probe (perf-probe.ts): render `/`
     // in-process, parse its own Server-Timing, write the spans to Analytics
     // Engine. Offset from the old */30 around-crawl so the two never shared a
