@@ -14,42 +14,20 @@ import { previewToolRefusal } from "./lib/preview.ts";
 import { overBudget } from "./lib/ratelimit.ts";
 import { asRecord, asText } from "./lib/parse.ts";
 
-// DUAL-ERA. The wire rules (versions, `_meta` keys, resultType, cache hints,
-// error codes, the header check) live in lib/mcp-protocol.js because
-// /serendipity/mcp is a second MCP server on this same origin and the two must
-// not drift into different dialects. That file carries the full argument; what
-// matters here is that a request with modern `_meta` is served statelessly
-// under 2026-07-28 and an `initialize` request selects legacy semantics.
-//
-// This server was unusually well placed for the change. The header above has
-// said "intentionally stateless" since it was written, and statelessness is
-// precisely what the new revision assumes. There was nothing to unwind.
-// Exported because the published server card is a PROJECTION of this server,
-// not a second hand-maintained description of it. tools/gen-mcp-cards.ts
-// imports these three, so the card cannot claim an identity the Worker does not
-// report at `initialize`.
 export const SITE_MCP_SERVER_INFO = { name: "aadhar.sh", title: "Aadharsh Site", version: "2.1.0" };
 export const SITE_MCP_CAPABILITIES = { tools: {}, resources: {} };
 export const SITE_MCP_INSTRUCTIONS = "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, and an HTTP representation vault. Image inputs are not persisted; the vault stores normalized headers, metadata, and body digests only. resources/list enumerates the site's public pages; resources/read fetches one. No private data is exposed.";
 
 const MCP = mcpServer({
-  // Self-reported and explicitly NOT a security signal — the spec says clients
-  // should not change behavior on it. Display, logging, debugging.
   serverInfo: SITE_MCP_SERVER_INFO,
   capabilities: SITE_MCP_CAPABILITIES,
   instructions: SITE_MCP_INSTRUCTIONS,
 });
 
-// Which cache hint each surface earns. Tools are a static array in this file and
-// resources are projected from site-manifest.json, so both change exactly at
-// deploy; resources/read fetches a live page; prompts are permanently empty.
 const CACHE_TOOLS     = CACHE_STATIC;
 const CACHE_RESOURCES = CACHE_STATIC;
 const CACHE_READ      = CACHE_LIVE;
 const CACHE_PROMPTS   = CACHE_EMPTY;
-// Generous for a real client (they batch a handful of calls, not hundreds) and
-// small enough that a batch can't outrun the per-IP crawl budgets. See the note
-// at the batch branch in handleSiteMcp.
 const MCP_MAX_BATCH = 16;
 
 const HOSTED_TOOLS = [
@@ -95,24 +73,6 @@ const HOSTED_TOOLS = [
     } },
   },
   {
-    // The two vault WRITERS, and the only tools on this server that are not
-    // read-only. Each call persists a fresh snapshot row keyed by a new id, so
-    // neither is idempotent either: calling twice leaves two observations, which
-    // is the point of a vault. Nothing is destroyed, hence destructiveHint stays
-    // false. Saying so here rather than in lib/mcp-tools.js keeps the claim
-    // beside the INSERT that decides it.
-    //
-    // The write is ALSO stated in the description, which reads as redundant and
-    // is not. Cloudflare's WebMCP bridge builds its registerTool() call from
-    // exactly {name, description, inputSchema, execute}, so `annotations` is
-    // dropped on the way to the browser and these two arrive looking like every
-    // read-only tool (measured 2026-08-07 against the shipped bridge.js, by
-    // shimming document.modelContext and capturing all 24 registrations). The
-    // field is not the API's limit — developers.cloudflare.com hand-rolls its
-    // own registration on the same API and passes both `title` and
-    // `annotations` — it is this bridge not forwarding them. Description is the
-    // one field that survives, so the claim rides there too. Delete the prose
-    // only once a bridge is observed forwarding annotations.
     name: "representation_capture",
     description: "Capture bounded public HTTP representations under browser, bot, Markdown, or identity request profiles and store only normalized headers, metadata, and body digests. Writes: each call persists a new snapshot row, so this tool is not read-only and not idempotent.",
     annotations: { readOnlyHint: false, idempotentHint: false },
@@ -138,18 +98,6 @@ const HOSTED_TOOLS = [
 const MCP_TOOL_DEFINITIONS = [
   ...DATA_TOOLS,
   ...HOSTED_TOOLS,
-  // ── the terminal programs ───────────────────────────────────────────────
-  // These return a rendered 80-column FRAME as text, not a record. That is the
-  // point rather than a limitation: the frame names its own controls, so a
-  // caller learns the program by reading one instead of by being handed a
-  // schema. Every frame also returns the `url` that produced it, which is the
-  // whole state — resume, fork, or hand it to somebody else by passing it back.
-  //
-  // The structured twins already exist beside these (search_site, photo_query,
-  // lens_inspect). A caller that wants fields should use those; these are for
-  // the caller that wants to EXPLORE, and for the human reading over its
-  // shoulder. Frames are never coloured here: an ANSI escape in a context
-  // window is noise the model then has to be robust to.
   {
     name: "finger",
     description: "Look up who runs aadhar.sh, as a drivable terminal program. Panes: overview, writing, reading, listening, photos, around, coffee, deploys, search. Send `keys` to move (1-9 pane, j/k cursor, <cr> open, h back, ? help) and pass the returned `url`'s params back to continue. Returns a rendered 80-column frame.",
@@ -173,9 +121,6 @@ const MCP_TOOL_DEFINITIONS = [
     } },
   },
   {
-    // The one tool here whose INPUT this server cannot produce. An agent with a
-    // shell has an antenna; this origin does not. So the agent samples and this
-    // draws — see radar.js on why a hosted radar is otherwise dishonest.
     name: "radar",
     description: "Render signal readings you have already measured (wifi/Bluetooth RSSI) as a terminal instrument: concentric strength bands, a meter and trend per source, and findphone's field calibration (-45 arm's reach, -60 same table, -72 same room). This origin has no antenna and does not sense anything; you supply the samples. Nothing is stored. Angles in the plot are decorative because RSSI carries no bearing.",
     inputSchema: { type: "object", properties: {
@@ -220,9 +165,6 @@ const MCP_TOOL_DEFINITIONS = [
 
 export const MCP_TOOLS = MCP_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 
-// Public surfaces projected from the generated agent catalog. Names are stable
-// paths; absolute URIs let clients dereference them directly. Listing describes
-// the surface registry, while resources/read can refuse an unavailable page.
 const MCP_RESOURCE_TYPES = new Map(AGENT_SURFACES.map((s) => [s.path, s.mimeType]));
 function mcpResources(origin) {
   return AGENT_SURFACES.map((s) => ({
@@ -234,9 +176,6 @@ function mcpResources(origin) {
   }));
 }
 
-// Read the public page through the local dispatcher, with no caller credentials
-// or query-driven work. A resource is complete or unreadable, never a silently
-// clipped prefix. 512 KiB accommodates the listed pages, including Horizon.
 async function readResource(uri: unknown, request: Request, env: Env) {
   const resourceUri = asText(uri);
   const selfFetch = env.SELF_FETCH;
@@ -267,16 +206,6 @@ async function readResource(uri: unknown, request: Request, env: Env) {
 
 function errorResult(message) { return { _error: String(message).slice(0, 400) }; }
 
-// The five tools that spend something the caller does not own: a fetch of a URL
-// they named, an Images transform, or a row in the vault. FIVE buckets rather
-// than one shared one, because the ceilings differ by 5x and they differ for a
-// reason: image_inspect on inlined base64 is one binding call and no subrequest,
-// while representation_capture is up to four third-party fetches and four D1
-// writes. A single bucket has to pick one number, and either choice is wrong at
-// one end of that range.
-//
-// `what` lives here so the 429 quotes a ceiling it cannot disagree with; `max`
-// is mirrored in cloudflare.config.ts's rate-limit bindings and a contract test pins the pair.
 export const MCP_BUDGETS = {
   imageInspect:   { binding: "MCP_RL_IMAGE_INSPECT",   max: 20, what: "Image inspections" },
   imageTransform: { binding: "MCP_RL_IMAGE_TRANSFORM", max: 8,  what: "Image transforms" },
@@ -287,19 +216,6 @@ export const MCP_BUDGETS = {
 
 const budgetRefusal = (budget) => errorResult(`${budget.what} are rate-limited to ${budget.max}/min.`);
 
-// The crawl tools bill against the SAME per-IP buckets as their HTTP twins
-// (lens.js LENS_BUDGETS), not a private `mcp:lensrl:` one. A separate bucket let
-// a caller stack budgets: 30 inspections via /lens/fetch AND another 8 here, and
-// lens_compare was metered at 8/min through JSON-RPC while /lens/compare allows
-// 4, so the cheaper door was the expensive operation. One bucket, one ceiling,
-// whichever door you knock on.
-
-// The three underscore fields are the CONTRACT between this function and the
-// dispatcher above: _unknown means no such tool, _error means the tool ran and
-// failed (a result with isError, never a JSON-RPC error), and _mcp means the
-// tool already shaped its own MCP content. Declared here because a tool that
-// returns a plain payload returns none of them, so inference sees only the
-// happy shape and the dispatcher's reads look like typos.
 type ToolOutcome = Record<string, any> & {
   _unknown?: boolean;
   _error?: string;
@@ -308,16 +224,8 @@ type ToolOutcome = Record<string, any> & {
 
 async function callTool(name, args, request, env, ctx): Promise<ToolOutcome> {
   args = asRecord(args) || {};
-  // The seven data tools live in lib/tools.js, because /ask calls the
-  // same seven through the same function. Dispatching them here would mean two
-  // switch statements that have to agree.
   if (DATA_TOOL_NAMES.has(name)) return callDataTool(name, args, request, env, ctx);
 
-  // The three frame tools share one implementation, because the HTTP route and
-  // the tool are the same program read through different doors. terminal_lens does
-  // NOT get its own rate-limit check here: lensFrame runs the same LENS_INSPECT
-  // spec lens_inspect does, so the ceiling is shared whichever
-  // door you knock on — the rule the crawl-tool note above already states.
   if (name === "finger") return terminalToolFrame("finger", args, request, env, ctx);
   if (name === "photos") return terminalToolFrame("photos", args, request, env, ctx);
   if (name === "lens") return terminalToolFrame("lens", args, request, env, ctx);
@@ -372,10 +280,7 @@ export async function handleSiteMcp(request, env, ctx) {
       // server is without probing tools/list + resources/list + prompts/list.
       if (msg.method === "server/discover") return MCP.discover(id);
 
-      // LEGACY ERA. Removed in 2026-07-28 and kept because deleting it strands
-      // every pre-2026 client with no way forward.
       if (msg.method === "initialize") return MCP.initialize(id, msg.params?.protocolVersion);
-      // Also removed in 2026-07-28, also kept for legacy callers. Cheap.
       if (msg.method === "ping") return { jsonrpc: "2.0", id, result: {} };
 
       // tools/list order is deterministic because MCP_TOOLS is a literal array
@@ -395,9 +300,6 @@ export async function handleSiteMcp(request, env, ctx) {
       if (msg.method === "prompts/list") return MCP.result(id, { prompts: [] }, CACHE_PROMPTS);
       if (msg.method === "tools/call") {
         const name = msg.params?.name;
-        // A preview runs production bindings, and two tools here write D1. The
-        // transport guard admits /mcp as a whole (lib/preview.js says why), so
-        // the refusal has to happen where the tool is known.
         const refusedOnPreview = previewToolRefusal(request, MCP_TOOLS, name);
         if (refusedOnPreview) return MCP.result(id, { content: [{ type: "text", text: refusedOnPreview }], isError: true });
         const out = await callTool(name, msg.params?.arguments, request, env, ctx);
@@ -420,15 +322,6 @@ export async function handleSiteMcp(request, env, ctx) {
     // runs through Promise.all, so N simultaneous tool calls can all observe an
     // under-budget counter and all proceed. Unbounded, one POST carrying N
     // lens_inspect calls turns a 30/min ceiling into N outbound crawls.
-    //
-    // This survived the move off KV counters onto the Rate Limiting binding
-    // (2026-08-04) and the reason is worth keeping straight. The old note blamed
-    // KV's read-then-write and concluded "KV can't be made atomic without a
-    // Durable Object". The binding is not read-then-write, and it is STILL not
-    // atomic here: its own docs say counters are locally cached and updated
-    // asynchronously, and that it is "intentionally designed to not be used as
-    // an accurate accounting system". So the cap is what makes the ceiling mean
-    // anything, exactly as before, for a different underlying reason.
     if (payload.length > MCP_MAX_BATCH) {
       return respond(mcpError(null, -32600, `Batch too large: ${payload.length} messages, limit ${MCP_MAX_BATCH}.`), 413);
     }

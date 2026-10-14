@@ -1,46 +1,7 @@
-// lib/botauth.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-// ── AadharshBot ─────────────────────────────────────────────────────
-// branded crawler. uses our own UA + signs every outbound request per
-// RFC 9421 (HTTP Message Signatures), profile per the Web Bot Auth IETF
-// draft. signatures cover @authority + signature-agent; receiving sites
-// can fetch the JWKS at https://aadhar.sh/.well-known/http-message-signatures-directory
-// and verify against the published public keys.
-//
-// Every request carries sig1, ed25519, the one verifiers check. When
-// RN_SIGNING_KEY_MLDSA_JWK is set, primary fetches also carry sig2, an
-// ML-DSA-44 post-quantum label over the same covered components; the fan-out
-// opts out per request (see `postQuantum` on BotRequestOptions). A verifier that only
-// knows ed25519 reads sig1 and skips sig2, because Signature-Input and
-// Signature are structured-field Dictionaries.
-//
-// sig2 has been here twice, and the CPU is why the second time is different.
-// The first run (2026-07-27 to 2026-08-15) signed in pure JS, because workerd
-// had no ML-DSA, at ~8.5ms a signature. On Workers Free, where a busy account
-// clamps near 10ms of CPU per invocation, ONE signature spent most of a request
-// and every fan-out spent several: rn's playlist scrape signed once per track
-// (~180ms, every album cover came back null) and /lens discovery signed 28
-// probes (31 of 51 sampled requests died `exceededCpu`). /garage/pqc has the
-// whole story.
-//
 // workerd now ships ML-DSA in WebCrypto behind the `webcrypto_modern_algorithms`
 // compatibility flag, on BoringSSL. Measured 2026-10-01 on the pinned workerd:
 // 0.12ms per signature, 72x the JS figure, and 0.03ms to turn the seed into a
 // key. So the same fan-out now spends ~3.4ms where it spent ~240ms.
-//
-// Three rules keep sig2 from ever costing sig1 anything:
-//   - sig2 is OPTIONAL. A missing, malformed or unimportable ML-DSA key drops
-//     the label and logs once per isolate; it never throws, and sig1 still ships.
-//   - its keyid is the RFC 9964 thumbprint of the public key DERIVED from the
-//     secret with getPublicKey, so the secret may be the bare 32-byte seed
-//     (workerd accepts that; node and bun want `pub` too) and keyid still
-//     cannot disagree with the key that signed.
-//   - the directory publishes exactly the keys the Worker signs with. When sig2
-//     is unavailable, its AKP entry is filtered out of the served directory, so
-//     nothing points at a key we are not signing with (the DNS-AID note's
-//     `_a2a` rule) and sig1's directory keeps serving. When sig2 IS available
-//     but its key differs from the published one, that is rotation drift, and
-//     it 503s exactly like a drifted ed25519 key always has.
 import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./public-fetch.ts";
 import { lensParseRobots, lensRobotsVerdict } from "./robots.ts";
 import { isSubrequestLimit } from "./budget.ts";
@@ -50,7 +11,7 @@ const ENCODER = new TextEncoder();
 
 export const BOT_NAME    = "AadharshBot";
 
-const BOT_VERSION = "1.0";   // module-private: only BOT_UA below consumes it
+const BOT_VERSION = "1.0";
 
 export const BOT_UA      = `${BOT_NAME}/${BOT_VERSION} (+https://aadhar.sh/bot)`;
 
@@ -59,10 +20,6 @@ export const SIG_AGENT   = "https://aadhar.sh/";
 const DIRECTORY_PATH = "/.well-known/http-message-signatures-directory";
 const DIRECTORY_TYPE = "application/http-message-signatures-directory+json";
 
-// Cloudflare recommends a minute: signatures remain usable in transit without
-// leaving a long replay window. Each signature, including redirect hops, gets
-// its own 256-bit nonce. Only key material is memoized below.
-//
 // `alg` is "ed25519" for sig1 and "ml-dsa-44" for sig2. The second is this
 // site's spelling, since the IANA HTTP Signature Algorithms registry has no
 // post-quantum entry yet; it follows the registry's lowercase-hyphen convention
@@ -80,24 +37,10 @@ export type BotRequestOptions = {
   redirect?: "follow" | "error" | "manual";
   signal?: AbortSignal;
   cf?: RequestInitCfProperties;
-  // RN alone opts into the operator-approved exception for Spotify embeds.
-  // Every other URL, including redirect destinations, keeps the default policy.
   robots?: "respect" | "spotify-embed";
-  // false drops sig2 for this one request, and leaves sig1 exactly as it was.
-  // The callers that pass it are the FAN-OUT: /lens discovery (28 probes per
-  // scan), its Markdown replay (10), and the robots.txt bootstrap. Measured in
-  // production on 2026-10-01 with sig2 on every request, a /lens scan went from
-  // a 22ms to a 32ms CPU median, ~0.33ms a signature, which is 3x the laptop
-  // figure. Primary fetches (the page being scanned, /around, rn, reading)
-  // keep both labels, so every request that IS the crawler's identity carries
-  // the post-quantum one too.
   postQuantum?: boolean;
 };
 
-// Build the headers for an identified outbound request. AadharshBot's public
-// identity promise is meaningful only when the signature is present, so this
-// fails closed when the key is missing or malformed. Callers that genuinely do
-// not need bot identity should use plain fetch with their own explicit policy.
 export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
   const headers = new Headers(opts.headers || {});
   headers.set("user-agent", BOT_UA);
@@ -127,14 +70,8 @@ export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
 }
 
 type Signer = { keyId: string; alg: string; sign: (base: Uint8Array) => Promise<ArrayBuffer> };
-// The ML-DSA secret is OPTIONAL to every caller, which is the whole of sig2's
-// failure policy written as a type: env.ts declares it required because the
-// production deploy gate asks for it, and nothing here may depend on that.
 type SigningEnv = Pick<Env, "RN_SIGNING_KEY_JWK"> & Partial<Pick<Env, "RN_SIGNING_KEY_MLDSA_JWK">>;
 
-// sig1 always; sig2 only when the ML-DSA key is configured AND usable. The
-// ed25519 half throws like it always has, since without it there is no bot
-// identity at all, while the ML-DSA half resolves to nothing on any failure.
 async function activeSigners(env: SigningEnv, postQuantum = true): Promise<Signer[]> {
   const [ed, pq] = await Promise.all([
     signingMaterial(env.RN_SIGNING_KEY_JWK),
@@ -145,9 +82,6 @@ async function activeSigners(env: SigningEnv, postQuantum = true): Promise<Signe
   return signers;
 }
 
-// One Dictionary member per signer, labelled by position: sig1 is ed25519 and
-// sig2 is ML-DSA-44, which is the order a verifier that stops at the first
-// label it knows wants to meet them in. The signatures run concurrently.
 async function signLabels(signers: Signer[], components: string, tag: string, base: (params: string) => string) {
   const parts = await Promise.all(signers.map(async (signer, i) => {
     const label = `sig${i + 1}`;
@@ -182,8 +116,6 @@ export async function handleSignatureDirectory(request: Request, env: Pick<Env, 
   try {
     if (!env.RN_SIGNING_KEY_JWK) throw new Error("Signing key unavailable");
     const signers = await activeSigners(env);
-    // A fresh GET excludes client conditionals, ranges, and HEAD: every success
-    // needs the full directory and a new proof, even when its bytes are unchanged.
     const asset = await env.ASSETS.fetch(new Request(new URL(DIRECTORY_PATH, request.url)));
     if (asset.status !== 200) throw new Error("Directory unavailable");
     let body = await asset.text();
@@ -210,37 +142,6 @@ export async function handleSignatureDirectory(request: Request, env: Pick<Env, 
   }
 }
 
-// The key material a signature needs, derived once per secret rather than once
-// per call. `JSON.parse`, the RFC 7638 thumbprint (a SHA-256 over members that
-// never change) and `importKey` are pure functions of the secret, and measured
-// in workerd at this repo's compatibility date they were 17us of botHeaders'
-// 29.5us. What is left, 12.5us, is the Ed25519 signature itself, which covers a
-// per-request authority and a per-request `created` and so cannot be reused.
-//
-// The saving is per SIGNATURE, and the signature count is what makes it worth
-// doing: /around walks 20 neighbours at two signed fetches each, /lens
-// discovery fans out to 26 probes, and since #746 every redirect hop signs for
-// its own authority. This account is on Workers Free, where sustained requests
-// clamp near 10ms of CPU, and the ML-DSA note at the top of this file is what
-// that clamp costs when per-request crypto meets a fan-out.
-//
-// Keyed on the JWK TEXT rather than computed once, because "the secret cannot
-// change" is true of an isolate and not of a process: the contract suite signs
-// with fixture keys, and a rotation that reused retired material would sign
-// with a key the directory no longer publishes. Comparing the string makes the
-// memo correct without anyone having to know which of those is happening.
-//
-// A PROMISE is cached rather than its result, since the fan-out above starts
-// dozens of signatures at once and caching the value would let every one of
-// them begin the same derivation before the first finished.
-//
-// A REJECTION is cached like any other answer, and that is deliberate rather
-// than overlooked. Every input to the derivation is the secret, so a key that
-// cannot be parsed or imported fails the same way however many times it is
-// retried, and a different secret is a different memo entry. Dropping the entry
-// on rejection was written first and then measured against the tests here: it
-// changes nothing any caller can observe, so it went back out rather than stay
-// as a line nothing can fail on.
 let signingKey: { jwkText: string; material: Promise<{ keyId: string; key: CryptoKey }> } | null = null;
 
 function signingMaterial(jwkText: string) {
@@ -306,11 +207,6 @@ export class BotPolicyError extends Error {
   }
 }
 
-// A policy fetch is the only bootstrap request: its redirect chain is validated
-// and signed, but cannot recursively ask itself for permission. Content readers
-// consult this cached policy unless RN selects the Spotify-only exception below.
-// Keep this out of botHeaders: signing is a pure operation used by self-dispatch
-// and cryptographic verifiers as well as network callers.
 export async function botRobotsPolicy(targetUrl: string, env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK" | "BOT_ROBOTS_CACHE" | "OUTBOUND_TRANSPORT">, signal?: AbortSignal): Promise<BotPolicy> {
   const target = validateLensTarget(targetUrl);
   if (!target.ok) return { ok: false, kind: "undetermined", reason: target.error || "invalid target" };
@@ -371,7 +267,6 @@ async function readBotRobots(origin: string, env: Pick<Env, "RN_KV" | "RN_SIGNIN
         try { await env.RN_KV.put(cacheKey, JSON.stringify(parsed), { expirationTtl: 43200 }); } catch (error) { if (isSubrequestLimit(error)) throw error; }
       }
     } catch (error) {
-      // Census must still distinguish an exhausted instrument from the site.
       if (isSubrequestLimit(error)) throw error;
       return { ok: false, kind: "undetermined", reason: "robots.txt unreachable" };
     }
@@ -379,14 +274,9 @@ async function readBotRobots(origin: string, env: Pick<Env, "RN_KV" | "RN_SIGNIN
   return { ok: true, parsed };
 }
 
-// The music panel reads these three public embed shapes on the owner's behalf.
-// Keep the exception explicit at the RN call site and re-check it on EVERY hop:
-// neither an unrelated Spotify page nor another origin inherits it. `_t` is
-// RN's existing cache-busting parameter, used for playlist refreshes and retries.
 const SPOTIFY_EMBED = /^https:\/\/open\.spotify\.com\/embed\/(?:playlist|track|artist)\/[A-Za-z0-9]{22}(?:\?_t=\d+)?$/;
 
 export async function botRequestHeaders(targetUrl: string, env, opts: BotRequestOptions = {}) {
-  // Fail before any network activity if there is no usable signing key.
   const headers = await botHeaders(targetUrl, env, { ...opts, sign: true });
   if (opts.robots === "spotify-embed" && (opts.method || "GET") === "GET" && SPOTIFY_EMBED.test(targetUrl)) return headers;
   const policy = await botRobotsPolicy(targetUrl, env, opts.signal);
@@ -398,8 +288,8 @@ export async function signedFetch(targetUrl, env, opts: BotRequestOptions = {}) 
   const init = async (url) => ({
     method: opts.method || "GET",
     headers: await botRequestHeaders(url, env, opts),
-    signal: opts.signal,  // optional caller-supplied deadline (AbortSignal)
-    cf: opts.cf || { cacheTtl: 0 },  // caller may set its own edge-cache policy; default is app-layer only
+    signal: opts.signal,
+    cf: opts.cf || { cacheTtl: 0 },
   });
   if (opts.redirect && opts.redirect !== "follow") {
     const verdict = validateLensTarget(targetUrl);

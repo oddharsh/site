@@ -1,12 +1,3 @@
-// mf2.ts: a small, bounded microformats2 parser for pages a stranger names.
-//
-// The webmention receiver needs three facts from a source page: who wrote it,
-// what it is called, and when. Those live in microformats2 markup, and the
-// values rarely sit in visible text. A site that marks its author up with
-// <data class="p-name" value="..."> draws nothing on screen and still names a
-// person, and every real mf2 parser (XRay, mf2py, microformats-parser) reads it.
-// A text-only reader reads nothing there and falls back to the hostname.
-//
 // So this follows the parsing spec (https://microformats.org/wiki/microformats2-parsing)
 // for the parts a mention uses:
 //
@@ -21,15 +12,6 @@
 //   nested h-* under a property: the item, with `value` set per the prefix
 //   implied name, photo and url, when the item has nothing explicit
 //   rels, for rel=author
-//
-// Left out on purpose: backcompat classes (hentry, vcard), dt-* date
-// inheritance between siblings, srcset, and the `lang` and `id` fields. None
-// of them decides an author or a date for a mention.
-//
-// No dependency and no HTMLRewriter: the contract suite runs this under node,
-// which has neither, and the Worker bundle should not pay for a DOM. The tree is
-// built by one regex tokenizer with a node cap and a depth cap, so a hostile page
-// can make the parse shorter and never longer. Values are capped too.
 
 import { asList, asRecord, asText } from "./parse.ts";
 
@@ -39,9 +21,6 @@ export type Mf2Item = {
   children?: Mf2Item[];
   value?: string;
   html?: string;
-  // Which properties the implied rules supplied. Outside the mf2 JSON shape: a
-  // consumer that wants what the page SAID (a post title, say) needs to tell an
-  // explicit p-name from a name implied out of the whole entry's text.
   implied?: string[];
 };
 export type Mf2Value = string | { html: string; value: string } | Mf2Item;
@@ -52,7 +31,7 @@ type El = {
   attrs: Record<string, string>;
   classes: string[];
   children: El[];
-  text?: string;   // set on "#text" nodes alone
+  text?: string;
   innerStart: number;
   innerEnd: number;
 };
@@ -85,7 +64,6 @@ const AUTO_CLOSE: Record<string, Set<string>> = {
 const ROOT = /^h-(?:[a-z0-9]+-)?[a-z]+(?:-[a-z]+)*$/;
 const PROP = /^(p|u|dt|e)-((?:[a-z0-9]+-)?[a-z]+(?:-[a-z]+)*)$/;
 
-// ── entities ───────────────────────────────────────────────────────────────
 const NAMED: Record<string, string> = {
   amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0",
   mdash: "\u2014", ndash: "\u2013", hellip: "\u2026", lsquo: "\u2018", rsquo: "\u2019",
@@ -102,7 +80,6 @@ export function decodeEntities(s: string): string {
   });
 }
 
-// ── tokenizer ──────────────────────────────────────────────────────────────
 const TOKEN = /<!--[\s\S]*?(?:-->|$)|<![^>]*>?|<\?[^>]*>?|<\/([a-zA-Z][^\s/>]*)[^>]*>|<([a-zA-Z][^\s/>]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g;
 const ATTR = /([^\s"'>/=]+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'=<>`]+))?/g;
 
@@ -141,7 +118,7 @@ function buildTree(input: string): El {
       }
       continue;
     }
-    if (!m[2]) continue;   // comment, doctype, processing instruction
+    if (!m[2]) continue;
     if (++nodes > MAX_NODES) { last = src.length; break; }
 
     const tag = m[2].toLowerCase();
@@ -165,8 +142,6 @@ function buildTree(input: string): El {
       continue;
     }
     if (VOID.has(tag) || /\/\s*$/.test(rawAttrs)) continue;
-    // Past the depth cap an element keeps its place in its parent and its
-    // children become its siblings. The structure flattens; nothing is lost.
     if (stack.length < MAX_DEPTH) stack.push(el);
   }
   pushText(src.slice(last));
@@ -174,13 +149,10 @@ function buildTree(input: string): El {
   return root;
 }
 
-// ── text helpers ───────────────────────────────────────────────────────────
 const textNode = (text: string): El => ({ tag: "#text", attrs: {}, classes: [], children: [], innerStart: 0, innerEnd: 0, text });
 function elementChildren(el: El): El[] { return el.children.filter((n) => n.tag !== "#text"); }
 const cap = (s: string, n = MAX_VALUE) => (s.length > n ? s.slice(0, n) : s);
 
-/** textContent with script and style dropped (the tokenizer never kept them)
- *  and each img replaced by its alt, or its src when it has no alt. */
 function textOf(el: El, base: string, imgs = true, trim = true): string {
   let out = "";
   const walk = (n: El) => {
@@ -201,12 +173,11 @@ function resolve(url: string, base: string): string {
   try { return new URL(url.trim(), base).href; } catch { return url.trim(); }
 }
 
-// ── value-class pattern ────────────────────────────────────────────────────
 function valueElements(el: El): El[] {
   const found: El[] = [];
   const walk = (n: El) => {
     for (const c of elementChildren(n)) {
-      if (c.classes.some((k) => ROOT.test(k))) continue;   // a nested item keeps its own values
+      if (c.classes.some((k) => ROOT.test(k))) continue;
       if (c.classes.includes("value") || c.classes.includes("value-title")) { found.push(c); continue; }
       walk(c);
     }
@@ -228,9 +199,6 @@ const DATE = /^\d{4}-(?:\d{2}-\d{2}|\d{3})$/;
 const TIME = /^\d{1,2}(?::\d{2}(?::\d{2}(?:\.\d+)?)?)?\s*(?:[ap]\.?m\.?)?$/i;
 const TZ = /^(?:Z|[+-]\d{2}:?(?:\d{2})?)$/i;
 
-/** The dt-* half of the pattern: parts are sorted into a date, a time and a
- *  timezone and joined as "date time", which is what mf2py and XRay emit. A
- *  part that already carries both halves stands in for the date. */
 function joinDateTime(parts: string[]): string {
   let date = "", time = "", tz = "";
   for (const raw of parts.map((p) => p.trim()).filter(Boolean)) {
@@ -243,7 +211,6 @@ function joinDateTime(parts: string[]): string {
   return time ? `${date} ${time}${tz}` : date;
 }
 
-// ── property parsers ───────────────────────────────────────────────────────
 function parseP(el: El, base: string): string {
   const vals = valueElements(el);
   if (vals.length) return cap(vals.map((v) => valueOf(v, false, base)).join("").trim());
@@ -282,7 +249,6 @@ function parseE(el: El, src: string, base: string): { html: string; value: strin
   return { html: cap(src.slice(el.innerStart, el.innerEnd).trim(), MAX_HTML), value: textOf(el, base) };
 }
 
-// ── items ──────────────────────────────────────────────────────────────────
 function rootsOf(el: El): string[] { return el.classes.filter((k) => ROOT.test(k)).sort(); }
 function propsOf(el: El): [string, string][] {
   const out: [string, string][] = [];
@@ -348,7 +314,6 @@ function parseItem(el: El, ctx: Ctx): Mf2Item {
   return item;
 }
 
-/** The only element child, when it is not itself an item. */
 function soleChild(el: El): El | null {
   const kids = elementChildren(el);
   return kids.length === 1 && !rootsOf(kids[0]).length ? kids[0] : null;
@@ -382,15 +347,11 @@ function impliedUrl(el: El, base: string): string {
   return v == null ? "" : resolve(v, base);
 }
 
-/** A property value as an item, when it is one. Values are built here, so the
- *  parse.ts primitives are the whole check: an item is the record with a type. */
 function asItem(v: Mf2Value): Mf2Item | null {
   const r = asRecord(v);
   return r && asList(r.type).length ? (r as Mf2Item) : null;
 }
 
-/** The text a value stands for: a plain value, or the `value` an embedded
- *  e-* or a nested item carries for its parent. */
 function textValue(v: Mf2Value): string | null {
   return asText(v) ?? asText(asRecord(v)?.value);
 }
@@ -403,7 +364,6 @@ function firstString(vals: Mf2Value[] | undefined): string | undefined {
   return undefined;
 }
 
-// ── document ───────────────────────────────────────────────────────────────
 export function parseMf2(html: string, pageUrl: string): Mf2Doc {
   const src = String(html ?? "");
   const tree = buildTree(src);
@@ -421,8 +381,6 @@ export function parseMf2(html: string, pageUrl: string): Mf2Doc {
   findBase(tree);
 
   const ctx = { src, base };
-  // Items stop the item walk at their root; rels are document-wide, so every
-  // element is visited for those whether or not it sits inside an item.
   const walk = (n: El, inItem: boolean) => {
     for (const c of elementChildren(n)) {
       if ((c.tag === "a" || c.tag === "link" || c.tag === "area") && c.attrs.rel && c.attrs.href != null) {
@@ -441,14 +399,10 @@ export function parseMf2(html: string, pageUrl: string): Mf2Doc {
   return { items, rels };
 }
 
-/** The first string value of a property: a plain value, or the `value` a nested
- *  item carries for its parent. */
 export function mf2First(item: Mf2Item | undefined, name: string): string {
   return firstString(item?.properties[name]) ?? "";
 }
 
-/** Every item in the document, depth first: top-level items, their children,
- *  and items that sit under a property. */
 export function mf2All(doc: Mf2Doc): Mf2Item[] {
   const out: Mf2Item[] = [];
   const visit = (it: Mf2Item) => {
@@ -463,14 +417,10 @@ export function mf2All(doc: Mf2Doc): Mf2Item[] {
   return out;
 }
 
-/** The plain string values of a property, which for a u-* is its URLs. Nested
- *  items and embedded e-* values are left out. */
 export function mf2Strings(item: Mf2Item | undefined, name: string): string[] {
   return (item?.properties[name] || []).map((v) => asText(v)).filter((s): s is string => s !== null);
 }
 
-/** The nested items under a property, and the plain strings beside them, in
- *  document order: an author can be either. */
 export function mf2Values(item: Mf2Item | undefined, name: string): ({ item: Mf2Item } | { text: string })[] {
   const out: ({ item: Mf2Item } | { text: string })[] = [];
   for (const v of item?.properties[name] || []) {

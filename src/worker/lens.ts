@@ -20,17 +20,6 @@ import { subrequestLimitIn } from "./lib/budget.ts";
 import { VIEW_SAMPLE, classifyWalls } from "./lens-walls.ts";
 import { lensNeed } from "./lens-need.ts";
 
-// The glossary. This page's whole subject is protocol names, which is fine for
-// the audience that already has them and a wall for the audience that doesn't.
-// Every definition here is written for someone who has never read a spec: plain
-// sentence first, and a definition may lean only DOWNWARD, on the umbrella terms
-// below (structured data, entity, markup, parser). Two schemes must never
-// explain each other, because a reader meeting one of them has met neither.
-//
-// `plain` is the one-liner. `more` is the second sentence the hover adds, and
-// is optional — several terms are genuinely one sentence and padding them would
-// be worse. Keys are stable ids, so the same definition can be attached from the
-// worker's SSR and from the client's rendered checks without a second copy.
 export const LENS_GLOSSARY = {
   "llms-txt": {
     label: "llms.txt",
@@ -103,12 +92,6 @@ export const LENS_GLOSSARY = {
     more: "A plain fetch sees only the file the server sent. Many sites look empty until the JavaScript fills them in.",
   },
 
-  // ── the umbrella terms ────────────────────────────────────
-  // These sit ABOVE the schemes below, and they were the gap: someone meeting
-  // "JSON-LD" cold has usually never met "structured data" or "entity" either,
-  // so the scheme definitions were leaning on vocabulary the reader was missing.
-  // Defining the umbrella once lets each scheme stay one sentence about what
-  // makes IT different, which is the shape those definitions already wanted.
   "semantic-web": {
     label: "semantic web",
     alt: ["semantic-web"],
@@ -163,11 +146,6 @@ export const LENS_GLOSSARY = {
     more: "It favors what one person can ship this weekend over what a committee can ratify.",
   },
 
-  // ── the tagging schemes ─────────────────────────────────────────────────
-  // Four ways to say the same thing, which is most of why none of them won.
-  // Each definition stands alone rather than describing itself against the
-  // others, because a reader meeting "RDFa" for the first time has not met
-  // JSON-LD either.
   "json-ld": {
     label: "JSON-LD",
     plain: "A block of machine-readable facts a page carries about itself: who wrote it, what it sells, when it was published.",
@@ -200,7 +178,6 @@ export const LENS_GLOSSARY = {
     more: "The one piece of the semantic web nearly everybody shipped, because the payoff showed up the same afternoon.",
   },
 
-  // ── the doors ───────────────────────────────────────────────────────────
   openapi: {
     label: "OpenAPI",
     plain: "A written description of a web API: every operation it offers, what each one takes, and what it gives back.",
@@ -232,7 +209,6 @@ export const LENS_GLOSSARY = {
     plain: "A published index of every API a site offers, at a fixed address, so software can find them without being told where to look.",
   },
 
-  // ── identity, permission, cost ──────────────────────────────────────────
   oauth: {
     label: "OAuth",
     plain: "The sign-in handoff where you approve one app to do specific things on your behalf, and can withdraw that later.",
@@ -245,9 +221,6 @@ export const LENS_GLOSSARY = {
   },
   "user-agent": {
     label: "user agent",
-    // The page's own prose spells it hyphenated everywhere ("six representative
-    // crawler user-agents"), so the unhyphenated label alone never once matched
-    // and this definition had been unreachable since it was written.
     alt: ["user-agents", "user-agent"],
     plain: "The name a visitor's software gives when it asks for a page. A browser, a crawler, or a model can each set its own.",
     more: "Nothing checks it, so an unverified name is a claim rather than evidence.",
@@ -258,7 +231,6 @@ export const LENS_GLOSSARY = {
     more: "On a typical commercial page that is most of the weight and none of the words.",
   },
 
-  // ── how the page is actually read ───────────────────────────────────────
   "reader-mode": {
     label: "reader mode",
     alt: ["Readability", "extractor"],
@@ -282,45 +254,10 @@ export const LENS_GLOSSARY = {
   },
 };
 
-// Wrap known glossary terms in the hover markup. Input MUST already be escaped:
-// this inserts real tags, and it is only safe because escHtml has already
-// removed every < and > the source string could have carried.
-//
-// First occurrence per term per string, longest spelling first so "llms.txt" is
-// never eaten by a shorter overlapping match. A term may carry `alt` spellings,
-// because the checks say "Link relations" where the glossary says "Link headers"
-// and one definition should serve both.
-//
-// Boundaries are hand-rolled: \b is useless against labels carrying dots, digits
-// and slashes (llms.txt, x402, text/markdown). Leading guard is "not a word char,
-// dot or dash". Trailing is TWO lookaheads, both load-bearing and both learned
-// from a failing case:
-//   (?!\w)    refuses llms.txtfoo, but must NOT include "-", or "DNSSEC-signed"
-//             stops matching DNSSEC. A term used as a compound modifier is still
-//             the term.
-//   (?!\.\w)  refuses sitemap.xml.gz while still letting "robots.txt." at the end
-//             of a sentence through, which the naive version got wrong.
 const LENS_SPELLINGS = Object.keys(LENS_GLOSSARY)
   .flatMap((key) => [LENS_GLOSSARY[key].label, ...(LENS_GLOSSARY[key].alt || [])].map((s) => [key, s]))
   .sort((a, b) => b[1].length - a[1].length);
 
-// ONE LEFT-TO-RIGHT PASS OVER THE SOURCE, and that is the load-bearing part
-// rather than a style preference. The old version looped the terms and re-matched
-// against its own accumulating OUTPUT, so every tag it inserted became fair game
-// for the next term. That was harmless only while no term's spelling appeared
-// inside another term's markup, and it stopped being harmless the moment
-// "agent-card" joined a glossary that already had "agent": the emitted
-// data-t="agent-card" contains "agent", the leading guard admits a quote and the
-// trailing one deliberately admits a hyphen, so the second pass wrapped a fragment
-// of the first pass's attribute and produced nested garbage on screen.
-//
-// Matching against `src` and emitting into `out` makes that structurally
-// impossible: nothing this function writes is ever read back. Attribute VALUES
-// are equally safe, which matters because a definition can name another term.
-//
-// Semantics kept: one definition per key per string, leftmost match wins, and on
-// a tie the longer spelling wins (LENS_SPELLINGS is sorted longest-first, so the
-// longer one claims the position before the shorter one is tried).
 export function glossify(escaped, only?) {
   const src = String(escaped);
   const pairs = only
@@ -332,7 +269,7 @@ export function glossify(escaped, only?) {
   for (;;) {
     let best: { key: any, spelling: string, index: number, m: RegExpMatchArray } | null = null;
     for (const [key, spelling] of pairs) {
-      if (seen.has(key)) continue;       // one definition per string, not one per spelling
+      if (seen.has(key)) continue;
       const re = new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)");
       const m = src.slice(pos).match(re);
       if (!m) continue;
@@ -341,9 +278,6 @@ export function glossify(escaped, only?) {
     }
     if (!best) break;
     seen.add(best.key);
-    // The title is the no-JS / touch fallback and what a screen reader reads.
-    // On a hover-capable pointer the client strips it the moment the richer
-    // surface is live, so the two tips never stack on one word.
     out += src.slice(pos, best.at) +
       '<abbr class="lx-term" data-t="' + escAttr(best.key) + '" title="' + escAttr(LENS_GLOSSARY[best.key].plain) + '">' + best.text + "</abbr>";
     pos = best.at + best.text.length;
@@ -351,38 +285,8 @@ export function glossify(escaped, only?) {
   return out + src.slice(pos);
 }
 
-// Per-IP crawl budgets, one place. These used to be inlined at each call site,
-// which was fine until /mcp grew tools that call the same crawler: sharing one
-// counter is the whole point, because a second unmetered door (30 via
-// /lens/fetch AND unlimited via JSON-RPC) is not a rate limit.
-//
-// `max` is duplicated from cloudflare.config.ts's rate-limit bindings on purpose: it is the
-// number the 429 message quotes, and a message that disagrees with the ceiling
-// is worse than no message. A contract test pins the two together so they cannot
-// drift, which is the only reason duplicating it is safe.
-//
-// A rate limit counts INVOCATIONS; the subrequest cap counts what one invocation
-// spends, and on Workers Free that is 50, KV and Cache API included (gotcha 36).
-// Measured with counting stubs (contract-lens-compare-stays-under-the-
-// subrequest-cap): a cold single scan is 46 (robots gate 3, page 1, doors cache
-// 2, fan-out 29, Markdown negotiation 1, bot views 10), so four redirect hops
-// are all the slack it has. A cold compare was 72 until discoveryBoard let one
-// side run live per invocation; it is 41 now, and 42 when one side is cached.
-// How many bytes of a document lens will PARSE, as distinct from how many it
-// will fetch (2MB, above). See the measured table at the parse phase: the
-// regex chains run ~32ms/MB, so this constant is the single knob that decides
-// whether a scan fits a CPU ceiling.
-//
-// 256 KB (~8ms) bounds the worst case without touching the median page. Drop it
-// to 64 KB (~3.2ms) to fit the Workers FREE plan's 10ms-per-invocation ceiling,
-// which leaves headroom for everything else in the request.
 export const LENS_PARSE_CAP = 256 * 1024;
 
-// The cap a scan actually uses. LENS_PARSE_KB overrides it per deployment, so
-// moving lens onto the free plan is a var flip (LENS_PARSE_KB: "64"), and the
-// 8 KB floor keeps a typo like "1" from disabling parsing. Unset, zero, or not a
-// number means the default, and that arm is a real branch on purpose: the parse
-// phase's note records the `||` version that pinned every scan to 8 KB.
 export function lensParseCap(env: { LENS_PARSE_KB?: unknown } | undefined): number {
   const overrideKb = Number(env?.LENS_PARSE_KB) || 0;
   return overrideKb > 0 ? Math.max(8, overrideKb) * 1024 : LENS_PARSE_CAP;
@@ -396,43 +300,13 @@ export function lensParseCap(env: { LENS_PARSE_KB?: unknown } | undefined): numb
 // account's minute and the next visitor got a failure that read like a bug.
 export const BROWSER_FREE_PLAN = { perMinute: 6, perDayMinutes: 10, concurrent: 3 };
 
-// The budgets, the cache helpers and the request pipeline live in
-// lens-pipeline.ts since 2026-10-02, where every lens door runs through one
-// ordered sequence of validate, cache, budget and run. Re-exported here because
-// the contract suite and the auxiliary modules have always read them from this
-// file. `overLensBudget` is gone: its twenty call sites were the copies the
-// pipeline replaced, and the limiter itself is lib/ratelimit.ts's overBudget.
 export { LENS_BUDGETS, budgetMessage, lensPngHeaders, lensSha256Hex } from "./lens-pipeline.ts";
 
-// ── /lens — "the other web" -----------------------------------------------
-// A URL goes in; what a MACHINE sees comes out, across five lenses: page
-// anatomy (raw HTML, headers, headings, stripped text), structured/semantic
-// data (JSON-LD, microdata, RDFa, microformats, OG/Twitter), the LLM/AI view
-// (a markdown rendering + crawler directives), the TERMS the site sets for
-// machines (per-bot robots verdicts, Content-Signal, price + enforcement,
-// the open → signaled → enforced → paid spectrum), and site-level discovery
-// files (robots.txt, sitemap.xml, llms.txt, feeds). The fetch is server-side
-// (CORS blocks the browser), guarded against SSRF, capped in time + size, and
-// made honestly as AadharshBot. Engine here; the /lens page (handleLens) is the UI.
-
-// /lens — the SSR shell: IE6 address bar, a Human/Machine view toggle, the
-// six lens tabs, two panes, seeded examples. The renderer lives in /lens.js
-// (a real static file, cached like nav.js) so it can use normal JS without
-// fighting this template literal's ${} and backticks.
-// the /lens shell is static when it has no target. A shareable ?url= request is
-// intentionally inspected server-side and seeded with the same HTML floor as
-// /lens/fetch, so no-JS visitors still get a useful result. The empty shell is
-// keyed on the bare path and remains cacheable; targeted inspections are
-// private because they spend the crawler budget and contain third-party data.
 export async function handleLens(request, env, ctx) {
   const url = new URL(request.url);
   const target = url.searchParams.get("url");
   const vs = url.searchParams.get("vs");
   if (target && vs) {
-    // Head-to-head: ?url=A&vs=B renders both sites through one rubric, SSR'd
-    // for the same reason single scans are — a shared compare link should show
-    // its result without JavaScript. Same budget as /lens/compare (they are
-    // the same two full inspections).
     const result = await compareLensRequest(request, env, ctx, target, vs);
     const response = renderLensShell(null, lensState(url), target, { vsValue: vs, payload: result.payload });
     response.headers.set("cache-control", "no-store, must-revalidate");
@@ -448,16 +322,9 @@ export async function handleLens(request, env, ctx) {
     response.headers.set("x-robots-tag", "noindex");
     return response;
   }
-  // Keep a route-local shell key: the production runtime may not expose
-  // CF_VERSION_METADATA, so a deploy can otherwise leave an older shell in
-  // the edge cache while the separately served lens.js has already changed.
   return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v4", env);
 }
 
-// One label per lens, shared by the SSR tabs, the SSR machine header, and the
-// client (LENS_LABEL in lens.js must match). These are phrased as the question
-// each lens answers, not practitioner nouns, so a first-time visitor can read
-// the tab row as a menu of questions. Change here + in src/client/lens.js together.
 const LENS_TAB_LABELS = {
   readiness: "Agent-ready?",
   anatomy: "Raw response",
@@ -472,44 +339,12 @@ const LENS_TAB_LABELS = {
   markdown: "What agents get",
 };
 
-// Tab ORDER is evidence to verdict: raw observation first (the default lens, so
-// the first tab is the selected one on load), Agent-ready? last as the capstone.
-// `reader` sits second on purpose — it is one reader-mode extractor's opinion of
-// the very bytes the tab before it just showed, and the pairing is what makes
-// the gap between them legible. The tab strip renders from this array, so the
-// order lives in one place rather than in eight hand-written buttons.
-//
-// `tools` sits directly after `discovery` for the same pairing reason: discovery
-// KNOCKS on /mcp and infers a verdict from a status code, and tools walks
-// through and reads the catalogue. Door then room.
-//
-// `wire` sits third for the same pairing reason one step out. The first two tabs
-// argue about what the DOCUMENT is; wire is the first tab that is not about the
-// document at all, and putting it directly after them is what makes "all of that
-// argument was 4% of what the page actually cost you" land.
-//
-// `nlweb` completes that pairing rather than starting a new one. `discovery`
-// knocks on /ask and reads a status code, `tools` walks through /mcp, and this
-// walks through /ask: door, room, room. It sits last before the capstone because
-// it is the only tab that asks the origin a QUESTION, which is also why it is
-// the only one that never fires on its own.
-// `markdown` closes the same door-then-room run. The discovery tier already
-// knocks on Markdown negotiation and keeps ONE boolean from it: `lensProbeMdNego`
-// reads the content-type and cancels the body without ever looking at what came
-// back. This walks through, replays the Accept header seven named agent clients
-// actually send, and reports which representation each one got. The boolean and
-// the tab disagree often enough to be worth both: an origin can flip its
-// content-type for a bare `text/markdown` and still hand Claude Code HTML.
 export const LENS_TAB_ORDER = ["anatomy", "reader", "wire", "structured", "ai", "terms", "discovery", "tools", "nlweb", "markdown", "readiness"];
 
 function lensState(url) {
   const validViews = ["both", "human", "machine", "browser", "delta"];
   const validLenses = LENS_TAB_ORDER;
   const view = validViews.includes(url.searchParams.get("view")) ? url.searchParams.get("view") : "both";
-  // Default lens is the raw observation, not the readiness report. Compare's
-  // premise is "one URL, three readers", and the middle pane defaulting to a
-  // report card made it page | analysis | render. The score still leads: it
-  // rides the verdict strip above the pane. Must match lens.js.
   const lens = validLenses.includes(url.searchParams.get("lens")) ? url.searchParams.get("lens") : "anatomy";
   const counterfactuals = {};
   for (const key of (url.searchParams.get("cf") || "").split(",")) {
@@ -528,7 +363,7 @@ function lensScriptJson(value) {
 function lensHttpText(status) {
   if (status >= 200 && status < 300) return "OK";
   if (status >= 300 && status < 400) return "redirect";
-  if (status === 402) return "Payment Required";   // the x402 chip's whole point; a bare "client error" is the least useful label for the demo the page ships to showcase 402
+  if (status === 402) return "Payment Required";
   if (status === 404) return "Not Found";
   if (status >= 400 && status < 500) return "client error";
   if (status >= 500) return "server error";
@@ -582,8 +417,6 @@ function lensMachineFragment(data, state) {
   const doors = ag.strategy && ag.strategy.verdict || "unknown";
   const files = [
     d.robotsTxt && d.robotsTxt.ok ? "robots.txt" : "",
-    // Same rule the readiness check uses: an HTML page answering 200 at the
-    // sitemap URL is not a sitemap, so it does not get listed as one here.
     lensSitemapVerdict(d.sitemapXml).valid ? "sitemap.xml" : lensSitemapVerdict(d.sitemapDeclared).valid ? "sitemap (declared in robots.txt)" : "",
     d.llmsTxt && d.llmsTxt.ok ? "llms.txt" : "",
   ].filter(Boolean);
@@ -606,10 +439,6 @@ function lensBrowserFragment(data) {
   }
   return '<div class="lx-browser-intro"><b>Browser Run snapshot ready.</b> The Browser pane is a rendered observation, separate from AadharshBot\'s HTTP fetch and the visitor\'s Human view.' +
     '<div class="lx-cap">Switch back to Browser and run again to refresh this snapshot.</div>' +
-    // The floor states what it cannot do rather than omitting it. The chips are
-    // buttons that fetch, so interaction genuinely needs JavaScript, and a
-    // reader with it off should learn that from the page instead of from its
-    // absence.
     '<div class="lx-cap">Reading a page <i>after</i> interaction (opening collapsed sections, removing a consent overlay) needs JavaScript in your own browser. The scripts Lens is willing to run are published at <a href="/lens/browser?recipes=1">/lens/browser?recipes=1</a>.</div></div>';
 }
 
@@ -624,13 +453,6 @@ function lensStatusFragment(data, state) {
     '<span style="margin-left:auto">fetched as ' + escHtml(data.fetchedBy || "identified bot") + "</span>";
 }
 
-// ── the head-to-head fragment ------------------------------------------------
-// Two sites through one rubric, rendered from the same summaries /lens/compare
-// serves. This is the page's strongest single exhibit (a 13 next to a 93 does
-// more explaining than either scan alone), so it gets a real UI instead of
-// living as JSON only. Mirrored by renderVs() in src/client/lens.js — the SSR copy
-// is the no-JS floor for a shared ?url=&vs= link, the client copy is what the
-// vs form renders without a round-trip through this template.
 const LENS_VS_SURFACES = [
   ["llms", "llms.txt"], ["markdown", "markdown negotiation"], ["mcp", "MCP"],
   ["agentCard", "an agent card"], ["apiCatalog", "an API catalog"],
@@ -650,9 +472,6 @@ function lensVsBytes(n) {
 function lensVsColumn(s) {
   const host = lensVsHost(s.finalUrl || s.url);
   const levelKind = s.level >= 5 ? "ok" : s.level >= 3 ? "" : "warn";
-  // A side whose discovery did not run carries null doors and null surfaces.
-  // Printing them as "0" and "no machine surfaces published" would state two
-  // facts about a site nobody asked.
   const measured = !(s.phases && s.phases.discovery === false);
   const pub = LENS_VS_SURFACES.filter(([key]) => s.surfaces && s.surfaces[key])
     .map(([, label]) => '<span class="lx-tag">' + escHtml(label) + "</span>").join("");
@@ -666,7 +485,7 @@ function lensVsColumn(s) {
     ["response", (s.status == null ? "?" : s.status) + " " + lensHttpText(s.status || 0)],
     ["terms", s.tier || "unknown"],
     ["agent doors", measured ? String(s.doors || 0) : "not measured"],
-    ["one model read", null],   // placeholder; cost carries markup, rendered below
+    ["one model read", null],
     ["payload", lensVsBytes(s.bytes)],
     ["words", String(s.wordCount || 0)],
   ].map((row) => "<tr><td>" + escHtml(row[0]) + "</td><td>" + (row[1] == null ? cost : escHtml(row[1])) + "</td></tr>").join("");
@@ -699,14 +518,9 @@ export function lensVsFragment(payload) {
 }
 
 
-// One inspection, four doors: /lens/fetch and the SSR shell here, the
-// lens_inspect and lens_page MCP tools, and the terminal's lens frame. They
-// bill one budget through one spec, so no door can be the cheaper way in.
 export const LENS_INSPECT = defineLens({
   budget: "inspect",
   targets: (input: { url?: string | null; phases?: string[]; skipBotViews?: boolean }) => input.url || "",
-  // Only the options a door asked for reach lensInspect, so /lens/fetch with no
-  // ?phases calls it with {} exactly as it always did.
   args: (input) => {
     const opts: { phases?: string[]; skipBotViews?: boolean } = {};
     if (input.phases) opts.phases = input.phases;
@@ -722,23 +536,10 @@ export const LENS_INSPECT = defineLens({
 
 async function inspectLensRequest(request, env, ctx) {
   const params = new URL(request.url).searchParams;
-  // ?phases=page returns only what derives from the page's own bytes: one
-  // subrequest instead of twenty-eight. The UI asks for this first so readiness
-  // paints at ~29ms rather than behind a 656ms fan-out, then asks for the rest.
   const phases = params.get("phases") === "page" ? ["page"] : undefined;
   return lensStatusPayload(await LENS_INSPECT.run({ url: params.get("url"), phases }, request, env, ctx));
 }
 
-// A dated, source-linked exhibit of where the machine web actually stands, so a
-// cold visitor reads every per-URL verdict as a claim about the web, not one
-// site's laziness. Hand-maintained; each fact carries a "checked" date and a
-// source. Update the dates when you refresh the numbers.
-//
-// One array, two surfaces. `rail` is the always-visible one-liner under the lede
-// (lensStateOfWebRail); the full sourced cards live in the dialog behind its "?"
-// (lensStateOfWebPanel). Facts without a `rail` key appear in the dialog only, so
-// the rail stays one line. Deriving both from the same array is the point: the
-// headline number and the sourced claim cannot drift apart.
 const LENS_SOW_MONTH = "2026-08";
 const LENS_SOW_CHECKED = "checked " + LENS_SOW_MONTH;
 const LENS_SOW_FACTS = [
@@ -781,15 +582,7 @@ const LENS_SOW_FACTS = [
   },
 ];
 
-// The compact form: a status strip of the four headline numbers, always on the
-// page, with one Luna "?" button opening the sourced panel. This is what the
-// dialog used to do by popping itself open on arrival, minus the interruption.
 function lensStateOfWebRail() {
-  // Past the first two, facts drop out under 560px rather than turning the strip
-  // into a five-line block above the address bar. The "?" holds all six anyway.
-  // The rail is the first screen, and it opens on llms.txt / MCP / x402 — three
-  // terms that lose a non-technical reader in the first four seconds. glossify
-  // makes each one hoverable in place rather than rewriting the fact around it.
   const items = LENS_SOW_FACTS.filter((f) => f.rail).map((f, i) =>
     '<span class="lx-sow-i' + (i > 1 ? " lx-sow-i-x" : "") + '"><b>' + escHtml(f.railStat || f.stat) + "</b> " + glossify(escHtml(f.rail)) + "</span>"
   ).join("");
@@ -818,14 +611,6 @@ function lensStateOfWebPanel() {
     "</div></dialog>";
 }
 
-// The About dialog: the page's argument, stated once, in order. Everything on
-// /lens is evidence for a three-act story about machine access to the web (the
-// semantic web asked publishers first; models now brute-force the human page
-// and pay the difference; the open question is acting, not reading), but the
-// acts were scattered across lens captions where only a completionist would
-// assemble them. This panel is the assembly, with a jump into the lens that
-// proves each act live. Same dialog chrome as the machine-web panel; opened
-// from the footer's own self-description.
 const LENS_ERAS = [
   {
     era: "Past", years: "1995-2011", label: "The semantic web asked first.",
@@ -874,31 +659,17 @@ function lensAboutPanel() {
 }
 
 export function renderLensShell(initial?, state?, inputValue?, compare?) {
-  // defaults must match the client (lens.js) and lensState(), or a plain /lens
-  // SSRs one tab and the deferred script silently flips to another on hydrate.
   state = state || { view: "both", lens: "anatomy", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false } };
   const seeded = initial && initial.ok;
-  // vs mode: the single-scan toolbar and panes stay in the DOM but hidden
-  // (.lx-off), so the client can drop back to a normal scan without rebuilding
-  // them; #lx-vs holds the head-to-head fragment in their place.
   const vsActive = !!(compare && compare.vsValue);
   const vsValue = (compare && compare.vsValue) || "";
-  // Delta is the one stateful view (it holds flipped switches), so its segment
-  // carries an amber count of the switches currently on. The client keeps the
-  // same span current via updateDeltaCount().
   const cfOn = Object.keys(state.counterfactuals || {}).filter((k) => state.counterfactuals[k]).length;
   const value = inputValue || (seeded ? initial.finalUrl || initial.url : "");
   const humanHeader = seeded && !initial.framable
     ? 'Human view <span class="lx-mode">Reader</span> <span class="lx-mode-sub">server-rendered readable fallback</span>'
     : "Human view &middot; the live page";
-  // The header no longer repeats the lens name: the tab strip sits inside the
-  // pane now, so the active tab IS the lens label. Must match renderMachine()
-  // and updateModeUi() in src/client/lens.js or the header rewrites on hydrate.
   const machineHeader = state.view === "delta" ? "Delta view &middot; What changes" : "Machine view";
   const browserHeader = "Browser Run &middot; Rendered";
-  // Mode notes coach, they don't caption: each one asks for a prediction the
-  // pane will then confirm or correct. Keep the strings byte-identical to
-  // MODE_NOTE in src/client/lens.js or the note visibly rewrites on hydrate.
   const modeNote = state.view === "human"
     ? "Human is the page as a person receives it. Every other view subtracts the person."
     : state.view === "machine"
@@ -933,10 +704,6 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
 <meta property="og:image:alt" content="A Windows XP browser window showing one URL three ways at once: the page a person sees, the evidence a machine can recover, and a rendered snapshot.">
 <meta name="twitter:card" content="summary_large_image">
 `),
-    // The bare shell is the site's flagship machine-web page and should be
-    // indexable — an agent reading llms.txt now finds /lens listed there. Only a
-    // targeted ?url= scan gets x-robots-tag: noindex (handleLens sets it), since
-    // that response spends the crawl budget and carries third-party data.
     robots: "index, follow",
     css: `/*min*/
 h1 { font-size:var(--text-lg); margin:0 0 2px; }
@@ -1657,31 +1424,15 @@ footer a { color:var(--link); }
     <script type="application/json" id="lx-glossary">${lensScriptJson(LENS_GLOSSARY)}</script>
     ${initialScript}
 `),
-    // The idle shell is complete server-rendered HTML, including a native GET form,
-    // so it loads only the tiny interaction bootstrap. build.ts hashes the full
-    // lens client first, rewrites that exact URL into the bootstrap, then hashes the
-    // bootstrap itself. A fresh shell therefore cannot pair with either stale layer.
-    // The plain files stay served, short-cached, for dev and stale HTML.
     scripts: unsafeHtml(`<script src="/lens-boot.js" defer></script>`),
     cache: "public, max-age=60, s-maxage=300",
     headers: {
-      // No x-robots-tag here: the bare shell is meant to be indexed. handleLens
-      // adds x-robots-tag: noindex for ?url= scans only.
-      // /lens embeds arbitrary sites in the Human view, so it needs a looser
-      // policy than the site default (which has no frame-src → falls back to
-      // default-src 'self' and blocks every cross-origin iframe). This relaxes
-      // ONLY frame-src (any https origin, for the live iframe) and img-src
-      // (blob: for the Browser Run screenshot, https: for OG-card art);
-      // everything else stays locked down. withSecurityHeaders sees a CSP is
-      // already present and leaves it alone. frame-ancestors 'none' keeps OTHER
-      // sites from embedding /lens itself.
       "content-security-policy":
         "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self'; font-src 'self'; frame-src https:; child-src https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'",
     },
   });
 }
 
-// /lens/fetch?url=… → the stable machine-facing JSON contract.
 export async function handleLensFetch(request, env, ctx) {
   if (new URL(request.url).searchParams.get("mode") === "cloudflare") {
     return handleLensCloudflareScore(request, env, ctx);
@@ -1721,13 +1472,6 @@ export function lensParseCloudflareAgentScore(body, contentType = "") {
   };
 }
 
-// The cache is read BEFORE the inspect budget now, the order every other lens
-// keeps. This route charged first until 2026-10-02, with no comment saying
-// why, so a reader whose score was already in KV could still be refused it.
-//
-// Only an available score is cached. "Could not be read", "did not answer"
-// and a thrown fetch all answer 200 with `available: false`, the shape the
-// pane already renders, and none of them may sit in KV for six hours.
 const LENS_CLOUDFLARE_SCORE = defineLens({
   budget: "inspect",
   targets: (params: URLSearchParams) => params.get("url") || "",
@@ -1758,8 +1502,6 @@ const LENS_CLOUDFLARE_SCORE = defineLens({
         payload: { ok: true, available: false, error: response.ok ? "Cloudflare's score could not be read." : "Cloudflare's scanner did not answer." },
       };
     }
-    // Only the normalized level is kept: a third party's complete report
-    // belongs neither in our response contract nor in KV.
     return { ok: true, value: parsed };
   },
   onThrow: () => ({ status: 200, payload: { ok: true, available: false, error: "Cloudflare's scanner is unavailable right now." } }),
@@ -1799,25 +1541,9 @@ export function handleLensCloudflareScore(request, env, ctx) {
 // than by capping the loss on each failure.
 const LENS_GOTO = { waitUntil: "networkidle2", timeout: 18000 };
 
-// /lens/shot?url=… → a faithful PNG of the page, rendered by Cloudflare
-// Browser Run (real headless Chrome, server-side). The Human view uses this
-// only when a site forbids live framing.
-// The pipeline reads the cache BEFORE either budget, and the order is the point
-// rather than a micro-optimization: every limit here exists to ration Browser
-// Run, and a hit spends none of it. Measured 2026-08-15 against a fully warmed
-// cache, one visitor clicking through the seeded chips got 429 on the third,
-// with all seven entries present in KV the whole time.
-//
-// 6h, up from 1h. On the free plan a MISS costs a slice of a 6-per-minute,
-// 10-minute-a-day allowance, while a stale screenshot costs a slightly old
-// picture of a page that mostly did not change. The cache is the real budget
-// control here; the rate limits only stop a burst.
 const LENS_SHOT = defineLens({
   span: "lens.shot",
   budget: "shot",
-  // Either Browser Run door counts. This demanded the BINDING until
-  // 2026-10-01, so a deployment holding only a REST token rendered
-  // /lens/browser and answered 503 here.
   browser: "render",
   body: "png",
   targets: (params: URLSearchParams) => params.get("url") || "",
@@ -1841,17 +1567,10 @@ const LENS_SHOT = defineLens({
       r = ran.response;
       s.setAttribute("lens.render_engine", ran.engine);
     } catch (e) {
-      // the binding threw rather than answering: a 502 to the visitor, and the
-      // reason recorded on the span rather than only inside this string.
       s.setAttribute("lens.error", lensErrorText(e));
       return { ok: false, status: 502, outcome: "binding_threw", payload: { ok: false, error: "Browser Run request failed: " + lensErrorText(e) } };
     }
     const ctype = r.headers.get("content-type") || "";
-    // Browser Run refusing us is NOT the target site failing, and the old code
-    // reported both as a 502. On the free plan that is the single most likely
-    // response here — one Quick Action per 10 seconds account-wide — so the
-    // common case was being dressed up as an upstream fault, pointing whoever
-    // debugged it at the scanned site instead of at our own budget.
     if (r.status === 429) {
       return {
         ok: false, status: 429, outcome: "browser_budget_spent",
@@ -1874,19 +1593,8 @@ export function handleLensShot(request, env, ctx) {
   return LENS_SHOT.handle(request, env, ctx);
 }
 
-// Base64 chars, so roughly 4.5 MB of PNG. Chosen to keep the whole snapshot an
-// order of magnitude clear of both the KV value cap and the isolate's memory,
-// and because an image past this size is not being LOOKED at — it is a 40,000px
-// strip of an infinite-scroll page that no pane can usefully render.
 const LENS_BROWSER_SHOT_MAX = 6_000_000;
-// The KV write cap that sat here (20 MB, under KV's own 25) is lens-pipeline.ts's
-// LENS_KV_MAX now, and guards every lens rather than this one.
 
-// The "before" side of an interaction delta, read out of the plain snapshot the
-// Browser pane's auto-run already cached. Deliberately a READ and never a
-// render: manufacturing a before would cost a second Quick Action for one
-// click, on an account with ten browser-minutes a day. No plain entry means no
-// delta is claimed, which is the honest answer rather than a guessed one.
 async function plainTally(env, plainKey) {
   if (!env.RN_KV) return null;
   try {
@@ -1895,15 +1603,8 @@ async function plainTally(env, plainKey) {
   } catch (_e) { return null; }
 }
 
-// Both sides of the comparison run through the SAME documentTally(), which is
-// the only reason the number is claimable. An in-page innerText count and
-// stripped() are different counters, and comparing two incompatible counters is
-// the bug deltaStrip already carries a bail for.
 function buildInteraction(recipe, receipt, before) {
   const base = { id: recipe.id, label: recipe.label, claim: recipe.claim, before, beforeSource: before ? "kv" : "none" };
-  // No receipt at all: the script never ran. Common and expected — a page
-  // serving `script-src 'self'` refuses an inline injection and Quick Actions
-  // expose no bypass. The client says so using the CSP it already scanned.
   if (!receipt) return { ...base, ran: false, acted: 0, scanned: 0, note: "no-receipt", outcome: "no-receipt" };
   if (receipt.note === "forged-receipt") return { ...base, ...receipt, outcome: "forged-receipt" };
   const outcome = receipt.note === "threw" ? "threw"
@@ -1912,80 +1613,38 @@ function buildInteraction(recipe, receipt, before) {
   return { ...base, ...receipt, outcome };
 }
 
-// `outcome` exists for the span, where it has to stay separable from
-// `lens.outcome` ("the render failed") so that "the render succeeded and the
-// recipe found nothing" is still a group-by rather than a filter. The response
-// carries `note` and does not need a second spelling of it.
 function interactionPayload({ outcome: _outcome, ...rest }) { return rest; }
 
-// /lens/browser?url=… → opt-in rendered evidence for the third Lens pane.
-// This deliberately stays separate from /lens/fetch: the normal scan is an
-// identified HTTP observation, while this path executes page JavaScript in a
-// Browser Run instance and returns a rendered snapshot plus browser structure.
 const LENS_BROWSER = defineLens({
   span: "lens.browser",
   budget: "browser",
   browser: "render",
   targets: (params: URLSearchParams) => params.get("url") || "",
-  // An unknown id is a 400 and not a silent fall-through to the plain render.
-  // Falling through would hand back a perfectly good snapshot that the caller
-  // believes is post-interaction, which is the one failure mode this whole
-  // feature exists to avoid. Absent `do` is the plain path byte for byte.
   args: (params) => {
     const id = params.get("do");
     if (id == null) return { recipe: null };
     const recipe = lensRecipe(id);
     return recipe ? { recipe } : new LensArgsRefusal("Unknown interaction recipe.", { recipes: lensRecipeIds() });
   },
-  // The plain key keeps its exact legacy shape and a recipe run APPENDS to it.
-  // Hashing url+id together would have been tidier and would also have changed
-  // every plain key in one deploy, invalidating the namespace and buying a wave
-  // of fresh Quick Actions against a 10 min/day budget. An allowlisted [a-z] id
-  // on the end is safe, cheap, and greppable in KV.
-  //
-  // 6h, up from 15 MINUTES, which was the shortest TTL of the three browser
-  // caches while guarding by far the most expensive call. A render costs a
-  // slice of a 10-minute-a-day account-wide allowance and takes ~19s; expiring
-  // it after a quarter of an hour meant two visitors twenty minutes apart paid
-  // twice for the same page.
   cache: { prefix: "lens:browser:", ttl: 21600, suffix: (args) => args.recipe?.id },
-  // Same reasoning as lens.shot, one step heavier: this asks Browser Run for four
-  // formats at once (content, screenshot, markdown, accessibility tree) and has
-  // FOUR distinct 502 shapes below — binding threw, non-ok status, invalid JSON,
-  // and a body that parsed but carried nothing. They are indistinguishable in the
-  // client's error string and separable on the span.
   run: async ({ target, args, env, span: s }) => {
     const { recipe } = args;
     const started = Date.now();
-    // Fresh per request. The page is being rendered right now and must not be
-    // able to guess this; it does not have to survive the request.
     const nonce = recipe ? lensRecipeNonce() : "";
     const payload: Record<string, any> = {
       url: target,
       formats: ["content", "screenshot", "markdown", "accessibilityTree"],
       viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
       screenshotOptions: { fullPage: true, type: "png" },
-      // Same object REFERENCE, not a clone: a contract test asserts this route and
-      // /lens/shot share one config by identity, and a per-recipe clone would
-      // break it. Both shipping recipes are synchronous, so nothing here needs a
-      // settle; an async recipe would ride `waitForTimeout` (a sibling key) rather
-      // than reach in here.
       gotoOptions: LENS_GOTO,
       userAgent: BOT_UA,
     };
-    // The ONLY place caller input reaches the payload is `url`. `content` is
-    // assembled from the frozen registry plus a server-generated nonce, and a
-    // contract test asserts no caller bytes appear anywhere else.
     if (recipe) payload.addScriptTag = [{ content: lensRecipeScript(recipe, nonce) }];
     if (recipe) s.setAttribute("lens.recipe", recipe.id);
 
     let response;
     let engine = "chromium-binding";
     try {
-      // Routed through the engine seam, which asks the binding for Kitesurf and
-      // falls back to Chromium on a refused option. Still returns a Response,
-      // because the four distinct 502 shapes below are the point and must not be
-      // flattened into one.
       const run = await span("lens.browser.quick_action", () => runBrowserAction("snapshot", payload, env));
       if (!run) return { ok: false, status: 503, outcome: "no_engine", payload: { ok: false, error: "Browser Run is not configured on this deployment." } };
       response = run.response;
@@ -1995,12 +1654,6 @@ const LENS_BROWSER = defineLens({
       s.setAttribute("lens.error", lensErrorText(e));
       return { ok: false, status: 502, outcome: "binding_threw", payload: { ok: false, error: "Browser Run request failed: " + lensErrorText(e) } };
     }
-    // Browser Run refusing US is not the scanned site failing. /lens/shot learned
-    // this and /lens/browser did not, which is how production answered a 502
-    // carrying {"code":2001,"message":"Rate limit exceeded"} on 2026-08-06 — a
-    // bad-gateway status pointing whoever read it at react.dev instead of at our
-    // own six-per-minute allowance. On the free plan this is the MOST likely
-    // response here, so it is the one that most needs to be itself.
     if (response.status === 429) {
       return {
         ok: false, status: 429, outcome: "browser_budget_spent",
@@ -2026,17 +1679,10 @@ const LENS_BROWSER = defineLens({
     }
     const result = envelope && envelope.result ? envelope.result : envelope || {};
     const meta = envelope && envelope.meta ? envelope.meta : {};
-    // Strip the receipt FIRST. Everything downstream — documentTally, the 120KB
-    // cap, the body the reader sees — has to run on a document that no longer
-    // carries our own injected node. Count before stripping and `shape` counts our
-    // script; cap before stripping and the receipt falls off the end of a large
-    // page and the run reports as "never happened".
     const settled = recipe
       ? lensRecipeReceipt(String(result.content || ""), nonce)
       : { receipt: null, html: String(result.content || "") };
     const rawContent = settled.html;
-    // The "before" is read out of the PLAIN snapshot's cache entry, whose key is
-    // this lens's own prefix over the bare URL.
     const interaction = recipe
       ? buildInteraction(recipe, settled.receipt, await plainTally(env, "lens:browser:" + (await lensSha256Hex(target))))
       : null;
@@ -2061,28 +1707,16 @@ const LENS_BROWSER = defineLens({
       markdown: String(result.markdown || "").slice(0, 60000),
       accessibilityTree: result.accessibilityTree || null,
       screenshot: rawShot && !shotTooBig ? "data:image/png;base64," + rawShot : null,
-      // Dropping the image silently would read as "the browser took no shot",
-      // which is a different observation. Say which one happened.
       screenshotDropped: shotTooBig ? Math.round(rawShot.length * 0.75) : 0,
       // WebMCP discovery is currently a Chrome-beta lab capability, not a
       // production Browser Run binding capability. The local helper performs
       // the real runtime listing; this field keeps that boundary explicit.
       webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use tools/lens-webmcp.ts." },
       fetchedBy: "Cloudflare Browser Run",
-      // WHICH engine rendered this. A reader comparing two snapshots needs to know
-      // whether they came from the same one, and "Browser Run" alone stopped being
-      // a specific enough answer the moment Kitesurf existed.
       engine,
-      // Counted from the FULL body, before the 120KB content cap above, so a
-      // truncated `content` field cannot quietly shrink the comparison. The
-      // client's deltaStrip subtracts this from the HTTP anatomy.
       tally: documentTally(rawContent),
       tallyTruncated: rawContent.length > 120000,
     };
-    // Absent entirely on a plain run, so every existing consumer sees the exact
-    // response it saw before. `shape` above stays the AFTER; the before lives
-    // inside here, next to the count of what the recipe actually touched. Set
-    // before `elapsedMs` so the key order of the JSON is what it always was.
     if (interaction) output.interaction = interactionPayload(interaction);
     output.elapsedMs = Date.now() - started;
     s.setAttribute("lens.content_bytes", rawContent.length);
@@ -2104,7 +1738,6 @@ export async function handleLensBrowser(request, env, ctx) {
   return LENS_BROWSER.handle(request, env, ctx);
 }
 
-// X-Frame-Options / CSP frame-ancestors → can a browser embed this live?
 export function lensFramable(headers) {
   const xfo = (headers["x-frame-options"] || "").toLowerCase();
   if (xfo.includes("deny") || xfo.includes("sameorigin") || xfo.includes("allow-from")) {
@@ -2120,9 +1753,6 @@ export function lensFramable(headers) {
   return { framable: true, reason: null };
 }
 
-// The target allowlist moved to lib/crawl.js, beside the host floor it wraps,
-// when `lens-reader/` (a separate Worker) needed the same guard. Re-exported
-// here because every existing caller and contract test names it on this module.
 export { validateLensTarget };
 
 function lensDoorCount(agent) {
@@ -2131,9 +1761,6 @@ function lensDoorCount(agent) {
     .filter((door) => door && (door.verdict === "yes" || door.verdict === "likely" || door.verdict === "maybe" || door.present || door.found)).length;
 }
 
-// Compact, stable Lens output for comparison and machine callers. Full scans
-// remain available from /lens/fetch; these helpers deliberately exclude raw
-// HTML, headers, and third-party response bodies.
 export function lensObservationSummary(result) {
   const readiness = result?.readiness || {};
   const terms = result?.terms || {};
@@ -2142,10 +1769,6 @@ export function lensObservationSummary(result) {
   const structured = result?.structured || {};
   const title = structured.title || result?.title || "";
   const phases = result?.phases || { page: true, discovery: true, botViews: true };
-  // A side whose discovery did not run has no score, no doors and no surfaces.
-  // They are NULL rather than 0 and false, because "0 agent doors" and "no
-  // machine surfaces published" are claims about the site, and nobody looked.
-  // lens_page promised this in its description and the summary emitted zeros.
   const measured = phases.discovery !== false;
   const summary = {
     url: result?.url || "",
@@ -2158,9 +1781,6 @@ export function lensObservationSummary(result) {
     title: String(title).slice(0, 240),
     wordCount: anatomy.wordCount ?? 0,
     bytes: anatomy.rawBytes ?? null,
-    // A prefix parse must be visible. Silently reporting a 2MB page's first
-    // 256KB as its word count and its cost is the same class of error as
-    // calling an unreachable door a shut one.
     parsedBytes: anatomy.parsedBytes ?? anatomy.rawBytes ?? null,
     parseTruncated: !!anatomy.parseTruncated,
     readiness: readiness.overall ?? null,
@@ -2170,18 +1790,12 @@ export function lensObservationSummary(result) {
     levelNote: readiness.levelNote ?? null,
     tier: spectrum.tier || "unknown",
     doors: lensDoorCount(result?.agent),
-    // The dollar figure the verdict strip states for a single scan, carried
-    // into the summary so a head-to-head can price both sides. Additive to the
-    // /lens/compare + MCP contract; null for non-HTML bodies, never faked.
     cost: (() => {
       const base = result?.cost?.tiers?.[0];
       const rate = result?.cost?.rates?.[0];
       if (!base || !rate) return null;
       return { tokens: base.tokens, usdPerRead: +(base.tokens / 1e6 * rate.usdPerMtok).toFixed(4), model: rate.model };
     })(),
-    // Carried so a caller can tell a zero from an absence. Without it a
-    // page-only scan reports `doors: 0` and `readiness: null`, which reads as a
-    // verdict rather than as "that phase did not run".
     phases,
     surfaces: {
       llms: !!result?.discovery?.llmsTxt?.ok,
@@ -2192,10 +1806,6 @@ export function lensObservationSummary(result) {
     },
   };
   if (measured) return summary;
-  // On an unmeasured side the level's NAME carries the reason. It is the one
-  // free-text field both compare renderers already print beside the score (the
-  // SSR fragment here and the hashed lens.js client), so the reason reaches a
-  // reader without re-minting a content-hashed asset.
   return {
     ...summary,
     readiness: null, fieldScore: null, level: null, tier: null, doors: null, surfaces: null,
@@ -2206,8 +1816,6 @@ export function lensObservationSummary(result) {
 
 const LENS_DEFERRED_NOTE = "This side's origin discovery was deferred so the comparison stays inside the 50 subrequests one Workers Free invocation allows. Compare again and it runs live or comes from cache.";
 
-// The fields a side only has once its discovery ran. Comparing them across a
-// side that never measured them would report "doors 3 -> null" as a change.
 const LENS_DISCOVERY_FIELDS = new Set(["readiness", "level", "tier", "doors"]);
 
 export function compareLensObservations(left, right) {
@@ -2231,7 +1839,6 @@ export function compareLensObservations(left, right) {
   return changes;
 }
 
-// How each side's discovery was obtained, named for a reader of the payload.
 function lensDiscoverySource(phases) {
   if (!phases || phases.discovery === false) return phases?.discoveryDeferred ? "deferred" : "none";
   if (phases.discoveryCached) return "cached";
@@ -2239,17 +1846,9 @@ function lensDiscoverySource(phases) {
   return phases.subrequestCap ? "refused" : "live";
 }
 
-// A cold compare used to run two live discoveries in one invocation: 72
-// subrequests against Workers Free's 50, with the loser's probes refused and
-// read as absent. The board (see discoveryBoard) lets at most one side run live;
-// a cold pair now costs 41, and a repeat compare hands the live run to the side
-// that is still cold, so the second compare of a pair is complete.
 export async function compareLensTargets(leftUrl, rightUrl, env, opts: { skipBotViews?: boolean } = {}) {
   const board = discoveryBoard(["left", "right"]);
   const inspect = (url, side) => lensInspect(url, env, { skipBotViews: opts.skipBotViews !== false, board, side })
-    // A side that ends before discovery (a fetch error, a non-HTML body, a
-    // blocked host) never reports on its own, and the other side would wait on
-    // it forever. Passing on settle releases the board on every exit path.
     .finally(() => board.pass(side));
   const [left, right] = await Promise.all([inspect(leftUrl, "left"), inspect(rightUrl, "right")]);
   const leftSummary = lensObservationSummary(left);
@@ -2261,10 +1860,6 @@ export async function compareLensTargets(leftUrl, rightUrl, env, opts: { skipBot
   };
 }
 
-// One spec for every compare caller: the JSON route below, the SSR'd
-// ?url=A&vs=B branch of handleLens, and /mcp's lens_compare. Splitting these
-// would eventually split the budget, which is the mistake LENS_BUDGETS exists
-// to prevent. A bad target answers with its label, left before right.
 export const LENS_COMPARE = defineLens({
   budget: "compare",
   targets: (input: { left?: string | null; right?: string | null }) => ({ left: input.left || "", right: input.right || "" }),
@@ -2285,24 +1880,7 @@ export async function handleLensCompare(request, env, ctx) {
   return jsonResponse(result.payload, result.status, result.headers ?? {});
 }
 
-// the orchestrator: fetch the target, parse it, then probe the origin's
-// site-level files in parallel. returns the full lens envelope.
-// TRACING NOTE, because the numbers here disagree on purpose. `out.elapsedMs`
-// below is computed the moment the main fetch and body read finish, and it is a
-// PUBLIC field of /lens/fetch's JSON, so it keeps meaning exactly that. It has
-// never covered the discovery fan-out further down: 28 parallel probes, one of
-// which (`botViews`) is itself 6 fetches. So on an HTML target, `elapsedMs`
-// routinely describes a fraction of the work the scan actually did, and nothing
-// measured the rest.
-//
-// The `lens.*` spans are that missing measurement. `lens.inspect` is the honest
-// total; `lens.inspect.fetch` is what elapsedMs reports; `lens.discovery` is the
-// part that was invisible. Every probe inside it is an auto-instrumented child
-// fetch named by URL, so a straggler identifies itself without any per-probe
-// code here.
 export async function lensInspect(targetUrl, env, opts) {
-  // Workflow census steps enter here without the HTTP dispatcher. Share the
-  // policy read across this scan too, keeping its fan-out inside the budget.
   if (!env?.BOT_ROBOTS_CACHE) env = withBotPolicyCache(env || {});
   opts = opts || {};
   return span("lens.inspect", (s) => lensInspectInner(targetUrl, env, opts, s), {
@@ -2311,8 +1889,6 @@ export async function lensInspect(targetUrl, env, opts) {
   });
 }
 
-// hostname only, never the full URL: a span attribute is the wrong place for a
-// third party's query string, which can carry their tokens and identifiers.
 function safeHost(raw) {
   try { return new URL(raw).hostname.toLowerCase(); } catch { return undefined; }
 }
@@ -2331,20 +1907,12 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // in-process response (SELF_FETCH) that came back still compressed: the
     // runtime has no brotli decoder, so reading those bytes as UTF-8 yields
     // mojibake that renders as a real page full of garbage.
-    //
-    // index.js's IDENTITY_BODY is the actual fix and this should never fire. It
-    // is here because the failure it guards is SILENT — the bug it was written
-    // for shipped mojibake on this site's own front page while every third-party
-    // URL looked perfect. Refusing to parse says so; decoding anyway does not.
     const enc0 = (r0.headers.get("content-encoding") || "").trim().toLowerCase();
     const undecodable0 = enc0 && enc0 !== "identity" ? enc0 : "";
     const ct0Textual = ct0 === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct0);
     const isTextual0 = ct0Textual && !undecodable0;
     const isHtml0 = /html/i.test(ct0) && !undecodable0;
     let body0 = "", truncated0 = false;
-    // read the body inside the same deadline. Clearing a timer before the read
-    // (as this once did) left a slow-drip response unbounded in wall time, and
-    // AbortSignal.timeout covers headers and body by construction.
     if (isTextual0) { const r = await lensReadCapped(r0, 2 * 1024 * 1024); body0 = r.text; truncated0 = r.truncated; }
     else if (undecodable0) { try { await r0.body?.cancel(); } catch (_e) {} }
     if (undecodable0) s.setAttribute("lens.undecodable_encoding", undecodable0);
@@ -2362,26 +1930,13 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   const headers: Record<string, string> = {};
   for (const [k, val] of res.headers) headers[k] = val;
 
-  // ASSEMBLED IN STAGES, which is why the type is open rather than the literal
-  // tsc would infer. What follows attaches a dozen optional tiers as each one
-  // succeeds or is skipped (bodyUnreadable, framable, anatomy, structured, ai,
-  // cost, phases, discovery, wire, agent, botViews, readiness, terms, spectrum),
-  // and every one of them is legitimately absent on some target. Declaring the
-  // closed literal would mean listing fourteen optional members whose real
-  // shapes live in the functions that produce them, which is a second copy that
-  // rots; the alternative here is one honest boundary at the accumulator.
   const out: Record<string, any> = {
     ok: true, url: targetUrl, finalUrl, redirected: finalUrl !== targetUrl,
     status: res.status, contentType: ct, binary: !isTextual, truncated,
     elapsedMs: Date.now() - started, fetchedBy: BOT_UA, headers,
   };
-  // Name the refusal in the payload, not just in a span. A consumer that sees an
-  // empty anatomy deserves the reason, and "the body arrived br-encoded and this
-  // runtime cannot decode br" is a fact about the exchange worth reporting.
   if (undecodable) out.bodyUnreadable = { reason: "undecodable-content-encoding", encoding: undecodable };
 
-  // can the browser embed this URL live in an <iframe>, or does the site
-  // forbid framing (so the Human view must fall back to a screenshot)?
   var fr = lensFramable(headers);
   out.framable = fr.framable;
   out.frameReason = fr.reason;
@@ -2402,41 +1957,6 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   if (isHtml && body) {
     await span("lens.inspect.parse", async (s) => {
     s.setAttribute("lens.body_bytes", body.length);
-    // ── the parse budget ─────────────────────────────────────────────────
-    // This is the one genuinely CPU-BOUND thing lens does, and it was bounded
-    // only by the 2MB fetch cap. lensText and lensMarkdown are regex chains —
-    // roughly thirty sequential global replaces, each allocating a new string —
-    // so cost is linear in bytes handed to them.
-    //
-    // MEASURED (node, same V8, synthetic HTML): ~32ms per MB.
-    //    64 KB → 3.2ms    256 KB →  8.0ms    752 KB → 24.2ms    2 MB → 64.2ms
-    // Serialization of the result is noise beside it (0.1–1.1ms).
-    //
-    // 2MB of parse cannot fit anywhere near the Workers FREE ceiling of 10ms
-    // CPU per invocation, and even on Paid it is 64ms spent on a page nobody
-    // reads past the first screen of. Capping the PARSE (not the fetch) bounds
-    // the worst case without changing the common one: the median page is far
-    // under this and is unaffected.
-    // Overridable per deployment through lensParseCap, so moving lens onto the
-    // free plan is a var flip: set LENS_PARSE_KB: bindings.text("64") in cloudflare.config.ts.
-    //
-    // THE DEFAULT ARM HAS TO BE A REAL BRANCH, and writing it as a `||` fallback
-    // silently pinned every scan to 8 KB from the day this was written. The old
-    // line read `Math.max(8, Number(env?.LENS_PARSE_KB) || 0) * 1024 || LENS_PARSE_CAP`:
-    // with the var unset that is `Math.max(8, 0) * 1024`, or 8192, which is
-    // TRUTHY, so the `|| LENS_PARSE_CAP` arm was unreachable and the 256 KB
-    // constant was dead code. The floor meant to protect a misconfigured override
-    // became the cap for everybody.
-    //
-    // It read as a text bug rather than a truncation bug, which is why it lasted.
-    // 8 KB rarely reaches a page's <body>, so `lensText`'s narrowing match fails
-    // and it falls back to the whole document; the same cut lands mid-<style> or
-    // mid-<script>, so the strip regexes find no closing tag and leave the block
-    // in. The reader then showed CSS and feature-flag JSON as the page's "text":
-    // github.com came out as `{"locale":"en","featureFlags":[...` and this site's
-    // own homepage as its `:root{--font-caption:...` block. Measured against
-    // production 2026-08-09: every target reported parsedBytes 8192, including a
-    // 1.3 MB cloudflare.com and a 572 KB github.com.
     const cap = lensParseCap(env);
     const parseable = body.length > cap ? body.slice(0, cap) : body;
     const parseTruncated = parseable.length < body.length;
@@ -2448,9 +1968,6 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     const fullText = lensText(parseable);
     out.anatomy = {
       rawHtml: parseable.length > 80000 ? parseable.slice(0, 80000) : parseable,
-      // rawBytes stays the TRUE length. We know it from the fetch even when we
-      // decline to parse all of it, and reporting the prefix as the page's size
-      // would be a straightforward lie about the thing being measured.
       rawBytes: body.length,
       parsedBytes: parseable.length,
       parseTruncated,
@@ -2468,83 +1985,32 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       relLinks: attrs.relLinks.map((l) => ({ ...l, href: lensAbs(l.href, finalUrl) })),
     };
     out.ai = { markdown: lensMarkdown(parseable, finalUrl) };
-    // context economics: the same page, priced per representation an agent
-    // could ingest. Full (unsliced) lengths — the slices above are UI caps.
-    // Priced on what was actually parsed, and flagged when that is a prefix.
-    // Extrapolating to the full byte count would be inventing a number: token
-    // density is not uniform across a document, and the tail of a big page is
-    // usually markup rather than prose.
     out.cost = lensCost({ html: parseable.length, text: fullText.length, markdown: out.ai.markdown.length, headings: out.anatomy.headings });
     if (parseTruncated) out.cost.partial = { parsedBytes: parseable.length, rawBytes: body.length };
     s.setAttribute("lens.word_count", out.anatomy.wordCount);
     s.setAttribute("lens.markdown_bytes", out.ai.markdown.length);
     });
   } else if (isTextual && body) {
-    // non-HTML text (xml/json/txt/markdown): show it raw, no parsing.
     out.anatomy = { rawHtml: body.slice(0, 80000), rawBytes: body.length, text: lensText(body).slice(0, 24000), headings: [], imgTotal: 0, imgNoAlt: 0 };
     out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
     out.cost = lensCost({ raw: body.length });
   }
 
-  // ── the probe/derive seam ─────────────────────────────────────────────
-  // Everything above this line DERIVES from bytes already in hand: anatomy,
-  // structured data, markdown, token cost. Zero further network. Everything
-  // below needs the fan-out.
-  //
-  // A caller that only wants the derived half can stop here and pay one
-  // subrequest instead of twenty-eight, which is what lets a UI paint readiness
-  // immediately and fill the rest in behind it.
-  //
-  // The fields below are then ABSENT rather than empty. That distinction is the
-  // whole reason this is a phase flag and not a filter: a readiness score
-  // computed without discovery is not a partial score, it is a WRONG one, and
-  // `doors: 0` would read as "this site has no agent doors" when it means
-  // "nobody looked". Same rule as lib/doors.js's shut-versus-unread.
   out.phases = { page: true, discovery: false, botViews: false };
   if (opts.phases && !opts.phases.includes("discovery")) return out;
 
-  // site-level discovery — probe the origin's well-known files + agent doors
-  // in parallel.
-  // re-validate the FINAL url before probing its origin: the input allowlist only
-  // vetted the url the user typed, but redirect:"follow" could have landed us on a
-  // private/link-local host. a blocked final host skips discovery entirely.
   const origin = (() => {
     try { const u = new URL(finalUrl); return privateHostBlocked(u.hostname.toLowerCase()) ? null : u.origin; }
     catch { return null; }
   })();
   if (origin) {
-    // Scanning our OWN /lens route is a fan-out trap. SELF_FETCH dispatches each probe
-    // back through route() into handleLens, and every one of those re-runs a COMPLETE
-    // inspection of the inner ?url= target: the main fetch, plus markdown negotiation,
-    // plus ten bot identities = 12 full nested scans inside one invocation. SELF_FETCH
-    // nulls itself one level down, so DEPTH was already bounded; this bounds the WIDTH.
-    // Neither probe says anything meaningful about the lens itself anyway.
     const selfLens = (() => {
       try {
         const u = new URL(finalUrl);
         return u.hostname.toLowerCase() === CANONICAL_HOST && /^\/lens(\/|$)/.test(u.pathname);
       } catch { return false; }
     })();
-    // THE fan-out: 28 concurrent probes, and `botViews` is 6 fetches on its own,
-    // so a full scan of an HTML target makes on the order of 33 outbound requests
-    // after the one the visitor asked for. None of it was measured before —
-    // `out.elapsedMs` was already fixed above. Each probe shows up as an
-    // auto-instrumented child fetch under this span, named by its URL, so "which
-    // well-known file is the slow one" answers itself.
-    // ── the fan-out, split on the seam that decides its cost ──────────────
-    // 26 of these 28 probes depend only on the ORIGIN: robots.txt, llms.txt, the
-    // well-known files, the MCP endpoint, DNS-AID. Nothing about them changes
-    // with which page you scanned, and they were being re-fetched on every scan
-    // anyway — 656ms of a measured 685ms, for answers that were already known.
-    //
-    // So they move behind an origin-keyed cache (originDiscovery below) and only
-    // the genuinely per-URL pair stays live: Markdown negotiation, which is a
-    // property of the document rather than the site, and the bot-view sampling,
-    // which refetches THIS url as ten identities (eight crawlers, two controls).
     const disco = await originDiscovery(origin, new URL(finalUrl).hostname, env, { selfLens, board: opts.board, side: opts.side });
-    // Only a board can defer, and only compareLensTargets passes one. The page
-    // phase is complete, so this returns exactly what a page-only scan returns,
-    // with the reason on it: discovery was not measured in this invocation.
     if (!disco) {
       out.phases.discoveryDeferred = true;
       return out;
@@ -2560,23 +2026,12 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       s.setAttribute("lens.discovery_cached", !!disco.cached);
       return Promise.all([
         isHtml && !selfLens ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
-        // bot-view sampling is 10 extra fetches per scan (8 crawlers + 2 controls). The census
-        // (opts.skipBotViews) only needs tier/score/doors, so it skips them to
-        // stay well under the per-invocation subrequest budget when sweeping the
-        // whole roster. Its own span because it is the single heaviest entry
-        // here and the only one that gets skipped — a scan missing it should
-        // look different.
         (selfLens || opts.skipBotViews)
           ? Promise.resolve([])
           : span("lens.discovery.bot_views", () => lensProbeBotViews(finalUrl, env)),
       ]);
     });
 
-    // A 2xx that is really a wall: one Clef call over every view the regex left
-    // unflagged (lens-walls.ts has the measurement). Skipped once the platform
-    // has refused probes, since a refused call would read as unread anyway and
-    // the budget is what ran out. Before readiness, so a walled CONTROL stops
-    // counting as admitted and the crawler rows read as unmeasured.
     if (Array.isArray(botViews) && botViews.length && !(disco.refused || subrequestLimitIn({ mdNego, botViews }))) {
       const walls = await span("lens.discovery.walls", async (s) => {
         const w = await classifyWalls(botViews, env || {});
@@ -2593,9 +2048,6 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     out.phases.botViews = Array.isArray(botViews) && botViews.length > 0;
     out.phases.discoveryCached = !!disco.cached;
     if (disco.shared) out.phases.discoveryShared = true;
-    // The platform's ceiling refused some of this scan's probes. Each one reads
-    // as unknown on its own (never as absent), and this flag says why so a
-    // caller can tell "the site did not answer" from "we ran out of budget".
     if (disco.refused || subrequestLimitIn({ mdNego, botViews })) out.phases.subrequestCap = true;
 
     const feeds = (out.structured?.relLinks || []).filter((l) =>
@@ -2607,9 +2059,6 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       oauthProtectedResource: oauthResource, authMd, mcpServerCard, agentSkills,
       commerce: { ucp, acp, ap2 },
     };
-    // The transport-layer counterfactuals: what the wire carries (a shared
-    // dictionary, so a repeat fetch is a delta) and what it hides (ECH, so the
-    // destination name isn't in the clear). Both read off signals already gathered.
     out.wire = { dictionary: lensDetectDictionary(headers), ech };
     out.ai = out.ai || {};
     out.ai.llmsTxtPresent = llms.ok;
@@ -2627,17 +2076,9 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       webmcp: isHtml ? lensDetectWebmcp(body) : { found: false },
     });
     out.botViews = botViews;
-    // finalUrl, status and body used to be passed here and were never read:
-    // readiness is judged from the probe RESULTS, each of which carries its own
-    // status and body, rather than from the page that prompted the fan-out.
     out.readiness = lensReadiness({
       headers, robots, sitemap, sitemapDeclared, terms: out.terms,
       discovery: out.discovery, agent: out.agent, openapi, botViews,
-      // Always null on the initial scan, and that is the design rather than a
-      // gap: this pass is 28 cheap HTTP probes, while execution evidence needs a
-      // real browser off a 10-minute-a-day account ceiling. The two checks come
-      // back neutral here and are filled in by /lens/wire, which already opens
-      // the CDP session they ride.
       execution: null,
     });
     out.readiness.field = lensFieldEvidence({
@@ -2647,9 +2088,6 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       agent: out.agent,
       botViews,
     });
-    // The mirror above weighs every declaration the same. This reweighs the
-    // same evidence by what the site actually serves (lens-need.ts), and so
-    // reads the mirror and field results rather than re-deriving them.
     out.readiness.need = lensNeed({
       status: out.status, bodyUnreadable: out.bodyUnreadable, url: out.url, finalUrl: out.finalUrl, isHtml,
       anatomy: out.anatomy, structured: out.structured, headers, cost: out.cost,
@@ -2659,12 +2097,6 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   return out;
 }
 
-// honest, identified fetch — AadharshBot UA + a required Web Bot Auth
-// signature for external targets, the same identity the rest of the site
-// crawls under. Self-dispatch stays local and therefore has no wire signature.
-// `accept` override: the md-negotiation and MCP probes speak different Accepts.
-// `opts.postQuantum: false` drops sig2 on fan-out probes (botauth.ts has the
-// measurement); the page being scanned keeps both labels.
 export async function lensFetch(targetUrl, env, signal?, accept?, opts: { postQuantum?: boolean } = {}) {
   env = env || {};
   const baseHeaders = {
@@ -2672,10 +2104,7 @@ export async function lensFetch(targetUrl, env, signal?, accept?, opts: { postQu
     "accept": accept || "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
     "accept-language": "en-US,en;q=0.9",
   };
-  // An unparseable target is a caller bug and throws, as it always has.
   if (!URL.canParse(targetUrl)) throw new TypeError("Invalid URL");
-  // Self or network is lib/outbound.ts's decision. This origin dispatches
-  // in-process and unsigned; anything else is signed and robots-gated per hop.
   const read = await outboundRead(targetUrl, env, {
     method: "GET",
     headers: baseHeaders,
@@ -2684,21 +2113,15 @@ export async function lensFetch(targetUrl, env, signal?, accept?, opts: { postQu
     maxHops: 4,
   });
   if (read.ok) return read.response;
-  // This function's callers catch the robots refusal as a BotPolicyError.
   if (read.reason === "robots") throw read.cause;
   return new Response(null, { status: 502, statusText: "Blocked redirect" });
 }
 
-// read a response body but stop at `max` bytes so a giant page can't blow memory.
 export async function lensReadCapped(res, max) {
   const result = await readResponseCapped(res, max);
   return { text: result.text, truncated: result.truncated };
 }
 
-// The "wire" counterfactuals in the Delta lab are transport properties, not task
-// stages, and both are genuinely observable — no simulation needed to tell whether
-// a site already ships them.
-//
 // A shared compression dictionary shows up in the site's OWN response headers: a
 // server that offers one sends `Use-As-Dictionary` and lists `available-dictionary`
 // in `Vary` (RFC 9842), and a delta response is tagged `Content-Encoding: dcb|dcz`.
@@ -2713,8 +2136,8 @@ function lensDetectDictionary(headers) {
   const deltaCoded = ce === "dcb" || ce === "dcz";
   return {
     observed: !!offer || negotiates || deltaCoded,
-    offer: offer || null,               // the Use-As-Dictionary match/scope, verbatim
-    negotiates,                          // Vary advertises available-dictionary
+    offer: offer || null,
+    negotiates,
     activeEncoding: deltaCoded ? ce : null,
   };
 }
@@ -2762,7 +2185,7 @@ async function lensProbeEch(hostname) {
     return {
       observed: https.some((r) => r.ech),
       recordPresent: https.length > 0,
-      parsed: https.length === 0 || https.some((r) => r.parsed),   // false only when a record exists but no answer parsed
+      parsed: https.length === 0 || https.some((r) => r.parsed),
       dnssecValidated: body.AD === true,
     };
   } catch (e) {
@@ -2770,72 +2193,12 @@ async function lensProbeEch(hostname) {
   }
 }
 
-// DNS-AID is a DNS surface, not an HTTP file. Query the three discovery names
-// the scanner recognizes through Cloudflare's DNS-over-HTTPS endpoint and keep
-// the result deliberately small: Lens is showing whether a door exists, not
-// pretending to be a full DNS debugger.
-// ── origin-level discovery, cached ────────────────────────────────────────
-// The 26 probes that depend on the ORIGIN and not on which page you scanned.
-//
-// This is where lens's cost lived. A production trace of a 752KB page measured
-// lens.inspect at 685ms, of which lens.discovery was 656 — and every byte of
-// that 656ms was re-asking one host the same 26 questions it had already
-// answered. Scanning a second page on the same site paid it again in full.
-//
-// Cached in caches.default rather than KV ON PURPOSE: KV carries a ~10K
-// writes/day budget this repo is already careful with, and a scan burst would
-// eat it. The Cache API is per-colo and costs nothing, which is the right trade
-// for data that is cheap to re-derive on a miss.
-//
-// Six hours because these files change on the order of deploys, not requests,
-// and a stale llms.txt is a far smaller error than a lens nobody can afford to
-// run. `fresh` bypasses for a caller that needs the live answer.
-//
-// That reasoning holds for every origin except THIS one, where "on the order of
-// deploys" is the problem rather than the justification: our own deploys are
-// exactly what the TTL cannot see. discoveryScope below keys the self blob on
-// the Worker version so a release invalidates it at the moment it lands.
 const DISCOVERY_TTL = 21600;
-// Bodies are capped at 256KB each by lensProbe, so a pathological origin could
-// serialize to megabytes. Skip caching rather than truncate: truncating would
-// silently change what /lens DISPLAYS, and a cache miss only costs what the old
-// code paid every time.
 const DISCOVERY_MAX_BYTES = 1_000_000;
 
 const discoveryKey = (origin, scope) =>
   new Request(`https://lens-discovery.invalid/v1/${encodeURIComponent(origin)}${scope ? `/${encodeURIComponent(scope)}` : ""}`);
 
-/**
- * How one origin's discovery blob is scoped in the cache.
- *
- * A FOREIGN origin's answers have nothing to do with which version of this
- * Worker is running, so the origin alone is the key and a deploy must not throw
- * that entry away: refilling it means re-asking a stranger 23 questions, which
- * is both slow and rude.
- *
- * OUR OWN origin is the opposite case, because every probe against it
- * self-dispatches in-process. The answers ARE this Worker, so a deploy changes
- * them at the instant it lands, and the six-hour TTL cannot see the one input
- * that actually invalidated them.
- *
- * Measured 2026-08-19, the day /ask shipped: production answered /ask correctly
- * while this site's own doors row went on reporting `no /ask`. The blob was
- * pre-deploy, and the proof was a field nobody looks at — its cached llms.txt
- * was 12,860 bytes against the 13,946 production was serving, exactly the
- * /ask section missing. Worth keeping, because the VERDICT could not settle
- * this on its own: "no /ask" is what a stale cache and a broken probe both look
- * like, and only a field that must have changed tells them apart.
- *
- * So the version rides in the key for self. A deploy mints a new one, the next
- * self-scan refills once per colo, and every scan after that hits cache exactly
- * as before. Skipping the cache outright was the obvious fix and the wrong one:
- * the self-scan is the first thing anyone tries here, and it would pay the full
- * fan-out every time.
- *
- * With no version to key on there is no safe cache, so it is skipped entirely.
- * That state is local dev, where the fan-out never leaves the isolate and where
- * a stale entry in .wrangler/state is a documented way to lose an afternoon.
- */
 export function discoveryScope(origin, env) {
   let host;
   try { host = new URL(origin).hostname.toLowerCase(); } catch { return { scope: null, cacheable: true }; }
@@ -2844,29 +2207,6 @@ export function discoveryScope(origin, env) {
   return version ? { scope: version, cacheable: true } : { scope: null, cacheable: false };
 }
 
-// NB: selfLens is PASSED by the /lens scan path and read by nothing in here —
-// only opts.fresh is. Typing the bag is what surfaced it. Left in place rather
-// than deleted, because an ignored option is either a caller's leftover or a
-// scoping intent that was never wired, and those want different fixes.
-/**
- * The 27 doors one discovery pass knocks on, named once.
- *
- * This type exists because the two return paths below could not otherwise be
- * one type: the live path returns an object literal of these 27 fields, and the
- * cache path returns a spread of `hit.json()`. TypeScript unions those into a
- * shape carrying none of the fields, so the 27-way destructure in
- * lensInspect() read every door off a type that had no doors. That was
- * invisible while `span()` returned `any`; it is the same finding typing
- * queryBillableUsage's union produced in ledger.ts, one file over.
- *
- * PER-DOOR `any` IS DELIBERATE and adds no looseness that was not already
- * there. Each probe returns a genuinely different shape (a robots read carries
- * rules, a DNS-AID read carries SVCB records, a locked MCP door carries an auth
- * scheme), and pinning 27 of those is a much larger change than this one. What
- * the type buys today is the KEY SET, which is what the destructure needs and
- * what makes the door list greppable in one place instead of being spelled out
- * at three call sites that can drift apart.
- */
 export type DiscoveryPayload = {
   robots: any; sitemap: any; sitemapDeclared: any; llms: any; llmsFull: any;
   aiTxt: any; secTxt: any; tdmrep: any; agentCard: any; openapi: any; aiPlugin: any;
@@ -2875,27 +2215,6 @@ export type DiscoveryPayload = {
   agentSkills: any; ucp: any; acp: any; ap2: any; agentsMd: any; dnsAid: any; ech: any;
 };
 
-// ── one live discovery per invocation, when two scans share one ────────────
-// Workers Free allows 50 subrequests per invocation, and a cold discovery is 36
-// of them once its side's robots gate, page fetch, cache and Markdown probe are
-// counted. So two cold sides in one compare were 72, and whichever side the
-// ceiling landed on had most of its probes refused. Each probe caught its own
-// error, so the refusal read as absence: two byte-identical origins compared
-// as readiness 27 against 7, and which side lost was a race.
-//
-// The board is the arbitration. Each side peeks the doors cache first (one
-// subrequest) and a hit needs nothing further. Sides that MISS wait until every
-// side has either reported or finished, then exactly one of them runs live:
-// the first missing side in `sides` order, so the choice is deterministic and a
-// repeat compare gives the live run to whichever side is still cold. A second
-// side on the SAME origin shares that run instead of repeating it, and any
-// other missing side is deferred, which lensInspect reports as discovery not
-// measured (phases.discoveryDeferred) rather than as zero.
-//
-// Deferral beats a partial fan-out because a partial fan-out is the bug: a
-// deferred side says "not measured" and the next compare fills it in, while a
-// refused side reports unknown on every probe it lost, and the rubric counts
-// each unknown against the score.
 export type DiscoveryMode = "live" | "defer" | "share";
 export type DiscoveryBoard = ReturnType<typeof discoveryBoard>;
 
@@ -2929,14 +2248,11 @@ export function discoveryBoard(sides: readonly string[]) {
     settle();
   };
   return {
-    /** This side needs no live run: a cache hit, a free origin, or a scan that ended early. Idempotent. */
     pass(side: string) { report(side, null); },
-    /** This side missed the cache on `key`. Resolves once every side has reported. */
     async claim(side: string, key: string): Promise<DiscoveryMode> {
       report(side, key);
       return (await decided).get(side) || "defer";
     },
-    /** The live side publishes its result, or null when it failed, for a sharer to reuse. */
     publish(key: string, result: any) { runs.get(key)?.resolve(result); },
     shared(key: string): Promise<any> { return runs.get(key)?.promise || Promise.resolve(null); },
   };
@@ -2945,9 +2261,6 @@ export function discoveryBoard(sides: readonly string[]) {
 export type OriginDiscovery = DiscoveryPayload & { cached: boolean; shared?: boolean; refused?: boolean };
 type DiscoveryOpts = { fresh?: boolean; selfLens?: boolean };
 
-// Two signatures, because only a board can defer: every caller that passes no
-// board (doors.ts, the single scan) always gets a payload back, and the type
-// says so rather than making each of them handle a null they cannot receive.
 export async function originDiscovery(origin, hostname, env, opts?: DiscoveryOpts): Promise<OriginDiscovery>;
 export async function originDiscovery(
   origin, hostname, env, opts: DiscoveryOpts & { board?: DiscoveryBoard; side?: string },
@@ -2970,19 +2283,13 @@ export async function originDiscovery(
     try {
       const hit = await cache.match(key);
       if (hit) {
-        // Cast rather than validated, and the cast is honest: this blob is
-        // exactly `JSON.stringify(result)` from the live path below, written by
-        // this same function. Nothing else writes this key.
         const cached = await hit.json() as DiscoveryPayload;
         opts.board?.pass(opts.side || "");
         return { ...cached, cached: true };
       }
-    } catch { /* a cache read must never cost the scan */ }
+    } catch { }
   }
 
-  // A miss under a board waits its turn (see discoveryBoard). Our own origin
-  // never takes the turn: its probes self-dispatch in-process, so all it spends
-  // is the four DNS-over-HTTPS reads and its cache put.
   const board = opts.board;
   const side = opts.side || "";
   let claimed = false;
@@ -3004,15 +2311,9 @@ export async function originDiscovery(
   try {
     result = await discoveryFanOut(origin, hostname, env);
   } finally {
-    // Published even on a throw (as null), so a side sharing this run is
-    // released rather than left waiting on a promise nothing will resolve.
     if (claimed) board?.publish(key.url, result);
   }
 
-  // A blob with a refusal in it describes this invocation's budget, and caching
-  // it would serve that refusal as the origin's answer for six hours. Only a
-  // fan-out the platform let finish is written; a refused one is returned for
-  // this scan alone, flagged, and re-asked next time.
   const refused = subrequestLimitIn(result);
   if (cache && cacheable && !refused) {
     try {
@@ -3022,7 +2323,7 @@ export async function originDiscovery(
           headers: { "content-type": "application/json", "cache-control": `max-age=${DISCOVERY_TTL}` },
         }));
       }
-    } catch { /* a cache write must never cost the scan either */ }
+    } catch { }
   }
   return refused ? { ...result, cached: false, refused: true } : { ...result, cached: false };
 }
@@ -3060,22 +2361,12 @@ async function discoveryFanOut(origin, hostname, env): Promise<DiscoveryPayload>
       lensProbeDnsAid(hostname),
       lensProbeEch(hostname),
     ]);
-    // ONE conditional follow-up, and only when the convention did not deliver:
-    // robots.txt names where the sitemap actually is. Sequential because it
-    // cannot be known until robots.txt has been read, and skipped entirely on
-    // the common path, so the fan-out above keeps its shape for every site
-    // whose sitemap sits where the convention says.
     let sitemapDeclared: any = null;
     if (!lensSitemapVerdict(sitemap).valid) {
       const declared = lensSitemapDeclared(robots, origin);
       if (declared) {
         s.setAttribute("lens.sitemap_declared", true);
         const probe: Record<string, any> = await lensProbe(declared, env);
-        // Count first, then TRIM. This whole result is cached as one JSON blob
-        // under DISCOVERY_MAX_BYTES, and a large sitemap kept whole would push
-        // the blob over that ceiling — which does not error, it just stops
-        // caching, so the site silently pays 28 probes on every future scan.
-        // The shape check only needs the head of the document.
         if (probe.ok && asText(probe.body) !== null) {
           probe.entries = (probe.body.match(/<url>|<sitemap>/gi) || []).length;
           probe.body = probe.body.slice(0, 8 * 1024);
@@ -3109,24 +2400,6 @@ export async function lensProbeDnsAid(hostname) {
   }
 }
 
-// These are representative request identities, not claims about the exact
-// implementation each vendor uses. A bot view is a bounded GET observation;
-// the policy verdict in Terms remains the source of truth for robots.txt.
-//
-// The two `role: "control"` rows are the reason this table can be read at all,
-// and they were missing until 2026-08-21. A crawler row returning 403 has two
-// completely different explanations — the origin refuses that NAME, or the
-// origin refuses this instrument (our datacenter IP, our TLS fingerprint, our
-// missing cookie) and would refuse anything. Those are indistinguishable from
-// a crawler-only sample, so every scan of a hard-walled origin used to render
-// as "blocks all AI crawlers" when the honest answer was "we never got in".
-// Measured the day they were added: medium.com and quora.com answer 403 to
-// Chrome as well, so every AI-crawler row on those hosts is uninterpretable.
-//
-// Controls are DISPLAYED and never SCORED. `lensFieldEvidence` filters them out
-// of `sampledBots`, because counting a browser as a bot identity that received
-// an unblocked response would reward exactly the site that serves humans and
-// refuses every machine.
 const LENS_BOT_VIEWS = [
   { key: "Chrome", label: "Chrome", owner: "a browser", role: "control",
     ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" },
@@ -3142,12 +2415,6 @@ const LENS_BOT_VIEWS = [
   { key: "Claude-User", label: "Claude-User", owner: "Anthropic", role: "answers", ua: "Claude-User/1.0" },
 ];
 
-// `accept` defaults to the browser-shaped header every existing caller was
-// sending inline, so the bot-views tier is byte-identical. The Markdown lens
-// passes its own, because there the Accept header IS the instrument: it replays
-// the exact string a named agent client sends and reports which representation
-// came back. Both callers share this one function rather than growing a second
-// outbound path, for the reason the per-hop redirect check below exists.
 export async function lensFetchAsBot(targetUrl, env, signal, userAgent, accept = "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7") {
   const headers = new Headers({
     "user-agent": userAgent,
@@ -3155,11 +2422,6 @@ export async function lensFetchAsBot(targetUrl, env, signal, userAgent, accept =
     "accept-language": "en-US,en;q=0.9",
   });
   if (!URL.canParse(targetUrl)) throw new TypeError("Invalid URL");
-  // The same self-or-network boundary as lensFetch, with this profile's UA and
-  // deliberately NO signature: "unsigned-probe" sends these headers verbatim.
-  // It still validates every hop (a refused hop reads as an unreachable target,
-  // which is what it is) and still obeys AadharshBot's robots opt-out, so a
-  // diagnostic UA comparison cannot be a back door around our own.
   const read = await outboundRead(targetUrl, env, {
     method: "GET",
     headers,
@@ -3188,8 +2450,6 @@ export async function lensProbeBotView(targetUrl, env, profile) {
       // aadhar.sh scan. Fall back to targetUrl, matching lensInspect's `res.url || targetUrl`.
       redirected: (res.url || targetUrl) !== targetUrl,
     };
-    // The sample rides on a symbol key so it never reaches JSON (lens-walls.ts),
-    // and classifyWalls reads it to ask whether a 2xx was really the site.
     view[VIEW_SAMPLE] = cap.text;
     return view;
   } catch (e) {
@@ -3201,14 +2461,8 @@ export function lensProbeBotViews(targetUrl, env) {
   return Promise.all(LENS_BOT_VIEWS.map((profile) => lensProbeBotView(targetUrl, env, profile)));
 }
 
-// The discovery probes are the fan-out: one scan signs ~28 of them, so they
-// carry sig1 alone. Exported so lens-markdown's replay can say the same.
 export const FAN_OUT = { postQuantum: false } as const;
 
-// small, forgiving probe for a single site-level file.
-// `accept` is optional and forwards to lensFetch, which has always taken one.
-// lib/doors.js needs it to ask a page for its Markdown twin at the page's own
-// URL; every existing caller omits it and gets the previous default.
 export async function lensProbe(url, env, accept?) {
   try {
     const deadline = AbortSignal.timeout(5000);
@@ -3220,25 +2474,13 @@ export async function lensProbe(url, env, accept?) {
       return { ok: false, status: res.status, url, headers };
     }
     const cap = await lensReadCapped(res, 256 * 1024);
-    // `headers` is additive and exists for dict.js, whose whole subject is the
-    // response headers rather than the body. Flattened to a plain object so the
-    // audit can be a pure function of it and therefore testable without a fetch.
     const headers = {};
     for (const [key, value] of res.headers) headers[key.toLowerCase()] = value;
     return { ok: true, status: res.status, url, contentType: res.headers.get("content-type") || "", headers, body: cap.text, truncated: cap.truncated };
   } catch (e) { return { ok: false, error: (e && e.message) || String(e), url }; }
 }
 
-// AGENTS.md / agents.md — the 2025 convention for telling an agent how to work
-// with a codebase or service (the CLI wave's answer to "where's the contract").
-// Case varies by host, so try the lowercase web form first, then the uppercase
-// repo form. `present` requires a non-trivial body, not just a 200, so an SPA
-// catch-all serving HTML for everything doesn't read as a real AGENTS.md.
 export async function lensProbeAgentsMd(origin, env) {
-  // A variant that never answered (a thrown fetch, a 5xx, the platform's
-  // subrequest ceiling) is not evidence the file is missing. Both variants have
-  // to be ASKED before "not found" is a claim, so an unanswered one makes the
-  // whole result unknown and carries its error forward.
   let unanswered: { error?: string; status?: number } | null = null;
   for (const name of ["/agents.md", "/AGENTS.md"]) {
     const p = await lensProbe(origin + name, env);
@@ -3254,9 +2496,6 @@ export async function lensProbeAgentsMd(origin, env) {
   return { ok: false, present: false, note: "no /agents.md or /AGENTS.md found" };
 }
 
-// HTMLRewriter pass for the attribute-driven extraction it's robust at:
-// meta/OG/Twitter, JSON-LD script bodies, rel-links, img alt coverage,
-// microdata, RDFa, and microformats class tokens.
 export async function lensExtractAttrs(html) {
   const acc = {
     meta: {}, og: {}, twitter: {}, relLinks: [], jsonld: [],
@@ -3327,31 +2566,7 @@ export function lensText(html) {
 // An end tag may carry attributes, so `</script bar>` closes a script element as
 // surely as `</script>` does. The closers below are `<\/tag\b[^>]*>` for that reason;
 // spelling one `<\/script\s*>` hands the whole body through into the markdown.
-//
-// CodeQL asks for a second thing here and does not get it, so the reasoning is
-// recorded rather than argued again every time the file moves. It flags each strip
-// below as js/incomplete-multi-character-sanitization, wanting a fixpoint loop,
-// because removing a span can RE-FORM what was removed out of what is left either
-// side. That really happens: one pass of the comment strip over `<p>a<!-<!--x-->-</p>`
-// leaves `<p>a<!--</p>`, since the match starts at the INNER opener.
-//
-// It is unreachable anyway, twice over. The re-formed opener is eaten by the generic
-// `<[^>]+>` strip further down (`<!--</p>` matches whole), and that strip is itself
-// already a fixpoint: its match runs from a `<` to the next `>`, so any `<` surviving
-// a pass has no `>` after it and a second pass cannot match. Looping all three cost a
-// MEASURED 6.29ms against 5.72ms on a 256KB page, node, same V8 — 10% of the
-// CPU-bound half of a scan, on the path LENS_PARSE_CAP exists to keep under the 10ms
-// Workers ceiling. That is a real bill for a bug nothing can reach.
-//
-// What would change the answer: narrowing any pattern here (a literal `/<script>/g`
-// re-forms and is NOT self-limiting), or the output ever reaching a parser instead of
-// pre() -> esc(). Add the loop then, and delete this paragraph.
 
-// best-effort, dependency-free HTML→Markdown, roughly what a basic LLM scraper
-// ingests. The high-fidelity read is a deliberate SEPARATE surface rather than a
-// v2 of this one: /lens/read runs Readability in the lens-reader Worker, because
-// a real extractor needs a DOM and linkedom alone is 94.6 KB gzip. This stays
-// crude on purpose, since the AI view is showing what a crude scraper sees.
 export function lensMarkdown(html, baseUrl) {
   let s = html;
   const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i); if (b) s = b[1];
@@ -3391,16 +2606,6 @@ export function lensDecode(s) {
     .replace(/&amp;/g, "&");
 }
 
-// ── the Terms lens ----------------------------------------------------------
-// What this site permits, resists, or charges — per bot, per path. Everything
-// below is read from PUBLISHED policy (robots.txt, Content-Signal, TDMRep,
-// noai directives) plus what happened to our own identified fetch. Lens never
-// wears another bot's user-agent to test enforcement; same honesty rule as
-// AadharshBot itself.
-
-// The crawlers worth a scoreboard row: the household names of the agentic web,
-// grouped by what they take (a search index / a training corpus / live
-// answers). Verdicts are evaluated per-bot against the exact fetched path.
 const LENS_BOTS = [
   { ua: "Googlebot",          owner: "Google",       kind: "search",  note: "the classic search index" },
   { ua: "Bingbot",            owner: "Microsoft",    kind: "search",  note: "Bing (and Copilot grounding)" },
@@ -3419,15 +2624,8 @@ const LENS_BOTS = [
   { ua: "AadharshBot",        owner: "aadhar.sh",    kind: "answers", note: "the bot that fetched this page" },
 ];
 
-// robots.txt → { groups: [{agents, rules, signal}], sitemaps }. Groups follow
-// RFC 9309: consecutive User-agent lines share one group; Content-Signal
-// (contentsignals.org) rides along as a group-level directive.
-// robots.txt parsing + RFC 9309 evaluation moved to lib/robots.js (a second caller,
-// /around, now OBEYS these on the crawl). Imported above for local use here and
-// re-exported so every lens caller and the public export surface stay identical.
 export { lensParseRobots, lensPathMatch, lensRobotsVerdict };
 
-// "search=yes,ai-input=yes,ai-train=no" → { search: "yes", ... }
 export function lensParseContentSignal(raw) {
   const out = {};
   for (const part of String(raw || "").split(",")) {
@@ -3463,20 +2661,11 @@ export function lensTdmrep(probe, path) {
   return out;
 }
 
-// assemble the whole terms envelope: scoreboard + signals + price + enforcement
-// + the open → signaled → enforced → paid spectrum.
 export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, metaRobots }) {
   let path = "/";
   try { const u = new URL(finalUrl); path = u.pathname + u.search; } catch (_e) {}
-  // The terms envelope is assembled tier by tier below (scoreboard, signals,
-  // paid, enforcement, directives, tdmrep, spectrum), and each tier is skipped
-  // when the site does not carry it. Same reason the inspect accumulator is
-  // open: the alternative is a second copy of seven shapes that already exist
-  // where they are produced.
   const t: Record<string, any> = { path, robotsPresent: !!(robots && robots.ok) };
 
-  // "absent" (a clean 404) and "unreachable" (timeout / 403 / 5xx) are very
-  // different claims — never report unknown terms as no terms.
   const robotsAbsent = !!(robots && !robots.ok && (robots.status === 404 || robots.status === 410));
   t.robotsUnknown = !t.robotsPresent && !robotsAbsent;
   t.robotsError = t.robotsUnknown ? ((robots && (robots.error || (robots.status ? "HTTP " + robots.status : null))) || "unreachable") : null;
@@ -3489,8 +2678,6 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
   });
   t.signals = parsed.groups.filter((g) => g.signal).map((g) => ({ agents: g.agents, raw: g.signal, parsed: lensParseContentSignal(g.signal) }));
 
-  // price signals on the fetched response: HTTP 402, Cloudflare pay-per-crawl
-  // headers, an x402 payment envelope in the body.
   const crawlerHeaders = {};
   for (const k in headers) if (/^crawler-/i.test(k)) crawlerHeaders[k] = headers[k];
   t.paid = { http402: status === 402, crawlerHeaders, x402: null };
@@ -3498,7 +2685,6 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
     try { const j = JSON.parse(body); if (j && (j.x402Version != null || j.accepts)) t.paid.x402 = JSON.stringify(j, null, 2).slice(0, 6000); } catch (_e) {}
   }
 
-  // enforcement: what actually happened to our identified, signed fetch.
   const challenged = headers["cf-mitigated"] === "challenge" || /_cf_chl_opt|challenge-platform|<title>Just a moment/i.test(String(body || "").slice(0, 6000));
   t.enforcement = { status, challenged, blocked: challenged || status === 401 || status === 403 || status === 451 };
 
@@ -3506,9 +2692,6 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
   t.directives = { metaRobots: metaRobots || null, xRobotsTag, noai: /noai|noimageai/i.test((metaRobots || "") + " " + (xRobotsTag || "")) };
   t.tdmrep = lensTdmrep(tdmrep, path);
 
-  // the spectrum: strongest tier present wins; reasons list everything found.
-  // Nuance: an all-yes Content-Signal (or naming bots only to allow them) is an
-  // explicit GRANT — that keeps the site at "open", just deliberately so.
   const reasons: { tier: string; why: string }[] = [];
   const named = t.scoreboard.filter((b) => b.matchedUa && b.matchedUa !== "*");
   const blocked = t.scoreboard.filter((b) => b.verdict === "block");
@@ -3535,11 +2718,6 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
   return t;
 }
 
-// ── context economics --------------------------------------------------------
-// What reading this page costs a machine, per representation it could ingest.
-// The semantic web asked publishers to structure content up front; LLMs won by
-// brute-force reading the human HTML instead — this is that choice, priced.
-//
 // chars-per-token calibrated 2026-07 against o200k_base on real pages
 // (stripe.com 584KB, wikipedia Semantic_Web, daringfireball, aadhar.sh;
 // size-weighted): raw HTML ≈ 2.9 (minified script-heavy markup tokenizes
@@ -3558,10 +2736,6 @@ const LENS_RATES = [
   { model: "GPT-5.6 Luna", usdPerMtok: 0.2 },
 ];
 
-/**
- * Every tier is optional: an HTML page prices html/text/markdown/outline, a
- * non-HTML text body prices raw alone, and add() skips whatever is absent.
- */
 export function lensCost({ html, text, markdown, headings, raw }: {
   html?: number; text?: number; markdown?: number; headings?: Array<{ level: number; text: string }>; raw?: number;
 }) {
@@ -3580,17 +2754,6 @@ export function lensCost({ html, text, markdown, headings, raw }: {
   return tiers.length ? { tokenizer: "o200k_base, calibrated estimate", checked: "2026-08", rates: LENS_RATES, tiers } : null;
 }
 
-// ── agent doors ---------------------------------------------------------------
-// Does this site publish surfaces for agents, or must they brute-force the
-// human page? The research question behind the whole machine-internet thread
-// (publish-for-agents vs drive-the-human-web), probed live per site.
-
-// The reason a probe never answered, kept on the result as `error`. Three probes
-// below dropped it and said only "probe failed", which is honest to a reader and
-// blind to the one caller that matters: subrequestLimitIn (lib/budget.ts) walks
-// a result for an `error` naming the platform's ceiling, and a refusal with no
-// error on it is a refusal nothing can tell from a timeout. That is how a
-// discovery blob full of refused probes could be cached as an origin's answer.
 function probeErrorText(e) {
   return (e && e.message) || String(e);
 }
@@ -3623,14 +2786,6 @@ export async function lensProbeNlweb(origin, env) {
     const head = (await lensReadCapped(res, 1024)).text.trim();
     if (res.status === 404 || /html/i.test(ct)) return { verdict: "no", detail: res.status === 404 ? "no /ask" : "HTML at /ask (a page, not an endpoint)" };
     const json = /json/i.test(ct) || head.startsWith("{");
-    // A door has to ANSWER before it counts as one. This accepted ANY non-404
-    // JSON, and error pages are overwhelmingly JSON on a JSON endpoint, so a
-    // `410 Gone`, a `412`, a `429` and a bare `401` all read as "NLWeb-shaped"
-    // — and because an NLWeb door is an ACTION surface, each one promoted its
-    // whole site to Agent-Native. Measured over a 46-site survey (2026-08-15):
-    // 4 of the 6 sites this rubric called Agent-Native earned the top rung from
-    // a /ask that answered 410, 412, 429 or 401. One decade-dead API and three
-    // bot walls, scored as a working agent interface.
     // SSE is the protocol's DEFAULT framing (streaming defaults to true), so an
     // origin that streams here is answering as an NLWeb server rather than
     // failing. This probe demanded JSON and therefore graded a correctly
@@ -3649,20 +2804,13 @@ export async function lensProbeNlweb(origin, env) {
     if (json && (res.status === 400 || res.status === 422) && /\bquery\b/.test(head)) {
       return { verdict: "likely", detail: "HTTP " + res.status + " at /ask asking for `query` by name" };
     }
-    // 401 is the one refusal that still evidences a door, and only when the
-    // origin says how to open it. Same rule lensProbeMcp already applies to a
-    // 401 at /mcp, so the two door probes agree about what a locked door is.
     const www = res.headers.get("www-authenticate") || "";
     if (json && res.status === 401 && www) return { verdict: "likely", detail: "401 + WWW-Authenticate at /ask (auth-gated endpoint)" };
-    // A 5xx is our probe failing to get an answer, not the site lacking a door;
-    // `unknown` is what the doors tier already renders as "never answered".
     if (res.status >= 500) return { verdict: "unknown", detail: "HTTP " + res.status + " at /ask — origin did not answer" };
     return { verdict: "no", detail: "HTTP " + res.status + (ct ? " " + ct : "") };
   } catch (e) { return { verdict: "unknown", detail: "probe failed", error: probeErrorText(e) }; }
 }
 
-// Accept: text/markdown — Cloudflare-style content negotiation: the same URL,
-// re-served for machines. Supported iff the content-type actually flips.
 export async function lensProbeMdNego(pageUrl, env) {
   try {
     const deadline = AbortSignal.timeout(5000);
@@ -3685,13 +2833,6 @@ export async function lensProbeMdNego(pageUrl, env) {
 //     src="/.webmcp/bridge.js" data-packs="…">`, injected by HTMLRewriter at the
 //     edge, and it proxies the origin's own MCP server (`data-mcp-url`, default
 //     `/mcp`) into the page.
-//
-// Missing the bridge shape mattered more every week: it is one dashboard toggle,
-// so the population of sites carrying it grows without any of them writing a line
-// of code, and a scan calling all of them "no WebMCP" would have been quietly
-// wrong at increasing scale. `kind` is reported because the two are genuinely
-// different claims — inline means somebody wrote tools for this page, bridge means
-// an MCP server got hoisted into it — and a reader deserves to tell them apart.
 const WEBMCP_MARKERS = [
   { kind: "inline", re: /navigator\.modelContext|document\.modelContext|modelContext\.(?:registerTool|provideContext)|window\.webmcp/i },
   { kind: "bridge", re: /\/\.webmcp\/bridge\.js|\bdata-(?:packs|mcp-url)=/i },
@@ -3705,15 +2846,6 @@ export function lensDetectWebmcp(html) {
   return { found: false };
 }
 
-// a well-known JSON probe only counts if the body parses AND has the right
-// shape — SPAs answer 200 text/html for every path, and that must read as
-// absent, not present. And a probe that never answered reads as UNKNOWN,
-// not absent — same honesty rule as the robots.txt tier.
-// One predicate for "this probe never actually answered the question", shared by
-// both JSON interpreters below so they cannot disagree. lensProbe only sets .error
-// when the fetch THROWS; a reachable-but-broken origin returns { ok:false, status:503 }
-// with no error, which is still not an answer. (429 stays a definitive negative here,
-// matching the door tier; revisit if rate-limited probes need their own "unknown".)
 function lensProbeUnanswered(probe) {
   return !probe || !!probe.error || !!(probe.status && probe.status >= 500);
 }
@@ -3749,7 +2881,6 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   if (doors.apiCatalog.present) doors.apiCatalog.detail = (doors.apiCatalog.json.linkset || []).length + " linkset entr" + ((doors.apiCatalog.json.linkset || []).length === 1 ? "y" : "ies");
   for (const k of ["agentCard", "openapi", "aiPlugin", "apiCatalog"]) delete doors[k].json;
 
-  // the verdict: action surfaces beat readable ones beat nothing.
   const action: string[] = [];
   if (doors.mcp.verdict === "yes" || doors.mcp.verdict === "likely") action.push("an MCP endpoint");
   if (doors.nlweb.verdict === "maybe" || doors.nlweb.verdict === "likely") action.push("an NLWeb-shaped /ask");
@@ -3761,7 +2892,6 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   if (doors.apiCatalog.present) readable.push("an RFC 9264 API catalog");
   if (doors.openapi.present) readable.push("OpenAPI");
   if (doors.aiPlugin.present) readable.push("a legacy ai-plugin manifest");
-  // probes that never answered can't vote — say so rather than undercount.
   const unknowns: string[] = [];
   if (doors.llmsTxt.unknown) unknowns.push("llms.txt");
   if (doors.mcp.verdict === "unknown") unknowns.push("/mcp");
@@ -3771,8 +2901,6 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
     if (doors[k].unknown) unknowns.push(label);
   }
 
-  // a timed-out probe can hide an action/readable door too, not just flip a
-  // human-only verdict — so hedge on every verdict where unknowns remain.
   const hedge = unknowns.length
     ? " (" + unknowns.length + " probe" + (unknowns.length > 1 ? "s" : "") + " never answered, so this may undercount: " + unknowns.join(", ") + ")"
     : "";
@@ -3794,30 +2922,16 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   return doors;
 }
 
-// ── sitemaps ---------------------------------------------------------------
-// Is this response actually a sitemap? `probe.ok` alone is not the question,
-// and treating it as the question is how this rubric MANUFACTURED passes: a
-// site that serves its SPA shell or a soft-404 page at /sitemap.xml answers
-// 200 text/html, and every one of those was scored a valid sitemap. A missed
-// sitemap is an undercount; an invented one is a lie, so this errs toward
-// refusing rather than guessing.
 export function lensSitemapVerdict(probe) {
   if (!probe || !probe.ok) {
     return { valid: false, reason: probe && probe.status ? "HTTP " + probe.status : "no response" };
   }
   const body = String(probe.body || "");
   const ct = String(probe.contentType || "").toLowerCase();
-  // A .gz sitemap is legal and common, and this probe reads TEXT, so the body
-  // in hand is compressed bytes decoded as text. Saying "not sitemap-shaped"
-  // about that would be a fabrication about a file we did not read.
   if (/application\/(x-)?gzip|application\/octet-stream/.test(ct) || /\.gz(\?|#|$)/i.test(String(probe.url || ""))) {
     return { valid: false, compressed: true, reason: "compressed sitemap — this probe reads text, so its contents were not verified" };
   }
   if (/<(urlset|sitemapindex)\b/i.test(body)) {
-    // `entries` may be precomputed by the caller: the declared-sitemap probe
-    // counts before trimming its body, because a 256KB sitemap kept whole would
-    // push the discovery blob past DISCOVERY_MAX_BYTES and silently disable the
-    // cache for exactly the sites that need it most.
     return { valid: true, kind: "xml", entries: Number.isFinite(probe.entries) ? probe.entries : (body.match(/<url>|<sitemap>/gi) || []).length };
   }
   // sitemaps.org also blesses a plain-text file of one URL per line.
@@ -3849,11 +2963,6 @@ export function lensSitemapDeclared(robots, origin) {
   return null;
 }
 
-// ── agent readiness rubric -------------------------------------------------
-// A local, evidence-backed implementation of the public IsItAgentReady rubric.
-// The score is intentionally transparent: pass / (pass + fail + unknown),
-// with neutral emerging-commerce checks excluded. A site can inspect exactly
-// why a point moved instead of receiving an opaque vendor verdict.
 const LENS_READINESS_META = {
   robotsTxt: { category: "discoverability", label: "robots.txt" }, sitemap: { category: "discoverability", label: "Sitemap" },
   linkHeaders: { category: "discoverability", label: "Link headers" }, dnsAid: { category: "discoverability", label: "DNS-AID" },
@@ -3867,8 +2976,6 @@ const LENS_READINESS_META = {
   x402: { category: "commerce", label: "x402", optional: true, countInScore: false }, mpp: { category: "commerce", label: "MPP", optional: true, countInScore: false },
   ucp: { category: "commerce", label: "UCP", optional: true, countInScore: false }, acp: { category: "commerce", label: "ACP", optional: true, countInScore: false },
   ap2: { category: "commerce", label: "AP2", optional: true, countInScore: false },
-  // The EXECUTION half, imported so the CLI check and this rubric cannot drift
-  // into two different definitions of the same two questions.
   ...EXECUTION_META,
 };
 
@@ -3878,18 +2985,10 @@ const LENS_READINESS_CATEGORIES = [
   { key: "botAccessControl", label: "Bot Access Control", countInScore: true },
   { key: "discovery", label: "API, Auth, MCP & Skill Discovery", countInScore: true },
   { key: "commerce", label: "Commerce", countInScore: false },
-  // Last, because it is the only category that needs a real browser and so the
-  // only one that is usually neutral. Everything above it is a declaration
-  // audit: this asks what an engine DID with the page. Measured 2026-08-12,
-  // aadhar.sh passed all twenty declared checks on a day its homepage rendered
-  // twelve blank squares and every page threw.
   { key: "execution", label: "Execution in an agent browser", countInScore: true },
 ];
 
 function lensJsonVerdict(probe, validate) {
-  // same "did it answer?" rule as lensJsonDoor: a 5xx origin did NOT answer, so it is
-  // unknown, not a definitive fail (this used to call a reachable-but-broken 503 a fail,
-  // undercounting webBotAuth / the oauth checks that route through here).
   if (lensProbeUnanswered(probe)) return { status: "unknown", detail: probe && probe.status ? "HTTP " + probe.status + " — probe did not answer" : "probe did not answer" };
   if (!probe.ok) return { status: "fail", detail: "HTTP " + (probe.status || "error") };
   try {
@@ -3901,8 +3000,6 @@ function lensJsonVerdict(probe, validate) {
 type LensReadinessCheck = {
   key: string; category: string; label: string; status: string; detail: string;
   optional: boolean; countInScore: boolean;
-  /** Set only on a check the site has said does not apply to it, which the
-   *  grid prints as "n/a" rather than "optional" (lensKeylessDeclaration). */
   notApplicable?: true;
 };
 
@@ -3917,23 +3014,8 @@ function lensReadinessItem(key, status, detail, notApplicable = false): LensRead
   return item;
 }
 
-// The three authority checks (OAuth discovery, OAuth Protected Resource,
-// Auth.md) ask how an agent gets scoped permission to act for a user. A site
-// whose API needs no credential at all has nothing to scope, and grading it
-// "fix" told it to bolt on OAuth that would guard nothing. aadhar.sh carried
-// exactly that, an anonymous flow issuing tokens no endpoint checked, until
-// 2026-10-13. The scanners this rubric mirrors have no such verdict, so a
-// keyless site cannot score 100 on them.
-//
-// The evidence is the site's own declaration, never an inference from
-// absence: an OpenAPI document whose top-level `security` is an explicit
-// empty array, with no security scheme defined and no operation asking for
-// one. An omitted `security` stays a fail, since a spec that never mentions
-// auth is far more often incomplete than keyless.
 export function lensKeylessDeclaration(openapi): string | null {
   if (!openapi || !openapi.ok || openapi.truncated) return null;
-  // Parsed once at the boundary; every read below tolerates a wrong shape by
-  // landing on the conservative answer (null), never on "keyless".
   let spec: any;
   try { spec = JSON.parse(openapi.body || ""); } catch (_e) { return null; }
   if (!spec?.openapi && !spec?.swagger) return null;
@@ -3944,15 +3026,6 @@ export function lensKeylessDeclaration(openapi): string | null {
   return "the site's OpenAPI document declares every operation keyless (security: [])";
 }
 
-// What LENS itself observed on the wire. This is intentionally orthogonal to
-// the standards checklist below: it asks whether an identified machine got a
-// usable answer, whether six named crawler identities got one too, and whether
-// the site offered a machine door. Cloudflare supplies the standards opinion in
-// the composite; counting this local mirror again would double-weight it.
-// Every field optional, for the same reason lensReadiness's are: each is read
-// behind a guard and a scan legitimately produces none of them when the body
-// could not be decoded. Required destructuring made a caller that supplies four
-// of five fail on the shape rather than the behaviour.
 export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botViews }: {
   status?: any; bodyUnreadable?: any; anatomy?: any; agent?: any; botViews?: any;
 }) {
@@ -3968,17 +3041,12 @@ export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botV
   );
 
   const allViews = Array.isArray(botViews) ? botViews : [];
-  // Controls (Chrome, curl) exist to prove the instrument got in at all. They are
-  // not bot identities, so scoring them here would let a site that serves browsers
-  // and refuses every crawler score as though two crawlers had succeeded.
   const views = allViews.filter((bot) => bot && bot.role !== "control");
   const controls = allViews.filter((bot) => bot && bot.role === "control");
   const answered = views.filter((bot) => Number.isFinite(bot && bot.status));
   const successful = answered.filter((bot) => bot.status >= 200 && bot.status < 400 && !bot.blocked && !bot.challenge);
   const scoredTotal = LENS_BOT_VIEWS.filter((p) => p.role !== "control").length;
   const fullSample = views.length === scoredTotal;
-  // If no control got a readable response, a crawler 403 is not evidence about
-  // crawler policy: nothing this instrument sent got through. Report unknown.
   const controlsPassed = controls.length === 0 || controls.some(
     (bot) => Number.isFinite(bot.status) && bot.status >= 200 && bot.status < 400 && !bot.blocked && !bot.challenge);
   add(
@@ -4018,27 +3086,13 @@ export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botV
   };
 }
 
-// EVERY FIELD IS OPTIONAL, which is what the body already assumed: each one is
-// read behind a truthiness guard, and `execution` is legitimately null whenever
-// the browser budget was spent. Left to inference the destructure makes all ten
-// REQUIRED, so a caller that supplies nine (the rubric tests, which pass a base
-// object without sitemapDeclared) fails on the shape rather than the behaviour.
 export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms, discovery, agent, openapi, botViews, execution }: {
   headers?: any; robots?: any; sitemap?: any; sitemapDeclared?: any; terms?: any;
   discovery?: any; agent?: any; openapi?: any; botViews?: any; execution?: any;
 }) {
-  // Keyed by check name, valued by whatever lensReadinessItem produces. Derived
-  // from the producer rather than hand-written, so adding a field there cannot
-  // leave a second copy here describing the old shape. Without it Object.values
-  // below yields unknown[] and every `item.status` read fails.
   const items: Record<string, ReturnType<typeof lensReadinessItem>> = {};
   const robotsParsed = robots && robots.ok ? lensParseRobots(robots.body || "") : null;
   const robotsRules = robotsParsed && robotsParsed.groups.length > 0;
-  // Gate the "AI bot rules" STATUS on actually-named agents. Keying it on
-  // robotsRules (= "any User-agent group exists") passed a robots.txt carrying
-  // nothing but `User-agent: *` on a check whose own fix copy says to declare
-  // explicit GPTBot/ClaudeBot/CCBot rules — this site scored that unearned pass on
-  // its own scan. The predicate already existed; it just lived in the detail string.
   const namedAiRules = !!(robotsRules && robotsParsed.groups.some((g) =>
     g.agents.some((a) => a !== "*" && /bot|crawler|extended|spider|anthropic|openai|claude/i.test(a))));
   const link = String((headers && headers.link) || "");
@@ -4052,18 +3106,12 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   const ucp = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.ucp, (j) => !!(j.protocol || j.version || j.services || j.capabilities));
   const acp = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.acp, (j) => !!(j.protocol || j.api_base_url || j.capabilities || j.services));
   const ap2 = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.ap2, (j) => !!(j.protocol || j.version || j.capabilities));
-  // A pass is still a pass: a keyless site that publishes OAuth anyway gets
-  // the credit. Anything else on a declared-keyless site is not applicable.
   const keyless = lensKeylessDeclaration(openapi);
   const authorityItem = (key, status, detail) => keyless && status !== "pass"
     ? lensReadinessItem(key, "neutral", "not applicable: " + keyless, true)
     : lensReadinessItem(key, status, detail);
 
   items.robotsTxt = lensReadinessItem("robotsTxt", robots && robots.ok ? "pass" : robots && (robots.status === 404 || robots.status === 410) ? "fail" : "unknown", robots && robots.ok ? "valid response with " + robotsParsed.groups.length + " User-agent group(s)" : "robots.txt did not return a readable 200");
-  // Two probes, best-of: the conventional /sitemap.xml and whatever robots.txt
-  // DECLARED, which is the authoritative location and often a different path.
-  // Each is validated rather than trusted for answering 200 — see
-  // lensSitemapVerdict for why a bare `ok` was manufacturing passes.
   const sitemapCandidates = [
     { probe: sitemap, verdict: lensSitemapVerdict(sitemap), declared: false },
     { probe: sitemapDeclared, verdict: lensSitemapVerdict(sitemapDeclared), declared: true },
@@ -4084,12 +3132,6 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   );
   items.linkHeaders = lensReadinessItem("linkHeaders", usefulLinks ? "pass" : "fail", usefulLinks ? usefulLinks + " agent-useful Link relation(s)" : "no agent-useful Link relations on the fetched response");
   items.dnsAid = lensReadinessItem("dnsAid", discovery && discovery.dnsAid && discovery.dnsAid.ok ? (discovery.dnsAid.found ? "pass" : "fail") : "unknown", discovery && discovery.dnsAid && discovery.dnsAid.found ? "DNS-AID record found" : "no DNS-AID record found at the checked discovery names");
-  // A probe that never ran cannot be a "fail". lensProbeMdNego sets `note` ONLY when
-  // it produced no real answer ("probe failed", or "not probed (non-HTML target)");
-  // a genuine negative carries contentType/status and no note. Keying on the exact
-  // string "probe failed" let the not-probed case fall through to fail and then
-  // assert "Accept: text/markdown stayed non-markdown" about a request never sent —
-  // the same fabrication the agent-doors tier already refuses to make.
   const mdNego = (agent && agent.mdNegotiation) || null;
   items.markdownNegotiation = lensReadinessItem("markdownNegotiation", mdNego && mdNego.supported ? "pass" : mdNego && mdNego.note ? "unknown" : "fail", mdNego && mdNego.supported ? "same URL returned text/markdown" : mdNego && mdNego.note ? mdNego.note : "Accept: text/markdown stayed non-markdown");
   items.robotsTxtAiRules = lensReadinessItem("robotsTxtAiRules", robots && robots.ok ? (namedAiRules ? "pass" : "fail") : "unknown", namedAiRules ? "named AI bot rules found" : robotsRules ? "wildcard rules apply to crawlers, no AI crawler is named" : "robots policy could not be evaluated");
@@ -4100,9 +3142,6 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   items.oauthProtectedResource = authorityItem("oauthProtectedResource", oauthResource.status, oauthResource.detail);
   items.authMd = authorityItem("authMd", discovery && discovery.authMd && discovery.authMd.ok && String(discovery.authMd.body || "").trim() ? "pass" : discovery && discovery.authMd && discovery.authMd.error ? "unknown" : "fail", discovery && discovery.authMd && discovery.authMd.ok ? "auth.md answered" : "no auth.md registration guide");
   items.mcpServerCard = lensReadinessItem("mcpServerCard", mcpCard.status, mcpCard.detail);
-  // Same unknown arm as apiCatalog above. lensJsonDoor has always marked an
-  // unanswered agent-card probe `unknown`, and this check read only `present`,
-  // so a refused probe was graded as a site with no card.
   items.a2aAgentCard = lensReadinessItem("a2aAgentCard", agent && agent.agentCard && agent.agentCard.present ? "pass" : agent && agent.agentCard && agent.agentCard.unknown ? "unknown" : "fail", agent && agent.agentCard && agent.agentCard.present ? agent.agentCard.detail : agent && agent.agentCard && agent.agentCard.unknown ? "the agent card probe did not answer" : "no valid A2A Agent Card");
   items.agentSkills = lensReadinessItem("agentSkills", skills.status, skills.detail);
   items.webMcp = lensReadinessItem("webMcp", agent && agent.webmcp && agent.webmcp.found ? "pass" : "fail",
@@ -4116,13 +3155,6 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   items.acp = lensReadinessItem("acp", acp.status === "pass" ? "pass" : "neutral", acp.status === "pass" ? "ACP-shaped discovery metadata found" : "not observed (optional; not scored)");
   items.ap2 = lensReadinessItem("ap2", ap2.status === "pass" ? "pass" : "neutral", ap2.status === "pass" ? "AP2-shaped discovery metadata found" : "not observed (optional; not scored)");
 
-  // Execution rides whatever agent-browser evidence this scan happens to hold.
-  // With none, both come back `neutral`: shown in the grid, excluded from the
-  // score. That is deliberate and is the opposite of how `unknown` is treated
-  // above. An unknown DECLARED check means we asked and the site did not
-  // answer, which is the site's fact. An unmeasured execution check means our
-  // browser budget was spent, which is OURS, and docking a stranger's score for
-  // our rate limit would make the number dishonest.
   const exec = executionChecks(execution);
   items.agentScripts = lensReadinessItem("agentScripts", exec.agentScripts.status, exec.agentScripts.detail);
   items.agentMedia = lensReadinessItem("agentMedia", exec.agentMedia.status, exec.agentMedia.detail);
@@ -4139,31 +3171,15 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   const strongPublishing = items.markdownNegotiation.status === "pass" && items.contentSignals.status === "pass" && items.linkHeaders.status === "pass";
   const baseline = items.robotsTxt.status === "pass" || items.sitemap.status === "pass";
   const ladder = actionSurface ? 5 : strongPublishing ? 3 : baseline ? 1 : 0;
-  // The ladder reads ONE signal per rung, and the score reads twenty. Left
-  // alone the two contradict each other in public: github.com scored 13/100 and
-  // was labelled Agent-Native, walmart.com 27/100 and the same, because a
-  // single door probe outranks every failed check beneath it. So a rung may
-  // claim at most ONE step beyond what the breadth of the score supports.
-  //
-  // One step rather than zero on purpose. The top rung is a claim about
-  // CAPABILITY, and a site can genuinely ship a working agent interface while
-  // publishing none of the metadata the other checks look for — that site
-  // deserves to outrank its score. What it may not do is outrun the whole
-  // rubric by four rungs on the strength of one probe.
   const RUNGS = [0, 1, 3, 5];
   const supported = Math.floor(overall / 20) + 1;
   const ceiling = RUNGS.filter((rung) => rung <= supported).pop() ?? 0;
   const number = Math.min(ladder, ceiling);
   const LEVEL_NAMES = { 0: "Not Ready", 1: "Basic Web Presence", 3: "Agent-Readable", 5: "Agent-Native" };
   const level = { number, name: LEVEL_NAMES[number] };
-  // Say so when the cap bit, rather than quietly publishing a smaller number
-  // than the evidence produced — the reader is owed the disagreement.
   const levelNote = number < ladder
     ? `one signal supports ${LEVEL_NAMES[ladder]}, but ${overall}/100 of the rubric passed, so the level is held at ${LEVEL_NAMES[number]}`
     : null;
-  // ship the label with each action: LENS_READINESS_META already owns it, so the
-  // client should render it off the envelope rather than keep a second copy that
-  // silently wins and drifts when a label is renamed here.
   const nextActions = Object.values(items).filter((item) => item.status === "fail" && item.countInScore).slice(0, 5).map((item) => ({ key: item.key, label: item.label }));
   return {
     overall, level: level.number, levelName: level.name, levelNote,

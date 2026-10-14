@@ -1,33 +1,3 @@
-// URL policy and bounded redirect reads shared by the public-facing Workers.
-// The SSRF floor for every outbound fetch a visitor can aim: reject hosts that
-// resolve inside the network rather than out on the public web, cloud-metadata
-// endpoint included. It lives here, with the other bounded-fetch helpers, because
-// three callers need the SAME answer — /lens, webmention source verification, and
-// serendipity's cover proxy. It was written out twice (lensHostBlocked and
-// coverHostBlocked, byte-identical), which is one edit away from a hole that only
-// opens on one surface; consolidated 2026-07-28.
-//
-// Host-shaped only, deliberately. A name that resolves to a private address still
-// passes here, so this is a floor and not the whole control: callers pair it with
-// the scheme/port allowlist and a redirect re-check.
-//
-// Four shapes were measured through this function on 2026-08-07 and came back
-// ALLOW, so each one below is a hole that was open rather than a hypothetical:
-//
-//   localhost.        a trailing dot is a legal absolute FQDN and resolves the
-//   127.0.0.1.        same, but `=== "localhost"` and the dotted-quad regex both
-//                     miss it. Normalized off before any comparison.
-//   ::                the unspecified address. Routes to loopback on a stack that
-//                     accepts it, and `=== "::1"` does not cover it.
-//   ::ffff:127.0.0.1  v4-mapped IPv6. The one that matters: the whole dotted-quad
-//   ::ffff:169.254…   table below was being skipped because the host does not
-//                     match the v4 regex, so the metadata address had a spelling
-//                     that walked straight through.
-//   fe81:: … febf::   link-local is fe80::/10, which is every prefix fe80 through
-//                     febf. Matching the literal string "fe80:" covered one of 64.
-//
-// The v4 table is applied to a v4-mapped address by unwrapping to its dotted
-// quad and re-testing, so the two spellings can never drift apart again.
 export function privateHostBlocked(host) {
   const h = String(host || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
   if (!h) return true;
@@ -61,16 +31,6 @@ export function privateHostBlocked(host) {
   return false;
 }
 
-// Only public http(s). Reject loopback / private / link-local / cloud-metadata
-// literals + non-standard ports. (Workers can't egress to the internal network
-// anyway, but blocking the obvious literals is cheap hygiene.)
-//
-// This lived in lens.js until the Reader lens shipped. It moved HERE, next to
-// the host floor it wraps, because `lens-reader/` is a SEPARATE Worker that
-// aims the same visitor-supplied URL at the same public internet, and a second
-// copy of an SSRF allowlist is the kind of duplicate that passes review on the
-// day it is written and diverges quietly afterwards. lens.js re-exports it, so
-// every existing caller and the contract tests that name it are untouched.
 export function validateLensTarget(raw) {
   const s0 = String(raw || "").trim();
   if (!s0) return { ok: false, error: "Type a URL to inspect." };
@@ -81,33 +41,12 @@ export function validateLensTarget(raw) {
   let url;
   try { url = new URL(s); } catch { return { ok: false, error: "That doesn't parse as a URL." }; }
   if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false, error: "Only http and https URLs." };
-  // Credentials in the authority are refused rather than stripped. A scan is a
-  // public read published back to the visitor, so a URL carrying a secret is
-  // either a mistake or an attempt to make this site replay it; stripping would
-  // quietly scan a different resource than the one that was typed.
   if (url.username || url.password) return { ok: false, error: "Remove the credentials from that URL." };
   if (url.port && url.port !== "80" && url.port !== "443") return { ok: false, error: "Only ports 80 and 443 are allowed." };
   if (privateHostBlocked(url.hostname)) return { ok: false, error: "That host is on the no-fetch list (localhost / private / link-local)." };
   return { ok: true, url: url.toString() };
 }
 
-// Follow redirects one hop at a time so every hop is checked, rather than asking
-// fetch to follow them and inspecting only where it landed.
-//
-// The post-hoc check this replaces guarded the DISCOVERY probes, so a public URL
-// that 302s to a blocked host still had its body fetched and returned; only the
-// origin-level fan-out was skipped. Validating per hop means the request to the
-// blocked host is never made at all.
-//
-// `check` is the caller's full allowlist (scheme, port, host), not just this
-// module's host floor, because a redirect can change the scheme and port too.
-// A per-hop init can sign the validated authority; fixed headers serve unsigned
-// reads. The callback runs only after the URL has passed the policy check.
-//
-// `transport` is the network adapter. Absent, each hop goes to the global
-// `fetch`, read at call time. lib/outbound.ts and lib/botauth.ts pass
-// `env.OUTBOUND_TRANSPORT`, which only a test ever sets, so a fake network
-// reaches this loop by injection and the per-hop check still runs before it.
 export type PublicTransport = (url: string, init: RequestInit) => Promise<Response>;
 
 export async function fetchFollowingPublicRedirects(url, init: (url: string) => RequestInit | Promise<RequestInit>, check, maxHops = 4, transport?: PublicTransport | null): Promise<
@@ -123,7 +62,7 @@ export async function fetchFollowingPublicRedirects(url, init: (url: string) => 
     const response = await (transport ? transport(current, hopInit) : fetch(current, hopInit));
     const location = [301, 302, 303, 307, 308].includes(response.status) ? response.headers.get("location") : null;
     if (location === null) return { ok: true, response, finalUrl: response.url || current, hops: hop };
-    try { await response.body?.cancel(); } catch (_e) { /* nothing buffered yet */ }
+    try { await response.body?.cancel(); } catch (_e) {}
     let next;
     try { next = new URL(location, current).toString(); }
     catch { return { ok: false, error: "That redirect target does not parse as a URL.", blockedHop: hop, url: current }; }
@@ -134,9 +73,6 @@ export async function fetchFollowingPublicRedirects(url, init: (url: string) => 
 
 export const DEFAULT_CRAWL_BODY_CAP = 200 * 1024;
 
-// Read at most maxBytes from a response stream. A second read after the cap
-// distinguishes an exactly-max-sized body from a truncated one without ever
-// buffering an unbounded response.
 export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY_CAP, signal?: AbortSignal) {
   const reader = response && response.body && response.body.getReader
     ? response.body.getReader()
@@ -146,13 +82,9 @@ export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY
     return { text: "", bytesRead: 0, truncated: false, digest: "" };
   }
 
-  // Annotated because an empty literal infers `never[]` under strictNullChecks,
-  // which the lens-reader Worker's program turns on: TypeScript only lets an
-  // array evolve from its pushes while that flag is off.
   const chunks: Uint8Array[] = [];
   let bytesRead = 0;
   let truncated = false;
-  // Internal responses have no fetch transport to cancel their body for us.
   const abort = () => { void reader.cancel(signal?.reason).catch(() => {}); };
   signal?.addEventListener("abort", abort, { once: true });
   if (signal?.aborted) abort();

@@ -1,23 +1,3 @@
-// lib/tools.js — the site's tool registry: what a caller can ASK this origin to
-// do, and the one function that does it.
-//
-// Extracted from mcp.js when the natural-language ask loop arrived, so that a
-// second door onto the same tools could not drift from the first the moment one
-// description was reworded. Same argument as site-manifest.json: one registry,
-// projected outward, never transcribed.
-//
-// That loop was cut, and the reason this file survived it is worth stating: the
-// registry outlived its second consumer and then gained several more (the MCP
-// server, the terminal programs, and every page's WebMCP catalog). /ask is back
-// as of the NLWeb work, and it is a DIFFERENT thing wearing the old path — a
-// retrieval endpoint, not a model handed a function catalog. It reads one tool
-// here rather than all of them.
-//
-// Deliberately only the DATA tools. The three frame-returning terminal_* tools
-// stay declared in mcp.js, because they are implemented in terminal.js and
-// pulling them in here would make lib/tools.js -> terminal.js -> ask.js ->
-// lib/tools.js a cycle. The ask loop has no use for them either: it wants
-// records to reason over, not a rendered 80-column screen.
 import { readAroundChanges } from "../around.ts";
 import { getPublicAvailability } from "../../../cal/src/slots.ts";
 import { LENS_COMPARE, LENS_INSPECT, lensObservationSummary } from "../lens.ts";
@@ -41,33 +21,13 @@ import { asRecord, asText } from "./parse.ts";
 
 export function toolError(message) { return { _error: String(message).slice(0, 400) }; }
 
-// The MCP encoder over a lens outcome (lens-pipeline.ts). The lens tools run the
-// same spec as their HTTP twins, so validation, the budget and the refusal
-// wording are one implementation whichever door an agent knocks on.
 function lensToolResult<V>(o: LensOutcome<V>, map: (value: V) => Record<string, any> = (v) => v as Record<string, any>): Record<string, any> {
   if (o.kind === "ok") return map(o.value);
   return toolError(o.kind === "failed" ? asText(o.payload.error) ?? "The lens failed." : o.error);
 }
 
-// The crawl tools bill against the SAME per-IP buckets as their HTTP twins
-// (lens.js LENS_BUDGETS), not a private one. A separate bucket let a caller
-// stack budgets: 30 inspections via /lens/fetch AND another 8 here, and
-// lens_compare was metered at 8/min through JSON-RPC while /lens/compare allows
-// 4, so the cheaper door was the expensive operation. One bucket, one ceiling,
-// whichever door you knock on — and /ask, being a third door onto the
-// same functions, inherits that property for free by calling through here.
 const DATA_TOOL_DEFINITIONS = [
   {
-    // The MCP half of NLWeb. The protocol specifies BOTH doors, /ask and /mcp,
-    // carrying the same arguments and the same answer, so this is deliberately
-    // the same function the REST route calls rather than a second ranking with
-    // the same name. A client that finds one door and not the other still gets
-    // the same origin's answer.
-    //
-    // It overlaps search_site on purpose and does not replace it: search_site
-    // returns this site's own record shape, and `ask` returns NLWeb's
-    // (`url`/`name`/`site`/`score`/`description`/`schema_object`). A caller who
-    // wants a schema.org object per hit wants this one.
     name: "ask",
     description: "Ask aadhar.sh a natural-language question and get NLWeb-shaped results: for each match a url, name, site, score (0-100), description, and a schema.org schema_object. Retrieval is lexical over the site's own corpus and descriptions are extractive, so this returns the passages that answer the question rather than a written answer. mode=summarize and mode=generate are refused by name: this origin runs no language model.",
     inputSchema: { type: "object", properties: {
@@ -110,10 +70,6 @@ const DATA_TOOL_DEFINITIONS = [
     inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
   },
   {
-    // The cheap tier. One subrequest instead of twenty-eight, for a caller that
-    // wants what the page itself says and not what its origin advertises. The
-    // discovery-derived fields come back ABSENT rather than zero, and `phases`
-    // says so, because "no agent doors" and "nobody looked" are different claims.
     name: "lens_page",
     description: "Read one public URL and return only what derives from the page's own bytes: anatomy, structured data, a markdown rendering, and what it costs an agent to ingest. Skips the origin-level fan-out entirely, so it is far cheaper and far faster than lens_inspect. Readiness, agent doors and terms are ABSENT from the result (not zero) because they were not checked; `phases.discovery` is false. Use lens_inspect when you need those.",
     inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
@@ -123,13 +79,6 @@ const DATA_TOOL_DEFINITIONS = [
     description: "Inspect two public HTTP(S) URLs and compare status, content, readiness, spectrum, agent doors, and discovery surfaces.",
     inputSchema: { type: "object", properties: { left: { type: "string" }, right: { type: "string" } }, required: ["left", "right"] },
   },
-  // The one tool here whose data lives in the OTHER MCP server on this origin.
-  // It is hoisted because a browser-side agent never gets to choose a door: the
-  // WebMCP bridge Cloudflare injects reads `/mcp` and registers what it finds, so
-  // /serendipity/mcp's tools are invisible from the page. This used to be a
-  // hand-rolled `navigator.modelContext` block in index.html, which was worse
-  // three ways — homepage only, on the API Chrome 146 replaced with
-  // `document.modelContext`, and a second schema to keep in step with the pool.
   {
     name: "find_events",
     description: "Search the Serendipity event pool (community events worth going to, and who's RSVP'd) by keyword. Returns events the pool's contributors actually said yes to; pass rsvp:\"all\" to include events that were only browsed.",
@@ -148,19 +97,9 @@ export const DATA_TOOLS = DATA_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 
 export const DATA_TOOL_NAMES = new Set(DATA_TOOLS.map((t) => t.name));
 
-// The result is Record<string, any> for the same reason mcp.ts's callTool is: one
-// function dispatches every DATA_TOOLS entry, each returns its own payload
-// shape, and the sentinel fields (_error among them) ride alongside. Inference
-// picks one arm of that union and every caller reading another arm's field looks
-// like a typo.
 export async function callDataTool(name, args, request, env, ctx): Promise<Record<string, any>> {
   args = asRecord(args) || {};
   if (name === "ask") {
-    // Validated through the ROUTE's parser, with a synthetic URL standing in for
-    // the query string. Site tokens, mode refusals, `prev` handling and the
-    // query_id default are one implementation, so the two doors cannot disagree
-    // about what a request means — which is the whole reason the protocol
-    // specifies them together.
     const parsed = parseAskRequest(new URL("https://aadhar.sh/ask"), args);
     if (!parsed.ok) return toolError(parsed.error.error);
     return nlwebAsk(env, parsed.params, request);

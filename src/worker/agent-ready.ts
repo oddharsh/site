@@ -3,21 +3,8 @@ import { readDoors } from "./lib/doors.ts";
 
 const INNER = COLS - 4;
 
-// ── the bill ──────────────────────────────────────────────────────────────
-// HAND-MAINTAINED with a checked date, the same contract lens's census runs on
-// (lens.js: "Hand-maintained; each fact carries a 'checked' date and a source").
-// A generator would drift less but would mean extending build.ts, which this
-// repo does not do without the owner saying so. A stale number with an honest
-// date beats a fresh number nobody sanctioned.
-//
-// Recount with: the groups below map to real paths; `wc -l` them.
 export const LIFT_CHECKED = "2026-08-05";
-// Typed as a TUPLE rather than left to inference. Without it tsc widens the
-// element type to (string | number)[], every `lines` reads as string | number,
-// and the sum below stops type-checking for a reason that has nothing to do
-// with the arithmetic.
 export const LIFT: Array<[name: string, files: number, lines: number, what: string]> = [
-  // [capability, files, lines, what it buys]
   ["MCP server", 3, 574, "tools/list + tools/call, stateless 2026-07-28"],
   ["llms.txt", 1, 208, "a readable map, hand-written"],
   ["agent discovery", 1, 113, "agent-card, api-catalog, anonymous auth"],
@@ -29,9 +16,6 @@ export const LIFT: Array<[name: string, files: number, lines: number, what: stri
   ["the tools", 5, 1932, "finger, lens, dict, cache, radar"],
 ];
 
-// The honest decomposition, and the point of publishing any of this: BASELINE
-// compatibility is a weekend. The rest is differentiation and drift-proofing,
-// which is where the real cost hides and where nobody budgets.
 export const BASELINE = ["MCP server", "llms.txt", "agent discovery"];
 
 export const liftTotals = () => LIFT.reduce(
@@ -43,9 +27,6 @@ export const liftTotals = () => LIFT.reduce(
   { files: 0, lines: 0, baseline: 0 },
 );
 
-// ── the audit ─────────────────────────────────────────────────────────────
-// Counted, never scored. Each door is one of three states and the third is the
-// one most graders get wrong: a check that could not run is not a failure.
 export function scoreDoors(doors) {
   const checks = [
     ["llms.txt", doors.llms],
@@ -74,8 +55,6 @@ export async function agentReadyFrame(target, env, { self = false } = {}) {
   const score = scoreDoors(doors);
   const totals = liftTotals();
 
-  // The return is a TUPLE because it is spread into s(text, style); an array
-  // type would make the spread a rest-argument error.
   const mark = (probe): [string, string] => (probe.ok ? ["  open ", "ok"] : probe.unreadable ? ["unread ", "warn"] : ["  shut ", "dim"]);
   const doorRows = score.checks.map(([label, probe]) => [
     s(...mark(probe)),
@@ -93,7 +72,6 @@ export async function agentReadyFrame(target, env, { self = false } = {}) {
       s(score.unread ? `, ${score.unread} unreadable from here` : "", "dim")],
   );
 
-  // The bill only makes sense for the origin that has the source tree.
   const bill = self ? rows(
     blank(),
     rule(INNER, `what this cost to build (counted ${LIFT_CHECKED})`),

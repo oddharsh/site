@@ -1,26 +1,3 @@
-// speculation.js — did the hand-tuned speculation rules actually pay off?
-//
-// index.html ships two speculation rules: prerender almost everything at
-// `eagerness: moderate` (roughly "the pointer rested on this link"), and
-// prefetch /garage/* + /lwe/* eagerly. Both were written by REASONING about
-// which link a visitor takes next, and until now nothing checked the reasoning.
-// The only evidence they helped was that pages felt fast when I clicked them,
-// which is not evidence: I wrote the rules, so I already know where I am going.
-//
-// A speculation that never activates is bandwidth spent on the visitor's behalf
-// for nothing — a whole document plus subresources, fetched, rendered, and
-// dropped. Precision (activated / speculated) is the number worth knowing, and
-// it needs BOTH halves:
-//
-//   DENOMINATOR — every speculative request. Chrome has sent `Sec-Purpose:
-//     prefetch` (and `prefetch;prerender`) for years, counter.js already reads
-//     it to avoid counting a speculative load as a visit, and it arrives at this
-//     worker on every worker-first route. This half works TODAY.
-//
-//   NUMERATOR — the activation. The `on-prefetch-activation` response header
-//     names an endpoint the browser HEADs when a speculated document is
-//     actually used for a navigation.
-//
 // WHY THE NUMERATOR CANNOT JUST BE COUNTED SERVER-SIDE, measured rather than
 // argued (Canary 153, local worker, 2026-07-30). Inject a URL-list prefetch of
 // /garage/horizon, then navigate to it. The browser makes two requests:
@@ -33,51 +10,9 @@
 // network. So the server sees every speculation and is structurally blind to
 // every payoff, which is the whole reason the numerator has to come back as a
 // beacon instead of a log line.
-//
-// STATUS, and the reason this ships half-dark on purpose. chromestatus lists
-// the beacon as *Proposed* with NO stable milestone, behind an origin trial
-// named `PrefetchAndPrerenderActivationBeacon` (desktop_first 151, and
-// `origintrial: false` on the record, so the trial may not even be open yet).
-// VERIFIED ABSENT in Chrome Canary 153.0.7978.0 on 2026-07-30: a prefetch that
-// demonstrably fired and was demonstrably used sent no beacon under any of
-// three flag spellings (`--enable-features=PrefetchAndPrerenderActivationBeacon`,
-// `--enable-blink-features=` with the same name, and
-// `--enable-experimental-web-platform-features` alone). So 151 is a plan rather
-// than a shipped state, and the numerator stays at zero until this origin joins
-// the trial or the feature reaches stable. The denominator starts recording the
-// moment this deploys.
-//
-// Re-test cheaply: prefetch a URL, navigate to it, and watch for a HEAD to
-// /ledger/prefetch. The absence of that HEAD is the whole signal.
-//
-// THE CLIENT HALF, since 2026-09-29, because the header beacon left the ledger's
-// numerator at exactly 0 for 30 days across 83 paths, which read in
-// speculation:report as a 0% activation rate rather than as no instrument. The
-// shell's rules only PRERENDER, and every Chromium since 108 fires
-// `prerenderingchange` when a prerendered document is activated, so nav.js now
-// listens on a prerendered page and HEADs this endpoint with `via=client` when
-// it happens. That lands as its own kind, `activated-client`, and the readback
-// takes the LARGER of the two per path, so the day Chrome ships the header
-// beacon the same activation is not counted twice. What the client half cannot
-// see is a prefetch-only activation, which no rule here produces.
-//
-// That asymmetry is deliberate rather than an oversight. Shipping the receiver
-// now means the only remaining step is a trial registration, which is a form
-// the owner submits rather than code anyone has to write, and the endpoint is
-// real on the day it turns on. What this must NOT do is imply a number it does
-// not have: /ledger reports the two halves separately and says so.
-//
-// Everything here is best-effort. A metric must never break a page.
 
 const SPECULATIVE = /prefetch|prerender/i;
 
-// The serving version, as blob3 on both writes. Speculation is the one ledger
-// here that a gradual deployment can genuinely move: prerender depends on the
-// speculation-rules block in the served document, so a ramp that changes those
-// rules changes the activation rate, and a denominator you cannot split by
-// version cannot show it. Appended rather than inserted, so the existing blob1
-// (kind) and blob2 (path) SQL keeps reading the same columns. "dev" locally,
-// where the binding exists but CF_VERSION_METADATA does not.
 function versionBlob(env) {
   return env.CF_VERSION_METADATA?.id?.slice(0, 8) || "dev";
 }
@@ -91,7 +26,6 @@ export function prefetchActivationHeader(pathname) {
   return `/ledger/prefetch?p=${encodeURIComponent(pathname)}`;
 }
 
-// DENOMINATOR. Called from the dispatcher next to countCrawlerHit.
 export function countSpeculativeLoad(env, request, response, pathname) {
   try {
     if (!env.SPECULATION || response.status >= 400) return;
@@ -105,22 +39,16 @@ export function countSpeculativeLoad(env, request, response, pathname) {
     // dropping it would hide real speculations.
     const dest = request.headers.get("sec-fetch-dest");
     if (dest && dest !== "document") return;
-    // "prerender" is the stronger claim and the more expensive one, so when a
-    // header says both (`prefetch;prerender`) it counts as a prerender.
     const kind = /prerender/i.test(purpose) ? "prerender" : "prefetch";
     env.SPECULATION.writeDataPoint({
-      // blob3 is the serving version (see the note on the activation write).
       blobs: [kind, pathname.slice(0, 96), versionBlob(env)],
       doubles: [1],
       indexes: [kind],
     });
-  } catch { /* best-effort; never break a response over a counter */ }
+  } catch {}
 }
 
-// NUMERATOR. The browser HEADs this when a speculated document gets used.
 export function handlePrefetchActivation(request, env) {
-  // GET is accepted alongside HEAD purely so this is curl-able while the
-  // origin trial is pending; the browser itself only ever sends HEAD.
   if (request.method !== "HEAD" && request.method !== "GET") {
     return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
   }
@@ -128,7 +56,6 @@ export function handlePrefetchActivation(request, env) {
     if (env.SPECULATION) {
       const params = new URL(request.url).searchParams;
       const p = params.get("p") || "(unknown)";
-      // nav.js's prerenderingchange listener says so; see THE CLIENT HALF above
       const kind = params.get("via") === "client" ? "activated-client" : "activated";
       env.SPECULATION.writeDataPoint({
         blobs: [kind, p.slice(0, 96), versionBlob(env)],
@@ -136,28 +63,13 @@ export function handlePrefetchActivation(request, env) {
         indexes: [kind],
       });
     }
-  } catch { /* as above */ }
-  // 204 with no body: the browser wants an acknowledgement, not a document.
+  } catch {}
   return new Response(null, {
     status: 204,
     headers: { "cache-control": "no-store" },
   });
 }
 
-// ── the readback: /ledger/speculation.json ─────────────────────────────────────
-// Everything above WRITES the ledger; until 2026-09-02 nothing read it, so the
-// one question the ledger exists to answer (which speculated documents get
-// navigated to, and which are rendered for nobody) was answerable only from
-// the dashboard. This is the same SQL read /ledger.json makes over its own
-// dataset, grouped per path and kind, folded into one row per path.
-//
-// `rate` is activations over speculations. It is NOT a conversion rate in the
-// strict sense: an activation beacon fires when a speculated document is used,
-// while the denominator counts speculations that reached the origin, and a
-// prefetch that later upgraded to a prerender counts twice there. Read it as an
-// ordering, which is what tools/speculation-report.ts does with it. The report
-// is also where any promotion to a more eager rule is decided; this route only
-// answers.
 import { analyticsReadError, analyticsSql, text, type AnalyticsRow } from "./ledger.ts";
 import { jsonResponse } from "./lib/http.ts";
 
@@ -169,11 +81,8 @@ export type SpeculationRow = {
   speculated: number; rate: number | null;
 };
 
-// the two activation sources, folded into `activated` by taking the larger
 const HEADER = "activated", CLIENT = "activated-client";
 
-// Pure over the SQL rows, so the contract test can pin the arithmetic without a
-// token. Unknown kinds are ignored rather than counted as anything.
 export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
   const byPath = new Map<string, SpeculationRow>();
   const sources = new Map<string, { header: number; client: number }>();
@@ -191,8 +100,6 @@ export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
   }
   const out = [...byPath.values()];
   for (const row of out) {
-    // Both beacons can report one activation, so the larger is the count and
-    // the sum would double it.
     const src = sources.get(row.path);
     row.activated = src ? Math.max(src.header, src.client) : 0;
     row.speculated = row.prefetch + row.prerender;

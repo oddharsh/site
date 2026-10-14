@@ -1,17 +1,3 @@
-// lib/mcp-tools.js — the shared public metadata for MCP tool descriptors.
-//
-// Tool annotations help a client choose and explain a tool, but they are hints,
-// not authorization. The handlers enforce their own boundaries regardless.
-// Keeping the decoration here means /ask, /mcp, /serendipity/mcp, the
-// browser-side WebMCP bridge, and the published server cards see one shape.
-//
-// The DEFAULT is the shape most of this site's tools actually have: read a
-// public thing on this origin, return it, change nothing. A tool that is not
-// that says so on its own definition, next to the code that makes it untrue —
-// see `representation_capture` in mcp.js, which writes a row. Defaults that
-// have to be true for every tool are the ones that quietly become lies when
-// somebody adds the eighth tool on another branch.
-
 const OPEN_WORLD_TOOLS = new Set([
   "now_playing",
   "lens_inspect",
@@ -22,7 +8,6 @@ const OPEN_WORLD_TOOLS = new Set([
   "dict",
   "cache",
   "lens",
-  // hosted tools that will fetch a caller-supplied URL
   "image_inspect",
   "image_transform",
   "image_compare",
@@ -45,9 +30,6 @@ export function mcpTool(tool, { title, openWorldHint }: { title?: string; openWo
     ...tool,
     title: tool.title || title || titleFor(tool.name),
     outputSchema: tool.outputSchema || genericObjectOutput(),
-    // The definition's own annotations win. That makes this decorator
-    // idempotent, which matters because DATA_TOOLS is decorated once in
-    // lib/tools.js and then composed into two servers that decorate again.
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,

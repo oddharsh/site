@@ -1,5 +1,3 @@
-// bot.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { serveMarkdownTwin } from "./lib/assets.ts";
 import { BOT_NAME, BOT_UA, SIG_AGENT } from "./lib/botauth.ts";
 import { cachedRender } from "./lib/cache.ts";
@@ -7,15 +5,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { esc, wantsMarkdown } from "./lib/http.ts";
 
-// ── /bot info page ──────────────────────────────────────────────────
-// static shell: ride the caches.default layer like the other rendered pages;
-// edge TTL = the s-maxage in the render, version-keyed so a deploy busts it.
 export async function handleBotPage(request, env, ctx) {
-  // This is the page a stranger reads after finding AadharshBot in their logs,
-  // and that stranger is increasingly an agent. Answer in Markdown when asked;
-  // /bot.md is the stable, cacheable URL for the same bytes. The twin is
-  // hand-authored (src/content/md/bot.md) because this page renders from a template
-  // literal, and build.ts fails the deploy if it drifts from the constants here.
   if (wantsMarkdown(request)) {
     const md = await serveMarkdownTwin(request, env, "/bot.md");
     if (md) return md;

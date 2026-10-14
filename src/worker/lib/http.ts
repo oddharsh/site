@@ -1,5 +1,3 @@
-// lib/http.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { escape } from "./html.ts";
 
 export function escAttr(s) {
@@ -10,26 +8,14 @@ export function escHtml(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// The one JSON response every route builds. Defaults to a private reply: never
-// cached, pretty-printed for a person reading it with curl. A route changes the
-// policy through extraHeaders (cache-control, CORS, x-robots-tag, ...), and a
-// big public payload passes { pretty: false } to ship compact bytes. A header
-// set to null is dropped, which is how a caller turns a default off entirely.
 export function jsonResponse(body, status = 200, extraHeaders = {}, { pretty = true } = {}) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...extraHeaders };
   for (const key of Object.keys(headers)) if (headers[key] === null) delete headers[key];
   return new Response(pretty ? JSON.stringify(body, null, 2) + "\n" : JSON.stringify(body), { status, headers });
 }
 
-// The headers Response.json() sends, for an internal hop (a Durable Object
-// answering its own Worker) that should stay byte-identical to it.
 export const PLAIN_JSON = { "content-type": "application/json", "cache-control": null };
 
-// short-cache error response. matches the CF Cache Rule that pins edge
-// TTL to 30s on 4xx/5xx — sending max-age=30 makes the browser cache
-// honor the same window, so a transient 404 during a deploy race
-// doesn't get pinned in either CF's edge OR the visitor's browser for
-// the platform's default 4h negative-cache. use everywhere we emit a 4xx/5xx ourselves.
 export function errorResp(body, status) {
   return new Response(body, {
     status,
@@ -40,12 +26,6 @@ export function errorResp(body, status) {
   });
 }
 
-// ── markdown negotiation ────────────────────────────────────────────
-// returns true iff the client's Accept header explicitly asks for text/markdown
-// and prefers it over HTML. Do not let generic */* negotiate to Markdown: the
-// root URL is primarily a browser page, and /index.md is the stable cacheable
-// Markdown URL for agents that do not send a precise Accept header.
-//
 // A TIE GOES TO WHICHEVER WAS LISTED FIRST, and until 2026-08-27 it went to
 // HTML. That rule was `markdownQ > htmlQ`, so a header naming both types at q=1
 // lost, and the three most common agent clients send exactly that:
@@ -62,11 +42,6 @@ export function errorResp(body, status) {
 // the convention every one of these clients relies on, and the alternative is
 // not neutrality: it is silently preferring HTML, which is a choice too, and the
 // one that costs an agent the whole point of asking.
-//
-// Deliberately narrow. It changes nothing about a browser, which never names
-// text/markdown at all and is stopped by the guard above; nothing about a client
-// that ranks HTML higher; and nothing about `text/markdown;q=0`, which is an
-// explicit refusal and still returns false.
 export function wantsMarkdown(request) {
   const accept = (request.headers.get("accept") || "").toLowerCase();
   if (!/(^|,)\s*text\/markdown\s*(?:;|,|$)/i.test(accept)) return false;
@@ -83,10 +58,6 @@ export function wantsMarkdown(request) {
   );
 }
 
-// true iff Accept explicitly names application/json and prefers it over HTML,
-// by the same rules as wantsMarkdown: a named type only (no `*/*`), q > 0, and a
-// tie goes to whichever was listed first. A browser never names it, so this
-// moves nothing for a person.
 export function wantsJson(request) {
   const accept = (request.headers.get("accept") || "").toLowerCase();
   if (!/(^|,)\s*application\/json\s*(?:;|,|$)/i.test(accept)) return false;
@@ -100,20 +71,11 @@ export function wantsJson(request) {
   );
 }
 
-/** True when Accept names HTML itself (text/html or XHTML, q > 0): a browser
- *  navigating. A bare wildcard does not count, so curl's default and most
- *  HTTP clients read as not asking for a page. */
 export function namesHtml(request) {
   const accept = (request.headers.get("accept") || "").toLowerCase();
   return ["text/html", "application/xhtml+xml"].some((t) => acceptIndex(accept, t) !== Infinity && acceptQ(accept, t) > 0);
 }
 
-// Where a type is named EXACTLY in the Accept header, as an ordinal, or Infinity
-// when it is not named at all. Wildcards are deliberately not matched here even
-// though acceptQ matches them for q: `*/*` expresses no preference BETWEEN two
-// named types, so it cannot break a tie between them. That distinction is what
-// makes `text/markdown, */*` resolve to Markdown, since the only explicit type
-// in it is the Markdown one.
 function acceptIndex(accept, type) {
   const [wantType, wantSub] = type.split("/");
   const entries = accept.split(",");
@@ -152,9 +114,6 @@ function acceptQ(accept, type) {
   return best;
 }
 
-// The cache policy for a public, CORS-open JSON read (search, photos, ledger,
-// the playlist): errors get the errorResp() discipline (30s), never the
-// 5-minute success TTL, so a transient scrape 502 does not pin in browsers.
 export function publicJsonHeaders(status) {
   return {
     "cache-control": status >= 400
@@ -178,14 +137,6 @@ export function extractMeta(html, name) {
   return m ? decodeEntities(m[1].trim()).slice(0, 240) : "";
 }
 
-// &amp; is decoded LAST, and the order is the whole correctness of this function.
-// Decoding it first re-feeds its own output to the passes below, so `&amp;lt;` —
-// a page saying the literal text "&lt;" — comes out as a real `<`. That turns
-// inert prose from an arbitrary third party into markup, which is exactly the
-// input this sees: every caller runs it over a crawled page's <title>, meta
-// description, or author (crawl.js, around.js, webmention.js). The sinks escape
-// today, so this was never live XSS; it was a decoder manufacturing tags that
-// only the next un-escaped sink would have to catch.
 function decodeEntities(s) {
   return s
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
@@ -193,27 +144,13 @@ function decodeEntities(s) {
     .replace(/&amp;/g, "&");
 }
 
-// constant-time string compare so we don't leak the secret via timing.
-export function timingSafeEqual(a, b) {
-  // NOT parsed through lib/parse.js, deliberately. `asText` treats "" as absent,
-  // which is right at a boundary and wrong here: two empty secrets must still
-  // compare equal rather than fall out as a type failure. This is a precondition
-  // on an internal call, not a boundary parse, and it guards a timing-safe
-  // compare, so it stays the plain type test.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  if (typeof a !== "string" || typeof b !== "string") return false;
+export function timingSafeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
 
-// The one gate for an owner secret arriving in a request: a query parameter, a
-// header, a form field. It fails CLOSED when the secret is unset or empty, so a
-// missing binding can never match a missing parameter, and it compares in
-// constant time. Six of ten owner checks compared with `===` before this
-// existed, because the rule lived in a comment above timingSafeEqual rather
-// than in the one function every gate calls.
 export function secretMatches(supplied: string | null | undefined, secret: string | undefined): boolean {
   if (!secret || supplied == null) return false;
   return timingSafeEqual(supplied, secret);

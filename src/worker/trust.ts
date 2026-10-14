@@ -1,16 +1,3 @@
-// trust.ts: /about, /contact, /privacy and /developers.
-//
-// The four pages an agent (or a person) checks before trusting a site: who runs
-// it, how to reach them, what a visit leaves behind, and how to call it from
-// code. Each is a fixed document, rendered at deploy by build.ts beside
-// /bot.html and served through serveBuiltPage.
-//
-// Nothing here is runtime state, so every renderer takes no arguments (the
-// deploy-time renderer contract). Every figure is the constant the code
-// enforces, imported rather than typed out, and the Markdown twins are
-// generated from these pages at build (gen-md-twins.ts, generated tier), so
-// there is no second copy to drift. A claim on /privacy with no constant
-// behind it names the module that makes it true.
 import { lunaPage } from "./lib/chrome.ts";
 import { html, type Html } from "./lib/html.ts";
 import { missJson } from "./lib/not-found.ts";
@@ -24,8 +11,6 @@ import { UID_COOKIE, UID_COOKIE_MAX_AGE_S } from "../../serendipity/serendipity.
 
 export const CONTACT_EMAIL = "coffee@aadhar.sh";
 
-/** A whole number of years in words, for a cookie lifetime. Throws on a
- *  lifetime that is not whole years, so a change gets new words, not "1.5". */
 function years(seconds: number): string {
   const n = seconds / (365 * 86400);
   const words = ["", "one year", "two years", "three years", "four years", "five years"];
@@ -33,7 +18,6 @@ function years(seconds: number): string {
   return words[n];
 }
 
-// The /bot page's document style, shared by all four. Tokens only.
 const CSS = `/*min*/
   h2 { font-family: var(--font-caption); font-size: var(--text-h2); color: var(--blue-40); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
   h2::after { content: ""; display: block; height: 1px; background: var(--rule); margin-top: 8px; }
@@ -66,8 +50,6 @@ function page({ route, title, description, body }: { route: string; title: strin
     title: `${title} · aadhar.sh`,
     path: `aadhar.sh${route}`,
     route,
-    // the address bar names the object, as /bot's does; <title> keeps the
-    // descriptive name for search results and bookmarks
     explorerName: `aadhar.sh${route}`,
     width: 660,
     description,
@@ -77,7 +59,6 @@ function page({ route, title, description, body }: { route: string; title: strin
   });
 }
 
-// ── /about ───────────────────────────────────────────────────────────────────
 export function renderAboutPage() {
   return page({
     route: "/about",
@@ -138,7 +119,6 @@ export function renderAboutPage() {
   });
 }
 
-// ── /contact ─────────────────────────────────────────────────────────────────
 export function renderContactPage() {
   return page({
     route: "/contact",
@@ -192,14 +172,6 @@ export function renderContactPage() {
   });
 }
 
-// ── /privacy ─────────────────────────────────────────────────────────────────
-// Read from the code on 2026-10-13. Each paragraph names what it describes so
-// it can be re-checked: dispatch.ts serveWorkerRequest (the log line),
-// cloudflare.config.ts observability, ledger.ts / lib/not-found.ts /
-// speculation.ts (Analytics Engine), serendipity/serendipity.ts (the one
-// cookie, contributor cookies, attendees), cal/src/booking.ts (90-day
-// bookings), webmention.ts, ask-rank.ts and lwe-ask (AI Gateway),
-// whoareyou.ts (RDAP), lens.ts (isitagentready, KV caches), representation.ts.
 export const PRIVACY_REVIEWED = "2026-10-13";
 
 export function renderPrivacyPage() {
@@ -295,12 +267,6 @@ export function renderPrivacyPage() {
 `,
   });
 }
-
-// ── /developers ──────────────────────────────────────────────────────────────
-// Generated from the code it documents: the endpoint list and the curl lines
-// from lib/public-api.ts (the same descriptions /openapi.json is written from),
-// the limits from LENS_BUDGETS and ASK_BUDGET (the budgets the handlers spend),
-// and the error example from missJson, the function that writes a real 404.
 
 const QUICKSTART: readonly (readonly [operationId: string, lead: string])[] = [
   ["searchSite", "Search the site, then read the page you found as Markdown:"],

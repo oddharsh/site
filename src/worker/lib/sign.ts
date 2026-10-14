@@ -1,7 +1,3 @@
-// HMAC-SHA256 signed links, base64url. One implementation for every signed URL
-// the site mints: cal's approve/decline links, webmention's, and serendipity's
-// cover-proxy URLs. WebCrypto in the Worker runtime, no deps.
-
 export async function sign(message, secret) {
   const key = await importKey(secret);
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));

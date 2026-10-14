@@ -2,26 +2,6 @@ import { isCanonicalHost } from "./const.ts";
 import { wantsMarkdown } from "./http.ts";
 import { CACHEABLE_PREFIXES } from "../routes.ts";
 
-// lib/cache.js: the worker's caching kit, one primitive surface where four
-// hand-rolled dialects used to drift apart.
-//
-//   swrKV: a persistent KV value carrying its own freshness stamp in KV
-//   METADATA. Stale serves instantly, the rebuild rides ctx.waitUntil, and only a
-//   true cold miss builds inline. Callers pass validity guards because a
-//   transient empty rebuild must never wipe a good stale value; two of the four
-//   old copies allowed exactly that.
-//
-//   The stamp rode a second ":fresh" key until 2026-08-27. Metadata travels with
-//   the value on the read that was already happening, so folding it in costs one
-//   KV read per lookup instead of two and one write per rebuild instead of two,
-//   for a number that occupies about 20 of metadata's 1024 bytes.
-//
-//   cachedRender: a local caches.default fallback for rendered shells whose bytes
-//   are static-shaped. Production's named CachedPages entrypoint now sits in
-//   front of these routes, so a Workers Cache hit skips the worker entirely;
-//   this fallback still covers local dev, internal self-dispatch, and a miss
-//   where the per-colo response is already warm.
-
 type SwrOptions<T> = {
   type?: "text" | "json" | "arrayBuffer" | "stream";
   isValid?: (value: T | null) => boolean;
@@ -30,12 +10,6 @@ type SwrOptions<T> = {
   cacheTtl?: number;
 };
 
-// A legacy entry carries no metadata, and that reads as STALE on purpose: it
-// serves instantly and rebuilds once behind the response, which is what writes
-// the first stamp. Reading absence as fresh would be the unsafe half of the same
-// guess, since "written seconds ago" and "written before this code shipped" are
-// the same observation from here. The cost is bounded at one background rebuild
-// per key on the first read after the deploy.
 function isStampFresh(metadata, ttl) {
   const written = Number(metadata && metadata.t);
   return Number.isFinite(written) && Date.now() - written < ttl * 1000;
@@ -47,20 +21,6 @@ function isStampFresh(metadata, ttl) {
 // they pay the central-store round trip: 120-200ms against a colo-local 3-5ms.
 // Measured on the homepage 2026-07-27 (manifest 126ms / counter 149ms /
 // tracks 204ms cold, versus 3-5ms each once warm).
-//
-// Two things follow from it, and both are the caller's call to price:
-//   - a write or delete from ANOTHER colo stays invisible here for up to
-//     cacheTtl, so a manual `wrangler kv key delete` bust lands late. Callers
-//     that document a bust step keep this short.
-//   - the stamp is part of the value's own entry, so the two cannot be cached
-//     independently and cannot disagree. That retires the ttl + cacheTtl
-//     freshness window this bullet used to describe, where a separately cached
-//     sentinel could outlive or predate the value it spoke for. The stamp is an
-//     absolute time describing exactly the bytes it arrived with, so no colo
-//     reads a value as fresher than ttl. What is left is plain cacheTtl cost: a
-//     colo serves a value up to cacheTtl older than central's newest and can
-//     fire an extra background rebuild or two until its own copy refreshes.
-//     Bounded, and it never touches the response.
 export async function swrKV<T>(env, ctx, key, ttl, buildFn: () => T | Promise<T>, opts: SwrOptions<T> = {}): Promise<T | null> {
   const kv = env && env.RN_KV;
   const type = opts.type || "json";
@@ -72,9 +32,6 @@ export async function swrKV<T>(env, ctx, key, ttl, buildFn: () => T | Promise<T>
   const store = async (value: T) => {
     if (!kv || !shouldStore(value)) return value;
     const body = type === "json" ? JSON.stringify(value) : value;
-    // The stamp is the write time rather than an expiry, so ttl stays the
-    // READER's parameter: changing it at a caller takes effect on the entries
-    // already in KV instead of waiting for each one to be rewritten.
     await kv.put(key, body, { metadata: { t: Date.now() } });
     return value;
   };
@@ -111,19 +68,6 @@ export async function swrKV<T>(env, ctx, key, ttl, buildFn: () => T | Promise<T>
   return value;
 }
 
-// deadline: give a read a fixed budget on the render path, then ship without
-// it. KV's per-colo cache is a shared LRU, so at this site's traffic a key can
-// come back 100-200ms cold at ANY time (observed on the homepage 2026-07-27/28,
-// including seconds after a warm read) — no cacheTtl makes that tail go away,
-// because eviction isn't expiry. Racing the read caps what it can cost the
-// response; the underlying promise is NOT cancelled, so a timed-out KV get
-// still completes, still fires its SWR refresh, and still warms the colo for
-// the next visitor. The work isn't wasted, only un-waited-for.
-//
-// onTimeout fires only if the budget lapses first (the timer is cleared when
-// the read settles, so a 5ms read can never mark itself deadlined at 25ms).
-// Callers pass a fallback distinguishable from the read's own miss value when
-// they need "slow" and "absent" to behave differently downstream.
 export function deadline(promise, ms, fallback, onTimeout) {
   let timer;
   return Promise.race([
@@ -137,23 +81,11 @@ export function deadline(promise, ms, fallback, onTimeout) {
   ]);
 }
 
-// One key to drop, since the freshness stamp is metadata on the value and dies
-// with it. The ":fresh" sentinels this used to delete alongside were every one of
-// them written with `expirationTtl: ttl`, so KV reaps the last of them within one
-// ttl of the deploy that stops writing them (6h, the longest any caller sets),
-// and nothing reads one in the meantime. There is no cleanup pass to run, and a
-// second delete here would only be a write against a key that is already gone.
 export async function deleteSWRKV(env, key) {
   if (!env || !env.RN_KV) return;
   await env.RN_KV.delete(key);
 }
 
-// The cache key folds in the deployed worker VERSION (CF_VERSION_METADATA.id),
-// so a deploy mints a fresh keyspace and every old rendered shell is orphaned at
-// once — the same "a name points at exact bytes" trick the /i/ content-hashed
-// images use, lifted to worker output. No purge step, no TTL wait, no manual
-// bump: the old entries just age out under their own max-age. Falls back to
-// "dev" when the binding is absent (local dev, preview), so nothing breaks there.
 export function edgeKey(origin, keyPath, env) {
   const ver = (env && env.CF_VERSION_METADATA && env.CF_VERSION_METADATA.id) || "dev";
   return new Request(`${origin}/__ec/${encodeURIComponent(ver)}${keyPath}`, { method: "GET" });
@@ -191,10 +123,6 @@ export function notModifiedIfFresh(request, response) {
   return new Response(null, { status: 304, headers });
 }
 
-// Worker-rendered shells have deterministic bytes but historically had no
-// validator, so max-age=0 forced their complete body over the wire. Hash once
-// on the cache miss, store the tagged response, and every warm revalidation can
-// use the same cheap 304 path as a static asset.
 export async function withWeakEtag(response) {
   if (response.status !== 200 || response.headers.has("etag")) return response;
   const bytes = await response.arrayBuffer();
@@ -209,17 +137,6 @@ export async function withWeakEtag(response) {
   });
 }
 
-// Contract, in the order it saves you:
-//   - the edge TTL is the response's own cache-control (caches.default honors
-//     s-maxage, else max-age); nothing rewrites headers, so browsers see exactly
-//     what the route declared.
-//   - the key folds in the deploy version (edgeKey), so shipping busts every
-//     shell atomically; within a version the response's max-age still bounds it.
-//   - cache.put fires only on status 200, because a pinned transient 404 is the
-//     poison class this site has already paid for once.
-//   - the key normalizes to a path, so query variants of a query-independent
-//     shell share one entry.
-//   - x-edge-cache: hit|miss makes every request auditable from curl.
 export async function cachedRender(request, ctx, renderFn, keyPath, env) {
   const url = new URL(request.url);
   const key = edgeKey(url.origin, keyPath || url.pathname, env);
@@ -236,11 +153,6 @@ export async function cachedRender(request, ctx, renderFn, keyPath, env) {
 
   let resp = await renderFn();
   if (request.method === "GET" && resp.status === 200 && ctx) {
-    // Hashing calls arrayBuffer(), which would otherwise consume and fully buffer
-    // the only response body before the first byte reaches the visitor. Tee the
-    // stream once, send the original immediately, and do the cache-only hash in
-    // waitUntil. A cold miss intentionally has no validator; its next request hits
-    // the tagged copy and can take the cheap 304 path.
     const cacheFill = withWeakEtag(resp.clone())
       .then((tagged) => cache.put(key, tagged))
       .catch(() => {});
@@ -255,28 +167,6 @@ export async function cachedRender(request, ctx, renderFn, keyPath, env) {
   return notModifiedIfFresh(request, resp);
 }
 
-// ── the Workers Cache admission test ────────────────────────────────────────────
-// Which requests the default export may hand to the CachedPages entrypoint, where
-// a hit answers WITHOUT running the dispatcher at all.
-//
-// It lives here, and is exported, because it shipped a production bug on
-// 2026-07-31 that no test could have caught while it was a private function in
-// index.js: `/` joined the set, and `Accept: text/markdown` on the homepage
-// started coming back as HTML. Route logic was never involved. Workers Cache
-// keyed the URL, the HTML response carries `vary: accept-encoding,
-// available-dictionary` and says nothing about `accept`, so the stored HTML
-// answered a request that negotiates a different representation.
-//
-// The one axis a cache key here cannot see is the one this predicate has to
-// close: a route may answer more than one media type at one URL. Bailing is the
-// right shape rather than adding `accept` to Vary, because browser Accept strings
-// are high-cardinality and varying on them would shard the cache into near-unique
-// entries and cost the hit rate the cache exists for. Markdown requests come from
-// agents, they are rare, and sending them straight to the dispatcher is free.
-//
-// Verified on production before the fix: `/` returned text/html on a cache HIT and
-// text/markdown with `?cb=` appended, which is the same route bypassing this
-// predicate through the query-string bail below.
 // The HOST is the second axis this key cannot see, and it cost the same bug on a
 // different dimension. Three hostnames reach this Worker and only one of them is
 // the site: `cal.aadhar.sh` 404s every path but /coffee*, and a `*.workers.dev`
@@ -290,22 +180,13 @@ export async function cachedRender(request, ctx, renderFn, keyPath, env) {
 // `age` on both hostnames in the same second. Adding `?cb=` to any of them
 // returned the real 404, which is this predicate's query-string bail sending the
 // request to the dispatcher and is what makes the mechanism unambiguous.
-//
-// Bailing rather than varying, for the same reason as the Accept case: there is
-// no Vary that would help (the Host is not a request header the cache varies on
-// here), and the canonical host is the only one whose hit rate matters.
 export function shouldUseWorkersCache(request, cacheablePaths) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
   if (request.headers.has("range") || request.headers.has("if-none-match")) return false;
-  // Content negotiation: any request that asks for a representation other than the
-  // cached one has to reach the dispatcher. Kept as a media-type test rather than
-  // "has an accept header", since every browser sends one.
   if (wantsMarkdown(request)) return false;
   const url = new URL(request.url);
   if (!isCanonicalHost(url.hostname)) return false;
   if (url.search) return false;
   if (cacheablePaths.has(url.pathname)) return true;
-  // /writing/, /images/full/ and /images/meta/, declared on their routes in
-  // routes.ts rather than listed here a second time.
   return CACHEABLE_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
 }

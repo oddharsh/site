@@ -9,27 +9,12 @@ import { span } from "./lib/trace.ts";
 import seed from "./dyno-seed.json" with { type: "json" };
 import { DYNO_PULLS_URL } from "./routes.ts";
 
-// The machine-owned branch. `perf-history.yml` appends one line a night and
-// force-pushes nothing; /garage/dyno only ever reads.
-//
-// A BRANCH rather than D1 or a commit to main, and the reason is the repo's own
-// rules rather than preference. `main` carries a ruleset with zero bypass
-// actors, so no workflow may push to it; D1 writes need a Cloudflare Edit token,
-// and the one that exists is environment-gated behind a required reviewer for
-// the ramp. A branch outside both rulesets is the only write target a nightly
-// job can reach without weakening something load-bearing.
 const HISTORY_URL = "https://raw.githubusercontent.com/oddharsh/site/perf-history/history.jsonl";
 
 const KV_KEY = "dyno:history";
-const KV_TTL = 6 * 3600;      // the source updates once a night; 6h is generous
+const KV_TTL = 6 * 3600;
 const FETCH_BUDGET_MS = 3000;
 
-// ── data ────────────────────────────────────────────────────────────────────
-
-// Rows come back stale-while-revalidate. The isValid guard is load-bearing: a
-// GitHub outage that returned an empty array would otherwise overwrite a good
-// cached history with nothing, and this page's entire value is the part of the
-// series that already happened.
 async function readHistory(env, ctx) {
   const rows = await swrKV(env, ctx, KV_KEY, KV_TTL, () => fetchHistory(), {
     cacheTtl: 300,
@@ -39,9 +24,6 @@ async function readHistory(env, ctx) {
 }
 
 async function fetchHistory() {
-  // Attributes are set on the span object rather than passed up front, because
-  // the only things worth recording here (how many rows came back, whether
-  // GitHub answered) are not known until after the fetch.
   return span("dyno.fetch", async (s) => {
     let res;
     try {
@@ -61,9 +43,6 @@ async function fetchHistory() {
     for (const line of text.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      // One malformed line must not cost the whole series. The file is
-      // append-only from a single writer, so a bad line means an interrupted
-      // push, and the rows around it are still true.
       try { rows.push(JSON.parse(trimmed)); } catch { malformed++; }
     }
     s.setAttribute("dyno.rows", rows.length);
@@ -73,18 +52,12 @@ async function fetchHistory() {
   });
 }
 
-// Seed rows are hand-entered history from perf-budget.mjs's baseline comment;
-// nightly rows are measured. Merging them here rather than seeding the branch
-// keeps every hand-entered number in the repo, where a PR review can see it.
-// Dedupe on ts so a nightly row always wins over a seeded one for the same day.
 export function mergeHistory(nightly) {
   const byTs = new Map();
   for (const r of seed) byTs.set(r.ts, r);
   for (const r of nightly) if (r && r.ts) byTs.set(r.ts, r);
   return [...byTs.values()].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
 }
-
-// ── chart ───────────────────────────────────────────────────────────────────
 
 const W = 620, H = 210, PAD_L = 46, PAD_R = 12, PAD_T = 14, PAD_B = 26;
 const PLOT_W = W - PAD_L - PAD_R;
@@ -93,11 +66,6 @@ const PLOT_H = H - PAD_T - PAD_B;
 const kib = (b) => b / 1024;
 const day = (ts) => Date.parse(`${ts}T00:00:00Z`);
 
-// Time-proportional X, not index-proportional. A gap in the series is a gap in
-// the chart, which is the honest rendering: the nightly job skips days with no
-// commits (it should — measuring an unchanged tree twice adds a point and no
-// information), so evenly spacing the points would draw a steady cadence the
-// data does not have.
 function scales(rows, pick) {
   const xs = rows.map((r) => day(r.ts));
   const ys = rows.map(pick).filter((v) => asNumber(v) !== null);
@@ -116,9 +84,6 @@ function polyline(rows, sc, pick, cls) {
   return pts.length < 2 ? "" : `<polyline class="${cls}" points="${pts.join(" ")}"/>`;
 }
 
-// Every point carries a <title>, which is the whole hover story on a chart with
-// no JavaScript: the browser draws the tooltip natively. Hand-entered points get
-// a wider dot because they are the ones with a note worth reading.
 function dots(rows, sc, pick, cls) {
   return rows.filter((r) => asNumber(pick(r)) !== null).map((r) =>
     `<circle class="${cls}" cx="${sc.x(r.ts).toFixed(1)}" cy="${sc.y(pick(r)).toFixed(1)}" r="${r.source === "baseline-note" ? "3.2" : "1.7"}"><title>${esc(`${r.ts} · ${kib(pick(r)).toFixed(1)} KiB · ${r.sha}${r.note ? ` — ${r.note}` : ""}`)}</title></circle>`
@@ -126,30 +91,18 @@ function dots(rows, sc, pick, cls) {
 }
 
 function chart(rows) {
-  // Three series on one axis. They span 57-466 KiB, which is close enough that a
-  // shared axis reads fine and far better than three stacked charts: the whole
-  // question this page answers is how the parts move against each other.
   const series = [
     { key: "pages_br",    cls: "s-pages",  label: "all pages, Brotli" },
     { key: "worker_gzip", cls: "s-worker", label: "worker bundle, gzip" },
     { key: "assets_br",   cls: "s-assets", label: "client assets, Brotli" },
   ];
-  // The placeholder model (PENDING_ROWS below) carries no dates and no numbers,
-  // so it draws the frame alone: the same viewBox, grid and legend, with no
-  // lines and no tick values. That keeps the swap to the live chart from moving
-  // anything, and it is not a guess at the series.
   const pending = rows.every((r) => r.ts === null);
   const sc = pending
     ? { x: () => PAD_L, y: (v) => PAD_T + PLOT_H - v * PLOT_H, yMax: 1 }
     : scales(rows, (r) => Math.max(r.pages_br ?? 0, r.worker_gzip ?? 0, r.assets_br ?? 0));
 
-  // The seeded prefix is drawn dashed. A number typed into a code comment and a
-  // number a runner measured last night are not the same kind of fact, and a
-  // chart that renders them identically is lying about which half of its own
-  // history it can stand behind.
   const seeded = rows.filter((r) => r.source === "baseline-note");
   const measured = rows.filter((r) => r.source !== "baseline-note");
-  // Join the two so the line does not break at the handover.
   const bridge = seeded.length && measured.length ? [seeded[seeded.length - 1], measured[0]] : [];
 
   const gridY = [0, 0.25, 0.5, 0.75, 1].map((f) => {
@@ -189,25 +142,10 @@ function chart(rows) {
 </ul>`;
 }
 
-// ── page ────────────────────────────────────────────────────────────────────
-
-// /garage/dyno is a BUILT document since 2026-09-25, in lib/island.ts's shape:
-// build.ts step 5b renders the shell once, so the lede, the footnote and 4 KB of
-// CSS ship as a q11 twin with a dcz delta, an ETag and hashed CSP. The part that
-// comes from the perf-history branch (chart, callout, table) is the island,
-// fetched after load from PULLS_URL. It rendered per request until then, which
-// sent the whole page at the edge's on-the-fly brotli with no twin and no delta,
-// for a series that changes once a night.
 export const PULLS_URL = DYNO_PULLS_URL;
 
-// The table shows the last 14 pulls. The live series has held more than that
-// since 2026-08, so the placeholder draws exactly this many rows and the swap
-// adds none.
 const TABLE_ROWS = 14;
 
-// The placeholder model: rows with no date, no commit and no numbers. The same
-// renderer draws it, so the baked frame and the live fragment share markup, and
-// nothing in it is a guess at the series.
 const PENDING_ROWS = Array.from({ length: TABLE_ROWS }, () => ({ ts: null, sha: null, source: "pending" }));
 
 const delta = (rows, key) => {
@@ -217,18 +155,12 @@ const delta = (rows, key) => {
   return { a, b, pct: ((b - a) / a) * 100, from: have[0].ts, to: have[have.length - 1].ts };
 };
 
-/** The island: chart, callout and recent pulls, for `rows` or the placeholder. */
 export function renderDynoPulls(rows) {
   const pending = rows.length > 0 && rows.every((r) => r.ts === null);
   const empty = !pending && rows.length < 2;
   const worker = pending ? null : delta(rows, "worker_gzip");
   const dots = "…";
 
-  // An em dash for a row that carries no number, which is what a JSONL row
-  // written before that column existed looks like. asNumber also refuses NaN,
-  // so a corrupt cell reads as absent rather than plotting as zero. The
-  // placeholder reads an ellipsis instead, since its cells are unread rather
-  // than absent.
   const cell = (v) => (pending ? dots : asNumber(v) === null ? "—" : kib(asNumber(v)).toFixed(1));
   const source = (r) => (pending ? dots : r.source === "baseline-note" ? "by hand" : "measured");
   const table = rows.slice(-TABLE_ROWS).reverse().map((r) => `<tr>
@@ -240,8 +172,6 @@ export function renderDynoPulls(rows) {
       <td class="src">${source(r)}</td>
     </tr>`).join("\n    ");
 
-  // The placeholder keeps the callout's box and its sentence, with the figures
-  // unread, so the text below it does not jump when the numbers arrive.
   const callout = worker || pending
     ? `<div class="callout"><b>The worker bundle is the pull worth watching.</b>
     It went from ${worker ? kib(worker.a).toFixed(0) : dots} to ${worker ? kib(worker.b).toFixed(0) : dots} KiB gzip between ${esc(worker ? worker.from : dots)} and
@@ -264,7 +194,6 @@ export function renderDynoPulls(rows) {
     </table>`);
 }
 
-/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderDynoPage() {
   return lunaPage({
     title: "Dyno · aadhar.sh",
@@ -332,9 +261,6 @@ td.src{font-size:var(--text-3xs);color:var(--slate-67)}
   });
 }
 
-// The island. The series is the same for every visitor and moves once a night,
-// so unlike /whoareyou's values it may be cached, for the five minutes the JSON
-// endpoint already takes.
 export async function handleDynoPulls(request, env, ctx) {
   const rows = mergeHistory(await readHistory(env, ctx));
   return islandResponse(renderDynoPulls(rows), { "cache-control": "public, max-age=300, s-maxage=300" });

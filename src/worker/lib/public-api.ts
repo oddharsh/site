@@ -1,18 +1,3 @@
-// lib/public-api.ts: the keyless JSON API, described once.
-//
-// build.ts writes /openapi.json from these operations (lib/openapi.ts adds the
-// component schemas and the document around them), and /developers (trust.ts)
-// renders its endpoint list and examples from OPERATIONS, so the
-// spec, the page and the handlers cannot disagree about a number: every cap,
-// default and rate budget below is the constant the handler itself enforces
-// (lib/api-limits.ts, LENS_BUDGETS, ASK_BUDGET), and the census roster is counted. Shapes were read from the
-// handlers on 2026-10-13; contract-openapi-describes-only-real-endpoints holds
-// each path to a real route.
-//
-// The component schemas live in lib/openapi.ts, which only build.ts and the
-// tests import: /developers needs the operations, and the Worker bundle has no
-// use for 20 KB of response shapes it never serves itself.
-//
 // Node-safe (gotcha 16): build.ts imports it from the staged tree.
 import { API_READ_BUDGET, ASK_LIMITS, CHANGE_RADAR_LIMITS, LENS_FETCH_TIMEOUT_MS, PHOTO_QUERY_LIMITS, SEARCH_LIMITS } from "./api-limits.ts";
 import { ASK_BUDGET } from "../ask-rank.ts";
@@ -33,18 +18,11 @@ export type Operation = {
   parameters?: Param[];
   requestBody?: Schema;
   responses: Responses;
-  /** A query that answers something real, for /developers and its curl lines. */
   example?: string;
 };
 
 export const OPENAPI_PATH = "/openapi.json";
 
-// ── what the API leaves out ──────────────────────────────────────────────────
-/** The machinery a public API usually carries that this one skips, and why.
- *  /developers and /openapi.json both print it, so each absence reads as a
- *  decision rather than a gap for the next readiness audit to fill. The site
- *  shipped each of them for a scanner and removed them on 2026-10-13, since no
- *  caller needed any of the three. */
 export const LEAVES_OUT: readonly { what: string; why: string }[] = [
   { what: "Keys, accounts and OAuth",
     why: "Every endpoint is public and read-only, so a credential would unlock nothing. The site once issued anonymous OAuth tokens that no endpoint checked, and dropped them." },
@@ -54,8 +32,6 @@ export const LEAVES_OUT: readonly { what: string; why: string }[] = [
     why: "A notice period protects clients that depend on an exact shape, and none is known here. A breaking change lands in /openapi.json the day it ships." },
 ];
 
-// ── schema helpers (openapi.ts builds the component schemas with them) ───────
-/** Set `key` only when there is a value, so an absent description is absent. */
 function withField(schema: Schema, key: string, value: unknown): Schema {
   if (value !== undefined) schema[key] = value;
   return schema;
@@ -74,22 +50,16 @@ const json = (description: string, schema: Schema): Responses[string] => ({ desc
 const err = (description: string) => json(description, ref("Error"));
 // The RateLimit fields as draft-ietf-httpapi-ratelimit-headers-11 writes them:
 // Structured Field Lists, one member per policy, named by budget.
-/** A rate policy as the headers name it: its name and its quota per window. */
 export type Policy = readonly [name: string, max: number];
 const lensPolicy = (b: LensBudget): Policy => [b, LENS_BUDGETS[b].max];
-/** The policy every operation without a 429 of its own shares (api-contract.ts). */
 export const READ_POLICY: Policy = ["read", API_READ_BUDGET.max];
-/** True for an operation that bills the shared read budget: one whose own
- *  description declares no 429, because it has no limiter of its own. */
 export const sharesReadBudget = (op: Operation): boolean => !("429" in op.responses);
 const policyHeader = (policies: readonly Policy[]): Schema => ({
   description: `The quota this endpoint bills, as a Structured Field List: ${policies.map(([n, max]) => rateLimitPolicy(n, max)).join(", ")}. q is requests and w the window in seconds.`,
   schema: str(),
 });
-/** A 2xx from a budgeted door, which names its policy. */
 export const budgeted = (response: Responses[string], policies: readonly Policy[]): Responses[string] =>
   ({ ...response, headers: { ...response.headers, "RateLimit-Policy": policyHeader(policies) } });
-/** A 429 from the site's own limiter, which always says when to come back. */
 export const limited = (description: string, policies: readonly Policy[]): Responses[string] => ({
   ...err(description),
   headers: {
@@ -100,7 +70,6 @@ export const limited = (description: string, policies: readonly Policy[]): Respo
 });
 const CLAMPED = "Values outside the range are clamped, and a non-number falls back to the default.";
 
-// ── operations ───────────────────────────────────────────────────────────────
 const inspect = LENS_BUDGETS.inspect.max;
 const compare = LENS_BUDGETS.compare.max;
 const askRanked = ASK_BUDGET.max;
@@ -244,14 +213,12 @@ export const OPERATIONS: readonly Operation[] = [
   },
 ];
 
-/** The operation with this id; throws so a renamed endpoint fails the build. */
 export function operation(operationId: string): Operation {
   const op = OPERATIONS.find((o) => o.operationId === operationId);
   if (!op) throw new Error(`public-api: no operation ${operationId}`);
   return op;
 }
 
-/** An operation's example as a site-relative URL. */
 export function exampleUrl(op: Operation): string {
   return op.example ? `${op.path}?${op.example}` : op.path;
 }

@@ -8,10 +8,6 @@ import { span } from "./lib/trace.ts";
 import { CENSUS_TABLE_URL } from "./routes.ts";
 import { SPARK } from "./lib/tui.ts";
 
-// The roster: 16 sites chosen to span the open → agent-native spectrum a
-// crypto-VC audience cares about. Agent-native infra, AI labs, publishers
-// building walls, an indie hand-built site, and the bare baseline. `label` is the
-// storage key + display name; `url` is exactly what gets scanned.
 export const CENSUS_ROSTER = [
   { url: "https://aadhar.sh/", label: "aadhar.sh" },
   { url: "https://stripe.com/", label: "stripe.com" },
@@ -32,59 +28,28 @@ export const CENSUS_ROSTER = [
 ];
 
 async function ensureCensusTable(env) {
-  // One row per (host, ymd): a same-day re-run upserts rather than duplicating,
-  // so the series is one point per scan day. Kept separate from the deploy-log
-  // `checkpoints` table that shares this D1 database.
   await env.RESTORE_DB.exec(
     "CREATE TABLE IF NOT EXISTS lens_census (ts INTEGER, ymd TEXT, host TEXT, url TEXT, tier TEXT, score INTEGER, level INTEGER, doors INTEGER, verdict TEXT, surfaces TEXT, PRIMARY KEY (host, ymd))"
   );
-  // The sweep's own record: one row per roster host per census day, saying how
-  // far that host got. See CENSUS_RUN_UPSERT for why it exists.
   await env.RESTORE_DB.exec(
     "CREATE TABLE IF NOT EXISTS lens_census_runs (ymd TEXT, host TEXT, ts INTEGER, stage TEXT, outcome TEXT, detail TEXT, PRIMARY KEY (ymd, host))"
   );
 }
 
-// WHY THE SWEEP KEEPS A RECORD OF ITSELF. Five Sundays wrote nothing to
-// lens_census, and every one of them left no trace a person could read a day
-// later. The dispatcher counted its failures on a span, spans live in Workers
-// Logs, and Workers Logs keep 3 days on Free, so by the time anyone noticed the
-// table had stopped moving the only evidence had expired. The failure that did
-// it on 2026-09-27 was `workflows.api.error.workflow.not_found`: the Workflow
-// this dispatches into did not exist in the account until 2026-09-28T21:10:36Z,
-// because nothing on the ramped release path ever registered it (see
-// census-workflow.ts). The dot in the instance id (#952) was real too, and was
-// never the only thing standing between a Sunday and a row.
-//
-// So each host gets one row a day in D1, which keeps it as long as the census
-// itself. The dispatcher writes stage `dispatch` (dispatched, duplicate,
-// dispatch_failed) and the Workflow step overwrites it with stage `scan`
-// (written, cap, failed). A row still at `dispatched` hours later names an
-// instance that never reported. /lens/census.json publishes the latest day as
-// `lastSweep`, so the question "did Sunday's sweep work, and if not where did
-// each host stop" is one curl from anywhere, forever.
 export const CENSUS_RUN_UPSERT =
   "INSERT INTO lens_census_runs (ymd, host, ts, stage, outcome, detail) VALUES (?,?,?,?,?,?) " +
   "ON CONFLICT(ymd, host) DO UPDATE SET ts=excluded.ts, stage=excluded.stage, outcome=excluded.outcome, detail=excluded.detail";
 
-// The dispatcher's form. It writes AFTER all sixteen creates, and an instance
-// can finish its scan before that, so a plain upsert would overwrite `written`
-// with `dispatched` and report a finished host as unfinished. The WHERE clause
-// lets a dispatch row replace only another dispatch row.
 export const CENSUS_RUN_UPSERT_DISPATCH = CENSUS_RUN_UPSERT + " WHERE lens_census_runs.stage = 'dispatch'";
 
 const detailOf = (e) => ((e && e.message) || (e == null ? null : String(e)))?.slice(0, 300) ?? null;
 
-/** Record one host's scan outcome. Never throws: the record must not be the
- *  thing that turns a written row into a retried step, and on the cap path the
- *  write can itself be refused. */
 async function recordScan(env, ymd, host, outcome, detail) {
   try {
     await env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, host, Date.now(), "scan", outcome, detail).run();
-  } catch (_e) { /* the span still carries the outcome */ }
+  } catch (_e) { }
 }
 
-// Pull the metrics the census tracks out of a full lens envelope.
 function censusMetrics(site, r, ts, ymd) {
   const terms = (r && r.terms) || {};
   const readiness = (r && r.readiness) || {};
@@ -111,88 +76,16 @@ function censusMetrics(site, r, ts, ymd) {
   };
 }
 
-// The weekly job, in three pieces below: a per-host scan, a Workflow instance
-// that runs exactly one of them, and a dispatcher that creates sixteen.
-//
-// THIS COMMENT USED TO PREDICT THE BUG AND THEN SHIP IT. It said the sweep ran
-// "in small concurrent batches", that the per-host catch "is correct (one dead
-// host must not abort the sweep) and it is also the exact mechanism by which a
-// roster of 16 could quietly become a roster of 3", and that the fix was to
-// record roster size against rows written so each failed host names itself.
-// Every word was right except the conclusion. The instrumentation went in,
-// nobody read it, and the roster became 3 for six straight weeks.
-//
-// The counter could not have shown the worse half anyway. Four concurrent scans
-// spent ~128 subrequests against a ceiling of 50, and because every probe in
-// lens.ts swallows its own error into `{ ok: false }`, the hosts that DID write
-// wrote a refusal as a score. Twelve missing rows is a gap you can see; three
-// deflated rows is a time series that looks healthy and is wrong.
-//
-// So the shape changed rather than the reporting. One host per invocation is
-// under the ceiling by construction, censusCapHit refuses to publish a row the
-// platform refused to measure, and censusScanOne rethrows instead of counting.
-// Traced throughout, because this is a TIME SERIES and the whole claim of
-// /lens/census is that it is citable evidence about where the web is going.
-/**
- * Did the PLATFORM refuse to look, rather than the site refuse to answer?
- *
- * THE BUG THIS EXISTS FOR, and it is the one /lens must never commit. Every
- * probe in lens.ts catches its own errors and returns `{ ok: false, error }`
- * (lensProbe's last line), which downstream reads as "this door is absent".
- * That is right for a 404 and catastrophically wrong for `Too many
- * subrequests`: the door may be wide open and we never knocked. The census then
- * stored the refusal as a score.
- *
- * Measured on the rows this replaced. Against a live single-host scan of the
- * same three sites through the same code:
- *
- *   host          census stored     one host per invocation
- *   stripe.com    0  / 0 doors      20 / 1 door
- *   shopify.com   0  / 0 doors      20 / 1 door   (three straight weeks at 0)
- *   vercel.com    13 -> 7 / 0       47 / 2 doors, tier `signaled`
- *
- * The only host that ever scored honestly was aadhar.sh, whose probes
- * self-dispatch and so spend no subrequests. Everything that cost budget was
- * published deflated.
- *
- * A GENERIC WALK rather than a list of probe fields, because a list of fields
- * is the thing that rots: the next probe added to originDiscovery is covered by
- * existing. `Object(v) === v` is the object test that needs no `typeof`, and
- * `isSubrequestLimit` takes `unknown` safely, so a body string or a null is
- * simply skipped. Bodies are strings and are never descended into.
- *
- * The walk itself lives in lib/budget.ts as `subrequestLimitIn`, since
- * 2026-09-30, because lens.ts needs the same question answered before it
- * writes a discovery blob to cache, and two copies of a walker disagree
- * about depth the day somebody edits one.
- */
 export function censusCapHit(result: unknown, maxDepth = 6): boolean {
   return subrequestLimitIn(result, maxDepth);
 }
 
-/**
- * Scan ONE roster host and upsert its row. This is the unit of work a Workflow
- * instance performs, and one host is the unit for a measured reason: a cold
- * origin costs 29 subrequests in originDiscovery alone (25 to the origin, 4
- * DNS-over-HTTPS, counted offline against a stubbed fetch), plus the page
- * fetch, the markdown-negotiation probe and this D1 write. Call it ~32 against
- * a ceiling of 50 per invocation on Workers Free. Two hosts do not fit, and the
- * sweep this replaces ran FOUR concurrently.
- *
- * `ts` and `ymd` are passed in rather than computed here, so every host in one
- * sweep lands on a single census day no matter when its instance actually runs.
- * A Workflow payload has to be serialisable and stable across retries anyway,
- * which is the same requirement from the other direction.
- */
 export async function censusScanOne(env, site, ts, ymd) {
   return span("census.host", async (s) => {
     s.setAttribute("census.host", site.label || site.url);
     try {
       const r = await lensInspect(site.url, env, { skipBotViews: true });
 
-      // Refuse to publish a refused check as a negative result. This is the
-      // guard that stays correct even if the budget arithmetic above is wrong
-      // one day, which is the point of having it as well as the split.
       if (censusCapHit(r)) {
         s.setAttribute("census.outcome", "cap");
         await recordScan(env, ymd, site.label, "cap", "subrequest cap reached; not published");
@@ -200,8 +93,6 @@ export async function censusScanOne(env, site, ts, ymd) {
       }
 
       const m = censusMetrics(site, r, ts, ymd);
-      // One batch, so the row and its record land together and cost one
-      // subrequest between them.
       await env.RESTORE_DB.batch([
         env.RESTORE_DB.prepare(
           "INSERT INTO lens_census (ts, ymd, host, url, tier, score, level, doors, verdict, surfaces) VALUES (?,?,?,?,?,?,?,?,?,?) " +
@@ -218,12 +109,7 @@ export async function censusScanOne(env, site, ts, ymd) {
     } catch (e) {
       s.setAttribute("census.outcome", "failed");
       s.setAttribute("census.error", (e && e.message) || String(e));
-      // Recorded per attempt, so a retry that succeeds overwrites it and one
-      // that never does leaves the last error standing in D1.
       await recordScan(env, ymd, site.label, "failed", detailOf(e));
-      // RETHROW, so the Workflow step records the failure and retries it. The
-      // old code swallowed here, which is how twelve hosts a week disappeared
-      // without a single number moving.
       throw e;
     }
   });
@@ -264,9 +150,6 @@ export function isDuplicateInstance(error) {
   return /already exists|duplicate/i.test((error && error.message) || String(error));
 }
 
-// The weekly job. It DISPATCHES and does no scanning: one Workflow instance per
-// roster host, each of which scans that host and upserts its row.
-//
 // WHY AN INSTANCE PER HOST RATHER THAN ONE INSTANCE OF SIXTEEN STEPS.
 // Cloudflare's limits page is ambiguous about which of the two owns a
 // subrequest budget: the row reads "Maximum number of subrequests per Workflow
@@ -275,14 +158,6 @@ export function isDuplicateInstance(error) {
 // exceed the default subrequest limit") reads as an instance-wide total. If it
 // is instance-wide, sixteen steps in one instance hit the exact wall this
 // change exists to escape, and the fix is theatre that looks like it works.
-//
-// An instance per host is correct under BOTH readings, which is why it is the
-// shape chosen rather than the tidier one. It costs nothing: Workers Free
-// allows 100,000 Workflow executions a day and 100 concurrent instances, and
-// this spends 16 a week.
-//
-// The dispatch is 2 D1 calls (the two CREATEs), 16 creates and 1 batch for the
-// record, so the invocation that used to demand ~512 subrequests now spends 19.
 export async function cronCensus(env) {
   return span("census.sweep", (s) => cronCensusInner(env, s), { "census.roster": CENSUS_ROSTER.length });
 }
@@ -293,15 +168,9 @@ async function cronCensusInner(env, sSweep) {
     return { ok: false, error: "no RESTORE_DB binding" };
   }
   if (!env.CENSUS_WORKFLOW) {
-    // Loud rather than a silent fallback to an in-line sweep. A fallback here
-    // would restore the exact contamination this change removes, on the one
-    // surface whose claim is that it never reports a failed check as a negative
-    // result.
     sSweep.setAttribute("census.outcome", "no_workflow");
     return { ok: false, error: "no CENSUS_WORKFLOW binding" };
   }
-  // Once here rather than once per instance: idempotent either way, but sixteen
-  // redundant D1 round trips is sixteen subrequests spent on nothing.
   await span("census.ensure_table", () => ensureCensusTable(env));
   const ts = Date.now();
   const ymd = new Date(ts).toISOString().slice(0, 10);
@@ -324,8 +193,6 @@ async function cronCensusInner(env, sSweep) {
     }
   }
 
-  // One batch for all sixteen rows, so the invocation spends 2 + 16 + 1
-  // subrequests. A refused record costs the record and never the sweep.
   try {
     await env.RESTORE_DB.batch(record.map(([host, outcome, detail]) =>
       env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT_DISPATCH).bind(ymd, host, ts, "dispatch", outcome, detail)));
@@ -339,13 +206,9 @@ async function cronCensusInner(env, sSweep) {
   sSweep.setAttribute("census.duplicate", duplicate);
   sSweep.setAttribute("census.failed", failed);
   sSweep.setAttribute("census.ymd", ymd);
-  // No `written` here. This function no longer writes a row, and reporting one
-  // would be the same lie by omission the old counter told.
   return { ok: failed === 0, created, duplicate, failed, ymd };
 }
 
-// Read every stored row, grouped per host into a time series with its first and
-// latest snapshot. Small dataset (roster × weeks), so read it all and reduce here.
 export async function fetchCensusGrouped(env) {
   if (!env.RESTORE_DB) return null;
   await ensureCensusTable(env);
@@ -373,7 +236,6 @@ export async function fetchCensusGrouped(env) {
       delta: (last.score != null && first.score != null) ? last.score - first.score : 0,
     };
   }).sort((a, b) => {
-    // rank by latest score desc, unknown/null last, ties keep roster order
     const sa = a.last.score == null ? -1 : a.last.score;
     const sb = b.last.score == null ? -1 : b.last.score;
     if (sb !== sa) return sb - sa;
@@ -382,9 +244,6 @@ export async function fetchCensusGrouped(env) {
   return { hosts, snapshots: days.size, firstYmd, lastYmd };
 }
 
-/** The latest census day's record, summarised. Pure, so the contract suite can
- *  hold its shape without a database. `null` when nothing has been recorded,
- *  which is every day before this table existed. */
 export function summarizeCensusRuns(rows) {
   if (!rows || !rows.length) return null;
   const ymd = rows.reduce((max, r) => (r.ymd > max ? r.ymd : max), rows[0].ymd);
@@ -397,8 +256,6 @@ export function summarizeCensusRuns(rows) {
     recorded: day.length,
     written: outcomes.written || 0,
     outcomes,
-    // Dispatched and never heard from: the instance is still running, still
-    // retrying, or died without reaching its catch.
     unfinished: day.filter((r) => r.stage === "dispatch" && r.outcome !== "dispatch_failed").map((r) => r.host),
     problems: day
       .filter((r) => r.outcome === "dispatch_failed" || r.outcome === "cap" || r.outcome === "failed")
@@ -408,7 +265,6 @@ export function summarizeCensusRuns(rows) {
 
 export async function fetchCensusLastSweep(env) {
   if (!env.RESTORE_DB) return null;
-  // No ensure here: handleCensusJson reads fetchCensusGrouped first, which does.
   const { results } = await env.RESTORE_DB.prepare(
     "SELECT ymd, host, ts, stage, outcome, detail FROM lens_census_runs WHERE ymd = (SELECT MAX(ymd) FROM lens_census_runs)"
   ).all();
@@ -423,11 +279,7 @@ function sparkline(series) {
 
 const TIER_KIND = { open: "ok", signaled: "", enforced: "warn", paid: "warn", unknown: "off" };
 
-// The shared exhibit renderer: the full per-site trend table. Used by the
-// standalone /lens/census page.
 export function censusExhibitHtml(grouped) {
-  // The placeholder model: one unnamed row per roster host, since the roster is
-  // what a sweep reports on. Nothing in it is a claim about any site.
   if (grouped === PENDING_CENSUS) {
     const cell = "…";
     const rows = CENSUS_ROSTER.map(() => '<tr aria-hidden="true"><td class="cx-site">' + cell + "</td><td>" + cell + '</td><td class="cx-num">' + cell +
@@ -445,8 +297,6 @@ export function censusExhibitHtml(grouped) {
     const tier = last.tier || "unknown";
     const scoreTxt = last.score == null ? "—" : last.score;
     const arrow = h.delta > 0 ? '<span class="cx-up">▲' + h.delta + "</span>" : h.delta < 0 ? '<span class="cx-down">▼' + Math.abs(h.delta) + "</span>" : (h.series.length > 1 ? '<span class="cx-flat">•</span>' : "");
-    // The stored column is JSON of whatever the sweep recorded, so the shape is
-    // declared here rather than inferred from an empty initializer.
     let surf: Partial<Record<"llms" | "md" | "mcp" | "agents" | "jsonld" | "webBotAuth", unknown>> = {};
     try { surf = JSON.parse(last.surfaces || "{}"); } catch (_e) {}
     const chips = [
@@ -495,21 +345,12 @@ export const CENSUS_CSS = `/*min*/
 .cx-empty { padding:22px 10px; text-align:center; color:var(--ink-dim); font-size:var(--text-sm); }
 `;
 
-// GET /lens/census — the standalone exhibit page (SSR, no-JS friendly, machines
-// welcome). ?refresh=<CENSUS_KEY> triggers a scan now (owner-only), so the first
-// snapshot doesn't have to wait for the weekly cron.
 export async function handleCensus(request, env, ctx) {
   const url = new URL(request.url);
   const refresh = url.searchParams.get("refresh");
   let banner = html``;
   if (refresh) {
     if (secretMatches(refresh, env.CENSUS_KEY)) {
-      // ONE sweep path now. This used to run its own cursor-and-batch variant
-      // because a fetch invocation's waitUntil gets only ~30s past the
-      // response, and a 16-host in-line sweep blows through that. Dispatching
-      // costs 19 subrequests and no crawling, so it fits inside the grace with
-      // room to spare, and the owner's manual pass and the cron are the same
-      // code. Two sweep implementations is how the roster quietly became four.
       ctx.waitUntil(cronCensus(env));
       banner = html`<div class="cx-banner ok">Census refresh triggered: one Workflow instance per roster host, 16 in all, each with its own subrequest budget. Reload in a minute or two as they land.</div>`;
     } else {
@@ -520,29 +361,19 @@ export async function handleCensus(request, env, ctx) {
   return censusPage(html`${banner}${censusExhibit(grouped)}`, { cache: "public, max-age=300, s-maxage=900" });
 }
 
-// /lens/census is a BUILT document since 2026-09-25: build.ts step 5b bakes
-// renderCensusPage() once, so the lede and the CSS ship as a q11 twin with a dcz
-// delta and an ETag, and the table arrives from TABLE_URL. The owner's
-// ?refresh=KEY view above still renders live and whole, since its banner belongs
-// to the request that asked for the sweep (index.ts routes it there).
 export const TABLE_URL = CENSUS_TABLE_URL;
 
 const PENDING_CENSUS = { pending: true };
 
-// The one place the string-built exhibit becomes markup. censusExhibitHtml
-// escapes every value it interpolates (escHtml, escAttr), and the three callers
-// above all take it through here rather than wrapping it themselves.
 function censusExhibit(grouped) {
   return unsafeHtml(censusExhibitHtml(grouped));
 }
 
-/** The island: the census table, read from D1 for this request. */
 export async function handleCensusTable(request, env) {
   const grouped = await fetchCensusGrouped(env);
   return islandResponse(censusExhibit(grouped), { "cache-control": "public, max-age=300, s-maxage=900" });
 }
 
-/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderCensusPage() {
   const mount = islandMount("cx-island", TABLE_URL, censusExhibit(PENDING_CENSUS),
     html`<p>The census table arrives in a second request after the page loads, and that needs a script. Without one, <a href="${TABLE_URL}">${TABLE_URL}</a> shows it as plain HTML, and <a href="/lens/census.json">/lens/census.json</a> as JSON.</p>`);
@@ -550,8 +381,6 @@ export function renderCensusPage() {
     { head: islandPreload(TABLE_URL), scripts: islandScript() });
 }
 
-// One page frame for both renders, so the live refresh view and the baked shell
-// cannot drift apart.
 function censusPage(exhibit, extra = {}) {
   return lunaPage({
     title: "The census · aadhar.sh",
@@ -587,10 +416,7 @@ footer a { color:var(--link); }
   });
 }
 
-// GET /lens/census.json — the machine twin: the same grouped series as JSON.
 export async function handleCensusJson(request, env) {
-  // A D1 failure used to escape as Cloudflare's HTML 1101 page from a JSON
-  // endpoint. It answers in the endpoint's own error shape instead.
   let grouped;
   try {
     grouped = await fetchCensusGrouped(env);
@@ -599,9 +425,6 @@ export async function handleCensusJson(request, env) {
     return jsonResponse({ ok: false, error: "census storage read failed", code: "storage_unavailable" }, 503, { "retry-after": "60" });
   }
   if (!grouped) return jsonResponse({ ok: false, error: "census storage is unavailable" }, 503);
-  // Read beside the series: `lastYmd` says when a
-  // row last landed, and `lastSweep` says what the latest sweep did, including
-  // a sweep that landed nothing.
   const lastSweep = await fetchCensusLastSweep(env).catch((e) => ({ error: detailOf(e) }));
   return jsonResponse({
     ok: true,
