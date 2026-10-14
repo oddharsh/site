@@ -176,7 +176,12 @@ export default {
       // keeps the pool honest AND the stored Luma session warm; without this
       // tick the pool only refreshed on a cookie re-paste. Odd minute, same
       // collision-avoidance as the others.
-      await cron("cron.serendipity", () => cronSerendipity(env));
+      //
+      // Its enrich and tag passes POST back to /serendipity/* in a fresh
+      // invocation, and only the loopback binding gets there: a global fetch to
+      // a route on this zone goes to the absent origin and answers 522.
+      const self = ctx.exports?.default;
+      await cron("cron.serendipity", () => cronSerendipity(env, self ? (url, init) => self.fetch(new Request(url, init)) : null));
     } else {
       await cron("cron.unmatched", async () => ({ ok: false, cron: event.cron }));
     }
