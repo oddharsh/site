@@ -1,5 +1,5 @@
 // ── no cron tick outspends the 50-subrequest cap ─────────────────────────────
-// Workers Free refuses an invocation's 51st subrequest. From 2026-08-14 to
+// Workers Free refuses an invocation's 51st subrequest (gotcha 36). From 2026-08-14 to
 // 2026-10-14 the /around crawl (about 40 on its own) and webmention-send (a
 // budget of 40) shared the 41 5 tick, so that one invocation hit the ceiling
 // every day. Where the refusal landed on a robots gate, the gate rethrew it,

@@ -45,7 +45,8 @@ export function cronJob(expr) {
   // missing on 25 of 28 days. Split 2026-10-14. 53 5 took the account's fifth
   // and last cron slot (Workers Free caps an account at five; aadhar-sh holds
   // all of them). The next job that needs its own invocation self-dispatches
-  // instead, as serendipity's dispatchTag does.
+  // through the ctx.exports.default loopback instead (PR #1333: a fetch() to
+  // this zone's own route never reaches the Worker, it gets a 522).
   if (sig === "41 5") return "around";
   if (sig === "53 5") return "webmention_send";
   if (sig === "23 */6") return "serendipity";
