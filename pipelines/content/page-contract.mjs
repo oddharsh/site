@@ -51,6 +51,35 @@ export function validateEditorial(editorial, context = "editorial") {
   return editorial;
 }
 
+// Two readers who skipped the page: one always picks the longest option, the
+// other the shortest. Either beats chance when authors write the right answer
+// with its full justification and the distractors as bare claims, which is how
+// 191 of 202 questions read on 2026-10-14. A win counts ties, because a
+// guesser who sees two equally long finalists still narrows the field.
+export function lengthGuesses(understanding) {
+  let longest = 0;
+  let shortest = 0;
+  const ratios = [];
+  for (const question of understanding.questions) {
+    const right = question.options.find((option) => option.ok === true).t.length;
+    const wrong = question.options.filter((option) => option.ok !== true).map((option) => option.t.length);
+    if (right >= Math.max(...wrong)) longest++;
+    if (right <= Math.min(...wrong)) shortest++;
+    ratios.push(right / (wrong.reduce((sum, n) => sum + n, 0) / wrong.length));
+  }
+  return { questions: understanding.questions.length, longest, shortest, ratios };
+}
+
+// One page may hand either guesser at most half its questions. A page that
+// sorts every right answer to one end of the length range teaches the reader
+// to read the lengths instead of the page.
+function checkLengthTell(understanding, context) {
+  const { questions, longest, shortest } = lengthGuesses(understanding);
+  const cap = Math.floor(questions / 2);
+  if (longest > cap) fail(`${context}.questions`, `the right answer is the longest option on ${longest} of ${questions} questions (cap ${cap}); trim it or give a distractor its detail`);
+  if (shortest > cap) fail(`${context}.questions`, `the right answer is the shortest option on ${shortest} of ${questions} questions (cap ${cap})`);
+}
+
 export function validateUnderstanding(understanding, context = "understanding") {
   if (!understanding || typeof understanding !== "object" || Array.isArray(understanding)) {
     fail(context, "must be an object with intro and questions");
@@ -77,6 +106,7 @@ export function validateUnderstanding(understanding, context = "understanding") 
       lintAuthorText(option.why, `${oContext}.why`);
     });
   });
+  checkLengthTell(understanding, context);
   return understanding;
 }
 
@@ -130,3 +160,5 @@ export function renderUnderstanding(understanding, skin) {
 // demos to make the model testable. End with three to seven questions that ask the
 // reader to reconstruct the model. Give every option feedback, including the
 // misconceptions. The check diagnoses a second read; it never blocks the page.
+// Match the options' lengths, so a reader who skipped the page can't pass by
+// picking the longest one (lengthGuesses, above).

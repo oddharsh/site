@@ -382,7 +382,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
       "q": "The copy bar uses scroll() and the maximize-on-open windows use view(). What's the actual difference between the two timelines?",
       "options": [
         {
-          "t": "scroll() tracks how far a scroll container has scrolled; view() tracks one element's own trip across the viewport.",
+          "t": "scroll() tracks how far a container has scrolled; view() tracks one element crossing the viewport.",
           "ok": true,
           "why": "That's the split the demos make: every copy-bar pixel maps to document position, while each window animates on its own schedule as it personally rises into view."
         },
@@ -391,7 +391,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
           "why": "view() still scrubs continuously with position. The windows only look one-shot because animation-range packs the whole animation into the start of each element's travel."
         },
         {
-          "t": "scroll() handles vertical movement and view() handles horizontal movement.",
+          "t": "scroll() handles vertical movement and view() handles horizontal movement across the page.",
           "why": "Both take an axis; section 1 passes block as an argument in scroll(root block). The real split is what gets measured, the container's offset or the element's position."
         },
         {
@@ -404,7 +404,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
       "q": "The maximize effect sets animation-range: entry 5% cover 32%. What is that range buying?",
       "options": [
         {
-          "t": "It packs the whole zoom into the early part of the element's travel, so it finishes fast and then holds still.",
+          "t": "It packs the zoom into the start of each card's travel, so it ends early.",
           "ok": true,
           "why": "Right: the open completes within the first third of the card's trip across the viewport, so it reads as XP's snappy one-shot maximize and then holds still."
         },
@@ -413,7 +413,7 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
           "why": "Those percentages name positions along the element's view() timeline. A clock never enters it, which is the premise of the whole page."
         },
         {
-          "t": "It restricts the effect to windows that cover at least 32% of the viewport.",
+          "t": "It restricts the effect to windows tall enough to cover at least 32% of the viewport.",
           "why": "cover names a stretch of the element's crossing of the scrollport, a position range. All three demo windows play the same entrance regardless of their height."
         },
         {
@@ -426,20 +426,20 @@ code { font-family: var(--font-mono); font-size: var(--text-sm); }
       "q": "How does the Luna scrollbar in section 3 relate to the scroll-driven animation the rest of the page is about?",
       "options": [
         {
-          "t": "It animates nothing: the native scrollbar restyled in pure CSS, and it already shipped site-wide.",
+          "t": "It animates nothing: the native scrollbar restyled in pure CSS, already shipped site-wide.",
           "ok": true,
           "why": "Right. ::-webkit-scrollbar draws the gradient thumb and arrow buttons, scrollbar-color covers Firefox, and the tint graduated out of the lab onto every page of the site."
         },
         {
-          "t": "The gradient thumb is driven by animation-timeline: scroll() attached to the track.",
+          "t": "The gradient thumb's shading is driven by animation-timeline: scroll() attached to the track.",
           "why": "The thumb's gradient is a static background on a native widget; your scrolling moves the widget itself. Section 3's note says up front that no animation is involved."
         },
         {
-          "t": "It needs a few lines of JS to redraw the thumb's gradient as it moves.",
+          "t": "It needs a few lines of JS to redraw the thumb's gradient as the thumb moves down the track.",
           "why": "The demo box spells it out: no images, no JS, just a styled native scrollbar. Firefox even gets a reduced two-tone version from a single scrollbar-color declaration."
         },
         {
-          "t": "It's what the other two prototypes fall back to under prefers-reduced-motion.",
+          "t": "It's what the other two prototypes fall back to when prefers-reduced-motion is set.",
           "why": "Under reduced motion the zoom freezes and the copy bar pins at a static fill; the scrollbar simply stays everywhere because styling a widget adds no motion to respect."
         }
       ]

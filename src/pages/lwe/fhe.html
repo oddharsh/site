@@ -352,7 +352,7 @@
           "why": "That describes a trusted enclave, which carries its own separate trust assumptions. In FHE the plaintext stays sealed everywhere: the addition runs on the noisy ciphertexts themselves."
         },
         {
-          "t": "the ciphertexts with the noise already stripped off them",
+          "t": "the ciphertexts with the noise stripped off",
           "why": "The noise stays in through the whole computation, since it is what keeps the ciphertext safe. Decryption rounds it away at the very end: the demo even prints the combined noise it rounded off."
         }
       ]
@@ -361,12 +361,12 @@
       "q": "Privacy homomorphisms were theorized in the late 1970s, yet FHE only arrived in 2009. What did Gentry's scheme contribute that made encryption fully homomorphic?",
       "options": [
         {
-          "t": "lattices expressing arbitrary circuits, so any computation at all",
+          "t": "lattices that express arbitrary circuits, so any computation",
           "ok": true,
           "why": "Yes. Earlier constructions supported only limited operations; lattices expressing arbitrary circuits turned a 30-year open problem into a working scheme, and that generality is what the word fully means."
         },
         {
-          "t": "a way to get rid of the random noise entirely",
+          "t": "a way to strip out the random noise entirely, so nothing corrupts",
           "why": "The noise is load-bearing: it is the randomness that makes the scheme secure. Gentry contributed a way to manage it, via bootstrapping, while keeping it in place."
         },
         {
@@ -374,7 +374,7 @@
           "why": "Speed came much later and only partially: the first implementation needed 30 minutes per bit operation, and even the millisecond-era schemes ran about a million times slower than plaintext computing. 2009 solved feasibility."
         },
         {
-          "t": "the very first idea of computing on encrypted data",
+          "t": "the original idea of computing on data while it stays encrypted",
           "why": "Privacy homomorphisms carried that idea back in the late 1970s. What stayed open for three decades was a workable construction, and that is what Gentry delivered in 2009."
         }
       ]
@@ -396,7 +396,7 @@
           "why": "Every operation runs on ciphertext, so the server stays blind either way. Corruption is an accuracy failure: enough accumulated noise makes decoding round wrong even for the honest key holder."
         },
         {
-          "t": "they grow noise the same, multiply just counts as more ops",
+          "t": "they grow noise at the same rate, multiply just counts as more ops",
           "why": "The growth rates genuinely differ, and that difference drives all of FHE engineering. Try the demo again: a handful of multiplies reaches the corrupt line while adds barely move the bar."
         }
       ]
@@ -405,7 +405,7 @@
       "q": "The bootstrap button rescued the demo every time the meter ran hot. What does bootstrapping actually do, and at what cost?",
       "options": [
         {
-          "t": "it homomorphically re-encrypts to reset the noise, and it costs a lot",
+          "t": "it homomorphically re-encrypts to reset the noise, at a big cost",
           "ok": true,
           "why": "Right: bootstrapping refreshes the ciphertext by re-encrypting it under a different key, resetting the noise before it bleeds into the data. The cost is speed and compute; Gentry's scheme needed 30 minutes per bit operation when first implemented."
         },
@@ -414,7 +414,7 @@
           "why": "That would expose the plaintext and defeat the entire construction. The refresh happens homomorphically: the re-encryption itself runs on encrypted data, so the noise resets while the secret stays sealed."
         },
         {
-          "t": "it removes the noise for good so later ops run clean",
+          "t": "it removes the noise for good, so every later op runs clean",
           "why": "Fresh noise returns with the very next operation, and it must, since the noise is what makes the encryption secure. Watch the demo's meter: bootstrap drops it to the floor, then it climbs again as you keep operating."
         },
         {
@@ -427,7 +427,7 @@
       "q": "Last one. Assume FHE someday runs fast enough for real applications. What catch appears the moment an application needs the plaintext answer?",
       "options": [
         {
-          "t": "someone has to hold the decryption key, and you have to trust them",
+          "t": "you have to trust whoever holds the decryption key",
           "ok": true,
           "why": "That is the caveat that closes the loop: outputs for non-FHE use need a decryption key, and in practice a single party or a set of MPC nodes controls it. The trust assumptions collapse back to MPC's, only slower."
         },

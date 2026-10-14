@@ -117,21 +117,21 @@ const garageFixture = {
       q: "What does this fixture prove?",
       options: [
         { t: "That the generator emits the shared page contract.", ok: true, why: "Right. The fixture checks the generated wiring." },
-        { t: "That every experiment is correct.", why: "The fixture tests wiring, not the truth of an experiment." },
+        { t: "That every experiment on a generated page is correct.", why: "The fixture tests wiring, not the truth of an experiment." },
         { t: "That a quiz can replace the page body.", why: "The body and the check serve different jobs." }
       ]
     }, {
       q: "What should a real Garage page add?",
       options: [
         { t: "A concrete mechanism, evidence, and a stated uncertainty.", ok: true, why: "Right. The scaffold carries the shell; the author carries the experiment." },
-        { t: "Only a longer title.", why: "A title cannot explain a mechanism." },
-        { t: "A score gate that blocks the page.", why: "The check diagnoses a second read and never blocks the page." }
+        { t: "A longer title and a status badge in the header.", why: "A title or a badge cannot explain a mechanism." },
+        { t: "A score gate that blocks the page until the reader passes.", why: "The check diagnoses a second read and never blocks the page." }
       ]
     }, {
       q: "What would falsify the scaffold contract?",
       options: [
         { t: "The generated page lacks its quiz payload or runtime.", ok: true, why: "Right. The generator promises both pieces." },
-        { t: "The reader misses a question.", why: "A miss points the reader back to the page; it does not falsify the scaffold." },
+        { t: "The reader misses a question on the generated page.", why: "A miss points the reader back to the page; it does not falsify the scaffold." },
         { t: "The page has custom experiment CSS.", why: "Custom CSS is an explicit part of the Garage boundary." }
       ]
     }]

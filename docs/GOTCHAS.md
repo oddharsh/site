@@ -459,3 +459,16 @@ skips it.
     (`workersInvocationsAdaptive`), which needs no observability scope;
     exactly 50 subrequests beside it means the Workers Free cap (gotcha 36).
     Checked by: nothing (judgment).
+
+66. **The right answer was the longest option, so the quiz graded length.**
+    On 2026-10-14 the right answer was the longest option on 191 of 202
+    understanding-check questions, at a median 1.40x the wrong ones. Authors
+    wrote it with its justification attached and the distractors as bare
+    claims, so "pick the longest" scored 95% on pages the reader never
+    opened. Option shuffling hid position and did nothing for length. The
+    justification belongs in the option's `why`; each misconception gets
+    the truth's level of detail. `validateUnderstanding` refuses a page
+    where the right answer is the longest, or the shortest, on more than
+    half its questions, and the contract test holds both guessers near
+    chance site-wide with the median length ratio in 0.85 to 1.15.
+    Checked by: `tools/contract-quiz-answers-carry-no-length-tell.test.mjs`.

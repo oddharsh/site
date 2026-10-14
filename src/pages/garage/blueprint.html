@@ -316,20 +316,20 @@ const PREFIX = [...];            <span class="c">// ordered</span>
       "q": "The KV caches store two keys per surface: the value itself plus a tiny :fresh sentinel. Why split them instead of just giving the value a TTL?",
       "options": [
         {
-          "t": "The value never expires and only the sentinel carries the TTL, so a lapse serves the stale copy instantly while the rebuild runs in the background.",
+          "t": "The value never expires and the sentinel carries the TTL, so a lapse serves stale instantly while it rebuilds.",
           "ok": true,
-          "why": "Right: nobody waits but the true first run. Expiry lives on the sentinel precisely so a lapse downgrades to a stale serve instead of a cold, blocking rebuild."
+          "why": "Right: nobody waits but the true first run. Expiry lives on the sentinel precisely so a lapse downgrades to a stale serve, with the rebuild riding ctx.waitUntil, instead of a cold, blocking rebuild."
         },
         {
           "t": "KV can't attach a TTL to a value that large, so the expiry has to live on a small companion key instead.",
           "why": "KV will happily attach a TTL to any value. The split is a serving decision: the keep table's SWR row says the value persists forever exactly so a lapse can serve stale instantly."
         },
         {
-          "t": "The sentinel works as a lock, keeping two isolates from rebuilding the same value at the same time.",
+          "t": "The sentinel works as a lock, so two isolates never race to rebuild the same value at the same time after a lapse.",
           "why": "The sentinel carries freshness, and only freshness. Two isolates rebuilding concurrently just write the same data twice; the keep table describes the sentinel only as the TTL carrier."
         },
         {
-          "t": "Checking the tiny sentinel first lets most requests skip the expensive read of the full value.",
+          "t": "Checking the tiny sentinel first lets most requests skip the expensive read of the full value from KV.",
           "why": "The value gets read on every request, fresh or stale. The two keys separate expiry from storage so the data can outlive its own TTL, per the SWR row in the keep table."
         }
       ]
@@ -338,12 +338,12 @@ const PREFIX = [...];            <span class="c">// ordered</span>
       "q": "The blueprint flips run_worker_first from a denylist (everything, minus 14 carve-outs) to an allowlist. What is the actual reason?",
       "options": [
         {
-          "t": "It inverts an inherited Pages default: the worker saw everything there, but most of this site is static, so static becomes the default and the worker earns each route.",
+          "t": "It drops a Pages-era default: most of this site is static, so the worker should earn each route it runs.",
           "ok": true,
-          "why": "Right: same engine, opposite default. The config then reads as intent, and a forgotten negation can never send a new static file through the worker by accident."
+          "why": "Right: on Pages the worker saw everything by definition, and the migration inherited that. Same engine, opposite default: the config reads as intent, and a forgotten negation can never send a new static file through the worker by accident."
         },
         {
-          "t": "Allowlist matching is cheaper for the routing engine, so every request saves latency at the edge.",
+          "t": "Allowlist matching is cheaper for the routing engine, so every request saves a little latency at the edge.",
           "why": "The routing ghost calls it the same engine with the opposite default, so per-request speed is a wash. The win is legibility and safety: compute happens exactly where the config says it does."
         },
         {
@@ -351,7 +351,7 @@ const PREFIX = [...];            <span class="c">// ordered</span>
           "why": "The denylist runs fine on Workers today, which is exactly how it survived the migration. It is a ghost because it encodes the old platform's default, per the routing section."
         },
         {
-          "t": "An allowlist sends more routes through the worker, so more of the site can be server-rendered.",
+          "t": "An allowlist sends more routes through the worker, so more of the site can be server-rendered and cached.",
           "why": "It points the opposite way: fewer requests invoke the worker. Under the as-built denylist the worker already saw everything except 14 carve-outs; the allowlist shrinks that to routes that need compute."
         }
       ]
@@ -360,16 +360,16 @@ const PREFIX = [...];            <span class="c">// ordered</span>
       "q": "Three handlers sniff the content-type of asset responses before returning them. What does the blueprint do with those guards?",
       "options": [
         {
-          "t": "Keep only the cache-control clamp on 404s: the SPA masquerade is extinct on Workers, but a miss under /images/* could still inherit the 1-year immutable rule.",
+          "t": "Keep only a cache-control clamp on 404s, since a miss under /images/* could still inherit the immutable rule.",
           "ok": true,
-          "why": "Right: one small guard instead of three sniffing ones. The masquerade test targets a Pages behavior that cannot occur on Workers, while the clamp still keeps a cached 404 from going immutable for a year."
+          "why": "Right: one small guard instead of three sniffing ones. The SPA masquerade the guards test for is a Pages behavior that cannot occur on Workers, while the clamp still keeps a cached 404 from going immutable for a year."
         },
         {
-          "t": "Delete all three outright, because Workers static assets answer a missing file with an honest 404.",
+          "t": "Delete all three outright, since Workers static assets answer a missing file with an honest 404 status.",
           "why": "That is the skim read, and the ghost section rejects it: an edge-cached 404 under /images/* would still inherit the 1-year immutable rule, so the narrow cache-control clamp stays."
         },
         {
-          "t": "Keep all three, because a corrupt AVIF can still come back as HTML at an image URL.",
+          "t": "Keep all three, because a corrupt AVIF can still come back from the asset layer as HTML at an image URL.",
           "why": "That conflates a different gotcha: picture-element decode failures, which happen in the browser after the bytes arrive. On Workers a missing asset returns an honest 404, so HTML at an image URL is extinct."
         },
         {
@@ -382,9 +382,9 @@ const PREFIX = [...];            <span class="c">// ordered</span>
       "q": "The lunaPage() sketch has nine handlers stop hand-assembling the same XP window. What does the page say it actually buys?",
       "options": [
         {
-          "t": "Change-amplification: a chrome tweak updates nine pages through one function, while the duplicated CSS was already near free on the wire under brotli.",
+          "t": "Change-amplification: one function updates nine pages when the chrome changes; wire bytes barely move.",
           "ok": true,
-          "why": "Right: when the back/forward buttons changed this week, one function would have updated nine pages. The page calls the maintenance case sufficient on its own."
+          "why": "Right: when the back/forward buttons changed this week, one function would have updated nine pages. Brotli already crushes the repeated CSS per response, so the page calls the maintenance case sufficient on its own."
         },
         {
           "t": "Wire bytes: nine hand-assembled shells ship nine copies of the chrome CSS, and one function collapses them.",
@@ -404,12 +404,12 @@ const PREFIX = [...];            <span class="c">// ordered</span>
       "q": "The closing verdict argues against a big-bang rewrite. On what grounds?",
       "options": [
         {
-          "t": "Half the blueprint already shipped incrementally, each deploy gated by the 42-route oracle with no downtime; the repo already knows how to become its next self one verified deploy at a time.",
+          "t": "Half of it already shipped incrementally, each step gated by the 42-route oracle, with no downtime.",
           "ok": true,
-          "why": "Right: the changelog is the argument. The verdict calls what remains a to-do list, since the Workers migration, the counter DO, and the build step all landed the same stepwise way."
+          "why": "Right: the changelog is the argument. The Workers migration, the counter DO, and the build step all landed stepwise, so the repo already knows how to become its next self one verified deploy at a time. What remains is a to-do list."
         },
         {
-          "t": "A rewrite of this size could never pay back the effort on a personal site, so everything stays as-is.",
+          "t": "A rewrite this size could never pay back the effort on a personal site, so it all stays as-is.",
           "why": "The verdict measures track record, and the page lays out real changes it wants made. The argument covers how they ship: incrementally, each deploy verified, the way the Workers migration itself landed."
         },
         {

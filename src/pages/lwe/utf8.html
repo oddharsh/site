@@ -226,7 +226,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
       "q": "Pop quiz then. Unicode says 中 is U+4E2D. What does that tell you about the bytes on disk?",
       "options": [
         {
-          "t": "nothing yet, the encoding decides how that number becomes bytes",
+          "t": "nothing yet, the encoding turns that number into bytes",
           "ok": true,
           "why": "Right. A code point is just a number, and UTF-8, UTF-16, and UTF-32 each store that same number as different bytes. That split between numbering and storage is the whole reason encodings exist."
         },
@@ -261,7 +261,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
           "why": "CPUs are great at fixed 4-byte reads, which is exactly why UTF-32 indexing is trivial. The price shows up in storage and bandwidth, and in breaking old ASCII tools."
         },
         {
-          "t": "it's harder to decode than utf-8 is",
+          "t": "decoding it takes more work than decoding utf-8",
           "why": "Decoding UTF-32 is the easy part: read 4 bytes, that's your code point. The page's objection is the 4x blowup on English text plus losing ASCII compatibility."
         }
       ]
@@ -270,12 +270,12 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
       "q": "UTF-8 spends exactly 1 byte on every ASCII character. What's the big prize that choice buys?",
       "options": [
         {
-          "t": "old ascii files are already valid utf-8, byte for byte",
+          "t": "every old ascii file is already valid utf-8",
           "ok": true,
           "why": "Backwards compatibility for free: an English text file from 1980 is a correct UTF-8 file with zero conversion. Add the smaller size and you get why it ate the web."
         },
         {
-          "t": "smaller files, and that's the whole story",
+          "t": "smaller english files, and that's the entire prize",
           "why": "Size is half of it. The other half is that every old ASCII file and tool kept working unchanged; type Hello into the first demo and UTF-8's bytes match ASCII exactly."
         },
         {
@@ -283,7 +283,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
           "why": "A byte tops out at 256 values, so 150,000 characters can't all fit in one. UTF-8 is variable-width: the demo shows é at 2 bytes, 中 at 3, and emoji at 4."
         },
         {
-          "t": "it caps utf-8 at 128 characters like ascii",
+          "t": "it caps utf-8 at 128 characters, same as ascii's 7 bits",
           "why": "That was ASCII's ceiling, and UTF-8 climbs past it with multi-byte sequences for everything above 127. The lead byte's prefix announces how many bytes follow, per the second demo."
         }
       ]
@@ -314,12 +314,12 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
       "q": "Last one, the flashcards trap. Someone asks how long the string 中 is. What's the honest answer?",
       "options": [
         {
-          "t": "depends what you count: 3 bytes, 1 code point, 1 glyph",
+          "t": "depends on the unit: 3 bytes, 1 code point, 1 glyph",
           "ok": true,
           "why": "That's the trap named at the end of the chat: byte length, code point count, and grapheme clusters are three different measures, and 中 scores 3, 1, and 1 on them."
         },
         {
-          "t": "1 obviously, a character is a character",
+          "t": "1 obviously, it's one character on screen and in memory",
           "why": "True at the glyph layer only. The first demo shows the same 中 costing 3 bytes in UTF-8 and 4 in UTF-32, so any code that touches storage needs the byte answer too."
         },
         {
