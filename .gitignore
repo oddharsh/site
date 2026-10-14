@@ -66,6 +66,8 @@ cf-garage/node_modules/
 tools/photos/zenc/target/
 # zensim-score (measurement only, zensim-probe.ts): same split
 tools/photos/zensim-score/target/
+# photo-metrics (hif-archive.ts scorer): same split, Cargo.lock committed
+tools/photos/photo-metrics/target/
 
 # dcz deltas are BUILD OUTPUT now (build.ts generates them with node:zlib zstd), not
 # committed artifacts. Nothing to ignore here; this note exists so the directory is not

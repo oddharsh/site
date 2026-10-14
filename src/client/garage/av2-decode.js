@@ -1,4 +1,5 @@
-// av2-decode.js: an AV2 still decoder for /garage/av2, run as a module Worker.
+// av2-decode.js: an AV2 still decoder for /garage/av2 and /pixel-peeper's AV2
+// tiles, run as a module Worker.
 //
 // No browser decodes AV2, so the page hands this worker an AVIF file whose
 // image item is av02 and gets RGBA back. The decoder is AOM's own reference,

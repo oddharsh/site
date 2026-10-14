@@ -27,9 +27,12 @@
 //     bun tools/photos/gen-pixel-peeper.ts --sheet x.html   # a contact sheet to eyeball
 //     bun tools/photos/gen-pixel-peeper.ts --only chroma    # one axis, implies --dry-run
 //     bun tools/photos/gen-pixel-peeper.ts --merge format   # rebuild ONE axis into the committed set
+//     bun tools/photos/gen-pixel-peeper.ts --only format --src <dir>   # measure on other originals
 //
 // Needs: zenc (cargo build in tools/photos/zenc), mozjpeg's cjpeg, sips,
-// ssimulacra2, butteraugli_main, and the source folder.
+// ssimulacra2, butteraugli_main, and the source folder. The format axis also
+// needs cjxl, djxl, avifenc, avifdec, and for AV2 the tuned libavif-avm build
+// (tools/photos/libavif-avm/build.sh --tuned).
 //
 // ── why this is TypeScript, since 2026-09-15 ──────────────────────────────
 // It was gen-pixel-peeper.py, 849 lines, and the last Python in the tree. Its
@@ -70,7 +73,11 @@ import { fileURLToPath } from "node:url";
 // ---------------------------------------------------------------- paths + tools
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const SRC_DIR = "/Users/aadharsh/Downloads/to post (from ssd)";
+// --src points the generator at another folder of originals, the way
+// av2-tile-probe.ts takes one. The canonical folder is the default, and the
+// only one a committed trial set comes from.
+const SRC_FLAG = process.argv.indexOf("--src");
+const SRC_DIR = SRC_FLAG >= 0 ? path.resolve(process.argv[SRC_FLAG + 1]) : "/Users/aadharsh/Downloads/to post (from ssd)";
 const OUT_DIR = path.join(REPO, "public", "pixel-peeper");
 const TILES_DIR = path.join(OUT_DIR, "tiles");
 
@@ -90,6 +97,13 @@ const BUTTERAUGLI = which("butteraugli_main") ?? "/opt/zerobrew/prefix/bin/butte
 // metrics, so a score describes the bitstream rather than a browser's decode.
 const CJXL = which("cjxl"), DJXL = which("djxl");
 const AVIFENC = which("avifenc"), AVIFDEC = which("avifdec");
+// AV2 comes from the TUNED libavif-avm build (tools/photos/libavif-avm/build.sh
+// --tuned), the one that carries the qmseg patch AV2_ARGS turns on. The
+// pristine build refuses those flags one encode at a time, so preflight checks
+// for the tuned binary up front. AVM_BUILD_DIR overrides the directory, as it
+// does for codec-knob-probe.ts.
+const AV2_BUILD = process.env.AVM_BUILD_DIR ?? path.join(REPO, "tools", "photos", "libavif-avm", "build", "tuned");
+const AVIFENC_AV2 = path.join(AV2_BUILD, "avifenc"), AVIFDEC_AV2 = path.join(AV2_BUILD, "avifdec");
 
 const TILE = 320;         // tile edge, cropped at NATIVE resolution: 1:1 pixels is the point
 const BUDGET_TOL = 0.02;  // equal-budget trials: every option within +/-2% of the target
@@ -218,7 +232,7 @@ type Option = { label: string; bytes: number; s2: number | null; butter: number 
 // `spread` is absent on a tradeoff trial, as it was in the Python: that axis
 // ranks on the metric split and the penalty, and the manifest carries neither
 // a spread it did not measure nor a placeholder.
-type Trial = { axis: Axis; crop: string; options: Option[]; disagree: boolean; spread?: number; budget?: number; budget_drift?: number; penalty?: number; rejected?: string[]; crop_score?: number; tier?: string; lossless?: { jxl: number; avif: number } };
+type Trial = { axis: Axis; crop: string; options: Option[]; disagree: boolean; spread?: number; budget?: number; budget_drift?: number; penalty?: number; rejected?: string[]; crop_score?: number; tier?: string; lossless?: { jxl: number; avif: number; av2: number } };
 
 // How each axis ranks its survivors: bigger sorts first, so ships first.
 //
@@ -706,8 +720,8 @@ function buildResample(src: Source, tmp: string): Built {
 
 // ------------------------------------------------------------------ format axis
 //
-// JPEG XL against AVIF at one byte budget. Three decisions carry the axis, and
-// one exclusion:
+// JPEG XL against AVIF at one byte budget, and AV2 on the same budget since
+// 2026-10-14. Three decisions carry the axis, and one exclusion:
 //
 //   0. NO WEBP. It was the third format until 2026-09-27 and came last on all
 //      14 calls it entered, 5-6 s2 behind AVIF even with its best flags, so it
@@ -719,7 +733,9 @@ function buildResample(src: Source, tmp: string): Built {
 //      file 3-6% and AVIF often cannot land inside BUDGET_TOL of an arbitrary
 //      number. cjxl's distance is continuous. So AVIF is encoded first and its
 //      ACTUAL output size becomes the budget JXL is searched onto, which it can
-//      hit to well under 1%.
+//      hit to well under 1%. AV2 is searched onto it too, on its own 0..255
+//      quantizer rather than libavif's -q, which moves an AV2 file up to 40% a
+//      step (/garage/av2).
 //   2. FOUR TIERS, each budget taken from what this site ships rather than
 //      picked. The ranking between these formats depends on bitrate (AVIF's
 //      reputation is built low, JXL's high), so one budget would teach whichever
@@ -742,15 +758,27 @@ function buildResample(src: Source, tmp: string): Built {
 //      first and scored 0.0-4.5 s2 lower at equal bytes; holding JXL at its
 //      default against AVIF at its slow preset would decide the call by preset.
 //      Defaults on both would compare two speed presets and call it a format
-//      comparison.
+//      comparison. AV2 gets the best setup /garage/av2 measured, AV2_ARGS.
+//
+// WHY AV2 IS HERE. The question the axis asks is which format to ship, and
+// AV2 is the codec AVIF's AV1 is turning into. Putting it on the same budgets,
+// crops and metrics as the other two answers three questions at once: where
+// AV2 improves on AV1, where it lands against JPEG XL, and whether any tier
+// is a different format's ground. No browser decodes AV2, so its tile ships
+// as the raw file and the page decodes it with the AVM WebAssembly build
+// /garage/av2 already ships, never through an <img> (gotcha 7: an AV2 file
+// typed image/avif draws broken and its fallback never loads).
 //
 // One caveat the page must carry: both metrics come from the JPEG XL project,
 // and cjxl's distance IS a butteraugli target. Scoring JXL with butteraugli is
 // grading it against its own answer key. ssimulacra2 is less directly coupled,
 // and the tiles, not the numbers, are what the visitor judges.
 
-export type Fmt = "jxl" | "avif";
-const FMT_EXT: Record<Fmt, string> = { jxl: "jxl", avif: "avif" };
+export type Fmt = "jxl" | "avif" | "av2";
+// AV2's file is an AVIF container whose image item is av02, so it keeps the
+// .avif name libavif gives it. The page tells the two apart by label.
+const FMT_EXT: Record<Fmt, string> = { jxl: "jxl", avif: "avif", av2: "avif" };
+const FMT_NAME: Record<Fmt, string> = { jxl: "JPEG XL", avif: "AVIF", av2: "AV2" };
 // Each tier names the SHIPPING encode its budget is read off. "avif" means the
 // AVIF tile is that encode itself; "zenc" means AVIF is searched onto what zenc
 // spends at that quality and chroma.
@@ -793,6 +821,7 @@ const LOW_TIER_BPP = 0.66;
 const FMT_KNOB: Record<Fmt, { lo: number; hi: number; up: boolean; int: boolean }> = {
   jxl: { lo: 0.1, hi: 15, up: false, int: false },   // butteraugli distance: smaller is bigger
   avif: { lo: 0, hi: 100, up: true, int: true },
+  av2: { lo: 0, hi: 255, up: true, int: true },      // 255 - AV2's qp, so bytes rise with it
 };
 
 // cjxl's flags beyond the distance, for the format axis. Effort 9 with the
@@ -808,10 +837,33 @@ export const JXL_ARGS = ["-e", "9", "--gaborish=0", "--epf=0"];
 // so the AVIF tile is a shipping encode. codec-knob-probe.ts varies these.
 export const AVIF_ARGS = ["-d", "10", "--speed", "2", "--yuv", "444"];
 
+// AV2's flags beyond its quantizer: the best setup /garage/av2 measured, all
+// of it from that page's probes (codec-knob-probe.ts --codec avm and
+// av2-tile-probe.ts), none tuned here.
+//   speed 3   beat speed 6 on all 32 crop calls and closed about a third of
+//             AV2's gap to the shipped AVIF there, at 41x the AVIF's encode
+//             time. cpu-used 1 ran past 8 minutes on one frame.
+//   sb-size   128, pinned, because at 320px AVM picks 64 on its own and a real
+//             600px tile gets 128; 64 cost 1.31 and 1.38 s2 on two tiles.
+//   qmseg     per-segment quantization matrices at level 12, the one tuned-build
+//             patch that paid: +0.14 s2 on the holdout crops, +0.12 on the 38
+//             tiles. It is syntax AV1 doesn't have, so it is the setting that
+//             asks what AV2 adds rather than what its encoder inherited.
+//   tune      left at libavif's ssim. psnr doubled butteraugli wins and cost
+//             about half a point of ssimulacra2; neither is a still-image
+//             tune, which AVM doesn't have yet.
+// Measured at speed 6. Speed 3 with qmseg is this axis's first run of the two
+// together, so its numbers are the record, not a re-run of the probes'.
+export const AV2_ARGS = ["-c", "avm", "-d", "10", "--speed", "3", "--yuv", "444", "-a", "sb-size=128",
+  "-a", "enable-qm=1", "-a", "qm-curve=1", "-a", "qmseg=1", "-a", "qmseg-level=12"];
+
 export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): number {
   if (fs.existsSync(out)) fs.unlinkSync(out);
   let r;
   if (fmt === "jxl") r = run([CJXL as string, png, out, "-d", knob.toFixed(4), ...jxlArgs, "--quiet"]);
+  // AV2's quantizer through `-a qp=`, which overrides -q. -q stays at 50 so
+  // libavif never reads the request as lossless (codec-knob-probe.ts, AVM).
+  else if (fmt === "av2") r = run([AVIFENC_AV2, "-q", "50", "-a", `qp=${255 - Math.round(knob)}`, ...AV2_ARGS, "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, out]);
   // --jobs is pinned to the pipeline's 4, because it changes AVIF output bytes
   // (gotcha 43), so this tile is byte-identical to a shipping encode at that -q.
   else r = run([AVIFENC as string, "-q", String(Math.round(knob)), ...avifArgs, "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, out]);
@@ -824,7 +876,7 @@ export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlA
  *  an 8-bit reference. */
 export function decodeFmt(fmt: Fmt, file: string, png: string): string {
   const r = fmt === "jxl" ? run([DJXL as string, file, png, "--bits_per_sample=8", "--quiet"])
-    : run([AVIFDEC as string, "-d", "8", file, png]);
+    : run([fmt === "av2" ? AVIFDEC_AV2 : AVIFDEC as string, "-d", "8", file, png]);
   if (!fs.existsSync(png)) throw new Error(`${fmt} decode failed: ${(r.stderr || r.stdout || "").trim().slice(0, 200)}`);
   return png;
 }
@@ -847,21 +899,37 @@ export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jx
   return best as { knob: number; bytes: number; path: string };
 }
 
+// The page reads a format option's format off its label's first word, so an
+// AV2 label must start "AV2 " and nothing else may (the contract
+// pixel-peeper-av2-tiles-are-av02 holds the files to it).
 const knobLabel = (fmt: Fmt, knob: number): string =>
-  fmt === "jxl" ? `JPEG XL · distance ${knob.toFixed(2)}` : `AVIF · q${Math.round(knob)}`;
+  fmt === "jxl" ? `JPEG XL · distance ${knob.toFixed(2)}` : fmt === "av2" ? `AV2 · qp ${255 - Math.round(knob)}` : `AVIF · q${Math.round(knob)}`;
 
-/** Both formats' LOSSLESS size for the crop. Not a call, since identical
+/** Each format's LOSSLESS size for the crop. Not a call, since identical
  *  pixels make no eye test, but it is the one place the gap is large (JXL ran
  *  53-79% of AVIF's bytes over 16 crops, 2026-10-07), so the page states it
- *  as a number beside the call. AVIF lossless is 8-bit RGB through the
- *  identity matrix, which is what avifenc -l writes. */
-function losslessBytes(png: string, tmp: string): { jxl: number; avif: number } {
-  const jxl = path.join(tmp, "lossless.jxl"), avif = path.join(tmp, "lossless.avif");
+ *  as a number beside the call. AVIF and AV2 lossless are 8-bit RGB through
+ *  the identity matrix, which is what avifenc -l writes. AV2's ran 29% larger
+ *  than AV1's on the same 16 crops (/garage/av2), against AOM listing better
+ *  lossless coding among AV2's tools, so the page shows that number too. */
+function losslessBytes(png: string, tmp: string): { jxl: number; avif: number; av2: number } {
+  const jxl = path.join(tmp, "lossless.jxl"), avif = path.join(tmp, "lossless.avif"), av2 = path.join(tmp, "lossless-av2.avif");
+  const quiet = ["--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp"];
   run([CJXL as string, png, jxl, "-d", "0", "-e", "9", "--quiet"]);
-  run([AVIFENC as string, "-l", "-d", "8", "--speed", "2", "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, avif]);
-  for (const f of [jxl, avif]) if (!fs.existsSync(f)) throw new Error(`lossless encode wrote no ${path.basename(f)}`);
-  return { jxl: fs.statSync(jxl).size, avif: fs.statSync(avif).size };
+  run([AVIFENC as string, "-l", "-d", "8", "--speed", "2", ...quiet, png, avif]);
+  run([AVIFENC_AV2, "-c", "avm", "-l", "-d", "8", "--speed", "3", ...quiet, png, av2]);
+  for (const f of [jxl, avif, av2]) if (!fs.existsSync(f)) throw new Error(`lossless encode wrote no ${path.basename(f)}`);
+  return { jxl: fs.statSync(jxl).size, avif: fs.statSync(avif).size, av2: fs.statSync(av2).size };
 }
+
+// Every format tier this run SCORED, before the legibility gate or the ranking
+// drops any. The calls a player sees are chosen for being easy to tell apart,
+// which favours whichever format loses biggest, so a tally over the shipped
+// calls would describe the gate as much as the formats. This pool is what the
+// page's "where each format wins" table and the run's summary are built from.
+type PoolFmt = { bytes: number; s2: number; bu: number };
+type PoolRow = { crop: string; tier: FormatTier; budget: number; bpp: number } & Partial<Record<Fmt, PoolFmt>>;
+const formatPool: PoolRow[] = [];
 
 function buildFormat(cropId: string, srcs: Srcs, refPng: string, tmp: string): Built[] {
   const lossless = losslessBytes(srcs.png, tmp);
@@ -882,8 +950,8 @@ type Got = { knob: number; bytes: number; path: string };
  *  spelled out), without the reconstruction box: a browser decodes pixels and
  *  never needs the original JPEG bytes back, so the box is overhead, and
  *  codec-knob-probe measured dropping it at +0.37 s2 at matched bytes. AVIF
- *  gets what any re-encoder gets, the JPEG's decoded pixels. */
-function repackPair(srcs: Srcs, sub: string): [Got, Got] {
+ *  and AV2 get what any re-encoder gets, the JPEG's decoded pixels. */
+function repackSet(srcs: Srcs, sub: string): [Fmt, Got][] {
   const jpg = path.join(sub, "have.jpg");
   encode("zenc", srcs, jpg, 84, "420");
   const jxl = path.join(sub, "repack.jxl");
@@ -891,7 +959,7 @@ function repackPair(srcs: Srcs, sub: string): [Got, Got] {
   if (!fs.existsSync(jxl)) throw new Error(`cjxl repack failed: ${(r.stderr || "").trim().slice(0, 200)}`);
   const pixels = toPng(jpg, path.join(sub, "have-dec.png"));
   const target = fs.statSync(jxl).size;
-  return [{ knob: 0, bytes: target, path: jxl }, searchFmt("avif", pixels, sub, target)];
+  return [["jxl", { knob: 0, bytes: target, path: jxl }], ["avif", searchFmt("avif", pixels, sub, target)], ["av2", searchFmt("av2", pixels, sub, target)]];
 }
 
 function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: string, tmp: string): Built {
@@ -900,8 +968,7 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
     fs.mkdirSync(sub, { recursive: true });
     let got: [Fmt, Got][];
     if (tier === "repack") {
-      const [jxl, avif] = repackPair(srcs, sub);
-      got = [["jxl", jxl], ["avif", avif]];   // here the JXL file sets the budget, since its size is fixed
+      got = repackSet(srcs, sub);   // here the JXL file sets the budget, since its size is fixed
     } else {
       const avif = tier === "avif-tier"
         ? (() => { const a = FORMAT_TIER_ANCHOR[tier]; const p = path.join(sub, "ship.avif"); return { knob: a.q, bytes: encodeFmt("avif", srcs.png, p, a.q), path: p }; })()
@@ -917,26 +984,61 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
             return searchFmt("avif", srcs.png, sub, low);
           })();
       // decision 1: the coarse knob's real output is the budget
-      got = [["avif", avif], ["jxl", searchFmt("jxl", srcs.png, sub, avif.bytes)]];
+      got = [["avif", avif], ["jxl", searchFmt("jxl", srcs.png, sub, avif.bytes)], ["av2", searchFmt("av2", srcs.png, sub, avif.bytes)]];
     }
     const target = got[0][1].bytes;
     const rejected: string[] = [];
     const options: Option[] = [];
+    const row: PoolRow = { crop: cropId, tier, budget: target, bpp: Number(((target * 8) / (TILE * TILE)).toFixed(3)) };
     for (const [fmt, g] of got) {
       const drift = Math.abs(g.bytes - target) / target;
       if (drift > BUDGET_TOL) { rejected.push(`${fmt}: closest was ${g.bytes}B, ${(drift * 100).toFixed(1)}% off ${target}B`); continue; }
       const dec = decodeFmt(fmt, g.path, path.join(sub, `${fmt}-dec.png`));
-      const label = tier === "repack" ? (fmt === "jxl" ? "JPEG XL · the JPEG, repacked losslessly" : `AVIF · q${Math.round(g.knob)}, re-encoded from the JPEG`) : knobLabel(fmt, g.knob);
-      options.push({ label, bytes: g.bytes, s2: ssim2(refPng, dec), butter: butter(refPng, dec), q: Number(g.knob.toFixed(4)), path: g.path, decoded: dec });
+      const label = tier !== "repack" ? knobLabel(fmt, g.knob)
+        : fmt === "jxl" ? "JPEG XL · the JPEG, repacked losslessly" : `${knobLabel(fmt, g.knob)}, re-encoded from the JPEG`;
+      const o: Option = { label, bytes: g.bytes, s2: ssim2(refPng, dec), butter: butter(refPng, dec), q: Number(g.knob.toFixed(4)), path: g.path, decoded: dec };
+      options.push(o);
+      row[fmt] = { bytes: o.bytes, s2: o.s2 as number, bu: o.butter as number };
     }
+    if (options.length >= 2) formatPool.push(row);
     if (options.length < 2) return [null, `${tier}: only ${options.length} format(s) hit ${target}B; ${JSON.stringify(rejected)}`];
     options.sort((a, b) => (a.s2 as number) - (b.s2 as number));
-    const spread = (options[1].s2 as number) - (options[0].s2 as number);
+    // best minus worst: with three formats a call is legible when SOME tile is
+    // visibly worse, which is what the gate has always asked of two
+    const spread = (options[options.length - 1].s2 as number) - (options[0].s2 as number);
     const summary = options.map((o) => `${o.label.split(" · ")[0]} ${o.s2}`).join(", ");
     if (spread < ENCODER_MIN_SPREAD) return [null, `${tier} @ ${target}B: formats within ${spread.toFixed(1)} s2 (${summary}); nothing to see`];
     const budgetDrift = Math.max(...options.map((o) => Math.abs(o.bytes - target))) / target;
-    return [{ axis: "format", crop: cropId, tier, options, disagree: markWinners(options), spread: Number(spread.toFixed(1)), budget: target, budget_drift: Number((budgetDrift * 100).toFixed(2)) }, null];
+    const trial: Trial = { axis: "format", crop: cropId, tier, options, disagree: markWinners(options), spread: Number(spread.toFixed(1)), budget: target, budget_drift: Number((budgetDrift * 100).toFixed(2)) };
+    if (rejected.length) trial.rejected = rejected;   // a format that missed the budget sits this call out, and the log says so
+    return [trial, null];
   }
+}
+
+// The pool, pairwise: for each pair of formats, over the tiers where both hit
+// the budget, the first one's mean ssimulacra2 lead and how many calls it took
+// on each metric. The page computes the same table from the same rows.
+const PAIRS: [Fmt, Fmt][] = [["av2", "avif"], ["av2", "jxl"], ["jxl", "avif"]];
+const BPP_BANDS: [string, number, number][] = [["under 0.5 bpp", 0, 0.5], ["0.5 to 1 bpp", 0.5, 1], ["over 1 bpp", 1, Infinity]];
+function pairLine(rows: PoolRow[], [a, b]: [Fmt, Fmt]): string {
+  const both = rows.filter((r) => r[a] && r[b]) as (PoolRow & Record<Fmt, PoolFmt>)[];
+  if (!both.length) return "n/a".padEnd(26);
+  const d = both.reduce((n, r) => n + r[a].s2 - r[b].s2, 0) / both.length;
+  const s2 = both.filter((r) => r[a].s2 > r[b].s2).length, bu = both.filter((r) => r[a].bu < r[b].bu).length;
+  return `${d >= 0 ? "+" : ""}${d.toFixed(2)}  s2 ${s2}/${both.length}  bu ${bu}/${both.length}`.padEnd(26);
+}
+function logPool(pool: PoolRow[]): void {
+  if (!pool.length) return;
+  log(`\nformat pool: ${pool.length} scored calls, before the legibility gate. each pair: mean s2 lead, s2 wins, butteraugli wins`);
+  log(`${"".padEnd(18)}${PAIRS.map(([a, b]) => `${FMT_NAME[a]} vs ${FMT_NAME[b]}`.padEnd(26)).join("")}`);
+  // bits per pixel decides AV2 against AV1 (/garage/av2), so the fresh-photo
+  // tiers are also pooled by it; repack starts from a JPEG and stays out
+  const groups: [string, PoolRow[]][] = [
+    ...FORMAT_TIERS.map((tier): [string, PoolRow[]] => [tier, pool.filter((r) => r.tier === tier)]),
+    ...BPP_BANDS.map(([name, lo, hi]): [string, PoolRow[]] => [name, pool.filter((r) => r.tier !== "repack" && r.bpp >= lo && r.bpp < hi)]),
+    ["all", pool],
+  ];
+  for (const [name, rows] of groups) if (rows.length) log(`${`${name} (${rows.length})`.padEnd(18)}${PAIRS.map((p) => pairLine(rows, p)).join("")}`);
 }
 
 // ------------------------------------------------------------------------ main
@@ -947,6 +1049,7 @@ function describe(t: Trial): string {
   if (t.spread !== undefined) bits += ` spread ${t.spread}`;
   if (t.penalty !== undefined) bits += ` penalty ${t.penalty}`;
   if (t.disagree) bits += " SPLIT";
+  if (t.rejected?.length) bits += ` (off budget, left out: ${t.rejected.join("; ")})`;
   return bits;
 }
 
@@ -985,10 +1088,14 @@ function preflight(axes: string[]): void {
   const missing = [["zenc", ZENC], ["mozjpeg cjpeg", CJPEG], ["ssimulacra2", SSIMULACRA2], ["butteraugli_main", BUTTERAUGLI]].filter(([, p]) => !fs.existsSync(p)).map(([n]) => n);
   if (!which("exif-sooc")) missing.push("exif-sooc");
   if (!fs.existsSync(SRC_DIR)) missing.push(`source photos at ${SRC_DIR}`);
-  if (axes.includes("format")) for (const [n, p] of [["cjxl", CJXL], ["djxl", DJXL], ["avifenc", AVIFENC], ["avifdec", AVIFDEC]] as const) if (!p) missing.push(n);
+  if (axes.includes("format")) {
+    for (const [n, p] of [["cjxl", CJXL], ["djxl", DJXL], ["avifenc", AVIFENC], ["avifdec", AVIFDEC]] as const) if (!p) missing.push(n);
+    for (const p of [AVIFENC_AV2, AVIFDEC_AV2]) if (!fs.existsSync(p)) missing.push(`AV2 ${path.basename(p)} at ${p}`);
+  }
   if (missing.length) {
     log(`missing: ${missing.join(", ")}`);
     log("  zenc:  cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml");
+    if (missing.some((m) => m.startsWith("AV2 "))) log("  AV2:   tools/photos/libavif-avm/build.sh --tuned");
     process.exit(1);
   }
 }
@@ -1015,7 +1122,7 @@ function stageTiles(trials: Trial[]): Map<string, Buffer> {
 function writeMerged(axis: Axis, fresh: Trial[]): number {
   if (fresh.length < 2) { log(`\nrefusing to merge: only ${fresh.length} ${axis} trial(s) survived, want >= 2`); return 1; }
   const manifestFile = path.join(OUT_DIR, "manifest.json");
-  const current = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { tile: number; trials: Trial[] };
+  const current = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { tile: number; trials: Trial[]; format_pool?: PoolRow[] };
   const kept = current.trials.filter((t) => t.axis !== axis);
   const staged = stageTiles(fresh);
   for (const [name, data] of staged) fs.writeFileSync(path.join(TILES_DIR, name), data);
@@ -1023,7 +1130,9 @@ function writeMerged(axis: Axis, fresh: Trial[]): number {
   const referenced = new Set(trials.flatMap((t) => t.options.map((o) => path.basename(o.src as string))));
   let pruned = 0;
   for (const f of fs.readdirSync(TILES_DIR)) if (!referenced.has(f)) { fs.rmSync(path.join(TILES_DIR, f)); pruned += 1; }
-  fs.writeFileSync(manifestFile, `${JSON.stringify({ tile: current.tile, trials })}\n`);
+  const next = { ...current, trials };
+  if (axis === "format") next.format_pool = formatPool;   // the pool is the format axis's, so it is rebuilt with it
+  fs.writeFileSync(manifestFile, `${JSON.stringify(next)}\n`);
   log(`\nmerged ${fresh.length} ${axis} trial(s) over ${current.trials.length - kept.length} old; kept ${kept.length} others byte-identical; wrote ${staged.size} tiles, pruned ${pruned}`);
   return 0;
 }
@@ -1101,6 +1210,7 @@ function main(): number {
     const enc = trials.filter((t) => t.budget_drift !== undefined);
     if (enc.length) log(`worst equal-budget drift shipped: ${Math.max(...enc.map((t) => t.budget_drift as number))}%`);
     if (dropped.length) { log(`dropped ${dropped.length}:`); for (const [axis, stem, why] of dropped) log(`   ${axis}/${stem}: ${why}`); }
+    logPool(formatPool);
 
     if (sheet) writeSheet(trials, sheet);
     if (dryRun) { log("\n--dry-run: no tiles or manifest written"); return 0; }
@@ -1113,7 +1223,7 @@ function main(): number {
     fs.mkdirSync(TILES_DIR, { recursive: true });
     for (const [name, data] of staged) fs.writeFileSync(path.join(TILES_DIR, name), data);
     const manifestFile = path.join(OUT_DIR, "manifest.json");
-    fs.writeFileSync(manifestFile, `${JSON.stringify({ tile: TILE, trials })}\n`);
+    fs.writeFileSync(manifestFile, `${JSON.stringify({ tile: TILE, trials, format_pool: formatPool })}\n`);
     const total = [...staged.values()].reduce((n, d) => n + d.length, 0);
     log(`\nwrote ${staged.size} tiles (${Math.floor(total / 1024)} KB) + manifest.json (${fs.statSync(manifestFile).size} B)`);
     return 0;

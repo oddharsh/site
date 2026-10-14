@@ -167,7 +167,8 @@
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
   Link: </webmention>; rel="webmention"
 
-# /garage/av2's AV2 decoder. Two rules, both of which must sit below /garage/*.
+# The AV2 decoder, which /garage/av2 and /pixel-peeper start as a worker. Two
+# rules, both of which must sit below /garage/*.
 #
 # The worker script's own policy adds 'wasm-unsafe-eval', which nothing else on
 # the site gets. A dedicated worker enforces the CSP of ITS OWN response and never

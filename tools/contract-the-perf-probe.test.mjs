@@ -135,7 +135,8 @@ test("cron dispatch survives Cloudflare's expression normalization", () => {
   assert.equal(cronJob("17 8 * * SUN"), "census");
   assert.equal(cronJob("17 8 * * MON"), "census");
   assert.equal(cronJob("7,37 * * * *"), "home_probe");
-  assert.equal(cronJob("41 5 * * *"), "daily_outbound");
+  assert.equal(cronJob("41 5 * * *"), "around");
+  assert.equal(cronJob("53 5 * * *"), "webmention_send");
   assert.equal(cronJob("23 */6 * * *"), "serendipity");
   // "*/30 * * * *" was the /around crawl until 2026-08-14, when it folded onto
   // the daily outbound tick. It must now be UNMATCHED rather than quietly

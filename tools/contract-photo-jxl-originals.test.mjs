@@ -21,18 +21,18 @@ test("an original is its stem's JPEG or JPEG XL, and only a migrated one names a
 });
 
 // Node has no Cache API; the route only needs a cache that always misses.
-/** @param {string} path @param {{ get?: (key: string) => Promise<object | null>, head?: (key: string) => Promise<object | null> }} [r2] */
-async function serve(path, { get = async () => null, head = async () => null } = {}) {
+/** @param {string} path @param {{ get?: (key: string, opts?: any) => Promise<object | null>, head?: (key: string) => Promise<object | null> }} [r2] @param {Record<string, string>} [headers] */
+async function serve(path, { get = async () => null, head = async () => null } = {}, headers = {}) {
   const g = /** @type {any} */ (globalThis);
   const had = g.caches;
   g.caches ??= { default: { match: async () => undefined, put: async () => {} } };
   const asked = [];
   const env = { PHOTOS_R2: {
-    get: async (key) => { asked.push(["get", key]); return get(key); },
+    get: async (key, opts) => { asked.push(["get", key]); return get(key, opts); },
     head: async (key) => { asked.push(["head", key]); return head(key); },
   } };
   try {
-    const res = await servePhotoFromR2(new Request(`https://aadhar.sh/images/full/${path}`), env, { waitUntil() {} });
+    const res = await servePhotoFromR2(new Request(`https://aadhar.sh/images/full/${path}`, { headers }), env, { waitUntil() {} });
     return { res, asked };
   } finally {
     if (had === undefined) delete g.caches;
@@ -78,4 +78,31 @@ test("the original's route serves a .jxl key as image/jxl", async () => {
   const refused = await serve("X1.jxlz");
   assert.equal(refused.res.status, 404);
   assert.deepEqual(refused.asked, []);
+});
+
+test("a matching If-None-Match answers 304 from the body-less object R2 returns", async () => {
+  // R2 answers a failed precondition with the object's metadata and no body,
+  // and keeps null for a missing key. Reading null as "matched" served a 200
+  // with zero bytes, marked immutable for a year.
+  const r2 = {
+    get: async (_key, opts) => {
+      const { body, ...meta } = object("jxl");
+      return opts?.onlyIf?.etagDoesNotMatch === "e" ? meta : { body, ...meta };
+    },
+  };
+  for (const tag of ['"e"', 'W/"e"']) {
+    const { res, asked } = await serve("X1.jxl", r2, { "if-none-match": tag });
+    assert.equal(res.status, 304, `${tag} matches the stored etag`);
+    assert.equal(await res.text(), "");
+    assert.equal(res.headers.get("etag"), '"e"');
+    assert.equal(res.headers.get("cache-control"), "public, max-age=31536000, immutable", "the 304 repeats the 200's freshness");
+    assert.deepEqual(asked, [["get", "X1.jxl"]], "get's own answer settles it, with no head()");
+  }
+  // Controls: a stale etag gets the whole original, and a missing key is
+  // still a 404 under the same header.
+  const stale = await serve("X1.jxl", r2, { "if-none-match": '"old"' });
+  assert.equal(stale.res.status, 200);
+  assert.equal(await stale.res.text(), "jxl");
+  assert.equal(stale.res.headers.get("content-length"), "3");
+  assert.equal((await serve("X2.jxl", {}, { "if-none-match": '"e"' })).res.status, 404);
 });

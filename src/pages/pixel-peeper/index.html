@@ -176,7 +176,7 @@ const AXES={
   chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. here's the honest part: on most photos this is free. fourteen saturated crops were built and measured for this test and <b>twelve were thrown out</b> because 4:2:0 cost them nothing you could see. what survives is a high-contrast two-tone edge, which is where the halved color plane can't keep up — and butteraugli (a color model) punishes that far harder than ssimulacra2. that's also why you only get one of these per run.`},
   encoder: {teach:`same photo, same byte budget. every tile in that call was searched onto one file size and landed within 2% of it, so the only thing that varied was the encoder's math. newer coders (zenc, jpegli) fit more picture into those bytes than mozjpeg, and sips fits the least. that gap is free quality — same size, better image, for picking a different tool.`},
   resample:{teach:`same photo, same byte budget, same encoder — only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
-  format:  {teach:t=>FMT[t.tier].teach+(state.log.filter(l=>l.axis==="format").length===1?` ${FMT_TAIL}`:``)+(t.lossless?` <b>lossless</b>, this photo is ${kb(t.lossless.jxl)} as JPEG XL and ${kb(t.lossless.avif)} as AVIF: JPEG XL's biggest lead, and one no eye test can show.`:``)},
+  format:  {teach:t=>FMT[t.tier].teach+av2Line(t)+(state.log.filter(l=>l.axis==="format").length===1?` ${FMT_TAIL}${av2Line(t)?FMT_TAIL_AV2:""}`:``)+(t.lossless?` <b>lossless</b>, this photo is ${kb(t.lossless.jxl)} as JPEG XL${t.lossless.av2?`, ${kb(t.lossless.avif)} as AVIF and ${kb(t.lossless.av2)} as AV2`:` and ${kb(t.lossless.avif)} as AVIF`}: JPEG XL's biggest lead, and one no eye test can show.`:``)},
   tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
 };
 const teachFor=t=>typeof AXES[t.axis].teach==="function"?AXES[t.axis].teach(t):AXES[t.axis].teach;
@@ -192,7 +192,16 @@ const FMT={
 };
 // The shared footnote rides on a run's FIRST format call only: on every call it
 // tripled the reveal and said the same thing each time.
-const FMT_TAIL=`every pair here is the same file size to within 2%. with more bytes the two converge, and WebP sat out after coming last on every call it entered. both judges come from the JPEG XL project, so if the scoring leans, it leans toward JPEG XL.`;
+const FMT_TAIL=`every tile here is the same file size to within 2%. with more bytes the formats converge, and WebP sat out after coming last on every call it entered. both judges come from the JPEG XL project, so if the scoring leans, it leans toward JPEG XL.`;
+const FMT_TAIL_AV2=` no browser decodes AV2 yet, so its tile was drawn by AOM's own reference decoder, compiled to WebAssembly and run on this page.`;
+// AV2 sits in a format call beside the other two, on the same budget. Its
+// standing is read off the call's own scores, so the line is true of whatever
+// the generator measured, and says nothing the numbers don't.
+function av2Line(t){
+  const o=t.options.find(isAv2); if(!o)return "";
+  const rank=[...t.options].sort((a,b)=>b.s2-a.s2).indexOf(o);
+  return ` AV2, the codec meant to follow the AV1 inside AVIF, took the same budget here, and ssimulacra2 put it ${["first","second","third"][rank]} of ${t.options.length}.`;
+}
 
 // The question the showdown asks, answered once the picks are in. Every number
 // is measured: the transcode and lossless spans from this axis's own probes
@@ -210,15 +219,38 @@ const AV2_BANDS=[["under 0.3","12 of 12",30],["0.3 to 0.5","11 of 12",52],["0.5 
 const FMT_QS=[
   {q:`why pick JPEG XL over AVIF?`,
    a:`when the picture already exists as a JPEG. the transcode from JPEG to JPEG XL is lossless: every pixel comes back identical, in a file 6 to 13% smaller on this site's photos. AVIF can only re-encode the JPEG, stacking its damage on the JPEG's. for lossless images in general, JPEG XL lands at 53 to 79% of AVIF's bytes. squeeze a fresh photo into a thumbnail budget and AVIF usually wins instead, and with more bytes the two converge. the cost is reach: only Chrome 155+ and Safari 17+ decode it, so it ships with an AVIF or JPEG behind it.`,
-   more:()=>jxlWinsHTML()},
+   more:()=>winsHTML("jxl")},
   {q:`where does AV2 fit?`,
-   a:`on AVIF's turf, a notch thinner. AV2 succeeds AV1, the codec inside every AVIF, and whether it wins depends on how scarce the bits are. measured at matched bytes against this site's AVIF, it won 23 of 24 calls under half a bit per pixel, and 6 of 30 above it. on this exam's 16 dense crops it lost. so AV2 earns its keep on the sparse end: thumbnails, previews, and the frames with the least detail, the third of this site's photos that sit under that line.`,
+   a:`on AVIF's turf, a notch thinner. AV2 succeeds AV1, the codec inside every AVIF, and whether it wins depends on how scarce the bits are. measured at matched bytes against this site's AVIF, it won 23 of 24 calls under half a bit per pixel, and 6 of 30 above it. on 16 dense crops like this exam's, it lost most calls under every setting tried. so AV2 earns its keep on the sparse end: thumbnails, previews, and the frames with the least detail, the third of this site's photos that sit under that line.`,
    more:()=>`<table class="fmtcard" style="margin:8px 0 6px"><thead><tr><th>bits per pixel</th><th>AV2 beat AVIF</th><th>this site's photos</th></tr></thead><tbody>${
      AV2_BANDS.map(([b,w,n])=>`<tr><td>${b}</td><td>${w}</td><td>${n} of 255</td></tr>`).join("")}</tbody></table>
+     ${winsHTML("av2")}
      <div>two things could widen that. the encoder measured is AV2's reference encoder, and production encoders like SVT-AV1 later moved AV1's dense end; a still-image tune is the first place to look. and it needs a browser that decodes it, under a name that browser can decline: served as AVIF, it draws as a broken image. it does nothing for JPEG XL's turf, with no lossless JPEG transcode and lossless files 29% larger than AV1's. <a href="/garage/av2">the long version</a>.</div>`},
+  {q:`so where does each format win, on these photos?`, when:()=>!!(DATA.format_pool&&DATA.format_pool.length),
+   a:`this counts every call the format axis scored, before it kept only the ones an eye can tell apart, since that cut favors whichever format lost biggest. each cell is the first format's mean ssimulacra2 lead over the second, then how many of the calls it won.`,
+   more:()=>poolHTML()},
   {q:`is WebP still worth anything?`,
    a:`for lossy photos, no. it came last on all 14 calls it entered here. its last job is lossless. on the 9 figures /garage/av2 ships, lossless WebP came in 34% smaller than lossless AVIF and 11% larger than JPEG XL, and every browser draws it. that's why those figures are WebP.`},
 ];
+
+// The whole pool, pairwise, from the generator's format_pool rows: per budget
+// tier, and the fresh-photo tiers again by bits per pixel, which is what
+// decides AV2 against AV1 on /garage/av2. tools/photos/gen-pixel-peeper.ts
+// prints the same table when it runs.
+const PAIRS=[["av2","avif"],["av2","jxl"],["jxl","avif"]];
+const BPP_BANDS=[["under 0.5 bits a pixel",0,0.5],["0.5 to 1 bit a pixel",0.5,1],["over 1 bit a pixel",1,Infinity]];
+function pairCell(rows,a,b){
+  const r=rows.filter(x=>x[a]&&x[b]); if(!r.length)return "·";
+  const d=r.reduce((n,x)=>n+x[a].s2-x[b].s2,0)/r.length;
+  return `${d>=0?"+":""}${d.toFixed(1)}, ${r.filter(x=>x[a].s2>x[b].s2).length} of ${r.length}`;
+}
+function poolHTML(){
+  const P=DATA.format_pool||[];
+  const groups=[...Object.keys(FMT).map(k=>[FMT[k].name,P.filter(r=>r.tier===k)]),
+    ...BPP_BANDS.map(([n,lo,hi])=>[n,P.filter(r=>r.tier!=="repack"&&r.bpp>=lo&&r.bpp<hi)]),["every call",P]].filter(([,r])=>r.length);
+  return `<table class="fmtcard" style="margin:8px 0 6px"><thead><tr><th>budget</th><th>calls</th>${PAIRS.map(([a,b])=>`<th>${FMT_NAME[a]} vs ${FMT_NAME[b]}</th>`).join("")}</tr></thead><tbody>${
+    groups.map(([n,r])=>`<tr><td>${n}</td><td>${r.length}</td>${PAIRS.map(([a,b])=>`<td>${pairCell(r,a,b)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
 
 // Where JPEG XL beats AVIF, shown as well as told. The examples come out of the
 // manifest, so a regenerated one picks its own: the widest clear JPEG XL win
@@ -227,31 +259,38 @@ const FMT_QS=[
 // differ most, found from the decoded pixels, because a phone has no hover for
 // the loupe and at 1x the gap is grain.
 const ZOOM_PATCH=64, ZOOM_SCALE=3;
-function jxlWins(){
-  const won=t=>t.axis==="format"&&!t.disagree&&t.options.some(o=>fmtOf(o)==="jxl"&&o.s2best&&o.butterbest);
-  const widest=ts=>ts.sort((a,b)=>b.spread-a.spread)[0];
-  const w=DATA.trials.filter(won);
-  return [widest(w.filter(t=>t.tier==="repack")),widest(w.filter(t=>t.tier!=="repack"))].filter(Boolean);
+// AV2's examples are the same idea: its widest clear win over AVIF, the AV1 it
+// would replace, and over JPEG XL. A pair waits for its AV2 decode.
+const won=(f,rival)=>t=>t.axis==="format"&&!t.disagree&&t.options.some(o=>fmtOf(o)===f&&o.s2best&&o.butterbest)&&t.options.some(o=>fmtOf(o)===rival);
+const widest=ts=>ts.sort((a,b)=>b.spread-a.spread)[0];
+function fmtWins(f){
+  if(f==="jxl"){const w=DATA.trials.filter(won("jxl","avif"));
+    return [widest(w.filter(t=>t.tier==="repack")),widest(w.filter(t=>t.tier!=="repack"))].filter(Boolean).map(t=>({t,f:"jxl",rival:"avif"}));}
+  return [["av2","avif"],["av2","jxl"]].map(([a,b])=>{const t=widest(DATA.trials.filter(won(a,b)));return t&&{t,f:a,rival:b};}).filter(Boolean);
 }
-function jxlWinsHTML(){
-  return jxlWins().map((t,i)=>{
-    const pair=[t.options.find(o=>fmtOf(o)==="jxl"),t.options.find(o=>fmtOf(o)==="avif")];
-    const head=t.tier==="repack"
-      ?`a lossless transcode. JPEG XL carries the JPEG over with every pixel intact; AVIF re-encodes the same JPEG at the same size.`
-      :`a fresh photo on a ${FMT[t.tier].name}, where AVIF usually wins. JPEG XL kept the fine texture here.`;
-    return `<div class="fmtex"><p class="meta" style="margin:10px 0 4px">${head}</p>
-      <div class="tiles">${pair.map((o,p)=>`<div class="opt"><div class="tile" data-ex="${i}" data-p="${p}"></div>
+const exHead=({t,f,rival})=>f==="jxl"
+  ?(t.tier==="repack"
+    ?`a lossless transcode. JPEG XL carries the JPEG over with every pixel intact; AVIF re-encodes the same JPEG at the same size.`
+    :`a fresh photo on a ${FMT[t.tier].name}, where AVIF usually wins. JPEG XL kept the fine texture here.`)
+  :`AV2's widest clear win over ${FMT_NAME[rival]} in this exam, on ${FMT[t.tier].name}.`;
+function winsHTML(f){
+  return fmtWins(f).map((ex,i)=>{
+    const pair=[ex.t.options.find(o=>fmtOf(o)===ex.f),ex.t.options.find(o=>fmtOf(o)===ex.rival)];
+    return `<div class="fmtex"><p class="meta" style="margin:10px 0 4px">${exHead(ex)}</p>
+      <div class="tiles">${pair.map((o,p)=>`<div class="opt"><div class="tile" data-ex="${f}${i}" data-p="${p}"></div>
         <div class="cap"><span class="lab">${FMT_NAME[fmtOf(o)]}</span>${kb(o.bytes)}<br><span class="m s2">s2 ${o.s2}</span><span class="m bt">bu ${o.butter}</span></div></div>`).join("")}</div>
-      <div class="tiles">${pair.map((_,p)=>`<canvas class="zoompatch" data-ex="${i}" data-p="${p}" width="${ZOOM_PATCH*ZOOM_SCALE}" height="${ZOOM_PATCH*ZOOM_SCALE}"></canvas>`).join("")}</div>
+      <div class="tiles">${pair.map((_,p)=>`<canvas class="zoompatch" data-ex="${f}${i}" data-p="${p}" width="${ZOOM_PATCH*ZOOM_SCALE}" height="${ZOOM_PATCH*ZOOM_SCALE}"></canvas>`).join("")}</div>
       <p class="meta" style="margin:2px 0 0;text-align:center">the ${ZOOM_PATCH}px patch where the two differ most, at ${ZOOM_SCALE}x</p></div>`;}).join("");
 }
-function wireJxlWins(){
-  jxlWins().forEach((t,i)=>{
-    const pair=[t.options.find(o=>fmtOf(o)==="jxl"),t.options.find(o=>fmtOf(o)==="avif")];
+function wireWins(f){
+  fmtWins(f).forEach((ex,n)=>{const i=f+n;
+    const pair=[ex.t.options.find(o=>fmtOf(o)===ex.f),ex.t.options.find(o=>fmtOf(o)===ex.rival)];
+    if(!document.querySelector(`.tile[data-ex="${i}"]`))return;
     const cvs=pair.map(()=>document.createElement("canvas"));
-    const imgs=pair.map((o,p)=>{const img=new Image();img.src=tileSrc(o);
-      const tile=document.querySelector(`.tile[data-ex="${i}"][data-p="${p}"]`);tile.appendChild(img);attachLoupe(tile,cvs[p],img);return img;});
-    Promise.all(imgs.map(img=>img.decode())).then(()=>{
+    // a pair with AV2 in it waits for that tile's decode; any other starts at once
+    av2Ready(ex.t).then(()=>Promise.all(pair.map((o,p)=>{const img=new Image();img.src=tileSrc(o);
+      const tile=document.querySelector(`.tile[data-ex="${i}"][data-p="${p}"]`);tile.appendChild(img);attachLoupe(tile,cvs[p],img);
+      return img.decode().then(()=>img);}))).then(imgs=>{
       const px=imgs.map((img,p)=>{const c=cvs[p];c.width=img.naturalWidth;c.height=img.naturalHeight;
         const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(img,0,0);return x.getImageData(0,0,c.width,c.height).data;});
       // slide the patch on a 16px grid; summed absolute RGB difference picks the spot
@@ -321,7 +360,7 @@ const UQ=[
         {t:"lossless AVIF",why:"every current browser draws it, but on the same figures it came in 52% larger than lossless WebP."}]},
  {fmt:1,q:"Where does AV2 beat AVIF at the same file size?",
   opts:[{t:"on thin budgets, like thumbnails with little detail",ok:1,why:"right: under half a bit per pixel AV2 won 23 of 24 calls. that's the sparse third of this site's photos."},
-        {t:"on dense detail, like a crop full of grain or lettering",why:"that's where it lost. above half a bit per pixel it won 6 of 30, and on this exam's 16 dense crops it lost."},
+        {t:"on dense detail, like a crop full of grain or lettering",why:"that's where it lost. above half a bit per pixel it won 6 of 30, and on 16 dense crops like this exam's it lost most calls."},
         {t:"everywhere, because it's the newer codec",why:"newer doesn't win at every budget. AOM's 18 to 24% lead comes from video sequences scored by PSNR, SSIM and VMAF; on photos, AV2's edge flips near half a bit per pixel."}]},
 ];
 // A showdown asks only the format questions; the full exam asks all of them.
@@ -366,7 +405,54 @@ const CAN_JXL=new Promise(r=>{const i=new Image();i.onload=()=>r(i.naturalWidth=
 const stage=document.getElementById("stage"), INTRO=stage.innerHTML.trim(), sbLeft=document.getElementById("sb-left"), sbRight=document.getElementById("sb-right");
 const loupe=document.getElementById("loupe"), lctx=loupe.getContext("2d"); loupe.width=150;loupe.height=150;const ZOOM=3;
 const kb=n=>(n/1024).toFixed(1)+"KB";
-const tileSrc=o=>o.src||o.uri;                 // split build: o.src (tile file). fat build: o.uri (data-URI)
+const tileSrc=o=>o.png||o.src||o.uri;          // split build: o.src (tile file). fat build: o.uri (data-URI). AV2: o.png, its decode
+
+// ---- AV2 tiles ----
+// No browser decodes AV2, and an AV2 file handed to an <img> draws broken
+// (gotcha 7), so an AV2 tile never reaches one as a file. The page fetches it,
+// decodes it on a worker with AOM's reference decoder compiled to WebAssembly
+// (the one /garage/av2 runs, bit-exact against native AVM), and gives the
+// <img> a lossless PNG of the result as a data: URL, which the page's img-src
+// already allows. The loupe, the diff map and the zooms then read it like any
+// other tile. The decoder, about 550 KB, is fetched only by a run that draws
+// an AV2 tile.
+const isAv2=o=>o.label.startsWith("AV2 ");
+// Whether this session draws AV2 at all: false for a manifest cut before the
+// format axis carried it, and false once the decoder has failed here. Every
+// AV2 mention outside a call keys on it, so the page never tallies a format
+// it didn't show.
+const VS=()=>state.av2?"JPEG XL vs AVIF vs AV2":"JPEG XL vs AVIF";
+const FMT_LIST=()=>state.av2?"JPEG XL, AVIF and AV2":"JPEG XL and AVIF";
+let av2Worker=null,av2Next=0;const av2Waiting={},av2Png=new Map();
+function av2Decode(src){
+  if(av2Png.has(src))return av2Png.get(src);
+  const job=fetch(src).then(r=>{if(!r.ok)throw new Error(`${src}: HTTP ${r.status}`);return r.arrayBuffer();}).then(buf=>new Promise((resolve,reject)=>{
+    if(!av2Worker){
+      av2Worker=new Worker("/garage/av2-decode.js",{type:"module"});
+      av2Worker.onmessage=e=>{const w=av2Waiting[e.data.id];delete av2Waiting[e.data.id];if(e.data.error)w.reject(new Error(e.data.error));else w.resolve(e.data);};
+      av2Worker.onerror=()=>{av2Worker.dead=true;for(const id in av2Waiting){av2Waiting[id].reject(new Error("the decoder didn't start"));delete av2Waiting[id];}};
+    }
+    if(av2Worker.dead){reject(new Error("the decoder didn't start"));return;}
+    const id=av2Next++;av2Waiting[id]={resolve,reject};av2Worker.postMessage({id,buf},[buf]);
+  })).then(d=>{const c=document.createElement("canvas");c.width=d.width;c.height=d.height;
+    c.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(d.rgba),d.width,d.height),0,0);return c.toDataURL("image/png");});
+  av2Png.set(src,job);return job;
+}
+// Resolves once every AV2 tile in a trial has its PNG. A trial without one
+// resolves at once.
+const av2Ready=t=>Promise.all(t.options.filter(isAv2).map(o=>av2Decode(o.src).then(u=>{o.png=u;})));
+// If the decoder can't run here, AV2 sits out the rest of the session: its
+// tiles leave every call, and each call's winners are worked out again over
+// what's left, the way the generator's markWinners does.
+function av2Off(err){
+  state.av2Error=err&&err.message||String(err); state.av2=false;
+  const strip=t=>{if(!t.options.some(isAv2))return t;
+    const options=t.options.filter(o=>!isAv2(o)), s2=Math.max(...options.map(o=>o.s2)), bu=Math.min(...options.map(o=>o.butter));
+    const ranked=options.map(o=>({...o,s2best:o.s2===s2,butterbest:o.butter===bu}));
+    return {...t,options:ranked,disagree:ranked.find(o=>o.s2best)!==ranked.find(o=>o.butterbest)};};
+  DATA.trials=DATA.trials.map(strip).filter(t=>t.options.length>=2);
+  state.trials=state.trials.map((t,i)=>i<state.i?t:strip(t)).filter((t,i)=>i<state.i||t.options.length>=2);
+}
 const rnd=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
 
 // The page now shares a desktop with nav.js's Run palette, so the 1/2/3 tile
@@ -393,7 +479,7 @@ function buildRun(mode){
     const pool=byTier(byAxis.format||[]);
     for(const t of pool){if(chosen.length>=SHOWDOWN_SIZE)break; if(!used.has(t.crop))take(t);}
     for(const t of pool){if(chosen.length>=SHOWDOWN_SIZE)break; if(!chosen.includes(t))take(t);}
-    state.trials=rnd(chosen); state.i=0; state.log=[]; return;
+    state.trials=rnd(chosen); state.i=0; state.log=[]; warmAv2(); return;
   }
   // each axis to its quota, never showing the same photo twice in one play
   for(const axis in AXIS_QUOTA){
@@ -406,8 +492,11 @@ function buildRun(mode){
   const rest=rnd(DATA.trials.filter(t=>!chosen.includes(t)));
   for(const t of rest){if(chosen.length>=RUN_SIZE)break; if(!used.has(t.crop))take(t);}   // top up, still photo-unique
   for(const t of rest){if(chosen.length>=RUN_SIZE)break; if(!chosen.includes(t))take(t);} // last resort if the pool is short
-  state.trials=rnd(chosen); state.i=0; state.log=[];
+  state.trials=rnd(chosen); state.i=0; state.log=[]; warmAv2();
 }
+// decode the run's AV2 tiles one call at a time, in play order, so a call is
+// usually ready by the time it comes up; a failure surfaces when it's drawn
+function warmAv2(){state.trials.reduce((p,t)=>p.then(()=>av2Ready(t)),Promise.resolve()).catch(()=>{});}
 
 function screenIntro(){
   sbLeft.textContent="← aadhar.sh · prototype"; sbRight.textContent="real encoders · two metrics";
@@ -417,15 +506,17 @@ function screenIntro(){
    <div class="gb"><span class="gb-legend">${RUN_SIZE} quick calls</span>
      <p style="margin:0 0 6px">behind the scenes, every set is judged by two machine metrics too, <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b>. they're rival models of human vision, not ground truth, and they <b>disagree</b>. at the end you'll see what your eye is quietly tuned to, which metric it thinks like, and a little grid you can paste anywhere.</p>
    </div>
-   <div class="gb"><span class="gb-legend">or: JPEG XL vs AVIF</span>
+   <div class="gb"><span class="gb-legend">or: ${VS()}</span>
      <p style="margin:0">${state.noJxl
        ?`your browser can't decode JPEG XL yet, so this run is off. Chrome 155+ and Safari 17+ can.`
+       :state.av2
+       ?`Chrome 155 decodes JPEG XL now, so here are ${SHOWDOWN_SIZE} calls with nothing but formats: JPEG XL, AVIF, and AV2, the codec meant to follow the AV1 inside AVIF, every tile in a call at one file size. no browser decodes AV2 yet, so this page decodes it for you, with a 550 KB reference decoder it fetches when the first AV2 tile comes up. the budgets run from a tight squeeze, where AVIF made its name, to a lossless JPEG transcode, which only JPEG XL can do. the question underneath: which format should a photo ship as, and where does AV2 change the answer? it comes at the end, along with where WebP lands.`
        :`Chrome 155 decodes JPEG XL now, so here are ${SHOWDOWN_SIZE} calls with nothing but JPEG XL against AVIF, every pair at one file size. the budgets run from a tight squeeze, where AVIF made its name, to a lossless JPEG transcode, which only JPEG XL can do. the question underneath: when should a photo ship as JPEG XL instead of AVIF? the answer comes at the end, along with where AV2 and WebP land.`}</p>
    </div>
    <div class="row spread" style="margin-top:12px">
      <small>hover any tile to pixel-peep · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> or click</small>
      <span class="row"><button class="xp-button compact${showdownFirst?"":" default"}" id="go">Start the exam ▸</button>
-     <button class="xp-button compact${showdownFirst?" default":""}" id="showdown"${state.noJxl?" disabled":""}>JPEG XL vs AVIF ▸</button></span></div>`;
+     <button class="xp-button compact${showdownFirst?" default":""}" id="showdown"${state.noJxl?" disabled":""}>${VS()} ▸</button></span></div>`;
   document.getElementById("go").onclick=()=>{buildRun();screenTrial();};
   document.getElementById("showdown").onclick=()=>{buildRun("showdown");screenTrial();};
 }
@@ -433,7 +524,14 @@ const pips=()=>state.trials.map((_,i)=>`<span class="dot ${i<state.i?'done':i===
 
 function screenTrial(){
   loupe.style.display="none";
+  if(state.i>=state.trials.length){screenResult();return;}
   const trial=state.trials[state.i];
+  if(trial.options.some(o=>isAv2(o)&&!o.png)){
+    sbRight.textContent=`decoding AV2…`;
+    stage.innerHTML=`<p class="hint">decoding the AV2 tile with AOM's reference decoder, running in your browser…</p>`;
+    av2Ready(trial).catch(av2Off).then(screenTrial);
+    return;
+  }
   const order=rnd(trial.options.map((_,i)=>i));   // random tile positions every call
   state.picking=true;
   sbLeft.textContent=`call ${state.i+1} of ${state.trials.length}`; sbRight.textContent=`pick the best`;
@@ -453,7 +551,7 @@ function screenTrial(){
     tile.onclick=()=>onPick(pos,order,trial);
     attachLoupe(tile,cv,img);
   });
-  const nx=state.trials[state.i+1]; if(nx) nx.options.forEach(o=>{const p=new Image();p.src=tileSrc(o);}); // warm next call
+  const nx=state.trials[state.i+1]; if(nx) nx.options.forEach(o=>{if(!isAv2(o)){const p=new Image();p.src=tileSrc(o);}}); // warm next call (warmAv2 has the AV2 tiles)
   document.onkeydown=e=>{if(!state.picking||typing(e))return;const n=parseInt(e.key);if(n>=1&&n<=3&&tiles[n-1])tiles[n-1].click();};
 }
 
@@ -528,15 +626,15 @@ function screenResult(){
   const clearLine=`called ${clearCount} of ${agreeRows.length} clear calls right`;
   const showdown=state.mode==="showdown", tally=fmtTally(state.log);
   const leanLine=showdown
-    ? `picked JPEG XL ${tally.pj}, AVIF ${tally.pa} · metrics: JPEG XL ${tally.mj}, AVIF ${tally.ma}`
+    ? `picked JPEG XL ${tally.pj}, AVIF ${tally.pa}${state.av2?`, AV2 ${tally.p2}`:""} · metrics: JPEG XL ${tally.mj}, AVIF ${tally.ma}${state.av2?`, AV2 ${tally.m2}`:""}`
     : !decisive
     ? (dis.length?`no decisive lean on the ${dis.length} split calls`:`this run hit no split calls`)
     : leaner==="neither"
       ? `split evenly on the close calls, ${s2n}–${btn}`
       : `eye leans ${leaner} (${leaner==="butteraugli"?"color":"structure"}) ${Math.max(s2n,btn)}–${Math.min(s2n,btn)}`;
-  sbLeft.textContent="← aadhar.sh · prototype"; sbRight.textContent=showdown?`JPEG XL vs AVIF`:decisive?`your eye leans ${leaner}`:`profile`;
+  sbLeft.textContent="← aadhar.sh · prototype"; sbRight.textContent=showdown?VS():decisive?`your eye leans ${leaner}`:`profile`;
   stage.innerHTML=`
-    <h1>${showdown?"JPEG XL vs AVIF, through your eyes":"your visual system, profiled"}</h1>
+    <h1>${showdown?`${FMT_LIST()}, through your eyes`:"your visual system, profiled"}</h1>
     <div class="score-hero"><div class="pct">${overall}<span style="font-size:15pt">%</span></div>
       <div class="grade">${grade} · you called the clear ones right ${overall}% of the time</div></div>
     ${showdown?showdownHTML(tally):`<div class="gb" style="margin-top:14px"><span class="gb-legend">whose eye do you have?</span>
@@ -548,7 +646,7 @@ function screenResult(){
       ${bar("Sharpness",sharp,"spotting the higher-quality JPEG")}
       ${bar("Color",color,"catching chroma subsampling",true)}
       ${bar("Encoders",enc,"separating real encoders at equal bytes")}
-      ${state.noJxl?"":bar("Formats",fmt,"telling JPEG XL and AVIF apart at equal bytes")}</div>
+      ${state.noJxl?"":bar("Formats",fmt,`telling ${FMT_LIST()} apart at equal bytes`)}</div>
     <div class="banner info"><span class="g">the takeaway</span><span>the metrics agree on the obvious calls and only split at the margins, where the differences are near invisible.${colorAha} that margin is exactly where an export preset should live: the setting no human, and barely a metric, can flag.</span></div>`}
     <div class="gb"><span class="gb-legend">share your run</span>
       ${shareGridHTML(marks)}
@@ -560,42 +658,43 @@ function screenResult(){
         <button class="xp-button compact" id="showcard">Preview image</button></div>
       <div id="cardwrap"></div></div>
     <div class="gb"><span class="gb-legend">what's real, what's next</span>
-      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file. the format budgets are all read off what this site ships: its 600px photos' bits per pixel, its AVIF, its JPEG, and that JPEG transcoded losslessly to JPEG XL.${state.noJxl?" your browser can't decode JPEG XL yet, so the format calls sat this run out. Chrome 155+ and Safari 17+ can.":""} next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
+      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc${state.av2||state.av2Error?" · AVM 1.0.0":""} for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file. the format budgets are all read off what this site ships: its 600px photos' bits per pixel, its AVIF, its JPEG, and that JPEG transcoded losslessly to JPEG XL.${state.noJxl?" your browser can't decode JPEG XL yet, so the format calls sat this run out. Chrome 155+ and Safari 17+ can.":""}${state.av2Error?` the AV2 decoder couldn't run here (${state.av2Error}), so AV2 sat out the rest of this session.`:""} next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
     ${quizHTML(showdown)}
     <div class="row spread" style="margin-top:14px">
       <small>your grid spoils nothing: no photo, encoder or setting is named</small>
       <button class="xp-button compact default" id="again">Play again ▸</button></div>`;
   requestAnimationFrame(()=>document.querySelectorAll(".fill").forEach(f=>f.style.width=(f.dataset.w||0)+"%"));
   wireQuiz();
-  if(showdown)wireJxlWins();
-  // a showdown card puts its needle on the JPEG XL / AVIF line: the share of your picks that went to AVIF
-  wireShare(marks,overall,grade,clearLine,leanLine,showdown?tally.pa/Math.max(1,tally.n):lean,showdown?tally.n:decisive,showdown);
+  if(showdown){wireWins("jxl");wireWins("av2");}
+  // a showdown card puts its needle on the line from JPEG XL to the AV1 family:
+  // the share of your picks that went to AVIF or its successor, AV2
+  wireShare(marks,overall,grade,clearLine,leanLine,showdown?(tally.pa+tally.p2)/Math.max(1,tally.n):lean,showdown?tally.n:decisive,showdown);
   document.getElementById("again").onclick=()=>{buildRun(state.mode);screenTrial();};
 }
 
 // Count a showdown's picks by format, the metrics' winners by format, and
 // how you did on each format's home ground (FMT[tier].turf).
-const fmtOf=o=>o.label.startsWith("JPEG XL")?"jxl":"avif";
+const fmtOf=o=>o.label.startsWith("JPEG XL")?"jxl":isAv2(o)?"av2":"avif";
 function fmtTally(log){
   const rows=log.filter(l=>l.axis==="format");
   const winner=l=>{const w=l.trial.options.find(o=>o.s2best&&o.butterbest);return w?fmtOf(w):null;};
   const turf=f=>{const r=rows.filter(l=>FMT[l.trial.tier].turf===f&&l.correct!==null);return{n:r.length,hit:r.filter(l=>l.correct).length};};
   return{rows,n:rows.length,
-    pj:rows.filter(l=>fmtOf(l.picked)==="jxl").length, pa:rows.filter(l=>fmtOf(l.picked)==="avif").length,
-    mj:rows.filter(l=>winner(l)==="jxl").length, ma:rows.filter(l=>winner(l)==="avif").length,
+    pj:rows.filter(l=>fmtOf(l.picked)==="jxl").length, pa:rows.filter(l=>fmtOf(l.picked)==="avif").length, p2:rows.filter(l=>fmtOf(l.picked)==="av2").length,
+    mj:rows.filter(l=>winner(l)==="jxl").length, ma:rows.filter(l=>winner(l)==="avif").length, m2:rows.filter(l=>winner(l)==="av2").length,
     avif:turf("avif"), jxl:turf("jxl"), winner};
 }
-const FMT_NAME={jxl:"JPEG XL",avif:"AVIF"};
+const FMT_NAME={jxl:"JPEG XL",avif:"AVIF",av2:"AV2"};
 function showdownHTML(t){
   const rows=t.rows.map((l,i)=>{const w=t.winner(l), mine=fmtOf(l.picked);
     return `<tr><td>${i+1}</td><td>${FMT[l.trial.tier].name}</td><td>${kb(l.trial.budget)}</td><td>${FMT_NAME[mine]}</td><td>${w?FMT_NAME[w]:"split"}</td><td>${l.trial.spread}</td><td>${l.correct===null?"·":l.correct?"✓":"✕"}</td></tr>`;}).join("");
   const turfLine=(f,where)=>t[f].n?`on ${FMT_NAME[f]}'s home ground (${where}) you sided with the metrics ${t[f].hit} of ${t[f].n} times. `:"";
   return `<div class="gb" style="margin-top:14px"><span class="gb-legend">call by call</span>
       <table class="fmtcard"><thead><tr><th>#</th><th>budget</th><th>size</th><th>you</th><th>metrics</th><th>gap, s2</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="meta" style="margin:6px 0 0">both tiles in every call were the same size to within 2%. "gap" is how far apart ssimulacra2 scored them, and 3.5 is the least a call needed to make this test.</p></div>
-    <div class="banner info"><span class="g">the takeaway</span><span>you picked JPEG XL ${t.pj} times and AVIF ${t.pa}. ${turfLine("avif","tight budgets")}${turfLine("jxl","transcoding a JPEG")}the metrics' winner was AVIF on ${t.ma} of these calls and JPEG XL on ${t.mj}${t.ma&&t.mj?", which is the split Chrome's own advice points at: try both":", and a different draw of photos would split them"}.</span></div>
+      <p class="meta" style="margin:6px 0 0">every tile in a call was the same size to within 2%. "gap" is how far apart ssimulacra2 scored the best and worst tile, and 3.5 is the least a call needed to make this test.</p></div>
+    <div class="banner info"><span class="g">the takeaway</span><span>you picked JPEG XL ${t.pj} times${state.av2?`, AVIF ${t.pa} and AV2 ${t.p2}`:` and AVIF ${t.pa}`}. ${turfLine("avif","tight budgets")}${turfLine("jxl","transcoding a JPEG")}the metrics' winner was AVIF on ${t.ma} of these calls${state.av2?`, JPEG XL on ${t.mj} and AV2 on ${t.m2}${t.ma&&t.mj?". AVIF and JPEG XL splitting is what Chrome's own advice points at: try both":", and a different draw of photos would split them differently"}`:` and JPEG XL on ${t.mj}${t.ma&&t.mj?", which is the split Chrome's own advice points at: try both":", and a different draw of photos would split them"}`}.</span></div>
     <div class="gb"><span class="gb-legend">so which one ships?</span>
-      <dl class="fmtq">${FMT_QS.map(x=>`<dt>${x.q}</dt><dd>${x.a}${x.more?x.more():""}</dd>`).join("")}</dl></div>`;
+      <dl class="fmtq">${FMT_QS.filter(x=>!x.when||x.when()).map(x=>`<dt>${x.q}</dt><dd>${x.a}${x.more?x.more():""}</dd>`).join("")}</dl></div>`;
 }
 function bar(label,val,sub,gold){
   const w=val===null?0:val.pct, n=val===null?"n/a":`${val.pct}% of ${val.n}`;
@@ -644,7 +743,7 @@ function shareKeyHTML(m){
 // already has, exactly like the page itself.
 function drawCard(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   // the needle line: which metric this eye thinks like, or in a showdown, which format it picked
-  const L=showdown?{l:"JPEG XL",r:"AVIF",ls:"picked more often",rs:"picked more often",cl:"#0a246a",cr:"#0a246a",gl:"#8a866f",gr:"#8a866f"}
+  const L=showdown?{l:"JPEG XL",r:state.av2?"AVIF or AV2":"AVIF",ls:"picked more often",rs:"picked more often",cl:"#0a246a",cr:"#0a246a",gl:"#8a866f",gr:"#8a866f"}
     :{l:"ssimulacra2",r:"butteraugli",ls:"structure / detail",rs:"color / masking",cl:"#0b57c9",cr:"#9c640d",gl:"#0b57c9",gr:"#c8811c"};
   const W=1200,H=630,cv=document.createElement("canvas");cv.width=W;cv.height=H;
   const x=cv.getContext("2d");
@@ -658,7 +757,7 @@ function drawCard(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   g.addColorStop(0,"#4aa3ff");g.addColorStop(.14,"#1f6fe0");g.addColorStop(.55,"#0a53c9");g.addColorStop(1,"#0a246a");
   x.fillStyle=g;x.fillRect(0,0,W,56);
   x.fillStyle="#fff";x.font=`bold 24px ${CAP}`;x.textBaseline="middle";
-  x.fillText(showdown?"Pixel Peeper · JPEG XL vs AVIF":"Pixel Peeper · compression eye exam",24,29);
+  x.fillText(showdown?`Pixel Peeper · ${VS()}`:"Pixel Peeper · compression eye exam",24,29);
   x.font=`15px ${MONO}`;x.fillStyle="rgba(255,255,255,.85)";x.textAlign="right";
   x.fillText("aadhar.sh/pixel-peeper",W-24,30);x.textAlign="left";
 
@@ -712,14 +811,15 @@ function drawCard(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   // footer
   x.fillStyle="#ACA899";x.fillRect(0,H-52,W,1);
   x.fillStyle="#636363";x.font=`15px ${MONO}`;
-  x.fillText(showdown?"real encodes · cjxl · avifenc · equal byte budgets":"real encodes · zenc · mozjpeg · sips · cjxl · avifenc · equal byte budgets",24,H-22);
+  const avm=state.av2?" · AVM":"";
+  x.fillText(showdown?`real encodes · cjxl · avifenc${avm} · equal byte budgets`:`real encodes · zenc · mozjpeg · sips · cjxl · avifenc${avm} · equal byte budgets`,24,H-22);
   x.textAlign="right";x.fillStyle="#0b3fae";
   x.fillText("whose eye do you have?",W-24,H-22);x.textAlign="left";
   return cv;
 }
 
 function wireShare(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
-  const txt=shareText(m,`${showdown?"JPEG XL vs AVIF · ":""}${overall}% · ${grade}`,leanLine,showdown);
+  const txt=shareText(m,`${showdown?`${VS()} · `:""}${overall}% · ${grade}`,leanLine,showdown);
   const flash=(el,msg)=>{const was=el.textContent;el.textContent=msg;setTimeout(()=>el.textContent=was,1500);};
   let card=null; const png=()=>(card=card||drawCard(m,overall,grade,clearLine,leanLine,lean,decisive,showdown));
   const blob=()=>new Promise(res=>png().toBlob(res,"image/png"));
@@ -905,7 +1005,8 @@ function wireDiff(gl,tiles,trial,order,pos){
 
 let DATA=null;
 Promise.all([fetch('/pixel-peeper/manifest.json').then(r=>r.json()),CAN_JXL]).then(([d,jxl])=>{
-  state.noJxl=!jxl; if(!jxl)d.trials=d.trials.filter(t=>t.axis!=="format"); DATA=d;boot();}).catch(e=>{stage.innerHTML='<h1>could not load</h1><p>'+e+'</p>';});
+  state.noJxl=!jxl; if(!jxl)d.trials=d.trials.filter(t=>t.axis!=="format"); DATA=d;
+  state.av2=d.trials.some(t=>t.options.some(isAv2)); boot();}).catch(e=>{stage.innerHTML='<h1>could not load</h1><p>'+e+'</p>';});
 function boot(){ screenIntro(); }
 
 </script>
