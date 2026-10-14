@@ -80,14 +80,16 @@ test("feed dates come from the sitemap the crawler already reads", async () => {
 // Discovery is the half that makes a feed reachable: a reader's subscribe button
 // looks for <link rel="alternate"> on the page, not for a URL somebody guessed.
 test("each section advertises its feed", () => {
+  // One tag, with all three attributes: a reader ignores a feed link without
+  // rel="alternate", and the type and href on separate tags advertise nothing.
+  const tag = (feed) => new RegExp(`<link rel=\\\\?"alternate\\\\?" type=\\\\?"application/rss\\+xml\\\\?"[^>]*href=\\\\?"${feed.replace(/\./g, "\\.")}\\\\?"`);
   for (const [file, feed] of [["src/pages/garage/index.html", "/garage/feed.xml"], ["src/pages/lwe/index.html", "/lwe/feed.xml"]]) {
-    const html = readFileSync(file, "utf8");
-    assert.ok(html.includes(`type="application/rss+xml"`) && html.includes(`href="${feed}"`),
-      `${file} does not advertise ${feed}`);
+    assert.match(readFileSync(file, "utf8"), tag(feed), `${file} does not advertise ${feed}`);
   }
   // /writing is Worker-rendered, so its shell carries the link for the index and
-  // every post at once.
-  assert.match(readFileSync("src/worker/writing.ts", "utf8"), /application\/rss\+xml[^"]*"[^"]*"\s*\+?[^"]*writing\/feed\.xml|writing\/feed\.xml/);
+  // every post at once. The tag sits in a JS string there, quotes escaped.
+  assert.match(readFileSync("src/worker/writing.ts", "utf8"), tag("/writing/feed.xml"), "writing.ts does not advertise its feed");
+  assert.doesNotMatch(`<link type="application/rss+xml" href="/lwe/feed.xml">`, tag("/lwe/feed.xml"), "a link with no rel must not count");
 });
 
 // A garage card that opens by naming the upstream work is the section's best
