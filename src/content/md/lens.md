@@ -40,8 +40,8 @@ Each is phrased as the question it answers rather than as a practitioner noun.
 | Agent doors | MCP, OAuth, API catalog, agent cards |
 | Agent-ready? | the readiness score, and the rubric behind it |
 
-**Reader's guess runs a third-party extractor and reports the gap, not the
-extraction.** Anyone who wants to read a page can open it. What no other surface
+**Reader's guess runs a third-party extractor and reports the gap between what
+it keeps and what the server sent.** Anyone who wants to read a page can open it. What no other surface
 shows is that an extractor is GUESSING which part of a document is the article,
 and how badly that goes on a page that is not one.
 
@@ -60,8 +60,8 @@ engine could decode the images the page served.
 
 **Execution checks stay neutral until a render has actually happened.** They are
 shown and excluded from the score. A render is rate-limited and capped
-account-wide, so most scans will never hold that evidence, and marking a site
-down because our browser budget was spent would make the number dishonest. Run
+account-wide, so most scans will never hold that evidence. Marking a site down
+because our browser budget was spent would make the number dishonest. Run
 the wire lens on a target to fill them in.
 
 The published scoring note travels with every result and states the rule.

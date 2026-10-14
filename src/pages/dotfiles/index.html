@@ -72,7 +72,7 @@ dl{margin:0 0 12px}dt{font-weight:700;margin-top:6px}dd{margin:0 0 4px 0}
   </div><!-- /axp:window -->
   <div class="content">
     <h1>macOS, the way i have it</h1>
-    <p class="lede">Every setting below is one i changed on my own Macs, read back off the machines with <code>defaults read</code> rather than from memory. The System rows came off <code>pmset</code>, <code>nvram</code> and the firewall's own tool. Tick the ones you want, copy the script, paste it into Terminal, and restart what it tells you to. Nothing runs from this page.</p>
+    <p class="lede">Every setting below is one i changed on my own Macs, read back off the machines with <code>defaults read</code>. The System rows came off <code>pmset</code>, <code>nvram</code> and the firewall's own tool. Tick the ones you want, copy the script, paste it into Terminal, and restart what it tells you to. Nothing runs from this page.</p>
 
     <section class="sheet" aria-labelledby="df-cap">
       <p class="cap" id="df-cap">Advanced settings:</p>
@@ -104,7 +104,7 @@ less macos.sh
 bash macos.sh</pre>
 
     <h2>How this list was made</h2>
-    <p><code>defaults read &lt;domain&gt;</code> prints only the keys something has written, so a key that is missing is proof that setting is still at factory, and a key that is present means it was touched at some point. i read the dozen domains that dotfiles conventionally cover, kept the keys whose value differs from what a fresh account gets, and dropped the ones i could not vouch for. Where i know the factory value it sits at the right of the row. A second sweep on 2026-10-09 read my personal Mac the same way and added 61 rows; where the two machines disagreed, the page kept the value it already had.</p>
+    <p><code>defaults read &lt;domain&gt;</code> prints only the keys something has written, so a missing key proves that setting is still at factory, and a present key means something touched it at some point. i read the dozen domains that dotfiles conventionally cover, kept the keys whose value differs from what a fresh account gets, and dropped the ones i could not vouch for. Where i know the factory value it sits at the right of the row. A second sweep on 2026-10-09 read my personal Mac the same way and added 61 rows; where the two machines disagreed, the page kept the value it already had.</p>
     <dl>
       <dt>What is deliberately missing</dt>
       <dd>My text replacements (personal), the Dock's app list (bookmark blobs, <code>dockutil</code> territory), the Control Center menu bar layout (an opaque blob), and the Terminal profile (archived colours, exportable as a <code>.terminal</code> file instead). Also the keyboard shortcuts i turned off under Accessibility, because i could not confirm which of those ship off already. Some keys stayed out because macOS no longer reads them: <code>LSQuarantine</code>, the Launchpad <code>springboard-*</code> keys, <code>no-glass</code> and <code>dashboard-in-overlay</code>. So did verbose boot, which needs reduced security on Apple Silicon. Safari, Mail, TextEdit and Preview went unswept: privacy protection keeps <code>defaults read</code> out of their settings without Full Disk Access.</dd>

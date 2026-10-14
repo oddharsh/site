@@ -43,7 +43,7 @@
   </div><!-- /axp:window -->
   <div class="content prose">
 <h1>Handing Instagram pixels it has no reason to resample</h1>
-<p class="garage-intro">Instagram resizes and re-encodes whatever it is given. What it does not do is <a class="term" data-t="image-scaling" href="https://en.wikipedia.org/wiki/Image_scaling" title="Computing a new grid of pixels for an image at a different size, estimating each new pixel from the old ones around it." rel="external">resample</a> a frame that already arrives at the size it wants. <a href="https://github.com/oddharsh/ig-prep">ig-prep</a> does the destructive work here, carefully, so the platform has as little left to do as possible. It also speaks <a href="https://modelcontextprotocol.io">MCP</a>, so a model can run it against photographs on your own machine without any of them moving.</p>
+<p class="garage-intro">Instagram resizes and re-encodes whatever it is given, except that it won't <a class="term" data-t="image-scaling" href="https://en.wikipedia.org/wiki/Image_scaling" title="Computing a new grid of pixels for an image at a different size, estimating each new pixel from the old ones around it." rel="external">resample</a> a frame that already arrives at the size it wants. <a href="https://github.com/oddharsh/ig-prep">ig-prep</a> does the destructive work here, carefully, so the platform has as little left to do as possible. It also speaks <a href="https://modelcontextprotocol.io">MCP</a>, so a model can run it against photographs on your own machine without any of them moving.</p>
 
 <h2>The geometric fact the default rests on</h2>
 <p>Instagram shows frames between 4:5 and 1.91:1. A 3:2 portrait, which is most of what a Fujifilm or a Leica produces held vertically, is 0.667 and falls outside that band, so something has to give.</p>
@@ -70,9 +70,9 @@
 <p>Eight 40 megapixel HEIFs through one call take 2.41 seconds of wall clock on an M-series Mac, at 354% CPU across the cores.</p>
 
 <h2>What the chroma choice costs</h2>
-<p>Instagram re-encodes to <a class="term" data-t="chroma-subsampling" href="https://en.wikipedia.org/wiki/Chroma_subsampling" title="Storing colour at lower resolution than brightness, since eyes notice brightness detail more. 4:4:4 keeps full colour and 4:2:0 keeps a quarter." rel="external">4:2:0</a> regardless, so the question is not what survives on disk but what its encoder is handed. Full-resolution chroma means its subsampling step averages real detail rather than detail already halved once, and two successive halvings visibly smear saturated edges. The cost is bytes on an upload nobody sees. On one 1440x2160 frame:</p>
+<p>Instagram re-encodes to <a class="term" data-t="chroma-subsampling" href="https://en.wikipedia.org/wiki/Chroma_subsampling" title="Storing colour at lower resolution than brightness, since eyes notice brightness detail more. 4:4:4 keeps full colour and 4:2:0 keeps a quarter." rel="external">4:2:0</a> regardless, so the question is what its encoder is handed. Full-resolution chroma means its subsampling step averages real detail rather than detail already halved once, and two successive halvings visibly smear saturated edges. The cost is bytes on an upload nobody sees. On one 1440x2160 frame:</p>
 <div class="ig-table" id="ig-chroma"></div>
-<p>A Fujifilm HIF halves chroma horizontally in its own landscape orientation, so held vertically the halved axis lands on the long edge of the portrait. Against a 1440x2160 output that is still 3.58x horizontally and 1.79x vertically of real chroma to average down, which is why 4:4:4 output is measured rather than invented. Somebody delivering at or near native size has a source that cannot fill it, and should say <code>--422</code> and mean it.</p>
+<p>A Fujifilm HIF halves chroma horizontally in its own landscape orientation, so held vertically the halved axis lands on the long edge of the portrait. Against a 1440x2160 output that is still 3.58x horizontally and 1.79x vertically of real chroma to average down, which is why the chroma in a 4:4:4 output is measured. Somebody delivering at or near native size has a source that cannot fill it, and should say <code>--422</code> and mean it.</p>
 
 <h2>Three constants are guesses, and they are marked as guesses</h2>
 <p>The target width of 1440, the 4:4:4 default, and the ratio band itself are all assumptions. 1440 is chosen over 1080 because the failure modes are asymmetric: if Instagram wants 1080 it downscales cleanly from 1440, and if it wants 1440 and gets 1080 it upscales and invents detail. Guessing high costs a resample. Guessing low costs the picture.</p>
@@ -80,7 +80,7 @@
 
 <h2>The bug that only black-and-white photographs could find</h2>
 <p>Building the MCP mode turned up a failure that had been in the tool since it was written. Every grayscale JPEG died with <code>source image: Size of buffer is smaller than required</code>, an error naming neither the file nor the cause, raised two layers away from it inside the resizer.</p>
-<p>The decoder's <code>jpeg_set_out_colorspace(RGB)</code> is a request rather than an instruction. For a single-channel source it declines and returns Luma anyway, silently, so the buffer came back at one byte per pixel while the code labelled it three. The repair reads the colourspace the decoder actually used instead of the one it was asked for, and checks the buffer length against the dimensions at the decode boundary, where the file name is still in hand. One file in a 160-file library failed before. None do now.</p>
+<p>The decoder's <code>jpeg_set_out_colorspace(RGB)</code> is only a request. For a single-channel source it declines and returns Luma anyway, silently, so the buffer came back at one byte per pixel while the code labelled it three. The repair reads the colourspace the decoder actually used instead of the one it was asked for, and checks the buffer length against the dimensions at the decode boundary, where the file name is still in hand. One file in a 160-file library failed before. None do now.</p>
 <p>The general shape is worth more than the instance. <b>An API that takes a preference and reports no error when it declines will be read as an instruction</b>, and the mismatch surfaces wherever the wrong assumption is first load-bearing, which is rarely where it was made.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
@@ -176,7 +176,7 @@
         },
         {
           "t": "MCP results cannot carry binary data at all.",
-          "why": "The protocol has image content blocks. The limit here is what a result is worth carrying, rather than what it can carry."
+          "why": "The protocol has image content blocks. The limit here is what a result is worth carrying."
         },
         {
           "t": "Returning bytes would let the model modify the originals.",

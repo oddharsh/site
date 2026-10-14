@@ -55,10 +55,10 @@ the browser fills that row in from what it sent with the page.
 ## About the page
 
 The Cloudflare edge renders it, and your browser never speaks to a third party.
-There are exactly two outbound calls: one server-side RDAP lookup to your IP's
-registry, which the edge caches for 24h so visitors from the same block do not
-re-hit ARIN, and the Edge Trace section's fetch of `/cdn-cgi/trace`, which your
-own browser makes to this same origin. The data lives for as long
+Two requests leave the page after it loads, both to this same origin: the
+values, and the Edge Trace section's read of `/cdn-cgi/trace`. One call leaves
+the server: an RDAP lookup to your IP's registry, which the edge caches for 24h
+so visitors from the same block don't re-hit ARIN. The data lives for as long
 as it takes to render, then nothing writes it to storage.
 
 Every script on this page is mine, and that is newer than it sounds. From 2026-08-06
@@ -68,7 +68,7 @@ file in the repository contained. It is off. What builds the tool catalogue now 
 `/webmcp.js`, which is in the repository and which you can read end-to-end like the
 rest.
 
-Two measurements retired the bridge rather than a preference. It never ran on the
+Two measurements retired the bridge. It never ran on the
 busiest page here at all: `/` is served as a compressed delta against bytes your
 browser already holds, and the edge cannot rewrite one, so the homepage advertised
 nothing to anybody while every other page advertised 25 tools. And your browser keeps

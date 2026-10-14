@@ -625,7 +625,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
       <code>/webmcp.js</code>, which is in the repository and which you can read
       end-to-end like the rest.
       <br><br>
-      Two measurements retired the bridge rather than a preference. It never ran
+      Two measurements retired the bridge. It never ran
       on the busiest page here at all: <code>/</code> is served as a compressed
       delta against bytes your browser already holds, and the edge cannot rewrite
       one, so the homepage advertised nothing to anybody while every other page

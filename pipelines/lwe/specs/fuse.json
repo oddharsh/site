@@ -8,15 +8,15 @@
   "disclosure": "<b>First-pass draft.</b> The incident reporting comes from the <a href=\"https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback\" rel=\"external\">Consumer Rights Wiki writeup</a> of the January 2026 OnePlus ColorOS 16.0.3.501 anti-rollback fuse incident, which collects the XDA and Android Authority coverage; the requirement is quoted from <a href=\"https://source.android.com/docs/security/features/verifiedboot/verified-boot\" rel=\"external\">AOSP Verified Boot</a>. Quoted lines are verbatim, the learner lines and pacing are AI. Both demos are simulations that run real arithmetic on a model of the counter, and neither one reads hardware.",
   "editorial": {
     "reader": "Someone who saw the January 2026 OnePlus bricking threads, understood that a fuse was involved, and cannot yet say why a phone would want a bit it can never clear.",
-    "problem": "The reader treats secure boot as one undifferentiated check, so a permanent hardware counter reads as vendor spite rather than as the answer to a specific hole that signatures structurally cannot close.",
-    "thesis": "Signature verification is stateless, so it accepts any genuinely signed build including the vulnerable one it shipped last year. Rollback protection closes that by adding state, and a counter kept in silicon is the one copy an attacker with full flash access cannot rewrite. The owner loses the same downgrade the attacker does, because the counter compares versions and cannot see who is asking.",
+    "problem": "The reader treats secure boot as one undifferentiated check, so a permanent hardware counter reads as vendor spite. It actually answers a specific hole that signatures structurally cannot close.",
+    "thesis": "Signature verification is stateless, so it accepts any genuinely signed build including the vulnerable one the vendor shipped last year. Rollback protection closes that by adding state, and a counter kept in silicon is the one copy an attacker with full flash access cannot rewrite. The owner loses the same downgrade the attacker does, because the counter compares versions and cannot see who is asking.",
     "evidence": [
       "The Qfprom mechanism, the PBL version compare, the TrustZone path that blows further fuses, and the EDL dead end are all reported in the Consumer Rights Wiki writeup and cited in the chat.",
       "AOSP states the requirement as tamper-evident storage, which the page contrasts against the irreversible fuse Qualcomm actually shipped.",
       "OnePlus said it had paused downgrades and would restore them, which separates the policy layer that can be lifted from the fuse layer that cannot.",
       "The two demos make the model testable: the paired verifiers isolate the single case where signatures and version floors disagree, and the fuse bank refuses to lower its floor."
     ],
-    "uncertainty": "Whether every affected handset is truly unrecoverable rests on community reports and paid unbrick services rather than a vendor teardown, and Qualcomm publishes no detail on how many fuses the counter spends or how it encodes a version, so the demo models it as a unary ratchet."
+    "uncertainty": "Whether every affected handset is truly unrecoverable rests on community reports and paid unbrick services, with no vendor teardown behind them. Qualcomm publishes no detail on how many fuses the counter spends or how it encodes a version, so the demo models it as a unary ratchet."
   },
   "understanding": {
     "intro": "Before you close the window: 5 questions, no grades. Both demos above still run if you want to check an answer against them.",
@@ -61,7 +61,7 @@
           },
           {
             "t": "the fuses live inside TrustZone, so only trusted code is allowed to lower them",
-            "why": "TrustZone is the path that blows fuses rather than a guard on lowering them. No caller of any privilege gets a fuse back."
+            "why": "TrustZone is the path that blows fuses. No caller of any privilege, TrustZone included, gets a fuse back."
           }
         ]
       },
@@ -79,7 +79,7 @@
           },
           {
             "t": "EDL needs an unlocked bootloader, and the update relocks it",
-            "why": "EDL exists for a device that will not boot at all, which is why people reach for it here. Its problem is the fuse, not the lock state."
+            "why": "EDL exists for a device that will not boot at all, which is why people reach for it here. The fuse stops it whatever the lock state."
           },
           {
             "t": "blowing a fuse disables the USB stack, so the phone stops enumerating",
@@ -165,7 +165,7 @@
     {
       "who": "bot",
       "time": "00:43",
-      "html": "<p>Start with what a signature can tell you. Secure boot checks that an image was signed by the vendor, so a forged image fails. Last year's image was also signed by the vendor, so it passes the identical check, and last year's image is the one carrying the hole somebody has already published an <a class=\"term\" data-t=\"exploit\" href=\"https://en.wikipedia.org/wiki/Exploit_(computer_security)\" title=\"Code or a technique that uses a bug to make a system do something its makers never intended, like leak data or run an attacker's code.\" rel=\"external\">exploit</a> for.</p>"
+      "html": "<p>Start with what a signature can tell you. Secure boot checks that an image was signed by the vendor, so a forged image fails. Last year's image was also signed by the vendor, so it passes the identical check. And last year's image is the one carrying the hole somebody has already published an <a class=\"term\" data-t=\"exploit\" href=\"https://en.wikipedia.org/wiki/Exploit_(computer_security)\" title=\"Code or a technique that uses a bug to make a system do something its makers never intended, like leak data or run an attacker's code.\" rel=\"external\">exploit</a> for.</p>"
     },
     {
       "who": "bot",
@@ -202,7 +202,7 @@
       "demo": {
         "id": "demo-ratchet",
         "bar": "the ratchet &middot; blow a fuse, then try to undo it",
-        "html": "<p class=\"lead\">A <b>simulated</b> fuse bank, 12 bits wide. No hardware is touched here; the point is the arithmetic. The floor starts at 3 because the factory already blew three. Pick a firmware version, flash it, and watch what the bank will and will not do.</p>\n<div class=\"fz-bank\" id=\"fz-bank\" role=\"img\" aria-label=\"a bank of 12 fuses, blown ones reading 1\"></div>\n<div class=\"fz-meta\">anti-rollback floor: <b id=\"fz-floor\">3</b></div>\n<div class=\"fz-row\"><label for=\"fz-ver\">firmware version</label><input id=\"fz-ver\" class=\"fz-slide\" type=\"range\" min=\"0\" max=\"12\" value=\"7\"><b id=\"fz-verout\">7</b></div>\n<div class=\"fz-row\"><button class=\"xp-button compact\" id=\"fz-flash\" type=\"button\">flash this build</button><button class=\"xp-button compact\" id=\"fz-undo\" type=\"button\">put the fuses back</button></div>\n<div class=\"fz-log\" id=\"fz-log\">pick a firmware version and flash it.</div>"
+        "html": "<p class=\"lead\">A <b>simulated</b> fuse bank, 12 bits wide, that runs the arithmetic and touches no hardware. The floor starts at 3 because the factory already blew three. Pick a firmware version, flash it, and watch what the bank will and will not do.</p>\n<div class=\"fz-bank\" id=\"fz-bank\" role=\"img\" aria-label=\"a bank of 12 fuses, blown ones reading 1\"></div>\n<div class=\"fz-meta\">anti-rollback floor: <b id=\"fz-floor\">3</b></div>\n<div class=\"fz-row\"><label for=\"fz-ver\">firmware version</label><input id=\"fz-ver\" class=\"fz-slide\" type=\"range\" min=\"0\" max=\"12\" value=\"7\"><b id=\"fz-verout\">7</b></div>\n<div class=\"fz-row\"><button class=\"xp-button compact\" id=\"fz-flash\" type=\"button\">flash this build</button><button class=\"xp-button compact\" id=\"fz-undo\" type=\"button\">put the fuses back</button></div>\n<div class=\"fz-log\" id=\"fz-log\">pick a firmware version and flash it.</div>"
       }
     },
     {
@@ -289,7 +289,7 @@
     {
       "who": "bot",
       "time": "00:52",
-      "html": "<p>That is the model. Carry one blind spot out with it: the counter compares two numbers and cannot see who is asking. An attacker rolling you back to an exploitable build and an owner rolling back to the build where the camera worked send the identical request, so any mechanism that stops the first stops the second by construction.</p>"
+      "html": "<p>That is the model. Carry one blind spot out with it: the counter compares two numbers and cannot see who is asking. An attacker rolling you back to an exploitable build sends the same request as an owner rolling back to the build where the camera worked. Any mechanism that stops the first stops the second by construction.</p>"
     },
     {
       "who": "you",

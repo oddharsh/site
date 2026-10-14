@@ -93,7 +93,7 @@
 <p>The homepage loads one script, <code>nav.js</code>, at 14.9 KiB gzip. That script builds the wallpaper, the draggable desktop icons, the taskbar, the clock, the Start orb, and the Run palette that filters 158 photos plus every page on the site. The heaviest page here is <a href="/lens">/lens</a> at 36.6 KiB, and it still lands under the framework row that won.</p>
 <p>Now the complication I would rather state than bury. Every script this site serves, summed across all 43 pages, is 49.0 KiB gzip, which is <em>more</em> than Nextane's 43.0. A visitor never downloads that sum, and a Nextane visitor pays 43.0 on their first page, so per page load the gap is real and roughly 3x. As a whole-site total the comparison reverses. Both numbers are true, they answer different questions, and only the per-page one describes what a browser does.</p>
 
-<h2>The chunk is the framework, not the glue</h2>
+<h2>The chunk is the framework</h2>
 <p>The obvious objection is that most of that <data value="125,152 bytes">125 KB</data> is Next.js compatibility <a class="term" data-t="shim" href="https://en.wikipedia.org/wiki/Shim_(computing)" title="A small layer of code that makes one interface behave like another, so code written for the old one keeps working." rel="external">shim</a>, which a plain Octane app would never load. I counted identifiers in the shipped chunk rather than arguing about it:</p>
 <table class="oct-table">
   <tr><th>Identifier in <code>router-bwM-JHXE.js</code></th><th>Occurrences</th></tr>
@@ -104,7 +104,7 @@
   <tr class="mine"><td><code>router</code></td><td>1</td></tr>
 </table>
 <p>The chunk is named for the router and contains almost none of one. What fills it is the reactive runtime, <a class="term" data-t="react-suspense" href="https://react.dev/reference/react/Suspense" title="A React feature that shows a fallback, such as a spinner, while part of the page waits for code or data to load." rel="external">Suspense</a>, and the scheduler. So 43.0 KiB sits close to Octane's own floor in this build, and stripping the Next.js surface off the top would not recover much of it.</p>
-<p>That reading rests on one <a class="term" data-t="software-alpha" href="https://en.wikipedia.org/wiki/Software_release_life_cycle" title="An early stage of software, before beta, when features are still incomplete and bugs and breaking changes are expected." rel="external">alpha</a> build. Octane calls itself alpha software and has beta in view, so a tuned release may <a class="term" data-t="tree-shaking" href="https://en.wikipedia.org/wiki/Tree_shaking" title="A build step that drops code a program never uses, so the shipped bundle contains only what runs." rel="external">tree-shake</a> considerably further. Treat the number as current rather than settled.</p>
+<p>That reading rests on one <a class="term" data-t="software-alpha" href="https://en.wikipedia.org/wiki/Software_release_life_cycle" title="An early stage of software, before beta, when features are still incomplete and bugs and breaking changes are expected." rel="external">alpha</a> build. Octane calls itself alpha software and has beta in view, so a tuned release may <a class="term" data-t="tree-shaking" href="https://en.wikipedia.org/wiki/Tree_shaking" title="A build step that drops code a program never uses, so the shipped bundle contains only what runs." rel="external">tree-shake</a> considerably further. Treat the number as provisional.</p>
 
 <h2>What the comparison actually measures</h2>
 <p>Here is where I argue against my own table. A framework competes with the version of your application you would otherwise hand-write and then maintain for years, which is a different opponent from a hand-written document. Octane's 43 KiB buys a component model, hydration, Suspense, and a compiler that tracks what your code reads so you stop maintaining dependency arrays. This site buys none of that because it needs none of it. It serves documents, and its interactivity is a desktop shell bolted on top of them.</p>
@@ -117,7 +117,7 @@
 
 <h2>The objection I think is right</h2>
 <p>The strongest reading of this page is that it stacks the deck. I picked a document site as the zero, then reported that an application framework costs more than zero, which was never in doubt. Nobody building a dashboard can adopt this site's answer, because the answer is "have less behaviour."</p>
-<p>I think that is fair, and it is why the middle sections exist rather than just the chart. What the extra rows buy is a scale rather than a verdict on Octane. A reader who has only ever seen framework-versus-framework tables can rank three options and still have no idea whether the winner is close to the metal or a long way from it. Now there is a distance on the axis, and 43.0 KiB reads as a genuine achievement against React and a large number against nothing at all. Both readings survive, and holding them together is the point.</p>
+<p>I think that is fair, and it is why the middle sections exist rather than just the chart. What the extra rows buy is a scale to read Octane against. A reader who has only ever seen framework-versus-framework tables can rank three options and still have no idea whether the winner is close to the metal or a long way from it. Now there is a distance on the axis, and 43.0 KiB reads as a genuine achievement against React and a large number against nothing at all. Both readings survive, and holding them together is the point.</p>
 <p class="oct-falsify">What would change my mind: a tuned, non-alpha Octane build landing anywhere near <code>nav.js</code>'s 14.9 KiB. That would mean the runtime cost measured here is a property of an early build rather than of the architecture, and the crossover argument above would collapse with it. The beta is where that shows up.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
@@ -247,7 +247,7 @@
         {
           "t": "nav.js growing several times its current weight, so the runtime stops dominating the code it replaces.",
           "ok": true,
-          "why": "Right. The runtime is roughly 3x nav.js today, so the trade is decided by the ratio rather than by the framework maturing."
+          "why": "Right. The runtime is roughly 3x nav.js today, so the ratio decides the trade, however mature the framework gets."
         },
         {
           "t": "Octane reaching a stable 1.0 release.",
@@ -255,7 +255,7 @@
         },
         {
           "t": "The site adding more pages that all load the shell.",
-          "why": "More pages sharing one immutable, long-cached script strengthens the current arrangement rather than weakening it."
+          "why": "More pages sharing one immutable, long-cached script strengthens the current arrangement."
         }
       ]
     },

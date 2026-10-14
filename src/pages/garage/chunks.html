@@ -66,8 +66,7 @@
   <div class="content prose">
     <h1>Chunking &amp; content-addressing <span class="badge review">in review</span></h1>
     <p class="lede">
-      How systems store and sync big files by their <em>content</em>, not their
-      name, and why a one-byte edit re-sends the whole file under
+      How systems store and sync big files by their <em>content</em>, and why a one-byte edit re-sends the whole file under
       naïve chunking, but almost nothing under <a class="term" data-t="content-defined-chunking" href="https://en.wikipedia.org/wiki/Rolling_hash#Content-based_slicing_using_a_rolling_hash" title="Splitting a file wherever its own bytes match a pattern, so an insertion only moves the boundaries near it and the other chunks stay identical." rel="external">content-defined chunking</a>.
     </p>
 
@@ -147,8 +146,7 @@
     <p class="note">
       Everything the shipping version adds is a separate concern wearing this
       function's clothes. <code>min</code>/<code>max</code> clamp pathological
-      sizes, which is a memory budget rather than a claim about where a chunk
-      belongs. "Normalized" chunking swaps a tighter mask in before the average
+      sizes, which is a memory budget, separate from the question of where a chunk belongs. "Normalized" chunking swaps a tighter mask in before the average
       and a looser one after, so sizes cluster near the target, which is a knob
       on the distribution. The <code>&gt;&gt;&gt; 0</code> after every shift is
       JavaScript keeping 32-bit arithmetic honest. Peel those three off and the
@@ -186,8 +184,7 @@
 
     <p class="replaces">
       On the site: this is the same instinct as the <code>?v=N</code> immutable
-      image URLs and the cache-first service worker: identity by content,
-      not by name. If the photo originals ever needed incremental sync to R2,
+      image URLs and the cache-first service worker: identity by content. If the photo originals ever needed incremental sync to R2,
       content-defined chunking is how you'd ship only what changed.
     </p>
 

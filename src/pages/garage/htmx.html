@@ -67,16 +67,16 @@
 <h1>Break-even at three submits</h1>
 <p class="garage-intro"><a href="https://github.com/bigskysoftware/htmx" rel="external">htmx</a> shipped <a href="https://four.htmx.org/announcements/2026-08-28-htmx-4.0.0-is-released" rel="external">4.0.0</a> on the day this page was written, and it is a real improvement on 2.x: 36,716 bytes <a class="term" data-t="minification" href="https://en.wikipedia.org/wiki/Minification_(programming)" title="Stripping spaces, comments and long names out of code so it downloads smaller and still runs the same." rel="external">minified</a> against 50,917, with the history cache dropped and <code>XMLHttpRequest</code> traded for <code>fetch</code>. The size is the easy question. The one that decides adoption is how much of your existing JavaScript the library can delete, and that turns on whether your code is already shaped like a request and a swap. This site's mostly isn't. So the measurement went to the one page where htmx should have won, and it lost by <data value="2.96x (11,735 bytes of library vs 3,968 saved per submit)">a factor of three</data>.</p>
 
-<h2>The library is priced per visitor, never per repo</h2>
+<h2>The library is priced per visitor</h2>
 <p>A <a class="term" data-t="hypermedia" href="https://en.wikipedia.org/wiki/Hypermedia" title="Hypertext extended with images, sound and video; on the web, pages whose links and forms tell the reader what they can do next." rel="external">hypermedia</a> library moves rendering to the server and sends HTML fragments back. That trade is good when a page holds many interactions, because the download amortizes across all of them. It is bad when a page holds one, because the visitor pays the whole library to save one response.</p>
-<p>Which means the honest unit is bytes per visitor rather than bytes on disk, and the number you need is the count of swaps a single visitor performs. Everything below is that arithmetic, run on real bytes.</p>
+<p>So the honest unit is bytes per visitor, and the number you need is the count of swaps a single visitor performs. Everything below is that arithmetic, run on real bytes.</p>
 
 <h2>The page htmx was built for</h2>
 <p>This site has 54 documents and 17 client modules, and almost none of it fetches HTML. <code>quiz.js</code> makes zero network requests. So do <code>hoist.js</code>, <code>infotip.js</code>, <code>notepad.js</code> and <code>nav-tray.js</code>. The modules that do fetch read JSON and paint structured interfaces from it, which htmx has no opinion about.</p>
 <p>One surface is different. <code>/coffee</code> is a booking form: two plain <code>method="POST"</code> forms, server-rendered responses, 874 bytes of inline script for the slot picker. Submitting it reloads the document. That is the shape htmx was designed for, so that is where the experiment went.</p>
 
 <h2>What was built</h2>
-<p>htmx 4.0.0 vendored as a client asset, loaded on the booking page alone rather than on the shared shell, so the confirmation and decline pages pay nothing. The form keeps its <code>method</code> and <code>action</code> as the no-JavaScript fallback and gains three attributes:</p>
+<p>htmx 4.0.0 vendored as a client asset, loaded on the booking page alone, outside the shared shell, so the confirmation and decline pages pay nothing. The form keeps its <code>method</code> and <code>action</code> as the no-JavaScript fallback and gains three attributes:</p>
 <pre class="hb-code"><code>&lt;form class="book" id="bookform" method="POST" action="/coffee/book" novalidate
       hx-post="/coffee/book" hx-swap="outerHTML" hx-disabled-elt="#submit"&gt;</code></pre>
 <p>The <a class="term" data-t="cloudflare-workers" href="https://developers.cloudflare.com/workers/" title="Code that runs on Cloudflare's servers around the world and answers each request directly, with no server of the site's own." rel="external">Worker</a> grew a branch that answers the body alone when htmx asks for it, and the full document otherwise, which is what a crawler and a visitor with JavaScript off still receive:</p>
@@ -133,7 +133,7 @@
     <p class="hb-legend">Per 1,000 visits, Brotli bytes. Library cost is 11,735 per first visit; saving is 3,968 per submit. The booking rate would have to pass <span id="hb-cross">the crossover</span> for htmx to pay for itself at the current repeat rate.</p>
   </div>
 </div>
-<p>The default positions are a guess about a personal booking page, and they are the part of this page you should distrust most. The site records no funnel for <code>/coffee</code>, so the 4% is an estimate rather than a measurement. Drag it and see how far it has to go.</p>
+<p>The default positions are a guess about a personal booking page, and they are the part of this page you should distrust most. The site records no funnel for <code>/coffee</code>, so the 4% is an estimate. Drag it and see how far it has to go.</p>
 
 <h2>Three reasons the rest of the site is worse</h2>
 <p>The booking page is htmx's best case here. The surfaces that carry the actual JavaScript are worse, for reasons that have nothing to do with the library's quality.</p>
@@ -145,7 +145,7 @@
 <p>Every document here names a <a class="term" data-t="speculation-rules" href="https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API" title="A browser API where a page lists links the browser may fetch or fully render ahead of time, so the next page appears instantly on click." rel="external">speculation ruleset</a> at <code>moderate</code> eagerness in a <code>Speculation-Rules</code> header, so the next page is rendered before the click lands. <code>hx-boost</code> is a fetch on click, which is strictly later. The cross-document <a class="term" data-t="view-transitions" href="https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API" title="A browser API that animates the change between two views or two pages by snapshotting the old one and morphing into the new." rel="external">View Transition</a> was removed from this site in July for the same reason. htmx 4 also drops the history cache and refetches on back navigation, where the browser's own <a class="term" data-t="bfcache" href="https://developer.mozilla.org/en-US/docs/Glossary/bfcache" title="The back/forward cache: the browser keeps a page frozen in memory when you leave, so Back or Forward restores it instantly with its state intact." rel="external">bfcache</a> restores the page with its state in place.</p>
 
 <h2>What the snapshot cannot see</h2>
-<p>A wire-size diff measures files. It cannot measure round trips, and round trips are where the argument above actually lives. So the diff proves the narrow claim, which is that the library is additive on this site's one hypermedia-shaped page, and the three reasons remain reasoning rather than measurement.</p>
+<p>A wire-size diff measures files. It cannot measure round trips, and round trips are where the argument above actually lives. So the diff proves the narrow claim, which is that the library is additive on this site's one hypermedia-shaped page, and the three reasons remain unmeasured.</p>
 <p>Two smaller things the experiment left on the table. htmx landed as a plain top-level asset, outside the <a class="term" data-t="content-addressing" href="https://en.wikipedia.org/wiki/Content-addressable_storage" title="Naming each piece of data by a hash of its bytes, so the same content always gets the same name and any change gets a new one." rel="external">content-hashed</a> <code>/a/</code> tier, so it received no <a class="term" data-t="compression-dictionaries" href="https://www.rfc-editor.org/rfc/rfc9842.html" title="A scheme where the browser keeps an earlier copy of a file and the server sends only a compressed difference against it." rel="external">shared-compression dictionary</a> and the delta count held at 110. Giving it that treatment would make repeat visits nearly free and leave the first visit exactly where it is. And the inline slot picker survived untouched, because an <code>aria-pressed</code> toggle and a <code>toLocaleString</code> button label are not requests. Lines of JavaScript this deleted: zero.</p>
 
 <h2>What would change the verdict</h2>
@@ -256,7 +256,7 @@
         },
         {
           "t": "The 54 pages divided by the 17 client modules.",
-          "why": "Neither number appears in the trade. The page count and the module count describe the site's shape rather than the cost of one interaction."
+          "why": "Neither number appears in the trade. The page count and the module count describe the site's shape."
         }
       ]
     },
@@ -278,7 +278,7 @@
         },
         {
           "t": "The browser cannot cache a fragment, so it costs more over time.",
-          "why": "Neither response is cached here, and the comparison is a single submit against a single submit. Caching governs the library asset rather than the reply."
+          "why": "Neither response is cached here, and the comparison is a single submit against a single submit. Caching governs the library asset."
         }
       ]
     },
@@ -296,7 +296,7 @@
         },
         {
           "t": "That the tooltips would break under htmx.",
-          "why": "They would work. The objection is cost rather than correctness: the interface would still render, and it would spend a request and Worker CPU on each hover."
+          "why": "They would work. The objection is cost: the interface would still render, and it would spend a request and Worker CPU on each hover."
         },
         {
           "t": "That htmx cannot render a photograph's metadata.",
@@ -308,7 +308,7 @@
       "q": "The page argues hx-boost would be slower here than what already ships. What is it competing against?",
       "options": [
         {
-          "t": "A speculation ruleset on every document that prerenders the next page before the click, so the document is ready rather than requested.",
+          "t": "A speculation ruleset on every document that prerenders the next page before the click lands.",
           "ok": true,
           "why": "Right. Boost improves on a full reload and loses to prerendering, because prerendering has already done the work when the click lands. The same reasoning removed this site's cross-document View Transition in July."
         },
@@ -332,7 +332,7 @@
         {
           "t": "A surface on this site where one visitor performs more than three swaps, which would carry the same arithmetic to the opposite verdict.",
           "ok": true,
-          "why": "Right. The conclusion is arithmetic rather than a preference, so the way to overturn it is a higher swap count. A multi-step form or a list somebody genuinely pages through would do it without any new argument."
+          "why": "Right. The conclusion is arithmetic, so the way to overturn it is a higher swap count. A multi-step form or a list somebody genuinely pages through would do it without any new argument."
         },
         {
           "t": "A future htmx release that is smaller than 11,735 Brotli bytes.",
@@ -340,7 +340,7 @@
         },
         {
           "t": "A page where the full document response is larger than 17,001 bytes.",
-          "why": "A heavier page raises the saving per submit, which helps, and the count of submits per visitor is what the conclusion turns on. That is why the correct answer names frequency rather than size."
+          "why": "A heavier page raises the saving per submit, which helps, but the count of submits per visitor is what the conclusion turns on. That is why the correct answer names frequency rather than size."
         },
         {
           "t": "Discovering that the Worker bundle grew by more than 0.09 KiB.",

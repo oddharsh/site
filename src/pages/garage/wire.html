@@ -93,7 +93,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
     <p class="lede">
       This site was no-build on principle: every page inline, every byte committed
       the way it ships. This is the story of the first build step that earned its
-      place anyway, the <a class="term" data-t="brotli" href="https://en.wikipedia.org/wiki/Brotli" title="A compression algorithm from Google built for the web. It ships with a built-in dictionary of common web text, which helps on small files." rel="external">brotli</a> rabbit hole that led there, the
+      place anyway and the <a class="term" data-t="brotli" href="https://en.wikipedia.org/wiki/Brotli" title="A compression algorithm from Google built for the web. It ships with a built-in dictionary of common web text, which helps on small files." rel="external">brotli</a> rabbit hole that led there. It also covers the
       <a href="https://github.com/oxc-project/oxc" rel="external">Oxc</a> and
       <a href="https://github.com/parcel-bundler/lightningcss" rel="external">Lightning CSS</a>
       knobs that survived contact with the real site, and the cache layer that finally
@@ -115,8 +115,8 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       offline.</p>
 
     <div class="callout">
-      The lesson that reframed the whole exercise: <strong>on this stack you do not
-      choose your compressor, you choose your bytes.</strong> The edge compresses
+      The lesson that reframed the whole exercise: <strong>on this stack you choose
+      your bytes, and the edge chooses the compressor.</strong> The edge compresses
       everything at its own fixed quality. The only lever the origin really owns is
       how many bytes go INTO the compressor.
     </div>
@@ -139,9 +139,9 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
         plain twin). Workers CAN do it: fetch the twin from assets and return it with
         <code class="m">content-encoding: br</code> and
         <code class="m">encodeBody: "manual"</code>, which tells the runtime the body
-        is already compressed. But that means the asset goes back through the worker
-        (undoing the zero-invocation edge-direct routing), plus <a class="term" data-t="accept-encoding" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept-Encoding" title="The HTTP request header where a browser lists the compression formats it can decode, such as gzip, br and zstd." rel="external">Accept-Encoding
-        negotiation</a> and <a class="term" data-t="vary" href="https://www.rfc-editor.org/rfc/rfc9110.html#field.vary" title="A response header telling caches which request headers changed the answer, so they keep a separate copy for each variant." rel="external">Vary</a> correctness, to beat the edge's own brotli by ~3KB on a
+        is already compressed. But the asset then goes back through the worker
+        (undoing the zero-invocation edge-direct routing) and needs <a class="term" data-t="accept-encoding" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept-Encoding" title="The HTTP request header where a browser lists the compression formats it can decode, such as gzip, br and zstd." rel="external">Accept-Encoding
+        negotiation</a> and <a class="term" data-t="vary" href="https://www.rfc-editor.org/rfc/rfc9110.html#field.vary" title="A response header telling caches which request headers changed the answer, so they keep a separate copy for each variant." rel="external">Vary</a> correctness. All that to beat the edge's own brotli by ~3KB on a
         file that was about to get much smaller anyway. Rejected, narrowly, with the
         next section as the reason.</li>
     </ul>
@@ -166,8 +166,8 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       <div class="bar-row"><span class="lbl">source, local brotli</span><span class="track"><span class="fill" style="width:27.5%"></span></span><span class="val">22,772</span></div>
       <div class="bar-row win"><span class="lbl">Oxc output, raw</span><span class="track"><span class="fill" style="width:55.7%"></span></span><span class="val">46,152</span></div>
       <div class="bar-row win"><span class="lbl">Oxc output, local brotli</span><span class="track"><span class="fill" style="width:15.6%"></span></span><span class="val">12,950</span></div>
-      <p class="bar-cap">These are local build measurements, not a claim about Cloudflare's edge quality:
-        the origin wins before the edge gets involved. Six scripts together go from 230.4KB raw to
+      <p class="bar-cap">These are local build measurements: they show what the origin wins before
+        the edge gets involved, whatever quality the edge then runs at. Six scripts together go from 230.4KB raw to
         128.2KB, with readable source twins beside the deployed files.</p>
     </div>
 
@@ -201,15 +201,14 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
     <p>External <code class="m">nav.js</code> and <code class="m">luna.css</code> have an obvious
       place to put smaller bytes. The homepage also carries a large inline
       <code class="m">&lt;style&gt;</code> block and several inline
-      <code class="m">&lt;script&gt;</code> blocks. Those are not pointers to the external
-      files: the code is literally inside the HTML document, so minifying the shells and
-      stylesheet never touched it.</p>
+      <code class="m">&lt;script&gt;</code> blocks. That code lives inside the HTML document
+      itself, so minifying the shells and stylesheet never touched it.</p>
     <p>The new profile closes that hole conservatively. Rust-backed
       <code class="m">@minify-html/node</code> handles document structure with its own
       JavaScript and CSS transforms disabled. Before that pass, homepage inline CSS goes
       through the existing Lightning CSS settings and executable inline JavaScript goes
-      through the existing Oxc settings. JSON-LD and <a class="term" data-t="speculation-rules" href="https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API" title="A browser API where a page lists links the browser may fetch or fully render ahead of time, so the next page appears instantly on click." rel="external">speculation rules</a> are data, not
-      JavaScript, so they remain untouched.</p>
+      through the existing Oxc settings. JSON-LD and <a class="term" data-t="speculation-rules" href="https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API" title="A browser API where a page lists links the browser may fetch or fully render ahead of time, so the next page appears instantly on click." rel="external">speculation rules</a> are data, so
+      they remain untouched.</p>
     <div class="callout">
       <strong>Structure gets smaller; meaning stays put.</strong> The served copy may lose
       comments and formatting whitespace and normalize attribute spelling, but it keeps
@@ -272,8 +271,7 @@ transition:filter 60ms ease-out}</pre></figure>
       <code class="m">0%</code> and <code class="m">100%</code> gradient stops). And
       whitespace is exactly the thing brotli already compresses to almost nothing.</p>
 
-    <p>So the real question is never "does the file get smaller" but "does the WIRE get
-      smaller after brotli." This site's CSS lives in four habitats, and I measured all
+    <p>So the real question is "does the WIRE get smaller after brotli?" This site's CSS lives in four habitats, and I measured all
       four:</p>
 
     <table class="cmp">
@@ -301,10 +299,10 @@ transition:filter 60ms ease-out}</pre></figure>
     </div>
 
     <h2>The knobs are part of the contract</h2>
-    <p>“Minify it” is not one switch. The useful part of today's work was deciding which
+    <p>"Minify it" hides a stack of separate switches. The useful part of today's work was deciding which
       transformations are safe for this site, which are intentionally absent, and where a
       warning becomes a failed deploy. The two panels below are the actual policy behind
-      <code class="m">build.ts</code>, not a menu of hypothetical optimizations.</p>
+      <code class="m">build.ts</code>.</p>
 
     <div class="knob-grid">
       <section class="knob-panel" aria-labelledby="js-knobs">
@@ -376,7 +374,7 @@ transition:filter 60ms ease-out}</pre></figure>
       <p>The earlier four-shell head-to-head still explains why the switch was attractive:
         Oxc was about six times faster than
         <a href="https://github.com/evanw/esbuild" rel="external">esbuild</a>, while the brotli output differed by only
-        40 bytes. But the thing now shipped is narrower than “the Rust toolchain”: this repo
+        40 bytes. But the thing now shipped is narrower than "the Rust toolchain": this repo
         uses Oxc Minify directly. It does not add Rolldown, and it does not bundle the six
         client islands together.</p>
       <table class="cmp">
@@ -409,8 +407,8 @@ transition:filter 60ms ease-out}</pre></figure>
       and does not repeat mistakes it has written down), TTLs stay short and honest
       because deploys do NOT flush this cache, and every response says which path it
       took in an <code class="m">x-edge-cache</code> header. The reading page also
-      dropped its <code class="m">no-store</code> (it was conservatism, not
-      necessity), and the manual refresh hook evicts the edge copy too, so a bust
+      dropped its <code class="m">no-store</code> (pure conservatism; nothing
+      needed it), and the manual refresh hook evicts the edge copy too, so a bust
       still busts.</p>
 
     <div class="cf-feat">
@@ -498,7 +496,7 @@ transition:filter 60ms ease-out}</pre></figure>
         <tr><td>Worker CSS literals</td><td class="n">5 static blocks</td><td class="y">~3.8KB raw saved</td><td>only <code>/*min*/</code> is eligible</td></tr>
         <tr><td>repeat /lens, /writing, /reading</td><td class="n">full re-render</td><td class="y">colo cache hit</td><td>caches.default, 200-only, short TTLs</td></tr>
         <tr><td>readable source</td><td>served as written</td><td class="y">source twins</td><td><code>/&lt;name&gt;.src.js</code> + <code>/luna.src.css</code> + <code>/index.src.html</code></td></tr>
-        <tr><td>authoring workflow</td><td>no build</td><td>no build</td><td>the transform lives in deploy, not in writing</td></tr>
+        <tr><td>authoring workflow</td><td>no build</td><td>no build</td><td>the transform lives in deploy; writing stays as authored</td></tr>
         <tr><td>homepage bytes</td><td>75.9KB raw source</td><td class="y">46.3KB raw<br><small>11.5KiB gzip / 9.9KiB Brotli</small></td><td>structure + inline CSS/JS transform; a built document since 2026-08-31, with the grid and tracklist as fragments</td></tr>
         <tr><td>per-request pages</td><td class="n">whole page at edge quality</td><td class="y">built shell + fragment</td><td><code>lib/island.ts</code>; a 304 on return</td></tr>
       </tbody>
@@ -605,7 +603,7 @@ transition:filter 60ms ease-out}</pre></figure>
         },
         {
           "t": "CSS minifiers are simply a less mature class of tooling than JS minifiers.",
-          "why": "The gap is not a tooling maturity contest. The ceiling is structural: selectors and properties are the page's public API, so a perfect tool still only strips whitespace, comments, and redundant gradient stops."
+          "why": "The ceiling is structural: selectors and properties are the page's public API, so a perfect tool still only strips whitespace, comments, and redundant gradient stops."
         },
         {
           "t": "Brotli happens to compress JavaScript syntax better than it compresses CSS syntax.",

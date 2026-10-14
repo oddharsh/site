@@ -50,7 +50,7 @@ export const LENS_GLOSSARY = {
   "robots-txt": {
     label: "robots.txt",
     plain: "A file at the root of a site listing which automated visitors may fetch what.",
-    more: "A posted rule, not a lock. Polite crawlers obey it; rude ones ignore it and nothing stops them.",
+    more: "A posted rule with no lock behind it. Polite crawlers obey it; rude ones ignore it and nothing stops them.",
   },
   sitemap: {
     label: "sitemap.xml",
@@ -89,7 +89,7 @@ export const LENS_GLOSSARY = {
   },
   agent: {
     label: "agent",
-    plain: "Software that acts on your behalf rather than just showing you a page: it reads, decides, and does.",
+    plain: "Software that acts on your behalf: it reads, decides, and does.",
   },
   bot: {
     label: "bots",
@@ -814,7 +814,7 @@ function lensStateOfWebPanel() {
     '<button class="lx-sow-x" type="button" id="lx-sow-close" title="Close" aria-label="Close"></button></div>' +
     '<div class="lx-sow-inner">' +
     '<div class="lx-sow-grid">' + cards + "</div>" +
-    '<div class="lx-sow-foot">A page\'s second life as data is now the busier one. Whether a machine can actually <b>read</b>, <b>understand</b>, and <b>act</b> on a page — not just fetch it — is what the lenses here measure. Paste a URL to see one site\'s answer, or watch the movement over time in <a href="/lens/census">the weekly census</a> of 16 representative sites.</div>' +
+    '<div class="lx-sow-foot">A page\'s second life as data is now the busier one. The lenses here measure whether a machine can actually <b>read</b>, <b>understand</b>, and <b>act</b> on a page once it has fetched it. Paste a URL to see one site\'s answer, or watch the movement over time in <a href="/lens/census">the weekly census</a> of 16 representative sites.</div>' +
     "</div></dialog>";
 }
 
@@ -864,7 +864,7 @@ function lensAboutPanel() {
     '<div class="lx-abt-rules"><b>How this instrument behaves</b><ul class="lx-why">' +
     "<li>Every fetch is identified and cryptographically signed as AadharshBot, apart from the bot-view samples, which are the one disclosed exception.</li>" +
     "<li>A bot-view sample sends one crawler's published user-agent, read-only and unsigned, to record what that identity gets served. Chrome and curl ride along as controls, because a 403 on every crawler says nothing until something proves the door opens at all.</li>" +
-    "<li>Every verdict stays pinned to evidence you can open. A probe that never answered reads as unknown, never as a fail.</li>" +
+    "<li>Every verdict stays pinned to evidence you can open. A probe that never answered reads as unknown.</li>" +
     "<li>Absent metadata renders as absent. Nothing is guessed or backfilled.</li>" +
     "<li>Delta's simulations stay amber. Green is reserved for signals actually observed.</li>" +
     "<li>One fetch per ask, server-side, with no logging.</li>" +
@@ -1558,7 +1558,7 @@ footer a { color:var(--link); }
     <form class="lx-addr" id="lx-form" action="/lens" method="get">
       <span class="lx-globe" aria-hidden="true"></span>
       <label class="lx-addr-label" for="lx-url">Address</label>
-      <input id="lx-url" class="lx-url" type="text" name="url" value="${escAttr(value)}" inputmode="url" placeholder="https://example.com  —  paste any URL" autocomplete="off" spellcheck="false"
+      <input id="lx-url" class="lx-url" type="text" name="url" value="${escAttr(value)}" inputmode="url" placeholder="https://example.com  ·  paste any URL" autocomplete="off" spellcheck="false"
              title="Any http(s) URL. This server fetches it as AadharshBot and shows you what came back.">
       <button class="lx-go" type="submit">Go</button>
       <button class="lx-go lx-vs-toggle" type="button" id="lx-vs-toggle" title="Compare two sites through one rubric" aria-expanded="${vsActive ? "true" : "false"}" aria-controls="lx-addr-vs">vs&hellip;</button>
@@ -1570,7 +1570,7 @@ footer a { color:var(--link); }
     <div class="lx-addr lx-addr-vs${vsActive ? "" : " lx-off"}" id="lx-addr-vs">
       <span class="lx-globe" aria-hidden="true"></span>
       <label class="lx-addr-label" for="lx-url-vs">vs</label>
-      <input id="lx-url-vs" class="lx-url" type="text" form="lx-form" name="vs" value="${escAttr(vsValue)}" inputmode="url" placeholder="https://the-other-site.com  —  head-to-head, one rubric" autocomplete="off" spellcheck="false"
+      <input id="lx-url-vs" class="lx-url" type="text" form="lx-form" name="vs" value="${escAttr(vsValue)}" inputmode="url" placeholder="https://the-other-site.com  ·  head-to-head, one rubric" autocomplete="off" spellcheck="false"
              title="A second URL. Both are scanned against one rubric, side by side.">
       <button class="lx-go lx-vs-toggle" type="button" id="lx-vs-close" title="Back to a single scan">&#215;</button>
     </div>
