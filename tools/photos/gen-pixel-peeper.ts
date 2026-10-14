@@ -228,7 +228,7 @@ export const CANDIDATES: Record<Axis, [Intent, number, string[]]> = {
   ]],
 };
 
-type Option = { label: string; bytes: number; s2: number | null; butter: number | null; q: number; path: string; chroma?: string; s2best?: boolean; butterbest?: boolean; src?: string; decoded?: string };
+type Option = { label: string; bytes: number; s2: number | null; butter: number | null; light?: number; q: number; path: string; chroma?: string; s2best?: boolean; butterbest?: boolean; src?: string; decoded?: string };
 // `spread` is absent on a tradeoff trial, as it was in the Python: that axis
 // ranks on the metric split and the penalty, and the manifest carries neither
 // a spread it did not measure nor a placeholder.
@@ -659,6 +659,16 @@ const RESAMPLE_REDUCTION = 3;
 // the difference does not survive at display size.
 const RESAMPLE_MIN_SPREAD = 8.0;
 
+// sRGB's transfer curve, decoded: 8-bit code value to linear light (IEC 61966-2-1).
+const SRGB_TO_LINEAR = Float64Array.from({ length: 256 }, (_, i) => { const c = i / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+/** Mean linear-light luminance (Rec. 709 weights) of a P6 PPM. */
+function meanLight(ppm: string): number {
+  const { w, h, px } = readPpm(ppm);
+  let sum = 0;
+  for (let i = 0; i < px.length; i += 3) sum += 0.2126 * SRGB_TO_LINEAR[px[i]] + 0.7152 * SRGB_TO_LINEAR[px[i + 1]] + 0.0722 * SRGB_TO_LINEAR[px[i + 2]];
+  return sum / (w * h);
+}
+
 /** sips against the linear-light kernel, at one byte budget.
  *
  *  NOT scored against a reference, and that is the design rather than a
@@ -672,7 +682,14 @@ const RESAMPLE_MIN_SPREAD = 8.0;
  *
  *  So the number here is the two candidates against EACH OTHER. That is the
  *  question the page exists to answer: whether a person looking at two tiles
- *  can tell them apart at all. The TILE-sized crop the main loop cut is unused;
+ *  can tell them apart at all.
+ *
+ *  Each tile does get one per-tile number with a known answer: LIGHT KEPT, its
+ *  decoded mean linear luminance over the source window's. Averaging in light
+ *  conserves that mean exactly, at any reduction, so a correct downscale reads
+ *  100% before the encoder rounds it, and the light averaging sRGB numbers
+ *  throws away shows up as the shortfall. It needs no common-size reference,
+ *  only the window both tiles came from. The TILE-sized crop the main loop cut is unused;
  *  this re-cuts a RESAMPLE_REDUCTION x larger window from the same source,
  *  because a downscale needs something to reduce. */
 function buildResample(src: Source, tmp: string): Built {
@@ -690,6 +707,7 @@ function buildResample(src: Source, tmp: string): Built {
   // One byte budget, both searched onto it, so the tile is not secretly a
   // quality comparison. Same discipline the encoder axis uses.
   const target = encode("zenc", { png: made.sips, ppm: made.sips }, path.join(tmp, "resample-budget.jpg"), 72, "420");
+  const srcLight = meanLight(big.ppm);
   const options: Option[] = [];
   const rejected: string[] = [];
   for (const [label, png] of Object.entries(made)) {
@@ -707,7 +725,10 @@ function buildResample(src: Source, tmp: string): Built {
     if (got === null) { rejected.push(`${label}: search found nothing`); continue; }
     const drift = Math.abs(got.bytes - target) / target;
     if (drift > BUDGET_TOL) { rejected.push(`${label}: closest was ${got.bytes}B, ${(drift * 100).toFixed(1)}% off budget`); continue; }
-    options.push({ label, bytes: got.bytes, q: got.q, path: got.path, s2: null, butter: null });
+    const dec = path.join(sub, "decoded.ppm");
+    zenc(["frame", got.path, "--out", dec]);
+    const light = Number(((100 * meanLight(dec)) / srcLight).toFixed(1));
+    options.push({ label, bytes: got.bytes, q: got.q, path: got.path, s2: null, butter: null, light });
   }
   if (options.length !== 2) return [null, `only ${options.length} geometry hit the budget; ${JSON.stringify(rejected)}`];
   // The legibility gate: how far apart the two DECODED tiles are. A reference
@@ -1044,7 +1065,7 @@ function logPool(pool: PoolRow[]): void {
 // ------------------------------------------------------------------------ main
 
 function describe(t: Trial): string {
-  let bits = (t.tier ? `[${t.tier}] ` : "") + t.options.map((o) => `${o.label.split(" · ")[0]}=${o.bytes}B/s2 ${o.s2}${o.butter !== null ? `/bu ${o.butter}` : ""}`).join(" ");
+  let bits = (t.tier ? `[${t.tier}] ` : "") + t.options.map((o) => `${o.label.split(" · ")[0]}=${o.bytes}B/${o.light !== undefined ? `light ${o.light}%` : `s2 ${o.s2}`}${o.butter !== null ? `/bu ${o.butter}` : ""}`).join(" ");
   if (t.budget_drift !== undefined) bits += ` [budget ${t.budget}B, drift ${t.budget_drift}%]`;
   if (t.spread !== undefined) bits += ` spread ${t.spread}`;
   if (t.penalty !== undefined) bits += ` penalty ${t.penalty}`;
@@ -1152,15 +1173,39 @@ function main(): number {
   // manifest is all-or-nothing. --merge is the exception, and writes one axis.
   const dryRun = argv.includes("--dry-run") || (only !== null && merge === null);
   const sheet = argv.includes("--sheet") ? argv[argv.indexOf("--sheet") + 1] : null;
+  // SHARDING, for the format axis above all: an AV2 encode at speed 3 runs on
+  // one core, so 11 crops in series took about 3 hours on 14 cores. A shard
+  // builds the crops --stems names and --emit saves what it built (trials,
+  // their files, drops, pool rows) without ranking. --collect then loads every
+  // shard, puts the trials back in author order so ranking ties break as a
+  // serial run's would, and ranks and writes exactly as one process does.
+  const arg = (f: string): string | null => (argv.includes(f) ? argv[argv.indexOf(f) + 1] : null);
+  const stemFilter = arg("--stems")?.split(",") ?? null;
+  const emit = arg("--emit");
+  const collect = arg("--collect")?.split(",") ?? null;
+  if (emit && !only) { log("--emit wants --only <axis>"); return 2; }
   preflight(only ? [only] : Object.keys(CANDIDATES));
 
   const built: Trial[] = [];
   const dropped: [string, string, string][] = [];
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "pixel-peeper-"));
   try {
+    if (collect) {
+      const order = (t: { axis: string; crop: string; tier?: string }) => {
+        const stems = CANDIDATES[t.axis as Axis][2];
+        return stems.indexOf(t.crop) * 10 + (t.tier ? FORMAT_TIERS.indexOf(t.tier as FormatTier) : 0);
+      };
+      const shards = collect.map((d) => JSON.parse(fs.readFileSync(path.join(d, "built.json"), "utf8")) as { built: Trial[]; dropped: [string, string, string][]; pool: PoolRow[] });
+      built.push(...shards.flatMap((s) => s.built).sort((a, b) => order(a) - order(b)));
+      dropped.push(...shards.flatMap((s) => s.dropped));
+      formatPool.push(...shards.flatMap((s) => s.pool).sort((a, b) => order({ axis: "format", ...a }) - order({ axis: "format", ...b })));
+      log(`collected ${built.length} built trial(s) from ${collect.length} shard(s)`);
+    }
     for (const [axis, [intent, , stems]] of Object.entries(CANDIDATES) as [Axis, [Intent, number, string[]]][]) {
+      if (collect) break;
       if (only && axis !== only) continue;
       for (const stem of [...new Set(stems)]) {          // dedupe, keep author order
+        if (stemFilter && !stemFilter.includes(stem)) continue;
         const tmp = path.join(work, `${axis}-${stem}`);
         fs.mkdirSync(tmp);
         let src: Source, crop: Crop;
@@ -1184,6 +1229,23 @@ function main(): number {
           log(`  · ${axis.padEnd(9)} ${stem}  ${describe(trial)}`);
         }
       }
+    }
+
+    if (emit) {
+      // the work dir is deleted below, so each option's file moves into the shard
+      fs.mkdirSync(path.join(emit, "files"), { recursive: true });
+      built.forEach((t, i) => t.options.forEach((o, j) => {
+        for (const k of ["path", "decoded"] as const) {
+          const from = o[k];
+          if (!from) continue;
+          const to = path.join(emit, "files", `${i}-${j}-${k}${path.extname(from)}`);
+          fs.copyFileSync(from, to);
+          o[k] = to;
+        }
+      }));
+      fs.writeFileSync(path.join(emit, "built.json"), JSON.stringify({ built, dropped, pool: formatPool }));
+      log(`\nemitted ${built.length} built trial(s) to ${emit}`);
+      return 0;
     }
 
     // ---- rank within each axis, keep the most legible
