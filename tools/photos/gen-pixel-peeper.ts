@@ -1173,15 +1173,39 @@ function main(): number {
   // manifest is all-or-nothing. --merge is the exception, and writes one axis.
   const dryRun = argv.includes("--dry-run") || (only !== null && merge === null);
   const sheet = argv.includes("--sheet") ? argv[argv.indexOf("--sheet") + 1] : null;
+  // SHARDING, for the format axis above all: an AV2 encode at speed 3 runs on
+  // one core, so 11 crops in series took about 3 hours on 14 cores. A shard
+  // builds the crops --stems names and --emit saves what it built (trials,
+  // their files, drops, pool rows) without ranking. --collect then loads every
+  // shard, puts the trials back in author order so ranking ties break as a
+  // serial run's would, and ranks and writes exactly as one process does.
+  const arg = (f: string): string | null => (argv.includes(f) ? argv[argv.indexOf(f) + 1] : null);
+  const stemFilter = arg("--stems")?.split(",") ?? null;
+  const emit = arg("--emit");
+  const collect = arg("--collect")?.split(",") ?? null;
+  if (emit && !only) { log("--emit wants --only <axis>"); return 2; }
   preflight(only ? [only] : Object.keys(CANDIDATES));
 
   const built: Trial[] = [];
   const dropped: [string, string, string][] = [];
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "pixel-peeper-"));
   try {
+    if (collect) {
+      const order = (t: { axis: string; crop: string; tier?: string }) => {
+        const stems = CANDIDATES[t.axis as Axis][2];
+        return stems.indexOf(t.crop) * 10 + (t.tier ? FORMAT_TIERS.indexOf(t.tier as FormatTier) : 0);
+      };
+      const shards = collect.map((d) => JSON.parse(fs.readFileSync(path.join(d, "built.json"), "utf8")) as { built: Trial[]; dropped: [string, string, string][]; pool: PoolRow[] });
+      built.push(...shards.flatMap((s) => s.built).sort((a, b) => order(a) - order(b)));
+      dropped.push(...shards.flatMap((s) => s.dropped));
+      formatPool.push(...shards.flatMap((s) => s.pool).sort((a, b) => order({ axis: "format", ...a }) - order({ axis: "format", ...b })));
+      log(`collected ${built.length} built trial(s) from ${collect.length} shard(s)`);
+    }
     for (const [axis, [intent, , stems]] of Object.entries(CANDIDATES) as [Axis, [Intent, number, string[]]][]) {
+      if (collect) break;
       if (only && axis !== only) continue;
       for (const stem of [...new Set(stems)]) {          // dedupe, keep author order
+        if (stemFilter && !stemFilter.includes(stem)) continue;
         const tmp = path.join(work, `${axis}-${stem}`);
         fs.mkdirSync(tmp);
         let src: Source, crop: Crop;
@@ -1205,6 +1229,23 @@ function main(): number {
           log(`  · ${axis.padEnd(9)} ${stem}  ${describe(trial)}`);
         }
       }
+    }
+
+    if (emit) {
+      // the work dir is deleted below, so each option's file moves into the shard
+      fs.mkdirSync(path.join(emit, "files"), { recursive: true });
+      built.forEach((t, i) => t.options.forEach((o, j) => {
+        for (const k of ["path", "decoded"] as const) {
+          const from = o[k];
+          if (!from) continue;
+          const to = path.join(emit, "files", `${i}-${j}-${k}${path.extname(from)}`);
+          fs.copyFileSync(from, to);
+          o[k] = to;
+        }
+      }));
+      fs.writeFileSync(path.join(emit, "built.json"), JSON.stringify({ built, dropped, pool: formatPool }));
+      log(`\nemitted ${built.length} built trial(s) to ${emit}`);
+      return 0;
     }
 
     // ---- rank within each axis, keep the most legible
