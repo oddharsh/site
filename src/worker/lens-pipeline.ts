@@ -175,7 +175,7 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
     const raw = spec.targets(input);
     let target: T;
     let first: string;
-    const pair: Record<string, string> | null = asRecord(raw);
+    const pair = asRecord(raw);
     if (!pair) {
       const v = validateLensTarget(raw || "");
       if (!v.ok) return refused(400, "bad_target", String(v.error));
@@ -184,7 +184,7 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
     } else {
       const out: Record<string, string> = {};
       for (const [label, value] of Object.entries(pair)) {
-        const v = validateLensTarget(value || "");
+        const v = validateLensTarget(asText(value, ""));
         if (!v.ok) return refused(400, "bad_target", `${label}: ${v.error}`);
         out[label] = v.url;
       }

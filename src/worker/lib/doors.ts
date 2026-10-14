@@ -4,7 +4,7 @@ import { outboundRead, type OutboundRefusal } from "./outbound.ts";
 import { readResponseCapped } from "./crawl.ts";
 import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS, parseMcpBody, rpcErrorDetail } from "./mcp-protocol.ts";
 import { lensProbe, originDiscovery } from "../lens.ts";
-import { asRecord, asText } from "./parse.ts";
+import { asRecord, asScalarText, asText } from "./parse.ts";
 import { sseEvents } from "./sse.ts";
 
 export const DOOR_LIMITS = {
@@ -147,14 +147,14 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
           title?: string;
           annotations?: Record<string, unknown>;
         } = {
-          name: String(toolRecord.name || "").slice(0, 60),
+          name: asScalarText(toolRecord.name || "").slice(0, 60),
           description: trim(toolRecord.description, DOOR_LIMITS.toolDesc),
         };
         if (!opts.schemas) return row;
         const capped = capSchema(toolRecord.inputSchema);
         row.inputSchema = capped.schema;
         if (capped.oversize) row.schemaOversize = capped.bytes;
-        if (toolRecord.title) row.title = String(toolRecord.title).slice(0, 80);
+        if (toolRecord.title) row.title = asScalarText(toolRecord.title).slice(0, 80);
         const annotations = asRecord(toolRecord.annotations);
         if (annotations) row.annotations = annotations;
         return row;
@@ -164,7 +164,6 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
     return { ok: false, unreadable: true, detail: String(error?.message || error).slice(0, 80) };
   }
 }
-
 
 // So three politenesses are structural rather than optional. `mode=list` is
 // sent EXPLICITLY, because it is the one mode the spec defines as pure
@@ -228,7 +227,13 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
   }
 }
 
-function parseAskJson(text) {
+/** What either ask parser reads off a body: a refusal with its reason, or the
+ *  results plus what the framing says about the server. */
+type AskParse =
+  | { ok: false; detail: string }
+  | { ok: true; dialect: "json" | "v0.55" | "legacy"; queryId: string | null; results: unknown[]; attributes: string[]; events?: string[] };
+
+function parseAskJson(text): AskParse {
   let payload;
   try { payload = JSON.parse(text); } catch { return { ok: false, detail: "that is not JSON" }; }
   const record = asRecord(payload);
@@ -251,10 +256,10 @@ function parseAskJson(text) {
  *   legacy  data: {"message_type":"result","content":[...]}
  *   v0.55   event: result\n data: {"index":0,"item":{...}}
  */
-function parseAskStream(text) {
+function parseAskStream(text): AskParse {
   const results: unknown[] = [];
-  const seen = new Set();
-  let queryId;
+  const seen = new Set<string>();
+  let queryId: string | null = null;
   let named = false;
 
   for (const { event: eventName, data } of sseEvents(text)) {

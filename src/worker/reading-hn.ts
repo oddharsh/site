@@ -67,8 +67,10 @@ const isHnHosted = (key: string) => key.startsWith("news.ycombinator.com/");
  */
 export function pickThread(key: string, body: unknown): Omit<HnEntry, "checked" | "seen"> {
   const hits = asList(asRecord(body)?.hits)
-    .map(asRecord)
-    .filter((h) => h && hnKey(text(h.url)) === key);
+    .flatMap((raw) => {
+      const h = asRecord(raw);
+      return h && hnKey(text(h.url)) === key ? [h] : [];
+    });
   let best: { id: number; c: number; p: number } | null = null;
   for (const h of hits) {
     const c = num(h.num_comments), p = num(h.points);
@@ -94,7 +96,8 @@ export function pickPending(items: unknown[], map: HnMap, now: number, limit = H
   const queued = new Set<string>();
   for (const raw of items) {
     const it = asRecord(raw);
-    const key = hnKey(text(it?.link));
+    if (!it) continue;
+    const key = hnKey(text(it.link));
     if (!key || isHnHosted(key) || queued.has(key)) continue;
     queued.add(key);
     const saved = Date.parse(text(it.created));
@@ -129,7 +132,8 @@ export function readHnMap(raw: unknown): HnMap {
   const out: HnMap = {};
   for (const [key, value] of Object.entries(asRecord(raw) ?? {})) {
     const e = asRecord(value);
-    const checked = asNumber(e?.checked);
+    if (!e) continue;
+    const checked = asNumber(e.checked);
     if (checked === null) continue;
     const id = asNumber(e.id);
     out[key] = {
