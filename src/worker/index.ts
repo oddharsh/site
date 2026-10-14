@@ -107,6 +107,17 @@ export default {
     // post-return grace — which is what cut the census sweep off at its first
     // batch on the owner-refresh path. waitUntil still receives the promise
     // too, so failure semantics are unchanged.
+    //
+    // WHICH MEANS A CATCH ON THE RETURNED PROMISE DOES NOT CLEAR A FAILURE.
+    // `await cron(...).catch(() => {})` catches the awaited copy, keeps the next
+    // job on the tick running, and still ends the invocation as an exception,
+    // because the copy waitUntil holds rejects uncaught. Measured 2026-10-14 in
+    // local workerd with three scheduled handlers: this exact shape reports
+    // `exception`, a bare throw reports `exception`, and catching before
+    // waitUntil sees the promise reports `ok`. The :07/:37 tick relies on the
+    // first half (ordering) and keeps the second (the status is the cheapest
+    // alarm this Worker has). The daily tick's old comment claimed only the
+    // rethrow was dropped, and every day for a month its status said otherwise.
     // The name is the CRON SLICE of SpanName rather than a type parameter, and
     // both halves of that are load-bearing. Left with implicit-any parameters
     // this helper erased the inference it wraps: the callback's return widened
@@ -148,26 +159,27 @@ export default {
       // The pairing is pinned in contract-the-perf-probe now. Prefer the
       // three-letter form in anything new.
       await cron("cron.census", () => cronCensus(env));   // the longitudinal census, full roster in one awaited pass
-    } else if (job === "daily_outbound") {
-      // 05:41 UTC daily — the two jobs that probe somebody else's server.
-      // Sequential, not Promise.all: both fetch third-party hosts and running
-      // them together doubles the burst this site presents at one instant, which
-      // is the opposite of why they share an off-peak daily tick.
+    } else if (job === "around") {
+      // 05:41 UTC daily: crawl the /around neighborhood. One of the two jobs that
+      // probe somebody else's server, each alone in its own invocation because
+      // together they needed more than the 50 subrequests one gets (lib/cron.ts).
       //
-      // Each is awaited inside its own span, so one failing still lets the other
-      // run and the trace says which. That matters more here than elsewhere,
-      // because a cron has no response and both jobs are designed to be quiet.
-      // Both are caught so a failure in one cannot skip the other. span() does
-      // not swallow, so enterSpan has already recorded the exception by the time
-      // the catch runs; what is dropped here is only the rethrow.
+      // NOT caught, and neither is webmention_send below. The catch these two
+      // used to carry was there so one job's failure could not skip the other,
+      // and with one job per tick there is nothing left for it to protect. A
+      // rejection now ends the invocation as an exception, which the Analytics
+      // API reports with no observability scope at all: that status, read with
+      // exactly 50 subrequests beside it, is how the shared tick was found.
+      await cron("cron.around", () => cronAround(env));
+    } else if (job === "webmention_send") {
+      // 05:53 UTC daily: tell the sources this site cites that they were cited.
       // withSelfFetch, not the bare env: this job reads this site's OWN pages, and
       // a plain fetch() to our own hostname from inside the worker is blocked as
       // recursion (error 1042 — perf-probe.js documents the same limit). It failed
       // by returning "", so every page was skipped and the run wrote nothing at
       // all. Measured 2026-08-28: both webmention tables empty since the feature
-      // shipped, while /around on this same tick had run that morning.
-      await cron("cron.webmention_send", () => cronSendWebmentions(withSelfFetch(env, ctx))).catch(() => {});
-      await cron("cron.around", () => cronAround(env)).catch(() => {});
+      // shipped, while /around had run that morning.
+      await cron("cron.webmention_send", () => cronSendWebmentions(withSelfFetch(env, ctx)));
     } else if (job === "serendipity") {
       // 00/06/12/18:23 UTC — re-sync every enabled Luma feed into the
       // serendipity pool (serendipity.js cronSerendipity): events, then the

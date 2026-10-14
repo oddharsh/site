@@ -70,8 +70,9 @@ import { REMOTE_ONLY_KEYS } from "./lib/site-config.ts";
 import { underNode } from "./lib/harness-dispatch.ts";
 import { linkServedTree, planServedTree } from "./lib/served-tree.ts";
 import { CENSUS_ROSTER } from "../src/worker/census.ts";
-import { NEIGHBORS } from "../src/worker/around.ts";
-import { citationsIn } from "../src/worker/webmention-send.ts";
+import { AROUND_SUBREQUEST_LIMIT, AROUND_SUBREQUEST_RESERVE, NEIGHBORS } from "../src/worker/around.ts";
+import { SUBREQUEST_BUDGET, citationsIn } from "../src/worker/webmention-send.ts";
+import { SUBREQUEST_CAP_FREE } from "../src/worker/lib/budget.ts";
 import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import {
   configText, ROOT, assert, test } from "./contract-shared.ts";
@@ -175,6 +176,10 @@ const only = (spans, name) => {
 // What each job must show for itself, keyed by the cron span the dispatcher
 // opens. `explains` claims outbound requests: every request a cron made has to
 // be claimed by one of the jobs that ran on that tick, or the test fails.
+// `ceiling` is the most subrequests the job can spend, where its module
+// declares one; the jobs that run on one tick must sum to Workers Free's 50
+// (contract-no-cron-tick-outspends-the-subrequest-cap has why). A job with no
+// ceiling here budgets in its own module and its own tests.
 const JOB_EVIDENCE = {
   "cron.home_probe": {
     async check({ run }) {
@@ -231,6 +236,7 @@ const JOB_EVIDENCE = {
     explains: () => false,
   },
   "cron.webmention_send": {
+    ceiling: SUBREQUEST_BUDGET,
     async check({ run, worker, env }) {
       const send = only(run.spans, "webmention.send");
       assert.ok(send["webmention.pages_read"] >= 1, "the sender read none of this site's own pages");
@@ -254,6 +260,7 @@ const JOB_EVIDENCE = {
     explains: (o, { cited }) => cited.has(o.url),
   },
   "cron.around": {
+    ceiling: AROUND_SUBREQUEST_LIMIT + AROUND_SUBREQUEST_RESERVE,
     async check({ run }) {
       const crawl = only(run.spans, "around.crawl");
       assert.equal(crawl["around.neighbors"], NEIGHBORS.length);
@@ -381,6 +388,12 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
           assert.ok(JOB_EVIDENCE[job.name], `${label} reached ${job.name}, which has no evidence check here; add one`);
           reached.add(job.name);
         }
+
+        // The pin the shared 41 5 tick failed every day from 2026-09-14: the
+        // jobs THIS tick actually dispatched, summed.
+        const ceiling = jobs.reduce((sum, job) => sum + (JOB_EVIDENCE[job.name].ceiling ?? 0), 0);
+        assert.ok(ceiling <= SUBREQUEST_CAP_FREE,
+          `${label} runs ${jobs.map((j) => j.name).join(" + ")}, which can spend ${ceiling} subrequests in one invocation`);
 
         const context = {};
         for (const job of jobs) {
