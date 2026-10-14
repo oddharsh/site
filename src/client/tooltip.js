@@ -204,9 +204,6 @@ export function start(initial) {
         // A stem missing from the index (a photo added since the visitor cached
         // it) lands here too, and this fetch carries the text as well as the
         // bars, so a stale index self-heals instead of rendering blank.
-        // warm-up fetches ride at low priority so the browser (and Lighthouse's
-        // critical-request-chain audit) treats them as the idle filler they are;
-        // a hover-triggered fetch keeps the default because someone is waiting.
         fetch(`/images/meta/${encodeURIComponent(stem)}.json?${META_V}`, priority ? { priority } : undefined)
           .then(r => {
             // non-200, SPA-fallback html, or a transient bot-challenge → treat as a
@@ -297,12 +294,6 @@ export function start(initial) {
       }
       queuePhotoMetaWarmup();
 
-      // unified hover target → "what was hovered?" lookup. one tooltip
-      // element, three content shapes: a photo slot (.photos a), a track
-      // row (.np-list li[data-track-title]), or an artist link inside a
-      // row (.np-artist-link). artist takes precedence over the row when
-      // both match, so hovering an artist's name shows the artist card,
-      // not the track card.
       const findTarget = (el) =>
         el?.closest?.(".np-artist-link, .photos a, .np-list li[data-track-title], .car-link") || null;
 
@@ -340,20 +331,8 @@ export function start(initial) {
         );
       }
 
-      // XP camera-back review readout: a Luna header strip (filename + flash),
-      // a sunken histogram band, the exposure trio, the full Fuji recipe as
-      // label/value rows, and a date footer. EXIF and the prebuilt histogram are
-      // fetched per-photo from /images/meta/<stem>.json after page settle (see
-      // fetchMeta and warmPhotoMeta); first hover may still render the shell for
-      // a beat if warm-up has not run or a fetch is slow, then re-renders when
-      // data lands.
       function buildPhotoContent(slot) {
         const stem = photoStem(slot);
-        // The dead `const img = slot.querySelector("img")` that sat here is gone.
-        // Its note said to take it on the next real edit to this file, since
-        // tooltip.js is content-hashed and removing it alone would mint a new
-        // /a/ URL for nothing. This is that edit.
-        //
         // Fetch only what the tile cannot answer. data-hist carries the bars, so
         // the request is now for TEXT alone and is skipped entirely once the
         // shared EXIF index has landed. A tile with no baked histogram takes the
@@ -467,12 +446,11 @@ export function start(initial) {
       function buildTrackContent(li) {
         const image = li.dataset.trackImage || "";
         if (image) return coverHtml(image);
-        // text fallback. title + artists + duration; flag explicit if it is.
         const title    = li.dataset.trackTitle    || "";
         const artists  = li.dataset.trackArtists  || "";
         const duration = li.dataset.trackDuration || "";
         const explicit = li.dataset.trackExplicit === "1";
-        if (!title && !artists) return ""; // truly nothing to show
+        if (!title && !artists) return "";
         const rows = [];
         if (artists) rows.push(artists);
         if (duration) rows.push(duration + (explicit ? " · explicit" : ""));

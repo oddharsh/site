@@ -109,7 +109,6 @@
   localizeTimes();
   restore();
 
-  // Keep the existing shared cover-tooltip engine and its deferred import.
   if (tip && !matchMedia("(hover: none)").matches) {
     var tipNode = tip;
     import("/hoist.js").then((m) => {
