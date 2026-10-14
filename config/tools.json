@@ -184,6 +184,23 @@
       "recorded": "zenc 0.2.0, zenjpeg 0.8.4"
     },
     {
+      "bin": "photo-metrics",
+      "path": "tools/photos/photo-metrics/target/release/photo-metrics",
+      "install": "cargo build --release --locked --manifest-path tools/photos/photo-metrics/Cargo.toml",
+      "optional": true,
+      "optional_why": "BUILT ON DEMAND like zenc: hif-archive.ts runs the install command on its first score in a process, so an absent binary on a fresh checkout is repaired rather than installed by hand. A missing `cargo` is the blocking failure, and cargo is declared above",
+      "why": "SSIMULACRA2 (fast-ssim2) and butteraugli (imazen's port) in one process: the bar a HIF photo's JPEG XL archive has to clear, on both metrics (hif-archive.ts). It replaced libjxl's ssimulacra2 and butteraugli_main there after matching their cjxl distance on 20 of 20 HIFs",
+      "required_by": [
+        "tools/photos/hif-archive.ts"
+      ],
+      "version": {
+        "reports": false,
+        "why": "prints no version; the fast-ssim2 and butteraugli pins are exact in tools/photos/photo-metrics/Cargo.toml and its Cargo.lock, which is the identity an archive decision is made against"
+      },
+      "bytes": true,
+      "bytes_why": "decides the cjxl distance of every HIF archive it scores, so a metric change can change archive bytes: a pin move is a re-measurement against libjxl (Cargo.toml says how)"
+    },
+    {
       "bin": "timbrado",
       "path": "node_modules/timbrado/target/release/timbrado",
       "install": "cargo build --release --locked --manifest-path node_modules/timbrado/Cargo.toml",
@@ -333,11 +350,10 @@
     {
       "bin": "ssimulacra2",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
-      "why": "the perceptual metric the Instagram export searches quality against; and, with butteraugli, the bar a HIF photo's JPEG XL archive has to clear (hif-archive.ts)",
+      "why": "the perceptual metric the Instagram export searches quality against. The HIF archive bar moved to photo-metrics on 2026-10-14",
       "required_by": [
-        "tools/photos/add-photos.sh",
         "tools/photos/export-for-instagram.sh",
-        "tools/photos/hif-archive.ts"
+        "tools/photos/photo-metrics-parity.ts"
       ],
       "version": {
         "reports": false,
@@ -348,11 +364,10 @@
     {
       "bin": "butteraugli_main",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
-      "why": "the second metric bounding that same search; and the second half of the HIF archive's bar, the metric that binds (hif-archive.ts)",
+      "why": "the second metric bounding that same search. The HIF archive bar moved to photo-metrics on 2026-10-14",
       "required_by": [
-        "tools/photos/add-photos.sh",
         "tools/photos/export-for-instagram.sh",
-        "tools/photos/hif-archive.ts"
+        "tools/photos/photo-metrics-parity.ts"
       ],
       "version": {
         "reports": false,
