@@ -82,7 +82,8 @@ test("feed dates come from the sitemap the crawler already reads", async () => {
 test("each section advertises its feed", () => {
   // One tag, with all three attributes: a reader ignores a feed link without
   // rel="alternate", and the type and href on separate tags advertise nothing.
-  const tag = (feed) => new RegExp(`<link rel=\\\\?"alternate\\\\?" type=\\\\?"application/rss\\+xml\\\\?"[^>]*href=\\\\?"${feed.replace(/\./g, "\\.")}\\\\?"`);
+  const literal = (text) => text.replace(/[\\^$.*+?()[\]{}|/]/g, "\\$&");
+  const tag = (feed) => new RegExp(`<link rel=\\\\?"alternate\\\\?" type=\\\\?"application/rss\\+xml\\\\?"[^>]*href=\\\\?"${literal(feed)}\\\\?"`);
   for (const [file, feed] of [["src/pages/garage/index.html", "/garage/feed.xml"], ["src/pages/lwe/index.html", "/lwe/feed.xml"]]) {
     assert.match(readFileSync(file, "utf8"), tag(feed), `${file} does not advertise ${feed}`);
   }
