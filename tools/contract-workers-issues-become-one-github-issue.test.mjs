@@ -30,6 +30,12 @@ test("workers-issue: the routine prompt keeps its safety and dedupe properties",
   // Read-only toward production, and nothing merges.
   assert.match(prompt, /Do not deploy, do not run wrangler against Cloudflare, do not touch\s+secrets/);
   assert.match(prompt, /Never merge it and never mark it ready/);
+  // A draft fix waits for a reproduction that calls the real code, and ships
+  // with it. Without the gate, a stack trace alone was enough to open a fix.
+  assert.match(prompt, /No reproduction, no fix\./);
+  assert.match(prompt, /never stub or patch the\s+function that threw/);
+  assert.match(prompt, /Never author over someone else's fix/);
+  assert.match(prompt, /with the fix AND\s+the test/);
   // A run that cannot reach GitHub still leaves the triage behind.
   assert.match(prompt, /end your run with the complete issue/);
 });

@@ -79,14 +79,39 @@ Open one issue in `oddharsh/site`:
 - **Body**, in this order: the marker line from step 1 as the first line; a
   two-or-three sentence summary of what failed and where; the redacted error
   and the relevant stack frames in a code block; your findings from step 3
-  with `path:line` references; one suggested next step.
+  with `path:line` references; whether you reproduced it (step 5), with the
+  command; one suggested next step.
 
 Write the body the way the repository's own prose reads: short paragraphs,
 specific numbers and paths, no em dashes, straight quotes only.
 
-If a fix is small and you are confident in it, you may also push a branch
-named `claude/workers-issue-<short-id>` with the change and open a DRAFT pull
-request that links the issue. Never merge it and never mark it ready.
+## Step 5: a draft fix, only after a reproduction
+
+No reproduction, no fix. A fix written from a stack trace alone guesses at
+the cause, and a guess that compiles reads as a finding. Skip this step
+entirely unless all of these hold:
+
+1. **No one is already on it.** Search open pull requests for the issue
+   number, the marker line, and the file that threw. If one exists, comment on
+   the issue with its link and stop. Never author over someone else's fix.
+2. **You reproduced the exact error.** Write a test in the nearest
+   `tools/contract-*.test.mjs` that calls the real code the stack trace names
+   and fails with the same message at the same frame. Run it twice and see the
+   same failure both times. You may stand in for external services (KV, D1,
+   `fetch`) with the values the payload shows. You may never stub or patch the
+   function that threw, because a test that injects the symptom proves only
+   that you can inject it.
+3. **The fix is small.** The fix should be one cause, in one place, with no
+   new dependency and no change to `config/`, `.github/` or the release path.
+
+Then push a branch named `claude/workers-issue-<short-id>` with the fix AND
+the test. Show the test failing before the fix and passing after it, then run
+`bun run test`. Open a DRAFT pull request that links the issue and pastes both
+runs. Never merge it and never mark it ready. The test stays with the fix, so
+the same error can't come back unnoticed.
+
+If you couldn't reproduce it, say so in the issue with what you tried. That is
+a finding too, and the next reader needs it more than a guessed fix.
 
 ## If you cannot reach GitHub
 
