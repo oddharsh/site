@@ -8,6 +8,12 @@
 // known answer, the tile the linear-light kernel made, through
 // AXES.resample.answer. This holds the page to that predicate and the manifest
 // to giving it exactly one tile to find in every call.
+//
+// Each tile's caption shows LIGHT KEPT instead: its decoded mean linear
+// luminance over the source window's. Averaging in light conserves that mean,
+// so the zenc tile has to keep more of it than sips in every call. A call
+// where it doesn't would put a number under the tiles that argues against the
+// answer the page grades by.
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 
@@ -29,4 +35,16 @@ test("every resample call is unscored and has exactly one linear-light tile and 
       assert.ok(!o.s2best && !o.butterbest, `${t.crop}/${o.label}: no metric picks a resample tile`);
     }
   }
+});
+
+test("every resample tile carries light kept, and the linear-light tile keeps more than sips", () => {
+  for (const t of resample) {
+    const light = Object.fromEntries(t.options.map((o) => [o.label, o.light]));
+    for (const [label, v] of Object.entries(light)) assert.ok(typeof v === "number" && v > 80 && v <= 100.5, `${t.crop}/${label}: light kept should be a percentage near 100, got ${v}`);
+    assert.ok(light.zenc > light.sips, `${t.crop}: zenc keeps ${light.zenc}% of the window's light and sips ${light.sips}%; averaging in light must keep more`);
+  }
+});
+
+test("the page captions light kept wherever a tile has no metric scores", () => {
+  assert.match(PAGE, /o\.s2===null\?\(o\.light==null\?``:`<span class="m">light kept \$\{o\.light\.toFixed\(1\)\}%<\/span>`\)/, "the caption must show light kept for an unscored tile");
 });
