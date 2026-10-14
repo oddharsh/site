@@ -4,7 +4,7 @@ import { deleteSWRKV, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
-import { asNumber, asRecord, asText } from "./lib/parse.ts";
+import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { esc, jsonResponse, publicJsonHeaders, secretMatches, wantsMarkdown } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 
@@ -792,9 +792,9 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
   // What is left inline is ONE fetch and ONE KV read, so a cold build is ~7
   // subrequests and comfortably inside both budgets.
   const meta = await span("rn.scrape.meta", async (s) => {
-    let known = {};
+    let known: Record<string, StoredTrackMeta> = {};
     try {
-      known = (await env?.RN_KV?.get(TRACK_META_KEY, "json")) || {};
+      known = readTrackMeta(await env?.RN_KV?.get(TRACK_META_KEY, "json"));
     } catch { /* a missing map means every cover is pending, never an error */ }
     s.setAttribute("rn.meta_known", Object.keys(known).length);
     return known;
@@ -860,9 +860,43 @@ const ENRICH_BUDGET_RESERVE = 4;
 // short window cost. A playlist swap leaves ~21 dead entries for 30 days.
 const TRACK_META_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+// The stored shape under TRACK_META_KEY, one entry per track id. `checked` and
+// `seen` are the cron's bookkeeping, absent on entries older deploys wrote.
+type StoredArtist = { id: string; name: string; spotify_url: string; image_url: string | null; checked?: number };
+type StoredTrackMeta = { image_url: string | null; artists: StoredArtist[]; seen?: number };
+
+/** Parse the stored map, dropping any entry an older deploy shaped differently. */
+function readTrackMeta(raw: unknown): Record<string, StoredTrackMeta> {
+  const out: Record<string, StoredTrackMeta> = {};
+  for (const [id, value] of Object.entries(asRecord(raw) ?? {})) {
+    const m = asRecord(value);
+    if (!m) continue;
+    const entry: StoredTrackMeta = { image_url: asText(m.image_url), artists: asList(m.artists).flatMap(readStoredArtist) };
+    const seen = asNumber(m.seen);
+    if (seen !== null) entry.seen = seen;
+    out[id] = entry;
+  }
+  return out;
+}
+
+function readStoredArtist(raw: unknown): StoredArtist[] {
+  const a = asRecord(raw);
+  const id = asText(a?.id);
+  if (!a || id === null) return [];
+  const artist: StoredArtist = {
+    id,
+    name:        asText(a.name, ""),
+    spotify_url: asText(a.spotify_url, `https://open.spotify.com/artist/${id}`),
+    image_url:   asText(a.image_url),
+  };
+  const checked = asNumber(a.checked);
+  if (checked !== null) artist.checked = checked;
+  return [artist];
+}
+
 // Parse one track embed into the stored shape. Artist images are left null and
 // filled by the artist pass, which is a separate budget.
-function trackMetaFromEntity(e) {
+function trackMetaFromEntity(e): StoredTrackMeta {
   return {
     image_url: canonicalArtUrl(e?.visualIdentity?.image?.[0]?.url || null),
     artists: Array.isArray(e?.artists)
@@ -935,7 +969,7 @@ export async function cronEnrichTracks(env, ctx) {
       return { ok: false, reason: "no_payload" };
     }
 
-    const meta = { ...asRecord(storedMeta) };
+    const meta = readTrackMeta(storedMeta);
     const live: string[] = payload.tracks.map((t) => t.id).filter(Boolean);
 
     // PRUNE BY AGE, never by absence from one read. The first version of this
@@ -965,8 +999,9 @@ export async function cronEnrichTracks(env, ctx) {
     for (const id of Object.keys(meta)) {
       // an entry written before this field existed is stamped rather than
       // deleted, so the upgrade cannot itself become the outage it prevents.
-      if (asNumber(meta[id].seen) === null) { meta[id].seen = now; continue; }
-      if (now - meta[id].seen > TRACK_META_MAX_AGE_MS) { delete meta[id]; pruned++; }
+      const seen = meta[id].seen;
+      if (seen === undefined) { meta[id].seen = now; continue; }
+      if (now - seen > TRACK_META_MAX_AGE_MS) { delete meta[id]; pruned++; }
     }
 
     const pendingTracks = live.filter(id => !meta[id]).slice(0, ENRICH_TRACK_BUDGET);

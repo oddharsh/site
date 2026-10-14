@@ -20,20 +20,26 @@
 // gives up the thing this file exists to provide.
 
 /** A non-empty string, or `fallback`. An empty string is not a value. */
-export const asText = (value, fallback = null) =>
-	(typeof value === "string" && value !== "" ? value : fallback);
+export function asText(value: unknown): string | null;
+export function asText<F>(value: unknown, fallback: F): string | F;
+export function asText(value: unknown, fallback: unknown = null): unknown {
+	return typeof value === "string" && value !== "" ? value : fallback;
+}
 
 /** A finite number, or `fallback`. NaN and Infinity are not numbers here. */
-export const asNumber = (value, fallback = null) =>
-	(typeof value === "number" && Number.isFinite(value) ? value : fallback);
+export function asNumber(value: unknown): number | null;
+export function asNumber<F>(value: unknown, fallback: F): number | F;
+export function asNumber(value: unknown, fallback: unknown = null): unknown {
+	return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
 
 /** A plain object, or null. Arrays are NOT records: `{}` and `[]` both answer
  *  "object" to typeof, and every caller here means the first one. */
-export const asRecord = (value) =>
-	(value !== null && typeof value === "object" && !Array.isArray(value) ? value : null);
+export const asRecord = (value: unknown): Record<string, unknown> | null =>
+	(value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null);
 
 /** An array, or an empty one, so callers can map without a guard. */
-export const asList = (value) => (Array.isArray(value) ? value : []);
+export const asList = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
 /**
  * A value going into text a human or an agent will read: a URL parameter, a
@@ -44,7 +50,7 @@ export const asList = (value) => (Array.isArray(value) ? value : []);
  * The three were reading values this Worker does not own: EXIF recipe cards
  * parsed from JSON, and MCP tool arguments, which arrive from a stranger.
  */
-export const asScalarText = (value) => {
+export const asScalarText = (value: unknown): string => {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") return String(value);
   if (value === null || value === undefined) return "";
@@ -55,4 +61,4 @@ export const asScalarText = (value) => {
  *  one: `env.BROWSER.quickAction`, `ctx.waitUntil`, a rate limiter's `limit`.
  *  There is no wire format to parse, only a platform that either handed us the
  *  method or did not, so this is the honest floor for that whole class. */
-export const isCallable = (value) => typeof value === "function";
+export const isCallable = (value: unknown): boolean => typeof value === "function";
