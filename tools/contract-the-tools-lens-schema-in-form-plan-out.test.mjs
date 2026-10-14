@@ -88,7 +88,11 @@ test("the Tools pane builds foreign strings as NODES, never as markup", () => {
   // that rule made checkable, because the failure is a stored XSS and the diff
   // that introduces it looks like ordinary convenience.
   const src = readFileSync("./src/client/lens-tools.js", "utf8");
-  const forms = src.slice(src.indexOf("function buildField"));
+  // Anchored: a renamed buildField would otherwise leave a one-character slice
+  // with no innerHTML in it.
+  const start = src.indexOf("function buildField");
+  assert.ok(start >= 0, "lens-tools.js lost buildField; point this test at the form builders");
+  const forms = src.slice(start);
   assert.ok(!/\.innerHTML\s*=/.test(forms), "the form builders must not assign innerHTML");
   assert.ok(/createElement/.test(src) && /textContent/.test(src), "the builders create nodes and set text");
 });

@@ -58,7 +58,13 @@ test("names are flat, per page, and fit the /a/ name shape the dictionary tools 
 test("quiz.js fetches the payload lazily and still reads an inline one", () => {
   const src = readFileSync(new URL("../src/client/quiz.js", import.meta.url), "utf8");
   // The fetch sits inside start(), which only the observer or its fallback calls.
-  assert.match(src, /function start\(\)[\s\S]*fetch\(src\)[\s\S]*\n {2}\}/, "the payload fetch lives in start()");
+  // Sliced to start()'s own body, since an unbounded match also reached a later
+  // closing brace and passed with the fetch moved out to the top level.
+  const from = src.indexOf("function start()");
+  const to = src.indexOf("\n  }\n", from);
+  assert.ok(from >= 0 && to > from, "quiz.js lost start(); point this test at it");
+  assert.ok(src.slice(from, to).includes("fetch(src)"), "the payload fetch lives in start()");
+  assert.equal(src.split("fetch(src)").length, 2, "start() is the only place the payload is fetched");
   assert.match(src, /new IntersectionObserver\([\s\S]*rootMargin:/, "start() waits on an observer with a margin");
   assert.match(src, /getAttribute\("data-src"\)/, "the served reference is read");
   assert.match(src, /JSON\.parse\(inline\)/, "the authored inline form still works for dev and the .src.html twin");
