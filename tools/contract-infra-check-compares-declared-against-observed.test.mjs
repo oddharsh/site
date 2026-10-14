@@ -12,7 +12,9 @@
 // produces zero failures, so the failure asserted is the mutation's and not
 // the fixture's. The declaration is the real config/infra.json throughout.
 import { assert, readFileSync, test } from "./contract-shared.ts";
+import { agentRepresentation, agentSurfaces } from "./lib/agent-representation.ts";
 import {
+  AGENT_SURFACE_FLOOR, compareAgentCoverage,
   compareD1Databases, compareDns, compareEdge, compareEdgeCheck, compareKvNamespaces,
   compareLabels, compareR2Buckets, compareReleaseDeclaration, compareRepository,
   compareRulesets, compareTokens, compareVersionAffinity, compareWorkerInventory,
@@ -20,7 +22,7 @@ import {
   SHARED_DICTIONARY_SECTION, ZERO_RTT_SECTION,
 } from "./lib/infra-compare.ts";
 import {
-  cloudflareReader, edgeFetcher, githubReader, readD1Databases, readDns, readEdge,
+  cloudflareReader, edgeFetcher, githubReader, readAgentAnswers, readD1Databases, readDns, readEdge,
   readKvNamespaces, readR2Buckets, readRepository, readTokens, readVersionAffinity,
   readWorkerScripts, readWorkersBuilds, readZoneSetting,
 } from "./lib/infra-ports.ts";
@@ -387,6 +389,129 @@ test("edge: an observation of the wrong kind, a missing body and a missing check
   const compression = edgeCheck("compression-on");
   const partial = compareEdgeCheck(compression, { kind: "compression", got: { zstd: "zstd" } }, { hostedRunner: false });
   assert.equal(partial[0].level, "warn", "an encoding nobody asked for cannot be reported as served");
+});
+
+// ------------------------------------------------ agent markdown surface ----
+
+// The registry these tests judge is the real one, so a surface added tomorrow
+// is covered by them without an edit.
+/** @typedef {import("./lib/agent-representation.ts").AgentSurface} AgentSurface */
+/** @typedef {import("./lib/infra-compare.ts").AgentAnswer} AgentAnswer */
+/** @type {AgentSurface[]} */
+const agentPages = agentSurfaces(JSON.parse(readFileSync("config/site-manifest.json", "utf8")).surfaces);
+/** @param {number} i */
+const agentPage = (i) => {
+  const p = agentPages[i];
+  if (!p) throw new Error(`the registry has no agents surface at ${i}`);
+  return p;
+};
+/** Every surface answering in its declared representation.
+ *  @returns {Map<string, AgentAnswer>} */
+const agentAnswersOk = () => new Map(agentPages.map((p) => [p.path, { kind: "answer", contentType: agentRepresentation(p) }]));
+/** @param {string} type */
+const pageServing = (type) => {
+  const p = agentPages.find((s) => agentRepresentation(s) === type);
+  if (!p) throw new Error(`no agents surface declares ${type}`);
+  return p;
+};
+const markdownPage = () => pageServing("text/markdown");
+const plainPage = () => pageServing("text/plain");
+
+test("agent coverage: every surface in its declared representation is the one pass", () => {
+  assert.ok(agentPages.length >= AGENT_SURFACE_FLOOR, `the registry reads ${agentPages.length} agents surfaces`);
+  assert.deepEqual(compareAgentCoverage(agentPages, agentAnswersOk()), [
+    { level: "pass", message: `agent markdown coverage: all ${agentPages.length} agents:true surfaces answer an agent in their declared representation` },
+  ]);
+});
+
+test("agent coverage: HTML where Markdown is owed, and a redirect, are gaps named by path", () => {
+  const html = markdownPage();
+  const moved = agentPage(agentPages[0] === html ? 1 : 0);
+  const answers = agentAnswersOk();
+  answers.set(html.path, { kind: "answer", contentType: "text/html" });
+  answers.set(moved.path, { kind: "redirect", status: 302, location: "https://open.spotify.com/" });
+  const n = agentPages.length;
+  // Gaps are listed in registry order.
+  const named = agentPages.filter((p) => p === html || p === moved)
+    .map((p) => (p === html ? `${p.path} (text/html)` : `${p.path} (302 to https://open.spotify.com/)`));
+  assert.deepEqual(compareAgentCoverage(agentPages, answers), [{
+    level: "warn",
+    message: `agent markdown coverage: ${n - 2}/${n} measured agents:true surfaces answer Accept: text/markdown in their declared representation. No twin: ${named.join(", ")}. Give each one a twin, declare the representation its route serves (mimeType), or drop flags.agents so the registry stops advertising it`,
+  }]);
+  // The rule is per surface: text/plain is right for a terminal tool and a gap
+  // where Markdown is owed.
+  const swapped = agentAnswersOk();
+  swapped.set(plainPage().path, { kind: "answer", contentType: "text/markdown" });
+  assert.equal(compareAgentCoverage(agentPages, swapped)[0].level, "warn");
+});
+
+test("agent coverage: an unmeasured surface blocks the pass and is never counted as a twin", () => {
+  const answers = agentAnswersOk();
+  const lost = plainPage();
+  answers.set(lost.path, { kind: "unmeasured", reason: "HTTP 403 without cf-ray" });
+  const findings = compareAgentCoverage(agentPages, answers);
+  assert.deepEqual(findings, [{ level: "warn", message: `agent markdown coverage left 1/${agentPages.length} surfaces unmeasured: ${lost.path} (HTTP 403 without cf-ray)` }]);
+
+  // Alongside a gap, the gap's denominator is what was measured.
+  answers.set(markdownPage().path, { kind: "answer", contentType: "text/html" });
+  const both = compareAgentCoverage(agentPages, answers);
+  assert.equal(both.length, 2);
+  assert.ok(both[1].message.startsWith(`agent markdown coverage: ${agentPages.length - 2}/${agentPages.length - 1} measured `), both[1].message);
+  assert.ok(both.every((f) => f.level === "warn"));
+});
+
+test("agent coverage: nothing measured is 'could not run', whether every probe threw or the port never asked", () => {
+  /** @type {Map<string, AgentAnswer>} */
+  const threw = new Map(agentPages.map((p) => [p.path, { kind: "unmeasured", reason: "fetch failed: socket hang up" }]));
+  assert.deepEqual(compareAgentCoverage(agentPages, threw), [{
+    level: "warn",
+    message: `agent markdown coverage could not run: Cloudflare's edge answered none of the ${agentPages.length} probes (first: ${agentPage(0).path} (fetch failed: socket hang up))`,
+  }]);
+  const never = compareAgentCoverage(agentPages, new Map());
+  assert.equal(never.length, 1);
+  assert.equal(never[0].level, "warn");
+  assert.ok(never[0].message.endsWith(`(first: ${agentPage(0).path} (no observation was recorded))`), never[0].message);
+});
+
+test("agent coverage: a registry under the floor says so and judges nothing", () => {
+  const few = agentPages.slice(0, AGENT_SURFACE_FLOOR - 1);
+  assert.deepEqual(compareAgentCoverage(few, agentAnswersOk()), [
+    { level: "warn", message: `agent markdown coverage read only ${few.length} agents:true surfaces. Has the registry stopped parsing?` },
+  ]);
+});
+
+test("agent port: asks manually, records what the edge served, and records the rest as unmeasured", async () => {
+  const [a, b, c, d, e] = [0, 1, 2, 3, 4].map(agentPage);
+  const asked = [];
+  const fetchImpl = async (url, init) => {
+    asked.push({ path: new URL(url).pathname, accept: init.headers.accept, redirect: init.redirect });
+    const path = new URL(url).pathname;
+    if (path === a.path) return edgeServed(new Response("# twin", { headers: { "content-type": "text/markdown; charset=utf-8" } }));
+    if (path === b.path) return edgeServed(new Response(null, { status: 302, headers: { location: "https://open.spotify.com/" } }));
+    if (path === c.path) return new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
+    if (path === d.path) throw new Error("fetch failed: socket hang up");
+    return edgeServed(new Response("<!doctype html>", { headers: { "content-type": "text/html" } }));
+  };
+  const answers = await readAgentAnswers("https://aadhar.sh", [a, b, c, d, e], edgeFetcher(fetchImpl));
+  assert.deepEqual([...answers], [
+    [a.path, { kind: "answer", contentType: "text/markdown" }],
+    [b.path, { kind: "redirect", status: 302, location: "https://open.spotify.com/" }],
+    [c.path, { kind: "unmeasured", reason: "HTTP 403 without cf-ray" }],
+    [d.path, { kind: "unmeasured", reason: "fetch failed: socket hang up" }],
+    [e.path, { kind: "answer", contentType: "text/html" }],
+  ]);
+  assert.ok(asked.every((q) => q.accept === "text/markdown" && q.redirect === "manual"), JSON.stringify(asked));
+});
+
+// The run that started this, end to end: the sandbox proxy's 403 for every
+// probe. Port plus comparer print exactly what infra:check printed there.
+test("agent port and comparer: a proxy answering every probe reads as 'could not run'", async () => {
+  const proxy = async () => new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
+  const findings = compareAgentCoverage(agentPages, await readAgentAnswers("https://aadhar.sh", agentPages, edgeFetcher(proxy)));
+  assert.deepEqual(findings, [{
+    level: "warn",
+    message: `agent markdown coverage could not run: Cloudflare's edge answered none of the ${agentPages.length} probes (first: ${agentPage(0).path} (HTTP 403 without cf-ray))`,
+  }]);
 });
 
 // ------------------------------------------------------- Cloudflare tier ----

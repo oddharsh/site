@@ -164,7 +164,7 @@
         <div class="bubble"><p>where does it matter most?</p></div></div></div>
 
       <div class="msg bot"><div class="pic"></div><div><div class="who"><b>thumbnail encoding</b><time>23:11</time></div>
-        <div class="bubble"><p>Under red light. Red carries only 0.299 of the brightness in the <a class="term" data-t="bt-601" href="https://en.wikipedia.org/wiki/Rec._601" title="A video standard whose matrix converts red, green and blue into one brightness and two colour channels, with red weighted at 0.299 of brightness." rel="external">BT.601</a> matrix these files use, so in a red scene the fine detail lives in the color planes rather than in luma. One night frame of bare branches against red windows, the one the real-photo grid above is cut from, needs 35% more bytes at 4:2:0 to match 4:4:4.</p></div></div></div>
+        <div class="bubble"><p>Under red light. Red carries only 0.299 of the brightness in the <a class="term" data-t="bt-601" href="https://en.wikipedia.org/wiki/Rec._601" title="A video standard whose matrix converts red, green and blue into one brightness and two colour channels, with red weighted at 0.299 of brightness." rel="external">BT.601</a> matrix these files use, so in a red scene the fine detail lives in the color planes. One night frame of bare branches against red windows, the one the real-photo grid above is cut from, needs 35% more bytes at 4:2:0 to match 4:4:4.</p></div></div></div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:11</time></div>
         <div class="bubble"><p>the garage page keeps saying every jpg here is <i>progressive</i>. if the pixels come out the same in the end, what actually changes?</p></div></div></div>
@@ -512,7 +512,7 @@ initWhenNear("demo-progressive", function () { progressiveDemo("pj-lwe"); });
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "Before you jump to the garage study: pop quiz, six questions. If the bytes-per-pixel table made sense, this takes a minute.",
+  "intro": "Before you jump to the garage study: pop quiz, 7 questions. If the bytes-per-pixel table made sense, this takes a minute.",
   "questions": [
     {
       "q": "Start from the top. One photo goes through a stack of encoders and comes out at wildly different sizes. Where does the shrink actually come from?",
@@ -589,7 +589,7 @@ initWhenNear("demo-progressive", function () { progressiveDemo("pj-lwe"); });
           "why": "Each tile pixel covers an 8.6 by 8.6 patch of the frame, which holds about four color samples across and nine down. At its own size the tile has full color, and 4:2:0 would halve it in each direction. Drag the reduction demo below 2x to see where that stops being true."
         },
         {
-          "t": "4:4:4 upsamples the camera);o.why=o.why.replace(/&apos;/g,s missing color and sharpens it",
+          "t": "4:4:4 upsamples the camera's missing color and sharpens it",
           "why": "Nothing can recover color the camera never recorded. The gain is color the downscale already measured: past 2x, every tile pixel has camera samples of its own. At 1x in the demo, 4:4:4 only stores copies."
         },
         {
@@ -664,7 +664,7 @@ initWhenNear("demo-progressive", function () { progressiveDemo("pj-lwe"); });
         },
         {
           "t": "it runs a lower quality setting internally, trading sharpness for bytes",
-          "why": "The grid held all four encoders to the same q72 and jpegli still beat both mozjpeg and the system baseline at like quality. It aims its bits more accurately instead of spending fewer bits on a worse picture."
+          "why": "The grid held all four encoders to the same q72 and jpegli still beat both mozjpeg and the system baseline at like quality. It aims its bits more accurately, so the same picture costs fewer bytes."
         }
       ]
     }

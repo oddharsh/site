@@ -85,7 +85,7 @@ li { margin: 3px 0; }
     </p>
     <ul>
       <li><strong><code>prepare(text, font)</code></strong>: the one-time
-        cost: normalize whitespace, segment (<a class="term" data-t="grapheme-cluster" href="https://www.unicode.org/reports/tr29/" title="What a reader sees as one character, even when it is stored as several code points, such as an accented letter or an emoji with a skin tone." rel="external">graphemes</a>, not just chars, since it
+        cost: normalize whitespace, segment (<a class="term" data-t="grapheme-cluster" href="https://www.unicode.org/reports/tr29/" title="What a reader sees as one character, even when it is stored as several code points, such as an accented letter or an emoji with a skin tone." rel="external">graphemes</a>, since it
         handles <a class="term" data-t="cjk-characters" href="https://en.wikipedia.org/wiki/CJK_characters" title="Chinese, Japanese and Korean, grouped in computing because their writing systems share a large set of Chinese-derived characters." rel="external">CJK</a>, Arabic, emoji, <a class="term" data-t="zwj" href="https://en.wikipedia.org/wiki/Zero-width_joiner" title="An invisible Unicode character that joins its neighbors, used to combine several emoji into one, such as a family." rel="external">ZWJ</a>), then measure each segment with canvas
         <code>measureText</code>. Cache it. Never re-run for the same text+font.</li>
       <li><strong><code>layout(prepared, width, lineHeight)</code></strong>:
@@ -188,8 +188,7 @@ li { margin: 3px 0; }
         swaps and every number is wrong. (aadhar.sh dodges this: it uses
         system Tahoma/Verdana, no webfont, which is also why the demo above
         agrees so closely.)</li>
-      <li><strong>Canvas widths ≠ glyph-exact.</strong> Good enough for line
-        breaking; not a font-rendering engine. <code>system-ui</code> is
+      <li><strong>Canvas widths ≠ glyph-exact.</strong> Good enough for line breaking; font rendering is out of scope. <code>system-ui</code> is
         explicitly unsafe for accuracy on macOS.</li>
       <li><strong>CSS subset.</strong> Only <code>white-space: normal/pre-wrap</code>,
         a few break modes, pixel <code>letter-spacing</code>; no

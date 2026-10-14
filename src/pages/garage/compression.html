@@ -112,7 +112,7 @@
       </li>
     </ol>
     <p>
-      What finally isolated it was deleting every variable: a 30-byte brotli constant, built in
+      I finally isolated it by deleting every variable: a 30-byte brotli constant, built in
       the Worker, touching no assets at all. It came back as 34 bytes in two layers. With no
       asset fetch in the path, the assets layer was exonerated and the bug had to be mine.
     </p>
@@ -166,19 +166,19 @@
     <p>
       I argued for brotli on bytes and got talked out of it, correctly, and then the numbers I
       argued from turned out to be wrong in <em>both</em> directions. Re-measured against real
-      dictionaries rather than stand-ins, brotli's size edge is bigger than the one byte I had
-      (245 bytes across the set, 6.8%, winning 11 of 12), and zstd's decode edge is far bigger
-      than the 2x I had (8.3x). The call held anyway, which is the interesting part.
+      dictionaries rather than stand-ins, brotli's size edge grew from the one byte I had to 245
+      bytes across the set (6.8%, winning 11 of 12). zstd's decode edge grew from the 2x I had to
+      8.3x. The call held anyway, which is the interesting part.
     </p>
     <p>
-      It held for a structural reason: <strong>decode scales with the reconstruction, not with
-      the delta.</strong> A 685-byte dcb delta still rebuilds 47,615 bytes, so making the delta
+      It held for a structural reason: <strong>decode scales with the size of the file it
+      rebuilds.</strong> A 685-byte dcb delta still rebuilds 47,615 bytes, so making the delta
       smaller never makes the decode gap smaller. Break-even at 9 Mbps is about 135 bytes saved
-      per asset and dcb saves 44, so dcz wins by roughly 3x. On a slow phone the margin widens,
+      per asset; dcb saves 44, so dcz wins by roughly 3x. On a slow phone the margin widens,
       because decode scales with the CPU while 44 bytes stays 44 bytes.
     </p>
     <p>
-      Worth saying plainly: on the old numbers this was a coin flip, and on these it is not. The
+      Worth saying plainly: on the old numbers this was a coin flip, and on these it's lopsided. The
       size table now favours brotli by more than it ever did, and that table is the wrong axis to
       decide on.
     </p>
@@ -192,7 +192,7 @@
       <a href="https://canicompress.com" rel="external">canicompress.com</a>: a 94KB mock <a class="term" data-t="single-page-application" href="https://en.wikipedia.org/wiki/Single-page_application" title="A web app that loads one page and then rewrites it with JavaScript as you move around, instead of fetching new pages." rel="external">SPA</a>
       bundle redeployed every minute, each version delivered as a delta against the one before.
       Running its curl recipe from this laptop gave 95,425 bytes raw, 21,702 through <a class="term" data-t="gzip" href="https://en.wikipedia.org/wiki/Gzip" title="The oldest compression format every browser accepts for web pages. It's fast and universal, and its files come out larger than brotli's or zstd's." rel="external">gzip</a>, and
-      <strong>134 as dcz</strong>. That is 162x under gzip, and it lands in the same couple of
+      <strong>134 as dcz</strong>. That is 162x under gzip. It lands in the same couple of
       hundred bytes as a change to this site's far smaller stylesheet, because a delta is priced
       by what changed rather than by what the file weighs.
     </p>
@@ -215,7 +215,7 @@
       artifacts, a manual step, and the tripwire that existed to catch you forgetting the manual
       step. Four things deleted because one assumption got tested. The check that mattered was
       interop: the foreign <code>zstd -d -D</code> CLI decodes Node's output byte-exact, prefix
-      included, because the real decoder is a browser and not Node.
+      included, because the real decoder lives in a browser.
     </p>
     <p>
       <strong>Update, August 2026:</strong> the brotli half expired too. Node 26 added a
@@ -247,13 +247,13 @@
     <h2>The part that transfers</h2>
     <p>
       Every fact I gathered about the platform was correct. The conclusion I built out of them
-      was wrong, and it survived three rounds because each new measurement kept confirming a real
-      constraint that simply was not the constraint doing the damage. Accumulating true facts
+      was wrong. It survived three rounds because each new measurement confirmed a real
+      constraint, just never the one doing the damage. Accumulating true facts
       feels like converging on a cause.
     </p>
     <p>
       What broke the loop was a test with none of my code in the path. That is the cheap move I
-      should reach for first, and the honest version of "it's a platform limit" is a reproduction
+      should reach for first. The honest version of "it's a platform limit" is a reproduction
       the platform owner could run. Until you have that, the call is coming from inside the house.
     </p>
 
@@ -268,7 +268,7 @@
       "q": "A Worker reads request.headers.get(\"accept-encoding\") and gets \"gzip, br\". What does that value tell you?",
       "options": [
         {
-          "t": "Nothing about the client. It describes what the EDGE can handle, and the runtime normalizes it to a constant.",
+          "t": "It describes what the EDGE can handle: the runtime normalizes the header to a constant, whatever the client sent.",
           "ok": true,
           "why": "Four probes sending identity, br, gzip and br;q=0 all arrived as the same string. Any branch on it always takes the true arm."
         },
@@ -304,7 +304,7 @@
       "q": "The deltas ship as dcz even though brotli measured smaller. Why?",
       "options": [
         {
-          "t": "Decode scales with the reconstruction rather than the delta, so brotli's smaller delta never shrinks zstd's 8.3x decode lead.",
+          "t": "Decode scales with the size of the rebuilt file, so brotli's smaller delta never shrinks zstd's 8.3x decode lead.",
           "ok": true,
           "why": "Re-measured against real dictionaries, dcb is 245 bytes (6.8%) ahead across all 12 pairs, and dcz still wins: rebuilding 47,615 bytes costs 0.0165 ms against 0.1368. Break-even at 9 Mbps needs ~135 bytes saved per asset and dcb saves 44."
         },
@@ -322,7 +322,7 @@
       "q": "Why did the wrong diagnosis survive three rounds of measurement?",
       "options": [
         {
-          "t": "Each round confirmed a real platform constraint that was not the one causing the damage.",
+          "t": "Each round confirmed a real platform constraint, just never the one causing the damage.",
           "ok": true,
           "why": "Accept-Encoding normalization and the missing down-convert are both genuinely true. Collecting true facts feels like converging on a cause, which is the trap."
         },

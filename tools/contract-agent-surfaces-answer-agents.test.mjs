@@ -79,12 +79,11 @@ test("build.ts, the route oracle and check-infra all enforce the shared rule", a
   assert.ok(body.length > 100, "checkAgentMarkdown is gone");
   const fn = body.slice(0, body.indexOf("\n}\n"));
   assert.match(fn, /agentSurfaces\(surfaces\)/);
-  assert.match(fn, /agentRepresentation\(p\)/);
   assert.doesNotMatch(fn, /kind === "page"/, "the production tier must cover every agents surface whatever its kind");
-  // An answer the edge didn't serve is unmeasured, and so is a probe that threw;
-  // a pass needs none of either (gotcha 60).
-  assert.ok(fn.indexOf("servedByEdge(res)") > -1 && fn.indexOf("servedByEdge(res)") < fn.indexOf('get("content-type")'),
-    "the sweep must check who answered before it reads the content-type");
-  assert.match(fn, /catch \(e\) \{\s*unmeasured\.push\(/);
-  assert.match(fn, /else if \(!unmeasured\.length\) pass\(/);
+  // Wiring only. What the sweep concludes from each answer, the shared rule
+  // included, is compareAgentCoverage's, and the infra contract suite drives
+  // it with recorded answers (gotcha 60).
+  assert.match(fn, /report\.add\(compareAgentCoverage\(pages, answers\)\)/);
+  assert.match(fn, /readAgentAnswers\(infra\.edge\.origin, pages, fetchEdge\)/);
+  assert.match(await src("tools/lib/infra-compare.ts"), /contentType !== agentRepresentation\(p\)/);
 });

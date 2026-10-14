@@ -32,7 +32,7 @@ from AadharshBot can verify it really came from here. See
 ## Header and transport details
 
 - **Content-Security-Policy**: `default-src 'self'; object-src 'none';
-  frame-ancestors 'none'; upgrade-insecure-requests`. No external script or
+  frame-ancestors 'none'; upgrade-insecure-requests`, with no external script or
   connect origin: the browser-facing directives are self-only. Server-side
   route handlers may still make the outbound calls documented on their own
   surfaces.
@@ -41,18 +41,18 @@ from AadharshBot can verify it really came from here. See
   trusting inline code as a class. `'unsafe-inline'` is gone from this directive
   as of 2026-08-16; it rode along in a report-only twin for the two weeks it took
   to prove itself against real browsers. The style directive keeps
-  `'unsafe-inline'` and will, because the CSS here is inline by design, so this is
-  protection against script injection and not against style injection.
+  `'unsafe-inline'` and will, because the CSS here is inline by design. So this
+  protects against script injection and makes no claim about style injection.
 - **... and what it lets through**: hashing inline scripts says nothing about
-  scripts loaded by `src` from this origin, which `'self'` permits. That was not
-  hypothetical here: from 2026-08-06 the edge injected `/.webmcp/bridge.js` into
+  scripts loaded by `src` from this origin, which `'self'` permits. It happened
+  here: from 2026-08-06 the edge injected `/.webmcp/bridge.js` into
   every page after this worker was done, so the strictest policy the site could
   ship still admitted 47KB of code the repository does not contain. That injection
   is off, and every `src` this page loads is now a file in the repository. The
-  directive still permits any same-origin script, so what closed the gap was
-  removing the script rather than tightening the policy, and the next edge feature
-  anybody enables re-opens it silently. Named rather than buried, because a page
-  about guarantees should say where they stop; details at
+  directive still permits any same-origin script, so removing the script closed
+  the gap and the policy itself never tightened. The next edge feature anybody
+  enables re-opens it silently. This page names the gap because a page about
+  guarantees should say where they stop; details at
   <https://aadhar.sh/whoareyou.md>.
 - **One worker, one more token**: the AV2 decoder on /garage/av2 runs as a
   dedicated worker, and that worker script's own response adds

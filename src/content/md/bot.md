@@ -28,14 +28,14 @@ third-party sites or read content behind a login.
 
 Lens also compares responses to sample browser and crawler User-Agent strings.
 Those diagnostic requests do not claim a Web Bot Auth identity for the sampled
-bot, and still obey AadharshBot's robots.txt policy.
+bot, but they still obey AadharshBot's robots.txt policy.
 
-## How to verify it is really AadharshBot
+## How to verify it's really AadharshBot
 
 The signed HTTP readers for /around, music, bookmarks and Lens carry `Signature-Agent`, `Signature-Input`, and `Signature`
 headers per [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421) with the Web Bot
 Auth profile (`tag="web-bot-auth"`). Fetch the JWKS at the URL above, find the
-key whose `kid` matches (the kid is the key's RFC 7638 thumbprint), and verify the Ed25519 signature over the canonical
+key whose `kid` matches (each `kid` is its key's RFC 7638 thumbprint), and verify the Ed25519 signature over the canonical
 components listed in `Signature-Input`. Treat an absent, expired or invalid
 signature as unverified. A User-Agent string alone does not prove who sent a request.
 
@@ -64,10 +64,10 @@ and its `keyid` is that key's thumbprint, the same rule `sig1` follows. The
 directory response carries both signatures too, one per key.
 
 This is its second run. The first, from 2026-07-27 to 2026-08-15, signed in pure
-JavaScript, because Cloudflare's runtime had no ML-DSA in WebCrypto: roughly 8.5ms
-a signature against a 10ms per-invocation budget, so the playlist scrape and the
-[/lens](https://aadhar.sh/lens) discovery pass, which sign many times per request,
-failed because of it. Cloudflare has since added ML-DSA to WebCrypto on Workers,
+JavaScript, because Cloudflare's runtime had no ML-DSA in WebCrypto. That cost
+roughly 8.5ms a signature against a 10ms per-invocation budget, so the playlist
+scrape and the [/lens](https://aadhar.sh/lens) discovery pass failed, since each
+signs many times per request. Cloudflare has since added ML-DSA to WebCrypto on Workers,
 where it signs in about 0.12ms. If that ever stops working, the label drops and
 `sig1` ships alone. [/garage/pqc](https://aadhar.sh/garage/pqc) has the
 measurements and the full argument.
@@ -87,9 +87,9 @@ Disallow: /
 ```
 
 Outside that exception, the signed HTTP readers read the origin's `robots.txt`
-(cached for up to 12 hours). It skips paths disallowed for `AadharshBot` or `*`,
+(cached for up to 12 hours). They skip paths disallowed for `AadharshBot` or `*`,
 including redirect destinations. If the policy is unreachable, rate-limited,
-or too large to read safely, the fetch is skipped. A positive `Crawl-delay`
+or too large to read safely, the bot skips the fetch. A positive `Crawl-delay`
 also makes this bot skip the origin. These rules apply to scheduled crawls and
 visitor-requested Lens HTTP reads. If you have a question or a complaint, email
-coffee@aadhar.sh and I will reply by hand.
+coffee@aadhar.sh and I'll reply by hand.

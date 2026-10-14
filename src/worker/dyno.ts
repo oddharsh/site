@@ -245,8 +245,8 @@ export function renderDynoPulls(rows) {
   const callout = worker || pending
     ? `<div class="callout"><b>The worker bundle is the pull worth watching.</b>
     It went from ${worker ? kib(worker.a).toFixed(0) : dots} to ${worker ? kib(worker.b).toFixed(0) : dots} KiB gzip between ${esc(worker ? worker.from : dots)} and
-    ${esc(worker ? worker.to : dots)}, ${worker ? (worker.pct > 0 ? "up" : "down") : dots} ${worker ? Math.abs(worker.pct).toFixed(0) : dots}%. Every one of those numbers
-    got found by somebody tripping over a stale threshold rather than by anyone watching the slope, which is the
+    ${esc(worker ? worker.to : dots)}, ${worker ? (worker.pct > 0 ? "up" : "down") : dots} ${worker ? Math.abs(worker.pct).toFixed(0) : dots}%. Somebody found every one of
+    those numbers by tripping over a stale threshold rather than by watching the slope. That drift is the
     specific failure a per-change check cannot catch and a series can.</div>`
     : "";
 

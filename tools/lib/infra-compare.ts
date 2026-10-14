@@ -31,6 +31,8 @@
 // before and after the move. Nothing here redacts: findings are plain data, and
 // tools/lib/infra-report.ts redacts every message on the way into its store.
 
+import { agentRepresentation, type AgentSurface } from "./agent-representation.ts";
+
 export type Level = "fail" | "warn" | "pass";
 export type Finding = { level: Level; message: string };
 
@@ -543,6 +545,60 @@ export function compareEdgeCheck(check, seen: EdgeObservation | undefined, opts:
 
 export function compareEdge(edge, observed: Map<string, EdgeObservation>, opts: EdgeOptions): Finding[] {
   return edge.checks.flatMap((check) => compareEdgeCheck(check, observed.get(check.id), opts));
+}
+
+// -------------------------------------------- tier: agent markdown surface ----
+
+/** What one agents:true surface answered to `Accept: text/markdown`, asked
+ *  with redirect: "manual". `unmeasured` covers both an answer Cloudflare's
+ *  edge didn't serve (no cf-ray) and a request that threw. */
+export type AgentAnswer =
+  | { kind: "unmeasured"; reason: string }
+  | { kind: "redirect"; status: number; location: string }
+  | { kind: "answer"; contentType: string };
+
+/** Fewer agents:true surfaces than this means the registry stopped parsing,
+ *  not that the site shrank. */
+export const AGENT_SURFACE_FLOOR = 40;
+
+// Which pages answer an agent in their declared representation, measured on the
+// wire. The rule is agent-representation.ts's, so the terminal tools pass on the
+// text/plain frame they declare and /rn on its live Markdown. WARN, never fail:
+// which pages deserve a twin is a content call (check-infra.ts says why).
+//
+// Three bugs lived in this loop while it sat in check-infra.ts, where a test
+// could only read its source: it covered `kind === "page"` alone until
+// 2026-09-30 (60 of 68 surfaces unread, six answering HTML under a clean pass);
+// it followed redirects, so /rn's 302 to Spotify read as "/rn (text/html)"; and
+// until 2026-10-13 it counted a sandbox proxy's text/plain 403 as six twins and
+// printed "all N answer" when every probe threw. Each is now a fixture.
+export function compareAgentCoverage<T extends AgentSurface>(pages: T[], answers: Map<string, AgentAnswer>): Finding[] {
+  const out = collector();
+  if (pages.length < AGENT_SURFACE_FLOOR) {
+    out.warn(`agent markdown coverage read only ${pages.length} agents:true surfaces. Has the registry stopped parsing?`);
+    return out.list;
+  }
+  const gaps: string[] = [];
+  const unmeasured: string[] = [];
+  for (const p of pages) {
+    // A surface the port never asked about is unmeasured, never a twin.
+    const got = answers.get(p.path) ?? { kind: "unmeasured", reason: "no observation was recorded" };
+    if (got.kind === "unmeasured") unmeasured.push(`${p.path} (${got.reason})`);
+    // A redirect is its own gap, since an agent that follows one off-origin has
+    // left the surface the registry advertised.
+    else if (got.kind === "redirect") gaps.push(`${p.path} (${got.status} to ${got.location || "?"})`);
+    else if (got.contentType !== agentRepresentation(p)) gaps.push(`${p.path} (${got.contentType || "no content-type"})`);
+  }
+  // A pass needs every surface measured.
+  if (unmeasured.length === pages.length) {
+    out.warn(`agent markdown coverage could not run: Cloudflare's edge answered none of the ${pages.length} probes (first: ${unmeasured[0]})`);
+    return out.list;
+  }
+  if (unmeasured.length) out.warn(`agent markdown coverage left ${unmeasured.length}/${pages.length} surfaces unmeasured: ${unmeasured.join(", ")}`);
+  const measured = pages.length - unmeasured.length;
+  if (gaps.length) out.warn(`agent markdown coverage: ${measured - gaps.length}/${measured} measured agents:true surfaces answer Accept: text/markdown in their declared representation. No twin: ${gaps.join(", ")}. Give each one a twin, declare the representation its route serves (mimeType), or drop flags.agents so the registry stops advertising it`);
+  else if (!unmeasured.length) out.pass(`agent markdown coverage: all ${pages.length} agents:true surfaces answer an agent in their declared representation`);
+  return out.list;
 }
 
 // ------------------------------------------------------------ tier: api ----
