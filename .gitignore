@@ -114,3 +114,8 @@ public/images/fingerprints.json
 config/.generated/
 # GENERATED from config/dev/ (production + the dev overlay) by tools/dev-stage.ts
 .wrangler.dev.jsonc
+
+# The AV2 tooling moved to github.com/oddharsh/av2-tone (pinned in package.json).
+# Checkouts that built it before the move keep gigabytes of build trees here.
+tools/photos/libavif-avm/
+tools/photos/av2-metal/

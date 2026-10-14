@@ -89,6 +89,11 @@ question, and feedback on every option. The check tests reconstruction rather
 than recognition: ask why the mechanism works, what it predicts, or what result
 would falsify the model. It diagnoses a second read; it never blocks the page.
 
+Write the options to about the same length. The right answer's justification
+goes in its `why`, and each misconception gets the same concrete detail as the
+truth. The generator refuses a page where the right answer is the longest, or
+the shortest, option on more than half its questions (gotcha 66).
+
 The shared contract applies the site's LRS and voice rules to author-facing copy.
 Write for a named reader, put the point near the front, keep the actor close to
 the verb, and let the new idea land at the end. Use concrete evidence and state

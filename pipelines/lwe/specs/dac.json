@@ -45,7 +45,7 @@
         "q": "The noise shaping demo runs the same 3-bit quantizer whether shaping is ON or OFF. What does the feedback loop actually change?",
         "options": [
           {
-            "t": "where the error sits: the same total hash, tilted up and out of the band you can hear",
+            "t": "where the error sits: the same total hash, tilted up above the audible band",
             "ok": true,
             "why": "That's the whole move. The loop high-passes the quantization error, so the floor tilts away from the shaded audible band and piles up in the ultrasonics, where a cheap analog filter wipes it."
           },
@@ -67,7 +67,7 @@
         "q": "In the filter demo, dragging sharpness up steepens the frequency wall on the right. What happens on the left, and why is it unavoidable?",
         "options": [
           {
-            "t": "the impulse rings longer, since sharpness in frequency is paid for with length in time",
+            "t": "the impulse rings longer, since a sharper wall in frequency costs length in time",
             "ok": true,
             "why": "That's the Fourier tradeoff the whole section rides on. A perfect brick wall at 20 kHz is a sinc that ripples forever in time, and NOS, oversampling, and Moffat's closed-form filter are each a different answer to it."
           },
@@ -89,7 +89,7 @@
         "q": "The contested ground demo feeds one quiet tone to both architectures. What two different imperfections do the spectra show?",
         "options": [
           {
-            "t": "multibit sprouts spikes at the tone's multiples, delta-sigma keeps one clean spike over a raised floor",
+            "t": "multibit sprouts harmonic spikes, delta-sigma keeps one clean spike over a raised floor",
             "ok": true,
             "why": "That's the honest core of the debate. Rounding to exact levels bends a quiet wave into harmonic distortion; shaping trades that for a noise floor. Slide to 16-bit and both sink below hearing, which is why the argument never settles."
           },
@@ -111,7 +111,7 @@
         "q": "Last one, on warmth. Why does the tube curve read as full while the hard clip reads as buzz, when both are just distortion?",
         "options": [
           {
-            "t": "the tube's lopsided curve grows mostly the 2nd harmonic, the symmetric clip cancels evens and stacks the odds",
+            "t": "the tube's lopsided curve favors the 2nd harmonic, the symmetric clip cancels evens and stacks odds",
             "ok": true,
             "why": "That's the tell. The 2nd harmonic IS the octave, the most consonant interval there is, so the ear reads fuller. Symmetry cancels the evens, and the odd stack (3rd, 5th, 7th) climbs toward the square-wave buzz of a signal slammed into its rails."
           },

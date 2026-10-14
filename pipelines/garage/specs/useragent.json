@@ -33,7 +33,7 @@
             "why": "Right. A denylist has to enumerate what it stops, which leaves every unlisted string on the allowed side."
           },
           {
-            "t": "The Times trusts OpenAI more than it trusts Anthropic.",
+            "t": "The Times trusts OpenAI's tools more than Anthropic's, so OpenAI names get through.",
             "why": "Both invented strings passed, and one of them names xAI, so the rule is matching text."
           },
           {
@@ -46,16 +46,16 @@
         "q": "Wikimedia served curl and refused a fake Googlebot. What is it actually filtering?",
         "options": [
           {
-            "t": "Claims it can check, which this request failed.",
+            "t": "Identity claims it can check, which this request failed.",
             "ok": true,
             "why": "Right. Google publishes the addresses Googlebot uses, so the claim is verifiable and ours did not match. Claiming nothing is unfalsifiable and passes."
           },
           {
-            "t": "Crawlers, which curl is not.",
+            "t": "Crawlers in general, a category that curl does not fall into.",
             "why": "An invented token and our own survey string both passed too, and neither is a browser. Being a crawler is not what got refused."
           },
           {
-            "t": "High request volume from one address.",
+            "t": "High request volume arriving from one address in a short window.",
             "why": "The same address sent every identity in the same window, and eight of the eleven were served the full article."
           }
         ]
@@ -64,16 +64,16 @@
         "q": "Every identity gets 403 from medium.com, Chrome included. What can you conclude about how Medium treats AI crawlers?",
         "options": [
           {
-            "t": "Nothing. The instrument never got in, so no row is evidence about user-agent policy.",
+            "t": "Nothing, because the Chrome control was refused with the same 403.",
             "ok": true,
-            "why": "Right. That is what the control rows are for, and it is why the target is reported unmeasurable rather than as a site that blocks crawlers."
+            "why": "Right. The instrument never got in, so no row is evidence about user-agent policy. That is what the control rows are for, and it is why the target is reported unmeasurable rather than as a site that blocks crawlers."
           },
           {
-            "t": "It blocks AI crawlers aggressively.",
+            "t": "It blocks AI crawlers aggressively, by name, before any page is served.",
             "why": "It refused a browser with the same status. The refusal is aimed at this address or this client, so the crawler rows add no information."
           },
           {
-            "t": "Its robots.txt disallows everything.",
+            "t": "Its robots.txt disallows every crawler, and the server enforces it.",
             "why": "Robots is a published request. This survey records what the server actually returned, and the two are deliberately separate."
           }
         ]
@@ -87,11 +87,11 @@
             "why": "Right. A link preview has to work without a JS engine, so the crawler gets server-rendered HTML while the browser gets a frame and a script tag."
           },
           {
-            "t": "Reddit gives AI crawlers privileged access under its content deals.",
+            "t": "Reddit gives AI crawlers privileged access to full pages under its data licensing deals.",
             "why": "facebookexternalhit is a link-preview fetcher rather than an AI crawler, and the AI crawlers in the same run were refused or rate-limited."
           },
           {
-            "t": "The browser request was blocked and the crawler request was not.",
+            "t": "The browser request was rate-limited and served a stub, while the crawler request went through.",
             "why": "Both returned 200. The browser response is a shell rather than a refusal, which is why the survey scores those as separate states."
           }
         ]
@@ -105,11 +105,11 @@
             "why": "Right. Charging is a real change in what the site wants, and it inherits the denylist's hole because the bill is addressed to a string."
           },
           {
-            "t": "Nothing, since 402 and 403 both deny access.",
+            "t": "Nothing, since 402 and 403 both withhold the page from the crawler.",
             "why": "402 invites a transaction where 403 ends the conversation, which is a different offer even though both withhold the page."
           },
           {
-            "t": "It proves The Atlantic verifies the crawlers it charges.",
+            "t": "It shows The Atlantic verifies the crawlers it charges, since a bill needs a known payer.",
             "why": "It charged four names and served two strings invented for this survey. Nothing was verified."
           }
         ]
@@ -118,16 +118,16 @@
         "q": "Cloudflare's Verified Bots program accepts a Web Bot Auth signature, a published IP list, or reverse DNS. Why does the signature option change who can hold a checkable identity?",
         "options": [
           {
-            "t": "It removes the requirement to own address space, so a crawler with no network blocks can still prove who it is.",
+            "t": "It drops the requirement to own address space, so a crawler with no network blocks can prove who it is.",
             "ok": true,
             "why": "Right. The other two proofs are properties of the address a request arrives from, which is why the checkable identities have been a handful of large companies. Note the signature earns the signed-agent classification, and Verified status is a further judgement about behaviour."
           },
           {
-            "t": "It is harder to forge than an IP range, which can be spoofed at the packet level.",
+            "t": "It is harder to forge than an IP range, since a source address can be spoofed at the packet level.",
             "why": "Source addresses on a completed TCP connection are already hard to forge. The constraint the signature lifts is who is able to own one."
           },
           {
-            "t": "It lets a bot skip robots.txt, since it has proven its identity.",
+            "t": "It lets a verified bot skip robots.txt, since it has already proven who it is to the site.",
             "why": "Verification adds obligations. Respecting robots is one of the program's stated requirements, and breaking it removes the bot from the allowlist."
           }
         ]
@@ -141,11 +141,11 @@
             "why": "Right. That would mean the list is maintained faster than a survey can exploit it, which is a different claim about the same mechanism."
           },
           {
-            "t": "GPTBot gets 403 again.",
+            "t": "GPTBot gets 403 again, along with the other three documented tokens.",
             "why": "That is the predicted result, so it supports the reading rather than testing it."
           },
           {
-            "t": "Chrome gets a different word count than last time.",
+            "t": "Chrome is served a different word count from the Times than it was on the last run.",
             "why": "The word counts moved by 13 across trials already. The finding rests on the 403 boundary, which held identically every time."
           }
         ]

@@ -185,7 +185,7 @@
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 
 # The decoder's WebAssembly, named by the first 8 hex of its own sha256
-# (tools/photos/av2-wasm/build.sh), so a year + immutable is true, like /i/. The
+# (av2-tone's wasm/build.sh), so a year + immutable is true, like /i/. The
 # shell preloads are dead weight on a fetched binary, so detach both.
 /garage/av2/av2dec.*
   ! Cache-Control
