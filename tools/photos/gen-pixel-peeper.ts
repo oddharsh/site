@@ -213,7 +213,11 @@ export const CANDIDATES: Record<Axis, [Intent, number, string[]]> = {
   // to four and needed a deeper pool. They come from the encoder and chroma
   // lists and stay clear of codec-knob-probe's HOLDOUT, which is why that
   // probe now pins its TRAIN set to the first eight by name.
-  format: ["detail", 24, [
+  //
+  // 44 is every stem at every tier, since 2026-10-14: calls with AV2 skip the
+  // legibility gate (buildFormatTier), and ranking on spread would otherwise
+  // drop exactly the close AV2 calls the gate now lets through.
+  format: ["detail", 44, [
     "XT507494",   // chrome grille, fine mesh
     "XT509794",   // brick road texture
     "XT508890",   // blossom, foliage is encoder-hard
@@ -1028,7 +1032,12 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
     // visibly worse, which is what the gate has always asked of two
     const spread = (options[options.length - 1].s2 as number) - (options[0].s2 as number);
     const summary = options.map((o) => `${o.label.split(" · ")[0]} ${o.s2}`).join(", ");
-    if (spread < ENCODER_MIN_SPREAD) return [null, `${tier} @ ${target}B: formats within ${spread.toFixed(1)} s2 (${summary}); nothing to see`];
+    // A call with an AV2 tile ships however close it lands. The gate exists so
+    // nobody is asked a call they cannot see, but whether AV2 can be told from
+    // AV1 and JPEG XL at all is the question the owner wants to judge by eye,
+    // and on 2026-10-14 the gate dropped 12 of 22 AV2 calls on seven crops.
+    const hasAv2 = options.some((o) => o.label.startsWith("AV2 "));
+    if (spread < ENCODER_MIN_SPREAD && !hasAv2) return [null, `${tier} @ ${target}B: formats within ${spread.toFixed(1)} s2 (${summary}); nothing to see`];
     const budgetDrift = Math.max(...options.map((o) => Math.abs(o.bytes - target))) / target;
     const trial: Trial = { axis: "format", crop: cropId, tier, options, disagree: markWinners(options), spread: Number(spread.toFixed(1)), budget: target, budget_drift: Number((budgetDrift * 100).toFixed(2)) };
     if (rejected.length) trial.rejected = rejected;   // a format that missed the budget sits this call out, and the log says so
