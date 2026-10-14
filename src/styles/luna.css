@@ -1178,6 +1178,16 @@ a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
   .axp-max { resize: none !important; }
 }
 
+/* ─────────────────────────── the HyperCam 2 watermark ─────────────────────────── */
+/* The free HyperCam 2 burned "Unregistered HyperCam 2" into the top-left corner
+   of every capture until Hyperionics dropped the watermark in May 2010, so a
+   whole era of YouTube tutorials wears it. It's on the video rather than the
+   desktop: it sits above every window and the taskbar, lets clicks through, and
+   stays out of the accessibility tree (the alt text after the slash is empty; a
+   browser that can't parse that form keeps the plain declaration before it).
+   body::after is the homepage's pre-JS taskbar strip, so this takes ::before. */
+body::before{content:"Unregistered HyperCam 2";content:"Unregistered HyperCam 2"/"";position:fixed;left:0;top:0;z-index:2147483647;padding:1px 3px;background:var(--window);color:var(--ink);font:var(--text-2xs)/1.25 var(--font-ui);white-space:nowrap;pointer-events:none}
+
 /* ─────────────────── print + High Contrast (phase C) ─────────────────── */
 /* print: the document inside the window is the artifact; the OS around it
    is not. strip the desktop, flatten the window into normal flow, and let
@@ -1186,7 +1196,7 @@ a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
 @media print {
   #axp-desktop, #axp-icons, #axp-taskbar, #axp-run,
   .axp-resize, .axp-acc, #axp-balloon, .axp-histnav,
-  .title-bar .controls, .np-controls { display: none !important; }
+  .title-bar .controls, .np-controls, body::before { display: none !important; }
   html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
   body { display: block !important; padding: 0 !important; }
   .window, .np-window {

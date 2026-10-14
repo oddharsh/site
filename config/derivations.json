@@ -229,7 +229,7 @@
     {
       "id": "pixel-peeper/trials",
       "tier": "unverifiable",
-      "why": "The /pixel-peeper trial set: 320px tiles cropped at native resolution from the source photos, encoded on one byte budget per trial, and a manifest of the trials that cleared their axis's legibility gate. Regenerated whole; the manifest is all-or-nothing.",
+      "why": "The /pixel-peeper trial set: 320px tiles cropped at native resolution from the source photos, encoded on one byte budget per trial, and a manifest of the trials that cleared their axis's legibility gate. Since 2026-10-14 the format axis runs AV2 beside JPEG XL and AVIF, and the manifest's format_pool records every format call it scored, before the gate. Regenerated whole, or one axis at a time with --merge; the manifest is all-or-nothing per axis.",
       "outputs": [
         "public/pixel-peeper"
       ],

@@ -119,7 +119,8 @@ test("cron dispatch survives Cloudflare's expression normalization", () => {
   assert.equal(cronJob("17 8 * * SUN"), "census");
   assert.equal(cronJob("17 8 * * MON"), "census");
   assert.equal(cronJob("7,37 * * * *"), "home_probe");
-  assert.equal(cronJob("41 5 * * *"), "daily_outbound");
+  assert.equal(cronJob("41 5 * * *"), "around");
+  assert.equal(cronJob("53 5 * * *"), "webmention_send");
   assert.equal(cronJob("23 */6 * * *"), "serendipity");
   assert.equal(cronJob("*/30 * * * *"), null);
   assert.equal(cronJob("0 0 * * *"), null);

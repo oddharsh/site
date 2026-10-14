@@ -1639,7 +1639,7 @@ export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
 // half that matters more. A self-dispatch spends ONE subrequest here and runs
 // the batch in a FRESH invocation with its own ceiling. Same shape /lens uses to
 // self-scan, and it costs no cron trigger, which matters because Workers Free
-// caps an account at five and four are spent.
+// caps an account at five and all five are spent (since 2026-10-14).
 //
 // The secret rides a header rather than the query string so it stays out of
 // request logs. Failure is reported and never thrown: enrichment is the

@@ -6,6 +6,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, extractMeta, jsonResponse, secretMatches } from "./lib/http.ts";
+import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } from "./lib/budget.ts";
 import { span } from "./lib/trace.ts";
 import { AROUND_SNAPSHOT_URL } from "./routes.ts";
 
@@ -363,7 +364,31 @@ export async function runAround(env) {
   return span("around.crawl", (s) => runAroundInner(env, s), { "around.neighbors": NEIGHBORS.length });
 }
 
+// THE CRAWL'S SHARE OF ITS INVOCATION, and the bound that decides whether the
+// history row gets written at all. Each neighbor costs a robots.txt read and a
+// page read, so twenty cost 40 before any redirect, and every redirect hop is
+// one more. Workers Free refuses the 51st, and until 2026-10-14 this crawl
+// shared its invocation with webmention-send, whose own budget is 40: the
+// refusal landed on whichever neighbors came last. Where it landed inside the
+// page read, the row became an error. Where it landed on a robots gate, the
+// gate rethrew it (botauth.ts does, on purpose, for census), the whole crawl
+// rejected, and neither the KV snapshot nor the history batch ran. Analytics
+// show that invocation at exactly 50 subrequests every day from 2026-09-14,
+// ending in scriptThrewException on most of them, and 25 of the 28 days before
+// the split have no history row.
+//
+// So the crawl now runs alone on its tick (lib/cron.ts) and meters every hop
+// through a ledger (lib/budget.ts meteredTransport). The reserve holds two back
+// for the snapshot put and the history batch. Measured in production, neither
+// counts against the 50, so the reserve is insurance rather than a requirement.
+export const AROUND_SUBREQUEST_RESERVE = 2;
+export const AROUND_SUBREQUEST_LIMIT = SUBREQUEST_CAP_FREE - AROUND_SUBREQUEST_RESERVE;
+
 async function runAroundInner(env, sCrawl) {
+  const budget = createBudget(SUBREQUEST_CAP_FREE, { reserve: AROUND_SUBREQUEST_RESERVE });
+  // botRobotsPolicy and crawlDocument both send every hop through
+  // env.OUTBOUND_TRANSPORT, so this one swap puts the whole crawl on the ledger.
+  env = { ...env, OUTBOUND_TRANSPORT: meteredTransport(budget, env.OUTBOUND_TRANSPORT) };
   // Four concurrent origins matches the census worker's bounded fan-out and
   // avoids turning one cron tick into a burst against twenty sites.
   const results = await mapWithConcurrency(NEIGHBORS, 4, async ({ name, url }) => span(
@@ -372,23 +397,25 @@ async function runAroundInner(env, sCrawl) {
     s.setAttribute("around.name", name);
     s.setAttribute("around.host", (() => { try { return new URL(url).hostname; } catch { return undefined; } })());
     const t0 = Date.now();
-    // honor robots.txt first. A disallow is a legitimate result (skipped row, no
-    // error); an undetermined robots.txt is recorded as an error so a network-wide
-    // outage can't overwrite the last-good snapshot with an all-skipped one.
-    const gate = await span("around.robots_gate", () => botRobotsPolicy(url, env));
-    if (!gate.ok && gate.kind === "disallow") {
-      s.setAttribute("around.outcome", "robots_disallow");
-      s.setAttribute("around.robots_rule", gate.rule);
-      return { name, url, skipped: "robots", robots: "disallow", robotsRule: gate.rule, elapsedMs: Date.now() - t0 };
-    }
-    if (!gate.ok && gate.kind === "undetermined") {
-      // the reason string ("robots.txt 503", "robots.txt unreachable") is the
-      // whole diagnosis and it has been going into a JSON field nobody reads.
-      s.setAttribute("around.outcome", "robots_undetermined");
-      s.setAttribute("around.reason", gate.reason);
-      return { name, url, robots: "undetermined", error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
-    }
     try {
+      // honor robots.txt first. A disallow is a legitimate result (skipped row, no
+      // error); an undetermined robots.txt is recorded as an error so a network-wide
+      // outage can't overwrite the last-good snapshot with an all-skipped one.
+      // Inside the try because the gate RETHROWS a spent budget, and outside it
+      // that one neighbor's refusal rejected the other nineteen rows with it.
+      const gate = await span("around.robots_gate", () => botRobotsPolicy(url, env));
+      if (!gate.ok && gate.kind === "disallow") {
+        s.setAttribute("around.outcome", "robots_disallow");
+        s.setAttribute("around.robots_rule", gate.rule);
+        return { name, url, skipped: "robots", robots: "disallow", robotsRule: gate.rule, elapsedMs: Date.now() - t0 };
+      }
+      if (!gate.ok && gate.kind === "undetermined") {
+        // the reason string ("robots.txt 503", "robots.txt unreachable") is the
+        // whole diagnosis and it has been going into a JSON field nobody reads.
+        s.setAttribute("around.outcome", "robots_undetermined");
+        s.setAttribute("around.reason", gate.reason);
+        return { name, url, robots: "undetermined", error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
+      }
       // The kernel owns the deadline, stream cap, digest, and normalized signals.
       const crawl = await crawlDocument(url, env, { timeoutMs: 4000, maxBytes: 200 * 1024 });
       s.setAttribute("around.outcome", "crawled");
@@ -412,6 +439,13 @@ async function runAroundInner(env, sCrawl) {
         elapsedMs:     crawl.elapsedMs,
       };
     } catch (e) {
+      // The ledger is spent: a fact about this run, so the row says so rather
+      // than blaming the neighbor. Still an error row, so a run the budget cut
+      // short everywhere cannot overwrite the last-good snapshot.
+      if (budget.fault(e) === "cap") {
+        s.setAttribute("around.outcome", "budget_spent");
+        return { name, url, error: "subrequest budget spent, not crawled", elapsedMs: Date.now() - t0 };
+      }
       // Redirect destinations have their own robots policy too.
       if (e instanceof BotPolicyError) {
         const policy = e.policy;
@@ -437,6 +471,7 @@ async function runAroundInner(env, sCrawl) {
   sCrawl.setAttribute("around.crawled", results.filter((r) => !r.error && !r.skipped).length);
   sCrawl.setAttribute("around.skipped", results.filter((r) => r.skipped).length);
   sCrawl.setAttribute("around.errored", results.filter((r) => r.error).length);
+  recordBudget(sCrawl, budget);
   return {
     crawledBy: BOT_UA,
     crawledAt: new Date().toISOString(),
