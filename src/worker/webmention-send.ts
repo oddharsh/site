@@ -2,23 +2,39 @@ import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget }
 import { readResponseCapped } from "./lib/crawl.ts";
 import { selfAdapter } from "./lib/outbound.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
+import { createBudget, isSubrequestLimit, meteredTransport, recordBudget } from "./lib/budget.ts";
 import { span } from "./lib/trace.ts";
+import type { PublicTransport } from "./lib/public-fetch.ts";
 import { asText } from "./lib/parse.ts";
 
 const SEND_TIMEOUT_MS = 8000;
 const PAGE_BYTE_CAP = 512 * 1024;
 const DISCOVERY_BYTE_CAP = 256 * 1024;
+// Politeness cap per run, and the one bound that is about the RECEIVER rather
+// than about us. The tick is daily (53 5 * * *, its own); a run that
+// re-notified every citation on every page would be a small crawl of its own.
 const MAX_SENDS_PER_RUN = 25;
 const RESEND_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 // THE BOUND THAT DECIDES THE SHAPE OF THIS JOB. Workers Free allows 50
-// subrequests per invocation, and every D1 statement, every asset read and every
-// outbound fetch is one (gotcha 36 — a fan-out that crosses it arrives as an
+// subrequests per invocation (gotcha 36: a fan-out that crosses it arrives as an
 // ordinary exception, which a job written to swallow its own failures reports as
-// silence). A full sweep here is ~35 pages plus ~100 citations at 2-3 statements
+// silence). Every outbound fetch is one, and every redirect hop. This ledger
+// also charges each D1 statement and asset read, which production says do not
+// count (lib/budget.ts, 2026-10-14); charging them anyway errs on the safe side. A full sweep here is ~35 pages plus ~100 citations at 2-3 statements
 // each, so it was never going to fit and the honest move is to spend a budget and
 // come back tomorrow rather than to die two thirds of the way through.
-const SUBREQUEST_BUDGET = 40;
+// 40 rather than 50, because the internal half of this count is an ESTIMATE: a
+// page read dispatches through route(), which reads the asset and may touch the
+// Workers cache on the way, and none of that is visible from here. The
+// third-party half is exact, since meteredTransport charges each hop before it
+// goes out.
+//
+// THIS JOB RUNS ALONE ON ITS TICK, and that is what makes 40 safe. Until
+// 2026-10-14 it shared 41 5 with the /around crawl, whose twenty neighbors need
+// 40 more on their own, so the invocation hit the platform's ceiling every day.
+// contract-no-cron-tick-outspends-the-subrequest-cap pins the per-tick sum.
+export const SUBREQUEST_BUDGET = 40;
 const COST_PER_TARGET = 3;
 const COST_PER_PAGE = 3;
 
@@ -59,14 +75,19 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
     console.warn("webmention-send: SOCIAL_DB unbound; skipping");
     return { sent: 0, discovered: 0, considered: 0, pagesRead: 0, spent: 0, skipped: "unbound" };
   }
-  let spent = 0;
-  await ensureTable(db); spent++;
+  // The ledger. Internal calls (D1, the own-page dispatch) are charged by hand
+  // at the estimates below; every third-party hop is charged by the transport
+  // before it is dispatched, so a redirect chain is counted hop by hop rather
+  // than as the one call it looks like from here.
+  const budget = createBudget(SUBREQUEST_BUDGET);
+  const transport = meteredTransport(budget, env.OUTBOUND_TRANSPORT);
+  await ensureTable(db); budget.charge();
 
   const pages = await span("webmention.own_pages", () => mentionablePages(env, origin));
   sSend.setAttribute("webmention.pages", Array.isArray(pages) ? pages.length : 0);
   const now = Date.now();
 
-  const priorRows = await db.prepare(`SELECT source, target, last_sent_at FROM ${TABLE}`).all(); spent++;
+  const priorRows = await db.prepare(`SELECT source, target, last_sent_at FROM ${TABLE}`).all(); budget.charge();
   const prior = new Map();
   for (const r of (priorRows && priorRows.results) || []) prior.set(`${r.source}|${r.target}`, r.last_sent_at || 0);
   const freshAt = (source, target) => now - (prior.get(`${source}|${target}`) ?? 0) < RESEND_AFTER_MS;
@@ -75,57 +96,79 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
   const queue = [...pages].sort((a, b) => pageRead(a) - pageRead(b));
 
   let sent = 0, discovered = 0, considered = 0, pagesRead = 0;
-  const affordable = () => spent + COST_PER_TARGET <= SUBREQUEST_BUDGET;
+  // A refusal from the ledger mid-target: a redirect chain cost more than the
+  // whole-target estimate. The run stops there and records nothing for it.
+  let refused = false;
+  const affordable = () => budget.left >= COST_PER_TARGET;
 
   for (const pageUrl of queue) {
-    if (sent >= MAX_SENDS_PER_RUN || spent + COST_PER_PAGE + COST_PER_TARGET > SUBREQUEST_BUDGET) break;
+    if (refused || sent >= MAX_SENDS_PER_RUN || budget.left < COST_PER_PAGE + COST_PER_TARGET) break;
     if (freshAt(pageUrl, pageUrl)) continue;
 
     const html = await span("webmention.fetch_own_page", (s) => {
       s.setAttribute("webmention.source", pageUrl);
       return fetchOwnPage(pageUrl, env);
     });
-    spent += COST_PER_PAGE;
+    budget.charge(COST_PER_PAGE);
     if (!html) continue;
     pagesRead++;
 
+    let cut = false;
     for (const target of citationsIn(html, origin)) {
-      if (sent >= MAX_SENDS_PER_RUN || !affordable()) break;
+      if (sent >= MAX_SENDS_PER_RUN || !affordable()) { cut = true; break; }
       considered++;
 
       if (freshAt(pageUrl, target)) continue;
 
-      const endpoint = await span("webmention.discover", (s) => {
-        s.setAttribute("webmention.target_host", hostOf(target));
-        return discoverEndpoint(target);
-      });
-      spent++;
+      let endpoint, status;
+      try {
+        endpoint = await span("webmention.discover", (s) => {
+          s.setAttribute("webmention.target_host", hostOf(target));
+          return discoverEndpoint(target, transport);
+        });
+        if (endpoint) {
+          status = await span("webmention.post", async (s) => {
+            s.setAttribute("webmention.target_host", hostOf(target));
+            const st = await postMention(endpoint, pageUrl, target, transport);
+            // the receiving endpoint's verdict. Stored in D1 per pair, but a run-level
+            // view of "who is rejecting my mentions" needed a query nobody writes.
+            s.setAttribute("http.response.status_code", st);
+            return st;
+          });
+        }
+      } catch (e) {
+        // Only the ceiling reaches here: discoverEndpoint and postMention turn
+        // every other failure into a value. Nothing is recorded for this
+        // target, so tomorrow's run probes it again instead of trusting a
+        // "no endpoint" the ledger made up.
+        if (budget.fault(e) !== "cap") throw e;
+        refused = true; cut = true; break;
+      }
       if (!endpoint) {
-        await recordSend(db, pageUrl, target, null, null, now); spent++;
+        await recordSend(db, pageUrl, target, null, null, now); budget.charge();
         continue;
       }
       discovered++;
-
-      const status = await span("webmention.post", async (s) => {
-        s.setAttribute("webmention.target_host", hostOf(target));
-        const st = await postMention(endpoint, pageUrl, target);
-        s.setAttribute("http.response.status_code", st);
-        return st;
-      });
-      spent++;
-      await recordSend(db, pageUrl, target, endpoint, status, now); spent++;
+      await recordSend(db, pageUrl, target, endpoint, status, now); budget.charge();
       sent++;
     }
 
-    await recordSend(db, pageUrl, pageUrl, null, null, now); spent++;
+    // The marker, written LAST so a page only counts as swept once its citations
+    // are. A run that ran out of budget mid-page leaves it unmarked and picks it
+    // up first tomorrow. (Until 2026-10-14 the cut only left the inner loop and
+    // fell through to this write, marking a half-swept page done for a week.)
+    if (cut) break;
+    await recordSend(db, pageUrl, pageUrl, null, null, now); budget.charge();
   }
 
   sSend.setAttribute("webmention.considered", considered);
   sSend.setAttribute("webmention.discovered", discovered);
   sSend.setAttribute("webmention.sent", sent);
   sSend.setAttribute("webmention.pages_read", pagesRead);
+  const spent = budget.spent;
   sSend.setAttribute("webmention.budget_spent", spent);
-  sSend.setAttribute("webmention.capped", sent >= MAX_SENDS_PER_RUN || !affordable());
+  sSend.setAttribute("webmention.capped", refused || sent >= MAX_SENDS_PER_RUN || !affordable());
+  recordBudget(sSend, budget);
   console.log(`webmention-send: ${pagesRead} pages read, ${considered} citations considered, ${discovered} endpoints found, ${sent} sent, ${spent}/${SUBREQUEST_BUDGET} subrequests`);
   return { sent, discovered, considered, pagesRead, spent };
 }
@@ -249,13 +292,16 @@ export function findEndpointIn(html, linkHeader, baseUrl) {
   return null;
 }
 
-export async function discoverEndpoint(target) {
+// `transport` is the send loop's metered adapter. Every failure is still a
+// null, EXCEPT the ceiling: a null is recorded as "no endpoint" and trusted for
+// a week, and a probe the ledger refused learned nothing about the target.
+export async function discoverEndpoint(target, transport?: PublicTransport) {
   try {
     const signal = AbortSignal.timeout(SEND_TIMEOUT_MS);
     const followed = await fetchFollowingPublicRedirects(target, () => ({
       headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
       signal,
-    }), validateLensTarget, 20); // Preserve native fetch's redirect allowance.
+    }), validateLensTarget, 20, transport); // Preserve native fetch's redirect allowance.
     if (!followed.ok) return null;
     const { response: res, finalUrl } = followed;
     const linkHeader = res.headers.get("link");
@@ -271,17 +317,26 @@ export async function discoverEndpoint(target) {
     if (!endpoint) return null;
     const checked = validateLensTarget(endpoint);
     return checked.ok ? checked.url : null;
-  } catch { return null; }
+  } catch (e) {
+    if (isSubrequestLimit(e)) throw e;
+    return null;
+  }
 }
 
 function abs(href, base) {
   try { return new URL(href, base).toString(); } catch { return null; }
 }
 
-async function postMention(endpoint, source, target) {
+// ONE request, redirect: "manual". A followed redirect is a subrequest per hop
+// that no ledger here can see, and its destination would skip the per-hop SSRF
+// check discovery gets. A 3xx is stored as the receiver's verdict, like any
+// other status.
+async function postMention(endpoint, source, target, transport?: PublicTransport) {
   try {
-    const res = await fetch(endpoint, {
+    const send = transport ?? ((url, init) => fetch(url, init));
+    const res = await send(endpoint, {
       method: "POST",
+      redirect: "manual",
       headers: {
         "content-type": "application/x-www-form-urlencoded",
         "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)",
@@ -291,5 +346,8 @@ async function postMention(endpoint, source, target) {
     });
     void res.body?.cancel?.();
     return res.status;
-  } catch { return 0; }
+  } catch (e) {
+    if (isSubrequestLimit(e)) throw e;
+    return 0;
+  }
 }
