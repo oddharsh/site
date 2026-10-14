@@ -7,16 +7,17 @@
 // decodes the same files through the shipped WebAssembly and compares.
 // Re-run after any AV2 file under public/garage/av2 changes.
 //
-// usage: bun tools/photos/av2-wasm/expect.ts [--build <libavif-avm build dir>]
+// usage: bun tools/photos/av2-wasm/expect.ts [--build <av2-tone encoder build dir>]
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { AV2_BUILD } from "../av2-tone.ts";
 
 const HERE = import.meta.dir;
 const REPO = path.resolve(HERE, "../../..");
 const i = process.argv.indexOf("--build");
-const BUILD = path.resolve(i >= 0 ? process.argv[i + 1] : path.join(HERE, "../libavif-avm/build"));
+const BUILD = path.resolve(i >= 0 ? process.argv[i + 1] : AV2_BUILD);
 const DIR = path.join(REPO, "public/garage/av2");
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "av2-expect-"));
 

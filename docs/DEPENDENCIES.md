@@ -187,6 +187,26 @@ Available, measured, and deliberately not wired in: `bun test --shard` with
 repo's single `validate` job has no use for yet), `bun test --changed` for
 local loops, and `--cpu-prof-md`, which writes a grep-friendly CPU profile.
 
+### av2-tone, the AV2 tooling, by commit
+
+[`av2-tone`](https://github.com/oddharsh/av2-tone) holds what used to be
+`tools/photos/libavif-avm`, `tools/photos/av2-metal` and the build half of
+`tools/photos/av2-wasm`: the pinned libavif + AVM 1.0.0 build, the tuned
+encoder's patches, the WebAssembly decoder and GDF on Metal. It moved out on
+2026-10-14 with its history (`git filter-repo`), and `package.json` pins it the
+way it pins timbrado, `github:oddharsh/av2-tone#<full sha>`. Nothing in CI
+builds it: `bun install` fetches the small tarball, and `bun run av2:build`
+builds AVM inside `node_modules/.bun/av2-tone@…+<sha>/` on a workstation that
+needs it. A pin bump therefore starts a fresh multi-minute build, which is the
+right cost, since a new pin can carry new encoder patches.
+
+What stays here is this site's: `tools/photos/av2-tone.ts` (the one place
+callers find the build), the probes, gen-pixel-peeper's AV2 arm, and
+`av2-wasm/samples.ts` and `expect.ts`, which read and write
+`public/garage/av2`. Checkouts that built AV2 before the move still hold
+gigabytes under `tools/photos/libavif-avm/`; `.gitignore` keeps them out of a
+commit, and deleting them is safe.
+
 ### timbrado, a git dependency by commit
 
 [`timbrado`](https://github.com/oddharsh/timbrado) is the tool extracted from

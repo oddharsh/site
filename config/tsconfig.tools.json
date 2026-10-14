@@ -46,8 +46,6 @@
   "exclude": [
     "../**/node_modules",
     "../tools/photos/libavif/src",
-    "../tools/photos/libavif/build",
-    "../tools/photos/libavif-avm/src",
-    "../tools/photos/libavif-avm/build"
+    "../tools/photos/libavif/build"
   ]
 }
