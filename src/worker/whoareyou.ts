@@ -6,7 +6,7 @@ import { deadline } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
-import { asNumber, asRecord, asText } from "./lib/parse.ts";
+import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { WHOAREYOU_VALUES_URL } from "./routes.ts";
 
 /** How long Cloudflare keeps an RDAP answer, keyed by the IP in its URL. /privacy prints it. */
@@ -56,11 +56,12 @@ export async function fetchRdap(ip) {
 
     // CIDR — prefer the structured cidr0_cidrs[0]; otherwise compose
     // from startAddress/endAddress (less precise but always present).
-    let cidr = null;
+    let cidr: string | null = null;
     const c = asRecord(Array.isArray(data.cidr0_cidrs) ? data.cidr0_cidrs[0] : null);
     if (c) {
       const prefix = asText(c.v4prefix) || asText(c.v6prefix);
-      if (prefix && asNumber(c.length) !== null) cidr = `${prefix}/${c.length}`;
+      const length = asNumber(c.length);
+      if (prefix && length !== null) cidr = `${prefix}/${length}`;
     }
     const startAddress = asText(data.startAddress);
     const endAddress = asText(data.endAddress);
@@ -71,8 +72,8 @@ export async function fetchRdap(ip) {
     // registered owner — pulled from the entity with role "registrant".
     // RDAP encodes entity contact info as a vCard 4.0 jCard structure;
     // the "fn" (formatted name) property is the human-readable owner.
-    let owner = null;
-    const entities = Array.isArray(data.entities) ? data.entities.map(asRecord).filter(Boolean) : [];
+    let owner: string | null = null;
+    const entities = asList(data.entities).flatMap((raw) => { const entity = asRecord(raw); return entity ? [entity] : []; });
     const registrant = entities.find((entity) =>
       Array.isArray(entity.roles) && entity.roles.includes("registrant")
     );
@@ -83,7 +84,7 @@ export async function fetchRdap(ip) {
     }
 
     // events — registration date + last changed are most interesting.
-    const events = Array.isArray(data.events) ? data.events.map(asRecord).filter(Boolean) : [];
+    const events = asList(data.events).flatMap((raw) => { const event = asRecord(raw); return event ? [event] : []; });
     const regEvent = events.find((event) => event.eventAction === "registration");
     const lastChanged = events.find((event) => event.eventAction === "last changed");
 
