@@ -115,3 +115,17 @@ test("a run is one UPDATE, the cap refuses without writing, and the crowd reads 
   assert.equal(c.picks[run.pooled[0]], 3);
   assert.equal(Object.keys(c.picks).length, run.pooled.length);
 });
+
+// A preview URL runs production bindings (lib/preview.ts), and it serves GETs.
+// So crowd.json must never write, not even the lazy CREATE TABLE the POST does.
+test("crowd.json only reads, and a pool with no table yet is an empty crowd", async () => {
+  const { handlePixelPeeperCrowd } = await crowd();
+  const seen = [];
+  const stmt = () => ({ bind: () => stmt(), first: async () => { throw new Error("no such table: pixel_peeper_tally"); }, run: async () => ({}) });
+  const SOCIAL_DB = { prepare: (sql) => { seen.push(sql); return stmt(); }, batch: async (xs) => { seen.push("batch"); return xs; } };
+  const res = await handlePixelPeeperCrowd(new Request("https://aadhar.sh/pixel-peeper/crowd.json"), { SOCIAL_DB });
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).runs, {});
+  assert.ok(seen.length > 0, "the control: the handler did reach the database");
+  for (const sql of seen) assert.match(sql, /^\s*SELECT\b/, `crowd.json issued a write: ${sql}`);
+});

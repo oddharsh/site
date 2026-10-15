@@ -231,8 +231,15 @@ async function ensureTables(db) {
   ensured = true;
 }
 
+// Never creates anything: crowd.json is a GET, and a preview URL runs this
+// against the production database (lib/preview.ts). Before the first counted
+// run there is no table, which reads as an empty crowd.
 async function readTally(db): Promise<string | null> {
-  return asText(asRecord(await db.prepare(`SELECT v FROM ${TALLY} WHERE k = 'all'`).first())?.v);
+  try {
+    return asText(asRecord(await db.prepare(`SELECT v FROM ${TALLY} WHERE k = 'all'`).first())?.v);
+  } catch {
+    return null;
+  }
 }
 
 // One manifest per isolate: it changes only with a deploy, which starts new ones.
@@ -254,7 +261,6 @@ export async function handlePixelPeeperCrowd(request: Request, env) {
   if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "GET only" }, 405, { allow: "GET, HEAD" });
   const db = env.SOCIAL_DB;
   if (!db) return json({ error: "the crowd is not bound on this deployment" }, 503);
-  await ensureTables(db);
   return json(crowdFromTally(await readTally(db)), 200, { "cache-control": "public, max-age=60" });
 }
 
