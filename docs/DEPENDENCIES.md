@@ -80,13 +80,18 @@ format, a byte-identical build and passing tests.
 From 2026-10-06 to 2026-10-11 the pin was `"bun": "canary"`, selected to adopt
 Bun's native `bun check` before npm carried it. 1.4.3 (2026-10-10) is the first
 release with the checker, and the pin returned to it. On 2026-10-15 it moved
-to the dated canary `1.4.3-canary.20261014.1+408c9374b` to adopt `bun lint`,
+to the dated canary `1.4.3-canary.20261013.1+9bcbf1e` to adopt `bun lint`,
 which no release carries yet (the first canary with it is 20261012.1). That is
-a hand edit of the channel, which `bun:pin` refuses to make. The evidence was
-the tripwire's run on that exact commit the night before: zstd, lockfile read
-and format, the contract suite (1470 pass) and cal's suite (96 pass) all
-green, and one differing build file, `phases.json`, the build's own timings
-(gotcha 68). It is past bunfig's 24 h window. While the pin sits on the
+a hand edit of the channel, which `bun:pin` refuses to make. The newer
+20261014.1 and 20261015.1 cannot be pinned at all: their npm `gitHead` is not
+the commit their binary reports, and the installer refuses the pair
+(gotcha 69). The evidence for 20261013.1: the tripwire ran the rolling canary
+on each side of it (`c69a636b9` on 10-13, `408c9374b` on 10-14), and both
+cleared zstd, the lockfile, the contract suite and cal's suite, with one
+differing build file, `phases.json`, the build's own timings (gotcha 68). On
+9bcbf1ecb itself the lockfile is unchanged, `bun check` prints the same
+diagnostics as 1.4.3 for all seven programs, and the lint matches oxlint.
+It is past bunfig's 24 h window. While the pin sits on the
 canary channel, the nightly bumper walks dated canaries; it returns to
 releases by hand once one carries `bun lint`. The rolling source still
 works if the owner selects it again: `.github/install-bun.sh` reads one GitHub

@@ -494,3 +494,14 @@ skips it.
     `public/phases.json` included, still fails. Anything else that records
     how long a build took belongs outside `.build/` or in `BUILD_TIMINGS`.
     Checked by: `tools/contract-the-build-gate-ignores-only-the-stopwatch.test.mjs`.
+
+69. **A dated canary's npm sha can name a different commit from its
+    binary.** Through 1.4.3-canary.20261013.1 the tarball's `package.json`
+    version (`+9bcbf1e`) and `bun --revision` (`+9bcbf1ecb`) agreed. From
+    20261014.1 they don't: npm says `+e40a58a` (its `gitHead`) and the binary
+    says `+408c9374b`, and 20261015.1 repeats the split. Pinning the binary's
+    sha failed every CI job in the installer's second witness; pinning npm's
+    would fail its third. Check both before choosing a dated canary:
+    `npm view @oven/bun-linux-x64@<version> gitHead` against
+    `bun --revision` on the unpacked binary. Measured 2026-10-15.
+    Checked by: `.github/install-bun.sh`.
