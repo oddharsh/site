@@ -413,6 +413,10 @@ const worker = defineWorker({
     // RateLimit-Policy. Generous on purpose; it states a ceiling rather than
     // rationing reads. Mirrored in API_READ_BUDGET (lib/api-limits.ts).
     API_RL: bindings.rateLimit({ namespace: "1017", simple: { limit: 120, period: 60 } }),
+    // Finished /pixel-peeper runs pooled into SOCIAL_DB. A real run takes
+    // minutes, so this only stops one address filling the daily cap alone.
+    // Mirrored in PIXEL_PEEPER_BUDGET (pixel-peeper-crowd.ts).
+    PIXEL_PEEPER_RL: bindings.rateLimit({ namespace: "1018", simple: { limit: 6, period: 60 } }),
 
     // Not a secret: an account id is an identifier, and this one is already
     // committed as the default in tools/photos/gen-alt-text.ts. It is a VAR
