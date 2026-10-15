@@ -97,7 +97,9 @@ test("a run is one UPDATE, the cap refuses without writing, and the crowd reads 
   db.exec("INSERT INTO pixel_peeper_tally (k, v) VALUES ('all', '{}')");
   const split = MANIFEST.trials.find((x) => x.disagree);
   const picks = [...clearCalls.slice(0, 4).map((x) => call(x, best(x))), call(split, split.options.find((o) => o.butterbest))];
-  const { run } = scoreRun(indexManifest(MANIFEST), { mode: "exam", picks });
+  const scored = scoreRun(indexManifest(MANIFEST), { mode: "exam", picks });
+  if (!scored.ok) throw new Error(scored.error);
+  const { run } = scored;
   const land = (day, cap) => { const { sql, params } = tallyStatement(run, day, cap); return db.all(sql, params); };
   assert.equal(land("2026-10-15", 2).length, 1);
   assert.equal(land("2026-10-15", 2).length, 1);

@@ -232,18 +232,20 @@ async function ensureTables(db) {
 }
 
 async function readTally(db): Promise<string | null> {
-  const row = await db.prepare(`SELECT v FROM ${TALLY} WHERE k = 'all'`).first<{ v: string }>();
-  return row?.v ?? null;
+  return asText(asRecord(await db.prepare(`SELECT v FROM ${TALLY} WHERE k = 'all'`).first())?.v);
 }
 
 // One manifest per isolate: it changes only with a deploy, which starts new ones.
 let manifestIndex: Promise<TileIndex> | null = null;
 function loadIndex(env): Promise<TileIndex> {
-  manifestIndex ||= env.ASSETS.fetch(new Request(`https://assets.local${MANIFEST_PATH}`))
+  if (manifestIndex) return manifestIndex;
+  const loading: Promise<TileIndex> = env.ASSETS.fetch(new Request(`https://assets.local${MANIFEST_PATH}`))
     .then((r: Response) => { if (!r.ok) throw new Error(`manifest: HTTP ${r.status}`); return r.json(); })
     .then((m: Manifest) => indexManifest(m));
-  manifestIndex.catch(() => { manifestIndex = null; });
-  return manifestIndex;
+  // a failed load is forgotten, so the next run tries again
+  loading.catch(() => { manifestIndex = null; });
+  manifestIndex = loading;
+  return loading;
 }
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => jsonResponse(body, status, headers, { pretty: false });
@@ -282,8 +284,9 @@ export async function handlePixelPeeperRun(request: Request, env, ctx?: Executio
   await ensureTables(db);
   const now = new Date();
   const { sql, params } = tallyStatement(run, now.toISOString().slice(0, 10), DAILY_RUN_CAP);
-  const updated = await db.prepare(sql).bind(...params).first<{ v: string }>();
-  const counted = !!updated;
+  // RETURNING hands back the new tally, or no row when the cap refused the run
+  const updated = asText(asRecord(await db.prepare(sql).bind(...params).first())?.v);
+  const counted = updated !== null;
   if (counted) {
     const insert = db.prepare(`INSERT INTO ${RUNS} (at, mode, overall, clear_n, clear_hit, split_s2, split_butter, split_neither, picks)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -293,7 +296,7 @@ export async function handlePixelPeeperRun(request: Request, env, ctx?: Executio
       .catch((e) => console.error("pixel-peeper: run row not written", e?.message || e));
     if (ctx?.waitUntil) ctx.waitUntil(insert); else await insert;
   }
-  const crowd = crowdFromTally(counted ? updated.v : await readTally(db));
+  const crowd = crowdFromTally(updated ?? await readTally(db));
   const you = { overall: run.overall, clear: run.clear, hit: run.hit, split: run.split };
   return json({ counted, you, crowd });
 }
