@@ -1,5 +1,6 @@
 {
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // Bun's linter reads this file (`bun lint --doctor` says "Using .oxlintrc.json").
+  // Its $schema pointed into the oxlint package, which left on 2026-10-15.
 
   // Two directories hold committed JavaScript that nobody here authored.
   // `a-dict` is the shell dictionary snapshots, which are minified BUILD INPUT

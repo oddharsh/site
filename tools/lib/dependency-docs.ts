@@ -27,8 +27,6 @@ export const DOC_ALIASES = [
   // COMMIT of workers-sdk main rather than a release number; see VERSIONLESS.
   { prose: "Oxc Minify", pkg: "oxc-minify" },
   { prose: "Lightning CSS", pkg: "lightningcss" },
-  { prose: "Oxlint", pkg: "oxlint" },
-  { prose: "oxlint-tsgolint", pkg: "oxlint-tsgolint" },
   { prose: "@oxlint/plugins", pkg: "@oxlint/plugins" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "@cloudflare/config", pkg: "@cloudflare/config" },
@@ -157,7 +155,8 @@ export function baselineSection(doc, heading = BASELINE_HEADING) {
 
 // A scanner that stops matching must not report a clean pass over no claims.
 // Each alias is also required individually; change the floor with the policy.
-export const FLOOR_CLAIMS = 13;
+// 13 until 2026-10-15, when Oxlint and oxlint-tsgolint left with their claims.
+export const FLOOR_CLAIMS = 11;
 
 // ONE manifest's worth of checking, in all four directions. Extracted from the
 // root path on 2026-08-14 so the four manifests outside package.json get the

@@ -26,9 +26,10 @@
 // program in config/tsconfig.cal-test.json includes that file, and its header
 // says why the union with bun's globals is the one this repo accepts.
 //
-// Oxlint's type-aware pass is a SECOND checker with its own program: tsgolint
-// discovers a tsconfig per file, finds none named tsconfig.json above this one,
-// and builds a default program with no includes, in which those three names
+// The type-aware lint is a SECOND checker with its own program. It was oxlint's
+// tsgolint until 2026-10-15 and is `bun lint` now; tsgolint
+// discovered a tsconfig per file, found none named tsconfig.json above this one,
+// and built a default program with no includes, in which those three names
 // are error types. An error type acts as `any`, so `ExecutionContext & {...}`
 // tripped no-redundant-type-constituents there while tsc was happy. The
 // context type below is an interface EXTENDING the global rather than an

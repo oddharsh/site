@@ -472,3 +472,25 @@ skips it.
     half its questions, and the contract test holds both guessers near
     chance site-wide with the median length ratio in 0.85 to 1.15.
     Checked by: `tools/contract-quiz-answers-carry-no-length-tell.test.mjs`.
+
+67. **A package.json script named `lint` shadows `bun lint`.** Bun runs the
+    script for `bun lint`, `bun lint .` and every flag but `--doctor`, so
+    `bun lint` in a terminal still ran oxlint after the canary carried the
+    built-in. Bun takes the built-in only when the script body itself says
+    `bun lint`, a prefix like `bun tools/gen-runtime-types.ts &&` included;
+    under 1.4.3, which has no linter, that same body recurses into the
+    script. `bun lint --doctor` reads the config either way, so it can say
+    "117 rules run natively" while the lint step runs something else.
+    Measured 2026-10-15 on 408c9374b.
+    Checked by: `tools/contract-the-lint-script-reaches-bun-lint.test.mjs`.
+
+68. **The byte-identical build gate read the build's stopwatch.** From
+    2026-10-13 `tools/build.ts` writes its phase timings to
+    `.build/phases.json`, and the gate hashed all of `.build/`, so every
+    candidate bun failed on that file alone and the canary tripwire went red
+    on 408c9374b with "1 differing: phases.json". The file sits beside
+    `.build/public`, so it never ships. `builtBytes` in `lib/bun-gates.ts`
+    drops exactly that path, and a changed byte anywhere else, a served
+    `public/phases.json` included, still fails. Anything else that records
+    how long a build took belongs outside `.build/` or in `BUILD_TIMINGS`.
+    Checked by: `tools/contract-the-build-gate-ignores-only-the-stopwatch.test.mjs`.

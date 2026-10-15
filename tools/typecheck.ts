@@ -13,8 +13,8 @@
 // With no arguments it checks every program except lens-reader's, which has its
 // own node_modules and runs from lens-reader/package.json with config paths as
 // arguments. A full run also checks that every tracked source file belongs to
-// some program and is named by one of its include globs, because oxlint's
-// type-aware pass only finds files a tsconfig names.
+// some program and is named by one of its include globs, because the
+// type-aware lint only finds files a tsconfig names.
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -98,7 +98,7 @@ export function baselineProblems(actual: Record<string, number>, declared: Recor
 export function coverageProblems(owned: string[], covered: Set<string>, named: Set<string>) {
   return owned.flatMap((file) => {
     if (!covered.has(file)) return [`${file}: belongs to no bun check program; add it to the include of the program whose globals match how it runs`];
-    if (!named.has(file)) return [`${file}: reached only through imports; name it in an include so oxlint's type-aware pass checks it`];
+    if (!named.has(file)) return [`${file}: reached only through imports; name it in an include so the type-aware lint checks it`];
     return [];
   });
 }

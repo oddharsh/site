@@ -170,6 +170,21 @@ export function hashTree(dir: string) {
   return files;
 }
 
+// The build's own stopwatch. tools/build.ts writes its phase table (wall and
+// CPU milliseconds) to `.build/phases.json`, beside `.build/public` rather than
+// in it, so no byte of it ships, and no two builds agree on it. Hashed, it
+// failed this gate for every candidate from 2026-10-13, when the table
+// landed: the canary tripwire's only differing file on 408c9374b was this one
+// (gotcha 68).
+export const BUILD_TIMINGS = ["phases.json"];
+
+/** hashTree minus the files that record how long the build took rather than what it built. */
+export function builtBytes(dir: string) {
+  const files = hashTree(dir);
+  for (const rel of BUILD_TIMINGS) files.delete(rel);
+  return files;
+}
+
 /** The three lists that separate two hashed trees. Empty everywhere means identical. */
 export function diffTrees(a: Map<string, string>, b: Map<string, string>) {
   const onlyA = [...a.keys()].filter((k) => !b.has(k));
@@ -206,8 +221,8 @@ export function byteIdenticalBuildGate(candidate: string, pinned: string, root: 
     renameSync(BUILD, SHADOW);
     const candidateMs = build("candidate", candidate);
 
-    const a = hashTree(SHADOW);
-    const b = hashTree(BUILD);
+    const a = builtBytes(SHADOW);
+    const b = builtBytes(BUILD);
     const d = diffTrees(a, b);
 
     rmSync(BUILD, { recursive: true, force: true });
