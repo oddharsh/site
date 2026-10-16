@@ -473,18 +473,35 @@ skips it.
     chance site-wide with the median length ratio in 0.85 to 1.15.
     Checked by: `tools/contract-quiz-answers-carry-no-length-tell.test.mjs`.
 
-67. **Safari reads a fixed box's background-color, never its gradient.**
-    Safari 26 dropped theme-color in tabs and tints its status bar and
-    toolbars from the frontmost fixed box just inside each edge, using that
-    box's computed `background-color` (`LocalFrameView::fixedContainerEdges`).
-    The taskbar was drawn with the `background:` shorthand, which leaves the
-    color transparent, so Safari had nothing solid to extend under it. The box
-    must span 90% of the edge and stand taller than 10px, or WebKit samples
-    pixels instead, and `backdrop-filter` disqualifies it (WebKit 319479). The
-    wallpaper has no solid color either, so `html::before` is a 12px top
-    sampler clipped to text it doesn't have: it paints nothing and still reads
-    as opaque. On 2026-10-16, Chromium screenshots of the top and bottom 40px
-    at 390px and 1440px matched main to the byte, and the same strip without
-    the clip didn't. Undocumented WebKit behavior: if it moves, the old look
-    comes back.
-    Checked by: `tools/contract-safari-reads-a-solid-colour-at-each-edge.test.mjs`.
+67. **A package.json script named `lint` shadows `bun lint`.** Bun runs the
+    script for `bun lint`, `bun lint .` and every flag but `--doctor`, so
+    `bun lint` in a terminal still ran oxlint after the canary carried the
+    built-in. Bun takes the built-in only when the script body itself says
+    `bun lint`, a prefix like `bun tools/gen-runtime-types.ts &&` included;
+    under 1.4.3, which has no linter, that same body recurses into the
+    script. `bun lint --doctor` reads the config either way, so it can say
+    "117 rules run natively" while the lint step runs something else.
+    Measured 2026-10-15 on 408c9374b.
+    Checked by: `tools/contract-the-lint-script-reaches-bun-lint.test.mjs`.
+
+68. **The byte-identical build gate read the build's stopwatch.** From
+    2026-10-13 `tools/build.ts` writes its phase timings to
+    `.build/phases.json`, and the gate hashed all of `.build/`, so every
+    candidate bun failed on that file alone and the canary tripwire went red
+    on 408c9374b with "1 differing: phases.json". The file sits beside
+    `.build/public`, so it never ships. `builtBytes` in `lib/bun-gates.ts`
+    drops exactly that path, and a changed byte anywhere else, a served
+    `public/phases.json` included, still fails. Anything else that records
+    how long a build took belongs outside `.build/` or in `BUILD_TIMINGS`.
+    Checked by: `tools/contract-the-build-gate-ignores-only-the-stopwatch.test.mjs`.
+
+69. **A dated canary's npm sha can name a different commit from its
+    binary.** Through 1.4.3-canary.20261013.1 the tarball's `package.json`
+    version (`+9bcbf1e`) and `bun --revision` (`+9bcbf1ecb`) agreed. From
+    20261014.1 they don't: npm says `+e40a58a` (its `gitHead`) and the binary
+    says `+408c9374b`, and 20261015.1 repeats the split. Pinning the binary's
+    sha failed every CI job in the installer's second witness; pinning npm's
+    would fail its third. Check both before choosing a dated canary:
+    `npm view @oven/bun-linux-x64@<version> gitHead` against
+    `bun --revision` on the unpacked binary. Measured 2026-10-15.
+    Checked by: `.github/install-bun.sh`.

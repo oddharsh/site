@@ -224,8 +224,8 @@ jobs:
       - name: Wait for the runtime types
         wait: types
 
-      # Read-only checks: nothing below writes what they read. oxlint ignores
-      # .build/**, and typecheck writes only under --update.
+      # Read-only checks: nothing below writes what they read. The linter ignores
+      # .build/** (.oxlintrc.json), and typecheck writes only under --update.
       - name: Lint
         id: lint
         run: bun run lint

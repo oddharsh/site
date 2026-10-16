@@ -38,7 +38,7 @@ byte for byte? Then it's `public/`. The site config is `cloudflare.config.ts` +
 bun run dev                 # cf dev on config/dev + Counter beside it (needs `bun add -g cf`)
 bun run build               # stage .build/ (minify, hash /a/ assets, twins, dictionaries)
 bun run check:fast          # lint + typecheck + test, in parallel
-bun run lint                # oxlint, type-aware
+bun run lint                # bun lint (built in), type-aware
 bun run typecheck
 bun run test                # contract suite under bun; `test:node` runs it under node
 bun run --filter cal-aadhar-sh test

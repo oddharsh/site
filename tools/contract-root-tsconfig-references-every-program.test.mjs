@@ -1,4 +1,4 @@
-// The root tsconfig.json maps every program for the checker and tsgolint. A program added to config/ and
+// The root tsconfig.json maps every program for the checker and the type-aware lint. A program added to config/ and
 // not referenced here is linted against a default program with no includes,
 // which is the blindness measured on 2026-09-02 (0 findings against 17),
 // arriving one program at a time instead of all at once. So the references
