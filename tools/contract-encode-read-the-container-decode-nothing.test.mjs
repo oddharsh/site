@@ -109,7 +109,8 @@ test("the ramp never double-parses the D1 helper's already-parsed rows", async (
   // a missed changelog row (gotcha 24). A die() there would block that repair.
   // The warning has to be there for its absence of die() to mean anything.
   assert.match(src, /STALE TARGET/, "the ramp lost its stale-target warning");
-  assert.equal(/STALE TARGET[\s\S]{0,700}?\bdie\(/.test(src), false,
+  const staleBranch = src.slice(src.indexOf("STALE TARGET")).split("\n}\n")[0];
+  assert.equal(/\bdie\(/.test(staleBranch), false,
     "a stale target must warn, never die — that would block the gotcha-24 repair path");
 
   assert.equal(/when D1 is reachable/.test(src), false,
