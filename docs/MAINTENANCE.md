@@ -1465,7 +1465,7 @@ when the remote job is unavailable.
 ```bash
 # the photo pipeline
 brew install mozjpeg libavif pkgconf          # JPEG tools plus native AVIF library and build discovery
-brew install jpeg-xl jpeg-turbo               # cjxl/djxl for the JPEG XL originals; djpeg decodes a HIF archive's bar
+brew install jpeg-xl                          # cjxl/djxl for the JPEG XL originals and a HIF archive's bar
 # Grid tiers use libavif directly from zenc. avifenc is the parity reference;
 # zenc --avif-version reports the library and codec actually linked at runtime
 # (the zenc-avif entry in config/tools.json).

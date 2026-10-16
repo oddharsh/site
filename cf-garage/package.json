@@ -7,6 +7,6 @@
     "test": "bun test"
   },
   "devDependencies": {
-    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@e1d1b77"
+    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@fc51b96"
   }
 }

@@ -76,9 +76,13 @@ photo, so the bucket stays inside R2's 10 GB free tier. It comes in two kinds:
   and butteraugli (scored by `tools/photos/photo-metrics`, imazen's Rust ports,
   since 2026-10-14; they picked libjxl's distance on 20 of 20 HIFs), then copies the HIF's EXIF and XMP on with exif-sooc 0.4.0,
   because sips keeps 40 of 75 tags and none of the Fujifilm maker notes.
-  Measured on all 119 HIF photos (2026-10-08, 60 train and 59 holdout, which
-  agreed within a point): about -33% bytes, both metrics better on every
-  photo. Where nothing beats the bar, it falls back to the lossless transcode.
+  The bar is that JPEG as a visitor gets it: repacked as JPEG XL and decoded
+  by djxl at 8 bits. The 2026-10-08 sweep scored it through djpeg instead,
+  which understates it by 1.9 to 3.5 ssimulacra2, and claimed -33%. Against
+  the corrected bar (2026-10-14, 118 photos, halves within a point), 99
+  shrink (median -9.4%) and the total is -8.6%. Where nothing beats the bar,
+  or only a file larger than the repack does, it falls back to the lossless
+  transcode.
   Settings: `-e 7 -p --compress_boxes=0`. Progressive keeps a 20 MB download
   painting early (+1.3% bytes); effort 9 saved 0.1% for 40% more time; and
   cjxl Brotli-compresses metadata by default, which exif-sooc cannot read.
