@@ -591,16 +591,23 @@ skips it.
     THE CLIENT EDGE in `luna.css`; the design tokens `luna.css` must carry
     verbatim; `lwe/encoding.html`, which inlines its spec from
     `pipelines/lwe/specs/`; the generated files (`lib/desktop.*`,
-    `lib/site-manifest.*`) and generated blocks (`nav-run.js`, `lwe/ask.js`)
-    their checks compare byte for byte; two derivation digests; and 7
-    contract-test regexes that spell out one-line source. JSON is out because
-    tools write it with `JSON.stringify(v, null, 2)` and the printer packs
-    short arrays onto one line, so every `derive --lock` would fail
-    `bun fmt --check`. With all of that in `[fmt].ignorePatterns`, the 504
+    `lib/site-manifest.*`) and generated blocks (`nav-run.ts`, `lwe/ask.ts`)
+    their checks compare byte for byte; two derivation digests; and 8
+    contract-test regexes that spell out one-line source. A 9th, from a test
+    written after that, turned up when the tree was re-formatted on
+    2026-10-23. JSON is out because tools write it with
+    `JSON.stringify(v, null, 2)` and the printer packs short arrays onto one
+    line, so every `derive --lock` would fail `bun fmt --check`. With all of that in `[fmt].ignorePatterns`, the 504
     files that remain format with no `/a/` or `pd/` change: the served diff is
     the 46 `.src` twins and `sw.js`. The Worker bundle still changes bytes at
     the same size, because esbuild picks minified names by character
-    frequency. A new reader of exact source text belongs in the ignore list.
+    frequency. A new reader of exact source text belongs in the ignore list,
+    or matches with `\s*` where the formatter may wrap, as those 9 regexes
+    have since the tree was formatted. The same re-format split a one-line
+    `try { … } catch { … }` in `src/client/webmcp.ts` and left its
+    `oxlint-disable-next-line` above the `try`, away from the line it
+    excused. Lint reports the stranded directive as unused, so `bun run lint`
+    catches this one; move the directive down onto the line it excuses.
     Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.ts`.
 
 75. **A playwright-core bump strands the canary's browser image.** The

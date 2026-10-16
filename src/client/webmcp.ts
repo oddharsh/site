@@ -194,10 +194,10 @@ function gate(name: string, args: Record<string, unknown>): Promise<boolean> {
   }
   const d = dialog;
   let body = "";
-  // oxlint-disable-next-line typescript/no-base-to-string -- display fallback for an argument that JSON could not serialize
   try {
     body = JSON.stringify(args, null, 1);
   } catch (e) {
+    // oxlint-disable-next-line typescript/no-base-to-string -- display fallback for an argument that JSON could not serialize
     body = String(args);
   }
   d.innerHTML = "";

@@ -135,17 +135,17 @@ test("a cold Lens document loads its page tools when WebMCP is available", () =>
   // browser while lens.js stays behind saved state, human intent, or a tool call.
   assert.match(
     LENS_BOOT,
-    /\(document\.modelContext \|\| navigator\.modelContext\)\s*\? import\("\/lens-webmcp\.js"\)/,
+    /\(?document\.modelContext \|\| navigator\.modelContext\)?\s*\? import\("\/lens-webmcp\.js"\)/,
     "lens-boot.js must load the lightweight registrar in a WebMCP browser",
   );
   assert.match(
     LENS_BOOT,
-    /if \(pageTools\) pageTools\.then\((?:function \(wm\)|\(wm\) =>) \{ return wm && wm\.boot\(load\); \}\)/,
+    /if \(pageTools\)\s*pageTools\s*\.then\((?:function \(wm\)|\(wm\) =>) \{\s*return wm && wm\.boot\(load\);\s*\}\)/,
     "lens-boot.js must register page tools before interaction",
   );
   assert.match(
     LENS_BOOT,
-    /import\("\/lens-webmcp\.js"\)\.catch\((?:function \(\)|\(\) =>) \{ return null; \}\)/,
+    /import\("\/lens-webmcp\.js"\)\s*\.catch\((?:function \(\)|\(\) =>) \{\s*return null;\s*\}\)/,
     "a failed optional registrar import must not prevent the human Lens client from loading",
   );
   assert.doesNotMatch(LENS_BOOT, /document\.modelContext\s*\|\|\s*hasClientState\(\)/, "WebMCP discovery must not hydrate the full Lens client while idle");

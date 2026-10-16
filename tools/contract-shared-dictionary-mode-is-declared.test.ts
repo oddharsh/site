@@ -17,7 +17,7 @@ test("infra: shared_dictionary_mode is declared passthrough and checked", () => 
   const check = readFileSync("tools/check-infra.ts", "utf8");
   assert.match(
     check,
-    /const sharedDictionary = infra\.zone\?\.shared_dictionary;\n\s*if \(sharedDictionary\) report\.add\(compareZoneSetting\(SHARED_DICTIONARY_SECTION, sharedDictionary, zone, await readZoneSetting\(cf, zone, sharedDictionary\.setting\)\)\);/,
+    /const sharedDictionary = infra\.zone\?\.shared_dictionary;\s*if \(sharedDictionary\)\s*report\.add\(compareZoneSetting\(SHARED_DICTIONARY_SECTION, sharedDictionary, zone, await readZoneSetting\(cf, zone, sharedDictionary\.setting\)\)\);/,
     "check-infra.ts must assert the declared shared_dictionary_mode",
   );
 });

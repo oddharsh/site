@@ -250,7 +250,7 @@ test("a capped level explains itself on every surface that shows the level", () 
   const client = readFileSync("./src/client/lens.ts", "utf8");
 
   assert.match(worker, /levelNote: readiness\.levelNote/, "the observation summary has to carry the note, or compare mode cannot show it");
-  assert.match(worker, /overall, level: level\.number, levelName: level\.name, levelNote/, "the readiness envelope has to publish it");
+  assert.match(worker, /overall,\s*level: level\.number,\s*levelName: level\.name,\s*levelNote/, "the readiness envelope has to publish it");
   assert.match(worker, /s\.levelNote \? ' title="'/, "the SSR badge explains itself for the no-JS floor");
   assert.match(client, /r\.levelNote \?/, "and the client renders it for everyone else");
   assert.match(worker, /\.lx-level-note \{/, "the note needs a style, or it renders as unlabelled prose");

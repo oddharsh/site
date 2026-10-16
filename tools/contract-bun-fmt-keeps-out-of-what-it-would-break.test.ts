@@ -1,6 +1,7 @@
-// bun fmt is not part of validate and the tree is not formatted, but Bun reads
-// bunfig.toml's [fmt] section whenever anyone runs it, so an ad hoc `bun fmt`
-// is exactly as safe as that section. On 2026-10-16 the whole tree was
+// The tree is formatted by bun fmt (`bun run format`, checked in validate, and
+// run on each agent edit by tools/format-hook.ts). Bun reads bunfig.toml's
+// [fmt] section on every run, so the formatter is exactly as safe as that
+// section. On 2026-10-16 the whole tree was
 // formatted and run through the build, the suite, lint and the checks; these
 // tests hold the four hazards that turned up:
 //
@@ -71,6 +72,7 @@ test("bunfig.toml's [fmt] section keeps every setting the hazards need", async (
     "design/tokens/**",
     "**/*.json",
     "pipelines/*/specs/**",
+    "**/pretext.lib.*",
     "src/worker/lib/desktop.*",
     "src/worker/lib/site-manifest.*",
     "src/client/nav-run.ts",
@@ -109,6 +111,8 @@ test("bun fmt never reaches a file whose exact text something else reads", () =>
     "src/worker/lib/site-manifest.ts",
     "src/client/nav-run.ts",
     "src/client/lwe/ask.ts",
+    "src/client/garage/pretext.lib.js",
+    "src/client/garage/pretext.lib.d.ts",
     "config/derivations.json",
     "config/ts-baseline.json",
     "src/pages/index.html",
@@ -116,4 +120,58 @@ test("bun fmt never reaches a file whose exact text something else reads", () =>
     "bun.lock",
   ])
     assert.ok(!listed.has(file), `gotcha 74: bun fmt would rewrite ${file}`);
+});
+
+// tools/format-hook.ts formats each file an agent edits, from the project root,
+// so bunfig.toml's [fmt] section scopes it the same way as `bun run format`.
+const hook = (dir, stdin) =>
+  spawnSync(bun, [join(repo, "tools/format-hook.ts")], {
+    cwd: dir,
+    input: stdin,
+    encoding: "utf8",
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+    timeout: 60_000,
+  });
+
+test("the format hook formats an edited file in scope and leaves a protected one byte for byte", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "format-hook-"));
+  try {
+    await copyFile(join(repo, "bunfig.toml"), join(dir, "bunfig.toml"));
+    await writeFile(join(dir, "t.ts"), 'const a={"b":1,"c":2}\n');
+    await writeFile(join(dir, "g.md"), FIXTURE["g.md"]);
+    const outside = await mkdtemp(join(tmpdir(), "format-hook-outside-"));
+    await writeFile(join(outside, "o.ts"), "const o={x:1}\n");
+
+    for (const file of [join(dir, "t.ts"), join(dir, "g.md"), join(outside, "o.ts")]) {
+      const out = hook(dir, JSON.stringify({ cwd: dir, tool_input: { file_path: file } }));
+      assert.equal(out.status, 0, `the hook must never fail the tool call: ${out.stderr}`);
+    }
+    assert.equal(await readFile(join(dir, "t.ts"), "utf8"), 'const a = { "b": 1, "c": 2 };\n', "an in-scope edit lands formatted");
+    assert.equal(await readFile(join(dir, "g.md"), "utf8"), FIXTURE["g.md"], "gotcha 72: an ignored file is passed explicitly and still left alone");
+    assert.equal(await readFile(join(outside, "o.ts"), "utf8"), "const o={x:1}\n", "a file outside the project is not the hook's to touch");
+    await rm(outside, { recursive: true, force: true });
+
+    for (const stdin of ["", "not json", "{}", JSON.stringify({ tool_input: { file_path: join(dir, "missing.ts") } })]) {
+      assert.equal(hook(dir, stdin).status, 0, `the hook exits 0 on ${JSON.stringify(stdin)}`);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the formatter is wired: scripts, the validate step, the agent hook", async () => {
+  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+  assert.equal(pkg.scripts.format, "bun fmt");
+  assert.equal(pkg.scripts["format:check"], "bun fmt --check");
+  // gotcha 67: a script named fmt would shadow the built-in for every flag.
+  assert.equal(pkg.scripts.fmt, undefined, "name it format, never fmt");
+  assert.match(pkg.scripts["check:fast"], /\bformat:check\b/);
+
+  const ci = await readFile(new URL(".github/workflows/ci.yml", ROOT), "utf8");
+  assert.match(ci, /- name: Format\n\s+id: format\n\s+run: bun run format:check\n/, "validate runs the format check");
+
+  const settings = JSON.parse(await readFile(new URL(".claude/settings.json", ROOT), "utf8"));
+  const entry = settings.hooks.PostToolUse.find((h) => h.hooks.some((x) => x.command.includes("tools/format-hook.ts")));
+  assert.ok(entry, "PostToolUse runs tools/format-hook.ts");
+  for (const tool of ["Edit", "Write", "MultiEdit"]) assert.ok(new RegExp(`(^|\\|)${tool}($|\\|)`).test(entry.matcher), `the hook fires on ${tool}`);
 });
