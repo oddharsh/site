@@ -94,7 +94,7 @@ async function fetchProfile(url, profile, env) {
       if (spec.identity) headers["accept-encoding"] = "identity";
       const followed = await fetchFollowingPublicRedirects(
         url, () => ({ method: "GET", headers, signal, cf: { cacheTtl: 0 } }), validateLensTarget, 20,
-      );
+      ); // Preserve native fetch's twenty-redirect allowance for these profiles.
       if (!followed.ok) return { error: "request redirected to a disallowed target" };
       ({ response, finalUrl } = followed);
     }
@@ -152,6 +152,9 @@ export async function captureRepresentation(args, env) {
   const db = database(env);
   if (!db) return error("representation vault is not configured on this deployment");
   await ensureTable(db);
+  // Comparing profiles is explicit caller intent, but four simultaneous reads
+  // would be an impolite burst at somebody else's origin. Two workers halve the
+  // waterfall while preserving input order and a tight concurrency ceiling.
   const fetched = await mapWithConcurrency(profiles, 2, (profile) =>
     fetchProfile(target.url, profile, env));
   const rows: any[] = [];
@@ -162,6 +165,8 @@ export async function captureRepresentation(args, env) {
     if (row.error) rows.push({ url: target.url, profile, error: row.error });
     else { successful.push(row); rows.push(rowForOutput(row)); }
   }
+  // D1 batch is one transactional subrequest rather than one write round trip
+  // per successful profile. Four is the public profile ceiling above.
   if (successful.length) await db.batch(successful.map((row) => storeStatement(db, row)));
   return { url: target.url, profiles, persistence: "normalized headers, metadata, and body digests only", snapshots: rows };
 }

@@ -1,5 +1,16 @@
 // lib/sha256.ts — a SYNCHRONOUS SHA-256, for the one caller that cannot wait.
-
+//
+// lunaPage returns a Response synchronously, and the CSP it now sets has to name
+// the sha256 of each inline script in the document it just assembled
+// (lib/inline-csp.ts). The runtime's two hashes are both out of reach from
+// there: crypto.subtle.digest is async, and node:crypto needs the nodejs_compat
+// flag this Worker does not carry. Turning lunaPage async would change the
+// return type of twenty callers to buy one header, so the hash comes here.
+//
+// It hashes a few hundred bytes of inline script per render, so speed is beside
+// the point; correctness is the whole contract, and
+// contract-worker-pages-hash-their-inline-scripts holds it byte for byte against
+// node:crypto over ASCII, non-ASCII, empty and multi-block inputs.
 const K = new Uint32Array([
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
   0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -13,6 +24,7 @@ const K = new Uint32Array([
 
 const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
 
+/** SHA-256 of `text` as UTF-8, base64-encoded: the form a CSP `'sha256-…'` source takes. */
 export function sha256Base64(text: string): string {
   const bytes = new TextEncoder().encode(text);
   // Pad: 0x80, zeros to 56 mod 64, then the bit length as a 64-bit big-endian.

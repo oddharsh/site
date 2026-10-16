@@ -1,6 +1,43 @@
 // lens-markdown.ts — the Markdown lens: which representation an agent actually
 // gets back when it asks this URL for Markdown.
-
+//
+// The four conformance checks here are the ones acceptmarkdown.com scores a URL
+// against (serves Markdown, sets Vary, refuses what it cannot serve, honours
+// q-values), and the site is credited in the pane. They are RFC 9110 read back
+// as a checklist, so the checks are re-derived from the spec rather than copied,
+// and three more are added below for reasons the four cannot cover.
+//
+// WHAT THIS TAB IS FOR, WHICH IS NOT THE CHECKLIST. A conformance grade answers
+// "is this origin correct". The question an agent author has is "does MY client
+// get Markdown here", and those come apart badly. Three of the seven shipping
+// agent clients send `text/markdown, text/html, */*`, where both types arrive at
+// q=1 and nothing in the header breaks the tie; a server that ranks strictly by
+// q-value serves them HTML while passing every check on the list. So the tab
+// REPLAYS the real Accept strings and reports what each one got. Measured on our
+// own /garage/horizon the day this was written: full marks on the checklist, and
+// Claude Code got HTML.
+//
+// That result is the reason the replay is the headline and the checklist is the
+// supporting evidence, rather than the other way around.
+//
+// THE CONTROL IS LOAD-BEARING, and it is the bot-views lesson one tier over. A
+// row reading "HTML" has two explanations that look identical from one sample:
+// the origin negotiated and chose HTML, or the origin has no Markdown to serve
+// anybody. The browser baseline separates them, because an origin that answers
+// every Accept with the same bytes is not negotiating at all. With no baseline
+// admitted the pane reports reach as null and says why, rather than printing a
+// confident 0 of 7.
+//
+// WHAT IT SENDS. An honest AadharshBot user-agent carrying somebody else's
+// Accept header. The Accept IS the instrument here, so replaying it is the
+// measurement, and wearing the agent's user-agent on top would buy nothing and
+// cost the disclosure rule the About dialog now makes explicit. External reads
+// use the same signed, robots-aware transport as the other Lens HTTP reads.
+//
+// COST. Ten plain GETs of one URL, deduped by Accept string, no browser and
+// no model. Cheaper per run than the Reader or Wire tabs and more than a knock,
+// which is why it is opt-in, cached for an hour, and rate-limited on its own
+// budget rather than the shared browser ceiling.
 import { mapWithConcurrency } from "./lib/crawl.ts";
 import { FAN_OUT, lensFetch } from "./lens.ts";
 import { defineLens } from "./lens-pipeline.ts";
@@ -8,22 +45,46 @@ import { defineLens } from "./lens-pipeline.ts";
 const MARKDOWN_CACHE_SECONDS = 3600;
 const BODY_SAMPLE = 4096;
 const PROBE_TIMEOUT_MS = 6000;
+// Matches the 2MB ceiling the other lens fetch paths use. Ten of these run
+// per invocation, so the real ceiling is the isolate's memory rather than any
+// one response.
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 // Real annotations rather than JSDoc, because a `@type` tag in a .ts file is
 // inert and would type nothing at all (gotcha 42).
 type CheckStatus = "pass" | "warn" | "fail" | "info";
 type Check = { id: string; status: CheckStatus; detail: string };
+// One shape for both arms. An agent whose probe threw keeps every field a
+// readable row needs and carries `ok:false`, so the pane never has to ask
+// whether a property exists before printing it, and `markdown:false` on an
+// unanswered row can never be counted as reach: `reached` filters on `ok` first.
 type AgentRow = {
   key: string; label: string; vendor: string; verified: string; accept: string;
   ok: boolean; status: number | null; contentType: string; markdown: boolean;
   bytes: number | null; error?: string;
 };
 
+// The Accept header a mainstream browser sends, used as the control. Same string
+// lensFetchAsBot defaults to, restated here because this tab's whole argument
+// rests on it being a BROWSER's header rather than a lens default that might
+// drift into something agent-flavoured later.
 export const BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7";
 
+// A media type nothing serves, for the 406 probe. Named after this lens so an
+// origin reading its own logs can tell what hit it.
 const UNSERVABLE = "application/x-lens-negotiation-probe";
 
+// The shipping agent clients that advertise a Markdown preference, and the exact
+// Accept header each one sends. Compiled and dated by acceptmarkdown.com, whose
+// support matrix is the only public record of these strings; the pane links out
+// to it. Agents that send no Markdown preference at all are deliberately absent,
+// because replaying a browser-shaped Accept under an agent's name would report a
+// finding about our own table rather than about the origin.
+//
+// `verified` is THEIR observation date, carried through rather than restated as
+// ours. A string that has drifted since is a fact about the table, and the pane
+// prints the date next to the row so a stale entry argues with itself instead of
+// quietly grading an origin against a header nobody sends any more.
 export const AGENT_ACCEPTS = [
   { key: "claude-code",   label: "Claude Code",         vendor: "Anthropic",         verified: "2025-11-13",
     accept: "text/markdown, text/html, */*" },
@@ -41,6 +102,9 @@ export const AGENT_ACCEPTS = [
     accept: "text/markdown;q=1.0, text/x-markdown;q=0.9, text/plain;q=0.8, text/html;q=0.7, */*;q=0.1" },
 ];
 
+// Every distinct Accept string the run needs, each fetched once. Three agents
+// share one header, so seven rows cost five requests, and two identical requests
+// could not honestly return different answers anyway.
 export function probePlan() {
   const seen = new Map();
   const add = (id, accept) => seen.getOrInsertComputed(accept, () => ({ id, accept })).id;
@@ -65,6 +129,10 @@ function mediaType(contentType) {
   return String(contentType || "").split(";")[0].trim().toLowerCase();
 }
 
+// A `Vary` naming Accept, matched as a token rather than a substring: `Vary:
+// accept-encoding` contains the letters of "accept" and means something else
+// entirely, and reading it as a pass is how an origin that varies only on
+// compression gets graded as negotiating.
 export function variesOnAccept(vary) {
   const raw = String(vary || "").toLowerCase();
   if (raw.trim() === "*") return true;
@@ -89,6 +157,10 @@ export function sharedStorable(cacheControl) {
 // Vary is. Cloudflare named this as the caveat on its Vary launch (2026-09-22):
 // omit Vary on one cacheable response and the cache can serve the wrong variant.
 // It is also this site's own #195 bug from the other side.
+//
+// Only 2xx responses count, since those are the representations a cache keeps,
+// and only ones a shared cache may store, since a no-store copy with a bare Vary
+// is never anybody else's answer. One representation in total owes Vary nothing.
 type ProbeRow = [string, { ok: boolean; status?: number; contentType?: string; vary?: string; cacheControl?: string; error?: string }];
 export function varyEveryVariant(rows: ProbeRow[]): Check {
   const variants = rows.filter(([, r]) => r?.ok && (r.status ?? 0) >= 200 && (r.status ?? 0) < 300);
@@ -138,6 +210,19 @@ export function markdownAlternate(linkHeader, html) {
   return null;
 }
 
+// Counts the WHOLE decoded body and keeps only the head of it.
+//
+// `Content-Length` is the wrong instrument, in two ways that a passing test
+// would not catch. It is usually ABSENT: a chunked or compressed response sends
+// none, so a byte comparison on it silently declines to render on most origins,
+// including the 38x case that motivated it.
+// And where both headers DO exist they describe COMPRESSED bytes, while the
+// sample beside them is decoded, so any comparison mixing the two is measuring
+// two different quantities and calling the difference a saving.
+//
+// Decoded is also the number the argument actually wants. An agent spends
+// context on the characters, not on what the transfer encoding managed to do
+// with them, so this is what "a fraction of the bytes" has to mean to be true.
 async function readCounting(res, keepBytes, maxBytes) {
   if (!res.body) return { bytes: 0, head: "", truncated: false };
   const reader = res.body.getReader();
@@ -152,6 +237,8 @@ async function readCounting(res, keepBytes, maxBytes) {
     if (head.length < keepBytes) head += decoder.decode(value, { stream: true });
     if (bytes > maxBytes) {
       truncated = true;
+      // Cancel rather than drain: past the cap the count can no longer be honest
+      // and there is nothing left to learn from the rest of the body.
       await reader.cancel().catch(() => {});
       break;
     }
@@ -172,6 +259,8 @@ async function probeOnce(targetUrl, env, accept) {
       vary: res.headers.get("vary") || "",
       cacheControl: res.headers.get("cache-control") || "",
       link: res.headers.get("link") || "",
+      // Measured, decoded, and null when it hit the cap, so a truncated read
+      // reports no size rather than a floor dressed up as a total.
       bytes: body.truncated ? null : body.bytes,
       sample: body.head,
     };
@@ -180,6 +269,9 @@ async function probeOnce(targetUrl, env, accept) {
   }
 }
 
+// The caller influences exactly one thing, which URL. The pipeline validates it
+// through the shared SSRF guard, reads the cache before the budget, and keeps an
+// unreadable origin out of KV.
 const LENS_MARKDOWN = defineLens({
   span: "lens.markdown",
   budget: "markdown",
@@ -189,6 +281,10 @@ const LENS_MARKDOWN = defineLens({
     const host = new URL(target).hostname;
 
     const { probes, agentProbe } = probePlan();
+    // Two workers halve the waterfall without turning ten probes into a burst.
+    // This is the same ceiling the representation vault uses for comparing one
+    // origin: enough overlap to remove idle network time, still small enough that
+    // a refusal is evidence about negotiation rather than our own load pattern.
     const results = await mapWithConcurrency(probes, 2, (p) => probeOnce(target, env, p.accept));
     const byId = new Map();
     for (let i = 0; i < probes.length; i++) byId.set(probes[i].id, results[i]);
@@ -210,6 +306,9 @@ const LENS_MARKDOWN = defineLens({
     const controlType = mediaType(control.contentType);
     const alternate = markdownAlternate(control.link, control.sample);
 
+    // Does anything at all come back as Markdown? Read across every probe rather
+    // than off the one check, because an origin that serves Markdown to Cursor
+    // and not to a bare `text/markdown` still serves Markdown.
     const anyMarkdown = [...byId.values()].some((r) => r.ok && isMarkdown(r.contentType));
 
     const checks: Check[] = [];
@@ -223,6 +322,9 @@ const LENS_MARKDOWN = defineLens({
               : `Answered ${md.status} ${mediaType(md.contentType) || "with no content-type"} to Accept: text/markdown.` })
       : { id: "serves-markdown", status: "fail", detail: md?.error || "no answer" });
 
+    // Read off the MARKDOWN response where there is one, because Vary is a claim
+    // about the negotiated representation. An origin that varies correctly on the
+    // HTML it always serves has not demonstrated anything.
     const varySource = (md?.ok && isMarkdown(md.contentType)) ? md : control;
     checks.push(variesOnAccept(varySource.vary)
       ? { id: "varies-by-accept", status: "pass", detail: `Vary: ${varySource.vary}` }
@@ -241,6 +343,12 @@ const LENS_MARKDOWN = defineLens({
             detail: `Answered ${bogus.status} to a media type nothing serves. RFC 9110 permits ignoring Accept and returning a default, so this is a preference rather than a defect.` })
       : { id: "rejects-unservable", status: "warn", detail: bogus?.error || "no answer" });
 
+    // Two q-value checks, because the single one on the public checklist tests
+    // only the easy half. Ranking Markdown below HTML should yield HTML, and
+    // that is what a server ordering by q-value gets right by construction.
+    // `q=0` is the half that catches a substring match: it is an explicit
+    // REFUSAL, and a server matching on the presence of the string serves
+    // Markdown to a client that just said it will not take any.
     const qr = byId.get("q-ranked");
     checks.push(qr?.ok
       ? (!isMarkdown(qr.contentType)
@@ -260,6 +368,11 @@ const LENS_MARKDOWN = defineLens({
       : { id: "link-alternate", status: anyMarkdown ? "warn" : "info",
           detail: "No rel=alternate pointing at a Markdown copy. Clients that follow the link rather than send an Accept header (Codex CLI is the one on the public matrix) have nothing to follow." });
 
+    // ── the replay ───────────────────────────────────────────────────────────
+    // Reach is scored against the CONTROL, never in isolation. Where the origin
+    // hands every Accept the same bytes it is not negotiating, and the honest
+    // reading is that no agent gets Markdown because there is none, rather than
+    // that seven agents were individually turned away.
     const negotiating = [...byId.values()].some((r) => r.ok && mediaType(r.contentType) !== controlType);
     const agents: AgentRow[] = AGENT_ACCEPTS.map((a) => {
       const r = byId.get(agentProbe.get(a.key));
@@ -278,6 +391,11 @@ const LENS_MARKDOWN = defineLens({
     const answered = agents.filter((a) => a.ok);
     const reached = answered.filter((a) => a.markdown).length;
 
+    // ── the delta ────────────────────────────────────────────────────────────
+    // The claim every page about this makes is "a fraction of the bytes". This is
+    // that claim as a number, on this URL, from the two responses just fetched.
+    // Only where a Markdown representation actually came back, and only from
+    // measured decoded lengths, so nothing here is inferred from a 4KB sample.
     const viaAgent = answered.find((a) => a.markdown);
     const mdBest = (viaAgent && byId.get(agentProbe.get(viaAgent.key)))
       || (md?.ok && isMarkdown(md.contentType) ? md : null);
@@ -301,6 +419,8 @@ const LENS_MARKDOWN = defineLens({
       ok: true,
       url: target,
       host,
+      // Null rather than 0 when the instrument cannot speak: no control admitted
+      // means no reach number, for the same reason sampledBots refuses one.
       reach: negotiating ? { reached, of: answered.length } : null,
       negotiating,
       anyMarkdown,
@@ -309,6 +429,8 @@ const LENS_MARKDOWN = defineLens({
       agents,
       alternate,
       delta,
+      // Every raw response the verdict rests on, so a reader can disagree with
+      // the grading without re-running anything.
       responses: probes.map((p) => {
         const r = byId.get(p.id);
         return { id: p.id, accept: p.accept, ok: !!r?.ok, status: r?.status ?? null,

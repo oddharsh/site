@@ -1,5 +1,5 @@
 // run.ts — the zero-JS floor under the Run palette (blueprint's declarative
-// ladder). The ⌘K palette in nav.js is script; this is the same idea as a real
+// ladder). The ⌘K palette in nav-run.js is script; this is the same idea as a real
 // page: an <input list> + <datalist> of destinations and a GET form this
 // handler answers with a 302. Works with scripting disabled, invokers missing,
 // or dialog unsupported — the palette's own footer links here.
@@ -11,6 +11,10 @@ import { escAttr, escHtml } from "./lib/http.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { PHOTO_POOL } from "./photos.ts";
 
+// Mirrors the pages + profiles set in nav-run.js (kept small on purpose; photo
+// stems resolve against PHOTO_POOL instead of bloating the datalist).
+// Every other page resolves against the site manifest below, so the datalist
+// stays a suggestion list rather than the whole map.
 const DESTS = [
   ["home",        "/",            "the homepage"],
   ["photos",      "/photos",      "every photo, Thumbnails view"],
@@ -55,6 +59,10 @@ async function resolve(cmd, env, request) {
     const hit = PHOTO_POOL.find(p => p.stem.toLowerCase() === q);
     if (hit) return `/images/full/${encodeURIComponent(hit.full).replace(/%2F/g, "/")}`;
   }
+  // any page the site registers: its path ("garage/av2"), or its last segment
+  // when only one page ends that way ("av2", "fhe"; "encoding" is two pages, so
+  // it falls through). The manifest lists public pages only, so a typed name
+  // can never land on an /a/ or /i/ file.
   const pages = AGENT_SURFACES.map((s) => s.path);
   const byPath = pages.find((p) => p.toLowerCase() === "/" + q.replace(/^\/+/, ""));
   if (byPath) return byPath;
@@ -68,6 +76,8 @@ async function resolve(cmd, env, request) {
 export function renderRun({ cmd = "", notFound = false } = {}) {
   const options = DESTS.map(([name, path, hint]) =>
     `<option value="${escAttr(name)}">${escHtml(hint)} — ${escHtml(path)}</option>`).join("\n");
+  // XP's own Run error ends "To search for a file, click the Start button, and
+  // then click Search." Here the search is one link away, already filled in.
   const search = `/search?q=${encodeURIComponent(cmd.trim())}`;
   const errorBanner = notFound
     ? `<div class="run-err" role="alert"><b>Windows cannot find '${escHtml(cmd)}'.</b>
@@ -145,8 +155,11 @@ export async function handleRun(request, env, ctx) {
       const location = /^https?:\/\//.test(dest) ? dest : url.origin + dest;
       return new Response(null, { status: 302, headers: { "location": location, "cache-control": "no-store" } });
     }
+    // the classic Run error, as a page (200: the form is the content)
     return renderRun({ cmd, notFound: true });
   }
 
+  // bare /run is static-shaped: edge-cache it. Query variants never enter this
+  // branch, so the 302/error paths can't be masked by a cached bare page.
   return cachedRender(request, ctx, () => Promise.resolve(renderRun()), "/run", env);
 }

@@ -1,6 +1,34 @@
 // terminal.ts — the terminal apps at /finger, /photos, /lens, /radar, /dict, /cache,
 // /agent-ready and /encode, and the key-driven session model behind
 // them. lib/tui.ts draws the frames; this file decides what goes in them.
+//
+// ── what this is for ──────────────────────────────────────────────────────
+// Every other agent surface on this site hands back a document or a JSON blob:
+// one shot, no follow-up. A TUI is the other shape. An agent arrives knowing
+// nothing, reads a frame that names its own controls, presses a key, and reads
+// the next frame — which is how a person learns an unfamiliar program, and it
+// needs no schema shipped ahead of time. The frame IS the documentation.
+//
+// ── where the state lives ─────────────────────────────────────────────────
+// The programs keep their state in the URL: ?pane=writing&cursor=3&open=lattice
+// is the whole thing. No Durable Object, no KV entry, no token, no TTL.
+//
+// Four things fall out of the URL model:
+//
+//   1. Sessions FORK. Two agents explore from the same frame without colliding.
+//   2. A state from last week still resolves, because it was never a live object
+//      anybody had to keep holding. Bookmarkable, replayable, diffable.
+//   3. It is inspectable. A site whose argument is "here is what the machine
+//      sees" should not hand an agent an opaque blob and ask for it back.
+//   4. Any isolate can serve any frame. No affinity, nothing to fail over.
+//
+// This is MCP's 2026-07-28 stateless revision (lib/mcp-protocol.ts serves both
+// eras) applied one layer up: MCP made a single tool call stateless, and this
+// makes a whole session over those tools stateless too.
+//
+// The rule if a program ever needs more: small and addressable stays in the URL,
+// growing and opaque gets a Durable Object. A pane and a cursor fit a query
+// string forever; a transcript outgrows the ~2KB practical ceiling.
 
 import { agentReadyFrame } from "./agent-ready.ts";
 import { unsafeHtml } from "./lib/html.ts";
@@ -28,10 +56,21 @@ import { searchSite } from "./search.ts";
 import { readCheckpoints } from "./updates.ts";
 import { readPosts } from "./writing.ts";
 
+// The frame is 80 columns because that is what a terminal is, and because an
+// agent's context window pays for every column of padding it never reads.
 const INNER = COLS - 4;
 
+// ── keys ──────────────────────────────────────────────────────────────────
+// A key sequence arrives as one string. Single code points are single keys;
+// the named forms exist because <cr> is typeable in a URL and \r is not, and an
+// agent composing a query string should not have to percent-encode a control
+// character to press Enter.
 const NAMED = { cr: "\r", enter: "\r", esc: "\x1b", tab: "\t", sp: " ", up: "k", down: "j", left: "h", right: "l" };
 
+// 32 keys per request. Enough to drive anywhere in these apps from cold, and
+// small enough that no single request can make the pane loader run away — the
+// loader is memoized per pane, so the real ceiling is one load per pane, but a bound that
+// does not depend on reading the memo table is the one worth stating.
 const MAX_KEYS = 32;
 
 export function tokenizeKeys(input) {
@@ -51,8 +90,14 @@ export function tokenizeKeys(input) {
   return out;
 }
 
+// ── state ─────────────────────────────────────────────────────────────────
 const FINGER_PANES = ["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"];
 
+// "plan" is a real finger daemon's .plan file, not one of the nine numbered
+// panes: no digit key reaches it, help doesn't list it, and it never appears in
+// FINGER_PANES. That is the accurate behavior — the original protocol had no
+// menu either, you fingered a name and got whatever was in the file. Reachable
+// only by already knowing to ask: ?pane=plan.
 const HIDDEN_PANES = ["plan"];
 
 const clampInt = (raw, min, max, fallback) => {
@@ -85,6 +130,7 @@ export function readState(url, app) {
   };
 }
 
+/** The canonical URL for a state: what the frame tells the caller to send next. */
 export function stateUrl(state, extra = {}) {
   const params = new URLSearchParams();
   const put = (key, value, skip?) => { if (value !== undefined && value !== null && value !== "" && value !== skip) params.set(key, String(value)); };
@@ -102,19 +148,39 @@ export function stateUrl(state, extra = {}) {
   }
   for (const [key, value] of Object.entries(extra)) put(key, value);
   const qs = params.toString();
+  // The tool's own root path, because that is where it lives. This string is
+  // the resumable state a caller sends back, so it has to be the real URL.
   return `/${state.app}${qs ? `?${qs}` : ""}`;
 }
 
+/**
+ * The status-bar line that prints the current state.
+ *
+ * LABELLED, because a frame legitimately contains several /<tool> URLs —
+ * cross-references between the programs, examples in the help screen — and an
+ * agent told to "pass the url back" has to be able to tell which one is the
+ * state. Unlabelled, the first match in the frame is whichever URL happens to
+ * appear earliest in the body, which is not the state and is not stable.
+ */
 const stateLine = (state, trailer = "") => [
   s("state ", "label"),
   s(stateUrl(state), "accent"),
   ...(trailer ? [s(`   ${trailer}`, "dim")] : []),
 ];
 
+// ── finger: the panes ─────────────────────────────────────────────────────
+// Each pane declares how to LOAD its data and how to turn that data into a list
+// of rows. The list is what j/k moves through and what Enter opens, so a pane
+// that has no list (overview) simply returns none and the movement keys become
+// no-ops there rather than special cases in the key loop.
+
 const dash = (value) => (value === null || value === undefined || value === "" ? [s("—", "dim")] : [s(String(value))]);
 
 const PANES = {
   async overview(env, _ctx, _request, _state) {
+    // Every source here is a bundled file or an asset read, deliberately: the
+    // first frame of the flagship app should not wait on Spotify, Curius, or a
+    // calendar. Those load on the pane that shows them, and nowhere else.
     const [posts, photos, checkpoints] = await Promise.all([
       readPosts(env),
       queryPhotos(env, { limit: 1 }),
@@ -164,9 +230,15 @@ const PANES = {
   },
 };
 
+// ── finger: rendering one pane ────────────────────────────────────────────
+
+/** A selectable list, with the cursor row painted like the title bar. */
 function listBody(list, state, { empty = "nothing here yet.", metaWidth = 16 } = {}) {
   if (!list.length) return [[s(empty, "dim")]];
   const cursor = Math.min(state.cursor, list.length - 1);
+  // A frame is 24 rows on a classic terminal and the chrome eats 8, so the
+  // window scrolls to keep the cursor inside 14 rows rather than emitting every
+  // row and trusting the caller to scroll. An agent pays for every row.
   const view = 14;
   const start = Math.max(0, Math.min(cursor - Math.floor(view / 2), list.length - view));
   const slice = list.slice(Math.max(0, start), Math.max(0, start) + view);
@@ -215,6 +287,10 @@ function renderWriting(data, state) {
       kv("date", post.date, INNER),
       kv("read", `https://aadhar.sh/writing/${post.slug}`, INNER, { style: "accent" }),
       blank(),
+      // The note's TEXT is deliberately not inlined. /writing/<slug>.txt already
+      // serves it as plain text with no chrome at all, which is strictly better
+      // than the same bytes reflowed into an 80-column box, and a frame that
+      // duplicated it would make the archive's total size the frame's size.
       ...wrap("The full text is one fetch away, unwrapped and unstyled, at the .txt URL above. This frame is the index card.", INNER).map((row) => [s(row, "dim")]),
     );
   }
@@ -384,6 +460,11 @@ const RENDER = {
   plan: renderPlan,
 };
 
+// ── the key loop ──────────────────────────────────────────────────────────
+// Pane data is memoized per pane for the life of one request, which is what
+// makes a sequence like "2jj5kk1" cost three loads rather than seven. It also
+// means a sequence that returns to a pane sees the data it saw the first time,
+// which is the correct reading of "these keys were pressed at one moment".
 async function driveFinger(env, ctx, request, state, tokens) {
   const loaded = new Map();
   const load = async (name) => {
@@ -472,6 +553,7 @@ export async function fingerFrame(env, ctx, request, state, tokens) {
   return { title: `finger — aadharsh@aadhar.sh`, body, status: fingerStatus(state, data) };
 }
 
+// ── photos ────────────────────────────────────────────────────────────────
 const PAGE = 12;
 
 export async function photosFrame(env, ctx, state, tokens) {
@@ -488,6 +570,9 @@ export async function photosFrame(env, ctx, state, tokens) {
     limit: PAGE, offset: state.page * PAGE,
   }, ctx);
 
+  // j/k move within the page that was just fetched, so the cursor is applied
+  // AFTER the query rather than before it — otherwise a cursor from the previous
+  // page's length could point past the end of this one.
   for (const key of tokens) {
     if (key === "j") state.cursor = Math.min(state.cursor + 1, Math.max(0, result.photos.length - 1));
     else if (key === "k") state.cursor = Math.max(0, state.cursor - 1);
@@ -517,6 +602,9 @@ export async function photosFrame(env, ctx, state, tokens) {
         kv("shot", meta.date, INNER),
         blank(),
         rule(INNER, "recipe"),
+        // The recipe card is the whole point of publishing this metadata: it is
+        // the set of in-camera settings a look was made with, so somebody can
+        // re-shoot it. Rendered verbatim, in the camera's own field names.
         ...(Object.keys(recipe).length
           ? Object.entries(recipe).map(([field, value]) => kv(field, value, INNER, { gutter: 24 }))
           : [[s("no recipe recorded for this frame.", "dim")]]),
@@ -557,6 +645,7 @@ export async function photosFrame(env, ctx, state, tokens) {
   };
 }
 
+// ── lens ──────────────────────────────────────────────────────────────────
 const verdictStyle = (level) => (level >= 4 ? "ok" : level >= 2 ? "warn" : "bad");
 
 function lensReadout(obs) {
@@ -588,6 +677,11 @@ function lensReadout(obs) {
   );
 }
 
+// ── the lens pipeline, as a terminal frame ────────────────────────────────
+// Every tool here that points at a URL bills Lens's inspect budget, so each one
+// runs through the lens pipeline (lens-pipeline.ts): the same SSRF guard, the
+// same budget and the same 429 wording as /lens/fetch and the MCP tools,
+// whichever door was used. The frame is just the encoder.
 function terminalLens<V>(work: (url: string, env) => Promise<V>) {
   return defineLens({
     budget: "inspect",
@@ -634,6 +728,10 @@ export async function lensFrame(env, request, state, ctx) {
   }
   const obs = lensObservationSummary(inspected.value);
   const target = { url: obs.url };
+  // ── walking through the doors lens just knocked on ──────────────────────
+  // lens reports that an origin HAS an llms.txt, a markdown twin, an MCP
+  // endpoint. &doors=1 reads what is actually behind them. It belongs here,
+  // because knocking and walking through are the same job at two depths.
   let doorsBody = blank();
   if (state.doors) {
     const doors = await readDoors(target.url, env).catch(() => null);
@@ -652,6 +750,8 @@ export async function lensFrame(env, request, state, ctx) {
         door("mcp tools/list", doors.mcp, doors.mcp.ok ? `${doors.mcp.count} tools` : doors.mcp.detail || "no server"),
         doors.mcp.ok && doors.mcp.tools.length ? rows(
           blank(),
+          // LISTED, NEVER CALLED. tools/list asks a server to describe itself;
+          // tools/call is execution on somebody else's infrastructure.
           rule(INNER, "their tools — listed, never called"),
           ...doors.mcp.tools.slice(0, 8).map((t) => [...fit([s(t.name, "strong")], 24), s(t.description, "dim")]),
         ) : blank(),
@@ -666,6 +766,7 @@ export async function lensFrame(env, request, state, ctx) {
   };
 }
 
+// ── radar: the instrument for a sensor somebody else is holding ───────────
 function radarIdleFrame() {
   return {
     title: "radar — post readings, get an instrument",
@@ -690,6 +791,7 @@ function radarIdleFrame() {
   };
 }
 
+// ── dict: will a browser ever actually use your dictionary? ───────────────
 const VERDICT_STYLE = { ok: "ok", warn: "warn", veto: "bad" };
 const VERDICT_MARK = { ok: "  ok  ", warn: " warn ", veto: " VETO " };
 
@@ -734,6 +836,8 @@ export async function dictFrame(env, request, state, ctx) {
       kv("cache-control", dictionary.cacheControl || "(none)", INNER, { gutter: 16 }),
       blank(),
       rule(INNER, "as a dictionary"),
+      // Every rule prints, including the ones that passed. A lint that shows only
+      // failures leaves you unsure whether it looked.
       ...dictionary.results.map((r) => [
         s(VERDICT_MARK[r.verdict], VERDICT_STYLE[r.verdict]),
         ...fit([s(r.title, "strong")], 26),
@@ -763,6 +867,7 @@ export async function dictFrame(env, request, state, ctx) {
   };
 }
 
+// ── cache: does your validator actually revalidate? ───────────────────────
 const CACHE_MARK = { ok: "  ok  ", warn: " warn ", veto: " VETO ", "bad-but-explained": " 200  " };
 const CACHE_STYLE = { ok: "ok", warn: "warn", veto: "bad", "bad-but-explained": "warn" };
 
@@ -822,7 +927,10 @@ export async function cacheFrame(env, request, state, ctx) {
   };
 }
 
+// ── agent-ready: the scorecard, pointed at anyone including us ────────────
 export async function agentReadyRoute(env, request, state, ctx) {
+  // No url means audit THIS origin and show the bill. That default is the
+  // dogfood: the tool that grades other people grades its author first.
   if (!state.url.trim()) {
     return agentReadyFrame(`https://${CANONICAL_HOST}/`, env, { self: true });
   }
@@ -830,6 +938,7 @@ export async function agentReadyRoute(env, request, state, ctx) {
   return gated.kind === "ok" ? gated.value.value : refusalFrame("agent-ready", gated);
 }
 
+// ── encode: what did your encoder actually do? ────────────────────────────
 export async function encodeFrame(env, request, state, ctx) {
   if (!state.url.trim()) {
     return {
@@ -864,6 +973,8 @@ export async function encodeFrame(env, request, state, ctx) {
     };
   }
 
+  // Sniffed from magic bytes, never from content-type: a mislabelled response is
+  // common and the parse has to match the actual container.
   const kind = sniff(got.bytes);
   const info = kind === "jpeg" ? parseJpeg(got.bytes) : kind === "avif" ? parseAvif(got.bytes) : null;
   if (!info) {
@@ -892,6 +1003,7 @@ export async function encodeFrame(env, request, state, ctx) {
   };
 }
 
+// ── the index frame ───────────────────────────────────────────────────────
 function indexFrame() {
   const app = (name, line) => rows(
     [s(`  /${name}`, "accent")],
@@ -920,6 +1032,7 @@ function indexFrame() {
   };
 }
 
+// ── HTTP ──────────────────────────────────────────────────────────────────
 const TERMINAL_APPS = new Set(["finger", "photos", "lens", "radar", "dict", "cache", "agent-ready", "encode"]);
 
 async function buildFrame(name, request, env, ctx, url) {
@@ -938,12 +1051,16 @@ async function buildFrame(name, request, env, ctx, url) {
 
 const frameLines = (frame) => plainFrame({ title: frame.title, body: frame.body, status: frame.status });
 
+/** The frame as plain text: what curl, MCP, and the contract tests all read. */
 export function frameText(frame) {
   return emit(frameLines(frame));
 }
 
 
 
+// ── a tool asked for HTML ─────────────────────────────────────────────────
+// The frame, in a <pre>, in the ordinary site window. What a browser needs from
+// a TOOL route is the same text curl gets, made legible.
 function toolPage(frame, path) {
   return lunaPage({
     title: `aadhar.sh${path}`,
@@ -958,11 +1075,31 @@ function toolPage(frame, path) {
   });
 }
 
+// ── routing: a tool is a SERVICE, the frame is a REPRESENTATION ───────────
+// Tools live at the ROOT, next to /lens and /photos and /coffee, because that is
+// where this site puts utilities, while content pages nest. Filing them under
+// /terminal/* would organise them by how they RENDER rather than by what they
+// are, which is the wrong lesson for a site whose argument is "here is how you
+// expose services to agents".
+//
+// So the frame joins .md as a REPRESENTATION rather than a location, and every
+// tool answers three ways from one URL:
+//
+//   /dict                       Accept: text/html  -> the page
+//   /dict                       anything else      -> the frame (curl, agents)
+//   /dict.txt                                      -> the frame, explicitly
+//
+// Exactly the markdown-twin contract this site already runs on.
 export const TOOL_NAMES = TERMINAL_APPS;
 
+/** Shared by every tool route. */
 async function serveFrame(name, request, env, ctx, { explicitText = false } = {}) {
   const url = new URL(request.url);
 
+  // radar is the ONE tool that takes a POST, because it is the one whose input
+  // this server cannot produce: the readings come from a machine with an
+  // antenna. Everything else stays GET-only, so the surface does not quietly
+  // become writable.
   if (request.method === "POST" && name === "radar") {
     let payload = null;
     try { payload = await request.json(); } catch { payload = null; }
@@ -985,9 +1122,15 @@ async function serveFrame(name, request, env, ctx, { explicitText = false } = {}
     && !url.searchParams.has("plain");
 
   if (wantsHtml) return toolPage(frame, url.pathname);
+  // ANSI by default over plain HTTP, because the usual caller of a text/plain
+  // route from a terminal IS a terminal. ?plain=1 drops it; MCP never asks for it.
   return new Response(frameText(frame) + "\n", {
     headers: {
       "content-type": "text/plain; charset=utf-8",
+      // Frames are per-query and several are live (playlist, calendar, lens), so
+      // no shared cache should hold one. The route also negotiates on Accept,
+      // which a URL-keyed edge cache cannot represent — the trap lib/cache.ts
+      // documents for the markdown twins.
       "cache-control": "no-store",
       "x-robots-tag": "noindex",
       vary: "accept",
@@ -995,12 +1138,15 @@ async function serveFrame(name, request, env, ctx, { explicitText = false } = {}
   });
 }
 
+/** Every tool in TOOL_NAMES, and its .txt representation. */
 export async function handleTool(request, env, ctx) {
   const url = new URL(request.url);
   const raw = url.pathname.replace(/^\//, "").replace(/\/+$/, "");
   const explicitText = raw.endsWith(".txt");
   const name = raw.replace(/\.txt$/, "");
   if (!TOOL_NAMES.has(name)) {
+    // The index frame IS the 404 body: a wrong name gets every right one, with a
+    // sentence each.
     return new Response(`no such tool: ${name}\n\n${frameText(indexFrame())}\n`, {
       status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
     });
@@ -1011,6 +1157,7 @@ export async function handleTool(request, env, ctx) {
 
 
 
+/** The MCP entry point: a frame as plain text, never coloured. */
 export async function terminalToolFrame(app, args, request, env, ctx) {
   const url = new URL(`https://aadhar.sh/${app}`);
   for (const [key, value] of Object.entries(args || {})) {

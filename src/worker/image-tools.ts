@@ -2,7 +2,6 @@
 // request or fetched from one validated public URL, transformed through the
 // Cloudflare Images binding, and returned inline. Nothing is written to the
 // public photo bucket or the representation vault.
-
 import photoIndex from "./photo-index.json" with { type: "json" };
 import { CANONICAL_HOST } from "./lib/const.ts";
 import { fetchFollowingPublicRedirects, sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";
@@ -201,6 +200,8 @@ function imageReceipt(input: ImageInput, info, output: TransformedImage | null) 
 }
 
 function mcpOutput(receipt, images: TransformedImage[] = []) {
+  // MCP content is a union of block shapes; without the annotation the array
+  // infers as text-only off its first element and refuses the image blocks.
   const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] =
     [{ type: "text", text: JSON.stringify(receipt, null, 2) }];
   for (const image of images) content.push({ type: "image", data: image.bytes.toBase64(), mimeType: image.mime });
@@ -247,6 +248,11 @@ export async function imageCompare(args: ImageToolArgs, env) {
     if ("error" in spec) return error(spec.error);
     jobs.push({ format, spec });
   }
+  // Each format is a complete, independent Images pipeline. Keep the caller's
+  // order through Promise.all, but pay one binding latency window rather than a
+  // three-encode waterfall. The combined-output cap is checked below, after
+  // every encode settles; parallelism does not increase its 3 x 4 MiB
+  // worst-case residency.
   const outputs: ({ _error: string } | (TransformedImage & { format: string }))[] = await Promise.all(jobs.map(async ({ format, spec }) => {
     const output = await transformBytes(env, input.bytes, spec);
     if ("error" in output) return error(output.error);
@@ -282,6 +288,7 @@ function archiveStemFromUrl(rawUrl, hashes) {
     const url = new URL(rawUrl);
     if (url.hostname.toLowerCase() !== CANONICAL_HOST) return null;
     const full = decodeURIComponent(url.pathname.replace(/^\/images\/full\//, ""));
+    // `jpeg`: a link from before the original moved to JPEG XL still names its photo.
     for (const [stem, entry] of Object.entries(photoIndex)) if (entry.full === full || (entry as { jpeg?: string }).jpeg === full) return { stem, kind: "archive-url" };
     const match = url.pathname.match(/^\/i\/([A-Za-z0-9_-]+?)(-400)?\.([a-f0-9]{8})\.(avif|jpg)$/i);
     if (match && hashes[match[1]]) {
@@ -312,11 +319,30 @@ export async function photoRecipe(args, env) {
   let inputSha256: string | null = null;
   if (stem && !/^[A-Za-z0-9_-]{1,120}$/.test(stem)) return error("stem is not a published photo stem");
 
+  // These JSON files are separate assets so their 285 KiB stays out of every
+  // isolate's Worker bundle. Read only the indexes this lookup shape can use:
+  // a stem never needs fingerprints, while a byte miss needs nothing else.
+  // Once a stem is known, the three independent projection reads share one
+  // asset-binding round trip instead of forming a serial waterfall.
   if (args.image_data) {
     const encoded = decodeBase64(args.image_data);
     if (!encoded) return error("image_data must be valid base64 and no larger than 8 MiB");
     inputSha256 = await sha256Hex(encoded.bytes);
     const fingerprints = await loadJson(env, "images/fingerprints.json");
+    // fingerprints.json is keyed BY DIGEST, so the parsed object IS the index and
+    // this is the whole lookup, the right shape for a question that only ever
+    // runs digest -> photo.
+    //
+    // Object.hasOwn keeps a caller-derived key off the prototype chain. A digest
+    // is our own sha256 output and so can never spell `constructor`, but leaning
+    // on that would put the safety three lines from the lookup.
+    //
+    // Deliberately a plain object rather than a Map parsed at the loadJson
+    // boundary: at 474 entries, building the Map cost ~0.072 ms, which is MORE
+    // than the 0.0205 ms nested scan it replaced, so the boundary parse would
+    // spend the whole win. JSON.parse already returns the index; the values are
+    // our own build artifact, and tools/photos/check-photo-pipeline.ts is what
+    // proves their shape.
     const hit = Object.hasOwn(fingerprints, inputSha256) ? String(fingerprints[inputSha256]) : "";
     const cut = hit.lastIndexOf(":");
     const hitStem = cut > 0 ? hit.slice(0, cut) : "";

@@ -7,11 +7,21 @@
 // Workers Free, whose 50-subrequest ceiling (gotcha 36) a per-page fan-out over
 // 39 explainers would have spent most of.
 //
+// Under `bun run dev` the farm derives nothing, so there is no built file and
+// x402.ts assembles the writing half live through this same function. Two
+// callers, one format, so the dev copy cannot drift from the shipped one.
+//
+// Each document is wrapped in a <doc> element because the bodies carry their own
+// `#` and `##` headings, and plain concatenation leaves no reliable boundary
+// between one page and the next. A twin keeps its YAML front matter inside the
+// element, so title, path, section and updated date survive the inlining.
+//
 // Pure and node-safe: build.ts imports it from source (gotcha 16).
 
 export type LlmsFullDoc = { title: string; path: string; date?: string; body: string };
 export type LlmsFullSection = { heading: string; docs: LlmsFullDoc[] };
 
+// Shared by both callers so the dev fallback names the section the way the build does.
 export const WRITING_HEADING = "Writing: full text";
 
 const attr =(s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");

@@ -1,5 +1,11 @@
 // lib/openapi.ts: the OpenAPI 3.1 document build.ts writes to /openapi.json.
 //
+// The operations come from lib/public-api.ts, which /developers also renders,
+// and every number in them is the constant its handler enforces. This module
+// adds the component schemas (response shapes read from the handlers on
+// 2026-10-13) and the document around them. Only build.ts and the contract
+// tests import it, so none of it ships in the Worker bundle.
+//
 // Node-safe (gotcha 16).
 import { LEAVES_OUT, OPERATIONS, READ_POLICY, arr, bool, budgeted, int, limited, nullStr, num, obj, ref, sharesReadBudget, str, type Operation, type Schema } from "./public-api.ts";
 import { allowedMethods } from "./api-contract.ts";
@@ -7,10 +13,14 @@ import { allowedMethods } from "./api-contract.ts";
 export { OPENAPI_PATH } from "./public-api.ts";
 
 const intOrNull = (description?: string): Schema => ({ ...int(description), type: ["integer", "null"] });
+/** An object whose every value is a string: headers, meta tags. */
 const strMap = (description?: string): Schema =>
   description === undefined ? { type: "object", additionalProperties: str() } : { type: "object", additionalProperties: str(), description };
+/** A recipe card value. */
 const SCALAR: Schema = { type: ["string", "number", "boolean", "null"] };
+/** A compared field's value on either side of /lens/compare.json. */
 const CHANGED: Schema = { type: ["string", "integer", "boolean", "null"] };
+/** A crawl column's value on either side of a change. */
 const COLUMN: Schema = { type: ["string", "integer", "null"] };
 
 export const SCHEMAS: Record<string, Schema> = {
@@ -257,11 +267,14 @@ export const SCHEMAS: Record<string, Schema> = {
 
 const CONTRACT_HEADERS = { Link: { $ref: "#/components/headers/ServiceDesc" } };
 
+/** One operation as the spec prints it: the contract's 405, its read budget,
+ *  and its response headers, on top of what public-api.ts says. */
 function specOperation(op: Operation, allow: string[]) {
   const { path: _path, method: _method, example: _example, ...rest } = op;
   const responses: Record<string, any> = {};
   for (const [status, r] of Object.entries(op.responses)) responses[status] = { ...r };
   responses[405] ??= { description: `A method other than ${allow.join(", ")} (code method_not_allowed). The Allow header lists them.`, content: { "application/json": { schema: ref("Error") } } };
+  // No limiter of its own, so it bills the shared read budget (api-contract.ts).
   if (sharesReadBudget(op)) {
     for (const status of Object.keys(responses)) if (status.startsWith("2")) responses[status] = budgeted(responses[status], [READ_POLICY]);
     responses[429] = limited(`Over the shared read budget of ${READ_POLICY[1]} requests a minute per caller (code rate_limited).`, [READ_POLICY]);

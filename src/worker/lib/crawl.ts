@@ -7,6 +7,8 @@ import type { BotRequestOptions } from "./botauth.ts";
 import { DEFAULT_CRAWL_BODY_CAP, readResponseCapped } from "./public-fetch.ts";
 import { extractMeta, extractTitle } from "./http.ts";
 
+// Keep scheduled fan-out polite and predictable. Results retain input order,
+// while at most `limit` target requests are active at once.
 export async function mapWithConcurrency(items, limit, fn) {
   const values = Array.from(items || []);
   const output = new Array(values.length);
@@ -23,8 +25,12 @@ export async function mapWithConcurrency(items, limit, fn) {
   return output;
 }
 
+// Kept as exports for the auxiliary Reader Worker and existing crawl callers.
 export { DEFAULT_CRAWL_BODY_CAP, readResponseCapped, sha256Hex } from "./public-fetch.ts";
 
+// Fetch one bounded HTML-ish document as AadharshBot. The body is deliberately
+// returned only for the current parser; persistence callers should keep the
+// digest and normalized signals, not the raw third-party text.
 export async function crawlDocument(targetUrl, env, opts: BotRequestOptions & { maxBytes?: number; timeoutMs?: number } = {}) {
   const {
     maxBytes = DEFAULT_CRAWL_BODY_CAP,

@@ -1,5 +1,25 @@
 // lib/built-page.ts: what "a built document with a live fallback" means, once.
-
+//
+// A page declares three things and stops choreographing:
+//
+//   headers  its policy. It lands on EVERY representation of the page: the q11
+//            twin, the dcz delta, the 304, the HEAD, the Markdown twin answered
+//            at the page's own URL, and the live render. The twin takes it
+//            through twinPolicy (lib/assets.ts), which keeps its no-store and
+//            leaves out the shell preloads.
+//   divert   the requests the built file cannot answer (a ?q=, a ?cmd=, an
+//            owner's ?refresh=). Return a response to take the request, or
+//            nothing to serve the document. A diverted response is its own:
+//            a search result or a redirect does not take the shell's policy.
+//   live     the renderer for a tree that staged no bake, which is `bun run
+//            dev` and the contract suite. The build refuses to ship without
+//            the file, so production never takes this arm.
+//
+// The representation engine is serveStaticPage; this is the seam above it that
+// knows a page has a fallback. Routes call it so none hand-rolls the six steps
+// (build the header set, serveStaticPage, test for 404, cancel the body, render,
+// loop the headers back on), and none negotiates Markdown by hand, which is how
+// a twin would lose the page's noindex.
 import { serveStaticPage } from "./assets.ts";
 
 type Awaitable<T> = T | Promise<T>;
@@ -21,6 +41,9 @@ export async function serveBuiltPage(request: Request, env, page: BuiltPage = {}
   return withPagePolicy(await page.live(), page.headers);
 }
 
+// The policy belongs to the DOCUMENT. A live handler can also answer a miss (an
+// unknown /writing slug is a 404), a redirect or a raw text file, and none of
+// those may inherit a day of shared cache from the page they are not.
 function withPagePolicy(live: Response, headers: Record<string, string> = {}): Response {
   const isDocument = live.status === 200 && (live.headers.get("content-type") || "").startsWith("text/html");
   if (!isDocument) return live;

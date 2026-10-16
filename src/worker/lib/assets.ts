@@ -10,10 +10,20 @@ type AssetOptions = {
   notFoundType?: string;
   headers?: Record<string, string>;
 };
+// serveFreshAsset: fetch the asset under a unique query (which busts the
+// read-through asset cache), then re-emit it at the canonical URL with an honest
+// content-type and a short edge TTL. Exists because a long Cache-Control once
+// pinned a stale agent-discovery doc at its canonical URL while every ?query
+// variant served fresh.
 export async function serveFreshAsset(request, env, contentType) {
   const u = new URL(request.url);
   u.searchParams.set("__r", Date.now().toString(36));
   const res = await env.ASSETS.fetch(new Request(u.toString(), { headers: request.headers }));
+  // A miss must not wear the success content-type or the 300s shared TTL: an agent
+  // parsing /.well-known/agent-card.json deserves an honest 404 rather than a body
+  // that says "not found" under `application/json`, and pinning that miss at the
+  // edge for 5 minutes would outlive the deploy that restores the file. Same clamp
+  // the serveAssetWith404Clamp sibling below applies.
   if (res.status === 404) {
     try { await res.body?.cancel(); } catch {}
     return new Response("not found", {
@@ -39,6 +49,16 @@ function bodiless(res) {
   return new Response(null, { status: res.status, headers: new Headers(res.headers) });
 }
 
+// serveMarkdownTwin: answer `Accept: text/markdown` at a page's own URL with the
+// .md twin build.ts generated for it. The twin also lives at a stable, cacheable
+// URL of its own (/garage/encoding -> /garage/encoding.md), which is what
+// llms.txt links and what an agent without a precise Accept header should use.
+// This is the same-URL convenience layered on that.
+//
+// Returns null when no twin exists, so the caller falls through to HTML rather
+// than 404ing. Negotiation is a courtesy and every one of these paths has a real
+// page to serve; failing a navigation because a twin did not generate would be
+// the worse trade.
 export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {}) {
   const u = new URL(request.url);
   u.pathname = twinPath;
@@ -53,20 +73,29 @@ export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {
     status: 200,
     headers: {
       "content-type": "text/markdown; charset=utf-8",
+      // rough estimate at ~4 chars/token, the same honest approximation the
+      // homepage twin has always advertised
       "x-markdown-tokens": String(Math.ceil(body.length / 4)),
       // The edge caches per URL, not per Accept, so a cached negotiated response
       // here could later be handed to a client that asked for HTML. The .md URL
-      // is the cacheable representation; this one must not be. Same reasoning as
-      // the homepage's negotiated "/" in home.js.
+      // is the cacheable representation; this one must not be.
       "cache-control": "no-store, must-revalidate",
       "vary": "accept",
       "x-content-type-options": "nosniff",
       ...extraHeaders,
     },
   });
+  // HEAD is answered HERE rather than by each caller, so every negotiated route
+  // gets the same header set from one place. The body has already been read to
+  // count tokens, so a HEAD carries x-markdown-tokens for the same work a GET
+  // does.
   return request.method === "HEAD" ? bodiless(negotiated) : negotiated;
 }
 
+// serveAssetWith404Clamp: pass real assets through untouched; clamp only a 404
+// to max-age=0, because a miss under /images/* would otherwise inherit the
+// 1-year immutable rule and pin itself at the edge. This one clamp is all that
+// survives of the Pages-era content sniffing; Workers 404s are honest now.
 export async function serveAssetWith404Clamp(request, env, opts: AssetOptions = {}) {
   const res = await env.ASSETS.fetch(request);
   if (res.status === 404) {
@@ -85,10 +114,15 @@ export async function serveAssetWith404Clamp(request, env, opts: AssetOptions = 
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
+// content types for the /a/ shell, keyed by the real extension. The asset server
+// gets this right on its own; we only need it because the bytes we hand back came
+// from a `.br` file, whose extension would otherwise type the response as binary.
 const SHELL_TYPES = {
   js:  "text/javascript; charset=utf-8",
   css: "text/css; charset=utf-8",
   svg: "image/svg+xml; charset=utf-8",
+  // /a/pixel-peeper-manifest.<hash8>.json, since 2026-09-30: the year and the
+  // q11 twin, and deliberately NOT the dictionary path (see DICTIONARY_TYPES).
   json: "application/json; charset=utf-8",
   dict: "application/octet-stream",
 };
@@ -103,9 +137,30 @@ const SPECULATION_RULES_FILE = /^\/a\/speculation\.[0-9a-f]{8}\.json$/;
 const SPECULATION_RULES_TYPE = "application/speculationrules+json";
 const shellType = (pathname: string, ext: string) =>
   SPECULATION_RULES_FILE.test(pathname) ? SPECULATION_RULES_TYPE : SHELL_TYPES[ext];
+// The identity fallbacks below hand back the asset layer's response, which types
+// a .json as application/json, so the ruleset carries its type through them too.
 const identityOpts = (pathname: string): AssetOptions =>
   SPECULATION_RULES_FILE.test(pathname) ? { headers: { "content-type": SPECULATION_RULES_TYPE } } : {};
 
+// Which of those may travel the SHARED-DICTIONARY path (the `use-as-dictionary` offer
+// and the dcz delta): js, css and, since 2026-09-26, svg. The family .dict stays off,
+// being the dictionary rather than something one compresses.
+//
+// svg sat out from July to 2026-09-26 because of one incident: when #114 turned the
+// icon sprite into an <img>, the next deploy blanked the 12 taskbar and tray icons for
+// returning Chromium visitors, and a hard reload (which drops Available-Dictionary)
+// brought them back. A local repro on 2026-09-25 with the exact July bytes never
+// failed in Chrome 154 or Canary 156, while a delta against the WRONG dictionary
+// failed the July way (blank image, ERR_UNEXPECTED_CONTENT_DICTIONARY_HEADER), so the
+// instrument could see the failure. A cookie canary (#940) then tested production's
+// own path: #943 served the first svg delta (116 B against 2,424 B of q11 brotli) to
+// two Chrome profiles holding the old sprite, which took the dcz over h2 through
+// Cloudflare and drew 14 of 14 icons on first load and reload.
+//
+// If the July symptom ever returns, it will look exactly as it did then: icons blank
+// for returning Chromium visitors on the deploy after a sprite change, and a hard
+// reload fixing it. Taking svg out of this map is the whole rollback.
+//
 // json is on /a/ and OFF this map, and that is a measurement rather than caution.
 // The one hashed json (the /pixel-peeper trial manifest, 1,860 B at q11) changed
 // in 5 of the 200 releases to 2026-09-30, and its delta against the previous
@@ -126,12 +181,24 @@ const DICTIONARY_TYPES = { js: 1, css: 1, svg: 1 };
 // a server may ignore the resulting header. match="/a/*" scopes it to the content-hashed
 // shell, so the next deploy's /a/nav.<newhash>.js is exactly the request that arrives
 // carrying the OLD bytes' hash.
+//
 // match-dest scopes the offer to the fetch destinations we will actually answer with a
-// delta. RFC 9842 makes it optional and DEFAULTS IT TO EVERY DESTINATION, so the earlier
-// bare `match="/a/*"` told Chromium these bytes were a dictionary for any /a/ request —
-// including the icon sprite, fetched as an `image`, back when the worker refused to answer
-// an svg with a dcz. The offer promised more than the server honoured: the client stored
-// state and sent Available-Dictionary on requests we ignored.
+// delta. RFC 9842 makes it optional and DEFAULTS IT TO EVERY DESTINATION, so a bare
+// `match="/a/*"` tells Chromium these bytes are a dictionary for any /a/ request, and
+// the client stores state and sends Available-Dictionary on requests we ignore. So each
+// offer names its own destination, and the sprite's names ("image") now that it
+// travels this path too (see DICTIONARY_TYPES). The wire says exactly what we answer.
+//
+// The match is PER-BASE rather than a shared /a/* glob. Chrome DevTools reported "Found a matching dictionary,
+// but the dictionary is not used for the response" on tooltip.js and hoist.js, and the
+// pooled pattern is why: every js/css asset offered the SAME match, so Chromium keyed them
+// all to one scope and, on a request for tooltip.js, could send the hash of nav.js. Delta
+// filenames are per-base (/ad/<base>.<hash8>.<dicttag>.dcz), so a cross-base hash can never
+// resolve — the client did its half correctly and we answered plain brotli.
+//
+// Scoping match to the asset family makes the dictionary Chromium sends the one we can
+// actually diff against. match-dest narrows per type as well: a stylesheet is never fetched
+// as a script, and neither is ever fetched as an image (the #119 rule, in the protocol).
 const SHELL_DESTS = { js: '("script")', css: '("style")', svg: '("image")' };
 const shellOffer = (pathname, ext) => {
   const base = pathname.slice("/a/".length).replace(/\.[0-9a-f]{8}\.(js|css|svg|dict)$/, "");
@@ -143,6 +210,15 @@ const shellOffer = (pathname, ext) => {
 // held an exact snapshot the build had not captured, it sent that unusable hash and
 // the Worker had no way to ask for the family hash it also held, so the page fell all
 // the way back to Brotli.
+//
+// This is a site-wide URLPattern without custom regexp groups. Its deliberately
+// descriptive wildcard name makes the match string longer than any page path, so
+// the broad, build-guaranteed family delta wins whenever the family dictionary is
+// present. Exact page snapshots remain the high-ratio fallback while the family
+// dictionary is not cached yet. If a future page path is longer than this pattern,
+// pageOffer declines to register it rather than letting it shadow the family again.
+// Tested against URLPattern in shipping Chrome: it matches `/` and nested paths and
+// `hasRegExpGroups` is false, as RFC 9842 requires.
 export const PAGE_FAMILY_MATCH = "/:sitewide_html_dictionary_preferred_over_uncaptured_exact_page_snapshots*/*";
 const pageFamilyOffer = (pathname) =>
   pathname.startsWith("/a/") && parseFamilyDictionary(pathname.slice("/a/".length))
@@ -152,6 +228,27 @@ const pageOffer = (pathname) => pathname.length < PAGE_FAMILY_MATCH.length
   ? `match="${pathname}", match-dest=("document")`
   : null;
 
+// Can the BROWSER keep an offer made on a response with this cache-control?
+//
+// Chromium derives a registered dictionary's lifetime from the response's own freshness,
+// so a response that is stale the moment it lands registers a dictionary that has already
+// expired, and drops it. DevTools says so out loud: "The response can't be used as a
+// dictionary because its freshness is expired." Until 2026-07-29 every page here offered
+// itself anyway, which taught Chromium to store nothing and cost a console error per
+// navigation.
+//
+// Measured in Chrome that day, one navigation per policy, watching for the
+// Available-Dictionary the browser sends back only when it actually stored the offer:
+//
+//   max-age=3600                                                  REGISTERED (control)
+//   max-age=0, stale-while-revalidate=604800                      REGISTERED
+//   max-age=0, must-revalidate                                    no
+//   max-age=0, must-revalidate, stale-while-revalidate=604800     no
+//   private, no-cache, must-revalidate                 (this site's old /)      no
+//   private, no-cache, stale-while-revalidate=604800                            no
+//   public, max-age=0, must-revalidate, s-maxage=86400 (this site's old pages)  no
+//   public, max-age=0, s-maxage=86400, swr=604800      (PAGE_CACHE_CONTROL)     REGISTERED
+//
 // Re-measured 2026-09-23 in Chrome 152, because every must-revalidate row above pairs it
 // with max-age=0 and so could not separate "vetoes" from "leaves no lifetime":
 //
@@ -166,6 +263,15 @@ const pageOffer = (pathname) => pathname.length < PAGE_FAMILY_MATCH.length
 // reads as a veto when max-age is 0. no-cache and no-store veto outright, whatever else
 // the header says, because no-cache bars reuse without revalidation. s-maxage is
 // invisible to this decision: a browser is a private cache.
+//
+// Gating the offer on the header keeps the coupling honest in both directions, so
+// whether a page joins the tier is a cache-control decision and never a change here.
+// The pages took `stale-while-revalidate` without `must-revalidate` and lit their tier
+// back up, and `/` moved to PAGE_CACHE_CONTROL on 2026-07-31 and joined them, neither
+// touching this function. The immutable /a/page-family.<hash>.dict is preferred
+// whenever it is cached. The exact page tier remains useful before that idle-loaded
+// family dictionary arrives, so the two tiers stack without letting an uncaptured
+// exact hash force an avoidable Brotli response.
 const canRegisterAsDictionary = (cacheControl) => {
   const cc = (cacheControl || "").toLowerCase();
   if (/\b(?:no-store|no-cache)\b/.test(cc)) return false;
@@ -200,13 +306,26 @@ const variantEtag = (etag, suffix) => {
 // and the canaries that proved them are gone now that the default paths exercise the same
 // code. docs/GOTCHAS.md gotchas 13 and 14 record how to rebuild them if a regression ever needs
 // bisecting.
+//
+//   precompression: /encoding-test returned 30 bytes in ONE brotli layer (34 in two before
+//   the withSecurityHeaders fix), and the shell twin measured 13,047 decoding to 46,268
+//   bytes of valid JS. About 19% under the edge's ~q4 fly-compression, for every browser.
+//
+//   dcz deltas: luna.css served as 116 bytes against its previous version, round-tripping
+//   byte-exact. 65x under the plain response for a returning Chromium visitor.
 
+// The tag build.ts put in each .dcz filename for the dictionary this client says it
+// holds, or null. The parse (and why it is strict) is lib/dictionary-names.ts, the
+// module the build names those files with.
 const dictionaryTag = (request) => tagFromAvailableDictionary(request.headers.get("available-dictionary"));
 
+// serveDictionaryDelta: hand back the precomputed dcz for the dictionary this client
+// says it holds, or null to let the caller fall through.
 async function serveDictionaryDelta(url, ext, request, env) {
   const tag = dictionaryTag(request);
   if (!tag) return null;
 
+  // /a/<base>.<hash8>.<ext> -> /ad/<base>.<hash8>.<tag>.dcz
   const deltaPath = shellDeltaPath(url.pathname, tag);
   if (!deltaPath) return null;
   let res;
@@ -221,12 +340,32 @@ async function serveDictionaryDelta(url, ext, request, env) {
   headers.set("content-type", SHELL_TYPES[ext]);
   headers.set("content-encoding", "dcz");
   headers.set("cache-control", "public, max-age=31536000, immutable");
+  // Both dimensions matter to a shared cache: the same URL now answers with identity, br,
+  // or a dcb that is only decodable against ONE dictionary. Cloudflare varies its cache on
+  // exactly these two for shared dictionaries.
   headers.set("vary", "accept-encoding, available-dictionary");
+  // Keep offering the shell as a dictionary, so a client that just delta-updated adopts
+  // the new bytes and the chain continues on the next deploy.
   headers.set("use-as-dictionary", shellOffer(url.pathname, ext));
-  headers.delete("etag");
+  headers.delete("etag");   // described the .dcz file, not this resource
   return new Response(res.body, { status: 200, headers, encodeBody: "manual" });
 }
 
+// servePrecompressedShell: /a/<name>.<hash8>.<ext> from the worker, so the response
+// can carry bytes the platform would not have produced.
+//
+// Cloudflare compresses on the fly at roughly brotli q4 and prefers zstd when a
+// browser offers everything, which measured LARGER than its own brotli here. build.ts
+// writes a q11 `.br` twin next to each shell asset; this hands that twin over when the
+// request offers br, which is a measured ~19% off nav.js + luna.css on the wire.
+//
+// Every failure path lands on today's behavior rather than a broken response:
+//   - client doesn't offer br            -> identity asset, untouched
+//   - no .br twin (build step skipped)   -> identity asset, untouched
+//   - .br fetch errors                   -> identity asset, untouched
+//   - asset genuinely missing            -> the 404 clamp, so a miss under an
+//                                           immutable rule can't pin itself
+//
 // encodeBody: "manual" is LOAD-BEARING. The Workers runtime compresses response
 // bodies to match `content-encoding` on its own; without "manual" it would brotli
 // these already-brotli bytes and ship br-in-br, which every client fails to decode.
@@ -234,18 +373,51 @@ export async function servePrecompressedShell(request, env) {
   const url = new URL(request.url);
   const ext = url.pathname.split(".").pop().toLowerCase();
 
+  // Only the shell's own types (SHELL_TYPES), and only GET. Anything else
+  // (a range request, a HEAD we'd have to length-match, an unexpected extension)
+  // goes down the untouched path rather than through a hand-built response.
+  //
+  // env.IDENTITY_BODY joins that list: an in-process caller (SELF_FETCH, so /lens
+  // scanning this host) has no transport to decode with and the runtime ships no
+  // brotli decoder, so a precompressed body reaches it as mojibake. dispatch.ts
+  // sets the flag on that child env. This is the only branch that can turn it off, so keep the
+  // check at the top of the function rather than beside each emission below.
   if (request.method !== "GET" || !SHELL_TYPES[ext] || env.IDENTITY_BODY) {
     return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
   }
 
+  // ── dcz: the delta path ────────────────────────────────────────────────────────
+  // A Chromium client that accepted our Use-As-Dictionary offer sends back the SHA-256
+  // of the shell bytes it already holds. tools/build.ts step 7 has precomputed
+  // zstd-against-that-dictionary at deploy time, so serving the diff is a filename lookup:
+  // /ad/<base>.<hash8>.<dicttag>.dcz. The first real one: luna.css in 115 bytes instead
+  // of 7,615, a 98.5% cut, from an ordinary CSS change.
+  //
+  // dcz rather than dcb because Cloudflare passes both through identically on all plans,
+  // so the choice is bytes vs decode time. zstd decodes ~2x faster (0.046ms vs 0.094ms on
+  // a bare 46KB asset), and on the real shipping pair brotli was smaller by exactly ONE
+  // byte (79 vs 80). Bytes are the proxy; latency is the goal, and the decode gap widens
+  // on the slow phones that need it most.
+  //
+  // Any miss falls through to the br path below and then to identity, so a client whose
+  // dictionary we have no delta for (skipped several deploys, or a hand-crafted header)
+  // just gets the ordinary asset.
+  // DICTIONARY_TYPES gates this: the family dictionary (.dict) sits it out, since it is
+  // the dictionary rather than something a dictionary compresses.
   const onDictionaryPath = Boolean(DICTIONARY_TYPES[ext]);
   if (onDictionaryPath) {
     const delta = await serveDictionaryDelta(url, ext, request, env);
     if (delta) return delta;
   }
 
+  // No Available-Dictionary, or no delta for the dictionary this client holds: fall through
+  // to the brotli q11 twin below, which carries the dictionary offer itself.
+
   let br;
   try {
+    // Ask for identity on the SUBREQUEST. If the asset layer applied its own
+    // content-encoding to the .br file we would be re-wrapping already-encoded
+    // bytes and mislabelling the result as plain br.
     const sub = new Request(`${url.origin}${url.pathname}.br`, {
       headers: { "accept-encoding": "identity" },
     });
@@ -259,10 +431,26 @@ export async function servePrecompressedShell(request, env) {
     return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
   }
 
+  // Carry the asset layer's headers (so the _headers `/a/*` immutable rule still
+  // applies — the .br twin matches that same glob), then correct the three things
+  // that describe the encoded body rather than the file it came from.
   const headers = new Headers(br.headers);
   headers.set("content-type", shellType(url.pathname, ext));
   headers.set("content-encoding", "br");
+  // RFC 9218 Extensible Priorities: Cloudflare honours an origin `priority`
+  // response header on HTTP/3 (unenhanced scheduler on Free), and this is the
+  // one response where the server knows better than the client's own signal.
+  // The family dictionary is fetched on idle at VeryLow and is useful only on
+  // the NEXT navigation, so u=7 puts it behind every document, style, script
+  // and tile on the connection outright. Scripts and styles keep the client's
+  // signal: Chrome already ranks luna.css above nav.js above the tiles, and an
+  // override there could only demote something the parser is waiting on.
+  // Nothing on the wire reports whether the override took, so this is set on
+  // the argument rather than on a measurement (roadmap, 2026-09-02).
   if (ext === "dict") headers.set("priority", "u=7");
+  // Only offer a type we are willing to answer with a delta. Offering anything else
+  // would teach Chromium to send Available-Dictionary for it and then get plain br
+  // anyway: wasted storage on the client and a header we deliberately ignore.
   if (onDictionaryPath) {
     headers.set("use-as-dictionary", shellOffer(url.pathname, ext));
   } else {
@@ -270,7 +458,13 @@ export async function servePrecompressedShell(request, env) {
     if (familyOffer) headers.set("use-as-dictionary", familyOffer);
     else headers.delete("use-as-dictionary");
   }
+  // The URL is content-addressed, so these bytes never change identity. Vary still
+  // has to name accept-encoding: the same URL answers with br or identity depending
+  // on the request, and a shared cache must not serve one to a client that asked for
+  // the other.
   headers.append("vary", "accept-encoding");
+  // The asset layer's ETag describes the .br file. Two encodings of one resource
+  // must not share a strong validator, so weaken it and mark the encoding.
   const etag = headers.get("etag");
   if (etag) headers.set("etag", `W/${etag.replace(/^W\//, "").replace(/"$/, "-br\"")}`);
 
@@ -281,9 +475,55 @@ export async function servePrecompressedShell(request, env) {
   });
 }
 
+
+// servePrecompressedText: the brotli q11 twin for a static TEXT asset that is
+// neither a page nor part of the /a/ shell: the Markdown twins, the photo data
+// indexes, llms.txt, the sitemap, the feeds.
+//
+// Why it exists is one measurement. Every hashed /a/ asset arrives at EXACTLY
+// its q11 size (1098/1098, 7781/7781, 6148/6148, 2839/2839 on 2026-08-31), so
+// the twin path works and reaches the client untouched. Everything without a
+// twin arrived 12-24% larger, because the edge compresses on the fly at what
+// the comment on servePrecompressedShell calls "roughly brotli q4". That is
+// now measured rather than assumed: local q4 reproduces production's wire size
+// almost byte for byte (garage/horizon.md 50,624 live against 50,508 at q4,
+// index.md 1,361 against 1,361, search-index.json 34,856 against 34,757).
+// 271 static text files shipped that way, 496.7 KiB at q4 against 416.1 KiB
+// at q11. The content is byte-identical either way, so nothing here is a
+// quality trade.
+//
+// It differs from servePrecompressedShell in ONE structural way, and the
+// difference is the reason this is not a call to that function with a wider
+// type map. The shell takes its headers from the TWIN, which works because the
+// `/a/*` glob in _headers matches the .br file too. Nothing else here has that
+// property: `/llms.txt` carries a 30-day Cache-Control and an explicit
+// Content-Type from _headers, `/garage/feed.xml` is typed application/rss+xml,
+// and none of those rules match `<path>.br`. So the headers come from the PLAIN
+// asset and only the body comes from the twin, fetched in parallel because
+// both are colo-local lookups. Whatever _headers says about the URL a visitor
+// asked for is what they get, with three corrections for the bytes actually on
+// the wire: content-encoding, content-length, and a weakened validator.
+//
+// Every failure path lands on today's behaviour, the same contract as the shell:
+//   - not a GET, or not a type the build twins   -> plain asset, untouched
+//   - env.IDENTITY_BODY (an in-process caller)   -> plain asset, untouched
+//   - either lookup fails, or the twin is missing -> plain asset, untouched
+//   - the twin arrives already encoded            -> plain asset, untouched
+//
+// encodeBody: "manual" is load-bearing here for the reason recorded on the
+// shell path: without it the runtime would brotli these already-brotli bytes.
+//
+// js and css joined on 2026-09-16, for the scripts that live under a section
+// prefix rather than in the content-hashed shell (/lwe/ask.js, the vendored
+// /garage/pretext.lib.js) and for the readable .src.js / .src.css twins. html is
+// deliberately NOT a member: `/garage/horizon.html` reaches serveStaticPage's
+// extension branch too, and a twin lookup there would answer the page at a
+// second URL with a 200 where the asset layer redirects it to the canonical one.
+// Only the `.src.html` readable twin is admitted, by name, through hasTextTwin.
 const TEXT_TWIN_TYPES = new Set(["md", "json", "txt", "xml", "svg", "js", "css"]);
 const SOURCE_TWIN = /\.src\.html$/i;
 
+/** Does the build write a q11 twin beside this path, if the Worker claims it? */
 export function hasTextTwin(pathname: string): boolean {
   const ext = (pathname.split(".").pop() ?? "").toLowerCase();
   return TEXT_TWIN_TYPES.has(ext) || SOURCE_TWIN.test(pathname);
@@ -295,6 +535,9 @@ export async function servePrecompressedText(request, env, opts: AssetOptions = 
     return serveAssetWith404Clamp(request, env, opts);
   }
 
+  // Both subrequests ask for identity so the asset layer hands back the file's
+  // own bytes: the plain one so its headers describe the plain body we then
+  // discard, the twin so we are not re-wrapping something the layer encoded.
   const identity = { headers: { "accept-encoding": "identity" } };
   const [plain, twin] = await Promise.all([
     env.ASSETS.fetch(new Request(url.toString(), identity)).catch(() => null),
@@ -309,10 +552,18 @@ export async function servePrecompressedText(request, env, opts: AssetOptions = 
 
   const headers = new Headers(plain.headers);
   headers.set("content-encoding", "br");
+  // The plain response's length describes the body we just cancelled. The twin's
+  // is the one on the wire; if the layer did not state it, let the runtime
+  // measure the stream rather than assert a number that is wrong.
   const twinLength = twin.headers.get("content-length");
   if (twinLength) headers.set("content-length", twinLength);
   else headers.delete("content-length");
+  // Same URL, two encodings: a shared cache must not hand one to a client that
+  // asked for the other.
   headers.append("vary", "accept-encoding");
+  // The asset layer's ETag is a strong validator for the PLAIN bytes. Two
+  // encodings of one resource must not share it, so weaken and mark it, the way
+  // the page path does.
   const encoded = variantEtag(headers.get("etag"), "br");
   if (encoded) headers.set("etag", encoded);
   for (const [name, value] of Object.entries(opts.headers || {})) headers.set(name, value);
@@ -321,12 +572,21 @@ export async function servePrecompressedText(request, env, opts: AssetOptions = 
   return notModifiedIfFresh(request, res);
 }
 
+// twinPolicy: the part of a page's header policy its negotiated Markdown twin
+// takes, which is all of it except two headers that describe the HTML
+// representation. cache-control stays the twin's own no-store (the edge keys the
+// URL, never the Accept), and a rel=preload entry names the shell's stylesheet
+// and script, which a Markdown body never loads. Every other Link entry is about
+// the resource and stays: it is the rule the homepage's twin already followed by
+// hand (HOMEPAGE_DISCOVERY_LINK without SHELL_PRELOAD_LINK), and it is what
+// keeps /inbox's webmention endpoint discoverable from either representation.
 export function twinPolicy(headers: Record<string, string> = {}): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [name, value] of Object.entries(headers)) {
     const key = name.toLowerCase();
     if (key === "cache-control") continue;
     if (key === "link") {
+      // split between entries only: a comma inside <...> belongs to a URL
       const kept = value.split(/,\s*(?=<)/).filter((entry) => !/;\s*rel="?preload"?/i.test(entry)).join(", ");
       if (kept) out[name] = kept;
       continue;
@@ -336,14 +596,37 @@ export function twinPolicy(headers: Record<string, string> = {}): Record<string,
   return out;
 }
 
+// serveStaticPage: static and build-rendered HTML, with a dcz delta when the
+// client holds either the preferred immutable family dictionary or a committed
+// per-page snapshot, otherwise the brotli q11 twin, otherwise the plain asset.
+//
+// The family dictionary lives at an immutable /a/ URL with a one-year lifetime and
+// is advertised by every HTML response. Static page responses also offer the page
+// itself as a scoped document dictionary; committed snapshots let the next release
+// answer that tag with the high-ratio per-page delta before the family dictionary has
+// arrived. Once both exist, PAGE_FAMILY_MATCH deliberately wins RFC 9842's longest-
+// match selection so an uncaptured exact snapshot cannot shadow a usable family delta.
+// Dynamic Worker pages keep the family Link but never enter this precomputed route.
 export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   const url = new URL(request.url);
+  // HEAD walks the GET path far enough to answer with the SAME headers, then drops
+  // the body. RFC 9110 asks a HEAD to carry the fields its GET would send, and
+  // deciding those fields is this function's whole job, so bailing on the method
+  // before the negotiation below made HEAD advertise text/html on a page whose GET
+  // answers text/markdown. Measured on production 2026-07-31, after the cache fix:
+  // GET /garage/encoding and GET /bot both returned text/markdown while HEAD on the
+  // same URLs returned text/html. That is also a convincing false positive for the
+  // #195 cache bug, since `curl -I` is the reflex probe, which is the second reason
+  // to close it rather than document it.
   const head = request.method === "HEAD";
   if (!head && request.method !== "GET") return serveAssetWith404Clamp(request, env, opts);
   const applyExtraHeaders = (headers) => {
     for (const [name, value] of Object.entries(opts.headers || {})) headers.set(name, value);
     return headers;
   };
+  // Offer the page as its own dictionary only when the cache-control it actually ships
+  // lets a browser keep the offer (see canRegisterAsDictionary). Runs after the caller's
+  // headers land, because the caller is what sets cache-control.
   const offerIfStorable = (headers) => {
     if (canRegisterAsDictionary(headers.get("cache-control"))) {
       const offer = pageOffer(url.pathname);
@@ -355,23 +638,69 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
     return headers;
   };
 
+  // /garage/compression -> asset garage/compression.html, slug garage__compression.
+  // html_handling drops the trailing slash, so the path never carries the extension.
+  // A trailing slash is not canonical here — `html_handling: "drop-trailing-slash"`
+  // makes /garage the one true spelling — so /garage/ must 301 rather than be
+  // answered. Hand it to the asset layer, which issues that redirect. This has to
+  // come BEFORE the /index fallback below: that fallback resolves /garage/ to the
+  // same twin as /garage and would serve it a cheerful 200, leaving the page with
+  // two live URLs. The route oracle caught exactly that.
+  // The ROOT is canonical WITH its slash, so it must be answered rather than
+  // redirected — the opposite of every other trailing slash here. It maps to
+  // index.html, which build.ts bakes into a deterministic document precisely so
+  // it can take this path. Has to come before the guard below, which would
+  // otherwise hand `/` to the asset layer and skip the twin entirely.
   const rel = url.pathname === "/"
     ? "index"
     : url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
   if (rel !== "index" && url.pathname.endsWith("/")) return serveAssetWith404Clamp(request, env);
 
   if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {
+    // Sub-resources under these prefixes are not pages. The TEXT ones (a page's
+    // .md twin, a section's llms.txt or feed.xml, and since 2026-09-16 its
+    // scripts and its readable .src.html twin) have a q11 twin of their own and
+    // take servePrecompressedText, which falls through to the plain asset on any
+    // miss; everything else (the garage's images) goes straight to the asset
+    // layer untouched, as it always did.
     if (!rel.includes("..") && hasTextTwin(rel)) {
       return servePrecompressedText(request, env);
     }
     return serveAssetWith404Clamp(request, env);
   }
+  // Markdown negotiation runs before the dictionary/delta machinery below, which
+  // is all about shipping the HTML cheaply. An agent asking for text/markdown is
+  // not going to use a delta against an HTML dictionary it does not hold.
   if (wantsMarkdown(request)) {
+    // serveMarkdownTwin drops the body for a HEAD itself, so the header set is
+    // decided in one place for every negotiated route. It costs a HEAD one ASSETS
+    // subrequest it used to skip; HEAD is rare enough here that an honest
+    // content-type is the better side of that trade.
+    // The twin is the same page in another representation, so it takes the
+    // page's policy too (since 2026-10-02), which is what keeps a noindex page's
+    // twin noindex without the caller negotiating by hand.
     const md = await serveMarkdownTwin(request, env, `/${rel}.md`, twinPolicy(opts.headers));
     if (md) return md;
   }
+  // Everything below hands back a precompressed BODY (a dcz delta or the q11 twin)
+  // and sizes its headers to those bytes, which a HEAD must not claim. From here it
+  // takes the asset layer's own HEAD handling.
   if (head) return serveAssetWith404Clamp(request, env, opts);
 
+  // build.ts names both artifacts after the ASSET path; this function knows only the
+  // REQUEST path, and `html_handling: "drop-trailing-slash"` makes those differ for
+  // exactly one shape — a section index, where /garage is served by garage/index.html.
+  // So /garage asked for garage.html.br and /pd/garage.<tag>.dcz while the build had
+  // written garage/index.html.br and /pd/garage__index.<tag>.dcz. Both missed, both
+  // silently, and the page fell through to on-the-fly edge compression.
+  //
+  // Measured 2026-07-28: /garage shipped 13,264 bytes against an 11,131-byte twin (16%
+  // wasted), /lwe 6,197 against 5,171 (17%). Every sub-page was byte-exact for its own
+  // twin, which is why this hid — the shape that broke is the only one with no sibling
+  // to diff against, and a missing twin degrades to a correct, slightly larger page.
+  //
+  // Direct name first, so a sub-page still costs one lookup and only an index pays for
+  // the second. An ASSETS miss is colo-local and cheap; an unserved twin is not.
   const bases = [rel, `${rel}/index`];
 
   const findDelta = async () => {
@@ -387,13 +716,15 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
           h.set("content-type", "text/html; charset=utf-8");
           h.set("content-encoding", "dcz");
           h.set("vary", "accept-encoding, available-dictionary");
-          h.delete("etag");
+          h.delete("etag");                       // described the .dcz file, not this page
           applyExtraHeaders(h);
+          // The self-offer is reconciled once more below, after this response borrows the
+          // twin's cache-control; deciding it here would read a header about to change.
           offerIfStorable(h);
           return new Response(d.body, { status: 200, headers: h, encodeBody: "manual" });
         }
         try { await d.body?.cancel(); } catch {}
-      } catch {}
+      } catch { /* fall through to the twin */ }
     }
     return null;
   };
@@ -417,11 +748,23 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
           return new Response(br.body, { status: 200, headers: h, encodeBody: "manual" });
         }
         try { await br.body?.cancel(); } catch {}
-      } catch {}
+      } catch { /* fall through to the plain asset */ }
     }
     return null;
   };
 
+  // The current twin and the optional dictionary delta are independent colo-local
+  // lookups, so do them in parallel. The twin supplies the validator even when the
+  // response body is the delta: after applying it, the browser owns the CURRENT
+  // page and can revalidate that representation with a 304 on its next visit.
+  //
+  // env.IDENTITY_BODY skips both lookups outright and falls through to the plain
+  // asset below. An in-process caller (SELF_FETCH, i.e. /lens reading this host)
+  // gets no transport decode and the runtime has no brotli decoder, so either of
+  // these bodies would reach it as mojibake (dispatch.ts sets the flag).
+  // Skipping is content-preserving here rather than a different answer: the twin
+  // is a compression of the very asset `plain` returns, so the document is the
+  // same one, and the two lookups it avoids are pure cost on this path.
   const [br, delta] = env.IDENTITY_BODY
     ? [null, null]
     : await Promise.all([findBrotli(), findDelta()]);
@@ -434,14 +777,20 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   }
   if (delta) {
     if (br) {
+      // The delta file physically lives under /pd/, but semantically represents
+      // the requested page. Preserve the page URL's cache and discovery contract
+      // from its current q11 twin; only the body encoding differs.
       for (const name of ["etag", "cache-control", "link", "last-modified"]) {
         const value = br.headers.get(name);
         if (value) delta.headers.set(name, value);
       }
+      // The validator belongs to the representation on the wire. Reusing the
+      // Brotli tag on a dcz body lets a cache/client validate the wrong encoding.
       const encoded = variantEtag(br.headers.get("etag"), "dcz");
       if (encoded) delta.headers.set("etag", encoded);
       try { await br.body?.cancel(); } catch {}
     }
+    // cache-control just moved; the self-offer has to agree with the one that shipped.
     offerIfStorable(delta.headers);
     const fresh = notModifiedIfFresh(request, delta);
     if (fresh.status === 304) return fresh;

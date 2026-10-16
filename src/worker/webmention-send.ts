@@ -13,7 +13,15 @@ const DISCOVERY_BYTE_CAP = 256 * 1024;
 // Politeness cap per run, and the one bound that is about the RECEIVER rather
 // than about us. The tick is daily (53 5 * * *, its own); a run that
 // re-notified every citation on every page would be a small crawl of its own.
+//
+// Under the subrequest budget below it cannot currently bind — 40 subrequests buy
+// at most ~12 sends — so it is the ceiling that takes over if that budget is ever
+// raised, which is what moving off Workers Free would do.
+// Kept rather than deleted because the two bounds answer different questions and
+// only one of them is about being a good citizen.
 const MAX_SENDS_PER_RUN = 25;
+// Don't re-notify the same (source,target) pair more often than this. A
+// re-send is legitimate (it's the spec's update signal) but weekly is plenty.
 const RESEND_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 // THE BOUND THAT DECIDES THE SHAPE OF THIS JOB. Workers Free allows 50
@@ -24,6 +32,7 @@ const RESEND_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 // count (lib/budget.ts, 2026-10-14); charging them anyway errs on the safe side. A full sweep here is ~35 pages plus ~100 citations at 2-3 statements
 // each, so it was never going to fit and the honest move is to spend a budget and
 // come back tomorrow rather than to die two thirds of the way through.
+//
 // 40 rather than 50, because the internal half of this count is an ESTIMATE: a
 // page read dispatches through route(), which reads the asset and may touch the
 // Workers cache on the way, and none of that is visible from here. The
@@ -35,9 +44,15 @@ const RESEND_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 // 40 more on their own, so the invocation hit the platform's ceiling every day.
 // contract-no-cron-tick-outspends-the-subrequest-cap pins the per-tick sum.
 export const SUBREQUEST_BUDGET = 40;
+// What one citation costs at worst: discover, POST, record. The loop stops while
+// it can still afford a whole one, so a target is never half-processed.
 const COST_PER_TARGET = 3;
+// And what one page costs at worst, charged up front for the same reason: the
+// dispatch is one call here and more than one subrequest down there.
 const COST_PER_PAGE = 3;
 
+// My own profile links, stamped into every page by the desktop shell. Kept in
+// sync with PROFILES (tools/photos/shell-data.ts) by contract-webmention-outbound.
 export const SELF_LINK_HOSTS = [
   "github.com/oddharsh",
   "x.com/oddhash",
@@ -64,6 +79,15 @@ async function ensureTable(db) {
   ensured = true;
 }
 
+// ── the cron entry point ───────────────────────────────────────────────────
+// Traced with both CAPS as first-class attributes. A run stops on whichever of
+// MAX_SENDS_PER_RUN (politeness, about the receivers) or SUBREQUEST_BUDGET
+// (the platform, about us) it reaches first, and either one leaves work undone
+// while looking, in the summary log, exactly like a run that finished.
+// `webmention.capped` and `webmention.budget_spent` are the difference. The
+// per-target spans additionally separate the three outcomes the summary line
+// fuses — no endpoint (the common, fine case), an endpoint that took the POST,
+// and an endpoint that rejected it.
 export async function cronSendWebmentions(env, origin = "https://aadhar.sh") {
   return span("webmention.send", (s) => cronSendWebmentionsInner(env, origin, s));
 }
@@ -73,6 +97,8 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
   if (!db) {
     sSend.setAttribute("webmention.outcome", "db_unbound");
     console.warn("webmention-send: SOCIAL_DB unbound; skipping");
+    // the full shape even here, so a caller reading `pagesRead` or `spent` off
+    // this job never has to ask which branch it came back from.
     return { sent: 0, discovered: 0, considered: 0, pagesRead: 0, spent: 0, skipped: "unbound" };
   }
   // The ledger. Internal calls (D1, the own-page dispatch) are charged by hand
@@ -87,11 +113,23 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
   sSend.setAttribute("webmention.pages", Array.isArray(pages) ? pages.length : 0);
   const now = Date.now();
 
+  // ONE read of everything this job has ever recorded, rather than a SELECT per
+  // citation. The table holds one row per (page, citation) plus one marker row
+  // per page, so it is a few hundred rows and it buys back ~100 subrequests —
+  // which is the whole difference between a run that finishes and a run that
+  // dies at the platform cap.
   const priorRows = await db.prepare(`SELECT source, target, last_sent_at FROM ${TABLE}`).all(); budget.charge();
   const prior = new Map();
   for (const r of (priorRows && priorRows.results) || []) prior.set(`${r.source}|${r.target}`, r.last_sent_at || 0);
   const freshAt = (source, target) => now - (prior.get(`${source}|${target}`) ?? 0) < RESEND_AFTER_MS;
 
+  // ROTATION, and it needs the marker rows to work. A bounded run always starts
+  // at the top of the list, so without a memory of which pages have been READ the
+  // first few would be swept every night and the tail never at all — and the
+  // pages that cite nothing would starve it hardest, because a page with
+  // no citations writes no row and so always looks new. The marker is the
+  // self-pair (source === target), which no real citation can ever be:
+  // citationsIn drops same-origin links, so the two key spaces cannot collide.
   const pageRead = (p) => prior.get(`${p}|${p}`) ?? 0;
   const queue = [...pages].sort((a, b) => pageRead(a) - pageRead(b));
 
@@ -103,6 +141,9 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
 
   for (const pageUrl of queue) {
     if (refused || sent >= MAX_SENDS_PER_RUN || budget.left < COST_PER_PAGE + COST_PER_TARGET) break;
+    // A page whose own marker is fresh has had every citation on it recorded
+    // within the window, so re-reading it can only produce rows we would skip.
+    // Costs nothing to check and is what makes the rotation advance.
     if (freshAt(pageUrl, pageUrl)) continue;
 
     const html = await span("webmention.fetch_own_page", (s) => {
@@ -118,6 +159,8 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
       if (sent >= MAX_SENDS_PER_RUN || !affordable()) { cut = true; break; }
       considered++;
 
+      // already told them recently? the spec's re-send is an update signal, not
+      // a heartbeat, so this stays quiet between real changes.
       if (freshAt(pageUrl, target)) continue;
 
       let endpoint, status;
@@ -145,6 +188,8 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
         refused = true; cut = true; break;
       }
       if (!endpoint) {
+        // No endpoint is the common case and not a failure. Record it so the
+        // next run doesn't re-probe the same URL for a week.
         await recordSend(db, pageUrl, target, null, null, now); budget.charge();
         continue;
       }
@@ -167,6 +212,8 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
   sSend.setAttribute("webmention.pages_read", pagesRead);
   const spent = budget.spent;
   sSend.setAttribute("webmention.budget_spent", spent);
+  // the honest cap flags: either means this run stopped early and there is more
+  // to do, which the summary line below cannot express.
   sSend.setAttribute("webmention.capped", refused || sent >= MAX_SENDS_PER_RUN || !affordable());
   recordBudget(sSend, budget);
   console.log(`webmention-send: ${pagesRead} pages read, ${considered} citations considered, ${discovered} endpoints found, ${sent} sent, ${spent}/${SUBREQUEST_BUDGET} subrequests`);
@@ -184,6 +231,9 @@ function recordSend(db, source, target, endpoint, status, at) {
   ).bind(source, target, endpoint, status, at).run();
 }
 
+// Every page that accepts mentions also SENDS them: if a page is public enough
+// to be written about, it's public enough to credit what it cites. /writing is a
+// section, so its leaf posts come from posts.json.
 export async function mentionablePages(env, origin) {
   const paths = WEBMENTION_PATHS.filter((p) => !WEBMENTION_SECTIONS.includes(p));
   for (const section of WEBMENTION_SECTIONS) {
@@ -200,6 +250,22 @@ export async function mentionablePages(env, origin) {
   return paths.map((p) => origin + p);
 }
 
+// Read one of my own pages, IN-PROCESS.
+//
+// A plain `fetch(url)` at the public origin cannot work: a fetch to our own
+// hostname from inside this worker is blocked as recursion (error 1042;
+// contract-webmention-outbound pins the in-process read). It failed by
+// RETURNING "" through the catch below, so every page was skipped and the job reported the
+// same silence a working job reports. Measured 2026-08-28: `webmentions_sent`
+// and `webmentions` both held zero rows, weeks after the feature shipped.
+//
+// SELF_FETCH (lib/outbound.ts selfAdapter) dispatches through route() and is
+// what a reader would have got, worker enhancement included; dispatch.ts sets
+// IDENTITY_BODY on it so the precompressed page tier arrives readable rather
+// than as raw brotli. ASSETS is the fallback for a caller that has no
+// dispatcher (dev, tests): it returns the pre-enhancement static bytes, which
+// is worse but is still the page's own links. There is deliberately NO
+// plain-fetch arm, because that arm is the bug.
 async function fetchOwnPage(url, env) {
   const req = new Request(url, {
     headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
@@ -215,6 +281,10 @@ async function fetchOwnPage(url, env) {
   } catch { return ""; }
 }
 
+// ── the citation filter ────────────────────────────────────────────────────
+// Strip the shell before looking for links: the desktop chrome (icons, taskbar,
+// tray) is injected into every page between markers and is where every one of my
+// own profile links lives. What survives is the page's own content.
 export function contentOf(html) {
   return String(html)
     .replace(/<!-- axp:shell -->[\s\S]*?<!-- \/axp:shell -->/g, " ")
@@ -225,29 +295,38 @@ export function contentOf(html) {
     .replace(/<!--[\s\S]*?(?:-->|--!>)/g, " ");
 }
 
+// Every external link in the page's own content, deduped, minus my own profiles
+// and anything the SSRF guard won't touch.
 export function citationsIn(html, origin) {
   const out = new Set<string>();
   for (const m of contentOf(html).matchAll(/<a\b[^>]*>/gi)) {
     const tag = m[0];
+    // An anchor whose job is to open a hover card is chrome, not a citation:
+    // same reasoning as stripping the desktop shell, one level down. The car
+    // references are the whole population here — `interestfor` (Interest
+    // Invoker) on the garage pages, `class="car-link"` on the homepage — and
+    // they point at Google SEARCH URLs, so telling google.com/search?q=Singer
+    // it had been cited would be nonsense rather than good citizenship.
     if (/\binterestfor\s*=/i.test(tag) || /\bclass\s*=\s*("[^"]*\bcar-link\b|'[^']*\bcar-link\b)/i.test(tag)) continue;
     const href = (tag.match(/\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i) || [])[1];
     if (!href) continue;
     const raw = href.replace(/^["']|["']$/g, "").trim();
-    if (!/^https?:\/\//i.test(raw)) continue;
+    if (!/^https?:\/\//i.test(raw)) continue;             // relative + mailto + raycast:// etc
     let u;
     try { u = new URL(raw); } catch { continue; }
-    if (u.origin === origin) continue;
+    if (u.origin === origin) continue;                     // my own pages
     const bare = (u.host + u.pathname).replace(/^www\./, "").replace(/\/$/, "");
     if (SELF_LINK_HOSTS.some((self) => bare === self || bare.startsWith(self + "/"))) continue;
     if (privateHostBlocked(u.hostname.toLowerCase())) continue;
     const checked = validateLensTarget(u.toString());
     if (!checked.ok) continue;
-    u.hash = "";
+    u.hash = "";                                           // #anchor is the same document
     out.add(u.toString());
   }
   return [...out];
 }
 
+// ── discovery ──────────────────────────────────────────────────────────────
 // Per spec: the Link header wins, then the first <link> or <a> carrying
 // rel=webmention IN DOCUMENT ORDER (not all <link>s and then all <a>s — that
 // ordering is what discovery tests 16 and 17 pull apart). Relative endpoints
@@ -306,8 +385,10 @@ export async function discoverEndpoint(target, transport?: PublicTransport) {
     const { response: res, finalUrl } = followed;
     const linkHeader = res.headers.get("link");
     let endpoint;
+    // A HEAD-equivalent shortcut: if the Link header already names an endpoint,
+    // don't read the body at all.
     if (linkHeader && /\bwebmention\b/i.test(linkHeader)) {
-      try { await res.body?.cancel(); } catch {}
+      try { await res.body?.cancel(); } catch { /* no body needed for header discovery */ }
       endpoint = findEndpointIn("", linkHeader, finalUrl);
     } else {
       if (!res.ok) return null;
@@ -315,6 +396,8 @@ export async function discoverEndpoint(target, transport?: PublicTransport) {
       endpoint = findEndpointIn(body?.text || "", null, finalUrl);
     }
     if (!endpoint) return null;
+    // The endpoint itself is an attacker-supplied URL (it comes from a page I
+    // don't control), so it gets the same guard as everything else.
     const checked = validateLensTarget(endpoint);
     return checked.ok ? checked.url : null;
   } catch (e) {

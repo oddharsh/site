@@ -1,7 +1,6 @@
 // /search — bounded server-side search over the generated public corpus.
 // The index is static and loaded only on this route (or by the site MCP tool),
 // keeping the homepage critical path free of search bytes and fan-out.
-
 import { cachedRender } from "./lib/cache.ts";
 import { SEARCH_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { lunaPage } from "./lib/chrome.ts";
@@ -19,11 +18,19 @@ export type SearchRecord = {
 
 type PreparedRecord = {
   record: SearchRecord;
+  // The title and description, lowercased. The body is matched where it is,
+  // through bodyMatchers, so it has no lowercase copy.
   fields: string[];
 };
 
 let indexCache: PreparedRecord[] | null = null;
 
+// Test seam, never called by the worker, like _resetPhotoCaches in photos.ts.
+// The corpus is cached per ISOLATE, which is right in production and becomes
+// per-PROCESS under `bun test --no-isolate`: a worker running two files that
+// stub different corpora serves the second file the first one's. Found
+// 2026-09-29 when /ask's tests read an empty corpus after new test files
+// reshuffled which files share a worker.
 export function _resetSearchIndex() {
   indexCache = null;
 }
@@ -39,6 +46,19 @@ async function getSearchIndex(env): Promise<PreparedRecord[]> {
     // scoring fields once, after the lazy read, rather than allocating and
     // lowercasing every article for every query. Keep only completed data here:
     // an in-flight ASSETS promise belongs to the request that started it.
+    //
+    // Lowercasing the title and description is the only per-record pass. A
+    // whitespace collapse used to run here too, on text the generator already
+    // collapsed, and it was the most expensive line on the route: `\s+` matches
+    // every single space, so it rebuilt all 590 KB of body text, 5.6-6.9ms of a
+    // cold isolate's CPU (2026-10-07). snippet() collapses the 220 characters it
+    // returns instead.
+    //
+    // The body text isn't lowercased either. It's 686 KB of the index's 705 KB
+    // (63 records, 2026-10-09), and lowercasing it took 0.87-0.92 ms of a cold
+    // isolate's prepare, against 0.21 ms to search it once lowercased. A
+    // case-insensitive regex searches the original in about the same time, so
+    // the copy only cost the cold request. bodyMatchers builds those per query.
     const prepared: PreparedRecord[] = payload.records.map((record: SearchRecord) => ({
       record,
       fields: [record.title, record.description].map((value) => String(value || "").toLowerCase()),
@@ -46,13 +66,21 @@ async function getSearchIndex(env): Promise<PreparedRecord[]> {
     indexCache = prepared;
     return prepared;
   } catch {
+    // A transient read/parse failure must not pin an empty corpus to an isolate.
     return [];
   }
 }
 
+// One case-insensitive matcher per query term, for the body text. Terms are
+// runs of letters and digits (lib/text.ts), so the escape is a guard against a
+// tokenizer that someday lets punctuation through, not something today's terms
+// need.
 const bodyMatchers = (queryTerms: string[]) =>
   queryTerms.map((term) => new RegExp(term.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&"), "i"));
 
+// The excerpt comes from the body, or the description when a record has none,
+// starting near the first query term it contains. The body is searched with
+// the query's matchers, so the position is the original text's own.
 function snippet({ record, fields }: PreparedRecord, queryTerms: string[], matchers: RegExp[]) {
   const source = record.text || String(record.description || "");
   if (!source) return "";
@@ -64,13 +92,31 @@ function snippet({ record, fields }: PreparedRecord, queryTerms: string[], match
   return (start ? "…" : "") + source.slice(start, start + 220).replace(/\s+/g, " ").trim() + (start + 220 < source.length ? "…" : "");
 }
 
+// The per-term ceiling: a term that hits the title, the description AND the
+// body scores 8 + 4 + 1. Exported because a raw additive score is meaningless
+// without it — /ask reports NLWeb's `score` as a percentage of what the query
+// could possibly have scored, and that denominator is terms x this.
 export const SEARCH_TERM_MAX = 13;
 
+/**
+ * The ranking pass, with the score and the terms it was scored against still
+ * attached. searchSite drops both, correctly: its callers (the /search page,
+ * /search.json, the terminal and the MCP search_site tool) list results, and
+ * "39" tells a reader nothing. /ask cannot drop them, because NLWeb's result
+ * contract carries a `score` and a relevance number is only honest when you
+ * can say what its ceiling was.
+ */
 export async function searchSiteRanked(env, query: string, limit: string | number | null = SEARCH_LIMITS.limitDefault) {
   const q = String(query || "").trim().slice(0, SEARCH_LIMITS.queryMax);
+  // Agents ask this in sentences ("what does he think about agents"), and every
+  // stopword in one scores against the body text of nearly every page at +1.
+  // Enough of them and the ranking is decided by which page is longest. Terms
+  // survive if dropping them would leave nothing to search on.
   const meaningful = queryTermsOf(q).terms;
   const queryTerms = meaningful.length ? meaningful : terms(q);
   const max = clampParam(limit, SEARCH_LIMITS.limitDefault, SEARCH_LIMITS.limitMax);
+  // Before the index read: a query with no terms answers nothing either way,
+  // and reading it first charged an empty MCP search the whole cold prepare.
   if (!queryTerms.length) return { query: q, terms: [], total: 0, returned: 0, results: [] };
   const records = await getSearchIndex(env);
   const matchers = bodyMatchers(queryTerms);
@@ -90,11 +136,20 @@ export async function searchSiteRanked(env, query: string, limit: string | numbe
     terms: queryTerms,
     total: results.length,
     returned: Math.min(max, results.length),
+    // Only returned rows need an excerpt. Broad queries can match the whole
+    // corpus, while the caller asks for as few as one result.
     results: results.slice(0, max).map(({ entry, score }) => ({
       ...entry.record, score, snippet: snippet(entry, queryTerms, matchers),
     })),
   };
 }
+/**
+ * The whole corpus as excerpt-ready records, for /ask's Clef ranking, which
+ * chooses across every page rather than reordering the lexical matches
+ * (ask-rank.ts has the measurement). Each record carries the snippet the
+ * lexical pass would have shown for this query, so a page Clef found without a
+ * matching word still reads the same way in the answer.
+ */
 export async function searchCorpusFor(env, query: string) {
   const q = String(query || "").trim().slice(0, SEARCH_LIMITS.queryMax);
   const meaningful = queryTermsOf(q).terms;
@@ -127,6 +182,7 @@ export async function handleSearch(request, env, ctx) {
   const query = url.searchParams.get("q") || "";
   const results = query.trim() ? await searchSite(env, query, url.searchParams.get("limit")) : { query: "", total: 0, returned: 0, results: [] };
   const render = () => renderSearchPage(query, results);
+  // Query-specific HTML must never share the blank/search result cache key.
   return query.trim() ? render() : cachedRender(request, ctx, render, "/search", env);
 }
 

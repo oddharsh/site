@@ -46,10 +46,14 @@ export const ERR_INVALID_PARAMS = -32602;
 // notifications rather than replacing them. `public` throughout because every
 // surface on both servers is public: no auth, no per-caller view, nothing an
 // intermediary would be wrong to share.
-export const CACHE_STATIC = { ttlMs: 3_600_000,  cacheScope: "public" };
-export const CACHE_LIVE   = { ttlMs:   300_000,  cacheScope: "public" };
-export const CACHE_EMPTY  = { ttlMs: 86_400_000, cacheScope: "public" };
+export const CACHE_STATIC = { ttlMs: 3_600_000,  cacheScope: "public" };  // changes at deploy
+export const CACHE_LIVE   = { ttlMs:   300_000,  cacheScope: "public" };  // reads a live page
+export const CACHE_EMPTY  = { ttlMs: 86_400_000, cacheScope: "public" };  // permanently empty
 
+// ── per-request negotiation ─────────────────────────────────────────
+
+// The version this request declares, or null for a legacy caller.
+//
 // `_meta` is the ONLY modern signal. The MCP-Protocol-Version header predates
 // this revision (2025-06-18 introduced it for HTTP), so treating a header as
 // proof of modernity would misclassify a legacy client and answer it in a
@@ -68,11 +72,21 @@ export const CACHE_EMPTY  = { ttlMs: 86_400_000, cacheScope: "public" };
 // exists to avoid. A dual-era server cannot both read absence as an era signal
 // and call absence malformed. It has to pick one, and this one picks the era
 // signal.
+//
+// What that leaves is a clean rule: `protocolVersion` is the SELF-DECLARATION
+// of modernity, and everything else the modern revision requires is enforced
+// against callers who made it. See missingRequiredMeta().
 export function declaredVersion(msg) {
   const v = msg?.params?._meta?.[META_PROTOCOL];
   return asText(v);
 }
 
+// The `_meta` field this MODERN request is missing, or null if it is fine.
+//
+// Only ever fires on a request that declared `protocolVersion`, which is what
+// keeps the legacy door open (see the deviation above): a caller with no
+// `_meta` at all is legacy, not malformed, and never reaches this.
+//
 // `clientCapabilities` must be an OBJECT. The spec types it as
 // ClientCapabilities, and a client sending `true` or `"none"` has not declared
 // capabilities in any readable sense; accepting the key's mere presence would
@@ -86,6 +100,10 @@ export function missingRequiredMeta(msg) {
   return ok ? null : META_CLIENT_CAPS;
 }
 
+// The refusal for that, which is a plain Invalid Params rather than anything
+// from the reserved range. `data.missing` is not required by the spec and is
+// there because "Invalid params" alone tells a client author nothing about
+// WHICH param, and this is a field they have probably never heard of.
 export function malformedRequest(id, missing) {
   return { jsonrpc: "2.0", id, error: {
     code: ERR_INVALID_PARAMS,
@@ -154,11 +172,19 @@ export function mcpCorsHeaders() {
   };
 }
 
+// ── result construction ─────────────────────────────────────────────
+
+// Binds the protocol helpers to one server's identity, so `serverInfo` is
+// stated once per server instead of threaded through every call site.
+//
 // Results carry `resultType` and `_meta` serverInfo UNCONDITIONALLY, including
 // to legacy callers. Safe in both directions: JSON-RPC clients ignore unknown
 // result fields, and the spec tells modern clients to read a missing
 // `resultType` as "complete" anyway. One code path beats two that must agree.
 export function mcpServer({ serverInfo, capabilities, instructions }) {
+  // `cache` is optional: a tools/call result carries no freshness hint, and
+  // the default spreads to nothing. TypeScript reads an unannotated parameter
+  // as REQUIRED, so the default is what lets those callers omit it.
   const result = (id, payload, cache = {}) => ({ jsonrpc: "2.0", id, result: {
     resultType: "complete",
     ...payload,
@@ -182,6 +208,8 @@ export function mcpServer({ serverInfo, capabilities, instructions }) {
       instructions,
     }, CACHE_STATIC),
 
+    // The legacy handshake. Kept because deleting it strands every pre-2026
+    // client; answered in the legacy era only (see MCP_LEGACY_DEFAULT).
     initialize: (id, requested) => ({ jsonrpc: "2.0", id, result: {
       protocolVersion: MCP_LEGACY.includes(requested) ? requested : MCP_LEGACY_DEFAULT,
       capabilities,
@@ -191,6 +219,17 @@ export function mcpServer({ serverInfo, capabilities, instructions }) {
   };
 }
 
+// The gate every request passes before dispatch: version, then the required
+// modern `_meta`, then headers. Returns a JSON-RPC error to send, or null to
+// proceed. Shared so the two servers cannot diverge on which requests they
+// refuse.
+//
+// Version goes FIRST so a caller on a version we do not speak is told that,
+// rather than being told its `_meta` is malformed under a revision it was never
+// claiming to follow. The two would be equally "correct" refusals and only one
+// of them is actionable.
+// mcpRequest suppresses notification replies after applying this gate;
+// null here means the request may proceed.
 function mcpGate(msg, request) {
   const id = msg.id;
   const declared = declaredVersion(msg);
@@ -208,6 +247,29 @@ function mcpGate(msg, request) {
 
 export const mcpError = (id, code, message) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
 
+// ── which era is actually calling ───────────────────────────────────
+// The legacy half of this module exists for one reason, that a pre-2026 client
+// has no fall-forward mechanism. That reason expires when those clients stop
+// calling, and nothing here could say when that happens. This records the era of
+// every well-formed message so the per-request log line in dispatch.ts can carry
+// it, which turns "can the legacy door close" into a count rather than a guess.
+//
+// It rides the EXISTING log line rather than emitting its own, because every
+// console.log and every span is one observability event on the 200K/day Free
+// quota from 2026-10-01 (CLAUDE.md's Workers Free invariant). A second line per
+// /mcp call would buy nothing this field does not.
+//
+// Keyed on the Request OBJECT, which is the one value both the MCP handlers and
+// serveWorkerRequest hold: route() hands the same object all the way down. A
+// WeakMap means nothing outlives the request and nothing needs clearing. A
+// self-dispatch (SELF_FETCH) never reaches serveWorkerRequest, so this origin's
+// own /lens probes are recorded here and logged nowhere, which is correct: they
+// are this site talking to itself.
+//
+// Everything written here is caller-controlled, so it is narrowed before it can
+// reach a log: a version must be date-shaped, and a client name keeps printable
+// ASCII and 40 characters. A field that fails that is dropped rather than
+// rewritten, the same undefined-is-skipped rule the span attributes follow.
 type McpEra = { era: "modern" | "legacy" | "mixed"; version?: string; client?: string };
 const ERAS = new WeakMap<Request, McpEra>();
 
@@ -239,11 +301,16 @@ function noteEra(request: Request, msg) {
     ERAS.set(request, { era, version, client });
     return;
   }
+  // A batch can mix eras, and then no single revision describes the request.
+  // Say so rather than letting the last message win.
   if (seen.era !== era) seen.era = "mixed";
   if (seen.version !== version) seen.version = undefined;
   seen.client ??= client;
 }
 
+// What the MCP handlers recorded for this request, or undefined when the
+// request never reached one (every non-MCP route, and every MCP request that
+// failed to parse). Read by the log line in dispatch.ts.
 export function mcpEraOf(request: Request): McpEra | undefined {
   return ERAS.get(request);
 }
@@ -261,6 +328,7 @@ export async function mcpRequest(msg, request, dispatch) {
   return Object.hasOwn(msg, "id") ? reply : null;
 }
 
+// Preserve useful refusals from JSON-RPC and from plain vendor/OAuth errors.
 export function rpcErrorDetail(payload) {
   const error = payload && payload.error;
   const code = Number.isInteger(error && error.code) ? error.code : null;
@@ -295,6 +363,8 @@ export function parseMcpBody(text, contentType, expectedId: string | number) {
       && Object.hasOwn(reply, "result") !== Object.hasOwn(reply, "error")) {
       return { ok: true, payload, framing };
     }
+    // A non-RPC JSON refusal is still worth reading, but cannot authorize a
+    // protocol retry or supply a result for the caller to trust.
     if (!streamed && reply?.error && !reply.jsonrpc) return { ok: false, detail: rpcErrorDetail(reply) };
   }
   return { ok: false, detail: `${streamed ? "SSE stream carried" : "answer contained"} no matching JSON-RPC response` };

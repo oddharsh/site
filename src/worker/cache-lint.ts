@@ -1,6 +1,30 @@
 // cache-lint.ts — does your cache validator actually work? A BEHAVIORAL probe,
 // not a header read.
-
+//
+// ── the silent failure this catches ───────────────────────────────────────
+// A huge class of origins serve an ETag that never matches: the server varies
+// compression (or a template nonce, or a timestamp) per response, so the
+// validator changes on every fetch and every If-None-Match revalidation comes
+// back 200 with a full body. The headers look perfect. Nothing warns. Your
+// "cached" asset re-downloads in full on every revisit, forever.
+//
+// No header-reading grader can see this, because the pathology is not IN one
+// response — it is BETWEEN responses. So this tool fetches the target twice and
+// then replays the validator, and reports what the origin actually did:
+//
+//   fetch #1                 -> note ETag / Last-Modified
+//   fetch #2 (unconditional) -> did the validator CHANGE between identical requests?
+//   fetch #3 (If-None-Match) -> did a 304 actually come back?
+//
+// Three subrequests, near-zero CPU: this runs comfortably inside Workers Free's
+// 10ms CPU limit.
+//
+// ── the second trap: negotiation without Vary ─────────────────────────────
+// Hit in production on THIS site (#195): a route answered `Accept: text/markdown`
+// with markdown, but the cached HTML's Vary named only accept-encoding, so a
+// markdown ask off a warm cache came back HTML. The lint probes it the same
+// behavioral way: ask for a second representation and check whether the answer
+// changed while Vary claims it cannot.
 import { outboundRead } from "./lib/outbound.ts";
 import { parseCacheControl } from "./dict.ts";
 
@@ -10,6 +34,7 @@ type HeaderProbe =
   | { status: number; headers: Record<string, string>; error?: never }
   | { error: string; status?: never; headers?: never };
 
+/** One bounded, signed fetch that reads only headers (body cancelled). */
 async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
   const deadline = AbortSignal.timeout(FETCH_TIMEOUT);
   try {
@@ -18,6 +43,9 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
       accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.7",
       ...extraHeaders,
     };
+    // This origin dispatches in-process, unsigned. Anything else is signed and
+    // robots-gated per hop, with native fetch's 20-redirect allowance
+    // (lib/outbound.ts owns both arms).
     const read = await outboundRead(url, env, {
       method: "GET",
       headers: base,
@@ -29,13 +57,21 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
     const res = read.response;
     const responseHeaders: Record<string, string> = {};
     for (const [key, value] of res.headers) responseHeaders[key.toLowerCase()] = value;
-    try { await res.body?.cancel(); } catch { }
+    try { await res.body?.cancel(); } catch { /* already drained */ }
     return { status: res.status, headers: responseHeaders };
   } catch (error) {
     return { error: String(error?.message || error).slice(0, 80) };
   }
 }
 
+/**
+ * The verdict, as a pure function of the three observations (plus the optional
+ * negotiation pair). Pure so the rules are testable without a network
+ * (tools/contract-cache-the-behavioral-revalidation-lint.test.mjs).
+ */
+// negotiated is OPTIONAL: it marks a response that varied on Accept, which most
+// callers have no opinion about. The body reads it behind a guard, and the lint's
+// own tests pass three of the four fields.
 export function judgeRevalidation({ first, second, conditional, negotiated }: {
   first?: any; second?: any; conditional?: any; negotiated?: any;
 }) {
@@ -73,7 +109,12 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: {
 
   if (etag1?.startsWith("W/")) add("weak", "warn", "weak ETag — legal for revalidation, but disables If-Range resumption");
 
+  // The #195 trap: a second representation from one URL with a Vary that
+  // doesn't name the negotiating header.
   if (negotiated) {
+    // TOKENS, not substring. "accept-encoding".includes("accept") is true, so a
+    // substring test waves through the exact header combination #195 shipped
+    // with. The contract test above pins that case.
     const varyTokens = (first.headers?.vary || "").toLowerCase().split(",").map((t) => t.trim());
     const variesOnAccept = varyTokens.includes("accept") || varyTokens.includes("*");
     const differs = negotiated.headers?.["content-type"] !== first.headers?.["content-type"];
@@ -97,6 +138,10 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: {
   return { findings, vetoes, healthy: vetoes.length === 0 };
 }
 
+/**
+ * Run the whole probe against one URL. The caller has already validated the
+ * target (validateLensTarget) and charged the rate budget.
+ */
 export async function probeRevalidation(url, env) {
   const first = await probeHeaders(url, env);
   if ("error" in first) return { ok: false, unreadable: true, why: first.error };

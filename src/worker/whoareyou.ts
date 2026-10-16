@@ -1,6 +1,5 @@
 // whoareyou.ts — /whoareyou (System Properties), its values island, and the
 // /whoareyou.json feed the tray and the release canary read. Bundled by wrangler.
-
 import { BOT_UA } from "./lib/botauth.ts";
 import { BUILD_INFO } from "./lib/build-info.ts";
 import { deadline } from "./lib/cache.ts";
@@ -10,9 +9,18 @@ import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { WHOAREYOU_VALUES_URL } from "./routes.ts";
 
+/** How long Cloudflare keeps an RDAP answer, keyed by the IP in its URL. /privacy prints it. */
 export const RDAP_CACHE_TTL_S = 86400;
 
 const RDAP_BUDGET_MS = 250;
+
+// /whoareyou shows the visitor what their HTTP request revealed. It stores
+// nothing and logs nothing beyond the one line dispatch.ts writes for every
+// request (/privacy says what that line holds). One server-side outbound call
+// to ARIN's RDAP service enriches the IP with its registration metadata
+// (network name, owner, CIDR), so the visitor's browser never speaks to a third
+// party. RDAP results are CF-edge-cached by URL for 24h, so visitors from the
+// same IP block don't re-hit ARIN.
 
 // RDAP returns the registered owner of the IP block — often more
 // specific than the ASN's operator (e.g. "Columbia University" rather
@@ -21,6 +29,7 @@ const RDAP_BUDGET_MS = 250;
 // one URL works for all five RIRs as long as we follow redirects.
 export async function fetchRdap(ip) {
   if (!ip || ip === "—") return null;
+  // basic shape check to avoid sending garbage to ARIN
   if (!/^[0-9a-fA-F:.]+$/.test(ip)) return null;
   try {
     const res = await fetch(`https://rdap.arin.net/registry/ip/${encodeURIComponent(ip)}`, {
@@ -29,15 +38,24 @@ export async function fetchRdap(ip) {
         "accept":     "application/rdap+json",
       },
       redirect: "follow",
+      // cap the enrichment: a slow/unreachable RIR must not block the page.
+      // on abort the catch below returns null and the page renders without the
+      // optional owner/CIDR/registration lines (they refill once the 24h edge
+      // cache warms). RDAP is non-essential enrichment, so 2s is deliberate.
       signal: AbortSignal.timeout(2000),
-      cf: { cacheTtl: RDAP_CACHE_TTL_S, cacheEverything: true },
+      cf: { cacheTtl: RDAP_CACHE_TTL_S, cacheEverything: true },  // CF edge cache, keyed by URL
     });
     if (!res.ok) return null;
     const data = asRecord(await res.json());
     if (!data) return null;
 
+    // network name — short identifier for the allocated block (e.g.
+    // "COMCAST-1", "COLUMBIA-UNIV"). `handle` falls back to ARIN's
+    // internal NET- handle if `name` isn't populated.
     const networkName = asText(data.name) || asText(data.handle) || null;
 
+    // CIDR — prefer the structured cidr0_cidrs[0]; otherwise compose
+    // from startAddress/endAddress (less precise but always present).
     let cidr: string | null = null;
     const c = asRecord(Array.isArray(data.cidr0_cidrs) ? data.cidr0_cidrs[0] : null);
     if (c) {
@@ -69,6 +87,7 @@ export async function fetchRdap(ip) {
     const regEvent = events.find((event) => event.eventAction === "registration");
     const lastChanged = events.find((event) => event.eventAction === "last changed");
 
+    // allocation type — "DIRECT ASSIGNMENT", "REASSIGNED", "ALLOCATED PORTABLE", etc.
     const allocType = asText(data.type);
 
     return {
@@ -84,6 +103,9 @@ export async function fetchRdap(ip) {
   }
 }
 
+// gather everything one HTTP request revealed: the cf.* edge signals, the
+// request headers, a parsed UA, and the (optional, cached) RDAP enrichment.
+// shared by the /whoareyou page and the /whoareyou.json popout feed.
 export async function gatherWhoareyou(request, ctx) {
   const cf = request.cf || {};
   const h  = request.headers;
@@ -141,6 +163,10 @@ export async function gatherWhoareyou(request, ctx) {
 
   const ua = parseUA(data.userAgent);
 
+  // RDAP enrichment is optional. Give a warm edge-cached response a short place
+  // on the critical path, then render without it while the same read finishes in
+  // the background and warms the colo. fetchRdap's own 2s abort remains the
+  // outer bound; a cold or unreachable RIR no longer makes the page pay it.
   let rdapTimedOut = false;
   const rdapRead = fetchRdap(data.ip);
   const rdap = await deadline(rdapRead, RDAP_BUDGET_MS, null, () => { rdapTimedOut = true; });
@@ -152,6 +178,10 @@ export async function gatherWhoareyou(request, ctx) {
   return { data, ua, rdap };
 }
 
+// the fields-only model behind the System Properties views. values are plain
+// strings; extra detail that is itself DATA (continent, allocation type,
+// last-changed date, QUIC) rides inline. pure explanation (what a field means,
+// why it matters) is omitted — the popout shows fields, the page carries prose.
 export function buildWhoareyouGroups(data, ua, rdap, version, build = BUILD_INFO) {
   const net = [
     { k: "IP address", v: data.ip },
@@ -201,6 +231,23 @@ export function buildWhoareyouGroups(data, ua, rdap, version, build = BUILD_INFO
   // and are not exposed on request.cf, so the worker genuinely cannot know
   // them. The page fills them in the browser; this JSON feed is server-rendered
   // and would have to invent them, so it says nothing instead.
+  // The first field here that describes the SERVER rather than the caller, and it
+  // is here because "what does one request reveal" honestly includes which build
+  // answered it. During a gradual deployment two versions serve this route at
+  // once, so an outside prober polling this feed is how a ramp gets verified from
+  // the outside: `no-store` below means every poll re-runs the worker and reports
+  // the version that actually handled it. That is why the canary sampler in
+  // tools/deploy-promote.ts reads THIS route rather than /updates.json, which
+  // reports the D1 changelog both versions share and so cannot tell them apart.
+  //
+  // Omitted entirely when unbound (local dev, the contract tests) rather than
+  // filled with a placeholder, same nullable discipline as the photo pipeline.
+  //
+  // "Built from commit" is the other half: the source that version was built
+  // from, baked in by build.ts step 5e (lib/build-info.ts). A version names an
+  // upload and no commit, so the commit is what lets tools/check-served.ts ask CI
+  // for the manifest this release should match. Absent outside Workers Builds,
+  // same discipline.
   const server = [
     version ? { k: "Serving version", v: version, mono: true } : null,
     build ? { k: "Built from commit", v: build.commit, mono: true } : null,
@@ -218,6 +265,9 @@ export function buildWhoareyouGroups(data, ua, rdap, version, build = BUILD_INFO
 export async function handleWhoareyouJson(request, env, ctx) {
   const { data, ua, rdap } = await gatherWhoareyou(request, ctx);
   const version = env?.CF_VERSION_METADATA?.id;
+  // `build` is the same facts as the Server group, for a reader that wants them
+  // without walking the groups. Null when there is neither a version binding nor
+  // a Workers Builds commit, and each missing half is null, never a placeholder.
   const build = version || BUILD_INFO
     ? { version: version ?? null, commit: BUILD_INFO?.commit ?? null, branch: BUILD_INFO?.branch ?? null, build: BUILD_INFO?.build ?? null }
     : null;
@@ -232,9 +282,31 @@ export async function handleWhoareyouJson(request, env, ctx) {
   });
 }
 
+// /whoareyou is a built shell and one island. The page rendered per request
+// until 2026-09-25, which cost it everything a built document gets: it went out at the edge's roughly-q4 brotli (8,293 B
+// against 6,836 B at q11, measured that day), with no dcz delta, no ETag, and
+// the loose 'unsafe-inline' script policy every unhashed page falls back to.
+// About half the body is fixed prose, so it takes lib/island.ts's shape: the
+// document is baked by build.ts step 5b, and the values are a fragment from
+// /whoareyou/values.html, fetched once after load by the same request pattern
+// the homepage uses for its photo grid.
+//
+// What moved is worth stating, because this page's subject is what a request
+// reveals. The values now describe the FRAGMENT request, which is normally the
+// same connection (one IP, one TLS session, one HTTP version) with a slightly
+// later clock and its own ray id. The one field that genuinely differs is the
+// referrer: the fragment request's Referer is this page, so that row is filled
+// in the browser from document.referrer, which is what the browser sent with
+// the page request. The callout says all of this in the page's own copy.
 export const VALUES_URL = WHOAREYOU_VALUES_URL;
 const PENDING = "…";
 
+// The placeholder model. The same renderer draws the baked placeholder and the
+// live fragment, so the swap moves only what the live values add. Optional
+// fields a browser visitor normally has (coords, a round-trip, delivery rate,
+// stream priority, the TLS extensions hash) are PENDING rather than null, so
+// their rows are already standing when the values land. Fields most visitors
+// never carry (RDAP until the colo is warm, JA3/JA4, a bot score) stay null.
 const PLACEHOLDER_DATA = {
   host: "aadhar.sh", scheme: "https", ray: PENDING, ip: PENDING, asn: PENDING, asOrg: PENDING,
   country: PENDING, continent: "—", isEU: false, region: PENDING, city: PENDING, postalCode: "—",
@@ -321,6 +393,7 @@ export function renderWhoareyouValues(data, ua, rdap) {
 `;
 }
 
+// The island. Everything in it is this one request's, so it is never cached.
 export async function handleWhoareyouValues(request, env, ctx) {
   const { data, ua, rdap } = await gatherWhoareyou(request, ctx);
   return islandResponse(renderWhoareyouValues(data, ua, rdap), {
@@ -577,6 +650,13 @@ footer .signature small { color: oklch(56.93% 0 0); }
     </footer>
 
 `,
+    // Two scripts. The first fills the Edge Trace section from /cdn-cgi/trace,
+    // the only source for those fields (request.cf never carries them), and the
+    // referrer row from document.referrer, both now and after every island swap.
+    // Failure is reported rather than hidden, because a page whose whole subject
+    // is what a request reveals should not quietly show blanks where it could not
+    // look. The second is lib/island.ts's shared loader, byte-identical on every
+    // page that uses it. build.ts hashes both into script-src (step 7c).
     scripts: html`${unsafeHtml(`<script>
 (function () {
   // The referrer row. The values request's own Referer is this page, so the

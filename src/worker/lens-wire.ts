@@ -1,5 +1,8 @@
 import { span } from "./lib/trace.ts";
 import { BOT_UA } from "./lib/botauth.ts";
+// lens.ts does not import this file, so the edge runs one way and there is no
+// cycle. The route's validation, cache, budgets and span are lens-pipeline.ts's;
+// the SSRF guard it validates through is lib/public-fetch.ts's, never a copy.
 import { BROWSER_FREE_PLAN } from "./lens.ts";
 import { defineLens, lensErrorText } from "./lens-pipeline.ts";
 import { EXECUTION_PROBE } from "./lib/agent-execution.ts";
@@ -8,6 +11,10 @@ import { asText } from "./lib/parse.ts";
 
 const CDP_BASE = "https://localhost/v1/devtools/browser";
 
+// Wall-clock ceilings. The navigate wait is generous because the point of the
+// lens is late-firing third parties, and the settle window after the load event
+// is what catches the analytics beacons that fire on load. Both are well inside
+// the isolate's budget; the binding's own CDP timeout is 30s.
 export const WIRE_TIMING = {
   cdpCommandMs: 20000,
   navigateMs: 20000,
@@ -15,9 +22,21 @@ export const WIRE_TIMING = {
   hardCapMs: 28000,
 };
 
+// KV, 6h, the same reasoning /lens/shot wrote down: on a ten-minute-a-day
+// allowance a MISS costs a slice of the account's budget while a stale
+// waterfall costs a slightly old picture of a page that mostly did not change.
 const WIRE_CACHE_TTL = 21600;
 
+// How many individual requests travel in the payload. The SUMMARY is computed
+// over every request; this caps only the itemised list, because a page that
+// fires 300 requests needs its totals more than it needs 300 rows.
 const WIRE_MAX_ROWS = 60;
+
+// ── pure summariser ────────────────────────────────────────────────────────
+// Split out from the transport on purpose: this half is a pure function of a
+// CDP event array, so the contract suite can exercise the interesting logic
+// without a browser, a binding, or a network. Everything below the transport line needs
+// workerd; everything above it does not.
 
 // Registrable-domain-ish grouping. Deliberately NOT a public-suffix list: PSL is
 // ~250KB against a bundle already over budget, and the claim this makes is
@@ -37,6 +56,9 @@ function hostOf(url) {
   try { return new URL(url).hostname.toLowerCase(); } catch { return ""; }
 }
 
+// CDP resource types are Chrome's own vocabulary and there are ~20 of them. The
+// page's cost story needs about six, so the rest fold into "other" rather than
+// producing a histogram with a long tail of ones.
 const TYPE_BUCKETS = {
   Document: "document", Stylesheet: "css", Script: "js", Image: "image",
   Font: "font", XHR: "xhr", Fetch: "xhr", Media: "media", Manifest: "other",
@@ -46,6 +68,10 @@ const TYPE_BUCKETS = {
 
 export function bucketFor(cdpType) { return TYPE_BUCKETS[cdpType] || "other"; }
 
+// Build one row per request id, folding the four events that describe the same
+// request into a single record. Ordering is by the CDP timestamp on the
+// requestWillBeSent, which is monotonic within a session, so the list reads as
+// the actual load order rather than as event-arrival order.
 export function summariseWire(events, pageUrl) {
   const pageHost = hostOf(pageUrl);
   const pageSite = siteOf(pageHost);
@@ -114,6 +140,8 @@ export function summariseWire(events, pageUrl) {
   const dataUris = [...byId.values()].filter((r) => r.url && r.url.startsWith("data:")).length;
 
   const hosts = new Map();
+  // Filled per resource type as the waterfall is walked, so the key set is not
+  // knowable from the initializer.
   const byType: Record<string, { count: number; bytes: number }> = {};
   let bytes = 0, thirdBytes = 0, thirdCount = 0, cached = 0, failed = 0, aborted = 0;
 
@@ -150,6 +178,8 @@ export function summariseWire(events, pageUrl) {
     thirdParty: {
       requests: thirdCount,
       bytes: thirdBytes,
+      // The headline. Guarded against a zero-byte load so the demo never shows
+      // NaN% on a page that failed to fetch anything.
       bytesPct: bytes > 0 ? Math.round((thirdBytes / bytes) * 100) : 0,
       requestsPct: rows.length > 0 ? Math.round((thirdCount / rows.length) * 100) : 0,
       hosts: hostList.filter((h) => h.third).length,
@@ -179,6 +209,11 @@ export function summariseWire(events, pageUrl) {
   };
 }
 
+// ── transport ──────────────────────────────────────────────────────────────
+
+// A minimal CDP client over the binding's WebSocket. Replies are matched by the
+// id we assigned; anything with a `method` is an event and goes in the log.
+// `sessionId` on a frame addresses the attached page target (flatten mode).
 function cdpClient(ws) {
   let nextId = 1;
   const pending = new Map();
@@ -197,6 +232,9 @@ function cdpClient(ws) {
     }
     if (msg.method) events.push(msg);
   });
+  // A socket that dies mid-navigation must reject every outstanding command
+  // rather than let them all sit until their individual timeouts, which would
+  // hold the isolate open for 20s per pending call for no reason.
   const die = (why) => {
     closed = closed || new Error(why);
     for (const [, { reject }] of pending) reject(closed);
@@ -205,17 +243,27 @@ function cdpClient(ws) {
   ws.addEventListener("close", () => die("CDP socket closed"));
   ws.addEventListener("error", () => die("CDP socket error"));
 
+  // The result is Record<string, any> rather than a narrower shape, on purpose.
+  // CDP returns a different payload per method across 54 domains, so the honest
+  // alternatives are hand-written types for each one (fiction that rots the
+  // first time Chrome revises a domain) or an open record at the boundary. The
+  // callers below read one or two fields each and guard for absence.
   const send = (method: string, params?: unknown, sessionId?: string): Promise<Record<string, any>> =>
     new Promise<Record<string, any>>((resolve, reject) => {
     if (closed) return reject(closed);
     const id = nextId++;
     pending.set(id, { resolve, reject });
+    // sessionId is OPTIONAL on the wire: a browser-level command carries none,
+    // and a page-level one must. Declared so the conditional assign type-checks.
     const frame: { id: number; method: string; params: unknown; sessionId?: string } = { id, method, params: params || {} };
     if (sessionId) frame.sessionId = sessionId;
     try { ws.send(JSON.stringify(frame)); } catch (e) { pending.delete(id); return reject(e); }
     setTimeout(() => { if (pending.delete(id)) reject(new Error(`CDP timeout: ${method}`)); }, WIRE_TIMING.cdpCommandMs);
   });
 
+  // Resolves on the first matching event, or on timeout WITHOUT throwing: a page
+  // that never fires its load event is a real page with a real waterfall, and
+  // refusing to report it would throw away the observation we just paid for.
   const waitFor = (method, ms) => new Promise((resolve) => {
     const seen = events.find((e) => e.method === method);
     if (seen) return resolve(seen);
@@ -234,12 +282,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 type PageCdpSend = (method: string, params?: unknown) => Promise<Record<string, any>>;
 
+// These domains have no ordering edge between them; all four only need to be
+// ready before Page.navigate. Pairing their enables removes two CDP round trips
+// from every uncached wire run while keeping the required-vs-optional boundary:
+// Network/Page still reject the run, Runtime/Log merely neutralize execution.
 export async function enableWireDomains(send: PageCdpSend) {
   await Promise.all([send("Network.enable", {}), send("Page.enable", {})]);
   const execution = await Promise.allSettled([send("Runtime.enable", {}), send("Log.enable", {})]);
   return execution.every((result) => result.status === "fulfilled");
 }
 
+// Open a session, drive one navigation, return the raw events. Every exit path
+// runs the DELETE.
 async function runWireSession(env, url) {
   const created = await env.BROWSER.fetch(CDP_BASE, { method: "POST" });
   if (created.status === 429) return { budget: true };
@@ -262,6 +316,15 @@ async function runWireSession(env, url) {
     if (!page) return { error: "The CDP session exposed no page target." };
     const { sessionId: pageSession } = await cdp.send("Target.attachToTarget", { targetId: page.targetId, flatten: true });
 
+    // Identify honestly, exactly like every other outbound fetch on this site.
+    // A page that wants to refuse AadharshBot must be able to see it is
+    // AadharshBot; a stealth crawl would make this lens a lie about itself.
+    //
+    // Tolerated rather than awaited-or-die: the override is deprecated in favour
+    // of Emulation.setUserAgentOverride and the two have swapped primacy before,
+    // so a binding that drops it should cost the honest UA string and not the
+    // whole observation. `uaApplied` carries the fact into the payload instead of
+    // letting the page silently claim an identity it did not send.
     let uaApplied = true;
     try {
       await cdp.send("Network.setUserAgentOverride", { userAgent: BOT_UA }, pageSession);
@@ -269,12 +332,27 @@ async function runWireSession(env, url) {
       try { await cdp.send("Emulation.setUserAgentOverride", { userAgent: BOT_UA }, pageSession); }
       catch (_e2) { uaApplied = false; }
     }
+    // Runtime and Log carry the EXECUTION evidence, and both are enabled before
+    // the navigation because an exception thrown during load is the interesting
+    // case. This costs no extra browser instance and no extra minute: it is the
+    // session this lens already opens, answering two more questions on the way
+    // past. `agentScripts` and `agentMedia` in the readiness rubric are fed from
+    // here, and they are the two questions a declaration audit structurally
+    // cannot answer.
+    //
+    // Tolerated rather than awaited-or-die, exactly like the UA override above.
+    // A binding that refuses either domain should cost the execution checks and
+    // leave them neutral, not lose the whole request waterfall this route
+    // exists for.
     const execDomains = await enableWireDomains((method, params) =>
       cdp.send(method, params, pageSession));
 
     const t0 = Date.now();
     await cdp.send("Page.navigate", { url }, pageSession);
     const loaded = await cdp.waitFor("Page.loadEventFired", WIRE_TIMING.navigateMs);
+    // The settle window is where the third parties this lens exists to count
+    // actually show up: beacons and tag managers fire ON load, so stopping at
+    // the load event would systematically under-report the thing being measured.
     await sleep(Math.min(WIRE_TIMING.settleAfterLoadMs, Math.max(0, WIRE_TIMING.hardCapMs - (Date.now() - t0))));
 
     // The census runs AFTER the settle window on purpose: an image that has not
@@ -302,6 +380,11 @@ async function runWireSession(env, url) {
       } catch (_e) { execution = null; }
     }
 
+    // The browser-local tool catalog, read from the SAME session. A page's
+    // WebMCP tools exist only once its own script has run, so this is the one
+    // place on the site that can see them at all; every other tool reading here
+    // fetches /mcp, which is a different catalog belonging to the server.
+    //
     // awaitPromise is the load-bearing option: getTools() is async, and without
     // it the evaluate resolves to a pending Promise handle and the catalog reads
     // as empty on every origin, which is indistinguishable from a site that has
@@ -312,12 +395,15 @@ async function runWireSession(env, url) {
         const w = await cdp.send("Runtime.evaluate", { expression: WEBMCP_PROBE, returnByValue: true, awaitPromise: true }, pageSession);
         const value = w && w.result ? asText(w.result.value) : null;
         webmcp = value === null ? null : readWebmcpProbe(JSON.parse(value));
+        // The engine label has to come from CDP rather than from the page. This
+        // route overrides navigator.userAgent to AadharshBot, so the in-page
+        // value is our own mask and would report the browser as a crawler.
         if (webmcp) {
           try {
             const ver = await cdp.send("Browser.getVersion");
             const product = ver && asText(ver.product);
             if (product) webmcp = { ...webmcp, engine: product.slice(0, 120) };
-          } catch (_e) { }
+          } catch (_e) { /* an engine we cannot name is still a result */ }
         }
       } catch (_e) { webmcp = null; }
     }
@@ -330,6 +416,12 @@ async function runWireSession(env, url) {
   }
 }
 
+// ── route ──────────────────────────────────────────────────────────────────
+
+// A CDP session is a real browser instance on the account-wide allowance, so
+// this is a "cdp" browser lens: the pipeline refuses with a 503 when the
+// binding cannot open one, and bills the shared browser budget after the
+// per-IP one.
 const LENS_WIRE = defineLens({
   span: "lens.wire",
   budget: "wire",
@@ -345,6 +437,9 @@ const LENS_WIRE = defineLens({
       return { ok: false, status: 502, outcome: "session_threw", payload: { ok: false, error: "The CDP session failed: " + lensErrorText(e) } };
     }
 
+    // Our own budget, not the target site's fault. /lens/shot already made this
+    // correction and the reasoning transfers exactly: on the free plan this is
+    // the single most likely non-success here.
     if (out.budget) {
       return {
         ok: false, status: 429, outcome: "browser_budget_spent",
@@ -366,9 +461,17 @@ const LENS_WIRE = defineLens({
       fetchedBy: "Cloudflare Browser Run (CDP)",
       engine: "chromium-cdp",
       navMs: out.navMs,
+      // A page that never fired load is still reported, and says so, rather than
+      // being thrown away after the budget was already spent on it.
       loadFired: out.loadFired,
       identifiedAs: out.uaApplied ? BOT_UA : null,
+      // The execution evidence the readiness rubric's `execution` category
+      // consumes. Null when the probe could not run, which keeps those checks
+      // neutral rather than turning our own failure into the site's fail.
       execution: out.execution || null,
+      // The browser-local tool catalog. Null when the probe could not run, and
+      // `{present:false}` when it ran and the page registered nothing: those are
+      // different claims and this surface must not collapse them.
       webmcp: out.webmcp || null,
       ...summary,
     };
@@ -377,6 +480,9 @@ const LENS_WIRE = defineLens({
     s.setAttribute("lens.wire_bytes", summary.bytes);
     s.setAttribute("lens.wire_third_pct", summary.thirdParty.bytesPct);
     s.setAttribute("lens.wire_hosts", summary.hostTotal);
+    // Attributes follow the pipeline rule: an undefined value is SKIPPED, never
+    // coerced. A scan with no execution evidence records nothing here rather
+    // than a zero that reads like a clean page.
     if (out.execution) {
       s.setAttribute("lens.exec_script_errors", (out.execution.consoleErrors || 0) + (out.execution.pageErrors || 0));
       s.setAttribute("lens.exec_images_broken", out.execution.brokenImages || 0);
@@ -386,6 +492,11 @@ const LENS_WIRE = defineLens({
       s.setAttribute("lens.webmcp_tools", out.webmcp.count || 0);
       s.setAttribute("lens.webmcp_write", out.webmcp.write || 0);
     }
+    // `fromCache`, NEVER `cached`, on the response the pipeline builds. The
+    // summary already owns `cached` as the number of the TARGET's requests the
+    // browser served from ITS cache, and spelling the hit flag the same way
+    // overwrote that count with a boolean: the pane rendered "true served from
+    // cache". Two different subjects, so two different keys.
     return { ok: true, value: payload };
   },
 });

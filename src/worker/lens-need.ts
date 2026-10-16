@@ -1,20 +1,53 @@
 // What does THIS site need an agent to find, and what is it building past need?
 //
+// The readiness mirror beside this (lensReadiness in lens.ts) is Cloudflare's
+// rubric: a flat list of declarations, each worth the same. That weighting docks a
+// personal blog for publishing no OAuth discovery, no MCP server card and no
+// auth.md, none of which it has any use for, and it hands the same point for a
+// DNS-AID record as for a page that serves its words without JavaScript.
+//
+// Is Agentic (is-agentic.com, Vercel + Ora) fixed that with one idea worth
+// borrowing: APPLICABILITY. Its Essential checks share 80 points and apply to
+// every public site. Its Recommended checks share 20 and switch on only when
+// the scan finds the surface they grade (an API, an MCP server, an auth flow,
+// commerce). Emerging formats earn a bonus capped at 5, so a site cannot buy
+// its way up with drafts. aadhar.sh scored 100 there on 2026-10-13: 80 from six
+// essential checks, and +5 for 61 bonus signals. That is the honest price of
+// most of what this site publishes for agents, and the point of this module.
+//
+// What Lens takes and what it leaves is ISAG_LEDGER below, one row per check in
+// their catalog, each declined row with its reason. Lens declines on three
+// grounds: the check grades fame or a business decision rather than the page;
+// it needs more requests than a scan has (a cold scan spends 46 of Workers
+// Free's 50 subrequests); or Lens disagrees with it.
+//
 // Pure and node-safe (gotcha 16): every input is evidence the scan already
 // holds, so this adds zero subrequests.
 
 import { asRecord, asText } from "./lib/parse.ts";
 
+// Checked against https://is-agentic.com/scan/aadhar.sh on this date; the
+// catalog is the 132 check ids embedded in that report.
 export const ISAG_CHECKED = "2026-10-13";
 
 export const NEED_POOLS = { essential: 80, recommended: 20, bonusCap: 5 };
 
+// Markdown negotiation earns a Recommended slot only when the HTML tax is real:
+// raw HTML at least this many times its markdown AND past this many tokens.
+// Below that the page is already lean enough to read, and a twin is bonus.
+// 8K tokens is near is-agentic's own page-token-budget line (their largest
+// passing page on this site was ~5K).
 const HTML_TAX_RATIO = 5;
 const HTML_TAX_TOKENS = 8000;
 
 type Credit = number | null;
 type NeedCheck = { key: string; label: string; status: string; credit: Credit; detail: string };
 
+// pass 1, fail 0, partial in between. `unknown` means we asked and the site did
+// not answer, which is the site's fact, so it counts at zero. `neutral` means
+// WE did not measure (a self-scan skips bot views, a spent budget), and docking
+// a stranger for our instrument would make the number dishonest; it is shown
+// and excluded. Same split lensReadiness makes for its execution checks.
 const check = (key: string, label: string, credit: Credit, detail: string, neutral = false): NeedCheck => ({
   key, label, detail,
   status: neutral ? "neutral" : credit == null ? "unknown" : credit >= 1 ? "pass" : credit <= 0 ? "fail" : "partial",
@@ -33,6 +66,9 @@ function pool(checks: NeedCheck[], points: number) {
   };
 }
 
+// The share of OpenAPI operations an agent can call as a function: each needs
+// an operationId to become a tool name. Resend publishes 83 operations and 0
+// operationIds (is-agentic, 2026-10-12), which is exactly the gap this reads.
 export function openapiOperationIds(body: string) {
   let spec: any;
   try { spec = JSON.parse(body); } catch { return null; }
@@ -73,6 +109,12 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
   const jsonld = (structured && structured.jsonld) || [];
   const doors = agent || {};
 
+  // ── which surfaces apply ────────────────────────────────────────────────
+  // The website always does. Every other surface switches on only on positive
+  // evidence, and each carries the evidence that switched it.
+  // A POST-only server answers lens's GET with a 405, which the door probe
+  // calls "maybe". A server card beside that 405 settles it. Only "no" counts
+  // as absent: "maybe" and "unknown" are not evidence that nothing is there.
   const mcpVerdict = doors.mcp && doors.mcp.verdict;
   const mcpUp = mcpVerdict === "yes" || mcpVerdict === "likely" || (mcpVerdict === "maybe" && has(mirror.mcpServerCard));
   const mcpAbsent = mcpVerdict === "no";
@@ -88,6 +130,8 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
     { key: "website", label: "Public website", applies: true, why: "every public URL" },
     { key: "api", label: "API", applies: !!apiWhy, why: apiWhy || "no OpenAPI, API catalog or plugin manifest answered" },
     { key: "mcp", label: "MCP", applies: !!mcpUp, why: String((doors.mcp && doors.mcp.detail) || (mcpAbsent ? "/mcp did not answer as an MCP server" : "the /mcp probe did not run")) + (mcpVerdict === "maybe" && mcpUp ? ", and a server card describes it" : "") },
+    // Authorization is a surface only when it guards something: an API or an
+    // MCP server. OAuth metadata in front of neither is in beyondNeed below.
     {
       key: "auth", label: "Authorization", applies: !!((apiWhy || mcpUp) && (oauthSeen || mcpAuthGated)),
       why: mcpAuthGated ? "/mcp answered 401 with WWW-Authenticate" : oauthSeen && (apiWhy || mcpUp) ? "OAuth metadata in front of an API or MCP server" : oauthSeen ? "OAuth metadata, but nothing found for it to guard" : "no OAuth metadata and no 401 challenge",
@@ -100,6 +144,7 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
   const applies = (k: string) => surfaces.some((s) => s.key === k && s.applies);
   const notHtml = !isHtml && !html;
 
+  // ── essential: what every public URL owes an agent ─────────────────────
   const essential: NeedCheck[] = [];
   const chars = text.length;
   const h1 = headings.some((h: any) => h.level === 1);
@@ -118,6 +163,9 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
       ? check("crawlerReach", "Agents are let in", null, bots ? bots.detail : "no bot evidence", true)
       : check("crawlerReach", "Agents are let in", bots.score / 100, bots.detail));
 
+  // robots.txt, read for the agents a PERSON sent. Turning away GPTBot or CCBot
+  // is a training-consent choice and costs nothing here; turning away
+  // ChatGPT-User or Claude-User refuses someone who asked for this page.
   const board = (terms && Array.isArray(terms.scoreboard)) ? terms.scoreboard : [];
   const asked = board.filter((r: any) => r && (r.kind === "answers") && String(r.ua).endsWith("-User"));
   const refused = asked.filter((r: any) => r.verdict === "block");
@@ -128,6 +176,8 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
       : check("userAgents", "robots.txt admits user-sent agents", 1 - refused.length / asked.length,
         refused.length ? `robots.txt refuses ${refused.map((r: any) => r.ua).join(", ")} on this path` : `${asked.map((r: any) => r.ua).join(" and ")} may fetch this path; training crawlers are a separate choice`));
 
+  // One page, so this is the narrow version of their five-page sample: did the
+  // URL itself ask for credentials?
   essential.push(!Number.isFinite(status)
     ? check("publicRead", "Readable without signing in", null, "the identified fetch did not answer")
     : status === 401 || status === 407
@@ -161,6 +211,7 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
     : check("identity", "Says what it is", idHave.length / idParts.length,
       idMiss.length ? `missing ${idMiss.join(", ")}` : "canonical URL, lang, og:image and og:type all present"));
 
+  // ── recommended: switched on per surface ───────────────────────────────
   const recommended: NeedCheck[] = [];
   const robotsMeta = String(meta.robots || "") + " " + String((headers && headers["x-robots-tag"]) || "");
   if (!notHtml) {
@@ -171,6 +222,8 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
     recommended.push(check("jsonld", "JSON-LD identity", validLd.length ? 1 : jsonld.length ? 0.5 : 0,
       validLd.length ? `${validLd.length} valid block(s): ${[...new Set(ldTypes)].slice(0, 4).join(", ") || "untyped"}` : jsonld.length ? "JSON-LD present but none parsed" : "no JSON-LD"));
   }
+  // The discerning one. A twin halves an agent's bill on a heavy page and buys
+  // almost nothing on a lean one, so it is Recommended only when the tax is real.
   const htmlTok = tokensOf(cost, "html");
   const mdTok = tokensOf(cost, "markdown");
   const heavy = htmlTok != null && mdTok != null && mdTok > 0 && htmlTok >= HTML_TAX_TOKENS && htmlTok / mdTok >= HTML_TAX_RATIO;
@@ -204,6 +257,7 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
       paymentDoor ? `${mirror[paymentDoor].label} answered` : "the site sells, but publishes no machine payment protocol"));
   }
 
+  // ── bonus: emerging doors, capped ──────────────────────────────────────
   const bonusKeys = ["robotsTxtAiRules", "contentSignals", "linkHeaders", "dnsAid", "webBotAuth", "authMd", "a2aAgentCard", "agentSkills", "webMcp"];
   const signals: string[] = [];
   if (doors.llmsTxt && doors.llmsTxt.present) signals.push("llms.txt");
@@ -213,12 +267,21 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
   if (doors.nlweb && (doors.nlweb.verdict === "likely" || doors.nlweb.verdict === "maybe")) signals.push("NLWeb /ask");
   const bonus = { points: Math.min(NEED_POOLS.bonusCap, signals.length), cap: NEED_POOLS.bonusCap, signals };
 
+  // ── the score ──────────────────────────────────────────────────────────
+  // Their arithmetic: earned essential + earned recommended + bonus, capped at
+  // 100. One departure, for the site with no recommended check at all (a
+  // non-HTML URL with nothing else): the 80 is rescaled to 100 so an empty
+  // pool cannot cap a perfect score at 85.
   const ess = pool(essential, NEED_POOLS.essential);
   const rec = pool(recommended, NEED_POOLS.recommended);
   const available = ess.available + rec.available;
   const base = available ? ((ess.earned + rec.earned) / available) * 100 : null;
   const overall = base == null || ess.available === 0 ? null : Math.min(100, Math.round(base + bonus.points));
 
+  // ── past need ──────────────────────────────────────────────────────────
+  // SKIP: mirror checks this site fails (or leaves unanswered) that it has no
+  // reason to fix. The mirror's next-actions list would otherwise send a blog
+  // off to build OAuth.
   const skip: Array<{ key: string; label: string; why: string }> = [];
   const skipIf = (key: string, when: boolean, why: string) => {
     const item = mirror[key];
@@ -237,6 +300,7 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
   skipIf("webMcp", true, "pays only when the page has actions worth handing an agent");
   skipIf("linkHeaders", true, "a shortcut to files an agent can already find at their well-known paths");
 
+  // BEYOND NEED: doors this site built that point at nothing it serves.
   const beyondNeed: Array<{ label: string; why: string }> = [];
   if (oauthSeen && guardsNothing) beyondNeed.push({ label: "OAuth metadata", why: "published, but Lens found no API or MCP server behind it" });
   if (has(mirror.mcpServerCard) && mcpAbsent) beyondNeed.push({ label: "MCP Server Card", why: "describes a server that did not answer at /mcp" });
@@ -257,6 +321,11 @@ export function lensNeed({ status, bodyUnreadable, url, finalUrl, isHtml, anatom
   };
 }
 
+// ── the ledger ─────────────────────────────────────────────────────────────
+// Every check in Is Agentic's catalog, filed once. `scored` maps a Lens need
+// check to the is-agentic ids it stands in for; `bonus` are counted as signals;
+// `declined` carries the reason Lens leaves them out. The contract test holds
+// this to the catalog, so a new is-agentic check has to be filed somewhere.
 export const ISAG_LEDGER = {
   scored: {
     servedContent: ["content-no-js"],
@@ -333,6 +402,8 @@ export const ISAG_LEDGER = {
   ],
 };
 
+// The 132 ids Is Agentic's report carried on ISAG_CHECKED, for the contract
+// test to hold the ledger against. Recount from any report page's embedded data.
 export const ISAG_CATALOG = [
   "a2a-agent-card", "a2ui-support", "acp-delegate-payment", "acp-support", "agent-auth-discovery-metadata",
   "agent-auth-endpoints-reachable", "agent-auth-www-authenticate", "agent-crawler-reachability", "agent-discovery-file",

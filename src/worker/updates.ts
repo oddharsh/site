@@ -7,17 +7,35 @@ import { unsafeHtml } from "./lib/html.ts";
 import { esc, jsonResponse } from "./lib/http.ts";
 import checkpoints from "./checkpoints.json" with { type: "json" };
 
+// ── /updates handler (Windows Update reskin) ────────────────────────
 export async function handleWindowsUpdate(request, env, ctx) {
+  // Version-keyed edge cache (caches.default): the changelog changes only on
+  // deploy, and a deploy mints a fresh cache key, so the rendered shell serves
+  // for up to s-maxage=300 without re-rendering on every visit.
   return cachedRender(request, ctx, () => readCheckpoints(env).then(renderWindowsUpdate), "/updates", env);
 }
 
+// The release log, read ONCE and handed to the three renderers that project it.
+//
+// It reads the BUNDLED projection (src/worker/checkpoints.json) rather than D1,
+// and that is the point. build.ts calls the three renderers in Node against the
+// same file and bakes updates.html + restore.html at deploy time, so /updates.json
+// serves literally the same bytes the two HTML pages render from, and the three
+// cannot disagree. Baking costs no freshness, because the file changes only in
+// the PR that ships a release (tools/photos/bump-version.sh writes the entry).
+//
+// D1 records what actually SHIPPED (`bun run deploy:promote` writes it at 100%),
+// and `bun run checkpoints:check` fails when the two diverge beyond a tail of
+// unreleased entries. env stays in the signature because the handlers pass it.
 export async function readCheckpoints(env) {
   return { points: checkpoints, state: checkpoints.length ? "ok" : "empty" };
 }
 
 export async function renderWindowsUpdate(cp) {
+  // The newest entry is the running build and the recent entries ARE the
+  // changelog.
   const state = cp.state;
-  const pts = cp.points.slice(-18).reverse();
+  const pts = cp.points.slice(-18).reverse();          // newest first
   let build = "aadhar.sh", log = [];
   if (pts.length) { build = pts[0].version; log = pts.map((p) => [p.slug, p.title]); }
   const rows = log.length
@@ -71,12 +89,14 @@ export async function renderWindowsUpdate(cp) {
   });
 }
 
+// brief JSON for the Windows Update tray balloon: running build + recent changelog,
+// read from the same checkpoints projection as /updates and /restore.
 export async function handleUpdatesJson(request, env, ctx) {
   return cachedRender(request, ctx, () => readCheckpoints(env).then(renderUpdatesJson), "/updates.json", env);
 }
 
 export async function renderUpdatesJson(cp) {
-  const pts = cp.points.slice(-8).reverse();
+  const pts = cp.points.slice(-8).reverse();           // newest first
   let build = "aadhar.sh", items = [];
   if (pts.length) { build = pts[0].version; items = pts.map((p) => ({ slug: p.slug, title: p.title })); }
   return jsonResponse({ build, items }, 200, {
@@ -86,6 +106,11 @@ export async function renderUpdatesJson(cp) {
   }, { pretty: false });
 }
 
+// ── /restore handler (Windows System Restore reskin) ─────────────────
+// One restore point per release entry in the checkpoints projection. The
+// scrubber previews the recorded state at any past point; it changes nothing.
+// A real rollback is `bun run deploy:promote --rollback` from a workstation,
+// never exposed to a visitor.
 export async function handleSystemRestore(request, env, ctx) {
   return cachedRender(request, ctx, () => readCheckpoints(env).then(renderSystemRestore), "/restore", env);
 }
@@ -93,6 +118,8 @@ export async function handleSystemRestore(request, env, ctx) {
 export async function renderSystemRestore(cp) {
   const points = cp.points;
   const state = cp.state;
+  // "You are here" tracks the newest checkpoint, so it can't go stale on deploy
+  // the way a hardcoded constant did.
   const newest = points.length ? points[points.length - 1] : null;
   const live = newest
     ? { version: newest.version, title: newest.title, ymd: newest.ymd }

@@ -1,5 +1,17 @@
 // inbox.ts — /inbox, the Outlook Express window where approved webmentions land.
-
+//
+// The web writing back to this site is mail, so it renders as mail: a folder
+// tree of the pages people wrote about, a striped message list, and a preview
+// pane. Every row links OUT to the source, because sending readers to the person
+// who wrote about you is the whole social contract of the format.
+//
+// Deliberately NOT reusing the homepage's `.np-*` classes: that prefix already
+// means two different things in this codebase (now-playing inline, Notepad in
+// luna.css), and a third meaning would be cruel. Everything here is `oe-`.
+//
+// No avatars, by choice: hotlinking a stranger's profile picture leaks my
+// readers' IPs to their host and buys nothing OE ever had. Name, subject, date,
+// excerpt — very 2003.
 import { serveBuiltPage } from "./lib/built-page.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
@@ -18,6 +30,12 @@ const KIND_LABEL = {
   mention: "mentioned",
 };
 
+// /inbox is a BUILT document since 2026-09-25: build.ts step 5b bakes
+// renderInboxPage() once, so the lede and 3 KB of CSS ship as a q11 twin with a
+// dcz delta and an ETag. The mail itself (the folder tree, the message list and
+// the endpoint line under them) is the island at MAIL_URL, read from D1 per
+// request. The endpoint line rides in the island because it names the origin,
+// and because nothing may sit below an island whose height the mail decides.
 export const MAIL_URL = INBOX_MAIL_URL;
 
 // The endpoint, relative so the one baked shell is right on every host. RFC 8288
@@ -25,12 +43,18 @@ export const MAIL_URL = INBOX_MAIL_URL;
 // follows RFC 8288.
 export const WEBMENTION_LINK = '</webmention>; rel="webmention"';
 
+// A screenful of unread rows for the placeholder. The live count is whatever has
+// been approved, and it does not need to match: nothing follows the island.
 const PENDING_ROWS = 4;
 
+/** The island: folder tree, message list and endpoint line, or the placeholder. */
 export function renderInboxMail(mentions, state, origin) {
   const pending = state === "pending";
   const dots = "…";
 
+  // Folders are the pages that were written about, newest activity first. This
+  // answers the question that actually matters at a glance: who is talking
+  // about which thing I made.
   const folders = new Map();
   for (const m of mentions) {
     const path = pathOf(m.target, origin);
@@ -50,6 +74,8 @@ export function renderInboxMail(mentions, state, origin) {
     : mentions.map((m, i) => {
     const kind = KIND_LABEL[m.kind] || "mentioned";
     const when = m.approved_at ? new Date(m.approved_at).toISOString().slice(0, 10) : "";
+    // A like/bookmark is a read receipt, not a message: one compact line, no
+    // excerpt. A reply/repost/mention is a real message with its own row.
     const light = m.kind === "like" || m.kind === "bookmark";
     return `<li class="oe-row${light ? " oe-light" : ""}" id="m-${i}">
           <span class="oe-from">${esc(m.author || "someone")}</span>
@@ -91,11 +117,18 @@ export function renderInboxMail(mentions, state, origin) {
       removed retracts it.</p>`);
 }
 
+// The island's response. Moderation state changes rarely and a stale read costs
+// a few minutes of a mention not yet showing, so it takes a short browser cache;
+// it was never edge-cached and is not now, since an approval has no cache to evict.
 export async function handleInboxMail(request, env, ctx) {
   const { state, mentions } = await readApprovedMentions(env);
   return islandResponse(renderInboxMail(mentions, state, new URL(request.url).origin), { "cache-control": "public, max-age=60" });
 }
 
+// The route. It serves the built shell with the page policy every generated
+// document takes, plus the webmention Link header the live render always sent,
+// and falls back to rendering the shell where no bake is staged (bun run dev,
+// and the contract suite, which is why it lives here rather than in index.ts).
 export function handleInbox(request, env) {
   return serveBuiltPage(request, env, {
     headers: { "cache-control": PAGE_CACHE_CONTROL, link: `${SHELL_PRELOAD_LINK}, ${WEBMENTION_LINK}` },
@@ -103,6 +136,7 @@ export function handleInbox(request, env) {
   });
 }
 
+/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderInboxPage() {
   return lunaPage({
     title: "Inbox · aadhar.sh",
@@ -110,6 +144,8 @@ export function renderInboxPage() {
     route: "/inbox",
     width: 860,
     description: "Webmentions from the open web: who linked to aadhar.sh, moderated and rendered as mail.",
+    // The endpoint advertised on the page that displays its results, so a reader
+    // (or their software) can find it from here too.
     headers: { link: WEBMENTION_LINK },
     head: islandPreload(MAIL_URL),
     css: OE_CSS,

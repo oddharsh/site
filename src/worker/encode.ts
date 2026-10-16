@@ -1,9 +1,35 @@
 // encode.ts — what did your encoder actually do?
-
+//
+// ── why this fits in a Worker at all ──────────────────────────────────────
+// Cloudflare Images cannot take HEIC without Enterprise and cannot take RAW at
+// all, and a Worker has no decoder. That blocked every "resize my photo" idea.
+//
+// But none of the interesting questions about an encode need PIXELS. They are all
+// answered by the container: a JPEG's quantization tables, its scan script, its
+// component sampling factors; an AVIF's av1C configuration record. Reading those
+// is byte walking — microseconds, no decoder, comfortably inside the free plan's
+// 10ms. Decoding is the hard part, and none of this needs it.
+//
+// ── what it is FOR ────────────────────────────────────────────────────────
+// This site has spent real effort on delivery encoding: zenc (zenjpeg hybrid
+// trellis + 64-candidate progressive scan search), 10-bit AVIF for a free ~6%,
+// the 4:2:2 archive decision and the butteraugli/ssimulacra2 disagreement behind
+// it, and /pixel-peeper's thesis that 4:4:4 is a byte tax nobody can see. All of
+// that knowledge is currently locked in prose. This turns it into a verdict on
+// a file somebody else made.
+//
+// ── the honesty rule ──────────────────────────────────────────────────────
+// Quality is ESTIMATED and says so. There is no quality number in a JPEG — only
+// quantization tables — and every "quality: 82" any tool prints is an inference
+// from those tables. The method is named in the output so the number can be
+// argued with rather than believed.
 import { COLS, blank, fit, kv, rows, rule, s, wrap } from "./lib/tui.ts";
 
 const INNER = COLS - 4;
 
+// Markers live in the first few KB, but a PROGRESSIVE file spreads its scans
+// through the whole thing, so counting them means walking further. 1MB bounds
+// the walk; past that the scan count reports as a floor rather than a total.
 export const ENCODE_CAP = 1024 * 1024;
 
 // The IJG Annex K luma table. libjpeg and everything derived from it scales this
@@ -17,6 +43,14 @@ const ANNEX_K_LUMA = [
   49, 64, 78, 87, 103, 121, 120, 101, 72, 92, 95, 98, 112, 100, 103, 99,
 ];
 
+/**
+ * Estimate quality by asking which Annex K scaling best explains this table.
+ *
+ * This is the standard inference (the one libjpeg's own scaling defines in
+ * reverse) and it is only meaningful for tables that ARE scaled Annex K. When
+ * the residual is large the table is custom, and the honest answer is to say so
+ * rather than print a confident number derived from the wrong model.
+ */
 export function estimateQuality(table) {
   let best = { quality: null, residual: Infinity };
   for (let q = 1; q <= 100; q++) {
@@ -28,12 +62,20 @@ export function estimateQuality(table) {
     }
     if (residual < best.residual) best = { quality: q, residual };
   }
+  // Mean absolute deviation per coefficient. Under ~1 is a match; a genuinely
+  // custom table lands far above it.
   const mad = best.residual / 64;
   return { quality: best.quality, mad, standard: mad < 1.0 };
 }
 
 const SUBSAMPLING = { "2,2": "4:2:0", "2,1": "4:2:2", "1,1": "4:4:4", "1,2": "4:4:0", "4,1": "4:1:1" };
 
+/**
+ * Walk JPEG markers. Pure byte reading — no decode, no allocation per pixel.
+ *
+ * Returns what the container SAYS. Anything it cannot determine is left null
+ * rather than guessed, the same discipline the photo pipeline applies to EXIF.
+ */
 export function parseJpeg(bytes) {
   const out = {
     format: "jpeg", width: null, height: null, progressive: null, scans: 0,
@@ -41,20 +83,20 @@ export function parseJpeg(bytes) {
     icc: false, exif: false, xmp: false, jfif: false, restartInterval: null,
     truncated: false, comments: [],
   };
-  let i = 2;
+  let i = 2;   // past SOI
   const u16 = (at) => (bytes[at] << 8) | bytes[at + 1];
 
   while (i < bytes.length - 1) {
     if (bytes[i] !== 0xFF) { i++; continue; }
     const marker = bytes[i + 1];
     if (marker === 0xFF || marker === 0x00) { i++; continue; }
-    if (marker === 0xD9) break;
-    if (marker >= 0xD0 && marker <= 0xD7) { i += 2; continue; }
+    if (marker === 0xD9) break;                       // EOI
+    if (marker >= 0xD0 && marker <= 0xD7) { i += 2; continue; }   // RSTn
 
     const length = u16(i + 2);
     const payload = i + 4;
 
-    if (marker === 0xDB) {
+    if (marker === 0xDB) {                            // DQT
       let p = payload;
       while (p < payload + length - 2) {
         const spec = bytes[p];
@@ -103,12 +145,22 @@ export function parseJpeg(bytes) {
   return out;
 }
 
+/**
+ * Read an AVIF's av1C configuration record out of the ISOBMFF box tree.
+ *
+ * Same trick as EXIF-in-HEIF: the interesting facts are in a box, not in the
+ * pixels. Deliberately shallow — brand, bit depth, subsampling, alpha — because
+ * anything deeper starts wanting a real parser and this is a lint, not a demuxer.
+ */
 export function parseAvif(bytes) {
   const out = { format: "avif", brand: null, bitDepth: null, subsampling: null, monochrome: null, alpha: false };
   const ascii = (at, n) => String.fromCharCode(...bytes.slice(at, at + n));
   if (ascii(4, 4) !== "ftyp") return null;
   out.brand = ascii(8, 4);
 
+  // Scan for the av1C box rather than walking the full tree: it is a leaf deep
+  // inside meta/iprp/ipco, and locating it by signature is honest here because a
+  // false positive would have to be four exact bytes followed by a valid record.
   for (let i = 0; i < bytes.length - 8; i++) {
     if (ascii(i, 4) !== "av1C") continue;
     const p = i + 4;
@@ -123,6 +175,7 @@ export function parseAvif(bytes) {
     break;
   }
   if (bytes.length) {
+    // An alpha plane shows up as an auxiliary item; the tag is enough for a lint.
     for (let i = 0; i < bytes.length - 4; i++) {
       if (ascii(i, 4) === "auxC") { out.alpha = true; break; }
     }
@@ -130,6 +183,7 @@ export function parseAvif(bytes) {
   return out.bitDepth === null ? null : out;
 }
 
+// ── the verdicts, which are where this site's measurements pay off ─────────
 export function judgeEncode(info, byteLength) {
   const findings = [];
   const add = (id, verdict, detail) => findings.push({ id, verdict, detail });
@@ -137,6 +191,9 @@ export function judgeEncode(info, byteLength) {
   const bpp = pixels ? (byteLength * 8) / pixels : null;
 
   if (info.format === "jpeg") {
+    // 4:4:4 is the one that costs real bytes for chroma detail nobody can see at
+    // delivery sizes — /pixel-peeper's whole thesis. 4:2:2 is the deliberate
+    // ARCHIVE choice here (Fuji HIF is 4:2:2 native), so it is not a fault.
     if (info.subsampling === "4:4:4") {
       add("chroma", "warn", "4:4:4 — full chroma resolution. At delivery sizes this is a byte tax for detail the eye does not resolve; 4:2:0 is usually free.");
     } else if (info.subsampling === "4:2:2") {
@@ -147,6 +204,7 @@ export function judgeEncode(info, byteLength) {
       add("chroma", "ok", info.subsampling);
     }
 
+    // Progressive is free bytes and this site searches 64 scan scripts for them.
     if (info.progressive === true) {
       add("scan", "ok", `progressive, ${info.scans} scan${info.scans === 1 ? "" : "s"}${info.truncated ? "+ (walk truncated)" : ""} — typically several percent smaller than baseline at equal quality`);
     } else if (info.progressive === false) {
@@ -179,6 +237,11 @@ export function judgeEncode(info, byteLength) {
     } else if (info.bitDepth) {
       add("depth", "ok", `${info.bitDepth}-bit — the free win; 10-bit beats 8-bit at equal quality`);
     }
+    // NOT the JPEG rule above, measured 2026-09-26 on this site's own tiers: at
+    // equal bytes 4:4:4 AVIF beat 4:2:0 by ~0.5 ssimulacra2 on every tier size,
+    // butteraugli agreeing. A downscaled photo has full chroma to keep, and AV1
+    // spends little on smooth chroma planes, so the halving buys less than the
+    // colour bleed it causes. tools/photos/zenc/src/avif.c carries the numbers.
     if (info.subsampling === "4:4:4") add("chroma", "ok", "4:4:4: full chroma. For AVIF at delivery sizes this measured ahead of 4:2:0 at equal bytes here (~2% bytes, median)");
     else if (info.subsampling === "4:2:0") add("chroma", "ok", "4:2:0: fine, though on downscaled photos 4:4:4 measured ~2% better at equal bytes here");
     else if (info.subsampling) add("chroma", "ok", info.subsampling);
@@ -186,6 +249,9 @@ export function judgeEncode(info, byteLength) {
   }
 
   if (bpp !== null) {
+    // Bytes per pixel is the number this site's own pipeline is tuned against,
+    // so it is reported as an anchor rather than graded — a portrait at 0.9 and
+    // a flat graphic at 0.9 are not the same story.
     add("density", "ok", `${bpp.toFixed(2)} bits/pixel over ${info.width}x${info.height}`);
   }
 
@@ -216,6 +282,15 @@ export function encodeReadout(info, byteLength) {
   );
 }
 
+/**
+ * Fetch an image as BYTES, bounded.
+ *
+ * Deliberately not lensReadCapped, which returns TEXT: decoding image bytes as
+ * UTF-8 replaces every invalid sequence with U+FFFD, so a quantization table
+ * would arrive as mojibake and the parse would silently read garbage. Binary
+ * needs a binary reader, and the failure mode of getting this wrong is a
+ * confident wrong verdict rather than an error.
+ */
 export async function fetchImageBytes(url, env, lensFetch) {
   const deadline = AbortSignal.timeout(8000);
   try {
@@ -231,7 +306,7 @@ export async function fetchImageBytes(url, env, lensFetch) {
       if (done) break;
       chunks.push(value);
       total += value.length;
-      if (total >= ENCODE_CAP) { truncated = true; try { await reader.cancel(); } catch { } break; }
+      if (total >= ENCODE_CAP) { truncated = true; try { await reader.cancel(); } catch { /* done */ } break; }
     }
     const bytes = new Uint8Array(total);
     let at = 0;
@@ -242,6 +317,7 @@ export async function fetchImageBytes(url, env, lensFetch) {
   }
 }
 
+/** Sniff the container from magic bytes rather than trusting content-type. */
 export function sniff(bytes) {
   if (bytes.length > 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return "jpeg";
   if (bytes.length > 12 && String.fromCharCode(...bytes.slice(4, 8)) === "ftyp") {

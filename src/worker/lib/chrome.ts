@@ -9,6 +9,14 @@ import { SHELL_PRELOAD_LINK } from "./shell-assets.ts";
 import { twinFor } from "./twins.ts";
 import { titleBar } from "./window.ts";
 
+// The page-level CSS every server-rendered Luna window shares. Everything a
+// window LOOKS like (frame, title bar, gel caption buttons, desktop, taskbar
+// floor, the OS-window flex model, the client edge, scrollbars) is luna.css's,
+// which lunaPage links render-blocking, so it is already applied at first paint
+// and a copy here would paint nothing. What stays is what luna does not set:
+// body type, the margin reset, the page's measure (--axp-maxw, from lunaPage's
+// `width`). Page-specific rules stay inline per page after the call. The /*min*/ sentinel lets build.ts
+// minify this static literal on the wire; the readable source remains in git.
 export function xpChromeCss() {
   return `/*min*/
   * { box-sizing: border-box; }
@@ -24,6 +32,11 @@ export function xpChromeCss() {
 	`;
 }
 
+// A first-level section's tab favicon IS its taskbar tile, and it belongs in the
+// document rather than in nav.js. Setting it at boot meant every section page
+// painted one icon and then swapped to another, and it cost one data-favicon
+// attribute per pin on every page so that the 11 section pages could read one.
+// Anything that is not a section keeps /favicon.ico.
 function faviconLink(route): Html {
   const icon = SECTION_FAVICONS[route];
   return icon
@@ -31,6 +44,13 @@ function faviconLink(route): Html {
     : html`<link rel="icon" href="/favicon.ico">`;
 }
 
+/** The link-unfurl card: Open Graph plus the twitter:card hint, which is what
+ *  X, Slack, iMessage and Discord read when a URL is pasted. The static pages
+ *  author these by hand (with a pre-baked /og/ image); this is the same set for
+ *  every page rendered here, so a shared /photos or writing post unfurls with a
+ *  title and description instead of a bare URL. `image` is site-relative and
+ *  must be a JPEG or PNG: no unfurler draws an SVG. Without one the card is
+ *  `summary`, which needs no image. */
 export function shareMeta({ title, description = "", path, type = "website", image = "", imageAlt = "" }: {
   title: string; description?: string; path: string; type?: string; image?: string; imageAlt?: string;
 }): Html {
@@ -48,14 +68,31 @@ export function shareMeta({ title, description = "", path, type = "website", ima
 <meta property="og:image:alt" content="${imageAlt}">` : EMPTY}` : EMPTY}`;
 }
 
+/** What `lunaPage` accepts.
+ *
+ *  The point of writing this out is the four `Html` fields. Everything else is
+ *  text this function escapes on the caller's behalf; `head`, `body`,
+ *  `scripts` and `windowAttrs` are markup it splices in verbatim, and while
+ *  they were plain `string`, nothing stopped a caller interpolating a stranger's
+ *  text into one. Declaring them `Html` moves that from a convention to a
+ *  call-site error.
+ *
+ *  `css` stays `string` DELIBERATELY, and the reason is a real trap: `<style>`
+ *  is a raw-text element, so HTML entities are not decoded inside it. Escaping
+ *  CSS would turn `a > b` into `a &gt; b` and break the selector rather than
+ *  protect anything. Escaping is the wrong tool in that context, which is why
+ *  it is wrapped as trusted markup at the one place it is spliced. */
 export type LunaPageOptions = {
   title?: string;
   path?: string;
   width?: number;
   description?: string;
   robots?: string;
+  /** A site-relative image for the link-unfurl card. Without one the card is
+   *  title and description alone, which every unfurler still draws. */
   ogImage?: string;
   ogImageAlt?: string;
+  /** CSS, not HTML. See the note above. */
   css?: string;
   head?: Html;
   body?: Html;
@@ -66,6 +103,7 @@ export type LunaPageOptions = {
   titleClass?: string;
   windowClass?: string;
   contentClass?: string;
+  /** Raw attributes for the window element, e.g. `data-no-histnav`. */
   windowAttrs?: Html;
   route?: string;
   explorer?: boolean;
@@ -77,6 +115,11 @@ export type LunaPageOptions = {
   closeLabel?: string;
 };
 
+// lunaPage: the one place a worker-rendered page becomes a Luna window. Every
+// handler hands it {title, body, css, cache} and it owns everything they used to
+// hand-assemble: doctype, chrome CSS (xpChromeCss, once), title bar with the
+// path as its caption, caption controls, security posture, nav.js include.
+// When the window chrome changes, this function changes and every page follows.
 export function lunaPage({
   title,
   path,
@@ -92,10 +135,33 @@ export function lunaPage({
   cache = "public, max-age=300, s-maxage=300",
   headers = {},
   titleClass = "",
+  // Extra classes on the window and its content pane, plus raw attributes on
+  // the window. All three default to empty, and no caller sets them since the
+  // /terminal console retired on 2026-09-16. It needed the SAME window
+  // structure (nav.js's drag, resize and maximize all key off `body > .window`
+  // and its `.title-bar`) while looking like a console rather than a document:
+  // no content padding, its own icon, and (via data-no-histnav below) no
+  // back/forward buttons, because a PowerShell window has no browser in it.
+  //
+  // Deliberately parameters here rather than a second document assembler. The
+  // whole argument for this function is that window chrome changes in one
+  // place and every page follows; a private copy of the doctype, head, and
+  // desktop wiring would opt one page out of that on day one.
   windowClass = "",
   contentClass = "",
   windowAttrs = EMPTY,
+  // The REQUEST path, which `path` above is not: that one is the window caption
+  // and callers pass free text through it ("Security Center", "The Crawl
+  // Ledger"). The Explorer chrome and the Markdown twin both need the real
+  // route, so they render only for a caller that supplies one. Defaulting to
+  // "" rather than guessing at `path` keeps a caption from being published as a
+  // URL — "Inbox — Outlook Express" would have become a breadcrumb.
   route = "",
+  // The address bar and task pane (lib/explorer.ts). `explorer: false` is for a
+  // page that is not a folder, where neither device would tell the truth; the
+  // retired /terminal console was the one caller that set it.
+  // `explorerName` is the object's display name, and `explorerTasks` /
+  // `explorerDetails` are facts the CALLER counted: nothing here invents one.
   explorer = true,
   explorerName = "",
   explorerTasks = [],
@@ -121,8 +187,14 @@ export function lunaPage({
     ? html`\n<link rel="canonical" href="https://aadhar.sh${route}">`
     : EMPTY;
   const scriptHtml = html`${scripts}\n<script src="/nav.js" defer></script>`;
+  // Back/Forward ship in the HTML so the caption has its final geometry at first
+  // paint (tools/photos/gen-desktop-partial.ts, HISTNAV_HTML, says what
+  // injecting it cost).
+  // A window that opts out with data-no-histnav gets none, as nav.js would.
   const histnav = !/\bdata-no-histnav\b/.test(String(windowAttrs));
 
+  // The Markdown twin, advertised only where the build actually wrote one, and
+  // offered as this object's first task for the same reason.
   const twin = route ? twinFor(route) : null;
   const twinLink = twin
     ? html`\n<link rel="alternate" type="text/markdown" title="markdown source" href="${twin}">`
@@ -137,6 +209,7 @@ export function lunaPage({
   const addressHtml = showChrome ? html`\n  ${addressBar(chromeOptions)}` : EMPTY;
   const paneHtml = showChrome ? html`${taskPane(chromeOptions)}\n` : EMPTY;
 
+  // `document` rather than `html`, which is the tagged template now.
   const document = html`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -167,6 +240,12 @@ ${scriptHtml}
 </html>`;
 
   const bytes = String(document);
+  // A hashed script-src for exactly these bytes (lib/inline-csp.ts). This is
+  // what takes a per-request page off 'unsafe-inline': the build's hash map only
+  // knows staged documents. null means the page carries something a hash cannot
+  // cover, and then no header is set here, so withSecurityHeaders stamps the
+  // loose default. A caller's own policy in `headers` still wins
+  // (lens.ts's framed view composes one).
   const out: Record<string, string> = {
     "content-type": "text/html; charset=utf-8",
     "cache-control": cache,

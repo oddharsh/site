@@ -1,4 +1,4 @@
-// x402.js — the /llms-full.txt bot paywall. The llms.txt MAP is free next
+// x402.ts — the /llms-full.txt bot paywall. The llms.txt MAP is free next
 // door; the FULL machine-readable corpus (map + every writing post + every Garage
 // and LWE explainer, inlined)
 // costs one cent, payable by machine, per the x402 protocol (x402.org):
@@ -35,6 +35,7 @@ const FACILITATOR_DEFAULT = "https://x402.org/facilitator";
 export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: ExecutionContext) {
   const url = new URL(request.url);
 
+  // gate off = serve free, and say so. never a broken paywall.
   if (!env.X402_PAY_TO) {
     return llmsFullResponse(request, env, { "x-payment-note": "x402 gate not configured; served free" });
   }
@@ -46,6 +47,7 @@ export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: Execu
       " in USDC (" + requirements.network + "). The llms.txt map next door is free.");
   }
 
+  // JSON is UTF-8, and atob's Latin-1 string turned any non-ASCII byte in it to mojibake
   let payload = null;
   try { payload = JSON.parse(new TextDecoder().decode(Uint8Array.fromBase64(paymentHeader))); } catch (_e) {
     return deny(requirements, "X-PAYMENT did not decode as base64 JSON.");
@@ -75,6 +77,9 @@ export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: Execu
       (settle.json && settle.json.error ? ": " + settle.json.error : "."));
   }
 
+  // UTF-8 before base64. btoa threw on anything above U+00FF, and this line runs after
+  // the payment settled, so one curly quote from the facilitator charged the payer for
+  // an error. Identical bytes to btoa for every ASCII receipt.
   return llmsFullResponse(request, env, {
     "x-payment-response": new TextEncoder().encode(JSON.stringify(settle.json)).toBase64(),
   });
@@ -112,11 +117,25 @@ async function facilitatorPost(url, body) {
   return { ok: r.ok, status: r.status, json: await r.json().catch(() => null) };
 }
 
-// The comment here used to say to read `.text()` rather than hand the asset's
-// body on, so as not to rebuild another response (gotcha 13). That reasoning is
-// intact and now lives one layer down: servePrecompressedText owns the
-// `encodeBody: "manual"` rebuild that 430 other twins already ship through, and
-// it falls back to the plain asset when no twin was built.
+// The corpus is BUILT (tools/build.ts step 1g3, lib/llms-full.ts): the map, every
+// writing post, and the Markdown twin of every Garage and LWE page, staged at the
+// asset path this route shadows. /llms-full.txt is run_worker_first, so the file is
+// reachable only through this handler and the paywall stays in front of it.
+//
+// It goes out through the q11 twin. This route is `no-store`, so without a twin
+// every agent fetch re-pays the edge's on-the-fly compression at about q4:
+// measured 2026-09-26 against production, the 516 KB corpus took 188,404 B on
+// the wire where q11 is 156,709, a flat 31,695 B (16.8%) off the largest text
+// artifact this site serves. Nothing joins "a file grew" to "a file has no
+// twin", so no check catches losing it.
+//
+// servePrecompressedText owns the `encodeBody: "manual"` rebuild (gotcha 13) and
+// falls back to the plain asset when no twin was built. With no staged file at
+// all (`bun run dev` stages nothing derived) it 404s, and the writing half is
+// assembled live through the same renderer.
+//
+// no-store: the paid response carries a per-payment receipt header, so it must
+// never be shared from a cache.
 async function llmsFullResponse(request: SiteRequest, env: Env, extraHeaders) {
   const headers = {
     "content-type": "text/plain; charset=utf-8",
@@ -136,6 +155,9 @@ async function llmsFullResponse(request: SiteRequest, env: Env, extraHeaders) {
 
 async function assembleWritingOnly(grab: (path: string) => Promise<string | null>) {
   const [llms, postsRaw] = await Promise.all([grab("/llms.txt"), grab("/writing/posts.json")]);
+  // Annotated because `let posts = []` infers `never[]`, which makes `p` below
+  // `never` and every field read on it an error. The shape is the registry's,
+  // src/content/writing/posts.json.
   let posts: Array<{ slug: string; title: string; date: string }> = [];
   try { posts = JSON.parse(postsRaw || "[]"); } catch (_e) {}
   const docs = (await Promise.all(posts.map(async (p): Promise<LlmsFullDoc | null> => {

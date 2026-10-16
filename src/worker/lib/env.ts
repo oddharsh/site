@@ -3,6 +3,14 @@
 // served. Types only, so the whole module erases and nothing here reaches the
 // wire.
 //
+// WHY THIS EXISTS. Every handler in index.ts took `env: any`, so a typo'd
+// binding name was a runtime `undefined` and a deleted binding was nothing at
+// all. That is the failure cloudflare.config.ts's `bindings.secret()` entries
+// (wrangler.jsonc's `secrets` block, until 2026-09-28) were added to catch,
+// one layer up: the comment it replaced had drifted in BOTH directions,
+// naming two secrets nothing reads and omitting two the Worker genuinely does.
+// A comment cannot fail a deploy and neither can `any`.
+//
 // WHY IT IS HAND-WRITTEN RATHER THAN `wrangler types`. That command works here
 // and its binding list is correct, so this is a choice rather than a
 // workaround. It writes 15,125 lines, of which ~15,070 re-declare the runtime
@@ -20,35 +28,65 @@
 // 3 and a `?` in tier 4 fails the moment the config gates the deploy on that
 // name. (This paragraph described that check for three weeks before it
 // existed; it was written on 2026-09-02, with the controls at its header.)
+//
+// THE FIVE TIERS ARE NOT DECORATION: they are the required/optional split, and
+// getting it backwards is how strictNullChecks stops meaning anything. Tiers 1
+// to 3 are guaranteed present at runtime, because wrangler refuses to publish a
+// Worker missing a declared binding or a required secret, so they are
+// non-optional and code may read them straight. Tiers 4 and 5 are genuinely
+// absent in normal operation, so they are `?` and every read has to face that.
+// COVER_SECRET, ANALYTICS_READ_TOKEN and BILLING_READ_TOKEN are the ones to
+// look at: cloudflare.config.ts argues each is deliberately NOT a required secret
+// because the path degrades without it, and the `?` here is that argument in a
+// form the compiler enforces.
 
 import type { BotRobotsRead } from "./botauth.ts";
 import type { PublicTransport } from "./public-fetch.ts";
 import type { BookingWorkflow } from "../../../cal/src/workflow.ts";
 import type { CensusWorkflow } from "../census-workflow.ts";
 
+// ---------------------------------------------------------------------------
+// Tier 1 — platform bindings. Declared in cloudflare.config.ts; wrangler will not
+// publish a Worker whose code names one it does not carry.
+// ---------------------------------------------------------------------------
 export interface EnvBindings {
+  /** Playlist tracks, cover metadata, /lens response caches, the visit mirror. */
   RN_KV: KVNamespace;
+  /** Pending and confirmed coffee bookings, plus the per-slot `held:` keys. */
   BOOKINGS: KVNamespace;
+  /** `aadhar-photos`: the SOOC originals. */
   PHOTOS_R2: R2Bucket;
+  /** `aadhar-restore`: the deploy log both /restore and /updates render. */
   RESTORE_DB: D1Database;
   SERENDIPITY_DB: D1Database;
   SOCIAL_DB: D1Database;
+  /** Reads every dataset below with SQL, no token (ledger.ts analyticsSql). */
   ANALYTICS: AnalyticsSQLBinding;
+  /** Identified crawler hits, priced by /ledger. */
   BOT_LEDGER: AnalyticsEngineDataset;
   SPECULATION: AnalyticsEngineDataset;
+  /** The :07/:37 homepage-fragment latency series. */
   PERF_PROBE: AnalyticsEngineDataset;
+  /** 404s answered or recovered, by caller class and path bucket. */
   MISS_LEDGER: AnalyticsEngineDataset;
 
+  // The eight per-IP /lens budgets plus the one account-wide browser bucket.
+  // LENS_BUDGETS in lens-pipeline.ts mirrors these ceilings because that is
+  // what the 429 message quotes; contract-lens-per-ip-crawl-budgets pins the
+  // two together.
   LENS_RL_INSPECT: RateLimit;
   LENS_RL_SHOT: RateLimit;
   LENS_RL_COMPARE: RateLimit;
   LENS_RL_BROWSER: RateLimit;
+  /** Keyed on a CONSTANT, not the caller: every browser route bills one bucket. */
   LENS_RL_BROWSER_ALL: RateLimit;
   LENS_RL_WIRE: RateLimit;
   LENS_RL_TOOLS: RateLimit;
   LENS_RL_NLWEB: RateLimit;
   LENS_RL_MARKDOWN: RateLimit;
 
+  // The five /mcp tools that spend something on a caller's say-so, mirrored in
+  // MCP_BUDGETS (mcp.ts), plus the public webmention endpoint's own ceiling.
   MCP_RL_IMAGE_INSPECT: RateLimit;
   MCP_RL_IMAGE_TRANSFORM: RateLimit;
   MCP_RL_IMAGE_COMPARE: RateLimit;
@@ -57,23 +95,52 @@ export interface EnvBindings {
   WEBMENTION_RL: RateLimit;
   /** Finished /pixel-peeper runs, per IP (pixel-peeper-crowd.ts). */
   PIXEL_PEEPER_RL: RateLimit;
+  /** /ask's Clef ranking, per IP; past it the answer is lexical (ask-rank.ts). */
   ASK_RL: RateLimit;
+  /** The documented API's shared read budget, per IP (lib/api-contract.ts). */
   API_RL: RateLimit;
 
   BROWSER: BrowserRun;
   IMAGES: ImagesBinding;
+  /** Workers AI, for Serendipity's event tags (serendipity/event-tags.ts).
+   *  Guaranteed in production like every member here. The credential-free
+   *  harnesses strip it (REMOTE_ONLY_KEYS in tools/lib/site-config.ts), which
+   *  is why the tag pass still checks for it, the way /lens checks BROWSER. */
   AI: Ai;
+  /** Read straight off the binding by /whoareyou.json; the ramp's read-out. */
   CF_VERSION_METADATA: WorkerVersionMetadata;
   /** The static-assets binding. Hands the Worker DECODED bytes: see gotcha 13. */
   ASSETS: Fetcher;
 
+  /**
+   * UNPARAMETERIZED on purpose, where `wrangler types` writes
+   * `DurableObjectNamespace<Counter>`. Counter (counter/src/counter.ts, which
+   * aadhar-counter implements) hand-rolls its Durable Object
+   * instead of extending the base class, because importing that class means
+   * importing `cloudflare:workers`, which the contract suite cannot resolve
+   * under plain node. So it carries no `[__DURABLE_OBJECT_BRAND]` and cannot
+   * satisfy the parameter: measured, `DurableObjectNamespace<Counter>` is
+   * TS2741 here. The cost is that `.get()` hands back an unparameterized stub
+   * rather than a typed RPC surface, which is the price of that constraint
+   * rather than an oversight. Parameterize this the day Counter can extend
+   * DurableObject.
+   */
   COUNTER: DurableObjectNamespace;
   BOOKING_WORKFLOW: Workflow<Parameters<BookingWorkflow["run"]>[0]["payload"]>;
   CENSUS_WORKFLOW: Workflow<Parameters<CensusWorkflow["run"]>[0]["payload"]>;
 }
 
+// ---------------------------------------------------------------------------
+// Tier 2 — vars. Plain strings in cloudflare.config.ts, so every one arrives as a
+// string even where it names a number: SLOT_MINUTES is "30" and the cal module
+// parses it. Typing them `string` rather than the literal wrangler generates is
+// deliberate, because a literal makes editing a var in cloudflare.config.ts a TYPE
+// change and fails unrelated code that compares against it.
+// ---------------------------------------------------------------------------
 export interface EnvVars {
+  /** An identifier rather than a secret, and committed as such. */
   CF_ACCOUNT_ID: string;
+  /** AI Gateway id Serendipity's Clef calls route through; "" calls Workers AI with no gateway. */
   AI_GATEWAY: string;
   HOST_TIMEZONE: string;
   WORKING_HOURS_START: string;
@@ -92,6 +159,15 @@ export interface EnvVars {
   PENDING_TTL_DAYS: string;
 }
 
+// ---------------------------------------------------------------------------
+// Tier 3 — required secrets. The names (never the values) are in
+// cloudflare.config.ts's `bindings.secret()` entries, which makes them a
+// DEPLOY GATE: wrangler refuses to publish unless each is configured on the
+// Worker. That gate is what earns them a non-optional type here. Set one with
+// the versions form, then promote, since `wrangler secret put` deploys
+// immediately (CLAUDE.md, Release path):
+//   bun run wrangler:site versions secret put <NAME>
+// ---------------------------------------------------------------------------
 export interface EnvSecrets {
   CENSUS_KEY: string;
   ICAL_URL: string;
@@ -105,23 +181,66 @@ export interface EnvSecrets {
   WORK_CALENDAR_URL: string;
 }
 
+// ---------------------------------------------------------------------------
+// Tier 4 — DEGRADING secrets. Read by code, deliberately absent from
+// cloudflare.config.ts's `bindings.secret()` entries, because each one's path is built to degrade and declaring
+// it would fail the deploy over a working site. That is cloudflare.config.ts's
+// argument; `?` is what makes the compiler hold the code to it. Removing a `?`
+// here to quiet an error is the one edit this file exists to prevent, since it
+// asserts a credential is present on a path whose whole design is that it may
+// not be.
+// ---------------------------------------------------------------------------
 export interface EnvOptionalSecrets {
+  /** /ledger's Analytics Engine SQL. Without it the cost line reads unconfigured. */
   ANALYTICS_READ_TOKEN?: string;
+  /** Billing:Read and nothing else. Kept off the CI token on purpose. */
   BILLING_READ_TOKEN?: string;
+  /** Browser Rendering EDIT scope, for the REST fallback in lens-render.ts; unused while the BROWSER binding exists. */
   BROWSER_RUN_TOKEN?: string;
+  /** Serendipity cover images; falls back to SYNC_SECRET. */
   COVER_SECRET?: string;
+  /** Serendipity enrichment. Absent means the enrich pass reports itself skipped. */
   EXA_API_KEY?: string;
   X402_PAY_TO?: string;
   X402_FACILITATOR?: string;
   X402_NETWORK?: string;
+  /** Bounded per-tick enrichment batch. Parsed, so a string; absent takes the default. */
   ENRICH_CRON_BATCH?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Tier 5 — INJECTED, never configured. These exist only because a caller built
+// a derived env and spread one in, so they are absent on a normal request by
+// construction and no amount of Cloudflare configuration adds them. They are
+// also why this file could not be generated: nothing in cloudflare.config.ts knows
+// they exist.
+// ---------------------------------------------------------------------------
 export interface EnvInjected {
+  /** Policy reads shared by one invocation, never Worker-global I/O. */
   BOT_ROBOTS_CACHE?: Map<string, Promise<BotRobotsRead>>;
+  /**
+   * In-process dispatch back into this Worker, so a /lens self-scan costs no
+   * wire request. dispatch.ts sets it to NULL on the inner env, which is what stops
+   * a self-scan recursing forever, so the type has to admit null rather than
+   * only absence. lib/outbound.ts's selfAdapter reads it and falls back to
+   * env.ASSETS.
+   */
   SELF_FETCH?: ((request: Request) => Promise<Response>) | null;
+  /**
+   * The network adapter for AadharshBot's outbound reads (lib/outbound.ts,
+   * lib/botauth.ts). Unset, reads go to the global fetch. around.ts sets it to
+   * a subrequest meter (lib/budget.ts) around the real fetch for its crawl,
+   * and a test sets it to supply a fake network by injection.
+   * Per-hop URL validation, the robots gate and signing all run in front of it.
+   */
   OUTBOUND_TRANSPORT?: PublicTransport | null;
+  /**
+   * Set beside SELF_FETCH. Tells lib/assets.ts to skip the brotli and dictionary
+   * lookups and hand back plain bytes, because an in-process caller is going to
+   * parse the body rather than ship it.
+   */
   IDENTITY_BODY?: boolean;
+  /** Set per-request by cal's router so templates can mount under /coffee. */
   BASE_PATH?: string;
 }
 
@@ -139,6 +258,7 @@ export interface EnvInjected {
  */
 export type SiteRequest = Request<unknown, IncomingRequestCfProperties>;
 
+/** The site Worker's env. `route()` and every handler take this instead of `any`. */
 export interface Env
   extends EnvBindings,
     EnvVars,

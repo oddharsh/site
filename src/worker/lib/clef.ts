@@ -1,6 +1,12 @@
 // One Clef call through the Workers AI binding, shared by every decision this
 // site asks Clef for (serendipity/event-tags.ts, lens-walls.ts).
 //
+// Clef speaks TypeSafe's System One API: a state, typed questions, typed answers
+// with calibrated probabilities. What lives here is the transport the callers
+// would otherwise each hand-roll: the gateway argument, a deadline, and an error
+// classification. The request and the parsing stay with each caller, since the
+// questions are the part that differs.
+//
 // Never throws. A caller counts outcomes by cause, because "the gateway is
 // missing", "Free's daily allocation ran out" and "Clef was slow" need different
 // fixes and must not blur into one "failed". Node-safe (gotcha 16).
@@ -34,6 +40,8 @@ export function classifyAiError(err: unknown): string {
   return code ? `ai ${code}` : "ai error";
 }
 
+/** One call, raced against `timeoutMs`. The body is returned unparsed, since
+ *  each caller validates the answers against its own options. */
 export async function runClef(env: ClefEnv, model: ClefModel, request: unknown, timeoutMs: number):
   Promise<{ body: unknown } | { error: string }> {
   if (!env.AI) return { error: "no AI binding" };
