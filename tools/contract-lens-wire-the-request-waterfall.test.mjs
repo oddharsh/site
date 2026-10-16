@@ -204,8 +204,10 @@ test("a CDP session is deleted on every exit path", () => {
   const finallyAt = body.indexOf("} finally {");
   assert.ok(finallyAt > 0, "runWireSession must clean up in a finally, not on the happy path");
   assert.match(body.slice(finallyAt), /method: "DELETE"/, "the finally block must DELETE the session");
-  assert.ok(body.indexOf("if (created.status === 429)") < body.indexOf("try {"),
-    "the budget bail must return before the session is entered");
+  const bail = body.indexOf("if (created.status === 429)"), enter = body.indexOf("try {");
+  assert.ok(bail >= 0, "runWireSession lost its budget bail on the create's 429");
+  assert.ok(enter >= 0, "runWireSession lost its try block");
+  assert.ok(bail < enter, "the budget bail must return before the session is entered");
 });
 
 test("the wire lens reports a spent browser budget as ours, not as the target failing", () => {

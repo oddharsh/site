@@ -17,8 +17,6 @@ export const BASELINE_HEADING = "## Current baseline";
 export const DOC_ALIASES = [
   { prose: "Oxc Minify", pkg: "oxc-minify" },
   { prose: "Lightning CSS", pkg: "lightningcss" },
-  { prose: "Oxlint", pkg: "oxlint" },
-  { prose: "oxlint-tsgolint", pkg: "oxlint-tsgolint" },
   { prose: "@oxlint/plugins", pkg: "@oxlint/plugins" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "@cloudflare/config", pkg: "@cloudflare/config" },
@@ -112,7 +110,7 @@ export function baselineSection(doc, heading = BASELINE_HEADING) {
   return at === -1 ? null : doc.slice(at);
 }
 
-export const FLOOR_CLAIMS = 13;
+export const FLOOR_CLAIMS = 11;
 
 export function auditManifest({
   claims, claimed, problems, pins, aliases, versionless,

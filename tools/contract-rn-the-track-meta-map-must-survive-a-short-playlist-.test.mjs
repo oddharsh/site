@@ -75,11 +75,20 @@ const metaFor = (ids) => Object.fromEntries(
 
 test("a SHORT playlist read cannot delete track meta", async () => {
   const all = ["a", "b", "c", "d", "e", "f", "g", "h"];
-  const { store, env } = metaEnv({ tracks: [{ id: "a" }, { id: "b" }], meta: metaFor(all) });
+  // the payload has regressed to two tracks; the map still holds all eight,
+  // each last seen a day ago
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const meta = metaFor(all);
+  for (const id of all) meta[id].seen = dayAgo;
+  const { store, env } = metaEnv({ tracks: [{ id: "a" }, { id: "b" }], meta });
   await cronEnrichTracks(env, null);
   const after = JSON.parse(store.get("trackmeta:v1"));
   assert.deepEqual(Object.keys(after).sort(), all, "a short read must delete nothing");
-  for (const id of all) assert.ok(after[id].image_url, `${id} keeps its cover`);
+  for (const id of all) assert.equal(after[id].image_url, `https://i.scdn.co/image/${id}`, `${id} keeps its cover`);
+  // The tick did run: the two tracks it read are stamped now, and the six it
+  // did not see keep the stamp they had.
+  for (const id of ["a", "b"]) assert.ok(after[id].seen > dayAgo, `${id} was seen on this read`);
+  for (const id of ["c", "d", "e", "f", "g", "h"]) assert.equal(after[id].seen, dayAgo, `${id} keeps its old stamp`);
 });
 
 test("an entry unseen past the age window is pruned, so the map stays bounded", async () => {
@@ -272,7 +281,6 @@ test("Change Radar remains a stable public JSON surface without D1", async () =>
   assert.equal((await response.json()).available, false);
 });
 
-
 test("Lens shell is a complete document, not a fragment", () => {
   const response = renderLensShell();
   assert.equal(response.status, 200);
@@ -310,7 +318,6 @@ test("Lens dialogs leave layout and hit testing when closed", async () => {
   assert.match(html, /\.lx-sow-dialog\[open\]\s*\{[^}]*display:flex[^}]*\}/);
   assert.doesNotMatch(html, /<dialog[^>]*\sopen(?:\s|=|>)/i);
 });
-
 
 test("track HTML renderer emits rows only", () => {
   const html = renderTrackListHtml(TRACKS).html;

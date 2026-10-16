@@ -456,7 +456,7 @@ const av2Ready=t=>Promise.all(t.options.filter(isAv2).map(o=>av2Decode(o.src).th
 function dropFmt(t,is){if(!t.options.some(is))return t;
   const options=t.options.filter(o=>!is(o)), s2=Math.max(...options.map(o=>o.s2)), bu=Math.min(...options.map(o=>o.butter));
   const ranked=options.map(o=>({...o,s2best:o.s2===s2,butterbest:o.butter===bu}));
-  return {...t,options:ranked,disagree:ranked.find(o=>o.s2best)!==ranked.find(o=>o.butterbest)};}
+  return {...t,options:ranked,cut:true,disagree:ranked.find(o=>o.s2best)!==ranked.find(o=>o.butterbest)};}
 // If the decoder can't run here, AV2 sits out the rest of the session.
 function av2Off(err){
   state.av2Error=err&&err.message||String(err); state.av2=false;
@@ -598,7 +598,7 @@ function onPick(pos,order,trial){
   } else if(answer){cls=right?"ok":"no";head=right?`✓ ${AXES[trial.axis].right}`:`✕ ${AXES[trial.axis].wrong}`;extra="";
   } else {cls=right?"ok":"no";head=right?"✓ both metrics agree, and so did you":"✕ both metrics picked another one";extra="";}
   const gl=diffGL();
-  fb.innerHTML=`<div class="banner ${cls}"><span class="g">${head}</span><span>${extra} ${teachFor(trial)}</span></div>
+  fb.innerHTML=`<div class="banner ${cls}"><span class="g">${head}</span><span>${extra}${crowdLine(trial,chosen)} ${teachFor(trial)}</span></div>
     ${gl?diffHTML(trial,order):""}
     <div class="row" style="justify-content:flex-end"><button class="xp-button compact default" id="next">${state.i===state.trials.length-1?"See my profile ▸":"Next ▸"}</button></div>`;
   if(gl)wireDiff(gl,tiles,trial,order,pos);
@@ -653,10 +653,11 @@ function screenResult(){
     <h1>${showdown?`${FMT_LIST()}, through your eyes`:"your visual system, profiled"}</h1>
     <div class="score-hero"><div class="pct">${overall}<span style="font-size:15pt">%</span></div>
       <div class="grade">${grade} · you called the clear ones right ${overall}% of the time</div></div>
+    <div class="gb" id="crowd" hidden><span class="gb-legend">you vs everyone</span><div id="crowdbody"></div></div>
     ${showdown?showdownHTML(tally):`<div class="gb" style="margin-top:14px"><span class="gb-legend">whose eye do you have?</span>
       <div class="axiswrap">
         <div class="axislabels"><span class="l">ssimulacra2<small>structure / detail</small></span><span class="r" style="text-align:right">butteraugli<small>color / masking</small></span></div>
-        <div class="axis">${axisSVG(lean,decisive)}</div>
+        <div class="axis" id="axis">${axisSVG(lean,decisive,null)}</div>
         <p class="axiscap">${alignCap}</p></div></div>
     <div class="gb"><span class="gb-legend">where your eye is sharp</span>
       ${bar("Sharpness",sharp,"spotting the higher-quality JPEG")}
@@ -674,12 +675,13 @@ function screenResult(){
         <button class="xp-button compact" id="showcard">Preview image</button></div>
       <div id="cardwrap"></div></div>
     <div class="gb"><span class="gb-legend">what's real, what's next</span>
-      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc${state.av2||state.av2Error?" · AVM 1.0.0":""} for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file. the format budgets are all read off what this site ships: its 600px photos' bits per pixel, its AVIF, its JPEG, and that JPEG transcoded losslessly to JPEG XL.${state.noJxl?state.av2?" your browser can't decode JPEG XL yet, so its tiles sat out and the format calls ran AVIF against AV2. Chrome 155+ and Safari 17+ add it.":" your browser can't decode JPEG XL yet, so the format calls sat this run out. Chrome 155+ and Safari 17+ can.":""}${state.av2Error?` the AV2 decoder couldn't run here (${state.av2Error}), so AV2 sat out the rest of this session.`:""} next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
+      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc${state.av2||state.av2Error?" · AVM 1.0.0":""} for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file. the format budgets are all read off what this site ships: its 600px photos' bits per pixel, its AVIF, its JPEG, and that JPEG transcoded losslessly to JPEG XL.${state.noJxl?state.av2?" your browser can't decode JPEG XL yet, so its tiles sat out and the format calls ran AVIF against AV2. Chrome 155+ and Safari 17+ add it.":" your browser can't decode JPEG XL yet, so the format calls sat this run out. Chrome 155+ and Safari 17+ can.":""}${state.av2Error?` the AV2 decoder couldn't run here (${state.av2Error}), so AV2 sat out the rest of this session.`:""} every finished run joins the pool above, with nothing about who played. next: <b>sharpYUV</b>, a bigger photo set, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
     ${quizHTML(showdown)}
     <div class="row spread" style="margin-top:14px">
       <small>your grid spoils nothing: no photo, encoder or setting is named</small>
       <button class="xp-button compact default" id="again">Play again ▸</button></div>`;
   requestAnimationFrame(()=>document.querySelectorAll(".fill").forEach(f=>f.style.width=(f.dataset.w||0)+"%"));
+  submitRun(overall,lean,decisive);
   wireQuiz();
   if(showdown){wireWins("jxl");wireWins("av2");}
   // a showdown card puts its needle on the line from JPEG XL to the AV1 family:
@@ -868,11 +870,20 @@ function wireShare(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   };
 }
 
-function axisSVG(lean,decisive){
+// The shape behind the needle is every exam run's lean, in tenths, read from
+// the pool (pixel-peeper-crowd.ts, the g: keys). It was a drawn bell curve
+// labelled "other players" until the pool existed; with no pool it draws none.
+function axisSVG(lean,decisive,dist){
   const W=680,H=54,pad=10,x=pad+lean*(W-2*pad);
-  let d=`M ${pad} 40`;
-  for(let i=0;i<=60;i++){const t=i/60,px=pad+t*(W-2*pad),g=Math.exp(-Math.pow((t-0.5)/0.22,2)/2);d+=` L ${px.toFixed(1)} ${(40-g*22).toFixed(1)}`;}
-  d+=` L ${W-pad} 40 Z`;
+  const counts=Array.from({length:11},(_,i)=>(dist&&dist[i])||0), total=counts.reduce((a,b)=>a+b,0), top=Math.max(1,...counts);
+  let crowd="";
+  if(total){
+    let d=`M ${pad} 40`;
+    counts.forEach((n,i)=>{d+=` L ${(pad+i/10*(W-2*pad)).toFixed(1)} ${(40-n/top*22).toFixed(1)}`;});
+    d+=` L ${W-pad} 40 Z`;
+    crowd=`<path d="${d}" fill="#0a246a" opacity="0.10"/>
+    <text x="${pad}" y="52" font-family="Courier New,monospace" font-size="7.5" fill="#9a9684">${total.toLocaleString()} ${total===1?"run":"runs"} in the pool</text>`;
+  }
   const needle=decisive?`
     <line x1="${x}" y1="6" x2="${x}" y2="44" stroke="#0a246a" stroke-width="2"/>
     <polygon points="${x-5},6 ${x+5},6 ${x},14" fill="#0a246a"/>
@@ -880,11 +891,64 @@ function axisSVG(lean,decisive){
     :`<text x="${W/2}" y="26" text-anchor="middle" font-family="Courier New,monospace" font-size="10" fill="#636363">no decisive lean</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="metric alignment">
     <defs><linearGradient id="mg" x1="0" x2="1"><stop offset="0" stop-color="#0b57c9"/><stop offset="1" stop-color="#c8811c"/></linearGradient></defs>
-    <path d="${d}" fill="#0a246a" opacity="0.10"/>
-    <text x="${pad}" y="52" font-family="Courier New,monospace" font-size="7.5" fill="#9a9684">other players</text>
+    ${crowd}
     <rect x="${pad}" y="40" width="${W-2*pad}" height="6" fill="url(#mg)"/>
     <rect x="${pad}" y="40" width="${W-2*pad}" height="6" fill="none" stroke="#8a866f" stroke-width="0.5"/>
     ${needle}</svg>`;
+}
+
+/* ---- the crowd -----------------------------------------------------------
+   Everyone's finished runs, pooled by pixel-peeper-crowd.ts. The page reads
+   the pool once at boot for the line under each call, then posts the run from
+   the result screen and draws the copy that answer carries, which includes
+   this run. The server scores the run again from the picks alone; the page
+   never sends a score. Any failure (a preview URL refuses the POST, the
+   pool is unbound in dev) leaves the screen as it was before the pool. */
+const tileId=src=>src.slice(src.lastIndexOf("/")+1).split(".")[0];
+// below this many players a share is a handful of people, so it isn't shown
+const CROWD_MIN=10;
+function crowdLine(trial,chosen){
+  const c=state.crowd; if(!c||trial.cut)return"";
+  const n=trial.options.reduce((a,o)=>a+(c.picks[tileId(o.src)]||0),0);
+  if(n<CROWD_MIN)return"";
+  return ` <b>${Math.round(100*(c.picks[tileId(chosen.src)]||0)/n)}%</b> of ${n.toLocaleString()} players picked this one too.`;
+}
+function submitRun(overall,lean,decisive){
+  const run=state.trials; if(state.posted===run)return; state.posted=run;
+  const body={mode:state.mode,picks:state.log.map(l=>({pick:l.picked.src,shown:l.trial.options.map(o=>o.src)}))};
+  const local=()=>state.crowd&&drawCrowd({counted:null,you:{overall},crowd:state.crowd},run,lean,decisive);
+  fetch("/pixel-peeper/runs",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)})
+    .then(r=>r.ok?r.json():null)
+    .then(d=>{if(!d){local();return;} state.crowd=d.crowd; drawCrowd(d,run,lean,decisive);})
+    .catch(local);
+}
+function drawCrowd(d,run,lean,decisive){
+  // the player may have pressed Play again while the POST was out
+  const box=document.getElementById("crowd"); if(!box||state.trials!==run)return;
+  const c=d.crowd, runs=c.runs[state.mode]||0, hist=c.hist[state.mode]||{}, you=d.you.overall;
+  if(!runs)return;
+  const bins=Array(10).fill(0); let below=0;
+  for(const [k,n] of Object.entries(hist)){const v=+k; bins[Math.min(9,Math.floor(v/10))]+=n; if(v<you)below+=n;}
+  const yb=Math.min(9,Math.floor(you/10)), top=Math.max(1,...bins);
+  // narrower than the axis's 680 so its counts stay legible once a phone scales it down
+  const W=480,H=96,pad=10,bw=(W-2*pad)/10;
+  const bars=bins.map((n,i)=>{const h=n/top*64, bx=pad+i*bw;
+    return `<rect x="${(bx+2).toFixed(1)}" y="${(74-h).toFixed(1)}" width="${(bw-4).toFixed(1)}" height="${h.toFixed(1)}" fill="#0a246a" opacity="${i===yb?1:0.22}"/>`+
+      (n?`<text x="${(bx+bw/2).toFixed(1)}" y="${(70-h).toFixed(1)}" text-anchor="middle" font-family="Courier New,monospace" font-size="9" fill="#636363">${n}</text>`:"");}).join("");
+  const ticks=[0,50,100].map(t=>`<text x="${pad+t/100*(W-2*pad)}" y="88" text-anchor="${t?t===100?"end":"middle":"start"}" font-family="Courier New,monospace" font-size="9" fill="#9a9684">${t}%</text>`).join("");
+  const pct=Math.round(100*below/runs);
+  const head=runs===1?`yours is the first run in the pool.`
+    :`you scored higher than <b>${pct}%</b> of ${runs.toLocaleString()} runs.`;
+  const note=d.counted===false?` today's pool is full, so this run sits out until tomorrow.`
+    :d.counted===null?` this run couldn't be added, so the chart is the pool before it.`:``;
+  const L=c.lean, dec=L.s2+L.butter;
+  const crowdLean=dec>=CROWD_MIN?`<p class="axiscap">on the calls where the metrics split, everyone's picks went to <b style="color:var(--bt-ink)">butteraugli</b> ${Math.round(100*L.butter/dec)}% of the time and <b style="color:var(--s2)">ssimulacra2</b> ${Math.round(100*L.s2/dec)}%${L.neither?`, with ${L.neither.toLocaleString()} picks going to neither`:``}.</p>`:``;
+  document.getElementById("crowdbody").innerHTML=`<p style="margin:0 0 4px">${head}${note}</p>
+    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto" role="img" aria-label="scores of ${runs} runs in tenths; ${runs===1?"yours is the only one":`you scored higher than ${pct}%`}">${bars}
+      <rect x="${pad}" y="74" width="${W-2*pad}" height="1" fill="#8a866f"/>${ticks}</svg>
+    <small>score on the clear calls, in 10-point bins. the dark bar is yours.</small>${crowdLean}`;
+  box.hidden=false;
+  const axis=document.getElementById("axis"); if(axis&&c.leanRuns)axis.innerHTML=axisSVG(lean,decisive,c.leanRuns);
 }
 function attachLoupe(tile,cv,img){
   tile.addEventListener("mousemove",e=>{
@@ -1047,6 +1111,7 @@ function wireDiff(gl,tiles,trial,order,pos){
 }
 
 let DATA=null;
+fetch('/pixel-peeper/crowd.json').then(r=>r.ok?r.json():null).then(c=>{if(c&&!state.crowd)state.crowd=c;}).catch(()=>{});
 Promise.all([fetch('/pixel-peeper/manifest.json').then(r=>r.json()),CAN_JXL]).then(([d,jxl])=>{
   // Without JPEG XL a format call loses that tile and stays a call between
   // what's left: AVIF against AV2, which this page decodes itself. Before the

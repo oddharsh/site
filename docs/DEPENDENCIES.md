@@ -79,7 +79,21 @@ format, a byte-identical build and passing tests.
 
 From 2026-10-06 to 2026-10-11 the pin was `"bun": "canary"`, selected to adopt
 Bun's native `bun check` before npm carried it. 1.4.3 (2026-10-10) is the first
-release with the checker, and the pin returned to it. The rolling source still
+release with the checker, and the pin returned to it. On 2026-10-15 it moved
+to the dated canary `1.4.3-canary.20261013.1+9bcbf1e` to adopt `bun lint`,
+which no release carries yet (the first canary with it is 20261012.1). That is
+a hand edit of the channel, which `bun:pin` refuses to make. The newer
+20261014.1 and 20261015.1 cannot be pinned at all: their npm `gitHead` is not
+the commit their binary reports, and the installer refuses the pair
+(gotcha 69). The evidence for 20261013.1: the tripwire ran the rolling canary
+on each side of it (`c69a636b9` on 10-13, `408c9374b` on 10-14), and both
+cleared zstd, the lockfile, the contract suite and cal's suite, with one
+differing build file, `phases.json`, the build's own timings (gotcha 68). On
+9bcbf1ecb itself the lockfile is unchanged, `bun check` prints the same
+diagnostics as 1.4.3 for all seven programs, and the lint matches oxlint.
+It is past bunfig's 24 h window. While the pin sits on the
+canary channel, the nightly bumper walks dated canaries; it returns to
+releases by hand once one carries `bun lint`. The rolling source still
 works if the owner selects it again: `.github/install-bun.sh` reads one GitHub
 release metadata snapshot, checks the archive's SHA-256 and the binary's full
 commit, verifies `bun check` is available, and writes `bun.install.json` beside
@@ -420,7 +434,7 @@ does not make a failed write safe to ignore.
   clean installs) to cut median install time from 4.62 s to 3.03 s and
   `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
   rather than maintained.
-- @cloudflare/config 0.25.0 is the exact root pin for the helpers
+- @cloudflare/config 0.26.0 is the exact root pin for the helpers
   `cloudflare.config.ts` and `cf-garage/cloudflare.config.ts` author with. It
   moved from 0.20.0 on 2026-10-05 for `bindings.analyticsSQL()` (new in
   0.22.0, renamed `bindings.analytics()` in 0.24.0), which declares the site's `ANALYTICS` binding. workers-sdk#15914 moved them
@@ -437,20 +451,30 @@ does not make a failed write safe to ignore.
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. A bump PR's review should read their release notes for output,
   target-browser, and native-install changes.
-- Oxlint 1.88.0 and oxlint-tsgolint 7.0.2004 are exact root pins for
-  `bun run lint`, a required step in `validate`. The tsgolint version tracks the
-  checker bundled with Bun: TypeScript 7.0 ships no stable programmatic
-  API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint
-  uses to reach the same type-aware rules. A bump PR's review should read oxlint
-  releases for NEW rules, since a new rule in an enabled category fails CI on
-  unchanged code, and compare any tsgolint release with the
-  checker version reported by `bun -p process.versions.typescript`. Every rule this repo turns off is turned off in
-  `.oxlintrc.json` beside the measurement that decided it.
-- @oxlint/plugins 1.88.0 is the runtime for the three rules vendored from
-  anti-slop at `tools/oxlint/anti-slop`. **Bump it in lockstep with oxlint and
-  never on its own**: it is the ABI between the linter and a JS plugin, the two
-  ship one version number, and a mismatch would fail at plugin load rather than
-  at install. It carries no transitive dependencies. Since the rules themselves
+- **The linter is Bun's, as of 2026-10-15.** `bun run lint`, a required step
+  in `validate`, runs `bun lint --type-aware`, which reads `.oxlintrc.json` as
+  it stands and runs the type-aware rules against the same programs Bun's
+  checker uses. Oxlint 1.88.0 and oxlint-tsgolint 7.0.2004 left with it, and
+  56 lockfile lines with them. Measured on an unchanged tree the day it moved,
+  identical by file, line and rule: the same 4 findings without types (0.35 s
+  against oxlint's 1.22 s) and the same 14 with them (1.9 s against 4.0 s),
+  the second run with both packages removed from `node_modules`. That checkout
+  could not install wrangler, so it had no generated Workers types and 13 of
+  the 14 were error-type findings (the #709 shape); a planted file still drew
+  `typescript(await-thenable)`, a native `unicorn` rule and
+  `anti-slop(no-runtime-typeof)`, one from each kind of rule. The linter now moves with the
+  Bun pin, so a pin bump PR's review should read Bun's lint changes for NEW
+  rules, since a new rule in an enabled category fails CI on unchanged code.
+  Every rule this repo turns off is turned off in `.oxlintrc.json` beside the
+  measurement that decided it. `bun lint --doctor` says which rules run
+  natively and which run in JavaScript (117 and 3 on 2026-10-15).
+- @oxlint/plugins 1.88.0 is the adapter the three rules vendored from
+  anti-slop at `tools/oxlint/anti-slop` import (`eslintCompatPlugin`,
+  `defineRule`). Bun's linter loads them through it as JavaScript rules. It was
+  the ABI between oxlint and a JS plugin and moved in lockstep with oxlint;
+  with oxlint gone it moves on its own, and a bump PR should run `bun run lint`
+  and confirm `--doctor` still counts 3 JavaScript rules. It carries no
+  transitive dependencies. Since the rules themselves
   are vendored rather than depended on, an anti-slop release is NOT a Dependabot
   event here; re-syncing is a deliberate copy, and the section at the end of this
   file says which three files it covers.
@@ -496,7 +520,7 @@ does not make a failed write safe to ignore.
   Bun also discovers directly included files with
   `--listFilesOnly --noResolve`, preserving the lint coverage check without
   the old CLI's `--showConfig`. The root `tsconfig.json` maps those programs
-  for tsgolint and Bun. It intentionally has no compiler options or source files of its own.
+  for Bun's checker and its type-aware lint. It intentionally has no compiler options or source files of its own.
 
   Programs follow runtime boundaries: Workers use the generated workerd
   declarations, client code uses the DOM, the service worker uses WebWorker
@@ -534,8 +558,9 @@ does not make a failed write safe to ignore.
   the peer is absent. The harness types used here are declared locally in that
   file; keep this limitation in mind when adopting another Wrangler API.
 
-  Review Bun checker upgrades for new checks on unchanged source and keep
-  tsgolint paired with the compiler, as described above.
+  Review Bun checker upgrades for new checks on unchanged source. The
+  type-aware lint ships in the same binary as the checker, so there is no
+  second version to pair with it the way tsgolint had to be.
 - @types/bun 1.4.3 is the exact type pin for host tools and tests. It supplies
   Node globals as well as Bun APIs such as HTMLRewriter, so those programs use
   one `types` entry. It adds no runtime dependency or served byte.
@@ -544,7 +569,7 @@ does not make a failed write safe to ignore.
   age floor elapsed. That delay needed no permanent package exemption:
   `minimumReleaseAgeExcludes` matches a package name across future versions,
   so adding one to bypass a same-day delay would outlive its reason.
-- playwright-core 1.64.0 is the exact root pin for the browser probes. It was
+- playwright-core 1.64.1 is the exact root pin for the browser probes. It was
   caret-ranged until 2026-09-10, on the reasoning that it drives the locally
   installed Google Chrome rather than a bundled browser, so there was no exact
   pin worth stating. That argument is about the BROWSER, and it left the half a
@@ -787,7 +812,7 @@ rules through `tools/oxlint/anti-slop/index.ts` and enables them in
 | `no-conditional-empty-object-spread` | Add conditional properties explicitly while preserving absent-versus-zero semantics. |
 
 The three rule files and their MIT license are vendored; `@oxlint/plugins`
-provides the adapter and stays paired with Oxlint. Re-sync the upstream rule
+provides the adapter Bun's linter loads them through. Re-sync the upstream rule
 files deliberately, review their behavior against this tree, and keep local
 policy in the wrapper and `.oxlintrc.json`.
 
@@ -796,7 +821,7 @@ others inapplicable because the source was JavaScript. Adoption and the
 TypeScript migration superseded that conclusion. The unvendored rules are
 not enabled; the old zero findings do not establish their applicability now.
 
-Core Oxlint supplies `vitest/no-restricted-vi-methods` for `vi.mock` and
+The linter's built-in `vitest` plugin supplies `vitest/no-restricted-vi-methods` for `vi.mock` and
 `vi.doMock`, so that equivalent rule needs no vendored copy. It does not
 match Bun's `mock.module`: `cal/test/preload.ts` uses that API for the
 `cloudflare:workers` virtual module, and other uses require review of the seam.

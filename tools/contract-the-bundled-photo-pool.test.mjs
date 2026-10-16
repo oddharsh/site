@@ -70,9 +70,12 @@ test("both homepage fragments are preloaded, and the reason that is free still h
     "the playlist must ship as an island mount, or the preloaded fragment goes unfetched");
   assert.doesNotMatch(page, /data-ssr=|x-rn-fragment/,
     "the homepage runs on the one island convention, with no second marker or guard");
+  // The Worker became TypeScript in #460, and this loop kept filtering `.js`, so
+  // it has read nothing since. The floor makes the next rename fail loudly.
   const workerDir = new URL("src/worker/", ROOT);
-  for (const file of await readdir(workerDir)) {
-    if (!file.endsWith(".js")) continue;
+  const sources = (await readdir(workerDir)).filter((file) => file.endsWith(".ts"));
+  assert.ok(sources.length >= 30, `only ${sources.length} Worker sources found in src/worker/`);
+  for (const file of sources) {
     const src = await readFile(new URL(file, workerDir), "utf8");
     assert.doesNotMatch(src, /SSR_DEADLINE_MS|serveHomepageWithPrerenderedTracks/,
       `${file} reintroduces homepage SSR; revisit the /rn/tracks.html preload and the comments that call the fetch unconditional`);

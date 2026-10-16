@@ -92,9 +92,15 @@ test("a cold Lens document loads its page tools when WebMCP is available", () =>
   assert.doesNotMatch(LENS_BOOT, /document\.modelContext\s*\|\|\s*hasClientState\(\)/,
     "WebMCP discovery must not hydrate the full Lens client while idle");
 
-  const execute = LENS_WEBMCP.slice(LENS_WEBMCP.indexOf("async function execute"), LENS_WEBMCP.indexOf("const proxy"));
-  assert.ok(execute.indexOf("await loadClient()") < execute.indexOf("return handler(args)"),
-    "a page-tool call must hydrate lens.js before reaching its live handler");
+  const from = LENS_WEBMCP.indexOf("async function execute"), to = LENS_WEBMCP.indexOf("const proxy");
+  assert.ok(from >= 0 && to > from, "lens-webmcp.js lost execute() or the proxy after it; point this test at them");
+  const execute = LENS_WEBMCP.slice(from, to);
+  // Both calls must be there: indexOf answers -1 for a deleted loadClient(),
+  // and -1 sorts before anything.
+  const load = execute.indexOf("await loadClient()"), run = execute.indexOf("return handler(args)");
+  assert.ok(load >= 0, "execute() must hydrate lens.js with await loadClient()");
+  assert.ok(run >= 0, "execute() must reach the live handler");
+  assert.ok(load < run, "a page-tool call must hydrate lens.js before reaching its live handler");
 });
 
 test("the early definitions and lazy Lens handlers stay one-to-one", () => {
@@ -156,10 +162,15 @@ test("the agent-activity tray icon ships HIDDEN and is unhidden by script", () =
 test("the tray reads the log rather than fetching it, and renders every outcome", () => {
   assert.ok(/loadWebmcp/.test(NAV) && /loadWebmcp/.test(TRAY),
     "nav.js should pass a loadWebmcp reader and nav-tray.js should take it");
-  assert.ok(!/fetch\(/.test(TRAY.slice(TRAY.indexOf("function renderWebmcp"), TRAY.indexOf("var BALLOON"))),
-    "renderWebmcp must not fetch anything");
+  // Anchored, so a renamed function or table reads as a moved test rather than
+  // an empty slice that contains no fetch and passes.
+  const from = TRAY.indexOf("function renderWebmcp"), to = TRAY.indexOf("var BALLOON");
+  assert.ok(from >= 0 && to > from, "nav-tray.js lost renderWebmcp or the BALLOON table after it; point this test at them");
+  const render = TRAY.slice(from, to);
+  assert.ok(!/fetch\(/.test(render), "renderWebmcp must not fetch anything");
+  // Inside renderWebmcp, since `"ok"` also appears elsewhere in the tray.
   for (const outcome of ["ok", "refused", "failed"]) {
-    assert.ok(new RegExp(`"${outcome}"`).test(TRAY),
+    assert.ok(render.includes(`c.outcome === "${outcome}"`),
       `the balloon must render the ${outcome} outcome`);
   }
   for (const name of ["summary", "onActivity"]) {

@@ -120,9 +120,14 @@ test("every failure path lands on the plain asset, untouched", async () => {
 
 test("a type the build does not twin never takes the path", async () => {
   const env = fakeEnv();
-  let twinAsked = false;
+  const asked = [];
   const inner = env.ASSETS.fetch;
-  env.ASSETS.fetch = async (input) => { if (String(input instanceof Request ? input.url : input).endsWith(".br")) twinAsked = true; return inner(input); };
-  await servePrecompressedText(new Request("https://aadhar.sh/garage/photo.avif"), env);
-  assert.equal(twinAsked, false, "an .avif must go straight to the asset layer without a twin lookup");
+  env.ASSETS.fetch = async (input) => { asked.push(new URL(input instanceof Request ? input.url : input).pathname); return inner(input); };
+  const res = await servePrecompressedText(new Request("https://aadhar.sh/garage/photo.avif"), env);
+  assert.deepEqual(asked, ["/garage/photo.avif"], "an .avif must go straight to the asset layer without a twin lookup");
+  assert.equal(res.status, 404, "the asset layer's own answer comes back");
+  // The same spy on a feed, which the build does twin, sees the .br lookup.
+  asked.length = 0;
+  await servePrecompressedText(get(), env);
+  assert.ok(asked.includes("/garage/feed.xml.br"), `a feed asks for its twin: ${asked.join(", ")}`);
 });

@@ -42,15 +42,11 @@ export type Bump = {
 export type Group = { name: string; patterns: string[] };
 
 export const GROUPS: Group[] = [
-  // The linter ABI. `@oxlint/plugins` is the interface between oxlint and the
-  // three rules vendored at tools/oxlint/anti-slop; the two ship one version
-  // number and a mismatch fails at PLUGIN LOAD, so moving one without the other
-  // reds `validate` on unchanged code.
-  { name: "oxlint", patterns: ["oxlint", "@oxlint/plugins"] },
-  // tsgolint tracks the TYPESCRIPT pin, not the oxlint one. TypeScript 7.0
-  // ships no stable programmatic API, so tsgolint is the only door to the
-  // type-aware rules, and its releases pair with TypeScript's.
-  { name: "typescript", patterns: ["typescript", "oxlint-tsgolint"] },
+  // The oxlint and tsgolint groups left on 2026-10-15 with the packages: the
+  // linter is Bun's now (`bun lint`), pinned with the runtime in
+  // config/bun-pin.json. `@oxlint/plugins` stays as the adapter the vendored
+  // anti-slop rules import, and moves on its own.
+  { name: "typescript", patterns: ["typescript"] },
   { name: "cloudflare-toolchain", patterns: ["wrangler", "@cloudflare/*"] },
   { name: "minifiers", patterns: ["oxc-minify", "lightningcss"] },
 ];

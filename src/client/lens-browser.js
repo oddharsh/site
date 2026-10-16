@@ -88,9 +88,6 @@
     return Math.min(100, Math.round((rawWords / renWords) * 100));
   }
   function structural(tally, a) {
-    // Only the axes the HTTP side actually measured. anatomy carries images and
-    // their alt coverage but no heading or link totals, so claiming a delta on
-    // those would be inventing the "before" half of a comparison.
     var rows = [];
     if (tally.jsonld != null) rows.push([tally.jsonld, "JSON-LD block"]);
     if (tally.headings != null) rows.push([tally.headings, "heading"]);

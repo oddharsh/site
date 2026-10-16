@@ -20,7 +20,12 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // because bun records it at the lockfile's TOP LEVEL rather than per workspace.
 export const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"] as const;
 
-export const FLOOR_PINS = 12;
+// A scanner that has quietly stopped matching must not report a clean pass over
+// nothing. 10 pins are checked on 2026-10-15, after oxlint and oxlint-tsgolint
+// left the root devDependencies (16 when this was written);
+// the floor sits below that so a deliberate removal does not trip it and a
+// broken walk does.
+export const FLOOR_PINS = 8;
 
 export type LockfileManifest = { manifest: string; wsKey: string; pkg: Record<string, unknown> };
 export type LockfileInput = { lock: string; parsed: Record<string, unknown>; manifests: LockfileManifest[] };

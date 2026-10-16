@@ -1,6 +1,10 @@
 {
-  // SOLUTION-STYLE: the checker walks these references, and oxlint's
-  // type-aware pass uses them to find each file's runtime program.
+  // SOLUTION-STYLE: the checker walks these references, and the type-aware
+  // lint (`bun lint --type-aware`) uses them to find each file's runtime
+  // program. Until 2026-10-15 that lint was oxlint's, through tsgolint, which
+  // is what the measurements below were taken with; Bun's linter resolves the
+  // same programs (identical findings on an unchanged tree, measured in
+  // docs/DEPENDENCIES.md).
   //
   // Every real program lives in config/tsconfig.*.json and is run by `bun run
   // typecheck` by explicit path; each config owns what Bun checks. tsgolint

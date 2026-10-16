@@ -82,7 +82,12 @@ test("the nightly row's gzip figure is wrangler's, never the runtime's zlib", as
   assert.ok(row.length > 100, "the row builder moved; re-anchor this test");
   assert.match(row, /worker_gzip: snap\.worker\.gzipBytes/, "worker_gzip must be the figure the wrangler dry-run printed");
   assert.doesNotMatch(row, /\.gzip\b/, "no row field may read a per-asset gzip, which is the runtime's zlib");
+  // and the figure it does take is parsed off wrangler's output, not computed
+  // The assignment itself, since the match alone stayed true with gzipBytes
+  // recomputed from gzipSync on the next line.
   assert.match(src, /dryOut\.match\(\/gzip:/, "gzipBytes must be read from the dry-run's own line");
+  assert.match(src, /gzipBytes = Math\.round\(parseFloat\(gz\[1\]\) \* 1024\)/, "gzipBytes must be set from that match");
+  assert.doesNotMatch(src, /gzipBytes = [^;]*gzipSync/, "gzipBytes must never come from the runtime's zlib");
 });
 
 // With that settled, node is spent only where wrangler needs it. Wrangler

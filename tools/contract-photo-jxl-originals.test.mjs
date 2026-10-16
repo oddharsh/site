@@ -10,6 +10,12 @@ import { servePhotoFromR2 } from "../src/worker/photos.ts";
 const index = JSON.parse(await readFile(new URL("src/worker/photo-index.json", ROOT), "utf8"));
 
 test("an original is its stem's JPEG or JPEG XL, and only a migrated one names a retired JPEG", () => {
+  // 165 entries on 2026-10-14, every one migrated. An emptied index, or a writer
+  // that stopped recording `jpeg`, would otherwise run the checks below on
+  // nothing and drop the redirects they guard without a word.
+  const entries = Object.values(index);
+  assert.ok(entries.length >= 150, `only ${entries.length} photos in photo-index.json`);
+  assert.ok(entries.some((entry) => entry.jpeg !== undefined), "no entry names a retired JPEG, so the migrated half below checks nothing");
   for (const [stem, entry] of Object.entries(index)) {
     assert.match(entry.full, /\.(jpe?g|jxl)$/i, `${stem}: an original is a JPEG or its lossless JPEG XL`);
     assert.equal(entry.full.replace(/\.[^.]+$/, ""), stem, `${stem}: the key is the stem's`);

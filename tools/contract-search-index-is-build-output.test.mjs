@@ -40,8 +40,14 @@ test("the build still generates it, with both floors intact", () => {
     /public\/search-index\.json/,
     "build.ts no longer writes public/search-index.json into the staged tree",
   );
+  // A generator wired in with its tripwires deleted is the freeze wearing a
+  // different hat: the step runs, writes an empty corpus, and passes.
+  // The conditions, as well as the messages: a floor lowered to `< 1` keeps its
+  // "expected 50+" text and guards nothing.
   assert.match(build, /expected 50\+/, "the record floor is gone from build.ts step 1i");
+  assert.match(build, /if \(index\.records\.length < 50\)/, "the record floor no longer tests for 50 records");
   assert.match(build, /searchIndex\?/, "the surface-registry floor is gone from build.ts step 1i");
+  assert.match(build, /if \(!manual\) throw/, "the surface-registry floor no longer throws");
 });
 
 test("the corpus covers every static document and every flagged surface", async () => {

@@ -163,12 +163,12 @@ skips it.
     rule it targets does nothing.
     Checked by: nothing (judgment).
 
-32. **`bun run pages:check` lints page text, and `validate` doesn't run it.**
-    It bans em dashes, AI filler and "X, not Y" negations, but only in the
-    quiz and editorial fields; lint your own diff for the rest. It was a CI
-    step until #1001 folded CI into one job and left it out, so run it before
-    pushing page copy.
-    Checked by: `tools/check-page-contracts.ts`.
+32. **`bun run pages:check` lints page text and is required.** It bans em
+    dashes, AI filler and "X, not Y" negations, but only in the quiz and
+    editorial fields; lint your own diff for the rest. #1001 folded CI into
+    one job on 2026-09-28 and left it out until 2026-10-14; `contract-ci-required-gate` now fails
+    if `validate` stops running it.
+    Checked by: `tools/check-page-contracts.ts`, `tools/contract-ci-required-gate.test.mjs`.
 
 33. **A speculation rule can't be measured from the page or from an agent's
     backgrounded tab.** Count at the origin (`Sec-Purpose`) with
@@ -472,3 +472,36 @@ skips it.
     half its questions, and the contract test holds both guessers near
     chance site-wide with the median length ratio in 0.85 to 1.15.
     Checked by: `tools/contract-quiz-answers-carry-no-length-tell.test.mjs`.
+
+67. **A package.json script named `lint` shadows `bun lint`.** Bun runs the
+    script for `bun lint`, `bun lint .` and every flag but `--doctor`, so
+    `bun lint` in a terminal still ran oxlint after the canary carried the
+    built-in. Bun takes the built-in only when the script body itself says
+    `bun lint`, a prefix like `bun tools/gen-runtime-types.ts &&` included;
+    under 1.4.3, which has no linter, that same body recurses into the
+    script. `bun lint --doctor` reads the config either way, so it can say
+    "117 rules run natively" while the lint step runs something else.
+    Measured 2026-10-15 on 408c9374b.
+    Checked by: `tools/contract-the-lint-script-reaches-bun-lint.test.mjs`.
+
+68. **The byte-identical build gate read the build's stopwatch.** From
+    2026-10-13 `tools/build.ts` writes its phase timings to
+    `.build/phases.json`, and the gate hashed all of `.build/`, so every
+    candidate bun failed on that file alone and the canary tripwire went red
+    on 408c9374b with "1 differing: phases.json". The file sits beside
+    `.build/public`, so it never ships. `builtBytes` in `lib/bun-gates.ts`
+    drops exactly that path, and a changed byte anywhere else, a served
+    `public/phases.json` included, still fails. Anything else that records
+    how long a build took belongs outside `.build/` or in `BUILD_TIMINGS`.
+    Checked by: `tools/contract-the-build-gate-ignores-only-the-stopwatch.test.mjs`.
+
+69. **A dated canary's npm sha can name a different commit from its
+    binary.** Through 1.4.3-canary.20261013.1 the tarball's `package.json`
+    version (`+9bcbf1e`) and `bun --revision` (`+9bcbf1ecb`) agreed. From
+    20261014.1 they don't: npm says `+e40a58a` (its `gitHead`) and the binary
+    says `+408c9374b`, and 20261015.1 repeats the split. Pinning the binary's
+    sha failed every CI job in the installer's second witness; pinning npm's
+    would fail its third. Check both before choosing a dated canary:
+    `npm view @oven/bun-linux-x64@<version> gitHead` against
+    `bun --revision` on the unpacked binary. Measured 2026-10-15.
+    Checked by: `.github/install-bun.sh`.

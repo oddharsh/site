@@ -169,7 +169,7 @@ test("the reader never renders an unmeasurable phase as 0 ms", () => {
   // `fetch` carries real time. Measured through the live route 2026-08-10:
   // stripe.com answered {fetch: 104, parse: 0, extract: 0, markdown: 0} where the
   // same run under wrangler dev had reported 30 / 347 / 10.
-  assert.match(client, /not measurable/,
+  assert.match(client, /return value > 0 \? value \+ " ms" : "not measurable/,
     "a zero-valued timing phase must render as unmeasurable, never as 0 ms");
   assert.match(client, /never during synchronous execution/,
     "the panel must explain WHY those phases read zero");
@@ -208,8 +208,10 @@ test("the cracker's scorer matches the quadgram table it ships", () => {
 test("the cracker reports a verdict rather than always answering", () => {
   const page = readFileSync("./src/pages/lwe/vigenere.html", "utf8");
   assert.match(page, /<b>failed\.<\/b>/, "a run that did not solve must say so");
-  assert.match(page, /confidence/, "the verdict must carry a confidence");
-  assert.match(page, /PSEUDO/, "confidence must be shrunk toward random on short text");
+  // The scorer and its shrinkage, since both words also appear in comments and
+  // in PERIOD_PSEUDO, which is a different estimate.
+  assert.match(page, /function confidence\(L\)/, "the verdict must carry a confidence");
+  assert.match(page, /\+ PSEUDO \* FLOOR\) \/ \(w \+ PSEUDO\)/, "confidence must be shrunk toward random on short text");
   assert.match(page, /margin over runner-up/, "the verdict must report the margin to the next candidate");
   assert.match(page, /letters per column/, "the gauge must be per column, not per message");
   assert.match(page, /per >= 20/, "the measured comfortable threshold is 20 letters per column");

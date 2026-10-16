@@ -55,6 +55,7 @@ test("an engine with no WebMCP is UNMEASURABLE, never a site with no tools", () 
 });
 
 test("the engine label comes from CDP, never from the page's user agent", () => {
+  assert.ok(/getTools\(\)/.test(WEBMCP_PROBE), "WEBMCP_PROBE should be the script that reads getTools()");
   assert.ok(!/navigator\.userAgent/.test(WEBMCP_PROBE),
     "the probe must not report navigator.userAgent; this route overrides it");
   assert.ok(/Browser\.getVersion/.test(WIRE),

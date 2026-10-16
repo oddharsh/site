@@ -101,15 +101,37 @@ test("no source tree imports a retired package", async () => {
 });
 
 test("a named exception is a real file, and it still uses what it is excused for", async () => {
-  for (const entry of ledger.retired.filter((e) => e.bans.source?.except)) {
+  // No entry carries an exception today (Pillow's went on 2026-09-15), so the
+  // real ledger runs this over nothing. The control below is what shows it can
+  // still fail when the next exception is written.
+  assert.deepEqual(await exceptionProblems(ledger.retired, committed, (file) => readFile(new URL(file, ROOT), "utf8")), []);
+});
+
+/** What is wrong with each `bans.source.except` entry, as messages. */
+async function exceptionProblems(entries, isCommitted, read) {
+  const problems = [];
+  for (const entry of entries.filter((e) => e.bans.source?.except)) {
     const { specifiers, except } = entry.bans.source;
     for (const file of except) {
-      assert.ok(committed(file).length === 1, `config/retired.json excuses ${file}, which is not a committed file`);
-      const text = await readFile(new URL(file, ROOT), "utf8");
-      assert.notDeepEqual(sourceViolations(file, text, specifiers), [],
-        `config/retired.json excuses ${file} from the ${entry.id} ban, but it no longer imports it. The retirement is complete: drop the exception and the scope note`);
+      if (isCommitted(file).length !== 1) { problems.push(`config/retired.json excuses ${file}, which is not a committed file`); continue; }
+      if (sourceViolations(file, await read(file), specifiers).length === 0) {
+        problems.push(`config/retired.json excuses ${file} from the ${entry.id} ban, but it no longer imports it. The retirement is complete: drop the exception and the scope note`);
+      }
     }
   }
+  return problems;
+}
+
+test("the exception check fails on a stale path and on a finished retirement", async () => {
+  const files = { "gen.py": "from PIL import Image\n", "done.py": "import json\n" };
+  const isCommitted = (file) => (file in files ? [file] : []);
+  const read = async (file) => files[file];
+  const entry = (except) => ({ id: "pillow", bans: { source: { specifiers: ["PIL"], except } } });
+  assert.deepEqual(await exceptionProblems([entry(["gen.py"])], isCommitted, read), []);
+  assert.deepEqual(await exceptionProblems([entry(["gone.py", "done.py"])], isCommitted, read), [
+    "config/retired.json excuses gone.py, which is not a committed file",
+    "config/retired.json excuses done.py from the pillow ban, but it no longer imports it. The retirement is complete: drop the exception and the scope note",
+  ]);
 });
 
 test("each ban kind catches the thing it bans", () => {

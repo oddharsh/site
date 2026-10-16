@@ -107,9 +107,9 @@ test("the ramp never double-parses the D1 helper's already-parsed rows", async (
   // It warns and does not refuse, on purpose: ramping something older than HEAD
   // is legitimate for a rollback and for re-ramping the serving version to write
   // a missed changelog row (gotcha 24). A die() there would block that repair.
-  assert.ok(src.includes("STALE TARGET"), "the stale-target warning must still exist");
-  const staleBranch = src.slice(src.indexOf("STALE TARGET")).split("\n}\n")[0];
-  assert.equal(/\bdie\(/.test(staleBranch), false,
+  // The warning has to be there for its absence of die() to mean anything.
+  assert.match(src, /STALE TARGET/, "the ramp lost its stale-target warning");
+  assert.equal(/STALE TARGET[\s\S]{0,700}?\bdie\(/.test(src), false,
     "a stale target must warn, never die — that would block the gotcha-24 repair path");
 
   assert.equal(/when D1 is reachable/.test(src), false,
