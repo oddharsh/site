@@ -505,3 +505,24 @@ skips it.
     `npm view @oven/bun-linux-x64@<version> gitHead` against
     `bun --revision` on the unpacked binary. Measured 2026-10-15.
     Checked by: `.github/install-bun.sh`.
+
+70. **Safari reads a fixed box's background-color, never its gradient.**
+    Safari 26 dropped theme-color in tabs and tints its status bar and
+    toolbars from the frontmost fixed box just inside each edge, using that
+    box's computed `background-color` (`LocalFrameView::fixedContainerEdges`).
+    The taskbar was drawn with the `background:` shorthand, which leaves the
+    color transparent, so Safari had nothing solid to extend under it. The box
+    must span 90% of the edge and stand taller than 10px, or WebKit samples
+    pixels instead, and `backdrop-filter` disqualifies it (WebKit 319479). The
+    wallpaper has no solid color either, so `html::before` is a 12px top
+    sampler clipped to text it doesn't have: it paints nothing and still reads
+    as opaque. On iPhone the top edge only counts under `viewport-fit=cover`
+    (319479 again), so every page asks for it, and cover runs the page under
+    the status bar, the notch and the home indicator: whatever the shell draws
+    at an edge steps in by luna.css's SAFE AREAS insets (`--sa-*`,
+    `--taskbar-h`). Measured 2026-10-16 in Chromium: with no insets the pages
+    matched main pixel for pixel, and under `Emulation.setSafeAreaInsetsOverride`
+    (59/34px portrait, 59px sides landscape) nothing tappable sat in an inset.
+    This is undocumented WebKit behavior. If it moves, the old look comes back.
+    (This was 67 in #1366; #1365's merge took the number and dropped the entry.)
+    Checked by: `tools/contract-safari-reads-a-solid-colour-at-each-edge.test.mjs`.

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/teardown</title>
@@ -110,7 +110,7 @@ return errorResp("not found", 404);  <span class="c">// no masquerade</span></pr
 // pops in a frame or two later</span></pre></figure>
         <figure class="after"><figcaption>after</figcaption><pre><span class="c">/* inline, in every page's &lt;style&gt; */</span>
 html { height: 100dvh; overflow: hidden; }
-body { height: calc(100dvh - 30px); overflow: hidden;
+body { height: calc(100dvh - 30px - env(safe-area-inset-bottom, 0px)); overflow: hidden;
   display: flex; flex-direction: column; padding: 8px; }
 .window &gt; .content { flex: 1; min-height: 0; overflow: auto; }</pre></figure>
       </div>

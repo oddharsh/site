@@ -47,7 +47,7 @@ color:oklch(16% 0 0);font-family:var(--font-mono);font-size:13px;line-height:1.5
 .np-edited{color:var(--ink-quiet)}
 /* a note opened as a popover — floats over the folder ("selecting menu"),
    clears the taskbar, and keeps the window chrome (drag/resize/scrollbar). */
-.np-note[popover]{position:fixed;left:0;right:0;top:10px;margin:0 auto;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 48px) !important}
+.np-note[popover]{position:fixed;left:0;right:0;top:calc(10px + var(--sa-t,0px));margin:0 auto;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 48px - var(--sa-t,0px) - var(--sa-b,0px)) !important}
 .np-note[popover]::backdrop{background:transparent}
 /* CRITICAL: our .np-window{display:flex} would otherwise beat the UA
    [popover]:not(:popover-open){display:none}, leaking closed notes into flow.
@@ -86,7 +86,7 @@ export function writingShell(o) {
   // The Markdown twin, where the build wrote one: the lookup lunaPage makes.
   const twin = twinFor(o.path);
   return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
-    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">" +
     "<meta name=\"theme-color\" content=\"#2D78BD\">" +
     "<title>" + escHtml(o.title) + "</title>" +
     // The section tile, same as the taskbar pin. Notepad builds its own head
