@@ -434,7 +434,7 @@ does not make a failed write safe to ignore.
   clean installs) to cut median install time from 4.62 s to 3.03 s and
   `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
   rather than maintained.
-- @cloudflare/config 0.25.0 is the exact root pin for the helpers
+- @cloudflare/config 0.26.0 is the exact root pin for the helpers
   `cloudflare.config.ts` and `cf-garage/cloudflare.config.ts` author with. It
   moved from 0.20.0 on 2026-10-05 for `bindings.analyticsSQL()` (new in
   0.22.0, renamed `bindings.analytics()` in 0.24.0), which declares the site's `ANALYTICS` binding. workers-sdk#15914 moved them
@@ -569,7 +569,7 @@ does not make a failed write safe to ignore.
   age floor elapsed. That delay needed no permanent package exemption:
   `minimumReleaseAgeExcludes` matches a package name across future versions,
   so adding one to bypass a same-day delay would outlive its reason.
-- playwright-core 1.64.0 is the exact root pin for the browser probes. It was
+- playwright-core 1.64.1 is the exact root pin for the browser probes. It was
   caret-ranged until 2026-09-10, on the reasoning that it drives the locally
   installed Google Chrome rather than a bundled browser, so there was no exact
   pin worth stating. That argument is about the BROWSER, and it left the half a

@@ -392,6 +392,25 @@ html{text-wrap:pretty}
 /* deferred nav.js is what builds it, so until then a transparent html would expose */
 /* the browser's white canvas. The gradient makes that gap read as sky, not white. */
 html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%) !important}body{background:transparent !important}
+/* SAFARI'S EDGE TINT (2026-10-16, after joshpuckett.me/seamless-mobile-safari). Safari 26
+   dropped theme-color in tabs and paints behind its status bar and toolbars from the page
+   instead: LocalFrameView::fixedContainerEdges hit-tests ~4px inside each obscured edge,
+   takes the frontmost fixed/sticky box there, and extends its COMPUTED background-color.
+   The box must span 90%+ of the edge and be taller than 10px (at 10px or less WebKit
+   samples painted pixels instead), and backdrop-filter disqualifies it (WebKit 319479).
+   Gradients and images count for nothing: a box with only background-image reads as
+   transparent. Undocumented, so if WebKit moves these numbers the failure is the old look.
+   --edge-top is the wallpaper's top stop (the sky); the p3 value mirrors #axp-desktop's.
+   --edge-bottom is the taskbar's bottom stop, so the toolbar continues the bar's floor. */
+/* html's own colour sits under the backstop gradient: never painted, but it's Safari's fallback. */
+html{--edge-top:oklch(59.1% 0.135 254);--edge-bottom:oklch(40% 0.18 260);background-color:var(--edge-top) !important}
+@media (color-gamut: p3){@supports (color: oklch(0% 0 0)){html{--edge-top:oklch(59.1% 0.172 254.5)}}}
+/* the top sampler: the wallpaper has no solid colour to read, so this hands Safari one.
+   It paints nothing. background-clip:text with no text clips the fill to zero pixels while
+   the computed colour stays opaque, which is all the sampler reads. Frontmost (taskbar's z)
+   so a window dragged up to the edge doesn't take the tint. pointer-events:none keeps it
+   out of every click; the probe still finds it (Puckett's strips carry it too). */
+html::before{content:"";position:fixed;left:0;right:0;top:0;height:12px;z-index:99999;pointer-events:none;background-color:var(--edge-top);-webkit-background-clip:text;background-clip:text}
 /* app-shell: the taskbar is a HARD FLOOR. the body is the scroll container and ends at */
 /* the taskbar's top (height = viewport − 30px taskbar), so page content scrolls within */
 /* it and never flows under the bar. html doesn't scroll. dvh tracks the mobile URL bar; */
@@ -536,9 +555,10 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
 /* rather than left as dead weight on a render-blocking sheet. `git log -S axp-window` */
 /* has the full set if the trade ever wants revisiting; /garage/vt-check still probes */
 /* the platform independently of whether this site opts in. */
+/* background-color under the gradient is what Safari's bottom edge reads (see SAFARI'S EDGE TINT). */
 #axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;display:flex;align-items:stretch;
 font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;user-select:none;
-background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);
+background-color:var(--edge-bottom);background-image:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);
 box-shadow:inset 0 1px 0 oklch(82% 0.09 250),inset 0 2px 0 oklch(62% 0.16 255)}
 /* start orb */
 /* the Start orb is an <a href="/run"> now (phase B): the palette's no-script

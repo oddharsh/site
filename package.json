@@ -85,15 +85,15 @@
   "comment:lint": "`bun lint` here is Bun's built-in linter, reading .oxlintrc.json. A script named lint shadows the built-in for every flag but --doctor, and Bun runs the built-in only when the script body itself says `bun lint` (gotcha 67). gen-runtime-types runs FIRST because the type-aware pass reads the real programs now (root tsconfig.json), and those programs include config/.generated/workers-runtime.d.ts. Without it every Workers global is an error type acting as `any`, which is a different lint from the one that passes locally: CI runs lint before typecheck, typecheck was the only thing generating the file, and #709 went red on 6 `error type` findings that no workstation could reproduce. 0.02s warm, 3s on a cold checkout.",
   "comment:check-fast": "Local feedback only: lint, typecheck and test are independent read-only gates, so Bun can run them concurrently. CI keeps them as named sequential steps for legible failures. Do not add build, routes, Lens or perf commands here: several share .build or intentionally run under Node.",
   "devDependencies": {
-    "@cloudflare/config": "0.25.0",
+    "@cloudflare/config": "0.26.0",
     "@oxlint/plugins": "1.88.0",
     "@types/bun": "1.4.3",
     "av2-tone": "github:oddharsh/av2-tone#996848f8a319e72991d99f209c0d089192ac3cf1",
     "lightningcss": "1.33.0",
     "oxc-minify": "0.154.0",
-    "playwright-core": "1.64.0",
+    "playwright-core": "1.64.1",
     "timbrado": "github:oddharsh/timbrado#ec6c6b19dd97b922ce86f49d60711abfe5924670",
-    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@b81efbc"
+    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@e1d1b77"
   },
   "comment:engines-node-floor": "TWO node floors exist and this field is the HIGHER one: the highest version any constraint in this repo demands. It is NOT the zstd dictionary floor, which is 24, lives beside the check that enforces it as ZSTD_DICTIONARY_NODE_FLOOR in tools/build.ts, and is measured there. Welding the two was right when zstd was the only constraint and went wrong silently the moment source used something newer. What set 26 is Map.prototype.getOrInsertComputed, used in src/worker/inbox.ts, around.ts and census.ts; probed 2026-08-31, it is undefined on node 24.20.0 and 25.4.0 and a function on 26.8.1. PRODUCTION IS UNAFFECTED, which is why nothing caught this: workerd has the method (probed through createTestHarness, and the call works) and /around and /inbox both answer 200. What broke was the repo's own suite under node 24, with 2 failures that read like defects. Note also that 26 EQUALS .node-version, so the floor is now the version CI exercises on every run rather than a claim about a version nothing tests. Raise this whenever a new constraint measures higher, and lower it only with a measurement.",
   "engines": {
