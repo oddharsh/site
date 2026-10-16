@@ -39,6 +39,7 @@ bun run dev                 # cf dev on config/dev + Counter beside it (needs `b
 bun run build               # stage .build/ (minify, hash /a/ assets, twins, dictionaries)
 bun run check:fast          # lint + typecheck + test, in parallel
 bun run lint                # bun lint (built in), type-aware
+bun run format              # bun fmt; `format:check` is what validate runs
 bun run typecheck
 bun run test                # contract suite under bun; `test:node` runs it under node
 bun run --filter cal-aadhar-sh test
@@ -64,7 +65,11 @@ probes) is in `package.json` and [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
   session that opened the PR claims it; a second claim takes the watch over.
 - Labels worth applying by hand: `hashed-asset` (the diff re-mints an `/a/`
   URL, gotcha 35) and `release-path` (it touches what decides what ships).
-- `validate` is the one required check: lint, typecheck, build under the perf
+- The tree is formatted by `bun fmt`, scoped by `[fmt]` in `bunfig.toml`
+  (gotchas 71 to 74). A hook formats each file an agent edits; elsewhere run
+  `bun run format` before committing. A test that reads source text must
+  tolerate the formatter rewrapping it.
+- `validate` is the one required check: lint, format, typecheck, build under the perf
   budget, `derive:check`, `pages:check`, `routes:check`, the contract suite and
   cal's tests.
 - Measure before you claim, and run the control that would show your

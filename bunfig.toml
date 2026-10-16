@@ -120,11 +120,12 @@ root = "tools"
 preload = ["./tools/lib/no-network.ts"]
 pathIgnorePatterns = ["tools/photos/libavif/src/**", "tools/photos/libavif/build/**"]
 
-# bun fmt (in the pinned canary since 1.4.3-canary.20261013.1) is NOT part of
-# validate and the tree is NOT formatted. This section exists so that an ad hoc
-# `bun fmt` cannot do damage: Bun reads it whenever anyone runs the formatter,
-# and every line below answers a hazard measured on 2026-10-16 by formatting the
-# whole tree and running the build, the suite, lint and the checks against it.
+# bun fmt (in the pinned canary since 1.4.3-canary.20261013.1) formats the tree:
+# `bun run format` writes, `bun run format:check` is a validate step, and
+# tools/format-hook.ts formats each file an agent edits. Bun reads this section
+# on every run, explicit paths included, so it decides what the formatter may
+# touch. Every line below answers a hazard measured on 2026-10-16 by formatting
+# the whole tree and running the build, the suite, lint and the checks on it.
 # tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs holds each
 # one, with a --no-config control showing the hazard is real on the pinned bun.
 #

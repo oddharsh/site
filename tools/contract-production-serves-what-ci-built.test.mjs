@@ -208,7 +208,7 @@ test("served-manifest: CI cuts and signs it, and every release checks it", async
   assert.match(checker, /"--source-ref", "refs\/heads\/main"/);
   // An empty scope verified the commit and signature and compared no bytes, and
   // must say so rather than print "0 of 0 URLs" under a passing headline.
-  assert.match(checker, /if \(!results\.length\) \{\n  console\.log\(`served:check: nothing to compare/);
+  assert.match(checker, /if \(!results\.length\) \{\s*console\.log\(\s*`served:check: nothing to compare/);
 
   const promote = await readFile(new URL(".github/workflows/promote-production.yml", ROOT), "utf8");
   assert.match(promote, /run: bun run served:check \$\{SINCE:\+--since "\$SINCE"\}/, "each release checks the URLs it changed");

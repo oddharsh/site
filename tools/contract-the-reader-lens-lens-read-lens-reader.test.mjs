@@ -79,7 +79,7 @@ test("the reader owns one focused Markdown walk over Readability's node", async 
   assert.doesNotMatch(src, /from "turndown"|TurndownService/, "the Reader Worker must not carry the removed converter in its bundle");
   assert.match(src, /return tidyMarkdown\(markdownChildren\(root\)\)\.trim\(\)/, "toMarkdown must walk Readability's finished node directly");
   assert.match(src, /const MD_DROP = new Set\(\["script", "style"\]\)/, "only non-prose script and style bodies may be discarded by the serializer");
-  assert.match(src, /default: return inner\(\)/, "unknown semantic wrappers must retain their prose");
+  assert.match(src, /default:\s*return inner\(\)/, "unknown semantic wrappers must retain their prose");
 });
 
 test("the reader reports what it dropped, never only what it kept", async () => {
@@ -275,7 +275,7 @@ test("the reader's 429 carries the site limiter's Retry-After and RateLimit fiel
   const index = readFileSync("lens-reader/src/index.ts", "utf8");
   assert.match(index, /import \{[^}]*\brateLimitedHeaders\b[^}]*\} from "\.\.\/\.\.\/src\/worker\/lib\/ratelimit\.ts"/);
   const refusal = index.slice(index.indexOf("overBudget(READER_BUDGET"), index.indexOf("try {", index.indexOf("overBudget(READER_BUDGET")));
-  assert.match(refusal, /429, rateLimitedHeaders\("reader", READER_LIMIT_PER_MIN\)\)/, "the 429 names the reader policy and its real quota");
+  assert.match(refusal, /429,\s*rateLimitedHeaders\("reader", READER_LIMIT_PER_MIN\),?\s*\)/, "the 429 names the reader policy and its real quota");
   assert.match(
     index,
     /json\(await read\(target\.url\), 200, \{ "ratelimit-policy": rateLimitPolicy\("reader", READER_LIMIT_PER_MIN\) \}\)/,
