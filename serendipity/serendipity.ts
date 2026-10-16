@@ -422,7 +422,7 @@ function shell(title, currentPath, bodyHtml, head = "", description = POOL_DESCR
   const twin = twinFor(currentPath);
   const twinLink = twin ? `\n<link rel="alternate" type="text/markdown" title="markdown source" href="${esc(twin)}">` : "";
   return `<!doctype html><html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#2D78BD">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#2D78BD">
 <title>${currentPath === PREFIX ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <link rel="icon" type="image/svg+xml" href="/section-icons/serendipity.svg">
 <meta name="description" content="${esc(description)}">

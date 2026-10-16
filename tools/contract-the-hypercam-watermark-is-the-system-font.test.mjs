@@ -105,6 +105,6 @@ test("the homepage reserves the same band at first paint", () => {
   const page = read("src/pages/index.html");
   assert.deepEqual(steps(page), steps(read("src/styles/luna.css")), "index.html's inline --hypercam-px steps drifted from luna.css");
   assert.match(page, /--hypercam-h: calc\(16 \* var\(--hypercam-px\)\)/);
-  assert.match(page, /padding-top: calc\(var\(--hypercam-h\) \+ 8px\)/, "the window column starts below the band before luna lands");
-  assert.match(page, /#axp-icons\s*\{[^}]*inset: var\(--hypercam-h\) 0 0/, "so does the icon layer");
+  assert.match(page, /padding-top: calc\(var\(--sa-t\) \+ var\(--hypercam-h\) \+ 8px\)/, "the window column starts below the band (and the status bar) before luna lands");
+  assert.match(page, /#axp-icons\s*\{[^}]*inset: calc\(var\(--sa-t\) \+ var\(--hypercam-h\)\) /, "so does the icon layer");
 });

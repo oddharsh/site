@@ -411,14 +411,29 @@ html{--edge-top:oklch(59.1% 0.135 254);--edge-bottom:oklch(40% 0.18 260);backgro
    so a window dragged up to the edge doesn't take the tint. pointer-events:none keeps it
    out of every click; the probe still finds it (Puckett's strips carry it too). */
 html::before{content:"";position:fixed;left:0;right:0;top:0;height:12px;z-index:99999;pointer-events:none;background-color:var(--edge-top);-webkit-background-clip:text;background-clip:text}
+/* SAFE AREAS. Every page asks for viewport-fit=cover, so on a notched or home-indicator
+   device the page runs edge to edge: the Bliss wallpaper fills behind the status bar and
+   Safari's tint has a fixed edge to sample. What the shell draws ON the desktop (the
+   HyperCam band, the icons, the window column, a maximized window, the taskbar) steps in
+   by these four insets instead, so nothing sits under the Dynamic Island, the notch in
+   landscape or the home indicator. They read 0px everywhere else, so desktop and every
+   browser without insets lay out exactly as before. --taskbar-h is the bar plus the
+   strip under it, the one height the floor is measured from. Registered as <length> so
+   getComputedStyle hands nav.js resolved pixels instead of the env() text. */
+@property --sa-t{syntax:"<length>";inherits:true;initial-value:0px}
+@property --sa-r{syntax:"<length>";inherits:true;initial-value:0px}
+@property --sa-b{syntax:"<length>";inherits:true;initial-value:0px}
+@property --sa-l{syntax:"<length>";inherits:true;initial-value:0px}
+@property --taskbar-h{syntax:"<length>";inherits:true;initial-value:30px}
+html{--sa-t:env(safe-area-inset-top,0px);--sa-r:env(safe-area-inset-right,0px);--sa-b:env(safe-area-inset-bottom,0px);--sa-l:env(safe-area-inset-left,0px);--taskbar-h:calc(30px + var(--sa-b))}
 /* app-shell: the taskbar is a HARD FLOOR. the body is the scroll container and ends at */
-/* the taskbar's top (height = viewport − 30px taskbar), so page content scrolls within */
+/* the taskbar's top (height = viewport − --taskbar-h), so page content scrolls within */
 /* it and never flows under the bar. html doesn't scroll. dvh tracks the mobile URL bar; */
 /* vh is the fallback. !important to beat each page's own min-height:100vh / overflow. */
 html{height:100dvh;overflow:hidden}
 /* base: the desktop area is the viewport minus the taskbar (the hard floor). */
 /* windowless pages (e.g. the raw directory index) keep normal scrolling here. */
-body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
+body{min-height:0 !important;height:calc(100vh - var(--taskbar-h)) !important;height:calc(100dvh - var(--taskbar-h)) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
 /* frontier typography, site-wide (headings with their own text-wrap:balance win): */
 /* prettier paragraph ragging where supported, normal wrapping where not. */
 body{text-wrap:pretty}
@@ -436,7 +451,7 @@ body{text-wrap:pretty}
    horizon, so the instrument sees the expensive shape. What makes this one cheap:
    Chromium filters :has invalidation on the argument's classes, and body's own
    declarations here inherit nothing that forces descendants to restyle. */
-body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
+body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px calc(8px + var(--sa-r)) 8px calc(8px + var(--sa-l)) !important}
 /* window frame: bounded to the desktop, sized to content but never taller than it. */
 .window,.np-window{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
 .window,.np-window{display:flex;flex-direction:column}
@@ -556,9 +571,11 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
 /* has the full set if the trade ever wants revisiting; /garage/vt-check still probes */
 /* the platform independently of whether this site opts in. */
 /* background-color under the gradient is what Safari's bottom edge reads (see SAFARI'S EDGE TINT). */
-#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;display:flex;align-items:stretch;
+/* the bar's 30px row sits above the home indicator: the gradient is sized to that row and */
+/* the solid colour fills the inset strip under it (see SAFE AREAS). */
+#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:var(--taskbar-h);padding:0 var(--sa-r) var(--sa-b) var(--sa-l);z-index:99999;display:flex;align-items:stretch;
 font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;user-select:none;
-background-color:var(--edge-bottom);background-image:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);
+background-color:var(--edge-bottom);background-image:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);background-size:100% 30px;background-repeat:no-repeat;
 box-shadow:inset 0 1px 0 oklch(82% 0.09 250),inset 0 2px 0 oklch(62% 0.16 255)}
 /* start orb */
 /* the Start orb is an <a href="/run"> now (phase B): the palette's no-script
@@ -1182,10 +1199,10 @@ a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
    drag; nav.js keeps only the dotted-grip decoration and the clamp lift
    (see initResize). Maximized windows and the content-hugging Notepad
    folder stay fixed; small screens never resize (same rule the JS had). */
-/* maximized: cover the whole desktop (wallpaper + icons), stop at the 30px
-   taskbar floor. nav.js toggles the class from the title bar's max button. */
+/* maximized: cover the whole desktop (wallpaper + icons) inside the safe areas, stop
+   at the taskbar floor. nav.js toggles the class from the title bar's max button. */
 .window.axp-max, .np-window.axp-max {
-  position: fixed !important; inset: 0 0 30px 0 !important; width: auto !important; height: auto !important;
+  position: fixed !important; inset: 0 var(--sa-r) var(--taskbar-h) var(--sa-l) !important; width: auto !important; height: auto !important;
   max-width: none !important; max-height: none !important; margin: 0 !important; border-radius: 0 !important;
   transform: none !important; z-index: 9998 !important;
 }
@@ -1225,10 +1242,10 @@ html{--hypercam-px:1px;--hypercam-h:calc(16 * var(--hypercam-px))}
 @media (min-width:1024px){html{--hypercam-px:2px}}
 @media (min-width:1920px){html{--hypercam-px:3px}}
 @media print{html{--hypercam-h:0px}}
-body::before{content:"";position:fixed;left:0;top:0;z-index:1;width:calc(168 * var(--hypercam-px));height:var(--hypercam-h);background:var(--window) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 168 16' shape-rendering='crispEdges'%3E%3Cpath d='M1 3h2v8h-2zM7 3h2v8h-2zM40 3h2v2h-2zM81 3h2v3h-2zM89 3h2v4h-2zM95 3h2v4h-2zM130 3h4v1h-4zM162 3h4v1h-4zM52 4h2v2h-2zM129 4h2v1h-2zM133 4h2v1h-2zM161 4h2v2h-2zM165 4h2v3h-2zM128 5h2v6h-2zM134 5h2v1h-2zM11 6h5v1h-5zM19 6h4v1h-4zM25 6h4v1h-4zM33 6h5v1h-5zM40 6h2v7h-2zM45 6h4v1h-4zM51 6h4v1h-4zM57 6h4v1h-4zM64 6h4v1h-4zM70 6h4v1h-4zM78 6h5v1h-5zM98 6h2v2h-2zM104 6h2v2h-2zM107 6h5v1h-5zM116 6h4v1h-4zM123 6h4v1h-4zM138 6h4v1h-4zM145 6h9v1h-9zM11 7h2v6h-2zM15 7h2v6h-2zM19 7h3v1h-3zM24 7h2v2h-2zM28 7h2v2h-2zM32 7h2v5h-2zM36 7h2v5h-2zM44 7h2v1h-2zM48 7h2v1h-2zM52 7h2v5h-2zM56 7h2v2h-2zM60 7h2v2h-2zM64 7h3v1h-3zM69 7h2v2h-2zM73 7h2v2h-2zM77 7h2v5h-2zM81 7h2v5h-2zM89 7h8v1h-8zM107 7h2v5h-2zM111 7h2v5h-2zM115 7h2v2h-2zM119 7h2v2h-2zM123 7h3v1h-3zM137 7h2v1h-2zM141 7h2v2h-2zM145 7h2v6h-2zM149 7h2v6h-2zM153 7h2v6h-2zM164 7h2v1h-2zM19 8h2v5h-2zM45 8h2v1h-2zM64 8h2v5h-2zM89 8h2v5h-2zM95 8h2v5h-2zM99 8h2v2h-2zM103 8h2v2h-2zM123 8h2v5h-2zM163 8h2v1h-2zM24 9h5v1h-5zM46 9h2v1h-2zM56 9h5v1h-5zM69 9h5v1h-5zM115 9h5v1h-5zM138 9h5v1h-5zM162 9h2v1h-2zM24 10h2v2h-2zM47 10h2v1h-2zM56 10h2v2h-2zM69 10h2v2h-2zM100 10h4v2h-4zM115 10h2v2h-2zM134 10h2v1h-2zM137 10h2v2h-2zM141 10h2v2h-2zM161 10h2v2h-2zM2 11h2v1h-2zM6 11h2v1h-2zM28 11h2v1h-2zM44 11h2v1h-2zM48 11h2v1h-2zM60 11h2v1h-2zM73 11h2v1h-2zM119 11h2v1h-2zM129 11h2v1h-2zM133 11h2v1h-2zM3 12h4v1h-4zM25 12h4v1h-4zM33 12h5v1h-5zM45 12h4v1h-4zM53 12h2v1h-2zM57 12h4v1h-4zM70 12h4v1h-4zM78 12h5v1h-5zM101 12h2v2h-2zM107 12h5v1h-5zM116 12h4v1h-4zM130 12h4v1h-4zM138 12h5v1h-5zM161 12h6v1h-6zM36 13h2v2h-2zM107 13h2v3h-2zM32 14h2v1h-2zM100 14h2v1h-2zM33 15h4v1h-4zM99 15h2v1h-2z'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat;pointer-events:none;forced-color-adjust:none}
-#axp-icons{top:var(--hypercam-h)}
-body:has(.window),body:has(.np-window){padding-top:calc(var(--hypercam-h) + 8px) !important}
-.window.axp-max,.np-window.axp-max{top:var(--hypercam-h) !important}
+body::before{content:"";position:fixed;left:var(--sa-l);top:var(--sa-t);z-index:1;width:calc(168 * var(--hypercam-px));height:var(--hypercam-h);background:var(--window) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 168 16' shape-rendering='crispEdges'%3E%3Cpath d='M1 3h2v8h-2zM7 3h2v8h-2zM40 3h2v2h-2zM81 3h2v3h-2zM89 3h2v4h-2zM95 3h2v4h-2zM130 3h4v1h-4zM162 3h4v1h-4zM52 4h2v2h-2zM129 4h2v1h-2zM133 4h2v1h-2zM161 4h2v2h-2zM165 4h2v3h-2zM128 5h2v6h-2zM134 5h2v1h-2zM11 6h5v1h-5zM19 6h4v1h-4zM25 6h4v1h-4zM33 6h5v1h-5zM40 6h2v7h-2zM45 6h4v1h-4zM51 6h4v1h-4zM57 6h4v1h-4zM64 6h4v1h-4zM70 6h4v1h-4zM78 6h5v1h-5zM98 6h2v2h-2zM104 6h2v2h-2zM107 6h5v1h-5zM116 6h4v1h-4zM123 6h4v1h-4zM138 6h4v1h-4zM145 6h9v1h-9zM11 7h2v6h-2zM15 7h2v6h-2zM19 7h3v1h-3zM24 7h2v2h-2zM28 7h2v2h-2zM32 7h2v5h-2zM36 7h2v5h-2zM44 7h2v1h-2zM48 7h2v1h-2zM52 7h2v5h-2zM56 7h2v2h-2zM60 7h2v2h-2zM64 7h3v1h-3zM69 7h2v2h-2zM73 7h2v2h-2zM77 7h2v5h-2zM81 7h2v5h-2zM89 7h8v1h-8zM107 7h2v5h-2zM111 7h2v5h-2zM115 7h2v2h-2zM119 7h2v2h-2zM123 7h3v1h-3zM137 7h2v1h-2zM141 7h2v2h-2zM145 7h2v6h-2zM149 7h2v6h-2zM153 7h2v6h-2zM164 7h2v1h-2zM19 8h2v5h-2zM45 8h2v1h-2zM64 8h2v5h-2zM89 8h2v5h-2zM95 8h2v5h-2zM99 8h2v2h-2zM103 8h2v2h-2zM123 8h2v5h-2zM163 8h2v1h-2zM24 9h5v1h-5zM46 9h2v1h-2zM56 9h5v1h-5zM69 9h5v1h-5zM115 9h5v1h-5zM138 9h5v1h-5zM162 9h2v1h-2zM24 10h2v2h-2zM47 10h2v1h-2zM56 10h2v2h-2zM69 10h2v2h-2zM100 10h4v2h-4zM115 10h2v2h-2zM134 10h2v1h-2zM137 10h2v2h-2zM141 10h2v2h-2zM161 10h2v2h-2zM2 11h2v1h-2zM6 11h2v1h-2zM28 11h2v1h-2zM44 11h2v1h-2zM48 11h2v1h-2zM60 11h2v1h-2zM73 11h2v1h-2zM119 11h2v1h-2zM129 11h2v1h-2zM133 11h2v1h-2zM3 12h4v1h-4zM25 12h4v1h-4zM33 12h5v1h-5zM45 12h4v1h-4zM53 12h2v1h-2zM57 12h4v1h-4zM70 12h4v1h-4zM78 12h5v1h-5zM101 12h2v2h-2zM107 12h5v1h-5zM116 12h4v1h-4zM130 12h4v1h-4zM138 12h5v1h-5zM161 12h6v1h-6zM36 13h2v2h-2zM107 13h2v3h-2zM32 14h2v1h-2zM100 14h2v1h-2zM33 15h4v1h-4zM99 15h2v1h-2z'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat;pointer-events:none;forced-color-adjust:none}
+#axp-icons{top:calc(var(--sa-t) + var(--hypercam-h));left:var(--sa-l);right:var(--sa-r)}
+body:has(.window),body:has(.np-window){padding-top:calc(var(--sa-t) + var(--hypercam-h) + 8px) !important}
+.window.axp-max,.np-window.axp-max{top:calc(var(--sa-t) + var(--hypercam-h)) !important}
 
 /* ─────────────────── print + High Contrast (phase C) ─────────────────── */
 /* print: the document inside the window is the artifact; the OS around it

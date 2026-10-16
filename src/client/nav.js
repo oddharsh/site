@@ -164,6 +164,11 @@
   })();
 
   function front(win) { win.style.zIndex = ++accZ; }
+  // luna.css's SAFE AREAS insets in px: sa-t, sa-r, sa-b, sa-l, and taskbar-h (the bar
+  // plus the home-indicator strip under it). They're registered as <length>, so the
+  // computed value is resolved pixels; unregistered or absent reads 0, and the taskbar 30.
+  function inset(name) { var v = parseFloat(getComputedStyle(D.documentElement).getPropertyValue("--" + name)); return v > 0 ? v : 0; }
+  function taskbarH() { return inset("taskbar-h") || 30; }
   function initRaise() {
     D.addEventListener("pointerdown", (e) => {
       var win = e.target instanceof Element && e.target.closest(".window,.np-window,.axp-acc");
@@ -201,6 +206,7 @@
           loadPhotos: loadPhotos,
           loadWriting: loadWriting,
           front: front,
+          inset: inset,
           saver: runSaver,
           tips: () => { openTips(false).catch(() => {}); }
         });
@@ -345,7 +351,7 @@
       if (!(a instanceof HTMLElement)) return;
       cur = a; moved = false; sx = e.clientX; sy = e.clientY;
       // the layer's height, not innerHeight: it starts below the HyperCam band
-      maxY = /** @type {HTMLElement} */ (e.currentTarget).clientHeight - 30 - 72;
+      maxY = /** @type {HTMLElement} */ (e.currentTarget).clientHeight - taskbarH() - 72;
       ox = parseFloat(a.style.left) || 0; oy = parseFloat(a.style.top) || 0;
       try { a.setPointerCapture(e.pointerId); } catch (_) {}
       D.addEventListener("pointermove", mv);
@@ -516,7 +522,7 @@
   // so it composes instead of jumping, which also makes the Run dialog draggable.
   // caption buttons + links are skipped so close/min/max keep working; touch scrolls.
   function initDrag() {
-    var win = /** @type {HTMLElement | null} */ (null), sx = 0, sy = 0, base = "", r = /** @type {DOMRect | null} */ (null), topLayer = false;
+    var win = /** @type {HTMLElement | null} */ (null), sx = 0, sy = 0, base = "", r = /** @type {DOMRect | null} */ (null), topLayer = false, ceil = 8, bar = 30;
     // clamp so the title bar can't leave the desktop: the TOP is a hard wall (you
     // can't retrieve a window dragged off the top — there's no menu up there), and
     // the bar can't slide under the taskbar or fully off the sides either.
@@ -527,16 +533,16 @@
       // Ordinary windows are clamped by their TITLE BAR and are free to let their
       // body slide under the taskbar, which is what XP does and what reads right:
       // the taskbar's z-index 99999 covers them.
-      var maxDy = (vh - 30 - 24) - r.top;
+      var maxDy = (vh - bar - 24) - r.top;
       // A /writing folder note is popover="manual", so it lives in the TOP LAYER,
       // and the top layer paints above every z-index there is — 99999 included.
       // Dragged down, it went OVER the taskbar instead of under it. No stacking
       // rule can fix that from CSS, so the honest fallback is to stop the whole
       // window at the taskbar: the note never crosses it, in either direction.
-      // Always satisfiable — .np-note[popover] caps at 100dvh - 48, which leaves
-      // more room than the 38px this needs, so maxDy never falls below the top wall.
-      if (topLayer) maxDy = Math.min(maxDy, (vh - 30) - r.bottom);
-      dy = Math.max(8 - r.top, Math.min(dy, maxDy));
+      // Always satisfiable — .np-note[popover] caps at 100dvh - 48 less both insets, which leaves
+      // more room than the 38px (plus both insets) this needs, so maxDy never falls below the top wall.
+      if (topLayer) maxDy = Math.min(maxDy, (vh - bar) - r.bottom);
+      dy = Math.max(ceil - r.top, Math.min(dy, maxDy));
       dx = Math.max((60 - r.width) - r.left, Math.min(dx, (vw - 60) - r.left));
       win.style.transform = base + "translate(" + dx + "px," + dy + "px)";
     }
@@ -555,6 +561,9 @@
       // :popover-open is the top-layer test — a popover only joins the top layer
       // while it is showing, and a hidden one can't be dragged anyway.
       topLayer = w.matches(":popover-open");
+      // read the walls once per drag, not per pointermove: the top one clears the
+      // status bar on a notched phone, the bottom one is the taskbar's real height.
+      ceil = 8 + inset("sa-t"); bar = taskbarH();
       w.classList.add("axp-dragging");
       win = w; sx = e.clientX; sy = e.clientY;
       try { b.setPointerCapture(e.pointerId); } catch (_) {}
@@ -632,7 +641,7 @@
           // .np-note[popover]'s own max-height is !important, which is also why the
           // plain assignment below was already a no-op for these: the lift never
           // applied, yet a short note dragged down could still grow past the bar.
-          if (f.matches(":popover-open")) f.style.setProperty("max-height", Math.max(120, (innerHeight - 30) - r.top) + "px", "important");
+          if (f.matches(":popover-open")) f.style.setProperty("max-height", Math.max(120, (innerHeight - taskbarH()) - r.top) + "px", "important");
           else f.style.maxHeight = "none";
         }
       });
