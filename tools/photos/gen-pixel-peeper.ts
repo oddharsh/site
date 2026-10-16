@@ -878,10 +878,16 @@ export const AVIF_ARGS = ["-d", "10", "--speed", "2", "--yuv", "444"];
 //   tune      left at libavif's ssim. psnr doubled butteraugli wins and cost
 //             about half a point of ssimulacra2; neither is a still-image
 //             tune, which AVM doesn't have yet.
-// Measured at speed 6. Speed 3 with qmseg is this axis's first run of the two
-// together, so its numbers are the record, not a re-run of the probes'.
+//   tool-unlock=6  TCQ and the IST/CCTX transform search, two AV2 additions
+//             that speed 2 and speed 3 switch off (av2-tone patch 0007).
+//             Together +0.99 s2 over plain speed 6 on 20 held-out tier tiles,
+//             tier-weighted, and 19 of 20 butteraugli wins (av2-tile-probe.ts,
+//             2026-10-16). About 4x the encode time at speed 3.
+// Measured at speed 6. Speed 3 with qmseg and tool-unlock is this axis's first
+// run of them together, so its numbers are the record, not a re-run of the
+// probes'.
 export const AV2_ARGS = ["-c", "avm", "-d", "10", "--speed", "3", "--yuv", "444", "-a", "sb-size=128",
-  "-a", "enable-qm=1", "-a", "qm-curve=1", "-a", "qmseg=1", "-a", "qmseg-level=12"];
+  "-a", "enable-qm=1", "-a", "qm-curve=1", "-a", "qmseg=1", "-a", "qmseg-level=12", "-a", "tool-unlock=6"];
 
 export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): number {
   if (fs.existsSync(out)) fs.unlinkSync(out);
