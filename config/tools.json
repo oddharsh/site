@@ -217,22 +217,6 @@
       "recorded": "timbrado 0.2.0"
     },
     {
-      "bin": "djpeg",
-      "install": "brew install jpeg-turbo",
-      "why": "decodes the JPEG a HIF photo's archive has to beat, for scoring. It ignores EXIF orientation, so the bar is compared in the same sensor orientation as the HIF's own decode (hif-archive.ts)",
-      "required_by": [
-        "tools/photos/add-photos.sh",
-        "tools/photos/hif-archive.ts"
-      ],
-      "version": {
-        "flag": "-version",
-        "match": "libjpeg-turbo version (\\d+\\.\\d+\\.\\d+)"
-      },
-      "bytes": false,
-      "recorded": "3.2.0",
-      "bytes_why": "Decode only, for a score. Nothing it writes ships."
-    },
-    {
       "bin": "jpegtran",
       "path": "/opt/homebrew/opt/mozjpeg/bin/jpegtran",
       "install": "brew install mozjpeg",

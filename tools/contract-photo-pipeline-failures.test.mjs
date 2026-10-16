@@ -98,13 +98,12 @@ printf encoded > "$last"`);
     await command("bin/ffmpeg", 'for last in "$@"; do :; done; printf encoded > "$last"');
     // The metrics answer per file so a test can make a HIF's direct encode
     // beat its JPEG bar (CAND_S2 above 95, CAND_BA below 0.5) or not. hif-archive.ts
-    // scores its candidates as cand.png; the bar is base.ppm. It reaches this
+    // scores its candidates as cand.png; the bar is base.png. It reaches this
     // stub through PHOTO_METRICS_BIN rather than building tools/photos/photo-metrics.
     await command("bin/photo-metrics", 'case "$2" in *cand*) s2="${CAND_S2:-95}" ba="${CAND_BA:-0.5}" ;; *) s2=95 ba=0.5 ;; esac; echo "{\\"s2\\":$s2,\\"ba\\":$ba,\\"ba3\\":$ba}"');
     // export-for-instagram.sh still scores with libjxl's two CLIs.
     await command("bin/ssimulacra2", 'case "$2" in *cand*) echo "${CAND_S2:-95}" ;; *) echo 95 ;; esac');
     await command("bin/butteraugli_main", 'case "$2" in *cand*) echo "${CAND_BA:-0.5}" ;; *) echo 0.5 ;; esac');
-    await command("bin/djpeg", 'while [ "$1" != -outfile ]; do shift; done; printf "P6\n400 266\n255\n" > "$2"');
     // BSD stat is used by these macOS scripts; keep the control portable in CI.
     await command("bin/stat", 'test "$1" = -f%z; test -f "$2"; echo 7');
     await command("bin/cargo", 'echo cargo >> "$TRACE"');
@@ -291,7 +290,10 @@ echo "cjxl $*" >> "$TRACE"
 copy=$(awk -F'\\t' -v s="$src" '$1 == s { print $2 }' "$FIXTURE_ROOT/progressive-paths" 2>/dev/null) || copy=""
 [ -z "$copy" ] || [ ! -e "$copy" ] || echo "discarded-copy-exists" >> "$TRACE"
 { printf 'jxl:'; cat "$src"; } > "$last"`);
+    // A decode to PNG for hif-archive.ts's scores gets a header of the HIF's
+    // size, which is all it reads of one.
     await f.command("bin/djxl", `
+case "$2" in *.png) printf '\\211PNG\\015\\012\\032\\012\\000\\000\\000\\015IHDR\\000\\000\\001\\220\\000\\000\\001\\012' > "$2"; exit 0 ;; esac
 tail -c +5 "$1" > "$2"
 [ "\${BAD_REBUILD:-0}" != 1 ] || printf x >> "$2"`);
     const uploads = async () => (await f.read("uploads")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line));

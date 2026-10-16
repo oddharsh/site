@@ -81,6 +81,10 @@ async function one(stem: string) {
     const made = await hifArchive(hifs.get(stem)!, base, next);
     const was = fs.statSync(cur).size;
     if (made.mode !== "direct") { kept++; streak = 0; console.log(`  = ${stem}: kept as is (${made.reason})`); return; }
+    // hif-archive.ts weighs its encode against a fresh repack, whose metadata
+    // boxes are uncompressed; the archive in R2 compressed them, so it can be a
+    // few KB smaller still. The bucket only shrinks.
+    if (made.bytes >= was) { kept++; streak = 0; console.log(`  = ${stem}: kept as is (d${made.distance}, ${made.bytes} B, is no smaller than the ${was} B in R2)`); return; }
     if (!dryRun) {
       run([WRANGLER, "r2", "object", "put", `${BUCKET}/${key}`, `--file=${next}`, "--content-type=image/jxl", "--remote"]);
       run([WRANGLER, "r2", "object", "get", `${BUCKET}/${key}`, `--file=${back}`, "--remote"]);
