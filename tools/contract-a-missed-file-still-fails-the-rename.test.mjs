@@ -21,7 +21,15 @@ const map = new Map([["--surface-window", "--a"], ["--ink", "--b"]]);
 const renamed = (skip) => new Map([...before].map(([rel, text]) => [rel, rel === skip ? text : applyMangle(text, map)]));
 
 test("a complete rename passes", () => {
-  assert.doesNotThrow(() => assertIntegrity(before, renamed(null), map, 2));
+  const after = renamed(null);
+  assert.deepEqual([...after], [
+    ["luna.css", ":root{--a:#fff;--b:#000}"],
+    ["page.html", "<style>.w{background:var(--a);color:var(--b)}</style>"],
+    ["other.css", ".x{color:var(--never-defined)}"],
+  ]);
+  assert.doesNotThrow(() => assertIntegrity(before, after, map, 2));
+  // The floor is the other way this check can fail on a complete rename.
+  assert.throws(() => assertIntegrity(before, after, map, 3), /only 2 custom properties renamed, expected at least 3/);
 });
 
 test("a file the rename missed fails, though its scan is reused", () => {

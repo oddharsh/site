@@ -92,6 +92,8 @@ export interface EnvBindings {
   MCP_RL_REPR_CAPTURE: RateLimit;
   MCP_RL_REPR_COMPARE: RateLimit;
   WEBMENTION_RL: RateLimit;
+  /** Finished /pixel-peeper runs, per IP (pixel-peeper-crowd.ts). */
+  PIXEL_PEEPER_RL: RateLimit;
   /** /ask's Clef ranking, per IP; past it the answer is lexical (ask-rank.ts). */
   ASK_RL: RateLimit;
   /** The documented API's shared read budget, per IP (lib/api-contract.ts). */

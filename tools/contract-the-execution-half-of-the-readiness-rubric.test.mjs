@@ -69,6 +69,10 @@ test("the DOM census treats an empty alt as a decision, not an omission", () => 
 });
 
 test("both execution checks are declared in the category the rubric scores", () => {
+  // The meta table and the checks the scorer runs name the same two keys, so
+  // the loop below walks both checks rather than whatever the table holds.
+  assert.deepEqual(Object.keys(EXECUTION_META), Object.keys(executionChecks(null)));
+  assert.deepEqual(Object.keys(executionChecks(null)), ["agentScripts", "agentMedia"]);
   for (const [key, meta] of Object.entries(EXECUTION_META)) {
     assert.equal(meta.category, "execution", `${key} must sit in the execution category`);
     assert.ok(meta.label && meta.label.length > 0, `${key} needs a label the grid can render`);

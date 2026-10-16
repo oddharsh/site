@@ -223,7 +223,8 @@ test("the reader never renders an unmeasurable phase as 0 ms", () => {
   // Rendering those zeros would tell a visitor that parsing a 645 KB page is
   // free, on the one panel whose job is saying what the read cost. This is the
   // same class of claim the rest of the lens is built to avoid, so it is pinned.
-  assert.match(client, /not measurable/,
+  // The formatter itself: "not measurable" also appears in the comment above it.
+  assert.match(client, /return value > 0 \? value \+ " ms" : "not measurable/,
     "a zero-valued timing phase must render as unmeasurable, never as 0 ms");
   assert.match(client, /never during synchronous execution/,
     "the panel must explain WHY those phases read zero");
@@ -275,8 +276,10 @@ test("the cracker reports a verdict rather than always answering", () => {
   // that solved the cipher, which is the whole reason step 4 exists. The three
   // outcomes and the sample-size shrinkage are the load-bearing parts.
   assert.match(page, /<b>failed\.<\/b>/, "a run that did not solve must say so");
-  assert.match(page, /confidence/, "the verdict must carry a confidence");
-  assert.match(page, /PSEUDO/, "confidence must be shrunk toward random on short text");
+  // The scorer and its shrinkage, since both words also appear in comments and
+  // in PERIOD_PSEUDO, which is a different estimate.
+  assert.match(page, /function confidence\(L\)/, "the verdict must carry a confidence");
+  assert.match(page, /\+ PSEUDO \* FLOOR\) \/ \(w \+ PSEUDO\)/, "confidence must be shrunk toward random on short text");
   assert.match(page, /margin over runner-up/, "the verdict must report the margin to the next candidate");
   // The gauge predicts failure BEFORE the run, from letters per column, which is
   // the number that actually governs it. These thresholds were measured.

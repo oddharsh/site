@@ -109,9 +109,16 @@ test("DST repetition retains the instant and uses each date's correct zone label
 });
 
 test("unavailable local formatting retains UTC labels and uses UTC weekend days", () => {
-  const b = browser({ intlFails: true, url: "https://aadhar.sh/serendipity?when=weekend" });
+  const events = [
+    fixtureEvent("NYC Friday", "2026-10-03T01:00:00Z"),
+    fixtureEvent("UTC Friday", "2026-10-02T20:00:00Z"),
+  ];
+  const b = browser({ intlFails: true, url: "https://aadhar.sh/serendipity?when=weekend", events });
   assert.equal(b.events[0].time.textContent, "UTC fallback");
+  // Friday evening in New York is Saturday in UTC, so the fallback keeps it.
   assert.equal(b.events[0].card.hidden, false);
+  // A Friday in UTC is still filtered out, so the fallback filters at all.
+  assert.equal(b.events[1].card.hidden, true);
 });
 
 test("bookmarked filters restore before the island arrives and apply when it lands", () => {

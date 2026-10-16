@@ -29,7 +29,13 @@ test("the build hands the early bake a private directory and collects it at 5b",
   assert.match(build, spawned);
   assert.match(build, /const BAKED = `\$\{OUT\}\/baked`;/);
   // started after step 5 (its last input) and collected inside 5b
-  const at = (s) => build.indexOf(s);
+  // Every anchor must exist: indexOf answers -1 for a renamed phase, which
+  // sorts before anything and turns a slice into the rest of the file.
+  const at = (s) => {
+    const i = build.indexOf(s);
+    assert.ok(i >= 0, `build.ts has no ${s}; point this test at the renamed phase`);
+    return i;
+  };
   assert.ok(at('phase("5 worker css");') < build.search(spawned), "the bake starts after step 5 minified the Worker CSS");
   assert.ok(build.search(spawned) < at('phase("1h feeds");'), "and before the steps it overlaps");
   const fiveB = build.slice(at('phase("5b rendered pages");'), at('phase("5c custom properties");'));
