@@ -26,7 +26,7 @@ comes back (its `Checked by:` line names it).
 | `pipelines/` | page generators for `garage/` and `lwe/` |
 | `config/` | `infra.json`, `site-manifest.json`, `derivations.json`, `tools.json`, tsconfigs, `dev/` |
 | `design/` | the Luna design system; `tokens/` and `DESIGN.md` are canonical |
-| `docs/` | runbooks: `MAINTENANCE.md`, `DEPENDENCIES.md`, `PHOTO-PIPELINE.md`, `GOTCHAS.md` |
+| `docs/` | runbooks: `MAINTENANCE.md`, `DEPENDENCIES.md`, `PHOTO-PIPELINE.md`, `GOTCHAS.md`, `COMMENTS.md` |
 
 Does a build step transform the file? Then it belongs in `src/`. Does it ship
 byte for byte? Then it's `public/`. The site config is `cloudflare.config.ts` +
@@ -69,6 +69,9 @@ probes) is in `package.json` and [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
   cal's tests.
 - Measure before you claim, and run the control that would show your
   instrument can fail. Most gotchas are an instrument that couldn't.
+- Comments record what the code can't say: a decision and its measured
+  reason, a constraint, what breaks if this changes. Read
+  [docs/COMMENTS.md](docs/COMMENTS.md) before writing or cutting them.
 
 ## Release path
 
