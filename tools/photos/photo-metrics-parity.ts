@@ -8,7 +8,8 @@
 // For every 7th HIF in the photo inbox (20 frames), it runs hif-archive.ts's
 // own bisection twice, once scored by photo-metrics and once by libjxl's
 // `ssimulacra2` and `butteraugli_main --pnorm 3`, against the same sips 16-bit
-// reference and zenc q100 4:2:2 baseline. Encodes are shared, so the two
+// reference and zenc q100 4:2:2 baseline, built and decoded the way
+// hif-archive.ts does: repacked as JPEG XL and decoded by djxl at 8 bits. Encodes are shared, so the two
 // searches see identical candidates and differ only in their scorer. It prints
 // each frame's two picks and, over every candidate both scored, the largest
 // ssimulacra2 and 3-norm gaps.
@@ -17,7 +18,8 @@
 // archive decisions, and the honest response is to say so in the PR rather
 // than to merge it as a refresh.
 //
-// MEASURED 2026-10-14, at the pins in Cargo.toml, against libjxl 0.12.0:
+// MEASURED 2026-10-14, at the pins in Cargo.toml, against libjxl 0.12.0, on
+// the bar hif-archive.ts used then (djpeg's decode, candidates at 16 bits):
 //   same distance on 20 of 20 HIFs; same verdict on 161 of 161 candidates
 //   worst gap over those candidates: ssimulacra2 0.19, 3-norm 0.00001
 // The ssimulacra2 gap is the one to watch: its half of the verdict flipped on
@@ -33,7 +35,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ARGS, beats, searchDistance, stripPng, type Score } from "./hif-archive.ts";
+import { ARGS, DECODE, beats, searchDistance, stripJpegExif, stripPng, type Score } from "./hif-archive.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ZENC = path.join(HERE, "zenc/target/release/zenc");
@@ -76,11 +78,14 @@ for (const f of hifs) {
   const dir = fs.mkdtempSync(path.join(WORK, `${stem}-`));
   try {
     const raw = path.join(dir, "raw.png"), ref = path.join(dir, "ref.png");
-    const baseJpg = path.join(dir, "base.jpg"), base = path.join(dir, "base.ppm");
+    const baseJpg = path.join(dir, "base.jpg"), bare = path.join(dir, "bare.jpg");
+    const repack = path.join(dir, "bare.jxl"), base = path.join(dir, "base.png");
     sh(["sips", "-s", "format", "png", path.join(SRC, f), "--out", raw]);
     stripPng(raw, ref);
     sh([ZENC, raw, baseJpg, "-q", "100", "--yuv", "422"]);
-    sh(["djpeg", "-outfile", base, baseJpg]);
+    stripJpegExif(baseJpg, bare);
+    sh(["cjxl", "--quiet", "--lossless_jpeg=1", "-e", "1", bare, repack]);
+    sh(["djxl", repack, base, ...DECODE]);
     const decoded = new Map<number, string>();
     const dec = (d: number) => {
       let p = decoded.get(d);
@@ -88,7 +93,7 @@ for (const f of hifs) {
         const jxl = path.join(dir, `d${d}.jxl`);
         p = path.join(dir, `d${d}.png`);
         sh(["cjxl", "--quiet", "-d", String(d), ...ARGS, ref, jxl]);
-        sh(["djxl", jxl, p]);
+        sh(["djxl", jxl, p, ...DECODE]);
         decoded.set(d, p);
       }
       return p;

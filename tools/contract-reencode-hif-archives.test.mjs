@@ -46,9 +46,17 @@ for last in "$@"; do :; done
 for a in "$@"; do case "$a" in -*|[0-9]*) ;; *) [ "$a" = "$last" ] || src="$a" ;; esac; done
 case "$*" in *--lossless_jpeg=1*) cp "$src" "$last"; exit 0 ;; esac
 printf '\\000\\000\\000\\014JXL \\015\\012\\207\\012\\000\\000\\000\\024ftypjxl \\000\\000\\000\\000jxl \\000\\000\\000\\014jxlcnew!' > "$last"`, 0o755);
-  await put("bin/djxl", '#!/bin/bash\ncp "$1" "$2"', 0o755);
+  // djxl rebuilds the same JPEG (with an Exif segment for the bar's strip to
+  // drop, and SCAN_BYTES of scan, so a test can make the repack smaller than
+  // the 44-byte lossy encode) from any transcode, and writes a PNG header of
+  // the HIF's size for a pixel decode, which is all hif-archive.ts reads of one.
+  await put("bin/djxl", `#!/bin/bash
+case "$2" in
+  *.jpg) { printf '\\377\\330\\377\\341\\000\\012Exif\\000\\000MM\\377\\332\\000\\002'; head -c "\${SCAN_BYTES:-200}" /dev/zero | tr '\\000' x; printf '\\377\\331'; } > "$2" ;;
+  *.png) printf '\\211PNG\\015\\012\\032\\012\\000\\000\\000\\015IHDR\\000\\000\\001\\220\\000\\000\\001\\012' > "$2" ;;
+  *) cp "$1" "$2" ;;
+esac`, 0o755);
   await put("bin/sips", '#!/bin/bash\nif [ "$1" = -g ]; then printf "pixelWidth: 400\\npixelHeight: 266\\n"; else for last in "$@"; do :; done; printf png > "$last"; fi', 0o755);
-  await put("bin/djpeg", '#!/bin/bash\nwhile [ "$1" != -outfile ]; do shift; done; printf "P6\\n400 266\\n255\\n" > "$2"', 0o755);
   // hif-archive.ts scores through tools/photos/photo-metrics; PHOTO_METRICS_BIN
   // points it here instead, so no cargo build runs in the fixture.
   await put("bin/photo-metrics", '#!/bin/bash\ncase "$2" in *cand*) s2="${CAND_S2:-95}" ba="${CAND_BA:-0.5}" ;; *) s2=95 ba=0.5 ;; esac\necho "{\\"s2\\":$s2,\\"ba\\":$ba,\\"ba3\\":$ba}"', 0o755);
@@ -110,4 +118,13 @@ test("a photo whose encode cannot beat its bar on both metrics keeps its archive
   assert.match(r.stdout, /= X1: kept as is/);
   assert.deepEqual(await read("r2/X1.jxl"), TRANSCODE);
   assert.ok((await calls()).every((c) => !c.includes(" put ")));
+});
+
+test("a photo whose winning encode is no smaller than its repack keeps its archive", async () => {
+  const { run, read, calls } = await setup();
+  const r = run(["--backup", "backup"], { ...WIN, SCAN_BYTES: "1" });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /= X1: kept as is \(the smallest encode that beats the bar \(d0\.6, 44 B\) is no smaller than the repack/);
+  assert.deepEqual(await read("r2/X1.jxl"), TRANSCODE, "R2 untouched");
+  assert.ok((await calls()).every((c) => !c.includes(" put ")), "no upload");
 });
