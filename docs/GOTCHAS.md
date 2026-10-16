@@ -163,12 +163,12 @@ skips it.
     rule it targets does nothing.
     Checked by: nothing (judgment).
 
-32. **`bun run pages:check` lints page text, and `validate` doesn't run it.**
-    It bans em dashes, AI filler and "X, not Y" negations, but only in the
-    quiz and editorial fields; lint your own diff for the rest. It was a CI
-    step until #1001 folded CI into one job and left it out, so run it before
-    pushing page copy.
-    Checked by: `tools/check-page-contracts.ts`.
+32. **`bun run pages:check` lints page text and is required.** It bans em
+    dashes, AI filler and "X, not Y" negations, but only in the quiz and
+    editorial fields; lint your own diff for the rest. #1001 folded CI into
+    one job on 2026-09-28 and left it out until 2026-10-14; `contract-ci-required-gate` now fails
+    if `validate` stops running it.
+    Checked by: `tools/check-page-contracts.ts`, `tools/contract-ci-required-gate.test.mjs`.
 
 33. **A speculation rule can't be measured from the page or from an agent's
     backgrounded tab.** Count at the origin (`Sec-Purpose`) with
