@@ -47,7 +47,9 @@ export const OPENAPI_PATH = "/openapi.json";
  *  caller needed any of the three. */
 export const LEAVES_OUT: readonly { what: string; why: string }[] = [
   { what: "Keys, accounts and OAuth",
-    why: "Every endpoint is public and read-only, so a credential would unlock nothing. The site once issued anonymous OAuth tokens that no endpoint checked, and dropped them." },
+    why: "Every endpoint is free, public and read-only, so there is nothing to sign up for and a credential would unlock nothing. The site once issued anonymous OAuth tokens that no endpoint checked, and dropped them." },
+  { what: "A sandbox or test mode",
+    why: "Production is the sandbox. Every endpoint is read-only, so a test call changes nothing, and a separate copy would only drift from the real API. On the MCP server, representation_capture and representation_compare each store a snapshot row, and their descriptions say so." },
   { what: "Version headers and pinning",
     why: "One person maintains the API, and it has one live shape: the one /openapi.json describes. New endpoints, parameters and fields arrive without notice, so ignore fields you don't know." },
   { what: "Deprecation and Sunset headers",
