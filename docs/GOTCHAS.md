@@ -526,3 +526,50 @@ skips it.
     This is undocumented WebKit behavior. If it moves, the old look comes back.
     (This was 67 in #1366; #1365's merge took the number and dropped the entry.)
     Checked by: `tools/contract-safari-reads-a-solid-colour-at-each-edge.test.mjs`.
+
+71. **bun fmt reformats the HTML inside `html` tagged templates.** Prettier's
+    default `embeddedLanguageFormatting = "auto"` treats a template tagged
+    `html` as markup and reflows it, so `titleBar()` in
+    `src/worker/lib/window.ts` emitted different HTML and the build's desktop
+    freshness check refused to deploy. Templates the build doesn't compare
+    would just ship the new markup. `bun fmt --debug-check` reported no change
+    in meaning across 720 files while this happened, because the string is
+    data to it. bunfig.toml's `[fmt]` sets it `"off"`. Measured 2026-10-16 on
+    1.4.3-canary.20261013.1 by formatting the whole tree and building.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+
+72. **bun fmt renumbers ordered lists in Markdown.** This file numbers its
+    entries 1, 2, 3, then skips the retired ones, and the printer rewrote them
+    to run consecutively: every gotcha after the first gap took a new number,
+    and the 290 "gotcha N" references in 170 files pointed at the
+    wrong entry. Markdown stays out of `[fmt]` entirely, since the docs here
+    also hold version pins and tables that other checks read. Measured
+    2026-10-16.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+
+73. **bun fmt unquotes object keys, and lint rules read the result.** With
+    Prettier's default `quoteProps = "as-needed"`, `{ "shape": ... }` in
+    `src/client/lens.js` became `{ shape: ... }`. The key means the same thing,
+    and anti-slop's `no-shape-in-symbol-names` now saw an identifier and failed
+    `bun run lint` in three files nobody had edited. `[fmt]` sets
+    `"preserve"`. The formatter also drops parentheses it thinks are
+    redundant (`(a || b) ? x : y` loses them), which broke a contract test's
+    regex the same way. Measured 2026-10-16.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+
+74. **Whatever reads a file's exact text breaks when bun fmt rewraps it.**
+    Formatting everything on 2026-10-16 broke, in turn: the build's regex for
+    THE CLIENT EDGE in `luna.css`; the design tokens `luna.css` must carry
+    verbatim; `lwe/encoding.html`, which inlines its spec from
+    `pipelines/lwe/specs/`; the generated files (`lib/desktop.*`,
+    `lib/site-manifest.*`) and generated blocks (`nav-run.js`, `lwe/ask.js`)
+    their checks compare byte for byte; two derivation digests; and 7
+    contract-test regexes that spell out one-line source. JSON is out because
+    tools write it with `JSON.stringify(v, null, 2)` and the printer packs
+    short arrays onto one line, so every `derive --lock` would fail
+    `bun fmt --check`. With all of that in `[fmt].ignorePatterns`, the 504
+    files that remain format with no `/a/` or `pd/` change: the served diff is
+    the 46 `.src` twins and `sw.js`. The Worker bundle still changes bytes at
+    the same size, because esbuild picks minified names by character
+    frequency. A new reader of exact source text belongs in the ignore list.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.

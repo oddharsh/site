@@ -21,10 +21,13 @@ async function project(lintScript) {
 }
 
 // The script's own `bun` resolves through PATH, so put the running bun first.
-const lint = (cwd) => spawnSync(process.execPath, ["lint"], {
+// `bun run test:node` runs this file under node, where process.execPath is node
+// and the bun to test is the one on PATH.
+const bun = process.versions.bun ? process.execPath : "bun";
+const lint = (cwd) => spawnSync(bun, ["lint"], {
   cwd,
   encoding: "utf8",
-  env: { ...process.env, PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}` },
+  env: process.versions.bun ? { ...process.env, PATH: `${dirname(bun)}${delimiter}${process.env.PATH ?? ""}` } : process.env,
   timeout: 60_000,
 });
 
