@@ -77,6 +77,10 @@ test("every page and page template asks for viewport-fit=cover", async () => {
     const metas = [...text.matchAll(VIEWPORT)].map((m) => m[1]);
     if (!metas.length && EMITTERS.includes(rel)) missing.push(`${rel}: no viewport meta`);
     for (const content of metas) if (!/viewport-fit=cover/.test(content)) missing.push(`${rel}: ${content}`);
+    // a page with no OS window gets no help from the shell's insets, so it has to
+    // step in by them itself (the /garage/vt-* probes, which load no luna.css)
+    const windowed = /class="[^"]*\b(?:window|np-window)\b/.test(text);
+    if (pages.includes(rel) && !windowed && !/env\(safe-area-inset-top/.test(text)) missing.push(`${rel}: no window and no safe-area inset`);
   }
   assert.deepEqual(missing, []);
 });
