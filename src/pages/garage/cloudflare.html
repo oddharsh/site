@@ -202,16 +202,16 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       "q": "Why did the counter demo use a Durable Object when the homepage's visitor counter already runs on KV?",
       "options": [
         {
-          "t": "A DO is one strongly-consistent instance, so each click lands exactly once; KV is eventually consistent and its free writes cap at 1,000 a day.",
+          "t": "A DO is one strongly-consistent instance, so every click lands exactly once; KV is eventually consistent.",
           "ok": true,
-          "why": "Right. Section 1's whole point is correctness under concurrency: one instance serializes the increments, no lost updates, and the budget rises to 100k writes/day."
+          "why": "Right. Section 1's whole point is correctness under concurrency: one instance serializes the increments, no lost updates. KV's free writes also cap at 1,000 a day, and the DO's budget rises to 100k writes/day."
         },
         {
           "t": "KV can only store strings and blobs, so a numeric counter needs the SQLite storage a Durable Object carries.",
           "why": "KV would hold the number just fine. Section 1 blames eventual consistency plus the 1,000 writes/day cap, and those bite regardless of the value's type."
         },
         {
-          "t": "A Durable Object spins up at the edge nearest each visitor, so the counter mainly picks up a latency win.",
+          "t": "A Durable Object spins up at the edge nearest each visitor, so the counter gains a latency win.",
           "why": "Backwards on the architecture: a DO lives in one place, so some visitors travel farther to reach it. Section 1 claims atomicity as the win, no race."
         },
         {
@@ -224,12 +224,12 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       "q": "When the caption button runs llava over one of my grid photos, where does the inference actually happen?",
       "options": [
         {
-          "t": "On Cloudflare's GPUs, reached from the worker through a single env.AI.run binding call, inside the free 10,000 neurons/day allowance.",
+          "t": "On Cloudflare's GPUs, through one env.AI.run binding call inside the free 10,000 neurons a day.",
           "ok": true,
-          "why": "Right. Section 2's pitch is that the whole model catalog is platform-native: one binding call, no GPU of mine, no API key, free up to the neuron cap."
+          "why": "Right. Section 2's pitch is that the whole model catalog is platform-native: one binding call from the worker, no GPU of mine, no API key, free up to the neuron cap."
         },
         {
-          "t": "In the visitor's browser, which downloads a small quantized vision model and captions the photo client-side.",
+          "t": "In the visitor's browser, which downloads a small quantized vision model and captions it locally.",
           "why": "The page ships no model bytes; the button fetches a worker endpoint and gets text back. The env.AI.run call in section 2 runs server-side on Cloudflare."
         },
         {
@@ -237,7 +237,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
           "why": "Section 2 makes a point of needing no key: the AI binding is first-party platform access, which is exactly what makes it free-tier viable."
         },
         {
-          "t": "Nowhere at click time: a nightly job pre-captions every photo and the button reads back the stored alt text.",
+          "t": "Nowhere at click time: a nightly job pre-captions every photo and the button reads stored alt text.",
           "why": "The lede promises nothing is faked. Each click runs the model fresh, which is why it takes a few seconds and once mistook a cloudy sky for a UFO."
         }
       ]
@@ -246,9 +246,9 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       "q": "Since the Aug 2026 merge, the caption call passes a third argument, { gateway: { id } }. What does naming a gateway there actually change?",
       "options": [
         {
-          "t": "Nothing about the inference: the same model runs the same way, and the account gains payload logs, per-model token counts, and cost attribution that the worker's own log line cannot produce.",
+          "t": "Nothing about the inference; the account gains payload logs, token counts, and cost attribution.",
           "ok": true,
-          "why": "Right. Unification made the gateway an option on a call I was already making, so observability stopped being a separate integration. Section 3's line times the call; only the gateway prices it."
+          "why": "Right. The same model runs the same way, and the worker's own log line could never produce those numbers. Unification made the gateway an option on a call I was already making, so observability stopped being a separate integration. Section 3's line times the call; only the gateway prices it."
         },
         {
           "t": "It caches the response, so clicking the button twice stops spending neurons the second time.",
@@ -268,7 +268,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       "q": "Every demo button makes the worker console.log a JSON object like { feature, ms }. On the free plan, where do those lines end up?",
       "options": [
         {
-          "t": "In Workers Observability as structured events: searchable and filterable in the dashboard, 200,000 events/day, kept for 3 days.",
+          "t": "In Workers Observability as structured events: searchable in the dashboard, 200,000 a day, kept 3 days.",
           "ok": true,
           "why": "Right. One wrangler.toml flag turns plain console.log into queryable structured logs, a job that used to need a third-party service and a credit card."
         },
@@ -290,7 +290,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       "q": "Run the traced request twice and the first bar usually collapses from tens of milliseconds to a few. What was that first fat bar measuring?",
       "options": [
         {
-          "t": "A cold Durable Object: run one pays the object's startup cost, and once it is warm the peek span drops to single-digit ms.",
+          "t": "A cold Durable Object: run one pays its startup cost, then the warm peek span drops to a few ms.",
           "ok": true,
           "why": "Right. Section 4 tells you to run it twice for exactly this: hand-written spans (new as of Jun 2026) make a platform behavior, cold versus warm, visible."
         },
@@ -312,12 +312,12 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       "q": "Browser Rendering is bound and buttonless here. Why does its screenshot path use a Quick Action?",
       "options": [
         {
-          "t": "It is one bounded screenshot operation, so the binding can own its session lifecycle without bundling a general-purpose CDP client.",
+          "t": "It is one bounded screenshot operation, so the binding can own the session without bundling a whole CDP client.",
           "ok": true,
           "why": "Right. The native Quick Action expresses the whole operation and keeps Puppeteer's CDP implementation out of this auxiliary Worker."
         },
         {
-          "t": "The free plan refuses to provision a headless browser: the binding deploys, but every launch gets rejected until you pay.",
+          "t": "The free plan refuses to provision a headless browser, so every launch gets rejected until you pay.",
           "why": "The callout says the binding itself is the access, so the free plan provisions it fine; the route is parked only to protect the browser-minute budget."
         },
         {

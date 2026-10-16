@@ -49,12 +49,13 @@ printf '\\000\\000\\000\\014JXL \\015\\012\\207\\012\\000\\000\\000\\024ftypjxl 
   await put("bin/djxl", '#!/bin/bash\ncp "$1" "$2"', 0o755);
   await put("bin/sips", '#!/bin/bash\nif [ "$1" = -g ]; then printf "pixelWidth: 400\\npixelHeight: 266\\n"; else for last in "$@"; do :; done; printf png > "$last"; fi', 0o755);
   await put("bin/djpeg", '#!/bin/bash\nwhile [ "$1" != -outfile ]; do shift; done; printf "P6\\n400 266\\n255\\n" > "$2"', 0o755);
-  await put("bin/ssimulacra2", '#!/bin/bash\ncase "$2" in *cand*) echo "${CAND_S2:-95}" ;; *) echo 95 ;; esac', 0o755);
-  await put("bin/butteraugli_main", '#!/bin/bash\ncase "$2" in *cand*) echo "${CAND_BA:-0.5}" ;; *) echo 0.5 ;; esac', 0o755);
+  // hif-archive.ts scores through tools/photos/photo-metrics; PHOTO_METRICS_BIN
+  // points it here instead, so no cargo build runs in the fixture.
+  await put("bin/photo-metrics", '#!/bin/bash\ncase "$2" in *cand*) s2="${CAND_S2:-95}" ba="${CAND_BA:-0.5}" ;; *) s2=95 ba=0.5 ;; esac\necho "{\\"s2\\":$s2,\\"ba\\":$ba,\\"ba3\\":$ba}"', 0o755);
   await put("bin/exif-sooc", '#!/bin/bash\n[ "$1" = --version ] && { echo "exif-sooc 0.4.0"; exit 0; }\necho "exif-sooc $*" >> "$FIXTURE_ROOT/calls"', 0o755);
   const run = (args, env = {}) => spawnSync(BUN, ["tools/photos/reencode-hif-archives.ts", "--hif-dir", "hifs", ...args], {
     cwd: root, encoding: "utf8", timeout: 60_000,
-    env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, FIXTURE_ROOT: root, ...env },
+    env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, PHOTO_METRICS_BIN: `${root}/bin/photo-metrics`, FIXTURE_ROOT: root, ...env },
   });
   const read = (rel) => readFile(path.join(root, rel)).catch(() => null);
   const calls = async () => ((await read("calls"))?.toString() ?? "").split("\n").filter(Boolean);

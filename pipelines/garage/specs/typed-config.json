@@ -27,16 +27,16 @@
         "q": "Why can a JSON config never give env a checked type on its own?",
         "options": [
           {
-            "t": "A data file cannot export a type, so the binding names have to be copied into a type by something else.",
+            "t": "A data file cannot export a type for the compiler to read.",
             "ok": true,
-            "why": "Right. That copy is what wrangler types produces, and a copy is correct when it is made and silently stale afterwards."
+            "why": "Right. The binding names have to be copied into a type by something else. That copy is what wrangler types produces, and a copy is correct when it is made and silently stale afterwards."
           },
           {
-            "t": "JSON has no way to express a string, so the binding names are untyped.",
+            "t": "JSON has no way to express a string, so the binding names stay untyped.",
             "why": "JSON expresses strings fine. The gap is that a JSON file cannot participate in the type system at all."
           },
           {
-            "t": "The Workers runtime strips types before the config is read.",
+            "t": "The Workers runtime strips types before the config file is ever read.",
             "why": "Types are erased at build time in every TypeScript project. The runtime is not what decides whether a config can carry one."
           }
         ]
@@ -45,16 +45,16 @@
         "q": "The demo shows bindings.text(\"default\") producing the type \"default\" rather than string. What does that buy?",
         "options": [
           {
-            "t": "A comparison against a value that was never configured fails at compile time instead of silently at runtime.",
+            "t": "Comparing it with a value that was never configured is a compile error.",
             "ok": true,
-            "why": "Right. The literal type carries the configured value, so the set of things the variable can equal is known to the compiler."
+            "why": "Right. The literal type carries the configured value, so the set of things the variable can equal is known to the compiler, and a wrong comparison fails at compile time instead of silently at runtime."
           },
           {
-            "t": "The variable becomes read-only at runtime.",
+            "t": "The variable becomes read-only at runtime, so a handler cannot overwrite it.",
             "why": "Types are erased before the Worker runs. Nothing about runtime mutability changes."
           },
           {
-            "t": "The value is encrypted the way a secret is.",
+            "t": "The value is stored encrypted, the way a secret binding's value is.",
             "why": "A text binding is plain configuration and is visible in the resolved config. Secrets are a separate binding kind that carries no value at all."
           }
         ]
@@ -63,16 +63,16 @@
         "q": "A Durable Object binding infers as DurableObjectNamespace<undefined>. What turned it into DurableObjectNamespace<Counter> in the October run?",
         "options": [
           {
-            "t": "Binding a class that a second Worker exports, through that Worker's definition, whose entrypoint is imported with the cf-worker attribute.",
+            "t": "Binding a class a second Worker exports through that Worker's definition, with a cf-worker module entrypoint.",
             "ok": true,
             "why": "Right. The control matters: the same definition with a path-string entrypoint gave DurableObjectNamespace<DurableObjectBranded>, so the module import is what carries the class."
           },
           {
-            "t": "Giving the entrypoint as a cf-worker module while naming the Worker by string.",
+            "t": "Giving the entrypoint as a cf-worker module import while still naming the Worker in the binding by string.",
             "why": "That was measured in August and again in October, and the type stayed undefined. A string name gives the compiler no module to read the class from."
           },
           {
-            "t": "Pointing the binding at the Worker's own definition.",
+            "t": "Pointing the binding at the Worker's own definition, so the class comes from the file it is bound in.",
             "why": "That reference is circular. tsc reports TS7022 and the binding collapses to never, which is why a self-bound Durable Object still types worse than wrangler types."
           }
         ]
@@ -81,16 +81,16 @@
         "q": "A dry run of the converted Worker passes. What does that fail to tell you?",
         "options": [
           {
-            "t": "Whether the API accepts the export-based Durable Object form, because a dry run never computes a migration at all.",
+            "t": "Whether the API accepts the export-based Durable Object form for a class that already exists.",
             "ok": true,
-            "why": "Right. The migration is resolved against the live script, which a run that contacts no API cannot do. This site needed a real deploy, on 2026-09-21, to get the answer."
+            "why": "Right. A dry run never computes a migration, and the migration is resolved against the live script, which a run that contacts no API cannot do. This site needed a real deploy, on 2026-09-21, to get the answer."
           },
           {
             "t": "Whether the bindings are named correctly, since a dry run skips binding resolution.",
             "why": "The dry run prints the resolved binding table, which is exactly the part it does check."
           },
           {
-            "t": "Whether the bundle compiles, since a dry run skips the build.",
+            "t": "Whether the bundle compiles at all, since a dry run skips the build step and only validates the config.",
             "why": "A dry run builds the Worker and reports its upload size. Building is most of what it does."
           }
         ]
@@ -99,16 +99,16 @@
         "q": "The loader refuses bun, yet bun x --no-install wrangler loads the config. Why?",
         "options": [
           {
-            "t": "That path resolves a shim whose node shebang hands the process to node before the config is read.",
+            "t": "The wrangler shim it resolves has a node shebang, so node runs the loader.",
             "ok": true,
-            "why": "Right. The refusal checks the process that ends up running wrangler, whichever package manager launched it."
+            "why": "Right. The shim's node shebang hands the process to node before the config is read. The refusal checks the process that ends up running wrangler, whichever package manager launched it."
           },
           {
-            "t": "The --no-install flag switches wrangler into a compatibility mode.",
+            "t": "The --no-install flag puts wrangler in a compatibility mode that skips that check.",
             "why": "That flag only stops bun fetching a package it cannot resolve locally. It changes nothing about the runtime."
           },
           {
-            "t": "bun detects the config extension and delegates automatically.",
+            "t": "bun detects the .config.ts extension and delegates loading to node automatically.",
             "why": "The shebang on the resolved binary picks the runtime, before any config is opened."
           }
         ]
@@ -122,11 +122,11 @@
             "why": "Right. wrangler types takes a snapshot you have to retake; the inferred Env reads the config every time the compiler runs."
           },
           {
-            "t": "wrangler 4.147.0 added literal types to wrangler types since August.",
+            "t": "wrangler 4.147.0 added literal types to wrangler types, so newer JSON configs now carry the value.",
             "why": "The same wrangler.jsonc gave the same literal on 4.125.0, so nothing was added. The August claim was wrong on the day it was written."
           },
           {
-            "t": "The TypeScript config stopped narrowing text bindings to their value.",
+            "t": "The TypeScript config stopped narrowing text bindings to their value, so both formats now type it as string.",
             "why": "bindings.text(\"default\") still types as \"default\" on config 0.23.0. The correction is about the JSON side."
           }
         ]

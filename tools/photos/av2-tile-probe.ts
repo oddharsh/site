@@ -71,6 +71,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { HOLDOUT, TRAIN } from "./codec-knob-probe.ts";
+import { AV2_BUILD, AV2_BUILD_COMMAND, AV2_TUNED_BUILD } from "./av2-tone.ts";
 import { JXL_ARGS } from "./gen-pixel-peeper.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -80,8 +81,7 @@ const arg = (name: string): string | undefined => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? argv[i + 1] : undefined;
 };
-const TUNED = path.join(HERE, "libavif-avm/build/tuned");
-const BUILD = path.resolve(arg("build") ?? (fs.existsSync(path.join(TUNED, "avifenc")) ? TUNED : path.join(HERE, "libavif-avm/build")));
+const BUILD = path.resolve(arg("build") ?? (fs.existsSync(path.join(AV2_TUNED_BUILD, "avifenc")) ? AV2_TUNED_BUILD : AV2_BUILD));
 const ZENC = path.join(HERE, "zenc/target/release/zenc");
 const WORK = path.join(os.tmpdir(), "av2-tile-probe");
 const EXCLUDE = new Set([...TRAIN, ...HOLDOUT, "XT507495"]);
@@ -260,7 +260,7 @@ async function main(): Promise<number> {
   const known = CODECS[codec].configs;
   const configs = (arg("configs") ?? CODECS[codec].defaults).split(",");
   for (const c of configs) if (!known[c]) { console.error(`unknown ${codec} config ${c}; have ${Object.keys(known).join(", ")}`); return 2; }
-  if (codec === "avm" && configs.some((c) => c !== "base") && BUILD !== TUNED) console.error(`note: ${configs.join(",")} needs the tuned build (build.sh --tuned); using ${BUILD}`);
+  if (codec === "avm" && configs.some((c) => c !== "base") && BUILD !== AV2_TUNED_BUILD) console.error(`note: ${configs.join(",")} needs the tuned build (${AV2_BUILD_COMMAND}); using ${BUILD}`);
   const label = codec === "avm" ? `AV2 (${path.basename(BUILD)})` : `JPEG XL (${(await sh(["cjxl", "--version"])).split(" ")[1]})`;
   const stems = arg("stems")?.split(",") ?? fs.readdirSync(src)
     .filter((f) => /^XT\d+\.JPG$/.test(f)).map((f) => f.replace(/\.JPG$/, "")).filter((s) => !EXCLUDE.has(s)).sort();

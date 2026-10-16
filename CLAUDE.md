@@ -38,7 +38,7 @@ byte for byte? Then it's `public/`. The site config is `cloudflare.config.ts` +
 bun run dev                 # cf dev on config/dev + Counter beside it (needs `bun add -g cf`)
 bun run build               # stage .build/ (minify, hash /a/ assets, twins, dictionaries)
 bun run check:fast          # lint + typecheck + test, in parallel
-bun run lint                # oxlint, type-aware
+bun run lint                # bun lint (built in), type-aware
 bun run typecheck
 bun run test                # contract suite under bun; `test:node` runs it under node
 bun run --filter cal-aadhar-sh test
@@ -65,7 +65,8 @@ probes) is in `package.json` and [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
 - Labels worth applying by hand: `hashed-asset` (the diff re-mints an `/a/`
   URL, gotcha 35) and `release-path` (it touches what decides what ships).
 - `validate` is the one required check: lint, typecheck, build under the perf
-  budget, `derive:check`, `routes:check`, the contract suite and cal's tests.
+  budget, `derive:check`, `pages:check`, `routes:check`, the contract suite and
+  cal's tests.
 - Measure before you claim, and run the control that would show your
   instrument can fail. Most gotchas are an instrument that couldn't.
 

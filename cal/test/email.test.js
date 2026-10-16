@@ -265,10 +265,14 @@ describe("sendDecline + error handling", () => {
   it("keeps List-Id off the guest's copies", async () => {
     await sendDecline(env, booking);
     await sendInvite(env, booking);
+    expect(calls.map(({ body }) => body.to)).toEqual([["jordan@example.com"], ["jordan@example.com"]]);
     for (const { body } of calls) {
       expect(body.headers["List-Id"]).toBeUndefined();
       expect(body.headers["X-Coffee-Booking"]).toBe("abc123def456");
     }
+    // The host's copy of the same booking is the one that carries it.
+    await sendHostCopy(env, booking);
+    expect(calls[2].body.headers["List-Id"]).toBe("coffee bookings <coffee.aadhar.sh>");
   });
 
   it("throws when Resend returns a non-2xx (so callers/log see the failure)", async () => {

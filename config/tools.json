@@ -119,7 +119,6 @@
       "install": "brew install cmake",
       "why": "configures and builds the pinned AVIF encoder and its libraries",
       "required_by": [
-        "tools/photos/libavif-avm/build.sh",
         "tools/photos/libavif/build.sh"
       ],
       "version": {
@@ -134,7 +133,6 @@
       "install": "brew install ninja",
       "why": "executes the CMake build for the pinned AVIF encoder",
       "required_by": [
-        "tools/photos/libavif-avm/build.sh",
         "tools/photos/libavif/build.sh"
       ],
       "version": {
@@ -150,7 +148,6 @@
       "why": "fetches the pinned AVIF encoder sources; also supplies the tracked-script census for tools:check",
       "required_by": [
         "tools/check-tools.ts",
-        "tools/photos/libavif-avm/build.sh",
         "tools/photos/libavif/build.sh"
       ],
       "version": {
@@ -182,6 +179,23 @@
       },
       "bytes": true,
       "recorded": "zenc 0.2.0, zenjpeg 0.8.4"
+    },
+    {
+      "bin": "photo-metrics",
+      "path": "tools/photos/photo-metrics/target/release/photo-metrics",
+      "install": "cargo build --release --locked --manifest-path tools/photos/photo-metrics/Cargo.toml",
+      "optional": true,
+      "optional_why": "BUILT ON DEMAND like zenc: hif-archive.ts runs the install command on its first score in a process, so an absent binary on a fresh checkout is repaired rather than installed by hand. A missing `cargo` is the blocking failure, and cargo is declared above",
+      "why": "SSIMULACRA2 (fast-ssim2) and butteraugli (imazen's port) in one process: the bar a HIF photo's JPEG XL archive has to clear, on both metrics (hif-archive.ts). It replaced libjxl's ssimulacra2 and butteraugli_main there after matching their cjxl distance on 20 of 20 HIFs",
+      "required_by": [
+        "tools/photos/hif-archive.ts"
+      ],
+      "version": {
+        "reports": false,
+        "why": "prints no version; the fast-ssim2 and butteraugli pins are exact in tools/photos/photo-metrics/Cargo.toml and its Cargo.lock, which is the identity an archive decision is made against"
+      },
+      "bytes": true,
+      "bytes_why": "decides the cjxl distance of every HIF archive it scores, so a metric change can change archive bytes: a pin move is a re-measurement against libjxl (Cargo.toml says how)"
     },
     {
       "bin": "timbrado",
@@ -333,11 +347,10 @@
     {
       "bin": "ssimulacra2",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
-      "why": "the perceptual metric the Instagram export searches quality against; and, with butteraugli, the bar a HIF photo's JPEG XL archive has to clear (hif-archive.ts)",
+      "why": "the perceptual metric the Instagram export searches quality against. The HIF archive bar moved to photo-metrics on 2026-10-14",
       "required_by": [
-        "tools/photos/add-photos.sh",
         "tools/photos/export-for-instagram.sh",
-        "tools/photos/hif-archive.ts"
+        "tools/photos/photo-metrics-parity.ts"
       ],
       "version": {
         "reports": false,
@@ -348,11 +361,10 @@
     {
       "bin": "butteraugli_main",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
-      "why": "the second metric bounding that same search; and the second half of the HIF archive's bar, the metric that binds (hif-archive.ts)",
+      "why": "the second metric bounding that same search. The HIF archive bar moved to photo-metrics on 2026-10-14",
       "required_by": [
-        "tools/photos/add-photos.sh",
         "tools/photos/export-for-instagram.sh",
-        "tools/photos/hif-archive.ts"
+        "tools/photos/photo-metrics-parity.ts"
       ],
       "version": {
         "reports": false,
@@ -365,7 +377,6 @@
       "install": "brew install pkgconf libavif",
       "why": "resolves installed libavif development headers and libraries for the native grid encoder",
       "required_by": [
-        "tools/photos/libavif-avm/build.sh",
         "tools/photos/require-zenc.sh"
       ],
       "version": {
@@ -394,11 +405,11 @@
     },
     {
       "bin": "avifenc-avm",
-      "path": "tools/photos/libavif-avm/build/avifenc",
-      "install": "brew install aom cmake ninja pkgconf && tools/photos/libavif-avm/build.sh",
+      "path": "node_modules/av2-tone/encoder/build/avifenc",
+      "install": "brew install aom cmake ninja pkgconf && bun run av2:build",
       "optional": true,
       "optional_why": "measurement only: codec-knob-probe.ts --codec avm is its one caller and refuses with the build command when it is missing. Nothing in the photo pipeline or the build needs it",
-      "why": "AV2 (AVM 1.0.0) still-image encoder, with avifdec beside it, for the --codec avm arm of codec-knob-probe.ts. libavif pinned by commit with its experimental AVIF_CODEC_AVM on",
+      "why": "AV2 (AVM 1.0.0) still-image encoder, with avifdec beside it, for the --codec avm arm of codec-knob-probe.ts. Built from the av2-tone checkout package.json pins (github.com/oddharsh/av2-tone), which pins libavif by commit with its experimental AVIF_CODEC_AVM on",
       "required_by": [
         "tools/photos/codec-knob-probe.ts"
       ],
@@ -408,22 +419,6 @@
       },
       "bytes": false,
       "bytes_why": "writes scratch AV2 encodes for a probe and commits nothing; no browser decodes AV2, so none of its output can ship"
-    },
-    {
-      "bin": "emcc",
-      "install": "brew install emscripten",
-      "optional": true,
-      "optional_why": "only rebuilding /garage/av2's AV2 decoder needs it: tools/photos/av2-wasm/build.sh is its one caller and refuses with the install command when it is missing. The committed .wasm serves without it",
-      "why": "compiles AVM 1.0.0's decoder to the WebAssembly /garage/av2 runs in a worker (public/garage/av2/av2dec.<sha8>.wasm)",
-      "required_by": [
-        "tools/photos/av2-wasm/build.sh"
-      ],
-      "version": {
-        "flag": "--version",
-        "match": "emcc \\(Emscripten gcc/clang-like replacement \\+ linker emulating GNU ld\\) (\\d+\\.\\d+\\.\\d+)"
-      },
-      "bytes": true,
-      "recorded": "6.0.12"
     }
   ]
 }

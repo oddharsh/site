@@ -213,7 +213,7 @@ sel = keep ? indexOfIdentity(items, keep)
       "q": "The audit found that a missing thumbnail URL could serve homepage HTML with a 1-year cache. What let that happen?",
       "options": [
         {
-          "t": "Pages answered the miss with its SPA fallback, a 200 carrying homepage HTML, and the worker's res.ok gate waved any 200 through to the immutable cache rule.",
+          "t": "Pages served its SPA fallback, a 200 of homepage HTML, and the res.ok gate passed that 200 to the immutable cache rule.",
           "ok": true,
           "why": "Right. The status was a clean 200, so gating on res.ok could never catch it. Only the content-type gave the masquerade away, which is exactly what the fix checks: image/* passes, everything else becomes an uncacheable 404."
         },
@@ -226,7 +226,7 @@ sel = keep ? indexOfIdentity(items, keep)
           "why": "The edge did exactly what it was told: it cached whatever the origin returned under that URL. The origin's SPA fallback supplied the wrong body; the cache just faithfully pinned it for a year."
         },
         {
-          "t": "Marking thumbnails immutable was the real bug, and the fix was to stop sending the 1-year cache header on the image routes.",
+          "t": "Marking thumbnails immutable was the real bug, so the fix dropped the 1-year header on image routes.",
           "why": "Immutable is correct for versioned thumbnails and it stayed. The fix gates on content-type so only real images can inherit that rule, and anything else turns into a 404 that nothing is allowed to cache."
         }
       ]
@@ -235,20 +235,20 @@ sel = keep ? indexOfIdentity(items, keep)
       "q": "Why did the /writing notes end up stacked on top of the folder in browsers without the Popover API?",
       "options": [
         {
-          "t": ":not() is non-forgiving, so a selector containing the unknown :popover-open invalidated the whole rule, and the one rule hiding the notes vanished.",
+          "t": ":not() is non-forgiving, so the unknown :popover-open made the engine discard the one rule hiding the notes.",
           "ok": true,
           "why": "Right. The hide rule itself depended on understanding the new feature. An engine that had never heard of popovers threw the entire rule away and had nothing left to hide the notes with."
         },
         {
-          "t": "Old engines ignore just the unknown pseudo-class and apply the rest of the selector, which then accidentally matched every note on the page.",
+          "t": "Old engines skip only the unknown pseudo-class and apply the rest of the selector, which then matched every note.",
           "why": "That forgiving behavior belongs to :is() and :where(). :not() rejects the whole rule when any argument is unknown, which is precisely why the hide rule evaporated. The fix inverts it so the default needs no new syntax."
         },
         {
-          "t": "The notes open through JavaScript, and browsers without the Popover API threw on showPopover() before the code that hides them could run.",
+          "t": "The notes open through JavaScript, and showPopover() threw in old browsers before the hide code could run.",
           "why": "The failure was pure CSS and happened before any script ran. The after version needs no feature detect at all: hidden by default in any parser, revealed only by an engine that understands :popover-open."
         },
         {
-          "t": "The popover attribute is invalid HTML in old browsers, so the parser hoisted the note elements out of their container and displayed them.",
+          "t": "The popover attribute is invalid in old browsers, so the parser hoisted the notes out of their container.",
           "why": "Unknown attributes parse fine and sit inert; the markup stayed exactly where it was. What broke was the CSS hide rule being discarded, which let all three already-present windows render at once."
         }
       ]
@@ -257,7 +257,7 @@ sel = keep ? indexOfIdentity(items, keep)
       "q": "The window shell used to pop into place a beat after first paint. What actually fixed it?",
       "options": [
         {
-          "t": "Each page inlines the same OS-window geometry the deferred shell script applies, so first paint is already the windowed layout and nav.js changes nothing visible.",
+          "t": "Each page inlines the same OS-window geometry the deferred nav.js applies later, so first paint is already the windowed layout.",
           "ok": true,
           "why": "Right. The inline rules are byte-identical to what nav.js applies later, so when the script runs, nothing moves. The pop was the gap between two layouts, and now there is only one."
         },
@@ -270,7 +270,7 @@ sel = keep ? indexOfIdentity(items, keep)
           "why": "An animation would only dress the pop up. The fix removes the layout change entirely: first paint and final layout are the same layout. (The site did carry cross-document view transitions when this teardown was written; they were removed in 2026-07 because prerendering had already made navigation instant.)"
         },
         {
-          "t": "The window stays hidden until nav.js finishes building the shell, so visitors never get to see the pre-shell document layout at all.",
+          "t": "The window stays hidden until nav.js finishes building the shell, so nobody sees the pre-shell layout.",
           "why": "Hiding content until a deferred script runs makes first paint slower, the opposite of the goal. The page paints immediately in its final geometry, and with JS off the content still scrolls natively."
         }
       ]
@@ -279,20 +279,20 @@ sel = keep ? indexOfIdentity(items, keep)
       "q": "How did the fix stop the homepage first byte from waiting on the visitor counter's Durable Object?",
       "options": [
         {
-          "t": "The counter read races a 75ms timeout: if the DO is slow the pill keeps its static placeholder, while the real increment still lands via ctx.waitUntil.",
+          "t": "The counter read races a 75ms timeout, while the increment itself still lands via ctx.waitUntil.",
           "ok": true,
-          "why": "Right. The visit still counts either way; only the render stops waiting. A cross-region round trip can no longer hold the whole page hostage for one footer pill that already has a fallback."
+          "why": "Right. If the DO is slow, the pill keeps its static placeholder, and the visit still counts either way; only the render stops waiting. A cross-region round trip can no longer hold the whole page hostage for one footer pill that already has a fallback."
         },
         {
-          "t": "The homepage is edge-cached now, so most visits never reach the worker and never touch the counter's home region in the first place.",
+          "t": "The homepage is edge-cached now, so most visits never reach the worker or the counter's home region.",
           "why": "The homepage stays no-store on purpose: the worker injects fresh tracks and photos on every visit. The fix accepts that the worker always runs and instead bounds how long one slow dependency can block it."
         },
         {
-          "t": "The counter moved from the Durable Object into KV, which replicates to every region and answers the read locally everywhere.",
+          "t": "The counter moved from the Durable Object into KV, which answers the read locally in every region.",
           "why": "KV's eventual consistency would drop concurrent increments; the single-homed DO is what keeps the count exact, and it stayed. Only the blocking read got put on a 75ms leash."
         },
         {
-          "t": "The increment moved into client-side JS, which posts to the counter after the page has already rendered in the browser.",
+          "t": "The increment moved into client-side JS, which posts to the counter after the page has rendered.",
           "why": "Then blockers and bots skew the count, and the worker already holds the request anyway. The increment stays server-side; it just rides waitUntil instead of sitting on the response path."
         }
       ]
@@ -301,7 +301,7 @@ sel = keep ? indexOfIdentity(items, keep)
       "q": "What does the two-key stale-while-revalidate for the Spotify tracklist actually change?",
       "options": [
         {
-          "t": "The track value persists with no TTL while a small fresh sentinel expires hourly, so a lapsed hour serves the stale list instantly and the rescrape runs in the background.",
+          "t": "The list persists with no TTL while a small sentinel expires hourly, so a lapsed hour serves stale tracks and rescrapes in the background.",
           "ok": true,
           "why": "Right. Freshness and existence became separate keys. Nobody ever waits on the one-to-three-second scrape anymore, and a transient Spotify failure degrades to slightly stale music instead of none."
         },

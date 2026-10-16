@@ -124,6 +124,13 @@ export const EXACT_ROUTES = [
   { path: "/rn/admin" },
   { path: "/rn/set" },
 
+  // Pixel Peeper's pooled picks (pixel-peeper-crowd.ts). Both sit under the
+  // section's own "/pixel-peeper/*" claim, so they cost no allowlist row. The
+  // POST is an unsafe method, which preview.ts and early-data.ts already refuse
+  // on a preview and on 0-RTT without a `writes` flag.
+  { path: "/pixel-peeper/runs", claim: ["/pixel-peeper/*"] },
+  { path: "/pixel-peeper/crowd.json", claim: ["/pixel-peeper/*"] },
+
   { path: "/bot", cacheable: true },
   { path: "/about", cacheable: true },
   { path: "/contact", cacheable: true },

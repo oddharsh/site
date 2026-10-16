@@ -43,26 +43,12 @@
     var navEntry = /** @type {PerformanceNavigationTiming & {deliveryType?: string} | undefined} */ (performance.getEntriesByType("navigation")[0]);
     if (navEntry && navEntry.deliveryType === "navigational-prefetch") activated();
   }
-  // The Run palette used to open and close inside a same-document View Transition.
-  // It applies its DOM change directly now (2026-07-30), for the same reason the
-  // cross-document transition came out of luna.css: the palette is already on
-  // screen the instant it is asked for, so a transition could only delay it.
-  // Wrapping the mutation was also never free of side effects — startViewTransition
-  // defers the callback, so anything that measured or focused right after the call
-  // ran a frame early. #axp-run keeps its own 90ms `axp-pop` CSS animation, which
-  // is a plain keyframe on the dialog and costs the page nothing.
   // platform-aware shortcut label shown on the Start orb + Run dialog. The
   // keydown handler binds BOTH ⌘K and Ctrl-K; this is only what we DISPLAY, so
   // Mac users see ⌘K and everyone else sees Ctrl K.
   var uaData = /** @type {Navigator & {userAgentData?: {platform?: string}}} */ (navigator).userAgentData;
   var IS_MAC = /Mac|iPhone|iPad|iPod/i.test((uaData && uaData.platform) || navigator.platform || navigator.userAgent || "");
   var KBD = IS_MAC ? "⌘K" : "Ctrl K";
-
-  // The pageswap/pagereveal pair that tagged each navigation "axp-open" or
-  // "axp-close" is gone with the transition it steered. Both listeners ran on
-  // EVERY navigation to hand a type to CSS rules that no longer exist, and the
-  // pageswap one also wrote the sessionStorage breadcrumb /garage/vt-check read;
-  // that page now states plainly that the shell does not opt in.
 
   // Run destinations and profiles live in /nav-run.js, transferred only when
   // someone opens the palette. Section artwork lives only in shell-data.mjs;
@@ -334,14 +320,14 @@
     // move, promoted by .axp-dragging's will-change), and the final left/top is
     // committed once, on release. Writing left/top per pointermove forced a
     // layout every frame — visible as judder on 120Hz variable-refresh panels.
-    var cur = /** @type {HTMLElement | null} */ (null), sx = 0, sy = 0, ox = 0, oy = 0, nx = 0, ny = 0, moved = false;
+    var cur = /** @type {HTMLElement | null} */ (null), sx = 0, sy = 0, ox = 0, oy = 0, nx = 0, ny = 0, maxY = 0, moved = false;
     function mv(e) {
       if (!cur) return;
       var dx = e.clientX - sx, dy = e.clientY - sy;
       if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
       moved = true; cur.classList.add("axp-dragging");
       nx = Math.max(0, Math.min(ox + dx, innerWidth - 76));
-      ny = Math.max(0, Math.min(oy + dy, innerHeight - 30 - 72));
+      ny = Math.max(0, Math.min(oy + dy, maxY));
       cur.style.transform = "translate(" + (nx - ox) + "px," + (ny - oy) + "px)";
     }
     function up() {
@@ -358,6 +344,8 @@
       var a = e.target instanceof Element && e.target.closest(".axp-ico");
       if (!(a instanceof HTMLElement)) return;
       cur = a; moved = false; sx = e.clientX; sy = e.clientY;
+      // the layer's height, not innerHeight: it starts below the HyperCam band
+      maxY = /** @type {HTMLElement} */ (e.currentTarget).clientHeight - 30 - 72;
       ox = parseFloat(a.style.left) || 0; oy = parseFloat(a.style.top) || 0;
       try { a.setPointerCapture(e.pointerId); } catch (_) {}
       D.addEventListener("pointermove", mv);
@@ -390,8 +378,6 @@
     clearTimeout(clockTimer);
     clockTimer = W.setTimeout(tickClock, 60000 - now.getSeconds() * 1000 - now.getMilliseconds() + 20);
   }
-
-  // Run palette and accessory implementation moved to /nav-run.js.
 
   // Data is cached per page load. Keeping these readers in the core lets a tray
   // click and a later live infotip share one fetch without shipping render code.
@@ -612,7 +598,7 @@
       var y = parseInt(sessionStorage.getItem(key), 10);
       if (y > 0) {
         var done = false;
-        var restore = () => { if (done) return; sc.scrollTop = y; if (sc.scrollTop > 0) done = true; };   // fires scroll → thumb syncs
+        var restore = () => { if (done) return; sc.scrollTop = y; if (sc.scrollTop > 0) done = true; };
         requestAnimationFrame(restore);                      // once the scroller is laid out
         addEventListener("load", restore, { once: true });   // re-assert after images/fonts settle (scrollHeight final)
       }

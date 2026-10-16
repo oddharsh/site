@@ -97,7 +97,7 @@ test("one package pinned in two manifests moves as one bump", () => {
 });
 
 test("named groups take majors; the rest split into minor-and-patch and one PR per major", () => {
-  assert.equal(groupFor("oxlint", "major"), "oxlint");
+  assert.equal(groupFor("wrangler", "major"), "cloudflare-toolchain");
   assert.equal(groupFor("@cloudflare/config", "minor"), "cloudflare-toolchain");
   assert.equal(groupFor("smol-toml", "patch"), CATCH_ALL);
   assert.equal(groupFor("smol-toml", "major"), "smol-toml");

@@ -96,8 +96,6 @@ export function renderScript(data, picked = null) {
     out.push(`[ -z "\${no_fda:-}" ] || echo 'skipped the accessibility rows: give Terminal Full Disk Access in Privacy & Security, then run this again'`);
   }
   if (restarts.has("login")) {
-    // Named by GROUP rather than by row: the sentence is a reminder, and a
-    // 17-item list is one nobody reads.
     const who = [...new Set(chosen.filter((o) => o.restart.includes("login")).map((o) => o.group.toLowerCase()))];
     out.push(`echo 'log out and back in for the rest: ${who.join(", ")}'`);
   }

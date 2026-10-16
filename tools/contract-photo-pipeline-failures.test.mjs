@@ -29,6 +29,7 @@ async function fixture(run) {
   const shell = (file, args = [], env = {}) => spawnSync("/bin/bash", [path.join(root, "tools/photos", file), ...args], {
     cwd: root, encoding: "utf8", timeout: 10_000,
     env: { ...process.env, PATH: `${root}/bin:/usr/bin:/bin`, FIXTURE_ROOT: root,
+      PHOTO_METRICS_BIN: `${root}/bin/photo-metrics`,
       TRACE: `${root}/trace`, JOBS: "1", REMOTE_RENDER_ONLY: "1", ...env },
   });
   try {
@@ -112,7 +113,10 @@ printf encoded > "$last"`);
     await command("bin/ffmpeg", 'for last in "$@"; do :; done; printf encoded > "$last"');
     // The metrics answer per file so a test can make a HIF's direct encode
     // beat its JPEG bar (CAND_S2 above 95, CAND_BA below 0.5) or not. hif-archive.ts
-    // scores its candidates as cand.png; the bar is base.ppm.
+    // scores its candidates as cand.png; the bar is base.ppm. It reaches this
+    // stub through PHOTO_METRICS_BIN rather than building tools/photos/photo-metrics.
+    await command("bin/photo-metrics", 'case "$2" in *cand*) s2="${CAND_S2:-95}" ba="${CAND_BA:-0.5}" ;; *) s2=95 ba=0.5 ;; esac; echo "{\\"s2\\":$s2,\\"ba\\":$ba,\\"ba3\\":$ba}"');
+    // export-for-instagram.sh still scores with libjxl's two CLIs.
     await command("bin/ssimulacra2", 'case "$2" in *cand*) echo "${CAND_S2:-95}" ;; *) echo 95 ;; esac');
     await command("bin/butteraugli_main", 'case "$2" in *cand*) echo "${CAND_BA:-0.5}" ;; *) echo 0.5 ;; esac');
     // djpeg decodes the bar for hif-archive.ts; a PPM header is all it reads.

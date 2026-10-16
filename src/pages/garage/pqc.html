@@ -333,16 +333,16 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
       "q": "Why can this site send an ML-DSA signature years before IANA registers a post-quantum algorithm?",
       "options": [
         {
-          "t": "Signature-Input and Signature are structured-fields Dictionaries, so a second label appends and an old verifier reads the label it knows.",
+          "t": "A second Signature label appends to the dictionary, and an old verifier reads the label it knows.",
           "ok": true,
-          "why": "Right. Additive labels are what make an unregistered algorithm safe to send: ignoring it costs a verifier nothing."
+          "why": "Right. Signature-Input and Signature are structured-fields Dictionaries, so sig2 rides beside sig1 over the same covered components. Ignoring an unregistered algorithm costs a verifier nothing."
         },
         {
-          "t": "RFC 9421 lets a sender pick any algorithm as long as the key is published in a JWKS.",
+          "t": "RFC 9421 lets a sender use any algorithm whose key is published in its JWKS.",
           "why": "Publishing a key does not make an algorithm interoperable. The registry is what tells a verifier which token means which algorithm."
         },
         {
-          "t": "Cloudflare verifies ML-DSA signatures already, so the registry no longer matters.",
+          "t": "Cloudflare's Web Bot Auth verifier already checks ML-DSA, so a registry codepoint is no longer needed.",
           "why": "Cloudflare's Web Bot Auth verifier accepts Ed25519 only and ignores other key types in the directory."
         }
       ]
@@ -351,16 +351,16 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
       "q": "Both SLH-DSA parameter sets were rejected. What does comparing them tell you about hash-based signatures here?",
       "options": [
         {
-          "t": "They trade signing time against signature size, so one blows the header limit and the other blows the latency budget.",
+          "t": "128f is too large to fit in a header, and 128s is too slow to sign.",
           "ok": true,
           "why": "Right. 128f signs in 132ms but needs 22,784 bytes of header; 128s is compact by comparison and takes 2.65 seconds. Neither is small on both axes."
         },
         {
-          "t": "Hash-based signatures have large public keys, which is what makes them impractical for HTTP.",
+          "t": "Hash-based signatures carry large public keys, too big to publish in a JWKS.",
           "why": "Their public keys are the smallest on the page at 32 bytes. The signatures are what fail."
         },
         {
-          "t": "Both are slower to verify than ML-DSA, so receiving sites would reject them.",
+          "t": "Both verify slower than ML-DSA, so receiving sites would reject them.",
           "why": "Verification is in the same few-millisecond range for all of them. The binding constraints are signing time and signature size."
         }
       ]
@@ -369,16 +369,16 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
       "q": "This site's TLS already negotiates X25519MLKEM768. What does that protect, and what does it leave open?",
       "options": [
         {
-          "t": "It protects confidentiality against an attacker recording traffic today, and leaves authentication on a classical P-256 certificate.",
+          "t": "It protects confidentiality against traffic recorded today, and leaves authentication on a classical P-256 certificate.",
           "ok": true,
           "why": "Right. Key agreement had to migrate early because recorded ciphertext can be decrypted later. The certificate chain is a separate, slower migration."
         },
         {
-          "t": "It makes the whole handshake post-quantum, including the certificate.",
+          "t": "It makes the whole handshake post-quantum, certificate included, since the hybrid group covers every step.",
           "why": "The handshake still reports ecdsa_secp256r1_sha256 and a P-256 certificate. Only the key agreement moved."
         },
         {
-          "t": "It protects the crawler's outbound request signatures.",
+          "t": "It protects the crawler's outbound request signatures, since those travel inside the same TLS connection.",
           "why": "Those are application-layer RFC 9421 signatures. TLS key agreement has no bearing on them."
         }
       ]
@@ -387,16 +387,16 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
       "q": "Why is there less urgency to migrate a request signature than to migrate key agreement?",
       "options": [
         {
-          "t": "A recorded request cannot be retroactively forged into something anyone still trusts, while recorded ciphertext can be decrypted whenever the hardware arrives.",
+          "t": "A forged old request buys nothing, while recorded ciphertext can be decrypted once the hardware exists.",
           "ok": true,
-          "why": "Right. Harvest now, decrypt later applies to confidentiality. An ephemeral signature stops mattering once the request is served."
+          "why": "Right. Harvest now, decrypt later applies to confidentiality. A recorded request cannot be retroactively forged into something anyone still trusts, because an ephemeral signature stops mattering once the request is served."
         },
         {
-          "t": "Request signatures use stronger keys than TLS key agreement does.",
+          "t": "Request signatures use stronger keys than TLS key agreement does, so they last longer.",
           "why": "Ed25519 and X25519 sit at comparable classical strength. The difference is what an attacker gains by breaking each one later."
         },
         {
-          "t": "Signatures are verified locally, so a quantum attacker could never reach them.",
+          "t": "Signatures are verified locally on the receiving server, so a quantum attacker has no copy of one to break.",
           "why": "A forger with the private key could sign anything. The reason the clock is slower is that a stale forgery buys nothing."
         }
       ]
@@ -405,16 +405,16 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
       "q": "The page reports 8.58ms to sign and 2,420 bytes of signature. Which of those two numbers should you expect to improve, and why?",
       "options": [
         {
-          "t": "The time, because it measures a lattice scheme running in JavaScript, while the size is fixed by FIPS 204.",
+          "t": "The time, since 8.58ms measures JavaScript running a lattice scheme.",
           "ok": true,
-          "why": "Right, and it did. Cloudflare's runtime now signs natively in 0.12ms and emits the same 2,420 bytes, which is why the migration decision should rest on the size budget."
+          "why": "Right, and it did. Cloudflare's runtime now signs natively in 0.12ms and emits the same 2,420 bytes, because FIPS 204 fixes the size. That is why the migration decision should rest on the size budget."
         },
         {
           "t": "The size, because compression will shrink the signature once it travels as a header.",
           "why": "Signature bytes are effectively random, so they do not compress. The base64 expansion makes the header larger rather than smaller."
         },
         {
-          "t": "Neither, because both are properties of ML-DSA-44 as standardised.",
+          "t": "Neither, because FIPS 204 fixes both the signing time and the signature size.",
           "why": "Only the sizes are standardised. The 8.58ms belongs to this implementation on this hardware, which the in-browser native run and the workerd measurement both demonstrate."
         }
       ]
@@ -428,11 +428,11 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
           "why": "Right, and that is the check the page committed to. It never fired: no server rejected the headers. sig2 came out anyway on 2026-08-15, for a cost this page measured once and never multiplied, which is ~8.5ms of signing CPU per request against a 10ms per-invocation budget. Read the retirement section."
         },
         {
-          "t": "A verifier reading sig1 and ignoring sig2 entirely.",
+          "t": "A verifier reading sig1 and ignoring sig2, so nobody on the internet checks the ML-DSA signature.",
           "why": "That is the predicted behaviour, so it supports the model rather than challenging it."
         },
         {
-          "t": "IANA registering a different token for ML-DSA in the signature algorithms registry.",
+          "t": "IANA registering a token other than ml-dsa-44 for ML-DSA in the HTTP signature algorithms registry.",
           "why": "That would mean renaming a string. The page already treats its own token as provisional."
         }
       ]
@@ -441,16 +441,16 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
       "q": "Native ML-DSA-44 signed in 0.12ms on a laptop. Why did sig2 wait for a production measurement before coming back?",
       "options": [
         {
-          "t": "Laptop wall-clock time and production CPU differ, and this page already missed a cost once by pricing it in isolation from fan-out and load.",
+          "t": "Laptop wall-clock and production CPU differ, and the page had already underpriced fan-out once.",
           "ok": true,
-          "why": "Right, and the wait paid for itself. Signing every request took a /lens scan from 22ms to 32ms of CPU, 3 times the laptop projection, so sig2 now skips the fan-out and costs about 2ms a scan."
+          "why": "Right, and the wait paid for itself. August priced 8.58ms in isolation from fan-out and load. In production, signing every request took a /lens scan from 22ms to 32ms of CPU, 3 times the laptop projection, so sig2 now skips the fan-out and costs about 2ms a scan."
         },
         {
           "t": "A native signature is a different size, so headers could break where the JavaScript ones did fine.",
           "why": "The size is fixed by FIPS 204. Native and JavaScript ML-DSA-44 signatures are both 2,420 bytes."
         },
         {
-          "t": "Other libraries cannot check signatures from the native implementation yet.",
+          "t": "Other libraries could not yet verify signatures from the native BoringSSL implementation.",
           "why": "Node's OpenSSL-backed WebCrypto verified a workerd signature, and rejected it once the signed bytes changed."
         }
       ]

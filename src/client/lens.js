@@ -812,9 +812,6 @@
     return '<pre class="lx-pre' + (light ? " lx-pre-light" : "") + '">' + esc(text) + "</pre>";
   }
 
-  // `title` is optional and every existing caller omits it. Any [title] on this
-  // site is already an infotip (nav.js owns the matcher), so a badge that can
-  // explain itself costs no new surface.
   function badge(text, kind, title) {
     return '<span class="lx-badge ' + (kind || "") + '"' + (title ? ' title="' + esc(title) + '"' : "") + ">" + esc(text) + "</span>";
   }
@@ -950,7 +947,6 @@
     // READ
     var costNote = c ? " (~" + fmtTok(c.tokens) + " tok, " + fmtUsd(c.tokens / 1e6 * rate.usdPerMtok) + " at " + (rate.model || "Sonnet") + " rates)" : "";
     line("ok", "GET " + (data.finalUrl || data.url) + " as an agent → " + data.status + " " + esc(httpText(data.status)) + ", " + (data.contentType || "?") + ", " + bytes(a.rawBytes) + costNote + ".");
-    // md negotiation
     var md = ag.mdNegotiation;
     if (md && md.supported) line("ok", "Asked for text/markdown → the site served a clean machine copy. No HTML tax.");
     else line("warn", "Asked for text/markdown → still HTML. Paying the token tax to read markup meant for a browser.");
@@ -980,7 +976,6 @@
     else if (keyless) line("ok", "Checked for a consent boundary → not applicable: " + keyless + ", so there is no credential to delegate.");
     else line("warn", "Checked for a consent boundary → none. No scoped, revocable way to act on a user's behalf.");
 
-    // verdict
     var verdict, vkind;
     if (action && authority) { verdict = "ACT: this site was built for agents. A task with side effects can run against a real contract."; vkind = "ok"; }
     else if (action && keyless) { verdict = "ACT: this site was built for agents. Its contract needs no credential, so an agent calls it as itself."; vkind = "ok"; }
@@ -1726,7 +1721,6 @@
 
   function lensTools() {
     if (window.LensTools) return window.LensTools.render(toolsBusy ? { pending: true } : toolsData) + webmcpSection();
-    // Pre-module fallback, self-contained because the module may never arrive.
     return section("What it accepts", { text: "not run" },
       "Reads this origin's MCP catalogue and draws a form for every tool, from the argument schema the server publishes.",
       '<div class="lx-tools-intro"><b>An MCP tool list is an ABI.</b> A block explorer turns one into a form you can fill in, ' +
@@ -1771,7 +1765,6 @@
   // which costs them a lookup and, on an LLM-backed instance, a model call.
   function lensNlweb() {
     if (window.LensNlweb) return window.LensNlweb.render(nlwebBusy ? { pending: true } : nlwebData);
-    // Pre-module fallback, self-contained because the module may never arrive.
     return section("What it answers", { text: "not run" },
       "Asks this origin's /ask endpoint one real question and grades the answer against NLWeb's result contract.",
       '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
@@ -1822,7 +1815,6 @@
   // which costs the origin bandwidth every time somebody clicks.
   function lensMarkdownTab() {
     if (window.LensMarkdown) return window.LensMarkdown.render(markdownBusy ? { pending: true } : markdownData);
-    // Pre-module fallback, self-contained because the module may never arrive.
     return section("What agents get", { text: "not run" },
       "Replays the Accept header seven named agent clients actually send, and reports what each one got back.",
       '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
@@ -1942,7 +1934,6 @@
     out += section("Meta tags", null, "The original machine-readable layer (1995). description + keywords were the first SEO surface.",
       kvTable(s.meta || {}, metaOrder.concat(Object.keys(s.meta || {}).filter((k) => { return metaOrder.indexOf(k) < 0; }))));
 
-    // Open Graph card
     if (has(s.og)) {
       var card = '<div class="lx-ogcard">';
       if (s.og.image) card += '<img src="' + esc(s.og.image) + '" alt="" onerror="this.style.display=\'none\'">';
@@ -1957,7 +1948,6 @@
       out += section("Twitter Card", { text: "twitter:" }, "Twitter, 2012. A parallel preview vocabulary, mostly overlapping OG.", kvTable(s.twitter));
     }
 
-    // JSON-LD
     if (s.jsonld && s.jsonld.length) {
       var blocks = s.jsonld.map((b) => {
         if (b.valid) {
@@ -2049,7 +2039,6 @@
     if (!t) return '<div class="lx-empty">No terms to read (the origin never answered the probes).</div>';
     var out = "";
 
-    // the spectrum strip
     var TIERS = [
       { k: "open",     label: "Open",     sub: "no terms set" },
       { k: "signaled", label: "Signaled", sub: "asks, via robots" },
@@ -2064,7 +2053,6 @@
       "Open to any bot, gated behind payment, or anywhere in between. The agentic web's actual terms of service.",
       strip + why);
 
-    // the bot scoreboard
     var KIND = { search: "Search engines", train: "AI training crawlers", answers: "AI answer engines (live retrieval)" };
     var blocked = (t.scoreboard || []).filter((b) => { return b.verdict === "block"; }).length;
     var rows = "<tr><th>crawler</th><th>runs it</th><th>verdict</th><th>why</th></tr>";
@@ -2087,7 +2075,6 @@
       "robots.txt evaluated per crawler (RFC 9309 longest-match) for " + t.path + ". This is policy, not enforcement — obeying it is voluntary.",
       '<table class="lx-bots">' + rows + "</table>");
 
-    // Content Signals
     var sig;
     if (t.signals && t.signals.length) {
       sig = t.signals.map((s) => {
@@ -2105,7 +2092,6 @@
       "contentsignals.org, 2025 (Cloudflare). Three consent bits a site can attach to a robots group: search, ai-input (grounding answers), ai-train.",
       sig);
 
-    // price
     var paid = t.paid || {};
     var paidInner = "";
     if (paid.http402) paidInner += '<div class="lx-fallback-note">This URL answered <b>402 Payment Required</b>' + (paid.x402 ? " with an x402 envelope — a machine-readable invoice." : ".") + "</div>";
@@ -2116,7 +2102,6 @@
       "HTTP 402, Cloudflare pay-per-crawl headers, x402 envelopes: content gated behind machine payment.",
       paidInner);
 
-    // enforcement
     var enf = t.enforcement || {};
     var enfInner;
     if (enf.challenged) enfInner = '<div class="lx-fallback-note">Our fetch hit a bot challenge (the &quot;verify you are human&quot; wall). The policy above is backed by active enforcement.</div>';
@@ -2571,8 +2556,6 @@
         run(qp);
       }
     }
-    // The idle shell used to pop the "state of the machine web" dialog here, once
-    // a session. The rail carries that argument now without asking to be closed.
   } catch (e) {}
 
   // ---- WebMCP: the handlers that need THIS WINDOW -----------------------

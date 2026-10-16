@@ -68,15 +68,11 @@ export type Group = { name: string; patterns: string[] };
 // one PR: seven packages were outdated at once on 2026-08-19 with zero PRs
 // open, because the fastest-releasing four outran a serialized queue.
 export const GROUPS: Group[] = [
-  // The linter ABI. `@oxlint/plugins` is the interface between oxlint and the
-  // three rules vendored at tools/oxlint/anti-slop; the two ship one version
-  // number and a mismatch fails at PLUGIN LOAD, so moving one without the other
-  // reds `validate` on unchanged code.
-  { name: "oxlint", patterns: ["oxlint", "@oxlint/plugins"] },
-  // tsgolint tracks the TYPESCRIPT pin, not the oxlint one. TypeScript 7.0
-  // ships no stable programmatic API, so tsgolint is the only door to the
-  // type-aware rules, and its releases pair with TypeScript's.
-  { name: "typescript", patterns: ["typescript", "oxlint-tsgolint"] },
+  // The oxlint and tsgolint groups left on 2026-10-15 with the packages: the
+  // linter is Bun's now (`bun lint`), pinned with the runtime in
+  // config/bun-pin.json. `@oxlint/plugins` stays as the adapter the vendored
+  // anti-slop rules import, and moves on its own.
+  { name: "typescript", patterns: ["typescript"] },
   // One resolved Cloudflare stack: one miniflare, one workerd, one undici. A
   // @cloudflare/* package carrying its own wrangler, bumped apart, splits that
   // stack in two. wrangler itself is a pkg.pr.new commit URL today, owned by

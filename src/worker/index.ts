@@ -11,6 +11,7 @@ import { handleHit } from "./counter.ts";
 import { handlePhotoGrid, serveMarkdown, warmGridData } from "./home.ts";
 import { handleInbox, handleInboxMail } from "./inbox.ts";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.ts";
+import { handlePixelPeeperCrowd, handlePixelPeeperRun } from "./pixel-peeper-crowd.ts";
 import { cronSendWebmentions } from "./webmention-send.ts";
 import { handleLedgerJson, handleLedgerLines, renderLedgerPage } from "./ledger.ts";
 import { handlePrefetchActivation, handleSpeculationJson } from "./speculation.ts";
@@ -257,6 +258,10 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/rn/tracks.html": handleRnTracksHtml,
   "/rn/admin": handleRnAdmin,
   "/rn/set": handleRnSet,
+
+  // everyone's /pixel-peeper picks, pooled in SOCIAL_DB
+  "/pixel-peeper/runs": handlePixelPeeperRun,
+  "/pixel-peeper/crowd.json": handlePixelPeeperCrowd,
 
   "/bot": routeBot,
   "/about": routeTrustPage(renderAboutPage),

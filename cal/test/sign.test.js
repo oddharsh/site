@@ -45,6 +45,10 @@ describe("sign/verify — approve/decline link auth", () => {
   });
 
   it("is deterministic — same message+secret yields the same signature", async () => {
-    expect(await sign("approve:x", SECRET)).toBe(await sign("approve:x", SECRET));
+    // HMAC-SHA256 of "approve:x", base64url without padding; openssl dgst
+    // -sha256 -hmac gives the same bytes.
+    const vector = "UC2yqszjfGliPNCKv8SFUHoTWQKtQ8zwlwKr7vxEQhA";
+    expect(await sign("approve:x", SECRET)).toBe(vector);
+    expect(await sign("approve:x", SECRET)).toBe(vector);
   });
 });

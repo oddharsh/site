@@ -58,13 +58,13 @@ const SKIP = new Set(["node_modules", ".git", ".build", ".wrangler", ".claude", 
  * By path because the basenames are `src` and `build`, which are the two names
  * least safe to add to SKIP.
  *
- * tools/photos/libavif-avm/build.sh (the AV2 build) is the same shape and worse:
- * CMake fetches AVM, TensorFlow Lite, XNNPACK and abseil under build/_deps, and
- * the first run reported their Python as undeclared generators by the dozen.
+ * The AV2 build was the same shape and worse (CMake fetches AVM, TensorFlow
+ * Lite, XNNPACK and abseil, whose Python read as undeclared generators by the
+ * dozen). It moved to github.com/oddharsh/av2-tone and builds inside
+ * node_modules, which the census never walks.
  */
 const VENDORED = new Set([
   "tools/photos/libavif/src", "tools/photos/libavif/build",
-  "tools/photos/libavif-avm/src", "tools/photos/libavif-avm/build",
 ]);
 
 const SCANNED = [".ts", ".mjs", ".js", ".py"];

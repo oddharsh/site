@@ -55,6 +55,8 @@ export interface EnvBindings {
   MCP_RL_REPR_CAPTURE: RateLimit;
   MCP_RL_REPR_COMPARE: RateLimit;
   WEBMENTION_RL: RateLimit;
+  /** Finished /pixel-peeper runs, per IP (pixel-peeper-crowd.ts). */
+  PIXEL_PEEPER_RL: RateLimit;
   ASK_RL: RateLimit;
   API_RL: RateLimit;
 

@@ -29,6 +29,9 @@
   /* --bt is the chart/border identity; as TEXT the amber only hits 3.06:1 on the
      panel, so text uses this darker sibling (4.8:1) and the graphics keep --bt. */
   --bt-ink:#9c640d;
+  /* the diff map's two sides, the first tile of a pair and the second. Kept off
+     the metric blue and amber, and mirrored by DIFF_FS's CA and CB. */
+  --da:#1fb5d6; --db:#e0479e;
   --grad-btn-hover:linear-gradient(180deg,#ffffff 0%,#f3f4ff 100%);
 }
 /* The window frame, title bar, gel caption buttons and sunken .content field all
@@ -83,6 +86,8 @@ b{color:var(--ink)}
 .diffctl input[type=range]{vertical-align:middle;width:120px}
 .seg{gap:4px}
 .seg .xp-button[aria-pressed=true]{font-weight:700}
+.dkey{display:flex;gap:12px;flex-wrap:wrap}
+.dkey i{display:inline-block;width:10px;height:10px;margin-right:4px;vertical-align:-1px;border:1px solid var(--shadow)}
 .banner{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid;border-radius:2px;font-size:var(--text-ui);margin:10px 0;line-height:1.45}
 .banner .g{font-weight:700;flex:0 0 auto}
 .banner.ok{background:var(--green-97);border-color:#a9cf9c;color:#2c5720}
@@ -173,10 +178,14 @@ a{color:var(--link)}
 // ---- data + config ----
 const AXES={
   quality: {teach:`that gap was plain JPEG quality. the encoder drops fine detail as quality falls, and below some point your eye stops noticing. that point is your ceiling: export any higher and you're spending bytes on detail you can't see.`},
-  chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. here's the honest part: on most photos this is free. fourteen saturated crops were built and measured for this test and <b>twelve were thrown out</b> because 4:2:0 cost them nothing you could see. what survives is a high-contrast two-tone edge, which is where the halved color plane can't keep up — and butteraugli (a color model) punishes that far harder than ssimulacra2. that's also why you only get one of these per run.`},
-  encoder: {teach:`same photo, same byte budget. every tile in that call was searched onto one file size and landed within 2% of it, so the only thing that varied was the encoder's math. newer coders (zenc, jpegli) fit more picture into those bytes than mozjpeg, and sips fits the least. that gap is free quality — same size, better image, for picking a different tool.`},
-  resample:{teach:`same photo, same byte budget, same encoder — only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
-  format:  {teach:t=>FMT[t.tier].teach+av2Line(t)+(state.log.filter(l=>l.axis==="format").length===1?` ${FMT_TAIL}${av2Line(t)?FMT_TAIL_AV2:""}`:``)+(t.lossless?` <b>lossless</b>, this photo is ${kb(t.lossless.jxl)} as JPEG XL${t.lossless.av2?`, ${kb(t.lossless.avif)} as AVIF and ${kb(t.lossless.av2)} as AV2`:` and ${kb(t.lossless.avif)} as AVIF`}: JPEG XL's biggest lead, and one no eye test can show.`:``)},
+  chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. here's the honest part: on most photos this is free. fourteen saturated crops were built and measured for this test and <b>twelve were thrown out</b> because 4:2:0 cost them nothing you could see. what survives is a high-contrast two-tone edge, which is where the halved color plane can't keep up, and butteraugli (a color model) punishes that far harder than ssimulacra2. that's also why you only get one of these per run.`},
+  encoder: {teach:`same photo, same byte budget. every tile in that call was searched onto one file size and landed within 2% of it, so the only thing that varied was the encoder's math. newer coders (zenc, jpegli) fit more picture into those bytes than mozjpeg, and sips fits the least. that gap is free quality: same size, better image, for picking a different tool.`},
+  // No metric scores these (gen-pixel-peeper.ts buildResample: there is no
+  // common-size reference), so the call is graded by its analytically known
+  // answer instead: the tile the linear-light kernel made.
+  resample:{answer:o=>o.label==="zenc",right:"you picked the one averaged in light",wrong:"that one averaged sRGB numbers",
+    teach:`same photo, same byte budget, same encoder. only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. <b>light kept</b> under each tile is its mean brightness, measured as light, over the window it was shrunk from: averaging in light keeps exactly 100% until the JPEG rounds off a few tenths, and averaging sRGB numbers keeps less. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
+  format:  {teach:t=>(state.noJxl?`your browser can't draw JPEG XL yet, so this call left its tile out and ran the rest. `:``)+FMT[t.tier].teach+av2Line(t)+(state.log.filter(l=>l.axis==="format").length===1?` ${FMT_TAIL}${av2Line(t)?FMT_TAIL_AV2:""}`:``)+(t.lossless?` <b>lossless</b>, this photo is ${kb(t.lossless.jxl)} as JPEG XL${t.lossless.av2?`, ${kb(t.lossless.avif)} as AVIF and ${kb(t.lossless.av2)} as AV2`:` and ${kb(t.lossless.avif)} as AVIF`}: JPEG XL's biggest lead, and one no eye test can show.`:``)},
   tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
 };
 const teachFor=t=>typeof AXES[t.axis].teach==="function"?AXES[t.axis].teach(t):AXES[t.axis].teach;
@@ -422,7 +431,7 @@ const isAv2=o=>o.label.startsWith("AV2 ");
 // AV2 mention outside a call keys on it, so the page never tallies a format
 // it didn't show.
 const VS=()=>state.av2?"JPEG XL vs AVIF vs AV2":"JPEG XL vs AVIF";
-const FMT_LIST=()=>state.av2?"JPEG XL, AVIF and AV2":"JPEG XL and AVIF";
+const FMT_LIST=()=>state.noJxl?"AVIF and AV2":state.av2?"JPEG XL, AVIF and AV2":"JPEG XL and AVIF";
 let av2Worker=null,av2Next=0;const av2Waiting={},av2Png=new Map();
 function av2Decode(src){
   if(av2Png.has(src))return av2Png.get(src);
@@ -441,15 +450,17 @@ function av2Decode(src){
 // Resolves once every AV2 tile in a trial has its PNG. A trial without one
 // resolves at once.
 const av2Ready=t=>Promise.all(t.options.filter(isAv2).map(o=>av2Decode(o.src).then(u=>{o.png=u;})));
-// If the decoder can't run here, AV2 sits out the rest of the session: its
-// tiles leave every call, and each call's winners are worked out again over
-// what's left, the way the generator's markWinners does.
+// A format this browser can't draw leaves a call, and the call's winners are
+// worked out again over what's left, the way the generator's markWinners
+// does. A call left with one tile is no call, and its caller drops it.
+function dropFmt(t,is){if(!t.options.some(is))return t;
+  const options=t.options.filter(o=>!is(o)), s2=Math.max(...options.map(o=>o.s2)), bu=Math.min(...options.map(o=>o.butter));
+  const ranked=options.map(o=>({...o,s2best:o.s2===s2,butterbest:o.butter===bu}));
+  return {...t,options:ranked,cut:true,disagree:ranked.find(o=>o.s2best)!==ranked.find(o=>o.butterbest)};}
+// If the decoder can't run here, AV2 sits out the rest of the session.
 function av2Off(err){
   state.av2Error=err&&err.message||String(err); state.av2=false;
-  const strip=t=>{if(!t.options.some(isAv2))return t;
-    const options=t.options.filter(o=>!isAv2(o)), s2=Math.max(...options.map(o=>o.s2)), bu=Math.min(...options.map(o=>o.butter));
-    const ranked=options.map(o=>({...o,s2best:o.s2===s2,butterbest:o.butter===bu}));
-    return {...t,options:ranked,disagree:ranked.find(o=>o.s2best)!==ranked.find(o=>o.butterbest)};};
+  const strip=t=>dropFmt(t,isAv2);
   DATA.trials=DATA.trials.map(strip).filter(t=>t.options.length>=2);
   state.trials=state.trials.map((t,i)=>i<state.i?t:strip(t)).filter((t,i)=>i<state.i||t.options.length>=2);
 }
@@ -508,7 +519,7 @@ function screenIntro(){
    </div>
    <div class="gb"><span class="gb-legend">or: ${VS()}</span>
      <p style="margin:0">${state.noJxl
-       ?`your browser can't decode JPEG XL yet, so this run is off. Chrome 155+ and Safari 17+ can.`
+       ?`your browser can't decode JPEG XL yet, so this run is off. Chrome 155+ and Safari 17+ can.${state.av2?` the exam still has format calls: AVIF against AV2, which this page decodes for you.`:``}`
        :state.av2
        ?`Chrome 155 decodes JPEG XL now, so here are ${SHOWDOWN_SIZE} calls with nothing but formats: JPEG XL, AVIF, and AV2, the codec meant to follow the AV1 inside AVIF, every tile in a call at one file size. no browser decodes AV2 yet, so this page decodes it for you, with a 550 KB reference decoder it fetches when the first AV2 tile comes up. the budgets run from a tight squeeze, where AVIF made its name, to a lossless JPEG transcode, which only JPEG XL can do. the question underneath: which format should a photo ship as, and where does AV2 change the answer? it comes at the end, along with where WebP lands.`
        :`Chrome 155 decodes JPEG XL now, so here are ${SHOWDOWN_SIZE} calls with nothing but JPEG XL against AVIF, every pair at one file size. the budgets run from a tight squeeze, where AVIF made its name, to a lossless JPEG transcode, which only JPEG XL can do. the question underneath: when should a photo ship as JPEG XL instead of AVIF? the answer comes at the end, along with where AV2 and WebP land.`}</p>
@@ -558,7 +569,9 @@ function screenTrial(){
 function onPick(pos,order,trial){
   if(!state.picking)return;state.picking=false;
   const tiles=[...document.querySelectorAll(".tile")];
-  const s2Pos=order.findIndex(i=>trial.options[i].s2best), btPos=order.findIndex(i=>trial.options[i].butterbest);
+  // an axis with a known answer marks it as both metrics' pick would be marked
+  const answer=AXES[trial.axis].answer;
+  const s2Pos=order.findIndex(i=>answer?answer(trial.options[i]):trial.options[i].s2best), btPos=answer?s2Pos:order.findIndex(i=>trial.options[i].butterbest);
   const chosen=trial.options[order[pos]];
   const sided = chosen.s2best&&chosen.butterbest?"both":chosen.s2best?"s2":chosen.butterbest?"butter":"neither";
   document.getElementById("hint").style.visibility="hidden";
@@ -571,24 +584,27 @@ function onPick(pos,order,trial){
     if(p===pos)tile.classList.add("pick");
     const cap=document.getElementById("cap"+p);
     cap.innerHTML=`<span class="lab">${o.label.split(" · ")[0]}</span>${kb(o.bytes)}<br>`+
-      `<span class="m s2">s2 ${o.s2}${o.s2best?" ✓":""}</span><span class="m bt">bu ${o.butter}${o.butterbest?" ✓":""}</span>`+
+      (o.s2===null?(o.light==null?``:`<span class="m">light kept ${o.light.toFixed(1)}%</span>`):`<span class="m s2">s2 ${o.s2}${o.s2best?" ✓":""}</span><span class="m bt">bu ${o.butter}${o.butterbest?" ✓":""}</span>`)+
       (p===pos?`<span class="yours">▲ your pick</span>`:``);
   });
-  state.log.push({axis:trial.axis,disagree:trial.disagree,sided,correct:trial.disagree?null:(chosen.s2best&&chosen.butterbest),trial,picked:chosen});
+  const right=answer?answer(chosen):chosen.s2best&&chosen.butterbest;
+  state.log.push({axis:trial.axis,disagree:trial.disagree,sided,correct:trial.disagree?null:right,trial,picked:chosen});
   const fb=document.getElementById("fb");
   let cls,head,extra;
   if(trial.disagree){cls="split";head="⚖ the metrics split here";
     extra = sided==="s2"?` your eye sided with <b style="color:var(--s2)">ssimulacra2</b> (the sharper one).`
           : sided==="butter"?` your eye sided with <b style="color:var(--bt-ink)">butteraugli</b> (the truer color).`
           : ` you picked the one <b>neither</b> metric ranked first. rebel.`;
-  } else {const right=chosen.s2best&&chosen.butterbest;
-    cls=right?"ok":"no";head=right?"✓ both metrics agree, and so did you":"✕ both metrics picked another one";extra="";}
+  } else if(answer){cls=right?"ok":"no";head=right?`✓ ${AXES[trial.axis].right}`:`✕ ${AXES[trial.axis].wrong}`;extra="";
+  } else {cls=right?"ok":"no";head=right?"✓ both metrics agree, and so did you":"✕ both metrics picked another one";extra="";}
   const gl=diffGL();
-  fb.innerHTML=`<div class="banner ${cls}"><span class="g">${head}</span><span>${extra} ${teachFor(trial)}</span></div>
+  fb.innerHTML=`<div class="banner ${cls}"><span class="g">${head}</span><span>${extra}${crowdLine(trial,chosen)} ${teachFor(trial)}</span></div>
     ${gl?diffHTML(trial,order):""}
     <div class="row" style="justify-content:flex-end"><button class="xp-button compact default" id="next">${state.i===state.trials.length-1?"See my profile ▸":"Next ▸"}</button></div>`;
   if(gl)wireDiff(gl,tiles,trial,order,pos);
-  const next=document.getElementById("next");next.focus();next.onclick=advance;
+  // focus without the scroll: Next sits under the diff map, and a plain focus()
+  // dragged it into view, which threw the tiles you just judged off the top
+  const next=document.getElementById("next");next.focus({preventScroll:true});next.onclick=advance;
   // the diff map's own buttons take Enter and Space, so those keys only advance from elsewhere
   document.onkeydown=e=>{if(typing(e)||(e.target instanceof Element&&e.target.closest("#diff")))return;if(e.key==="Enter"||e.key===" ")advance();};
 }
@@ -637,16 +653,17 @@ function screenResult(){
     <h1>${showdown?`${FMT_LIST()}, through your eyes`:"your visual system, profiled"}</h1>
     <div class="score-hero"><div class="pct">${overall}<span style="font-size:15pt">%</span></div>
       <div class="grade">${grade} · you called the clear ones right ${overall}% of the time</div></div>
+    <div class="gb" id="crowd" hidden><span class="gb-legend">you vs everyone</span><div id="crowdbody"></div></div>
     ${showdown?showdownHTML(tally):`<div class="gb" style="margin-top:14px"><span class="gb-legend">whose eye do you have?</span>
       <div class="axiswrap">
         <div class="axislabels"><span class="l">ssimulacra2<small>structure / detail</small></span><span class="r" style="text-align:right">butteraugli<small>color / masking</small></span></div>
-        <div class="axis">${axisSVG(lean,decisive)}</div>
+        <div class="axis" id="axis">${axisSVG(lean,decisive,null)}</div>
         <p class="axiscap">${alignCap}</p></div></div>
     <div class="gb"><span class="gb-legend">where your eye is sharp</span>
       ${bar("Sharpness",sharp,"spotting the higher-quality JPEG")}
       ${bar("Color",color,"catching chroma subsampling",true)}
       ${bar("Encoders",enc,"separating real encoders at equal bytes")}
-      ${state.noJxl?"":bar("Formats",fmt,`telling ${FMT_LIST()} apart at equal bytes`)}</div>
+      ${state.noJxl&&!state.av2?"":bar("Formats",fmt,`telling ${FMT_LIST()} apart at equal bytes`)}</div>
     <div class="banner info"><span class="g">the takeaway</span><span>the metrics agree on the obvious calls and only split at the margins, where the differences are near invisible.${colorAha} that margin is exactly where an export preset should live: the setting no human, and barely a metric, can flag.</span></div>`}
     <div class="gb"><span class="gb-legend">share your run</span>
       ${shareGridHTML(marks)}
@@ -658,12 +675,13 @@ function screenResult(){
         <button class="xp-button compact" id="showcard">Preview image</button></div>
       <div id="cardwrap"></div></div>
     <div class="gb"><span class="gb-legend">what's real, what's next</span>
-      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc${state.av2||state.av2Error?" · AVM 1.0.0":""} for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file. the format budgets are all read off what this site ships: its 600px photos' bits per pixel, its AVIF, its JPEG, and that JPEG transcoded losslessly to JPEG XL.${state.noJxl?" your browser can't decode JPEG XL yet, so the format calls sat this run out. Chrome 155+ and Safari 17+ can.":""}${state.av2Error?` the AV2 decoder couldn't run here (${state.av2Error}), so AV2 sat out the rest of this session.`:""} next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
+      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc${state.av2||state.av2Error?" · AVM 1.0.0":""} for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file. the format budgets are all read off what this site ships: its 600px photos' bits per pixel, its AVIF, its JPEG, and that JPEG transcoded losslessly to JPEG XL.${state.noJxl?state.av2?" your browser can't decode JPEG XL yet, so its tiles sat out and the format calls ran AVIF against AV2. Chrome 155+ and Safari 17+ add it.":" your browser can't decode JPEG XL yet, so the format calls sat this run out. Chrome 155+ and Safari 17+ can.":""}${state.av2Error?` the AV2 decoder couldn't run here (${state.av2Error}), so AV2 sat out the rest of this session.`:""} every finished run joins the pool above, with nothing about who played. next: <b>sharpYUV</b>, a bigger photo set, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
     ${quizHTML(showdown)}
     <div class="row spread" style="margin-top:14px">
       <small>your grid spoils nothing: no photo, encoder or setting is named</small>
       <button class="xp-button compact default" id="again">Play again ▸</button></div>`;
   requestAnimationFrame(()=>document.querySelectorAll(".fill").forEach(f=>f.style.width=(f.dataset.w||0)+"%"));
+  submitRun(overall,lean,decisive);
   wireQuiz();
   if(showdown){wireWins("jxl");wireWins("av2");}
   // a showdown card puts its needle on the line from JPEG XL to the AV1 family:
@@ -852,11 +870,20 @@ function wireShare(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   };
 }
 
-function axisSVG(lean,decisive){
+// The shape behind the needle is every exam run's lean, in tenths, read from
+// the pool (pixel-peeper-crowd.ts, the g: keys). It was a drawn bell curve
+// labelled "other players" until the pool existed; with no pool it draws none.
+function axisSVG(lean,decisive,dist){
   const W=680,H=54,pad=10,x=pad+lean*(W-2*pad);
-  let d=`M ${pad} 40`;
-  for(let i=0;i<=60;i++){const t=i/60,px=pad+t*(W-2*pad),g=Math.exp(-Math.pow((t-0.5)/0.22,2)/2);d+=` L ${px.toFixed(1)} ${(40-g*22).toFixed(1)}`;}
-  d+=` L ${W-pad} 40 Z`;
+  const counts=Array.from({length:11},(_,i)=>(dist&&dist[i])||0), total=counts.reduce((a,b)=>a+b,0), top=Math.max(1,...counts);
+  let crowd="";
+  if(total){
+    let d=`M ${pad} 40`;
+    counts.forEach((n,i)=>{d+=` L ${(pad+i/10*(W-2*pad)).toFixed(1)} ${(40-n/top*22).toFixed(1)}`;});
+    d+=` L ${W-pad} 40 Z`;
+    crowd=`<path d="${d}" fill="#0a246a" opacity="0.10"/>
+    <text x="${pad}" y="52" font-family="Courier New,monospace" font-size="7.5" fill="#9a9684">${total.toLocaleString()} ${total===1?"run":"runs"} in the pool</text>`;
+  }
   const needle=decisive?`
     <line x1="${x}" y1="6" x2="${x}" y2="44" stroke="#0a246a" stroke-width="2"/>
     <polygon points="${x-5},6 ${x+5},6 ${x},14" fill="#0a246a"/>
@@ -864,11 +891,64 @@ function axisSVG(lean,decisive){
     :`<text x="${W/2}" y="26" text-anchor="middle" font-family="Courier New,monospace" font-size="10" fill="#636363">no decisive lean</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="metric alignment">
     <defs><linearGradient id="mg" x1="0" x2="1"><stop offset="0" stop-color="#0b57c9"/><stop offset="1" stop-color="#c8811c"/></linearGradient></defs>
-    <path d="${d}" fill="#0a246a" opacity="0.10"/>
-    <text x="${pad}" y="52" font-family="Courier New,monospace" font-size="7.5" fill="#9a9684">other players</text>
+    ${crowd}
     <rect x="${pad}" y="40" width="${W-2*pad}" height="6" fill="url(#mg)"/>
     <rect x="${pad}" y="40" width="${W-2*pad}" height="6" fill="none" stroke="#8a866f" stroke-width="0.5"/>
     ${needle}</svg>`;
+}
+
+/* ---- the crowd -----------------------------------------------------------
+   Everyone's finished runs, pooled by pixel-peeper-crowd.ts. The page reads
+   the pool once at boot for the line under each call, then posts the run from
+   the result screen and draws the copy that answer carries, which includes
+   this run. The server scores the run again from the picks alone; the page
+   never sends a score. Any failure (a preview URL refuses the POST, the
+   pool is unbound in dev) leaves the screen as it was before the pool. */
+const tileId=src=>src.slice(src.lastIndexOf("/")+1).split(".")[0];
+// below this many players a share is a handful of people, so it isn't shown
+const CROWD_MIN=10;
+function crowdLine(trial,chosen){
+  const c=state.crowd; if(!c||trial.cut)return"";
+  const n=trial.options.reduce((a,o)=>a+(c.picks[tileId(o.src)]||0),0);
+  if(n<CROWD_MIN)return"";
+  return ` <b>${Math.round(100*(c.picks[tileId(chosen.src)]||0)/n)}%</b> of ${n.toLocaleString()} players picked this one too.`;
+}
+function submitRun(overall,lean,decisive){
+  const run=state.trials; if(state.posted===run)return; state.posted=run;
+  const body={mode:state.mode,picks:state.log.map(l=>({pick:l.picked.src,shown:l.trial.options.map(o=>o.src)}))};
+  const local=()=>state.crowd&&drawCrowd({counted:null,you:{overall},crowd:state.crowd},run,lean,decisive);
+  fetch("/pixel-peeper/runs",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)})
+    .then(r=>r.ok?r.json():null)
+    .then(d=>{if(!d){local();return;} state.crowd=d.crowd; drawCrowd(d,run,lean,decisive);})
+    .catch(local);
+}
+function drawCrowd(d,run,lean,decisive){
+  // the player may have pressed Play again while the POST was out
+  const box=document.getElementById("crowd"); if(!box||state.trials!==run)return;
+  const c=d.crowd, runs=c.runs[state.mode]||0, hist=c.hist[state.mode]||{}, you=d.you.overall;
+  if(!runs)return;
+  const bins=Array(10).fill(0); let below=0;
+  for(const [k,n] of Object.entries(hist)){const v=+k; bins[Math.min(9,Math.floor(v/10))]+=n; if(v<you)below+=n;}
+  const yb=Math.min(9,Math.floor(you/10)), top=Math.max(1,...bins);
+  // narrower than the axis's 680 so its counts stay legible once a phone scales it down
+  const W=480,H=96,pad=10,bw=(W-2*pad)/10;
+  const bars=bins.map((n,i)=>{const h=n/top*64, bx=pad+i*bw;
+    return `<rect x="${(bx+2).toFixed(1)}" y="${(74-h).toFixed(1)}" width="${(bw-4).toFixed(1)}" height="${h.toFixed(1)}" fill="#0a246a" opacity="${i===yb?1:0.22}"/>`+
+      (n?`<text x="${(bx+bw/2).toFixed(1)}" y="${(70-h).toFixed(1)}" text-anchor="middle" font-family="Courier New,monospace" font-size="9" fill="#636363">${n}</text>`:"");}).join("");
+  const ticks=[0,50,100].map(t=>`<text x="${pad+t/100*(W-2*pad)}" y="88" text-anchor="${t?t===100?"end":"middle":"start"}" font-family="Courier New,monospace" font-size="9" fill="#9a9684">${t}%</text>`).join("");
+  const pct=Math.round(100*below/runs);
+  const head=runs===1?`yours is the first run in the pool.`
+    :`you scored higher than <b>${pct}%</b> of ${runs.toLocaleString()} runs.`;
+  const note=d.counted===false?` today's pool is full, so this run sits out until tomorrow.`
+    :d.counted===null?` this run couldn't be added, so the chart is the pool before it.`:``;
+  const L=c.lean, dec=L.s2+L.butter;
+  const crowdLean=dec>=CROWD_MIN?`<p class="axiscap">on the calls where the metrics split, everyone's picks went to <b style="color:var(--bt-ink)">butteraugli</b> ${Math.round(100*L.butter/dec)}% of the time and <b style="color:var(--s2)">ssimulacra2</b> ${Math.round(100*L.s2/dec)}%${L.neither?`, with ${L.neither.toLocaleString()} picks going to neither`:``}.</p>`:``;
+  document.getElementById("crowdbody").innerHTML=`<p style="margin:0 0 4px">${head}${note}</p>
+    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto" role="img" aria-label="scores of ${runs} runs in tenths; ${runs===1?"yours is the only one":`you scored higher than ${pct}%`}">${bars}
+      <rect x="${pad}" y="74" width="${W-2*pad}" height="1" fill="#8a866f"/>${ticks}</svg>
+    <small>score on the clear calls, in 10-point bins. the dark bar is yours.</small>${crowdLean}`;
+  box.hidden=false;
+  const axis=document.getElementById("axis"); if(axis&&c.leanRuns)axis.innerHTML=axisSVG(lean,decisive,c.leanRuns);
 }
 function attachLoupe(tile,cv,img){
   tile.addEventListener("mousemove",e=>{
@@ -887,27 +967,43 @@ function attachLoupe(tile,cv,img){
    map drawn during the pick would hand over the answer the test exists to ask.
    There is no original on the page, so it compares tiles with each other.
 
-   The difference is taken in JPEG's own space, YCbCr over the decoded sRGB
-   bytes, because that is where the encoders made their choices. Luma is the
-   detail a quality drop eats; CbCr is the color that 4:2:0 halves. A fragment
-   shader does it per pixel, so the gain slider and the mode buttons are a
-   uniform change and a redraw rather than a pass over the pixels in JS. */
+   The map is SIGNED: each spot takes the color of the tile that is ahead
+   there, so it answers "which one is brighter, sharper, more colorful here"
+   rather than only "they differ here". Each mode measures one quantity per
+   tile and subtracts:
+     brighter     luma
+     sharper      local contrast, the standard deviation of luma over the 3x3
+                  around the pixel: texture a tile kept, or ringing and blocks
+                  it added, and the tiles beside the map show which
+     more color   chroma magnitude, the saturation 4:2:0 smears away
+   All three are taken in JPEG's own space, YCbCr over the decoded sRGB bytes,
+   because that is where the encoders made their choices. A fragment shader
+   does it per pixel, so the gain slider and the mode buttons are a uniform
+   change and a redraw rather than a pass over the pixels in JS. */
 const DIFF_VS=`#version 300 es
-out vec2 uv;
-void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.-1.,0.,1.);}`;
+void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,0.,1.);}`;
 const DIFF_FS=`#version 300 es
 precision highp float;
-uniform sampler2D A,B;uniform float gain;uniform int mode;
-in vec2 uv;out vec4 o;
+uniform sampler2D A,B;uniform float gain;uniform int mode;uniform bool raw;
+out vec4 o;
 const mat3 YCC=mat3(.299,-.168736,.5,.587,-.331264,-.418688,.114,.5,-.081312);
-const vec3 AMBER=vec3(1.,.645,.14);
+const vec3 CA=vec3(.122,.71,.839),CB=vec3(.878,.278,.62);   // --da, --db
+vec3 ycc(sampler2D T,ivec2 p){return YCC*texelFetch(T,clamp(p,ivec2(0),textureSize(T,0)-1),0).rgb;}
+float sig(sampler2D T,ivec2 p){
+  if(mode==1){float s=0.,q=0.;
+    for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){float l=ycc(T,p+ivec2(x,y)).x;s+=l;q+=l*l;}
+    float m=s/9.;return sqrt(max(q/9.-m*m,0.));}
+  vec3 c=ycc(T,p);return mode==2?length(c.yz):c.x;
+}
 void main(){
-  vec3 d=YCC*(texture(A,uv).rgb-texture(B,uv).rgb);
-  float y=abs(d.x)*gain,c=length(d.yz)*gain;
-  vec3 v=mode==1?vec3(y):mode==2?c*AMBER:vec3(y)+c*AMBER;
-  o=vec4(min(v,vec3(1.)),1.);
+  float s=sig(A,ivec2(gl_FragCoord.xy))-sig(B,ivec2(gl_FragCoord.xy));
+  // raw: the first tile's lead in red, the second's in green, at gain 1, for readback
+  if(raw){o=vec4(max(s,0.),max(-s,0.),0.,1.);return;}
+  o=vec4(min((max(s,0.)*CA+max(-s,0.)*CB)*gain,vec3(1.)),1.);
 }`;
-const DIFF_MODES=[["both",0],["detail",1],["color",2]];
+const DIFF_MODES=[["brighter",0],["sharper",1],["more color",2]];
+// Which question the map opens on: the one the call's axis is about.
+const diffModeFor=axis=>axis==="resample"?0:axis==="chroma"||axis==="tradeoff"?2:1;
 // Format calls differ by very different amounts per tier (mean 2.4-4.9 levels
 // on a tight budget, 0.6-1.7 on a repack, measured 2026-10-07), so no one gain
 // shows both: x8 left a repack map black, and x32 clips a tight-budget map to
@@ -928,7 +1024,7 @@ function diffGL(){
   if(!gl.getProgramParameter(p,gl.LINK_STATUS))return DIFF=null;
   gl.useProgram(p);
   gl.uniform1i(gl.getUniformLocation(p,"A"),0);gl.uniform1i(gl.getUniformLocation(p,"B"),1);
-  const uGain=gl.getUniformLocation(p,"gain"), uMode=gl.getUniformLocation(p,"mode");
+  const uGain=gl.getUniformLocation(p,"gain"), uMode=gl.getUniformLocation(p,"mode"), uRaw=gl.getUniformLocation(p,"raw");
   const tex=[0,1].map(()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
     [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(k=>gl.texParameteri(gl.TEXTURE_2D,k,gl.NEAREST));
     [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(k=>gl.texParameteri(gl.TEXTURE_2D,k,gl.CLAMP_TO_EDGE));return t;});
@@ -937,18 +1033,22 @@ function diffGL(){
   gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.NONE);
   cv.className="diffmap";cv.setAttribute("role","img");
   cv.addEventListener("webglcontextlost",()=>{DIFF=undefined;});
-  const draw=(gain,mode)=>{gl.viewport(0,0,cv.width,cv.height);gl.uniform1f(uGain,gain);gl.uniform1i(uMode,mode);gl.drawArrays(gl.TRIANGLES,0,3);};
-  // max and mean of one channel at gain 1, read back from the shader's own
-  // output, so the numbers and the picture cannot disagree about what differs
+  const draw=(gain,mode,raw=false)=>{gl.viewport(0,0,cv.width,cv.height);gl.uniform1f(uGain,gain);gl.uniform1i(uMode,mode);gl.uniform1i(uRaw,raw?1:0);gl.drawArrays(gl.TRIANGLES,0,3);};
+  // Each side's lead in levels of 255, read back from the shader's own raw
+  // output, so the numbers and the picture cannot disagree about who is ahead.
+  // `a` and `b` are the share of the tile where that side leads by a level or
+  // more; the rest is a tie at this precision.
   let px=null;
-  const measure=mode=>{draw(1,mode);const n=cv.width*cv.height;if(!px||px.length!==n*4)px=new Uint8Array(n*4);
+  const measure=mode=>{draw(1,mode,true);const n=cv.width*cv.height;if(!px||px.length!==n*4)px=new Uint8Array(n*4);
     gl.readPixels(0,0,cv.width,cv.height,gl.RGBA,gl.UNSIGNED_BYTE,px);
-    let max=0,sum=0;for(let i=0;i<px.length;i+=4){const v=px[i];if(v>max)max=v;sum+=v;}return{max,mean:sum/n};};
+    let max=0,sum=0,a=0,b=0;
+    for(let i=0;i<px.length;i+=4){const v=px[i]+px[i+1];if(v>max)max=v;sum+=v;if(px[i])a++;else if(px[i+1])b++;}
+    return{max,mean:sum/n,a:a/n,b:b/n};};
   return DIFF={cv,draw,
     load(a,b){cv.width=a.naturalWidth;cv.height=a.naturalHeight;
       [a,b].forEach((img,i)=>{gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,tex[i]);
         gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);});
-      return{y:measure(1),c:measure(2)};}};
+      return DIFF_MODES.map(([,m])=>measure(m));}};
 }
 // a tile's short name, the same one its caption shows once revealed: "quality 45", "zenc", "4:2:0"
 const tileName=(trial,order,p)=>trial.options[order[p]].label.split(" · ")[0];
@@ -959,9 +1059,10 @@ function diffHTML(trial,order){
       <div class="diffctl">
         ${pairs.length>1?`<div class="row seg" role="group" aria-label="compare">${pairs.map(([a,b])=>`<button class="xp-button compact" data-pair="${a},${b}" aria-pressed="false">${nm(a)} vs ${nm(b)}</button>`).join("")}</div>`:""}
         <div class="row seg" role="group" aria-label="show">${DIFF_MODES.map(([t,m])=>`<button class="xp-button compact" data-mode="${m}" aria-pressed="false">${t}</button>`).join("")}</div>
+        <p class="meta dkey" id="dkey" style="margin:0"></p>
         <label class="meta">gain ×<output id="dgv"></output> <input type="range" id="dgain" min="0" max="5" step="1" value="3"></label>
         <p class="meta" id="dstat" style="margin:0"></p>
-        <p style="margin:0;font-size:9pt">black means the two tiles match. white marks a brightness difference and amber a color one, both multiplied by the gain so a one-level gap still shows.</p>
+        <p style="margin:0;font-size:9pt">each spot takes the color of the tile that's ahead there, brighter for a bigger lead, and black means they match. <b>sharper</b> is local contrast: texture a tile kept, or ringing and blocks it added, so check the tiles to see which.</p>
       </div></div></div>`;
 }
 // Which tile the map compares your pick against when it opens. Wrong on a
@@ -981,31 +1082,41 @@ function diffDefault(trial,order,pos){
 function wireDiff(gl,tiles,trial,order,pos){
   document.getElementById("diffwrap").appendChild(gl.cv);
   const other=diffDefault(trial,order,pos), nm=p=>tileName(trial,order,p);
-  let pair=[Math.min(pos,other),Math.max(pos,other)], mode=0;
-  const gain=document.getElementById("dgain"), gv=document.getElementById("dgv"), stat=document.getElementById("dstat");
-  const g=()=>2**+gain.value;
+  let pair=[Math.min(pos,other),Math.max(pos,other)], mode=diffModeFor(trial.axis), s=null;
+  const gain=document.getElementById("dgain"), gv=document.getElementById("dgv"), stat=document.getElementById("dstat"), key=document.getElementById("dkey");
+  const g=()=>2**+gain.value, pct=v=>`${Math.round(100*v)}%`;
   const press=(sel,on)=>document.querySelectorAll(`#diff [${sel}]`).forEach(b=>b.setAttribute("aria-pressed",String(b.getAttribute(sel)===on)));
-  const redraw=()=>{gv.textContent=g();gl.draw(g(),mode);};
-  // A format call opens at the gain that lands its mean difference near
-  // AUTO_GAIN_MEAN levels, once; the slider is the visitor's after that.
-  let auto=trial.axis==="format";
+  // who leads in this mode, and over how much of the tile
+  const tell=()=>{if(!s)return;const v=s[mode],[A,B]=pair.map(nm),word=DIFF_MODES[mode][0];
+    stat.textContent=`${word}: ${A} in ${pct(v.a)} of the tile, ${B} in ${pct(v.b)}, the rest within a level · lead avg ${v.mean.toFixed(1)}, max ${v.max} levels of 255`;
+    gl.cv.setAttribute("aria-label",`where each tile is ${word}, ${A} against ${B}: ${stat.textContent}`);};
+  // Until the visitor moves the slider, the gain follows the shown mode: the
+  // one that lands its mean lead near AUTO_GAIN_MEAN levels, never under x8.
+  // The modes differ as much as the format tiers do (a resample call leads by
+  // 2.4 levels on brightness and 0.9 on local contrast), so one gain per call
+  // left the sharper map black.
+  let auto=true;
+  const fit=()=>{if(auto&&s)gain.value=String(Math.min(+gain.max,Math.max(3,Math.round(Math.log2(AUTO_GAIN_MEAN/Math.max(s[mode].mean,.01))))));};
+  const redraw=()=>{fit();gv.textContent=g();gl.draw(g(),mode);tell();};
   const load=()=>{
     const [a,b]=pair.map(p=>tiles[p].querySelector("img"));
     if(!a.complete||!b.complete||!a.naturalWidth){stat.textContent="tiles still loading";return;}
-    const s=gl.load(a,b),f=v=>`max ${v.max}, avg ${v.mean.toFixed(1)}`;
-    if(auto){auto=false;gain.value=String(Math.min(+gain.max,Math.max(+gain.value,Math.round(Math.log2(AUTO_GAIN_MEAN/Math.max(s.y.mean,s.c.mean,.01))))));}
-    stat.textContent=`${nm(pair[0])} vs ${nm(pair[1])}, in levels of 255 · detail ${f(s.y)} · color ${f(s.c)}`;
-    gl.cv.setAttribute("aria-label",`difference between ${nm(pair[0])} and ${nm(pair[1])}: ${stat.textContent}`);
+    s=gl.load(a,b);
+    key.innerHTML=pair.map((p,i)=>`<span><i style="background:var(${i?"--db":"--da"})"></i>${nm(p)} ahead</span>`).join("");
     press("data-pair",pair.join(","));redraw();};
   document.querySelectorAll("#diff [data-pair]").forEach(b=>b.onclick=()=>{pair=b.dataset.pair.split(",").map(Number);load();});
   document.querySelectorAll("#diff [data-mode]").forEach(b=>b.onclick=()=>{mode=+b.dataset.mode;press("data-mode",String(mode));redraw();});
-  gain.oninput=redraw;
-  press("data-mode","0");load();
+  gain.oninput=()=>{auto=false;redraw();};
+  press("data-mode",String(mode));load();
 }
 
 let DATA=null;
+fetch('/pixel-peeper/crowd.json').then(r=>r.ok?r.json():null).then(c=>{if(c&&!state.crowd)state.crowd=c;}).catch(()=>{});
 Promise.all([fetch('/pixel-peeper/manifest.json').then(r=>r.json()),CAN_JXL]).then(([d,jxl])=>{
-  state.noJxl=!jxl; if(!jxl)d.trials=d.trials.filter(t=>t.axis!=="format"); DATA=d;
+  // Without JPEG XL a format call loses that tile and stays a call between
+  // what's left: AVIF against AV2, which this page decodes itself. Before the
+  // manifest carried AV2 that left one tile, so the format calls sat out.
+  state.noJxl=!jxl; if(!jxl)d.trials=d.trials.map(t=>dropFmt(t,o=>o.label.startsWith("JPEG XL"))).filter(t=>t.options.length>=2); DATA=d;
   state.av2=d.trials.some(t=>t.options.some(isAv2)); boot();}).catch(e=>{stage.innerHTML='<h1>could not load</h1><p>'+e+'</p>';});
 function boot(){ screenIntro(); }
 

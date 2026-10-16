@@ -13,7 +13,10 @@ HTML, CSS, and JavaScript; keep `pageCss` to what is actually that page's own.
    problem, the thesis, the evidence, and the uncertainty.
 3. Write three to seven `understanding.questions`. Each question should test
    the mechanism or a prediction. Give every option a `why`, including the
-   misconception.
+   misconception. Keep the options about the same length: the right answer's
+   justification belongs in its `why`, and each wrong option gets the same
+   concrete detail. The generator refuses a page where the right answer is
+   the longest, or the shortest, on more than half its questions (gotcha 66).
 4. Render the spec into `src/pages/garage/<id>.html`:
 
 ```bash
@@ -74,22 +77,22 @@ The retired Garage `wire` command now refuses before writing; use steps 5 and 6.
         "q": "What does the cache key need to identify before a long-lived hit is safe?",
         "options": [
           { "t": "The exact bytes the response represents.", "ok": true, "why": "Right. A stable identity lets the browser reuse the right bytes and fetch a new name when the bytes change." },
-          { "t": "Only the page title.", "why": "A title can stay the same while the bytes change. It cannot identify the response." },
-          { "t": "Only the age of the response.", "why": "Age says when the cache stored a response. It says nothing about which bytes the URL names." }
+          { "t": "The route path, since each page lives at one URL.", "why": "A path can serve new bytes after every deploy. It names a place, so it cannot vouch for what is there." },
+          { "t": "The age of the response, read from its Age header.", "why": "Age says when the cache stored a response. It says nothing about which bytes the URL names." }
         ]
       },
       {
         "q": "What would you predict if the bytes changed while the cache key stayed fixed?",
         "options": [
-          { "t": "Some visitors could keep seeing the old bytes until the cache expires or is purged.", "ok": true, "why": "Right. The unchanged key gives the cache permission to reuse a response that no longer matches the source." },
+          { "t": "Some visitors keep seeing the old bytes until the entry expires.", "ok": true, "why": "Right. The unchanged key gives the cache permission to reuse a response that no longer matches the source." },
           { "t": "Every browser would detect the change from the HTML title.", "why": "Browsers do not compare an arbitrary title with the origin before serving a cache hit." },
-          { "t": "The response would become uncachable automatically.", "why": "The cache sees the same key and policy. It has no automatic proof that the source changed." }
+          { "t": "The edge would notice the new bytes and mark the response uncachable.", "why": "The cache sees the same key and policy. It has no automatic proof that the source changed." }
         ]
       },
       {
         "q": "Which result would falsify the page's model?",
         "options": [
-          { "t": "A fresh key still returns the old bytes after the origin and edge both report the new content.", "ok": true, "why": "Right. That result would show that the proposed identity boundary does not control the bytes a visitor receives." },
+          { "t": "A fresh key returns old bytes after the origin serves new ones.", "ok": true, "why": "Right. That result would show that the proposed identity boundary does not control the bytes a visitor receives." },
           { "t": "An old key returns an old response from a cache with a long lifetime.", "why": "That is the predicted failure mode, so it supports the model rather than falsifying it." },
           { "t": "A browser refetches after the cache entry expires.", "why": "Expiry is the ordinary cache lifecycle. It does not challenge the identity rule." }
         ]

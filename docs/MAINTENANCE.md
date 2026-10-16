@@ -1874,13 +1874,18 @@ Prints byte counts + bytes-per-pixel so the figcaptions on `/garage/encoding` ca
 
 ### Measure AV2 stills against the shipped AVIF
 ```bash
-tools/photos/libavif-avm/build.sh
+bun run av2:build
 bun tools/photos/codec-knob-probe.ts --codec avm --variants base,s4
 ```
-The build is `avifenc-avm` in `config/tools.json`: libavif pinned by commit with
-its experimental AV2 codec (AVM 1.0.0) on, plus the installed aom, so one binary
-writes both (`-c avm` / `-c aom`). No tagged libavif carries AVM 1.0.0 yet, which
-is why the pin is a commit. The probe arm scores AV2 at the byte budget of each
+The AV2 tooling lives in [av2-tone](https://github.com/oddharsh/av2-tone), which
+`package.json` pins by full commit the way it pins timbrado. `bun run av2:build`
+builds it inside `node_modules/av2-tone`: the pristine pair in `encoder/build`
+and the tuned encoder in `encoder/build/tuned`. `tools/photos/av2-tone.ts` is
+the one place the site's callers find those paths. The build is `avifenc-avm` in
+`config/tools.json`: libavif pinned by commit with its experimental AV2 codec
+(AVM 1.0.0) on, plus the installed aom, so one binary writes both (`-c avm` /
+`-c aom`). No tagged libavif carries AVM 1.0.0 yet, which is why that pin is a
+commit too. The probe arm scores AV2 at the byte budget of each
 shipped AVIF tile on the /pixel-peeper crops, train and holdout, and the table
 it prints is the answer to "where is AV2 now". Measurement only: no browser
 decodes AV2 and the `av02` image format is experimental, so none of this output
@@ -1889,20 +1894,37 @@ so pick variants rather than running the whole list.
 
 ### Rebuild /garage/av2's in-page AV2 decoder
 ```bash
-tools/photos/libavif-avm/build.sh
-tools/photos/av2-wasm/build.sh
+bun run av2:build
+bun run av2:wasm
 bun tools/photos/av2-wasm/samples.ts --src "<originals>" --stems XT507488,XT507525,XT508319,XT507399
 bun tools/photos/av2-wasm/expect.ts
 ```
-`build.sh` needs `emcc` (`brew install emscripten`, declared in
-`config/tools.json`) and the AVM source the first command fetches. It writes
+`av2:wasm` runs av2-tone's `wasm/build.sh`, which needs `emcc` (`brew install
+emscripten`) and the AVM source the first command fetches. It writes
 `public/garage/av2/av2dec.<sha8>.wasm`; then set `WASM_URL` in
-`src/client/garage/av2-decode.js` to the name it prints. `samples.ts` re-encodes
+`src/client/garage/av2-decode.js` to the name it prints. The emscripten version
+decides the bytes: av2-tone's `wasm/build.sh` records the one that minted the
+shipped file. `samples.ts` re-encodes
 the page's AV2 thumbnails and refuses a photo whose shipped AVIF it can't
 reproduce byte for byte. `expect.ts` records what native AVM decodes each file
 to, and `contract-av2-decoder-matches-avm.test.mjs` holds the shipped WebAssembly
 to it, so re-run it after any AV2 file or the `.wasm` changes. Moving the AVM pin
 changes the bitstream the decoder reads, so re-encode the samples with it.
+
+### Re-measure photo-metrics after a pin move
+```bash
+bun tools/photos/photo-metrics-parity.ts          # 20 HIFs, one at a time
+bun tools/photos/photo-metrics-parity.ts --limit 4
+```
+`hif-archive.ts` scores every HIF archive with `photo-metrics`
+(`tools/photos/photo-metrics/`: fast-ssim2 for SSIMULACRA2, imazen's butteraugli
+for the 3-norm), built on first use. Its two pins are exact, and the dependabot
+lane for that directory is a prompt to run this before merging. It replays
+`hif-archive.ts`'s own bisection with photo-metrics and with libjxl's
+`ssimulacra2` and `butteraugli_main`, and prints PASS only when every frame
+lands on the same cjxl distance. It needs libjxl's tools on PATH, which nothing
+else in the photo pipeline does now, and about 20 minutes per frame, almost all
+of it in libjxl.
 
 ---
 

@@ -174,7 +174,16 @@ export function renderContactPage() {
   });
 }
 
-export const PRIVACY_REVIEWED = "2026-10-13";
+// ── /privacy ─────────────────────────────────────────────────────────────────
+// Read from the code on 2026-10-13. Each paragraph names what it describes so
+// it can be re-checked: dispatch.ts serveWorkerRequest (the log line),
+// cloudflare.config.ts observability, ledger.ts / lib/not-found.ts /
+// speculation.ts (Analytics Engine), serendipity/serendipity.ts (the one
+// cookie, contributor cookies, attendees), cal/src/booking.ts (90-day
+// bookings), webmention.ts, ask-rank.ts and lwe-ask (AI Gateway),
+// whoareyou.ts (RDAP), lens.ts (isitagentready, KV caches), representation.ts,
+// pixel-peeper-crowd.ts.
+export const PRIVACY_REVIEWED = "2026-10-15";
 
 export function renderPrivacyPage() {
   return page({
@@ -235,6 +244,10 @@ export function renderPrivacyPage() {
       <li><strong>A webmention</strong>: the source and target URLs, the author's name and
         URL, the title and an excerpt. Cloudflare Workers AI checks it for spam, and it is
         emailed to me. It is deleted when I decline it or the source stops linking here.</li>
+      <li><strong>A finished <a href="/pixel-peeper">/pixel-peeper</a> run</strong>: which
+        tile you picked on each call, the tiles it showed, your score and the date. Nothing
+        about who played is stored with it. It joins the pooled counts every result screen
+        draws, and it can't be removed afterward because nothing ties it to you.</li>
       <li><strong>A question</strong> to <a href="/ask">/ask</a> or an
         <a href="/lwe">/lwe</a> explainer: it goes to Cloudflare Workers AI through
         Cloudflare AI Gateway, which logs requests. Answers to explainer questions are

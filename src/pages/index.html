@@ -447,11 +447,18 @@ footer .signature small { color: oklch(56.93% 0 0); }
      the taskbar, so the page stays usable. luna.css's !important versions are
      byte-identical, so when it applies nothing moves. ── */
   html { height: 100dvh; overflow: hidden; }
+  /* the HyperCam band: luna.css draws the watermark and starts the window
+     column and the icon layer below it. Reserved here so neither moves when
+     luna lands. tools/contract-the-hypercam-watermark-is-the-system-font holds
+     these steps to luna's. */
+  html { --hypercam-px: 1px; --hypercam-h: calc(16 * var(--hypercam-px)); }
+  @media (min-width: 1024px) { html { --hypercam-px: 2px; } }
+  @media (min-width: 1920px) { html { --hypercam-px: 3px; } }
   body {
     min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
     overflow: hidden; box-sizing: border-box;
     display: flex; flex-direction: column; align-items: center;
-    padding: 8px;
+    padding: 8px; padding-top: calc(var(--hypercam-h) + 8px);
   }
   .window {
     flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
@@ -500,7 +507,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
      Matches luna.css:332/396/430. */
   #axp-desktop { position: fixed; inset: 0; z-index: -1; }
   #axp-taskbar { position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 99999; display: flex; align-items: stretch; }
-  #axp-icons   { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+  #axp-icons   { position: fixed; inset: var(--hypercam-h) 0 0; z-index: 1; pointer-events: none; }
   /* the icons themselves too: they ship with inline left/top, which is inert
      until they're absolute. Without this they lay out as inline anchors in one
      shoulder-to-shoulder row (a visible row-to-column snap when luna lands, and

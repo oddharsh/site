@@ -155,7 +155,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       "q": "Start at the top. A dynamic driver and a planar driver both turn current into force on a diaphragm. What is the actual difference between them?",
       "options": [
         {
-          "t": "where the force lands. a dynamic pushes at one point, the coil, and a planar pushes across the whole film",
+          "t": "where the force lands. a dynamic pushes at the coil, a planar pushes across the whole film",
           "ok": true,
           "why": "Right. The dynamic glues a voice coil to the cone and pushes there; the planar etches the conductor across the film so the force lands evenly over the whole surface. Everything else on this page follows from that."
         },
@@ -168,7 +168,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           "why": "The shape is a side effect. The cone needs its shape to stay stiff under a point push, and the film can be flat because the push is spread out. Point drive versus distributed drive is the load-bearing difference."
         },
         {
-          "t": "the stiffness. the planar film is more rigid, so it tracks the signal more accurately",
+          "t": "the stiffness. the planar film is more rigid than a paper cone, so it tracks the signal more accurately",
           "why": "Backwards. The planar film is famously thin and floppy, and it gets away with that because it is driven everywhere at once, so it never needs to be stiff enough to resist a point load."
         }
       ]
@@ -177,7 +177,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       "q": "You dragged the frequency slider in the demo. What happens to the dynamic cone as the frequency climbs?",
       "options": [
         {
-          "t": "the rim starts lagging the center, since the push has to travel outward from the coil",
+          "t": "the rim lags the center, and the cone stops moving as one piece",
           "ok": true,
           "why": "That is the whole demo. The motion propagates out from the coil as a bending wave, the phase lag grows with frequency, and past a point the surface stops moving as one piece. It breaks into modes."
         },
@@ -199,7 +199,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       "q": "When the cone breaks up like that, what does it do to what you actually hear?",
       "options": [
         {
-          "t": "it radiates sound that wasn't in the signal, showing up as treble resonances and distortion",
+          "t": "it radiates sound that wasn't in the signal: treble resonances and distortion",
           "ok": true,
           "why": "Exactly. Regions moving out of step each radiate on their own, and the sum contains output the recording never asked for. That is why breakup lands as resonance peaks and extra distortion up high."
         },
@@ -226,7 +226,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           "why": "That is the tradeoff. Planars buy low treble distortion with heavy magnet arrays, an inefficient diaphragm, and amp hunger. Dynamics move a lot of air cheaply and efficiently, which is what most listeners need."
         },
         {
-          "t": "mostly patents and habit, the industry just hasn't moved over to planars yet",
+          "t": "mostly patents and habit, the industry just hasn't retooled its factories for planars yet",
           "why": "The chat gave physical reasons: heavy magnet arrays, an inefficient flat diaphragm, and hunger for amp power. Those costs are real, so dynamics stay the sensible default."
         },
         {

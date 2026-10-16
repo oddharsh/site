@@ -110,8 +110,16 @@ test("readDoors reads lens's discovery rather than re-probing the same files", a
   // itself, duplicating four of lens's twenty-six probes. Worse than wasteful:
   // two surfaces on one site could disagree about the same origin.
   const src = readFileSync("src/worker/lib/doors.ts", "utf8");
-  assert.match(src, /originDiscovery/, "doors must consume the shared discovery");
-  for (const dup of ["/llms.txt", "/.well-known/agent-card.json", "/.well-known/api-catalog"]) {
-    assert.ok(!src.includes(`lensProbe(origin + "${dup}"`), `doors re-probes ${dup} instead of reusing discovery`);
-  }
+  // The call, inside readDoors itself. A bare /originDiscovery/ also matched the
+  // import line, so a readDoors that stopped calling it still passed.
+  const start = src.indexOf("export async function readDoors(");
+  assert.ok(start >= 0, "readDoors moved out of doors.ts; point this test at it");
+  const next = src.indexOf("\nexport ", start + 1);
+  const body = src.slice(start, next < 0 ? src.length : next);
+  assert.match(body, /originDiscovery\(origin\b/, "readDoors must consume the shared discovery");
+  // A re-probe of any of the three, however the URL is spelled: concatenated,
+  // templated, or through fetch rather than lensProbe.
+  const reprobe = /\b(lensProbe|fetch|outboundRead)\([^;]*?(\/llms\.txt|agent-card\.json|api-catalog)/;
+  assert.match("lensProbe(`${origin}/llms.txt`, env)", reprobe, "the re-probe pattern must catch a templated URL");
+  assert.doesNotMatch(src, reprobe, "doors re-probes a discovery file instead of reusing lens's discovery");
 });

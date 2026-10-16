@@ -244,8 +244,11 @@ test("a CDP session is deleted on every exit path", () => {
   // The create's own 429 returns BEFORE a session exists, so it must sit outside
   // the try — deleting a session that was never minted is a wasted subrequest on
   // the exact path where the budget is already exhausted.
-  assert.ok(body.indexOf("if (created.status === 429)") < body.indexOf("try {"),
-    "the budget bail must return before the session is entered");
+  // Both must exist first: a deleted bail answers -1, which sorts before the try.
+  const bail = body.indexOf("if (created.status === 429)"), enter = body.indexOf("try {");
+  assert.ok(bail >= 0, "runWireSession lost its budget bail on the create's 429");
+  assert.ok(enter >= 0, "runWireSession lost its try block");
+  assert.ok(bail < enter, "the budget bail must return before the session is entered");
 });
 
 test("the wire lens reports a spent browser budget as ours, not as the target failing", () => {
