@@ -36,10 +36,15 @@ test("every Garage and LWE content page yields an Article with a headline, a dat
   }
 });
 
-test("the homepage still declares the Person and WebSite the Articles point at", () => {
+test("the homepage still declares the Person and WebSite the Articles point at", async () => {
+  // Read the ids off a real Article rather than typing them here, so a change
+  // to article-ld.ts that the homepage didn't follow fails this test.
+  const { articleLd } = await import("./lib/article-ld.ts");
+  const ld = articleLd({ path: "/garage/x", section: "garage", html: "<h1>X</h1>", date: "2026-01-01" });
+  const ids = [ld.author["@id"], ld.publisher["@id"], ld.isPartOf["@id"]];
+  assert.deepEqual(ids, ["https://aadhar.sh/#person", "https://aadhar.sh/#person", "https://aadhar.sh/#website"]);
   const home = readFileSync("src/pages/index.html", "utf8");
-  assert.match(home, /"@id": "https:\/\/aadhar\.sh\/#person"/);
-  assert.match(home, /"@id": "https:\/\/aadhar\.sh\/#website"/);
+  for (const id of new Set(ids)) assert.ok(home.includes(`"@id": "${id}"`), `the homepage must declare ${id}`);
 });
 
 test("the headline comes from the og:title topic, then the h1, and refuses a page with neither", async () => {

@@ -53,6 +53,17 @@ const render = (files, shell) => {
   return { map, out: new Map([...files].map(([f, t]) => [f, applyMangle(t, map)])) };
 };
 
+// What 5c makes of the shell above, written out: --blue-65's seven shell uses
+// earn --a, and --face and --ink follow. Every edit below must leave exactly
+// these bytes, so a rename that stopped running fails here instead of
+// comparing two unchanged copies and calling them identical.
+const LUNA_RENAMED = [
+  ":root{--a:#3169c6;--b:#ece9d8;--c:#000}",
+  ".a{color:var(--a)}.b{border-color:var(--a)}.c{outline-color:var(--a)}",
+  ".f{fill:var(--a)}.g{stroke:var(--a)}.h{caret-color:var(--a)}",
+  ".d{background:var(--b)}.e{color:var(--c)}",
+].join("");
+
 const EDITS = {
   "one more var() use of the page-local name": ".u{border-left:1px solid var(--sh)}".repeat(6),
   "a CSS comment that mentions the page-local name": "/* borrows var(--sh) var(--sh) var(--sh) var(--sh) var(--sh) var(--sh) */",
@@ -63,7 +74,8 @@ for (const [label, extra] of Object.entries(EDITS)) {
   test(`${label} leaves the shell stylesheet byte-identical`, () => {
     const before = render(tree(""), SHELL);
     const after = render(tree(extra), SHELL);
-    assert.equal(after.out.get("public/luna.css"), before.out.get("public/luna.css"), "the /a/ bytes, and so the /a/ URL, must not move");
+    assert.equal(before.out.get("public/luna.css"), LUNA_RENAMED);
+    assert.equal(after.out.get("public/luna.css"), LUNA_RENAMED, "the /a/ bytes, and so the /a/ URL, must not move");
     assert.equal(
       after.out.get("public/access/index.html"),
       before.out.get("public/access/index.html"),
@@ -103,7 +115,12 @@ test("page-local names come from the two-character tier and never shadow a shell
 test("the rename still passes the dangling-reference invariant", () => {
   const files = tree(".r{color:var(--never-defined)}");
   const { map, out } = render(files, SHELL);
+  assert.equal(out.get("public/luna.css"), LUNA_RENAMED);
   assert.doesNotThrow(() => assertIntegrity(files, out, map, 3));
+  // The same check on a tree whose shell kept its old names: the page's
+  // var(--a) now points at nothing, and the invariant has to say so.
+  const missed = new Map([...out, ["public/luna.css", luna]]);
+  assert.throws(() => assertIntegrity(files, missed, map, 3), /newly dangling: --a\n/);
 });
 
 // The page-scoped hashed files (ask.js, the pretext library, dotfiles.js, the
