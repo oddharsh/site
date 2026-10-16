@@ -9,16 +9,8 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 
-import {
-  MCP_TOOLS as SITE_TOOLS,
-  SITE_MCP_CAPABILITIES,
-  SITE_MCP_SERVER_INFO,
-} from "../src/worker/mcp.ts";
-import {
-  MCP_TOOLS as SERENDIPITY_TOOLS,
-  SERENDIPITY_MCP_CAPABILITIES,
-  SERENDIPITY_MCP_SERVER_INFO,
-} from "../serendipity/serendipity.ts";
+import { MCP_TOOLS as SITE_TOOLS, SITE_MCP_CAPABILITIES, SITE_MCP_SERVER_INFO } from "../src/worker/mcp.ts";
+import { MCP_TOOLS as SERENDIPITY_TOOLS, SERENDIPITY_MCP_CAPABILITIES, SERENDIPITY_MCP_SERVER_INFO } from "../serendipity/serendipity.ts";
 import { MCP_MODERN } from "../src/worker/lib/mcp-protocol.ts";
 
 const ROOT = "https://aadhar.sh";
@@ -47,7 +39,8 @@ function card({ serverInfo, capabilities, description, transport, documentationU
 const siteCard = card({
   serverInfo: SITE_MCP_SERVER_INFO,
   capabilities: SITE_MCP_CAPABILITIES,
-  description: "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, an HTTP representation vault, and the site's published page resources.",
+  description:
+    "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, an HTTP representation vault, and the site's published page resources.",
   transport: `${ROOT}/mcp`,
   documentationUrl: `${ROOT}/llms.txt`,
   tools: SITE_TOOLS,

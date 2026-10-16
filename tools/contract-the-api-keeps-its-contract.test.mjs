@@ -59,11 +59,14 @@ test("the spec documents the contract on every operation, and says what it leave
 
 test("dispatch runs the contract around the real route table", async () => {
   const fake = () => () => Response.json({ ok: true });
-  const dispatch = createDispatch(/** @type {any} */ ({
-    exact: Object.fromEntries(EXACT_ROUTES.map((r) => [r.path, fake()])),
-    prefix: Object.fromEntries(PREFIX_ROUTES.map((r) => [r.label, fake()])),
-    album: fake(), calHost: fake(),
-  }));
+  const dispatch = createDispatch(
+    /** @type {any} */ ({
+      exact: Object.fromEntries(EXACT_ROUTES.map((r) => [r.path, fake()])),
+      prefix: Object.fromEntries(PREFIX_ROUTES.map((r) => [r.label, fake()])),
+      album: fake(),
+      calHost: fake(),
+    }),
+  );
   const env = /** @type {any} */ ({ ASSETS: { fetch: async () => new Response("", { status: 404 }) } });
   const ctx = { waitUntil() {}, passThroughOnException() {} };
   const serve = (path, init) => dispatch.serveWorkerRequest(req(path, init), env, ctx);
@@ -85,7 +88,17 @@ test("dispatch runs the contract around the real route table", async () => {
 /** A limiter binding that refuses, and records the keys it was asked about. */
 const refusing = () => {
   const keys = [];
-  return { keys, env: { [API_READ_BUDGET.binding]: { async limit({ key }) { keys.push(key); return { success: false }; } } } };
+  return {
+    keys,
+    env: {
+      [API_READ_BUDGET.binding]: {
+        async limit({ key }) {
+          keys.push(key);
+          return { success: false };
+        },
+      },
+    },
+  };
 };
 
 test("an endpoint with no limiter of its own bills the shared read budget and says so", async () => {
@@ -107,7 +120,13 @@ test("an endpoint with no limiter of its own bills the shared read budget and sa
   const options = refusing();
   assert.equal(await apiPreflight(req("/search.json", { method: "OPTIONS" }), "/search.json", options.env), null);
   assert.deepEqual(options.keys, []);
-  const allowing = { [API_READ_BUDGET.binding]: { async limit() { return { success: true }; } } };
+  const allowing = {
+    [API_READ_BUDGET.binding]: {
+      async limit() {
+        return { success: true };
+      },
+    },
+  };
   assert.equal(await apiPreflight(req("/search.json?q=x"), "/search.json", allowing), null);
   assert.equal(await apiPreflight(req("/search.json?q=x"), "/search.json", {}), null, "no binding, no refusal");
 
@@ -116,8 +135,11 @@ test("an endpoint with no limiter of its own bills the shared read budget and sa
   assert.equal(served.headers.get("ratelimit-policy"), `"read";q=${API_READ_BUDGET.max};w=60`);
   const lensAnswer = withApiContract(new Response("{}", { headers: { "ratelimit-policy": '"inspect";q=30;w=60' } }), "/lens/fetch");
   assert.equal(lensAnswer.headers.get("ratelimit-policy"), '"inspect";q=30;w=60');
-  assert.equal(withApiContract(new Response("{}"), "/lens/fetch").headers.get("ratelimit-policy"), null,
-    "the contract never names the read policy on a door that does not bill it");
+  assert.equal(
+    withApiContract(new Response("{}"), "/lens/fetch").headers.get("ratelimit-policy"),
+    null,
+    "the contract never names the read policy on a door that does not bill it",
+  );
 });
 
 test("the spec documents the read budget where it applies and nowhere else", () => {

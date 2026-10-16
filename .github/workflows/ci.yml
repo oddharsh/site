@@ -240,6 +240,12 @@ jobs:
         run: bun run lint
         background: true
 
+      # bun fmt --check over what bunfig.toml's [fmt] section covers. 0.1s.
+      - name: Format
+        id: format
+        run: bun run format:check
+        background: true
+
       - name: Typecheck
         id: typecheck
         run: bun run typecheck

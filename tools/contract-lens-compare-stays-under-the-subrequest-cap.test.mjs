@@ -34,7 +34,15 @@ async function signingEnv() {
 // One ledger for every billable call. `enforce` makes the 51st throw exactly
 // what the runtime throws, so a test can watch what the code does with it.
 function harness({ enforce = false, store = new Map() } = {}) {
-  const ledger = { fetch: 0, kv: 0, cache: 0, ai: 0, get total() { return this.fetch + this.kv + this.cache + this.ai; } };
+  const ledger = {
+    fetch: 0,
+    kv: 0,
+    cache: 0,
+    ai: 0,
+    get total() {
+      return this.fetch + this.kv + this.cache + this.ai;
+    },
+  };
   const charge = (kind) => {
     ledger[kind]++;
     if (enforce && ledger.total > SUBREQUEST_CAP_FREE) throw new Error(CAP_ERROR);
@@ -50,13 +58,25 @@ function harness({ enforce = false, store = new Map() } = {}) {
     return new Response("not found", { status: 404, headers: { "content-type": "text/plain" } });
   };
   const RN_KV = {
-    async get() { charge("kv"); return null; },
-    async put() { charge("kv"); },
+    async get() {
+      charge("kv");
+      return null;
+    },
+    async put() {
+      charge("kv");
+    },
   };
   const caches = {
     default: {
-      async match(req) { charge("cache"); const hit = store.get(req.url); return hit ? new Response(hit) : undefined; },
-      async put(req, res) { charge("cache"); store.set(req.url, await res.text()); },
+      async match(req) {
+        charge("cache");
+        const hit = store.get(req.url);
+        return hit ? new Response(hit) : undefined;
+      },
+      async put(req, res) {
+        charge("cache");
+        store.set(req.url, await res.text());
+      },
     },
   };
   // Every question answered "not a wall", which leaves the scan's verdicts
@@ -75,9 +95,12 @@ async function withHarness(h, run) {
   const realCaches = globalThis.caches;
   testGlobals.fetch = h.fetch;
   testGlobals.caches = h.caches;
-  try { return await run(); } finally {
+  try {
+    return await run();
+  } finally {
     testGlobals.fetch = realFetch;
-    if (realCaches === undefined) delete testGlobals.caches; else testGlobals.caches = realCaches;
+    if (realCaches === undefined) delete testGlobals.caches;
+    else testGlobals.caches = realCaches;
   }
 }
 
@@ -94,8 +117,10 @@ test("a cold compare stays under the cap and says which side it deferred", needs
   // 36 for the live side and 5 for the deferred one (robots gate 3, page 1,
   // one cache peek). 9 of headroom, which a redirect hop or two can spend.
   // A compare samples no bot views, so its Clef wall check never runs.
-  assert.ok(h.ledger.total < SUBREQUEST_CAP_FREE,
-    `cold compare spent ${h.ledger.total} subrequests (${JSON.stringify(h.ledger)}) against a cap of ${SUBREQUEST_CAP_FREE}`);
+  assert.ok(
+    h.ledger.total < SUBREQUEST_CAP_FREE,
+    `cold compare spent ${h.ledger.total} subrequests (${JSON.stringify(h.ledger)}) against a cap of ${SUBREQUEST_CAP_FREE}`,
+  );
   assert.equal(h.ledger.total, 41, `the measured cold count moved: ${JSON.stringify(h.ledger)}`);
   assert.equal(h.ledger.ai, 0, "a compare samples no bot views, so it asks Clef nothing");
 
@@ -112,8 +137,7 @@ test("a cold compare stays under the cap and says which side it deferred", needs
   assert.equal(out.right.surfaces, null);
   // And nothing discovery-derived is reported as a change between the two.
   for (const change of out.changes) {
-    assert.ok(!/^(readiness|level|tier|doors|surfaces\.)/.test(change.field),
-      `a deferred side must not produce a ${change.field} change`);
+    assert.ok(!/^(readiness|level|tier|doors|surfaces\.)/.test(change.field), `a deferred side must not produce a ${change.field} change`);
   }
 });
 
@@ -123,10 +147,7 @@ test("control: two cold scans in one invocation with no board cross the cap", ne
   const { lensInspect } = await import("../src/worker/lens.ts");
   const h = harness();
   const env = { ...(await signingEnv()), RN_KV: h.RN_KV, AI: h.AI };
-  await withHarness(h, () => Promise.all([
-    lensInspect(LEFT, env, { skipBotViews: true }),
-    lensInspect(RIGHT, env, { skipBotViews: true }),
-  ]));
+  await withHarness(h, () => Promise.all([lensInspect(LEFT, env, { skipBotViews: true }), lensInspect(RIGHT, env, { skipBotViews: true })]));
   assert.equal(h.ledger.total, 72, `the unarbitrated baseline moved: ${JSON.stringify(h.ledger)}`);
 });
 
@@ -203,9 +224,20 @@ test("a single cold scan stays under the cap, with its headroom named", needsPar
 // The checks that read discovery. Page-only checks (linkHeaders, webMcp) and
 // the neutral ones are left out, since the cap cannot reach bytes already held.
 const DISCOVERY_CHECKS = [
-  "robotsTxt", "sitemap", "dnsAid", "markdownNegotiation", "robotsTxtAiRules", "contentSignals",
-  "webBotAuth", "apiCatalog", "oauthDiscovery", "oauthProtectedResource", "authMd",
-  "mcpServerCard", "a2aAgentCard", "agentSkills",
+  "robotsTxt",
+  "sitemap",
+  "dnsAid",
+  "markdownNegotiation",
+  "robotsTxtAiRules",
+  "contentSignals",
+  "webBotAuth",
+  "apiCatalog",
+  "oauthDiscovery",
+  "oauthProtectedResource",
+  "authMd",
+  "mcpServerCard",
+  "a2aAgentCard",
+  "agentSkills",
 ];
 
 async function refusedScan(spentElsewhere) {
@@ -250,4 +282,3 @@ test("a probe the platform refused is never graded as absent", needsParser, asyn
   assert.equal(out.discovery.agentsMd.unknown, true);
   assert.ok(out.agent.strategy.unknowns.length >= 3, `doors verdict named ${out.agent.strategy.unknowns.length} unanswered probes`);
 });
-

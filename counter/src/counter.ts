@@ -44,15 +44,17 @@ export class Counter {
     // slot instance.
     if (url.pathname === "/reserve" || url.pathname === "/release") {
       let payload;
-      try { payload = await request.json(); } catch { return json({ error: "invalid body" }, 400); }
+      try {
+        payload = await request.json();
+      } catch {
+        return json({ error: "invalid body" }, 400);
+      }
       const bookingId = String(payload?.bookingId || "");
       if (!bookingId) return json({ error: "bookingId is required" }, 400);
       if (url.pathname === "/release") {
         return json({ released: await dropReservation(this.state.storage, bookingId) });
       }
-      const claimed = await claimReservation(
-        this.state.storage, bookingId, Number(payload.start), Number(payload.end),
-      );
+      const claimed = await claimReservation(this.state.storage, bookingId, Number(payload.start), Number(payload.end));
       return json({ claimed });
     }
 

@@ -1,10 +1,6 @@
 // ── the per-invocation subrequest budget ────────────────────────────
 // Shared imports live in contract-shared.ts.
-import {
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
 
 // lib/budget.ts encodes one rule: a platform ceiling is never the current
 // item's fault. These tests are mostly about the ways that rule can be
@@ -109,10 +105,7 @@ test("a ceiling hit while the ledger shows headroom is reported as an overrun", 
   assert.equal(honest.overrun, false, "an expected ceiling is not an accounting bug");
   const honestSpan = fakeSpan();
   recordBudget(honestSpan, honest);
-  assert.equal(
-    honestSpan.set.has("budget.overrun"), false,
-    "a false overrun is omitted rather than emitted on every span",
-  );
+  assert.equal(honestSpan.set.has("budget.overrun"), false, "a false overrun is omitted rather than emitted on every span");
 });
 
 test("recordBudget stamps a span and omits what it has nothing to say about", async () => {
@@ -138,7 +131,10 @@ test("mapWithBudget stops at the ledger and calls the rest skipped, not failed",
   const b = createBudget(3);
   const seen = [];
 
-  const run = await mapWithBudget([1, 2, 3, 4, 5], b, async (n) => { seen.push(n); return n * 2; });
+  const run = await mapWithBudget([1, 2, 3, 4, 5], b, async (n) => {
+    seen.push(n);
+    return n * 2;
+  });
 
   assert.deepEqual(seen, [1, 2, 3], "only what the ledger could afford ran");
   assert.deepEqual(run.results, [2, 4, 6]);
@@ -183,8 +179,5 @@ test("the declared cap is one constant, not a number typed out per surface", asy
   // platform ceiling ends up written down in three places and updated in one.
   // This fails if a surface re-declares it rather than importing.
   const src = readFileSync("serendipity/serendipity.ts", "utf8");
-  assert.ok(
-    !/^\s*const\s+CRON_SUBREQUEST_CAP\s*=\s*\d+/m.test(src),
-    "serendipity re-declares the subrequest cap instead of importing SUBREQUEST_CAP_FREE",
-  );
+  assert.ok(!/^\s*const\s+CRON_SUBREQUEST_CAP\s*=\s*\d+/m.test(src), "serendipity re-declares the subrequest cap instead of importing SUBREQUEST_CAP_FREE");
 });

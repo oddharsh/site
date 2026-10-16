@@ -46,7 +46,15 @@ import { handleWritingIndex } from "../src/worker/writing.ts";
 import { handleTool, tokenizeKeys } from "../src/worker/terminal.ts";
 import { DATA_TOOLS } from "../src/worker/lib/tools.ts";
 import { cronJob } from "../src/worker/lib/cron.ts";
-import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, checkDependencyDocs, findClaims, parseCargoDeps } from "./lib/dependency-docs.ts";
+import {
+  BASELINE_HEADING,
+  FLOOR_CLAIMS,
+  auditDependencyDocs,
+  baselineSection,
+  checkDependencyDocs,
+  findClaims,
+  parseCargoDeps,
+} from "./lib/dependency-docs.ts";
 import { PAGE_FAMILY_MATCH, serveStaticPage } from "../src/worker/lib/assets.ts";
 import { serveMarkdown } from "../src/worker/home.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
@@ -72,7 +80,17 @@ import {
   staleGuestIds,
 } from "../serendipity/serendipity.ts";
 import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "../src/worker/lib/mcp-protocol.ts";
-import { derivePhotoPool, curatedPool, albumPool, renderPhotosPage, renderAlbumPage, handleImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "../src/worker/photos.ts";
+import {
+  derivePhotoPool,
+  curatedPool,
+  albumPool,
+  renderPhotosPage,
+  renderAlbumPage,
+  handleImagesManifest,
+  handlePhotoQuery,
+  queryPhotos,
+  _resetPhotoCaches,
+} from "../src/worker/photos.ts";
 import { ALBUMS, albumPath } from "../src/worker/albums.ts";
 import { renderPhotoSlots } from "../src/worker/lib/photo-grid.ts";
 import { cachedRender, deadline, deleteSWRKV, swrKV } from "../src/worker/lib/cache.ts";
@@ -86,7 +104,15 @@ import { renderRun } from "../src/worker/run.ts";
 import { getPublicAvailability } from "../cal/src/slots.ts";
 import { botHeaders } from "../src/worker/lib/botauth.ts";
 import { mapWithConcurrency, readResponseCapped } from "../src/worker/lib/crawl.ts";
-import { NEIGHBORS, diffAroundRows, handleAroundChangesJson, persistAroundHistory, readAroundChanges, renderAroundPage, renderAroundSnapshot } from "../src/worker/around.ts";
+import {
+  NEIGHBORS,
+  diffAroundRows,
+  handleAroundChangesJson,
+  persistAroundHistory,
+  readAroundChanges,
+  renderAroundPage,
+  renderAroundSnapshot,
+} from "../src/worker/around.ts";
 import * as tui from "../src/worker/lib/tui.ts";
 import {
   ART_VERSION,
@@ -105,27 +131,30 @@ import {
 
 const ROOT = new URL("../", import.meta.url);
 
-
 const PLAYLIST_ID = "4IRq9W1N2tOWHhH0O3vXiF";
 
 const TRACKS = {
   playlist_id: PLAYLIST_ID,
   playlist_name: "rn",
-  tracks: [{
-    id: "track-1",
-    title: "A <song>",
-    artists_text: "An Artist",
-    artists: [{
-      id: "artist-1",
-      name: "An Artist",
-      spotify_url: "https://open.spotify.com/artist/artist-1",
+  tracks: [
+    {
+      id: "track-1",
+      title: "A <song>",
+      artists_text: "An Artist",
+      artists: [
+        {
+          id: "artist-1",
+          name: "An Artist",
+          spotify_url: "https://open.spotify.com/artist/artist-1",
+          image_url: null,
+        },
+      ],
+      song_link_url: "https://song.link/s/track-1",
+      duration_ms: 65000,
       image_url: null,
-    }],
-    song_link_url: "https://song.link/s/track-1",
-    duration_ms: 65000,
-    image_url: null,
-    is_explicit: false,
-  }],
+      is_explicit: false,
+    },
+  ],
 };
 
 function context() {
@@ -134,10 +163,15 @@ function context() {
 
 function fakeImages() {
   return {
-    async info(bytes) { return { format: "jpeg", width: 100, height: 50, fileSize: bytes.byteLength, animated: false }; },
+    async info(bytes) {
+      return { format: "jpeg", width: 100, height: 50, fileSize: bytes.byteLength, animated: false };
+    },
     input(bytes) {
       return {
-        transform(options) { this.options = options; return this; },
+        transform(options) {
+          this.options = options;
+          return this;
+        },
         async output(options) {
           const marker = new TextEncoder().encode(JSON.stringify({ input: bytes.byteLength, options: this.options || {}, output: options }));
           return {
@@ -161,10 +195,55 @@ function representationD1() {
           return {
             async run() {
               if (/INSERT OR REPLACE INTO http_representation_vault/i.test(sql)) {
-                const [id, url, profile, observed_at, final_url, status, content_type, content_encoding, content_length, cache_control, vary, etag, last_modified, server, age, cf_cache_status, body_bytes, body_hash, truncated, title, word_count] = args;
-                const row = { id, url, profile, observed_at, final_url, status, content_type, content_encoding, content_length, cache_control, vary, etag, last_modified, server, age, cf_cache_status, body_bytes, body_hash, truncated, title, word_count };
+                const [
+                  id,
+                  url,
+                  profile,
+                  observed_at,
+                  final_url,
+                  status,
+                  content_type,
+                  content_encoding,
+                  content_length,
+                  cache_control,
+                  vary,
+                  etag,
+                  last_modified,
+                  server,
+                  age,
+                  cf_cache_status,
+                  body_bytes,
+                  body_hash,
+                  truncated,
+                  title,
+                  word_count,
+                ] = args;
+                const row = {
+                  id,
+                  url,
+                  profile,
+                  observed_at,
+                  final_url,
+                  status,
+                  content_type,
+                  content_encoding,
+                  content_length,
+                  cache_control,
+                  vary,
+                  etag,
+                  last_modified,
+                  server,
+                  age,
+                  cf_cache_status,
+                  body_bytes,
+                  body_hash,
+                  truncated,
+                  title,
+                  word_count,
+                };
                 const index = rows.findIndex((existing) => existing.id === id);
-                if (index >= 0) rows[index] = row; else rows.push(row);
+                if (index >= 0) rows[index] = row;
+                else rows.push(row);
               }
               return { success: true, meta: { changes: 1 } };
             },
@@ -174,14 +253,18 @@ function representationD1() {
             },
           };
         },
-        async run() { return { success: true, meta: { changes: 0 } }; },
+        async run() {
+          return { success: true, meta: { changes: 0 } };
+        },
       };
     },
     async batch(statements) {
       batches++;
       return Promise.all(statements.map((statement) => statement.run()));
     },
-    get batchCount() { return batches; },
+    get batchCount() {
+      return batches;
+    },
     rows,
   };
 }
@@ -220,8 +303,7 @@ function assertFullDocument(html) {
 }
 
 function labels(headers) {
-  return (headers.get("signature-input").match(/(^|, )(sig\d+)=/g) || [])
-    .map((m) => m.replace(/^, /, "").replace(/=$/, ""));
+  return (headers.get("signature-input").match(/(^|, )(sig\d+)=/g) || []).map((m) => m.replace(/^, /, "").replace(/=$/, ""));
 }
 
 function staticAssets(files) {
@@ -256,7 +338,10 @@ function fakeD1() {
     if (/^UPDATE webmentions SET status = 'approved'/i.test(s)) {
       const [ts, id] = args;
       const r = rows.find((x) => x.id === id);
-      if (r) { r.status = "approved"; r.approved_at = ts; }
+      if (r) {
+        r.status = "approved";
+        r.approved_at = ts;
+      }
       return { meta: { changes: r ? 1 : 0 } };
     }
     if (/^DELETE FROM webmentions WHERE id/i.test(s)) {
@@ -281,7 +366,10 @@ function fakeD1() {
     prepare(sql) {
       let bound = [];
       const api = {
-        bind: (...a) => { bound = a; return api; },
+        bind: (...a) => {
+          bound = a;
+          return api;
+        },
         run: async () => run(sql, bound),
         all: async () => run(sql, bound),
         first: async () => run(sql, bound),
@@ -306,22 +394,26 @@ function deferredContext() {
   return { waitUntil: (p: Promise<unknown>) => pending.push(p), settle: () => Promise.all(pending) };
 }
 
-const wmPost = (source, target) => new Request("https://aadhar.sh/webmention", {
-  method: "POST",
-  headers: { "content-type": "application/x-www-form-urlencoded" },
-  body: new URLSearchParams({ source, target }).toString(),
-});
+const wmPost = (source, target) =>
+  new Request("https://aadhar.sh/webmention", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ source, target }).toString(),
+  });
 
-const mcpPost = (body, headers = {}) => new Request("https://aadhar.sh/mcp", {
-  method: "POST",
-  body: JSON.stringify(body),
-  headers: { "content-type": "application/json", ...headers },
-});
+const mcpPost = (body, headers = {}) =>
+  new Request("https://aadhar.sh/mcp", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json", ...headers },
+  });
 
-const MODERN_META = { _meta: {
-  "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-  "io.modelcontextprotocol/clientCapabilities": {},
-} };
+const MODERN_META = {
+  _meta: {
+    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+    "io.modelcontextprotocol/clientCapabilities": {},
+  },
+};
 
 const TERMINAL_ASSETS = {
   "/writing/posts.json": [
@@ -330,7 +422,14 @@ const TERMINAL_ASSETS = {
     { slug: "three", title: "The third note", date: "2026-03-04" },
   ],
   "/images/metadata.json": {
-    A_1: { camera: "FUJIFILM X-T50", lens: "XF27mmF2.8", film: "Classic Chrome", date: "2026:01:02", iso: 640, recipe: { "Film Simulation": "Classic Chrome", "Dynamic Range": "DR400" } },
+    A_1: {
+      camera: "FUJIFILM X-T50",
+      lens: "XF27mmF2.8",
+      film: "Classic Chrome",
+      date: "2026:01:02",
+      iso: 640,
+      recipe: { "Film Simulation": "Classic Chrome", "Dynamic Range": "DR400" },
+    },
     A_2: { camera: "FUJIFILM X-T50", lens: "XF23mmF1.4", film: "Acros", date: "2025:05:06" },
     A_3: { camera: "LEICA M11", lens: "Summicron 35", film: "", date: "2025:07:08" },
   },
@@ -344,7 +443,6 @@ const terminalEnv = () => ({ ASSETS: staticAssets(TERMINAL_ASSETS) });
 const terminalReq = (path) => new Request(`https://aadhar.sh${path}`);
 
 const terminalGet = (path) => handleTool(terminalReq(path), terminalEnv(), context());
-
 
 // The globals, typed loosely for TEST DOUBLES, and this is the only cast in the
 // suite that exists for typing rather than for behaviour.

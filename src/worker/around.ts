@@ -10,7 +10,7 @@ import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } fro
 import { span } from "./lib/trace.ts";
 import { AROUND_SNAPSHOT_URL } from "./routes.ts";
 
-  // Signature-Agent value (RFC 8941 string)
+// Signature-Agent value (RFC 8941 string)
 
 // the neighborhood — crypto-VC homepages worth checking in on. just funds
 // whose work i follow; the dashboard is mostly an excuse to point a branded
@@ -25,26 +25,26 @@ import { AROUND_SNAPSHOT_URL } from "./routes.ts";
 // "Standard Crypto" -> "Standard" rebrand; 1confirmation/thrivecap/ribbitcap
 // apex -> www; sequoiacap www -> apex).
 export const NEIGHBORS = [
-  { name: "Paradigm",                url: "https://www.paradigm.xyz/" },
-  { name: "a16z crypto",             url: "https://a16zcrypto.com/" },
-  { name: "Polychain Capital",       url: "https://polychain.capital/" },
-  { name: "Multicoin Capital",       url: "https://multicoin.capital/" },
-  { name: "Variant Fund",            url: "https://variant.fund/" },
-  { name: "Dragonfly",               url: "https://www.dragonfly.xyz/" },
-  { name: "Electric Capital",        url: "https://www.electriccapital.com/" },
-  { name: "1confirmation",           url: "https://www.1confirmation.com/" },
-  { name: "Standard",                url: "https://www.standardvc.com/" },
-  { name: "Union Square Ventures",   url: "https://www.usv.com/" },
-  { name: "Archetype",               url: "https://www.archetype.fund/" },
-  { name: "Pace Capital",            url: "https://pacecapital.com/" },
-  { name: "Thrive Capital",          url: "https://www.thrivecap.com/" },
-  { name: "Sequoia Capital",         url: "https://sequoiacap.com/" },
-  { name: "Founders Fund",           url: "https://foundersfund.com/" },
-  { name: "Hummingbird",             url: "https://www.hummingbird.vc/" },
-  { name: "Benchmark",               url: "https://www.benchmark.com/" },
-  { name: "Index Ventures",          url: "https://www.indexventures.com/" },
-  { name: "Ribbit Capital",          url: "https://www.ribbitcap.com/" },
-  { name: "Topology",                url: "https://www.topology.vc/" },
+  { name: "Paradigm", url: "https://www.paradigm.xyz/" },
+  { name: "a16z crypto", url: "https://a16zcrypto.com/" },
+  { name: "Polychain Capital", url: "https://polychain.capital/" },
+  { name: "Multicoin Capital", url: "https://multicoin.capital/" },
+  { name: "Variant Fund", url: "https://variant.fund/" },
+  { name: "Dragonfly", url: "https://www.dragonfly.xyz/" },
+  { name: "Electric Capital", url: "https://www.electriccapital.com/" },
+  { name: "1confirmation", url: "https://www.1confirmation.com/" },
+  { name: "Standard", url: "https://www.standardvc.com/" },
+  { name: "Union Square Ventures", url: "https://www.usv.com/" },
+  { name: "Archetype", url: "https://www.archetype.fund/" },
+  { name: "Pace Capital", url: "https://pacecapital.com/" },
+  { name: "Thrive Capital", url: "https://www.thrivecap.com/" },
+  { name: "Sequoia Capital", url: "https://sequoiacap.com/" },
+  { name: "Founders Fund", url: "https://foundersfund.com/" },
+  { name: "Hummingbird", url: "https://www.hummingbird.vc/" },
+  { name: "Benchmark", url: "https://www.benchmark.com/" },
+  { name: "Index Ventures", url: "https://www.indexventures.com/" },
+  { name: "Ribbit Capital", url: "https://www.ribbitcap.com/" },
+  { name: "Topology", url: "https://www.topology.vc/" },
 ];
 
 // ── /around ─────────────────────────────────────────────────────────
@@ -66,12 +66,16 @@ export async function handleAroundJson(request, env, ctx) {
       // retry-after tracks the crawl cadence, which became daily on 2026-08-14.
       // Only reachable before the first successful crawl ever: after that a
       // snapshot exists and an all-error crawl deliberately will not clear it.
-      return jsonResponse({ pending: true, note: "no snapshot yet; the daily crawl hasn't run" }, 503,
-        { "retry-after": "86400", "x-robots-tag": "noindex" }, { pretty: false });
+      return jsonResponse(
+        { pending: true, note: "no snapshot yet; the daily crawl hasn't run" },
+        503,
+        { "retry-after": "86400", "x-robots-tag": "noindex" },
+        { pretty: false },
+      );
     }
     return jsonResponse(report, 200, {
       "cache-control": "public, max-age=60, s-maxage=300",
-      "x-robots-tag":  "noindex",
+      "x-robots-tag": "noindex",
     });
   };
   return isBust ? render() : cachedRender(request, ctx, render, "/around/json", env);
@@ -133,41 +137,39 @@ export async function persistAroundHistory(env, report) {
   try {
     const db = env.RESTORE_DB;
     const observedAt = Date.parse(report.crawledAt) || Date.now();
-    const inserts = report.results.map((row) => db.prepare(
-      `INSERT OR REPLACE INTO ${AROUND_HISTORY_TABLE}
+    const inserts = report.results.map((row) =>
+      db
+        .prepare(
+          `INSERT OR REPLACE INTO ${AROUND_HISTORY_TABLE}
        (target, name, observed_at, status, final_url, title, description, content_type,
         server, last_modified, body_hash, bytes_read, truncated, robots, skipped, error)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      row.url || "",
-      row.name || "",
-      observedAt,
-      row.status ?? null,
-      row.finalUrl || null,
-      row.title || null,
-      row.description || null,
-      row.contentType || null,
-      row.server || null,
-      row.lastModified || null,
-      row.bodyHash || null,
-      row.bytesRead ?? null,
-      row.truncated ? 1 : 0,
-      row.robots || null,
-      row.skipped || null,
-      row.error || null,
-    ));
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          row.url || "",
+          row.name || "",
+          observedAt,
+          row.status ?? null,
+          row.finalUrl || null,
+          row.title || null,
+          row.description || null,
+          row.contentType || null,
+          row.server || null,
+          row.lastModified || null,
+          row.bodyHash || null,
+          row.bytesRead ?? null,
+          row.truncated ? 1 : 0,
+          row.robots || null,
+          row.skipped || null,
+          row.error || null,
+        ),
+    );
     // Keep the history explainable without letting a frequent cron grow D1
     // forever. The public reader still uses a small recent window. D1 executes
     // a batch in order, so the DDL remains ahead of writes and cleanup remains
     // behind them while all three stages share one database round trip.
-    const retention = db.prepare(
-      `DELETE FROM ${AROUND_HISTORY_TABLE} WHERE observed_at < ?`
-    ).bind(Date.now() - 90 * 24 * 60 * 60 * 1000);
-    await db.batch([
-      ...AROUND_HISTORY_DDL.map((sql) => db.prepare(sql)),
-      ...inserts,
-      retention,
-    ]);
+    const retention = db.prepare(`DELETE FROM ${AROUND_HISTORY_TABLE} WHERE observed_at < ?`).bind(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    await db.batch([...AROUND_HISTORY_DDL.map((sql) => db.prepare(sql)), ...inserts, retention]);
     return { ok: true, written: inserts.length };
   } catch (e) {
     return { ok: false, reason: String(e?.message || e) };
@@ -224,7 +226,7 @@ export async function readAroundChanges(env, requestedLimit: string | number | n
               content_type, body_hash, robots, skipped, error
          FROM ${AROUND_HISTORY_TABLE}
         ORDER BY observed_at DESC
-        LIMIT 200`
+        LIMIT 200`,
     ).all();
     rows = result.results || [];
   } catch (e) {
@@ -303,7 +305,7 @@ export async function cronAround(env) {
   // the snapshot write is conditional: an all-error crawl deliberately does NOT
   // overwrite the last-good snapshot. Worth recording, because "the page still
   // shows last week" is then a fact about this branch rather than a mystery.
-  const publishable = !!(report && Array.isArray(report.results) && report.results.some(r => !r.error) && env.RN_KV);
+  const publishable = !!(report && Array.isArray(report.results) && report.results.some((r) => !r.error) && env.RN_KV);
   if (publishable) {
     await span("around.publish", () => env.RN_KV.put(AROUND_KEY, JSON.stringify(report)));
   }
@@ -330,9 +332,9 @@ async function readAroundReport(request, env) {
   // still allowed to crawl, because it authenticates as the owner.
   const url = new URL(request.url);
   if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {
-    await deleteSWRKV(env, AROUND_KEY);   // this key is written directly above, never by swrKV
+    await deleteSWRKV(env, AROUND_KEY); // this key is written directly above, never by swrKV
     const report = await runAround(env);
-    if (report && report.results && report.results.some(r => !r.error) && env.RN_KV) {
+    if (report && report.results && report.results.some((r) => !r.error) && env.RN_KV) {
       await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
     }
     return report;
@@ -348,7 +350,9 @@ async function readAroundReport(request, env) {
   try {
     const report = env.RN_KV ? await env.RN_KV.get(AROUND_KEY, { type: "json", cacheTtl: 1800 }) : null;
     return report && Array.isArray(report.results) ? report : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 // Traced per neighbor, with a rollup on the parent. This is the job where
@@ -391,80 +395,89 @@ async function runAroundInner(env, sCrawl) {
   env = { ...env, OUTBOUND_TRANSPORT: meteredTransport(budget, env.OUTBOUND_TRANSPORT) };
   // Four concurrent origins matches the census worker's bounded fan-out and
   // avoids turning one cron tick into a burst against twenty sites.
-  const results = await mapWithConcurrency(NEIGHBORS, 4, async ({ name, url }) => span(
-    "around.neighbor",
-    async (s) => {
-    s.setAttribute("around.name", name);
-    s.setAttribute("around.host", (() => { try { return new URL(url).hostname; } catch { return undefined; } })());
-    const t0 = Date.now();
-    try {
-      // honor robots.txt first. A disallow is a legitimate result (skipped row, no
-      // error); an undetermined robots.txt is recorded as an error so a network-wide
-      // outage can't overwrite the last-good snapshot with an all-skipped one.
-      // Inside the try because the gate RETHROWS a spent budget, and outside it
-      // that one neighbor's refusal rejected the other nineteen rows with it.
-      const gate = await span("around.robots_gate", () => botRobotsPolicy(url, env));
-      if (!gate.ok && gate.kind === "disallow") {
-        s.setAttribute("around.outcome", "robots_disallow");
-        s.setAttribute("around.robots_rule", gate.rule);
-        return { name, url, skipped: "robots", robots: "disallow", robotsRule: gate.rule, elapsedMs: Date.now() - t0 };
+  const results = await mapWithConcurrency(NEIGHBORS, 4, async ({ name, url }) =>
+    span("around.neighbor", async (s) => {
+      s.setAttribute("around.name", name);
+      s.setAttribute(
+        "around.host",
+        (() => {
+          try {
+            return new URL(url).hostname;
+          } catch {
+            return undefined;
+          }
+        })(),
+      );
+      const t0 = Date.now();
+      try {
+        // honor robots.txt first. A disallow is a legitimate result (skipped row, no
+        // error); an undetermined robots.txt is recorded as an error so a network-wide
+        // outage can't overwrite the last-good snapshot with an all-skipped one.
+        // Inside the try because the gate RETHROWS a spent budget, and outside it
+        // that one neighbor's refusal rejected the other nineteen rows with it.
+        const gate = await span("around.robots_gate", () => botRobotsPolicy(url, env));
+        if (!gate.ok && gate.kind === "disallow") {
+          s.setAttribute("around.outcome", "robots_disallow");
+          s.setAttribute("around.robots_rule", gate.rule);
+          return { name, url, skipped: "robots", robots: "disallow", robotsRule: gate.rule, elapsedMs: Date.now() - t0 };
+        }
+        if (!gate.ok && gate.kind === "undetermined") {
+          // the reason string ("robots.txt 503", "robots.txt unreachable") is the
+          // whole diagnosis and it has been going into a JSON field nobody reads.
+          s.setAttribute("around.outcome", "robots_undetermined");
+          s.setAttribute("around.reason", gate.reason);
+          return { name, url, robots: "undetermined", error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
+        }
+        // The kernel owns the deadline, stream cap, digest, and normalized signals.
+        const crawl = await crawlDocument(url, env, { timeoutMs: 4000, maxBytes: 200 * 1024 });
+        s.setAttribute("around.outcome", "crawled");
+        s.setAttribute("http.response.status_code", crawl.status);
+        s.setAttribute("around.bytes_read", crawl.bytesRead);
+        s.setAttribute("around.truncated", crawl.truncated);
+        return {
+          name,
+          url,
+          finalUrl: crawl.finalUrl,
+          status: crawl.status,
+          title: crawl.title,
+          description: crawl.description,
+          ogImage: extractMeta(crawl.text, "og:image") || "",
+          server: crawl.server,
+          lastModified: crawl.lastModified,
+          contentType: crawl.contentType,
+          bodyHash: crawl.bodyHash,
+          bytesRead: crawl.bytesRead,
+          truncated: crawl.truncated,
+          robots: "allow",
+          elapsedMs: crawl.elapsedMs,
+        };
+      } catch (e) {
+        // The ledger is spent: a fact about this run, so the row says so rather
+        // than blaming the neighbor. Still an error row, so a run the budget cut
+        // short everywhere cannot overwrite the last-good snapshot.
+        if (budget.fault(e) === "cap") {
+          s.setAttribute("around.outcome", "budget_spent");
+          return { name, url, error: "subrequest budget spent, not crawled", elapsedMs: Date.now() - t0 };
+        }
+        // Redirect destinations have their own robots policy too.
+        if (e instanceof BotPolicyError) {
+          const policy = e.policy;
+          s.setAttribute("around.outcome", "robots_" + policy.kind);
+          return policy.kind === "disallow"
+            ? { name, url, skipped: "robots", robots: "disallow", robotsRule: policy.rule, elapsedMs: Date.now() - t0 }
+            : { name, url, robots: "undetermined", error: e.message, elapsedMs: Date.now() - t0 };
+        }
+        s.setAttribute("around.outcome", "error");
+        s.setAttribute("around.error", String(e?.message || e));
+        return { name, url, robots: "allow", error: String(e?.message || e), elapsedMs: Date.now() - t0 };
       }
-      if (!gate.ok && gate.kind === "undetermined") {
-        // the reason string ("robots.txt 503", "robots.txt unreachable") is the
-        // whole diagnosis and it has been going into a JSON field nobody reads.
-        s.setAttribute("around.outcome", "robots_undetermined");
-        s.setAttribute("around.reason", gate.reason);
-        return { name, url, robots: "undetermined", error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
-      }
-      // The kernel owns the deadline, stream cap, digest, and normalized signals.
-      const crawl = await crawlDocument(url, env, { timeoutMs: 4000, maxBytes: 200 * 1024 });
-      s.setAttribute("around.outcome", "crawled");
-      s.setAttribute("http.response.status_code", crawl.status);
-      s.setAttribute("around.bytes_read", crawl.bytesRead);
-      s.setAttribute("around.truncated", crawl.truncated);
-      return {
-        name, url,
-        finalUrl:      crawl.finalUrl,
-        status:        crawl.status,
-        title:         crawl.title,
-        description:   crawl.description,
-        ogImage:       extractMeta(crawl.text, "og:image") || "",
-        server:        crawl.server,
-        lastModified:  crawl.lastModified,
-        contentType:   crawl.contentType,
-        bodyHash:      crawl.bodyHash,
-        bytesRead:     crawl.bytesRead,
-        truncated:     crawl.truncated,
-        robots:        "allow",
-        elapsedMs:     crawl.elapsedMs,
-      };
-    } catch (e) {
-      // The ledger is spent: a fact about this run, so the row says so rather
-      // than blaming the neighbor. Still an error row, so a run the budget cut
-      // short everywhere cannot overwrite the last-good snapshot.
-      if (budget.fault(e) === "cap") {
-        s.setAttribute("around.outcome", "budget_spent");
-        return { name, url, error: "subrequest budget spent, not crawled", elapsedMs: Date.now() - t0 };
-      }
-      // Redirect destinations have their own robots policy too.
-      if (e instanceof BotPolicyError) {
-        const policy = e.policy;
-        s.setAttribute("around.outcome", "robots_" + policy.kind);
-        return policy.kind === "disallow"
-          ? { name, url, skipped: "robots", robots: "disallow", robotsRule: policy.rule, elapsedMs: Date.now() - t0 }
-          : { name, url, robots: "undetermined", error: e.message, elapsedMs: Date.now() - t0 };
-      }
-      s.setAttribute("around.outcome", "error");
-      s.setAttribute("around.error", String(e?.message || e));
-      return { name, url, robots: "allow", error: String(e?.message || e), elapsedMs: Date.now() - t0 };
-    }
-    },
-  ));
+    }),
+  );
   // sort fastest → slowest; errors (no latency or huge values) fall to the
   // bottom so the table reads as a leaderboard.
   results.sort((a, b) => {
-    const an = (a.error || a.skipped) ? Infinity : (a.elapsedMs ?? Infinity);
-    const bn = (b.error || b.skipped) ? Infinity : (b.elapsedMs ?? Infinity);
+    const an = a.error || a.skipped ? Infinity : (a.elapsedMs ?? Infinity);
+    const bn = b.error || b.skipped ? Infinity : (b.elapsedMs ?? Infinity);
     return an - bn;
   });
   // the rollup: the one line that turns twenty quiet rows into a health signal.
@@ -476,7 +489,7 @@ async function runAroundInner(env, sCrawl) {
     crawledBy: BOT_UA,
     crawledAt: new Date().toISOString(),
     signedWith: SIG_AGENT,
-    count:     results.length,
+    count: results.length,
     results,
   };
 }
@@ -508,9 +521,10 @@ export function renderAroundSnapshot(report) {
   const pending = report.crawledAt === null;
   const dots = "…";
 
-  const rows = report.results.map((r) => {
-    if (pending) {
-      return `
+  const rows = report.results
+    .map((r) => {
+      if (pending) {
+        return `
       <tr>
         <td class="firm">${dots}<div class="host">${dots}</div></td>
         <td class="status">${dots}</td>
@@ -518,23 +532,23 @@ export function renderAroundSnapshot(report) {
         <td class="latency">${dots}</td>
         <td class="link"></td>
       </tr>`;
-    }
-    const skipped = r.skipped === "robots";
-    const ok = !r.error && !skipped && r.status >= 200 && r.status < 400;
-    const status = r.error
-      ? `<span class="bad">error</span>`
-      : skipped
-        ? `<span class="dim" title="robots.txt disallows AadharshBot on this path">robots</span>`
-        : ok
-          ? `<span class="ok">${r.status}</span>`
-          : `<span class="warn">${r.status}</span>`;
-    const titleCol = r.error
-      ? esc(r.error)
-      : skipped
-        ? `<span class=dim>not crawled (${esc(r.robotsRule || "robots.txt")})</span>`
-        : (esc(r.title) || "<span class=dim>—</span>");
-    const desc = r.description ? `<div class="desc">${esc(r.description)}</div>` : "";
-    return `
+      }
+      const skipped = r.skipped === "robots";
+      const ok = !r.error && !skipped && r.status >= 200 && r.status < 400;
+      const status = r.error
+        ? `<span class="bad">error</span>`
+        : skipped
+          ? `<span class="dim" title="robots.txt disallows AadharshBot on this path">robots</span>`
+          : ok
+            ? `<span class="ok">${r.status}</span>`
+            : `<span class="warn">${r.status}</span>`;
+      const titleCol = r.error
+        ? esc(r.error)
+        : skipped
+          ? `<span class=dim>not crawled (${esc(r.robotsRule || "robots.txt")})</span>`
+          : esc(r.title) || "<span class=dim>—</span>";
+      const desc = r.description ? `<div class="desc">${esc(r.description)}</div>` : "";
+      return `
       <tr>
         <td class="firm">${esc(r.name)}<div class="host">${esc(new URL(r.url).host)}</div></td>
         <td class="status">${status}</td>
@@ -542,7 +556,8 @@ export function renderAroundSnapshot(report) {
         <td class="latency">${r.elapsedMs}ms</td>
         <td class="link"><a href="${esc(r.url)}" target="_blank" rel="noopener">↗</a></td>
       </tr>`;
-  }).join("");
+    })
+    .join("");
 
   return unsafeHtml(`<div class="meta">
       <strong>Last crawl:</strong> ${esc(report.crawledAt ?? dots)} &middot;
@@ -569,7 +584,9 @@ export async function refreshAroundSnapshot(request, env) {
   const report = await readAroundReport(request, env);
   const fresh = islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
   if (report) {
-    try { await caches.default.put(edgeKey(url.origin, SNAPSHOT_URL, env), await withWeakEtag(fresh.clone())); } catch {}
+    try {
+      await caches.default.put(edgeKey(url.origin, SNAPSHOT_URL, env), await withWeakEtag(fresh.clone()));
+    } catch {}
   }
   return fresh;
 }

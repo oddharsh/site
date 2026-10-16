@@ -57,16 +57,32 @@ test("a redirect to a private address is refused at the hop, as a value, before 
     assert.equal(read.hop, 1, "hop 0 was the public URL; hop 1 is the private one");
     assert.equal(read.url, metadata);
     assert.match(read.error, /no-fetch list/);
-    assert.deepEqual(net.content().map((r) => r.url), [origin + "/start"], "the private address is never requested");
-    assert.ok(net.seen.every((r) => r.redirect === "manual"), "every hop is requested with redirect: manual");
+    assert.deepEqual(
+      net.content().map((r) => r.url),
+      [origin + "/start"],
+      "the private address is never requested",
+    );
+    assert.ok(
+      net.seen.every((r) => r.redirect === "manual"),
+      "every hop is requested with redirect: manual",
+    );
   }
 
   // CONTROL: the same fake network under a check that allows everything DOES
   // request the metadata address, so the assertion above can fail.
-  const net = fakeNetwork(({ url }) => url === metadata ? new Response("secret") : new Response(null, { status: 302, headers: { location: metadata } }));
-  const walked = await fetchFollowingPublicRedirects(origin + "/start", () => ({}), () => ({ ok: true }), 4, net.transport);
+  const net = fakeNetwork(({ url }) => (url === metadata ? new Response("secret") : new Response(null, { status: 302, headers: { location: metadata } })));
+  const walked = await fetchFollowingPublicRedirects(
+    origin + "/start",
+    () => ({}),
+    () => ({ ok: true }),
+    4,
+    net.transport,
+  );
   assert.equal(walked.ok, true);
-  assert.deepEqual(net.seen.map((r) => r.url), [origin + "/start", metadata]);
+  assert.deepEqual(
+    net.seen.map((r) => r.url),
+    [origin + "/start", metadata],
+  );
 });
 
 test("the URL as given is checked too, and an unparseable one is refused rather than thrown", async () => {
@@ -90,14 +106,21 @@ test("the robots gate stops a disallowed read for both identities, as a value", 
     assert.equal(read.reason, "robots");
     assert.match(read.error, /Disallow: \/private/);
     assert.equal(read.cause.name, "BotPolicyError");
-    assert.deepEqual(net.seen.map((r) => r.url), [origin + "/robots.txt"], "only the policy was read");
+    assert.deepEqual(
+      net.seen.map((r) => r.url),
+      [origin + "/robots.txt"],
+      "only the policy was read",
+    );
 
     // CONTROL: a path the same policy allows IS fetched through the same fake.
     const allowed = fakeNetwork(() => new Response("content"), disallow);
     const ok = await outboundRead(origin + "/public", { ...key, OUTBOUND_TRANSPORT: allowed.transport }, get(identity));
     assert.equal(ok.ok, true);
     assert.equal(ok.via, "network");
-    assert.deepEqual(allowed.content().map((r) => r.url), [origin + "/public"]);
+    assert.deepEqual(
+      allowed.content().map((r) => r.url),
+      [origin + "/public"],
+    );
   }
 });
 
@@ -110,31 +133,47 @@ test("a redirect destination answers to its own robots.txt", async () => {
   const read = await outboundRead(origin + "/page", { ...key, OUTBOUND_TRANSPORT: net.transport }, get(BOT));
   assert.equal(read.ok, false);
   assert.equal(read.reason, "robots");
-  assert.deepEqual(net.seen.map((r) => r.url), [origin + "/robots.txt", origin + "/page", "https://other.example/robots.txt"]);
+  assert.deepEqual(
+    net.seen.map((r) => r.url),
+    [origin + "/robots.txt", origin + "/page", "https://other.example/robots.txt"],
+  );
 });
 
 test("this origin goes to self-dispatch, unsigned, and never to the network", async () => {
   const key = await signingEnv();
   const self = "https://aadhar.sh/page";
-  for (const binding of ["SELF_FETCH", "ASSETS"]) for (const identity of [BOT, PROBE]) {
-    const net = fakeNetwork(() => new Response("unexpected network"));
-    const requests = [];
-    const dispatch = async (request) => { requests.push(request); return new Response("in-process"); };
-    const env = { ...key, OUTBOUND_TRANSPORT: net.transport, ...(binding === "SELF_FETCH" ? { SELF_FETCH: dispatch } : { ASSETS: { fetch: dispatch } }) };
-    const read = await outboundRead(self, env, get(identity));
-    assert.equal(read.ok, true);
-    assert.equal(read.via, "self");
-    assert.equal(await read.response.text(), "in-process");
-    assert.equal(requests.length, 1);
-    assert.equal(requests[0].headers.has("signature"), false, "self-dispatch carries no wire signature");
-    assert.equal(requests[0].headers.get("user-agent"), identity === BOT ? "AadharshBot/1.0 (+https://aadhar.sh/bot)" : "fixture-agent/1.0");
-    assert.equal(net.seen.length, 0, "no network request and no robots read");
+  for (const binding of ["SELF_FETCH", "ASSETS"])
+    for (const identity of [BOT, PROBE]) {
+      const net = fakeNetwork(() => new Response("unexpected network"));
+      const requests = [];
+      const dispatch = async (request) => {
+        requests.push(request);
+        return new Response("in-process");
+      };
+      const env = { ...key, OUTBOUND_TRANSPORT: net.transport, ...(binding === "SELF_FETCH" ? { SELF_FETCH: dispatch } : { ASSETS: { fetch: dispatch } }) };
+      const read = await outboundRead(self, env, get(identity));
+      assert.equal(read.ok, true);
+      assert.equal(read.via, "self");
+      assert.equal(await read.response.text(), "in-process");
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0].headers.has("signature"), false, "self-dispatch carries no wire signature");
+      assert.equal(requests[0].headers.get("user-agent"), identity === BOT ? "AadharshBot/1.0 (+https://aadhar.sh/bot)" : "fixture-agent/1.0");
+      assert.equal(net.seen.length, 0, "no network request and no robots read");
 
-    // A dead binding is a FAULT: it throws, and it is not permission to go out.
-    const broken = async () => { throw new Error("fixture local failure"); };
-    await assert.rejects(outboundRead(self, { ...env, SELF_FETCH: binding === "SELF_FETCH" ? broken : undefined, ASSETS: binding === "ASSETS" ? { fetch: broken } : undefined }, get(identity)), /fixture local failure/);
-    assert.equal(net.seen.length, 0, "a binding failure never falls through to the network");
-  }
+      // A dead binding is a FAULT: it throws, and it is not permission to go out.
+      const broken = async () => {
+        throw new Error("fixture local failure");
+      };
+      await assert.rejects(
+        outboundRead(
+          self,
+          { ...env, SELF_FETCH: binding === "SELF_FETCH" ? broken : undefined, ASSETS: binding === "ASSETS" ? { fetch: broken } : undefined },
+          get(identity),
+        ),
+        /fixture local failure/,
+      );
+      assert.equal(net.seen.length, 0, "a binding failure never falls through to the network");
+    }
 
   // SELF_FETCH wins over ASSETS when both are present.
   const both = await outboundRead(self, { SELF_FETCH: async () => new Response("route"), ASSETS: { fetch: async () => new Response("static") } }, get(PROBE));
@@ -147,7 +186,10 @@ test("this origin goes to self-dispatch, unsigned, and never to the network", as
   const read = await outboundRead(self, { ...key, OUTBOUND_TRANSPORT: net.transport }, get(BOT));
   assert.ok(read.ok);
   assert.equal(read.via, "network");
-  assert.deepEqual(net.content().map((r) => r.url), [self]);
+  assert.deepEqual(
+    net.content().map((r) => r.url),
+    [self],
+  );
   assert.ok(net.content()[0].headers.has("signature"), "and on the network it is signed");
 });
 
@@ -194,7 +236,14 @@ test("each caller keeps its own identity, method and hop limit", async () => {
   const loop = ({ url }) => new Response(null, { status: 302, headers: { location: "/" + (Number(new URL(url).pathname.replace(/\D/g, "") || 0) + 1) } });
   const callers = [
     { name: "lensFetch", hops: 4, method: "GET", signed: true, run: (env) => lensFetch(origin + "/0", env) },
-    { name: "lensFetchAsBot", hops: 4, method: "GET", signed: false, ua: "GPTBot/1.0", run: (env) => lensFetchAsBot(origin + "/0", env, undefined, "GPTBot/1.0") },
+    {
+      name: "lensFetchAsBot",
+      hops: 4,
+      method: "GET",
+      signed: false,
+      ua: "GPTBot/1.0",
+      run: (env) => lensFetchAsBot(origin + "/0", env, undefined, "GPTBot/1.0"),
+    },
     { name: "MCP catalogue", hops: 4, method: "POST", signed: true, run: (env) => foreignMcpTools(origin, env) },
     { name: "NLWeb", hops: 4, method: "GET", signed: true, run: (env) => foreignNlwebAsk(origin, env) },
     { name: "cache probe", hops: 20, method: "GET", signed: true, run: (env) => probeRevalidation(origin + "/0", env) },
@@ -223,9 +272,11 @@ test("each caller keeps its own identity, method and hop limit", async () => {
 test("the MCP probe retries once with MCP-Protocol-Version only on a refusal naming it", async () => {
   const key = await signingEnv();
   let calls = 0;
-  const net = fakeNetwork(() => ++calls === 1
-    ? Response.json({ jsonrpc: "2.0", id: 1, error: { code: -32020, message: "Header mismatch: MCP-Protocol-Version is required" } }, { status: 400 })
-    : answer());
+  const net = fakeNetwork(() =>
+    ++calls === 1
+      ? Response.json({ jsonrpc: "2.0", id: 1, error: { code: -32020, message: "Header mismatch: MCP-Protocol-Version is required" } }, { status: 400 })
+      : answer(),
+  );
   const out = await foreignMcpTools(origin, { ...key, OUTBOUND_TRANSPORT: net.transport });
   assert.equal(out.ok, true);
   const [first, second] = net.content();

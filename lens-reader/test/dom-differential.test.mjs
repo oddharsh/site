@@ -26,15 +26,17 @@ const here = dirname(fileURLToPath(import.meta.url));
  *  makes in this repository: 3.13 MiB of real-world HTML is 384 KiB compressed,
  *  and node:zlib decompresses it with no dependency. Authored repo documents are
  *  read as-is. */
-const readDoc = (file) => file.endsWith(".br")
-  ? brotliDecompressSync(readFileSync(file)).toString("utf8")
-  : readFileSync(file, "utf8");
+const readDoc = (file) => (file.endsWith(".br") ? brotliDecompressSync(readFileSync(file)).toString("utf8") : readFileSync(file, "utf8"));
 const CORPUS = [join(here, "..", "..", "src", "pages"), join(here, "corpus")];
 
 function htmlFiles(dir) {
   let out = [];
   let entries;
-  try { entries = readdirSync(dir); } catch { return out; }
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return out;
+  }
   for (const name of entries) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) out = out.concat(htmlFiles(p));
@@ -55,10 +57,14 @@ function extract(parseHTML, html) {
   const { document } = parseHTML(html);
   const controls = collectControlLabels(document);
   let node;
-  const article = new Readability(document, {
-    charThreshold: 500,
-    serializer(el) { node = el; return el.innerHTML; },
-  }).parse() || /** @type {Partial<NonNullable<ReturnType<Readability["parse"]>>>} */ ({});
+  const article =
+    new Readability(document, {
+      charThreshold: 500,
+      serializer(el) {
+        node = el;
+        return el.innerHTML;
+      },
+    }).parse() || /** @type {Partial<NonNullable<ReturnType<Readability["parse"]>>>} */ ({});
   return {
     title: String(article.title || ""),
     byline: String(article.byline || ""),
@@ -79,10 +85,23 @@ test("fitted DOM matches linkedom across the corpus", () => {
   for (const file of files) {
     const html = readDoc(file);
     let a, b;
-    try { a = extract(parseLinkedom, html); } catch (e) { threw++; mismatches.push({ file, field: "linkedom threw", detail: e.message }); continue; }
-    try { b = extract(parseFitted, html); } catch (e) { threw++; mismatches.push({ file, field: "fitted threw", detail: e.message }); continue; }
+    try {
+      a = extract(parseLinkedom, html);
+    } catch (e) {
+      threw++;
+      mismatches.push({ file, field: "linkedom threw", detail: e.message });
+      continue;
+    }
+    try {
+      b = extract(parseFitted, html);
+    } catch (e) {
+      threw++;
+      mismatches.push({ file, field: "fitted threw", detail: e.message });
+      continue;
+    }
     for (const field of FIELDS) {
-      const x = JSON.stringify(a[field]), y = JSON.stringify(b[field]);
+      const x = JSON.stringify(a[field]),
+        y = JSON.stringify(b[field]);
       if (x !== y) mismatches.push({ file, field, detail: firstDiff(x, y) });
     }
   }
@@ -122,7 +141,8 @@ test("fitted DOM parses real-world pages into an identical tree", () => {
     const rootB = parseFitted(html).document.documentElement;
     assert.ok(rootA, `linkedom parsed no documentElement from ${file}`);
     assert.ok(rootB, `the fitted DOM parsed no documentElement from ${file}`);
-    const a = rootA.outerHTML, b = rootB.outerHTML;
+    const a = rootA.outerHTML,
+      b = rootB.outerHTML;
     assert.equal(b, a, `tree differs for ${file}\n${firstDiff(a, b)}`);
   }
 });
@@ -144,7 +164,8 @@ test("fitted DOM supports toMarkdown's string fallback", () => {
     el.innerHTML = fragment;
     return el;
   };
-  const a = root(parseLinkedom), b = root(parseFitted);
+  const a = root(parseLinkedom),
+    b = root(parseFitted);
   assert.equal(b.innerHTML, a.innerHTML, "innerHTML round-trip differs");
   assert.equal(toMarkdown(b), toMarkdown(a), "markdown differs");
   assert.equal(toMarkdown(fragment).length > 0, true, "string fallback produced nothing");
@@ -161,34 +182,55 @@ test("the cached element-child view invalidates on every mutation path", () => {
   const c = document.createElement("c");
   main.appendChild(c);
   assert.notEqual(main.children, cached, "appendChild kept a stale view");
-  assert.deepEqual(main.children.map((node) => node.localName), ["a", "b", "c"]);
+  assert.deepEqual(
+    main.children.map((node) => node.localName),
+    ["a", "b", "c"],
+  );
 
   const first = document.createElement("first");
   main.insertBefore(first, main.firstChild);
-  assert.deepEqual(main.children.map((node) => node.localName), ["first", "a", "b", "c"]);
+  assert.deepEqual(
+    main.children.map((node) => node.localName),
+    ["first", "a", "b", "c"],
+  );
 
   main.removeChild(first);
-  assert.deepEqual(main.children.map((node) => node.localName), ["a", "b", "c"]);
+  assert.deepEqual(
+    main.children.map((node) => node.localName),
+    ["a", "b", "c"],
+  );
 
   const replacement = document.createElement("replacement");
   main.replaceChild(replacement, main.children[1]);
-  assert.deepEqual(main.children.map((node) => node.localName), ["a", "replacement", "c"]);
+  assert.deepEqual(
+    main.children.map((node) => node.localName),
+    ["a", "replacement", "c"],
+  );
 
   const other = document.createElement("aside");
   document.appendChild(other);
   void main.children;
   void other.children;
   other.appendChild(c);
-  assert.deepEqual(main.children.map((node) => node.localName), ["a", "replacement"],
-    "moving a child kept the old parent's cached view");
-  assert.deepEqual(other.children.map((node) => node.localName), ["c"],
-    "moving a child kept the new parent's cached view");
+  assert.deepEqual(
+    main.children.map((node) => node.localName),
+    ["a", "replacement"],
+    "moving a child kept the old parent's cached view",
+  );
+  assert.deepEqual(
+    other.children.map((node) => node.localName),
+    ["c"],
+    "moving a child kept the new parent's cached view",
+  );
 
   main.textContent = "text";
   assert.equal(main.children.length, 0, "textContent kept the previous children");
   main.innerHTML = "<i></i><em></em>";
-  assert.deepEqual(main.children.map((node) => node.localName), ["i", "em"],
-    "innerHTML kept the textContent-era cache");
+  assert.deepEqual(
+    main.children.map((node) => node.localName),
+    ["i", "em"],
+    "innerHTML kept the textContent-era cache",
+  );
 });
 
 // SVG semantics the corpus CANNOT reach, pinned directly against the oracle.
@@ -206,9 +248,7 @@ test("the cached element-child view invalidates on every mutation path", () => {
 // record of what someone once believed.
 test("SVG semantics match the oracle where the corpus is blind", () => {
   const svgHtml =
-    '<html><body><svg viewBox="0 0 1 1">' +
-    '<path d="M0&amp;0" data-q="a&amp;b&lt;c" class=""></path>' +
-    "<g></g><text>t</text></svg></body></html>";
+    '<html><body><svg viewBox="0 0 1 1">' + '<path d="M0&amp;0" data-q="a&amp;b&lt;c" class=""></path>' + "<g></g><text>t</text></svg></body></html>";
   const pick = (parseHTML) => {
     const { document } = parseHTML(svgHtml);
     const svg = document.getElementsByTagName("svg")[0];

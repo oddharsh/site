@@ -36,15 +36,19 @@ export class ReaderError extends Error {
   // site Worker's counter.ts, and a bare field declaration erases.
   visitorFacing: boolean;
 
-  constructor(message) { super(message); this.name = "ReaderError"; this.visitorFacing = true; }
+  constructor(message) {
+    super(message);
+    this.name = "ReaderError";
+    this.visitorFacing = true;
+  }
 }
 
 export const BOT_UA = "AadharshBot/1.0 (+https://aadhar.sh/bot)";
 export const EXTRACTOR = { name: "readability", version: "0.6.0" };
 export const READER_LIMIT_PER_MIN = 10;
 export const FETCH_TIMEOUT_MS = 8000;
-export const BODY_CAP = 2 * 1024 * 1024;   // same 2MB ceiling /lens/fetch reads to
-export const MARKDOWN_CAP = 120 * 1024;    // same cap the Browser view puts on content
+export const BODY_CAP = 2 * 1024 * 1024; // same 2MB ceiling /lens/fetch reads to
+export const MARKDOWN_CAP = 120 * 1024; // same cap the Browser view puts on content
 
 export const READER_NOTE =
   "Readability is a third-party extractor (Apache-2.0, mozilla/readability), the engine behind " +
@@ -60,14 +64,19 @@ export const READER_NOTE =
 async function fetchSource(targetUrl) {
   const deadline = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   try {
-    const followed = await fetchFollowingPublicRedirects(targetUrl, () => ({
-      headers: {
-        "user-agent": BOT_UA,
-        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "accept-language": "en-US,en;q=0.9",
-      },
-      signal: deadline,
-    }), validateLensTarget, 20); // Preserve native fetch's redirect allowance.
+    const followed = await fetchFollowingPublicRedirects(
+      targetUrl,
+      () => ({
+        headers: {
+          "user-agent": BOT_UA,
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": "en-US,en;q=0.9",
+        },
+        signal: deadline,
+      }),
+      validateLensTarget,
+      20,
+    ); // Preserve native fetch's redirect allowance.
     if (!followed.ok) {
       throw new ReaderError("That URL redirected somewhere this reader will not follow.");
     }
@@ -94,8 +103,13 @@ export async function read(targetUrl) {
     // An extractor has nothing to say about JSON or plain text. Refusing is more
     // honest than running the heuristic over a body it was never meant for.
     return {
-      ok: true, url: targetUrl, finalUrl, status: response.status, contentType,
-      extractor: EXTRACTOR, note: READER_NOTE,
+      ok: true,
+      url: targetUrl,
+      finalUrl,
+      status: response.status,
+      contentType,
+      extractor: EXTRACTOR,
+      note: READER_NOTE,
       skipped: "not-html",
       source: tally(html),
       ms: { fetch: fetchMs },
@@ -116,22 +130,23 @@ export async function read(targetUrl) {
 
   const t2 = Date.now();
   let articleNode;
-  const result = new Readability(working, {
-    charThreshold: 500,
-    // Readability calls its serializer with the finished article node. Keep that
-    // node while returning the same innerHTML its default serializer returns, so
-    // the public `content` contract does not move and Markdown can skip reparsing
-    // the exact HTML Readability just serialized.
-    serializer(element) {
-      articleNode = element;
-      return element.innerHTML;
-    },
-  // A REAL cast rather than the JSDoc one this line carried until 2026-08-24.
-  // #514 fixed the five `.parse()` property reads below with `@type`, and a .ts
-  // file ignores JSDoc, so the rename made that fix inert and every one of them
-  // came back. That is the trap in converting a file that already documented its
-  // types: the better-annotated module is the one that regresses.
-  }).parse() || ({} as Partial<NonNullable<ReturnType<Readability["parse"]>>>);
+  const result =
+    new Readability(working, {
+      charThreshold: 500,
+      // Readability calls its serializer with the finished article node. Keep that
+      // node while returning the same innerHTML its default serializer returns, so
+      // the public `content` contract does not move and Markdown can skip reparsing
+      // the exact HTML Readability just serialized.
+      serializer(element) {
+        articleNode = element;
+        return element.innerHTML;
+      },
+      // A REAL cast rather than the JSDoc one this line carried until 2026-08-24.
+      // #514 fixed the five `.parse()` property reads below with `@type`, and a .ts
+      // file ignores JSDoc, so the rename made that fix inert and every one of them
+      // came back. That is the trap in converting a file that already documented its
+      // types: the better-annotated module is the one that regresses.
+    }).parse() || ({} as Partial<NonNullable<ReturnType<Readability["parse"]>>>);
   const extractMs = Date.now() - t2;
 
   const contentHtml = String(result.content || "");
@@ -150,7 +165,10 @@ export async function read(targetUrl) {
 
   return {
     ok: true,
-    url: targetUrl, finalUrl, status: response.status, contentType,
+    url: targetUrl,
+    finalUrl,
+    status: response.status,
+    contentType,
     redirected: finalUrl !== targetUrl,
     extractor: EXTRACTOR,
     note: READER_NOTE,
@@ -198,7 +216,7 @@ export function toMarkdown(content) {
   if (!content) return "";
   let root = content;
   if (!content.nodeType) {
-    const { document } = parseHTML("<div id=\"lens-root\"></div>");
+    const { document } = parseHTML('<div id="lens-root"></div>');
     root = document.getElementById("lens-root");
     root.innerHTML = content;
   }
@@ -207,14 +225,37 @@ export function toMarkdown(content) {
 
 const MD_DROP = new Set(["script", "style"]);
 const MD_BLOCK = new Set([
-  "address", "article", "aside", "body", "caption", "details", "div", "figcaption", "figure",
-  "fieldset", "footer", "form", "header", "li", "main", "nav", "output", "section", "summary",
-  "table", "tbody", "td", "tfoot", "th", "thead", "tr",
+  "address",
+  "article",
+  "aside",
+  "body",
+  "caption",
+  "details",
+  "div",
+  "figcaption",
+  "figure",
+  "fieldset",
+  "footer",
+  "form",
+  "header",
+  "li",
+  "main",
+  "nav",
+  "output",
+  "section",
+  "summary",
+  "table",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "tr",
 ]);
 
-const nodeName = (node) => String(node && node.nodeName || "").toLowerCase();
-const childrenOf = (node) => Array.from(node && node.childNodes || []);
-const attr = (node, name) => String(node && node.getAttribute && node.getAttribute(name) || "");
+const nodeName = (node) => String((node && node.nodeName) || "").toLowerCase();
+const childrenOf = (node) => Array.from((node && node.childNodes) || []);
+const attr = (node, name) => String((node && node.getAttribute && node.getAttribute(name)) || "");
 
 function tidyMarkdown(value) {
   return String(value)
@@ -248,7 +289,9 @@ function longestRun(value, char) {
 // backslash FIRST, or the escapes escape each other. CodeQL's
 // js/incomplete-sanitization caught the image half.
 function mdDestination(value) {
-  return String(value || "").replace(/\\/g, "\\\\").replace(/\)/g, "\\)");
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\)/g, "\\)");
 }
 
 function mdTitle(value) {
@@ -297,14 +340,32 @@ function markdownNode(node) {
   if (MD_BLOCK.has(tag) || tag === "p") return `\n\n${inner()}\n\n`;
 
   switch (tag) {
-    case "br": return "  \n";
-    case "hr": return "\n\n---\n\n";
-    case "strong": case "b": { const value = inline(); return value ? `**${value}**` : ""; }
-    case "em": case "i": case "cite": { const value = inline(); return value ? `*${value}*` : ""; }
-    case "del": case "s": { const value = inline(); return value ? `~~${value}~~` : ""; }
-    case "code": return codeSpan(node.textContent);
+    case "br":
+      return "  \n";
+    case "hr":
+      return "\n\n---\n\n";
+    case "strong":
+    case "b": {
+      const value = inline();
+      return value ? `**${value}**` : "";
+    }
+    case "em":
+    case "i":
+    case "cite": {
+      const value = inline();
+      return value ? `*${value}*` : "";
+    }
+    case "del":
+    case "s": {
+      const value = inline();
+      return value ? `~~${value}~~` : "";
+    }
+    case "code":
+      return codeSpan(node.textContent);
     case "pre": {
-      const value = String(node.textContent || "").replace(/^\n/, "").replace(/\s+$/, "");
+      const value = String(node.textContent || "")
+        .replace(/^\n/, "")
+        .replace(/\s+$/, "");
       if (!value) return "";
       const fence = "`".repeat(Math.max(3, longestRun(value, "`") + 1));
       const code = childrenOf(node).find((child) => nodeName(child) === "code");
@@ -326,13 +387,25 @@ function markdownNode(node) {
     }
     case "blockquote": {
       const value = tidyMarkdown(inner()).trim();
-      return value ? `\n\n${value.split("\n").map((line) => line ? `> ${line}` : "> ").join("\n")}\n\n` : "";
+      return value
+        ? `\n\n${value
+            .split("\n")
+            .map((line) => (line ? `> ${line}` : "> "))
+            .join("\n")}\n\n`
+        : "";
     }
-    case "ul": return markdownList(node, false);
-    case "ol": return markdownList(node, true);
-    case "dt": { const value = inline(); return value ? `\n\n**${value}**\n` : ""; }
-    case "dd": return `\n${inner()}\n\n`;
-    default: return inner();
+    case "ul":
+      return markdownList(node, false);
+    case "ol":
+      return markdownList(node, true);
+    case "dt": {
+      const value = inline();
+      return value ? `\n\n**${value}**\n` : "";
+    }
+    case "dd":
+      return `\n${inner()}\n\n`;
+    default:
+      return inner();
   }
 }
 
@@ -397,22 +470,26 @@ export function scoreExtraction({ source, kept, controls, title, markdown }) {
   const controlRatio = controlTotal ? controlKept / controlTotal : 0;
   const checks = [
     {
-      key: "body", label: "usable body recovered",
+      key: "body",
+      label: "usable body recovered",
       pass: sourceWords > 0 && keptWords >= threshold,
       detail: `${keptWords} words kept; ${threshold} required for this source`,
     },
     {
-      key: "title", label: "title recovered",
+      key: "title",
+      label: "title recovered",
       pass: !!String(title || "").trim(),
       detail: title ? "Readability returned a title" : "no title returned",
     },
     {
-      key: "controls", label: "control-label purity",
+      key: "controls",
+      label: "control-label purity",
       pass: controlRatio <= 0.25,
       detail: controlTotal ? `${controlKept} of ${controlTotal} control labels survived` : "no source controls to leak into prose",
     },
     {
-      key: "markdown", label: "Markdown produced",
+      key: "markdown",
+      label: "Markdown produced",
       pass: !!String(markdown || "").trim(),
       detail: markdown ? `${String(markdown).length} characters produced` : "the extraction was empty",
     },
@@ -442,7 +519,12 @@ async function readCapped(response, maxBytes) {
     if (done) break;
     total += value.length;
     chunks.push(value);
-    if (total >= maxBytes) { try { await reader.cancel(); } catch (_e) {} break; }
+    if (total >= maxBytes) {
+      try {
+        await reader.cancel();
+      } catch (_e) {}
+      break;
+    }
   }
   const merged = new Uint8Array(Math.min(total, maxBytes));
   let offset = 0;

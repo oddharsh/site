@@ -31,11 +31,9 @@ test("closeTagSource matches every close the tokenizer accepts", () => {
 
 test("stripRawText removes the element whatever shape its end tag takes", () => {
   for (const [name, close] of CLOSES) {
-    assert.equal(stripRawText(`keep<script>LEAK${close}tail`, "script").replace(/\s+/g, " "),
-      "keep tail", name);
+    assert.equal(stripRawText(`keep<script>LEAK${close}tail`, "script").replace(/\s+/g, " "), "keep tail", name);
   }
-  assert.equal(stripRawText("keep<style>a{b:c} LEAK</style >tail", "style").replace(/\s+/g, " "),
-    "keep tail", "style too");
+  assert.equal(stripRawText("keep<style>a{b:c} LEAK</style >tail", "style").replace(/\s+/g, " "), "keep tail", "style too");
 });
 
 test("document extraction keeps prose after each legal raw-text close", () => {
@@ -82,10 +80,7 @@ test("check-page-contracts composes its close from the shared module", async () 
 });
 
 test("the composed luq-data pattern reads every close", () => {
-  const re = new RegExp(
-    `<script\\b[^>]*\\btype="application/json"[^>]*\\bid="luq-data"[^>]*>([\\s\\S]*?)${closeTagSource("script")}`,
-    "gi",
-  );
+  const re = new RegExp(`<script\\b[^>]*\\btype="application/json"[^>]*\\bid="luq-data"[^>]*>([\\s\\S]*?)${closeTagSource("script")}`, "gi");
   for (const [name, close] of CLOSES) {
     const html = `<script type="application/json" id="luq-data">{"a":1}${close}`;
     const m = [...html.matchAll(re)];

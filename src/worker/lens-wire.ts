@@ -46,27 +46,48 @@ const WIRE_MAX_ROWS = 60;
 // the payload reports HOSTS as the primary fact and the grouping as a
 // convenience. Say what a number is worth rather than overstating it.
 export function siteOf(hostname) {
-  const parts = String(hostname || "").toLowerCase().split(".").filter(Boolean);
+  const parts = String(hostname || "")
+    .toLowerCase()
+    .split(".")
+    .filter(Boolean);
   if (parts.length <= 2) return parts.join(".");
   const twoLevelSuffix = /^(co|com|org|net|gov|edu|ac)\.[a-z]{2}$/.test(parts.slice(-2).join("."));
   return parts.slice(twoLevelSuffix ? -3 : -2).join(".");
 }
 
 function hostOf(url) {
-  try { return new URL(url).hostname.toLowerCase(); } catch { return ""; }
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
 }
 
 // CDP resource types are Chrome's own vocabulary and there are ~20 of them. The
 // page's cost story needs about six, so the rest fold into "other" rather than
 // producing a histogram with a long tail of ones.
 const TYPE_BUCKETS = {
-  Document: "document", Stylesheet: "css", Script: "js", Image: "image",
-  Font: "font", XHR: "xhr", Fetch: "xhr", Media: "media", Manifest: "other",
-  TextTrack: "other", EventSource: "xhr", WebSocket: "other", Ping: "beacon",
-  CSPViolationReport: "beacon", Preflight: "other", Other: "other",
+  Document: "document",
+  Stylesheet: "css",
+  Script: "js",
+  Image: "image",
+  Font: "font",
+  XHR: "xhr",
+  Fetch: "xhr",
+  Media: "media",
+  Manifest: "other",
+  TextTrack: "other",
+  EventSource: "xhr",
+  WebSocket: "other",
+  Ping: "beacon",
+  CSPViolationReport: "beacon",
+  Preflight: "other",
+  Other: "other",
 };
 
-export function bucketFor(cdpType) { return TYPE_BUCKETS[cdpType] || "other"; }
+export function bucketFor(cdpType) {
+  return TYPE_BUCKETS[cdpType] || "other";
+}
 
 // Build one row per request id, folding the four events that describe the same
 // request into a single record. Ordering is by the CDP timestamp on the
@@ -89,7 +110,9 @@ export function summariseWire(events, pageUrl) {
         // carrying redirectResponse. Overwriting would lose the first hop and
         // undercount both the request and its bytes, so the hop is counted and
         // the row moves on to the destination.
-        if (p.redirectResponse && row.url) { row.redirects = (row.redirects || 0) + 1; }
+        if (p.redirectResponse && row.url) {
+          row.redirects = (row.redirects || 0) + 1;
+        }
         row.url = p.request?.url || row.url;
         row.method = p.request?.method || row.method;
         row.type = bucketFor(p.type);
@@ -125,17 +148,20 @@ export function summariseWire(events, pageUrl) {
         // means the server answered and the body was cut short or the caller
         // walked away, which devtools itself renders as "(canceled)". No status
         // means the request genuinely did not complete.
-        if (row.status != null || p.canceled) { row.aborted = true; } else { row.failed = true; }
-        row.error = p.blockedReason ? "blocked: " + p.blockedReason : (p.errorText || "failed");
+        if (row.status != null || p.canceled) {
+          row.aborted = true;
+        } else {
+          row.failed = true;
+        }
+        row.error = p.blockedReason ? "blocked: " + p.blockedReason : p.errorText || "failed";
         row.t1 = p.timestamp;
         break;
-      default: break;
+      default:
+        break;
     }
   }
 
-  const rows = [...byId.values()]
-    .filter((r) => r.url && !r.url.startsWith("data:"))
-    .sort((a, b) => (a.t0 ?? 0) - (b.t0 ?? 0));
+  const rows = [...byId.values()].filter((r) => r.url && !r.url.startsWith("data:")).sort((a, b) => (a.t0 ?? 0) - (b.t0 ?? 0));
 
   const dataUris = [...byId.values()].filter((r) => r.url && r.url.startsWith("data:")).length;
 
@@ -143,7 +169,12 @@ export function summariseWire(events, pageUrl) {
   // Filled per resource type as the waterfall is walked, so the key set is not
   // knowable from the initializer.
   const byType: Record<string, { count: number; bytes: number }> = {};
-  let bytes = 0, thirdBytes = 0, thirdCount = 0, cached = 0, failed = 0, aborted = 0;
+  let bytes = 0,
+    thirdBytes = 0,
+    thirdCount = 0,
+    cached = 0,
+    failed = 0,
+    aborted = 0;
 
   for (const r of rows) {
     const host = hostOf(r.url);
@@ -153,7 +184,10 @@ export function summariseWire(events, pageUrl) {
     r.ms = r.t0 != null && r.t1 != null ? Math.round((r.t1 - r.t0) * 1000) : null;
 
     bytes += r.bytes;
-    if (third) { thirdBytes += r.bytes; thirdCount++; }
+    if (third) {
+      thirdBytes += r.bytes;
+      thirdCount++;
+    }
     if (r.cached) cached++;
     if (r.failed) failed++;
     if (r.aborted) aborted++;
@@ -164,7 +198,8 @@ export function summariseWire(events, pageUrl) {
     byType[t].bytes += r.bytes;
 
     const h = hosts.getOrInsertComputed(host, () => ({ host, count: 0, bytes: 0, third }));
-    h.count++; h.bytes += r.bytes;
+    h.count++;
+    h.bytes += r.bytes;
   }
 
   const hostList = [...hosts.values()].sort((a, b) => b.bytes - a.bytes || b.count - a.count);
@@ -222,7 +257,11 @@ function cdpClient(ws) {
 
   ws.addEventListener("message", (ev) => {
     let msg;
-    try { msg = JSON.parse(asText(ev.data, "")); } catch { return; }
+    try {
+      msg = JSON.parse(asText(ev.data, ""));
+    } catch {
+      return;
+    }
     if (msg.id && pending.has(msg.id)) {
       const { resolve, reject } = pending.get(msg.id);
       pending.delete(msg.id);
@@ -250,30 +289,50 @@ function cdpClient(ws) {
   // callers below read one or two fields each and guard for absence.
   const send = (method: string, params?: unknown, sessionId?: string): Promise<Record<string, any>> =>
     new Promise<Record<string, any>>((resolve, reject) => {
-    if (closed) return reject(closed);
-    const id = nextId++;
-    pending.set(id, { resolve, reject });
-    // sessionId is OPTIONAL on the wire: a browser-level command carries none,
-    // and a page-level one must. Declared so the conditional assign type-checks.
-    const frame: { id: number; method: string; params: unknown; sessionId?: string } = { id, method, params: params || {} };
-    if (sessionId) frame.sessionId = sessionId;
-    try { ws.send(JSON.stringify(frame)); } catch (e) { pending.delete(id); return reject(e); }
-    setTimeout(() => { if (pending.delete(id)) reject(new Error(`CDP timeout: ${method}`)); }, WIRE_TIMING.cdpCommandMs);
-  });
+      if (closed) return reject(closed);
+      const id = nextId++;
+      pending.set(id, { resolve, reject });
+      // sessionId is OPTIONAL on the wire: a browser-level command carries none,
+      // and a page-level one must. Declared so the conditional assign type-checks.
+      const frame: { id: number; method: string; params: unknown; sessionId?: string } = { id, method, params: params || {} };
+      if (sessionId) frame.sessionId = sessionId;
+      try {
+        ws.send(JSON.stringify(frame));
+      } catch (e) {
+        pending.delete(id);
+        return reject(e);
+      }
+      setTimeout(() => {
+        if (pending.delete(id)) reject(new Error(`CDP timeout: ${method}`));
+      }, WIRE_TIMING.cdpCommandMs);
+    });
 
   // Resolves on the first matching event, or on timeout WITHOUT throwing: a page
   // that never fires its load event is a real page with a real waterfall, and
   // refusing to report it would throw away the observation we just paid for.
-  const waitFor = (method, ms) => new Promise((resolve) => {
-    const seen = events.find((e) => e.method === method);
-    if (seen) return resolve(seen);
-    const t = setTimeout(() => { ws.removeEventListener("message", onMsg); resolve(null); }, ms);
-    function onMsg(ev) {
-      let m; try { m = JSON.parse(ev.data); } catch { return; }
-      if (m.method === method) { clearTimeout(t); ws.removeEventListener("message", onMsg); resolve(m); }
-    }
-    ws.addEventListener("message", onMsg);
-  });
+  const waitFor = (method, ms) =>
+    new Promise((resolve) => {
+      const seen = events.find((e) => e.method === method);
+      if (seen) return resolve(seen);
+      const t = setTimeout(() => {
+        ws.removeEventListener("message", onMsg);
+        resolve(null);
+      }, ms);
+      function onMsg(ev) {
+        let m;
+        try {
+          m = JSON.parse(ev.data);
+        } catch {
+          return;
+        }
+        if (m.method === method) {
+          clearTimeout(t);
+          ws.removeEventListener("message", onMsg);
+          resolve(m);
+        }
+      }
+      ws.addEventListener("message", onMsg);
+    });
 
   return { send, waitFor, events };
 }
@@ -298,7 +357,10 @@ async function runWireSession(env, url) {
   const created = await env.BROWSER.fetch(CDP_BASE, { method: "POST" });
   if (created.status === 429) return { budget: true };
   if (!created.ok) {
-    let detail = ""; try { detail = (await created.text()).slice(0, 200); } catch (_e) {}
+    let detail = "";
+    try {
+      detail = (await created.text()).slice(0, 200);
+    } catch (_e) {}
     return { error: `Browser Run refused a CDP session (${created.status}).`, detail, status: created.status };
   }
   const { sessionId } = await created.json();
@@ -329,8 +391,11 @@ async function runWireSession(env, url) {
     try {
       await cdp.send("Network.setUserAgentOverride", { userAgent: BOT_UA }, pageSession);
     } catch (_e) {
-      try { await cdp.send("Emulation.setUserAgentOverride", { userAgent: BOT_UA }, pageSession); }
-      catch (_e2) { uaApplied = false; }
+      try {
+        await cdp.send("Emulation.setUserAgentOverride", { userAgent: BOT_UA }, pageSession);
+      } catch (_e2) {
+        uaApplied = false;
+      }
     }
     // Runtime and Log carry the EXECUTION evidence, and both are enabled before
     // the navigation because an exception thrown during load is the interesting
@@ -344,8 +409,7 @@ async function runWireSession(env, url) {
     // A binding that refuses either domain should cost the execution checks and
     // leave them neutral, not lose the whole request waterfall this route
     // exists for.
-    const execDomains = await enableWireDomains((method, params) =>
-      cdp.send(method, params, pageSession));
+    const execDomains = await enableWireDomains((method, params) => cdp.send(method, params, pageSession));
 
     const t0 = Date.now();
     await cdp.send("Page.navigate", { url }, pageSession);
@@ -374,10 +438,14 @@ async function runWireSession(env, url) {
           const logged = cdp.events.filter((e) => e.method === "Log.entryAdded" && e.params && e.params.entry && e.params.entry.level === "error");
           const first = thrown[0]
             ? String((thrown[0].params && thrown[0].params.exceptionDetails && thrown[0].params.exceptionDetails.text) || "").slice(0, 120)
-            : logged[0] ? String((logged[0].params.entry.text) || "").slice(0, 120) : "";
+            : logged[0]
+              ? String(logged[0].params.entry.text || "").slice(0, 120)
+              : "";
           execution = { ran: true, engine: "chromium-cdp", pageErrors: thrown.length, consoleErrors: logged.length, firstError: first || undefined, ...raw };
         }
-      } catch (_e) { execution = null; }
+      } catch (_e) {
+        execution = null;
+      }
     }
 
     // The browser-local tool catalog, read from the SAME session. A page's
@@ -403,16 +471,22 @@ async function runWireSession(env, url) {
             const ver = await cdp.send("Browser.getVersion");
             const product = ver && asText(ver.product);
             if (product) webmcp = { ...webmcp, engine: product.slice(0, 120) };
-          } catch (_e) { /* an engine we cannot name is still a result */ }
+          } catch (_e) {
+            /* an engine we cannot name is still a result */
+          }
         }
-      } catch (_e) { webmcp = null; }
+      } catch (_e) {
+        webmcp = null;
+      }
     }
 
     return { events: cdp.events, navMs: Date.now() - t0, loadFired: Boolean(loaded), uaApplied, execution, webmcp, sessionId };
   } finally {
     // Fire and forget would be wrong: a leaked session holds one of three
     // concurrent slots and blacks out every browser lens on the site.
-    try { await env.BROWSER.fetch(`${CDP_BASE}/${sessionId}`, { method: "DELETE" }); } catch (_e) {}
+    try {
+      await env.BROWSER.fetch(`${CDP_BASE}/${sessionId}`, { method: "DELETE" });
+    } catch (_e) {}
   }
 }
 
@@ -442,7 +516,9 @@ const LENS_WIRE = defineLens({
     // the single most likely non-success here.
     if (out.budget) {
       return {
-        ok: false, status: 429, outcome: "browser_budget_spent",
+        ok: false,
+        status: 429,
+        outcome: "browser_budget_spent",
         payload: {
           ok: false,
           error: `Browser Run is rate-limited right now (free plan: one new browser every 20s, ${BROWSER_FREE_PLAN.perDayMinutes} min/day account-wide). Every other lens still works.`,

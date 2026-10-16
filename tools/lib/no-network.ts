@@ -62,7 +62,11 @@ const escaped: string[] = state.escaped;
 // in the report: an escape to something unparseable is an escape.
 
 const urlOf = (input) => {
-  try { return new Request(input as any).url; } catch { return String(input); }
+  try {
+    return new Request(input as any).url;
+  } catch {
+    return String(input);
+  }
 };
 
 const arm = () => {
@@ -81,7 +85,7 @@ const arm = () => {
     escaped.push(url);
     throw new TypeError(
       `the test suite tried to fetch ${url}. Stub globalThis.fetch for this test ` +
-      `(see tools/lib/no-network.ts) rather than letting a required check depend on a live host.`,
+        `(see tools/lib/no-network.ts) rather than letting a required check depend on a live host.`,
     );
   };
 
@@ -92,25 +96,31 @@ const arm = () => {
     const counts = new Map<string, number>();
     for (const url of escaped) {
       let host = "(unparseable)";
-      try { host = new URL(url).host; } catch { /* keep the placeholder */ }
+      try {
+        host = new URL(url).host;
+      } catch {
+        /* keep the placeholder */
+      }
       counts.set(host, (counts.get(host) ?? 0) + 1);
     }
 
-    process.stderr.write([
-      "",
-      `NETWORK TRIPWIRE: the suite attempted ${escaped.length} outbound request(s).`,
-      "",
-      ...[...counts].sort((a, b) => b[1] - a[1]).map(([host, n]) => `  ${String(n).padStart(4)}  ${host}`),
-      "",
-      "  first few:",
-      ...[...new Set(escaped)].slice(0, 5).map((u) => `    ${u}`),
-      "",
-      "  Every one was REFUSED, so nothing left the machine, and a test that",
-      "  caught the refusal may well have passed. That is why this fails at exit",
-      "  rather than trusting the throw to be noticed.",
-      "  Stub globalThis.fetch in the offending test; the header here says how.",
-      "",
-    ].join("\n") + "\n");
+    process.stderr.write(
+      [
+        "",
+        `NETWORK TRIPWIRE: the suite attempted ${escaped.length} outbound request(s).`,
+        "",
+        ...[...counts].sort((a, b) => b[1] - a[1]).map(([host, n]) => `  ${String(n).padStart(4)}  ${host}`),
+        "",
+        "  first few:",
+        ...[...new Set(escaped)].slice(0, 5).map((u) => `    ${u}`),
+        "",
+        "  Every one was REFUSED, so nothing left the machine, and a test that",
+        "  caught the refusal may well have passed. That is why this fails at exit",
+        "  rather than trusting the throw to be noticed.",
+        "  Stub globalThis.fetch in the offending test; the header here says how.",
+        "",
+      ].join("\n") + "\n",
+    );
 
     // Set rather than thrown: an exception raised in an exit hook is reported
     // as a crash in the harness instead of as this message, and the message is

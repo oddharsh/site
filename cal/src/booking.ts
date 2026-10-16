@@ -122,12 +122,12 @@ export async function setLocation(env, id: string, location: string): Promise<Bo
 // Returns the slot it VACATED alongside the patched booking, because the old
 // start/end are gone from the record the moment this writes, and releasing a
 // hold needs exactly those two numbers.
-export async function setSchedule(env, id: string, slot: Interval): Promise<{ booking: Booking, was: Interval } | null> {
+export async function setSchedule(env, id: string, slot: Interval): Promise<{ booking: Booking; was: Interval } | null> {
   const b = await getBooking(env, id);
   if (!b) return null;
   const was = { start: b.start, end: b.end };
   b.start = slot.start;
-  b.end   = slot.end;
+  b.end = slot.end;
   // Same rule as setLocation: only a booking whose invite is already out has a
   // VEVENT to supersede. A pending one still owes its first at SEQUENCE:0.
   if (b.status === "confirmed") b.sequence = (b.sequence ?? 0) + 1;
@@ -148,7 +148,7 @@ export async function setSchedule(env, id: string, slot: Interval): Promise<{ bo
 export async function cancelBooking(env, id: string): Promise<Booking | null> {
   const b = await getBooking(env, id);
   if (!b) return null;
-  b.status   = "cancelled";
+  b.status = "cancelled";
   b.acted_at = Date.now();
   b.sequence = (b.sequence ?? 0) + 1;
   await putBooking(env, b);

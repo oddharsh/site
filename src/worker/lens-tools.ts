@@ -27,9 +27,13 @@ const LENS_TOOLS = defineLens({
     if (!probe.ok) {
       s.setAttribute("lens.detail", probe.detail);
       return {
-        ok: false, status: 200, outcome: probe.unreadable ? "unreadable" : "shut",
+        ok: false,
+        status: 200,
+        outcome: probe.unreadable ? "unreadable" : "shut",
         payload: {
-          ok: false, origin, host,
+          ok: false,
+          origin,
+          host,
           unreadable: !!probe.unreadable,
           error: probe.detail || "the MCP door did not answer",
         },
@@ -40,7 +44,8 @@ const LENS_TOOLS = defineLens({
     s.setAttribute("lens.tool_count", probe.count);
     s.setAttribute("lens.tools_with_schema", withSchema);
     return {
-      ok: true, outcome: "read",
+      ok: true,
+      outcome: "read",
       value: {
         ok: true,
         origin,

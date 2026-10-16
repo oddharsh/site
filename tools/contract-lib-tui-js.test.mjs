@@ -1,10 +1,6 @@
 // ── lib/tui.js ───────────────────────────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  assert,
-  test,
-  tui,
-} from "./contract-shared.ts";
+import { assert, test, tui } from "./contract-shared.ts";
 
 // ── lib/tui.js ───────────────────────────────────────────────────────────────
 // A fixed-80-column renderer fails SILENTLY. A frame one column wide or narrow
@@ -59,7 +55,12 @@ test("tui truncTo() reserves exactly one column for its ellipsis", () => {
 test("tui ends() fills its line and never lets the two sides touch", () => {
   // ends() is what draws every header row: a label left, a value right. If the
   // gap maths is wrong the two run together and the frame reads as corrupted.
-  for (const [l, r] of [["left", "right"], ["", ""], ["x".repeat(70), "y".repeat(20)], ["😀".repeat(9), "z"]]) {
+  for (const [l, r] of [
+    ["left", "right"],
+    ["", ""],
+    ["x".repeat(70), "y".repeat(20)],
+    ["😀".repeat(9), "z"],
+  ]) {
     const out = tui.ends([tui.s(l)], [tui.s(r)], tui.COLS);
     assert.equal(tui.width(out), tui.COLS, `ends(${l.slice(0, 6)}…) must fill exactly ${tui.COLS}`);
     const flat = out.map(([t]) => t).join("");
@@ -72,8 +73,8 @@ test("tui wrap() never returns a line wider than the column", () => {
   const inputs = [
     "short",
     "a series of perfectly ordinary words that must be broken across several lines",
-    "https://example.com/" + "a".repeat(120),      // one unbreakable token
-    "😀".repeat(80),                                // astral, unbreakable
+    "https://example.com/" + "a".repeat(120), // one unbreakable token
+    "😀".repeat(80), // astral, unbreakable
     "   collapsing\n\twhitespace   ",
     "",
   ];
@@ -89,7 +90,11 @@ test("tui wrap() never returns a line wider than the column", () => {
 test("tui table() emits rows that are all exactly the table width", () => {
   const out = tui.table({
     cols: [{ label: "name", width: 20 }, { label: "value" }],
-    rows: [["short", "x"], ["😀".repeat(30), "y".repeat(90)], ["", ""]],
+    rows: [
+      ["short", "x"],
+      ["😀".repeat(30), "y".repeat(90)],
+      ["", ""],
+    ],
     width: tui.COLS,
   });
   assert.ok(out.length >= 3, "header plus rows");
@@ -117,5 +122,8 @@ test("tui pane() and plainFrame() render at the console width", () => {
   const paneOut = tui.pane({ title: "title", body: tui.wrap("body text", tui.COLS - 4).map((r) => [tui.s(r)]) });
   for (const line of paneOut) assert.ok(tui.width(line) <= tui.COLS, "a pane never exceeds the console");
   const frame = tui.emit(tui.plainFrame({ title: "t", body: [[tui.s("b")]], status: "ok" }));
-  assert.ok(frame.split("\n").every((l) => [...l].length <= tui.COLS), "no frame line exceeds 80 columns");
+  assert.ok(
+    frame.split("\n").every((l) => [...l].length <= tui.COLS),
+    "no frame line exceeds 80 columns",
+  );
 });

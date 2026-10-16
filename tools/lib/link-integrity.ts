@@ -28,7 +28,12 @@
 
 import { claimedByWorker } from "../../src/worker/routes.ts";
 
-export function makeResolver({ files, routeKeys, allow, surfaces }: {
+export function makeResolver({
+  files,
+  routeKeys,
+  allow,
+  surfaces,
+}: {
   /** served paths in the staged tree, each leading "/" */
   files: Set<string>;
   /** exact paths from the Worker's ROUTES map */
@@ -107,10 +112,7 @@ export async function internalRefs(html) {
       }
     },
   };
-  await new HTMLRewriter()
-    .on("*", handler)
-    .transform(new Response(html))
-    .arrayBuffer();
+  await new HTMLRewriter().on("*", handler).transform(new Response(html)).arrayBuffer();
   return out;
 }
 
@@ -129,9 +131,7 @@ export async function internalRefs(html) {
  * `origin` or root-relative. An off-origin image is not ours to vouch for, and
  * the `og:image:width` family is metadata about the image rather than a URL.
  */
-const META_IMAGE_KEYS = new Set([
-  "og:image", "og:image:url", "og:image:secure_url", "twitter:image", "twitter:image:src",
-]);
+const META_IMAGE_KEYS = new Set(["og:image", "og:image:url", "og:image:secure_url", "twitter:image", "twitter:image:src"]);
 
 export async function metaImageRefs(html: string, origin = "https://aadhar.sh"): Promise<string[]> {
   const out: string[] = [];
@@ -142,9 +142,16 @@ export async function metaImageRefs(html: string, origin = "https://aadhar.sh"):
         const key = el.getAttribute("property") || el.getAttribute("name");
         const raw = el.getAttribute("content");
         if (!key || !raw || !META_IMAGE_KEYS.has(key)) return;
-        if (raw.startsWith("/") && !raw.startsWith("//")) { out.push(raw.split(/[?#]/)[0]); return; }
+        if (raw.startsWith("/") && !raw.startsWith("//")) {
+          out.push(raw.split(/[?#]/)[0]);
+          return;
+        }
         let url: URL;
-        try { url = new URL(raw); } catch { return; }
+        try {
+          url = new URL(raw);
+        } catch {
+          return;
+        }
         if (url.host === host) out.push(url.pathname);
       },
     })

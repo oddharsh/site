@@ -30,7 +30,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FILE = path.join(ROOT, "src/worker/checkpoints.json");
 const SYNC = process.argv.includes("--sync");
 
-const fail = (msg) => { console.error(`checkpoints: ${msg}`); process.exit(1); };
+const fail = (msg) => {
+  console.error(`checkpoints: ${msg}`);
+  process.exit(1);
+};
 
 // The exact query bump-version.sh writes from, so a column or order change here
 // fails loudly instead of producing a diff nobody can read.
@@ -47,7 +50,6 @@ try {
   process.exit(0);
 }
 
-
 if (SYNC) {
   await writeFile(FILE, JSON.stringify(live, null, 2).replace(/\n$/, "") + "\n");
   console.log(`checkpoints: synced ${live.length} rows from D1 -> src/worker/checkpoints.json`);
@@ -56,11 +58,15 @@ if (SYNC) {
 }
 
 let committed;
-try { committed = JSON.parse(await readFile(FILE, "utf8")); }
-catch { fail("src/worker/checkpoints.json is missing or unparseable — run: bun run checkpoints:sync"); }
+try {
+  committed = JSON.parse(await readFile(FILE, "utf8"));
+} catch {
+  fail("src/worker/checkpoints.json is missing or unparseable — run: bun run checkpoints:sync");
+}
 
 const byVnum = (rows): Map<number, any> => new Map(rows.map((r) => [r.vnum, r]));
-const c = byVnum(committed), l = byVnum(live);
+const c = byVnum(committed),
+  l = byVnum(live);
 const liveMax = live.length ? Math.max(...l.keys()) : 0;
 
 // PENDING entries are the projection running ahead of D1, which is now the
@@ -71,14 +77,16 @@ const liveMax = live.length ? Math.max(...l.keys()) : 0;
 //
 // So "ahead" is legal and "behind" never is. A projection row BELOW D1's high
 // -water mark that D1 does not have is not pending, it is a rewrite of history.
-const pending = committed.filter((r) => !l.has(r.vnum) && r.vnum > liveMax)
-  .sort((a, b) => a.vnum - b.vnum);
+const pending = committed.filter((r) => !l.has(r.vnum) && r.vnum > liveMax).sort((a, b) => a.vnum - b.vnum);
 const pendingVnums = new Set(pending.map((r) => r.vnum));
 
 const diffs: string[] = [];
 for (const [vnum, row] of l) {
   const mine = c.get(vnum);
-  if (!mine) { diffs.push(`v${vnum} present in D1, absent from the projection`); continue; }
+  if (!mine) {
+    diffs.push(`v${vnum} present in D1, absent from the projection`);
+    continue;
+  }
   for (const k of ["ymd", "version", "slug", "title"]) {
     if (mine[k] !== row[k]) diffs.push(`v${vnum} ${k}: projection ${JSON.stringify(mine[k])} vs D1 ${JSON.stringify(row[k])}`);
   }
@@ -99,9 +107,12 @@ pending.forEach((row, i) => {
 if (diffs.length) {
   fail(
     `${diffs.length} row(s) differ from D1:\n` +
-    diffs.slice(0, 8).map((d) => `  - ${d}`).join("\n") +
-    (diffs.length > 8 ? `\n  … and ${diffs.length - 8} more` : "") +
-    `\n  fix with: bun run checkpoints:sync && git add src/worker/checkpoints.json`,
+      diffs
+        .slice(0, 8)
+        .map((d) => `  - ${d}`)
+        .join("\n") +
+      (diffs.length > 8 ? `\n  … and ${diffs.length - 8} more` : "") +
+      `\n  fix with: bun run checkpoints:sync && git add src/worker/checkpoints.json`,
   );
 }
 

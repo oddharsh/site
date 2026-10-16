@@ -23,7 +23,7 @@ test("Bun checks imported source, counts only its owner, and separates named fil
   const { root, write } = fixture(t);
   write("tsconfig.json", { compilerOptions: OPTIONS, include: ["owned/main.ts"] });
   write("owned/main.ts", 'import { value } from "../shared/value"; export const count: number = value;');
-  write("shared/value.ts", 'export const value: string = 1;');
+  write("shared/value.ts", "export const value: string = 1;");
   const checked = checkProgram(root, "tsconfig.json", ["owned/"], BUN);
   assert.deepEqual(checked.counts, { "owned/main.ts": 1 });
   assert.ok(checked.files.includes("shared/value.ts"));
@@ -107,7 +107,9 @@ test("Reader's partial baseline update preserves errors owed by other programs",
   const result = spawnSync(BUN, [join(root, "tools/typecheck.ts"), "config/tsconfig.lens-reader.json", "--update"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.deepEqual(JSON.parse(readFileSync(join(root, "config/ts-baseline.json"), "utf8")).files, {
-    "lens-reader/src/main.ts": 1, "src/worker/old.ts": 3, "tools/old.ts": 2,
+    "lens-reader/src/main.ts": 1,
+    "src/worker/old.ts": 3,
+    "tools/old.ts": 2,
   });
   const checked = spawnSync(BUN, [join(root, "tools/typecheck.ts"), "config/tsconfig.lens-reader.json"], { cwd: root, encoding: "utf8" });
   assert.equal(checked.status, 0, `${checked.stdout}\n${checked.stderr}`);

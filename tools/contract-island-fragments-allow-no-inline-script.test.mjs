@@ -59,7 +59,7 @@ test("real fragments hold nothing the policy would block", async () => {
     source: "https://evil.example/<script>alert(1)</script>",
     target: "https://aadhar.sh/writing/in-flux",
     author: "<img src=x onerror=alert(1)>",
-    content: "<script>alert(2)</script> <a href=\"javascript:alert(3)\">x</a>",
+    content: '<script>alert(2)</script> <a href="javascript:alert(3)">x</a>',
     published: "2026-10-08T00:00:00Z",
     approved: true,
   };

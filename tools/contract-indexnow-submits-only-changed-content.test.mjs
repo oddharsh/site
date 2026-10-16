@@ -18,7 +18,10 @@ test("indexnow: the key is served at /<key>.txt, as the protocol requires", asyn
   const served = await readFile(new URL(`public/${INDEXNOW_KEY}.txt`, ROOT), "utf8");
   assert.equal(served.trim(), INDEXNOW_KEY, "the engines compare the file body with the submitted key");
   assert.deepEqual(submission("aadhar.sh", ["https://aadhar.sh/x"]), {
-    host: "aadhar.sh", key: INDEXNOW_KEY, keyLocation: `https://aadhar.sh/${INDEXNOW_KEY}.txt`, urlList: ["https://aadhar.sh/x"],
+    host: "aadhar.sh",
+    key: INDEXNOW_KEY,
+    keyLocation: `https://aadhar.sh/${INDEXNOW_KEY}.txt`,
+    urlList: ["https://aadhar.sh/x"],
   });
   const oracle = await readFile(new URL("tools/verify-routes.ts", ROOT), "utf8");
   assert.ok(oracle.includes(`path: "/${INDEXNOW_KEY}.txt", status: 200`), "the route oracle must hold the key file at 200");
@@ -52,10 +55,12 @@ test("indexnow: the real sitemap parses to every page", async () => {
 });
 
 test("indexnow: the sitemap parse and every protocol status", () => {
-  const xml = "<urlset><url><loc>https://aadhar.sh</loc></url><url><loc>https://aadhar.sh/garage</loc></url><url><loc>https://elsewhere.test/x</loc></url></urlset>";
+  const xml =
+    "<urlset><url><loc>https://aadhar.sh</loc></url><url><loc>https://aadhar.sh/garage</loc></url><url><loc>https://elsewhere.test/x</loc></url></urlset>";
   assert.deepEqual(sitemapPaths(xml, "aadhar.sh"), ["/", "/garage"]);
   // Hosts are compared parsed and exact, never pattern-matched.
-  const tricky = "<loc>https://aadhar.sh.evil.test/x</loc><loc>https://aadharXsh/y</loc><loc>http://aadhar.sh/z</loc><loc>not a url</loc><loc> https://aadhar.sh/ok </loc>";
+  const tricky =
+    "<loc>https://aadhar.sh.evil.test/x</loc><loc>https://aadharXsh/y</loc><loc>http://aadhar.sh/z</loc><loc>not a url</loc><loc> https://aadhar.sh/ok </loc>";
   assert.deepEqual(sitemapPaths(tricky, "aadhar.sh"), ["/ok"]);
   assert.equal(readStatus(200).ok, true);
   assert.equal(readStatus(202).ok, true, "202 is accepted with key validation still pending");
@@ -65,7 +70,7 @@ test("indexnow: the sitemap parse and every protocol status", () => {
 test("indexnow: the release job submits after it checks, and never blocks on it", async () => {
   const wf = await readFile(new URL(".github/workflows/promote-production.yml", ROOT), "utf8");
   const served = wf.indexOf("run: bun run served:check");
-  const submit = wf.indexOf("run: bun run indexnow ${SINCE:+--since \"$SINCE\"}");
+  const submit = wf.indexOf('run: bun run indexnow ${SINCE:+--since "$SINCE"}');
   assert.ok(served > 0 && submit > served, "submit after the served check, so a release that fails it is still visible first");
   const step = wf.slice(wf.lastIndexOf("- name:", submit), submit);
   assert.match(step, /continue-on-error: true/, "a search engine's answer must never fail a release job");

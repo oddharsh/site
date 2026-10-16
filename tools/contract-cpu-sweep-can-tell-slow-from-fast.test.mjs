@@ -22,22 +22,33 @@ const MODEL = cpus()[0]?.model.trim() ?? "unknown";
 const UNCALIBRATED = { machines: {}, routes: {} };
 const atFactor = (factor, routes = {}) => ({ machines: { [MODEL]: { factor, runs: 1 } }, routes });
 
-function sweep(routes, budget, ...flags) { return sweepIn({}, routes, budget, ...flags); }
+function sweep(routes, budget, ...flags) {
+  return sweepIn({}, routes, budget, ...flags);
+}
 function sweepIn(env, routes, budget, ...flags) {
   const dir = mkdtempSync(join(tmpdir(), "cpu-sweep-"));
   try {
-    const out = join(dir, "sweep.json"), file = join(dir, "budget.json");
+    const out = join(dir, "sweep.json"),
+      file = join(dir, "budget.json");
     writeFileSync(file, JSON.stringify(budget));
-    const run = spawnSync(node, ["tools/cpu-sweep.ts", "--bundle", BUNDLE, "--routes", routes, "--budget", file, "--out", out, ...flags], { cwd: ROOT, encoding: "utf8", timeout: 60_000, env: { ...process.env, GITHUB_ACTIONS: "", GITHUB_STEP_SUMMARY: "", ...env } });
+    const run = spawnSync(node, ["tools/cpu-sweep.ts", "--bundle", BUNDLE, "--routes", routes, "--budget", file, "--out", out, ...flags], {
+      cwd: ROOT,
+      encoding: "utf8",
+      timeout: 60_000,
+      env: { ...process.env, GITHUB_ACTIONS: "", GITHUB_STEP_SUMMARY: "", ...env },
+    });
     return { code: run.status, stdout: run.stdout, stderr: run.stderr, report: run.status === 2 ? null : JSON.parse(readFileSync(out, "utf8")) };
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 const row = (report, route) => report.rows.find((r) => r.route === route);
 
 test("a 12 ms route reads over the gate, and report mode still passes", { timeout: 90_000 }, () => {
   const { code, report } = sweep("/spin,/still", atFactor(1));
   assert.equal(code, 0, "without --gate nothing fails");
-  const spin = row(report, "/spin"), still = row(report, "/still");
+  const spin = row(report, "/spin"),
+    still = row(report, "/still");
   assert.ok(spin.ms > report.gateMs, `/spin read ${spin.ms} ms`);
   assert.ok(spin.samples > 1, "a route near its ceiling is sampled again before it's judged");
   assert.equal(still.samples, 1, "a route far under its ceiling isn't");
@@ -83,7 +94,10 @@ test("--gate judges nothing on a runner whose control reads off its model, and j
   assert.equal(off.report.inconclusive, true);
   assert.ok(row(off.report, "/spin").ms > off.report.gateMs, "the reading is still over 8 ms");
   assert.equal(off.code, 0, "a runner off its model can't fail the gate");
-  assert.match(off.stdout, /^::warning title=CPU per route::--gate judged nothing, because the run was inconclusive: the control read [\d.]+ ms, \+\d+% off the 0\.01 ms this model's factor expects/m);
+  assert.match(
+    off.stdout,
+    /^::warning title=CPU per route::--gate judged nothing, because the run was inconclusive: the control read [\d.]+ ms, \+\d+% off the 0\.01 ms this model's factor expects/m,
+  );
   const within = sweep("/spin", { ...atFactor(1), control: { ms: 0.01, drift: 1e9 } }, "--gate");
   assert.equal(within.report.inconclusive, false);
   assert.equal(within.code, 1, "inside the band, the slow route fails");
@@ -98,7 +112,8 @@ test("the committed budget names a control reference, so the drift check can't g
 // The warm-up has to be what makes /icu cheap, so --cold-icu, which skips it,
 // must read it heavy again. Raw milliseconds, uncalibrated.
 test("a route's first date format is cheap in a warm process, and --cold-icu shows the cold one", { timeout: 90_000 }, () => {
-  const warm = row(sweep("/icu", UNCALIBRATED).report, "/icu"), cold = row(sweep("/icu", UNCALIBRATED, "--cold-icu").report, "/icu");
+  const warm = row(sweep("/icu", UNCALIBRATED).report, "/icu"),
+    cold = row(sweep("/icu", UNCALIBRATED, "--cold-icu").report, "/icu");
   assert.ok(warm.ms < 2, `warm process: /icu read ${warm.ms} ms`);
   assert.ok(cold.ms > 5, `cold process: /icu read ${cold.ms} ms, so the warm-up proves nothing`);
 });

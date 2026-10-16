@@ -68,4 +68,3 @@ jobs:
       # builtins), and the bumped crates already ran in this job's cargo test.
       - name: Reproduce the committed histograms
         run: bun run histograms:check
-

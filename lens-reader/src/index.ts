@@ -62,7 +62,11 @@ export default {
     if (!target.ok) return json({ ok: false, error: target.error }, 400);
 
     if (await overBudget(READER_BUDGET, request, env)) {
-      return json({ ok: false, error: `Reader extraction is limited to ${READER_LIMIT_PER_MIN} per minute per visitor. Try again shortly.` }, 429, rateLimitedHeaders("reader", READER_LIMIT_PER_MIN));
+      return json(
+        { ok: false, error: `Reader extraction is limited to ${READER_LIMIT_PER_MIN} per minute per visitor. Try again shortly.` },
+        429,
+        rateLimitedHeaders("reader", READER_LIMIT_PER_MIN),
+      );
     }
 
     try {
@@ -85,12 +89,17 @@ export default {
 };
 
 function json(body, status = 200, extra: Readonly<Record<string, string>> = {}) {
-  return jsonResponse(body, status, {
-    ...extra,
-    // Third-party page content keyed by a visitor-supplied URL: private, the
-    // same rule /lens/fetch follows.
-    "cache-control": "private, no-store",
-    "x-content-type-options": "nosniff",
-    "x-robots-tag": "noindex",
-  }, { pretty: false });
+  return jsonResponse(
+    body,
+    status,
+    {
+      ...extra,
+      // Third-party page content keyed by a visitor-supplied URL: private, the
+      // same rule /lens/fetch follows.
+      "cache-control": "private, no-store",
+      "x-content-type-options": "nosniff",
+      "x-robots-tag": "noindex",
+    },
+    { pretty: false },
+  );
 }

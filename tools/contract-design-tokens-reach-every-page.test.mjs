@@ -23,7 +23,17 @@
 // call, so `bun run colors:drift` lists it and nothing here gates on it.
 import { readdir } from "node:fs/promises";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
-import { EMAIL_TEMPLATES, cssSources, deltaEOK, loadTokenValueMap, normalizeColor, parseOklch, parseSrgb, tokenCopiesIn, tokenValueMap } from "./lib/token-literals.ts";
+import {
+  EMAIL_TEMPLATES,
+  cssSources,
+  deltaEOK,
+  loadTokenValueMap,
+  normalizeColor,
+  parseOklch,
+  parseSrgb,
+  tokenCopiesIn,
+  tokenValueMap,
+} from "./lib/token-literals.ts";
 
 const read = (rel) => readFile(new URL(rel, ROOT), "utf8");
 
@@ -49,20 +59,35 @@ test("the resolver sees the knobs, and refuses an ambiguous value", () => {
   assert.equal(normalizeColor("oklch(100.00% 0 0)"), "oklch(100% 0 0)");
   assert.equal(normalizeColor("oklch(70% .15 258)"), "oklch(70% 0.15 258)", "the generator's bare .15 spelling is the same colour");
   // A copy in a fixture IS found, so an empty report below means clean and not blind.
-  assert.deepEqual(tokenCopiesIn(".x{color:oklch(51% 0.225 263)}", map).map((c) => c.token), ["--blue-65"]);
+  assert.deepEqual(
+    tokenCopiesIn(".x{color:oklch(51% 0.225 263)}", map).map((c) => c.token),
+    ["--blue-65"],
+  );
   // The two spellings text equality missed: the token under an alpha, and the token retyped at another rounding.
   assert.deepEqual(
     tokenCopiesIn(".x{box-shadow:0 0 0 1px oklch(51% 0.225 263 / .3)}", map).map((c) => c.fix),
     ["oklch(from var(--blue-65) l c h / .3)"],
     "an alpha copy is a copy, and its fix keeps the alpha",
   );
-  assert.deepEqual(tokenCopiesIn(".x{color:oklch(51.2% 0.224 263.3)}", map).map((c) => c.token), ["--blue-65"], "a rounding copy within COPY_DE is a copy");
+  assert.deepEqual(
+    tokenCopiesIn(".x{color:oklch(51.2% 0.224 263.3)}", map).map((c) => c.token),
+    ["--blue-65"],
+    "a rounding copy within COPY_DE is a copy",
+  );
   assert.deepEqual(tokenCopiesIn(".x{color:oklch(55% 0.225 263)}", map), [], "four points of lightness is a different colour, not a copy");
   assert.deepEqual(tokenCopiesIn('<text fill="oklch(51% 0.225 263)">', map), [], "an SVG presentation attribute cannot take var(), so it is never a copy");
   // Hex and rgb() name the same colours in another notation.
   const hexMap = tokenValueMap(`:root{--ink-faint: oklch(62.68% 0 0);}`);
-  assert.deepEqual(tokenCopiesIn(".x{color:#888}", hexMap).map((c) => c.fix), ["var(--ink-faint)"], "#888 in hex is the --ink-faint token");
-  assert.deepEqual(tokenCopiesIn(".x{border-color:rgba(136,136,136,.5)}", hexMap).map((c) => c.fix), ["oklch(from var(--ink-faint) l c h / .5)"], "rgba() keeps its alpha");
+  assert.deepEqual(
+    tokenCopiesIn(".x{color:#888}", hexMap).map((c) => c.fix),
+    ["var(--ink-faint)"],
+    "#888 in hex is the --ink-faint token",
+  );
+  assert.deepEqual(
+    tokenCopiesIn(".x{border-color:rgba(136,136,136,.5)}", hexMap).map((c) => c.fix),
+    ["oklch(from var(--ink-faint) l c h / .5)"],
+    "rgba() keeps its alpha",
+  );
   assert.deepEqual(tokenCopiesIn("#888, .y{color:red}", hexMap), [], "an id selector that spells a colour is not a declaration");
   assert.deepEqual(tokenCopiesIn(".x{border:6px solid var(--ink-faint,#888)}", hexMap), [], "a var() fallback is where a literal belongs");
   assert.deepEqual(tokenCopiesIn(".x{background:#0054e3}", hexMap), [], "a different colour in hex is not a copy");
@@ -139,5 +164,6 @@ test("the title-bar gradient is consumed as a token, not resolved by hand", asyn
   const sources = ["src/pages/index.html", "src/worker/writing.ts"];
   for (const rel of sources) assert.ok((await read(rel)).includes("var(--grad-title)"), `${rel} should paint its title bar from the token`);
   const resolved = /linear-gradient\(180deg,\s*oklch\(70% 0\.15 258\)/;
-  for (const rel of [...sources, "src/pages/garage/index.html", "src/styles/luna.css"]) assert.doesNotMatch(await read(rel), resolved, `${rel} carries the gradient resolved by hand`);
+  for (const rel of [...sources, "src/pages/garage/index.html", "src/styles/luna.css"])
+    assert.doesNotMatch(await read(rel), resolved, `${rel} carries the gradient resolved by hand`);
 });

@@ -1,13 +1,6 @@
 // ── webmention (outbound) ───────────────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  PROFILES,
-  SELF_LINK_HOSTS,
-  assert,
-  citationsIn,
-  cronSendWebmentions,
-  test,
-} from "./contract-shared.ts";
+import { PROFILES, SELF_LINK_HOSTS, assert, citationsIn, cronSendWebmentions, test } from "./contract-shared.ts";
 
 // ── webmention (outbound) ───────────────────────────────────────────────────
 test("outbound citations exclude the shell, self-links, and non-public URLs", () => {
@@ -35,14 +28,26 @@ test("outbound citations exclude the shell, self-links, and non-public URLs", ()
 
   assert.ok(found.includes("https://github.com/officialunofficial/mkit"), "a real citation is sent");
   assert.ok(found.includes("https://mkit.makechain.net/streaming"), "a second real citation is sent");
-  assert.ok(found.some((u) => u.startsWith("https://docs.makechain.net/")), "anchors are normalized, not dropped");
+  assert.ok(
+    found.some((u) => u.startsWith("https://docs.makechain.net/")),
+    "anchors are normalized, not dropped",
+  );
   assert.equal(found.filter((u) => u.includes("officialunofficial")).length, 1, "deduped");
 
-  for (const bad of ["oddharsh", "spotify", "instagram", "aadhar.sh/garage", "127.0.0.1", "169.254", "mailto", "head-link",
-                     // an anchor that exists to open a hover card is chrome. These
-                     // point at Google SEARCH pages, so a webmention to them would
-                     // be noise rather than credit.
-                     "google.com/search"]) {
+  for (const bad of [
+    "oddharsh",
+    "spotify",
+    "instagram",
+    "aadhar.sh/garage",
+    "127.0.0.1",
+    "169.254",
+    "mailto",
+    "head-link",
+    // an anchor that exists to open a hover card is chrome. These
+    // point at Google SEARCH pages, so a webmention to them would
+    // be noise rather than credit.
+    "google.com/search",
+  ]) {
     assert.ok(!found.some((u) => u.includes(bad)), `must not send to ${bad}`);
   }
 });
@@ -57,7 +62,7 @@ test("outbound self-link list stays in sync with the desktop shell profiles", as
     const bare = (u.host + u.pathname).replace(/^www\./, "").replace(/\/$/, "");
     assert.ok(
       SELF_LINK_HOSTS.some((self) => bare === self || bare.startsWith(self + "/")),
-      `shell-data.ts PROFILES has ${bare} but webmention-send.js SELF_LINK_HOSTS does not exclude it`
+      `shell-data.ts PROFILES has ${bare} but webmention-send.js SELF_LINK_HOSTS does not exclude it`,
     );
   }
 });
@@ -94,7 +99,10 @@ function sentTable() {
     prepare(sql) {
       let bound = [];
       const api = {
-        bind: (...a) => { bound = a; return api; },
+        bind: (...a) => {
+          bound = a;
+          return api;
+        },
         run: async () => run(sql, bound),
         all: async () => run(sql, bound),
         first: async () => run(sql, bound),
@@ -112,9 +120,7 @@ const ENDPOINT = "https://example.org/wm";
 
 function outboundHarness({ selfFetch = true, assets = false } = {}) {
   const posted = [];
-  const page = (path) =>
-    new Response(`<html><body><p>credit <a href="${CITED}">them</a></p></body></html>`,
-      { headers: { "content-type": "text/html" } });
+  const page = (path) => new Response(`<html><body><p>credit <a href="${CITED}">them</a></p></body></html>`, { headers: { "content-type": "text/html" } });
   const env = {
     SOCIAL_DB: sentTable(),
     ASSETS: {
@@ -130,17 +136,29 @@ function outboundHarness({ selfFetch = true, assets = false } = {}) {
   const realFetch = globalThis.fetch;
   // annotated because `typeof fetch` carries Bun's `preconnect` and a bare arrow
   // does not; the stub is a stand-in for the call, not for the whole interface.
-  const stub = /** @type {typeof fetch} */ (/** @type {unknown} */ (async (input, init) => {
-    const url = typeof input === "string" ? input : input.url;
-    if (url === CITED) {
-      return new Response(`<html><head><link rel="webmention" href="${ENDPOINT}"></head></html>`,
-        { headers: { "content-type": "text/html" } });
-    }
-    if (url === ENDPOINT) { posted.push(String(init?.body || "")); return new Response("", { status: 202 }); }
-    throw new Error(`unexpected outbound fetch to ${url}`);
-  }));
+  const stub = /** @type {typeof fetch} */ (
+    /** @type {unknown} */ (
+      async (input, init) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url === CITED) {
+          return new Response(`<html><head><link rel="webmention" href="${ENDPOINT}"></head></html>`, { headers: { "content-type": "text/html" } });
+        }
+        if (url === ENDPOINT) {
+          posted.push(String(init?.body || ""));
+          return new Response("", { status: 202 });
+        }
+        throw new Error(`unexpected outbound fetch to ${url}`);
+      }
+    )
+  );
   globalThis.fetch = stub;
-  return { env, posted, restore: () => { globalThis.fetch = realFetch; } };
+  return {
+    env,
+    posted,
+    restore: () => {
+      globalThis.fetch = realFetch;
+    },
+  };
 }
 
 test("outbound cron reads its own pages through the injected dispatcher", async () => {
@@ -154,9 +172,13 @@ test("outbound cron reads its own pages through the injected dispatcher", async 
     assert.ok(cite, "every probe is recorded, so the next run can skip it");
     assert.equal(cite.endpoint, ENDPOINT);
     assert.equal(cite.status, 202, "the receiver's own verdict is what gets stored");
-    assert.ok(h.posted.some((b) => b.includes("source=") && b.includes("target=")),
-      "the POST carries the spec's two parameters");
-  } finally { h.restore(); }
+    assert.ok(
+      h.posted.some((b) => b.includes("source=") && b.includes("target=")),
+      "the POST carries the spec's two parameters",
+    );
+  } finally {
+    h.restore();
+  }
 });
 
 test("outbound cron with no dispatcher records nothing rather than pretending", async () => {
@@ -167,9 +189,10 @@ test("outbound cron with no dispatcher records nothing rather than pretending", 
     const out = await cronSendWebmentions(h.env, "https://aadhar.sh");
     assert.equal(out.pagesRead, 0);
     assert.equal(out.sent, 0);
-    assert.ok(!h.env.SOCIAL_DB.rows.some((r) => r.target === CITED),
-      "a page that could not be read must not be recorded as swept");
-  } finally { h.restore(); }
+    assert.ok(!h.env.SOCIAL_DB.rows.some((r) => r.target === CITED), "a page that could not be read must not be recorded as swept");
+  } finally {
+    h.restore();
+  }
 });
 
 test("outbound cron stays inside the Workers subrequest budget and rotates", async () => {
@@ -186,8 +209,9 @@ test("outbound cron stays inside the Workers subrequest budget and rotates", asy
 
     const second = await cronSendWebmentions(h.env, "https://aadhar.sh");
     const secondPages = new Set(h.env.SOCIAL_DB.rows.filter((r) => r.source === r.target).map((r) => r.source));
-    assert.ok(secondPages.size > firstPages.size,
-      "the second run must advance to pages the first never reached");
+    assert.ok(secondPages.size > firstPages.size, "the second run must advance to pages the first never reached");
     assert.ok(second.spent <= 40);
-  } finally { h.restore(); }
+  } finally {
+    h.restore();
+  }
 });

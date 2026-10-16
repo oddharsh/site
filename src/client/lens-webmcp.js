@@ -44,9 +44,7 @@ export async function boot(load) {
   // The server-rendered tab row is the source of truth for which lenses this
   // document exposes. Reading it keeps the early schema aligned without
   // copying LENS_TAB_LABELS into a third client module.
-  const tabs = [...document.querySelectorAll(".lx-tab")]
-    .map((tab) => tab.getAttribute("data-lens"))
-    .filter((tab) => tab);
+  const tabs = [...document.querySelectorAll(".lx-tab")].map((tab) => tab.getAttribute("data-lens")).filter((tab) => tab);
 
   const defs = [
     {
@@ -70,7 +68,11 @@ export async function boot(load) {
     {
       name: "lens_show",
       description:
-        "Change what the Lens window is displaying. `pane` picks the split (" + VIEWS.join(", ") + ") and `tab` picks which machine lens is open (" + tabs.join(", ") + "). This only moves the view. Five tabs hold nothing until somebody pays for the fetch, so follow it with lens_run_tab when the pane comes back empty.",
+        "Change what the Lens window is displaying. `pane` picks the split (" +
+        VIEWS.join(", ") +
+        ") and `tab` picks which machine lens is open (" +
+        tabs.join(", ") +
+        "). This only moves the view. Five tabs hold nothing until somebody pays for the fetch, so follow it with lens_run_tab when the pane comes back empty.",
       inputSchema: { type: "object", properties: { pane: { type: "string", enum: VIEWS }, tab: { type: "string", enum: tabs } } },
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
       writes: false,
@@ -104,7 +106,9 @@ export async function boot(load) {
     {
       name: "lens_delta",
       description:
-        "Flip one of the Delta counterfactual switches and repaint. Each switch simulates a fix the scanned site has not made (" + SWITCHES.join(", ") + ") and shows what it would have bought. Nothing is sent anywhere: the whole simulation is arithmetic on the scan already on screen.",
+        "Flip one of the Delta counterfactual switches and repaint. Each switch simulates a fix the scanned site has not made (" +
+        SWITCHES.join(", ") +
+        ") and shows what it would have bought. Nothing is sent anywhere: the whole simulation is arithmetic on the scan already on screen.",
       inputSchema: {
         type: "object",
         properties: {

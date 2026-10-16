@@ -46,10 +46,26 @@ const RAW_TEXT_DISCARD = new Set(["script", "style"]);
 
 // dropped whole, children and all
 const DROP = new Set([
-  "script", "style", "noscript", "template", "svg", "canvas", "iframe", "object",
-  "head", "meta", "link", "form",
+  "script",
+  "style",
+  "noscript",
+  "template",
+  "svg",
+  "canvas",
+  "iframe",
+  "object",
+  "head",
+  "meta",
+  "link",
+  "form",
   // interactive controls: label without behavior reads as a claim
-  "button", "input", "select", "option", "textarea", "label", "output",
+  "button",
+  "input",
+  "select",
+  "option",
+  "textarea",
+  "label",
+  "output",
 ]);
 
 // dropped by id/class, because they are the XP desktop chrome rather than the page
@@ -61,17 +77,54 @@ const DROP_CLASS = new Set(["title-bar", "controls", "status", "modebar", "reado
 // buffered before it, so a <div><strong>Rule:</strong> text</div> stays ONE
 // paragraph instead of splitting bold and prose into two.
 const TRANSPARENT = new Set([
-  "html", "body", "div", "section", "article", "aside", "main", "nav", "header",
-  "footer", "colgroup", "tbody", "thead", "tfoot", "hgroup", "address", "fieldset",
+  "html",
+  "body",
+  "div",
+  "section",
+  "article",
+  "aside",
+  "main",
+  "nav",
+  "header",
+  "footer",
+  "colgroup",
+  "tbody",
+  "thead",
+  "tfoot",
+  "hgroup",
+  "address",
+  "fieldset",
 ]);
 
 // every element that starts a new block. Anything absent is inline and gets
 // buffered into the surrounding paragraph.
 const BLOCK = new Set([
   ...TRANSPARENT,
-  "h1", "h2", "h3", "h4", "h5", "h6", "p", "hr", "pre", "blockquote",
-  "ul", "ol", "li", "dl", "dt", "dd", "table", "tr", "td", "th",
-  "details", "summary", "figure", "figcaption", "caption",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "p",
+  "hr",
+  "pre",
+  "blockquote",
+  "ul",
+  "ol",
+  "li",
+  "dl",
+  "dt",
+  "dd",
+  "table",
+  "tr",
+  "td",
+  "th",
+  "details",
+  "summary",
+  "figure",
+  "figcaption",
+  "caption",
 ]);
 
 // pure ornament in the XP window vocabulary: the bay counter is a decorative
@@ -98,7 +151,8 @@ const DROP_CLASS_INLINE = new Set(["bay-no"]);
 // a parent lookup, which would need a tree walk this deliberately does without.
 // `flex` needs the leading boundary so it cannot swallow `flex-direction` and
 // `flex-flow`, which are CONTAINER properties and say nothing about this element.
-const OUT_OF_FLOW = /(?:display\s*:\s*(?:block|flex|grid|list-item|table)|float\s*:\s*(?:left|right)|(?:^|[;{\s])flex\s*:|flex-basis\s*:|grid-(?:area|column|row)\s*:)/i;
+const OUT_OF_FLOW =
+  /(?:display\s*:\s*(?:block|flex|grid|list-item|table)|float\s*:\s*(?:left|right)|(?:^|[;{\s])flex\s*:|flex-basis\s*:|grid-(?:area|column|row)\s*:)/i;
 
 // Elements renderInline turns into a standalone Markdown token. They are already
 // self-separating in the output, so promoting them to blocks can only lose them.
@@ -114,7 +168,9 @@ const SELF_TOKEN = new Set(["img"]);
 // auto-fill grid) one child per line.
 const CONTAINER = /display\s*:\s*(?:flex|grid)\b/i; // inline-flex sits inside a line of text, so it stays inline
 
-export function collectBlockClasses(html) { return new Set(rulesWhere(html, OUT_OF_FLOW).keys()); }
+export function collectBlockClasses(html) {
+  return new Set(rulesWhere(html, OUT_OF_FLOW).keys());
+}
 
 // class -> how many children share a line: Infinity for a flex row that doesn't wrap, N for a grid
 // with N readable columns, 1 otherwise
@@ -147,19 +203,34 @@ function gridColumns(decls: string): number {
 function tracks(value: string): number {
   if (/auto-(?:fill|fit)|\[|subgrid|masonry/i.test(value)) return 1;
   const count = (v: string): number => {
-    let n = 0, depth = 0, token = "";
-    const end = () => { if (token.trim()) n += 1; token = ""; };
+    let n = 0,
+      depth = 0,
+      token = "";
+    const end = () => {
+      if (token.trim()) n += 1;
+      token = "";
+    };
     for (let i = 0; i < v.length; i++) {
       const ch = v[i];
       if (depth === 0 && v.startsWith("repeat(", i)) {
-        let j = i + 7, d = 1;
-        while (j < v.length && d) { if (v[j] === "(") d++; else if (v[j] === ")") d--; j++; }
-        const inner = v.slice(i + 7, j - 1), comma = inner.indexOf(",");
+        let j = i + 7,
+          d = 1;
+        while (j < v.length && d) {
+          if (v[j] === "(") d++;
+          else if (v[j] === ")") d--;
+          j++;
+        }
+        const inner = v.slice(i + 7, j - 1),
+          comma = inner.indexOf(",");
         n += Number(inner.slice(0, comma)) * count(inner.slice(comma + 1));
-        token = ""; i = j - 1; continue;
+        token = "";
+        i = j - 1;
+        continue;
       }
-      if (ch === "(") depth++; else if (ch === ")") depth--;
-      if (depth === 0 && /\s/.test(ch)) end(); else token += ch;
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      if (depth === 0 && /\s/.test(ch)) end();
+      else token += ch;
     }
     end();
     return n;
@@ -195,7 +266,11 @@ const IMPLIED_CLOSE = {
   thead: new Set(["tbody", "tfoot"]),
   tbody: new Set(["tbody", "tfoot"]),
   optgroup: new Set(["optgroup"]),
-  p: new Set("address article aside blockquote details dialog div dl fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr main menu nav ol p pre search section table ul".split(" ")),
+  p: new Set(
+    "address article aside blockquote details dialog div dl fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr main menu nav ol p pre search section table ul".split(
+      " ",
+    ),
+  ),
   li: new Set(["li"]),
   dt: new Set(["dt", "dd"]),
   dd: new Set(["dt", "dd"]),
@@ -207,27 +282,71 @@ const IMPLIED_CLOSE = {
 };
 
 const ENTITIES = {
-  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0", hellip: "\u2026",
-  mdash: "\u2014", ndash: "\u2013", times: "\u00d7", middot: "\u00b7", deg: "\u00b0",
-  laquo: "\u00ab", raquo: "\u00bb", ldquo: "\u201c", rdquo: "\u201d", lsquo: "\u2018",
-  rsquo: "\u2019", larr: "\u2190", rarr: "\u2192", uarr: "\u2191", darr: "\u2193",
-  check: "\u2713", copy: "\u00a9", reg: "\u00ae", trade: "\u2122", eacute: "\u00e9",
-  egrave: "\u00e8", agrave: "\u00e0", ccedil: "\u00e7", uuml: "\u00fc", ouml: "\u00f6",
-  auml: "\u00e4", szlig: "\u00df", ntilde: "\u00f1", minus: "\u2212", plusmn: "\u00b1",
-  frac12: "\u00bd", sup2: "\u00b2", sup3: "\u00b3", micro: "\u00b5", infin: "\u221e",
-  ne: "\u2260", le: "\u2264", ge: "\u2265", asymp: "\u2248", bull: "\u2022",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: "\u00a0",
+  hellip: "\u2026",
+  mdash: "\u2014",
+  ndash: "\u2013",
+  times: "\u00d7",
+  middot: "\u00b7",
+  deg: "\u00b0",
+  laquo: "\u00ab",
+  raquo: "\u00bb",
+  ldquo: "\u201c",
+  rdquo: "\u201d",
+  lsquo: "\u2018",
+  rsquo: "\u2019",
+  larr: "\u2190",
+  rarr: "\u2192",
+  uarr: "\u2191",
+  darr: "\u2193",
+  check: "\u2713",
+  copy: "\u00a9",
+  reg: "\u00ae",
+  trade: "\u2122",
+  eacute: "\u00e9",
+  egrave: "\u00e8",
+  agrave: "\u00e0",
+  ccedil: "\u00e7",
+  uuml: "\u00fc",
+  ouml: "\u00f6",
+  auml: "\u00e4",
+  szlig: "\u00df",
+  ntilde: "\u00f1",
+  minus: "\u2212",
+  plusmn: "\u00b1",
+  frac12: "\u00bd",
+  sup2: "\u00b2",
+  sup3: "\u00b3",
+  micro: "\u00b5",
+  infin: "\u221e",
+  ne: "\u2260",
+  le: "\u2264",
+  ge: "\u2265",
+  asymp: "\u2248",
+  bull: "\u2022",
   // found by the minifier check: these leaked into the twins and llms-full.txt
   // as written ("Lesi&nacute;ski", "round &divide;1000")
-  divide: "\u00f7", rsaquo: "\u203a", lsaquo: "\u2039", nacute: "\u0144", chi: "\u03c7",
-  dagger: "\u2020", Dagger: "\u2021", approx: "\u2248", boxbox: "\u29c9", blacktriangle: "\u25b4",
+  divide: "\u00f7",
+  rsaquo: "\u203a",
+  lsaquo: "\u2039",
+  nacute: "\u0144",
+  chi: "\u03c7",
+  dagger: "\u2020",
+  Dagger: "\u2021",
+  approx: "\u2248",
+  boxbox: "\u29c9",
+  blacktriangle: "\u25b4",
 };
 
 export function decodeEntities(s) {
   return s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (m, body) => {
     if (body[0] === "#") {
-      const cp = body[1] === "x" || body[1] === "X"
-        ? parseInt(body.slice(2), 16)
-        : parseInt(body.slice(1), 10);
+      const cp = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
       return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m;
     }
     const hit = ENTITIES[body];
@@ -251,16 +370,16 @@ type Attrs = Record<string, string>;
 // always knows which element produced it, and that pairing is what lets the tree
 // builder drop a <script> body by owner without proving the field is there.
 type Token =
-  | { t: "text", v: string, raw?: false, owner?: undefined }
-  | { t: "text", v: string, raw: true, owner: string }
-  | { t: "open", name: string, attrs: Attrs, self: boolean }
-  | { t: "close", name: string };
+  | { t: "text"; v: string; raw?: false; owner?: undefined }
+  | { t: "text"; v: string; raw: true; owner: string }
+  | { t: "open"; name: string; attrs: Attrs; self: boolean }
+  | { t: "close"; name: string };
 
 // The tree. A text node carries a value and no children; everything else is an
 // element. The stack only ever holds elements, which is why `top().children` is
 // safe to push into.
-type TextNode = { name: "#text", value: string };
-type ElementNode = { name: string, attrs: Attrs, children: Node[] };
+type TextNode = { name: "#text"; value: string };
+type ElementNode = { name: string; attrs: Attrs; children: Node[] };
 type Node = TextNode | ElementNode;
 
 function tokenize(html) {
@@ -286,14 +405,27 @@ function tokenize(html) {
     }
     if (html.startsWith("</", lt)) {
       const end = html.indexOf(">", lt);
-      if (end === -1) { i = html.length; break; }
-      tokens.push({ t: "close", name: html.slice(lt + 2, end).trim().toLowerCase() });
+      if (end === -1) {
+        i = html.length;
+        break;
+      }
+      tokens.push({
+        t: "close",
+        name: html
+          .slice(lt + 2, end)
+          .trim()
+          .toLowerCase(),
+      });
       i = end + 1;
       continue;
     }
 
     const tag = readTag(html, lt);
-    if (!tag) { tokens.push({ t: "text", v: "<" }); i = lt + 1; continue; }
+    if (!tag) {
+      tokens.push({ t: "text", v: "<" });
+      i = lt + 1;
+      continue;
+    }
     tokens.push({ t: "open", name: tag.name, attrs: tag.attrs, self: tag.self });
     i = tag.end;
 
@@ -321,14 +453,27 @@ function readTag(html, start) {
 
   while (i < html.length) {
     while (i < html.length && /\s/.test(html[i])) i++;
-    if (html[i] === ">") { i++; break; }
-    if (html[i] === "/" && html[i + 1] === ">") { self = true; i += 2; break; }
+    if (html[i] === ">") {
+      i++;
+      break;
+    }
+    if (html[i] === "/" && html[i + 1] === ">") {
+      self = true;
+      i += 2;
+      break;
+    }
     const an = /^[^\s=/>]+/.exec(html.slice(i));
-    if (!an) { i++; continue; }
+    if (!an) {
+      i++;
+      continue;
+    }
     const attr = an[0].toLowerCase();
     i += an[0].length;
     while (i < html.length && /\s/.test(html[i])) i++;
-    if (html[i] !== "=") { attrs[attr] = ""; continue; }
+    if (html[i] !== "=") {
+      attrs[attr] = "";
+      continue;
+    }
     i++;
     while (i < html.length && /\s/.test(html[i])) i++;
     const q = html[i];
@@ -425,8 +570,9 @@ function renderChildren(node, ctx, depth) {
   const width = across(node, ctx);
   if (!width) return renderBlocks(node.children || [], ctx, depth);
   const boxes = (node.children || []).filter((c) => !dropped(c) && (!isText(c) || squeeze(c.value).trim()));
-  const cells = boxes.map((c) => (isText(c) || INLINE_TOKEN.has(c.name) || BLOCK.has(c.name)
-    ? renderBlocks([c], ctx, depth) : renderChildren(c, ctx, depth)).trim());
+  const cells = boxes.map((c) =>
+    (isText(c) || INLINE_TOKEN.has(c.name) || BLOCK.has(c.name) ? renderBlocks([c], ctx, depth) : renderChildren(c, ctx, depth)).trim(),
+  );
   const rows: string[] = [];
   const step = Number.isFinite(width) ? width : cells.length;
   for (let i = 0; i < cells.length; i += step) {
@@ -453,15 +599,16 @@ const escapeMd = (s) => s.replace(/([\\`*_[\]<>])/g, "\\$1");
 // `Next.js \16.`, and a backslash before a digit is no escape in CommonMark, so
 // every reader saw it. An ordered marker escapes its period (`16\.`), the one
 // character CommonMark will unescape there.
-const escapeLineStarts = (s) => s
-  .replace(/^(\s*)([#>+-])(?=\s)/gm, "$1\\$2")
-  .replace(/^(\s*)(\d+)\.(?=\s)/gm, "$1$2\\.");
+const escapeLineStarts = (s) => s.replace(/^(\s*)([#>+-])(?=\s)/gm, "$1\\$2").replace(/^(\s*)(\d+)\.(?=\s)/gm, "$1$2\\.");
 
 function renderInline(nodes, ctx) {
   let out = "";
   for (const n of nodes) {
     if (isText(n)) {
-      if (ctx.raw) { out += n.value; continue; }
+      if (ctx.raw) {
+        out += n.value;
+        continue;
+      }
       // Whitespace collapses ACROSS text nodes, the way a browser lays it out.
       // Two nodes can meet with a space on each side when a comment splits
       // them: the homepage's `2026</time> <!-- … --> · You` read `2026  · You`.
@@ -473,20 +620,28 @@ function renderInline(nodes, ctx) {
     switch (n.name) {
       // Inside a table cell a hard break would end the row, so the cell keeps
       // <br>, which GFM reads there. Elsewhere it is the Markdown hard break.
-      case "br": out += ctx.inCell ? "<br>" : "  \n"; break;
-      case "code": case "kbd": case "samp": {
+      case "br":
+        out += ctx.inCell ? "<br>" : "  \n";
+        break;
+      case "code":
+      case "kbd":
+      case "samp": {
         const t = textOf(n);
         // pick a fence that cannot collide with backticks inside the span
         const ticks = "`".repeat(Math.max(1, longestRun(t, "`") + 1));
         out += t ? `${ticks}${t.includes("`") ? " " : ""}${t}${t.includes("`") ? " " : ""}${ticks}` : "";
         break;
       }
-      case "strong": case "b": {
+      case "strong":
+      case "b": {
         const inner = renderInline(n.children, ctx).trim();
         out += inner ? `**${inner}**` : "";
         break;
       }
-      case "em": case "i": case "cite": case "var": {
+      case "em":
+      case "i":
+      case "cite":
+      case "var": {
         const inner = renderInline(n.children, ctx).trim();
         out += inner ? `*${inner}*` : "";
         break;
@@ -500,13 +655,16 @@ function renderInline(nodes, ctx) {
         // a page, so a data:text/html href would hand a reader a payload dressed
         // as a citation. No page here authors one, and the check is widened
         // anyway because the cost is a regex and the input set only ever grows.
-        if (!href || href.startsWith("#") || executesRatherThanAddresses(href)) { out += inner; break; }
+        if (!href || href.startsWith("#") || executesRatherThanAddresses(href)) {
+          out += inner;
+          break;
+        }
         // A glossary term (<a class="term" data-t="srgb" … title="…">) becomes
         // a reference link, [sRGB][srgb], and its definition joins the glossary
         // readDocument appends to the twin. The key, the source and the
         // definition all survive, so a page rendered from the twin can write the
         // term back byte for byte, and an agent gets the definitions too.
-        const key = hasClass(n, "term") ? (n.attrs["data-t"] || "") : "";
+        const key = hasClass(n, "term") ? n.attrs["data-t"] || "" : "";
         const title = (n.attrs.title || "").trim();
         if (ctx.terms && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(key) && title) {
           if (!ctx.terms.has(key)) ctx.terms.set(key, { href: absolute(href, ctx.origin), title });
@@ -524,18 +682,30 @@ function renderInline(nodes, ctx) {
         out += `![${escapeMd(alt)}](${absolute(src, ctx.origin)})`;
         break;
       }
-      case "sup": out += `^${renderInline(n.children, ctx).trim()}`; break;
-      case "sub": out += `_${renderInline(n.children, ctx).trim()}`; break;
-      case "del": case "s": out += `~~${renderInline(n.children, ctx).trim()}~~`; break;
-      default: out += renderInline(n.children, ctx);
+      case "sup":
+        out += `^${renderInline(n.children, ctx).trim()}`;
+        break;
+      case "sub":
+        out += `_${renderInline(n.children, ctx).trim()}`;
+        break;
+      case "del":
+      case "s":
+        out += `~~${renderInline(n.children, ctx).trim()}~~`;
+        break;
+      default:
+        out += renderInline(n.children, ctx);
     }
   }
   return out;
 }
 
 const longestRun = (s, ch) => {
-  let best = 0, cur = 0;
-  for (const c of s) { cur = c === ch ? cur + 1 : 0; if (cur > best) best = cur; }
+  let best = 0,
+    cur = 0;
+  for (const c of s) {
+    cur = c === ch ? cur + 1 : 0;
+    if (cur > best) best = cur;
+  }
   return best;
 };
 
@@ -560,7 +730,11 @@ function renderBlocks(nodes, ctx, depth = 0) {
   let run: string[] = [];
   const flush = () => {
     if (!run.length) return;
-    const s = escapeLineStarts(renderInline(run, ctx).replace(/[ \t]+\n/g, "  \n").trim());
+    const s = escapeLineStarts(
+      renderInline(run, ctx)
+        .replace(/[ \t]+\n/g, "  \n")
+        .trim(),
+    );
     run = [];
     if (s) out.push(s);
   };
@@ -585,24 +759,36 @@ function renderBlocks(nodes, ctx, depth = 0) {
     // counting as out-of-flow. A named tag in BLOCK still wins, as before.
     // (a block-level grid or flex container is already here: OUT_OF_FLOW reads
     // its display, and renderChildren lays its children out below)
-    const isBlock = BLOCK.has(n.name)
-      || (!SELF_TOKEN.has(n.name) && cls.some((c) => promoted.has(c)));
-    if (!isBlock) { run.push(n); continue; }
+    const isBlock = BLOCK.has(n.name) || (!SELF_TOKEN.has(n.name) && cls.some((c) => promoted.has(c)));
+    if (!isBlock) {
+      run.push(n);
+      continue;
+    }
     flush();
 
     switch (n.name) {
-      case "h1": case "h2": case "h3": case "h4": case "h5": case "h6": {
+      case "h1":
+      case "h2":
+      case "h3":
+      case "h4":
+      case "h5":
+      case "h6": {
         const level = Number(n.name[1]);
         // A heading is one line, but its CSS can still lay a part out as a box
         // of its own: /lwe's `<b>Learning With Errors</b><span class="tag">…`
         // read `**Learning With Errors**explaining hard things`. When a child is
         // promoted, render the parts as blocks and rejoin them on one line, the
         // way a caption is; otherwise the inline path is unchanged.
-        const promotedChild = (n.children || []).some((c) => !isText(c)
-          && (c.attrs?.class || "").split(/\s+/).some((k) => (ctx.blockClasses || EMPTY).has(k)));
-        const s = (promotedChild
-          ? renderBlocks(n.children, ctx, depth).split(/\n{2,}/).map((b) => b.replace(/\n/g, " ").trim()).filter(Boolean).join(" · ")
-          : renderInline(n.children, ctx)).trim();
+        const promotedChild = (n.children || []).some((c) => !isText(c) && (c.attrs?.class || "").split(/\s+/).some((k) => (ctx.blockClasses || EMPTY).has(k)));
+        const s = (
+          promotedChild
+            ? renderBlocks(n.children, ctx, depth)
+                .split(/\n{2,}/)
+                .map((b) => b.replace(/\n/g, " ").trim())
+                .filter(Boolean)
+                .join(" · ")
+            : renderInline(n.children, ctx)
+        ).trim();
         if (s) out.push(`${"#".repeat(level)} ${s}`);
         break;
       }
@@ -612,7 +798,10 @@ function renderBlocks(nodes, ctx, depth = 0) {
       // concatenated onto the text before it. Children that are all inline
       // buffer into a single run and come back out as one paragraph, which is
       // the ordinary case and is unchanged.
-      case "p": case "figcaption": case "summary": case "caption": {
+      case "p":
+      case "figcaption":
+      case "summary":
+      case "caption": {
         const s = renderChildren(n, ctx, depth).trim();
         if (!s) break;
         // A caption is one thought even when its CSS lays the parts out as
@@ -629,14 +818,25 @@ function renderBlocks(nodes, ctx, depth = 0) {
       // as blocks, then put them on one line the way a caption is, since a
       // Markdown link holds inline text only. A heading inside reads as text.
       case "a": {
-        const inner = renderChildren(n, ctx, depth).trim()
-          .split(/\n{2,}/).map((b) => b.replace(/^#{1,6} /, "").replace(/\n/g, " ").trim()).filter(Boolean).join(" · ");
+        const inner = renderChildren(n, ctx, depth)
+          .trim()
+          .split(/\n{2,}/)
+          .map((b) =>
+            b
+              .replace(/^#{1,6} /, "")
+              .replace(/\n/g, " ")
+              .trim(),
+          )
+          .filter(Boolean)
+          .join(" · ");
         if (!inner) break;
         const href = n.attrs.href || "";
         out.push(!href || href.startsWith("#") || executesRatherThanAddresses(href) ? inner : `[${inner}](${absolute(href, ctx.origin)})`);
         break;
       }
-      case "hr": out.push("---"); break;
+      case "hr":
+        out.push("---");
+        break;
       case "pre": {
         const t = textOf(n).replace(/^\n/, "").replace(/\s+$/, "");
         if (t) out.push("```\n" + t + "\n```");
@@ -644,10 +844,17 @@ function renderBlocks(nodes, ctx, depth = 0) {
       }
       case "blockquote": {
         const inner = renderBlocks(n.children, ctx, depth);
-        if (inner.trim()) out.push(inner.split("\n").map((l) => (l ? `> ${l}` : ">")).join("\n"));
+        if (inner.trim())
+          out.push(
+            inner
+              .split("\n")
+              .map((l) => (l ? `> ${l}` : ">"))
+              .join("\n"),
+          );
         break;
       }
-      case "ul": case "ol": {
+      case "ul":
+      case "ol": {
         const items = n.children.filter((c) => c.name === "li" && !dropped(c));
         const lines = items.map((li, k) => {
           const marker = n.name === "ol" ? `${k + 1}.` : "-";
@@ -723,7 +930,7 @@ function renderTable(table, outer) {
   // Cells render with inCell set, so a <br> stays <br> (see renderInline).
   const ctx = { ...outer, inCell: true };
   // One rendered table row: its cells, and whether it was the header row.
-  const rows: { cells: string[], head: boolean }[] = [];
+  const rows: { cells: string[]; head: boolean }[] = [];
   const walk = (node) => {
     for (const c of node.children || []) {
       if (dropped(c)) continue;
@@ -747,7 +954,13 @@ function renderTable(table, outer) {
         // third path that skips escapeMd.
         const cells = (c.children || [])
           .filter((d) => (d.name === "td" || d.name === "th") && !dropped(d))
-          .map((d) => renderInline(d.children, ctx).replace(/\|/g, "\\|").replace(/ {2}\n/g, "<br>").replace(/\n/g, " ").trim());
+          .map((d) =>
+            renderInline(d.children, ctx)
+              .replace(/\|/g, "\\|")
+              .replace(/ {2}\n/g, "<br>")
+              .replace(/\n/g, " ")
+              .trim(),
+          );
         if (cells.length) rows.push({ cells, head: (c.children || []).some((d) => d.name === "th") });
       } else walk(c);
     }
@@ -756,15 +969,15 @@ function renderTable(table, outer) {
   if (!rows.length) return "";
 
   const width = Math.max(...rows.map((r) => r.cells.length));
-  const pad = (r) => { const c = r.cells.slice(); while (c.length < width) c.push(""); return c; };
+  const pad = (r) => {
+    const c = r.cells.slice();
+    while (c.length < width) c.push("");
+    return c;
+  };
   const head = rows[0].head ? pad(rows[0]) : Array(width).fill("");
   const body = rows.slice(rows[0].head ? 1 : 0);
 
-  const lines = [
-    `| ${head.join(" | ")} |`,
-    `| ${Array(width).fill("---").join(" | ")} |`,
-    ...body.map((r) => `| ${pad(r).join(" | ")} |`),
-  ];
+  const lines = [`| ${head.join(" | ")} |`, `| ${Array(width).fill("---").join(" | ")} |`, ...body.map((r) => `| ${pad(r).join(" | ")} |`)];
   return lines.join("\n");
 }
 
@@ -776,10 +989,19 @@ function renderTable(table, outer) {
 function renderText(nodes, ctx, items = false) {
   let out = "";
   for (const n of nodes) {
-    if (isText(n)) { out += n.value; continue; }
+    if (isText(n)) {
+      out += n.value;
+      continue;
+    }
     if (dropped(n)) continue;
-    if (n.name === "img") { out += ` ${n.attrs.alt || ""} `; continue; }
-    if (n.name === "br" || n.name === "hr") { out += " "; continue; }
+    if (n.name === "img") {
+      out += ` ${n.attrs.alt || ""} `;
+      continue;
+    }
+    if (n.name === "br" || n.name === "hr") {
+      out += " ";
+      continue;
+    }
     const inner = renderText(n.children, ctx, isContainer(n, ctx));
     const block = items || BLOCK.has(n.name) || (n.attrs.class || "").split(/\s+/).some((c) => ctx.blockClasses.has(c));
     out += block ? ` ${inner} ` : inner;
@@ -803,13 +1025,14 @@ export function readDocument(html, { origin = "https://aadhar.sh", format = "mar
   const terms = new Map<string, { href: string; title: string }>();
   const ctx = { origin, blockClasses: collectBlockClasses(html), containerClasses: collectContainerClasses(html), terms };
   if (format === "text") return { ...meta, body: squeeze(renderText(content.children, ctx, isContainer(content, ctx))).trim() };
-  const body = renderChildren(content, ctx, 0).replace(/\n{3,}/g, "\n\n").trim();
+  const body = renderChildren(content, ctx, 0)
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return { ...meta, body: terms.size ? `${body}\n\n${glossary(terms)}` : body };
 }
 
 function collectMeta(root) {
-  const out: { title: string, description: string, canonical: string, status: string[] } =
-    { title: "", description: "", canonical: "", status: [] };
+  const out: { title: string; description: string; canonical: string; status: string[] } = { title: "", description: "", canonical: "", status: [] };
   const visit = (n) => {
     if (isText(n)) return;
     if (n.name === "title" && !out.title) out.title = textOf(n).trim();
@@ -841,7 +1064,9 @@ function collectMeta(root) {
 // the payload is `.content` when the page has one (every garage/lwe window
 // does), otherwise <main>, otherwise <body>
 function findContent(root) {
-  let main = null, body = null, contentDiv = null;
+  let main = null,
+    body = null,
+    contentDiv = null;
   const visit = (n) => {
     if (isText(n)) return;
     const cls = (n.attrs?.class || "").split(/\s+/);

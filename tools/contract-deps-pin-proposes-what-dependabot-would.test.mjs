@@ -9,15 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  CATCH_ALL,
-  branchFor,
-  compareSemver,
-  groupFor,
-  newestEligible,
-  planBumps,
-  rewriteManifest,
-} from "./lib/deps-plan.ts";
+import { CATCH_ALL, branchFor, compareSemver, groupFor, newestEligible, planBumps, rewriteManifest } from "./lib/deps-plan.ts";
 
 const DAY = 86400;
 const NOW = Date.parse("2026-10-06T12:00:00Z");
@@ -43,9 +35,7 @@ test("control: an old-enough newer release is proposed", () => {
     nowMs: NOW,
     minAgeSeconds: DAY,
   });
-  assert.deepEqual(bumps, [
-    { pkg: "oxc-minify", from: "0.151.0", to: "0.153.0", type: "minor", group: "minifiers", manifests: ["package.json"] },
-  ]);
+  assert.deepEqual(bumps, [{ pkg: "oxc-minify", from: "0.151.0", to: "0.153.0", type: "minor", group: "minifiers", manifests: ["package.json"] }]);
 });
 
 test("a release younger than the window is invisible, and the next-newest wins", () => {
@@ -73,12 +63,17 @@ test("deprecated versions are skipped", () => {
 
 test("only exact pins are planned", () => {
   const bumps = planBumps({
-    manifests: [manifest("package.json", {
-      wrangler: "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@425662b",
-      timbrado: "github:oddharsh/timbrado#c110b30",
-      ranged: "^1.0.0",
-    })],
-    registry: new Map([["wrangler", doc(["4.200.0", 400])], ["ranged", doc(["1.0.0", 400], ["1.2.0", 100])]]),
+    manifests: [
+      manifest("package.json", {
+        wrangler: "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@425662b",
+        timbrado: "github:oddharsh/timbrado#c110b30",
+        ranged: "^1.0.0",
+      }),
+    ],
+    registry: new Map([
+      ["wrangler", doc(["4.200.0", 400])],
+      ["ranged", doc(["1.0.0", 400], ["1.2.0", 100])],
+    ]),
     nowMs: NOW,
     minAgeSeconds: DAY,
   });

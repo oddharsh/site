@@ -151,7 +151,12 @@ export function readWebmcpProbe(raw: unknown): WebmcpReading | null {
     read: count(r.read, 0),
     write: count(r.write, 0),
     unstated: count(r.unstated, 0),
-    origins: asList(r.origins).flatMap((raw) => { const origin = asText(raw); return origin ? [origin] : []; }).slice(0, 8),
+    origins: asList(r.origins)
+      .flatMap((raw) => {
+        const origin = asText(raw);
+        return origin ? [origin] : [];
+      })
+      .slice(0, 8),
     truncated: r.truncated === true,
     tools,
   };

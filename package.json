@@ -53,10 +53,12 @@
     "comment:test-node": "The same suite under node, kept because a suite that passes on one runtime and fails on another is reporting a fact about the runtime. bun's spec-strict Response found a real defect this way: withSecurityHeaders rebuilds every response, which per Fetch LOCKS the body it was handed, and one test pushed the same case objects through twice. node's undici allows it and bun throws. --test-isolation=none is what makes that comparison honest AND cheap. node's default forks one child per file, so 74 files cost 74 interpreter starts that each re-parse and type-strip the same modules: measured 2026-08-31, 34.5s of CPU against 1.8s, and 18s of the 85s validate job against ~3s. It was also the model bun used at the time — probed the same day, a global set in one bun test file is visible in the next — so running node isolated was comparing two runtimes AND two isolation models at once, and a failure could be attributed to the runtime when the process boundary was the cause. THAT HALF NARROWED ON 2026-09-10: the bun side runs --parallel=4 --no-isolate, so it keeps one global PER WORKER where node keeps one per run. The models are close rather than equal, and the difference is bounded to which files happen to share: a test that depends on another file's leftovers is deterministic under node and scheduling-dependent under bun. Keep node as it is, since the reason above is interpreter starts, and see comment:test-parallel for why --isolate was measured and declined. Counts are identical either way (re-measured 2026-09-10: 681 tests, 670 pass, 11 skipped, isolated and not), and the control is a deliberate failing assertion: it exits 1 and names the file. If a future test needs a fresh process, give it its own file and its own runner line rather than restoring isolation for all 74.",
     "test:node": "node --import ./tools/lib/no-network.ts --test --test-isolation=none tools/*.test.mjs",
     "lint": "bun tools/gen-runtime-types.ts && bun lint --type-aware",
+    "format": "bun fmt",
+    "format:check": "bun fmt --check",
     "typecheck": "bun tools/gen-runtime-types.ts && bun tools/check-env.ts && bun tools/typecheck.ts",
     "types:gen": "bun tools/gen-runtime-types.ts",
     "env:check": "bun tools/check-env.ts",
-    "check:fast": "bun run --parallel lint typecheck test",
+    "check:fast": "bun run --parallel lint typecheck test format:check",
     "shell:roll": "bun tools/roll-shell-dictionary.ts",
     "pages:roll": "bun tools/roll-shell-dictionary.ts --pages",
     "family:roll": "bun tools/roll-shell-dictionary.ts --family",
@@ -83,6 +85,7 @@
     "webmention:eval": "bun tools/webmention-sort-eval.ts"
   },
   "comment:lint": "`bun lint` here is Bun's built-in linter, reading .oxlintrc.json. A script named lint shadows the built-in for every flag but --doctor, and Bun runs the built-in only when the script body itself says `bun lint` (gotcha 67). gen-runtime-types runs FIRST because the type-aware pass reads the real programs now (root tsconfig.json), and those programs include config/.generated/workers-runtime.d.ts. Without it every Workers global is an error type acting as `any`, which is a different lint from the one that passes locally: CI runs lint before typecheck, typecheck was the only thing generating the file, and #709 went red on 6 `error type` findings that no workstation could reproduce. 0.02s warm, 3s on a cold checkout.",
+  "comment:format": "bun fmt, under bunfig.toml's [fmt] section, which says what it may touch and why (gotchas 71 to 74). Named format rather than fmt so the script never shadows the built-in the way the lint script shadows bun lint (gotcha 67). validate runs format:check; agents' edits are formatted as they land by tools/format-hook.ts. 0.1s for the whole tree.",
   "comment:check-fast": "Local feedback only: lint, typecheck and test are independent read-only gates, so Bun can run them concurrently. CI keeps them as named sequential steps for legible failures. Do not add build, routes, Lens or perf commands here: several share .build or intentionally run under Node.",
   "devDependencies": {
     "@cloudflare/config": "0.26.0",

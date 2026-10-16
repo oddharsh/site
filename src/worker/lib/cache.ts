@@ -80,7 +80,8 @@ export async function swrKV<T>(env, ctx, key, ttl, buildFn: () => T | Promise<T>
   };
 
   if (kv) {
-    let value: T | null = null, fresh = false;
+    let value: T | null = null,
+      fresh = false;
     try {
       const read = await kv.getWithMetadata(key, cacheTtl ? { type, cacheTtl } : { type });
       value = read.value;
@@ -93,7 +94,7 @@ export async function swrKV<T>(env, ctx, key, ttl, buildFn: () => T | Promise<T>
           Promise.resolve()
             .then(buildFn)
             .then(store)
-            .catch(() => {})
+            .catch(() => {}),
         );
       }
       return value;
@@ -187,7 +188,9 @@ export function notModifiedIfFresh(request, response) {
   // Response without draining it leaves that stream unconsumed for the rest of the
   // invocation, so cancel it explicitly — same discipline as every other body we
   // decide not to serve in assets.js.
-  try { response.body?.cancel(); } catch {}
+  try {
+    response.body?.cancel();
+  } catch {}
   return new Response(null, { status: 304, headers });
 }
 

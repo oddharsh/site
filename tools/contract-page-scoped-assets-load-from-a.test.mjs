@@ -25,12 +25,30 @@ const needsBuild = !existsSync(BUILT) && "needs a built tree: bun run build";
 const lwePages = ["dac", "drivers", "encoding", "fhe", "fuse", "knots", "lean", "mpc", "pcrypto", "tee", "utf8", "vigenere"].map((p) => `lwe/${p}.html`);
 const ASSETS = [
   { plain: "lwe/ask.js", base: "ask", ext: "js", loader: /src=["']?\/lwe\/ask\.js/, pages: lwePages },
-  { plain: "garage/pretext.lib.js", base: "pretext-lib", ext: "js", loader: /import\(\s*["'`](?:\.\/|\/garage\/)pretext\.lib\.js/, pages: ["garage/pretext.html"] },
+  {
+    plain: "garage/pretext.lib.js",
+    base: "pretext-lib",
+    ext: "js",
+    loader: /import\(\s*["'`](?:\.\/|\/garage\/)pretext\.lib\.js/,
+    pages: ["garage/pretext.html"],
+  },
   { plain: "dotfiles.js", base: "dotfiles", ext: "js", loader: /from\s*["'`]\/dotfiles\.js/, pages: ["dotfiles/index.html"] },
-  { plain: "pixel-peeper/manifest.json", base: "pixel-peeper-manifest", ext: "json", loader: /fetch\(\s*["'`]\/pixel-peeper\/manifest\.json/, pages: ["pixel-peeper/index.html"] },
+  {
+    plain: "pixel-peeper/manifest.json",
+    base: "pixel-peeper-manifest",
+    ext: "json",
+    loader: /fetch\(\s*["'`]\/pixel-peeper\/manifest\.json/,
+    pages: ["pixel-peeper/index.html"],
+  },
   // joined 2026-10-13: the AV2 decoder, started as a module Worker; /pixel-peeper
   // started it too on 2026-10-14, for its AV2 tiles
-  { plain: "garage/av2-decode.js", base: "av2-decode", ext: "js", loader: /new Worker\(\s*["'`]\/garage\/av2-decode\.js/, pages: ["garage/av2.html", "pixel-peeper/index.html"] },
+  {
+    plain: "garage/av2-decode.js",
+    base: "av2-decode",
+    ext: "js",
+    loader: /new Worker\(\s*["'`]\/garage\/av2-decode\.js/,
+    pages: ["garage/av2.html", "pixel-peeper/index.html"],
+  },
 ];
 
 test("each page-scoped asset has one /a/ copy, byte-identical to the plain file, with a q11 twin", { skip: needsBuild }, async () => {
@@ -74,7 +92,10 @@ test("the loaders in SOURCE still name the plain URL, which is what the rewrite 
 const MANIFEST = "/a/pixel-peeper-manifest.0123abcd.json";
 function fakeAssets() {
   const asked = [];
-  const files = new Map([[MANIFEST, "plain json"], [`${MANIFEST}.br`, "brotli json"]]);
+  const files = new Map([
+    [MANIFEST, "plain json"],
+    [`${MANIFEST}.br`, "brotli json"],
+  ]);
   return {
     asked,
     fetch: async (request) => {
@@ -103,7 +124,10 @@ test("an /a/ json is served as the q11 twin, typed as json, and stays off the di
 test("the roll and dcz:check discover assets from one list, and it reaches the page-scoped scripts", async () => {
   assert.ok(SHELL_DISCOVERY_ROOTS.includes("/dotfiles"), "/dotfiles.js is loaded by /dotfiles alone");
   assert.ok(SHELL_DISCOVERY_ROOTS.includes("/garage/pretext"), "the pretext library is loaded by /garage/pretext alone");
-  assert.ok(SHELL_DISCOVERY_ROOTS.some((p) => p.startsWith("/lwe/")), "ask.js is loaded by the LWE pages alone");
+  assert.ok(
+    SHELL_DISCOVERY_ROOTS.some((p) => p.startsWith("/lwe/")),
+    "ask.js is loaded by the LWE pages alone",
+  );
   for (const file of ["roll-shell-dictionary.ts", "check-dictionary-support.ts"]) {
     const src = await readFile(new URL(file, import.meta.url), "utf8");
     assert.match(src, /for \(const path of SHELL_DISCOVERY_ROOTS\)/, `${file} must walk SHELL_DISCOVERY_ROOTS`);

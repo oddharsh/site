@@ -136,15 +136,12 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
         const where = `${lock} ${field === "overrides" ? "overrides" : `workspaces[${JSON.stringify(wsKey)}].${field}`}`;
 
         if (mirror === undefined) {
-          problems.push(
-            `${manifest} declares ${field}.${name} at ${pin} and ${where} does not record it. ` +
-            `Run \`bun update ${name}\` and commit ${lock}.`,
-          );
+          problems.push(`${manifest} declares ${field}.${name} at ${pin} and ${where} does not record it. ` + `Run \`bun update ${name}\` and commit ${lock}.`);
         } else if (mirror !== pin) {
           problems.push(
             `${manifest} declares ${field}.${name} at ${pin} but ${where} mirrors ${JSON.stringify(mirror)}. ` +
-            `Run \`bun update ${name}\` and commit ${lock}. ` +
-            `(A frozen install DOES catch this one, so it is a lockfile nobody has reinstalled from.)`,
+              `Run \`bun update ${name}\` and commit ${lock}. ` +
+              `(A frozen install DOES catch this one, so it is a lockfile nobody has reinstalled from.)`,
           );
         }
 
@@ -164,7 +161,7 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
           // understands.
           problems.push(
             `${manifest} declares ${field}.${name} at ${pin} and ${lock} resolves no package by that name. ` +
-            `If bun has changed how it keys resolutions, fix tools/lib/lockfile-pins.ts rather than the pin.`,
+              `If bun has changed how it keys resolutions, fix tools/lib/lockfile-pins.ts rather than the pin.`,
           );
           continue;
         }
@@ -172,15 +169,15 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
         if (version === null) {
           problems.push(
             `${lock} resolves ${name} to something that is not a \`${name}@<version>\` entry, ` +
-            `while ${manifest} pins it at ${pin}. Read the lockfile entry before trusting any install from it.`,
+              `while ${manifest} pins it at ${pin}. Read the lockfile entry before trusting any install from it.`,
           );
           continue;
         }
         if (version !== pin) {
           problems.push(
             `${manifest} pins ${name} at ${pin} and ${lock} RESOLVES ${version}. ` +
-            `A frozen install exits 0 on this and installs ${version}; so does a plain \`bun install\`. ` +
-            `Run \`bun update ${name}\` and commit ${lock}, because a reinstall does not repair it.`,
+              `A frozen install exits 0 on this and installs ${version}; so does a plain \`bun install\`. ` +
+              `Run \`bun update ${name}\` and commit ${lock}, because a reinstall does not repair it.`,
           );
         }
       }
@@ -190,8 +187,8 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
   if (checked.length < floor) {
     problems.push(
       `only ${checked.length} exact pin(s) were checked against a lockfile, below the floor of ${floor}. ` +
-      `The walk has probably stopped finding manifests rather than the tree having shrunk; ` +
-      `check readLockfilePins in tools/lib/lockfile-pins.ts.`,
+        `The walk has probably stopped finding manifests rather than the tree having shrunk; ` +
+        `check readLockfilePins in tools/lib/lockfile-pins.ts.`,
     );
   }
 

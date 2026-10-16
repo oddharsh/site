@@ -46,9 +46,7 @@
 // before, the whole /mcp catalog after. Native first, since a page holding both
 // should register where the browser will actually route an agent's call.
 /** @type {ModelContext | null} */
-const MC = (globalThis.document && globalThis.document.modelContext)
-  || (globalThis.navigator && globalThis.navigator.modelContext)
-  || null;
+const MC = (globalThis.document && globalThis.document.modelContext) || (globalThis.navigator && globalThis.navigator.modelContext) || null;
 
 /**
  * A native ModelContext has getTools(); a shim may not. Read the catalog where
@@ -58,7 +56,11 @@ const MC = (globalThis.document && globalThis.document.modelContext)
  */
 async function listTools() {
   if (!MC || !MC.getTools) return [];
-  try { return await MC.getTools(); } catch (error) { return []; }
+  try {
+    return await MC.getTools();
+  } catch (error) {
+    return [];
+  }
 }
 
 const META = {
@@ -86,7 +88,11 @@ function notify() {
   for (const fn of listeners) {
     // A broken listener must never break registration or a tool call. The tray
     // is an observer of both, never part of either operation.
-    try { fn(); } catch (error) { /* ignored on purpose */ }
+    try {
+      fn();
+    } catch (error) {
+      /* ignored on purpose */
+    }
   }
 }
 
@@ -96,10 +102,14 @@ function record(name, started, outcome, gated) {
 }
 
 /** Is there a WebMCP implementation on this page at all? */
-export function available() { return MC !== null; }
+export function available() {
+  return MC !== null;
+}
 
 /** Every tool call this page has served this session, newest last. */
-export function callLog() { return audit.slice(); }
+export function callLog() {
+  return audit.slice();
+}
 
 /**
  * Subscribe to registration and to every tool call. Returns an unsubscribe.
@@ -187,12 +197,17 @@ function gate(name, args) {
     dialog = document.createElement("dialog");
     dialog.id = "webmcp-consent";
     dialog.setAttribute("aria-labelledby", "webmcp-consent-h");
-    dialog.style.cssText = "padding:0;border:2px outset #d4d0c8;background:#ece9d8;color:#000;font:11px var(--font-ui,Tahoma,Verdana,sans-serif);max-width:30rem;box-shadow:2px 2px 8px rgba(0,0,0,.4)";
+    dialog.style.cssText =
+      "padding:0;border:2px outset #d4d0c8;background:#ece9d8;color:#000;font:11px var(--font-ui,Tahoma,Verdana,sans-serif);max-width:30rem;box-shadow:2px 2px 8px rgba(0,0,0,.4)";
     document.body.appendChild(dialog);
   }
   const d = dialog;
   let body = "";
-  try { body = JSON.stringify(args, null, 1); } catch (e) { body = String(args); }
+  try {
+    body = JSON.stringify(args, null, 1);
+  } catch (e) {
+    body = String(args);
+  }
   d.innerHTML = "";
   const wrap = document.createElement("div");
   const bar = document.createElement("div");
@@ -206,14 +221,17 @@ function gate(name, args) {
   p.textContent = "The tool " + name + " writes data on aadhar.sh. WebMCP has no way to tell your agent that, so this page is asking you instead.";
   const pre = document.createElement("pre");
   pre.textContent = body;
-  pre.style.cssText = "margin:0 0 10px;padding:6px;background:#fff;border:1px solid #7f9db9;max-height:9rem;overflow:auto;font:11px var(--font-mono,\"Courier New\",monospace);white-space:pre-wrap;word-break:break-word";
+  pre.style.cssText =
+    'margin:0 0 10px;padding:6px;background:#fff;border:1px solid #7f9db9;max-height:9rem;overflow:auto;font:11px var(--font-mono,"Courier New",monospace);white-space:pre-wrap;word-break:break-word';
   const row = document.createElement("div");
   row.style.cssText = "display:flex;gap:6px;justify-content:flex-end";
   const no = document.createElement("button");
   no.textContent = "Refuse";
   const yes = document.createElement("button");
   yes.textContent = "Allow once";
-  for (const b of [no, yes]) b.style.cssText = "min-width:5.5rem;padding:3px 10px;font:11px var(--font-ui,Tahoma,Verdana,sans-serif);border:2px outset #d4d0c8;background:#ece9d8;cursor:pointer";
+  for (const b of [no, yes])
+    b.style.cssText =
+      "min-width:5.5rem;padding:3px 10px;font:11px var(--font-ui,Tahoma,Verdana,sans-serif);border:2px outset #d4d0c8;background:#ece9d8;cursor:pointer";
   row.append(no, yes);
   inner.append(p, pre, row);
   wrap.append(bar, inner);
@@ -270,7 +288,11 @@ export async function registerTool(def) {
   if (typeof schema === "string") {
     // A schema read back out of getTools() is a JSON string. Re-registering one
     // without this throws "Failed to convert value to 'object'".
-    try { schema = JSON.parse(schema); } catch (e) { schema = undefined; }
+    try {
+      schema = JSON.parse(schema);
+    } catch (e) {
+      schema = undefined;
+    }
   }
 
   /** @type {Record<string, unknown>} */
@@ -289,7 +311,10 @@ export async function registerTool(def) {
             record(def.name, started, "refused", gated);
             // isError rather than throw: a throw reaches the agent as "the script
             // function threw an error", which loses the one fact that matters.
-            return { content: [{ type: "text", text: "Refused by the person at the keyboard. This tool writes data, so it needs their consent and did not get it." }], isError: true };
+            return {
+              content: [{ type: "text", text: "Refused by the person at the keyboard. This tool writes data, so it needs their consent and did not get it." }],
+              isError: true,
+            };
           }
         }
         const out = await def.execute(args || {});

@@ -34,10 +34,14 @@ const ACTIVATE = "/System/Library/PrivateFrameworks/SystemAdministration.framewo
 function shellValue(write) {
   const v = write.value;
   switch (write.type) {
-    case "bool": return `-bool ${v ? "true" : "false"}`;
-    case "int": return `-int ${Number(v)}`;
-    case "float": return `-float ${Number(v)}`;
-    default: return `-string '${String(v).replace(/'/g, "'\\''")}'`;
+    case "bool":
+      return `-bool ${v ? "true" : "false"}`;
+    case "int":
+      return `-int ${Number(v)}`;
+    case "float":
+      return `-float ${Number(v)}`;
+    default:
+      return `-string '${String(v).replace(/'/g, "'\\''")}'`;
   }
 }
 
@@ -157,15 +161,30 @@ export function init() {
   }
 
   const boxes = () => /** @type {HTMLInputElement[]} */ ([...list.querySelectorAll("input[type=checkbox]")]);
-  const picked = () => new Set(boxes().filter((b) => b.checked).map((b) => b.dataset.id || ""));
+  const picked = () =>
+    new Set(
+      boxes()
+        .filter((b) => b.checked)
+        .map((b) => b.dataset.id || ""),
+    );
   const render = () => {
     const set = picked();
     out.value = renderScript(data, set);
     count.textContent = `${set.size} of ${data.options.length} ticked`;
   };
   list.addEventListener("change", render);
-  document.getElementById("df-all")?.addEventListener("click", () => { boxes().forEach((b) => { b.checked = true; }); render(); });
-  document.getElementById("df-none")?.addEventListener("click", () => { boxes().forEach((b) => { b.checked = false; }); render(); });
+  document.getElementById("df-all")?.addEventListener("click", () => {
+    boxes().forEach((b) => {
+      b.checked = true;
+    });
+    render();
+  });
+  document.getElementById("df-none")?.addEventListener("click", () => {
+    boxes().forEach((b) => {
+      b.checked = false;
+    });
+    render();
+  });
   const copy = document.getElementById("df-copy");
   const copyOut = async () => {
     if (!copy) return;
@@ -176,8 +195,12 @@ export function init() {
       out.select();
       copy.textContent = "Select + copy";
     }
-    setTimeout(() => { copy.textContent = "Copy"; }, 1600);
+    setTimeout(() => {
+      copy.textContent = "Copy";
+    }, 1600);
   };
-  copy?.addEventListener("click", () => { void copyOut(); });
+  copy?.addEventListener("click", () => {
+    void copyOut();
+  });
   render();
 }

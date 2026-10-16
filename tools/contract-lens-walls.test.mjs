@@ -7,8 +7,14 @@
 // never "no wall", and the sample never reaches JSON.
 import { assert, test } from "./contract-shared.ts";
 import {
-  CLEF_DEADLINE_MS, VIEW_SAMPLE, WALL_MODEL, WALL_THRESHOLD,
-  buildWallRequest, classifyWalls, wallCandidates, wallDedupeKey,
+  CLEF_DEADLINE_MS,
+  VIEW_SAMPLE,
+  WALL_MODEL,
+  WALL_THRESHOLD,
+  buildWallRequest,
+  classifyWalls,
+  wallCandidates,
+  wallDedupeKey,
 } from "../src/worker/lens-walls.ts";
 import { lensFieldEvidence } from "../src/worker/lens.ts";
 
@@ -55,11 +61,14 @@ test("only an answered 2xx with a body, not already flagged, is asked about", ()
   views[3].error = "timeout";
   views[4][VIEW_SAMPLE] = "   ";
   views[5].status = 301;
-  assert.deepEqual(wallCandidates(views).map((v) => v.key), ["Google-Extended", "PerplexityBot", "ChatGPT-User", "Claude-User"]);
+  assert.deepEqual(
+    wallCandidates(views).map((v) => v.key),
+    ["Google-Extended", "PerplexityBot", "ChatGPT-User", "Claude-User"],
+  );
 });
 
 test("one question per distinct page, nonces normalised out, the body inside its own question", () => {
-  const views = scan((key) => key === "GPTBot" ? WALL : `${PAGE}<!-- rid ${key === "curl" ? "9f8e7d6c5b4a3f2e" : "0a1b2c3d4e5f6a7b"} t=${key.length}000 -->`);
+  const views = scan((key) => (key === "GPTBot" ? WALL : `${PAGE}<!-- rid ${key === "curl" ? "9f8e7d6c5b4a3f2e" : "0a1b2c3d4e5f6a7b"} t=${key.length}000 -->`));
   const { request, groups } = buildWallRequest(wallCandidates(views));
   assert.equal(request.model, WALL_MODEL);
   assert.match(WALL_MODEL, /^(clef|clef-flash)$/);
@@ -74,8 +83,8 @@ test("one question per distinct page, nonces normalised out, the body inside its
 });
 
 test("a wall at or past the threshold flips the view; a page keeps its probability and its verdict", async () => {
-  const views = scan((key) => key === "GPTBot" || key === "ClaudeBot" ? WALL : PAGE);
-  const binding = ai((q) => q.instructions.body === WALL ? 0.97 : 0.06);
+  const views = scan((key) => (key === "GPTBot" || key === "ClaudeBot" ? WALL : PAGE));
+  const binding = ai((q) => (q.instructions.body === WALL ? 0.97 : 0.06));
   const out = await classifyWalls(views, { AI: binding, AI_GATEWAY: "default" });
   assert.equal(binding.calls.length, 1, "ten views, one subrequest");
   assert.equal(binding.calls[0].model, `@cf/cloudflare/${WALL_MODEL}`);
@@ -103,12 +112,20 @@ test("a walled control stops counting as admitted, so the crawler rows read as u
 
 test("a failed or unreadable answer is never evidence that there was no wall", async () => {
   const views = scan();
-  const capacity = { async run() { throw new Error("AiError: Capacity temporarily exceeded, please try again. (3040)"); } };
+  const capacity = {
+    async run() {
+      throw new Error("AiError: Capacity temporarily exceeded, please try again. (3040)");
+    },
+  };
   assert.deepEqual(await classifyWalls(views, { AI: capacity }), { asked: 10, distinct: 1, flagged: 0, outcome: "ai 3040" });
   assert.ok(views.every((v) => v.wall.p === null && v.wall.error === "ai 3040" && !v.challenge));
 
   const odd = scan();
-  const unparseable = { async run() { return { answers: { b0: { type: "choice", choice: "yes" } } }; } };
+  const unparseable = {
+    async run() {
+      return { answers: { b0: { type: "choice", choice: "yes" } } };
+    },
+  };
   await classifyWalls(odd, { AI: unparseable });
   assert.ok(odd.every((v) => v.wall.p === null && v.wall.error === "unparseable" && !v.challenge));
   assert.ok(CLEF_DEADLINE_MS >= 1000 && CLEF_DEADLINE_MS <= 4500, "under the bot views' own 4.5 s timeout");

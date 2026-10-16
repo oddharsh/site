@@ -40,11 +40,16 @@ test("every resample call is unscored and has exactly one linear-light tile and 
 test("every resample tile carries light kept, and the linear-light tile keeps more than sips", () => {
   for (const t of resample) {
     const light = Object.fromEntries(t.options.map((o) => [o.label, o.light]));
-    for (const [label, v] of Object.entries(light)) assert.ok(typeof v === "number" && v > 80 && v <= 100.5, `${t.crop}/${label}: light kept should be a percentage near 100, got ${v}`);
+    for (const [label, v] of Object.entries(light))
+      assert.ok(typeof v === "number" && v > 80 && v <= 100.5, `${t.crop}/${label}: light kept should be a percentage near 100, got ${v}`);
     assert.ok(light.zenc > light.sips, `${t.crop}: zenc keeps ${light.zenc}% of the window's light and sips ${light.sips}%; averaging in light must keep more`);
   }
 });
 
 test("the page captions light kept wherever a tile has no metric scores", () => {
-  assert.match(PAGE, /o\.s2===null\?\(o\.light==null\?``:`<span class="m">light kept \$\{o\.light\.toFixed\(1\)\}%<\/span>`\)/, "the caption must show light kept for an unscored tile");
+  assert.match(
+    PAGE,
+    /o\.s2===null\?\(o\.light==null\?``:`<span class="m">light kept \$\{o\.light\.toFixed\(1\)\}%<\/span>`\)/,
+    "the caption must show light kept for an unscored tile",
+  );
 });

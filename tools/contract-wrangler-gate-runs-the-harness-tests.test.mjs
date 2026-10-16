@@ -35,7 +35,8 @@ test("the harness collector finds every contract test that boots createTestHarne
     "tools/contract-census-duplicate-id-in-workerd.test.mjs",
     "tools/contract-encodebody-survives-a-rebuild-in-workerd.test.mjs",
     "tools/contract-every-cron-fires-in-workerd.test.mjs",
-  ]) assert.ok(found.includes(rel), `${rel} boots the harness and the collector missed it`);
+  ])
+    assert.ok(found.includes(rel), `${rel} boots the harness and the collector missed it`);
 
   // The controls: the first two name createTestHarness in prose, and this file
   // quotes the import and the call as fixtures. None of them boots anything,

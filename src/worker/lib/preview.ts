@@ -110,7 +110,11 @@ export function previewDenial(pathname, method) {
 // Serendipity ever grows a tool that writes.
 export function previewToolRefusal(request, tools, name) {
   let hostname = "";
-  try { hostname = new URL(request.url).hostname; } catch { return null; }
+  try {
+    hostname = new URL(request.url).hostname;
+  } catch {
+    return null;
+  }
   if (!isPreviewHost(hostname)) return null;
 
   // An unknown name falls through to the dispatcher's own -32602, which is a
@@ -118,22 +122,24 @@ export function previewToolRefusal(request, tools, name) {
   const tool = (tools || []).find((t) => t && t.name === name);
   if (!tool || tool.annotations?.readOnlyHint !== false) return null;
 
-  return `${name} writes production state and is disabled on preview URLs. ` +
+  return (
+    `${name} writes production state and is disabled on preview URLs. ` +
     "This is a Workers preview build of aadhar.sh, running against production " +
-    "bindings and secrets. Read-only tools work.";
+    "bindings and secrets. Read-only tools work."
+  );
 }
 
 function denial(reason) {
   return new Response(
     `${reason}\n\n` +
-    "This is a Workers preview build of aadhar.sh. It runs against production\n" +
-    "bindings and secrets, so writes are refused here. Read-only routes work.\n",
+      "This is a Workers preview build of aadhar.sh. It runs against production\n" +
+      "bindings and secrets, so writes are refused here. Read-only routes work.\n",
     {
       status: 403,
       headers: {
-        "content-type":  "text/plain; charset=utf-8",
+        "content-type": "text/plain; charset=utf-8",
         "cache-control": "no-store",
-        "x-robots-tag":  PREVIEW_ROBOTS,
+        "x-robots-tag": PREVIEW_ROBOTS,
       },
     },
   );

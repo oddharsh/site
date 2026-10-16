@@ -1,11 +1,6 @@
 // ── RSS feeds ────────────────────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  assert,
-  existsSync,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, existsSync, readFileSync, test } from "./contract-shared.ts";
 
 // ── RSS feeds ────────────────────────────────────────────────────────
 // Feeds are BUILD OUTPUT (tools/gen-feeds.ts), like the Markdown twins and
@@ -36,7 +31,11 @@ test("every feed is well-formed, dated, and newest-first", async () => {
       return parsed;
     });
     // Newest first is the only order a reader respects.
-    assert.deepEqual(dates, [...dates].sort((a, b) => b - a), `${route} is not newest-first`);
+    assert.deepEqual(
+      dates,
+      [...dates].sort((a, b) => b - a),
+      `${route} is not newest-first`,
+    );
 
     for (const item of items) {
       const guid = item.match(/<guid isPermaLink="true">([^<]+)<\/guid>/)?.[1];
@@ -72,8 +71,7 @@ test("feed dates come from the sitemap the crawler already reads", async () => {
   for (const [, item] of garage.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
     const path = item.match(/<link>https:\/\/aadhar\.sh([^<]+)<\/link>/)[1];
     const pubDate = item.match(/<pubDate>([^<]+)<\/pubDate>/)[1];
-    assert.equal(pubDate, new Date(`${dates.get(path)}T12:00:00Z`).toUTCString(),
-      `${path} is dated differently in the feed and the sitemap`);
+    assert.equal(pubDate, new Date(`${dates.get(path)}T12:00:00Z`).toUTCString(), `${path} is dated differently in the feed and the sitemap`);
   }
 });
 
@@ -84,7 +82,10 @@ test("each section advertises its feed", () => {
   // rel="alternate", and the type and href on separate tags advertise nothing.
   const literal = (text) => text.replace(/[\\^$.*+?()[\]{}|/]/g, "\\$&");
   const tag = (feed) => new RegExp(`<link rel=\\\\?"alternate\\\\?" type=\\\\?"application/rss\\+xml\\\\?"[^>]*href=\\\\?"${literal(feed)}\\\\?"`);
-  for (const [file, feed] of [["src/pages/garage/index.html", "/garage/feed.xml"], ["src/pages/lwe/index.html", "/lwe/feed.xml"]]) {
+  for (const [file, feed] of [
+    ["src/pages/garage/index.html", "/garage/feed.xml"],
+    ["src/pages/lwe/index.html", "/lwe/feed.xml"],
+  ]) {
     assert.match(readFileSync(file, "utf8"), tag(feed), `${file} does not advertise ${feed}`);
   }
   // /writing is Worker-rendered, so its shell carries the link for the index and
@@ -103,7 +104,8 @@ test("each section advertises its feed", () => {
 test("a garage card cites nothing the page it describes does not", () => {
   const index = readFileSync("src/pages/garage/index.html", "utf8");
   const cards = index.match(/<li>[\s\S]*?<\/li>/g) || [];
-  let checked = 0, cited = 0;
+  let checked = 0,
+    cited = 0;
   for (const card of cards) {
     const slug = /class="name"><a href="([^"]+)"/.exec(card);
     const desc = /<div class="desc">([\s\S]*?)<\/div>/.exec(card);
@@ -111,19 +113,18 @@ test("a garage card cites nothing the page it describes does not", () => {
     checked++;
     const urls = [...desc[1].matchAll(/href="(https?:\/\/[^"]+)"/g)].map((m) => m[1]);
     if (!urls.length) continue;
-    const file = slug[1] === "/pixel-peeper"
-      ? "src/pages/pixel-peeper/index.html"
-      : `src/pages${slug[1]}.html`;
+    const file = slug[1] === "/pixel-peeper" ? "src/pages/pixel-peeper/index.html" : `src/pages${slug[1]}.html`;
     // /garage/dyno is Worker-rendered and has no file here. That is fine while it
     // cites nothing; the day it cites something, this says so rather than throwing
     // ENOENT at whoever added the link.
-    assert.ok(existsSync(file),
-      `the /garage card for ${slug[1]} carries a citation, but ${file} does not exist — a Worker-rendered page has to carry its own credit`);
+    assert.ok(
+      existsSync(file),
+      `the /garage card for ${slug[1]} carries a citation, but ${file} does not exist — a Worker-rendered page has to carry its own credit`,
+    );
     const page = readFileSync(file, "utf8");
     for (const url of urls) {
       cited++;
-      assert.ok(page.includes(url),
-        `the /garage card for ${slug[1]} cites ${url}, which never appears on ${file}`);
+      assert.ok(page.includes(url), `the /garage card for ${slug[1]} cites ${url}, which never appears on ${file}`);
     }
   }
   // Both counters, because the loop above passes trivially if the card markup

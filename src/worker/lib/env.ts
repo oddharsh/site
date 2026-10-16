@@ -39,7 +39,6 @@
 // because the path degrades without it, and the `?` here is that argument in a
 // form the compiler enforces.
 
-
 import type { BotRobotsRead } from "./botauth.ts";
 import type { PublicTransport } from "./public-fetch.ts";
 import type { BookingWorkflow } from "../../../cal/src/workflow.ts";
@@ -264,9 +263,4 @@ export type SiteRequest = Request<unknown, IncomingRequestCfProperties>;
  * about how the old cf-garage DO handed its count over, and which no line of
  * code reads. Leaving it out is the point of writing the surface down.
  */
-export interface Env
-  extends EnvBindings,
-    EnvVars,
-    EnvSecrets,
-    EnvOptionalSecrets,
-    EnvInjected {}
+export interface Env extends EnvBindings, EnvVars, EnvSecrets, EnvOptionalSecrets, EnvInjected {}

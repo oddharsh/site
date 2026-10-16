@@ -23,9 +23,9 @@ import { handleReading } from "../src/worker/reading.ts";
 
 const PRELOAD = '</a/luna.0dbcdba1.css>; rel="preload"; as="style", </a/nav.684e58a4.js>; rel="preload"; as="script"';
 const POLICY = {
-  "cache-control":   "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
-  "link":            `${PRELOAD}, </webmention>; rel="webmention"`,
-  "x-robots-tag":    "noindex",
+  "cache-control": "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
+  "link": `${PRELOAD}, </webmention>; rel="webmention"`,
+  "x-robots-tag": "noindex",
   "referrer-policy": "strict-origin-when-cross-origin",
 };
 
@@ -47,9 +47,9 @@ function stagedAssets(files) {
 }
 
 const BUILT = {
-  "/page":         ["<!doctype html><title>page</title>", { "content-type": "text/html; charset=utf-8", etag: '"plain"' }],
+  "/page": ["<!doctype html><title>page</title>", { "content-type": "text/html; charset=utf-8", etag: '"plain"' }],
   "/page.html.br": ["br-bytes", { "content-type": "application/octet-stream", etag: '"twin"' }],
-  "/page.md":      ["# Page\n\nprose about the page", { "content-type": "text/markdown; charset=utf-8" }],
+  "/page.md": ["# Page\n\nprose about the page", { "content-type": "text/markdown; charset=utf-8" }],
 };
 const ask = (path, init = {}) => new Request("https://aadhar.sh" + path, init);
 const MD = { accept: "text/markdown" };
@@ -78,10 +78,16 @@ test("the Markdown twin carries the policy, keeps its no-store and drops the she
   assert.equal(get.headers.get("content-type"), "text/markdown; charset=utf-8");
   assert.equal(get.headers.get("x-robots-tag"), "noindex", "a noindex page's twin must not be its indexable copy");
   assert.equal(get.headers.get("referrer-policy"), POLICY["referrer-policy"]);
-  assert.equal(get.headers.get("link"), '</webmention>; rel="webmention"',
-    "the resource's own Link entries survive; the shell preloads describe the HTML and do not");
-  assert.equal(get.headers.get("cache-control"), "no-store, must-revalidate",
-    "the edge keys the URL, never the Accept, so the negotiated twin must stay uncacheable whatever the page says");
+  assert.equal(
+    get.headers.get("link"),
+    '</webmention>; rel="webmention"',
+    "the resource's own Link entries survive; the shell preloads describe the HTML and do not",
+  );
+  assert.equal(
+    get.headers.get("cache-control"),
+    "no-store, must-revalidate",
+    "the edge keys the URL, never the Accept, so the negotiated twin must stay uncacheable whatever the page says",
+  );
 
   const head = await serveBuiltPage(ask("/page", { method: "HEAD", headers: MD }), env, { headers: POLICY });
   assert.equal(await head.text(), "");
@@ -102,14 +108,18 @@ test("twinPolicy leaves out only what describes the HTML representation", () => 
     "referrer-policy": "strict-origin-when-cross-origin",
   });
   assert.deepEqual(twinPolicy({ "Cache-Control": "public", Link: PRELOAD }), {}, "a preload-only Link leaves no empty header behind");
-  assert.deepEqual(twinPolicy({ link: '</a,b>; rel="sitemap", </x.css>; rel=preload; as=style' }), { link: '</a,b>; rel="sitemap"' },
-    "a comma inside a URL does not split an entry, and an unquoted rel is still a preload");
+  assert.deepEqual(
+    twinPolicy({ link: '</a,b>; rel="sitemap", </x.css>; rel=preload; as=style' }),
+    { link: '</a,b>; rel="sitemap"' },
+    "a comma inside a URL does not split an entry, and an unquoted rel is still a preload",
+  );
   assert.deepEqual(twinPolicy(), {});
 });
 
 test("a tree with no bake renders live under the same policy", async () => {
   const env = { ASSETS: stagedAssets({}) };
-  const live = () => new Response("<!doctype html>live", { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-own": "kept" } });
+  const live = () =>
+    new Response("<!doctype html>live", { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-own": "kept" } });
   for (const method of ["GET", "HEAD"]) {
     const res = await serveBuiltPage(ask("/page", { method }), env, { headers: POLICY, live });
     assert.equal(res.status, 200);
@@ -125,7 +135,8 @@ test("a live answer that is not the document keeps its own headers", async () =>
   const env = { ASSETS: stagedAssets({}) };
   const miss = await serveBuiltPage(ask("/writing/no-such-post"), env, {
     headers: POLICY,
-    live: () => new Response("<!doctype html>404", { status: 404, headers: { "content-type": "text/html", "cache-control": "public, max-age=30, must-revalidate" } }),
+    live: () =>
+      new Response("<!doctype html>404", { status: 404, headers: { "content-type": "text/html", "cache-control": "public, max-age=30, must-revalidate" } }),
   });
   assert.equal(miss.status, 404);
   assert.equal(miss.headers.get("cache-control"), "public, max-age=30, must-revalidate", "a miss must not inherit a day of shared cache");
@@ -171,7 +182,11 @@ test("/inbox and /reading serve their twins under the page's policy", async () =
 
   const inbox = await handleInbox(ask("/inbox", { headers: MD }), { ASSETS: twin("/inbox") });
   assert.equal(inbox.headers.get("content-type"), "text/markdown; charset=utf-8");
-  assert.match(inbox.headers.get("link") || "", /^<[^>]*\/webmention>; rel="webmention"$/, "the endpoint is discoverable from the twin, and nothing else rides with it");
+  assert.match(
+    inbox.headers.get("link") || "",
+    /^<[^>]*\/webmention>; rel="webmention"$/,
+    "the endpoint is discoverable from the twin, and nothing else rides with it",
+  );
   assert.match(inbox.headers.get("cache-control") || "", /no-store/);
   // CONTROL: the call the route made before, which is what dropped it.
   const before = await serveMarkdownTwin(ask("/inbox", { headers: MD }), { ASSETS: twin("/inbox") }, "/inbox.md");

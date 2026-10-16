@@ -1,11 +1,7 @@
 // ── a /*min*/ CSS literal means at runtime what Lightning CSS wrote ─────────
 // Split-file convention: shared imports live in contract-shared.ts.
 import { readdir, readFile } from "node:fs/promises";
-import {
-  assert,
-  ROOT,
-  test,
-} from "./contract-shared.ts";
+import { assert, ROOT, test } from "./contract-shared.ts";
 import { parseCss } from "./lib/css-parse.ts";
 import { cookTemplate, MIN_LITERAL, spliceMinLiterals, toTemplateRaw } from "./lib/css-literal.ts";
 
@@ -26,18 +22,27 @@ const evaluate = (literal) => new Function(`return ${literal};`)();
 // Module source as the pass reads it off disk. String.raw keeps every JS
 // escape as written: `\n` is a JS newline, `\\2014` is the CSS escape \2014,
 // `\\:` is CSS's escaped colon, and \` and $\{ cook to a backtick and "${".
-const FIXTURE = String.raw`export const css = ` + "`" + String.raw`/*min*/\n.tool-out { margin: 0 }
+const FIXTURE =
+  String.raw`export const css = ` +
+  "`" +
+  String.raw`/*min*/\n.tool-out { margin: 0 }
 form[action="/run"] { color: red }
 .a\\:b { color: blue }
 p::before { content: "\\2014" }
-q::after { content: "\`$\{" }` + "`;\n";
+q::after { content: "\`$\{" }` +
+  "`;\n";
 
 test("the cooker reads every escape class the way the engine does", () => {
   // css-literal.ts cooks by hand (lint refuses implied eval in .ts); the engine
   // is the oracle. One raw string per escape class, then all of them at once.
   const cases = [
-    String.raw`\n\t\b\v\f\r`, String.raw`\0 and \0a`, String.raw`\x41é\u{1F600}😀`,
-    String.raw`\\ \` \$ \{ \/ \: \q`, "line\\\ncontinued", "crlf\r\nand bare\rcr", "ls\\\u2028ps\\\u2029",
+    String.raw`\n\t\b\v\f\r`,
+    String.raw`\0 and \0a`,
+    String.raw`\x41é\u{1F600}😀`,
+    String.raw`\\ \` \$ \{ \/ \: \q`,
+    "line\\\ncontinued",
+    "crlf\r\nand bare\rcr",
+    "ls\\\u2028ps\\\u2029",
     String.raw`content:"\\2014" .a\\:b`,
   ];
   for (const raw of [...cases, cases.join("")]) {
@@ -74,7 +79,11 @@ test("control: the old splice, raw in and unescaped out, fails both ways", () =>
   const [{ min }] = spliceMinLiterals("fixture.ts", FIXTURE, minify).literals;
   assert.notEqual(minify(raw), min, "minifying raw source text should differ; the input case is not exercised");
   let naive;
-  try { naive = evaluate("`" + min + "`"); } catch { naive = undefined; }
+  try {
+    naive = evaluate("`" + min + "`");
+  } catch {
+    naive = undefined;
+  }
   assert.notEqual(naive, min, "an unescaped splice round-tripped; the output case is not exercised");
   // The reported failure on its own: \/ cooks to "/", leaving invalid CSS.
   assert.equal(evaluate("`" + "form[action=\\/run]{color:red}" + "`"), "form[action=/run]{color:red}");

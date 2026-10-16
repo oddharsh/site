@@ -58,21 +58,41 @@ function splitShelf(html: string): string {
   const items: number[] = [];
   let lists = 0;
   new HTMLRewriter()
-    .on(SHELF, { element() { lists++; } })
-    .on(`${SHELF} > li`, { element() { items.push(0); }, text(t) { items[items.length - 1] += t.text.replace(/\s+/g, " ").length; } }) // rendered text, as the measurement counted it
+    .on(SHELF, {
+      element() {
+        lists++;
+      },
+    })
+    .on(`${SHELF} > li`, {
+      element() {
+        items.push(0);
+      },
+      text(t) {
+        items[items.length - 1] += t.text.replace(/\s+/g, " ").length;
+      },
+    }) // rendered text, as the measurement counted it
     .transform(html);
   if (lists !== 1) return html; // one shelf on the site today; two would need their items counted apart
   const cuts: number[] = [];
   for (let i = 0, run = 0, count = 0; i < items.length - 1; i++) {
-    run += items[i]; count++;
-    if (run >= SHELF_RUN_CHARS && count % 2 === 0) { cuts.push(i + 1); run = 0; count = 0; }
+    run += items[i];
+    count++;
+    if (run >= SHELF_RUN_CHARS && count % 2 === 0) {
+      cuts.push(i + 1);
+      run = 0;
+      count = 0;
+    }
   }
   if (!cuts.length) return html;
-  let attrs = "", i = -1;
+  let attrs = "",
+    i = -1;
   return new HTMLRewriter()
     .on(SHELF, {
       element(e) {
-        attrs = [...e.attributes].filter(([n]) => n !== "class").map(([n, v]) => ` ${n}="${v.replace(/"/g, "&quot;")}"`).join("");
+        attrs = [...e.attributes]
+          .filter(([n]) => n !== "class")
+          .map(([n, v]) => ` ${n}="${v.replace(/"/g, "&quot;")}"`)
+          .join("");
         e.setAttribute("class", `${e.getAttribute("class")} open`);
       },
     })
@@ -91,16 +111,37 @@ type Plan = { starts: number[]; sizes: number[] };
 
 /** Where the folds start (by index among the candidate blocks, in document order), and each fold's text length. */
 function plan(html: string): Plan | null {
-  let text = 0, hidden = 0, sawProse = false;
+  let text = 0,
+    hidden = 0,
+    sawProse = false;
   const at: { h2: boolean; chars: number }[] = [];
   new HTMLRewriter()
-    .on(".content.prose", { element() { sawProse = true; }, text(t) { text += t.text.length; } })
+    .on(".content.prose", {
+      element() {
+        sawProse = true;
+      },
+      text(t) {
+        text += t.text.length;
+      },
+    })
     // script, style and template text is in the count above; take it back out
-    .on(".content.prose script, .content.prose style, .content.prose template", { text(t) { hidden += t.text.length; } })
+    .on(".content.prose script, .content.prose style, .content.prose template", {
+      text(t) {
+        hidden += t.text.length;
+      },
+    })
     // the shelf's indentation too: its source is far more whitespace than an essay's,
     // so its raw length overstated each fold's height by about 40%
-    .on(SHELF, { text(t) { hidden += t.text.length - t.text.replace(/\s+/g, " ").length; } })
-    .on(STARTS, { element(e) { at.push({ h2: e.tagName === "h2", chars: text - hidden }); } })
+    .on(SHELF, {
+      text(t) {
+        hidden += t.text.length - t.text.replace(/\s+/g, " ").length;
+      },
+    })
+    .on(STARTS, {
+      element(e) {
+        at.push({ h2: e.tagName === "h2", chars: text - hidden });
+      },
+    })
     .transform(html);
   if (!sawProse) return null;
   const total = text - hidden;
@@ -121,9 +162,9 @@ export function foldLongProse(html: string): string {
   html = splitShelf(html);
   const p = plan(html);
   if (!p) return html;
-  const open = (k: number) =>
-    `<section class="fold" style="contain-intrinsic-block-size:auto ${Math.max(200, Math.round(p.sizes[k] * PX_PER_CHAR))}px">`;
-  let i = -1, k = 0;
+  const open = (k: number) => `<section class="fold" style="contain-intrinsic-block-size:auto ${Math.max(200, Math.round(p.sizes[k] * PX_PER_CHAR))}px">`;
+  let i = -1,
+    k = 0;
   return new HTMLRewriter()
     .on(STARTS, {
       element(e) {
@@ -135,7 +176,9 @@ export function foldLongProse(html: string): string {
     })
     .on(".content.prose", {
       element(e) {
-        e.onEndTag((end) => { if (k > 0) end.before("</section>", { html: true }); });
+        e.onEndTag((end) => {
+          if (k > 0) end.before("</section>", { html: true });
+        });
       },
     })
     .transform(html);

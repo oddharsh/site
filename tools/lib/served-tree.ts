@@ -37,8 +37,7 @@ export const SERVED_ROOTS: readonly ServedRoot[] = [
   { dir: "src/styles", holds: "styles" },
 ];
 
-const rootsHolding = (...kinds: ServedRoot["holds"][]): string[] =>
-  SERVED_ROOTS.filter((root) => kinds.includes(root.holds)).map((root) => root.dir);
+const rootsHolding = (...kinds: ServedRoot["holds"][]): string[] => SERVED_ROOTS.filter((root) => kinds.includes(root.holds)).map((root) => root.dir);
 
 // Three projections of the one declaration. They answer different questions,
 // so they stay three names rather than one list with callers picking indexes.
@@ -61,11 +60,7 @@ export const BROWSER_IMPORT_ROOTS: readonly string[] = rootsHolding("client", "s
 // Nothing writes them into the source tree any more, so a file at one of them
 // can only be a leftover from an older checkout, and staging it would make the
 // served tree depend on whatever a given machine happens to still hold.
-export const DERIVED_PATHS: readonly string[] = [
-  "public/images/meta",
-  "public/images/exif.json",
-  "public/images/fingerprints.json",
-];
+export const DERIVED_PATHS: readonly string[] = ["public/images/meta", "public/images/exif.json", "public/images/fingerprints.json"];
 
 export type ServedTreePlan = {
   // The roots that were merged, in order.
@@ -142,8 +137,13 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
     // A root renamed out from under this list is the failure dev-stage was
     // first written to repair (dev named a deleted `www` for a day after the
     // 2026-08-18 split). Fail by NAME rather than plan a partial tree.
-    const ok = await stat(resolve(cwd, root)).then((s) => s.isDirectory()).catch(() => false);
-    if (!ok) throw new Error(`served-tree: root "${root}" does not exist. Has the served tree been rearranged again? Update SERVED_ROOTS in tools/lib/served-tree.ts.`);
+    const ok = await stat(resolve(cwd, root))
+      .then((s) => s.isDirectory())
+      .catch(() => false);
+    if (!ok)
+      throw new Error(
+        `served-tree: root "${root}" does not exist. Has the served tree been rearranged again? Update SERVED_ROOTS in tools/lib/served-tree.ts.`,
+      );
     await walk(root, "");
   }
 
@@ -166,14 +166,17 @@ async function cloneFirstRoot(plan: ServedTreePlan, out: string, cwd: string): P
   await rmdir(out).catch(() => {}); // an empty destination may exist; a full one fails the clone
   if (!(await cloneTree(resolve(cwd, root), out))) return null;
   const prefix = `${root}/`;
-  await Promise.all(plan.skipped.filter((p) => p.startsWith(prefix))
-    .map((p) => rm(resolve(out, p.slice(prefix.length)), { recursive: true, force: true })));
+  await Promise.all(plan.skipped.filter((p) => p.startsWith(prefix)).map((p) => rm(resolve(out, p.slice(prefix.length)), { recursive: true, force: true })));
   const want = new Set([...plan.files].filter(([rel, source]) => source === `${prefix}${rel}`).map(([rel]) => rel));
-  let same = true, seen = 0;
+  let same = true,
+    seen = 0;
   for (const entry of await readdir(out, { recursive: true, withFileTypes: true })) {
     if (entry.isDirectory()) continue;
     const rel = relative(out, resolve(entry.parentPath, entry.name)).split("\\").join("/");
-    if (entry.isSymbolicLink() || !want.has(rel)) { same = false; break; }
+    if (entry.isSymbolicLink() || !want.has(rel)) {
+      same = false;
+      break;
+    }
     seen++;
   }
   if (same && seen === want.size) return root;
@@ -185,7 +188,11 @@ async function cloneFirstRoot(plan: ServedTreePlan, out: string, cwd: string): P
 // first, from the plan's union, so no two copies race through mkdir for a
 // directory several roots share, and an empty authored directory still ships.
 const COPY_WIDTH = 64;
-export async function copyServedTree(plan: ServedTreePlan, dest: string, options: AdapterOptions = {}): Promise<{ files: number; dirs: number; cloned: string | null }> {
+export async function copyServedTree(
+  plan: ServedTreePlan,
+  dest: string,
+  options: AdapterOptions = {},
+): Promise<{ files: number; dirs: number; cloned: string | null }> {
   const cwd = options.cwd ?? ".";
   const out = resolve(cwd, dest);
   const cloned = await cloneFirstRoot(plan, out, cwd);

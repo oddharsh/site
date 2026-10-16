@@ -12,8 +12,8 @@ const MANIFEST = JSON.parse(readFileSync(new URL("../public/pixel-peeper/manifes
 const PAGE = readFileSync(new URL("../src/pages/pixel-peeper/index.html", import.meta.url), "utf8");
 
 const crowd = () => import("../src/worker/pixel-peeper-crowd.ts");
-const best = (t) => t.axis === "resample" ? t.options.find((o) => o.label === "zenc") : t.options.find((o) => o.s2best && o.butterbest);
-const worst = (t) => t.axis === "resample" ? t.options.find((o) => o.label !== "zenc") : t.options.find((o) => !o.s2best && !o.butterbest);
+const best = (t) => (t.axis === "resample" ? t.options.find((o) => o.label === "zenc") : t.options.find((o) => o.s2best && o.butterbest));
+const worst = (t) => (t.axis === "resample" ? t.options.find((o) => o.label !== "zenc") : t.options.find((o) => !o.s2best && !o.butterbest));
 const call = (t, o) => ({ pick: o.src, shown: t.options.map((x) => x.src) });
 const clearCalls = MANIFEST.trials.filter((t) => !t.disagree && best(t) && worst(t)).slice(0, 8);
 
@@ -41,7 +41,12 @@ test("the server scores from the picks, and ignores any score the client sends",
 test("split calls count toward the lean and never toward the score", async () => {
   const { indexManifest, scoreRun } = await crowd();
   const split = MANIFEST.trials.filter((t) => t.disagree).slice(0, 4);
-  const picks = split.map((t) => call(t, t.options.find((o) => o.butterbest)));
+  const picks = split.map((t) =>
+    call(
+      t,
+      t.options.find((o) => o.butterbest),
+    ),
+  );
   const r = scoreRun(indexManifest(MANIFEST), { mode: "exam", picks });
   assert.ok(r.ok);
   assert.equal(r.run.clear, 0);
@@ -63,8 +68,16 @@ test("a forged run is refused", async () => {
   refuse({ mode: "ranked", picks: ok }, "an unknown mode");
   const quality = clearCalls.find((t) => t.axis === "quality" && t.options.length > 2);
   if (quality) {
-    refuse({ mode: "exam", picks: [{ pick: best(quality).src, shown: [best(quality).src, worst(quality).src] }, ...ok.filter((p) => !quality.options.some((o) => o.src === p.pick)).slice(0, 3)] },
-      "only a format call may lose a tile");
+    refuse(
+      {
+        mode: "exam",
+        picks: [
+          { pick: best(quality).src, shown: [best(quality).src, worst(quality).src] },
+          ...ok.filter((p) => !quality.options.some((o) => o.src === p.pick)).slice(0, 3),
+        ],
+      },
+      "only a format call may lose a tile",
+    );
   }
 });
 
@@ -73,9 +86,13 @@ test("a format call a browser cut is ranked again over what it showed, like the 
   const t = MANIFEST.trials.find((x) => x.axis === "format" && x.options.length === 3 && x.options.some((o) => o.label.startsWith("JPEG XL")));
   assert.ok(t, "the manifest should hold a three-way format call with a JPEG XL tile");
   const shown = t.options.filter((o) => !o.label.startsWith("JPEG XL"));
-  const s2 = Math.max(...shown.map((o) => o.s2)), bu = Math.min(...shown.map((o) => o.butter));
+  const s2 = Math.max(...shown.map((o) => o.s2)),
+    bu = Math.min(...shown.map((o) => o.butter));
   const winner = shown.find((o) => o.s2 === s2 && o.butter === bu);
-  const others = clearCalls.filter((x) => x !== t).slice(0, 3).map((x) => call(x, best(x)));
+  const others = clearCalls
+    .filter((x) => x !== t)
+    .slice(0, 3)
+    .map((x) => call(x, best(x)));
   const r = scoreRun(indexManifest(MANIFEST), { mode: "exam", picks: [{ pick: (winner || shown[0]).src, shown: shown.map((o) => o.src) }, ...others] });
   assert.ok(r.ok);
   if (winner) assert.equal(r.run.hit, 4, "the best of the tiles shown is a hit even when the manifest's winner sat out");
@@ -85,22 +102,46 @@ test("a format call a browser cut is ranked again over what it showed, like the 
 
 // The UPDATE is the only write a run makes to the tally, so run it for real.
 async function sqlite() {
-  try { const { Database } = await import("bun:sqlite"); const db = new Database(":memory:"); return { exec: (s) => db.run(s), all: (s, p) => db.query(s).all(...p), get: (s) => db.query(s).get() }; } catch { /* not bun */ }
-  try { const { DatabaseSync } = await import("node:sqlite"); const db = new DatabaseSync(":memory:"); return { exec: (s) => db.exec(s), all: (s, p) => db.prepare(s).all(...p), get: (s) => db.prepare(s).get() }; } catch { return null; }
+  try {
+    const { Database } = await import("bun:sqlite");
+    const db = new Database(":memory:");
+    return { exec: (s) => db.run(s), all: (s, p) => db.query(s).all(...p), get: (s) => db.query(s).get() };
+  } catch {
+    /* not bun */
+  }
+  try {
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(":memory:");
+    return { exec: (s) => db.exec(s), all: (s, p) => db.prepare(s).all(...p), get: (s) => db.prepare(s).get() };
+  } catch {
+    return null;
+  }
 }
 
 test("a run is one UPDATE, the cap refuses without writing, and the crowd reads it back", async (t) => {
   const db = await sqlite();
-  if (!db) { t.skip("no SQLite in this runtime"); return; }
+  if (!db) {
+    t.skip("no SQLite in this runtime");
+    return;
+  }
   const { indexManifest, scoreRun, tallyStatement, crowdFromTally } = await crowd();
   db.exec("CREATE TABLE pixel_peeper_tally (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
   db.exec("INSERT INTO pixel_peeper_tally (k, v) VALUES ('all', '{}')");
   const split = MANIFEST.trials.find((x) => x.disagree);
-  const picks = [...clearCalls.slice(0, 4).map((x) => call(x, best(x))), call(split, split.options.find((o) => o.butterbest))];
+  const picks = [
+    ...clearCalls.slice(0, 4).map((x) => call(x, best(x))),
+    call(
+      split,
+      split.options.find((o) => o.butterbest),
+    ),
+  ];
   const scored = scoreRun(indexManifest(MANIFEST), { mode: "exam", picks });
   if (!scored.ok) throw new Error(scored.error);
   const { run } = scored;
-  const land = (day, cap) => { const { sql, params } = tallyStatement(run, day, cap); return db.all(sql, params); };
+  const land = (day, cap) => {
+    const { sql, params } = tallyStatement(run, day, cap);
+    return db.all(sql, params);
+  };
   assert.equal(land("2026-10-15", 2).length, 1);
   assert.equal(land("2026-10-15", 2).length, 1);
   const before = db.get("SELECT v FROM pixel_peeper_tally").v;
@@ -121,8 +162,23 @@ test("a run is one UPDATE, the cap refuses without writing, and the crowd reads 
 test("crowd.json only reads, and a pool with no table yet is an empty crowd", async () => {
   const { handlePixelPeeperCrowd } = await crowd();
   const seen = [];
-  const stmt = () => ({ bind: () => stmt(), first: async () => { throw new Error("no such table: pixel_peeper_tally"); }, run: async () => ({}) });
-  const SOCIAL_DB = { prepare: (sql) => { seen.push(sql); return stmt(); }, batch: async (xs) => { seen.push("batch"); return xs; } };
+  const stmt = () => ({
+    bind: () => stmt(),
+    first: async () => {
+      throw new Error("no such table: pixel_peeper_tally");
+    },
+    run: async () => ({}),
+  });
+  const SOCIAL_DB = {
+    prepare: (sql) => {
+      seen.push(sql);
+      return stmt();
+    },
+    batch: async (xs) => {
+      seen.push("batch");
+      return xs;
+    },
+  };
   const res = await handlePixelPeeperCrowd(new Request("https://aadhar.sh/pixel-peeper/crowd.json"), { SOCIAL_DB });
   assert.equal(res.status, 200);
   assert.deepEqual((await res.json()).runs, {});

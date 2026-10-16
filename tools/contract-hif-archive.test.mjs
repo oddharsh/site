@@ -51,15 +51,16 @@ const box = (kind, body) => {
   b.write(kind, 4, "latin1");
   return Buffer.concat([b, Buffer.from(body)]);
 };
-const container = (...boxes) => Buffer.concat([
-  Buffer.from([0, 0, 0, 12, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a]),
-  box("ftyp", "jxl \0\0\0\0jxl "),
-  ...boxes,
-]);
+const container = (...boxes) =>
+  Buffer.concat([Buffer.from([0, 0, 0, 12, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a]), box("ftyp", "jxl \0\0\0\0jxl "), ...boxes]);
 
 test("jxl-kind reads a jbrd box as a transcode and refuses what is not a container", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "jxl-kind-"));
-  const file = (name, bytes) => { const p = path.join(dir, name); writeFileSync(p, bytes); return p; };
+  const file = (name, bytes) => {
+    const p = path.join(dir, name);
+    writeFileSync(p, bytes);
+    return p;
+  };
   assert.equal(jxlKind(file("t.jxl", container(box("jbrd", "x"), box("jxlc", "image")))), "transcode");
   assert.equal(jxlKind(file("d.jxl", container(box("Exif", "\0\0\0\0MM"), box("jxlc", "image")))), "direct");
   // Controls: a JPEG, and a container whose last box runs past the end, both
@@ -72,7 +73,8 @@ test("jxl-kind reads a jbrd box as a transcode and refuses what is not a contain
 
 test("codestreamBytes counts only codestream boxes, so metadata cannot fake a match", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "cs-"));
-  const a = path.join(dir, "a.jxl"), b = path.join(dir, "b.jxl");
+  const a = path.join(dir, "a.jxl"),
+    b = path.join(dir, "b.jxl");
   await writeFile(a, container(box("jxlp", "head"), box("jxlp", "the image")));
   await writeFile(b, container(box("jxlp", "head"), box("Exif", "lots of metadata here"), box("jxlp", "the image")));
   assert.equal(codestreamBytes(a), codestreamBytes(b));
@@ -81,24 +83,37 @@ test("codestreamBytes counts only codestream boxes, so metadata cannot fake a ma
 
 test("stripPng drops eXIf and XMP and keeps every other chunk byte for byte", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "png-"));
-  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); return Buffer.concat([len, Buffer.from(type, "latin1"), Buffer.from(data, "latin1"), Buffer.alloc(4)]); };
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    return Buffer.concat([len, Buffer.from(type, "latin1"), Buffer.from(data, "latin1"), Buffer.alloc(4)]);
+  };
   const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const keep = [chunk("IHDR", "dimensions...."), chunk("iCCP", "profile"), chunk("IDAT", "pixels"), chunk("IEND", "")];
-  const src = path.join(dir, "in.png"), dst = path.join(dir, "out.png");
-  await writeFile(src, Buffer.concat([sig, keep[0], keep[1], chunk("eXIf", "MM\0*orientation 8"), chunk("iTXt", "XML:com.adobe.xmp\0\0\0\0\0<x/>"), keep[2], keep[3]]));
+  const src = path.join(dir, "in.png"),
+    dst = path.join(dir, "out.png");
+  await writeFile(
+    src,
+    Buffer.concat([sig, keep[0], keep[1], chunk("eXIf", "MM\0*orientation 8"), chunk("iTXt", "XML:com.adobe.xmp\0\0\0\0\0<x/>"), keep[2], keep[3]]),
+  );
   stripPng(src, dst);
   assert.deepEqual(await readFile(dst), Buffer.concat([sig, ...keep]));
 });
 
 test("stripJpegExif drops only the Exif segment and keeps the scan byte for byte", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "jpg-"));
-  const seg = (marker, body) => { const h = Buffer.from([0xff, marker, 0, 0]); h.writeUInt16BE(body.length + 2, 2); return Buffer.concat([h, Buffer.from(body, "latin1")]); };
+  const seg = (marker, body) => {
+    const h = Buffer.from([0xff, marker, 0, 0]);
+    h.writeUInt16BE(body.length + 2, 2);
+    return Buffer.concat([h, Buffer.from(body, "latin1")]);
+  };
   const soi = Buffer.from([0xff, 0xd8]);
   const keep = [seg(0xe0, "JFIF\0\x01\x01"), seg(0xe1, "http://ns.adobe.com/xap/1.0/\0<x/>"), seg(0xe2, "ICC_PROFILE\0..")];
   // The scan's entropy-coded bytes may hold anything, a fake Exif segment
   // included: nothing after the start of scan is touched.
   const scan = Buffer.concat([seg(0xda, "\x03\x01\x00"), seg(0xe1, "Exif\0\0inside the scan"), Buffer.from([0x12, 0xff, 0x00, 0xff, 0xd9])]);
-  const src = path.join(dir, "in.jpg"), dst = path.join(dir, "out.jpg");
+  const src = path.join(dir, "in.jpg"),
+    dst = path.join(dir, "out.jpg");
   await writeFile(src, Buffer.concat([soi, keep[0], seg(0xe1, "Exif\0\0MM\0*orientation 8"), keep[1], keep[2], scan]));
   stripJpegExif(src, dst);
   assert.deepEqual(await readFile(dst), Buffer.concat([soi, ...keep, scan]));

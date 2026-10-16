@@ -67,7 +67,14 @@ test("an unknown recipe is refused rather than quietly served as a plain render"
   // this feature exists to avoid, so a typo has to be loud.
   for (const bad of ["", "   ", "../", "expand;", "<script>", "EXPAND", " expand", "x".repeat(10000)]) {
     let called = false;
-    const env = { BROWSER: { quickAction: async () => { called = true; return Response.json({}); } } };
+    const env = {
+      BROWSER: {
+        quickAction: async () => {
+          called = true;
+          return Response.json({});
+        },
+      },
+    };
     const response = await handleLensBrowser(browserReq("&do=" + encodeURIComponent(bad)), env, context());
     assert.equal(response.status, 400, `"${bad.slice(0, 20)}" must 400`);
     assert.equal(called, false, `"${bad.slice(0, 20)}" must never reach the binding`);
@@ -86,8 +93,13 @@ test("no caller byte reaches the injected script, and none ever will", async () 
     // Every hostile shape a caller controls, all at once: extra query params the
     // handler must ignore, and payload-ish text inside the url itself.
     await handleLensBrowser(
-      new Request("https://aadhar.sh/lens/browser?url=" + encodeURIComponent("https://example.com/?evil=</script><script>alert(1)</script>") +
-        "&do=" + id + "&js=alert(9)&selector=body&script=pwn"),
+      new Request(
+        "https://aadhar.sh/lens/browser?url=" +
+          encodeURIComponent("https://example.com/?evil=</script><script>alert(1)</script>") +
+          "&do=" +
+          id +
+          "&js=alert(9)&selector=body&script=pwn",
+      ),
       recipeEnv("<html></html>", captured),
       context(),
     );
@@ -131,8 +143,21 @@ test("the recipe registry stays inside what it is allowed to do", async () => {
     assert.ok(r.label && r.claim, `${r.id} must say what it does before it does it`);
     // A recipe is a DOM edit, never a network actor. Any of these would turn an
     // observation into an action taken on somebody else's behalf.
-    for (const banned of ["fetch(", "XMLHttpRequest", "import(", "eval(", "new Function", "document.cookie",
-      "localStorage", "sessionStorage", "sendBeacon", "location=", "location =", ".submit(", "postMessage"]) {
+    for (const banned of [
+      "fetch(",
+      "XMLHttpRequest",
+      "import(",
+      "eval(",
+      "new Function",
+      "document.cookie",
+      "localStorage",
+      "sessionStorage",
+      "sendBeacon",
+      "location=",
+      "location =",
+      ".submit(",
+      "postMessage",
+    ]) {
       assert.equal(r.script.includes(banned), false, `${r.id} must not contain ${banned}`);
     }
     // Parses as a program. A syntax error would surface as a page that silently
@@ -160,7 +185,10 @@ test("the published scripts are the scripts that run", async () => {
   const response = await handleLensBrowser(new Request("https://aadhar.sh/lens/browser?recipes=1"), {}, context());
   const body = await response.json();
   assert.equal(response.status, 200);
-  assert.deepEqual(body.recipes.map((r) => r.id), LENS_RECIPES.map((r) => r.id));
+  assert.deepEqual(
+    body.recipes.map((r) => r.id),
+    LENS_RECIPES.map((r) => r.id),
+  );
   for (const published of body.recipes) {
     // Disclosure that can drift from execution is worse than no disclosure.
     assert.equal(published.script, LENS_RECIPES.find((r) => r.id === published.id).script);
@@ -178,7 +206,9 @@ test("the receipt is read, then removed before anything counts or caps it", asyn
         // 500 words of padding inside the receipt: if the strip happens after
         // documentTally, they land in the word count and the delta lies.
         return Response.json({
-          result: { content: `<html><body><p>one two three</p><script type="application/lens-receipt" id="lens-recipe-receipt">{"v":1,"n":"${n}","acted":4,"scanned":9,"note":"acted","pad":"${"word ".repeat(500)}"}</script></body></html>` },
+          result: {
+            content: `<html><body><p>one two three</p><script type="application/lens-receipt" id="lens-recipe-receipt">{"v":1,"n":"${n}","acted":4,"scanned":9,"note":"acted","pad":"${"word ".repeat(500)}"}</script></body></html>`,
+          },
           meta: { status: 200 },
         });
       },
@@ -196,11 +226,15 @@ test("the receipt is read, then removed before anything counts or caps it", asyn
 test("a page cannot forge a result for a script it was not given", async () => {
   // Without the nonce a hostile page ships its own receipt claiming Lens tore
   // down a wall it never touched, and /lens repeats the lie in its own voice.
-  const body = await (await handleLensBrowser(
-    browserReq("&do=consent"),
-    recipeEnv('<html><body><script type="application/lens-receipt" id="lens-recipe-receipt">{"v":1,"n":"deadbeefdeadbeef","acted":9999,"scanned":9999,"note":"acted"}</script></body></html>'),
-    context(),
-  )).json();
+  const body = await (
+    await handleLensBrowser(
+      browserReq("&do=consent"),
+      recipeEnv(
+        '<html><body><script type="application/lens-receipt" id="lens-recipe-receipt">{"v":1,"n":"deadbeefdeadbeef","acted":9999,"scanned":9999,"note":"acted"}</script></body></html>',
+      ),
+      context(),
+    )
+  ).json();
   assert.equal(body.interaction.ran, false);
   assert.equal(body.interaction.note, "forged-receipt");
   assert.equal(body.interaction.acted, 0, "a forged count must never be repeated as ours");
@@ -224,7 +258,9 @@ test("a recipe that finds nothing, or never runs, is a 200 and says which", asyn
   // the reader to distrust the instrument on the pages where it is most useful.
   const nothing = await handleLensBrowser(
     browserReq("&do=expand"),
-    recipeEnv('<html><body><script type="application/lens-receipt" id="lens-recipe-receipt">{"v":1,"n":"REPLACED","acted":0,"scanned":12,"note":"none-found"}</script></body></html>'),
+    recipeEnv(
+      '<html><body><script type="application/lens-receipt" id="lens-recipe-receipt">{"v":1,"n":"REPLACED","acted":0,"scanned":12,"note":"none-found"}</script></body></html>',
+    ),
     context(),
   );
   assert.equal(nothing.status, 200);
@@ -246,7 +282,9 @@ test("a recipe run caches beside the plain snapshot, never on top of it", async 
   const writes = [];
   const kv = {
     get: async () => null,
-    put: async (k, _v, o) => { writes.push([k, o]); },
+    put: async (k, _v, o) => {
+      writes.push([k, o]);
+    },
   };
   const env = { ...recipeEnv("<html></html>"), RN_KV: kv };
   await handleLensBrowser(browserReq(""), env, context());
@@ -269,7 +307,12 @@ test("the before comes from the cached plain snapshot, and is never manufactured
   let quickActions = 0;
   const plain = { ok: true, tally: { words: 210, headings: 2, links: 14, images: 3, jsonld: 0 } };
   const env = {
-    BROWSER: { async quickAction() { quickActions++; return Response.json({ result: { content: "<html><body>a b c</body></html>" }, meta: {} }); } },
+    BROWSER: {
+      async quickAction() {
+        quickActions++;
+        return Response.json({ result: { content: "<html><body>a b c</body></html>" }, meta: {} });
+      },
+    },
     RN_KV: { get: async (k) => (k.endsWith(":expand") ? null : plain), put: async () => {} },
   };
   const body = await (await handleLensBrowser(browserReq("&do=expand"), env, context())).json();
@@ -291,7 +334,12 @@ test("a recipe run bills against the same two buckets as a plain one", async () 
   for (const spent of ["LENS_RL_BROWSER", "LENS_RL_BROWSER_ALL"]) {
     let called = false;
     const env = {
-      BROWSER: { quickAction: async () => { called = true; return Response.json({}); } },
+      BROWSER: {
+        quickAction: async () => {
+          called = true;
+          return Response.json({});
+        },
+      },
       [spent]: { limit: async () => ({ success: false }) },
     };
     const response = await handleLensBrowser(browserReq("&do=expand"), env, context());
@@ -300,12 +348,15 @@ test("a recipe run bills against the same two buckets as a plain one", async () 
   }
 });
 
-
 test("site search and JSON contract share the generated corpus", async () => {
   _resetSearchIndex(); // the corpus is memoised per process, like the photo maps
-  const env = { ASSETS: staticAssets({
-    "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" }] },
-  }) };
+  const env = {
+    ASSETS: staticAssets({
+      "/search-index.json": {
+        records: [{ url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" }],
+      },
+    }),
+  };
   const result = await searchSite(env, "cloudflare", 5);
   assert.equal(result.total, 1);
   assert.equal(result.results[0].url, "/writing/agents");
@@ -333,11 +384,16 @@ test("photo query filters public metadata and never exposes unlisted fields", as
   // without this the fixture below loses to whichever file loaded hashes.json
   // first and thumb.small reads null (validate on #1008, 2026-09-29).
   _resetPhotoCaches();
-  const env = { ASSETS: staticAssets({
-    "/images/metadata.json": { A: { camera: "X-T50", lens: "XF18mm", film: "Classic Chrome", date: "2026:01:02", gps: "secret" }, B: { camera: "Leica", film: "Monochrome", date: "2025:01:02" } },
-    "/images/alt.json": { A: "a blue car", B: "a lamp" },
-    "/images/hashes.json": { A: { a: "aaaa", j: "bbbb", s: "cccc" }, B: { a: "dddd", j: "eeee", s: "ffff" } },
-  }) };
+  const env = {
+    ASSETS: staticAssets({
+      "/images/metadata.json": {
+        A: { camera: "X-T50", lens: "XF18mm", film: "Classic Chrome", date: "2026:01:02", gps: "secret" },
+        B: { camera: "Leica", film: "Monochrome", date: "2025:01:02" },
+      },
+      "/images/alt.json": { A: "a blue car", B: "a lamp" },
+      "/images/hashes.json": { A: { a: "aaaa", j: "bbbb", s: "cccc" }, B: { a: "dddd", j: "eeee", s: "ffff" } },
+    }),
+  };
   const result = await queryPhotos(env, { camera: "x-t50", film: "chrome", limit: 10 });
   assert.equal(result.total, 1);
   assert.equal(result.photos[0].stem, "A");
@@ -353,19 +409,21 @@ test("photo query filters public metadata and never exposes unlisted fields", as
 // haystack cannot resolve and a field weighting can.
 function rankingEnv() {
   _resetPhotoCaches();
-  return { ASSETS: staticAssets({
-    "/images/metadata.json": {
-      A: { camera: "X-T50", lens: "XF27mm", film: "Classic Chrome", date: "2026:01:02" },
-      B: { camera: "Leica Q3", lens: "Summilux", film: "Monochrome", date: "2025:01:02" },
-      C: { camera: "X-T50", lens: "XF18mm", film: "Classic Chrome", date: "2024:05:05" },
-    },
-    "/images/alt.json": {
-      A: "a bridge over a river",
-      B: "a chrome bumper on a classic car",
-      C: "a lamp on a desk",
-    },
-    "/images/hashes.json": {},
-  }) };
+  return {
+    ASSETS: staticAssets({
+      "/images/metadata.json": {
+        A: { camera: "X-T50", lens: "XF27mm", film: "Classic Chrome", date: "2026:01:02" },
+        B: { camera: "Leica Q3", lens: "Summilux", film: "Monochrome", date: "2025:01:02" },
+        C: { camera: "X-T50", lens: "XF18mm", film: "Classic Chrome", date: "2024:05:05" },
+      },
+      "/images/alt.json": {
+        A: "a bridge over a river",
+        B: "a chrome bumper on a classic car",
+        C: "a lamp on a desk",
+      },
+      "/images/hashes.json": {},
+    }),
+  };
 }
 
 test("photo query scores each term independently instead of matching one substring", async () => {
@@ -387,7 +445,10 @@ test("photo ranking prefers the film simulation over the same words in a caption
   assert.equal(result.total, 3, "all three mention both words somewhere");
   // A and C are genuine Classic Chrome frames and outrank B, whose caption
   // merely contains the words. A leads C on date, both leading B on score.
-  assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C", "B"]);
+  assert.deepEqual(
+    result.photos.map((photo) => photo.stem),
+    ["A", "C", "B"],
+  );
   assert.ok(result.photos[0].score > result.photos[2].score);
   assert.deepEqual(result.photos[2].matched, ["alt"]);
 });
@@ -411,9 +472,11 @@ test("word boundaries keep chrome out of monochrome", async () => {
   // scores every black-and-white frame as a Classic Chrome match, at the FILM
   // weight — the highest there is — so the false hits outrank the true ones.
   const result = await queryPhotos(rankingEnv(), { q: "chrome" });
-  assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C", "B"]);
-  assert.equal(result.photos.find((photo) => photo.stem === "B").matched.includes("film"), false,
-    "B is a Monochrome frame and must not match on film");
+  assert.deepEqual(
+    result.photos.map((photo) => photo.stem),
+    ["A", "C", "B"],
+  );
+  assert.equal(result.photos.find((photo) => photo.stem === "B").matched.includes("film"), false, "B is a Monochrome frame and must not match on film");
   // The digit-gated substring escape stays open for part numbers, which live
   // inside a larger alphanumeric run with no boundary to match on.
   const lens = await queryPhotos(rankingEnv(), { q: "27mm" });
@@ -467,7 +530,10 @@ test("photo query omits score entirely when nothing was ranked", async () => {
   assert.equal("matched" in result.photos[0], false);
   // Filters stay exact even while `q` is ranked, so a filter cannot be widened
   // into a near miss.
-  assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C"]);
+  assert.deepEqual(
+    result.photos.map((photo) => photo.stem),
+    ["A", "C"],
+  );
 });
 
 test("a term that matches most of the corpus in a field stops counting there", async () => {
@@ -480,15 +546,20 @@ test("a term that matches most of the corpus in a field stops counting there", a
   const alt = {};
   for (let i = 0; i < 8; i += 1) {
     metadata[`P${i}`] = {
-      camera: "X-T50", film: i < 4 ? "Classic Chrome" : "Nostalgic Neg",
+      camera: "X-T50",
+      film: i < 4 ? "Classic Chrome" : "Nostalgic Neg",
       date: `2026:01:0${i + 1}`,
       recipe: { "Exposure Compensation": "0", "Color Chrome Effect": "Strong" },
     };
     alt[`P${i}`] = "a street";
   }
-  const env = { ASSETS: staticAssets({
-    "/images/metadata.json": metadata, "/images/alt.json": alt, "/images/hashes.json": {},
-  }) };
+  const env = {
+    ASSETS: staticAssets({
+      "/images/metadata.json": metadata,
+      "/images/alt.json": alt,
+      "/images/hashes.json": {},
+    }),
+  };
   const flood = await queryPhotos(env, { q: "long exposure" });
   assert.equal(flood.total, 0, "a universal recipe word must not drag in the archive");
   assert.equal(flood.ranking.mode, "no-match");
@@ -515,12 +586,14 @@ test("photo query reports whether the offline semantic tier is present", async (
   const bare = await queryPhotos(rankingEnv(), { q: "bridge" });
   assert.equal(bare.ranking.semantic, false, "no semantics.json shipped");
   _resetPhotoCaches();
-  const env = { ASSETS: staticAssets({
-    "/images/metadata.json": { A: { camera: "X-T50", film: "Classic Chrome", date: "2026:01:02" } },
-    "/images/alt.json": { A: "a bridge over a river" },
-    "/images/hashes.json": {},
-    "/images/semantics.json": { A: { terms: "span crossing viaduct overpass" } },
-  }) };
+  const env = {
+    ASSETS: staticAssets({
+      "/images/metadata.json": { A: { camera: "X-T50", film: "Classic Chrome", date: "2026:01:02" } },
+      "/images/alt.json": { A: "a bridge over a river" },
+      "/images/hashes.json": {},
+      "/images/semantics.json": { A: { terms: "span crossing viaduct overpass" } },
+    }),
+  };
   const expanded = await queryPhotos(env, { q: "viaduct" });
   assert.equal(expanded.ranking.semantic, true);
   assert.equal(expanded.total, 1, "matched a word that appears in no caption or EXIF field");
@@ -530,14 +603,26 @@ test("photo query reports whether the offline semantic tier is present", async (
 function coffeeEnv() {
   const snapshot = { busy: [], ts: Date.now() };
   return {
-    HOST_TIMEZONE: "America/New_York", WORKING_HOURS_START: "9", WORKING_HOURS_END: "18",
-    WORKING_DAYS: "1,2,3,4,5", SLOT_MINUTES: "30", BUFFER_MINUTES: "15",
-    MIN_NOTICE_HOURS: "0", MAX_LOOKAHEAD_DAYS: "2", DAILY_LIMIT: "3", WEEKLY_LIMIT: "5",
+    HOST_TIMEZONE: "America/New_York",
+    WORKING_HOURS_START: "9",
+    WORKING_HOURS_END: "18",
+    WORKING_DAYS: "1,2,3,4,5",
+    SLOT_MINUTES: "30",
+    BUFFER_MINUTES: "15",
+    MIN_NOTICE_HOURS: "0",
+    MAX_LOOKAHEAD_DAYS: "2",
+    DAILY_LIMIT: "3",
+    WEEKLY_LIMIT: "5",
     // listHeld pages KV with list({ prefix: "held:" }), one key per held slot.
     // An empty first page is the "nothing booked" fixture.
     BOOKINGS: {
-      async get(key, typeOrOptions) { if (key === "cal:busy" && kvType(typeOrOptions) === "json") return snapshot; return null; },
-      async list() { return { keys: [], list_complete: true, cursor: null }; },
+      async get(key, typeOrOptions) {
+        if (key === "cal:busy" && kvType(typeOrOptions) === "json") return snapshot;
+        return null;
+      },
+      async list() {
+        return { keys: [], list_complete: true, cursor: null };
+      },
     },
   };
 }
@@ -554,7 +639,11 @@ test("coffee availability reuses the booking slot calculation and returns a safe
 });
 
 test("Lens comparison rejects invalid targets before any fetch", async () => {
-  const response = await handleLensCompare(new Request("https://aadhar.sh/lens/compare.json?left=javascript%3Aalert(1)&right=https%3A%2F%2Fexample.com"), {}, context());
+  const response = await handleLensCompare(
+    new Request("https://aadhar.sh/lens/compare.json?left=javascript%3Aalert(1)&right=https%3A%2F%2Fexample.com"),
+    {},
+    context(),
+  );
   assert.equal(response.status, 400);
   assert.equal((await response.json()).ok, false);
 });
@@ -564,13 +653,33 @@ test("site MCP exposes one read-only tool catalog and calls shared search", asyn
   // the search test's, so it passed in file order and failed run alone after
   // another corpus had loaded (measured 2026-09-29).
   _resetSearchIndex();
-  const env = { ASSETS: staticAssets({
-    "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" }] },
-  }) };
-  const initialize = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }), headers: { "content-type": "application/json" } }), env, context());
+  const env = {
+    ASSETS: staticAssets({
+      "/search-index.json": {
+        records: [{ url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" }],
+      },
+    }),
+  };
+  const initialize = await handleSiteMcp(
+    new Request("https://aadhar.sh/mcp", {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }),
+      headers: { "content-type": "application/json" },
+    }),
+    env,
+    context(),
+  );
   assert.equal(initialize.status, 200);
   assert.equal((await initialize.json()).result.serverInfo.name, "aadhar.sh");
-  const call = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "search_site", arguments: { q: "cloudflare" } } }), headers: { "content-type": "application/json" } }), env, context());
+  const call = await handleSiteMcp(
+    new Request("https://aadhar.sh/mcp", {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "search_site", arguments: { q: "cloudflare" } } }),
+      headers: { "content-type": "application/json" },
+    }),
+    env,
+    context(),
+  );
   const callBody = await call.json();
   assert.equal(callBody.result.structuredContent.returned, 1);
   assert.equal((await handleSiteMcp(new Request("https://aadhar.sh/mcp"), env, context())).status, 405);
@@ -584,21 +693,32 @@ test("site MCP exposes one read-only tool catalog and calls shared search", asyn
 const MCP_WRITE_TOOLS = new Set(["representation_capture", "representation_compare"]);
 
 test("MCP tools publish honest client metadata for calling and WebMCP", async () => {
-  const response = await handleSiteMcp(mcpPost({
-    jsonrpc: "2.0", id: "metadata", method: "tools/list", params: { ...MODERN_META },
-  }), {}, context());
+  const response = await handleSiteMcp(
+    mcpPost({
+      jsonrpc: "2.0",
+      id: "metadata",
+      method: "tools/list",
+      params: { ...MODERN_META },
+    }),
+    {},
+    context(),
+  );
   const listed = (await response.json()).result.tools;
   assert.deepEqual(listed, SITE_MCP_TOOLS, "tools/list must expose the canonical decorated registry");
   assert.equal(listed.length, 25);
   for (const tool of listed) {
     assert.ok(tool.title, `${tool.name} needs a human-readable title`);
     const writes = MCP_WRITE_TOOLS.has(tool.name);
-    assert.deepEqual(tool.annotations, {
-      readOnlyHint: !writes,
-      destructiveHint: false,
-      idempotentHint: !writes,
-      openWorldHint: tool.annotations.openWorldHint,
-    }, `${tool.name} annotations must be explicit`);
+    assert.deepEqual(
+      tool.annotations,
+      {
+        readOnlyHint: !writes,
+        destructiveHint: false,
+        idempotentHint: !writes,
+        openWorldHint: tool.annotations.openWorldHint,
+      },
+      `${tool.name} annotations must be explicit`,
+    );
     assert.deepEqual(tool.outputSchema, { type: "object", additionalProperties: true }, `${tool.name} needs an object output schema`);
     // A write must ALSO say so in its description, because Cloudflare's WebMCP
     // bridge registers {name, description, inputSchema, execute} and drops
@@ -607,7 +727,8 @@ test("MCP tools publish honest client metadata for calling and WebMCP", async ()
     // agree. Asserting both directions is the point: prose on a read-only tool
     // would be a false warning, and that rots as quietly as a missing one.
     assert.equal(
-      /\bWrites:/.test(tool.description), writes,
+      /\bWrites:/.test(tool.description),
+      writes,
       writes
         ? `${tool.name} writes, so its description must carry the "Writes:" clause the WebMCP bridge can actually see`
         : `${tool.name} is read-only but its description claims it writes`,
@@ -625,19 +746,42 @@ test("MCP tools publish honest client metadata for calling and WebMCP", async ()
 
 test("site MCP image workbench returns an image content block and exact receipt", async () => {
   const env = { IMAGES: fakeImages() };
-  const list = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }), headers: { "content-type": "application/json" } }), env, context());
+  const list = await handleSiteMcp(
+    new Request("https://aadhar.sh/mcp", {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      headers: { "content-type": "application/json" },
+    }),
+    env,
+    context(),
+  );
   const names = (await list.json()).result.tools.map((tool) => tool.name);
   assert.ok(names.includes("image_inspect"));
   assert.ok(names.includes("image_transform"));
   assert.ok(names.includes("image_compare"));
-  const call = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "image_transform", arguments: { image_data: "aGVsbG8=", preset: "thumbnail" } } }), headers: { "content-type": "application/json" } }), env, context());
+  const call = await handleSiteMcp(
+    new Request("https://aadhar.sh/mcp", {
+      method: "POST",
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "image_transform", arguments: { image_data: "aGVsbG8=", preset: "thumbnail" } },
+      }),
+      headers: { "content-type": "application/json" },
+    }),
+    env,
+    context(),
+  );
   const body = await call.json();
   assert.equal(body.result.structuredContent.engine, "cloudflare-images");
   assert.equal(body.result.content[1].type, "image");
   assert.equal(body.result.content[1].mimeType, "image/avif");
   const bytes = Buffer.from(body.result.content[1].data, "base64");
   assert.deepEqual(JSON.parse(bytes.toString()), {
-    input: 5, options: { width: 600, height: 600, fit: "cover" }, output: { format: "image/avif", quality: 84 },
+    input: 5,
+    options: { width: 600, height: 600, fit: "cover" },
+    output: { format: "image/avif", quality: 84 },
   });
   assert.equal(body.result.structuredContent.output.bytes, bytes.byteLength);
   assert.equal(body.result.structuredContent.output.sha256, createHash("sha256").update(bytes).digest("hex"));
@@ -650,21 +794,27 @@ test("image_compare encodes independent formats in one binding latency window", 
   const formats = ["avif", "webp", "jpeg"];
   const encoded = Uint8Array.from({ length: 0x8000 + 2 }, (_, i) => i % 256);
   const bytesFor = (format) => encoded.subarray(0, 0x8000 + formats.indexOf(format));
-  const env = { IMAGES: {
-    async info(bytes) { return { format: "jpeg", width: 1, height: 1, fileSize: bytes.byteLength }; },
-    input() {
-      return {
-        transform() { return this; },
-        async output(options) {
-          active++;
-          peak = Math.max(peak, active);
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          active--;
-          return { response: () => new Response(bytesFor(options.format.replace("image/", "")), { headers: { "content-type": options.format } }) };
-        },
-      };
+  const env = {
+    IMAGES: {
+      async info(bytes) {
+        return { format: "jpeg", width: 1, height: 1, fileSize: bytes.byteLength };
+      },
+      input() {
+        return {
+          transform() {
+            return this;
+          },
+          async output(options) {
+            active++;
+            peak = Math.max(peak, active);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            active--;
+            return { response: () => new Response(bytesFor(options.format.replace("image/", "")), { headers: { "content-type": options.format } }) };
+          },
+        };
+      },
     },
-  } };
+  };
 
   const result = await imageCompare({ image_data: "aGVsbG8=", formats }, env);
   assert.ok("_mcp" in result);
@@ -689,20 +839,51 @@ test("photo_recipe only claims exact archive identities", async () => {
   // stages, rather than against a copy that could have gone stale beside it.
   const { index: fingerprints } = await buildImageFingerprints(".");
   const stem = Object.keys(metadata)[0];
-  const env = { ASSETS: staticAssets({ "/images/metadata.json": metadata, "/images/hashes.json": hashes, "/images/alt.json": alt, "/images/fingerprints.json": fingerprints }) };
-  const exact = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "photo_recipe", arguments: { stem } } }), headers: { "content-type": "application/json" } }), env, context());
+  const env = {
+    ASSETS: staticAssets({
+      "/images/metadata.json": metadata,
+      "/images/hashes.json": hashes,
+      "/images/alt.json": alt,
+      "/images/fingerprints.json": fingerprints,
+    }),
+  };
+  const exact = await handleSiteMcp(
+    new Request("https://aadhar.sh/mcp", {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "photo_recipe", arguments: { stem } } }),
+      headers: { "content-type": "application/json" },
+    }),
+    env,
+    context(),
+  );
   const exactBody = await exact.json();
   assert.equal(exactBody.result.structuredContent.matched, true);
   assert.equal(exactBody.result.structuredContent.photo.stem, stem);
   assert.equal("gps" in exactBody.result.structuredContent.photo.metadata, false);
   const jpgPath = `public/i/${stem}.${hashes[stem].j}.jpg`;
   const bytes = readFileSync(jpgPath).toString("base64");
-  const byBytes = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "photo_recipe", arguments: { image_data: bytes } } }), headers: { "content-type": "application/json" } }), env, context());
+  const byBytes = await handleSiteMcp(
+    new Request("https://aadhar.sh/mcp", {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "photo_recipe", arguments: { image_data: bytes } } }),
+      headers: { "content-type": "application/json" },
+    }),
+    env,
+    context(),
+  );
   const byBytesBody = await byBytes.json();
   assert.equal(byBytesBody.result.structuredContent.matched, true);
   assert.equal(byBytesBody.result.structuredContent.photo.matchKind, "published-thumbnail");
   assert.equal(byBytesBody.result.structuredContent.photo.matchedTier, "j");
-  const miss = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "photo_recipe", arguments: { image_data: "aGVsbG8=" } } }), headers: { "content-type": "application/json" } }), env, context());
+  const miss = await handleSiteMcp(
+    new Request("https://aadhar.sh/mcp", {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "photo_recipe", arguments: { image_data: "aGVsbG8=" } } }),
+      headers: { "content-type": "application/json" },
+    }),
+    env,
+    context(),
+  );
   const missBody = await miss.json();
   assert.equal(missBody.result.structuredContent.matched, false);
 });
@@ -717,15 +898,19 @@ test("photo_recipe fetches only the indexes its lookup can use, without a serial
   let active = 0;
   let peak = 0;
   const paths = [];
-  const env = { ASSETS: { async fetch(input) {
-    const path = new URL(input).pathname;
-    paths.push(path);
-    active++;
-    peak = Math.max(peak, active);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    active--;
-    return Response.json(files[path]);
-  } } };
+  const env = {
+    ASSETS: {
+      async fetch(input) {
+        const path = new URL(input).pathname;
+        paths.push(path);
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        active--;
+        return Response.json(files[path]);
+      },
+    },
+  };
 
   const exact = await photoRecipe({ stem: "L1000069_3" }, env);
   assert.ok("matched" in exact);
@@ -752,11 +937,26 @@ test("representation vault stores normalized snapshots and compares digests", as
     peak = Math.max(peak, active);
     await new Promise((resolve) => setTimeout(resolve, 10));
     active--;
-    return new Response(`<!doctype html><title>${version}</title><p>${version}</p>`, { headers: { "content-type": "text/html; charset=utf-8", etag: `"${version}"`, "cache-control": "public, max-age=60" } });
+    return new Response(`<!doctype html><title>${version}</title><p>${version}</p>`, {
+      headers: { "content-type": "text/html; charset=utf-8", etag: `"${version}"`, "cache-control": "public, max-age=60" },
+    });
   };
   try {
     const env = { RESTORE_DB: db };
-    const capture = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "representation_capture", arguments: { url: "https://example.com/page", profiles: ["browser", "identity"] } } }), headers: { "content-type": "application/json" } }), env, context());
+    const capture = await handleSiteMcp(
+      new Request("https://aadhar.sh/mcp", {
+        method: "POST",
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "representation_capture", arguments: { url: "https://example.com/page", profiles: ["browser", "identity"] } },
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+      env,
+      context(),
+    );
     const captured = (await capture.json()).result.structuredContent;
     const first = captured.snapshots[0];
     assert.equal(captured.snapshots.length, 2);
@@ -766,9 +966,19 @@ test("representation vault stores normalized snapshots and compares digests", as
     assert.equal(first.title, "one");
     assert.equal(db.rows[0].body, undefined);
     version = "two";
-    const compare = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "representation_compare", arguments: { snapshot_id: first.id } } }), headers: { "content-type": "application/json" } }), env, context());
+    const compare = await handleSiteMcp(
+      new Request("https://aadhar.sh/mcp", {
+        method: "POST",
+        body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "representation_compare", arguments: { snapshot_id: first.id } } }),
+        headers: { "content-type": "application/json" },
+      }),
+      env,
+      context(),
+    );
     const compared = (await compare.json()).result.structuredContent;
     assert.equal(compared.changed, true);
     assert.ok(compared.changes.body_hash);
-  } finally { testGlobals.fetch = realFetch; }
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
 });

@@ -31,7 +31,14 @@ export const MIN_LITERAL = /`(\/\*min\*\/(?:[^`\\]|\\[\s\S])*)`/g;
 // drift quietly. Escapes a template literal cannot hold (\1 to \9, \0 before a
 // digit, a malformed \x or \u) throw, since the module would not parse either.
 const TEMPLATE_ESCAPE = /\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|(0)(?![0-9])|(\r\n|[\s\S]))|\r\n?/g;
-const SINGLE_ESCAPES = new Map([["b", "\b"], ["t", "\t"], ["n", "\n"], ["v", "\v"], ["f", "\f"], ["r", "\r"]]);
+const SINGLE_ESCAPES = new Map([
+  ["b", "\b"],
+  ["t", "\t"],
+  ["n", "\n"],
+  ["v", "\v"],
+  ["f", "\f"],
+  ["r", "\r"],
+]);
 export const cookTemplate = (raw: string): string =>
   raw.replace(TEMPLATE_ESCAPE, (whole, hex, braced, unit, zero, char) => {
     if (hex) return String.fromCharCode(parseInt(hex, 16));
@@ -47,8 +54,7 @@ export const cookTemplate = (raw: string): string =>
 // The inverse: source text that cooks back to `value`, byte for byte.
 // Backslash first, or the escapes added after it would be doubled. A bare CR
 // is escaped too, because a template literal reads one in source as LF.
-export const toTemplateRaw = (value: string): string =>
-  value.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${").replace(/\r/g, "\\r");
+export const toTemplateRaw = (value: string): string => value.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${").replace(/\r/g, "\\r");
 
 export type MinLiteral = { index: number; source: string; cooked: string; min: string; spliced: string };
 
@@ -58,7 +64,8 @@ export type MinLiteral = { index: number; source: string; cooked: string; min: s
 // literal whose spliced form would not evaluate to exactly what `minify` said.
 export const spliceMinLiterals = (rel: string, src: string, minify: (css: string) => string) => {
   const literals: MinLiteral[] = [];
-  let out = "", last = 0;
+  let out = "",
+    last = 0;
   for (const m of src.matchAll(MIN_LITERAL)) {
     const raw = m[1];
     if (raw.includes("${")) throw new Error(`${rel}: a /*min*/ CSS literal carries interpolation`);

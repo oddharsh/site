@@ -92,116 +92,116 @@ const PRIORITISED_TILES = 6;
 // interpolation is escaped by the tag; build.ts's bake concatenates the result
 // into index.html, which reads it through Html's toString().
 export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histograms = {} } = {}): Html {
-  return joinHtml(pick.map((p, index) => {
-    // Omitted rather than spelled `auto` because they mean the same thing to the
-    // browser and one of them costs bytes on every tile.
-    const pri = index < PRIORITISED_TILES ? EMPTY : html` fetchpriority="low"`;
-    // Current photo artifacts always have thumb_small. The larger AVIF and then
-    // JPEG are recovery paths for an old/incomplete manifest entry, not alternate
-    // candidates emitted beside it: even that degraded row still names one URL.
-    const thumb = p.thumb_small || p.thumb_avif || p.thumb_jpg;
-    // ONE FORMAT, THREE SIZES. The candidates are all AVIF, which is what makes
-    // this different from the <picture> the note above removed: that raced two
-    // FORMATS behind one element and the loser kept being instantiated on hover.
-    // srcset resolves to a single candidate at layout and never touches the
-    // others. Measured before writing this, 12 tiles and two full hover passes at
-    // DPR 1 and DPR 2: 12 image loads on the page, 0 extra from hovering, byte
-    // for byte the same count as the single-URL control.
-    //
-    // 184px is .photos' fixed column (repeat(auto-fill, 184px)), so `sizes` is a
-    // constant rather than a guess: 184, 368 and 552 device pixels at DPR 1, 2
-    // and 3, which is exactly what the three tiers cover. Before this the 400px
-    // file went to everyone, 2.3x what a 1x display can show, while a DPR-3 phone
-    // asked for 552 and got 400.
-    const cands = [
-      p.thumb_xs ? `${p.thumb_xs} 200w` : "",
-      p.thumb_small ? `${p.thumb_small} 400w` : "",
-      p.thumb_avif ? `${p.thumb_avif} 600w` : "",
-    ].filter(Boolean);
-    // One candidate is what `src` already says, so the attribute would be pure
-    // bytes. This is also the degraded path for a stem the pipeline half-ran.
-    const srcsetValue = cands.length > 1 ? cands.join(", ") : "";
-    // Fall back to the stem rather than alt="": the tile IS the link, so an
-    // empty alt makes the <a> nameless for screen readers and agents.
-    const alt = altMap[p.stem] || p.stem;
-    // The tooltip's four histogram channels, packed to 256 bytes and riding with
-    // the tile that owns them. This used to arrive on the hover that needed it,
-    // one /images/meta/<stem>.json per photo: measured on production at 135ms and
-    // 117ms for the first two hovers, once per photo, with the bars unable to draw
-    // until the file landed.
-    //
-    // It has to be in the MARKUP rather than warmed by tooltip.js, because
-    // tooltip.js does not exist until the first hover happens (index.html's
-    // loader is deliberate about that: "visitors who never hover transfer no
-    // tooltip JavaScript"). Anything that module warms is by construction too
-    // late for hover number one.
-    //
-    // One modulo-delta character per bin in ASCII 63..126, packed by
-    // tools/photos/build-histogram-index.ts, which carries the reasoning. 256 chars a
-    // tile against base64's 344, and 36% smaller after brotli because base64
-    // destroys the byte alignment brotli exploits on smooth data.
-    //
-    // The range holds no character needing escaping, so the escape is a no-op here
-    // by construction rather than by luck. It DOES hold a backtick (96), one of
-    // the characters that forces the HTML minifier to keep the quotes: measured on the
-    // staged document, 7 of 12 tiles quoted and 5 unquoted, all 12 intact at 256
-    // characters. Both forms are spec-legal and dataset reads them identically;
-    // noted because an attribute whose quoting varies per value looks like a bug
-    // the first time you diff the output.
-    //
-    // Only the six tiles in the default urgency bucket carry bars. Those are the
-    // topmost prefix and the ones a visitor can reach first; the six low-priority
-    // tiles keep the existing per-photo fallback if they are hovered. Measured
-    // over 10,000 random twelve-photo fragments at brotli q4: this partition is
-    // 667 bytes smaller on average than carrying all twelve (-25.9%), with every
-    // sample winning. q11 agreed at -565 bytes (-26.4%, 1,000/1,000 wins).
-    //
-    // The deterministic deferred grid carries none. A scripting browser replaces
-    // it before the tooltip island can run, and a script-off browser has no
-    // tooltip, so those attributes would be dead bytes in the page and its dcz
-    // dictionary. Absent remains legal: tooltip.js fetches meta/<stem>.json.
-    const hist = !deferred && index < PRIORITISED_TILES ? histograms[p.stem] : null;
-    const histAttr = hist ? html` data-hist="${hist}"` : EMPTY;
-    const sizeAttr = (asNumber(p.size) > 0) ? html` data-size="${p.size}"` : EMPTY;
-    const upAttr = p.uploaded ? html` data-uploaded="${p.uploaded}"` : EMPTY;
+  return joinHtml(
+    pick.map((p, index) => {
+      // Omitted rather than spelled `auto` because they mean the same thing to the
+      // browser and one of them costs bytes on every tile.
+      const pri = index < PRIORITISED_TILES ? EMPTY : html` fetchpriority="low"`;
+      // Current photo artifacts always have thumb_small. The larger AVIF and then
+      // JPEG are recovery paths for an old/incomplete manifest entry, not alternate
+      // candidates emitted beside it: even that degraded row still names one URL.
+      const thumb = p.thumb_small || p.thumb_avif || p.thumb_jpg;
+      // ONE FORMAT, THREE SIZES. The candidates are all AVIF, which is what makes
+      // this different from the <picture> the note above removed: that raced two
+      // FORMATS behind one element and the loser kept being instantiated on hover.
+      // srcset resolves to a single candidate at layout and never touches the
+      // others. Measured before writing this, 12 tiles and two full hover passes at
+      // DPR 1 and DPR 2: 12 image loads on the page, 0 extra from hovering, byte
+      // for byte the same count as the single-URL control.
+      //
+      // 184px is .photos' fixed column (repeat(auto-fill, 184px)), so `sizes` is a
+      // constant rather than a guess: 184, 368 and 552 device pixels at DPR 1, 2
+      // and 3, which is exactly what the three tiers cover. Before this the 400px
+      // file went to everyone, 2.3x what a 1x display can show, while a DPR-3 phone
+      // asked for 552 and got 400.
+      const cands = [p.thumb_xs ? `${p.thumb_xs} 200w` : "", p.thumb_small ? `${p.thumb_small} 400w` : "", p.thumb_avif ? `${p.thumb_avif} 600w` : ""].filter(
+        Boolean,
+      );
+      // One candidate is what `src` already says, so the attribute would be pure
+      // bytes. This is also the degraded path for a stem the pipeline half-ran.
+      const srcsetValue = cands.length > 1 ? cands.join(", ") : "";
+      // Fall back to the stem rather than alt="": the tile IS the link, so an
+      // empty alt makes the <a> nameless for screen readers and agents.
+      const alt = altMap[p.stem] || p.stem;
+      // The tooltip's four histogram channels, packed to 256 bytes and riding with
+      // the tile that owns them. This used to arrive on the hover that needed it,
+      // one /images/meta/<stem>.json per photo: measured on production at 135ms and
+      // 117ms for the first two hovers, once per photo, with the bars unable to draw
+      // until the file landed.
+      //
+      // It has to be in the MARKUP rather than warmed by tooltip.js, because
+      // tooltip.js does not exist until the first hover happens (index.html's
+      // loader is deliberate about that: "visitors who never hover transfer no
+      // tooltip JavaScript"). Anything that module warms is by construction too
+      // late for hover number one.
+      //
+      // One modulo-delta character per bin in ASCII 63..126, packed by
+      // tools/photos/build-histogram-index.ts, which carries the reasoning. 256 chars a
+      // tile against base64's 344, and 36% smaller after brotli because base64
+      // destroys the byte alignment brotli exploits on smooth data.
+      //
+      // The range holds no character needing escaping, so the escape is a no-op here
+      // by construction rather than by luck. It DOES hold a backtick (96), one of
+      // the characters that forces the HTML minifier to keep the quotes: measured on the
+      // staged document, 7 of 12 tiles quoted and 5 unquoted, all 12 intact at 256
+      // characters. Both forms are spec-legal and dataset reads them identically;
+      // noted because an attribute whose quoting varies per value looks like a bug
+      // the first time you diff the output.
+      //
+      // Only the six tiles in the default urgency bucket carry bars. Those are the
+      // topmost prefix and the ones a visitor can reach first; the six low-priority
+      // tiles keep the existing per-photo fallback if they are hovered. Measured
+      // over 10,000 random twelve-photo fragments at brotli q4: this partition is
+      // 667 bytes smaller on average than carrying all twelve (-25.9%), with every
+      // sample winning. q11 agreed at -565 bytes (-26.4%, 1,000/1,000 wins).
+      //
+      // The deterministic deferred grid carries none. A scripting browser replaces
+      // it before the tooltip island can run, and a script-off browser has no
+      // tooltip, so those attributes would be dead bytes in the page and its dcz
+      // dictionary. Absent remains legal: tooltip.js fetches meta/<stem>.json.
+      const hist = !deferred && index < PRIORITISED_TILES ? histograms[p.stem] : null;
+      const histAttr = hist ? html` data-hist="${hist}"` : EMPTY;
+      const sizeAttr = asNumber(p.size) > 0 ? html` data-size="${p.size}"` : EMPTY;
+      const upAttr = p.uploaded ? html` data-uploaded="${p.uploaded}"` : EMPTY;
 
-    // In a scripting browser <noscript> is inert text, so these real URLs never
-    // enter the preload scanner and cannot undo the deferral above. Without JS
-    // they are the entire grid, which is why the baked set has to be real
-    // photos rather than empty frames. The fragment needs no twin — reaching it
-    // at all required fetch().
-    //
-    // ONE url here too. A <picture> was tried on 2026-08-12 and reverted the
-    // same day: it is SAFE in inert markup (nothing can instantiate a fallback,
-    // and a no-JS AVIF browser would still pick the AVIF source), but it costs
-    // 195 bytes a tile against 130 to serve a client that has to be no-JS AND
-    // no-AVIF at once. Kitesurf runs JavaScript, so the engine this whole repair
-    // exists for takes the onerror path in index.html and never reads this
-    // block. Paying every visitor for a hypothetical one is the trade this file
-    // already refuses everywhere else.
-    // 184x184 rather than 600x600. The attributes exist to reserve layout, and
-    // the ratio is what does that, so the old value was harmless and also
-    // described a file that has not been served since the grid moved to the
-    // 400px tier. With srcset it would be actively misleading: the intrinsic
-    // size now depends on which candidate wins, and the tile is always 184.
-    //
-    // The noscript twin deliberately keeps ONE url and no srcset. It is inert
-    // text in a scripting browser, and the note above already priced a second
-    // representation there at 195 bytes a tile against 130 to serve a client
-    // that must be no-JS AND no-AVIF at once.
-    const noScript = deferred
-      ? html`<noscript><img alt="${alt}" width="184" height="184" src="${thumb}" loading="lazy"${pri} decoding="async"></noscript>`
-      : EMPTY;
+      // In a scripting browser <noscript> is inert text, so these real URLs never
+      // enter the preload scanner and cannot undo the deferral above. Without JS
+      // they are the entire grid, which is why the baked set has to be real
+      // photos rather than empty frames. The fragment needs no twin — reaching it
+      // at all required fetch().
+      //
+      // ONE url here too. A <picture> was tried on 2026-08-12 and reverted the
+      // same day: it is SAFE in inert markup (nothing can instantiate a fallback,
+      // and a no-JS AVIF browser would still pick the AVIF source), but it costs
+      // 195 bytes a tile against 130 to serve a client that has to be no-JS AND
+      // no-AVIF at once. Kitesurf runs JavaScript, so the engine this whole repair
+      // exists for takes the onerror path in index.html and never reads this
+      // block. Paying every visitor for a hypothetical one is the trade this file
+      // already refuses everywhere else.
+      // 184x184 rather than 600x600. The attributes exist to reserve layout, and
+      // the ratio is what does that, so the old value was harmless and also
+      // described a file that has not been served since the grid moved to the
+      // 400px tier. With srcset it would be actively misleading: the intrinsic
+      // size now depends on which candidate wins, and the tile is always 184.
+      //
+      // The noscript twin deliberately keeps ONE url and no srcset. It is inert
+      // text in a scripting browser, and the note above already priced a second
+      // representation there at 195 bytes a tile against 130 to serve a client
+      // that must be no-JS AND no-AVIF at once.
+      const noScript = deferred
+        ? html`<noscript><img alt="${alt}" width="184" height="184" src="${thumb}" loading="lazy"${pri} decoding="async"></noscript>`
+        : EMPTY;
 
-    // data-srcset rides with data-src for the deferred set, for the same reason
-    // data-src does: a real srcset here starts a fetch the hydrator is about to
-    // throw away, which is the double-download #156 removed.
-    const image = deferred
-      ? html`<img data-photo-deferred alt="${alt}" width="184" height="184" data-src="${thumb}"${srcsetValue ? html` data-srcset="${srcsetValue}" sizes="184px"` : EMPTY} loading="eager"${pri} decoding="async">`
-      : html`<img alt="${alt}" width="184" height="184" src="${thumb}"${srcsetValue ? html` srcset="${srcsetValue}" sizes="184px"` : EMPTY} loading="eager"${pri} decoding="async">`;
+      // data-srcset rides with data-src for the deferred set, for the same reason
+      // data-src does: a real srcset here starts a fetch the hydrator is about to
+      // throw away, which is the double-download #156 removed.
+      const image = deferred
+        ? html`<img data-photo-deferred alt="${alt}" width="184" height="184" data-src="${thumb}"${srcsetValue ? html` data-srcset="${srcsetValue}" sizes="184px"` : EMPTY} loading="eager"${pri} decoding="async">`
+        : html`<img alt="${alt}" width="184" height="184" src="${thumb}"${srcsetValue ? html` srcset="${srcsetValue}" sizes="184px"` : EMPTY} loading="eager"${pri} decoding="async">`;
 
-    return html`<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener" data-full="${p.full}"${sizeAttr}${upAttr}${histAttr}>${image}${noScript}</a>`;
-  }));
+      return html`<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener" data-full="${p.full}"${sizeAttr}${upAttr}${histAttr}>${image}${noScript}</a>`;
+    }),
+  );
 }
 
 // The deterministic twelve for the baked fallback. Sorting by stem makes the

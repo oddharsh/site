@@ -39,7 +39,8 @@ test("every generated twin comes back byte for byte", () => {
     const twin = readDocument(readFileSync(file, "utf8")).body;
     const back = down(mdToHtml(twin));
     if (back !== twin) {
-      const a = twin.split("\n"), b = back.split("\n");
+      const a = twin.split("\n"),
+        b = back.split("\n");
       const k = a.findIndex((l, i) => l !== b[i]);
       failed.push(`${file} line ${k + 1}\n  twin: ${JSON.stringify(a[k])}\n  back: ${JSON.stringify(b[k])}`);
     }
@@ -66,7 +67,11 @@ test("a page rebuilt from its twin writes terms, intros and links byte for byte 
   const TERM = /<a class="term"[^>]*>[\s\S]*?<\/a>/g;
   const INTRO = /<p class="garage-intro">/g;
   const LOCAL = /<a href="\/[^"]*">[\s\S]*?<\/a>/g;
-  const KINDS = [{ kind: "term", re: TERM }, { kind: "intro", re: INTRO }, { kind: "local", re: LOCAL }];
+  const KINDS = [
+    { kind: "term", re: TERM },
+    { kind: "intro", re: INTRO },
+    { kind: "local", re: LOCAL },
+  ];
   /** @type {Record<string, number>} */
   const totals = { term: 0, intro: 0, local: 0 };
   for (const f of readdirSync("pipelines/garage/specs").filter((x) => x.endsWith(".json") && x !== "round-trip.json")) {

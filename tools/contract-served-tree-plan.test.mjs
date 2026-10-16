@@ -133,7 +133,10 @@ test("a served path two roots author is refused once, by the planner, with the p
   // CONTROL: the same fixture without the duplicate plans cleanly (first test).
   const cwd = await fixture({ "pages/_headers": "second owner", "client/garage": "a FILE where two roots have a directory" });
   try {
-    const refused = await planServedTree({ cwd, roots: ROOTS, derived: DERIVED }).then(() => null, (error) => error);
+    const refused = await planServedTree({ cwd, roots: ROOTS, derived: DERIVED }).then(
+      () => null,
+      (error) => error,
+    );
     assert.ok(refused instanceof ServedTreeCollision, "the planner must refuse, and say which kind of refusal it is");
     assert.deepEqual(refused.paths.sort(), ["_headers", "garage"], "file against file, and file against directory");
     assert.match(refused.message, /served path _headers is authored by both assets and pages/);
@@ -160,8 +163,11 @@ test("a derived path is left out of BOTH adapters, even inside a single-owner di
 
     for (const tree of ["out", "farm"]) {
       const served = await servedBytes(path.join(cwd, tree));
-      assert.deepEqual(Object.keys(served).filter((file) => file.startsWith("images/")), ["images/hashes.json"],
-        `${tree}: the leftover under images/meta must not be served`);
+      assert.deepEqual(
+        Object.keys(served).filter((file) => file.startsWith("images/")),
+        ["images/hashes.json"],
+        `${tree}: the leftover under images/meta must not be served`,
+      );
     }
     // images/ has one owner, and it still cannot be one symlink here: a link to
     // the whole directory would carry the leftover with it.
@@ -196,7 +202,10 @@ test("a root that does not exist is refused by name rather than planned around",
 test("the real tree plans cleanly, and every projection is a view of the one declaration", async () => {
   const plan = await planServedTree({ cwd: ROOT });
   assert.deepEqual(plan.roots, STAGED_ROOTS);
-  assert.deepEqual(STAGED_ROOTS, SERVED_ROOTS.map((root) => root.dir));
+  assert.deepEqual(
+    STAGED_ROOTS,
+    SERVED_ROOTS.map((root) => root.dir),
+  );
   // Floors, since every failure here is an absence: 1344 files on 2026-10-02.
   assert.ok(plan.files.size > 900, `only ${plan.files.size} served files planned`);
   assert.ok(plan.directories.get("")?.length === STAGED_ROOTS.length, "every root contributes to the URL root");
@@ -210,7 +219,10 @@ test("the real tree plans cleanly, and every projection is a view of the one dec
     assert.ok(STAGED_ROOTS.includes(root), `${root} is projected from the declaration, so it must be staged`);
   }
   for (const source of DERIVED_PATHS) {
-    assert.ok(STAGED_ROOTS.some((root) => source.startsWith(`${root}/`)), `${source} must sit under a staged root`);
+    assert.ok(
+      STAGED_ROOTS.some((root) => source.startsWith(`${root}/`)),
+      `${source} must sit under a staged root`,
+    );
   }
 });
 
@@ -218,12 +230,16 @@ test("the real tree plans cleanly, and every projection is a view of the one dec
 // import can resolve in. JSON cannot import the declaration, so this holds it.
 test("tsconfig.browser.json resolves absolute imports across the plan's browser roots", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  const mapped = (source) => parseJsonc(source).compilerOptions.paths["/*"]
-    .map((entry) => entry.replace(/^\.\.\//, "").replace(/\/\*$/, ""))
-    .sort();
+  const mapped = (source) =>
+    parseJsonc(source)
+      .compilerOptions.paths["/*"].map((entry) => entry.replace(/^\.\.\//, "").replace(/\/\*$/, ""))
+      .sort();
   const source = await readFile(path.join(ROOT, "config/tsconfig.browser.json"), "utf8");
-  assert.deepEqual(mapped(source), [...BROWSER_IMPORT_ROOTS].sort(),
-    "tsconfig.browser.json's `/*` paths must be exactly served-tree.ts's BROWSER_IMPORT_ROOTS");
+  assert.deepEqual(
+    mapped(source),
+    [...BROWSER_IMPORT_ROOTS].sort(),
+    "tsconfig.browser.json's `/*` paths must be exactly served-tree.ts's BROWSER_IMPORT_ROOTS",
+  );
 
   // CONTROL: a config that lost one root is told apart.
   const narrowed = source.replace(`"../src/styles/*", `, "");
@@ -239,7 +255,10 @@ test("neither consumer restates the roots or the skip list", async () => {
   assert.match(build, /copyServedTree\(servedPlan, `\$\{OUT\}\/public`\)/, "build.ts step 1 must copy the plan");
   assert.doesNotMatch(build, /\bcp\("[^"]+",\s*`\$\{OUT\}\/public`/, "build.ts must not copy a root into the served tree by hand");
   assert.match(dev, /linkServedTree\(plan, FARM\)/, "dev-stage.ts must link the plan");
-  for (const [name, source] of [["build.ts", build], ["dev-stage.ts", dev]]) {
+  for (const [name, source] of [
+    ["build.ts", build],
+    ["dev-stage.ts", dev],
+  ]) {
     for (const derived of DERIVED_PATHS) {
       assert.ok(!source.includes(`"${derived}"`), `${name} must not carry its own copy of the derived path ${derived}`);
     }

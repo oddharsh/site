@@ -148,8 +148,7 @@ export type Lock = Record<string, string>;
 
 const HASH = "sha256";
 
-export const hashBytes = (bytes: Buffer | string): string =>
-  createHash(HASH).update(bytes).digest("hex");
+export const hashBytes = (bytes: Buffer | string): string => createHash(HASH).update(bytes).digest("hex");
 
 /**
  * Every file a spec resolves to, repo-relative and sorted, so the digest is a
@@ -163,8 +162,7 @@ export const keeps = (spec: InputSpec, rel: string): boolean => {
 
 /** Is this repo-relative path one the spec would have collected? */
 export const claims = (spec: InputSpec, rel: string): boolean =>
-  keeps(spec, rel) &&
-  spec.paths.some((p) => rel === p || rel.startsWith(p.endsWith("/") ? p : `${p}/`));
+  keeps(spec, rel) && spec.paths.some((p) => rel === p || rel.startsWith(p.endsWith("/") ? p : `${p}/`));
 
 export async function resolveInputs(root: string, spec: InputSpec): Promise<string[]> {
   const found: string[] = [];
@@ -301,12 +299,7 @@ export type Verdict =
  * is the caller's projection of config/tools.json, passed in rather than read
  * here so this module stays free of any one repository's layout.
  */
-export async function verify(
-  root: string,
-  d: Derivation,
-  lock: Lock,
-  toolVersions: Record<string, string> = {},
-): Promise<Verdict> {
+export async function verify(root: string, d: Derivation, lock: Lock, toolVersions: Record<string, string> = {}): Promise<Verdict> {
   if (d.tier === "unverifiable") {
     return { id: d.id, state: "unverifiable", reason: d.unverifiable ?? "no reason declared" };
   }
@@ -361,11 +354,7 @@ export async function verify(
  * is dead weight rather than a missing answer, and the deletion that created it
  * has already moved the digest.
  */
-async function coverage(
-  root: string,
-  d: Derivation,
-  keys: string[],
-): Promise<{ uncovered: string[]; orphaned: string[] }> {
+async function coverage(root: string, d: Derivation, keys: string[]): Promise<{ uncovered: string[]; orphaned: string[] }> {
   if (!d.covers) return { uncovered: [], orphaned: [] };
   const parsed = JSON.parse(await readFile(path.join(root, d.covers), "utf8"));
   const have = new Set(Object.keys(parsed));
@@ -386,9 +375,7 @@ export async function record(
   const { entries, lockName, owns, count } = await project(root, d);
   const recorded: Recorded = { inputs: digestOf(entries), count };
   if (d.tools?.length) {
-    recorded.tools = Object.fromEntries(
-      d.tools.map((name) => [name, toolVersions[name] ?? ""]).filter(([, v]) => v),
-    );
+    recorded.tools = Object.fromEntries(d.tools.map((name) => [name, toolVersions[name] ?? ""]).filter(([, v]) => v));
   }
   const hashes = Object.fromEntries(Object.entries(entries).map(([n, v]) => [lockName(n), v]));
   return { recorded, hashes, owns };
@@ -429,11 +416,7 @@ export async function record(
  * site is a second thing to keep in agreement, and the one that would rot is the
  * printed count, which nothing checks.
  */
-export function relock(
-  lock: Lock,
-  fresh: Record<string, string>,
-  owns: (lockName: string) => boolean,
-): { next: Lock; pruned: string[] } {
+export function relock(lock: Lock, fresh: Record<string, string>, owns: (lockName: string) => boolean): { next: Lock; pruned: string[] } {
   const next: Lock = {};
   const pruned: string[] = [];
   for (const [key, value] of Object.entries(lock)) {

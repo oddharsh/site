@@ -11,7 +11,10 @@ import assert from "node:assert/strict";
 
 import { BASELINE_HEADING, auditDependencyDocs, planDocPinRewrites } from "./lib/dependency-docs.ts";
 
-const ALIASES = [{ prose: "Oxlint", pkg: "oxlint" }, { prose: "Wrangler", pkg: "wrangler" }];
+const ALIASES = [
+  { prose: "Oxlint", pkg: "oxlint" },
+  { prose: "Wrangler", pkg: "wrangler" },
+];
 
 // Prose ABOVE the baseline heading is out of scope for the reader, so it must be
 // out of scope for the writer too.
@@ -35,7 +38,13 @@ test("rewrites every claim the reader can see, including one that wraps", () => 
   });
 
   assert.equal(edits.length, 2, "both in-scope Oxlint claims move; Wrangler already agrees");
-  assert.deepEqual(edits.map((e) => [e.from, e.to]), [["1.79.0", "1.80.0"], ["1.79.0", "1.80.0"]]);
+  assert.deepEqual(
+    edits.map((e) => [e.from, e.to]),
+    [
+      ["1.79.0", "1.80.0"],
+      ["1.79.0", "1.80.0"],
+    ],
+  );
 
   // The wrapped mention is the whole point.
   assert.match(updated, /The pinned Oxlint\n {2}1\.80\.0 does support/);

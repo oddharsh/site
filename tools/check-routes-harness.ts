@@ -79,11 +79,7 @@ if (remote) {
   // No --out: the generator's default is the repo root, which is where the twin
   // has to live for the site config's relative `main` and `assets.directory` to
   // keep resolving (see gen-remote-config.mjs).
-  const gen = spawnSync(
-    process.execPath,
-    ["tools/gen-remote-config.ts", config],
-    { cwd: root, stdio: "inherit" },
-  );
+  const gen = spawnSync(process.execPath, ["tools/gen-remote-config.ts", config], { cwd: root, stdio: "inherit" });
   if (gen.status !== 0) process.exit(gen.status ?? 1);
   config = "./.wrangler.remote.jsonc";
 }
@@ -93,10 +89,7 @@ if (remote) {
 // binding names a service nobody defined. So the counter boots beside the site:
 // the site stays first, which is the one the harness URL serves.
 const server = createTestHarness({
-  workers: [
-    { configPath: config, prebuiltWorkerDir: values.prebuilt },
-    { configPath: `${root}counter/wrangler.jsonc` },
-  ],
+  workers: [{ configPath: config, prebuiltWorkerDir: values.prebuilt }, { configPath: `${root}counter/wrangler.jsonc` }],
 });
 
 let code = 1;
@@ -113,13 +106,9 @@ try {
   if (remote) childEnv.VERIFY_REMOTE = "1";
 
   code = await new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      ["tools/verify-routes.ts", String(url).replace(/\/$/, "")],
-      { cwd: root, stdio: "inherit", env: childEnv },
-    );
+    const child = spawn(process.execPath, ["tools/verify-routes.ts", String(url).replace(/\/$/, "")], { cwd: root, stdio: "inherit", env: childEnv });
     child.on("error", reject);
-    child.on("exit", (status, signal) => resolve(signal ? 1 : status ?? 1));
+    child.on("exit", (status, signal) => resolve(signal ? 1 : (status ?? 1)));
   });
 } finally {
   // workerd holds the process open; close() before the exit code is reported.

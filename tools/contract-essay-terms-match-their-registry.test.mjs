@@ -13,26 +13,31 @@ import { mdToHtml } from "../src/client/garage/md-to-html.js";
 const ROOT_DIR = new URL("../", import.meta.url);
 const TERMS = JSON.parse(readFileSync(new URL("src/content/terms.json", ROOT_DIR), "utf8"));
 
-const unescape = (s) => s
-  .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<")
-  .replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+const unescape = (s) =>
+  s
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
 const attr = (tag, name) => {
   const m = tag.match(new RegExp(`\\s${name}="([^"]*)"`));
   return m ? unescape(m[1]) : null;
 };
 
 const pages = readdirSync(new URL("src/pages/", ROOT_DIR), { recursive: true })
-  .map(String).filter((p) => p.endsWith(".html"));
+  .map(String)
+  .filter((p) => p.endsWith(".html"));
 const termTags = (page, html) => [...html.matchAll(/<a\b[^>]*\sclass="term"[^>]*>/g)].map((m) => ({ page, tag: m[0] }));
 // A page that renders from its own Markdown (/garage/round-trip) keeps its terms
 // there, as reference links and a glossary. Rendered the way the page renders
 // them, they are held to the registry like any hand-written page's.
 const RENDERED_FROM_MARKDOWN = readdirSync(new URL("src/content/garage/", ROOT_DIR))
-  .filter((f) => f.endsWith(".md")).map((f) => `src/content/garage/${f}`);
+  .filter((f) => f.endsWith(".md"))
+  .map((f) => `src/content/garage/${f}`);
 const marked = [
   ...pages.flatMap((page) => termTags(page, readFileSync(new URL(`src/pages/${page}`, ROOT_DIR), "utf8"))),
-  ...RENDERED_FROM_MARKDOWN.flatMap((file) =>
-    termTags(file, mdToHtml(readFileSync(new URL(file, ROOT_DIR), "utf8"), { origin: "https://aadhar.sh" }))),
+  ...RENDERED_FROM_MARKDOWN.flatMap((file) => termTags(file, mdToHtml(readFileSync(new URL(file, ROOT_DIR), "utf8"), { origin: "https://aadhar.sh" }))),
 ];
 
 test("the registry's entries are well formed and in the house voice", () => {

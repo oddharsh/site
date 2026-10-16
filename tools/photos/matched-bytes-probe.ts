@@ -39,9 +39,15 @@ import path from "node:path";
 
 const argv = process.argv.slice(2);
 const zencArg = argv.find((a) => !a.startsWith("--"));
-if (!zencArg) { console.error("usage: matched-bytes-probe.ts <zenc> [--limit N] [--work DIR]"); process.exit(2); }
+if (!zencArg) {
+  console.error("usage: matched-bytes-probe.ts <zenc> [--limit N] [--work DIR]");
+  process.exit(2);
+}
 const ZENC: string = zencArg;
-const flag = (name: string, fallback: string) => { const i = argv.indexOf(name); return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback; };
+const flag = (name: string, fallback: string) => {
+  const i = argv.indexOf(name);
+  return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
+};
 const SRC = "/Users/aadharsh/Downloads/to post (from ssd)";
 const WORK = flag("--work", "/tmp/mb");
 const LIMIT = Number(flag("--limit", "8"));
@@ -53,11 +59,21 @@ const run = (...a: string[]) => spawnSync(a[0], a.slice(1), { stdio: "ignore" })
 
 function sipsGeom(work: string, out: string, sq: number): number {
   const d = execFileSync("sips", ["-g", "pixelWidth", "-g", "pixelHeight", work], { encoding: "utf8" });
-  const dim = (key: string) => Number(d.split("\n").find((l) => l.includes(key))!.trim().split(/\s+/).at(-1));
-  const W = dim("pixelWidth"), H = dim("pixelHeight");
+  const dim = (key: string) =>
+    Number(
+      d
+        .split("\n")
+        .find((l) => l.includes(key))!
+        .trim()
+        .split(/\s+/)
+        .at(-1),
+    );
+  const W = dim("pixelWidth"),
+    H = dim("pixelHeight");
   // Python's -(-a // b) is ceiling division.
   const tl = W <= H ? Math.ceil((sq * H) / W) : Math.ceil((sq * W) / H);
-  const t = `${out}.t.tif`, s = `${out}.s.tif`;
+  const t = `${out}.t.tif`,
+    s = `${out}.s.tif`;
   run("sips", "-s", "format", "tiff", work, "--out", t);
   run("sips", "-Z", String(tl), t);
   run("sips", "-c", String(sq), String(sq), t, "--out", s);
@@ -80,7 +96,8 @@ function searchQ(png: string, jpg: string, target: number, lo = 40, hi = 95): [n
     const mid = Math.floor((lo + hi) / 2);
     const n = enc(png, jpg, mid);
     if (best === null || Math.abs(n - target) < Math.abs(best[1] - target)) best = [mid, n];
-    if (n < target) lo = mid + 1; else hi = mid - 1;
+    if (n < target) lo = mid + 1;
+    else hi = mid - 1;
   }
   enc(png, jpg, best![0]);
   return best!;
@@ -106,12 +123,21 @@ function meanLinear(file: string): number {
   // a mean over millions and keeps the whole sweep interactive. Same stride as
   // the Python's b[::step], so the two agree to the last digit.
   const step = Math.max(1, Math.floor(b.length / 200000));
-  let sum = 0, n = 0;
-  for (let i = 0; i < b.length; i += step) { sum += LUT[b[i]]; n += 1; }
+  let sum = 0,
+    n = 0;
+  for (let i = 0; i < b.length; i += step) {
+    sum += LUT[b[i]];
+    n += 1;
+  }
   return sum / n;
 }
 
-const srcs = fs.readdirSync(SRC).sort().map((f) => path.join(SRC, f)).filter((f) => /\.(jpg|hif)$/i.test(f)).slice(0, LIMIT);
+const srcs = fs
+  .readdirSync(SRC)
+  .sort()
+  .map((f) => path.join(SRC, f))
+  .filter((f) => /\.(jpg|hif)$/i.test(f))
+  .slice(0, LIMIT);
 type Row = Record<string, number | string>;
 const rows: Row[] = [];
 for (const [idx, f] of srcs.entries()) {
@@ -151,15 +177,24 @@ for (const [idx, f] of srcs.entries()) {
 const f2 = (v: unknown) => Number(v).toFixed(2).padStart(10);
 console.log();
 console.log("  ssimulacra2 at MATCHED BYTES, A=sips geometry q84, B=zenc geometry q-matched");
-console.log(`  ${"photo".padEnd(7)} ${"A/refsips".padStart(10)} ${"B/refsips".padStart(10)} ${"A/refzenc".padStart(10)} ${"B/refzenc".padStart(10)} ${"A/refffm".padStart(10)} ${"B/refffm".padStart(10)}`);
+console.log(
+  `  ${"photo".padEnd(7)} ${"A/refsips".padStart(10)} ${"B/refsips".padStart(10)} ${"A/refzenc".padStart(10)} ${"B/refzenc".padStart(10)} ${"A/refffm".padStart(10)} ${"B/refffm".padStart(10)}`,
+);
 const wins: Record<string, number> = { sips: 0, zenc: 0, ffmpeg: 0 };
 for (const r of rows) {
   console.log(`  ${String(r.photo).padEnd(7)} ${f2(r.A_sips)} ${f2(r.B_sips)} ${f2(r.A_zenc)} ${f2(r.B_zenc)} ${f2(r.A_ffmpeg)} ${f2(r.B_ffmpeg)}`);
   for (const ref of Object.keys(wins)) if (Number(r[`B_${ref}`]) > Number(r[`A_${ref}`])) wins[ref] += 1;
 }
-console.log(`\n  B (zenc) wins, per reference, out of ${rows.length}:  ${Object.entries(wins).map(([k, v]) => `${k}=${v}`).join("  ")}`);
+console.log(
+  `\n  B (zenc) wins, per reference, out of ${rows.length}:  ${Object.entries(wins)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("  ")}`,
+);
 const mean = (key: string) => rows.reduce((acc, r) => acc + Number(r[key]), 0) / rows.length;
-const la = mean("lin_A"), lb = mean("lin_B");
+const la = mean("lin_A"),
+  lb = mean("lin_B");
 console.log("\n  REFERENCE-FREE: mean |linear-luminance error| vs the native crop");
 console.log(`    sips geometry ${la.toFixed(5)}`);
-console.log(`    zenc geometry ${lb.toFixed(5)}   (${lb < la ? "zenc closer" : "sips closer"}, ${(Math.abs(la - lb) / Math.max(la, lb) * 100).toFixed(0)}% apart)`);
+console.log(
+  `    zenc geometry ${lb.toFixed(5)}   (${lb < la ? "zenc closer" : "sips closer"}, ${((Math.abs(la - lb) / Math.max(la, lb)) * 100).toFixed(0)}% apart)`,
+);

@@ -10,6 +10,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR/tools/format-hook.ts\"",
+            "timeout": 20
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [

@@ -24,7 +24,14 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import {
-  CLIENT_ASSETS, assetBase, assetExt, hashOrder, loaderNeedles, loaderRewrites, registryProblems, stagedPath,
+  CLIENT_ASSETS,
+  assetBase,
+  assetExt,
+  hashOrder,
+  loaderNeedles,
+  loaderRewrites,
+  registryProblems,
+  stagedPath,
   type ClientAsset,
 } from "./client-assets.ts";
 
@@ -37,10 +44,7 @@ export type HashedAssets = {
   filesTouched: number;
 };
 
-export async function hashClientAssets(
-  root: string,
-  opts: { assets?: readonly ClientAsset[]; log?: (line: string) => void } = {},
-): Promise<HashedAssets> {
+export async function hashClientAssets(root: string, opts: { assets?: readonly ClientAsset[]; log?: (line: string) => void } = {}): Promise<HashedAssets> {
   const assets = opts.assets ?? CLIENT_ASSETS;
   const log = opts.log ?? (() => {});
   const problems = registryProblems(assets);
@@ -50,8 +54,7 @@ export async function hashClientAssets(
 
   await mkdir(`${root}/public/a`, { recursive: true });
   const publicFiles = (await readdir(`${root}/public`, { recursive: true })) as string[];
-  const under = async (dir: string, recursive: boolean): Promise<string[]> =>
-    ((await readdir(`${root}/${dir}`, { recursive }).catch(() => [])) as string[]);
+  const under = async (dir: string, recursive: boolean): Promise<string[]> => (await readdir(`${root}/${dir}`, { recursive }).catch(() => [])) as string[];
 
   // Targets for the JS-STRING loaders (import(), from, script.src, fetch, a
   // keyed path): every staged surface that can carry one. HTML pages, the
@@ -79,14 +82,16 @@ export async function hashClientAssets(
   // straight away, so disk and memory never disagree, and an asset that is
   // itself a target (nav.js) is still hashed from its rewritten bytes.
   const text = new Map<string, string | null>();
-  await Promise.all([...new Set([...stringTargets, ...attrTargets])].map(async (rel) => {
-    text.set(rel, await readFile(`${root}/${rel}`, "utf8").catch(() => null));
-  }));
+  await Promise.all(
+    [...new Set([...stringTargets, ...attrTargets])].map(async (rel) => {
+      text.set(rel, await readFile(`${root}/${rel}`, "utf8").catch(() => null));
+    }),
+  );
 
   const urls: Record<string, string> = {};
   let filesTouched = 0;
   for (const a of order) {
-    let bytes = await readFile(`${root}/public/${a.file}`);   // exact served bytes (banner incl.)
+    let bytes = await readFile(`${root}/public/${a.file}`); // exact served bytes (banner incl.)
     // A JSON asset takes compact-data's canonical form HERE, before its hash,
     // and the plain copy with it. compact-data runs long after step 6 and skips
     // a/, so it can never rewrite bytes a hash already names.
@@ -105,24 +110,28 @@ export async function hashClientAssets(
       const reps = loaderRewrites(a, loader, to);
       const needles = loaderNeedles(a, loader);
       const targets = loader.via === "attr" ? attrTargets : stringTargets;
-      const touched = await Promise.all(targets.map(async (rel) => {
-        const before = text.get(rel);
-        // no pattern can match a file without one of its literals
-        if (before == null || !needles.some((n) => before.includes(n))) return null;
-        let after = before;
-        for (const [re, sub] of reps) after = after.replace(re, sub);
-        if (after === before) return null;
-        text.set(rel, after);
-        await writeFile(`${root}/${rel}`, after);
-        return rel;
-      }));
+      const touched = await Promise.all(
+        targets.map(async (rel) => {
+          const before = text.get(rel);
+          // no pattern can match a file without one of its literals
+          if (before == null || !needles.some((n) => before.includes(n))) return null;
+          let after = before;
+          for (const [re, sub] of reps) after = after.replace(re, sub);
+          if (after === before) return null;
+          text.set(rel, after);
+          await writeFile(`${root}/${rel}`, after);
+          return rel;
+        }),
+      );
       for (const rel of touched) {
         if (rel === null) continue;
         filesTouched++;
         // An edge the registry does not know. The order was derived without it,
         // so this dependent may already have been hashed with the plain URL.
         if (registered.has(rel) && !a.loadedBy.includes(rel)) {
-          throw new Error(`client assets: ${rel} loads /${a.file}, but ${a.file}'s loadedBy does not list it, so the hash order was derived without that edge. Add "${rel}" to its loadedBy.`);
+          throw new Error(
+            `client assets: ${rel} loads /${a.file}, but ${a.file}'s loadedBy does not list it, so the hash order was derived without that edge. Add "${rel}" to its loadedBy.`,
+          );
         }
       }
     }
@@ -137,8 +146,11 @@ export async function hashClientAssets(
       const dependent = registered.get(rel);
       const witness = dependent ? `public${urls[dependent.file]}` : rel;
       let body: string;
-      try { body = await readFile(`${root}/${witness}`, "utf8"); }
-      catch { throw new Error(`client assets: ${rel}, declared in ${a.file}'s loadedBy, is not in the staged tree`); }
+      try {
+        body = await readFile(`${root}/${witness}`, "utf8");
+      } catch {
+        throw new Error(`client assets: ${rel}, declared in ${a.file}'s loadedBy, is not in the staged tree`);
+      }
       if (!body.includes(urls[a.file])) {
         throw new Error(`client assets: ${witness} was not repointed to ${urls[a.file]}; did the way ${rel} loads /${a.file} change?`);
       }

@@ -39,11 +39,15 @@ const ANSI_SGR = /\u001b\[[0-9;]*m/g;
  * failure cannot bury the ramp's own message under it.
  */
 export function wranglerErrorLines(e: { stderr?: string; stdout?: string; message?: string }): string[] {
-  return String(e?.stderr || e?.stdout || e?.message || "")
-    .replace(ANSI_SGR, "")
-    .split("\n").map((l) => l.trim()).filter(Boolean)
-    // wrangler's own last line names the log file it wrote, which is where it
-    // put the error rather than what the error was.
-    .filter((l) => !l.startsWith("🪵"))
-    .slice(0, 6);
+  return (
+    String(e?.stderr || e?.stdout || e?.message || "")
+      .replace(ANSI_SGR, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      // wrangler's own last line names the log file it wrote, which is where it
+      // put the error rather than what the error was.
+      .filter((l) => !l.startsWith("🪵"))
+      .slice(0, 6)
+  );
 }

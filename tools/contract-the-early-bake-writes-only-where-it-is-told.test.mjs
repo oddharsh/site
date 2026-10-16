@@ -5,12 +5,7 @@
 // that is not staged yet (/garage/dyno), so a page landing in public/ early
 // would change what ships, and differently on a slow machine than a fast one.
 // These read the source, because the hazard is an edit that adds one write.
-import {
-  assert,
-  readFile,
-  ROOT,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFile, ROOT, test } from "./contract-shared.ts";
 
 const bake = await readFile(new URL("tools/bake-worker-pages.ts", ROOT), "utf8");
 const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");

@@ -39,15 +39,32 @@ export function literalDurations(css) {
 
 test("the matcher finds a hand-written duration, and only that", () => {
   // A finding in a fixture IS found, so an empty report below means clean and not blind.
-  assert.deepEqual(literalDurations(".t{transition:opacity 120ms ease-out}").map((f) => f.literal), ["120ms"]);
-  assert.deepEqual(literalDurations(".b{animation:axp-pop .09s ease-out}").map((f) => f.literal), [".09s"]);
-  assert.deepEqual(literalDurations(".d{animation-delay:calc(sibling-index() * 90ms)}").map((f) => f.literal), ["90ms"]);
-  assert.deepEqual(literalDurations(".t{transition:opacity var(--xp-transition-fade), display var(--xp-transition-fade) allow-discrete}"), [], "a token is the rule");
+  assert.deepEqual(
+    literalDurations(".t{transition:opacity 120ms ease-out}").map((f) => f.literal),
+    ["120ms"],
+  );
+  assert.deepEqual(
+    literalDurations(".b{animation:axp-pop .09s ease-out}").map((f) => f.literal),
+    [".09s"],
+  );
+  assert.deepEqual(
+    literalDurations(".d{animation-delay:calc(sibling-index() * 90ms)}").map((f) => f.literal),
+    ["90ms"],
+  );
+  assert.deepEqual(
+    literalDurations(".t{transition:opacity var(--xp-transition-fade), display var(--xp-transition-fade) allow-discrete}"),
+    [],
+    "a token is the rule",
+  );
   assert.deepEqual(literalDurations(":root{--xp-transition: 60ms ease-out;}"), [], "the token's own definition is a custom property, not a declaration");
   assert.deepEqual(literalDurations(".s{animation:spin 1.1s linear infinite}"), [], "ambient motion is exempt");
   assert.deepEqual(literalDurations(".x{/* @motion demo: the tween is the exhibit */ transition:height .35s ease}"), [], "an exhibit says so in its rule");
   assert.deepEqual(literalDurations(".n{transition:none} .z{transition:opacity 0s}"), [], "no motion is never a finding");
-  assert.deepEqual(literalDurations(".c{color:#0054e3; transition:filter 60ms ease-out}").map((f) => f.literal), ["60ms"], "a hex colour is not a time");
+  assert.deepEqual(
+    literalDurations(".c{color:#0054e3; transition:filter 60ms ease-out}").map((f) => f.literal),
+    ["60ms"],
+    "a hex colour is not a time",
+  );
 });
 
 test("every served transition and animation names a motion token", () => {

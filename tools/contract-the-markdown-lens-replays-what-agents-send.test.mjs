@@ -11,7 +11,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  AGENT_ACCEPTS, BROWSER_ACCEPT, handleLensMarkdown, isMarkdown, markdownAlternate, probePlan, sharedStorable, variesOnAccept,
+  AGENT_ACCEPTS,
+  BROWSER_ACCEPT,
+  handleLensMarkdown,
+  isMarkdown,
+  markdownAlternate,
+  probePlan,
+  sharedStorable,
+  variesOnAccept,
   varyEveryVariant,
 } from "../src/worker/lens-markdown.ts";
 import { wantsMarkdown } from "../src/worker/lib/http.ts";
@@ -81,8 +88,7 @@ test("the rel=alternate probe reads the header and the element", () => {
   assert.equal(viaTag?.where, "<link> element");
 
   // A Link header carrying several relations must not hand back the wrong one.
-  const mixed = markdownAlternate(
-    '</style.css>; rel=preload; as=style, </p.md>; rel="alternate"; type="text/markdown"', "");
+  const mixed = markdownAlternate('</style.css>; rel=preload; as=style, </p.md>; rel="alternate"; type="text/markdown"', "");
   assert.equal(mixed?.href, "/p.md");
 
   // An alternate that is not Markdown is not a Markdown alternate. Both halves
@@ -135,8 +141,11 @@ test("the replay overlaps only two probes and preserves its evidence order", asy
   assert.equal(accepts.length, planned.length, "every distinct probe still runs exactly once");
   assert.equal(new Set(accepts).size, planned.length, "no Accept string is duplicated");
   assert.equal(peak, 2, "one origin sees at most two simultaneous requests");
-  assert.deepEqual(payload.responses.map((row) => row.id), planned.map((probe) => probe.id),
-    "completion timing cannot reorder the evidence");
+  assert.deepEqual(
+    payload.responses.map((row) => row.id),
+    planned.map((probe) => probe.id),
+    "completion timing cannot reorder the evidence",
+  );
 });
 
 test("the browser control is never scored as an agent", () => {
@@ -160,7 +169,10 @@ test("the tie header the tab exists for is in the table", () => {
   // HTML both at q=1, with nothing in the header to break the tie.
   const tied = AGENT_ACCEPTS.filter((a) => a.accept === "text/markdown, text/html, */*");
   assert.ok(tied.length >= 3, "at least three shipping clients send the tied header");
-  assert.ok(tied.some((a) => a.key === "claude-code"), "Claude Code among them");
+  assert.ok(
+    tied.some((a) => a.key === "claude-code"),
+    "Claude Code among them",
+  );
 });
 
 test("this origin serves Markdown to every agent client the lens replays", () => {
@@ -275,7 +287,10 @@ test("every lazily-loaded lens island has a cache rule in _headers", async () =>
   let block = "";
   for (const line of headers.split("\n")) {
     if (!line.trim() || line.trimStart().startsWith("#")) continue;
-    if (/^\s/.test(line)) { if (block) rules.get(block).push(line.trim()); continue; }
+    if (/^\s/.test(line)) {
+      if (block) rules.get(block).push(line.trim());
+      continue;
+    }
     block = line.trim();
     if (!rules.has(block)) rules.set(block, []);
   }
@@ -305,8 +320,7 @@ test("a shared cache may store what no-store and private do not forbid", () => {
 /** @returns {[string, any]} */
 const raw = (id, result) => [id, result];
 /** @returns {[string, any]} */
-const row = (id, contentType, vary, cacheControl = "public, s-maxage=86400") =>
-  [id, { ok: true, status: 200, contentType, vary, cacheControl }];
+const row = (id, contentType, vary, cacheControl = "public, s-maxage=86400") => [id, { ok: true, status: 200, contentType, vary, cacheControl }];
 
 test("Vary is read off EVERY variant, not only the Markdown one", () => {
   // The shape this site served on 2026-09-22: Markdown names Accept, the
@@ -320,31 +334,28 @@ test("Vary is read off EVERY variant, not only the Markdown one", () => {
   assert.match(verdict.detail, /text\/html for control/, "names the variant that leaks");
   assert.ok(!verdict.detail.includes("markdown for markdown"), "does not blame the variant that varies");
 
-  assert.equal(varyEveryVariant([
-    row("control", "text/html", "Accept-Encoding, Accept"),
-    row("markdown", "text/markdown", "accept"),
-  ]).status, "pass");
+  assert.equal(varyEveryVariant([row("control", "text/html", "Accept-Encoding, Accept"), row("markdown", "text/markdown", "accept")]).status, "pass");
 
   // A bare Vary on a copy no shared cache may keep cannot reach anyone else.
-  assert.equal(varyEveryVariant([
-    row("control", "text/html", "accept-encoding", "private, max-age=60"),
-    row("markdown", "text/markdown", "accept"),
-  ]).status, "pass");
+  assert.equal(
+    varyEveryVariant([row("control", "text/html", "accept-encoding", "private, max-age=60"), row("markdown", "text/markdown", "accept")]).status,
+    "pass",
+  );
 
   // One representation owes Vary nothing, however bare it is.
-  assert.equal(varyEveryVariant([
-    row("control", "text/html", ""),
-    row("markdown", "text/html; charset=utf-8", ""),
-  ]).status, "info");
+  assert.equal(varyEveryVariant([row("control", "text/html", ""), row("markdown", "text/html; charset=utf-8", "")]).status, "info");
 
   // Errors and non-2xx answers are not stored variants. A 406 carrying no Vary
   // must not turn a clean origin into a failing one.
-  assert.equal(varyEveryVariant([
-    row("control", "text/html", "accept"),
-    row("markdown", "text/markdown", "accept"),
-    raw("unservable", { ok: true, status: 406, contentType: "text/plain", vary: "", cacheControl: "" }),
-    raw("q-zero", { ok: false, error: "timeout" }),
-  ]).status, "pass");
+  assert.equal(
+    varyEveryVariant([
+      row("control", "text/html", "accept"),
+      row("markdown", "text/markdown", "accept"),
+      raw("unservable", { ok: true, status: 406, contentType: "text/plain", vary: "", cacheControl: "" }),
+      raw("q-zero", { ok: false, error: "timeout" }),
+    ]).status,
+    "pass",
+  );
 });
 
 test("the handler grades a leaking HTML copy end to end", async () => {
@@ -361,6 +372,9 @@ test("the handler grades a leaking HTML copy end to end", async () => {
   const byId = Object.fromEntries(payload.checks.map((c) => [c.id, c]));
   assert.equal(byId["varies-by-accept"].status, "pass", "the checklist's one-response read misses it");
   assert.equal(byId["vary-on-every-variant"].status, "fail", "and the every-variant read catches it");
-  assert.equal(payload.responses.find((r) => r.id === "control").cacheControl, "public, s-maxage=86400",
-    "the evidence carries the header the verdict rests on");
+  assert.equal(
+    payload.responses.find((r) => r.id === "control").cacheControl,
+    "public, s-maxage=86400",
+    "the evidence carries the header the verdict rests on",
+  );
 });

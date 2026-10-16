@@ -12,7 +12,12 @@ const probe = (spec) => ({ ok: true, status: 200, body: JSON.stringify(spec), tr
 const keyless = { openapi: "3.1.0", security: [], paths: { "/search.json": { get: { operationId: "search" } } } };
 const missing = { ok: false, status: 404, body: "" };
 const base = {
-  headers: {}, robots: null, sitemap: null, terms: null, agent: null, botViews: [],
+  headers: {},
+  robots: null,
+  sitemap: null,
+  terms: null,
+  agent: null,
+  botViews: [],
   discovery: { oauthDiscovery: { openidConfiguration: missing, oauthAuthorizationServer: missing }, oauthProtectedResource: missing, authMd: missing },
 };
 

@@ -1,11 +1,6 @@
 // ── lens cost: origin-level discovery is cached ──────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  testGlobals,
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { testGlobals, assert, readFileSync, test } from "./contract-shared.ts";
 
 // ── lens cost: origin-level discovery is cached ──────────────────────────
 
@@ -35,7 +30,10 @@ const doh = () => new Response(JSON.stringify({ Status: 3 }), { headers: { "cont
 // version that returned the flag AND fanned out anyway passed here. Once fetch
 // is a double, the count is free and it is the claim the title makes.
 let dohCalls = 0;
-const countedDoh = () => { dohCalls++; return doh(); };
+const countedDoh = () => {
+  dohCalls++;
+  return doh();
+};
 
 test("a second scan of the same origin reuses discovery instead of re-probing", async () => {
   // This is where lens's cost lived: a production trace put lens.discovery at
@@ -50,8 +48,13 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
   testGlobals.fetch = countedDoh;
   testGlobals.caches = {
     default: {
-      async match(req) { const hit = store.get(req.url); return hit ? new Response(hit) : undefined; },
-      async put(req, res) { store.set(req.url, await res.text()); },
+      async match(req) {
+        const hit = store.get(req.url);
+        return hit ? new Response(hit) : undefined;
+      },
+      async put(req, res) {
+        store.set(req.url, await res.text());
+      },
     },
   };
   try {
@@ -83,7 +86,8 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
     assert.ok(dohCalls > warm, "`fresh` returned the cached body rather than bypassing the cache");
   } finally {
     testGlobals.fetch = realFetch;
-    if (realCaches === undefined) delete globalThis.caches; else testGlobals.caches = realCaches;
+    if (realCaches === undefined) delete globalThis.caches;
+    else testGlobals.caches = realCaches;
   }
 });
 

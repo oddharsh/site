@@ -88,26 +88,31 @@ const which = (name: string): string | null => {
 };
 const ZENC = path.join(REPO, "tools", "photos", "zenc", "target", "release", "zenc");
 const SIPS = which("sips") ?? "/usr/bin/sips";
-const CJPEG = which("cjpeg") ?? (() => {
-  const r = spawnSync("brew", ["--prefix", "mozjpeg"], { encoding: "utf8" });
-  return path.join(r.status === 0 ? r.stdout.trim() : "/opt/homebrew/opt/mozjpeg", "bin", "cjpeg");
-})();
+const CJPEG =
+  which("cjpeg") ??
+  (() => {
+    const r = spawnSync("brew", ["--prefix", "mozjpeg"], { encoding: "utf8" });
+    return path.join(r.status === 0 ? r.stdout.trim() : "/opt/homebrew/opt/mozjpeg", "bin", "cjpeg");
+  })();
 const SSIMULACRA2 = which("ssimulacra2") ?? "/opt/zerobrew/prefix/bin/ssimulacra2";
 const BUTTERAUGLI = which("butteraugli_main") ?? "/opt/zerobrew/prefix/bin/butteraugli_main";
 // The format axis. Each format is decoded by its own REFERENCE decoder for the
 // metrics, so a score describes the bitstream rather than a browser's decode.
-const CJXL = which("cjxl"), DJXL = which("djxl");
-const AVIFENC = which("avifenc"), AVIFDEC = which("avifdec");
+const CJXL = which("cjxl"),
+  DJXL = which("djxl");
+const AVIFENC = which("avifenc"),
+  AVIFDEC = which("avifdec");
 // AV2 comes from the TUNED av2-tone build (`bun run av2:build`), the one that
 // carries the qmseg patch AV2_ARGS turns on. The
 // pristine build refuses those flags one encode at a time, so preflight checks
 // for the tuned binary up front. AVM_BUILD_DIR overrides the directory, as it
 // does for codec-knob-probe.ts.
 const AV2_BUILD = process.env.AVM_BUILD_DIR ?? AV2_TUNED_BUILD;
-const AVIFENC_AV2 = path.join(AV2_BUILD, "avifenc"), AVIFDEC_AV2 = path.join(AV2_BUILD, "avifdec");
+const AVIFENC_AV2 = path.join(AV2_BUILD, "avifenc"),
+  AVIFDEC_AV2 = path.join(AV2_BUILD, "avifdec");
 
-const TILE = 320;         // tile edge, cropped at NATIVE resolution: 1:1 pixels is the point
-const BUDGET_TOL = 0.02;  // equal-budget trials: every option within +/-2% of the target
+const TILE = 320; // tile edge, cropped at NATIVE resolution: 1:1 pixels is the point
+const BUDGET_TOL = 0.02; // equal-budget trials: every option within +/-2% of the target
 // 2% is the floor an INTEGER quality knob can actually hold. The knob moves size in
 // jumps of 2-5% near the working range, so demanding tighter than this just throws
 // away good trials to no benefit. For scale, the hand-cut set this replaces ran
@@ -128,78 +133,98 @@ const BUDGET_TOL = 0.02;  // equal-budget trials: every option within +/-2% of t
 type Intent = "detail" | "color";
 type Axis = "quality" | "encoder" | "chroma" | "tradeoff" | "resample" | "format";
 export const CANDIDATES: Record<Axis, [Intent, number, string[]]> = {
-  quality: ["detail", 8, [
-    "XT507494",   // chrome grille, fine mesh
-    "XT509278",   // red grille, black mesh
-    "XT507955",   // metal staircase, yellow stripes
-    "XT509986",   // subway signage, text edges
-    "XT508055",   // mountain road sign
-    "XT507517",   // license plate lettering
-    "XT509535",   // Coca-Cola livery, text on a curve
-    "XT509509",   // train livery lettering
-    "XT509965",   // pier sign
-    "XT507940",   // framed painting
-    "XT509488",   // hand + pen, skin detail
-  ]],
-  encoder: ["detail", 6, [
-    "XT509794",   // brick road texture
-    "XT509848",   // brick + paint
-    "XT509388",   // coat of arms
-    "XT509540",   // motorcycle number plate
-    "XT508890",   // blossom, foliage is encoder-hard
-    "XT509276",   // red car, white wheel
-    "XT509446",   // staircase, yellow line
-    "XT509892",   // two cars, mixed texture
-    "XT507343",   // yellow/black sticker on glass
-    "XT509721",   // shirt + cap weave
-    "XT508756",   // knit + jacket texture
-    "XT509698",   // jersey mesh
-    "XT508790",   // roofline against sky
-  ]],
+  quality: [
+    "detail",
+    8,
+    [
+      "XT507494", // chrome grille, fine mesh
+      "XT509278", // red grille, black mesh
+      "XT507955", // metal staircase, yellow stripes
+      "XT509986", // subway signage, text edges
+      "XT508055", // mountain road sign
+      "XT507517", // license plate lettering
+      "XT509535", // Coca-Cola livery, text on a curve
+      "XT509509", // train livery lettering
+      "XT509965", // pier sign
+      "XT507940", // framed painting
+      "XT509488", // hand + pen, skin detail
+    ],
+  ],
+  encoder: [
+    "detail",
+    6,
+    [
+      "XT509794", // brick road texture
+      "XT509848", // brick + paint
+      "XT509388", // coat of arms
+      "XT509540", // motorcycle number plate
+      "XT508890", // blossom, foliage is encoder-hard
+      "XT509276", // red car, white wheel
+      "XT509446", // staircase, yellow line
+      "XT509892", // two cars, mixed texture
+      "XT507343", // yellow/black sticker on glass
+      "XT509721", // shirt + cap weave
+      "XT508756", // knit + jacket texture
+      "XT509698", // jersey mesh
+      "XT508790", // roofline against sky
+    ],
+  ],
   // Chroma is the axis where candidates die. The survivors all look the same:
   // a HIGH-CONTRAST TWO-TONE boundary (livery stripes, signage, a painted edge
   // against chrome), never a big saturated panel. Feed it accordingly, and
   // expect most of this list to be rejected: that rejection IS the finding.
-  chroma: ["color", 3, [
-    "XT509540",   // red/white motorcycle, livery stripes
-    "XT507343",   // yellow/black sticker on glass
-    "XT509814",   // blue car, yellow stripe
-    "XT509839",   // red car, yellow sticker
-    "XT509779",   // blue car beside a yellow taxi
-    "XT509276",   // red car, white wheel
-    "XT509085",   // yellow building, two figures
-    "XT509446",   // staircase, yellow line
-    "XT509892",   // black car beside a yellow one
-    "XT509794",   // yellow car on brick
-    "XT508947",   // beer crates, three saturated hues
-    "XT508890",   // pink blossom against sky
-    "XT509535",   // Coca-Cola red on white
-    "XT509987",   // wings sign
-  ]],
-  tradeoff: ["color", 3, [
-    "XT509987",   // wings sign
-    "XT509315",   // colourful umbrella
-    "XT509534",   // yellow car, red seat
-    "XT509535",   // Coca-Cola red
-    "XT508947",   // beer crates
-    "XT509509",   // train livery
-    "XT509809",   // yellow car, red interior
-    "XT509346",   // orange mirror
-  ]],
+  chroma: [
+    "color",
+    3,
+    [
+      "XT509540", // red/white motorcycle, livery stripes
+      "XT507343", // yellow/black sticker on glass
+      "XT509814", // blue car, yellow stripe
+      "XT509839", // red car, yellow sticker
+      "XT509779", // blue car beside a yellow taxi
+      "XT509276", // red car, white wheel
+      "XT509085", // yellow building, two figures
+      "XT509446", // staircase, yellow line
+      "XT509892", // black car beside a yellow one
+      "XT509794", // yellow car on brick
+      "XT508947", // beer crates, three saturated hues
+      "XT508890", // pink blossom against sky
+      "XT509535", // Coca-Cola red on white
+      "XT509987", // wings sign
+    ],
+  ],
+  tradeoff: [
+    "color",
+    3,
+    [
+      "XT509987", // wings sign
+      "XT509315", // colourful umbrella
+      "XT509534", // yellow car, red seat
+      "XT509535", // Coca-Cola red
+      "XT508947", // beer crates
+      "XT509509", // train livery
+      "XT509809", // yellow car, red interior
+      "XT509346", // orange mirror
+    ],
+  ],
   // The geometry axis. Fine repeating detail is where a downscale's defects
   // live: gamma-incorrect averaging darkens texture, and aliasing shows on
   // anything periodic. A smooth subject would separate by nothing and the
   // legibility gate would correctly drop it, so the stems are chosen the same
   // way the quality axis chooses its own.
-  resample: ["detail", 6, [
-    "XT507494",   // chrome grille, fine mesh
-    "XT509278",   // red grille, black mesh
-    "XT507955",   // metal staircase, yellow stripes
-    "XT509986",   // subway signage, text edges
-    "XT509509",   // train livery lettering
-    "XT507517",   // license plate lettering
-    "XT509535",   // Coca-Cola livery, text on a curve
-  ]],
+  resample: [
+    "detail",
+    6,
+    [
+      "XT507494", // chrome grille, fine mesh
+      "XT509278", // red grille, black mesh
+      "XT507955", // metal staircase, yellow stripes
+      "XT509986", // subway signage, text edges
+      "XT509509", // train livery lettering
+      "XT507517", // license plate lettering
+      "XT509535", // Coca-Cola livery, text on a curve
+    ],
+  ],
   // The format axis: JPEG XL against AVIF at one byte budget. Detail crops,
   // because a format difference at equal bytes shows first in what each codec
   // chooses to smooth: AVIF's deblocking eats grain and fine texture, JXL
@@ -218,26 +243,56 @@ export const CANDIDATES: Record<Axis, [Intent, number, string[]]> = {
   // 44 is every stem at every tier, since 2026-10-14: calls with AV2 skip the
   // legibility gate (buildFormatTier), and ranking on spread would otherwise
   // drop exactly the close AV2 calls the gate now lets through.
-  format: ["detail", 44, [
-    "XT507494",   // chrome grille, fine mesh
-    "XT509794",   // brick road texture
-    "XT508890",   // blossom, foliage is encoder-hard
-    "XT509986",   // subway signage, text edges
-    "XT509721",   // shirt + cap weave
-    "XT507517",   // license plate lettering
-    "XT509509",   // train livery lettering
-    "XT508756",   // knit + jacket texture
-    "XT509276",   // red car, white wheel
-    "XT509446",   // staircase, yellow line
-    "XT509892",   // two cars, mixed texture
-  ]],
+  format: [
+    "detail",
+    44,
+    [
+      "XT507494", // chrome grille, fine mesh
+      "XT509794", // brick road texture
+      "XT508890", // blossom, foliage is encoder-hard
+      "XT509986", // subway signage, text edges
+      "XT509721", // shirt + cap weave
+      "XT507517", // license plate lettering
+      "XT509509", // train livery lettering
+      "XT508756", // knit + jacket texture
+      "XT509276", // red car, white wheel
+      "XT509446", // staircase, yellow line
+      "XT509892", // two cars, mixed texture
+    ],
+  ],
 };
 
-type Option = { label: string; bytes: number; s2: number | null; butter: number | null; light?: number; q: number; path: string; chroma?: string; s2best?: boolean; butterbest?: boolean; src?: string; decoded?: string };
+type Option = {
+  label: string;
+  bytes: number;
+  s2: number | null;
+  butter: number | null;
+  light?: number;
+  q: number;
+  path: string;
+  chroma?: string;
+  s2best?: boolean;
+  butterbest?: boolean;
+  src?: string;
+  decoded?: string;
+};
 // `spread` is absent on a tradeoff trial, as it was in the Python: that axis
 // ranks on the metric split and the penalty, and the manifest carries neither
 // a spread it did not measure nor a placeholder.
-type Trial = { axis: Axis; crop: string; options: Option[]; disagree: boolean; spread?: number; budget?: number; budget_drift?: number; penalty?: number; rejected?: string[]; crop_score?: number; tier?: string; lossless?: { jxl: number; avif: number; av2: number } };
+type Trial = {
+  axis: Axis;
+  crop: string;
+  options: Option[];
+  disagree: boolean;
+  spread?: number;
+  budget?: number;
+  budget_drift?: number;
+  penalty?: number;
+  rejected?: string[];
+  crop_score?: number;
+  tier?: string;
+  lossless?: { jxl: number; avif: number; av2: number };
+};
 
 // How each axis ranks its survivors: bigger sorts first, so ships first.
 //
@@ -249,17 +304,20 @@ type Trial = { axis: Axis; crop: string; options: Option[]; disagree: boolean; s
 const RANK: Record<Axis, (t: Trial) => number | [number, number]> = {
   quality: (t) => t.spread as number,
   encoder: (t) => t.spread as number,
-  chroma: (t) => t.spread as number,   // structural damage is what a person can SEE
+  chroma: (t) => t.spread as number, // structural damage is what a person can SEE
   tradeoff: (t) => [t.disagree ? 1 : 0, t.penalty ?? 0],
   resample: (t) => t.spread as number, // how far apart the two geometries land
   format: (t) => t.spread as number,
 };
-const rankKey = (axis: Axis, t: Trial): number => { const k = RANK[axis](t); return Array.isArray(k) ? k[0] * 1e6 + k[1] : k; };
+const rankKey = (axis: Axis, t: Trial): number => {
+  const k = RANK[axis](t);
+  return Array.isArray(k) ? k[0] * 1e6 + k[1] : k;
+};
 
 // Legibility thresholds. A trial that cannot clear these is dropped, because a
 // call whose options are indistinguishable teaches nothing and just feels hard.
-const QUALITY_MID_GAP = 10.0;   // ssimulacra2 points between top rung and middle rung
-const QUALITY_LOW_GAP = 26.0;   // ...and between top rung and bottom rung
+const QUALITY_MID_GAP = 10.0; // ssimulacra2 points between top rung and middle rung
+const QUALITY_LOW_GAP = 26.0; // ...and between top rung and bottom rung
 const QUALITY_MIN_SPREAD = 18.0;
 const ENCODER_MIN_SPREAD = 3.5; // s2 points between the best and worst encoder at equal bytes
 const CHROMA_MIN_BUTTER = 0.25; // butteraugli penalty 4:2:0 must take over 4:2:2
@@ -268,7 +326,7 @@ const CHROMA_MIN_BUTTER = 0.25; // butteraugli penalty 4:2:0 must take over 4:2:
 // side by side, because at that margin the "gap" is measuring grain. 3.0 is where
 // a contact sheet starts showing a difference a person can point at.
 const CHROMA_MIN_S2 = 3.0;
-const COLOR_MIN_SAT = 34.0;     // mean 0-255 saturation a 'color' crop must carry to qualify
+const COLOR_MIN_SAT = 34.0; // mean 0-255 saturation a 'color' crop must carry to qualify
 // Large-scale contrast a 'detail' crop must have, so pure grain is excluded.
 // Measured rather than guessed, and the gap is wide: the one ambiguous crop in
 // the shipped set (flat grainy sky) scores 0.95, while every crop that made a
@@ -316,7 +374,8 @@ function readPpm(file: string): Rgb {
   const buf = fs.readFileSync(file);
   const m = /^P6\s+(\d+)\s+(\d+)\s+255\s/.exec(buf.subarray(0, 40).toString("latin1"));
   if (!m) throw new Error(`${file} is not the P6 zenc writes`);
-  const w = Number(m[1]), h = Number(m[2]);
+  const w = Number(m[1]),
+    h = Number(m[2]);
   return { w, h, px: new Uint8Array(buf.buffer, buf.byteOffset + m[0].length, w * h * 3) };
 }
 
@@ -349,9 +408,14 @@ function findEdges(src: Uint8Array, w: number, h: number): Uint8Array {
  *  (sum2 - sum^2/n)/n form.
  *  https://github.com/python-pillow/Pillow/blob/12.3.0/src/PIL/ImageStat.py#L149-L159 */
 function stats(band: Uint8Array): { mean: number; stddev: number } {
-  let sum = 0, sq = 0;
-  for (let i = 0; i < band.length; i += 1) { sum += band[i]; sq += band[i] * band[i]; }
-  const n = band.length, mean = sum / n;
+  let sum = 0,
+    sq = 0;
+  for (let i = 0; i < band.length; i += 1) {
+    sum += band[i];
+    sq += band[i] * band[i];
+  }
+  const n = band.length,
+    mean = sum / n;
   return { mean, stddev: Math.sqrt(Math.max(0, sq / n - mean * mean)) };
 }
 
@@ -360,7 +424,9 @@ function stats(band: Uint8Array): { mean: number; stddev: number } {
 function saturation(im: Rgb): Uint8Array {
   const out = new Uint8Array(im.w * im.h);
   for (let i = 0, p = 0; i < out.length; i += 1, p += 3) {
-    const r = im.px[p], g = im.px[p + 1], b = im.px[p + 2];
+    const r = im.px[p],
+      g = im.px[p + 1],
+      b = im.px[p + 2];
     out[i] = Math.max(r, g, b) - Math.min(r, g, b);
   }
   return out;
@@ -397,11 +463,18 @@ function window(im: Rgb, x0: number, y0: number, size: number): Rgb {
 function structure(gray: Uint8Array, w: number, h: number): number {
   const cells = new Uint8Array(256);
   for (let cy = 0; cy < 16; cy += 1) {
-    const y0 = Math.floor((cy * h) / 16), y1 = Math.max(y0 + 1, Math.floor(((cy + 1) * h) / 16));
+    const y0 = Math.floor((cy * h) / 16),
+      y1 = Math.max(y0 + 1, Math.floor(((cy + 1) * h) / 16));
     for (let cx = 0; cx < 16; cx += 1) {
-      const x0 = Math.floor((cx * w) / 16), x1 = Math.max(x0 + 1, Math.floor(((cx + 1) * w) / 16));
-      let sum = 0, n = 0;
-      for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) { sum += gray[y * w + x]; n += 1; }
+      const x0 = Math.floor((cx * w) / 16),
+        x1 = Math.max(x0 + 1, Math.floor(((cx + 1) * w) / 16));
+      let sum = 0,
+        n = 0;
+      for (let y = y0; y < y1; y += 1)
+        for (let x = x0; x < x1; x += 1) {
+          sum += gray[y * w + x];
+          n += 1;
+        }
       cells[cy * 16 + cx] = Math.round(sum / n);
     }
   }
@@ -438,7 +511,7 @@ function scoreWindow(win: Rgb, intent: Intent): number {
   // GATE below. Grey stone has huge chroma gradient and almost no saturation,
   // so gating on saturation is what tells the two apart.
   const sat = saturation(win);
-  if (stats(sat).mean < COLOR_MIN_SAT) return -1e6;  // not a colour crop at all, whatever its gradients say
+  if (stats(sat).mean < COLOR_MIN_SAT) return -1e6; // not a colour crop at all, whatever its gradients say
   // Saturation is a GATE, never a multiplier. Multiplying by it (the third wrong
   // cut) ranked a flat orange panel top of the pool: maximum saturation, no
   // boundary, nothing for 4:2:0 to damage. The boundary term has to lead.
@@ -456,7 +529,10 @@ type Crop = { png: string; ppm: string; score: number };
  *  reduction to happen inside the trial rather than a 1:1 cut. */
 export function bestCrop(src: Source, intent: Intent, tmp: string, boxPx = TILE, name = "crop"): Crop {
   const proxyPpm = path.join(tmp, `${name}-proxy.ppm`);
-  const dims = zenc(["frame", src.file, "--orient", String(src.orient), "--fit", "1400", "--out", proxyPpm]).trim().split(/\s+/).map(Number);
+  const dims = zenc(["frame", src.file, "--orient", String(src.orient), "--fit", "1400", "--out", proxyPpm])
+    .trim()
+    .split(/\s+/)
+    .map(Number);
   const [W, H] = dims;
   if (W < boxPx || H < boxPx) throw new Error(`source smaller than a ${boxPx}px window: ${W}x${H}`);
   // Score on a downscaled proxy so the scan is cheap, then map the window back.
@@ -465,18 +541,23 @@ export function bestCrop(src: Source, intent: Intent, tmp: string, boxPx = TILE,
   let box = Math.max(8, Math.floor(boxPx * scale));
   if (box > Math.min(proxy.w, proxy.h)) box = Math.min(proxy.w, proxy.h);
   const stride = Math.max(4, Math.floor(box / 3));
-  let best: [number, number] | null = null, bestS = -1e9;
+  let best: [number, number] | null = null,
+    bestS = -1e9;
   for (let y = 0; y + box <= proxy.h; y += stride) {
     for (let x = 0; x + box <= proxy.w; x += stride) {
       const s = scoreWindow(window(proxy, x, y, box), intent);
-      if (s > bestS) { bestS = s; best = [x, y]; }
+      if (s > bestS) {
+        bestS = s;
+        best = [x, y];
+      }
     }
   }
   if (bestS <= -1e5 || !best) throw new Error(`no window carries enough colour (mean sat < ${COLOR_MIN_SAT})`);
   // Map proxy coords back to native, clamped so the tile stays inside the frame.
   const nx = Math.min(W - boxPx, Math.max(0, Math.floor(best[0] / scale)));
   const ny = Math.min(H - boxPx, Math.max(0, Math.floor(best[1] / scale)));
-  const png = path.join(tmp, `${name}.png`), ppm = path.join(tmp, `${name}.ppm`);
+  const png = path.join(tmp, `${name}.png`),
+    ppm = path.join(tmp, `${name}.ppm`);
   zenc(["frame", src.file, "--orient", String(src.orient), "--crop", String(nx), String(ny), String(boxPx), String(boxPx), "--out", png, "--out", ppm]);
   return { png, ppm, score: bestS };
 }
@@ -506,7 +587,15 @@ export function encode(kind: Kind, srcs: Srcs, out: string, q: number, chroma = 
 /** Binary-search the quality knob until the output lands on `target` bytes.
  *  Returns the closest attempt, whether or not it made tolerance; the caller
  *  decides whether to keep it. */
-function searchQuality(kind: Kind, srcs: Srcs, tmp: string, target: number, chroma = "420", lo = 5, hi = 100): { q: number; bytes: number; path: string } | null {
+function searchQuality(
+  kind: Kind,
+  srcs: Srcs,
+  tmp: string,
+  target: number,
+  chroma = "420",
+  lo = 5,
+  hi = 100,
+): { q: number; bytes: number; path: string } | null {
   if (lo > hi) return null;
   if (kind === "zenc") {
     const out = path.join(tmp, "search-zenc.jpg");
@@ -536,7 +625,10 @@ function searchQuality(kind: Kind, srcs: Srcs, tmp: string, target: number, chro
 
 // --------------------------------------------------------------------- metrics
 
-const toPng = (jpg: string, png: string): string => { zenc(["frame", jpg, "--out", png]); return png; };
+const toPng = (jpg: string, png: string): string => {
+  zenc(["frame", jpg, "--out", png]);
+  return png;
+};
 const firstFloat = (tool: string, r: ReturnType<typeof run>): number => {
   const m = /-?\d+\.\d+/.exec(r.stdout || "");
   if (!m) throw new Error(`${tool} said: ${(r.stdout || "").trim()} ${(r.stderr || "").trim()}`);
@@ -554,8 +646,11 @@ function measure(refPng: string, jpg: string, tmp: string, both = true): [number
 /** Tag each metric's favourite and say whether the two of them split. */
 function markWinners(options: Option[]): boolean {
   const bestS2 = Math.max(...options.map((o) => o.s2 as number));
-  const bestBu = Math.min(...options.map((o) => o.butter as number));  // butteraugli: lower is better
-  for (const o of options) { o.s2best = o.s2 === bestS2; o.butterbest = o.butter === bestBu; }
+  const bestBu = Math.min(...options.map((o) => o.butter as number)); // butteraugli: lower is better
+  for (const o of options) {
+    o.s2best = o.s2 === bestS2;
+    o.butterbest = o.butter === bestBu;
+  }
   return options.find((o) => o.s2best) !== options.find((o) => o.butterbest);
 }
 
@@ -569,13 +664,16 @@ function buildQuality(cropId: string, srcs: Srcs, refPng: string, tmp: string): 
     return { q, bytes: size, s2: ssim2(refPng, toPng(p, path.join(tmp, `q${q}.png`))), path: p };
   });
   const top = rungs.reduce((a, b) => (b.s2 > a.s2 ? b : a));
-  const pick = (gap: number) => rungs.reduce((a, b) => (Math.abs((top.s2 - b.s2) - gap) < Math.abs((top.s2 - a.s2) - gap) ? b : a));
+  const pick = (gap: number) => rungs.reduce((a, b) => (Math.abs(top.s2 - b.s2 - gap) < Math.abs(top.s2 - a.s2 - gap) ? b : a));
   const chosen: typeof rungs = [];
   for (const r of [pick(QUALITY_LOW_GAP), pick(QUALITY_MID_GAP), top]) if (!chosen.some((c) => c.q === r.q)) chosen.push(r);
   if (chosen.length < 3) return [null, "ladder collapsed: fewer than 3 distinct rungs"];
   const spread = chosen[chosen.length - 1].s2 - chosen[0].s2;
   if (spread < QUALITY_MIN_SPREAD) return [null, `spread only ${spread.toFixed(1)} s2 (want ${QUALITY_MIN_SPREAD})`];
-  const options: Option[] = chosen.map((r) => { const [s2, bu] = measure(refPng, r.path, tmp); return { label: `quality ${r.q}`, bytes: r.bytes, s2, butter: bu, q: r.q, path: r.path }; });
+  const options: Option[] = chosen.map((r) => {
+    const [s2, bu] = measure(refPng, r.path, tmp);
+    return { label: `quality ${r.q}`, bytes: r.bytes, s2, butter: bu, q: r.q, path: r.path };
+  });
   return [{ axis: "quality", crop: cropId, options, disagree: markWinners(options), spread: Number(spread.toFixed(1)) }, null];
 }
 
@@ -588,11 +686,21 @@ function buildEncoder(cropId: string, srcs: Srcs, refPng: string, tmp: string): 
   const rejected: string[] = [];
   for (const kind of ["zenc", "mozjpeg", "sips"] as Kind[]) {
     let got;
-    try { got = searchQuality(kind, srcs, tmp, target, "420"); }
-    catch (e) { rejected.push(`${kind}: ${e instanceof Error ? e.message : String(e)}`); continue; }  // report, don't crash the run
-    if (got === null) { rejected.push(`${kind}: search found nothing`); continue; }
+    try {
+      got = searchQuality(kind, srcs, tmp, target, "420");
+    } catch (e) {
+      rejected.push(`${kind}: ${e instanceof Error ? e.message : String(e)}`);
+      continue;
+    } // report, don't crash the run
+    if (got === null) {
+      rejected.push(`${kind}: search found nothing`);
+      continue;
+    }
     const drift = Math.abs(got.bytes - target) / target;
-    if (drift > BUDGET_TOL) { rejected.push(`${kind}: closest was ${got.bytes}B, ${(drift * 100).toFixed(1)}% off budget`); continue; }
+    if (drift > BUDGET_TOL) {
+      rejected.push(`${kind}: closest was ${got.bytes}B, ${(drift * 100).toFixed(1)}% off budget`);
+      continue;
+    }
     const [s2, bu] = measure(refPng, got.path, tmp);
     options.push({ label: kind, bytes: got.bytes, s2, butter: bu, q: got.q, path: got.path });
   }
@@ -602,7 +710,8 @@ function buildEncoder(cropId: string, srcs: Srcs, refPng: string, tmp: string): 
   // both, which is what makes the call readable instead of a three-way tie.
   options.sort((a, b) => (a.s2 as number) - (b.s2 as number));
   if (options.length > 3) {
-    const lo = options[0], hi = options[options.length - 1];
+    const lo = options[0],
+      hi = options[options.length - 1];
     const mid = options.slice(1, -1).reduce((a, b) => {
       const d = (o: Option) => Math.min(Math.abs((o.s2 as number) - (lo.s2 as number)), Math.abs((o.s2 as number) - (hi.s2 as number)));
       return d(b) > d(a) ? b : a;
@@ -612,14 +721,29 @@ function buildEncoder(cropId: string, srcs: Srcs, refPng: string, tmp: string): 
   const spread = (options[options.length - 1].s2 as number) - (options[0].s2 as number);
   if (spread < ENCODER_MIN_SPREAD) return [null, `encoders within ${spread.toFixed(1)} s2 at equal bytes: nothing to see`];
   const budgetDrift = Math.max(...options.map((o) => Math.abs(o.bytes - target))) / target;
-  return [{ axis: "encoder", crop: cropId, options, disagree: markWinners(options), spread: Number(spread.toFixed(1)), budget: target, budget_drift: Number((budgetDrift * 100).toFixed(2)), rejected }, null];
+  return [
+    {
+      axis: "encoder",
+      crop: cropId,
+      options,
+      disagree: markWinners(options),
+      spread: Number(spread.toFixed(1)),
+      budget: target,
+      budget_drift: Number((budgetDrift * 100).toFixed(2)),
+      rejected,
+    },
+    null,
+  ];
 }
 
 /** Same quality setting, full colour vs halved. Bytes differ: that IS the axis. */
 function buildChroma(cropId: string, srcs: Srcs, refPng: string, tmp: string): Built {
   const Q = 80;
   const out: Option[] = [];
-  for (const [chroma, label] of [["422", "4:2:2 · full source color"], ["420", "4:2:0 · color halved"]]) {
+  for (const [chroma, label] of [
+    ["422", "4:2:2 · full source color"],
+    ["420", "4:2:0 · color halved"],
+  ]) {
     const p = path.join(tmp, `chroma-${chroma}.jpg`);
     const size = encode("zenc", srcs, p, Q, chroma);
     const [s2, bu] = measure(refPng, p, tmp);
@@ -629,7 +753,10 @@ function buildChroma(cropId: string, srcs: Srcs, refPng: string, tmp: string): B
   if (penalty < CHROMA_MIN_BUTTER) return [null, `4:2:0 only costs ${penalty.toFixed(3)} butteraugli: invisible, skip it`];
   const spread = Math.abs((out[0].s2 as number) - (out[1].s2 as number));
   if (spread < CHROMA_MIN_S2) return [null, `4:2:0 costs only ${spread.toFixed(2)} s2: the colour tell is not visible`];
-  return [{ axis: "chroma", crop: cropId, options: out, disagree: markWinners(out), penalty: Number(penalty.toFixed(3)), spread: Number(spread.toFixed(2)) }, null];
+  return [
+    { axis: "chroma", crop: cropId, options: out, disagree: markWinners(out), penalty: Number(penalty.toFixed(3)), spread: Number(spread.toFixed(2)) },
+    null,
+  ];
 }
 
 /** Equal bytes, forced trade: 4:2:0 buys sharpness with the colour budget. */
@@ -642,16 +769,29 @@ function buildTradeoff(cropId: string, srcs: Srcs, refPng: string, tmp: string):
   const drift = Math.abs(got.bytes - target) / target;
   if (drift > BUDGET_TOL) return [null, `4:2:0 closest was ${got.bytes}B vs ${target}B (${(drift * 100).toFixed(1)}% off)`];
   const options: Option[] = [];
-  for (const [p, label, q, chroma, size] of [[got.path, "4:2:0 · sharper, color halved", got.q, "420", got.bytes], [p422, "4:2:2 · full source color, softer", Q422, "422", target]] as [string, string, number, string, number][]) {
+  for (const [p, label, q, chroma, size] of [
+    [got.path, "4:2:0 · sharper, color halved", got.q, "420", got.bytes],
+    [p422, "4:2:2 · full source color, softer", Q422, "422", target],
+  ] as [string, string, number, string, number][]) {
     const [s2, bu] = measure(refPng, p, tmp);
     options.push({ label, bytes: size, s2, butter: bu, q, chroma, path: p });
   }
   const disagree = markWinners(options);
   const budgetDrift = Math.abs(options[0].bytes - options[1].bytes) / target;
-  return [{ axis: "tradeoff", crop: cropId, options, disagree, budget: target, budget_drift: Number((budgetDrift * 100).toFixed(2)),
-    // how hard the two sides pull apart: the colour cost of 4:2:0 against the
-    // sharpness it bought. A trade nobody can feel ranks last.
-    penalty: Number(Math.abs((options[0].butter as number) - (options[1].butter as number)).toFixed(3)) }, null];
+  return [
+    {
+      axis: "tradeoff",
+      crop: cropId,
+      options,
+      disagree,
+      budget: target,
+      budget_drift: Number((budgetDrift * 100).toFixed(2)),
+      // how hard the two sides pull apart: the colour cost of 4:2:0 against the
+      // sharpness it bought. A trade nobody can feel ranks last.
+      penalty: Number(Math.abs((options[0].butter as number) - (options[1].butter as number)).toFixed(3)),
+    },
+    null,
+  ];
 }
 
 // The reduction the trial reproduces. The pipeline takes a ~1333px short edge to
@@ -665,7 +805,10 @@ const RESAMPLE_REDUCTION = 3;
 const RESAMPLE_MIN_SPREAD = 8.0;
 
 // sRGB's transfer curve, decoded: 8-bit code value to linear light (IEC 61966-2-1).
-const SRGB_TO_LINEAR = Float64Array.from({ length: 256 }, (_, i) => { const c = i / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+const SRGB_TO_LINEAR = Float64Array.from({ length: 256 }, (_, i) => {
+  const c = i / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+});
 /** Mean linear-light luminance (Rec. 709 weights) of a P6 PPM. */
 function meanLight(ppm: string): number {
   const { w, h, px } = readPpm(ppm);
@@ -727,9 +870,15 @@ function buildResample(src: Source, tmp: string): Built {
     const sub = path.join(tmp, `rs-${label}`);
     fs.mkdirSync(sub, { recursive: true });
     const got = searchQuality("zenc", { png, ppm: png }, sub, target, "420");
-    if (got === null) { rejected.push(`${label}: search found nothing`); continue; }
+    if (got === null) {
+      rejected.push(`${label}: search found nothing`);
+      continue;
+    }
     const drift = Math.abs(got.bytes - target) / target;
-    if (drift > BUDGET_TOL) { rejected.push(`${label}: closest was ${got.bytes}B, ${(drift * 100).toFixed(1)}% off budget`); continue; }
+    if (drift > BUDGET_TOL) {
+      rejected.push(`${label}: closest was ${got.bytes}B, ${(drift * 100).toFixed(1)}% off budget`);
+      continue;
+    }
     const dec = path.join(sub, "decoded.ppm");
     zenc(["frame", got.path, "--out", dec]);
     const light = Number(((100 * meanLight(dec)) / srcLight).toFixed(1));
@@ -740,7 +889,8 @@ function buildResample(src: Source, tmp: string): Built {
   // is deliberately absent, so this is ssimulacra2 run candidate against
   // candidate, which is symmetric and needs no truth.
   const spread = 100.0 - ssim2(toPng(options[0].path, path.join(tmp, "resample-a-dec.png")), toPng(options[1].path, path.join(tmp, "resample-b-dec.png")));
-  if (spread < RESAMPLE_MIN_SPREAD) return [null, `the two geometries differ by only ${spread.toFixed(1)} at this budget (want ${RESAMPLE_MIN_SPREAD}); nobody could call this tile`];
+  if (spread < RESAMPLE_MIN_SPREAD)
+    return [null, `the two geometries differ by only ${spread.toFixed(1)} at this budget (want ${RESAMPLE_MIN_SPREAD}); nobody could call this tile`];
   return [{ axis: "resample", crop: src.stem, options, spread: Number(spread.toFixed(1)), disagree: false, budget: target }, null];
 }
 
@@ -809,8 +959,8 @@ const FMT_NAME: Record<Fmt, string> = { jxl: "JPEG XL", avif: "AVIF", av2: "AV2"
 // AVIF tile is that encode itself; "zenc" means AVIF is searched onto what zenc
 // spends at that quality and chroma.
 export const FORMAT_TIER_ANCHOR = {
-  "avif-tier": { enc: "avif", q: 63 },                 // add-photos.sh's AVIF tiers
-  "jpeg-tier": { enc: "zenc", q: 84, chroma: "420" },  // add-photos.sh's JPEG fallback
+  "avif-tier": { enc: "avif", q: 63 }, // add-photos.sh's AVIF tiers
+  "jpeg-tier": { enc: "zenc", q: 84, chroma: "420" }, // add-photos.sh's JPEG fallback
 } as const;
 // FORMAT_TIER_ANCHOR holds only the two tiers read off a shipping ENCODE,
 // because codec-knob-probe.ts tunes flags on exactly those budgets and its
@@ -845,9 +995,9 @@ const LOW_TIER_BPP = 0.66;
 // Knob ranges, and whether a HIGHER knob means MORE bytes. Continuous knobs get
 // a fixed number of bisection steps; the integer one stops when it runs out.
 const FMT_KNOB: Record<Fmt, { lo: number; hi: number; up: boolean; int: boolean }> = {
-  jxl: { lo: 0.1, hi: 15, up: false, int: false },   // butteraugli distance: smaller is bigger
+  jxl: { lo: 0.1, hi: 15, up: false, int: false }, // butteraugli distance: smaller is bigger
   avif: { lo: 0, hi: 100, up: true, int: true },
-  av2: { lo: 0, hi: 255, up: true, int: true },      // 255 - AV2's qp, so bytes rise with it
+  av2: { lo: 0, hi: 255, up: true, int: true }, // 255 - AV2's qp, so bytes rise with it
 };
 
 // cjxl's flags beyond the distance, for the format axis. Effort 9 with the
@@ -880,8 +1030,26 @@ export const AVIF_ARGS = ["-d", "10", "--speed", "2", "--yuv", "444"];
 //             tune, which AVM doesn't have yet.
 // Measured at speed 6. Speed 3 with qmseg is this axis's first run of the two
 // together, so its numbers are the record, not a re-run of the probes'.
-export const AV2_ARGS = ["-c", "avm", "-d", "10", "--speed", "3", "--yuv", "444", "-a", "sb-size=128",
-  "-a", "enable-qm=1", "-a", "qm-curve=1", "-a", "qmseg=1", "-a", "qmseg-level=12"];
+export const AV2_ARGS = [
+  "-c",
+  "avm",
+  "-d",
+  "10",
+  "--speed",
+  "3",
+  "--yuv",
+  "444",
+  "-a",
+  "sb-size=128",
+  "-a",
+  "enable-qm=1",
+  "-a",
+  "qm-curve=1",
+  "-a",
+  "qmseg=1",
+  "-a",
+  "qmseg-level=12",
+];
 
 export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): number {
   if (fs.existsSync(out)) fs.unlinkSync(out);
@@ -889,7 +1057,22 @@ export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlA
   if (fmt === "jxl") r = run([CJXL as string, png, out, "-d", knob.toFixed(4), ...jxlArgs, "--quiet"]);
   // AV2's quantizer through `-a qp=`, which overrides -q. -q stays at 50 so
   // libavif never reads the request as lossless (codec-knob-probe.ts, AVM).
-  else if (fmt === "av2") r = run([AVIFENC_AV2, "-q", "50", "-a", `qp=${255 - Math.round(knob)}`, ...AV2_ARGS, "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, out]);
+  else if (fmt === "av2")
+    r = run([
+      AVIFENC_AV2,
+      "-q",
+      "50",
+      "-a",
+      `qp=${255 - Math.round(knob)}`,
+      ...AV2_ARGS,
+      "--jobs",
+      "4",
+      "--ignore-icc",
+      "--ignore-exif",
+      "--ignore-xmp",
+      png,
+      out,
+    ]);
   // --jobs is pinned to the pipeline's 4, because it changes AVIF output bytes
   // (gotcha 43), so this tile is byte-identical to a shipping encode at that -q.
   else r = run([AVIFENC as string, "-q", String(Math.round(knob)), ...avifArgs, "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, out]);
@@ -901,16 +1084,27 @@ export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlA
  *  otherwise write 16 bits for a 10-bit file, and the metrics compare against
  *  an 8-bit reference. */
 export function decodeFmt(fmt: Fmt, file: string, png: string): string {
-  const r = fmt === "jxl" ? run([DJXL as string, file, png, "--bits_per_sample=8", "--quiet"])
-    : run([fmt === "av2" ? AVIFDEC_AV2 : AVIFDEC as string, "-d", "8", file, png]);
+  const r =
+    fmt === "jxl"
+      ? run([DJXL as string, file, png, "--bits_per_sample=8", "--quiet"])
+      : run([fmt === "av2" ? AVIFDEC_AV2 : (AVIFDEC as string), "-d", "8", file, png]);
   if (!fs.existsSync(png)) throw new Error(`${fmt} decode failed: ${(r.stderr || r.stdout || "").trim().slice(0, 200)}`);
   return png;
 }
 
 /** Bisect one format's knob onto `target` bytes; returns the closest attempt. */
-export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): { knob: number; bytes: number; path: string } {
+export function searchFmt(
+  fmt: Fmt,
+  png: string,
+  tmp: string,
+  target: number,
+  jxlArgs: string[] = JXL_ARGS,
+  avifArgs: string[] = AVIF_ARGS,
+): { knob: number; bytes: number; path: string } {
   const k = FMT_KNOB[fmt];
-  let lo = k.lo, hi = k.hi, best: { knob: number; bytes: number; path: string } | null = null;
+  let lo = k.lo,
+    hi = k.hi,
+    best: { knob: number; bytes: number; path: string } | null = null;
   for (let step = 0; step < 18; step += 1) {
     const mid = k.int ? Math.floor((lo + hi) / 2) : (lo + hi) / 2;
     const out = path.join(tmp, `fmt-${fmt}-${step}.${FMT_EXT[fmt]}`);
@@ -919,7 +1113,8 @@ export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jx
     if (size === target || Math.abs(size - target) / target < 0.002) break;
     const tooBig = size > target;
     // move toward fewer bytes if too big: lower knob when up, higher when not
-    if (tooBig === k.up) hi = k.int ? mid - 1 : mid; else lo = k.int ? mid + 1 : mid;
+    if (tooBig === k.up) hi = k.int ? mid - 1 : mid;
+    else lo = k.int ? mid + 1 : mid;
     if (k.int && lo > hi) break;
   }
   return best as { knob: number; bytes: number; path: string };
@@ -939,7 +1134,9 @@ const knobLabel = (fmt: Fmt, knob: number): string =>
  *  than AV1's on the same 16 crops (/garage/av2), against AOM listing better
  *  lossless coding among AV2's tools, so the page shows that number too. */
 function losslessBytes(png: string, tmp: string): { jxl: number; avif: number; av2: number } {
-  const jxl = path.join(tmp, "lossless.jxl"), avif = path.join(tmp, "lossless.avif"), av2 = path.join(tmp, "lossless-av2.avif");
+  const jxl = path.join(tmp, "lossless.jxl"),
+    avif = path.join(tmp, "lossless.avif"),
+    av2 = path.join(tmp, "lossless-av2.avif");
   const quiet = ["--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp"];
   run([CJXL as string, png, jxl, "-d", "0", "-e", "9", "--quiet"]);
   run([AVIFENC as string, "-l", "-d", "8", "--speed", "2", ...quiet, png, avif]);
@@ -964,8 +1161,9 @@ function buildFormat(cropId: string, srcs: Srcs, refPng: string, tmp: string): B
       const built = buildFormatTier(tier, cropId, srcs, refPng, tmp);
       if (built[0]) built[0].lossless = lossless;
       return built;
-    }
-    catch (e) { return [null, `${tier}: ${e instanceof Error ? e.message : String(e)}`]; }   // one tier failing keeps the others
+    } catch (e) {
+      return [null, `${tier}: ${e instanceof Error ? e.message : String(e)}`];
+    } // one tier failing keeps the others
   });
 }
 
@@ -985,7 +1183,11 @@ function repackSet(srcs: Srcs, sub: string): [Fmt, Got][] {
   if (!fs.existsSync(jxl)) throw new Error(`cjxl repack failed: ${(r.stderr || "").trim().slice(0, 200)}`);
   const pixels = toPng(jpg, path.join(sub, "have-dec.png"));
   const target = fs.statSync(jxl).size;
-  return [["jxl", { knob: 0, bytes: target, path: jxl }], ["avif", searchFmt("avif", pixels, sub, target)], ["av2", searchFmt("av2", pixels, sub, target)]];
+  return [
+    ["jxl", { knob: 0, bytes: target, path: jxl }],
+    ["avif", searchFmt("avif", pixels, sub, target)],
+    ["av2", searchFmt("av2", pixels, sub, target)],
+  ];
 }
 
 function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: string, tmp: string): Built {
@@ -994,23 +1196,35 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
     fs.mkdirSync(sub, { recursive: true });
     let got: [Fmt, Got][];
     if (tier === "repack") {
-      got = repackSet(srcs, sub);   // here the JXL file sets the budget, since its size is fixed
+      got = repackSet(srcs, sub); // here the JXL file sets the budget, since its size is fixed
     } else {
-      const avif = tier === "avif-tier"
-        ? (() => { const a = FORMAT_TIER_ANCHOR[tier]; const p = path.join(sub, "ship.avif"); return { knob: a.q, bytes: encodeFmt("avif", srcs.png, p, a.q), path: p }; })()
-        : tier === "jpeg-tier"
-          ? (() => { const a = FORMAT_TIER_ANCHOR[tier]; return searchFmt("avif", srcs.png, sub, encode("zenc", srcs, path.join(sub, "jpeg-anchor.jpg"), a.q, a.chroma)); })()
-          : (() => {
-            // A light crop's shipping AVIF can already sit at or under this
-            // budget (XT509509's is 8,398 B against 8,448), and then the
-            // "tight" tier is the shipping tier twice over.
-            const low = Math.round((TILE * TILE * LOW_TIER_BPP) / 8);
-            const ship = encodeFmt("avif", srcs.png, path.join(sub, "ship-check.avif"), FORMAT_TIER_ANCHOR["avif-tier"].q);
-            if (ship <= low * (1 + BUDGET_TOL)) throw new Error(`shipping AVIF is already ${ship}B, no tighter than the ${low}B tier`);
-            return searchFmt("avif", srcs.png, sub, low);
-          })();
+      const avif =
+        tier === "avif-tier"
+          ? (() => {
+              const a = FORMAT_TIER_ANCHOR[tier];
+              const p = path.join(sub, "ship.avif");
+              return { knob: a.q, bytes: encodeFmt("avif", srcs.png, p, a.q), path: p };
+            })()
+          : tier === "jpeg-tier"
+            ? (() => {
+                const a = FORMAT_TIER_ANCHOR[tier];
+                return searchFmt("avif", srcs.png, sub, encode("zenc", srcs, path.join(sub, "jpeg-anchor.jpg"), a.q, a.chroma));
+              })()
+            : (() => {
+                // A light crop's shipping AVIF can already sit at or under this
+                // budget (XT509509's is 8,398 B against 8,448), and then the
+                // "tight" tier is the shipping tier twice over.
+                const low = Math.round((TILE * TILE * LOW_TIER_BPP) / 8);
+                const ship = encodeFmt("avif", srcs.png, path.join(sub, "ship-check.avif"), FORMAT_TIER_ANCHOR["avif-tier"].q);
+                if (ship <= low * (1 + BUDGET_TOL)) throw new Error(`shipping AVIF is already ${ship}B, no tighter than the ${low}B tier`);
+                return searchFmt("avif", srcs.png, sub, low);
+              })();
       // decision 1: the coarse knob's real output is the budget
-      got = [["avif", avif], ["jxl", searchFmt("jxl", srcs.png, sub, avif.bytes)], ["av2", searchFmt("av2", srcs.png, sub, avif.bytes)]];
+      got = [
+        ["avif", avif],
+        ["jxl", searchFmt("jxl", srcs.png, sub, avif.bytes)],
+        ["av2", searchFmt("av2", srcs.png, sub, avif.bytes)],
+      ];
     }
     const target = got[0][1].bytes;
     const rejected: string[] = [];
@@ -1018,11 +1232,26 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
     const row: PoolRow = { crop: cropId, tier, budget: target, bpp: Number(((target * 8) / (TILE * TILE)).toFixed(3)) };
     for (const [fmt, g] of got) {
       const drift = Math.abs(g.bytes - target) / target;
-      if (drift > BUDGET_TOL) { rejected.push(`${fmt}: closest was ${g.bytes}B, ${(drift * 100).toFixed(1)}% off ${target}B`); continue; }
+      if (drift > BUDGET_TOL) {
+        rejected.push(`${fmt}: closest was ${g.bytes}B, ${(drift * 100).toFixed(1)}% off ${target}B`);
+        continue;
+      }
       const dec = decodeFmt(fmt, g.path, path.join(sub, `${fmt}-dec.png`));
-      const label = tier !== "repack" ? knobLabel(fmt, g.knob)
-        : fmt === "jxl" ? "JPEG XL · the JPEG, repacked losslessly" : `${knobLabel(fmt, g.knob)}, re-encoded from the JPEG`;
-      const o: Option = { label, bytes: g.bytes, s2: ssim2(refPng, dec), butter: butter(refPng, dec), q: Number(g.knob.toFixed(4)), path: g.path, decoded: dec };
+      const label =
+        tier !== "repack"
+          ? knobLabel(fmt, g.knob)
+          : fmt === "jxl"
+            ? "JPEG XL · the JPEG, repacked losslessly"
+            : `${knobLabel(fmt, g.knob)}, re-encoded from the JPEG`;
+      const o: Option = {
+        label,
+        bytes: g.bytes,
+        s2: ssim2(refPng, dec),
+        butter: butter(refPng, dec),
+        q: Number(g.knob.toFixed(4)),
+        path: g.path,
+        decoded: dec,
+      };
       options.push(o);
       row[fmt] = { bytes: o.bytes, s2: o.s2 as number, bu: o.butter as number };
     }
@@ -1040,8 +1269,17 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
     const hasAv2 = options.some((o) => o.label.startsWith("AV2 "));
     if (spread < ENCODER_MIN_SPREAD && !hasAv2) return [null, `${tier} @ ${target}B: formats within ${spread.toFixed(1)} s2 (${summary}); nothing to see`];
     const budgetDrift = Math.max(...options.map((o) => Math.abs(o.bytes - target))) / target;
-    const trial: Trial = { axis: "format", crop: cropId, tier, options, disagree: markWinners(options), spread: Number(spread.toFixed(1)), budget: target, budget_drift: Number((budgetDrift * 100).toFixed(2)) };
-    if (rejected.length) trial.rejected = rejected;   // a format that missed the budget sits this call out, and the log says so
+    const trial: Trial = {
+      axis: "format",
+      crop: cropId,
+      tier,
+      options,
+      disagree: markWinners(options),
+      spread: Number(spread.toFixed(1)),
+      budget: target,
+      budget_drift: Number((budgetDrift * 100).toFixed(2)),
+    };
+    if (rejected.length) trial.rejected = rejected; // a format that missed the budget sits this call out, and the log says so
     return [trial, null];
   }
 }
@@ -1049,13 +1287,22 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
 // The pool, pairwise: for each pair of formats, over the tiers where both hit
 // the budget, the first one's mean ssimulacra2 lead and how many calls it took
 // on each metric. The page computes the same table from the same rows.
-const PAIRS: [Fmt, Fmt][] = [["av2", "avif"], ["av2", "jxl"], ["jxl", "avif"]];
-const BPP_BANDS: [string, number, number][] = [["under 0.5 bpp", 0, 0.5], ["0.5 to 1 bpp", 0.5, 1], ["over 1 bpp", 1, Infinity]];
+const PAIRS: [Fmt, Fmt][] = [
+  ["av2", "avif"],
+  ["av2", "jxl"],
+  ["jxl", "avif"],
+];
+const BPP_BANDS: [string, number, number][] = [
+  ["under 0.5 bpp", 0, 0.5],
+  ["0.5 to 1 bpp", 0.5, 1],
+  ["over 1 bpp", 1, Infinity],
+];
 function pairLine(rows: PoolRow[], [a, b]: [Fmt, Fmt]): string {
   const both = rows.filter((r) => r[a] && r[b]) as (PoolRow & Record<Fmt, PoolFmt>)[];
   if (!both.length) return "n/a".padEnd(26);
   const d = both.reduce((n, r) => n + r[a].s2 - r[b].s2, 0) / both.length;
-  const s2 = both.filter((r) => r[a].s2 > r[b].s2).length, bu = both.filter((r) => r[a].bu < r[b].bu).length;
+  const s2 = both.filter((r) => r[a].s2 > r[b].s2).length,
+    bu = both.filter((r) => r[a].bu < r[b].bu).length;
   return `${d >= 0 ? "+" : ""}${d.toFixed(2)}  s2 ${s2}/${both.length}  bu ${bu}/${both.length}`.padEnd(26);
 }
 function logPool(pool: PoolRow[]): void {
@@ -1075,7 +1322,14 @@ function logPool(pool: PoolRow[]): void {
 // ------------------------------------------------------------------------ main
 
 function describe(t: Trial): string {
-  let bits = (t.tier ? `[${t.tier}] ` : "") + t.options.map((o) => `${o.label.split(" · ")[0]}=${o.bytes}B/${o.light !== undefined ? `light ${o.light}%` : `s2 ${o.s2}`}${o.butter !== null ? `/bu ${o.butter}` : ""}`).join(" ");
+  let bits =
+    (t.tier ? `[${t.tier}] ` : "") +
+    t.options
+      .map(
+        (o) =>
+          `${o.label.split(" · ")[0]}=${o.bytes}B/${o.light !== undefined ? `light ${o.light}%` : `s2 ${o.s2}`}${o.butter !== null ? `/bu ${o.butter}` : ""}`,
+      )
+      .join(" ");
   if (t.budget_drift !== undefined) bits += ` [budget ${t.budget}B, drift ${t.budget_drift}%]`;
   if (t.spread !== undefined) bits += ` spread ${t.spread}`;
   if (t.penalty !== undefined) bits += ` penalty ${t.penalty}`;
@@ -1099,28 +1353,51 @@ function writeSheet(trials: Trial[], file: string): void {
   const dir = `${file}.tiles`;
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
-  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
-  const rows = trials.map((t) => `<div class="row">${t.options.map((o, i) => {
-    // A format tile goes on the sheet as its REFERENCE decode, since the browser
-    // reading the sheet may not decode JXL, and a reviewer should judge the
-    // pixels the metrics scored.
-    const name = `${t.axis}-${t.tier ?? ""}-${t.crop}-${i}.${o.decoded ? "png" : "jpg"}`;
-    fs.copyFileSync(o.decoded ?? o.path, path.join(dir, name));
-    return `<figure><figcaption>${esc(`${t.axis}${t.tier ? `[${t.tier}]` : ""}/${t.crop} ${o.label.split(" · ")[0]} ${o.bytes}B s2=${o.s2} bu=${o.butter}`)}</figcaption><img src="${esc(path.basename(dir))}/${name}" width="${TILE}" height="${TILE}" alt=""></figure>`;
-  }).join("")}</div>`).join("\n");
-  fs.writeFileSync(file, `<!doctype html><meta charset="utf-8"><title>pixel-peeper contact sheet</title>
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
+  const rows = trials
+    .map(
+      (t) =>
+        `<div class="row">${t.options
+          .map((o, i) => {
+            // A format tile goes on the sheet as its REFERENCE decode, since the browser
+            // reading the sheet may not decode JXL, and a reviewer should judge the
+            // pixels the metrics scored.
+            const name = `${t.axis}-${t.tier ?? ""}-${t.crop}-${i}.${o.decoded ? "png" : "jpg"}`;
+            fs.copyFileSync(o.decoded ?? o.path, path.join(dir, name));
+            return `<figure><figcaption>${esc(`${t.axis}${t.tier ? `[${t.tier}]` : ""}/${t.crop} ${o.label.split(" · ")[0]} ${o.bytes}B s2=${o.s2} bu=${o.butter}`)}</figcaption><img src="${esc(path.basename(dir))}/${name}" width="${TILE}" height="${TILE}" alt=""></figure>`;
+          })
+          .join("")}</div>`,
+    )
+    .join("\n");
+  fs.writeFileSync(
+    file,
+    `<!doctype html><meta charset="utf-8"><title>pixel-peeper contact sheet</title>
 <style>body{background:#ECE9D8;color:#1a1a1a;font:12px Tahoma,Verdana,sans-serif;margin:10px}.row{display:flex;gap:10px;margin-bottom:10px}figure{margin:0}figcaption{height:20px;line-height:20px;white-space:nowrap;overflow:hidden}img{display:block;image-rendering:pixelated}</style>
 ${rows}
-`);
+`,
+  );
   log(`contact sheet: ${file}`);
 }
 
 function preflight(axes: string[]): void {
-  const missing = [["zenc", ZENC], ["mozjpeg cjpeg", CJPEG], ["ssimulacra2", SSIMULACRA2], ["butteraugli_main", BUTTERAUGLI]].filter(([, p]) => !fs.existsSync(p)).map(([n]) => n);
+  const missing = [
+    ["zenc", ZENC],
+    ["mozjpeg cjpeg", CJPEG],
+    ["ssimulacra2", SSIMULACRA2],
+    ["butteraugli_main", BUTTERAUGLI],
+  ]
+    .filter(([, p]) => !fs.existsSync(p))
+    .map(([n]) => n);
   if (!which("exif-sooc")) missing.push("exif-sooc");
   if (!fs.existsSync(SRC_DIR)) missing.push(`source photos at ${SRC_DIR}`);
   if (axes.includes("format")) {
-    for (const [n, p] of [["cjxl", CJXL], ["djxl", DJXL], ["avifenc", AVIFENC], ["avifdec", AVIFDEC]] as const) if (!p) missing.push(n);
+    for (const [n, p] of [
+      ["cjxl", CJXL],
+      ["djxl", DJXL],
+      ["avifenc", AVIFENC],
+      ["avifdec", AVIFDEC],
+    ] as const)
+      if (!p) missing.push(n);
     for (const p of [AVIFENC_AV2, AVIFDEC_AV2]) if (!fs.existsSync(p)) missing.push(`AV2 ${path.basename(p)} at ${p}`);
   }
   if (missing.length) {
@@ -1151,7 +1428,10 @@ function stageTiles(trials: Trial[]): Map<string, Buffer> {
 /** --merge: replace one axis's trials in the committed manifest, add its tiles,
  *  and prune only the tiles no trial references any more. */
 function writeMerged(axis: Axis, fresh: Trial[]): number {
-  if (fresh.length < 2) { log(`\nrefusing to merge: only ${fresh.length} ${axis} trial(s) survived, want >= 2`); return 1; }
+  if (fresh.length < 2) {
+    log(`\nrefusing to merge: only ${fresh.length} ${axis} trial(s) survived, want >= 2`);
+    return 1;
+  }
   const manifestFile = path.join(OUT_DIR, "manifest.json");
   const current = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { tile: number; trials: Trial[]; format_pool?: PoolRow[] };
   const kept = current.trials.filter((t) => t.axis !== axis);
@@ -1160,11 +1440,17 @@ function writeMerged(axis: Axis, fresh: Trial[]): number {
   const trials = [...kept, ...fresh];
   const referenced = new Set(trials.flatMap((t) => t.options.map((o) => path.basename(o.src as string))));
   let pruned = 0;
-  for (const f of fs.readdirSync(TILES_DIR)) if (!referenced.has(f)) { fs.rmSync(path.join(TILES_DIR, f)); pruned += 1; }
+  for (const f of fs.readdirSync(TILES_DIR))
+    if (!referenced.has(f)) {
+      fs.rmSync(path.join(TILES_DIR, f));
+      pruned += 1;
+    }
   const next = { ...current, trials };
-  if (axis === "format") next.format_pool = formatPool;   // the pool is the format axis's, so it is rebuilt with it
+  if (axis === "format") next.format_pool = formatPool; // the pool is the format axis's, so it is rebuilt with it
   fs.writeFileSync(manifestFile, `${JSON.stringify(next)}\n`);
-  log(`\nmerged ${fresh.length} ${axis} trial(s) over ${current.trials.length - kept.length} old; kept ${kept.length} others byte-identical; wrote ${staged.size} tiles, pruned ${pruned}`);
+  log(
+    `\nmerged ${fresh.length} ${axis} trial(s) over ${current.trials.length - kept.length} old; kept ${kept.length} others byte-identical; wrote ${staged.size} tiles, pruned ${pruned}`,
+  );
   return 0;
 }
 
@@ -1175,10 +1461,16 @@ function main(): number {
   // added without a full rebuild re-rolling 60 unrelated tiles through encoders
   // (sips above all) that may have moved since they were cut. The manifest
   // stays all-or-nothing per AXIS: the merged axis replaces its old trials whole.
-  const merge = argv.includes("--merge") ? argv[argv.indexOf("--merge") + 1] as Axis : null;
-  if (merge && !(merge in CANDIDATES)) { log(`--merge wants one of ${Object.keys(CANDIDATES).join(", ")}`); return 2; }
-  const only = merge ?? (argv.includes("--only") ? argv[argv.indexOf("--only") + 1] as Axis : null);
-  if (only && !(only in CANDIDATES)) { log(`--only wants one of ${Object.keys(CANDIDATES).join(", ")}`); return 2; }
+  const merge = argv.includes("--merge") ? (argv[argv.indexOf("--merge") + 1] as Axis) : null;
+  if (merge && !(merge in CANDIDATES)) {
+    log(`--merge wants one of ${Object.keys(CANDIDATES).join(", ")}`);
+    return 2;
+  }
+  const only = merge ?? (argv.includes("--only") ? (argv[argv.indexOf("--only") + 1] as Axis) : null);
+  if (only && !(only in CANDIDATES)) {
+    log(`--only wants one of ${Object.keys(CANDIDATES).join(", ")}`);
+    return 2;
+  }
   // --only implies --dry-run: a partial set must never be written, because the
   // manifest is all-or-nothing. --merge is the exception, and writes one axis.
   const dryRun = argv.includes("--dry-run") || (only !== null && merge === null);
@@ -1193,7 +1485,10 @@ function main(): number {
   const stemFilter = arg("--stems")?.split(",") ?? null;
   const emit = arg("--emit");
   const collect = arg("--collect")?.split(",") ?? null;
-  if (emit && !only) { log("--emit wants --only <axis>"); return 2; }
+  if (emit && !only) {
+    log("--emit wants --only <axis>");
+    return 2;
+  }
   preflight(only ? [only] : Object.keys(CANDIDATES));
 
   const built: Trial[] = [];
@@ -1205,7 +1500,9 @@ function main(): number {
         const stems = CANDIDATES[t.axis as Axis][2];
         return stems.indexOf(t.crop) * 10 + (t.tier ? FORMAT_TIERS.indexOf(t.tier as FormatTier) : 0);
       };
-      const shards = collect.map((d) => JSON.parse(fs.readFileSync(path.join(d, "built.json"), "utf8")) as { built: Trial[]; dropped: [string, string, string][]; pool: PoolRow[] });
+      const shards = collect.map(
+        (d) => JSON.parse(fs.readFileSync(path.join(d, "built.json"), "utf8")) as { built: Trial[]; dropped: [string, string, string][]; pool: PoolRow[] },
+      );
       built.push(...shards.flatMap((s) => s.built).sort((a, b) => order(a) - order(b)));
       dropped.push(...shards.flatMap((s) => s.dropped));
       formatPool.push(...shards.flatMap((s) => s.pool).sort((a, b) => order({ axis: "format", ...a }) - order({ axis: "format", ...b })));
@@ -1214,26 +1511,48 @@ function main(): number {
     for (const [axis, [intent, , stems]] of Object.entries(CANDIDATES) as [Axis, [Intent, number, string[]]][]) {
       if (collect) break;
       if (only && axis !== only) continue;
-      for (const stem of [...new Set(stems)]) {          // dedupe, keep author order
+      for (const stem of [...new Set(stems)]) {
+        // dedupe, keep author order
         if (stemFilter && !stemFilter.includes(stem)) continue;
         const tmp = path.join(work, `${axis}-${stem}`);
         fs.mkdirSync(tmp);
         let src: Source, crop: Crop;
-        try { src = loadSource(stem, tmp); crop = bestCrop(src, intent, tmp); }
-        catch (e) { const why = `source: ${e instanceof Error ? e.message : String(e)}`; dropped.push([axis, stem, why]); log(`  x ${axis.padEnd(9)} ${stem}  ${why}`); continue; }
+        try {
+          src = loadSource(stem, tmp);
+          crop = bestCrop(src, intent, tmp);
+        } catch (e) {
+          const why = `source: ${e instanceof Error ? e.message : String(e)}`;
+          dropped.push([axis, stem, why]);
+          log(`  x ${axis.padEnd(9)} ${stem}  ${why}`);
+          continue;
+        }
         const srcs: Srcs = { png: crop.png, ppm: crop.ppm };
         // Every builder yields one trial except format, which yields one per budget tier.
         let results: Built[];
         try {
-          results = axis === "format" ? buildFormat(stem, srcs, crop.png, tmp)
-            : [axis === "quality" ? buildQuality(stem, srcs, crop.png, tmp)
-            : axis === "encoder" ? buildEncoder(stem, srcs, crop.png, tmp)
-            : axis === "chroma" ? buildChroma(stem, srcs, crop.png, tmp)
-            : axis === "tradeoff" ? buildTradeoff(stem, srcs, crop.png, tmp)
-            : buildResample(src, tmp)];
-        } catch (e) { results = [[null, `${e instanceof Error ? e.constructor.name : "Error"}: ${e instanceof Error ? e.message : String(e)}`]]; }
+          results =
+            axis === "format"
+              ? buildFormat(stem, srcs, crop.png, tmp)
+              : [
+                  axis === "quality"
+                    ? buildQuality(stem, srcs, crop.png, tmp)
+                    : axis === "encoder"
+                      ? buildEncoder(stem, srcs, crop.png, tmp)
+                      : axis === "chroma"
+                        ? buildChroma(stem, srcs, crop.png, tmp)
+                        : axis === "tradeoff"
+                          ? buildTradeoff(stem, srcs, crop.png, tmp)
+                          : buildResample(src, tmp),
+                ];
+        } catch (e) {
+          results = [[null, `${e instanceof Error ? e.constructor.name : "Error"}: ${e instanceof Error ? e.message : String(e)}`]];
+        }
         for (const [trial, why] of results) {
-          if (trial === null) { dropped.push([axis, stem, why]); log(`  x ${axis.padEnd(9)} ${stem}  ${why}`); continue; }
+          if (trial === null) {
+            dropped.push([axis, stem, why]);
+            log(`  x ${axis.padEnd(9)} ${stem}  ${why}`);
+            continue;
+          }
           trial.crop_score = Number(crop.score.toFixed(1));
           built.push(trial);
           log(`  · ${axis.padEnd(9)} ${stem}  ${describe(trial)}`);
@@ -1244,15 +1563,17 @@ function main(): number {
     if (emit) {
       // the work dir is deleted below, so each option's file moves into the shard
       fs.mkdirSync(path.join(emit, "files"), { recursive: true });
-      built.forEach((t, i) => t.options.forEach((o, j) => {
-        for (const k of ["path", "decoded"] as const) {
-          const from = o[k];
-          if (!from) continue;
-          const to = path.join(emit, "files", `${i}-${j}-${k}${path.extname(from)}`);
-          fs.copyFileSync(from, to);
-          o[k] = to;
-        }
-      }));
+      built.forEach((t, i) =>
+        t.options.forEach((o, j) => {
+          for (const k of ["path", "decoded"] as const) {
+            const from = o[k];
+            if (!from) continue;
+            const to = path.join(emit, "files", `${i}-${j}-${k}${path.extname(from)}`);
+            fs.copyFileSync(from, to);
+            o[k] = to;
+          }
+        }),
+      );
       fs.writeFileSync(path.join(emit, "built.json"), JSON.stringify({ built, dropped, pool: formatPool }));
       log(`\nemitted ${built.length} built trial(s) to ${emit}`);
       return 0;
@@ -1264,7 +1585,8 @@ function main(): number {
       // format keeps its quota PER TIER: ranking both tiers together on spread
       // would ship only the low tier, where differences are biggest, and that
       // is the one-budget bias the second tier exists to remove.
-      const groups = axis === "format" ? FORMAT_TIERS.map((tier) => built.filter((t) => t.axis === axis && t.tier === tier)) : [built.filter((t) => t.axis === axis)];
+      const groups =
+        axis === "format" ? FORMAT_TIERS.map((tier) => built.filter((t) => t.axis === axis && t.tier === tier)) : [built.filter((t) => t.axis === axis)];
       const each = Math.ceil(keep / groups.length);
       for (const g of groups) {
         const pool = g.sort((a, b) => rankKey(axis, b) - rankKey(axis, a));
@@ -1277,17 +1599,31 @@ function main(): number {
     log("");
     const byAxis: Record<string, number> = {};
     for (const t of trials) byAxis[t.axis] = (byAxis[t.axis] ?? 0) + 1;
-    log(`kept ${trials.length} of ${built.length} built: ${Object.entries(byAxis).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+    log(
+      `kept ${trials.length} of ${built.length} built: ${Object.entries(byAxis)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([k, v]) => `${k} ${v}`)
+        .join(", ")}`,
+    );
     log(`chroma-flavoured: ${(byAxis.chroma ?? 0) + (byAxis.tradeoff ?? 0)} of ${trials.length}`);
     const enc = trials.filter((t) => t.budget_drift !== undefined);
     if (enc.length) log(`worst equal-budget drift shipped: ${Math.max(...enc.map((t) => t.budget_drift as number))}%`);
-    if (dropped.length) { log(`dropped ${dropped.length}:`); for (const [axis, stem, why] of dropped) log(`   ${axis}/${stem}: ${why}`); }
+    if (dropped.length) {
+      log(`dropped ${dropped.length}:`);
+      for (const [axis, stem, why] of dropped) log(`   ${axis}/${stem}: ${why}`);
+    }
     logPool(formatPool);
 
     if (sheet) writeSheet(trials, sheet);
-    if (dryRun) { log("\n--dry-run: no tiles or manifest written"); return 0; }
+    if (dryRun) {
+      log("\n--dry-run: no tiles or manifest written");
+      return 0;
+    }
     if (merge) return writeMerged(merge, trials);
-    if (trials.length < 12) { log(`\nrefusing to write: only ${trials.length} trials survived, want >= 12`); return 1; }
+    if (trials.length < 12) {
+      log(`\nrefusing to write: only ${trials.length} trials survived, want >= 12`);
+      return 1;
+    }
 
     // ---- write (only now that the whole set is known good)
     const staged = stageTiles(trials);

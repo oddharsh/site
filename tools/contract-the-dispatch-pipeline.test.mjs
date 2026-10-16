@@ -17,11 +17,17 @@ const html = (body) => new Response(`<!doctype html><title>${body}</title>`, { h
 // Typed `any`: the fakes stand in for Records over every route id.
 /** @param {(call: any) => void} [record] @returns {any} */
 function fakeHandlers(record = () => {}) {
-  const fake = (id) => (request, env) => { record({ id, env, request }); return html(id); };
+  const fake = (id) => (request, env) => {
+    record({ id, env, request });
+    return html(id);
+  };
   return {
     exact: Object.fromEntries(EXACT_ROUTES.map((r) => [r.path, fake(r.path)])),
     prefix: Object.fromEntries(PREFIX_ROUTES.map((r) => [r.label, fake(r.label)])),
-    album: (album, request, env) => { record({ id: `album:${album.slug}`, env, request }); return html(album.slug); },
+    album: (album, request, env) => {
+      record({ id: `album:${album.slug}`, env, request });
+      return html(album.slug);
+    },
     calHost: fake("calHost"),
   };
 }
@@ -50,7 +56,10 @@ function rig(overrides = {}) {
   const ctx = { waitUntil() {}, passThroughOnException() {} };
   const dispatch = createDispatch(handlers);
   return {
-    calls, assetPaths, env, ctx,
+    calls,
+    assetPaths,
+    env,
+    ctx,
     ids: () => calls.map((c) => c.id),
     serve: (url, init) => dispatch.serveWorkerRequest(new Request(url, init), env, ctx),
     route: (url, init) => dispatch.route(new Request(url, init), env, ctx),
@@ -132,24 +141,28 @@ test("a 404 is recovered on the site and left alone on cal.aadhar.sh", async () 
 
 test("exact routes win first, then the prefix table in routes.ts's order", async () => {
   const r = rig();
-  const answered = async (path) => { r.calls.length = 0; await r.route(`https://aadhar.sh${path}`); return r.ids()[0] ?? "static"; };
+  const answered = async (path) => {
+    r.calls.length = 0;
+    await r.route(`https://aadhar.sh${path}`);
+    return r.ids()[0] ?? "static";
+  };
   // each pair is a path two rows could claim, and the row that must win
   const cases = [
-    ["/images/manifest.json", "/images/manifest.json"],          // exact before "/images/<index>.json"
-    ["/images/meta/XT500010.json", "/images/meta/<stem>.json"],  // before "/images/<index>.json"
+    ["/images/manifest.json", "/images/manifest.json"], // exact before "/images/<index>.json"
+    ["/images/meta/XT500010.json", "/images/meta/<stem>.json"], // before "/images/<index>.json"
     ["/images/exif.json", "/images/<index>.json"],
-    ["/images/full/XT500010.jpg", "/images/full/<key>"],         // R2 originals before the thumbnail clamp
+    ["/images/full/XT500010.jpg", "/images/full/<key>"], // R2 originals before the thumbnail clamp
     ["/images/XT500010.jpg", "/images/<thumb>"],
-    ["/rn.md", "/rn.md"],                                        // exact before "/<page>.md"
+    ["/rn.md", "/rn.md"], // exact before "/<page>.md"
     ["/garage.md", "/<page>.md"],
-    ["/serendipity/app.src.js", "/serendipity/<path>"],          // before "/<path>.src.<ext>"
-    ["/garage/horizon.src.html", "/<path>.src.<ext>"],           // before "/garage/<page>"
-    ["/garage/dyno", "/garage/dyno"],                            // exact before "/garage/<page>"
+    ["/serendipity/app.src.js", "/serendipity/<path>"], // before "/<path>.src.<ext>"
+    ["/garage/horizon.src.html", "/<path>.src.<ext>"], // before "/garage/<page>"
+    ["/garage/dyno", "/garage/dyno"], // exact before "/garage/<page>"
     ["/garage/horizon", "/garage/<page>"],
-    ["/.well-known/api-catalog", "/.well-known/api-catalog"],    // exact before "/.well-known/<card>"
+    ["/.well-known/api-catalog", "/.well-known/api-catalog"], // exact before "/.well-known/<card>"
     ["/.well-known/ard.json", "/.well-known/<card>"],
     ["/a/nav.0123abcd.js", "/a/<asset>"],
-    ["/a/nav.0123abcd.js.br", "static"],                         // the twin itself stays a plain asset
+    ["/a/nav.0123abcd.js.br", "static"], // the twin itself stays a plain asset
     ["/robots.txt", "static"],
   ];
   for (const [path, want] of cases) assert.equal(await answered(path), want, `${path} must be answered by ${want}`);
@@ -227,7 +240,12 @@ test("the per-request log line carries the MCP era, and only on MCP requests", a
   const log = console.log;
   console.log = (line) => lines.push(line);
   try {
-    const initialize = { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "old-client" } } };
+    const initialize = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "old-client" } },
+    };
     await dispatch.serveWorkerRequest(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify(initialize) }), env, ctx);
     await dispatch.serveWorkerRequest(new Request("https://aadhar.sh/reading"), env, ctx);
   } finally {

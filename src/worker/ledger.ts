@@ -26,29 +26,29 @@ import { esc, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
 import { groupThousands } from "./lib/text.ts";
 import { LEDGER_LINES_URL } from "./routes.ts";
 
-const RATE_USD = 0.01;      // the site's posted price (the /llms-full.txt cent), not a market quote
+const RATE_USD = 0.01; // the site's posted price (the /llms-full.txt cent), not a market quote
 const WINDOW_DAYS = 30;
 const DATASET = "aadhar_bot_ledger";
 
 // UA-substring → identity. Specific tokens before general ones. AadharshBot
 // is deliberately absent: lens self-scans would have us billing ourselves.
 export const CRAWLERS = [
-  ["oai-searchbot",      "OAI-SearchBot",      "OpenAI",       "answers"],
-  ["chatgpt-user",       "ChatGPT-User",       "OpenAI",       "answers"],
-  ["gptbot",             "GPTBot",             "OpenAI",       "train"],
-  ["claude-searchbot",   "Claude-SearchBot",   "Anthropic",    "answers"],
-  ["claude-user",        "Claude-User",        "Anthropic",    "answers"],
-  ["claudebot",          "ClaudeBot",          "Anthropic",    "train"],
-  ["perplexity-user",    "Perplexity-User",    "Perplexity",   "answers"],
-  ["perplexitybot",      "PerplexityBot",      "Perplexity",   "answers"],
-  ["ccbot",              "CCBot",              "Common Crawl", "train"],
-  ["bytespider",         "Bytespider",         "ByteDance",    "train"],
-  ["amazonbot",          "Amazonbot",          "Amazon",       "train"],
-  ["meta-externalagent", "Meta-ExternalAgent", "Meta",         "train"],
-  ["applebot",           "Applebot",           "Apple",        "search"],
-  ["googlebot",          "Googlebot",          "Google",       "search"],
-  ["bingbot",            "Bingbot",            "Microsoft",    "search"],
-  ["duckduckbot",        "DuckDuckBot",        "DuckDuckGo",   "search"],
+  ["oai-searchbot", "OAI-SearchBot", "OpenAI", "answers"],
+  ["chatgpt-user", "ChatGPT-User", "OpenAI", "answers"],
+  ["gptbot", "GPTBot", "OpenAI", "train"],
+  ["claude-searchbot", "Claude-SearchBot", "Anthropic", "answers"],
+  ["claude-user", "Claude-User", "Anthropic", "answers"],
+  ["claudebot", "ClaudeBot", "Anthropic", "train"],
+  ["perplexity-user", "Perplexity-User", "Perplexity", "answers"],
+  ["perplexitybot", "PerplexityBot", "Perplexity", "answers"],
+  ["ccbot", "CCBot", "Common Crawl", "train"],
+  ["bytespider", "Bytespider", "ByteDance", "train"],
+  ["amazonbot", "Amazonbot", "Amazon", "train"],
+  ["meta-externalagent", "Meta-ExternalAgent", "Meta", "train"],
+  ["applebot", "Applebot", "Apple", "search"],
+  ["googlebot", "Googlebot", "Google", "search"],
+  ["bingbot", "Bingbot", "Microsoft", "search"],
+  ["duckduckbot", "DuckDuckBot", "DuckDuckGo", "search"],
 ];
 
 export function matchCrawler(ua) {
@@ -71,7 +71,9 @@ export function countCrawlerHit(env: Env, request, response, pathname) {
       doubles: [1],
       indexes: [hit.name],
     });
-  } catch (_e) { /* the ledger is best-effort; never break a response over it */ }
+  } catch (_e) {
+    /* the ledger is best-effort; never break a response over it */
+  }
 }
 
 // ── reading the meter ───────────────────────────────────────────────
@@ -97,8 +99,7 @@ export function countCrawlerHit(env: Env, request, response, pathname) {
 // tell, which is the whole reason a `?` on a degrading secret means anything.
 type LedgerRow = { bot: string; owner: string; kind: string; hits: number };
 type LedgerRead =
-  | { ok: false; reason: string; binding_fallback?: string }
-  | { ok: true; rows: LedgerRow[]; via?: "binding" | "token"; binding_fallback?: string };
+  { ok: false; reason: string; binding_fallback?: string } | { ok: true; rows: LedgerRow[]; via?: "binding" | "token"; binding_fallback?: string };
 
 // One SQL read against Analytics Engine, shared with the speculation ledger
 // (speculation.ts), which keeps its own dataset and its own GROUP BY but the
@@ -108,13 +109,12 @@ type LedgerRead =
 // reads a cell as text with one default and never sees "[object Object]".
 export type AnalyticsCell = string | number | null | undefined;
 export type AnalyticsRow = Record<string, AnalyticsCell>;
-export const text = (v: AnalyticsCell, dflt: string): string => (v === null || v === undefined || v === "") ? dflt : String(v);
+export const text = (v: AnalyticsCell, dflt: string): string => (v === null || v === undefined || v === "" ? dflt : String(v));
 
 // `via` names the door that answered, and `binding_fallback` says why the
 // binding did not, so a reply shows which one production is using.
 export type AnalyticsRead =
-  | { ok: false; reason: string; binding_fallback?: string }
-  | { ok: true; data: AnalyticsRow[]; via: "binding" | "token"; binding_fallback?: string };
+  { ok: false; reason: string; binding_fallback?: string } | { ok: true; data: AnalyticsRow[]; via: "binding" | "token"; binding_fallback?: string };
 
 const DEADLINE_MS = 8000;
 // A dataset with zero writes ever does not exist yet: an empty ledger, not an error.
@@ -137,7 +137,9 @@ async function viaBinding(env: Env, dataset: string, build: AnalyticsQuery): Pro
   if (!env.ANALYTICS) return { ok: false, reason: "unbound" };
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
-    const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("timed out")), DEADLINE_MS); });
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("timed out")), DEADLINE_MS);
+    });
     const query = build(`events.analyticsEngine.${dataset}`, (col) => `SUM(${col})`);
     const r = await Promise.race([env.ANALYTICS.query<AnalyticsRow>({ query }), deadline]);
     return { ok: true, data: Array.isArray(r?.data) ? r.data : [], via: "binding" };
@@ -183,15 +185,23 @@ export async function analyticsSql(env: Env, dataset: string, build: AnalyticsQu
 }
 
 async function queryLedger(env: Env): Promise<LedgerRead> {
-  const read = await analyticsSql(env, DATASET, (from, sum) =>
-    `SELECT blob1 AS bot, blob2 AS owner, blob3 AS kind, ${sum("double1")} AS hits ` +
-    `FROM ${from} WHERE timestamp > NOW() - INTERVAL '${WINDOW_DAYS}' DAY ` +
-    `GROUP BY bot, owner, kind ORDER BY hits DESC`);
+  const read = await analyticsSql(
+    env,
+    DATASET,
+    (from, sum) =>
+      `SELECT blob1 AS bot, blob2 AS owner, blob3 AS kind, ${sum("double1")} AS hits ` +
+      `FROM ${from} WHERE timestamp > NOW() - INTERVAL '${WINDOW_DAYS}' DAY ` +
+      `GROUP BY bot, owner, kind ORDER BY hits DESC`,
+  );
   if (!read.ok) return read;
-  const rows = read.data.map((d) => ({
-    bot: text(d.bot, "?"), owner: text(d.owner, "?"), kind: text(d.kind, "?"),
-    hits: Math.round(Number(d.hits) || 0),
-  })).filter((d) => d.hits > 0);
+  const rows = read.data
+    .map((d) => ({
+      bot: text(d.bot, "?"),
+      owner: text(d.owner, "?"),
+      kind: text(d.kind, "?"),
+      hits: Math.round(Number(d.hits) || 0),
+    }))
+    .filter((d) => d.hits > 0);
   return { ok: true, rows, via: read.via, binding_fallback: read.binding_fallback };
 }
 
@@ -212,9 +222,7 @@ async function queryLedger(env: Env): Promise<LedgerRead> {
 // Browser Run, and KV are absent from that list, so the cost line is a
 // floor rather than a total — `services` records which families actually
 // answered, so the note can name them instead of implying completeness.
-type BillableRead =
-  | { ok: false; reason: string }
-  | { ok: true; totalUsd: number; currency: string; services: string[]; from: string; to: string };
+type BillableRead = { ok: false; reason: string } | { ok: true; totalUsd: number; currency: string; services: string[]; from: string; to: string };
 
 async function queryBillableUsage(env: Env): Promise<BillableRead> {
   if (!env.BILLING_READ_TOKEN || !env.CF_ACCOUNT_ID) return { ok: false, reason: "unconfigured" };
@@ -223,16 +231,17 @@ async function queryBillableUsage(env: Env): Promise<BillableRead> {
   const ymd = (d) => d.toISOString().slice(0, 10);
   try {
     const deadline = AbortSignal.timeout(8000);
-    const r = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/billable-usage` +
-      `?from=${ymd(start)}&to=${ymd(end)}`,
-      { headers: { authorization: "Bearer " + env.BILLING_READ_TOKEN }, signal: deadline },
-    );
+    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/billable-usage` + `?from=${ymd(start)}&to=${ymd(end)}`, {
+      headers: { authorization: "Bearer " + env.BILLING_READ_TOKEN },
+      signal: deadline,
+    });
     if (!r.ok) {
       const detail = (await r.text().catch(() => "")).slice(0, 200);
       return { ok: false, reason: "billing API " + r.status + ": " + detail };
     }
-    const j = await r.json<{ success?: boolean; result?: Array<{ ContractedCost?: number | string; BillingCurrency?: string; ServiceFamilyName?: string }> }>().catch(() => null);
+    const j = await r
+      .json<{ success?: boolean; result?: Array<{ ContractedCost?: number | string; BillingCurrency?: string; ServiceFamilyName?: string }> }>()
+      .catch(() => null);
     if (!j || j.success !== true || !Array.isArray(j.result)) return { ok: false, reason: "unexpected envelope" };
     // Sum ContractedCost, NEVER CumulatedContractedCost. The latter is a
     // running total carried on every row, so adding it up bills each charge
@@ -248,12 +257,16 @@ async function queryBillableUsage(env: Env): Promise<BillableRead> {
       if (row.ServiceFamilyName) services.add(String(row.ServiceFamilyName));
     }
     return {
-      ok: true, totalUsd: +totalUsd.toFixed(2), currency,
+      ok: true,
+      totalUsd: +totalUsd.toFixed(2),
+      currency,
       // An EXPLICIT code-unit comparator, which is exactly what a bare .sort()
       // does to strings. Spelling it out satisfies require-array-sort-compare
       // without changing the order: localeCompare would have been the reflexive
       // fix and would quietly re-order anything non-ASCII.
-      services: [...services].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), from: ymd(start), to: ymd(end),
+      services: [...services].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+      from: ymd(start),
+      to: ymd(end),
     };
   } catch (e) {
     // The reason is served publicly (/ledger.json, /speculation.json), so an
@@ -286,22 +299,42 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
   const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
   const costBlock = cost.ok
     ? {
-        available: true, total_usd: cost.totalUsd, currency: cost.currency,
-        from: cost.from, to: cost.to, service_families: cost.services,
+        available: true,
+        total_usd: cost.totalUsd,
+        currency: cost.currency,
+        from: cost.from,
+        to: cost.to,
+        service_families: cost.services,
         note: "account-wide across every product Cloudflare bills through the Billable Usage API; daily granularity, so no part of this is attributable to any crawler",
       }
     : { available: false, reason: cost.reason };
   if (!q.ok) {
     const { status, error, code } = analyticsReadError(q.reason);
-    return jsonResponse({ ok: false, error, code, reason: q.reason, binding_fallback: q.binding_fallback, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock }, status, publicJsonHeaders(status), { pretty: false });
+    return jsonResponse(
+      { ok: false, error, code, reason: q.reason, binding_fallback: q.binding_fallback, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock },
+      status,
+      publicJsonHeaders(status),
+      { pretty: false },
+    );
   }
   const { items, totalHits, totalUsd } = priced(q.rows);
-  return jsonResponse({
-    ok: true, via: q.via, binding_fallback: q.binding_fallback, window_days: WINDOW_DAYS, rate_usd: RATE_USD,
-    note: "worker-served requests only; UA-matched (self-reported identity); the rate is this site's posted price, not a market quote",
-    line_items: items, total_hits: totalHits, total_usd: totalUsd,
-    cost: costBlock,
-  }, 200, publicJsonHeaders(200), { pretty: false });
+  return jsonResponse(
+    {
+      ok: true,
+      via: q.via,
+      binding_fallback: q.binding_fallback,
+      window_days: WINDOW_DAYS,
+      rate_usd: RATE_USD,
+      note: "worker-served requests only; UA-matched (self-reported identity); the rate is this site's posted price, not a market quote",
+      line_items: items,
+      total_hits: totalHits,
+      total_usd: totalUsd,
+      cost: costBlock,
+    },
+    200,
+    publicJsonHeaders(200),
+    { pretty: false },
+  );
 }
 
 // ── /ledger — the invoice ───────────────────────────────────────────
@@ -313,10 +346,16 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
 export const LINES_URL = LEDGER_LINES_URL;
 
 export function handleLedgerLines(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  return cachedRender(request, ctx, async () => {
-    const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
-    return islandResponse(renderLedgerLines(q, cost), { "cache-control": "public, max-age=60, s-maxage=300" });
-  }, LINES_URL, env);
+  return cachedRender(
+    request,
+    ctx,
+    async () => {
+      const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
+      return islandResponse(renderLedgerLines(q, cost), { "cache-control": "public, max-age=60, s-maxage=300" });
+    },
+    LINES_URL,
+    env,
+  );
 }
 
 // The placeholder model: one unread line per crawler this ledger can name,
@@ -334,23 +373,29 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
 
   let tableRows;
   if (pending) {
-    tableRows = CRAWLERS.map(() => `
+    tableRows = CRAWLERS.map(
+      () => `
       <tr>
         <td class="mono">${dots}</td>
         <td>${dots}<br><span class="dim">${dots}</span></td>
         <td class="num">${dots}</td>
         <td class="num">$${RATE_USD.toFixed(2)}</td>
         <td class="num">${dots}</td>
-      </tr>`).join("");
+      </tr>`,
+    ).join("");
   } else if (q.ok && items.length) {
-    tableRows = items.map((r) => `
+    tableRows = items
+      .map(
+        (r) => `
       <tr>
         <td class="mono">${esc(r.bot)}</td>
         <td>${esc(r.owner)}<br><span class="dim">${esc(KIND_LABEL[r.kind] || r.kind)}</span></td>
         <td class="num">${groupThousands(r.hits)}</td>
         <td class="num">$${RATE_USD.toFixed(2)}</td>
         <td class="num">$${r.amountUsd.toFixed(2)}</td>
-      </tr>`).join("");
+      </tr>`,
+      )
+      .join("");
   } else if (q.ok) {
     tableRows = `<tr><td colspan="5" class="empty">No identified AI-crawler visits landed on worker-served routes in the last ${WINDOW_DAYS} days. The meter is new; give it time.</td></tr>`;
   } else if (q.reason === "unconfigured") {
@@ -463,7 +508,8 @@ footer a { color:var(--link); }
     path: "The Crawl Ledger",
     route: "/ledger",
     width: 760,
-    description: "An invoice for the AI crawlers that read aadhar.sh: every identified bot hit in the last 30 days, priced at one cent a page. Issued monthly, collected never.",
+    description:
+      "An invoice for the AI crawlers that read aadhar.sh: every identified bot hit in the last 30 days, priced at one cent a page. Issued monthly, collected never.",
     robots: "index, nofollow",
     head: islandPreload(LINES_URL),
     css,

@@ -49,7 +49,10 @@ test("reserved names stay, and only stylesheets are edited", () => {
 });
 
 test("a name defined in a stylesheet and in markup loses only the stylesheet copy", () => {
-  const { files, dropped } = prune([["a.css", ":root{--both:1}"], ["p.html", '<b style="--both:3"></b>']]);
+  const { files, dropped } = prune([
+    ["a.css", ":root{--both:1}"],
+    ["p.html", '<b style="--both:3"></b>'],
+  ]);
   assert.deepEqual(dropped, ["--both"]);
   assert.equal(files.get("a.css"), ":root{}");
   assert.equal(files.get("p.html"), '<b style="--both:3"></b>', "markup is never edited");
@@ -77,19 +80,21 @@ test("every definition in a built stylesheet is read somewhere", { skip: !exists
   const walk = (d) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
       const p = join(d, e.name);
-      if (e.isDirectory()) { if (!/^(i|images|og|cars|pd)$/.test(e.name)) walk(p); }
-      else if (/\.(css|html|js)$/.test(e.name) && !/\.src\.(css|html|js)$/.test(e.name)) texts.push([p, readFileSync(p, "utf8")]);
+      if (e.isDirectory()) {
+        if (!/^(i|images|og|cars|pd)$/.test(e.name)) walk(p);
+      } else if (/\.(css|html|js)$/.test(e.name) && !/\.src\.(css|html|js)$/.test(e.name)) texts.push([p, readFileSync(p, "utf8")]);
     }
   };
   walk(BUILT);
   const sheets = texts.filter(([p]) => p.endsWith(".css"));
   assert.ok(sheets.length >= 5, `only ${sheets.length} stylesheets: the walk is reading the wrong tree`);
   const unread = [];
-  for (const [p, text] of sheets) for (const name of definitionsIn(text)) {
-    if (RESERVED.has(name)) continue;
-    // every metacharacter escaped, backslash included, though names are [a-z0-9-]
-    const re = new RegExp(`${name.replace(/[\\^$.*+?()[\]{}|-]/g, (c) => `\\${c}`)}(?![a-z0-9-])(?!\\s*:)`);
-    if (!texts.some(([, t]) => re.test(t))) unread.push(`${p.slice(BUILT.length)} ${name}`);
-  }
+  for (const [p, text] of sheets)
+    for (const name of definitionsIn(text)) {
+      if (RESERVED.has(name)) continue;
+      // every metacharacter escaped, backslash included, though names are [a-z0-9-]
+      const re = new RegExp(`${name.replace(/[\\^$.*+?()[\]{}|-]/g, (c) => `\\${c}`)}(?![a-z0-9-])(?!\\s*:)`);
+      if (!texts.some(([, t]) => re.test(t))) unread.push(`${p.slice(BUILT.length)} ${name}`);
+    }
   assert.deepEqual(unread, []);
 });

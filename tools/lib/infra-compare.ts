@@ -52,9 +52,15 @@ export function collector(): Collector {
   const list: Finding[] = [];
   return {
     list,
-    fail: (message) => { list.push({ level: "fail", message }); },
-    warn: (message) => { list.push({ level: "warn", message }); },
-    pass: (message) => { list.push({ level: "pass", message }); },
+    fail: (message) => {
+      list.push({ level: "fail", message });
+    },
+    warn: (message) => {
+      list.push({ level: "warn", message });
+    },
+    pass: (message) => {
+      list.push({ level: "pass", message });
+    },
     failed: () => list.some((f) => f.level === "fail"),
   };
 }
@@ -117,8 +123,14 @@ export function compareBindings(infra, wrangler, aux: Map<string, string>): Find
 
   for (const [binding, kind, label] of wanted) {
     const found = declared.get(binding);
-    if (!found) { out.fail(`infra.json declares binding ${binding} (${kind} ${label}) that no Wrangler config binds`); continue; }
-    if (found.kind !== kind) { out.fail(`binding ${binding} is ${kind} in infra.json but ${found.kind} in the Wrangler config`); continue; }
+    if (!found) {
+      out.fail(`infra.json declares binding ${binding} (${kind} ${label}) that no Wrangler config binds`);
+      continue;
+    }
+    if (found.kind !== kind) {
+      out.fail(`binding ${binding} is ${kind} in infra.json but ${found.kind} in the Wrangler config`);
+      continue;
+    }
     if (found.name && label && found.name !== label) {
       out.fail(`binding ${binding} names ${JSON.stringify(label)} in infra.json but ${JSON.stringify(found.name)} in the Wrangler config`);
     }
@@ -159,7 +171,9 @@ export function compareAccountPins(infra, wrangler, aux: Map<string, string>): F
   const out = collector();
   const declaredAccount = wrangler.account_id;
   if (!declaredAccount) {
-    out.fail(`cloudflare.config.ts lost its accountId — wrangler picks an account by itself only while the login sees exactly one, so every non-interactive call fails the moment a second appears`);
+    out.fail(
+      `cloudflare.config.ts lost its accountId — wrangler picks an account by itself only while the login sees exactly one, so every non-interactive call fails the moment a second appears`,
+    );
     return out.list;
   }
   // TWO copies ship in the site config, not one: the deploy-time
@@ -198,7 +212,9 @@ export function compareAccountPins(infra, wrangler, aux: Map<string, string>): F
     }
   }
   if (agreed === sites.length && sites.length === 6) {
-    out.pass(`account ${declaredAccount} agrees across all 7 declarations (account_id + vars.CF_ACCOUNT_ID on both site configs, the account pin on all 3 auxiliary Workers)`);
+    out.pass(
+      `account ${declaredAccount} agrees across all 7 declarations (account_id + vars.CF_ACCOUNT_ID on both site configs, the account pin on all 3 auxiliary Workers)`,
+    );
   }
   return out.list;
 }
@@ -223,7 +239,9 @@ export function compareReleaseDeclaration(release, wrangler): Finding[] {
     out.fail(`cloudflare.config.ts names the Worker ${JSON.stringify(wrangler.name)} but infra.json's release block expects ${JSON.stringify(release.worker)}`);
   }
   if (release.build_command !== "") {
-    out.fail(`infra.json's release.build_command must stay empty (wrangler.config.ts's build.command owns the build); got ${JSON.stringify(release.build_command)}`);
+    out.fail(
+      `infra.json's release.build_command must stay empty (wrangler.config.ts's build.command owns the build); got ${JSON.stringify(release.build_command)}`,
+    );
   }
   if (!wrangler.build?.command) {
     out.fail(`wrangler.config.ts lost its build.command — the deploy would ship the readable originals`);
@@ -258,16 +276,22 @@ export function compareReleaseDeclaration(release, wrangler): Finding[] {
       out.fail(`infra.json's release.${field} must be a \`versions upload\` so a branch build never takes production traffic; got ${JSON.stringify(cmd)}`);
     }
     if (field === "deploy_command" && !/\bdeploy-wrangler\.sh deploy\b/.test(cmd)) {
-      out.fail(`infra.json's release.${field} should be a \`deploy\`: nothing ramps an uploaded version any more, so a \`versions upload\` here ships nothing; got ${JSON.stringify(cmd)}`);
+      out.fail(
+        `infra.json's release.${field} should be a \`deploy\`: nothing ramps an uploaded version any more, so a \`versions upload\` here ships nothing; got ${JSON.stringify(cmd)}`,
+      );
     }
   }
   // Preview URLs are what makes an uploaded version worth anything before it
   // serves. `preview_urls` defaults to `workers_dev`, which is false here, so
   // dropping the explicit line silently turns every preview back off.
   if (release.preview_urls !== wrangler.preview_urls) {
-    out.fail(`infra.json's release.preview_urls (${release.preview_urls}) disagrees with cloudflare.config.ts's previewUrls (${wrangler.preview_urls}) — with workers_dev false, an unset value means OFF`);
+    out.fail(
+      `infra.json's release.preview_urls (${release.preview_urls}) disagrees with cloudflare.config.ts's previewUrls (${wrangler.preview_urls}) — with workers_dev false, an unset value means OFF`,
+    );
   }
-  out.pass(`release block agrees with cloudflare.config.ts (Worker ${wrangler.name}, build owned by Wrangler, production deploys and branches only upload, previews ${wrangler.preview_urls ? "on" : "off"})`);
+  out.pass(
+    `release block agrees with cloudflare.config.ts (Worker ${wrangler.name}, build owned by Wrangler, production deploys and branches only upload, previews ${wrangler.preview_urls ? "on" : "off"})`,
+  );
   return out.list;
 }
 
@@ -328,7 +352,10 @@ export function compareDns(infra, observed: DnsObservations): Finding[] {
   for (const record of infra.dns) {
     const { name, type, match } = record;
     const got = look(name, type);
-    if (got.unreachable) { out.warn(`could not resolve ${type} ${name} (${got.unreachable.join("; ")})`); continue; }
+    if (got.unreachable) {
+      out.warn(`could not resolve ${type} ${name} (${got.unreachable.join("; ")})`);
+      continue;
+    }
 
     // The zone is DNSSEC-signed, so an unauthenticated answer means either the
     // chain broke or something is answering that should not be.
@@ -360,10 +387,16 @@ export function compareDns(infra, observed: DnsObservations): Finding[] {
       else out.pass(`${name} proxied (${got.answers.length}x A, ${v6.answers?.length ?? "?"}x AAAA)`);
     } else if (match === "sameAs") {
       const base = look(record.expect, "A").answers;
-      if (!base?.length) { out.warn(`could not compare ${name} against ${record.expect} (no baseline answers)`); continue; }
+      if (!base?.length) {
+        out.warn(`could not compare ${name} against ${record.expect} (no baseline answers)`);
+        continue;
+      }
       const same = base.length === got.answers.length && base.every((v, i) => v === got.answers[i]);
       if (same) out.pass(`${name} resolves to the same edge as ${record.expect}`);
-      else out.fail(`${name} no longer resolves to the same edge as ${record.expect}\n      ${record.expect}: ${base.join(" | ")}\n      ${name}: ${got.answers.join(" | ") || "(none)"}`);
+      else
+        out.fail(
+          `${name} no longer resolves to the same edge as ${record.expect}\n      ${record.expect}: ${base.join(" | ")}\n      ${name}: ${got.answers.join(" | ") || "(none)"}`,
+        );
     } else {
       out.fail(`infra.json: unknown match mode ${JSON.stringify(match)} on ${type} ${name}`);
     }
@@ -389,8 +422,7 @@ export function compareDns(infra, observed: DnsObservations): Finding[] {
 
 // ----------------------------------------------------------- tier: edge ----
 
-export type EarlyDataResult = { skip: string; accepted?: undefined; attempts?: undefined }
-  | { accepted: boolean; attempts: number; skip?: undefined };
+export type EarlyDataResult = { skip: string; accepted?: undefined; attempts?: undefined } | { accepted: boolean; attempts: number; skip?: undefined };
 
 /** What the edge port saw for one declared check. The first two arms are the
  *  failed reads: a target that could not be resolved to a URL, and a request
@@ -498,7 +530,10 @@ export function compareEdgeCheck(check, seen: EdgeObservation | undefined, opts:
       const r = expect("early-data").result;
       if (r.skip) out.warn(`edge check ${check.id} skipped: ${r.skip}`);
       else if (r.accepted) out.pass(`edge ${check.id}: TLS early data accepted (0-RTT on)`);
-      else if (opts.hostedRunner) out.warn(`edge check ${check.id}: TLS early data rejected on ${r.attempts} spaced resumptions from a hosted runner; not a drift here (three false rejections on record from this network), confirm from a workstation with \`bun run infra:check\``);
+      else if (opts.hostedRunner)
+        out.warn(
+          `edge check ${check.id}: TLS early data rejected on ${r.attempts} spaced resumptions from a hosted runner; not a drift here (three false rejections on record from this network), confirm from a workstation with \`bun run infra:check\``,
+        );
       else drift(`${check.id}: TLS early data rejected on ${r.attempts} spaced resumptions — ${check.why.split(".")[0]}`);
       return out.list;
     }
@@ -553,9 +588,7 @@ export function compareEdge(edge, observed: Map<string, EdgeObservation>, opts: 
  *  with redirect: "manual". `unmeasured` covers both an answer Cloudflare's
  *  edge didn't serve (no cf-ray) and a request that threw. */
 export type AgentAnswer =
-  | { kind: "unmeasured"; reason: string }
-  | { kind: "redirect"; status: number; location: string }
-  | { kind: "answer"; contentType: string };
+  { kind: "unmeasured"; reason: string } | { kind: "redirect"; status: number; location: string } | { kind: "answer"; contentType: string };
 
 /** Fewer agents:true surfaces than this means the registry stopped parsing,
  *  not that the site shrank. */
@@ -596,7 +629,10 @@ export function compareAgentCoverage<T extends AgentSurface>(pages: T[], answers
   }
   if (unmeasured.length) out.warn(`agent markdown coverage left ${unmeasured.length}/${pages.length} surfaces unmeasured: ${unmeasured.join(", ")}`);
   const measured = pages.length - unmeasured.length;
-  if (gaps.length) out.warn(`agent markdown coverage: ${measured - gaps.length}/${measured} measured agents:true surfaces answer Accept: text/markdown in their declared representation. No twin: ${gaps.join(", ")}. Give each one a twin, declare the representation its route serves (mimeType), or drop flags.agents so the registry stops advertising it`);
+  if (gaps.length)
+    out.warn(
+      `agent markdown coverage: ${measured - gaps.length}/${measured} measured agents:true surfaces answer Accept: text/markdown in their declared representation. No twin: ${gaps.join(", ")}. Give each one a twin, declare the representation its route serves (mimeType), or drop flags.agents so the registry stops advertising it`,
+    );
   else if (!unmeasured.length) out.pass(`agent markdown coverage: all ${pages.length} agents:true surfaces answer an agent in their declared representation`);
   return out.list;
 }
@@ -616,8 +652,7 @@ export function sectionFailure(label: string, scope: string, error: string): Fin
   const authy = /\b(10000|9106|9109)\b|authentication|unauthorized|forbidden/i.test(error);
   return {
     level: "warn",
-    message: authy ? `${label} unchecked: token is missing ${scope} (${error})`
-                   : `${label} unchecked: ${error}`,
+    message: authy ? `${label} unchecked: token is missing ${scope} (${error})` : `${label} unchecked: ${error}`,
   };
 }
 
@@ -666,7 +701,8 @@ export function compareD1Databases(wrangler, databases: Read<any[]> | undefined)
     const dbs = new Map(d1.map((d) => [d.uuid, d.name])) as Map<string, string>;
     for (const d of wrangler.d1_databases || []) {
       if (!dbs.has(d.database_id)) out.fail(`D1 binding ${d.binding} points at database ${d.database_id}, which does not exist`);
-      else if (dbs.get(d.database_id) !== d.database_name) out.fail(`D1 binding ${d.binding} expects ${d.database_name} but ${d.database_id} is named ${dbs.get(d.database_id)}`);
+      else if (dbs.get(d.database_id) !== d.database_name)
+        out.fail(`D1 binding ${d.binding} expects ${d.database_name} but ${d.database_id} is named ${dbs.get(d.database_id)}`);
       else out.pass(`D1 ${d.binding} resolves (${d.database_name})`);
     }
   });
@@ -707,7 +743,7 @@ export function compareWorkersBuilds(release, builds: Read<WorkersBuildsObservat
     // The docs show a bare trigger object; a list endpoint may wrap it. Accept
     // either rather than guessing which, and say so if it is neither.
     const wrapped = raw as { triggers?: unknown } | null | undefined;
-    const triggers: any[] | null = Array.isArray(raw) ? raw : (Array.isArray(wrapped?.triggers) ? wrapped.triggers : null);
+    const triggers: any[] | null = Array.isArray(raw) ? raw : Array.isArray(wrapped?.triggers) ? wrapped.triggers : null;
     if (!triggers) {
       out.warn(`release config unchecked: unexpected triggers response shape (${JSON.stringify(raw).slice(0, 160)})`);
       return;
@@ -723,19 +759,23 @@ export function compareWorkersBuilds(release, builds: Read<WorkersBuildsObservat
     }
 
     const checks = [
-      ["deploy_command",  release.deploy_command],
-      ["build_command",   release.build_command],
-      ["root_directory",  release.root_directory],
+      ["deploy_command", release.deploy_command],
+      ["build_command", release.build_command],
+      ["root_directory", release.root_directory],
     ];
     for (const [field, expected] of checks) {
       const live = prod[field] ?? "";
       // root_directory is written "." here and may come back "" or "/" upstream;
       // treat those three as the same statement about a monorepo root.
-      const same = field === "root_directory"
-        ? [".", "", "/"].includes(String(live)) === [".", "", "/"].includes(String(expected))
-        : String(live).trim() === String(expected).trim();
+      const same =
+        field === "root_directory"
+          ? [".", "", "/"].includes(String(live)) === [".", "", "/"].includes(String(expected))
+          : String(live).trim() === String(expected).trim();
       if (same) out.pass(`Workers Builds ${field} matches infra.json (${JSON.stringify(live)})`);
-      else out.fail(`Workers Builds ${field} is ${JSON.stringify(live)} but infra.json declares ${JSON.stringify(expected)} — the dashboard is the live value, so fix it there`);
+      else
+        out.fail(
+          `Workers Builds ${field} is ${JSON.stringify(live)} but infra.json declares ${JSON.stringify(expected)} — the dashboard is the live value, so fix it there`,
+        );
     }
 
     // The non-production trigger, held to the SAME standard as the production
@@ -752,7 +792,9 @@ export function compareWorkersBuilds(release, builds: Read<WorkersBuildsObservat
       // Declared but absent. Nothing PUBLISHES in this direction, so it is not
       // dangerous, and a trigger list whose shape we guessed at is the case the
       // section header says degrades to a note. Say it and move on.
-      out.warn(`release config partly unchecked: infra.json declares a non-production deploy command but Workers Builds returned no second trigger (branch builds off, or the trigger list is shaped differently than assumed)`);
+      out.warn(
+        `release config partly unchecked: infra.json declares a non-production deploy command but Workers Builds returned no second trigger (branch builds off, or the trigger list is shaped differently than assumed)`,
+      );
     } else if (expectedPreview && preview) {
       const live = String(preview.deploy_command ?? "").trim();
       if (live === expectedPreview.trim()) {
@@ -767,7 +809,9 @@ export function compareWorkersBuilds(release, builds: Read<WorkersBuildsObservat
           : !/\bversions upload\b/.test(live)
             ? `it is not a \`versions upload\`, so a branch build would take production traffic on push`
             : `the commands differ in some other way, and the dashboard is what actually runs`;
-        out.fail(`Workers Builds non_production_deploy_command is ${JSON.stringify(live)} but infra.json declares ${JSON.stringify(expectedPreview)} — ${why}. The dashboard is the live value, so fix it there`);
+        out.fail(
+          `Workers Builds non_production_deploy_command is ${JSON.stringify(live)} but infra.json declares ${JSON.stringify(expectedPreview)} — ${why}. The dashboard is the live value, so fix it there`,
+        );
       }
     }
   });
@@ -833,7 +877,9 @@ export function compareTokens(infra, accountId: string, tokens: Read<any[]> | un
       if (!live) {
         // A rename is indistinguishable from a deletion from here, and both are
         // worth a look, so say what was searched for rather than guessing which.
-        out.warn(`token ${want.name} (${want.env}) is declared but no account token carries that name — renamed, deleted, or user-owned rather than account-owned`);
+        out.warn(
+          `token ${want.name} (${want.env}) is declared but no account token carries that name — renamed, deleted, or user-owned rather than account-owned`,
+        );
         continue;
       }
 
@@ -848,7 +894,10 @@ export function compareTokens(infra, accountId: string, tokens: Read<any[]> | un
       //    scope to infra.json, which is the exact change worth catching.
       if (!want.may_write) {
         const offenders = groups.filter((g) => writeGroup.test(g));
-        if (offenders.length) out.fail(`token ${want.name} (${want.env}) is declared read-only but carries ${offenders.join(", ")} — this credential is a GitHub secret on a PUBLIC repository`);
+        if (offenders.length)
+          out.fail(
+            `token ${want.name} (${want.env}) is declared read-only but carries ${offenders.join(", ")} — this credential is a GitHub secret on a PUBLIC repository`,
+          );
         else out.pass(`token ${want.name} carries no write permission (${groups.length} groups, all read)`);
       }
 
@@ -866,20 +915,29 @@ export function compareTokens(infra, accountId: string, tokens: Read<any[]> | un
           // A guard pointed at nothing that reports success is the silent pass
           // this file exists to refuse. Cloudflare's API name for the granular
           // Workers roles is unmeasured here, so a rename can do exactly that.
-          out.fail(`token ${want.name} (${want.env}) declares resource_scoped_group /${want.resource_scoped_group}/i but no permission group on it matches — the scoping guard is pointed at nothing. Observed ${JSON.stringify(groups)}; correct the pattern in infra.json`);
+          out.fail(
+            `token ${want.name} (${want.env}) declares resource_scoped_group /${want.resource_scoped_group}/i but no permission group on it matches — the scoping guard is pointed at nothing. Observed ${JSON.stringify(groups)}; correct the pattern in infra.json`,
+          );
         } else {
           const wide = guarded.filter((p) => Object.keys(p.resources || {}).includes(accountResource));
-          if (wide.length) out.fail(`token ${want.name} (${want.env}) is declared resource-scoped but its Workers policy names the whole account (${accountResource}), so it can write to every Worker rather than just ${infra.release.worker}`);
+          if (wide.length)
+            out.fail(
+              `token ${want.name} (${want.env}) is declared resource-scoped but its Workers policy names the whole account (${accountResource}), so it can write to every Worker rather than just ${infra.release.worker}`,
+            );
           else out.pass(`token ${want.name}: Workers grant is scoped below the account (${guarded.flatMap((p) => Object.keys(p.resources || {})).join(", ")})`);
         }
       }
 
       // 3. Report the shape, so infra.json can be corrected from evidence.
       if (!want.resource_key) out.warn(`token ${want.name}: resource_key is unrecorded in infra.json — observed ${JSON.stringify(resources)}`);
-      else if (!resources.includes(want.resource_key)) out.warn(`token ${want.name}: declared resource_key ${want.resource_key} is not among the observed ${JSON.stringify(resources)}`);
+      else if (!resources.includes(want.resource_key))
+        out.warn(`token ${want.name}: declared resource_key ${want.resource_key} is not among the observed ${JSON.stringify(resources)}`);
 
       const missing = want.permission_groups.filter((g) => !groups.some((n) => n.toLowerCase() === g.toLowerCase()));
-      if (missing.length) out.warn(`token ${want.name}: declared groups ${JSON.stringify(missing)} were not found by that name — observed ${JSON.stringify(groups)}. These are dashboard labels and the API may spell them differently, so correct infra.json from the observed list rather than treating this as drift`);
+      if (missing.length)
+        out.warn(
+          `token ${want.name}: declared groups ${JSON.stringify(missing)} were not found by that name — observed ${JSON.stringify(groups)}. These are dashboard labels and the API may spell them differently, so correct infra.json from the observed list rather than treating this as drift`,
+        );
     }
   });
 }
@@ -894,7 +952,9 @@ export type ZoneSettingObservation = { zoneId: string | null; setting?: { value?
 // ALWAYS DEGRADES TO A NOTE and a workstation run asserts it.
 export function compareZoneSetting(
   section_: { label: string; scope: string; short: string },
-  declared, zoneName: string, observed: Read<ZoneSettingObservation> | undefined,
+  declared,
+  zoneName: string,
+  observed: Read<ZoneSettingObservation> | undefined,
 ): Finding[] {
   if (!declared) return [];
   return section(section_.label, section_.scope, observed, ({ zoneId, setting }, out) => {
@@ -919,7 +979,11 @@ export const ZERO_RTT_SECTION = { label: "0-RTT connection resumption", scope: "
 // Use-As-Dictionary and refuses to cache dcb/dcz, which would drop every
 // dictionary tier to plain brotli without an error. infra.json under
 // zone.shared_dictionary says what is and is not measured about that.
-export const SHARED_DICTIONARY_SECTION = { label: "shared dictionaries passthrough", scope: "Zone:Zone Settings:Read and Zone:Zone:Read", short: "shared dictionaries" };
+export const SHARED_DICTIONARY_SECTION = {
+  label: "shared dictionaries passthrough",
+  scope: "Zone:Zone Settings:Read and Zone:Zone:Read",
+  short: "shared dictionaries",
+};
 
 /** The version-affinity port's answer. `ruleset: null` is the phase entrypoint
  *  answering 404, which is a definite statement that the phase holds no
@@ -956,8 +1020,7 @@ export function compareVersionAffinity(declared, zoneName: string, observed: Rea
     }
 
     const wanted = declared.header.toLowerCase();
-    const rule = (ruleset.rules || []).find((r) =>
-      Object.keys(r?.action_parameters?.headers || {}).some((h) => h.toLowerCase() === wanted));
+    const rule = (ruleset.rules || []).find((r) => Object.keys(r?.action_parameters?.headers || {}).some((h) => h.toLowerCase() === wanted));
     if (!rule) {
       out.fail(`no Transform Rule on ${zoneName} sets ${declared.header}. ${declared.why}`);
       return;
@@ -971,8 +1034,7 @@ export function compareVersionAffinity(declared, zoneName: string, observed: Rea
       return;
     }
 
-    const entry = Object.entries(rule.action_parameters.headers)
-      .find(([h]) => h.toLowerCase() === wanted)![1] as { value?: string; expression?: string };
+    const entry = Object.entries(rule.action_parameters.headers).find(([h]) => h.toLowerCase() === wanted)![1] as { value?: string; expression?: string };
 
     // "Set dynamic" comes back as an `expression`; "Set static" comes back as a
     // `value`. The difference is not cosmetic here: a static key is the SAME key
@@ -980,11 +1042,15 @@ export function compareVersionAffinity(declared, zoneName: string, observed: Rea
     // traffic on one side of a split that reports itself as 10%. That is worse
     // than having no affinity at all, so it gets its own failure.
     if (entry.value !== undefined && entry.expression === undefined) {
-      out.fail(`${declared.header} is set STATICALLY to ${JSON.stringify(entry.value)} on ${zoneName}, so every visitor shares one affinity key and a ramp puts all traffic on one version regardless of the percentages. It must be "Set dynamic" with ${JSON.stringify(declared.value)}`);
+      out.fail(
+        `${declared.header} is set STATICALLY to ${JSON.stringify(entry.value)} on ${zoneName}, so every visitor shares one affinity key and a ramp puts all traffic on one version regardless of the percentages. It must be "Set dynamic" with ${JSON.stringify(declared.value)}`,
+      );
       return;
     }
     if (String(entry.expression || "").trim() !== String(declared.value).trim()) {
-      out.fail(`${declared.header} is derived from ${JSON.stringify(entry.expression)} but infra.json declares ${JSON.stringify(declared.value)}. The dashboard is the live value, so fix it there`);
+      out.fail(
+        `${declared.header} is derived from ${JSON.stringify(entry.expression)} but infra.json declares ${JSON.stringify(declared.value)}. The dashboard is the live value, so fix it there`,
+      );
       return;
     }
 
@@ -996,8 +1062,14 @@ export function compareVersionAffinity(declared, zoneName: string, observed: Rea
     // the split take from a single IP, and a rule that overwrites those keys
     // collapses every sample onto one version, which the ramp reads as dead and
     // aborts on. Fails closed, and loudly, but it aborts healthy releases.
-    if (!String(rule.expression || "").toLowerCase().includes(wanted)) {
-      out.fail(`the ${declared.header} rule matches on ${JSON.stringify(rule.expression)}, which does not exempt requests that already carry the header. It will overwrite the per-request keys deploy:promote sends, and every ramp step will read as "the ramp did not take". infra.json declares: ${declared.expression}`);
+    if (
+      !String(rule.expression || "")
+        .toLowerCase()
+        .includes(wanted)
+    ) {
+      out.fail(
+        `the ${declared.header} rule matches on ${JSON.stringify(rule.expression)}, which does not exempt requests that already carry the header. It will overwrite the per-request keys deploy:promote sends, and every ramp step will read as "the ramp did not take". infra.json declares: ${declared.expression}`,
+      );
       return;
     }
 
@@ -1103,7 +1175,9 @@ export function compareRulesets(repo, core: Read<RulesetsObservation> | undefine
     // the actors the rule is aimed at.
     if (detail.bypass_actors?.length) {
       const who = detail.bypass_actors.map((a) => `${a.actor_type}#${a.actor_id} (${a.bypass_mode})`).join(", ");
-      out.fail(`${at} has ${detail.bypass_actors.length} bypass actor(s): ${who}. Every push here uses the owner's credentials, so a bypass exempts the actors the rule is for`);
+      out.fail(
+        `${at} has ${detail.bypass_actors.length} bypass actor(s): ${who}. Every push here uses the owner's credentials, so a bypass exempts the actors the rule is for`,
+      );
     }
 
     const include = detail.conditions?.ref_name?.include || [];
@@ -1115,7 +1189,8 @@ export function compareRulesets(repo, core: Read<RulesetsObservation> | undefine
     const missing = want.rules.filter((r) => !types.has(r));
     if (missing.length) out.fail(`${at} lost rule(s) ${missing.join(", ")}`);
     const extra = detail.rules.map((r) => r.type).filter((t) => !want.rules.includes(t));
-    if (extra.length) out.warn(`${at} carries undeclared rule(s) ${extra.join(", ")}: stricter than declared, but declare them so this file stays the source of truth`);
+    if (extra.length)
+      out.warn(`${at} carries undeclared rule(s) ${extra.join(", ")}: stricter than declared, but declare them so this file stays the source of truth`);
 
     // A forbidden rule is not an oversight in the declaration. `production`
     // must carry no pull_request rule, because promote-production.yml moves
@@ -1129,7 +1204,9 @@ export function compareRulesets(repo, core: Read<RulesetsObservation> | undefine
     if (want.required_approving_review_count !== undefined && types.has("pull_request")) {
       const got = rule("pull_request").required_approving_review_count;
       if (got !== want.required_approving_review_count) {
-        out.fail(`${at} requires ${got} approving review(s), declared ${want.required_approving_review_count}. GitHub refuses to let anyone approve their own PR, so a solo repo above 0 can never merge`);
+        out.fail(
+          `${at} requires ${got} approving review(s), declared ${want.required_approving_review_count}. GitHub refuses to let anyone approve their own PR, so a solo repo above 0 can never merge`,
+        );
       }
     }
 
@@ -1140,11 +1217,15 @@ export function compareRulesets(repo, core: Read<RulesetsObservation> | undefine
         const hit = got.find((c) => c.context === req.context);
         if (!hit) out.fail(`${at} no longer requires the ${JSON.stringify(req.context)} check`);
         else if (hit.integration_id !== req.integration_id) {
-          out.fail(`${at}'s ${JSON.stringify(req.context)} check is pinned to integration_id ${hit.integration_id}, declared ${req.integration_id}. Unpinned, any caller of the commit-status API could satisfy it`);
+          out.fail(
+            `${at}'s ${JSON.stringify(req.context)} check is pinned to integration_id ${hit.integration_id}, declared ${req.integration_id}. Unpinned, any caller of the commit-status API could satisfy it`,
+          );
         }
       }
       if (params.strict_required_status_checks_policy !== want.strict_required_status_checks_policy) {
-        out.fail(`${at}'s strict_required_status_checks_policy is ${params.strict_required_status_checks_policy}, declared ${want.strict_required_status_checks_policy}. Strict makes every Dependabot PR churn a rebase on each unrelated merge`);
+        out.fail(
+          `${at}'s strict_required_status_checks_policy is ${params.strict_required_status_checks_policy}, declared ${want.strict_required_status_checks_policy}. Strict makes every Dependabot PR churn a rebase on each unrelated merge`,
+        );
       }
     }
   }
@@ -1153,7 +1234,9 @@ export function compareRulesets(repo, core: Read<RulesetsObservation> | undefine
     out.warn(`${slug} carries an undeclared ruleset ${JSON.stringify(stray)}: add it to infra.json's repository block or delete it`);
   }
 
-  out.pass(`${slug} is ${meta.visibility} and its ${repo.rulesets.length} declared ruleset(s) match, with no bypass actors${opts.authenticated ? "" : " (unauthenticated read)"}`);
+  out.pass(
+    `${slug} is ${meta.visibility} and its ${repo.rulesets.length} declared ruleset(s) match, with no bypass actors${opts.authenticated ? "" : " (unauthenticated read)"}`,
+  );
   return { findings: out.list, proceed: true };
 }
 
@@ -1188,14 +1271,18 @@ export function compareLabels(repo, labels: Read<any[]> | undefined, opts: Repos
     const got = byName.get(want.name);
     byName.delete(want.name);
     if (!got) {
-      out.fail(`${slug} has no label ${JSON.stringify(want.name)}. Run \`bun run labels:sync -- --confirm\`: until then triage.yml will invent it with a colour nobody chose, and any workflow passing it to \`gh --label\` fails outright`);
+      out.fail(
+        `${slug} has no label ${JSON.stringify(want.name)}. Run \`bun run labels:sync -- --confirm\`: until then triage.yml will invent it with a colour nobody chose, and any workflow passing it to \`gh --label\` fails outright`,
+      );
       continue;
     }
     if (got.color.toLowerCase() !== want.color.toLowerCase()) {
       out.fail(`label ${JSON.stringify(want.name)} is #${got.color}, declared #${want.color} (\`bun run labels:sync -- --confirm\`)`);
     }
     if ((got.description ?? "") !== want.description) {
-      out.fail(`label ${JSON.stringify(want.name)} reads ${JSON.stringify(got.description ?? "")}, declared ${JSON.stringify(want.description)} (\`bun run labels:sync -- --confirm\`)`);
+      out.fail(
+        `label ${JSON.stringify(want.name)} reads ${JSON.stringify(got.description ?? "")}, declared ${JSON.stringify(want.description)} (\`bun run labels:sync -- --confirm\`)`,
+      );
     }
   }
 
@@ -1204,11 +1291,15 @@ export function compareLabels(repo, labels: Read<any[]> | undefined, opts: Repos
   // check red for something nobody chose.
   const strays = [...byName.keys()];
   if (strays.length) {
-    out.warn(`${slug} carries ${strays.length} undeclared label(s): ${strays.join(", ")}. Declare them in infra.json or remove them with \`bun run labels:sync -- --confirm --prune\` (a deletion strips the label from every issue that carried it)`);
+    out.warn(
+      `${slug} carries ${strays.length} undeclared label(s): ${strays.join(", ")}. Declare them in infra.json or remove them with \`bun run labels:sync -- --confirm --prune\` (a deletion strips the label from every issue that carried it)`,
+    );
   }
 
   if (out.failed()) return out.list;
-  out.pass(`${slug}'s ${triage.labels.length} declared label(s) match on name, colour and description${strays.length ? `, with ${strays.length} stray` : ""}${opts.authenticated ? "" : " (unauthenticated read)"}`);
+  out.pass(
+    `${slug}'s ${triage.labels.length} declared label(s) match on name, colour and description${strays.length ? `, with ${strays.length} stray` : ""}${opts.authenticated ? "" : " (unauthenticated read)"}`,
+  );
   return out.list;
 }
 
@@ -1253,7 +1344,9 @@ export function compareCodeScanning(repo, setup: Read<any> | undefined): Finding
   // moved to checkCodeqlWorkflow, which needs no credential.
   if (want.mode === "advanced") {
     if (live.state !== want.default_setup_state) {
-      out.fail(`CodeQL default setup is ${JSON.stringify(live.state)}, declared ${JSON.stringify(want.default_setup_state)}. With ${want.workflow} committed, both being on double-scans every commit and files duplicate alerts`);
+      out.fail(
+        `CodeQL default setup is ${JSON.stringify(live.state)}, declared ${JSON.stringify(want.default_setup_state)}. With ${want.workflow} committed, both being on double-scans every commit and files duplicate alerts`,
+      );
       return out.list;
     }
     out.pass(`CodeQL default setup is ${live.state}, leaving ${want.workflow} the only scanner`);
@@ -1263,7 +1356,9 @@ export function compareCodeScanning(repo, setup: Read<any> | undefined): Finding
   // state first. A scanner that is simply off reports nothing, which reads
   // exactly like a clean scan, so every field below is moot if this drifted.
   if (live.state !== want.state) {
-    out.fail(`CodeQL default setup is ${JSON.stringify(live.state)}, declared ${JSON.stringify(want.state)}. A disabled scanner reports no findings, which looks identical to a clean scan`);
+    out.fail(
+      `CodeQL default setup is ${JSON.stringify(live.state)}, declared ${JSON.stringify(want.state)}. A disabled scanner reports no findings, which looks identical to a clean scan`,
+    );
     return out.list;
   }
 
@@ -1281,7 +1376,9 @@ export function compareCodeScanning(repo, setup: Read<any> | undefined): Finding
   }
 
   if (live.threat_model !== want.threat_model) {
-    out.fail(`CodeQL threat_model is ${JSON.stringify(live.threat_model)}, declared ${JSON.stringify(want.threat_model)}. MAINTENANCE.md argues rust and python are droppable BECAUSE the model is remote, so this change invalidates that reasoning`);
+    out.fail(
+      `CodeQL threat_model is ${JSON.stringify(live.threat_model)}, declared ${JSON.stringify(want.threat_model)}. MAINTENANCE.md argues rust and python are droppable BECAUSE the model is remote, so this change invalidates that reasoning`,
+    );
   }
 
   if (live.query_suite !== want.query_suite) {
@@ -1449,7 +1546,9 @@ export function compareSecretScanning(repo, meta): Finding[] {
   }
 
   if (out.failed()) return out.list;
-  out.pass(`security_and_analysis matches on all ${fields.length} declared setting(s): ${fields.map((k) => `${k.replace(/^secret_scanning_?/, "") || "secret_scanning"} ${live[k].status}`).join(", ")}`);
+  out.pass(
+    `security_and_analysis matches on all ${fields.length} declared setting(s): ${fields.map((k) => `${k.replace(/^secret_scanning_?/, "") || "secret_scanning"} ${live[k].status}`).join(", ")}`,
+  );
   return out.list;
 }
 

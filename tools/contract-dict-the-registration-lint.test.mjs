@@ -1,10 +1,6 @@
 // ── /dict — the registration lint ───────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  assert,
-  terminalGet,
-  test,
-} from "./contract-shared.ts";
+import { assert, terminalGet, test } from "./contract-shared.ts";
 
 // ── /dict — the registration lint ───────────────────────────────
 // The rules ARE the product, and they are asserted as pure functions because
@@ -26,7 +22,10 @@ test("each Chromium veto is caught on its own, and a clean dictionary passes", a
   ]) {
     const audit = auditDictionary({ ...base, "cache-control": cc });
     assert.equal(audit.registers, false, `${cc} should not register`);
-    assert.ok(audit.vetoes.some((v) => v.id === expected), `${cc} should be vetoed by ${expected}`);
+    assert.ok(
+      audit.vetoes.some((v) => v.id === expected),
+      `${cc} should be vetoed by ${expected}`,
+    );
   }
 
   // Measured 2026-09-23 in Chrome 152: must-revalidate beside a positive max-age
@@ -37,7 +36,10 @@ test("each Chromium veto is caught on its own, and a clean dictionary passes", a
   assert.equal(fresh.results.find((r) => r.id === "must-revalidate")?.verdict, "ok");
   const cancelled = auditDictionary({ ...base, "cache-control": "max-age=3600, must-revalidate, stale-while-revalidate=86400" });
   assert.equal(cancelled.registers, true);
-  assert.ok(cancelled.warns.some((w) => w.id === "must-revalidate"), "the cancelled swr window is worth a warning");
+  assert.ok(
+    cancelled.warns.some((w) => w.id === "must-revalidate"),
+    "the cancelled swr window is worth a warning",
+  );
   assert.ok(cancelled.warns.some((w) => w.id === "lifetime"));
 
   // Missing the header at all is its own veto, not a pass by omission.
@@ -57,12 +59,12 @@ test("the lint knows the dictionary's life is max-age plus the SWR window", asyn
   // dictionary with a year of max-age and no stale-while-revalidate is usable
   // for zero seconds past freshness.
   const { auditDictionary } = await import("../src/worker/dict.ts");
-  const noSwr = auditDictionary({ "use-as-dictionary": "match=\"/*\"", "cache-control": "public, max-age=31536000, immutable" });
+  const noSwr = auditDictionary({ "use-as-dictionary": 'match="/*"', "cache-control": "public, max-age=31536000, immutable" });
   assert.equal(noSwr.registers, true, "no SWR is a warning, not a veto");
   assert.ok(noSwr.warns.some((w) => w.id === "lifetime"));
 
   // s-maxage is a shared-cache directive and buys a browser nothing here.
-  const shared = auditDictionary({ "use-as-dictionary": "match=\"/*\"", "cache-control": "public, s-maxage=99999, stale-while-revalidate=600" });
+  const shared = auditDictionary({ "use-as-dictionary": 'match="/*"', "cache-control": "public, s-maxage=99999, stale-while-revalidate=600" });
   assert.ok(shared.warns.some((w) => w.id === "s-maxage"));
 });
 
@@ -82,7 +84,7 @@ test("a delta served without vary: available-dictionary is flagged as a decode f
 test("dict refuses a private target before fetching, and explains itself with none", async () => {
   const idle = await (await terminalGet("/dict?plain=1")).text();
   assert.match(idle, /fail silently/);
-  assert.match(idle, /SILENTLY IGNORES/);   // the node:zlib finding is on the page, not just in source
+  assert.match(idle, /SILENTLY IGNORES/); // the node:zlib finding is on the page, not just in source
   const refused = await (await terminalGet("/dict?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
   assert.match(refused, /refused/);
 });

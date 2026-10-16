@@ -16,66 +16,100 @@
 
 const IDENTITIES = [
   // controls first; the report refuses to grade a target whose controls failed.
-  { key: "chrome",  label: "Chrome",       owner: "a browser", role: "control",
-    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" },
-  { key: "curl",    label: "curl",         owner: "a plain HTTP client", role: "control",
-    ua: "curl/8.7.1" },
+  {
+    key: "chrome",
+    label: "Chrome",
+    owner: "a browser",
+    role: "control",
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+  },
+  { key: "curl", label: "curl", owner: "a plain HTTP client", role: "control", ua: "curl/8.7.1" },
 
   // The honest row, and the survey's own disclosure. It claims nothing it cannot
   // back and points at the page that publishes these numbers. Read it against
   // `googlebot` on en.wikipedia.org: claiming NOTHING is served, and claiming a
   // verifiable identity from an IP that cannot back it is refused.
-  { key: "honest", label: "ua-survey (ours)", owner: "aadhar.sh", role: "control",
-    ua: "aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)" },
+  { key: "honest", label: "ua-survey (ours)", owner: "aadhar.sh", role: "control", ua: "aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)" },
 
-  { key: "bingbot", label: "Bingbot", owner: "Microsoft", role: "search",
-    ua: "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)" },
-  { key: "googlebot", label: "Googlebot",  owner: "Google",    role: "search",
-    ua: "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" },
-  { key: "applebot",  label: "Applebot",  owner: "Apple",    role: "search",
-    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)" },
-  { key: "duckduckbot", label: "DuckDuckBot", owner: "DuckDuckGo", role: "search",
-    ua: "DuckDuckBot/1.1; (+http://duckduckgo.com/duckduckbot.html)" },
-  { key: "amazonbot", label: "Amazonbot", owner: "Amazon", role: "train",
-    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.214 Safari/537.36 (compatible; Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot)" },
-  { key: "facebookbot", label: "facebookexternalhit", owner: "Meta", role: "answers",
-    ua: "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" },
+  { key: "bingbot", label: "Bingbot", owner: "Microsoft", role: "search", ua: "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)" },
+  { key: "googlebot", label: "Googlebot", owner: "Google", role: "search", ua: "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" },
+  {
+    key: "applebot",
+    label: "Applebot",
+    owner: "Apple",
+    role: "search",
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)",
+  },
+  { key: "duckduckbot", label: "DuckDuckBot", owner: "DuckDuckGo", role: "search", ua: "DuckDuckBot/1.1; (+http://duckduckgo.com/duckduckbot.html)" },
+  {
+    key: "amazonbot",
+    label: "Amazonbot",
+    owner: "Amazon",
+    role: "train",
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.214 Safari/537.36 (compatible; Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot)",
+  },
+  {
+    key: "facebookbot",
+    label: "facebookexternalhit",
+    owner: "Meta",
+    role: "answers",
+    ua: "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+  },
 
-  { key: "gptbot",    label: "GPTBot",     owner: "OpenAI",    role: "train",
-    ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot" },
-  { key: "claudebot", label: "ClaudeBot",  owner: "Anthropic", role: "train",
-    ua: "Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)" },
-  { key: "claudeuser", label: "Claude-User", owner: "Anthropic", role: "answers",
-    ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; Claude-User/1.0; +Claude-User@anthropic.com" },
-  { key: "perplexity", label: "PerplexityBot", owner: "Perplexity", role: "answers",
-    ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot" },
-  { key: "wba_unsigned", label: "Signature-Agent, unsigned", owner: "aadhar.sh", role: "probe",
+  {
+    key: "gptbot",
+    label: "GPTBot",
+    owner: "OpenAI",
+    role: "train",
+    ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot",
+  },
+  { key: "claudebot", label: "ClaudeBot", owner: "Anthropic", role: "train", ua: "Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)" },
+  {
+    key: "claudeuser",
+    label: "Claude-User",
+    owner: "Anthropic",
+    role: "answers",
+    ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; Claude-User/1.0; +Claude-User@anthropic.com",
+  },
+  {
+    key: "perplexity",
+    label: "PerplexityBot",
+    owner: "Perplexity",
+    role: "answers",
+    ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot",
+  },
+  {
+    key: "wba_unsigned",
+    label: "Signature-Agent, unsigned",
+    owner: "aadhar.sh",
+    role: "probe",
     ua: "aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)",
-    headers: { "signature-agent": '"https://aadhar.sh"' } },
+    headers: { "signature-agent": '"https://aadhar.sh"' },
+  },
 
   // The two the source claim named by name. Neither is a documented crawler
   // token, which is the point: they cost nothing to type and nothing verifies them.
-  { key: "oai_fd",  label: "OpenAI File Downloader", owner: "OpenAI (claimed)", role: "claimed",
-    ua: "OpenAI File Downloader" },
-  { key: "xai_img", label: "XaiImageApiFetch",       owner: "xAI (claimed)",    role: "claimed",
-    ua: "XaiImageApiFetch/1.0" },
+  { key: "oai_fd", label: "OpenAI File Downloader", owner: "OpenAI (claimed)", role: "claimed", ua: "OpenAI File Downloader" },
+  { key: "xai_img", label: "XaiImageApiFetch", owner: "xAI (claimed)", role: "claimed", ua: "XaiImageApiFetch/1.0" },
 ];
 
 const TARGETS = [
-  { key: "linkedin-profile", url: "https://www.linkedin.com/in/williamhgates",
+  {
+    key: "linkedin-profile",
+    url: "https://www.linkedin.com/in/williamhgates",
     note: "a public person profile, the source claim's own example",
-    markers: { contactInfo: /contact info/i, othersNamed: /others named/i,
-               similarProfiles: /similar profiles|browsemap/i, signIn: /sign in|join now/i } },
-  { key: "nytimes",   url: "https://www.nytimes.com/",  note: "a paywalled newsroom homepage" },
+    markers: { contactInfo: /contact info/i, othersNamed: /others named/i, similarProfiles: /similar profiles|browsemap/i, signIn: /sign in|join now/i },
+  },
+  { key: "nytimes", url: "https://www.nytimes.com/", note: "a paywalled newsroom homepage" },
   { key: "stackoverflow", url: "https://stackoverflow.com/", note: "answers 402 to some crawlers" },
   { key: "wikipedia", url: "https://en.wikipedia.org/wiki/Web_crawler", note: "an open reference article" },
-  { key: "reddit",    url: "https://www.reddit.com/r/programming/", note: "post-Google-deal access control" },
+  { key: "reddit", url: "https://www.reddit.com/r/programming/", note: "post-Google-deal access control" },
   { key: "theatlantic", url: "https://www.theatlantic.com/", note: "a second paywalled newsroom, testing whether the denylist shape repeats" },
-  { key: "github",    url: "https://github.com/",       note: "a developer platform with no AI-crawler position" },
+  { key: "github", url: "https://github.com/", note: "a developer platform with no AI-crawler position" },
   { key: "hackernews", url: "https://news.ycombinator.com/", note: "plain HTML, no CDN bot management" },
-  { key: "medium",    url: "https://medium.com/",       note: "expected to fail its controls" },
-  { key: "quora",     url: "https://www.quora.com/",    note: "expected to fail its controls" },
-  { key: "aadharsh",  url: "https://aadhar.sh/",        note: "this site, which serves everyone the same document" },
+  { key: "medium", url: "https://medium.com/", note: "expected to fail its controls" },
+  { key: "quora", url: "https://www.quora.com/", note: "expected to fail its controls" },
+  { key: "aadharsh", url: "https://aadhar.sh/", note: "this site, which serves everyone the same document" },
 ];
 
 const TIMEOUT_MS = 20000;
@@ -88,8 +122,11 @@ const SHELL_WORDS = 50; // below this, a 200 is a frame rather than a document
 import { stripRawText } from "./lib/html-raw-text.ts";
 export { stripRawText };
 
-export const words = (s: string) => stripRawText(stripRawText(s, "script"), "style")
-                      .replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length;
+export const words = (s: string) =>
+  stripRawText(stripRawText(s, "script"), "style")
+    .replace(/<[^>]*>/g, " ")
+    .split(/\s+/)
+    .filter(Boolean).length;
 
 // One measured fetch of one URL as one identity.
 type Sample = {
@@ -104,19 +141,19 @@ type Sample = {
   error?: string;
 };
 
-async function sample(
-  target: { url: string; markers?: Record<string, RegExp> },
-  identity: { ua: string; headers?: Record<string, string> },
-): Promise<Sample> {
+async function sample(target: { url: string; markers?: Record<string, RegExp> }, identity: { ua: string; headers?: Record<string, string> }): Promise<Sample> {
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(target.url, {
-      redirect: "follow", signal: ctrl.signal,
-      headers: { "user-agent": identity.ua,
-                 accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                 "accept-language": "en-US,en;q=0.9",
-                 ...identity.headers },
+      redirect: "follow",
+      signal: ctrl.signal,
+      headers: {
+        "user-agent": identity.ua,
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+        ...identity.headers,
+      },
     });
     const body = await res.text();
     const wordCount = words(body);
@@ -141,7 +178,8 @@ async function sample(
       bytes: new TextEncoder().encode(body).length,
       words: wordCount,
       contentType: (res.headers.get("content-type") || "").split(";")[0].trim(),
-      challenge, blocked,
+      challenge,
+      blocked,
       // A 200 carrying no prose is a shell, not a document. reddit.com answers 200
       // with ONE word to every identity here, browsers included, because the page
       // renders client-side. Scoring that as retrieval credits an origin for
@@ -152,10 +190,15 @@ async function sample(
     };
   } catch (e) {
     return { status: null, error: String((e instanceof Error && e.message) || e), blocked: false, challenge: false };
-  } finally { clearTimeout(to); }
+  } finally {
+    clearTimeout(to);
+  }
 }
 
-const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[(s.length - 1) >> 1] : null; };
+const median = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length ? s[(s.length - 1) >> 1] : null;
+};
 
 async function main() {
   const trials = Number(process.env.TRIALS || 3);
@@ -209,8 +252,7 @@ async function main() {
       markers: target.markers ? Object.keys(target.markers) : [],
       results,
       controlsPassed,
-      controlDetail: controls
-        .map((i) => `${i.key}:${results[i.key].blocked ? "blocked" : results[i.key].shell ? "shell-in" : "ok"}`).join(" "),
+      controlDetail: controls.map((i) => `${i.key}:${results[i.key].blocked ? "blocked" : results[i.key].shell ? "shell-in" : "ok"}`).join(" "),
       verdict: controlsPassed ? "measurable" : "unmeasurable",
     });
   }
@@ -219,9 +261,10 @@ async function main() {
 // Importing this module must not fire a survey. The contract test exercises
 // `words` directly, and a bare import that made 500 outbound requests would be
 // a memorable way to find that out.
-if (import.meta.main) main().catch((e) => {
-  // A survey that dies half way must not leave a truncated JSON body looking
-  // like a complete result. Fail loudly and write nothing usable.
-  process.stderr.write(`ua-survey failed: ${(e && e.stack) || e}\n`);
-  process.exitCode = 1;
-});
+if (import.meta.main)
+  main().catch((e) => {
+    // A survey that dies half way must not leave a truncated JSON body looking
+    // like a complete result. Fail loudly and write nothing usable.
+    process.stderr.write(`ua-survey failed: ${(e && e.stack) || e}\n`);
+    process.exitCode = 1;
+  });

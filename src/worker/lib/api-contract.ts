@@ -53,15 +53,23 @@ export async function apiPreflight(request: Request, pathname: string, env: unkn
   if (!ops) return null;
   const allow = allowedMethods(ops);
   if (!allow.includes(request.method)) {
-    return contractError(405, "method_not_allowed",
+    return contractError(
+      405,
+      "method_not_allowed",
       `${pathname} does not answer ${request.method}. It answers ${allow.join(", ")}.`,
-      { allow }, { allow: allow.join(", ") });
+      { allow },
+      { allow: allow.join(", ") },
+    );
   }
   // OPTIONS is a question about the API rather than a read of it, so it is free.
-  if (request.method !== "OPTIONS" && READ_BUDGETED.has(pathname) && await overBudget(API_READ_BUDGET, request, env)) {
-    return contractError(429, "rate_limited",
+  if (request.method !== "OPTIONS" && READ_BUDGETED.has(pathname) && (await overBudget(API_READ_BUDGET, request, env))) {
+    return contractError(
+      429,
+      "rate_limited",
       `Over the read budget of ${API_READ_BUDGET.max} requests a minute per caller. Retry after the Retry-After seconds.`,
-      {}, rateLimitedHeaders(...READ_POLICY));
+      {},
+      rateLimitedHeaders(...READ_POLICY),
+    );
   }
   return null;
 }

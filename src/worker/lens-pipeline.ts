@@ -70,20 +70,25 @@ type LensBudgetDecl = {
 // "N/min" in a lens door.
 export const LENS_BUDGETS = {
   inspect: { binding: "LENS_RL_INSPECT", max: 30, label: "Lens lookups", shares: "/lens/fetch, /mcp and the terminal tools" },
-  shot:    { binding: "LENS_RL_SHOT",    max: 3,  label: "Snapshots" },
-  compare: { binding: "LENS_RL_COMPARE", max: 4,  label: "Lens comparisons", shares: "/lens/compare and /mcp" },
-  browser: { binding: "LENS_RL_BROWSER", max: 3,  label: "Browser Run snapshots" },
-  wire:    { binding: "LENS_RL_WIRE",    max: 2,  label: "Wire traces" },
-  tools:   { binding: "LENS_RL_TOOLS",   max: 10, label: "Catalogue reads" },
+  shot: { binding: "LENS_RL_SHOT", max: 3, label: "Snapshots" },
+  compare: { binding: "LENS_RL_COMPARE", max: 4, label: "Lens comparisons", shares: "/lens/compare and /mcp" },
+  browser: { binding: "LENS_RL_BROWSER", max: 3, label: "Browser Run snapshots" },
+  wire: { binding: "LENS_RL_WIRE", max: 2, label: "Wire traces" },
+  tools: { binding: "LENS_RL_TOOLS", max: 10, label: "Catalogue reads" },
   // Tighter than the catalogue read it sits beside, and deliberately so: a
   // catalogue read costs a foreign server a lookup, and an /ask costs it a
   // retrieval and possibly a model call.
-  nlweb:   { binding: "LENS_RL_NLWEB",   max: 4,  label: "NLWeb reads", why: "because each one asks somebody else's server a real question" },
+  nlweb: { binding: "LENS_RL_NLWEB", max: 4, label: "NLWeb reads", why: "because each one asks somebody else's server a real question" },
   // Ten plain GETs of one URL per run, deduped by Accept string. No browser
   // and no model, so it is cheaper than the tabs above it on OUR side; what it
   // spends is somebody else's bandwidth, ten times over, on one page. Sat
   // between the catalogue read and the /ask question for that reason.
-  markdown: { binding: "LENS_RL_MARKDOWN", max: 4, label: "Markdown checks", why: "because each one fetches the same page ten times from somebody else's origin" },
+  markdown: {
+    binding: "LENS_RL_MARKDOWN",
+    max: 4,
+    label: "Markdown checks",
+    why: "because each one fetches the same page ten times from somebody else's origin",
+  },
   // The shared ceiling. Keyed on a CONSTANT rather than the caller's IP, so
   // every browser-consuming route bills against one bucket and no single
   // visitor can spend the account's allowance.
@@ -129,8 +134,7 @@ export const LENS_KV_MAX = 20_000_000;
 
 // The span names a cached lens owns. One name for a hit and a miss, differing
 // on `lens.cache`, so a hit rate is a group-by rather than a join.
-export type LensSpanName =
-  | "lens.shot" | "lens.browser" | "lens.wire" | "lens.tools" | "lens.nlweb" | "lens.markdown";
+export type LensSpanName = "lens.shot" | "lens.browser" | "lens.wire" | "lens.tools" | "lens.nlweb" | "lens.markdown";
 
 // What `run` hands back. `ok: false` is a result the lens reached and does not
 // want cached (a shut door, an unreadable origin, Browser Run refusing US),
@@ -138,8 +142,7 @@ export type LensSpanName =
 // lenses answer 200 with `ok: false` for a door that is shut, and that answer
 // must not sit in KV for an hour.
 export type LensRan<V> =
-  | { ok: true; value: V; store?: unknown; outcome?: string }
-  | { ok: false; status: number; payload: Record<string, unknown>; outcome: string };
+  { ok: true; value: V; store?: unknown; outcome?: string } | { ok: false; status: number; payload: Record<string, unknown>; outcome: string };
 
 export type LensOutcome<V> =
   | { kind: "ok"; value: V; fromCache?: boolean; budgets?: LensBudget[] }
@@ -224,17 +227,24 @@ function withSpan<R>(name: LensSpanName | undefined, fn: (s: Span<LensSpanName>)
 }
 
 function hostOf(url: string): string | undefined {
-  try { return new URL(url).hostname; } catch { return undefined; }
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
 }
 
-function refused<V>(status: 400 | 429 | 503, reason: "bad_target" | "unavailable" | "over_budget", error: string, extra?: { budget?: LensBudget; extra?: Record<string, unknown> }): LensOutcome<V> {
+function refused<V>(
+  status: 400 | 429 | 503,
+  reason: "bad_target" | "unavailable" | "over_budget",
+  error: string,
+  extra?: { budget?: LensBudget; extra?: Record<string, unknown> },
+): LensOutcome<V> {
   return { kind: "refused", status, reason, error, ...extra };
 }
 
 function defaultUsable(body: "json" | "png") {
-  return body === "png"
-    ? (entry) => entry instanceof ArrayBuffer && entry.byteLength > 0
-    : (entry) => asRecord(entry) !== null && entry.ok !== false;
+  return body === "png" ? (entry) => entry instanceof ArrayBuffer && entry.byteLength > 0 : (entry) => asRecord(entry) !== null && entry.ok !== false;
 }
 
 function browserReady(kind: "render" | "cdp", env): boolean {
@@ -245,9 +255,7 @@ export function lensErrorText(e: unknown): string {
   return asText(asRecord(e)?.message) ?? String(e);
 }
 
-export function defineLens<In, T extends string | Record<string, string>, A = undefined, V = any>(
-  spec: LensSpec<In, T, A, V>,
-): Lens<In, V> {
+export function defineLens<In, T extends string | Record<string, string>, A = undefined, V = any>(spec: LensSpec<In, T, A, V>): Lens<In, V> {
   if (!(spec.budget in LENS_BUDGETS) || spec.budget === "browserAll") {
     throw new Error(`defineLens: ${String(spec.budget)} is not a per-route budget`);
   }
@@ -311,8 +319,11 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
     }
     if (key && env && env.RN_KV) {
       let read: any = null;
-      try { read = await env.RN_KV.get(key, body === "png" ? "arrayBuffer" : "json"); }
-      catch { read = null; /* a corrupt or unreadable entry is a miss */ }
+      try {
+        read = await env.RN_KV.get(key, body === "png" ? "arrayBuffer" : "json");
+      } catch {
+        read = null; /* a corrupt or unreadable entry is a miss */
+      }
       const hit = read;
       if (hit !== null && usable(hit)) {
         return withSpan(spec.span, (s) => {
@@ -329,7 +340,7 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
     if (await overBudget(LENS_BUDGETS[spec.budget], request, env)) {
       return refused(429, "over_budget", budgetMessage(spec.budget), { budget: spec.budget });
     }
-    if (spec.browser && await overBudget(LENS_BUDGETS.browserAll, request, env)) {
+    if (spec.browser && (await overBudget(LENS_BUDGETS.browserAll, request, env))) {
       return refused(429, "over_budget", budgetMessage("browserAll"), { budget: "browserAll" });
     }
 

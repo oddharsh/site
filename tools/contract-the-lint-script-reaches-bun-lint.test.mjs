@@ -24,12 +24,13 @@ async function project(lintScript) {
 // `bun run test:node` runs this file under node, where process.execPath is node
 // and the bun to test is the one on PATH.
 const bun = process.versions.bun ? process.execPath : "bun";
-const lint = (cwd) => spawnSync(bun, ["lint"], {
-  cwd,
-  encoding: "utf8",
-  env: process.versions.bun ? { ...process.env, PATH: `${dirname(bun)}${delimiter}${process.env.PATH ?? ""}` } : process.env,
-  timeout: 60_000,
-});
+const lint = (cwd) =>
+  spawnSync(bun, ["lint"], {
+    cwd,
+    encoding: "utf8",
+    env: process.versions.bun ? { ...process.env, PATH: `${dirname(bun)}${delimiter}${process.env.PATH ?? ""}` } : process.env,
+    timeout: 60_000,
+  });
 
 test("the repo's lint script runs the generator, then Bun's own linter, type-aware", async () => {
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));

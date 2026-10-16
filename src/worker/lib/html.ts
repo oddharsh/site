@@ -63,14 +63,7 @@ export class Html {
 
 /** What may be interpolated. Arrays flatten, so `)${rows}` works on a list of
  *  fragments without a `.join("")` that would stringify each one first. */
-export type Interpolable =
-  | Html
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
-  | readonly Interpolable[];
+export type Interpolable = Html | string | number | boolean | null | undefined | readonly Interpolable[];
 
 const ESCAPES: Record<string, string> = {
   "&": "&amp;",

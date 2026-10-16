@@ -24,8 +24,7 @@ const TOP_CLOSE = "<!-- /axp:desktop -->";
 const CHROME_OPEN = "<!-- axp:shell -->";
 const CHROME_CLOSE = "<!-- /axp:shell -->";
 
-const esc = (value) => String(value)
-  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const esc = (value) => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 
 // Any speculationrules block, sentinel-wrapped or hand-written. patchStaticShell
 // strips whatever it finds, so a page that still carries an old inline copy
@@ -53,7 +52,10 @@ function stripSpeculationBlocks(input) {
 export const speculationRulesJson = () => JSON.stringify(SPECULATION);
 
 function assertTaskbarContract(surfaces) {
-  const declared = surfaces.filter((surface) => surface.flags.taskbar).map((surface) => surface.path).sort();
+  const declared = surfaces
+    .filter((surface) => surface.flags.taskbar)
+    .map((surface) => surface.path)
+    .sort();
   const rendered = TASKBAR.map((surface) => surface.path).sort();
   if (JSON.stringify(declared) !== JSON.stringify(rendered)) {
     throw new Error(`shell-data TASKBAR paths disagree with site-manifest taskbar flags\nmanifest: ${declared.join(", ")}\nshell: ${rendered.join(", ")}`);
@@ -65,10 +67,9 @@ function assertTaskbarContract(surfaces) {
 
 export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
   assertTaskbarContract(surfaces);
-  const counts = new Map(TASKBAR.map((item) => [
-    item.path,
-    surfaces.filter((surface) => surface.path.startsWith(item.path + "/") && surface.flags.run).length,
-  ]));
+  const counts = new Map(
+    TASKBAR.map((item) => [item.path, surfaces.filter((surface) => surface.path.startsWith(item.path + "/") && surface.flags.run).length]),
+  );
 
   const cells = [];
   let spriteY = 0;
@@ -82,32 +83,44 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
   };
 
   const desktopHtml = '<div id="axp-desktop" aria-hidden="true"></div>';
-  const iconsHtml = '<nav id="axp-icons" aria-label="desktop shortcuts">' + DESKTOP.map((item, index) => {
-    const external = item.kind === "profile";
-    const profile = external ? PROFILES.find((candidate) => candidate.label === item.label) : null;
-    const background = profile?.background || "linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))";
-    const glyph = profile?.glyph || item.label.charAt(0);
-    return `<a class="axp-ico"${external ? ' target="_blank" rel="noopener me external"' : ""}`
-      + ` title="${esc(item.hint || item.label)}${external ? " (opens in a new tab)" : ""}"`
-      + ` href="${esc(item.path)}" data-key="${esc(item.label)}" style="left:9px;top:${9 + index * 86}px">`
-      + `<span class="ic ${item.kind === "note" ? "note" : ""}"${external ? ` style="background:${background}"` : ""} aria-hidden="true">${external ? glyph : ""}</span>`
-      + `<span class="t">${esc(item.label)}</span></a>`;
-  }).join("") + "</nav>";
+  const iconsHtml =
+    '<nav id="axp-icons" aria-label="desktop shortcuts">' +
+    DESKTOP.map((item, index) => {
+      const external = item.kind === "profile";
+      const profile = external ? PROFILES.find((candidate) => candidate.label === item.label) : null;
+      const background = profile?.background || "linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))";
+      const glyph = profile?.glyph || item.label.charAt(0);
+      return (
+        `<a class="axp-ico"${external ? ' target="_blank" rel="noopener me external"' : ""}` +
+        ` title="${esc(item.hint || item.label)}${external ? " (opens in a new tab)" : ""}"` +
+        ` href="${esc(item.path)}" data-key="${esc(item.label)}" style="left:9px;top:${9 + index * 86}px">` +
+        `<span class="ic ${item.kind === "note" ? "note" : ""}"${external ? ` style="background:${background}"` : ""} aria-hidden="true">${external ? glyph : ""}</span>` +
+        `<span class="t">${esc(item.label)}</span></a>`
+      );
+    }).join("") +
+    "</nav>";
 
   const pinsHtml = TASKBAR.map((item) => {
     const name = `pin-${item.label.replace(/\s+/g, "-")}`;
-    return `<a class="axp-pin" title="${esc(item.hint)}" href="${esc(item.path)}" data-count="${counts.get(item.path) || 0}">`
-      + `<span class="fav" aria-hidden="true">${spriteRef(name, SECTION_ICONS[item.label])}</span>`
-      + `<span class="lbl">${esc(item.label)}</span></a>`;
+    return (
+      `<a class="axp-pin" title="${esc(item.hint)}" href="${esc(item.path)}" data-count="${counts.get(item.path) || 0}">` +
+      `<span class="fav" aria-hidden="true">${spriteRef(name, SECTION_ICONS[item.label])}</span>` +
+      `<span class="lbl">${esc(item.label)}</span></a>`
+    );
   }).join("");
 
-  const trayHtml = '<div id="axp-tray"><button id="axp-sound" type="button" hidden></button>'
-    + TRAY_ITEMS.map((item) => `<a id="${item.id}" class="axp-trayico"${item.hidden ? " hidden" : ""} href="${item.href}" data-kind="${item.kind}" title="${esc(item.title)}" aria-label="${esc(item.label)}">${spriteRef(`tray-${item.kind}`, item.svg)}</a>`).join("")
-    + '<span id="axp-clock" aria-hidden="true"></span></div>';
+  const trayHtml =
+    '<div id="axp-tray"><button id="axp-sound" type="button" hidden></button>' +
+    TRAY_ITEMS.map(
+      (item) =>
+        `<a id="${item.id}" class="axp-trayico"${item.hidden ? " hidden" : ""} href="${item.href}" data-kind="${item.kind}" title="${esc(item.title)}" aria-label="${esc(item.label)}">${spriteRef(`tray-${item.kind}`, item.svg)}</a>`,
+    ).join("") +
+    '<span id="axp-clock" aria-hidden="true"></span></div>';
 
-  const taskbarHtml = '<div id="axp-taskbar" role="navigation" aria-label="taskbar">'
-    + '<a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a>'
-    + `<div id="axp-pins">${pinsHtml}</div><div id="axp-spacer"></div>${trayHtml}</div>`;
+  const taskbarHtml =
+    '<div id="axp-taskbar" role="navigation" aria-label="taskbar">' +
+    '<a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a>' +
+    `<div id="axp-pins">${pinsHtml}</div><div id="axp-spacer"></div>${trayHtml}</div>`;
   // The speculation ruleset rode here until 2026-09-30, because the chrome was
   // the one projection reaching both static and worker-rendered pages. It is a
   // Speculation-Rules response header now, which reaches every HTML response
@@ -117,42 +130,45 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
   const chromeHtml = iconsHtml + taskbarHtml;
   const histnavHtml = HISTNAV_HTML;
 
-
   // The sprite banner names the generator by NAME, never by PATH. icons.svg is
   // content-hashed and served from /a/, so a path in its bytes couples the
   // repository layout to a public URL: moving this file re-mints
   // /a/icons.<hash>.svg and orphans every committed dictionary naming the old
   // one. Measured on 2026-08-16, when moving public/scripts to tools/photos did
   // exactly that and failed the build invariant.
-  const moduleSource = `// lib/desktop.js — the static XP desktop shell, GENERATED by\n`
-    + `// tools/photos/gen-desktop-partial.ts from shell-data.ts and\n`
-    + `// site-manifest.json. Do not hand-edit; run bun run gen:shell.\n`
-    + `// DESKTOP_TOP opens <body>; DESKTOP_CHROME closes it with icons/taskbar.\n`
-    + `// DESKTOP_HISTNAV opens the page window's title bar (Back/Forward).\n`
-    + `export const DESKTOP_TOP = ${JSON.stringify(desktopHtml)};\n`
-    + `export const DESKTOP_CHROME = ${JSON.stringify(chromeHtml)};\n`
-    + `export const DESKTOP_HISTNAV = ${JSON.stringify(histnavHtml)};\n`
-    + `export const SECTION_FAVICONS = ${JSON.stringify(sectionFavicons(), null, 2)};\n`;
+  const moduleSource =
+    `// lib/desktop.js — the static XP desktop shell, GENERATED by\n` +
+    `// tools/photos/gen-desktop-partial.ts from shell-data.ts and\n` +
+    `// site-manifest.json. Do not hand-edit; run bun run gen:shell.\n` +
+    `// DESKTOP_TOP opens <body>; DESKTOP_CHROME closes it with icons/taskbar.\n` +
+    `// DESKTOP_HISTNAV opens the page window's title bar (Back/Forward).\n` +
+    `export const DESKTOP_TOP = ${JSON.stringify(desktopHtml)};\n` +
+    `export const DESKTOP_CHROME = ${JSON.stringify(chromeHtml)};\n` +
+    `export const DESKTOP_HISTNAV = ${JSON.stringify(histnavHtml)};\n` +
+    `export const SECTION_FAVICONS = ${JSON.stringify(sectionFavicons(), null, 2)};\n`;
 
   const spriteWidth = Math.max(...cells.map((cell) => cell.right));
   const spriteHeight = Math.max(...cells.map((cell) => cell.bottom));
   const { defs, inners } = hoistDefs(cells.map((cell) => cell.inner));
   // The cells were compacted on the way in (spriteRef), so the hoist merges
   // compacted bodies and nothing here needs a second pass.
-  const sprite = `<svg xmlns="http://www.w3.org/2000/svg" width="${spriteWidth}" height="${spriteHeight}" viewBox="0 0 ${spriteWidth} ${spriteHeight}">`
-    + "<!-- GENERATED by gen-desktop-partial.ts from shell-data.ts. Do not hand-edit. Served from /a/ as q11 brotli, or as a dcz delta to a browser holding an earlier sprite; see DICTIONARY_TYPES in src/worker/lib/assets.ts. -->"
-    + `<defs>${defs}</defs>`
-    + cells.map((cell) => `<view id="${cell.name}" viewBox="${cell.view}"/>`).join("")
-    + cells.map((cell, index) => `<g transform="translate(0 ${cell.dy})">${inners[index]}</g>`).join("")
-    + "</svg>\n";
+  const sprite =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${spriteWidth}" height="${spriteHeight}" viewBox="0 0 ${spriteWidth} ${spriteHeight}">` +
+    "<!-- GENERATED by gen-desktop-partial.ts from shell-data.ts. Do not hand-edit. Served from /a/ as q11 brotli, or as a dcz delta to a browser holding an earlier sprite; see DICTIONARY_TYPES in src/worker/lib/assets.ts. -->" +
+    `<defs>${defs}</defs>` +
+    cells.map((cell) => `<view id="${cell.name}" viewBox="${cell.view}"/>`).join("") +
+    cells.map((cell, index) => `<g transform="translate(0 ${cell.dy})">${inners[index]}</g>`).join("") +
+    "</svg>\n";
 
   // Object.fromEntries over an inferred (string)[][] yields Record<string, any>
   // in JS and `unknown` values once checked as TypeScript, so the pair is a
   // tuple and the map is named: slug to SVG source.
-  const favicons: Record<string, string> = Object.fromEntries(TASKBAR.map((item): [string, string] => [
-    faviconSlug(item.label),
-    `${compactSvg(SECTION_ICONS[item.label]).replace("<svg ", '<svg width="32" height="32" ')}\n`,
-  ]));
+  const favicons: Record<string, string> = Object.fromEntries(
+    TASKBAR.map((item): [string, string] => [
+      faviconSlug(item.label),
+      `${compactSvg(SECTION_ICONS[item.label]).replace("<svg ", '<svg width="32" height="32" ')}\n`,
+    ]),
+  );
 
   return { desktopHtml, chromeHtml, histnavHtml, moduleSource, sprite, favicons };
 }
@@ -180,13 +196,14 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
 //   to 2,424 B brotli (14,721 to 14,531 B raw), and 30 random deletions of
 //   the same raw size spread -41 to +10 B, median -20, so -27 is inside what
 //   any edit this size does. What it buys is one gradient fewer.
-export const compactSvg = (svg: string): string => svg
-  .replace(/<([a-zA-Z]+)(\s[^<>]*)?><\/\1>/g, (_m, tag: string, attrs = "") => `<${tag}${attrs}/>`)
-  .replace(/ d="([^"]*)"/g, (_m, d: string) => ` d="${d.replace(/ +([MLHVCSQTAZmlhvcsqtaz])/g, "$1").replace(/([MLHVCSQTAZmlhvcsqtaz]) +/g, "$1")}"`)
-  .replace(/(<linearGradient\b[^>]*?) x1="0" y1="0"/g, "$1")
-  .replace(/<stop offset="0" /g, "<stop ")
-  .replaceAll(' flood-color="#000"', "")
-  .replace(/="#([0-9a-f])\1([0-9a-f])\2([0-9a-f])\3"/gi, (_m, r: string, g: string, b: string) => `="#${r}${g}${b}"`.toLowerCase());
+export const compactSvg = (svg: string): string =>
+  svg
+    .replace(/<([a-zA-Z]+)(\s[^<>]*)?><\/\1>/g, (_m, tag: string, attrs = "") => `<${tag}${attrs}/>`)
+    .replace(/ d="([^"]*)"/g, (_m, d: string) => ` d="${d.replace(/ +([MLHVCSQTAZmlhvcsqtaz])/g, "$1").replace(/([MLHVCSQTAZmlhvcsqtaz]) +/g, "$1")}"`)
+    .replace(/(<linearGradient\b[^>]*?) x1="0" y1="0"/g, "$1")
+    .replace(/<stop offset="0" /g, "<stop ")
+    .replaceAll(' flood-color="#000"', "")
+    .replace(/="#([0-9a-f])\1([0-9a-f])\2([0-9a-f])\3"/gi, (_m, r: string, g: string, b: string) => `="#${r}${g}${b}"`.toLowerCase());
 
 // Back and Forward, at the head of the page window's title bar. nav.js used to
 // CREATE this span at boot, two animation frames after the static paint on
@@ -197,9 +214,10 @@ export const compactSvg = (svg: string): string => svg
 // Its CSS lives in luna.css, which hides it when scripting is off (dead buttons
 // otherwise) and below 720px, where the phone's own back gesture does the job
 // and 50px of a 370px caption is the difference between one line and two.
-export const HISTNAV_HTML = '<span class="axp-histnav">'
-  + '<button type="button" class="axp-back" aria-label="Back" title="Back"></button>'
-  + '<button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>';
+export const HISTNAV_HTML =
+  '<span class="axp-histnav">' +
+  '<button type="button" class="axp-back" aria-label="Back" title="Back"></button>' +
+  '<button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>';
 
 // Any baked histnav, canonical or from an older generator, so a markup change
 // converges on the next gen:shell run instead of stacking a second pair.
@@ -217,7 +235,8 @@ const HISTNAV_BLOCK = /<span class="axp-histnav">(?:<button\b[^>]*><\/button>)*<
 // comments had exponentially many parses and a near-miss backtracked through
 // all of them (CodeQL, code-scanning alert 109). This form parses each comment
 // exactly one way.
-const WINDOW_TITLE_BAR = /(<div class="(?:window|np-window)(?:\s[^"]*)?"([^>]*)>(?:\s|<!--(?:[^-]|-(?!->))*-->)*<div class="(?:title-bar|np-titlebar|titlebar)(?:\s[^"]*)?"[^>]*>)/;
+const WINDOW_TITLE_BAR =
+  /(<div class="(?:window|np-window)(?:\s[^"]*)?"([^>]*)>(?:\s|<!--(?:[^-]|-(?!->))*-->)*<div class="(?:title-bar|np-titlebar|titlebar)(?:\s[^"]*)?"[^>]*>)/;
 
 export function bakeHistnav(source, histnavHtml = HISTNAV_HTML) {
   const stripped = source.replace(HISTNAV_BLOCK, "");
@@ -243,16 +262,21 @@ export function bakeHistnav(source, histnavHtml = HISTNAV_HTML) {
 export const WINDOW_OPEN = "<!-- axp:window -->";
 export const WINDOW_CLOSE = "<!-- /axp:window -->";
 
-const decodeAttr = (value: string) => value
-  .replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'")
-  .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+const decodeAttr = (value: string) =>
+  value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
 
-const comparable = (bar: string) => bar
-  .replace(HISTNAV_BLOCK, "")
-  .replace(/ title="minimize"/g, "")
-  .replace(/\s+>/g, ">")
-  .replace(/>\s+</g, "><")
-  .trim();
+const comparable = (bar: string) =>
+  bar
+    .replace(HISTNAV_BLOCK, "")
+    .replace(/ title="minimize"/g, "")
+    .replace(/\s+>/g, ">")
+    .replace(/>\s+</g, "><")
+    .trim();
 
 function divEnd(source: string, start: number) {
   const tag = /<\/?div\b[^>]*>/g;
@@ -269,8 +293,8 @@ export function bakeTitleBar(source: string, label = "page") {
   const plain = source.replaceAll(WINDOW_OPEN, "").replaceAll(WINDOW_CLOSE, "");
   const match = plain.match(WINDOW_TITLE_BAR);
   if (!match || !/^<div class="window[\s"]/.test(match[1])) return plain;
-  const start = (match.index ?? 0) + match[1].lastIndexOf("<div class=\"title-bar");
-  if (!plain.startsWith("<div class=\"title-bar\">", start)) {
+  const start = (match.index ?? 0) + match[1].lastIndexOf('<div class="title-bar');
+  if (!plain.startsWith('<div class="title-bar">', start)) {
     throw new Error(`${label}: the title bar carries attributes the template has no field for`);
   }
   const end = divEnd(plain, start);
@@ -283,16 +307,18 @@ export function bakeTitleBar(source: string, label = "page") {
   const indent = plain.slice(lineStart, start);
   if (!/^[ \t]*$/.test(indent)) throw new Error(`${label}: the title bar does not start its own line`);
 
-  const next = String(titleBar({
-    caption: unsafeHtml(text[3]),
-    titleClass: text[1]?.trim() ?? "",
-    iconClass: text[2]?.trim() ?? "",
-    histnav: !/\bdata-no-histnav\b/.test(match[2]),
-    closeHref: decodeAttr(close[1]),
-    closeTitle: decodeAttr(close[2]),
-    closeLabel: decodeAttr(close[3]),
-    indent,
-  }));
+  const next = String(
+    titleBar({
+      caption: unsafeHtml(text[3]),
+      titleClass: text[1]?.trim() ?? "",
+      iconClass: text[2]?.trim() ?? "",
+      histnav: !/\bdata-no-histnav\b/.test(match[2]),
+      closeHref: decodeAttr(close[1]),
+      closeTitle: decodeAttr(close[2]),
+      closeLabel: decodeAttr(close[3]),
+      indent,
+    }),
+  );
   if (comparable(next) !== comparable(old)) {
     throw new Error(`${label}: the title bar carries markup the template would drop:\n  had  ${comparable(old)}\n  made ${comparable(next)}`);
   }
@@ -321,15 +347,17 @@ export function hoistDefs(inners: string[]) {
       const body = `${match[1]}${match[2]}${match[4]}>${match[5]}`;
       const first = kept.get(body);
       if (first) alias.set(match[3], first);
-      else { kept.set(body, match[3]); defs.push(match[0]); }
+      else {
+        kept.set(body, match[3]);
+        defs.push(match[0]);
+      }
     }
   }
   return {
     defs: defs.join(""),
-    inners: inners.map((inner) => [...alias].reduce(
-      (text, [duplicate, first]) => text.replaceAll(`url(#${duplicate})`, `url(#${first})`),
-      inner.replace(/<defs>[\s\S]*?<\/defs>/g, ""),
-    )),
+    inners: inners.map((inner) =>
+      [...alias].reduce((text, [duplicate, first]) => text.replaceAll(`url(#${duplicate})`, `url(#${first})`), inner.replace(/<defs>[\s\S]*?<\/defs>/g, "")),
+    ),
   };
 }
 
@@ -339,8 +367,7 @@ export function hoistDefs(inners: string[]) {
 // "pixel peeper" files as pixel-peeper.svg.
 export const faviconSlug = (label) => label.replace(/\s+/g, "-");
 export const faviconHref = (label) => `/section-icons/${faviconSlug(label)}.svg`;
-export const sectionFavicons = () =>
-  Object.fromEntries(TASKBAR.map((item) => [item.path, faviconHref(item.label)]));
+export const sectionFavicons = () => Object.fromEntries(TASKBAR.map((item) => [item.path, faviconHref(item.label)]));
 
 const navScript = /<script\b[^>]*\bsrc=["']\/nav\.js["'][^>]*><\/script>/i;
 

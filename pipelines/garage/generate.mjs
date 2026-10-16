@@ -14,7 +14,7 @@ import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 import { titleBar } from "../../src/worker/lib/window.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
+const ROOT = join(HERE, "..", ".."); // pipelines/<name>/ -> repo root
 const PAGES = join(ROOT, "src/pages");
 
 function fail(message) {
@@ -27,9 +27,17 @@ function text(value, context) {
 }
 
 function html(value) {
-  return String(value == null ? "" : value).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  })[c]);
+  return String(value == null ? "" : value).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[c],
+  );
 }
 
 function validateGarageSpec(spec, context = "Garage spec") {

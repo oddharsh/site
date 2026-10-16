@@ -59,9 +59,17 @@ type Check = { id: string; status: CheckStatus; detail: string };
 // whether a property exists before printing it, and `markdown:false` on an
 // unanswered row can never be counted as reach: `reached` filters on `ok` first.
 type AgentRow = {
-  key: string; label: string; vendor: string; verified: string; accept: string;
-  ok: boolean; status: number | null; contentType: string; markdown: boolean;
-  bytes: number | null; error?: string;
+  key: string;
+  label: string;
+  vendor: string;
+  verified: string;
+  accept: string;
+  ok: boolean;
+  status: number | null;
+  contentType: string;
+  markdown: boolean;
+  bytes: number | null;
+  error?: string;
 };
 
 // The Accept header a mainstream browser sends, used as the control. Same string
@@ -86,20 +94,25 @@ const UNSERVABLE = "application/x-lens-negotiation-probe";
 // prints the date next to the row so a stale entry argues with itself instead of
 // quietly grading an origin against a header nobody sends any more.
 export const AGENT_ACCEPTS = [
-  { key: "claude-code",   label: "Claude Code",         vendor: "Anthropic",         verified: "2025-11-13",
-    accept: "text/markdown, text/html, */*" },
-  { key: "copilot-cli",   label: "Copilot CLI",         vendor: "GitHub",            verified: "2026-06-22",
-    accept: "text/markdown, text/html, */*" },
-  { key: "ms-copilot",    label: "Microsoft Copilot",   vendor: "Microsoft",         verified: "2026-06-22",
-    accept: "text/markdown, text/html, */*" },
-  { key: "copilot-chat",  label: "Copilot Chat",        vendor: "GitHub",            verified: "2026-06-22",
-    accept: "text/markdown, text/html;q=0.9, application/xhtml+xml;q=0.9, application/xml;q=0.8, */*;q=0.7" },
-  { key: "cursor",        label: "Cursor",              vendor: "Anysphere",         verified: "2026-04-18",
-    accept: "text/markdown, text/plain;q=0.9, */*;q=0.8" },
-  { key: "openclaw",      label: "OpenClaw",            vendor: "OpenClaw",          verified: "2026-05-04",
-    accept: "text/markdown, text/html;q=0.9, */*;q=0.1" },
-  { key: "opencode",      label: "OpenCode",            vendor: "SST",               verified: "2026-05-04",
-    accept: "text/markdown;q=1.0, text/x-markdown;q=0.9, text/plain;q=0.8, text/html;q=0.7, */*;q=0.1" },
+  { key: "claude-code", label: "Claude Code", vendor: "Anthropic", verified: "2025-11-13", accept: "text/markdown, text/html, */*" },
+  { key: "copilot-cli", label: "Copilot CLI", vendor: "GitHub", verified: "2026-06-22", accept: "text/markdown, text/html, */*" },
+  { key: "ms-copilot", label: "Microsoft Copilot", vendor: "Microsoft", verified: "2026-06-22", accept: "text/markdown, text/html, */*" },
+  {
+    key: "copilot-chat",
+    label: "Copilot Chat",
+    vendor: "GitHub",
+    verified: "2026-06-22",
+    accept: "text/markdown, text/html;q=0.9, application/xhtml+xml;q=0.9, application/xml;q=0.8, */*;q=0.7",
+  },
+  { key: "cursor", label: "Cursor", vendor: "Anysphere", verified: "2026-04-18", accept: "text/markdown, text/plain;q=0.9, */*;q=0.8" },
+  { key: "openclaw", label: "OpenClaw", vendor: "OpenClaw", verified: "2026-05-04", accept: "text/markdown, text/html;q=0.9, */*;q=0.1" },
+  {
+    key: "opencode",
+    label: "OpenCode",
+    vendor: "SST",
+    verified: "2026-05-04",
+    accept: "text/markdown;q=1.0, text/x-markdown;q=0.9, text/plain;q=0.8, text/html;q=0.7, */*;q=0.1",
+  },
 ];
 
 // Every distinct Accept string the run needs, each fetched once. Three agents
@@ -121,12 +134,18 @@ export function probePlan() {
 }
 
 export function isMarkdown(contentType) {
-  const t = String(contentType || "").split(";")[0].trim().toLowerCase();
+  const t = String(contentType || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
   return t === "text/markdown" || t === "text/x-markdown";
 }
 
 function mediaType(contentType) {
-  return String(contentType || "").split(";")[0].trim().toLowerCase();
+  return String(contentType || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
 }
 
 // A `Vary` naming Accept, matched as a token rather than a substring: `Vary:
@@ -136,7 +155,10 @@ function mediaType(contentType) {
 export function variesOnAccept(vary) {
   const raw = String(vary || "").toLowerCase();
   if (raw.trim() === "*") return true;
-  return raw.split(",").map((s) => s.trim()).includes("accept");
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .includes("accept");
 }
 
 // May a SHARED cache store this response? RFC 9111 section 3: no-store and
@@ -145,7 +167,9 @@ export function variesOnAccept(vary) {
 // freshness. Read as tokens for the same reason Vary is: "private" inside a
 // quoted no-cache field list is not the directive.
 export function sharedStorable(cacheControl) {
-  const directives = String(cacheControl || "").toLowerCase().split(",")
+  const directives = String(cacheControl || "")
+    .toLowerCase()
+    .split(",")
     .map((d) => d.trim().split("=")[0].trim());
   return !directives.includes("no-store") && !directives.includes("private");
 }
@@ -166,22 +190,32 @@ export function varyEveryVariant(rows: ProbeRow[]): Check {
   const variants = rows.filter(([, r]) => r?.ok && (r.status ?? 0) >= 200 && (r.status ?? 0) < 300);
   const types = new Set<string>(variants.map(([, r]) => mediaType(r.contentType)));
   if (types.size < 2) {
-    return { id: "vary-on-every-variant", status: "info",
-      detail: `Every 2xx answer was ${[...types][0] || "untyped"}, so there is one representation and Vary owes nothing.` };
+    return {
+      id: "vary-on-every-variant",
+      status: "info",
+      detail: `Every 2xx answer was ${[...types][0] || "untyped"}, so there is one representation and Vary owes nothing.`,
+    };
   }
   const bare = variants.filter(([, r]) => !variesOnAccept(r.vary));
   const exposed = bare.filter(([, r]) => sharedStorable(r.cacheControl));
   const summary = `${variants.length} answers across ${types.size} types`;
   if (!exposed.length) {
-    return { id: "vary-on-every-variant", status: "pass",
+    return {
+      id: "vary-on-every-variant",
+      status: "pass",
       detail: bare.length
         ? `${summary}. ${bare.length} omit Accept from Vary, and each forbids shared caching, so no cache can hand it to the wrong client.`
-        : `${summary}, and every one names Accept in Vary.` };
+        : `${summary}, and every one names Accept in Vary.`,
+    };
   }
-  const named = exposed.map(([id, r]) =>
-    `${mediaType(r.contentType) || "untyped"} for ${id} (Vary: ${r.vary || "none"}; Cache-Control: ${r.cacheControl || "none"})`);
-  return { id: "vary-on-every-variant", status: "fail",
-    detail: `${summary}. A shared cache may store ${named.join("; ")} without Accept in its key, then serve it to a client that asked for another type.` };
+  const named = exposed.map(
+    ([id, r]) => `${mediaType(r.contentType) || "untyped"} for ${id} (Vary: ${r.vary || "none"}; Cache-Control: ${r.cacheControl || "none"})`,
+  );
+  return {
+    id: "vary-on-every-variant",
+    status: "fail",
+    detail: `${summary}. A shared cache may store ${named.join("; ")} without Accept in its key, then serve it to a client that asked for another type.`,
+  };
 }
 
 // RFC 8288 in the header, plus the HTML element that says the same thing. Codex
@@ -294,9 +328,13 @@ const LENS_MARKDOWN = defineLens({
 
     if (!control?.ok) {
       return {
-        ok: false, status: 200, outcome: "unreadable",
+        ok: false,
+        status: 200,
+        outcome: "unreadable",
         payload: {
-          ok: false, url: target, host,
+          ok: false,
+          url: target,
+          host,
           unreadable: true,
           error: control?.error || "the origin did not answer a plain browser request",
         },
@@ -313,35 +351,51 @@ const LENS_MARKDOWN = defineLens({
 
     const checks: Check[] = [];
 
-    checks.push(md?.ok
-      ? (isMarkdown(md.contentType)
-        ? { id: "serves-markdown", status: "pass", detail: `Content-Type: ${md.contentType}` }
-        : { id: "serves-markdown", status: md.status === 406 ? "warn" : "fail",
-            detail: md.status === 406
-              ? `Answered 406 to Accept: text/markdown, which is honest and means there is no Markdown here.`
-              : `Answered ${md.status} ${mediaType(md.contentType) || "with no content-type"} to Accept: text/markdown.` })
-      : { id: "serves-markdown", status: "fail", detail: md?.error || "no answer" });
+    checks.push(
+      md?.ok
+        ? isMarkdown(md.contentType)
+          ? { id: "serves-markdown", status: "pass", detail: `Content-Type: ${md.contentType}` }
+          : {
+              id: "serves-markdown",
+              status: md.status === 406 ? "warn" : "fail",
+              detail:
+                md.status === 406
+                  ? `Answered 406 to Accept: text/markdown, which is honest and means there is no Markdown here.`
+                  : `Answered ${md.status} ${mediaType(md.contentType) || "with no content-type"} to Accept: text/markdown.`,
+            }
+        : { id: "serves-markdown", status: "fail", detail: md?.error || "no answer" },
+    );
 
     // Read off the MARKDOWN response where there is one, because Vary is a claim
     // about the negotiated representation. An origin that varies correctly on the
     // HTML it always serves has not demonstrated anything.
-    const varySource = (md?.ok && isMarkdown(md.contentType)) ? md : control;
-    checks.push(variesOnAccept(varySource.vary)
-      ? { id: "varies-by-accept", status: "pass", detail: `Vary: ${varySource.vary}` }
-      : { id: "varies-by-accept", status: anyMarkdown ? "fail" : "warn",
-          detail: varySource.vary
-            ? `Vary: ${varySource.vary}. It does not name Accept, so a shared cache can hand one audience the other's copy.`
-            : "No Vary header. A shared cache can hand one audience the other's copy." });
+    const varySource = md?.ok && isMarkdown(md.contentType) ? md : control;
+    checks.push(
+      variesOnAccept(varySource.vary)
+        ? { id: "varies-by-accept", status: "pass", detail: `Vary: ${varySource.vary}` }
+        : {
+            id: "varies-by-accept",
+            status: anyMarkdown ? "fail" : "warn",
+            detail: varySource.vary
+              ? `Vary: ${varySource.vary}. It does not name Accept, so a shared cache can hand one audience the other's copy.`
+              : "No Vary header. A shared cache can hand one audience the other's copy.",
+          },
+    );
 
     checks.push(varyEveryVariant([...byId.entries()]));
 
     const bogus = byId.get("unservable");
-    checks.push(bogus?.ok
-      ? (bogus.status === 406
-        ? { id: "rejects-unservable", status: "pass", detail: `406 for Accept: ${UNSERVABLE}` }
-        : { id: "rejects-unservable", status: "warn",
-            detail: `Answered ${bogus.status} to a media type nothing serves. RFC 9110 permits ignoring Accept and returning a default, so this is a preference rather than a defect.` })
-      : { id: "rejects-unservable", status: "warn", detail: bogus?.error || "no answer" });
+    checks.push(
+      bogus?.ok
+        ? bogus.status === 406
+          ? { id: "rejects-unservable", status: "pass", detail: `406 for Accept: ${UNSERVABLE}` }
+          : {
+              id: "rejects-unservable",
+              status: "warn",
+              detail: `Answered ${bogus.status} to a media type nothing serves. RFC 9110 permits ignoring Accept and returning a default, so this is a preference rather than a defect.`,
+            }
+        : { id: "rejects-unservable", status: "warn", detail: bogus?.error || "no answer" },
+    );
 
     // Two q-value checks, because the single one on the public checklist tests
     // only the easy half. Ranking Markdown below HTML should yield HTML, and
@@ -350,23 +404,38 @@ const LENS_MARKDOWN = defineLens({
     // REFUSAL, and a server matching on the presence of the string serves
     // Markdown to a client that just said it will not take any.
     const qr = byId.get("q-ranked");
-    checks.push(qr?.ok
-      ? (!isMarkdown(qr.contentType)
-        ? { id: "q-ranked", status: "pass", detail: `Served ${mediaType(qr.contentType) || "a non-Markdown type"} for text/html;q=1.0, text/markdown;q=0.5` }
-        : { id: "q-ranked", status: "fail", detail: "Served Markdown although the header ranked HTML above it." })
-      : { id: "q-ranked", status: "warn", detail: qr?.error || "no answer" });
+    checks.push(
+      qr?.ok
+        ? !isMarkdown(qr.contentType)
+          ? { id: "q-ranked", status: "pass", detail: `Served ${mediaType(qr.contentType) || "a non-Markdown type"} for text/html;q=1.0, text/markdown;q=0.5` }
+          : { id: "q-ranked", status: "fail", detail: "Served Markdown although the header ranked HTML above it." }
+        : { id: "q-ranked", status: "warn", detail: qr?.error || "no answer" },
+    );
 
     const qz = byId.get("q-zero");
-    checks.push(qz?.ok
-      ? (!isMarkdown(qz.contentType)
-        ? { id: "q-zero", status: "pass", detail: `Served ${mediaType(qz.contentType) || "a non-Markdown type"} for text/markdown;q=0` }
-        : { id: "q-zero", status: "fail", detail: "Served Markdown for text/markdown;q=0, which is the header explicitly refusing it. That is the signature of a substring match rather than a parse." })
-      : { id: "q-zero", status: "warn", detail: qz?.error || "no answer" });
+    checks.push(
+      qz?.ok
+        ? !isMarkdown(qz.contentType)
+          ? { id: "q-zero", status: "pass", detail: `Served ${mediaType(qz.contentType) || "a non-Markdown type"} for text/markdown;q=0` }
+          : {
+              id: "q-zero",
+              status: "fail",
+              detail:
+                "Served Markdown for text/markdown;q=0, which is the header explicitly refusing it. That is the signature of a substring match rather than a parse.",
+            }
+        : { id: "q-zero", status: "warn", detail: qz?.error || "no answer" },
+    );
 
-    checks.push(alternate
-      ? { id: "link-alternate", status: "pass", detail: `${alternate.where}: ${alternate.href}` }
-      : { id: "link-alternate", status: anyMarkdown ? "warn" : "info",
-          detail: "No rel=alternate pointing at a Markdown copy. Clients that follow the link rather than send an Accept header (Codex CLI is the one on the public matrix) have nothing to follow." });
+    checks.push(
+      alternate
+        ? { id: "link-alternate", status: "pass", detail: `${alternate.where}: ${alternate.href}` }
+        : {
+            id: "link-alternate",
+            status: anyMarkdown ? "warn" : "info",
+            detail:
+              "No rel=alternate pointing at a Markdown copy. Clients that follow the link rather than send an Accept header (Codex CLI is the one on the public matrix) have nothing to follow.",
+          },
+    );
 
     // ── the replay ───────────────────────────────────────────────────────────
     // Reach is scored against the CONTROL, never in isolation. Where the origin
@@ -377,11 +446,11 @@ const LENS_MARKDOWN = defineLens({
     const agents: AgentRow[] = AGENT_ACCEPTS.map((a) => {
       const r = byId.get(agentProbe.get(a.key));
       if (!r?.ok) {
-        return { ...a, ok: false, status: null, contentType: "", markdown: false, bytes: null,
-                 error: r?.error || "no answer" };
+        return { ...a, ok: false, status: null, contentType: "", markdown: false, bytes: null, error: r?.error || "no answer" };
       }
       return {
-        ...a, ok: true,
+        ...a,
+        ok: true,
         status: r.status,
         contentType: mediaType(r.contentType),
         markdown: isMarkdown(r.contentType),
@@ -397,16 +466,16 @@ const LENS_MARKDOWN = defineLens({
     // Only where a Markdown representation actually came back, and only from
     // declared lengths, so nothing here is inferred from a 4KB sample.
     const viaAgent = answered.find((a) => a.markdown);
-    const mdBest = (viaAgent && byId.get(agentProbe.get(viaAgent.key)))
-      || (md?.ok && isMarkdown(md.contentType) ? md : null);
-    const delta = (mdBest && control.bytes && mdBest.bytes)
-      ? {
-          htmlBytes: control.bytes,
-          markdownBytes: mdBest.bytes,
-          ratio: Number((control.bytes / mdBest.bytes).toFixed(1)),
-          saved: Number((100 * (1 - mdBest.bytes / control.bytes)).toFixed(1)),
-        }
-      : null;
+    const mdBest = (viaAgent && byId.get(agentProbe.get(viaAgent.key))) || (md?.ok && isMarkdown(md.contentType) ? md : null);
+    const delta =
+      mdBest && control.bytes && mdBest.bytes
+        ? {
+            htmlBytes: control.bytes,
+            markdownBytes: mdBest.bytes,
+            ratio: Number((control.bytes / mdBest.bytes).toFixed(1)),
+            saved: Number((100 * (1 - mdBest.bytes / control.bytes)).toFixed(1)),
+          }
+        : null;
 
     const failed = checks.filter((c) => c.status === "fail").length;
     s.setAttribute("lens.md_reached", reached);
@@ -433,9 +502,16 @@ const LENS_MARKDOWN = defineLens({
       // the grading without re-running anything.
       responses: probes.map((p) => {
         const r = byId.get(p.id);
-        return { id: p.id, accept: p.accept, ok: !!r?.ok, status: r?.status ?? null,
-                 contentType: r?.contentType || "", vary: r?.vary || "",
-                 cacheControl: r?.cacheControl || "", error: r?.error };
+        return {
+          id: p.id,
+          accept: p.accept,
+          ok: !!r?.ok,
+          status: r?.status ?? null,
+          contentType: r?.contentType || "",
+          vary: r?.vary || "",
+          cacheControl: r?.cacheControl || "",
+          error: r?.error,
+        };
       }),
       sample: mdBest ? mdBest.sample.slice(0, BODY_SAMPLE) : "",
       source: "https://acceptmarkdown.com/status",

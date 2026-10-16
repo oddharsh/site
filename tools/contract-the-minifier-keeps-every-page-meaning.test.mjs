@@ -32,20 +32,108 @@ import { assert, ROOT, test } from "./contract-shared.ts";
 const BUILT = fileURLToPath(new URL(".build/public/", ROOT));
 const needsBuild = !existsSync(BUILT) && "needs a built tree: bun run build";
 
-const LAYOUT = new Set(["html", "head", "body", "div", "section", "nav", "blockquote", "form", "figure", "header", "footer", "article", "fieldset",
-  "aside", "dialog", "main", "ol", "ul", "dl", "menu", "hgroup", "select", "optgroup", "datalist", "table", "thead", "tbody", "tfoot", "tr",
-  "colgroup", "map", "picture", "svg", "g"]);
-const CONTENT = new Set(["p", "li", "td", "th", "dd", "dt", "h1", "h2", "h3", "h4", "h5", "h6", "button", "summary", "details", "caption",
-  "legend", "option", "output", "figcaption", "noscript", "template", "label", "address", "object", "canvas", "iframe", "audio", "video", "slot"]);
+const LAYOUT = new Set([
+  "html",
+  "head",
+  "body",
+  "div",
+  "section",
+  "nav",
+  "blockquote",
+  "form",
+  "figure",
+  "header",
+  "footer",
+  "article",
+  "fieldset",
+  "aside",
+  "dialog",
+  "main",
+  "ol",
+  "ul",
+  "dl",
+  "menu",
+  "hgroup",
+  "select",
+  "optgroup",
+  "datalist",
+  "table",
+  "thead",
+  "tbody",
+  "tfoot",
+  "tr",
+  "colgroup",
+  "map",
+  "picture",
+  "svg",
+  "g",
+]);
+const CONTENT = new Set([
+  "p",
+  "li",
+  "td",
+  "th",
+  "dd",
+  "dt",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "button",
+  "summary",
+  "details",
+  "caption",
+  "legend",
+  "option",
+  "output",
+  "figcaption",
+  "noscript",
+  "template",
+  "label",
+  "address",
+  "object",
+  "canvas",
+  "iframe",
+  "audio",
+  "video",
+  "slot",
+]);
 const BLOCKISH = new Set([...LAYOUT, ...CONTENT]);
 const SENSITIVE = new Set(["pre", "textarea", "code"]);
 const DROP_EMPTY = new Set(["class", "id", "style", "title", "name", "value"]);
 const DEFAULTS = {
-  img: { loading: "eager" }, button: { type: "submit" }, script: { type: "text/javascript" }, style: { type: "text/css", media: "all" },
-  form: { method: "get" }, a: { target: "_self" }, area: { "shape": "rect" },
+  img: { loading: "eager" },
+  button: { type: "submit" },
+  script: { type: "text/javascript" },
+  style: { type: "text/css", media: "all" },
+  form: { method: "get" },
+  a: { target: "_self" },
+  area: { "shape": "rect" },
 };
-const BOOLEAN = new Set(["checked", "disabled", "hidden", "selected", "readonly", "required", "multiple", "autofocus", "novalidate", "async", "defer",
-  "nomodule", "ismap", "reversed", "open", "inert", "formnovalidate", "allowfullscreen", "default", "playsinline"]);
+const BOOLEAN = new Set([
+  "checked",
+  "disabled",
+  "hidden",
+  "selected",
+  "readonly",
+  "required",
+  "multiple",
+  "autofocus",
+  "novalidate",
+  "async",
+  "defer",
+  "nomodule",
+  "ismap",
+  "reversed",
+  "open",
+  "inert",
+  "formnovalidate",
+  "allowfullscreen",
+  "default",
+  "playsinline",
+]);
 
 // An attribute as the minifier is allowed to leave it, or null where it may drop it.
 function attribute(tag, name, value, attrs) {
@@ -74,7 +162,8 @@ export function meaning(html) {
         let t = c.value;
         if (!keepSpace) {
           t = t.replace(/\s+/g, " ");
-          const prev = kids[i - 1], next = kids[i + 1];
+          const prev = kids[i - 1],
+            next = kids[i + 1];
           if (!prev ? BLOCKISH.has(node.name) : BLOCKISH.has(prev.name)) t = t.trimStart();
           if (!next ? BLOCKISH.has(node.name) : BLOCKISH.has(next.name)) t = t.trimEnd();
           if (LAYOUT.has(node.name) && !t.trim()) t = "";

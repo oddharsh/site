@@ -1,10 +1,6 @@
 // ── Explorer chrome ──────────────────────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
 
 // ── Explorer chrome ──────────────────────────────────────────────────────────
 // The address bar and task pane are markup, so the things worth pinning are the
@@ -13,9 +9,15 @@ import {
 test("the task pane's places are the manifest's taskbar surfaces", async () => {
   const { PLACES } = await import("../src/worker/lib/explorer.ts");
   const manifest = JSON.parse(readFileSync("config/site-manifest.json", "utf8"));
-  const pinned = manifest.surfaces.filter((s) => s.flags && s.flags.taskbar).map((s) => s.path).sort();
-  assert.deepEqual(PLACES.map((p) => p.path).sort(), pinned,
-    "lib/explorer.js PLACES drifted from site-manifest.json — the pane would list a section the taskbar does not, or miss one");
+  const pinned = manifest.surfaces
+    .filter((s) => s.flags && s.flags.taskbar)
+    .map((s) => s.path)
+    .sort();
+  assert.deepEqual(
+    PLACES.map((p) => p.path).sort(),
+    pinned,
+    "lib/explorer.js PLACES drifted from site-manifest.json — the pane would list a section the taskbar does not, or miss one",
+  );
 });
 
 test("the pane states only what it was given", async () => {
@@ -35,7 +37,7 @@ test("the pane states only what it was given", async () => {
   assert.match(bar, /<span aria-current="page" class="axp-here">On the wire<\/span>|<span class="axp-here" aria-current="page">On the wire<\/span>/);
   assert.match(bar, /<a href="\/garage">Garage<\/a>/);
   // Untrusted text is escaped, not interpolated.
-  assert.match(String(taskPane({ path: "/garage/x", name: '<img src=x onerror=alert(1)>' })), /&lt;img src=x/);
+  assert.match(String(taskPane({ path: "/garage/x", name: "<img src=x onerror=alert(1)>" })), /&lt;img src=x/);
 });
 
 // A twin may only be advertised where the build wrote one. The committed list is
@@ -43,6 +45,9 @@ test("the pane states only what it was given", async () => {
 // marker build.ts rewrites is still there to be rewritten.
 test("the twin list is generated, not committed", () => {
   const source = readFileSync("src/worker/lib/twins.ts", "utf8");
-  assert.match(source, /^export const TWIN_PATHS = \[\]; \/\/ build:twins$/m,
-    "lib/twins.js must ship empty with its build:twins marker — a committed list would advertise twins that 404 in dev");
+  assert.match(
+    source,
+    /^export const TWIN_PATHS = \[\]; \/\/ build:twins$/m,
+    "lib/twins.js must ship empty with its build:twins marker — a committed list would advertise twins that 404 in dev",
+  );
 });

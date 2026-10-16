@@ -179,7 +179,10 @@ console.log("");
 
 // Cheapest disqualifier first, then the two that cost a minute, then the two
 // that cost several. The order is the bumper's, for the bumper's reason.
-const step = (g: Gate) => { gates.push(g); print(g); };
+const step = (g: Gate) => {
+  gates.push(g);
+  print(g);
+};
 
 step(zstdGate(candidate));
 step(lockfileReadGate(candidate, ROOT));
@@ -227,7 +230,9 @@ if (failed.length) {
 const movedWatches = watches.filter(watchMoved);
 if (movedWatches.length) {
   emit("changed", subject);
-  console.log(`canary:bun: ${identity.revision} clears every gate and ${movedWatches.length} watch(es) moved: ${movedWatches.map((w) => `${w.name} ${mark(w.pinned)} -> ${mark(w.candidate)}`).join("; ")}. Nothing written; a canary is never proposed.`);
+  console.log(
+    `canary:bun: ${identity.revision} clears every gate and ${movedWatches.length} watch(es) moved: ${movedWatches.map((w) => `${w.name} ${mark(w.pinned)} -> ${mark(w.candidate)}`).join("; ")}. Nothing written; a canary is never proposed.`,
+  );
   process.exit(1);
 }
 emit("green", subject);

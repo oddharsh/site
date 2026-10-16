@@ -77,9 +77,13 @@ test("q11() is build.ts's compressQ11, so a served twin reads as q11", async () 
   assert.match(own, /BROTLI_PARAM_SIZE_HINT\]: bytes\.length/);
   // The bytes, too: q11() on real text equals brotli at the build's settings.
   const plain = Buffer.from(build);
-  const expected = brotliCompressSync(plain, { params: {
-    [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_LGWIN]: 24, [zc.BROTLI_PARAM_SIZE_HINT]: plain.length,
-  } });
+  const expected = brotliCompressSync(plain, {
+    params: {
+      [zc.BROTLI_PARAM_QUALITY]: 11,
+      [zc.BROTLI_PARAM_LGWIN]: 24,
+      [zc.BROTLI_PARAM_SIZE_HINT]: plain.length,
+    },
+  });
   assert.ok(q11(plain).equals(expected), "q11() must produce the build's q11 bytes");
 });
 

@@ -31,7 +31,10 @@ export const stripRawText = (s: string, tag: string): string => {
   let rest = s;
   for (;;) {
     const i = rest.search(open);
-    if (i < 0) { kept.push(rest); break; }
+    if (i < 0) {
+      kept.push(rest);
+      break;
+    }
     kept.push(rest.slice(0, i));
     const after = rest.slice(i);
     const c = after.search(close);

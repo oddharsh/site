@@ -28,7 +28,9 @@ test("extraction moves the payload byte-for-byte and leaves an empty reference",
   const ref = quizReference(out.html);
   assert.deepEqual(ref, { inline: "", src: out.file.url });
   // Everything else in the page is untouched.
-  assert.ok(out.html.startsWith(`<main><section id="luq"></section></main>\n<script type="application/json" id="luq-data" data-src="${out.file.url}"></script>`));
+  assert.ok(
+    out.html.startsWith(`<main><section id="luq"></section></main>\n<script type="application/json" id="luq-data" data-src="${out.file.url}"></script>`),
+  );
   assert.ok(out.html.endsWith(`<script src="/quiz.js" defer></script>`));
 
   // A second pass is a build-order bug, and it says so rather than no-op.

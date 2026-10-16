@@ -27,7 +27,10 @@ const BITMAP = `
   ....................................##...............................................................##....##...........................................................
   ................................##..##..............................................................##.....##...........................................................
   .................................####..............................................................##......##...........................................................
-`.trim().split("\n").map((r) => r.trim());
+`
+  .trim()
+  .split("\n")
+  .map((r) => r.trim());
 
 const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
 
@@ -94,7 +97,10 @@ test("the watermark is desktop, so windows cover it", () => {
   // wanted a window dragged over it to cover it, the way it covers an icon.
   const css = read("src/styles/luna.css");
   const z = (selector) => Number(new RegExp(`(?:^|\\})${selector.replace(/[.()*+?[\]\\]/g, "\\$&")}\\{[^}]*z-index:(-?\\d+)`, "m").exec(css)?.[1]);
-  const mark = z("body::before"), win = z(".window,.np-window"), icons = z("#axp-icons"), desk = z("#axp-desktop");
+  const mark = z("body::before"),
+    win = z(".window,.np-window"),
+    icons = z("#axp-icons"),
+    desk = z("#axp-desktop");
   for (const [name, v] of Object.entries({ mark, win, icons, desk })) assert.ok(Number.isInteger(v), `found no z-index for ${name}`);
   assert.ok(mark < win, `the watermark (z-index ${mark}) has to sit under windows (${win})`);
   assert.ok(mark > desk, `and over the wallpaper (${desk})`);
@@ -105,6 +111,10 @@ test("the homepage reserves the same band at first paint", () => {
   const page = read("src/pages/index.html");
   assert.deepEqual(steps(page), steps(read("src/styles/luna.css")), "index.html's inline --hypercam-px steps drifted from luna.css");
   assert.match(page, /--hypercam-h: calc\(16 \* var\(--hypercam-px\)\)/);
-  assert.match(page, /padding-top: calc\(var\(--sa-t\) \+ var\(--hypercam-h\) \+ 8px\)/, "the window column starts below the band (and the status bar) before luna lands");
+  assert.match(
+    page,
+    /padding-top: calc\(var\(--sa-t\) \+ var\(--hypercam-h\) \+ 8px\)/,
+    "the window column starts below the band (and the status bar) before luna lands",
+  );
   assert.match(page, /#axp-icons\s*\{[^}]*inset: calc\(var\(--sa-t\) \+ var\(--hypercam-h\)\) /, "so does the icon layer");
 });

@@ -25,19 +25,22 @@
 
 import { createHoist, hoverCapable, ANCHOR_OK } from "/hoist.js";
 
-const esc = (s) => String(s ?? "")
-  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;");
+const esc = (s) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 // name line + optional hint line + the label/value grid. A pair whose value is
 // empty never reaches the markup, so an infotip is only ever as long as the
 // data behind it — the same discipline the photo recipe rows follow.
 const card = (name, hint, pairs) => {
-  const rows = (pairs || []).filter((p) => p && p[1])
-    .map((p) => `<dt>${esc(p[0])}</dt><dd>${esc(p[1])}</dd>`).join("");
-  return `<div class="n">${esc(name)}</div>` +
-    (hint ? `<div class="h">${esc(hint)}</div>` : "") +
-    (rows ? `<dl>${rows}</dl>` : "");
+  const rows = (pairs || [])
+    .filter((p) => p && p[1])
+    .map((p) => `<dt>${esc(p[0])}</dt><dd>${esc(p[1])}</dd>`)
+    .join("");
+  return `<div class="n">${esc(name)}</div>` + (hint ? `<div class="h">${esc(hint)}</div>` : "") + (rows ? `<dl>${rows}</dl>` : "");
 };
 
 // A tray icon's title is "System Properties · what one request reveals": the
@@ -87,12 +90,18 @@ export function start(o) {
   // by hand to opt a control in without a native tooltip ever existing.
   const stash = (t) => {
     const title = t.getAttribute("title");
-    if (title) { t.dataset.tip = title; t.setAttribute("title", ""); }
+    if (title) {
+      t.dataset.tip = title;
+      t.setAttribute("title", "");
+    }
   };
   const restore = (t) => {
     if (t.dataset.tip && t.getAttribute("title") === "") t.setAttribute("title", t.dataset.tip);
   };
-  const onEnter = (e) => { const t = findTarget(e.target); if (t) stash(t); };
+  const onEnter = (e) => {
+    const t = findTarget(e.target);
+    if (t) stash(t);
+  };
   const onLeave = (e) => {
     const t = findTarget(e.target);
     if (t && findTarget(e.relatedTarget) !== t) restore(t);
@@ -130,7 +139,11 @@ export function start(o) {
     const href = a.getAttribute("href") || "";
     if (!href || href[0] === "#") return "";
     let u;
-    try { u = new URL(href, location.href); } catch (_) { return ""; }
+    try {
+      u = new URL(href, location.href);
+    } catch (_) {
+      return "";
+    }
     if (u.protocol === "mailto:") return u.pathname;
     if (u.protocol !== "http:" && u.protocol !== "https:") return "";
     if (u.host === location.host) return "";
@@ -154,7 +167,13 @@ export function start(o) {
     // loadWriting() caches its own promise in nav.js, so a repeat hover before
     // the first fetch resolves costs nothing and never issues a second request.
     if (!writingCount && load.writing) {
-      load.writing().then((w) => { writingCount = (w || []).length; reshow(t); }).catch(() => {});
+      load
+        .writing()
+        .then((w) => {
+          writingCount = (w || []).length;
+          reshow(t);
+        })
+        .catch(() => {});
     }
     return writingCount;
   };
@@ -165,48 +184,65 @@ export function start(o) {
   // lands, or if it never does, the shortcut keeps its ordinary card below.
   const GITHUB = "https://github.com/oddharsh";
   const isGithub = (t) => t.matches(".axp-ico") && t.getAttribute("href") === GITHUB;
-  let gh = null, ghAsked = false;
+  let gh = null,
+    ghAsked = false;
   const loadGithub = (t) => {
     if (ghAsked) return;
     ghAsked = true;
     fetch("/github.json", { headers: { accept: "application/json" } })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j && j.prs && j.issues && j.commits) { gh = j; reshow(t); } })
+      .then((j) => {
+        if (j && j.prs && j.issues && j.commits) {
+          gh = j;
+          reshow(t);
+        }
+      })
       .catch(() => {});
   };
   const shortDay = (iso) => {
     try {
-      return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", timeZone: "UTC" })
-        .format(new Date(String(iso).slice(0, 10) + "T00:00:00Z"));
-    } catch (_) { return ""; }
+      return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(String(iso).slice(0, 10) + "T00:00:00Z"));
+    } catch (_) {
+      return "";
+    }
   };
   const nameOnly = (repo) => String(repo).replace(/^oddharsh\//, "");
   const ghTip = (g) => {
-    const pr = g.prs, is = g.issues, co = g.commits;
-    const head = (label, tail) =>
-      `<div class="gh-s"><b>${esc(label)}</b>${tail ? `<span>${esc(tail)}</span>` : ""}</div>`;
-    let out = `<div class="n">GitHub · ${esc(g.user)}</div>` +
-      `<div class="h">since ${esc(shortDay(g.since))}</div>`;
+    const pr = g.prs,
+      is = g.issues,
+      co = g.commits;
+    const head = (label, tail) => `<div class="gh-s"><b>${esc(label)}</b>${tail ? `<span>${esc(tail)}</span>` : ""}</div>`;
+    let out = `<div class="n">GitHub · ${esc(g.user)}</div>` + `<div class="h">since ${esc(shortDay(g.since))}</div>`;
 
     // Tier 1, the most room: each repository with its count and latest title.
     if (pr.repos.length) {
       out += head("Pull requests", [plural(pr.total, "PR"), pr.merged && pr.merged + " merged", pr.open && pr.open + " open"].filter(Boolean).join(" · "));
-      out += pr.repos.slice(0, 4).map((r) =>
-        `<div class="gh-r"><span class="gh-repo">${esc(r.repo)}</span><span class="gh-c">${r.count}</span></div>` +
-        `<div class="gh-t">${esc(r.latest.title)}${r.latest.state === "merged" ? " ✓" : ""}</div>`).join("");
+      out += pr.repos
+        .slice(0, 4)
+        .map(
+          (r) =>
+            `<div class="gh-r"><span class="gh-repo">${esc(r.repo)}</span><span class="gh-c">${r.count}</span></div>` +
+            `<div class="gh-t">${esc(r.latest.title)}${r.latest.state === "merged" ? " ✓" : ""}</div>`,
+        )
+        .join("");
       if (pr.repos.length > 4) out += `<div class="gh-more">+ ${plural(pr.repos.length - 4, "more repo")}</div>`;
     }
     // Tier 2: the newest issues, because an issue's title is its content.
     if (is.items.length) {
       out += head("Issues", plural(is.total, "issue") + (is.repoCount > 1 ? ` · ${is.repoCount} repos` : ""));
-      out += is.items.slice(0, 3).map((i) =>
-        `<div class="gh-t"><span class="gh-repo">${esc(i.repo)}</span> ${esc(i.title)}</div>`).join("");
+      out += is.items
+        .slice(0, 3)
+        .map((i) => `<div class="gh-t"><span class="gh-repo">${esc(i.repo)}</span> ${esc(i.title)}</div>`)
+        .join("");
     }
     // Tier 3, one line: where the commits went, by repository.
     if (co.repos.length) {
       const covered = co.coveredSince !== g.since ? `since ${shortDay(co.coveredSince)}` : "";
       out += head("Commits to my repos", [plural(co.total, "commit"), covered].filter(Boolean).join(" · "));
-      out += `<div class="gh-t">${co.repos.slice(0, 5).map((r) => `${esc(nameOnly(r.repo))} ${r.count}`).join(" · ")}</div>`;
+      out += `<div class="gh-t">${co.repos
+        .slice(0, 5)
+        .map((r) => `${esc(nameOnly(r.repo))} ${r.count}`)
+        .join(" · ")}</div>`;
     }
     return `<div class="gh">${out}</div>`;
   };
@@ -233,18 +269,31 @@ export function start(o) {
   // — one fetch per page, shared with the balloon, and only ever on a hover
   // that lasted long enough to mean it. The static half renders immediately;
   // the rows fill in when the data lands.
-  let sys = null, upd = null;
+  let sys = null,
+    upd = null;
   const fields = (j) => {
     const m = {};
-    ((j && j.groups) || []).forEach((g) => (g.fields || []).forEach((f) => { m[f.k] = f.v; }));
+    ((j && j.groups) || []).forEach((g) =>
+      (g.fields || []).forEach((f) => {
+        m[f.k] = f.v;
+      }),
+    );
     return m;
   };
   const trayTip = (a) => {
     const kind = a.getAttribute("data-kind");
     const parts = splitTitle(a.dataset.tip);
-    const want = (kind === "updates") ? "upd" : "sys";
-    if (want === "sys" && !sys && load.sys) load.sys((j) => { sys = j; reshow(a); });
-    if (want === "upd" && !upd && load.upd) load.upd((j) => { upd = j; reshow(a); });
+    const want = kind === "updates" ? "upd" : "sys";
+    if (want === "sys" && !sys && load.sys)
+      load.sys((j) => {
+        sys = j;
+        reshow(a);
+      });
+    if (want === "upd" && !upd && load.upd)
+      load.upd((j) => {
+        upd = j;
+        reshow(a);
+      });
     let rows = [];
     if (kind === "sysprop") {
       const m = fields(sys);
@@ -261,7 +310,10 @@ export function start(o) {
       ];
     } else if (kind === "updates") {
       const latest = (upd && upd.items && upd.items[0]) || null;
-      rows = [["Build", upd && upd.build], ["Latest", latest && latest.slug]];
+      rows = [
+        ["Build", upd && upd.build],
+        ["Latest", latest && latest.slug],
+      ];
     }
     return card(parts[0], parts[1], rows);
   };
@@ -271,11 +323,16 @@ export function start(o) {
   // taskbar is already showing, spelled out.
   const clockTip = () => {
     let zone = "";
-    try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (_) {}
+    try {
+      zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    } catch (_) {}
     let date = "";
     try {
       date = new Intl.DateTimeFormat(undefined, {
-        weekday: "long", year: "numeric", month: "long", day: "numeric",
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
       }).format(new Date());
     } catch (_) {}
     return card(date || "Date and Time", "", [["Zone", zone]]);
@@ -285,12 +342,10 @@ export function start(o) {
   // voices, not Microsoft's, and a tooltip is not the place to blur that.
   const soundTip = (b) => {
     const muted = b.classList.contains("muted");
-    return card("Sounds", muted ? "click to unmute" : "click to mute",
-      [["State", muted ? "Off" : "On"]]);
+    return card("Sounds", muted ? "click to unmute" : "click to mute", [["State", muted ? "Off" : "On"]]);
   };
 
-  const startTip = () => card("Run", "type the name of a page, photo, or profile",
-    [["Shortcut", kbd]]);
+  const startTip = () => card("Run", "type the name of a page, photo, or profile", [["Shortcut", kbd]]);
 
   // Everything else with a tip: title-bar controls, dialog buttons, form fields,
   // and every titled thing in the page body. One line, no rows — this is the
@@ -312,8 +367,10 @@ export function start(o) {
     if (!to && !blank) return plainTip(a);
     const text = a.dataset.tip || a.getAttribute("title") || "";
     if (!text && !to) return "";
-    return card(text || a.textContent.trim(), "",
-      [["Target", to], ["Opens", blank ? "in a new window" : ""]]);
+    return card(text || a.textContent.trim(), "", [
+      ["Target", to],
+      ["Opens", blank ? "in a new window" : ""],
+    ]);
   };
 
   // A glossary term in an essay (docs/TERMS.md). The definition is the point of
@@ -337,11 +394,15 @@ export function start(o) {
   const termTip = (a) => {
     const text = a.dataset.tip || a.getAttribute("title") || "";
     let host = "";
-    try { host = new URL(a.href).host; } catch (_) {}
+    try {
+      host = new URL(a.href).host;
+    } catch (_) {}
     const src = SOURCES[host] || host.replace(/^www\./, "");
-    return `<div class="n">${esc(a.textContent.trim())}</div>` +
+    return (
+      `<div class="n">${esc(a.textContent.trim())}</div>` +
       (text ? `<div class="d">${esc(text)}</div>` : "") +
-      (src ? `<dl><dt>Read more</dt><dd>${esc(src)}</dd></dl>` : "");
+      (src ? `<dl><dt>Read more</dt><dd>${esc(src)}</dd></dl>` : "")
+    );
   };
 
   const contentFor = (t) => {
@@ -380,7 +441,9 @@ export function start(o) {
   // rather than wait for the next hover. Same re-render the photo tooltip does
   // when a histogram lands, and the guard is the same: only if this exact
   // target is still the open one.
-  function reshow(t) { if (hoist.active() === t) hoist.show(t); }
+  function reshow(t) {
+    if (hoist.active() === t) hoist.show(t);
+  }
 
   // Replaying the hover that arrived first. Keyboard focus is deliberate and
   // shows at once; a POINTER replay has to serve out the rest of the dwell it
@@ -399,7 +462,11 @@ export function start(o) {
   else if (init && init.target) {
     const left = Math.max(0, 400 - (Date.now() - (init.at || 0)));
     setTimeout(() => {
-      try { if (!init.target.matches(":hover")) return; } catch (_) { return; }
+      try {
+        if (!init.target.matches(":hover")) return;
+      } catch (_) {
+        return;
+      }
       hoist.show(init.target, init);
     }, left);
   }

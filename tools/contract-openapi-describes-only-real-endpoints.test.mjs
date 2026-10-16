@@ -14,12 +14,14 @@ import { LENS_BUDGETS } from "../src/worker/lens-pipeline.ts";
 
 const spec = JSON.parse(JSON.stringify(openApiDocument()));
 const METHODS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
-const operations = Object.entries(spec.paths).flatMap(([path, item]) =>
-  METHODS.filter((m) => item[m]).map((method) => ({ path, method, op: item[method] })));
+const operations = Object.entries(spec.paths).flatMap(([path, item]) => METHODS.filter((m) => item[m]).map((method) => ({ path, method, op: item[method] })));
 
 test("the spec is OpenAPI 3.1 for this origin, keyless", () => {
   assert.match(spec.openapi, /^3\.1\.\d+$/);
-  assert.deepEqual(spec.servers.map((s) => s.url), ["https://aadhar.sh"]);
+  assert.deepEqual(
+    spec.servers.map((s) => s.url),
+    ["https://aadhar.sh"],
+  );
   assert.match(spec.servers[0].description, /sandbox/, "production is named as the sandbox, since it is one");
   assert.deepEqual(spec.security, [], "no endpoint needs a key");
   assert.ok(spec.info.title && spec.info.version && spec.info.description);
@@ -49,7 +51,10 @@ test("every operation is usable for function calling", () => {
       const content = Object.values(r.content || {});
       assert.ok(content.length && content.every((c) => c.schema), `${at} ${status}: a response schema`);
     }
-    assert.ok(Object.keys(op.responses).some((s) => s.startsWith("2")), `${at}: a success response`);
+    assert.ok(
+      Object.keys(op.responses).some((s) => s.startsWith("2")),
+      `${at}: a success response`,
+    );
   }
 });
 
@@ -63,7 +68,12 @@ test("every $ref resolves, and the Error shape is the one the site sends", () =>
 
 test("agents can find it: the API catalog and llms.txt both point at it", () => {
   const catalog = JSON.parse(readFileSync("public/.well-known/api-catalog", "utf8"));
-  const hrefs = catalog.linkset.flatMap((l) => Object.values(l).filter(Array.isArray).flat().map((x) => x.href));
+  const hrefs = catalog.linkset.flatMap((l) =>
+    Object.values(l)
+      .filter(Array.isArray)
+      .flat()
+      .map((x) => x.href),
+  );
   assert.ok(hrefs.includes("https://aadhar.sh/openapi.json"), "api-catalog links the spec");
   assert.match(readFileSync("public/llms.txt", "utf8"), /\(https:\/\/aadhar\.sh\/openapi\.json\)/, "llms.txt links the spec");
   const spec = "https://aadhar.sh/openapi.json";

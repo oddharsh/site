@@ -5,10 +5,17 @@ import { ROOT, assert, test } from "./contract-shared.ts";
 // Parse the real workflow with Bun's YAML parser under both test runners.
 // CI is ONE job since 2026-09-28, so the join job and its failure predicate
 // are gone: a single job named `validate` fails the required check by itself.
-const workflow = JSON.parse(execFileSync("bun", [
-  "-e", "console.log(JSON.stringify(Bun.YAML.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))))",
-  fileURLToPath(new URL(".github/workflows/ci.yml", ROOT)),
-], { encoding: "utf8" }));
+const workflow = JSON.parse(
+  execFileSync(
+    "bun",
+    [
+      "-e",
+      "console.log(JSON.stringify(Bun.YAML.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))))",
+      fileURLToPath(new URL(".github/workflows/ci.yml", ROOT)),
+    ],
+    { encoding: "utf8" },
+  ),
+);
 
 test("CI is one required job named validate that cannot be skipped or softened", () => {
   // `attest` (2026-10-01) signs the served manifest on a push to main. It is
@@ -25,7 +32,10 @@ test("CI is one required job named validate that cannot be skipped or softened",
   assert.equal(report["continue-on-error"], true, "a CPU failure may fail its job, never the run promote-production waits on");
   assert.equal(report.needs, undefined, "nothing waits on the report, and it waits on nothing");
   assert.ok(!Object.values(workflow.jobs).some((job) => [job.needs].flat().includes("cpu-sweep")), "no job may need the report");
-  assert.ok(report.steps.some((step) => /cpu-sweep\.ts --gate/.test(step.run ?? "")), "the CPU job gates");
+  assert.ok(
+    report.steps.some((step) => /cpu-sweep\.ts --gate/.test(step.run ?? "")),
+    "the CPU job gates",
+  );
   assert.ok(!workflow.jobs.validate.steps.some((step) => /cpu-sweep/.test(step.run ?? "")), "the sweep stays out of validate, which it slows");
   const { validate } = workflow.jobs;
   // The `main` ruleset requires a check with exactly this name.
@@ -42,8 +52,17 @@ test("validate still runs the checks that protect what ships", () => {
   const runs = workflow.jobs.validate.steps.map((step) => step.run ?? "").join("\n");
   // pages:check is here because #1001 dropped it from validate and nothing
   // noticed for 16 days (gotcha 32).
-  for (const command of ["bun run check-wrangler", "bun run lint", "bun run typecheck", "bun run perf-budget", "bun run derive:check",
-    "bun run pages:check", "bun run routes:check", "bun run test", "bun run --filter cal-aadhar-sh test"]) {
+  for (const command of [
+    "bun run check-wrangler",
+    "bun run lint",
+    "bun run typecheck",
+    "bun run perf-budget",
+    "bun run derive:check",
+    "bun run pages:check",
+    "bun run routes:check",
+    "bun run test",
+    "bun run --filter cal-aadhar-sh test",
+  ]) {
     assert.ok(runs.includes(command), `validate no longer runs ${command}`);
   }
 });
@@ -51,7 +70,8 @@ test("validate still runs the checks that protect what ships", () => {
 test("manual CI keeps checkout and cache scope on the dispatched revision", () => {
   assert.ok(Object.hasOwn(workflow.on, "workflow_dispatch"));
   assert.equal(workflow.on.workflow_dispatch?.inputs, undefined);
-  const checkouts = Object.values(workflow.jobs).flatMap((job) => job.steps)
+  const checkouts = Object.values(workflow.jobs)
+    .flatMap((job) => job.steps)
     .filter((step) => step.uses?.startsWith("actions/checkout@"));
   assert.ok(checkouts.length > 0);
   for (const checkout of checkouts) {
@@ -70,8 +90,7 @@ test("background steps keep the three ordering edges and all join before the job
     assert.ok(i >= 0, `validate no longer runs \`${run}\` as its own step`);
     return i;
   };
-  const waited = (id, before) => steps.slice(0, before).some((step) =>
-    step.wait === id || (Array.isArray(step.wait) && step.wait.includes(id)));
+  const waited = (id, before) => steps.slice(0, before).some((step) => step.wait === id || (Array.isArray(step.wait) && step.wait.includes(id)));
 
   // A background step needs an id for anything to wait on or cancel it.
   for (const step of steps.filter((s) => s.background)) assert.ok(step.id, `${step.name} runs in the background without an id`);

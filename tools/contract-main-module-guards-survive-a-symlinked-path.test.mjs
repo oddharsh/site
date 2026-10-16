@@ -34,7 +34,8 @@ test("no module decides it is the entry point by comparing argv[1] to import.met
   // git ls-files rather than a walk: the question is about files this repo
   // OWNS, and a walk would have to re-learn every ignore rule to answer it.
   const files = execFileSync("git", ["ls-files", "*.ts", "*.mjs", "*.js"], { cwd: ROOT, encoding: "utf8" })
-    .split("\n").filter(Boolean)
+    .split("\n")
+    .filter(Boolean)
     // Test files are exempt: this one quotes both broken spellings above, and
     // the fixture below writes one on purpose. A rule that failed on its own
     // explanation could only be fixed by deleting the explanation.
@@ -57,13 +58,16 @@ test("a module run through a symlinked path still knows it is the entry point", 
     // Explicit, so this reproduces on Linux CI too rather than riding macOS's
     // /var symlink. The trap is a property of symlinks, not of one platform.
     await symlink("real", path.join(dir, "link"));
-    await writeFile(path.join(dir, "real/mod.mjs"), `import { pathToFileURL } from "node:url";
+    await writeFile(
+      path.join(dir, "real/mod.mjs"),
+      `import { pathToFileURL } from "node:url";
 const argv1 = process.argv[1];
 console.log(JSON.stringify({
   metaMain: import.meta.main === true,
   comparison: Boolean(argv1) && import.meta.url === pathToFileURL(argv1).href,
 }));
-`);
+`,
+    );
     await writeFile(path.join(dir, "importer.mjs"), 'await import("./real/mod.mjs");\n');
 
     const read = (runtime, args) => {

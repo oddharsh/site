@@ -89,5 +89,8 @@ test("every TOML file in the tree parses, and the two the tools read have their 
   assert.ok(Object.keys(cargo.dependencies ?? {}).length > 0, "zenc's Cargo.toml has a dependencies table");
   const osv = parse(readFileSync(new URL("osv-scanner.toml", ROOT), "utf8"));
   const ignored = /** @type {Record<string, unknown>[]} */ (Array.isArray(osv.IgnoredVulns) ? osv.IgnoredVulns : []);
-  assert.ok(ignored.length > 0 && ignored.every((v) => String(v.id).startsWith("GHSA-")), "osv-scanner.toml's IgnoredVulns is an array of tables with advisory ids");
+  assert.ok(
+    ignored.length > 0 && ignored.every((v) => String(v.id).startsWith("GHSA-")),
+    "osv-scanner.toml's IgnoredVulns is an array of tables with advisory ids",
+  );
 });

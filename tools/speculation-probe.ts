@@ -106,7 +106,10 @@ await dwell(1500);
 await page.keyboard.press("Meta+k");
 await dwell(1200);
 const injected = await page.evaluate(
-  () => document.querySelectorAll('#axp-run a[href^="/lwe/"], #axp-run a[href^="/garage/"], .axp-run a[href^="/lwe/"], .axp-run a[href^="/garage/"], a.opt[href^="/lwe/"], a.opt[href^="/garage/"]').length,
+  () =>
+    document.querySelectorAll(
+      '#axp-run a[href^="/lwe/"], #axp-run a[href^="/garage/"], .axp-run a[href^="/lwe/"], .axp-run a[href^="/garage/"], a.opt[href^="/lwe/"], a.opt[href^="/garage/"]',
+    ).length,
 );
 console.log(`  palette injected ${injected} anchors matching the eager rule`);
 await dwell(5000);

@@ -387,9 +387,7 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
     const modes = new Set(entries.map((e) => e.mode));
     const kinds = [
       ...new Set(
-        github.messages
-          .filter((m) => m.paths.includes(path) && m.type.startsWith("CONFLICT"))
-          .map((m) => (m.text.match(/^CONFLICT \(([^)]+)\)/)?.[1] ?? m.type)),
+        github.messages.filter((m) => m.paths.includes(path) && m.type.startsWith("CONFLICT")).map((m) => m.text.match(/^CONFLICT \(([^)]+)\)/)?.[1] ?? m.type),
       ),
     ];
 
@@ -414,7 +412,8 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
     };
 
     if (structural) {
-      const what = kinds.length > 0 ? kinds.join(", ") : !stages.includes(2) ? "deleted on main" : !stages.includes(3) ? "deleted in the PR" : "not a line conflict";
+      const what =
+        kinds.length > 0 ? kinds.join(", ") : !stages.includes(2) ? "deleted on main" : !stages.includes(3) ? "deleted in the PR" : "not a line conflict";
       lift("local-required", `GitHub cannot render ${what}; its Resolve button is disabled for this`);
     }
 
@@ -428,7 +427,10 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
       lift("regenerate", exact ? `derived by ${exact.id}; the merged text is never the answer` : "a lockfile; the merged text is never the answer");
       owes.push(exact?.regenerate ?? "bun install");
     }
-    if (byDir) reasons.push(`sits under ${(byDir.outputs ?? []).find((o) => under(path, o))}, which ${byDir.id} declares as output; regenerate if it is one of that generator's files`);
+    if (byDir)
+      reasons.push(
+        `sits under ${(byDir.outputs ?? []).find((o) => under(path, o))}, which ${byDir.id} declares as output; regenerate if it is one of that generator's files`,
+      );
 
     if (!structural && hunks.length > 0) {
       const heavy = hunks.filter((h) => h.grade === "heavy").length;
@@ -444,7 +446,7 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
         owes.push(`${d.regenerate}  (input to ${d.id})`);
       }
     }
-    if (path === "config/derivations.json") owes.push("bun run derive:check -- --lock, after reading what it vouches for");    // A merged input moves a recorded digest, so `validate` runs derive:check
+    if (path === "config/derivations.json") owes.push("bun run derive:check -- --lock, after reading what it vouches for"); // A merged input moves a recorded digest, so `validate` runs derive:check
     // against a hash neither side recorded. The web editor commits and stops;
     // it cannot run the command that clears that, so the owed step is the
     // reason to take the file local even when every hunk is small.
@@ -614,10 +616,10 @@ function column(label: string, lines: string[] | null | undefined, origins: Orig
         ? ""
         : `<div class="none">no commits on this side since the merge base</div>`
       : lines === null
-      ? `<div class="none">no base (git wrote no diff3 section)</div>`
-      : lines.length === 0
-        ? `<div class="none">nothing: this side has no lines here</div>`
-        : `<pre>${esc(lines.slice(0, VIEW_LINES).join("\n"))}${lines.length > VIEW_LINES ? `\n<span class="n">… ${lines.length - VIEW_LINES} more lines</span>` : ""}</pre>`;
+        ? `<div class="none">no base (git wrote no diff3 section)</div>`
+        : lines.length === 0
+          ? `<div class="none">nothing: this side has no lines here</div>`
+          : `<pre>${esc(lines.slice(0, VIEW_LINES).join("\n"))}${lines.length > VIEW_LINES ? `\n<span class="n">… ${lines.length - VIEW_LINES} more lines</span>` : ""}</pre>`;
   return `<div class="col ${label}"><h4>${label}</h4>${chips ? `<ul class="by">${chips}</ul>` : ""}${body}</div>`;
 }
 
@@ -652,7 +654,9 @@ ${hist}${hunks}
 <h2>${title}</h2>
 <p class="n">${esc(r.base)} ← ${esc(r.head.slice(0, 12))}, from merge base ${esc(r.mergeBase.slice(0, 12))}</p>
 ${top ? `<div class="note lead">${prose(top)}</div>` : ""}
-<div class="route">${route(r).map((l) => `<p>${esc(l).replace(/`([^`]+)`/g, "<code>$1</code>")}</p>`).join("")}</div>
+<div class="route">${route(r)
+      .map((l) => `<p>${esc(l).replace(/`([^`]+)`/g, "<code>$1</code>")}</p>`)
+      .join("")}</div>
 ${r.warnings.map((w) => `<p class="warn">${esc(w)}</p>`).join("")}
 ${files.join("")}
 </section>`;

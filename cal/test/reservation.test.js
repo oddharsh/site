@@ -1,12 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  claimReservation,
-  dropReservation,
-  readReservation,
-  releaseSlotClaim,
-  reservationName,
-  reserveSlot,
-} from "../src/reservation.js";
+import { claimReservation, dropReservation, readReservation, releaseSlotClaim, reservationName, reserveSlot } from "../src/reservation.js";
 
 // A Durable Object's storage is a get/put/delete surface, so a Map stands in for
 // it exactly. What a Map CANNOT model is the serialization the real thing gives,
@@ -16,8 +9,12 @@ function fakeStorage() {
   const records = new Map();
   return {
     get: async (key) => records.get(key),
-    put: async (key, value) => { records.set(key, value); },
-    delete: async (key) => { records.delete(key); },
+    put: async (key, value) => {
+      records.set(key, value);
+    },
+    delete: async (key) => {
+      records.delete(key);
+    },
   };
 }
 
@@ -100,7 +97,16 @@ describe("slot reservations", () => {
   });
 
   it("survives a Durable Object that throws on release", async () => {
-    const env = { COUNTER: { idFromName: (n) => n, get: () => ({ fetch: async () => { throw new Error("unreachable"); } }) } };
+    const env = {
+      COUNTER: {
+        idFromName: (n) => n,
+        get: () => ({
+          fetch: async () => {
+            throw new Error("unreachable");
+          },
+        }),
+      },
+    };
     expect(await releaseSlotClaim(env, { id: "x", start, end })).toBe(false);
   });
 });

@@ -58,7 +58,9 @@ async function profiler(type) {
   try {
     const { stdout } = await run("system_profiler", ["-json", type], { maxBuffer: 24 * 1024 * 1024, timeout: 20000 });
     return JSON.parse(stdout);
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 async function wifi() {
@@ -147,8 +149,11 @@ const base = valueOf("--at", "https://aadhar.sh");
 if (has("--json")) {
   console.log(JSON.stringify({ samples: await sample() }, null, 2));
 } else if (has("--watch")) {
-  process.stdout.write("\x1b[?25l");   // hide the cursor; a blinking one on a redraw is noise
-  const stop = () => { process.stdout.write("\x1b[?25h\n"); process.exit(0); };
+  process.stdout.write("\x1b[?25l"); // hide the cursor; a blinking one on a redraw is noise
+  const stop = () => {
+    process.stdout.write("\x1b[?25h\n");
+    process.exit(0);
+  };
   process.on("SIGINT", stop);
   for (;;) {
     const frame = await draw(base, await sample());

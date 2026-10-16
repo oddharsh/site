@@ -34,8 +34,15 @@ import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManif
 import type { Album } from "./albums.ts";
 import { createDispatch, isEdgeCacheable, type RouteHandler } from "./dispatch.ts";
 import {
-  AROUND_SNAPSHOT_URL, CENSUS_TABLE_URL, DYNO_PULLS_URL, INBOX_MAIL_URL, LEDGER_LINES_URL,
-  READING_LIST_URL, WHOAREYOU_VALUES_URL, type ExactPath, type PrefixLabel,
+  AROUND_SNAPSHOT_URL,
+  CENSUS_TABLE_URL,
+  DYNO_PULLS_URL,
+  INBOX_MAIL_URL,
+  LEDGER_LINES_URL,
+  READING_LIST_URL,
+  WHOAREYOU_VALUES_URL,
+  type ExactPath,
+  type PrefixLabel,
 } from "./routes.ts";
 import { handleReading, handleReadingList } from "./reading.ts";
 import { handleGithubJson } from "./github.ts";
@@ -52,7 +59,14 @@ import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./u
 import { handleWhoareyouJson, handleWhoareyouValues, renderWhoareyouPage } from "./whoareyou.ts";
 import { handleWritingIndex, handleWritingPost } from "./writing.ts";
 import { handleLlmsFull } from "./x402.ts";
-import { cronSerendipity, handleSerendipity, MCP_INFO_PATH as SERENDIPITY_MCP_INFO, SERENDIPITY_SECURITY_HEADERS, serendipityCsp, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
+import {
+  cronSerendipity,
+  handleSerendipity,
+  MCP_INFO_PATH as SERENDIPITY_MCP_INFO,
+  SERENDIPITY_SECURITY_HEADERS,
+  serendipityCsp,
+  withSerendipitySecurityHeaders,
+} from "../../serendipity/serendipity.ts";
 import { scriptHashesFor } from "./lib/csp-hashes.ts";
 
 // Hand the runtime's tracer to the one span helper (cal and serendipity use it too). THIS is the only module that
@@ -62,7 +76,6 @@ import { scriptHashesFor } from "./lib/csp-hashes.ts";
 // any handler runs; without it every span is a harmless direct call, which is
 // exactly the behavior the tests and `wrangler dev` get.
 installTracing(tracing);
-
 
 // the coffee-booking expiry timer (Workflows). One durable instance per pending
 // booking replaces the old weekly cron sweep; its class_name must resolve on
@@ -139,7 +152,7 @@ export default {
     // instead of silently running somebody else's job.
     const job = cronJob(event.cron);
     if (job === "home_probe") {
-      await cron("cron.home_probe", () => cronHomeProbe(env, ctx));   // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
+      await cron("cron.home_probe", () => cronHomeProbe(env, ctx)); // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
       // Same tick, because Workers Free caps an account at five triggers and
       // this needs no schedule of its own: it fills a bounded batch of album
       // covers per run and converges in a few ticks (rn.js cronEnrichTracks).
@@ -159,7 +172,7 @@ export default {
       // catch it because cronJob() matches minute+hour and is right either way.
       // The pairing is pinned in contract-the-perf-probe now. Prefer the
       // three-letter form in anything new.
-      await cron("cron.census", () => cronCensus(env));   // the longitudinal census, full roster in one awaited pass
+      await cron("cron.census", () => cronCensus(env)); // the longitudinal census, full roster in one awaited pass
     } else if (job === "around") {
       // 05:41 UTC daily: crawl the /around neighborhood. One of the two jobs that
       // probe somebody else's server, each alone in its own invocation because
@@ -270,12 +283,18 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/terminal": routeTerminalGone,
   "/terminal/": routeTerminalGone,
 
-  "/finger": handleTool, "/finger.txt": handleTool,
-  "/radar": handleTool,  "/radar.txt": handleTool,
-  "/dict": handleTool,   "/dict.txt": handleTool,
-  "/cache": handleTool,  "/cache.txt": handleTool,
-  "/agent-ready": handleTool, "/agent-ready.txt": handleTool,
-  "/encode": handleTool, "/encode.txt": handleTool,
+  "/finger": handleTool,
+  "/finger.txt": handleTool,
+  "/radar": handleTool,
+  "/radar.txt": handleTool,
+  "/dict": handleTool,
+  "/dict.txt": handleTool,
+  "/cache": handleTool,
+  "/cache.txt": handleTool,
+  "/agent-ready": handleTool,
+  "/agent-ready.txt": handleTool,
+  "/encode": handleTool,
+  "/encode.txt": handleTool,
   // /photos and /lens already own their HTML pages, so they gain only the frame
   // representation rather than a second competing route.
   "/photos.txt": handleTool,
@@ -505,7 +524,11 @@ async function resolveWorkCalendar(shortUrl: string, env: Env, ctx: ExecutionCon
     // wait on the KV write.
     const write = env.RN_KV.put(WORK_CAL_CACHE_KEY, resolved, { expirationTtl: WORK_CAL_TTL });
     if (ctx && ctx.waitUntil) ctx.waitUntil(write.catch(() => {}));
-    else { try { await write; } catch {} }
+    else {
+      try {
+        await write;
+      } catch {}
+    }
   }
   return resolved;
 }
@@ -577,7 +600,9 @@ async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionCo
         headers: { ...SERENDIPITY_SECURITY_HEADERS, ...GENERATED_PAGE_HEADERS, "content-security-policy": serendipityCsp(scriptSrc) },
       });
       if (response.status !== 404) return response;
-      try { await response.body?.cancel(); } catch {}
+      try {
+        await response.body?.cancel();
+      } catch {}
     }
   }
   const response = await handleSerendipity(request, env, ctx);
@@ -589,7 +614,7 @@ async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionCo
 function routeFavicon() {
   return new Response(
     `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='25' width='24' height='3' rx='0.5' fill='#1a1a1a'/><path d='M 16 4 L 9 25 L 23 25 Z' fill='#ff6600'/><path d='M 11.3 18 L 20.7 18 L 21.7 21 L 10.3 21 Z' fill='#ffffff'/><path d='M 13.7 11 L 18.3 11 L 19 13 L 13 13 Z' fill='#ffffff'/></svg>`,
-    { headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } }
+    { headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } },
   );
 }
 
@@ -618,10 +643,10 @@ function routeDropSlash(_request, _env, _ctx, url) {
 // the thing it wanted now lives. Cached a day: the answer will not change.
 function routeTerminalGone() {
   return new Response(
-    "410 Gone: the /terminal console page retired on 2026-09-16.\n\n"
-    + "What it showed is the live exchange: POST https://aadhar.sh/mcp (JSON-RPC, tools/list then tools/call).\n"
-    + "The catalogue as a document: https://aadhar.sh/.well-known/mcp/server-card.json\n"
-    + "Every tool also answers a plain GET at its own path: /finger, /photos, /lens, /radar, /dict, /cache, /agent-ready, /encode\n",
+    "410 Gone: the /terminal console page retired on 2026-09-16.\n\n" +
+      "What it showed is the live exchange: POST https://aadhar.sh/mcp (JSON-RPC, tools/list then tools/call).\n" +
+      "The catalogue as a document: https://aadhar.sh/.well-known/mcp/server-card.json\n" +
+      "Every tool also answers a plain GET at its own path: /finger, /photos, /lens, /radar, /dict, /cache, /agent-ready, /encode\n",
     {
       status: 410,
       headers: {
@@ -684,7 +709,7 @@ function routeSearch(request: SiteRequest, env: Env, ctx: ExecutionContext, url:
 // run dev`, which stages no bake; the build refuses to ship without the file.
 const PRIVATE_PAGE_HEADERS = {
   ...GENERATED_PAGE_HEADERS,
-  "x-robots-tag":    "noindex",
+  "x-robots-tag": "noindex",
   "referrer-policy": "strict-origin-when-cross-origin",
 };
 
@@ -732,7 +757,9 @@ function routeLedger(request: SiteRequest, env: Env) {
 async function routeAround(request: SiteRequest, env: Env) {
   if (new URL(request.url).searchParams.has("bust")) {
     const busted = await refreshAroundSnapshot(request, env);
-    try { await busted?.body?.cancel(); } catch {}
+    try {
+      await busted?.body?.cancel();
+    } catch {}
   }
   return serveBuiltPage(request, env, {
     headers: { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "noindex" },
@@ -820,10 +847,11 @@ function routeBot(request: SiteRequest, env: Env, ctx: ExecutionContext) {
 // The trust pages (trust.ts) are fixed documents: build.ts bakes each one, and
 // the live render is the fallback for a tree that staged nothing.
 function routeTrustPage(render: () => Response): RouteHandler {
-  return (request: SiteRequest, env: Env) => serveBuiltPage(request, env, {
-    headers: GENERATED_PAGE_HEADERS,
-    live: () => render(),
-  });
+  return (request: SiteRequest, env: Env) =>
+    serveBuiltPage(request, env, {
+      headers: GENERATED_PAGE_HEADERS,
+      live: () => render(),
+    });
 }
 
 const WRITING_PAGE_HEADERS = {
@@ -838,7 +866,9 @@ const WRITING_PAGE_HEADERS = {
 async function routeImagesManifest(request: SiteRequest, env: Env) {
   const response = await servePrecompressedText(request, env, { headers: IMAGES_MANIFEST_HEADERS });
   if (response.status !== 404) return response;
-  try { await response.body?.cancel(); } catch {}
+  try {
+    await response.body?.cancel();
+  } catch {}
   return handleImagesManifest();
 }
 
@@ -882,13 +912,13 @@ async function routeImageThumb(request: SiteRequest, env: Env, _ctx: ExecutionCo
     const [, stem, small, ext] = m;
     const h = (await getThumbHashes(env))[stem];
     const isJpg = /^jpe?g$/i.test(ext);
-    const key = small ? "s" : (isJpg ? "j" : "a");
+    const key = small ? "s" : isJpg ? "j" : "a";
     if (h && h[key]) {
       const name = small ? `${stem}-400.${h[key]}.avif` : `${stem}.${h[key]}.${isJpg ? "jpg" : "avif"}`;
       return new Response(null, {
         status: 301,
         headers: {
-          "location":      `${url.origin}/i/${name}`,
+          "location": `${url.origin}/i/${name}`,
           "cache-control": "public, max-age=86400",
         },
       });

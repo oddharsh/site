@@ -1,14 +1,6 @@
 // ── /mcp: the 2026-07-28 dual-era contract ──────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  MODERN_META,
-  assert,
-  context,
-  handleSiteMcp,
-  mcpPost,
-  staticAssets,
-  test,
-} from "./contract-shared.ts";
+import { MODERN_META, assert, context, handleSiteMcp, mcpPost, staticAssets, test } from "./contract-shared.ts";
 
 // ── /mcp: the 2026-07-28 dual-era contract ──────────────────────────────
 // 2026-07-28 deleted the initialize handshake and moved version, identity and
@@ -21,9 +13,16 @@ import {
 // now be testing the refusal path in every test that used it.
 
 test("server/discover answers identity, versions and capabilities in one round trip", async () => {
-  const res = await handleSiteMcp(mcpPost({
-    jsonrpc: "2.0", id: "d1", method: "server/discover", params: { ...MODERN_META },
-  }), {}, context());
+  const res = await handleSiteMcp(
+    mcpPost({
+      jsonrpc: "2.0",
+      id: "d1",
+      method: "server/discover",
+      params: { ...MODERN_META },
+    }),
+    {},
+    context(),
+  );
   const { result } = await res.json();
 
   // MUST be implemented as of 2026-07-28 — a client may probe it before
@@ -40,10 +39,16 @@ test("server/discover answers identity, versions and capabilities in one round t
 });
 
 test("an unsupported protocol version is refused with the list the client can retry from", async () => {
-  const res = await handleSiteMcp(mcpPost({
-    jsonrpc: "2.0", id: 7, method: "tools/list",
-    params: { _meta: { "io.modelcontextprotocol/protocolVersion": "1900-01-01" } },
-  }), {}, context());
+  const res = await handleSiteMcp(
+    mcpPost({
+      jsonrpc: "2.0",
+      id: 7,
+      method: "tools/list",
+      params: { _meta: { "io.modelcontextprotocol/protocolVersion": "1900-01-01" } },
+    }),
+    {},
+    context(),
+  );
   const { error } = await res.json();
 
   assert.equal(error.code, -32022, "UnsupportedProtocolVersion, from the reserved -32020..-32099 range");
@@ -66,9 +71,16 @@ test("a modern request without clientCapabilities is malformed, and a legacy one
   // an era signal rather than a defect, and enforcing the version key the same
   // way would shut the legacy door this server exists to hold open.
   const bare = { "io.modelcontextprotocol/protocolVersion": "2026-07-28" };
-  const res = await handleSiteMcp(mcpPost({
-    jsonrpc: "2.0", id: 11, method: "tools/list", params: { _meta: bare },
-  }), {}, context());
+  const res = await handleSiteMcp(
+    mcpPost({
+      jsonrpc: "2.0",
+      id: 11,
+      method: "tools/list",
+      params: { _meta: bare },
+    }),
+    {},
+    context(),
+  );
   const { error } = await res.json();
   assert.equal(error.code, -32602, "plain Invalid Params, not a reserved-range code");
   assert.match(error.message, /clientCapabilities/, "must name the field, which client authors have often never heard of");
@@ -82,29 +94,52 @@ test("a modern request without clientCapabilities is malformed, and a legacy one
 
   // Empty is a valid declaration; a non-object is not. Accepting the key's mere
   // presence would make this a spelling check instead of a contract.
-  for (const [caps, ok] of [[{}, true], [{ roots: {} }, true], [true, false], ["none", false], [[], false], [null, false]]) {
-    const r = await handleSiteMcp(mcpPost({
-      jsonrpc: "2.0", id: 13, method: "tools/list",
-      params: { _meta: { ...bare, "io.modelcontextprotocol/clientCapabilities": caps } },
-    }), {}, context());
+  for (const [caps, ok] of [
+    [{}, true],
+    [{ roots: {} }, true],
+    [true, false],
+    ["none", false],
+    [[], false],
+    [null, false],
+  ]) {
+    const r = await handleSiteMcp(
+      mcpPost({
+        jsonrpc: "2.0",
+        id: 13,
+        method: "tools/list",
+        params: { _meta: { ...bare, "io.modelcontextprotocol/clientCapabilities": caps } },
+      }),
+      {},
+      context(),
+    );
     const body = await r.json();
     assert.equal(!body.error, ok, `clientCapabilities: ${JSON.stringify(caps)} should ${ok ? "pass" : "be refused"}`);
   }
 
   // Version first: a caller on a version we do not speak is told THAT, not that
   // its `_meta` is malformed under a revision it never claimed to follow.
-  const both = await handleSiteMcp(mcpPost({
-    jsonrpc: "2.0", id: 14, method: "tools/list",
-    params: { _meta: { "io.modelcontextprotocol/protocolVersion": "1900-01-01" } },
-  }), {}, context());
+  const both = await handleSiteMcp(
+    mcpPost({
+      jsonrpc: "2.0",
+      id: 14,
+      method: "tools/list",
+      params: { _meta: { "io.modelcontextprotocol/protocolVersion": "1900-01-01" } },
+    }),
+    {},
+    context(),
+  );
   assert.equal((await both.json()).error.code, -32022, "the unsupported version is the actionable refusal");
 
   // A batch with one bad message is not a bad batch: 200, with the error in the
   // array where JSON-RPC batching puts it.
-  const batch = await handleSiteMcp(mcpPost([
-    { jsonrpc: "2.0", id: 15, method: "tools/list", params: { ...MODERN_META } },
-    { jsonrpc: "2.0", id: 16, method: "tools/list", params: { _meta: bare } },
-  ]), {}, context());
+  const batch = await handleSiteMcp(
+    mcpPost([
+      { jsonrpc: "2.0", id: 15, method: "tools/list", params: { ...MODERN_META } },
+      { jsonrpc: "2.0", id: 16, method: "tools/list", params: { _meta: bare } },
+    ]),
+    {},
+    context(),
+  );
   assert.equal(batch.status, 200, "a batch has no single request whose status a 400 could describe");
   const rows = await batch.json();
   assert.ok(rows.find((r) => r.id === 15).result, "the well-formed message is still answered");
@@ -113,9 +148,11 @@ test("a modern request without clientCapabilities is malformed, and a legacy one
 
 test("every result carries resultType and server identity, and lists carry cache hints", async () => {
   // tools/call needs a real binding to reach a tool; the list methods do not.
-  const env = { ASSETS: staticAssets({
-    "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes", text: "cloudflare", kind: "writing" }] },
-  }) };
+  const env = {
+    ASSETS: staticAssets({
+      "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes", text: "cloudflare", kind: "writing" }] },
+    }),
+  };
   // TUPLES. Inference widens the rows to (string | object | boolean)[], after
   // which `...params` is a spread of something that might be a boolean.
   /** @type {Array<[method: string, params: object, cacheable: boolean]>} */
@@ -127,9 +164,16 @@ test("every result carries resultType and server identity, and lists carry cache
     ["tools/call", { name: "search_site", arguments: { q: "cloudflare" } }, false],
   ];
   for (const [method, params, cacheable] of cases) {
-    const res = await handleSiteMcp(mcpPost({
-      jsonrpc: "2.0", id: method, method, params: { ...params, ...MODERN_META },
-    }), env, context());
+    const res = await handleSiteMcp(
+      mcpPost({
+        jsonrpc: "2.0",
+        id: method,
+        method,
+        params: { ...params, ...MODERN_META },
+      }),
+      env,
+      context(),
+    );
     const { result } = await res.json();
     assert.equal(result.resultType, "complete", `${method} must carry resultType`);
     assert.equal(result._meta["io.modelcontextprotocol/serverInfo"].name, "aadhar.sh", `${method} must identify the server`);
@@ -142,9 +186,13 @@ test("every result carries resultType and server identity, and lists carry cache
 
   // tools/list order is deterministic, which the spec asks for so clients can
   // cache and so an LLM's prompt cache keeps hitting.
-  const twice = await Promise.all([0, 1].map(() =>
-    handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), {}, context()).then((r) => r.json())));
-  assert.deepEqual(twice[0].result.tools.map((t) => t.name), twice[1].result.tools.map((t) => t.name));
+  const twice = await Promise.all(
+    [0, 1].map(() => handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), {}, context()).then((r) => r.json())),
+  );
+  assert.deepEqual(
+    twice[0].result.tools.map((t) => t.name),
+    twice[1].result.tools.map((t) => t.name),
+  );
 });
 
 test("the legacy initialize handshake still works and never hands back a modern version", async () => {
@@ -154,13 +202,19 @@ test("the legacy initialize handshake still works and never hands back a modern 
   for (const [asked, expected] of [
     ["2025-06-18", "2025-06-18"],
     ["2024-11-05", "2024-11-05"],
-    ["2026-07-28", "2025-06-18"],   // modern version over the legacy door
-    [undefined,    "2025-06-18"],
+    ["2026-07-28", "2025-06-18"], // modern version over the legacy door
+    [undefined, "2025-06-18"],
   ]) {
-    const res = await handleSiteMcp(mcpPost({
-      jsonrpc: "2.0", id: 1, method: "initialize",
-      params: asked ? { protocolVersion: asked } : {},
-    }), {}, context());
+    const res = await handleSiteMcp(
+      mcpPost({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: asked ? { protocolVersion: asked } : {},
+      }),
+      {},
+      context(),
+    );
     const { result } = await res.json();
     assert.equal(result.protocolVersion, expected, `initialize(${asked}) should negotiate ${expected}`);
     assert.equal(result.serverInfo.name, "aadhar.sh");

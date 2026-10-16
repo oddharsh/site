@@ -10,12 +10,21 @@ import { EXACT_PATHS } from "../src/worker/routes.ts";
 import { HASHED_ASSETS } from "../src/worker/lib/shell-assets.ts";
 import { _resetPhotoCaches } from "../src/worker/photos.ts";
 import {
-  DISCOVERY_ALIASES, MISS_LINKS, _resetSitemap, callerClass, canonicalPage, countMiss, missBucket, nearestPages, recoverNotFound,
+  DISCOVERY_ALIASES,
+  MISS_LINKS,
+  _resetSitemap,
+  callerClass,
+  canonicalPage,
+  countMiss,
+  missBucket,
+  nearestPages,
+  recoverNotFound,
 } from "../src/worker/lib/not-found.ts";
 
 const SITEMAP = `<?xml version="1.0"?><urlset>
   ${["/", "/garage", "/garage/resample", "/garage/masonry", "/garage/encoding", "/lwe", "/lwe/fhe", "/writing", "/writing/colophon"]
-    .map((p) => `<url><loc>https://aadhar.sh${p}</loc></url>`).join("")}</urlset>`;
+    .map((p) => `<url><loc>https://aadhar.sh${p}</loc></url>`)
+    .join("")}</urlset>`;
 
 /**
  * An ASSETS binding serving a sitemap, a hashes.json and whatever else is listed.
@@ -59,7 +68,9 @@ test("a superseded /a/ hash answers with the current one", async () => {
     assert.equal(r.outcome, "redirect:stale-asset");
     assert.equal((await recover("/a/icons.11111111.svg")).response.status, 404, "the current hash never redirects to itself");
     assert.equal((await recover("/a/nothing.22222222.js")).response.status, 404, "a name the build never made is a plain miss");
-  } finally { delete HASHED_ASSETS["icons.svg"]; }
+  } finally {
+    delete HASHED_ASSETS["icons.svg"];
+  }
 });
 
 test("a superseded /i/ photo tile answers with the same tier's current hash", async () => {
@@ -121,12 +132,18 @@ test("an empty 404 names the closest pages in its own section, and the sitemap",
   assert.match(body, /Section index: \/garage/);
   assert.match(body, /\/sitemap\.xml/);
 
-  assert.deepEqual(nearestPages("/zzzzzz-qqqq", ["/garage", "/garage/resample"]), { section: null, pages: [] },
-    "an unrelated guess is not offered a near miss");
+  assert.deepEqual(
+    nearestPages("/zzzzzz-qqqq", ["/garage", "/garage/resample"]),
+    { section: null, pages: [] },
+    "an unrelated guess is not offered a near miss",
+  );
 
   const clamped = new Response("not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
-  assert.match(await (await recover("/garage/resampe", env(), undefined, clamped)).response.text(), /Closest pages in \/garage/,
-    "the clamp's generic \"not found\" is rewritten like an empty body");
+  assert.match(
+    await (await recover("/garage/resampe", env(), undefined, clamped)).response.text(),
+    /Closest pages in \/garage/,
+    'the clamp\'s generic "not found" is rewritten like an empty body',
+  );
 
   const head = await recover("/garage/resampe", env(), { method: "HEAD" });
   assert.equal(head.response.status, 404);
@@ -187,7 +204,7 @@ test("the counter records caller class, bucket and outcome for every miss", asyn
   const miss = await recoverNotFound(req, e, empty404());
   countMiss(e, req, "/garage/resampe", miss);
   assert.deepEqual(points, [{ blobs: ["ai-crawler", "page", "404:suggested", "/garage/resampe"], doubles: [1], indexes: ["page"] }]);
-  countMiss({}, req, "/x", miss);   // no binding: nothing to write, and nothing thrown
+  countMiss({}, req, "/x", miss); // no binding: nothing to write, and nothing thrown
 
   assert.equal(callerClass("curl/8.7.1"), "http-tool");
   assert.equal(callerClass("tphotobot/0.1 (+https://crawler.estidraft.com/bot)"), "other-bot");

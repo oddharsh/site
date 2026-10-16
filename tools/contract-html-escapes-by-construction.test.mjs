@@ -14,8 +14,7 @@ test("interpolated text is escaped, and Html composes without double-escaping", 
   assert.equal(html`<p>${html`<b>${"a<b"}</b>`}</p>`.html, "<p><b>a&lt;b</b></p>");
   // Arrays flatten, so a list of fragments needs no join() — which would
   // stringify each one and lose the marker.
-  assert.equal(html`<ul>${["a<", "b"].map((x) => html`<li>${x}</li>`)}</ul>`.html,
-    "<ul><li>a&lt;</li><li>b</li></ul>");
+  assert.equal(html`<ul>${["a<", "b"].map((x) => html`<li>${x}</li>`)}</ul>`.html, "<ul><li>a&lt;</li><li>b</li></ul>");
   assert.equal(joinHtml([html`<a>`, html`<b>`], "·").html, "<a>·<b>");
 });
 
@@ -40,7 +39,12 @@ test("the string escaper preserves coercion and escapes even Html values", () =>
   assert.equal(esc(false), "false");
   assert.equal(esc(unsafeHtml("<b>&</b>")), "&lt;b&gt;&amp;&lt;/b&gt;");
   let reads = 0;
-  const value = { toString() { reads++; return `&<>"' ☕`; } };
+  const value = {
+    toString() {
+      reads++;
+      return `&<>"' ☕`;
+    },
+  };
   assert.equal(esc(value), "&amp;&lt;&gt;&quot;&#39; ☕");
   assert.equal(reads, 1, "coercion happens once before escaping");
 });
@@ -85,9 +89,7 @@ test("the unescaped door is counted, and the count may only go down", async () =
   // The baseline may only shrink. A new use fails here rather than passing
   // review, and migrating a caller to `html` requires editing the number down,
   // which is what keeps the ledger a real record instead of a stale file.
-  const declared = JSON.parse(
-    await readFile(new URL("config/unsafe-html-baseline.json", ROOT), "utf8"),
-  );
+  const declared = JSON.parse(await readFile(new URL("config/unsafe-html-baseline.json", ROOT), "utf8"));
   const { readdir } = await import("node:fs/promises");
   // Every tree that renders HTML through lib/html.ts: the Worker, and the two
   // modules it bundles. cal/src and serendipity import unsafeHtml across the
@@ -104,7 +106,10 @@ test("the unescaped door is counted, and the count may only go down", async () =
   // A floor per root, so a directory that moves or empties reads as a broken
   // scan rather than as a tree with no unsafe doors in it.
   for (const dir of ROOTS) {
-    assert.ok(files.some((f) => f.startsWith(`${dir}/`)), `the unsafeHtml scan found no sources under ${dir}`);
+    assert.ok(
+      files.some((f) => f.startsWith(`${dir}/`)),
+      `the unsafeHtml scan found no sources under ${dir}`,
+    );
   }
 
   const actual = {};

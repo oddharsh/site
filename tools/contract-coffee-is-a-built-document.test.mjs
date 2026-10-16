@@ -83,29 +83,42 @@ test("a slot is a native radio that names the form, so booking needs no script",
   const env = await bakeEnv();
   const live = slotsFragment(SLOTS, env);
   const radios = [...live.matchAll(/<label class="slot-btn"><input type="radio" name="start" value="(\d+)" form="bookform" required aria-label="([^"]+)">/g)];
-  assert.deepEqual(radios.map((m) => Number(m[1])), SLOTS.map((s) => s.start));
+  assert.deepEqual(
+    radios.map((m) => Number(m[1])),
+    SLOTS.map((s) => s.start),
+  );
   assert.match(radios[0][2], /^Tuesday, October 6, \d/, "the accessible name carries the day as well as the time");
   assert.doesNotMatch(live, /<button|<form|<html/i, "a fragment of radios, never a document");
 
   const shell = bookingPage(env);
   assert.match(shell, /<form class="book" id="bookform" method="POST" action="\/coffee\/book">/, "no novalidate: the browser checks the required radio");
   assert.doesNotMatch(shell, /id="start"/, "the hidden start input the button script filled is gone");
-  assert.match(shell, /<button type="submit" class="xp-button primary" id="submit" data-tz="America\/New_York">send request<\/button>/,
-    "the submit is enabled from the start, since only a script could enable a disabled one");
+  assert.match(
+    shell,
+    /<button type="submit" class="xp-button primary" id="submit" data-tz="America\/New_York">send request<\/button>/,
+    "the submit is enabled from the start, since only a script could enable a disabled one",
+  );
   // The relabel script is a constant: nothing caller-supplied reaches script text.
   const scripts = [...shell.matchAll(/<script>([\s\S]*?)<\/script>/gi)].map((m) => m[1]);
   const relabel = scripts.find((s) => s.includes('addEventListener("change"'));
   assert.ok(relabel, "the relabel script is still shipped");
-  assert.equal(relabel, [...bookingPage({ ...env, HOST_TIMEZONE: "</script>" }).matchAll(/<script>([\s\S]*?)<\/script>/gi)]
-    .map((m) => m[1]).find((s) => s.includes('addEventListener("change"')), "the script text moved with the env");
+  assert.equal(
+    relabel,
+    [...bookingPage({ ...env, HOST_TIMEZONE: "</script>" }).matchAll(/<script>([\s\S]*?)<\/script>/gi)]
+      .map((m) => m[1])
+      .find((s) => s.includes('addEventListener("change"')),
+    "the script text moved with the env",
+  );
   assert.equal(PICK_PATH, "/pick");
 });
 
 test("the route serves the bake, and the island stays out of Workers Cache", async () => {
   const index = read("src/worker/index.ts");
   const route = index.slice(index.indexOf("async function routeCoffee("), index.indexOf("async function routeCalHost("));
-  assert.ok(route.indexOf("serveBuiltPage(") > 0 && route.indexOf("serveBuiltPage(") < route.indexOf("live: () => calWorker.fetch("),
-    "GET /coffee reads the built page before falling back to cal's render");
+  assert.ok(
+    route.indexOf("serveBuiltPage(") > 0 && route.indexOf("serveBuiltPage(") < route.indexOf("live: () => calWorker.fetch("),
+    "GET /coffee reads the built page before falling back to cal's render",
+  );
   // cal invalidates the slot list through caches.default on every booking
   // action. Workers Cache answers before the Worker runs and those deletes never
   // reach it, so a fragment admitted there would outlive a booking.

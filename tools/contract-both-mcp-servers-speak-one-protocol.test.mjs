@@ -1,27 +1,34 @@
 // ── both MCP servers speak one protocol ─────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  MCP_SUPPORTED_VERSIONS,
-  MODERN_META,
-  assert,
-  context,
-  handleSiteMcp,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { MCP_SUPPORTED_VERSIONS, MODERN_META, assert, context, handleSiteMcp, readFileSync, test } from "./contract-shared.ts";
 
 for (const server of ["site", "serendipity"]) {
   test(`${server} MCP rejects malformed envelopes before treating messages as notifications`, async () => {
     const { handleMcp } = await import("../serendipity/serendipity.ts");
     let calls = 0;
-    const env = { MCP_RL_IMAGE_INSPECT: { limit: async () => { calls++; return { success: false }; } } };
-    const database = { prepare: () => ({ all: async () => { calls++; return []; } }) };
+    const env = {
+      MCP_RL_IMAGE_INSPECT: {
+        limit: async () => {
+          calls++;
+          return { success: false };
+        },
+      },
+    };
+    const database = {
+      prepare: () => ({
+        all: async () => {
+          calls++;
+          return [];
+        },
+      }),
+    };
     const post = (body) => {
       const request = new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify(body) });
       return server === "site" ? handleSiteMcp(request, env, context()) : handleMcp(request, {}, database);
     };
     const notification = {
-      jsonrpc: "2.0", method: "tools/call",
+      jsonrpc: "2.0",
+      method: "tools/call",
       params: { name: server === "site" ? "image_inspect" : "list_contributors" },
     };
     const invalid = { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } };
@@ -30,7 +37,9 @@ for (const server of ["site", "serendipity"]) {
       const response = await post({ jsonrpc: "2.0", id: "reply", method });
       assert.equal(response.status, 200);
       assert.deepEqual(await response.json(), {
-        jsonrpc: "2.0", id: "reply", error: { code: -32601, message: `Method not found: ${method}` },
+        jsonrpc: "2.0",
+        id: "reply",
+        error: { code: -32601, message: `Method not found: ${method}` },
       });
     }
     // Missing IDs only silence valid request envelopes. Invalid IDs must not
@@ -40,9 +49,17 @@ for (const server of ["site", "serendipity"]) {
       assert.equal(calls, 0, `invalid ID ${JSON.stringify(id)} reached a tool`);
       assert.deepEqual(await response.json(), invalid);
     }
-    for (const body of [null, false, 1, "hello", {}, [],
-      { method: "tools/list" }, { jsonrpc: "1.0", method: "ping" },
-      { jsonrpc: "2.0", method: 1 }, { jsonrpc: "2.0", method: "" },
+    for (const body of [
+      null,
+      false,
+      1,
+      "hello",
+      {},
+      [],
+      { method: "tools/list" },
+      { jsonrpc: "1.0", method: "ping" },
+      { jsonrpc: "2.0", method: 1 },
+      { jsonrpc: "2.0", method: "" },
       ...[null, false, 1, "params"].map((params) => ({ jsonrpc: "2.0", method: "ping", params })),
     ]) {
       const response = await post(body);
@@ -73,13 +90,29 @@ for (const server of ["site", "serendipity"]) {
   test(`${server} MCP validates notifications before dispatch and never replies to them`, async () => {
     const { handleMcp } = await import("../serendipity/serendipity.ts");
     let calls = 0;
-    const env = { MCP_RL_IMAGE_INSPECT: { limit: async () => { calls++; return { success: false }; } } };
-    const database = { prepare: () => ({ all: async () => { calls++; return []; } }) };
+    const env = {
+      MCP_RL_IMAGE_INSPECT: {
+        limit: async () => {
+          calls++;
+          return { success: false };
+        },
+      },
+    };
+    const database = {
+      prepare: () => ({
+        all: async () => {
+          calls++;
+          return [];
+        },
+      }),
+    };
     const path = server === "site" ? "/mcp" : "/serendipity/mcp";
     const name = server === "site" ? "image_inspect" : "list_contributors";
     const post = (body, headers = {}) => {
       const request = new Request(`https://aadhar.sh${path}`, {
-        method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json", ...headers },
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json", ...headers },
       });
       return server === "site" ? handleSiteMcp(request, env, context()) : handleMcp(request, {}, database);
     };
@@ -136,7 +169,10 @@ for (const server of ["site", "serendipity"]) {
     ]);
     assert.equal(calls, before + 2, "only the two valid calls in a mixed batch may run");
     assert.equal(response.status, 200);
-    assert.deepEqual((await response.json()).map((reply) => reply.id), ["reply"]);
+    assert.deepEqual(
+      (await response.json()).map((reply) => reply.id),
+      ["reply"],
+    );
   });
 }
 
@@ -149,16 +185,20 @@ for (const server of ["site", "serendipity"]) {
 
 test("the site and serendipity MCP servers agree on the 2026-07-28 wire rules", async () => {
   const { handleMcp } = await import("../serendipity/serendipity.ts");
-  const post = (body, headers = {}) => new Request("https://aadhar.sh/serendipity/mcp", {
-    method: "POST", body: JSON.stringify(body),
-    headers: { "content-type": "application/json", ...headers },
-  });
+  const post = (body, headers = {}) =>
+    new Request("https://aadhar.sh/serendipity/mcp", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json", ...headers },
+    });
   // The protocol-level methods touch no database, so a null `d` is enough.
   const call = async (body, headers) => (await handleMcp(post(body, headers), {}, null)).json();
-  const modern = { _meta: {
-    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-    "io.modelcontextprotocol/clientCapabilities": {},
-  } };
+  const modern = {
+    _meta: {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {},
+    },
+  };
 
   // server/discover: MUST exist, and must advertise the same version set as the
   // site server — a client that trusts one origin's answer should not find the
@@ -172,7 +212,9 @@ test("the site and serendipity MCP servers agree on the 2026-07-28 wire rules", 
   // The version gate, byte-identical to the site server's because it is the
   // same function.
   const refused = await call({
-    jsonrpc: "2.0", id: 2, method: "tools/list",
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/list",
     params: { _meta: { "io.modelcontextprotocol/protocolVersion": "1900-01-01" } },
   });
   assert.equal(refused.error.code, -32022);
@@ -188,7 +230,10 @@ test("the site and serendipity MCP servers agree on the 2026-07-28 wire rules", 
   }
 
   // The legacy door still opens, and still never hands back a modern version.
-  for (const [asked, expected] of [["2025-06-18", "2025-06-18"], ["2026-07-28", "2025-06-18"]]) {
+  for (const [asked, expected] of [
+    ["2025-06-18", "2025-06-18"],
+    ["2026-07-28", "2025-06-18"],
+  ]) {
     const { result } = await call({ jsonrpc: "2.0", id: 3, method: "initialize", params: { protocolVersion: asked } });
     assert.equal(result.protocolVersion, expected);
     assert.equal(result.serverInfo.name, "serendipity");
@@ -197,10 +242,16 @@ test("the site and serendipity MCP servers agree on the 2026-07-28 wire rules", 
   // The required-`_meta` rule, same function and therefore same verdict: a
   // modern request without clientCapabilities is malformed at 400, a legacy one
   // with no `_meta` at all is served at 200.
-  const malformed = await handleMcp(post({
-    jsonrpc: "2.0", id: 6, method: "tools/list",
-    params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } },
-  }), {}, null);
+  const malformed = await handleMcp(
+    post({
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/list",
+      params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } },
+    }),
+    {},
+    null,
+  );
   assert.equal(malformed.status, 400);
   assert.equal((await malformed.json()).error.code, -32602);
   const legacyOk = await handleMcp(post({ jsonrpc: "2.0", id: 7, method: "tools/list" }), {}, null);
@@ -229,36 +280,40 @@ test("Serendipity social reads overlap independent D1 queries", async () => {
   const { handleMcp } = await import("../serendipity/serendipity.ts");
   let active = 0;
   let peak = 0;
-  const d = { prepare(sql) {
-    const run = async (kind, args) => {
-      active++;
-      peak = Math.max(peak, active);
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      active--;
-      if (kind === "get" && sql.includes("WHERE a.name LIKE")) {
-        const alice = String(args[0]).includes("Alice");
-        return { id: alice ? 1 : 2, name: alice ? "Alice" : "Bob", times_seen: 1 };
-      }
-      if (kind === "get") return { n: 1 };
-      return [];
-    };
-    return { get: (...args) => run("get", args), all: (...args) => run("all", args) };
-  } };
+  const d = {
+    prepare(sql) {
+      const run = async (kind, args) => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        active--;
+        if (kind === "get" && sql.includes("WHERE a.name LIKE")) {
+          const alice = String(args[0]).includes("Alice");
+          return { id: alice ? 1 : 2, name: alice ? "Alice" : "Bob", times_seen: 1 };
+        }
+        if (kind === "get") return { n: 1 };
+        return [];
+      };
+      return { get: (...args) => run("get", args), all: (...args) => run("all", args) };
+    },
+  };
   const call = async (name, args) => {
     peak = 0;
-    const response = await handleMcp(new Request("https://aadhar.sh/serendipity/mcp", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }),
-    }), {}, d);
+    const response = await handleMcp(
+      new Request("https://aadhar.sh/serendipity/mcp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }),
+      }),
+      {},
+      d,
+    );
     assert.equal(response.status, 200);
     return peak;
   };
 
-  assert.equal(await call("shared_events", { a: "Alice", b: "Bob" }), 2,
-    "the two person resolutions should share one D1 latency window");
-  assert.equal(await call("co_attendees", { q: "Alice" }), 2,
-    "the co-attendee rows and total should share one D1 latency window");
+  assert.equal(await call("shared_events", { a: "Alice", b: "Bob" }), 2, "the two person resolutions should share one D1 latency window");
+  assert.equal(await call("co_attendees", { q: "Alice" }), 2, "the co-attendee rows and total should share one D1 latency window");
 });
 
 test("both CSS checks go through the one parser, and it still tolerates the right family", async () => {
@@ -276,18 +331,23 @@ test("both CSS checks go through the one parser, and it still tolerates the righ
   const { parseCss, UNKNOWN_SELECTOR } = await import("../tools/lib/css-parse.ts");
 
   // The family is tolerated AND preserved verbatim, which is the whole bargain.
-  const carousel = "ul::scroll-marker-group{display:flex}li::scroll-marker{content:\"\"}";
+  const carousel = 'ul::scroll-marker-group{display:flex}li::scroll-marker{content:""}';
   const out = parseCss("probe", carousel, { minify: true });
   assert.match(out, /::scroll-marker-group/, "the tolerated selector must survive");
   assert.match(out, /::scroll-marker/, "the tolerated selector must survive");
 
   // A warning OUTSIDE the family is still fatal, so tolerance stays narrow.
-  assert.throws(() => parseCss("probe", "@nonsense (x) { .a { color: red } }"),
-    /emitted warnings/, "an unknown at-rule must not be swept in with the carousel family");
+  assert.throws(
+    () => parseCss("probe", "@nonsense (x) { .a { color: red } }"),
+    /emitted warnings/,
+    "an unknown at-rule must not be swept in with the carousel family",
+  );
 
   // And structurally broken CSS still fails rather than being recovered silently.
   assert.throws(() => parseCss("probe", ".a{color:red}}"), /.*/, "broken CSS must throw");
 
-  assert.ok(UNKNOWN_SELECTOR.test("'::scroll-marker' is not recognized as a valid pseudo-element"),
-    "the family regex must still match the message Lightning actually emits");
+  assert.ok(
+    UNKNOWN_SELECTOR.test("'::scroll-marker' is not recognized as a valid pseudo-element"),
+    "the family regex must still match the message Lightning actually emits",
+  );
 });

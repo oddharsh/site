@@ -42,8 +42,7 @@ import { parseJsonc } from "./lib/jsonc.ts";
 import { underNode } from "./lib/harness-dispatch.ts";
 import { STALE_INSTALL_REMEDY, installedSha, pinnedSha } from "./lib/wrangler-provenance.ts";
 import { CENSUS_ROSTER, isDuplicateInstance } from "../src/worker/census.ts";
-import {
-  configText, ROOT, assert, readFileSync, test } from "./contract-shared.ts";
+import { configText, ROOT, assert, readFileSync, test } from "./contract-shared.ts";
 
 const workerSource = (census) => `
 import { WorkflowEntrypoint } from "cloudflare:workers";
@@ -115,13 +114,17 @@ function wranglerProvenance() {
   const pinned = pinnedSha(pin);
   const installed = installedSha(manifest);
   if (pinned && installed && pinned !== installed) {
-    return `node_modules holds wrangler@${installed} (${version}) but package.json pins @${pinned}. `
-      + "That is a stale install rather than a regression: run "
-      + `\`${STALE_INSTALL_REMEDY}\` and re-run`;
+    return (
+      `node_modules holds wrangler@${installed} (${version}) but package.json pins @${pinned}. ` +
+      "That is a stale install rather than a regression: run " +
+      `\`${STALE_INSTALL_REMEDY}\` and re-run`
+    );
   }
-  return `the installed wrangler is ${installed ? `@${installed} ` : ""}${version}, which matches the pin ${pin}, `
-    + "so the local Workflows binding no longer enforces id uniqueness (workers-sdk#14847) "
-    + "and nothing below measures anything";
+  return (
+    `the installed wrangler is ${installed ? `@${installed} ` : ""}${version}, which matches the pin ${pin}, ` +
+    "so the local Workflows binding no longer enforces id uniqueness (workers-sdk#14847) " +
+    "and nothing below measures anything"
+  );
 }
 
 /** What the fixture's attempt() reports for one create.
@@ -131,100 +134,107 @@ function wranglerProvenance() {
 
 // Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.
 const DISPATCH = "a same-day census re-run counts every host as a duplicate, measured on the pinned workerd";
-test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
-  // Production's flags, for the reason the encodeBody probe gives: a binding
-  // measured under different flags is a measurement of a different runtime.
-  const site = parseJsonc(await configText("cloudflare.config.ts"));
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "census-dup-")));
-  writeFileSync(join(dir, "worker.js"),
-    workerSource(fileURLToPath(new URL("src/worker/census.ts", ROOT))));
-  writeFileSync(join(dir, "wrangler.jsonc"), JSON.stringify({
-    name: "census-duplicate-probe",
-    main: "worker.js",
-    compatibility_date: site.compatibility_date,
-    compatibility_flags: site.compatibility_flags,
-    workflows: [{ name: "census-duplicate-probe", binding: "CENSUS_WORKFLOW", class_name: "NoopCensus" }],
-    d1_databases: [{ binding: "RESTORE_DB", database_name: "census-duplicate-probe",
-      database_id: "00000000-0000-4000-8000-000000000000" }],
-  }));
+test(
+  DISPATCH,
+  underNode(import.meta.url, DISPATCH, async () => {
+    // Production's flags, for the reason the encodeBody probe gives: a binding
+    // measured under different flags is a measurement of a different runtime.
+    const site = parseJsonc(await configText("cloudflare.config.ts"));
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "census-dup-")));
+    writeFileSync(join(dir, "worker.js"), workerSource(fileURLToPath(new URL("src/worker/census.ts", ROOT))));
+    writeFileSync(
+      join(dir, "wrangler.jsonc"),
+      JSON.stringify({
+        name: "census-duplicate-probe",
+        main: "worker.js",
+        compatibility_date: site.compatibility_date,
+        compatibility_flags: site.compatibility_flags,
+        workflows: [{ name: "census-duplicate-probe", binding: "CENSUS_WORKFLOW", class_name: "NoopCensus" }],
+        d1_databases: [{ binding: "RESTORE_DB", database_name: "census-duplicate-probe", database_id: "00000000-0000-4000-8000-000000000000" }],
+      }),
+    );
 
-  const server = createTestHarness({ workers: [{ configPath: join(dir, "wrangler.jsonc") }] });
-  try {
-    await server.listen();
-    const worker = server.getWorker();
-    const call = async (path) => {
-      const response = await worker.fetch(`http://census.test${path}`);
-      assert.equal(response.status, 200, `${path} answered ${response.status}`);
-      return response.json();
-    };
+    const server = createTestHarness({ workers: [{ configPath: join(dir, "wrangler.jsonc") }] });
+    try {
+      await server.listen();
+      const worker = server.getWorker();
+      const call = async (path) => {
+        const response = await worker.fetch(`http://census.test${path}`);
+        assert.equal(response.status, 200, `${path} answered ${response.status}`);
+        return response.json();
+      };
 
-    // THE CONTROL, first. The instrument can only see a duplicate if the
-    // binding enforces uniqueness at all, so a second create that returns
-    // quietly fails here by name rather than letting every row below pass for
-    // a binding that never refuses anything.
-    const raw = /** @type {{ id: string, first: Attempt, second: Attempt, invalid: Attempt }} */ (
-      await call("/create-twice"));
-    assert.equal(raw.first.threw, false,
-      `the first create of ${raw.id} was refused (${raw.first.message}), so this probe cannot reach a duplicate`);
-    assert.equal(raw.second.threw, true,
-      `a second create with the same id returned quietly: ${raw.second.threw ? "" : wranglerProvenance()}`);
+      // THE CONTROL, first. The instrument can only see a duplicate if the
+      // binding enforces uniqueness at all, so a second create that returns
+      // quietly fails here by name rather than letting every row below pass for
+      // a binding that never refuses anything.
+      const raw = /** @type {{ id: string, first: Attempt, second: Attempt, invalid: Attempt }} */ (await call("/create-twice"));
+      assert.equal(raw.first.threw, false, `the first create of ${raw.id} was refused (${raw.first.message}), so this probe cannot reach a duplicate`);
+      assert.equal(raw.second.threw, true, `a second create with the same id returned quietly: ${raw.second.threw ? "" : wranglerProvenance()}`);
 
-    // The real classifier, on the real error object, inside workerd.
-    assert.match(String(raw.second.message), /instance\.already_exists|already exists/,
-      `the duplicate error changed shape: ${JSON.stringify(raw.second.message)}`);
-    assert.equal(raw.second.duplicate, true,
-      `isDuplicateInstance did not recognise the binding's duplicate error: ${JSON.stringify(raw.second.message)}`);
+      // The real classifier, on the real error object, inside workerd.
+      assert.match(
+        String(raw.second.message),
+        /instance\.already_exists|already exists/,
+        `the duplicate error changed shape: ${JSON.stringify(raw.second.message)}`,
+      );
+      assert.equal(raw.second.duplicate, true, `isDuplicateInstance did not recognise the binding's duplicate error: ${JSON.stringify(raw.second.message)}`);
 
-    // And the other refusal the binding makes, which must stay a failure: an
-    // invalid id counted as a duplicate would be a sweep that did nothing and
-    // reported sixteen harmless skips.
-    assert.equal(raw.invalid.threw, true, "the binding accepted an id with a dot in it");
-    assert.equal(raw.invalid.duplicate, false,
-      `isDuplicateInstance classified an invalid-id refusal as a duplicate: ${JSON.stringify(raw.invalid.message)}`);
+      // And the other refusal the binding makes, which must stay a failure: an
+      // invalid id counted as a duplicate would be a sweep that did nothing and
+      // reported sixteen harmless skips.
+      assert.equal(raw.invalid.threw, true, "the binding accepted an id with a dot in it");
+      assert.equal(raw.invalid.duplicate, false, `isDuplicateInstance classified an invalid-id refusal as a duplicate: ${JSON.stringify(raw.invalid.message)}`);
 
-    // The dispatch itself, twice, through cronCensus. The first sweep is the row
-    // that fails if an id ever turns illegal again, whichever host it is.
-    const firstSweep = /** @type {Sweep} */ (await call("/sweep"));
-    assert.deepEqual(
-      { created: firstSweep.created, duplicate: firstSweep.duplicate, failed: firstSweep.failed },
-      { created: CENSUS_ROSTER.length, duplicate: 0, failed: 0 },
-      `the first sweep of the day should create one instance per host: ${JSON.stringify(firstSweep)}`);
+      // The dispatch itself, twice, through cronCensus. The first sweep is the row
+      // that fails if an id ever turns illegal again, whichever host it is.
+      const firstSweep = /** @type {Sweep} */ (await call("/sweep"));
+      assert.deepEqual(
+        { created: firstSweep.created, duplicate: firstSweep.duplicate, failed: firstSweep.failed },
+        { created: CENSUS_ROSTER.length, duplicate: 0, failed: 0 },
+        `the first sweep of the day should create one instance per host: ${JSON.stringify(firstSweep)}`,
+      );
 
-    // The record, in real SQLite: one `dispatched` row per host.
-    const dispatched = /** @type {{ ymd: string, host: string, stage: string, outcome: string, detail: string | null }[]} */ (await call("/runs"));
-    assert.deepEqual(dispatched.map((r) => [r.ymd, r.stage, r.outcome]),
-      CENSUS_ROSTER.map(() => [firstSweep.ymd, "dispatch", "dispatched"]),
-      `the first sweep's record is wrong: ${JSON.stringify(dispatched)}`);
+      // The record, in real SQLite: one `dispatched` row per host.
+      const dispatched = /** @type {{ ymd: string, host: string, stage: string, outcome: string, detail: string | null }[]} */ (await call("/runs"));
+      assert.deepEqual(
+        dispatched.map((r) => [r.ymd, r.stage, r.outcome]),
+        CENSUS_ROSTER.map(() => [firstSweep.ymd, "dispatch", "dispatched"]),
+        `the first sweep's record is wrong: ${JSON.stringify(dispatched)}`,
+      );
 
-    // One host's instance finishes before the re-run. Its `written` has to
-    // survive the re-run's dispatch rows, which is the WHERE clause on
-    // CENSUS_RUN_UPSERT_DISPATCH, checked where SQLite actually parses it.
-    await call(`/scan-written?ymd=${firstSweep.ymd}`);
-    const secondSweep = /** @type {Sweep} */ (await call("/sweep"));
-    assert.equal(secondSweep.ymd, firstSweep.ymd,
-      "the two sweeps straddled midnight UTC, so the second one is not a same-day re-run; run it again");
-    assert.deepEqual(
-      { created: secondSweep.created, duplicate: secondSweep.duplicate, failed: secondSweep.failed },
-      { created: 0, duplicate: CENSUS_ROSTER.length, failed: 0 },
-      `a same-day re-run should count every host as a duplicate: ${JSON.stringify(secondSweep)}`);
-    const after = /** @type {{ host: string, stage: string, outcome: string }[]} */ (await call("/runs"));
-    const byHost = new Map(after.map((r) => [r.host, r]));
-    assert.equal(byHost.get(CENSUS_ROSTER[0].label)?.outcome, "written",
-      "a dispatch row overwrote a finished scan, so a written host would read as unfinished");
-    for (const s of CENSUS_ROSTER.slice(1)) {
-      assert.equal(byHost.get(s.label)?.outcome, "duplicate", `${s.label} after the re-run`);
+      // One host's instance finishes before the re-run. Its `written` has to
+      // survive the re-run's dispatch rows, which is the WHERE clause on
+      // CENSUS_RUN_UPSERT_DISPATCH, checked where SQLite actually parses it.
+      await call(`/scan-written?ymd=${firstSweep.ymd}`);
+      const secondSweep = /** @type {Sweep} */ (await call("/sweep"));
+      assert.equal(secondSweep.ymd, firstSweep.ymd, "the two sweeps straddled midnight UTC, so the second one is not a same-day re-run; run it again");
+      assert.deepEqual(
+        { created: secondSweep.created, duplicate: secondSweep.duplicate, failed: secondSweep.failed },
+        { created: 0, duplicate: CENSUS_ROSTER.length, failed: 0 },
+        `a same-day re-run should count every host as a duplicate: ${JSON.stringify(secondSweep)}`,
+      );
+      const after = /** @type {{ host: string, stage: string, outcome: string }[]} */ (await call("/runs"));
+      const byHost = new Map(after.map((r) => [r.host, r]));
+      assert.equal(
+        byHost.get(CENSUS_ROSTER[0].label)?.outcome,
+        "written",
+        "a dispatch row overwrote a finished scan, so a written host would read as unfinished",
+      );
+      for (const s of CENSUS_ROSTER.slice(1)) {
+        assert.equal(byHost.get(s.label)?.outcome, "duplicate", `${s.label} after the re-run`);
+      }
+    } finally {
+      await server.close();
+      rmSync(dir, { recursive: true, force: true });
     }
-  } finally {
-    await server.close();
-    rmSync(dir, { recursive: true, force: true });
-  }
-}));
+  }),
+);
 
 test("isDuplicateInstance refuses errors that are not a duplicate id", () => {
   // Host-side, for the shapes the Worker above cannot easily produce. The
   // proxy spelling is the harness's own, recorded the same day.
-  assert.equal(isDuplicateInstance(new Error(
-    "WorkflowError: (instance.already_exists) Workflow instance with id \"x\" already exists")), true);
+  assert.equal(isDuplicateInstance(new Error('WorkflowError: (instance.already_exists) Workflow instance with id "x" already exists')), true);
   assert.equal(isDuplicateInstance(new Error("Workflow instance has invalid id")), false);
   assert.equal(isDuplicateInstance(new Error("Too many subrequests.")), false);
   assert.equal(isDuplicateInstance(new Error("network connection lost")), false);

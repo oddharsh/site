@@ -34,9 +34,9 @@ import { sseEvents } from "./sse.ts";
 // Bounds. A door reader that follows whatever it finds is a crawler; these keep
 // it to one hop and a readable amount of text.
 export const DOOR_LIMITS = {
-  corpus: 6000,     // characters of third-party text handed to a model
-  tools: 24,        // foreign tools listed
-  toolDesc: 160,    // characters per foreign tool description
+  corpus: 6000, // characters of third-party text handed to a model
+  tools: 24, // foreign tools listed
+  toolDesc: 160, // characters per foreign tool description
   // Argument schemas, and only when a caller asks for them. A schema is
   // arbitrary third-party JSON of no stated size — mcp.context7.com ships tool
   // descriptions over a kilobyte on their own — so it is bounded like every
@@ -45,7 +45,7 @@ export const DOOR_LIMITS = {
   // An /ask answer. Results are bounded because a foreign server chooses how
   // many to send, and each one carries a schema.org object of no stated size.
   askResults: 10,
-  askText: 240,      // characters per foreign name/description
+  askText: 240, // characters per foreign name/description
   askSchemaBytes: 4000,
 };
 
@@ -61,13 +61,19 @@ export const DOOR_LIMITS = {
 function capSchema(schema) {
   if (!asRecord(schema) && !Array.isArray(schema)) return { schema: null };
   let encoded;
-  try { encoded = JSON.stringify(schema); } catch { return { schema: null, oversize: false }; }
+  try {
+    encoded = JSON.stringify(schema);
+  } catch {
+    return { schema: null, oversize: false };
+  }
   if (encoded.length > DOOR_LIMITS.schemaBytes) return { schema: null, oversize: true, bytes: encoded.length };
   return { schema };
 }
 
 const trim = (text, max) => {
-  const value = String(text || "").replace(/\r/g, "").trim();
+  const value = String(text || "")
+    .replace(/\r/g, "")
+    .trim();
   return value.length > max ? value.slice(0, max) + "\n…[truncated]" : value;
 };
 
@@ -110,9 +116,7 @@ export function wantsProtocolHeader(payload) {
  */
 export function gatedDoor(res): { ok: false; unreadable: true; gated: true; detail: string } {
   const challenge = String((res.headers && res.headers.get("www-authenticate")) || "").trim();
-  const how = /oauth|resource_metadata/i.test(challenge)
-    ? "OAuth"
-    : challenge ? challenge.split(/[\s,;]/)[0] : "credentials";
+  const how = /oauth|resource_metadata/i.test(challenge) ? "OAuth" : challenge ? challenge.split(/[\s,;]/)[0] : "credentials";
   return { ok: false, unreadable: true, gated: true, detail: `needs ${how} (HTTP ${res.status})` };
 }
 
@@ -175,11 +179,15 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
   // The values come from the server module so this client cannot advertise a
   // revision the site itself has stopped speaking.
   const body = JSON.stringify({
-    jsonrpc: "2.0", id: LIST_REQUEST_ID, method: LIST_METHOD,
-    params: { _meta: {
-      [META_PROTOCOL]: MCP_MODERN,
-      [META_CLIENT_CAPS]: {},
-    } },
+    jsonrpc: "2.0",
+    id: LIST_REQUEST_ID,
+    method: LIST_METHOD,
+    params: {
+      _meta: {
+        [META_PROTOCOL]: MCP_MODERN,
+        [META_CLIENT_CAPS]: {},
+      },
+    },
   });
   const deadline = AbortSignal.timeout(8000);
   // Pointing this at aadhar.sh is the first thing anybody will try, and over the
@@ -196,22 +204,23 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
   // NEW target nobody vetted. Under "follow" that hop was taken and its body
   // read, so a public host could hand this POST to an address
   // validateLensTarget exists to refuse.
-  const send = (extra) => outboundRead(url, env, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      // Both framings, because the server picks. DeepWiki refuses a
-      // JSON-only Accept outright (406, "Client must accept both") rather
-      // than downgrading to the one framing we said we could read.
-      accept: "application/json, text/event-stream",
-      "mcp-method": LIST_METHOD,
-      ...extra,
-    },
-    body,
-    signal: deadline,
-    identity: { as: "aadharshbot" },
-    maxHops: 4,
-  });
+  const send = (extra) =>
+    outboundRead(url, env, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        // Both framings, because the server picks. DeepWiki refuses a
+        // JSON-only Accept outright (406, "Client must accept both") rather
+        // than downgrading to the one framing we said we could read.
+        accept: "application/json, text/event-stream",
+        "mcp-method": LIST_METHOD,
+        ...extra,
+      },
+      body,
+      signal: deadline,
+      identity: { as: "aadharshbot" },
+      maxHops: 4,
+    });
 
   const read = async (res) => {
     const got = await readResponseCapped(res, CATALOG_CAP);
@@ -310,7 +319,6 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
   }
 }
 
-
 // ── NLWeb: reading an /ask answer ───────────────────────────────────────────
 // The catalogue read above asks an MCP server to DESCRIBE itself, which costs
 // it a lookup in memory. This one asks a stranger's retrieval endpoint an
@@ -351,7 +359,10 @@ export type ForeignNlwebProbe =
  */
 export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}): Promise<ForeignNlwebProbe> {
   const base = origin.replace(/\/+$/, "") + "/ask";
-  const query = String(opts.query || "").trim().slice(0, 200) || "what is this site about";
+  const query =
+    String(opts.query || "")
+      .trim()
+      .slice(0, 200) || "what is this site about";
   const url = `${base}?query=${encodeURIComponent(query)}&streaming=0&mode=list`;
 
   const deadline = AbortSignal.timeout(8000);
@@ -410,13 +421,19 @@ type AskParse =
 /** The single-body answer: `{query_id, ...attrs, results:[...]}`. */
 function parseAskJson(text): AskParse {
   let payload;
-  try { payload = JSON.parse(text); } catch { return { ok: false, detail: "that is not JSON" }; }
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return { ok: false, detail: "that is not JSON" };
+  }
   const record = asRecord(payload);
   if (!record) return { ok: false, detail: "the answer is not a JSON object" };
-  const results = Array.isArray(record.results) ? record.results
-    // ItemList is the richer structure the spec says results are moving to, so
-    // a server that has already moved is read rather than called malformed.
-    : Array.isArray(record.itemListElement) ? record.itemListElement
+  const results = Array.isArray(record.results)
+    ? record.results
+    : // ItemList is the richer structure the spec says results are moving to, so
+      // a server that has already moved is read rather than called malformed.
+      Array.isArray(record.itemListElement)
+      ? record.itemListElement
       : null;
   if (!results) return { ok: false, detail: "no `results` array in the answer" };
   return { ok: true, dialect: "json", queryId: asText(record.query_id), results, attributes: Object.keys(record).filter((k) => k !== "results") };
@@ -440,10 +457,17 @@ function parseAskStream(text): AskParse {
   for (const { event: eventName, data } of sseEvents(text)) {
     if (!data) continue;
     let frame;
-    try { frame = JSON.parse(data); } catch { continue; }
+    try {
+      frame = JSON.parse(data);
+    } catch {
+      continue;
+    }
     const record = asRecord(frame);
     if (!record) continue;
-    if (eventName) { named = true; seen.add(eventName); }
+    if (eventName) {
+      named = true;
+      seen.add(eventName);
+    }
     const type = asText(record.message_type);
     if (type) seen.add(type);
     queryId = queryId || asText(record.query_id) || asText(record.conversation_id);
@@ -478,7 +502,11 @@ function gradeAskResults(parsed) {
         const key = String(name).slice(0, 40);
         types.set(key, (types.get(key) || 0) + 1);
       }
-      try { schemaBytes += JSON.stringify(schema).length; } catch { /* unserializable, counted as none */ }
+      try {
+        schemaBytes += JSON.stringify(schema).length;
+      } catch {
+        /* unserializable, counted as none */
+      }
     }
   }
 
@@ -491,7 +519,10 @@ function gradeAskResults(parsed) {
     shown: Math.min(parsed.results.length, DOOR_LIMITS.askResults),
     coverage,
     conformant: ASK_FIELDS.every((f) => coverage[f] === parsed.results.length) && parsed.results.length > 0,
-    schemaTypes: [...types.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, count]) => ({ name, count })),
+    schemaTypes: [...types.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name, count]) => ({ name, count })),
     schemaBytes,
     attributes: (parsed.attributes || []).slice(0, 12),
     events: parsed.events,
@@ -518,7 +549,11 @@ function gradeAskResults(parsed) {
         // All-or-nothing, exactly like capSchema above: half a schema.org object
         // describes something that does not exist.
         let json;
-        try { json = JSON.stringify(schema); } catch { json = null; }
+        try {
+          json = JSON.stringify(schema);
+        } catch {
+          json = null;
+        }
         if (json && json.length <= DOOR_LIMITS.askSchemaBytes) row.schema_object = schema;
         else row.schemaOversize = json ? json.length : 0;
       }

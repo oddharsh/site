@@ -93,9 +93,12 @@ test("each consumer reads the derived value rather than a copy of it", async () 
 
 test("the island URLs are routing facts the feature modules import", async () => {
   const pairs = [
-    ["whoareyou", "VALUES_URL", routes.WHOAREYOU_VALUES_URL], ["reading", "LIST_URL", routes.READING_LIST_URL],
-    ["dyno", "PULLS_URL", routes.DYNO_PULLS_URL], ["census", "TABLE_URL", routes.CENSUS_TABLE_URL],
-    ["ledger", "LINES_URL", routes.LEDGER_LINES_URL], ["inbox", "MAIL_URL", routes.INBOX_MAIL_URL],
+    ["whoareyou", "VALUES_URL", routes.WHOAREYOU_VALUES_URL],
+    ["reading", "LIST_URL", routes.READING_LIST_URL],
+    ["dyno", "PULLS_URL", routes.DYNO_PULLS_URL],
+    ["census", "TABLE_URL", routes.CENSUS_TABLE_URL],
+    ["ledger", "LINES_URL", routes.LEDGER_LINES_URL],
+    ["inbox", "MAIL_URL", routes.INBOX_MAIL_URL],
     ["around", "SNAPSHOT_URL", routes.AROUND_SNAPSHOT_URL],
   ];
   for (const [mod, local, url] of pairs) {
