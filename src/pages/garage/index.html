@@ -227,10 +227,10 @@ p { margin: 0 0 12px; }
         <div class="desc">
           AV2&apos;s reference encoder <a href="https://github.com/AOMediaCodec/avm" rel="external">shipped 1.0.0 in May</a>,
           and no browser decodes it yet. Built locally and scored against the AVIF this site ships,
-          at matched bytes, it wins 23 of 24 thumbnails under half a bit per pixel, the sparsest
-          third of what this site ships, loses above that, and loses all 32 calls on dense detail
-          crops. Bits per pixel decides which. Per-segment quantization
-          matrices, which AV1 has no syntax for, widen the win.
+          at matched bytes, it comes out about even across the thumbnails this site ships at its
+          default speed, and wins on about 148 of 162 once two of its own tools that speed switches
+          off are back on. Dense detail crops still go to AV1, and bits per pixel decides where the
+          line falls. Per-segment quantization matrices, which AV1 has no syntax for, widen the win.
           <a href="https://arxiv.org/abs/2605.15800" rel="external">AOM&apos;s own report</a> puts it
           18 to 24% ahead with video metrics, and the page shows where each number comes from. It also
           catches a trap: behind a <code style="font-family: var(--font-mono);font-size:9pt">&lt;picture&gt;</code>

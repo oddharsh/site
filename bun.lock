@@ -8,7 +8,7 @@
         "@cloudflare/config": "0.26.0",
         "@oxlint/plugins": "1.88.0",
         "@types/bun": "1.4.3",
-        "av2-tone": "github:oddharsh/av2-tone#996848f8a319e72991d99f209c0d089192ac3cf1",
+        "av2-tone": "github:oddharsh/av2-tone#d680fad8687983cfac2ac6ba1d59c84609bda2fc",
         "lightningcss": "1.33.0",
         "oxc-minify": "0.154.0",
         "playwright-core": "1.64.1",
@@ -238,7 +238,7 @@
 
     "aadhar-sh-dev": ["aadhar-sh-dev@workspace:config/dev"],
 
-    "av2-tone": ["av2-tone@github:oddharsh/av2-tone#996848f", {}, "oddharsh-av2-tone-996848f", "sha512-vvl2OAePLqo1NjAPoUS6DVE79xn+lSjuvQ+yIY139qOEc9tH6ZpYO3vULrVWEf2zH7P9MROqc9EVkA4nZMl/sA=="],
+    "av2-tone": ["av2-tone@github:oddharsh/av2-tone#d680fad", {}, "oddharsh-av2-tone-d680fad", "sha512-ueIGABrBHwCu1ydDhGS8oRH940Daqko1NzL3OAi8K0RxOXqsOl4CKwplVwfCTDOFVNigQQ1OnRB0YGzOQ/7nSA=="],
 
     "blake3-wasm": ["blake3-wasm@2.1.5", "", {}, "sha512-F1+K8EbfOZE49dtoPtmxUQrpXaBIl3ICvasLh+nJta0xkz+9kF/7uet9fLnwKqhDrmj6g+6K3Tw9yQPUg2ka5g=="],
 
