@@ -472,3 +472,19 @@ skips it.
     half its questions, and the contract test holds both guessers near
     chance site-wide with the median length ratio in 0.85 to 1.15.
     Checked by: `tools/contract-quiz-answers-carry-no-length-tell.test.mjs`.
+
+67. **Safari reads a fixed box's background-color, never its gradient.**
+    Safari 26 dropped theme-color in tabs and tints its status bar and
+    toolbars from the frontmost fixed box just inside each edge, using that
+    box's computed `background-color` (`LocalFrameView::fixedContainerEdges`).
+    The taskbar was drawn with the `background:` shorthand, which leaves the
+    color transparent, so Safari had nothing solid to extend under it. The box
+    must span 90% of the edge and stand taller than 10px, or WebKit samples
+    pixels instead, and `backdrop-filter` disqualifies it (WebKit 319479). The
+    wallpaper has no solid color either, so `html::before` is a 12px top
+    sampler clipped to text it doesn't have: it paints nothing and still reads
+    as opaque. On 2026-10-16, Chromium screenshots of the top and bottom 40px
+    at 390px and 1440px matched main to the byte, and the same strip without
+    the clip didn't. Undocumented WebKit behavior: if it moves, the old look
+    comes back.
+    Checked by: `tools/contract-safari-reads-a-solid-colour-at-each-edge.test.mjs`.
