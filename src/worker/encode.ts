@@ -38,10 +38,8 @@ export const ENCODE_CAP = 1024 * 1024;
 // it is how "standard table at ~q80" gets distinguished from "custom table",
 // which is a real signal about which encoder made the file.
 const ANNEX_K_LUMA = [
-  16, 11, 10, 16, 24, 40, 51, 61, 12, 12, 14, 19, 26, 58, 60, 55,
-  14, 13, 16, 24, 40, 57, 69, 56, 14, 17, 22, 29, 51, 87, 80, 62,
-  18, 22, 37, 56, 68, 109, 103, 77, 24, 35, 55, 64, 81, 104, 113, 92,
-  49, 64, 78, 87, 103, 121, 120, 101, 72, 92, 95, 98, 112, 100, 103, 99,
+  16, 11, 10, 16, 24, 40, 51, 61, 12, 12, 14, 19, 26, 58, 60, 55, 14, 13, 16, 24, 40, 57, 69, 56, 14, 17, 22, 29, 51, 87, 80, 62, 18, 22, 37, 56, 68, 109, 103,
+  77, 24, 35, 55, 64, 81, 104, 113, 92, 49, 64, 78, 87, 103, 121, 120, 101, 72, 92, 95, 98, 112, 100, 103, 99,
 ];
 
 /**
@@ -79,66 +77,90 @@ const SUBSAMPLING = { "2,2": "4:2:0", "2,1": "4:2:2", "1,1": "4:4:4", "1,2": "4:
  */
 export function parseJpeg(bytes) {
   const out = {
-    format: "jpeg", width: null, height: null, progressive: null, scans: 0,
-    subsampling: null, components: null, precision: null, tables: [],
-    icc: false, exif: false, xmp: false, jfif: false, restartInterval: null,
-    truncated: false, comments: [],
+    format: "jpeg",
+    width: null,
+    height: null,
+    progressive: null,
+    scans: 0,
+    subsampling: null,
+    components: null,
+    precision: null,
+    tables: [],
+    icc: false,
+    exif: false,
+    xmp: false,
+    jfif: false,
+    restartInterval: null,
+    truncated: false,
+    comments: [],
   };
-  let i = 2;   // past SOI
+  let i = 2; // past SOI
   const u16 = (at) => (bytes[at] << 8) | bytes[at + 1];
 
   while (i < bytes.length - 1) {
-    if (bytes[i] !== 0xFF) { i++; continue; }
+    if (bytes[i] !== 0xff) {
+      i++;
+      continue;
+    }
     const marker = bytes[i + 1];
-    if (marker === 0xFF || marker === 0x00) { i++; continue; }
-    if (marker === 0xD9) break;                       // EOI
-    if (marker >= 0xD0 && marker <= 0xD7) { i += 2; continue; }   // RSTn
+    if (marker === 0xff || marker === 0x00) {
+      i++;
+      continue;
+    }
+    if (marker === 0xd9) break; // EOI
+    if (marker >= 0xd0 && marker <= 0xd7) {
+      i += 2;
+      continue;
+    } // RSTn
 
     const length = u16(i + 2);
     const payload = i + 4;
 
-    if (marker === 0xDB) {                            // DQT
+    if (marker === 0xdb) {
+      // DQT
       let p = payload;
       while (p < payload + length - 2) {
         const spec = bytes[p];
         const precision = spec >> 4;
         const values = [];
         for (let k = 0; k < 64; k++) values.push(precision ? u16(p + 1 + k * 2) : bytes[p + 1 + k]);
-        out.tables.push({ id: spec & 0x0F, precision, values });
+        out.tables.push({ id: spec & 0x0f, precision, values });
         p += 1 + (precision ? 128 : 64);
       }
-    } else if (marker === 0xC0 || marker === 0xC1 || marker === 0xC2) {
-      out.progressive = marker === 0xC2;
+    } else if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
+      out.progressive = marker === 0xc2;
       out.precision = bytes[payload];
       out.height = u16(payload + 1);
       out.width = u16(payload + 3);
       const n = bytes[payload + 5];
       out.components = n;
       if (n >= 1) {
-        const h = bytes[payload + 7] >> 4, v = bytes[payload + 7] & 0x0F;
-        out.subsampling = n === 1 ? "grayscale" : (SUBSAMPLING[`${h},${v}`] || `${h}x${v}`);
+        const h = bytes[payload + 7] >> 4,
+          v = bytes[payload + 7] & 0x0f;
+        out.subsampling = n === 1 ? "grayscale" : SUBSAMPLING[`${h},${v}`] || `${h}x${v}`;
       }
-    } else if (marker === 0xDA) {
+    } else if (marker === 0xda) {
       out.scans += 1;
       // Entropy-coded data follows and contains 0xFF00 stuffing. Skip to the
       // next real marker rather than trusting a length field that is not there.
       let p = payload + length - 2;
       while (p < bytes.length - 1) {
-        if (bytes[p] === 0xFF && bytes[p + 1] !== 0x00 && !(bytes[p + 1] >= 0xD0 && bytes[p + 1] <= 0xD7)) break;
+        if (bytes[p] === 0xff && bytes[p + 1] !== 0x00 && !(bytes[p + 1] >= 0xd0 && bytes[p + 1] <= 0xd7)) break;
         p++;
       }
       i = p;
       continue;
-    } else if (marker === 0xDD) {
+    } else if (marker === 0xdd) {
       out.restartInterval = u16(payload);
-    } else if (marker === 0xE0) { out.jfif = true; }
-    else if (marker === 0xE1) {
+    } else if (marker === 0xe0) {
+      out.jfif = true;
+    } else if (marker === 0xe1) {
       const tag = String.fromCharCode(...bytes.slice(payload, payload + 4));
       if (tag === "Exif") out.exif = true;
       if (tag === "http") out.xmp = true;
-    } else if (marker === 0xE2) {
+    } else if (marker === 0xe2) {
       if (String.fromCharCode(...bytes.slice(payload, payload + 4)) === "ICC_") out.icc = true;
-    } else if (marker === 0xFE) {
+    } else if (marker === 0xfe) {
       out.comments.push(String.fromCharCode(...bytes.slice(payload, Math.min(payload + 40, payload + length - 2))));
     }
     i += 2 + length;
@@ -168,17 +190,21 @@ export function parseAvif(bytes) {
     // av1C: marker+version, seq_profile+seq_level_idx_0, then the flags byte
     const b2 = bytes[p + 2];
     out.monochrome = !!(b2 & 0x10);
-    const high = !!(b2 & 0x40), twelve = !!(b2 & 0x20);
+    const high = !!(b2 & 0x40),
+      twelve = !!(b2 & 0x20);
     out.bitDepth = high ? (twelve ? 12 : 10) : 8;
-    const subX = !!(b2 & 0x08), subY = !!(b2 & 0x04);
-    out.subsampling = out.monochrome ? "grayscale"
-      : subX && subY ? "4:2:0" : subX ? "4:2:2" : "4:4:4";
+    const subX = !!(b2 & 0x08),
+      subY = !!(b2 & 0x04);
+    out.subsampling = out.monochrome ? "grayscale" : subX && subY ? "4:2:0" : subX ? "4:2:2" : "4:4:4";
     break;
   }
   if (bytes.length) {
     // An alpha plane shows up as an auxiliary item; the tag is enough for a lint.
     for (let i = 0; i < bytes.length - 4; i++) {
-      if (ascii(i, 4) === "auxC") { out.alpha = true; break; }
+      if (ascii(i, 4) === "auxC") {
+        out.alpha = true;
+        break;
+      }
     }
   }
   return out.bitDepth === null ? null : out;
@@ -207,7 +233,11 @@ export function judgeEncode(info, byteLength) {
 
     // Progressive is free bytes and this site searches 64 scan scripts for them.
     if (info.progressive === true) {
-      add("scan", "ok", `progressive, ${info.scans} scan${info.scans === 1 ? "" : "s"}${info.truncated ? "+ (walk truncated)" : ""} — typically several percent smaller than baseline at equal quality`);
+      add(
+        "scan",
+        "ok",
+        `progressive, ${info.scans} scan${info.scans === 1 ? "" : "s"}${info.truncated ? "+ (walk truncated)" : ""} — typically several percent smaller than baseline at equal quality`,
+      );
     } else if (info.progressive === false) {
       add("scan", "warn", "baseline. Progressive is usually a few percent smaller at identical quality and costs nothing but encoder time.");
     }
@@ -218,7 +248,11 @@ export function judgeEncode(info, byteLength) {
       if (q.standard) {
         add("quality", "ok", `~q${q.quality} against the IJG Annex K table (deviation ${q.mad.toFixed(2)}/coefficient) — a libjpeg-family encoder`);
       } else {
-        add("quality", "ok", `custom quantization table, closest Annex K fit ~q${q.quality} but deviation ${q.mad.toFixed(2)}/coefficient. Tuned encoder: mozjpeg, jpegli, zenjpeg or similar.`);
+        add(
+          "quality",
+          "ok",
+          `custom quantization table, closest Annex K fit ~q${q.quality} but deviation ${q.mad.toFixed(2)}/coefficient. Tuned encoder: mozjpeg, jpegli, zenjpeg or similar.`,
+        );
       }
     }
 
@@ -226,15 +260,20 @@ export function judgeEncode(info, byteLength) {
     if (info.icc) metaBytes.push("ICC");
     if (info.exif) metaBytes.push("EXIF");
     if (info.xmp) metaBytes.push("XMP");
-    add("metadata", metaBytes.length ? "warn" : "ok",
-      metaBytes.length
-        ? `carries ${metaBytes.join(", ")} — fine for an archive, dead weight on a thumbnail`
-        : "stripped, which is what a delivery tier wants");
+    add(
+      "metadata",
+      metaBytes.length ? "warn" : "ok",
+      metaBytes.length ? `carries ${metaBytes.join(", ")} — fine for an archive, dead weight on a thumbnail` : "stripped, which is what a delivery tier wants",
+    );
   }
 
   if (info.format === "avif") {
     if (info.bitDepth === 8) {
-      add("depth", "warn", "8-bit. 10-bit AVIF measured ~6% smaller at equal quality on this site's corpus, for free — the extra depth improves the transform, it does not cost bytes.");
+      add(
+        "depth",
+        "warn",
+        "8-bit. 10-bit AVIF measured ~6% smaller at equal quality on this site's corpus, for free — the extra depth improves the transform, it does not cost bytes.",
+      );
     } else if (info.bitDepth) {
       add("depth", "ok", `${info.bitDepth}-bit — the free win; 10-bit beats 8-bit at equal quality`);
     }
@@ -243,7 +282,8 @@ export function judgeEncode(info, byteLength) {
     // butteraugli agreeing. A downscaled photo has full chroma to keep, and AV1
     // spends little on smooth chroma planes, so the halving buys less than the
     // colour bleed it causes. zenc/src/avif.c carries the numbers.
-    if (info.subsampling === "4:4:4") add("chroma", "ok", "4:4:4: full chroma. For AVIF at delivery sizes this measured ahead of 4:2:0 at equal bytes here (~2% bytes, median)");
+    if (info.subsampling === "4:4:4")
+      add("chroma", "ok", "4:4:4: full chroma. For AVIF at delivery sizes this measured ahead of 4:2:0 at equal bytes here (~2% bytes, median)");
     else if (info.subsampling === "4:2:0") add("chroma", "ok", "4:2:0: fine, though on downscaled photos 4:4:4 measured ~2% better at equal bytes here");
     else if (info.subsampling) add("chroma", "ok", info.subsampling);
     if (info.brand) add("brand", "ok", info.brand);
@@ -269,17 +309,16 @@ export function encodeReadout(info, byteLength) {
     info.truncated ? [s("  (read the first 1 MB — scan count is a floor, not a total)", "warn")] : blank(),
     blank(),
     rule(INNER, "what the encoder did"),
-    ...findings.map((f) => [
-      s(MARK[f.verdict] || "  ??  ", f.verdict === "warn" ? "warn" : "ok"),
-      ...fit([s(f.id, "strong")], 12),
-      s(f.detail, "dim"),
-    ]),
+    ...findings.map((f) => [s(MARK[f.verdict] || "  ??  ", f.verdict === "warn" ? "warn" : "ok"), ...fit([s(f.id, "strong")], 12), s(f.detail, "dim")]),
     blank(),
     warns.length
       ? [s(`  ${warns.length} thing${warns.length === 1 ? "" : "s"} worth changing, above.`, "warn")]
       : [s("  Nothing here is leaving bytes on the table.", "ok")],
     blank(),
-    ...wrap("No pixels were decoded. Every fact above comes from the container — quantization tables, the scan script, component sampling factors, the av1C record — which is why this runs in a Worker at all.", INNER).map((row) => [s(row, "dim")]),
+    ...wrap(
+      "No pixels were decoded. Every fact above comes from the container — quantization tables, the scan script, component sampling factors, the av1C record — which is why this runs in a Worker at all.",
+      INNER,
+    ).map((row) => [s(row, "dim")]),
   );
 }
 
@@ -301,17 +340,30 @@ export async function fetchImageBytes(url, env, lensFetch) {
     const reader = res.body?.getReader();
     if (!reader) return { ok: false, why: "no body" };
     const chunks = [];
-    let total = 0, truncated = false;
+    let total = 0,
+      truncated = false;
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       chunks.push(value);
       total += value.length;
-      if (total >= ENCODE_CAP) { truncated = true; try { await reader.cancel(); } catch { /* done */ } break; }
+      if (total >= ENCODE_CAP) {
+        truncated = true;
+        try {
+          await reader.cancel();
+        } catch {
+          /* done */
+        }
+        break;
+      }
     }
     const bytes = new Uint8Array(total);
     let at = 0;
-    for (const c of chunks) { bytes.set(c.subarray(0, Math.min(c.length, total - at)), at); at += c.length; if (at >= total) break; }
+    for (const c of chunks) {
+      bytes.set(c.subarray(0, Math.min(c.length, total - at)), at);
+      at += c.length;
+      if (at >= total) break;
+    }
     return { ok: true, bytes, type, truncated, declaredLength: Number(res.headers.get("content-length")) || total };
   } catch (error) {
     return { ok: false, unreadable: true, why: String(error?.message || error).slice(0, 80) };
@@ -320,7 +372,7 @@ export async function fetchImageBytes(url, env, lensFetch) {
 
 /** Sniff the container from magic bytes rather than trusting content-type. */
 export function sniff(bytes) {
-  if (bytes.length > 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return "jpeg";
+  if (bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpeg";
   if (bytes.length > 12 && String.fromCharCode(...bytes.slice(4, 8)) === "ftyp") {
     const brand = String.fromCharCode(...bytes.slice(8, 12));
     if (brand.startsWith("avif") || brand.startsWith("avis")) return "avif";

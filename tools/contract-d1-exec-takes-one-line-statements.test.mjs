@@ -26,11 +26,7 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 /** Worker source this repository owns, from `git ls-files` rather than a walk,
  *  so a vendored tree cannot wander into scope. */
 function workerSources() {
-  const out = execFileSync(
-    "git",
-    ["ls-files", "-z", "src/worker/*", "cal/src/*", "serendipity/*"],
-    { cwd: new URL(".", ROOT), encoding: "utf8" },
-  );
+  const out = execFileSync("git", ["ls-files", "-z", "src/worker/*", "cal/src/*", "serendipity/*"], { cwd: new URL(".", ROOT), encoding: "utf8" });
   return out
     .split("\0")
     .filter((rel) => /\.(ts|js|mjs)$/.test(rel))
@@ -45,7 +41,10 @@ function literalAt(source, i) {
   const quote = source[i];
   if (quote !== '"' && quote !== "'" && quote !== "`") return null;
   for (let j = i + 1; j < source.length; j++) {
-    if (source[j] === "\\") { j++; continue; }
+    if (source[j] === "\\") {
+      j++;
+      continue;
+    }
     if (source[j] === quote) return source.slice(i, j + 1);
   }
   return null;
@@ -89,20 +88,16 @@ test("D1 exec() call sites pass a single-line statement", async () => {
   // of reporting a clean pass over zero of them.
   assert.ok(literals >= 1, "the matcher found no exec() literal arguments at all; it is broken");
 
-  assert.deepEqual(
-    offenders,
-    [],
-    `D1 exec() splits on newlines, so these statements cannot run; use prepare().run() or batch():\n  ${offenders.join("\n  ")}`,
-  );
+  assert.deepEqual(offenders, [], `D1 exec() splits on newlines, so these statements cannot run; use prepare().run() or batch():\n  ${offenders.join("\n  ")}`);
 });
 
 test("the multi-line matcher fails the shape that shipped", () => {
   // The control, because a check that has never gone red is decoration. This is
   // the DDL string around.ts passed to exec(), reduced; the matcher must call it
   // out, and must leave the single-line form alone.
-  const broken = 'await env.RESTORE_DB.exec(\n  `CREATE TABLE IF NOT EXISTS t (\n    a TEXT\n  )`\n);';
+  const broken = "await env.RESTORE_DB.exec(\n  `CREATE TABLE IF NOT EXISTS t (\n    a TEXT\n  )`\n);";
   const fixed = 'await env.RESTORE_DB.exec("CREATE TABLE IF NOT EXISTS t (a TEXT)");';
-  const byName = 'const m = /^(a)$/.exec(line);';
+  const byName = "const m = /^(a)$/.exec(line);";
 
   assert.equal(execLiteralArgs(broken).length, 1, "the broken form is one literal argument");
   assert.ok(execLiteralArgs(broken)[0].literal.includes("\n"), "and it must be flagged");
@@ -118,10 +113,7 @@ test("the around history DDL is a list of complete statements", async () => {
   // them back into a single string fails here as well as above.
   const src = await readFile(new URL("../src/worker/around.ts", import.meta.url), "utf8");
 
-  assert.ok(
-    /await db\.batch\(/.test(src),
-    "persistAroundHistory must reach D1 through batch(), not exec()",
-  );
+  assert.ok(/await db\.batch\(/.test(src), "persistAroundHistory must reach D1 through batch(), not exec()");
 
   const block = /const AROUND_HISTORY_DDL = \[([\s\S]*?)\n\];/.exec(src);
   assert.ok(block, "AROUND_HISTORY_DDL must be a literal array the check can read");

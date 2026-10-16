@@ -89,7 +89,8 @@ export const API_CALL_PATH = /\.json$|^\/api(?:\/|$)|^\/v\d+(?:\/|$)/i;
 // Derived from the registry, so a new tool is covered by being registered.
 const TEXT_TOOLS = new Set(AGENT_SURFACES.filter((s) => s.mimeType === "text/plain").map((s) => s.path));
 
-const PROBE = /\.(?:php\d?|env|git|ya?ml|cgi|sql|bak|zip|tar|gz|ini|cfg|conf|pem|key|asp|aspx|jsp)\b|\/wp-|\/\.(?:aws|ssh|docker|config|s3cfg|zshrc|bash|anthropic)|%25|\/etc\/|credentials|composer\.json|appsettings|phpinfo|cgi-bin/i;
+const PROBE =
+  /\.(?:php\d?|env|git|ya?ml|cgi|sql|bak|zip|tar|gz|ini|cfg|conf|pem|key|asp|aspx|jsp)\b|\/wp-|\/\.(?:aws|ssh|docker|config|s3cfg|zshrc|bash|anthropic)|%25|\/etc\/|credentials|composer\.json|appsettings|phpinfo|cgi-bin/i;
 
 /** Which kind of miss a path is, for the counter. */
 export function missBucket(path: string): string {
@@ -107,7 +108,8 @@ export function callerClass(ua: string | null): string {
   const s = String(ua || "");
   if (!s) return "empty";
   if (matchCrawler(s)) return "ai-crawler";
-  if (/curl|wget|python|go-http|node|undici|axios|okhttp|java\/|httpx|aiohttp|scrapy|headless|puppeteer|playwright|bun\/|deno|reqwest/i.test(s)) return "http-tool";
+  if (/curl|wget|python|go-http|node|undici|axios|okhttp|java\/|httpx|aiohttp|scrapy|headless|puppeteer|playwright|bun\/|deno|reqwest/i.test(s))
+    return "http-tool";
   if (/bot|crawl|spider|scan|fetch|monitor|preview|validator|feed/i.test(s)) return "other-bot";
   if (/mozilla/i.test(s)) return "browser";
   return "other";
@@ -125,17 +127,26 @@ export async function sitemapPaths(env: AssetsEnv): Promise<string[]> {
     const r = await env.ASSETS?.fetch("https://assets.local/sitemap.xml");
     const xml = r?.ok ? await r.text() : "";
     _sitemap = [...xml.matchAll(/<loc>\s*https?:\/\/[^/<]+([^<\s]*)\s*<\/loc>/g)].map((m) => m[1] || "/");
-  } catch { _sitemap = []; }
+  } catch {
+    _sitemap = [];
+  }
   return _sitemap;
 }
 
 /** Test seam, never called by the Worker (gotcha 28). */
-export function _resetSitemap() { _sitemap = undefined; }
+export function _resetSitemap() {
+  _sitemap = undefined;
+}
 
 /** The sitemap page a careless spelling meant: case, a trailing slash, `.html`,
  *  `/index`. These are the easy ones, and they need no guess. */
 export function canonicalPage(path: string, pages: readonly string[]): string | null {
-  const norm = (p: string) => (p.toLowerCase().replace(/\/index(?:\.html?)?$/, "").replace(/\.html?$/, "").replace(/\/+$/, "") || "/");
+  const norm = (p: string) =>
+    p
+      .toLowerCase()
+      .replace(/\/index(?:\.html?)?$/, "")
+      .replace(/\.html?$/, "")
+      .replace(/\/+$/, "") || "/";
   const want = norm(path);
   const hit = pages.find((p) => norm(p) === want);
   return hit && hit !== path ? hit : null;
@@ -166,7 +177,7 @@ function likeness(a: string, b: string): number {
  *  one (a miss under /garage/ is compared with /garage's pages), and across the
  *  whole sitemap otherwise. A floor keeps an unrelated page from being offered
  *  as a near miss. */
-export function nearestPages(path: string, pages: readonly string[], limit = 3): { section: string | null, pages: string[] } {
+export function nearestPages(path: string, pages: readonly string[], limit = 3): { section: string | null; pages: string[] } {
   const parts = path.replace(/\/+$/, "").split("/").filter(Boolean);
   const top = parts.length > 1 ? `/${parts[0]}` : null;
   const section = top && pages.includes(top) ? top : null;
@@ -182,7 +193,7 @@ export function nearestPages(path: string, pages: readonly string[], limit = 3):
 // ── the deterministic redirects ──────────────────────────────────────────────
 
 /** Where a missing path unambiguously points, and by which rule, or null. */
-export async function resolveMiss(url: URL, env: AssetsEnv): Promise<{ location: string, rule: string } | null> {
+export async function resolveMiss(url: URL, env: AssetsEnv): Promise<{ location: string; rule: string } | null> {
   const path = url.pathname;
 
   const asset = /^\/a\/(.+)\.([0-9a-f]{8})\.([a-z0-9]+)$/.exec(path);
@@ -218,7 +229,7 @@ export async function resolveMiss(url: URL, env: AssetsEnv): Promise<{ location:
 }
 
 /** The plain-text body an empty 404 gains. */
-export function missBody(path: string, near: { section: string | null, pages: string[] }): string {
+export function missBody(path: string, near: { section: string | null; pages: string[] }): string {
   const lines = [`404 Not Found: ${path}`, ""];
   if (near.pages.length) {
     lines.push(near.section ? `Closest pages in ${near.section}:` : "Closest pages:", ...near.pages.map((p) => `  ${p}`));
@@ -234,7 +245,7 @@ export function missBody(path: string, near: { section: string | null, pages: st
 
 /** The same answer for a caller that asked for `text/markdown`: the pages as
  *  absolute links, so an agent can follow them without resolving anything. */
-export function missMarkdown(origin: string, path: string, near: { section: string | null, pages: string[] }): string {
+export function missMarkdown(origin: string, path: string, near: { section: string | null; pages: string[] }): string {
   const link = (p: string) => `[${p}](${origin}${p})`;
   const lines = ["# 404 Not Found", "", `\`${path}\` is not a page on ${new URL(origin).host}.`, ""];
   if (near.pages.length) {
@@ -254,7 +265,7 @@ export function missMarkdown(origin: string, path: string, near: { section: stri
 
 /** The same answer as the Error object /openapi.json declares: the site's
  *  existing `{ ok: false, error }` shape, plus a machine code and a hint. */
-export function missJson(origin: string, path: string, near: { section: string | null, pages: string[] }) {
+export function missJson(origin: string, path: string, near: { section: string | null; pages: string[] }) {
   const body: Record<string, unknown> = {
     ok: false,
     error: `${path} is not a page or endpoint on ${new URL(origin).host}.`,
@@ -270,7 +281,7 @@ export function missJson(origin: string, path: string, near: { section: string |
 }
 
 // ── the hook ─────────────────────────────────────────────────────────────────
-export type MissOutcome = { response: Response, bucket: string, outcome: string };
+export type MissOutcome = { response: Response; bucket: string; outcome: string };
 
 /** Turn a 404 into a redirect where one URL is meant, and otherwise into a 404
  *  that says where the pages are. Never throws: a failure here returns the
@@ -302,9 +313,12 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
       // unless HTML was named, and everyone else plain text.
       const json = wantsJson(request) || (API_CALL_PATH.test(url.pathname) && !namesHtml(request));
       const kind = wantsMarkdown(request) ? "md" : json ? "json" : "text";
-      const text = kind === "md" ? missMarkdown(url.origin, url.pathname, near)
-        : kind === "json" ? `${JSON.stringify(missJson(url.origin, url.pathname, near), null, 2)}\n`
-        : missBody(url.pathname, near);
+      const text =
+        kind === "md"
+          ? missMarkdown(url.origin, url.pathname, near)
+          : kind === "json"
+            ? `${JSON.stringify(missJson(url.origin, url.pathname, near), null, 2)}\n`
+            : missBody(url.pathname, near);
       return {
         bucket,
         outcome: near.pages.length ? "404:suggested" : "404",
@@ -319,7 +333,9 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
         }),
       };
     }
-  } catch { /* fall through to the original, decorated */ }
+  } catch {
+    /* fall through to the original, decorated */
+  }
   const out = new Response(response.body, response);
   out.headers.append("link", MISS_LINKS);
   return { bucket, outcome: "404", response: out };
@@ -333,5 +349,7 @@ export function countMiss(env: { MISS_LEDGER?: AnalyticsEngineDataset }, request
       doubles: [1],
       indexes: [miss.bucket],
     });
-  } catch { /* the ledger is best-effort; never break a response over it */ }
+  } catch {
+    /* the ledger is best-effort; never break a response over it */
+  }
 }

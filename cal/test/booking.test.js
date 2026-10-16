@@ -12,10 +12,7 @@
 // (PENDING_TTL_DAYS = "7") and the BOOKINGS binding.
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 import { bootCal } from "./harness.ts";
-import {
-  createBooking, getBooking, setStatus,
-  holdSlot, releaseSlot, listHeld,
-} from "../src/booking.js";
+import { createBooking, getBooking, setStatus, holdSlot, releaseSlot, listHeld } from "../src/booking.js";
 
 /** @type {Awaited<ReturnType<typeof bootCal>>} */
 let cal;
@@ -63,9 +60,13 @@ const soon = (offsetH = 48) => {
  * @returns {Omit<Booking, "id">}
  */
 const pending = (fields = {}) => ({
-  status: "pending", created: Date.now(),
-  name: "Test Requester", email: "test@example.dev", topic: "coffee",
-  ...soon(), ...fields,
+  status: "pending",
+  created: Date.now(),
+  name: "Test Requester",
+  email: "test@example.dev",
+  topic: "coffee",
+  ...soon(),
+  ...fields,
 });
 
 describe("booking record CRUD", () => {

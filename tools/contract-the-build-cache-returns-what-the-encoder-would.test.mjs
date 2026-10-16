@@ -7,10 +7,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
-import {
-  assert,
-  test,
-} from "./contract-shared.ts";
+import { assert, test } from "./contract-shared.ts";
 
 const { buildCache, buildCacheEnabled } = await import("./lib/build-cache.ts");
 
@@ -21,7 +18,10 @@ function counted(name = "brotli test") {
     name,
     keyOf: (bytes) => [bytes],
     verify: (bytes, out) => brotliDecompressSync(out).equals(bytes),
-    encode: async (items) => { enc.calls += items.length; return items.map((b) => brotliCompressSync(b)); },
+    encode: async (items) => {
+      enc.calls += items.length;
+      return items.map((b) => brotliCompressSync(b));
+    },
   };
   return enc;
 }
@@ -38,7 +38,9 @@ test("a second build reads the entry the first one wrote, byte for byte", async 
     assert.equal(first.calls, 1);
     assert.equal(second.calls, 0, "the second build encoded nothing");
     assert.ok(a.equals(b) && a.equals(brotliCompressSync(page)));
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("an entry that does not decode to its input is recompressed, never returned", async () => {
@@ -55,7 +57,9 @@ test("an entry that does not decode to its input is recompressed, never returned
     const again = counted();
     await buildCache({ dir, enabled: true }).many([page], again);
     assert.equal(again.calls, 1, "a decoder that throws is a miss too");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("a different encoder name misses every entry", async () => {
@@ -65,7 +69,9 @@ test("a different encoder name misses every entry", async () => {
     const next = counted("brotli q11 bun@bbbb");
     await buildCache({ dir, enabled: true }).many([page], next);
     assert.equal(next.calls, 1, "a new runtime build recompressed");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("identical inputs encode once, in one call or across calls", async () => {
@@ -78,7 +84,9 @@ test("identical inputs encode once, in one call or across calls", async () => {
       const [z] = await Promise.all([cache.many([page], enc), cache.many([page], enc)]).then((r) => r[0]);
       assert.equal(enc.calls, 1, `enabled=${enabled}: one encode for four requests`);
       assert.ok(x.equals(y) && y.equals(z));
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 
@@ -103,7 +111,10 @@ test("memo returns a stored minification and refuses a damaged one", () => {
   const dir = fresh();
   try {
     let calls = 0;
-    const minify = () => { calls++; return ".a{color:red}"; };
+    const minify = () => {
+      calls++;
+      return ".a{color:red}";
+    };
     assert.equal(buildCache({ dir, enabled: true }).memo("css v1", [".a { color: red }"], minify), ".a{color:red}");
     assert.equal(buildCache({ dir, enabled: true }).memo("css v1", [".a { color: red }"], minify), ".a{color:red}");
     assert.equal(calls, 1, "the second build read the entry");
@@ -113,20 +124,31 @@ test("memo returns a stored minification and refuses a damaged one", () => {
     assert.equal(calls, 2, "an entry whose text no longer matches its digest is a miss");
     buildCache({ dir, enabled: true }).memo("css v2", [".a { color: red }"], minify);
     assert.equal(calls, 3, "a new tool version or option set misses");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("memo never remembers a failure, and shares within a build with the disk off", () => {
   const dir = join(tmpdir(), `build-cache-memo-off-${process.pid}`);
   const cache = buildCache({ dir, enabled: false });
   let calls = 0;
-  const broken = () => { calls++; throw new Error("parse failed"); };
+  const broken = () => {
+    calls++;
+    throw new Error("parse failed");
+  };
   assert.throws(() => cache.memo("js", ["x("], broken));
   assert.throws(() => cache.memo("js", ["x("], broken));
   assert.equal(calls, 2, "the second call failed again rather than reading a remembered result");
   let ok = 0;
-  cache.memo("js", ["a()"], () => { ok++; return "a()"; });
-  cache.memo("js", ["a()"], () => { ok++; return "a()"; });
+  cache.memo("js", ["a()"], () => {
+    ok++;
+    return "a()";
+  });
+  cache.memo("js", ["a()"], () => {
+    ok++;
+    return "a()";
+  });
   assert.equal(ok, 1, "a block repeated across pages minifies once, even in CI");
   assert.throws(() => readdirSync(dir), "nothing touched the disk");
 });
@@ -149,13 +171,15 @@ test("prune keeps what this build used, drops stale strangers, and runs at most 
     writeFileSync(join(dir, "stranger"), "x");
     writeFileSync(join(dir, "recent"), "x");
     const old = new Date(Date.now() - 30 * 86_400_000);
-    utimesSync(join(dir, usedEntry), old, old);   // old, but read by this build
-    utimesSync(join(dir, "stranger"), old, old);  // old and unused: goes
+    utimesSync(join(dir, usedEntry), old, old); // old, but read by this build
+    utimesSync(join(dir, "stranger"), old, old); // old and unused: goes
     assert.equal(await cache.prune(14), 1);
     assert.ok(existsSync(join(dir, usedEntry)), "an entry this build used survives its age");
     assert.ok(!existsSync(join(dir, "stranger")));
     assert.ok(existsSync(join(dir, "recent")), "an unused entry younger than the cutoff stays");
     utimesSync(join(dir, "recent"), old, old);
     assert.equal(await buildCache({ dir, enabled: true }).prune(14), 0, "a second sweep the same day does nothing");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

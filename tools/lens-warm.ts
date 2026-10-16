@@ -77,7 +77,11 @@ async function ask(path, url) {
       return { ok: res.ok, cached: res.headers.get("x-lens-cache") === "hit", ms, note: "PNG" };
     }
     let body = null;
-    try { body = await res.json(); } catch { /* an HTML error page from the edge */ }
+    try {
+      body = await res.json();
+    } catch {
+      /* an HTML error page from the edge */
+    }
     if (!body) return { ok: false, cached: false, ms, note: `${res.status} ${type || "no content-type"}` };
     if (body.ok === false) return { ok: false, cached: false, ms, note: body.reason || body.error || String(res.status) };
     return { ok: true, cached: !!body.fromCache, ms, note: body.fromCache ? "cache" : "fresh render" };
@@ -115,8 +119,16 @@ for (const [i, url] of targets.entries()) {
 
   const state = (r) => (r.ok ? (r.cached ? "cached" : "warmed") : "COLD");
   if (!shot.ok || !render.ok) cold++;
-  console.log(`  ${pad(short(url), 38)} shot ${pad(state(shot), 7)} render ${pad(state(render), 7)} ${
-    shot.ok && render.ok ? "" : [shot, render].filter((r) => !r.ok).map((r) => r.note).join(" | ")}`);
+  console.log(
+    `  ${pad(short(url), 38)} shot ${pad(state(shot), 7)} render ${pad(state(render), 7)} ${
+      shot.ok && render.ok
+        ? ""
+        : [shot, render]
+            .filter((r) => !r.ok)
+            .map((r) => r.note)
+            .join(" | ")
+    }`,
+  );
 
   if (isDaily(shot.note) || isDaily(render.note)) {
     stopped = true;

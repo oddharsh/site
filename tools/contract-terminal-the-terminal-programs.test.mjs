@@ -28,15 +28,24 @@ import { _resetPhotoCaches } from "../src/worker/photos.ts";
 // coffee) still render here — their loaders fail closed to an empty list, which
 // is itself the case worth pinning.
 const TERMINAL_STATES = [
-  "/finger", "/finger?help=1", "/finger?keys=q",
-  ...["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"]
-    .map((pane) => `/finger?pane=${pane}`),
-  "/finger?pane=writing&keys=jj", "/finger?pane=writing&cursor=1&open=two",
-  "/finger?pane=search&q=lattice", "/finger?pane=search&q=lattice&open=0",
-  "/finger?pane=deploys&keys=G", "/finger?pane=photos",
+  "/finger",
+  "/finger?help=1",
+  "/finger?keys=q",
+  ...["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"].map((pane) => `/finger?pane=${pane}`),
+  "/finger?pane=writing&keys=jj",
+  "/finger?pane=writing&cursor=1&open=two",
+  "/finger?pane=search&q=lattice",
+  "/finger?pane=search&q=lattice&open=0",
+  "/finger?pane=deploys&keys=G",
+  "/finger?pane=photos",
   "/finger?pane=plan",
-  "/photos", "/photos?film=acros", "/photos?keys=j%3Ccr%3E", "/photos?open=A_1",
-  "/photos?q=nothingmatchesthis", "/lens", "/lens?url=javascript%3Aalert(1)",
+  "/photos",
+  "/photos?film=acros",
+  "/photos?keys=j%3Ccr%3E",
+  "/photos?open=A_1",
+  "/photos?q=nothingmatchesthis",
+  "/lens",
+  "/lens?url=javascript%3Aalert(1)",
 ];
 
 test("no frame line runs past 80 columns, and none of them draws a box", async () => {
@@ -155,8 +164,11 @@ test("a browser gets the same text a terminal does, not a second layout", async 
   const pre = /<pre class="tool-out">([\s\S]*?)<\/pre>/.exec(html);
   assert.ok(pre, "a tool asked for HTML must render the frame in a <pre>");
   const unescaped = pre[1]
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
   for (const line of text.split("\n").filter(Boolean)) {
     assert.ok(unescaped.includes(line), `the HTML view dropped or altered a row: ${line}`);
   }
@@ -181,8 +193,9 @@ test("every frame tool the MCP server lists is one the server can actually call"
   // when a client believes the list and calls it — which is exactly the caller
   // this surface exists for.
   const env = terminalEnv();
-  const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json())
-    .result.tools.map((tool) => tool.name);
+  const listed = (
+    await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json()
+  ).result.tools.map((tool) => tool.name);
   // The MCP tool name IS the route name. One vocabulary: what you type in the
   // console, what you curl, and what an agent calls are the same word.
   const FRAME_TOOLS = ["finger", "photos", "radar", "dict", "cache", "lens", "agent_ready"];
@@ -211,12 +224,17 @@ test("every frame tool the MCP server lists is one the server can actually call"
   try {
     testGlobals.fetch = async () => new Response("not found", { status: 404 });
     for (const name of FRAME_TOOLS) {
-      const args = name === "lens" ? { url: "https://example.com" }
-        : name === "radar" ? { samples: [{ name: "AP", rssi: -58 }] }
-        : {};
-      const res = await handleSiteMcp(mcpPost({
-        jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args, ...MODERN_META },
-      }), env, context());
+      const args = name === "lens" ? { url: "https://example.com" } : name === "radar" ? { samples: [{ name: "AP", rssi: -58 }] } : {};
+      const res = await handleSiteMcp(
+        mcpPost({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: { name, arguments: args, ...MODERN_META },
+        }),
+        env,
+        context(),
+      );
       const { result, error } = await res.json();
       assert.ok(!error, `${name} is listed but not dispatched: ${JSON.stringify(error)}`);
       // terminal_lens reaches a real fetch it cannot make here, so it is allowed to
@@ -225,8 +243,10 @@ test("every frame tool the MCP server lists is one the server can actually call"
       // Was `frame.includes("╔")`. The box is gone; what still has to be true is
       // that a frame came back at all and that it names the tool that drew it.
       assert.ok(frame.length > 20, `${name} returned no frame`);
-      assert.ok(frame.startsWith(name.replace("_", "-")) || frame.includes(name.replace("_", "-")),
-        `${name}'s frame does not say which tool drew it: ${frame.slice(0, 60)}`);
+      assert.ok(
+        frame.startsWith(name.replace("_", "-")) || frame.includes(name.replace("_", "-")),
+        `${name}'s frame does not say which tool drew it: ${frame.slice(0, 60)}`,
+      );
       assert.ok(!frame.includes("\x1b"), `${name} returned ANSI escapes into a model context`);
     }
   } finally {
@@ -242,16 +262,22 @@ test("the tui frame never renders a photo field the public projection withholds"
   // metadata.json is memoised per isolate, which is per process here, so an
   // earlier test's archive would answer instead of this one's.
   _resetPhotoCaches();
-  const env = { ASSETS: staticAssets({
-    ...TERMINAL_ASSETS,
-    "/images/metadata.json": {
-      A_1: {
-        camera: "FUJIFILM X-T50", film: "Classic Chrome", date: "2026:01:02",
-        gps: "40.7128,-74.0060", gpsLatitude: 40.7128, serialNumber: "SECRET123",
-        recipe: { "Film Simulation": "Classic Chrome" },
+  const env = {
+    ASSETS: staticAssets({
+      ...TERMINAL_ASSETS,
+      "/images/metadata.json": {
+        A_1: {
+          camera: "FUJIFILM X-T50",
+          film: "Classic Chrome",
+          date: "2026:01:02",
+          gps: "40.7128,-74.0060",
+          gpsLatitude: 40.7128,
+          serialNumber: "SECRET123",
+          recipe: { "Film Simulation": "Classic Chrome" },
+        },
       },
-    },
-  }) };
+    }),
+  };
   const text = await (await handleTool(terminalReq("/photos?open=A_1&plain=1"), env, context())).text();
   assert.ok(text.includes("Classic Chrome"), "the frame did not render at all");
   for (const secret of ["40.7128", "-74.0060", "SECRET123"]) {

@@ -88,7 +88,10 @@ const text = (value: unknown, what: string): string => {
 // runtime will re-read, so an edit to cloudflare.config.ts reaches the DEV
 // projection only in a fresh process. Nothing here edits a config mid-run.
 async function load(file: string) {
-  const key = createHash("sha256").update(readFileSync(join(REPO, file))).digest("hex").slice(0, 12);
+  const key = createHash("sha256")
+    .update(readFileSync(join(REPO, file)))
+    .digest("hex")
+    .slice(0, 12);
   return asRecord((await import(`${pathToFileURL(join(REPO, file)).href}?v=${key}`)).default);
 }
 
@@ -142,8 +145,13 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
   const build = asRecord(tooling.build);
 
   type Row = Record<string, unknown>;
-  const kv: Row[] = [], ae: Row[] = [], r2: Row[] = [], d1: Row[] = [];
-  const doBindings: Row[] = [], workflows: Row[] = [], ratelimits: Row[] = [];
+  const kv: Row[] = [],
+    ae: Row[] = [],
+    r2: Row[] = [],
+    d1: Row[] = [];
+  const doBindings: Row[] = [],
+    workflows: Row[] = [],
+    ratelimits: Row[] = [];
   const vars: Record<string, string> = {};
   const secrets: string[] = [];
   let assetsBinding: string | undefined, versionBinding: string | undefined;
@@ -156,20 +164,43 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
     // drop fails the first time anything reads the config, not only under dev.
     const devOpts = asRecord(b.dev);
     if (devOpts?.remote !== undefined) {
-      if (!REMOTE_WIRED.has(String(b.type))) throw new Error(`site-config: env.${name} sets dev.remote on a ${JSON.stringify(b.type)} binding, which this projection has no remote key wired for; teach it rather than letting dev run it locally`);
+      if (!REMOTE_WIRED.has(String(b.type)))
+        throw new Error(
+          `site-config: env.${name} sets dev.remote on a ${JSON.stringify(b.type)} binding, which this projection has no remote key wired for; teach it rather than letting dev run it locally`,
+        );
       if (devOpts.remote === true) devRemote.add(name);
     }
     switch (b.type) {
-      case "assets": assetsBinding = name; break;
-      case "version-metadata": versionBinding = name; break;
-      case "browser": browserBinding = name; break;
-      case "images": imagesBinding = name; break;
-      case "ai": aiBinding = name; break;
-      case "analytics": analyticsBinding = name; break;
-      case "kv": kv.push({ binding: name, id: text(b.id, `env.${name}.id`) }); break;
-      case "analytics-engine-dataset": ae.push({ binding: name, dataset: text(b.name, `env.${name}.name`) }); break;
-      case "r2": r2.push({ binding: name, bucket_name: text(b.name, `env.${name}.name`) }); break;
-      case "d1": d1.push({ binding: name, database_name: text(b.name, `env.${name}.name`), database_id: text(b.id, `env.${name}.id`) }); break;
+      case "assets":
+        assetsBinding = name;
+        break;
+      case "version-metadata":
+        versionBinding = name;
+        break;
+      case "browser":
+        browserBinding = name;
+        break;
+      case "images":
+        imagesBinding = name;
+        break;
+      case "ai":
+        aiBinding = name;
+        break;
+      case "analytics":
+        analyticsBinding = name;
+        break;
+      case "kv":
+        kv.push({ binding: name, id: text(b.id, `env.${name}.id`) });
+        break;
+      case "analytics-engine-dataset":
+        ae.push({ binding: name, dataset: text(b.name, `env.${name}.name`) });
+        break;
+      case "r2":
+        r2.push({ binding: name, bucket_name: text(b.name, `env.${name}.name`) });
+        break;
+      case "d1":
+        d1.push({ binding: name, database_name: text(b.name, `env.${name}.name`), database_id: text(b.id, `env.${name}.id`) });
+        break;
       case "durable-object": {
         // A binding to ANOTHER Worker's class carries `script_name` in the legacy
         // shape. Dropping it would project COUNTER, which binds aadhar-counter
@@ -181,15 +212,24 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
         doBindings.push(binding);
         break;
       }
-      case "workflow": workflows.push({ name: text(b.name, `env.${name}.name`), binding: name, class_name: text(b.exportName, `env.${name}.exportName`) }); break;
+      case "workflow":
+        workflows.push({ name: text(b.name, `env.${name}.name`), binding: name, class_name: text(b.exportName, `env.${name}.exportName`) });
+        break;
       case "rate-limit": {
         const simple = need(b.simple, `env.${name}.simple`);
         ratelimits.push({ name, namespace_id: text(b.namespace, `env.${name}.namespace`), simple: { limit: simple.limit, period: simple.period } });
         break;
       }
-      case "text": vars[name] = text(b.value, `env.${name}.value`); break;
-      case "secret": secrets.push(name); break;
-      default: throw new Error(`site-config: env.${name} has binding type ${JSON.stringify(b.type)}, which this projection does not know; teach it rather than dropping the binding`);
+      case "text":
+        vars[name] = text(b.value, `env.${name}.value`);
+        break;
+      case "secret":
+        secrets.push(name);
+        break;
+      default:
+        throw new Error(
+          `site-config: env.${name} has binding type ${JSON.stringify(b.type)}, which this projection does not know; teach it rather than dropping the binding`,
+        );
     }
   }
 
@@ -209,14 +249,17 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
         entrypoints[name] = { type: "durable-object", state: "transferred", transferred_to: text(e.transferredTo, `exports.${name}.transferredTo`) };
         continue;
       }
-      if (e.state !== undefined && e.state !== "created") throw new Error(`site-config: exports.${name} is a DO in state ${JSON.stringify(e.state)}; the projection knows created and transferred classes only`);
-      if (e.storage !== "sqlite") throw new Error(`site-config: exports.${name} is a DO with storage ${JSON.stringify(e.storage)}; the projection only knows sqlite`);
+      if (e.state !== undefined && e.state !== "created")
+        throw new Error(`site-config: exports.${name} is a DO in state ${JSON.stringify(e.state)}; the projection knows created and transferred classes only`);
+      if (e.storage !== "sqlite")
+        throw new Error(`site-config: exports.${name} is a DO with storage ${JSON.stringify(e.storage)}; the projection only knows sqlite`);
       entrypoints[name] = { type: "durable-object", storage: "sqlite" };
     } else if (e.type !== "workflow") throw new Error(`site-config: exports.${name} has type ${JSON.stringify(e.type)}, which this projection does not know`);
   }
 
   const triggers = asList(worker.triggers).map((t, i) => need(t, `worker.triggers[${i}]`));
-  for (const t of triggers) if (t.type !== "fetch" && t.type !== "scheduled") throw new Error(`site-config: trigger type ${JSON.stringify(t.type)} is not projected`);
+  for (const t of triggers)
+    if (t.type !== "fetch" && t.type !== "scheduled") throw new Error(`site-config: trigger type ${JSON.stringify(t.type)} is not projected`);
 
   // Assembled key by key, in wrangler.jsonc's order, and a key is added only
   // when the TS config declares it, so an absent setting stays absent rather
@@ -271,7 +314,8 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
   return out;
 }
 
-const header = (from: string) => `// GENERATED by tools/lib/site-config.ts from ${from}.\n// Do not edit: edit those files. Gitignored, and rewritten whenever it is stale.\n`;
+const header = (from: string) =>
+  `// GENERATED by tools/lib/site-config.ts from ${from}.\n// Do not edit: edit those files. Gitignored, and rewritten whenever it is stale.\n`;
 
 // Writes only when the bytes would change, so a caller in a hot loop does not
 // churn wrangler's config watcher. Returns the path relative to the repo.
@@ -279,7 +323,11 @@ function writeIfChanged(name: string, from: string, config: Record<string, unkno
   const body = header(from) + JSON.stringify(config, null, 2) + "\n";
   const path = join(REPO, name);
   let current = "";
-  try { current = readFileSync(path, "utf8"); } catch { /* first write */ }
+  try {
+    current = readFileSync(path, "utf8");
+  } catch {
+    /* first write */
+  }
   if (current !== body) writeFileSync(path, body);
   return name;
 }

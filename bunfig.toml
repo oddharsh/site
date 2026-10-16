@@ -118,10 +118,7 @@ minimumReleaseAgeExcludes = [
 [test]
 root = "tools"
 preload = ["./tools/lib/no-network.ts"]
-pathIgnorePatterns = [
-  "tools/photos/libavif/src/**",
-  "tools/photos/libavif/build/**",
-]
+pathIgnorePatterns = ["tools/photos/libavif/src/**", "tools/photos/libavif/build/**"]
 
 # bun fmt (in the pinned canary since 1.4.3-canary.20261013.1) is NOT part of
 # validate and the tree is NOT formatted. This section exists so that an ad hoc

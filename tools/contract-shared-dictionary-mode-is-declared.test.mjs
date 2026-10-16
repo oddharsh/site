@@ -1,10 +1,6 @@
 // ── the zone's Shared Dictionaries setting is declared and checked ───────────
 // Split-file convention: shared imports live in contract-shared.ts.
-import {
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
 
 // Cloudflare's docs say `shared_dictionary_mode: disabled` strips the dictionary
 // headers and refuses to cache dcb/dcz, which would drop every dcz tier to plain
@@ -20,5 +16,9 @@ test("infra: shared_dictionary_mode is declared passthrough and checked", () => 
   // What the comparer does with `disabled` is asserted by calling it, in
   // contract-infra-check-compares-declared-against-observed.
   const check = readFileSync("tools/check-infra.ts", "utf8");
-  assert.match(check, /const sharedDictionary = infra\.zone\?\.shared_dictionary;\n\s*if \(sharedDictionary\) report\.add\(compareZoneSetting\(SHARED_DICTIONARY_SECTION, sharedDictionary, zone, await readZoneSetting\(cf, zone, sharedDictionary\.setting\)\)\);/, "check-infra.ts must assert the declared shared_dictionary_mode");
+  assert.match(
+    check,
+    /const sharedDictionary = infra\.zone\?\.shared_dictionary;\n\s*if \(sharedDictionary\) report\.add\(compareZoneSetting\(SHARED_DICTIONARY_SECTION, sharedDictionary, zone, await readZoneSetting\(cf, zone, sharedDictionary\.setting\)\)\);/,
+    "check-infra.ts must assert the declared shared_dictionary_mode",
+  );
 });

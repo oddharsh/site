@@ -30,7 +30,11 @@
 // An unknown expression returns null so the caller can surface it as its own
 // traced event instead of running somebody else's job.
 export function cronJob(expr) {
-  const sig = String(expr || "").trim().split(/\s+/).slice(0, 2).join(" ");
+  const sig = String(expr || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .join(" ");
   if (sig === "7,37 *") return "home_probe";
   if (sig === "17 8") return "census";
   // The two daily OUTBOUND ticks, the only jobs that probe somebody else's

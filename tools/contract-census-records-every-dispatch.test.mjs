@@ -39,13 +39,27 @@ const NOT_FOUND = "workflows.api.error.workflow.not_found [code: 10200]";
 /** A D1 stand-in that keeps what the sweep sent: exec() for the DDL, and
  *  batch() of bound statements for the record. */
 function recordingD1() {
-  const execs = [], batches = [];
-  const prepare = (sql) => ({ sql, args: [], bind(...args) { return { sql, args }; } });
+  const execs = [],
+    batches = [];
+  const prepare = (sql) => ({
+    sql,
+    args: [],
+    bind(...args) {
+      return { sql, args };
+    },
+  });
   return {
-    execs, batches,
-    exec: async (sql) => { execs.push(sql); return { count: 1 }; },
+    execs,
+    batches,
+    exec: async (sql) => {
+      execs.push(sql);
+      return { count: 1 };
+    },
     prepare,
-    batch: async (statements) => { batches.push(statements); return statements.map(() => ({ success: true })); },
+    batch: async (statements) => {
+      batches.push(statements);
+      return statements.map(() => ({ success: true }));
+    },
   };
 }
 
@@ -54,7 +68,12 @@ test("a sweep whose every create is refused records each host and the refusal", 
   let creates = 0;
   const env = {
     RESTORE_DB: db,
-    CENSUS_WORKFLOW: { create: async () => { creates++; throw new Error(NOT_FOUND); } },
+    CENSUS_WORKFLOW: {
+      create: async () => {
+        creates++;
+        throw new Error(NOT_FOUND);
+      },
+    },
   };
 
   const sweep = await census.cronCensus(env);
@@ -63,8 +82,10 @@ test("a sweep whose every create is refused records each host and the refusal", 
   // THE ASSERTION origin/main FAILS: it sent nothing to D1 but the DDL, so a
   // Sunday like 2026-09-27 left no trace once its logs expired.
   assert.equal(db.batches.length, 1, "the sweep must write its record in one batch");
-  assert.ok(db.execs.some((sql) => /CREATE TABLE IF NOT EXISTS lens_census_runs /.test(sql)),
-    "the sweep must create its record table before writing to it");
+  assert.ok(
+    db.execs.some((sql) => /CREATE TABLE IF NOT EXISTS lens_census_runs /.test(sql)),
+    "the sweep must create its record table before writing to it",
+  );
   const [record] = db.batches;
   assert.equal(record.length, census.CENSUS_ROSTER.length, "one record row per roster host");
   const rows = record.map(({ sql, args }) => {
@@ -74,7 +95,10 @@ test("a sweep whose every create is refused records each host and the refusal", 
     assert.equal(typeof ts, "number");
     return { ymd, host, ts, stage, outcome, detail };
   });
-  assert.deepEqual(rows.map((r) => r.host), census.CENSUS_ROSTER.map((s) => s.label));
+  assert.deepEqual(
+    rows.map((r) => r.host),
+    census.CENSUS_ROSTER.map((s) => s.label),
+  );
   for (const r of rows) {
     assert.equal(r.stage, "dispatch");
     assert.equal(r.outcome, "dispatch_failed", `${r.host} was recorded as ${r.outcome}`);
@@ -94,7 +118,9 @@ test("a sweep whose every create is refused records each host and the refusal", 
 
 test("a record the database refuses costs the record and never the sweep", async () => {
   const db = recordingD1();
-  db.batch = async () => { throw new Error("D1_ERROR: no such table"); };
+  db.batch = async () => {
+    throw new Error("D1_ERROR: no such table");
+  };
   const sweep = await census.cronCensus({
     RESTORE_DB: db,
     CENSUS_WORKFLOW: { create: async ({ id }) => ({ id }) },
@@ -120,7 +146,13 @@ test("summarizeCensusRuns reads the latest day and names where each host stopped
   assert.equal(last.written, 1);
   assert.deepEqual(last.outcomes, { written: 1, dispatched: 1, failed: 1, cap: 1, duplicate: 1 });
   assert.deepEqual(last.unfinished, ["a.example", "e.example"]);
-  assert.deepEqual(last.problems.map((p) => [p.host, p.outcome]), [["c.example", "failed"], ["d.example", "cap"]]);
+  assert.deepEqual(
+    last.problems.map((p) => [p.host, p.outcome]),
+    [
+      ["c.example", "failed"],
+      ["d.example", "cap"],
+    ],
+  );
 });
 
 /** Does this wrangler argument list register the Workflows a config exports?
@@ -144,19 +176,26 @@ test("the production deploy command registers the Workflows the site exports", (
   const workflows = [...config.matchAll(/exports\.workflow\(\{\s*name:\s*"([^"]+)"/g)].map((m) => m[1]);
   // FLOOR, so a matcher that stops matching cannot turn this into a pass over
   // a site that exports nothing.
-  assert.ok(workflows.includes("lens-census-host") && workflows.includes("cal-booking-expiry"),
-    `found ${JSON.stringify(workflows)}; the export matcher is broken`);
+  assert.ok(
+    workflows.includes("lens-census-host") && workflows.includes("cal-booking-expiry"),
+    `found ${JSON.stringify(workflows)}; the export matcher is broken`,
+  );
 
   const release = JSON.parse(readFileSync(new URL("config/infra.json", ROOT), "utf8")).release;
   const production = wranglerArgs(release.deploy_command);
-  assert.ok(registersWorkflows(production),
-    `the production command is \`wrangler ${production.join(" ")}\`, which never registers a Workflow. `
-    + "A new Workflow class would ship a binding to nothing, the way CensusWorkflow did from 2026-08-28 "
-    + "to 2026-09-28. Run `wrangler triggers deploy` once for it, or keep `deploy` as the command.");
+  assert.ok(
+    registersWorkflows(production),
+    `the production command is \`wrangler ${production.join(" ")}\`, which never registers a Workflow. ` +
+      "A new Workflow class would ship a binding to nothing, the way CensusWorkflow did from 2026-08-28 " +
+      "to 2026-09-28. Run `wrangler triggers deploy` once for it, or keep `deploy` as the command.",
+  );
 
   // THE CONTROL: the commands the ramp era released through read false.
-  assert.equal(registersWorkflows(wranglerArgs(release.non_production_deploy_command)), false,
-    "versions upload registers nothing, so the matcher that calls it registering is broken");
+  assert.equal(
+    registersWorkflows(wranglerArgs(release.non_production_deploy_command)),
+    false,
+    "versions upload registers nothing, so the matcher that calls it registering is broken",
+  );
   assert.equal(registersWorkflows(["versions", "deploy", "abc@100"]), false);
 });
 

@@ -8,8 +8,16 @@ import { fileURLToPath } from "node:url";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { bakeBuildInfo, buildInfoFromEnv } from "./lib/build-info.ts";
 import {
-  SCHEMA, buildManifest, canonicalUrl, changedUrls, checkOrigin, isServedFile, parseAssetsIgnore,
-  parseManifest, serializeManifest, sha256,
+  SCHEMA,
+  buildManifest,
+  canonicalUrl,
+  changedUrls,
+  checkOrigin,
+  isServedFile,
+  parseAssetsIgnore,
+  parseManifest,
+  serializeManifest,
+  sha256,
 } from "./lib/served-manifest.ts";
 import { buildWhoareyouGroups } from "../src/worker/whoareyou.ts";
 
@@ -23,10 +31,14 @@ import { buildWhoareyouGroups } from "../src/worker/whoareyou.ts";
 const COMMIT = "5fb917b37e5472d0586c97df64c7a72cc68252ec";
 
 // Bun parses the workflows under both runners, the way contract-ci-required-gate does.
-const yaml = (rel) => JSON.parse(execFileSync("bun", [
-  "-e", "console.log(JSON.stringify(Bun.YAML.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))))",
-  fileURLToPath(new URL(rel, ROOT)),
-], { encoding: "utf8" }));
+const yaml = (rel) =>
+  JSON.parse(
+    execFileSync(
+      "bun",
+      ["-e", "console.log(JSON.stringify(Bun.YAML.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))))", fileURLToPath(new URL(rel, ROOT))],
+      { encoding: "utf8" },
+    ),
+  );
 
 test("served-manifest: canonical URLs are the ones that answer 200 without a redirect", () => {
   // Each pairing measured against production 2026-10-01. The asset layer 307s
@@ -97,9 +109,16 @@ test("served-manifest: --since scope is exactly the URLs whose bytes moved or ar
 test("served-manifest: the comparison decodes, refuses redirects, and has teeth", async () => {
   const body = new TextEncoder().encode("<!doctype html>page");
   /** @type {import("./lib/served-manifest.ts").ServedManifest} */
-  const manifest = { schema: SCHEMA, commit: COMMIT, files: {
-    "/same": sha256(body), "/byte": sha256(body), "/moved": sha256(body), "/missing": sha256(body),
-  } };
+  const manifest = {
+    schema: SCHEMA,
+    commit: COMMIT,
+    files: {
+      "/same": sha256(body),
+      "/byte": sha256(body),
+      "/moved": sha256(body),
+      "/missing": sha256(body),
+    },
+  };
   const seen = [];
   const fake = async (url, init) => {
     seen.push(init.redirect);
@@ -114,16 +133,20 @@ test("served-manifest: the comparison decodes, refuses redirects, and has teeth"
   const results = await checkOrigin(manifest, { origin: "https://example.test", urls: [...Object.keys(manifest.files), "/unlisted"], fetch: fake });
   const verdict = Object.fromEntries(results.map((r) => [r.url, r.verdict]));
   assert.deepEqual(verdict, { "/byte": "mismatch", "/missing": "status", "/moved": "redirect", "/same": "match", "/unlisted": "error" });
-  assert.ok(seen.every((r) => r === "manual"), "a followed redirect would hash the destination and call the wrong URL a match");
+  assert.ok(
+    seen.every((r) => r === "manual"),
+    "a followed redirect would hash the destination and call the wrong URL a match",
+  );
 });
 
 test("build-info: only Workers Builds names a commit, and a malformed one fails the build", async () => {
   assert.equal(buildInfoFromEnv({}), null);
   assert.equal(buildInfoFromEnv({ GITHUB_SHA: COMMIT }), null, "a GitHub run's sha must not pass for the commit Workers Builds shipped");
-  assert.deepEqual(
-    buildInfoFromEnv({ WORKERS_CI_COMMIT_SHA: COMMIT.toUpperCase(), WORKERS_CI_BRANCH: "production", WORKERS_CI_BUILD_UUID: "b-1" }),
-    { commit: COMMIT, branch: "production", build: "b-1" },
-  );
+  assert.deepEqual(buildInfoFromEnv({ WORKERS_CI_COMMIT_SHA: COMMIT.toUpperCase(), WORKERS_CI_BRANCH: "production", WORKERS_CI_BUILD_UUID: "b-1" }), {
+    commit: COMMIT,
+    branch: "production",
+    build: "b-1",
+  });
   assert.throws(() => buildInfoFromEnv({ WORKERS_CI_COMMIT_SHA: "5fb917b" }), /not a 40-hex commit/);
 
   // The committed module carries the marker build.ts rewrites, and ships null.
@@ -145,9 +168,21 @@ test("whoareyou: the Server group names the commit beside the version, and omits
   const ua = { browser: "b", os: "o", device: "d" };
   const server = (groups) => groups.find((g) => g.title === "Server")?.fields ?? [];
   const both = server(buildWhoareyouGroups(data, ua, null, "v-1", { commit: COMMIT, branch: "production", build: null }));
-  assert.deepEqual(both.map((f) => [f.k, f.v]), [["Serving version", "v-1"], ["Built from commit", COMMIT]]);
-  assert.deepEqual(server(buildWhoareyouGroups(data, ua, null, "v-1", null)).map((f) => f.k), ["Serving version"]);
-  assert.equal(buildWhoareyouGroups(data, ua, null, undefined, null).some((g) => g.title === "Server"), false);
+  assert.deepEqual(
+    both.map((f) => [f.k, f.v]),
+    [
+      ["Serving version", "v-1"],
+      ["Built from commit", COMMIT],
+    ],
+  );
+  assert.deepEqual(
+    server(buildWhoareyouGroups(data, ua, null, "v-1", null)).map((f) => f.k),
+    ["Serving version"],
+  );
+  assert.equal(
+    buildWhoareyouGroups(data, ua, null, undefined, null).some((g) => g.title === "Server"),
+    false,
+  );
 });
 
 test("served-manifest: CI cuts and signs it, and every release checks it", async () => {

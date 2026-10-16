@@ -48,7 +48,7 @@ export const MAX_OPTIONS = 255;
 export const ASK_FLOOR = 0.02;
 export const ASK_BUDGET = { binding: "ASK_RL", max: 20 };
 
-export type RankableRecord = { url: string, title?: string, description?: string };
+export type RankableRecord = { url: string; title?: string; description?: string };
 
 // What Clef reads about each page: its title, path and description, which the
 // measurement used. The body text was left out because 64 bodies is far past
@@ -57,7 +57,10 @@ function option(record: RankableRecord) {
   return {
     title: String(record.title || "").replace(/^aadhar\.sh\//, ""),
     url: record.url,
-    about: String(record.description || "").replace(/\s+/g, " ").trim().slice(0, 200),
+    about: String(record.description || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 200),
   };
 }
 
@@ -76,8 +79,11 @@ export function buildAskRequest(query: string, records: readonly RankableRecord[
 }
 
 /** The probability Clef put on each url, or the reason there is none. */
-export async function clefRank(env: ClefEnv, query: string, records: readonly RankableRecord[]):
-  Promise<{ probabilities: Map<string, number> } | { error: string }> {
+export async function clefRank(
+  env: ClefEnv,
+  query: string,
+  records: readonly RankableRecord[],
+): Promise<{ probabilities: Map<string, number> } | { error: string }> {
   if (records.length < 2) return { error: "fewer than two pages to choose between" };
   const { request, ids } = buildAskRequest(query, records);
   const r = await runClef(env, ASK_MODEL, request, ASK_DEADLINE_MS);

@@ -50,11 +50,10 @@ test("no Worker module compares an owner secret with === or !==", () => {
     'if (!env.RN_BUST_SECRET || url.searchParams.get("bust") !== env.RN_BUST_SECRET) return null;',
     "return !!(env && env.SYNC_SECRET && supplied === env.SYNC_SECRET);",
     "if (env.CENSUS_KEY === refresh) {",
-  ]) assert.ok(BARE.test(line), `the scanner must flag: ${line}`);
-  for (const line of [
-    "if (env.CENSUS_KEY === undefined) return;",
-    'if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {',
-  ]) assert.ok(!BARE.test(line), `the scanner must pass: ${line}`);
+  ])
+    assert.ok(BARE.test(line), `the scanner must flag: ${line}`);
+  for (const line of ["if (env.CENSUS_KEY === undefined) return;", 'if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {'])
+    assert.ok(!BARE.test(line), `the scanner must pass: ${line}`);
 
   const files = execFileSync("git", ["ls-files", "src/worker", "cal/src", "serendipity", "counter/src"], { encoding: "utf8" })
     .split("\n")
@@ -62,9 +61,11 @@ test("no Worker module compares an owner secret with === or !==", () => {
   assert.ok(files.length > 50, `expected the Worker sources, got ${files.length} files`);
   const hits = [];
   for (const file of files) {
-    readFileSync(file, "utf8").split("\n").forEach((line, i) => {
-      if (!/^\s*\/\//.test(line) && BARE.test(line)) hits.push(`${file}:${i + 1}: ${line.trim()}`);
-    });
+    readFileSync(file, "utf8")
+      .split("\n")
+      .forEach((line, i) => {
+        if (!/^\s*\/\//.test(line) && BARE.test(line)) hits.push(`${file}:${i + 1}: ${line.trim()}`);
+      });
   }
   assert.deepEqual(hits, [], "compare owner secrets with secretMatches (lib/http.ts)");
 });

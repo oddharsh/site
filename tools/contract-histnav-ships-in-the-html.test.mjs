@@ -49,9 +49,11 @@ function assertAccessibleTitleBar(source, label, { maxButton = true } = {}) {
 }
 
 test("the title-bar check fails on the old aria-hidden pattern (control)", () => {
-  const old = '<div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>t</span><span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/"></a></span></div>';
+  const old =
+    '<div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>t</span><span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/"></a></span></div>';
   assert.throws(() => assertAccessibleTitleBar(old, "old"), /aria-hidden/);
-  const spanMax = '<div class="title-bar"><span class="title-text"><span class="icon" aria-hidden="true"></span>t</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/"></a></span></div>';
+  const spanMax =
+    '<div class="title-bar"><span class="title-text"><span class="icon" aria-hidden="true"></span>t</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/"></a></span></div>';
   assert.throws(() => assertAccessibleTitleBar(spanMax, "span max"), /native, labelled button/);
 });
 
@@ -114,7 +116,10 @@ test("serendipity's window is body-level, so nav.js wires it like every other", 
   // It sat inside a .wrap until 2026-09-30, and nav.js only wires `body > .window`,
   // so /serendipity had no Back/Forward, no maximize and no close-to-home. Every
   // view goes through one shell(), so the two built pages stand for all of them.
-  const views = [{ label: "/serendipity", response: renderSerendipityPage() }, { label: "/serendipity/mcp-info", response: renderMcpInfoPage() }];
+  const views = [
+    { label: "/serendipity", response: renderSerendipityPage() },
+    { label: "/serendipity/mcp-info", response: renderMcpInfoPage() },
+  ];
   for (const { label, response } of views) {
     const page = await response.text();
     assert.ok(page.includes(`<body>${DESKTOP_TOP}\n<div class="window">`), `${label}: the window is not the body's own child`);
@@ -127,8 +132,11 @@ test("serendipity's window is body-level, so nav.js wires it like every other", 
 test("the pair's rules are in luna.css at first paint, and nav.js injects none", () => {
   const luna = readFileSync("src/styles/luna.css", "utf8");
   assert.match(luna, /^\.axp-histnav \{ display: inline-flex;/m);
-  assert.match(luna, /@media \(scripting: none\), \(width < 720px\) \{ \.axp-histnav \{ display: none; \} \}/,
-    "the pair must hide with script off (dead buttons) and on a phone (wrapped captions)");
+  assert.match(
+    luna,
+    /@media \(scripting: none\), \(width < 720px\) \{ \.axp-histnav \{ display: none; \} \}/,
+    "the pair must hide with script off (dead buttons) and on a phone (wrapped captions)",
+  );
   const nav = readFileSync("src/client/nav.js", "utf8");
   assert.doesNotMatch(nav, /\.axp-histnav[^\n]*\{/, "nav.js must not carry the pair's CSS again");
   // The homepage alone loads luna.css non-blocking (media=print swap), so its

@@ -23,18 +23,41 @@ async function assertJsonError(r, status, code) {
 const quiet = async (fn) => {
   const original = console.error;
   console.error = () => {};
-  try { return await fn(); } finally { console.error = original; }
+  try {
+    return await fn();
+  } finally {
+    console.error = original;
+  }
 };
 
 test("/lens/census.json answers a D1 throw with a JSON 503", async () => {
-  const env = { RESTORE_DB: { prepare() { throw new Error("D1_ERROR: no such table"); }, exec() { throw new Error("D1_ERROR"); }, batch() { throw new Error("D1_ERROR"); } } };
+  const env = {
+    RESTORE_DB: {
+      prepare() {
+        throw new Error("D1_ERROR: no such table");
+      },
+      exec() {
+        throw new Error("D1_ERROR");
+      },
+      batch() {
+        throw new Error("D1_ERROR");
+      },
+    },
+  };
   const r = await quiet(() => handleCensusJson(new Request("https://aadhar.sh/lens/census.json"), env));
   await assertJsonError(r, 503, "storage_unavailable");
   assert.equal(r.headers.get("retry-after"), "60");
 });
 
 test("/rn/tracks answers a KV throw with a JSON 503", async () => {
-  const env = { RN_KV: { get() { throw new Error("KV GET failed: 500"); }, put() {} } };
+  const env = {
+    RN_KV: {
+      get() {
+        throw new Error("KV GET failed: 500");
+      },
+      put() {},
+    },
+  };
   const ctx = { waitUntil() {}, passThroughOnException() {} };
   const r = await quiet(() => handleRnTracks(new Request("https://aadhar.sh/rn/tracks"), env, ctx));
   const body = await assertJsonError(r, 503, "storage_unavailable");

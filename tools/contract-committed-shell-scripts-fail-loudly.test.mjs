@@ -40,7 +40,10 @@ function shellScripts() {
     cwd: new URL(".", ROOT),
     encoding: "utf8",
   });
-  return out.split("\0").filter(Boolean).map((rel) => new URL(rel, new URL(".", ROOT)));
+  return out
+    .split("\0")
+    .filter(Boolean)
+    .map((rel) => new URL(rel, new URL(".", ROOT)));
 }
 
 /** A `set` line is only the one that OPENS a line, so the word inside a comment
@@ -71,22 +74,17 @@ test("every committed shell script sets -e, -u and pipefail", async () => {
   // FLOOR. A scanner that matches nothing reports a pass, which is the failure
   // this repository has shipped three times. Eleven scripts exist today: ten
   // under tools/photos plus .github/deploy-wrangler.sh.
-  assert.ok(
-    scripts.length >= 11,
-    `found only ${scripts.length} shell scripts; the scanner is broken`,
-  );
+  assert.ok(scripts.length >= 11, `found only ${scripts.length} shell scripts; the scanner is broken`);
 
   const missing = [];
   for (const url of scripts) {
     const rel = url.href.slice(new URL(".", ROOT).href.length);
     const opts = shellOptions(await readFile(url, "utf8"));
-    const gaps = Object.entries(opts).filter(([, on]) => !on).map(([k]) => k);
+    const gaps = Object.entries(opts)
+      .filter(([, on]) => !on)
+      .map(([k]) => k);
     if (gaps.length) missing.push(`${rel} (missing ${gaps.join(", ")})`);
   }
 
-  assert.deepEqual(
-    missing,
-    [],
-    `these scripts continue past a failure they should abort on; add \`set -euo pipefail\`:\n  ${missing.join("\n  ")}`,
-  );
+  assert.deepEqual(missing, [], `these scripts continue past a failure they should abort on; add \`set -euo pipefail\`:\n  ${missing.join("\n  ")}`);
 });

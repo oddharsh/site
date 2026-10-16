@@ -28,7 +28,13 @@ test("the rule flags an agents surface with no twin and no declared representati
   ];
   assert.deepEqual(agentSurfacesWithoutTwin(surfaces, [twinPath("/twinned")]), ["/missing", "/explicit-html"]);
   // The control: the same registry with every twin present flags nothing.
-  assert.deepEqual(agentSurfacesWithoutTwin(surfaces, surfaces.map((s) => twinPath(s.path))), []);
+  assert.deepEqual(
+    agentSurfacesWithoutTwin(
+      surfaces,
+      surfaces.map((s) => twinPath(s.path)),
+    ),
+    [],
+  );
 
   assert.equal(agentRepresentation({ path: "/a" }), "text/markdown");
   assert.equal(agentRepresentation({ path: "/a", mimeType: "text/html" }), "text/markdown");
@@ -51,8 +57,11 @@ test("every agents surface the source tree cannot twin is one the build generate
   const missing = agentSurfacesWithoutTwin(readManifest(root).surfaces, [...files.keys(), ...committed]).sort();
   // /about, /contact, /privacy and /developers joined 2026-10-13: trust.ts
   // renders them at 1e, so their twins are generated rather than hand-kept.
-  assert.deepEqual(missing, ["/about", "/contact", "/developers", "/photos", "/privacy", "/restore", "/updates"],
-    "a new agents:true surface has no Markdown twin: add a hand twin in src/content/md/, declare mimeType for a live representation, or drop flags.agents");
+  assert.deepEqual(
+    missing,
+    ["/about", "/contact", "/developers", "/photos", "/privacy", "/restore", "/updates"],
+    "a new agents:true surface has no Markdown twin: add a hand twin in src/content/md/, declare mimeType for a live representation, or drop flags.agents",
+  );
 });
 
 test("the terminal tools declare the text/plain frame they answer agents with", () => {

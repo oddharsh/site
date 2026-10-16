@@ -49,10 +49,16 @@ test("the census placeholder is one unnamed row per roster host", async () => {
   assert.equal(count(mount, /<tr aria-hidden="true">/g), CENSUS_ROSTER.length);
   assert.doesNotMatch(mount, /class="cx-site"><a /, "the placeholder links no site");
   const grouped = {
-    snapshots: 2, firstYmd: "2026-09-13", lastYmd: "2026-09-20",
+    snapshots: 2,
+    firstYmd: "2026-09-13",
+    lastYmd: "2026-09-20",
     hosts: CENSUS_ROSTER.map((r) => ({
-      host: new URL(r.url).host, url: r.url,
-      last: { tier: "open", score: 40, level: 1, doors: 3, surfaces: "{}" }, delta: 0, series: [{}, {}], scoreSeries: [38, 40],
+      host: new URL(r.url).host,
+      url: r.url,
+      last: { tier: "open", score: 40, level: 1, doors: 3, surfaces: "{}" },
+      delta: 0,
+      series: [{}, {}],
+      scoreSeries: [38, 40],
     })),
   };
   const live = censusExhibitHtml(grouped);
@@ -69,6 +75,10 @@ test("the two islands carry the marker and their cache policies", async () => {
   assert.equal(census.headers.get("cache-control"), "public, max-age=300, s-maxage=900");
   assert.match(await census.text(), /cx-empty/, "no store is the empty panel, never a table");
   // Values are escaped by construction.
-  const hostile = renderInboxMail([{ kind: "reply", author: "<script>x</script>", source: "https://e.example/", target: "https://aadhar.sh/", approved_at: 0 }], "ok", "https://aadhar.sh").html;
+  const hostile = renderInboxMail(
+    [{ kind: "reply", author: "<script>x</script>", source: "https://e.example/", target: "https://aadhar.sh/", approved_at: 0 }],
+    "ok",
+    "https://aadhar.sh",
+  ).html;
   assert.ok(hostile.includes("&lt;script&gt;x&lt;/script&gt;") && !hostile.includes("<script>x"));
 });

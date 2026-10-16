@@ -19,8 +19,8 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../.
 // Same split as gen-og-cards.ts: www/ is gone, and the cards and the documents
 // live in different trees now. See that file's header for what the stale
 // constant cost.
-const PUBLIC = path.join(ROOT, "public");    // the baked cards
-const PAGES = path.join(ROOT, "src/pages");  // the documents whose <head> gets the meta
+const PUBLIC = path.join(ROOT, "public"); // the baked cards
+const PAGES = path.join(ROOT, "src/pages"); // the documents whose <head> gets the meta
 const SITE = "https://aadhar.sh";
 const CHECK = process.argv.includes("--check");
 // diagnostic/test harnesses that get no card (must match gen-og-cards.mjs)
@@ -45,7 +45,9 @@ function altFor(html, id) {
   return (t + ", live demo screenshotted").replace(/"/g, "&quot;");
 }
 
-let missing = 0, wrote = 0, skipped = 0;
+let missing = 0,
+  wrote = 0,
+  skipped = 0;
 
 // One page, one card, whatever shape of directory it came from. `alt` overrides
 // the synthesised line for pages whose card is not a demo screenshot.
@@ -57,11 +59,22 @@ async function wire(file, id, alt?) {
     missing++;
     return;
   }
-  if (/name="twitter:card"/.test(html)) { skipped++; return; }
+  if (/name="twitter:card"/.test(html)) {
+    skipped++;
+    return;
+  }
 
   const anchor = html.match(/<meta\s+property="og:url"[^>]*>/i);
-  if (!anchor) { console.log(`  ✗ ${id}: no og:url anchor to insert after`); missing++; return; }
-  if (CHECK) { console.log(`  · ${id}: would add card meta`); missing++; return; }
+  if (!anchor) {
+    console.log(`  ✗ ${id}: no og:url anchor to insert after`);
+    missing++;
+    return;
+  }
+  if (CHECK) {
+    console.log(`  · ${id}: would add card meta`);
+    missing++;
+    return;
+  }
 
   const ins = anchor[0] + "\n" + block(id, alt || altFor(html, id));
   html = html.replace(anchor[0], ins);

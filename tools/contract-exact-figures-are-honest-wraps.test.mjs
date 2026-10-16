@@ -11,7 +11,8 @@ import { readdirSync } from "node:fs";
 
 const ROOT_DIR = new URL("../", import.meta.url);
 const pages = readdirSync(new URL("src/pages/", ROOT_DIR), { recursive: true })
-  .map(String).filter((p) => /^(garage|lwe)\/.+\.html$/.test(p));
+  .map(String)
+  .filter((p) => /^(garage|lwe)\/.+\.html$/.test(p));
 
 test("every exact-figure wrap shows a different, non-empty value", () => {
   let seen = 0;

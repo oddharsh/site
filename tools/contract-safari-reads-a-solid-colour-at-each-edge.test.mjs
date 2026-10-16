@@ -43,7 +43,10 @@ test("the top sampler is a fixed, full-width box over 10px with an opaque colour
 test("the taskbar carries a solid background-color for the bottom edge", () => {
   const all = blocks("#axp-taskbar");
   assert.ok(all.length, "no #axp-taskbar rule");
-  assert.ok(all.some((b) => /background-color:\s*var\(--edge-bottom\)/.test(b)), "#axp-taskbar lost its background-color");
+  assert.ok(
+    all.some((b) => /background-color:\s*var\(--edge-bottom\)/.test(b)),
+    "#axp-taskbar lost its background-color",
+  );
   for (const b of all) {
     assert.doesNotMatch(b, /(?:^|;)\s*background:/, "the background shorthand resets background-color to transparent");
     assert.doesNotMatch(b, /backdrop-filter/, "backdrop-filter stops Safari sampling the taskbar (WebKit 319479)");
@@ -56,8 +59,12 @@ test("the taskbar carries a solid background-color for the bottom edge", () => {
 // the shell steps in by luna.css's SAFE AREAS insets wherever it meets an edge.
 const VIEWPORT = /name=\\?"viewport\\?" content=\\?"([^"\\]*)/g;
 const EMITTERS = [
-  "src/worker/lib/chrome.ts", "src/worker/writing.ts", "cal/src/templates.ts",
-  "serendipity/serendipity.ts", "pipelines/garage/generate.mjs", "pipelines/lwe/generate.mjs",
+  "src/worker/lib/chrome.ts",
+  "src/worker/writing.ts",
+  "cal/src/templates.ts",
+  "serendipity/serendipity.ts",
+  "pipelines/garage/generate.mjs",
+  "pipelines/lwe/generate.mjs",
 ];
 
 test("every page and page template asks for viewport-fit=cover", async () => {

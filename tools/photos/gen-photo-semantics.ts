@@ -65,9 +65,10 @@ const DRY_RUN = process.argv.includes("--dry-run");
 // Alt text answers "what is in this frame". This answers "what would someone
 // call this frame when looking for it", which is a different question and the
 // reason the two files exist separately.
-const VISION_PROMPT = "List 12 to 20 lowercase search keywords for this photo, comma separated. "
-  + "Cover the subject, the setting, the time of day, the weather, the light, and the mood. "
-  + "Single words or two-word phrases. No sentences, no punctuation beyond the commas.";
+const VISION_PROMPT =
+  "List 12 to 20 lowercase search keywords for this photo, comma separated. " +
+  "Cover the subject, the setting, the time of day, the weather, the light, and the mood. " +
+  "Single words or two-word phrases. No sentences, no punctuation beyond the commas.";
 
 // ── the derived tier ──────────────────────────────────────────────────────
 // Hand-written because it is vocabulary, not inference. Every entry maps a
@@ -121,12 +122,17 @@ function derivedTerms(record) {
   }
   const camera = String(record.camera || "");
   for (const [needle, alias] of CAMERA_ALIASES) {
-    if (camera.toUpperCase().includes(needle.toUpperCase())) { out.push(alias); break; }
+    if (camera.toUpperCase().includes(needle.toUpperCase())) {
+      out.push(alias);
+      break;
+    }
   }
   // The Fuji recipe card is a flat bag of scalars off metadata.json, so
   // Object.entries yields unknown values that must be stringified explicitly
   // before they reach a template.
-  const card = Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${String(v)}`).join(" ");
+  const card = Object.entries(record.recipe || {})
+    .map(([k, v]) => `${k}: ${String(v)}`)
+    .join(" ");
   for (const [needle, alias] of RECIPE_ALIASES) {
     if (card.toLowerCase().includes(needle.toLowerCase())) out.push(alias);
   }
@@ -158,13 +164,22 @@ async function visionTerms(stem, hashes) {
   // The model is asked for a comma list and sometimes writes a sentence anyway.
   // Normalising here rather than trusting the prompt keeps the artifact one
   // shape, which is what the ranking reads.
-  return raw.toLowerCase().replace(/[^a-z0-9,\s-]/g, " ")
-    .split(/[,\n]/).map((part) => part.trim()).filter((part) => part && part.length < 30)
-    .slice(0, 24).join(" ");
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9,\s-]/g, " ")
+    .split(/[,\n]/)
+    .map((part) => part.trim())
+    .filter((part) => part && part.length < 30)
+    .slice(0, 24)
+    .join(" ");
 }
 
 const readJson = (file, fallback) => {
-  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return fallback;
+  }
 };
 
 const metadata = readJson(META, {});
@@ -205,8 +220,11 @@ if (WANT_VISION) {
   for (const [index, stem] of todo.entries()) {
     try {
       const terms = await visionTerms(stem, hashes);
-      if (DRY_RUN) continue;   // visionTerms already reported what it would send
-      if (!terms) { console.log(`  [${index + 1}/${todo.length}] ${stem}: EMPTY`); continue; }
+      if (DRY_RUN) continue; // visionTerms already reported what it would send
+      if (!terms) {
+        console.log(`  [${index + 1}/${todo.length}] ${stem}: EMPTY`);
+        continue;
+      }
       out[stem].vision = terms;
       out[stem].from = ["derived", "vision"];
       out[stem].terms = [derivedTerms(metadata[stem] || {}), terms, String(alt[stem] || "").toLowerCase()].filter(Boolean).join(" ");

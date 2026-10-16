@@ -9,20 +9,20 @@
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  assert,
-  test,
-} from "./contract-shared.ts";
+import { assert, test } from "./contract-shared.ts";
 
 const { copyServedTree, planServedTree } = await import("./lib/served-tree.ts");
 
 // two roots and a derived path, the shape of public/ + src/pages
 function fixture() {
   const cwd = mkdtempSync(join(tmpdir(), "stage-"));
-  const put = (rel, body) => { mkdirSync(join(cwd, rel, ".."), { recursive: true }); writeFileSync(join(cwd, rel), body); };
+  const put = (rel, body) => {
+    mkdirSync(join(cwd, rel, ".."), { recursive: true });
+    writeFileSync(join(cwd, rel), body);
+  };
   put("pub/index.css", "a{}");
   put("pub/i/one.avif", Buffer.from([0, 1, 2, 3]));
-  put("pub/images/meta/stale.json", "{\"stale\":true}");
+  put("pub/images/meta/stale.json", '{"stale":true}');
   put("pub/.well-known/x.json", "{}");
   put("pages/garage/a.html", "<p>a</p>");
   return cwd;
@@ -45,13 +45,15 @@ function tree(dir) {
 
 async function stage(cwd, dest, clone) {
   const before = process.env.BUILD_CLONE;
-  if (clone) delete process.env.BUILD_CLONE; else process.env.BUILD_CLONE = "0";
+  if (clone) delete process.env.BUILD_CLONE;
+  else process.env.BUILD_CLONE = "0";
   let cloned;
   try {
     const plan = await planServedTree({ cwd, roots, derived });
     ({ cloned } = await copyServedTree(plan, dest, { cwd }));
   } finally {
-    if (before === undefined) delete process.env.BUILD_CLONE; else process.env.BUILD_CLONE = before;
+    if (before === undefined) delete process.env.BUILD_CLONE;
+    else process.env.BUILD_CLONE = before;
   }
   return { files: tree(join(cwd, dest)), cloned };
 }
@@ -67,7 +69,9 @@ test("cloning and copying stage the same planned tree", async () => {
     assert.deepEqual(cloned.files, copied.files);
     assert.deepEqual(Object.keys(copied.files).sort(), [".well-known/x.json", "garage/a.html", "i/one.avif", "index.css"]);
     assert.ok(!("images/meta/stale.json" in cloned.files), "a derived path the plan skips is not staged");
-  } finally { rmSync(cwd, { recursive: true, force: true }); }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });
 
 test("a link in the cloned root falls back to copying, which stages its target's bytes", async () => {
@@ -79,7 +83,9 @@ test("a link in the cloned root falls back to copying, which stages its target's
     assert.equal(cloned.cloned, null, "the link refused the clone");
     assert.deepEqual(cloned.files, copied.files);
     assert.equal(cloned.files["alias.css"].link, false, "the staged file is a file, as copyFile makes it");
-  } finally { rmSync(cwd, { recursive: true, force: true }); }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });
 
 test("a staged file is a copy: rewriting it leaves the source alone", async () => {
@@ -89,5 +95,7 @@ test("a staged file is a copy: rewriting it leaves the source alone", async () =
     assert.equal(cloned, canClone ? "pub" : null);
     writeFileSync(join(cwd, "out/index.css"), "b{}");
     assert.equal(readFileSync(join(cwd, "pub/index.css"), "utf8"), "a{}");
-  } finally { rmSync(cwd, { recursive: true, force: true }); }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });

@@ -78,7 +78,10 @@ export function npmVersion(version: string) {
 export function runningMatchesPin(pin: string, running: { version: string; revision: string }, installedRevision?: string) {
   if (pin === "canary") {
     const ok = installedRevision !== undefined && running.revision === installedRevision && /^[0-9a-f]{40}$/.test(running.revision);
-    return { ok, why: `rolling canary: running ${running.revision.slice(0, 9)}, ${ok ? "matches installed receipt" : "does not match installation receipt; run .github/install-bun.sh"}` };
+    return {
+      ok,
+      why: `rolling canary: running ${running.revision.slice(0, 9)}, ${ok ? "matches installed receipt" : "does not match installation receipt; run .github/install-bun.sh"}`,
+    };
   }
   const parsed = parseVersion(pin);
   if (!parsed.canary) return { ok: running.version === pin, why: `running ${running.version}, pin ${pin}` };
@@ -225,7 +228,8 @@ export async function npmBunDist(version: string, platform: string = npmPlatform
   const doc = await res.json();
   const tarball = String(doc?.dist?.tarball ?? "");
   const integrity = String(doc?.dist?.integrity ?? "");
-  if (!tarball.endsWith(".tgz") || !integrity.startsWith("sha512-")) throw new Error(`registry document for @oven/${platform}@${version} carries no tarball or no sha512`);
+  if (!tarball.endsWith(".tgz") || !integrity.startsWith("sha512-"))
+    throw new Error(`registry document for @oven/${platform}@${version} carries no tarball or no sha512`);
   return { tarball, integrity };
 }
 
@@ -280,7 +284,11 @@ console.log(JSON.stringify({
 /** Reads the probe's stdout. `honoured: null` means the probe never ran. */
 export function interpretZstdProbe(stdout: unknown) {
   let parsed: { none: number; good: number; wrong: number } | null = null;
-  try { parsed = JSON.parse(String(stdout).trim()); } catch { /* left null on purpose */ }
+  try {
+    parsed = JSON.parse(String(stdout).trim());
+  } catch {
+    /* left null on purpose */
+  }
   if (!parsed) return { parsed: null, honoured: null, detail: "probe did not run" };
   const honoured = parsed.good < parsed.none && parsed.wrong >= parsed.none;
   return {

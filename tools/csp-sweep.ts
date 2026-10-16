@@ -44,16 +44,17 @@ const pathsFrom = (file) => {
 
 const paths = process.env.PATHS
   ? JSON.parse(readFileSync(process.env.PATHS, "utf8"))
-  // The Worker stages at .build/src/worker/ since the 2026-08-18 split; this read
-  // .build/public/_worker.js/ until 2026-09-16 and died with ENOENT before the
-  // browser launched, which is gotcha 40's shape (a path that was correct when
-  // written and rotted under a move) on the one instrument that proves CSP hashes.
-  : pathsFrom(new URL("../.build/src/worker/lib/csp-hashes.ts", import.meta.url));
+  : // The Worker stages at .build/src/worker/ since the 2026-08-18 split; this read
+    // .build/public/_worker.js/ until 2026-09-16 and died with ENOENT before the
+    // browser launched, which is gotcha 40's shape (a path that was correct when
+    // written and rotted under a move) on the one instrument that proves CSP hashes.
+    pathsFrom(new URL("../.build/src/worker/lib/csp-hashes.ts", import.meta.url));
 
 const browser = await chromium.launch({ channel: chromeChannel(), headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 
-let bad = 0, swept = 0;
+let bad = 0,
+  swept = 0;
 for (const path of paths) {
   const page = await ctx.newPage();
   const violations = [];
@@ -81,7 +82,9 @@ for (const path of paths) {
     // sub-documents inherit the policy, so ask each frame too
     for (const f of page.frames()) {
       if (f === page.mainFrame()) continue;
-      try { violations.push(...(await f.evaluate(() => globalThis.__csp || []))); } catch {}
+      try {
+        violations.push(...(await f.evaluate(() => globalThis.__csp || [])));
+      } catch {}
     }
   } catch (e) {
     errors.push(`navigation: ${String(e).split("\n")[0]}`);

@@ -37,7 +37,9 @@ export async function serveBuiltPage(request: Request, env, page: BuiltPage = {}
   }
   const built = await serveStaticPage(request, env, { headers: page.headers });
   if (built.status !== 404 || !page.live) return built;
-  try { await built.body?.cancel(); } catch {}
+  try {
+    await built.body?.cancel();
+  } catch {}
   return withPagePolicy(await page.live(), page.headers);
 }
 

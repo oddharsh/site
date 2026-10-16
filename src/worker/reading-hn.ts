@@ -84,7 +84,11 @@ const TRACKING = /^(utm_\w+|ref|ref_src|fbclid|gclid|mc_cid|mc_eid|si)$/i;
  */
 export function hnKey(link: string): string | null {
   let url: URL;
-  try { url = new URL(link); } catch { return null; }
+  try {
+    url = new URL(link);
+  } catch {
+    return null;
+  }
   if (url.protocol !== "http:" && url.protocol !== "https:") return null;
   const host = url.hostname.toLowerCase().replace(/^www\./, "");
   const path = url.pathname.replace(/\/+$/, "");
@@ -105,14 +109,14 @@ const isHnHosted = (key: string) => key.startsWith("news.ycombinator.com/");
  * thread wins, because comments are what the reader came for.
  */
 export function pickThread(key: string, body: unknown): Omit<HnEntry, "checked" | "seen"> {
-  const hits = asList(asRecord(body)?.hits)
-    .flatMap((raw) => {
-      const h = asRecord(raw);
-      return h && hnKey(text(h.url)) === key ? [h] : [];
-    });
+  const hits = asList(asRecord(body)?.hits).flatMap((raw) => {
+    const h = asRecord(raw);
+    return h && hnKey(text(h.url)) === key ? [h] : [];
+  });
   let best: { id: number; c: number; p: number } | null = null;
   for (const h of hits) {
-    const c = num(h.num_comments), p = num(h.points);
+    const c = num(h.num_comments),
+      p = num(h.points);
     if (!best || c > best.c || (c === best.c && p > best.p)) {
       const id = Number(asText(h.objectID) ?? h.story_id);
       if (Number.isSafeInteger(id) && id > 0) best = { id, c, p };
@@ -189,8 +193,11 @@ export function readHnMap(raw: unknown): HnMap {
     const id = asNumber(e.id);
     out[key] = {
       id: id !== null && id > 0 ? id : null,
-      c: num(e.c), p: num(e.p), n: num(e.n),
-      checked, seen: asNumber(e.seen) ?? checked,
+      c: num(e.c),
+      p: num(e.p),
+      n: num(e.n),
+      checked,
+      seen: asNumber(e.seen) ?? checked,
     };
   }
   return out;
@@ -220,7 +227,10 @@ export async function cronEnrichReadingHn(env, now = Date.now()) {
       if (key && map[key]) map[key].seen = now;
     }
     for (const key of Object.keys(map)) {
-      if (now - map[key].seen > HN_MAX_AGE) { delete map[key]; pruned++; }
+      if (now - map[key].seen > HN_MAX_AGE) {
+        delete map[key];
+        pruned++;
+      }
     }
 
     const pending = pickPending(items, map, now);

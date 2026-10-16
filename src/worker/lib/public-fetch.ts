@@ -29,11 +29,14 @@
 // The v4 table is applied to a v4-mapped address by unwrapping to its dotted
 // quad and re-testing, so the two spellings can never drift apart again.
 export function privateHostBlocked(host) {
-  const h = String(host || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const h = String(host || "")
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
   if (!h) return true;
   if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".onion")) return true;
   if (h === "::" || h === "::1" || h.startsWith("fc") || h.startsWith("fd")) return true;
-  if (/^fe[89ab][0-9a-f]:/.test(h)) return true;    // fe80::/10 link-local, all 64 prefixes
+  if (/^fe[89ab][0-9a-f]:/.test(h)) return true; // fe80::/10 link-local, all 64 prefixes
   // v4-mapped IPv6, in BOTH spellings, because the caller decides which one this
   // function ever sees. `new URL("https://[::ffff:169.254.169.254]/").hostname`
   // is `[::ffff:a9fe:a9fe]`: the WHATWG parser rewrites the dotted tail into hex
@@ -45,18 +48,20 @@ export function privateHostBlocked(host) {
   if (mappedDotted) return privateHostBlocked(mappedDotted[1]);
   const mappedHex = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
   if (mappedHex) {
-    const high = parseInt(mappedHex[1], 16), low = parseInt(mappedHex[2], 16);
+    const high = parseInt(mappedHex[1], 16),
+      low = parseInt(mappedHex[2], 16);
     return privateHostBlocked(`${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`);
   }
   const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (m) {
-    const a = +m[1], b = +m[2];
+    const a = +m[1],
+      b = +m[2];
     if (a === 0 || a === 10 || a === 127) return true;
-    if (a === 169 && b === 254) return true;        // link-local incl. 169.254.169.254 metadata
+    if (a === 169 && b === 254) return true; // link-local incl. 169.254.169.254 metadata
     if (a === 192 && b === 168) return true;
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-    if (a >= 224) return true;                        // multicast / reserved
+    if (a >= 224) return true; // multicast / reserved
   }
   return false;
 }
@@ -79,7 +84,11 @@ export function validateLensTarget(raw) {
   }
   const s = /^https?:\/\//i.test(s0) ? s0 : "https://" + s0;
   let url;
-  try { url = new URL(s); } catch { return { ok: false, error: "That doesn't parse as a URL." }; }
+  try {
+    url = new URL(s);
+  } catch {
+    return { ok: false, error: "That doesn't parse as a URL." };
+  }
   if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false, error: "Only http and https URLs." };
   // Credentials in the authority are refused rather than stripped. A scan is a
   // public read published back to the visitor, so a URL carrying a secret is
@@ -110,10 +119,13 @@ export function validateLensTarget(raw) {
 // reaches this loop by injection and the per-hop check still runs before it.
 export type PublicTransport = (url: string, init: RequestInit) => Promise<Response>;
 
-export async function fetchFollowingPublicRedirects(url, init: (url: string) => RequestInit | Promise<RequestInit>, check, maxHops = 4, transport?: PublicTransport | null): Promise<
-  | { ok: true; response: Response; finalUrl: string; hops: number }
-  | { ok: false; error: string; blockedHop: number; url: string }
-> {
+export async function fetchFollowingPublicRedirects(
+  url,
+  init: (url: string) => RequestInit | Promise<RequestInit>,
+  check,
+  maxHops = 4,
+  transport?: PublicTransport | null,
+): Promise<{ ok: true; response: Response; finalUrl: string; hops: number } | { ok: false; error: string; blockedHop: number; url: string }> {
   let current = url;
   for (let hop = 0; hop <= maxHops; hop++) {
     const verdict = check(current);
@@ -123,10 +135,17 @@ export async function fetchFollowingPublicRedirects(url, init: (url: string) => 
     const response = await (transport ? transport(current, hopInit) : fetch(current, hopInit));
     const location = [301, 302, 303, 307, 308].includes(response.status) ? response.headers.get("location") : null;
     if (location === null) return { ok: true, response, finalUrl: response.url || current, hops: hop };
-    try { await response.body?.cancel(); } catch (_e) { /* nothing buffered yet */ }
+    try {
+      await response.body?.cancel();
+    } catch (_e) {
+      /* nothing buffered yet */
+    }
     let next;
-    try { next = new URL(location, current).toString(); }
-    catch { return { ok: false, error: "That redirect target does not parse as a URL.", blockedHop: hop, url: current }; }
+    try {
+      next = new URL(location, current).toString();
+    } catch {
+      return { ok: false, error: "That redirect target does not parse as a URL.", blockedHop: hop, url: current };
+    }
     current = next;
   }
   return { ok: false, error: `That URL redirected more than ${maxHops} times.`, blockedHop: maxHops, url: current };
@@ -138,9 +157,7 @@ export const DEFAULT_CRAWL_BODY_CAP = 200 * 1024;
 // distinguishes an exactly-max-sized body from a truncated one without ever
 // buffering an unbounded response.
 export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY_CAP, signal?: AbortSignal) {
-  const reader = response && response.body && response.body.getReader
-    ? response.body.getReader()
-    : null;
+  const reader = response && response.body && response.body.getReader ? response.body.getReader() : null;
   if (!reader) {
     signal?.throwIfAborted();
     return { text: "", bytesRead: 0, truncated: false, digest: "" };
@@ -153,7 +170,9 @@ export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY
   let bytesRead = 0;
   let truncated = false;
   // Internal responses have no fetch transport to cancel their body for us.
-  const abort = () => { void reader.cancel(signal?.reason).catch(() => {}); };
+  const abort = () => {
+    void reader.cancel(signal?.reason).catch(() => {});
+  };
   signal?.addEventListener("abort", abort, { once: true });
   if (signal?.aborted) abort();
   try {
@@ -178,7 +197,9 @@ export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY
   } finally {
     signal?.removeEventListener("abort", abort);
     if (truncated) {
-      try { await reader.cancel(); } catch (_e) {}
+      try {
+        await reader.cancel();
+      } catch (_e) {}
     }
   }
 
@@ -197,9 +218,7 @@ export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY
 }
 
 export async function sha256Hex(value) {
-  const bytes = value instanceof Uint8Array
-    ? value
-    : new TextEncoder().encode(String(value ?? ""));
+  const bytes = value instanceof Uint8Array ? value : new TextEncoder().encode(String(value ?? ""));
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
   return digest.toHex();
 }

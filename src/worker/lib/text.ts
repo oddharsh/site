@@ -35,8 +35,13 @@ export const groupThousands = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!
 // (length > 1 drops "a"/"I", 12 terms caps the fan-out), so it moved houses
 // without changing.
 export function terms(query, max = 12) {
-  return String(query || "").toLowerCase().trim().slice(0, 160)
-    .split(/[^\p{L}\p{N}]+/u).filter((term) => term.length > 1).slice(0, max);
+  return String(query || "")
+    .toLowerCase()
+    .trim()
+    .slice(0, 160)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((term) => term.length > 1)
+    .slice(0, max);
 }
 
 // Words that carry intent in a sentence and none in a query. The photo-specific
@@ -48,23 +53,94 @@ export function terms(query, max = 12) {
 // chrome" wants to match on the film simulation, and a stray match against the
 // word "shot" inside a caption is noise, not signal.
 export const STOPWORDS = new Set([
-  "a", "an", "the", "of", "in", "on", "at", "with", "and", "or", "to", "for",
-  "from", "by", "is", "are", "was", "were", "be", "it", "its", "that", "this",
-  "these", "those", "as", "into", "over", "some", "any", "all", "me", "my",
-  "you", "your", "i", "we", "us",
+  "a",
+  "an",
+  "the",
+  "of",
+  "in",
+  "on",
+  "at",
+  "with",
+  "and",
+  "or",
+  "to",
+  "for",
+  "from",
+  "by",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "it",
+  "its",
+  "that",
+  "this",
+  "these",
+  "those",
+  "as",
+  "into",
+  "over",
+  "some",
+  "any",
+  "all",
+  "me",
+  "my",
+  "you",
+  "your",
+  "i",
+  "we",
+  "us",
   // How an agent phrases a question. searchSiteRanked's own comment used "what
   // does he think about agents" as the example of a query stopwords rescue, and
   // not one of its filler words was in this set until 2026-09-23, so it searched
   // all six. Matching is SUBSTRING, so "he" hits nearly every page ("the",
   // "when") and every term is one more scan of the whole corpus: 1.33ms for that
   // query on a laptop against 30us for "zstd", measured by instruction count.
-  "what", "which", "who", "how", "why", "when", "where", "does", "do", "did",
-  "has", "have", "had", "he", "him", "his", "she", "her", "they", "them",
-  "their", "about",
+  "what",
+  "which",
+  "who",
+  "how",
+  "why",
+  "when",
+  "where",
+  "does",
+  "do",
+  "did",
+  "has",
+  "have",
+  "had",
+  "he",
+  "him",
+  "his",
+  "she",
+  "her",
+  "they",
+  "them",
+  "their",
+  "about",
   // the photo-domain half
-  "photo", "photos", "photograph", "photographs", "picture", "pictures",
-  "image", "images", "shot", "shots", "pic", "pics", "show", "showing",
-  "find", "search", "look", "looking", "get", "give", "want",
+  "photo",
+  "photos",
+  "photograph",
+  "photographs",
+  "picture",
+  "pictures",
+  "image",
+  "images",
+  "shot",
+  "shots",
+  "pic",
+  "pics",
+  "show",
+  "showing",
+  "find",
+  "search",
+  "look",
+  "looking",
+  "get",
+  "give",
+  "want",
 ]);
 
 // A deliberately shallow stem: strip a trailing plural "s" and nothing else.
@@ -198,7 +274,10 @@ export function scoreFields(fields, weights, queryTermList, skip = null) {
     let bestField = null;
     for (const [name, weight] of weights) {
       if (skip?.has(pairKey(term, name))) continue;
-      if (weight > best && fieldMatches(fields[name], term)) { best = weight; bestField = name; }
+      if (weight > best && fieldMatches(fields[name], term)) {
+        best = weight;
+        bestField = name;
+      }
     }
     if (best) {
       score += best;
@@ -251,8 +330,10 @@ export function commonPairs(records, weights, queryTermList, { threshold = 0.9, 
       let df = 0;
       for (const fields of records) if (fieldMatches(fields[name], term)) df += 1;
       if (!df) continue;
-      if (df / records.length >= threshold) { skip.add(pairKey(term, name)); suppressed = true; }
-      else informative = true;
+      if (df / records.length >= threshold) {
+        skip.add(pairKey(term, name));
+        suppressed = true;
+      } else informative = true;
     }
     // Suppressed everywhere it appeared, and informative nowhere: the term is
     // in the corpus and tells you nothing about which part. A term that appears

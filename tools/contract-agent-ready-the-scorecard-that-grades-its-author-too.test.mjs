@@ -1,14 +1,6 @@
 // ── /agent-ready — the scorecard that grades its author too ──────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  assert,
-  context,
-  handleTool,
-  terminalGet,
-  terminalReq,
-  test,
-  testGlobals,
-} from "./contract-shared.ts";
+import { assert, context, handleTool, terminalGet, terminalReq, test, testGlobals } from "./contract-shared.ts";
 
 // ── /agent-ready — the scorecard that grades its author too ──────────────
 
@@ -24,8 +16,14 @@ test("the lift table is internally consistent and names its baseline", async () 
   for (const b of BASELINE) assert.ok(names.includes(b), `baseline names ${b}, which is not in the table`);
 
   const totals = liftTotals();
-  assert.equal(totals.lines, LIFT.reduce((n, [, , lines]) => n + lines, 0));
-  assert.equal(totals.baseline, LIFT.filter(([n]) => BASELINE.includes(n)).reduce((n, [, , l]) => n + l, 0));
+  assert.equal(
+    totals.lines,
+    LIFT.reduce((n, [, , lines]) => n + lines, 0),
+  );
+  assert.equal(
+    totals.baseline,
+    LIFT.filter(([n]) => BASELINE.includes(n)).reduce((n, [, , l]) => n + l, 0),
+  );
   // The headline claim: baseline is a small fraction of the whole.
   assert.ok(totals.baseline < totals.lines / 3, "baseline should be a minority of the total, or the claim is wrong");
   for (const [name, files, lines, buys] of LIFT) {
@@ -40,9 +38,11 @@ test("doors are counted, and unreadable is never counted as either", async () =>
   // either one is lying about a site it never reached.
   const { scoreDoors } = await import("../src/worker/agent-ready.ts");
   const s = scoreDoors({
-    llms: { ok: true }, markdown: { ok: false, why: "HTTP 404" },
+    llms: { ok: true },
+    markdown: { ok: false, why: "HTTP 404" },
     agentCard: { ok: false, unreadable: true, why: "no signing key" },
-    apiCatalog: { ok: false }, mcp: { ok: false, unreadable: true },
+    apiCatalog: { ok: false },
+    mcp: { ok: false, unreadable: true },
   });
   assert.equal(s.total, 5);
   assert.equal(s.open, 1);
@@ -83,7 +83,7 @@ test("the scorecard grades other origins, and only bills its own", async () => {
     // open door beside four shut ones. A stub that answered everything the same
     // way would let a scorecard that ignores its input pass.
     testGlobals.fetch = async (input) => {
-      const url = String(typeof input === "string" ? input : input?.url ?? input);
+      const url = String(typeof input === "string" ? input : (input?.url ?? input));
       seen.push(url);
       if (new URL(url).pathname === "/llms.txt") {
         return new Response("# a readable map\n", { status: 200, headers: { "content-type": "text/plain" } });

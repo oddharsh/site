@@ -30,15 +30,24 @@ const { values } = parseArgs({
 
 const host = new URL(values.origin).host;
 const say = (msg: string) => console.log(`indexnow: ${msg}`);
-function instrument(msg: string): never { console.error(`indexnow: ${msg}`); process.exit(2); }
+function instrument(msg: string): never {
+  console.error(`indexnow: ${msg}`);
+  process.exit(2);
+}
 
-if (!values.since) { say("no --since, so there is no previous release to diff against; submitted nothing"); process.exit(0); }
+if (!values.since) {
+  say("no --since, so there is no previous release to diff against; submitted nothing");
+  process.exit(0);
+}
 const commit = (values.commit ?? (await originBuild(values.origin)).commit)?.toLowerCase();
 if (!commit) instrument(`${values.origin} reports no build commit and no --commit was given`);
 
 const nextPath = downloadManifest(values.repo, commit) ?? instrument(`no served-manifest for ${commit.slice(0, 12)}`);
 const prevPath = downloadManifest(values.repo, values.since.toLowerCase());
-if (!prevPath) { say(`no served-manifest for ${values.since.slice(0, 12)} (it predates #1073), so nothing to diff; submitted nothing`); process.exit(0); }
+if (!prevPath) {
+  say(`no served-manifest for ${values.since.slice(0, 12)} (it predates #1073), so nothing to diff; submitted nothing`);
+  process.exit(0);
+}
 const next = parseManifest(readFileSync(nextPath, "utf8"));
 const prev = parseManifest(readFileSync(prevPath, "utf8"));
 
@@ -52,7 +61,10 @@ const urls = changedPages(prev, next, paths, host);
 say(`${values.since.slice(0, 12)} -> ${commit.slice(0, 12)}: ${urls.length} of ${paths.length} sitemap pages changed content`);
 for (const u of urls) say(`  ${u}`);
 if (!urls.length) process.exit(0);
-if (values["dry-run"]) { say("dry run, submitted nothing"); process.exit(0); }
+if (values["dry-run"]) {
+  say("dry run, submitted nothing");
+  process.exit(0);
+}
 
 // The engines fetch the key file to verify ownership, so a key the origin does
 // not serve turns every submission into a 403. Check it first and say so.

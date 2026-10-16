@@ -1,13 +1,6 @@
 // ── every wrangler config points at a file that exists ──────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  ROOT,
-  assert,
-  existsSync,
-  readFile,
-  readdir,
-  test,
-} from "./contract-shared.ts";
+import { ROOT, assert, existsSync, readFile, readdir, test } from "./contract-shared.ts";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -51,7 +44,11 @@ async function wranglerConfigs() {
   for (const dir of roots) {
     const url = new URL(dir === "." ? "." : `${dir}/`, ROOT);
     let entries;
-    try { entries = await readdir(url, { withFileTypes: true }); } catch { continue; }
+    try {
+      entries = await readdir(url, { withFileTypes: true });
+    } catch {
+      continue;
+    }
     for (const entry of entries) {
       if (!entry.isFile()) continue;
       if (!/^(wrangler[\w.-]*\.(toml|jsonc?)|cloudflare\.config\.(ts|mts|js|mjs))$/.test(entry.name)) continue;
@@ -86,7 +83,7 @@ test("every wrangler config's entry point resolves to a real file", async () => 
   for (const { dir, path } of configs) {
     const source = await readFile(new URL(path, ROOT), "utf8");
     const match = ENTRY.exec(source);
-    if (!match) continue;              // a config may legitimately declare no main
+    if (!match) continue; // a config may legitimately declare no main
     checked++;
     const declared = match[1];
 
@@ -126,7 +123,10 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
       // 2026-09-10 and one spawn was measured past 5s under that load,
       // surfacing as `spawnSync ... ETIMEDOUT`, which reads like a broken
       // tool rather than a busy machine.
-      cwd: tmpdir(), env: { ...env, ...extraEnv }, encoding: "utf8", timeout: 30_000,
+      cwd: tmpdir(),
+      env: { ...env, ...extraEnv },
+      encoding: "utf8",
+      timeout: 30_000,
     });
     assert.equal(result.error, undefined);
     assert.equal(result.status, status, result.stdout + result.stderr);
@@ -138,8 +138,7 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
     // The script reads the installed tarball's sha through this helper, so the
     // scratch repository needs it beside the script or every run dies on import.
     await mkdir(join(dir, "tools/lib"));
-    await writeFile(join(dir, "tools/lib/wrangler-provenance.ts"),
-      await readFile(new URL("tools/lib/wrangler-provenance.ts", ROOT)));
+    await writeFile(join(dir, "tools/lib/wrangler-provenance.ts"), await readFile(new URL("tools/lib/wrangler-provenance.ts", ROOT)));
     const pkg = { type: "module", devDependencies: { wrangler: version }, workspaces: ["cal", "cf-garage", "lwe-ask"] };
     await write("package.json", pkg);
     const projects = ["cal", "cf-garage", "lwe-ask", "lens-reader", "nested/new project"];
@@ -230,5 +229,7 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
     run(1, /not a git repository/);
     await rm(join(dir, "node_modules/wrangler"));
     run(1, /bun install/);
-  } finally { await rm(dir, { recursive: true, force: true }); }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

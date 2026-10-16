@@ -19,8 +19,7 @@ import {
 // onto three real pool rows keeps the album renderer under test until the next
 // album is registered, and the registry loops below still cover every real one.
 const FIXTURE_ALBUM = { slug: "fixture-album", title: "Fixture Album", lede: ["A first line", "and a second's"], description: "a test album" };
-const withFixtureAlbum = (pool) => pool.map((p, i) =>
-  i < 3 ? { ...p, album: FIXTURE_ALBUM.slug, heif: i === 0 ? `${p.stem}.HIF` : null } : p);
+const withFixtureAlbum = (pool) => pool.map((p, i) => (i < 3 ? { ...p, album: FIXTURE_ALBUM.slug, heif: i === 0 ? `${p.stem}.HIF` : null } : p));
 const albumsUnderTest = () => [...Object.values(ALBUMS), FIXTURE_ALBUM];
 
 // ── the deploy-time page renderers ──────────────────────────────────
@@ -72,7 +71,10 @@ test("renderAlbumPage is pure over the committed pool and never invents a format
   for (const album of albumsUnderTest()) {
     const members = albumPool(pool, album);
     // build.ts step 1e refuses an empty album for the same reason
-    assert.ok(members.length > 0, `${album.slug}: registered in albums.ts but no photo-index.json entry carries it; run add-photos.sh with ALBUM=${album.slug}`);
+    assert.ok(
+      members.length > 0,
+      `${album.slug}: registered in albums.ts but no photo-index.json entry carries it; run add-photos.sh with ALBUM=${album.slug}`,
+    );
     const a = await renderAlbumPage(album, pool, alt).text();
     const b = await renderAlbumPage(album, pool, alt).text();
     assert.equal(a, b, `${album.slug}: same inputs must give byte-identical output`);
@@ -121,7 +123,10 @@ test("the contact sheets defer every tile past the first screen", async () => {
   const EAGER = 12;
   for (const [path, doc] of sheets) {
     // each tile ends at its own </div>; the last one would otherwise run on into the shell
-    const tiles = doc.split('<div class="ph">').slice(1).map((t) => t.slice(0, t.indexOf("</div>")));
+    const tiles = doc
+      .split('<div class="ph">')
+      .slice(1)
+      .map((t) => t.slice(0, t.indexOf("</div>")));
     // what the browser parses with scripts on: <noscript> content is inert text then
     const live = (tile) => tile.replace(/<noscript>[\s\S]*?<\/noscript>/g, "");
     tiles.forEach((tile, i) => {
@@ -133,9 +138,17 @@ test("the contact sheets defer every tile past the first screen", async () => {
       } else {
         assert.ok(live(tile).includes("<picture data-defer>"), `${where}: a tile past the first screen is deferred`);
         assert.ok(!/ (srcset|src)="/.test(live(tile).replace(/ (href)="[^"]*"/g, "")), `${where}: a deferred tile names no URL the browser would fetch`);
-        assert.match(live(tile), /<source type="image\/avif" data-srcset="[^"]+">/, `${where}: the AVIF source is deferred too, or the browser fetches it anyway`);
+        assert.match(
+          live(tile),
+          /<source type="image\/avif" data-srcset="[^"]+">/,
+          `${where}: the AVIF source is deferred too, or the browser fetches it anyway`,
+        );
         assert.match(live(tile), /<img data-src="[^"]+"/, `${where}: the JPEG fallback is deferred`);
-        assert.match(tile, /<noscript><picture>\s*<source type="image\/avif" srcset="[^"]+">\s*<img src="[^"]+"/, `${where}: a reader without scripts still gets the photo`);
+        assert.match(
+          tile,
+          /<noscript><picture>\s*<source type="image\/avif" srcset="[^"]+">\s*<img src="[^"]+"/,
+          `${where}: a reader without scripts still gets the photo`,
+        );
       }
     });
     assert.equal(doc.split("picture[data-defer]{display:none}").length - 1, 1, `${path}: without scripts the empty deferred tile is hidden, once`);

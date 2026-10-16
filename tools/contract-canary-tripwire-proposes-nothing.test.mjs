@@ -32,7 +32,11 @@ import { DEFAULT_PAIRS, HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCap
 import { BUN_WATCHES, WRANGLER_WATCHES, ensureTimbradoEngine, interpretTemporalProbe, runWatch } from "./lib/upstream-watches.ts";
 
 const LEGS = ["tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/canary-browsers.ts"];
-const strip = (src) => src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+const strip = (src) =>
+  src
+    .split("\n")
+    .filter((l) => !l.trim().startsWith("//"))
+    .join("\n");
 const PIN_WRITE = /\b(?:writeFile|appendFile|Bun\.write)\w*\([^;]*(?:bun-pin\.json|package\.json)/;
 
 test("no canary leg can write the pin, and none knows the bumper's write flag", async () => {
@@ -60,7 +64,12 @@ test("canary.yml holds no Cloudflare credential, writes only issues, and install
   assert.equal((yml.match(/uses: \.\/\.github\/actions\/setup-bun/g) ?? []).length, 3, "each leg installs the PINNED bun through the shared action, once");
   assert.doesNotMatch(yml, /oven-sh\/setup-bun|bun-version:|releases\/download\/canary/, "the canary binary is fetched by the script, never by the workflow");
   assert.equal((yml.match(/bun run timbrado report --target (\w+)/g) ?? []).length, 3, "every leg reports through timbrado's reporter");
-  for (const leg of jobs) assert.match(yml, new RegExp(`timbrado report --target ${leg} .*--reproduce "bun run canary:${leg}"`), `${leg} reports under its own name and says how to reproduce`);
+  for (const leg of jobs)
+    assert.match(
+      yml,
+      new RegExp(`timbrado report --target ${leg} .*--reproduce "bun run canary:${leg}"`),
+      `${leg} reports under its own name and says how to reproduce`,
+    );
   assert.doesNotMatch(yml, /canary:report|canary-report/, "the site's own reporter is gone");
 });
 
@@ -72,17 +81,22 @@ test("the bumper and the canary share the gates rather than each carrying a copy
   for (const file of ["tools/bump-bun-pin.ts", "tools/canary-bun.ts"]) {
     const code = strip(await readFile(new URL(file, ROOT), "utf8"));
     assert.match(code, /from "\.\/lib\/bun-gates\.ts"/, `${file} must import the shared gates`);
-    assert.doesNotMatch(code, /function hashTree|renameSync\(BUILD|\.build\.pinned-baseline"\)/, `${file} re-implements the build comparison instead of calling byteIdenticalBuildGate`);
+    assert.doesNotMatch(
+      code,
+      /function hashTree|renameSync\(BUILD|\.build\.pinned-baseline"\)/,
+      `${file} re-implements the build comparison instead of calling byteIdenticalBuildGate`,
+    );
   }
 });
 
 test("every Playwright launch in tools reads its channel from browser-channel.ts", async () => {
   const dir = fileURLToPath(new URL("tools/", ROOT));
-  const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => {
-    if (e.name === "node_modules" || e.name === "zenc" || e.name === "libavif" || e.name === ".venv") return [];
-    const p = `${d}${e.name}`;
-    return e.isDirectory() ? walk(`${p}/`) : /\.(ts|mjs)$/.test(e.name) ? [p] : [];
-  });
+  const walk = (d) =>
+    readdirSync(d, { withFileTypes: true }).flatMap((e) => {
+      if (e.name === "node_modules" || e.name === "zenc" || e.name === "libavif" || e.name === ".venv") return [];
+      const p = `${d}${e.name}`;
+      return e.isDirectory() ? walk(`${p}/`) : /\.(ts|mjs)$/.test(e.name) ? [p] : [];
+    });
   const launchers = [];
   for (const file of walk(dir)) {
     const src = await readFile(file, "utf8");
@@ -110,7 +124,16 @@ test("the legs' reports flow through timbrado's reporter: leg-shaped JSON, the v
   // A leg writes `leg`; the workflow passes `--target <leg>`, and the reporter
   // reads `target`. The join is one word, so it is pinned here.
   const asTimbrado = (report, target) => ({ ...report, target });
-  const red = asTimbrado({ leg: "bun", verdict: "red", signature: "red:zstd honours `dictionary`", subject: { revision: "1.4.3-canary.1+b820c70d6" }, gates: [{ name: "zstd honours `dictionary`", ok: false, detail: "73 none / 73 good | 73 wrong" }] }, "bun");
+  const red = asTimbrado(
+    {
+      leg: "bun",
+      verdict: "red",
+      signature: "red:zstd honours `dictionary`",
+      subject: { revision: "1.4.3-canary.1+b820c70d6" },
+      gates: [{ name: "zstd honours `dictionary`", ok: false, detail: "73 none / 73 good | 73 wrong" }],
+    },
+    "bun",
+  );
   assert.deepEqual(plan(red, null), { kind: "create" });
   const body = render(red, undefined, "bun run canary:bun");
   assert.ok(body.includes(marker("bun", red.signature)), "the rendered body carries the marker the next night dedupes on");
@@ -124,11 +147,20 @@ test("the legs' reports flow through timbrado's reporter: leg-shaped JSON, the v
   assert.ok(!isTitleFor("timbrado: bun-pin (2026-10-09)", "bun"), "the bun leg never claims the bun-pin issue");
 
   const tables = tablesFor(
-    [{ name: "chrome", version: "153.0.8010.37", probes: 87, true: 64 }, { name: "chrome-canary", version: "155.0.8057.0", probes: 87, true: 66 }],
-    [{ cap: "live:jxl-decode", stable: false, prerelease: true, pair: "chrome:chrome-canary" }, { cap: "margin-trim", stable: true, prerelease: false, pair: "chrome:chrome-canary" }],
+    [
+      { name: "chrome", version: "153.0.8010.37", probes: 87, true: 64 },
+      { name: "chrome-canary", version: "155.0.8057.0", probes: 87, true: 66 },
+    ],
+    [
+      { cap: "live:jxl-decode", stable: false, prerelease: true, pair: "chrome:chrome-canary" },
+      { cap: "margin-trim", stable: true, prerelease: false, pair: "chrome:chrome-canary" },
+    ],
     [{ cap: "popover", trueIn: ["chromium"] }],
   );
-  const browsers = render(asTimbrado({ leg: "browsers", verdict: "changed", signature: "changed:x", subject: { page: "/src/pages/garage/horizon.html" }, tables }, "browsers"), undefined);
+  const browsers = render(
+    asTimbrado({ leg: "browsers", verdict: "changed", signature: "changed:x", subject: { page: "/src/pages/garage/horizon.html" }, tables }, "browsers"),
+    undefined,
+  );
   assert.ok(browsers.includes("| chrome-canary | 155.0.8057.0 | 66 / 87 |"), "the engine table");
   assert.ok(browsers.includes("| `live:jxl-decode` | chrome:chrome-canary | false | true |"), "a flip");
   assert.ok(browsers.includes("| `margin-trim` | chrome:chrome-canary | true | false (gone) |"), "a regression is marked gone");
@@ -139,7 +171,10 @@ test("the legs' reports flow through timbrado's reporter: leg-shaped JSON, the v
 test("the honest-false detector matches the page's own convention, and finds the shipped cards", async () => {
   const html = await readFile(new URL("src/pages/garage/horizon.html", ROOT), "utf8");
   const probes = [...html.matchAll(/^\s*"([a-z0-9-]+)": function \(\) \{ return \(false\); \},?$/gm)].map((m) => m[1]);
-  assert.ok(probes.length >= 5, `only ${probes.length} one-line honest-false probes found in horizon.html; the page's convention moved or the scanner stopped matching`);
+  assert.ok(
+    probes.length >= 5,
+    `only ${probes.length} one-line honest-false probes found in horizon.html; the page's convention moved or the scanner stopped matching`,
+  );
   for (const cap of probes) assert.ok(HONEST_FALSE.test(`function () { return (false); }`), `${cap}'s probe shape is not detected`);
   assert.ok(HONEST_FALSE.test("function () { return false }"), "the bare form counts too");
   assert.ok(!HONEST_FALSE.test('function () { return CSS.supports("color: AccentColor"); }'), "a real probe is not honest-false");
@@ -217,14 +252,25 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
   // behind a guard that throws, and the leg has to ask for the engine before
   // it spends minutes downloading and building a canary.
   const lib = strip(await readFile(new URL("tools/lib/upstream-watches.ts", ROOT), "utf8"));
-  assert.doesNotMatch(lib, /export \{[^}]*\brunWatch\b[^}]*\} from "timbrado\/watch"/, "runWatch is re-exported bare from timbrado; a missing engine would read null");
+  assert.doesNotMatch(
+    lib,
+    /export \{[^}]*\brunWatch\b[^}]*\} from "timbrado\/watch"/,
+    "runWatch is re-exported bare from timbrado; a missing engine would read null",
+  );
   assert.match(lib, /export function runWatch\([^)]*\)[^{]*\{\s*ensureTimbradoEngine\(\);/, "the exported runWatch builds the engine before it measures");
   const leg = strip(await readFile(new URL("tools/canary-bun.ts", ROOT), "utf8"));
   const ensureAt = leg.indexOf("ensureTimbradoEngine();");
   assert.ok(ensureAt > 0, "canary-bun.ts never asks for the engine");
-  assert.ok(ensureAt < leg.indexOf('"download failed"'), "the engine is asked for AFTER the canary download; a runner without cargo pays for the download first");
+  assert.ok(
+    ensureAt < leg.indexOf('"download failed"'),
+    "the engine is asked for AFTER the canary download; a runner without cargo pays for the download first",
+  );
   assert.ok(ensureAt < leg.indexOf("for (const w of BUN_WATCHES)"), "the engine is asked for after the watch loop it exists for");
-  assert.match(leg.slice(ensureAt, ensureAt + 400), /emit\("instrument", bare, [^)]*engine[^)]*\);\s*process\.exit\(2\);/, "an engine that cannot be built is exit 2, the instrument, so the reporter files nothing");
+  assert.match(
+    leg.slice(ensureAt, ensureAt + 400),
+    /emit\("instrument", bare, [^)]*engine[^)]*\);\s*process\.exit\(2\);/,
+    "an engine that cannot be built is exit 2, the instrument, so the reporter files nothing",
+  );
 
   // The BUMPER runs the same suite gate, and it did not ask. So the suite's
   // first watch paid for a cold cargo build under bun's clock, bun test killed
@@ -236,7 +282,11 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
   assert.ok(askAt < bumper.indexOf("downloadBun("), "the bumper asks for the engine after the download; a runner without cargo pays for it first");
   assert.ok(askAt < bumper.indexOf("contractSuiteGate(candidate"), "the bumper asks for the engine after the suite that needs it");
   assert.ok(askAt > bumper.indexOf("is not proposable yet"), "the bumper builds the engine before gates 1 and 2, so every quiet night pays a cargo build");
-  assert.match(bumper.slice(askAt, askAt + 400), /process\.exit\(2\);/, "an engine the bumper cannot build is exit 2, which bun-pin.yml reds, never a failed gate it reads as green");
+  assert.match(
+    bumper.slice(askAt, askAt + 400),
+    /process\.exit\(2\);/,
+    "an engine the bumper cannot build is exit 2, which bun-pin.yml reds, never a failed gate it reads as green",
+  );
 
   // CI is the third caller of the same suite, and it did not ask either: the
   // cold build ran inside one test's 30s and killed cargo in the bun legs of
@@ -267,7 +317,6 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
 });
 
 test("the JXL fixture is a real codestream and the live probes are named where the reporter can find them", () => {
-
   const bytes = Buffer.from(JXL_2X2, "base64");
   assert.deepEqual([bytes[0], bytes[1]], [0xff, 0x0a], "a bare JPEG XL codestream starts ff 0a");
   assert.ok(bytes.length > 100 && bytes.length < 400, `a 2x2 lossless JXL is a couple of hundred bytes, got ${bytes.length}`);
@@ -287,7 +336,11 @@ test("every name in the browsers leg's default pairs is an installation target t
     // The workflow runs the installer under bun since 2026-09-16 (canary.yml,
     // the browsers job, which sets up no node at all now); this mirrors it.
     const runtime = process.versions.bun ? process.execPath : "bun";
-    const run = spawnSync(runtime, ["node_modules/playwright-core/cli.js", "install", "--dry-run", name], { cwd: fileURLToPath(ROOT), encoding: "utf8", timeout: 60_000 });
+    const run = spawnSync(runtime, ["node_modules/playwright-core/cli.js", "install", "--dry-run", name], {
+      cwd: fileURLToPath(ROOT),
+      encoding: "utf8",
+      timeout: 60_000,
+    });
     assert.doesNotMatch(`${run.stdout}${run.stderr}`, /Invalid installation targets/, `${name} is not an installation target of the pinned playwright-core`);
   }
   // The image ships only the bundled engines, so every branded channel a pair

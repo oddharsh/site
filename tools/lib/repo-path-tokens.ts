@@ -19,8 +19,23 @@
 // regex's own rule that matches never overlap.
 
 export const REPO_DIRS = [
-  "www", "holding", "scripts", "src", "tools", "cal", "cf-garage", "lens-reader", "lwe-ask",
-  "pipelines", "config", "serendipity", "public", "design", "docs", "migrations", "talks",
+  "www",
+  "holding",
+  "scripts",
+  "src",
+  "tools",
+  "cal",
+  "cf-garage",
+  "lens-reader",
+  "lwe-ask",
+  "pipelines",
+  "config",
+  "serendipity",
+  "public",
+  "design",
+  "docs",
+  "migrations",
+  "talks",
 ] as const;
 
 // The rule as a regex: the oracle the scanner is tested against.
@@ -49,8 +64,7 @@ export function repoPathTokens(text: string): string[] {
     while (start > 0 && isRun(text.charCodeAt(start - 1))) start--;
     const before = start > 0 ? text.charCodeAt(start - 1) : -1;
     let end = slash + 1;
-    if (start < slash && before !== DOT && before !== SLASH && end < text.length && isPath(text.charCodeAt(end))
-      && DIRS.has(text.slice(start, slash))) {
+    if (start < slash && before !== DOT && before !== SLASH && end < text.length && isPath(text.charCodeAt(end)) && DIRS.has(text.slice(start, slash))) {
       while (end < text.length && isPath(text.charCodeAt(end))) end++;
       out.push(text.slice(start, end));
       from = end;

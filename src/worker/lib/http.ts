@@ -3,11 +3,18 @@
 import { escape } from "./html.ts";
 
 export function escAttr(s) {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 export function escHtml(s) {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 // The one JSON response every route builds. Defaults to a private reply: never
@@ -34,7 +41,7 @@ export function errorResp(body, status) {
   return new Response(body, {
     status,
     headers: {
-      "content-type":  "text/plain; charset=utf-8",
+      "content-type": "text/plain; charset=utf-8",
       "cache-control": "public, max-age=30, must-revalidate",
     },
   });
@@ -72,15 +79,9 @@ export function wantsMarkdown(request) {
   if (!/(^|,)\s*text\/markdown\s*(?:;|,|$)/i.test(accept)) return false;
   const markdownQ = acceptQ(accept, "text/markdown");
   if (markdownQ <= 0) return false;
-  const htmlQ = Math.max(
-    acceptQ(accept, "text/html"),
-    acceptQ(accept, "application/xhtml+xml")
-  );
+  const htmlQ = Math.max(acceptQ(accept, "text/html"), acceptQ(accept, "application/xhtml+xml"));
   if (markdownQ !== htmlQ) return markdownQ > htmlQ;
-  return acceptIndex(accept, "text/markdown") < Math.min(
-    acceptIndex(accept, "text/html"),
-    acceptIndex(accept, "application/xhtml+xml")
-  );
+  return acceptIndex(accept, "text/markdown") < Math.min(acceptIndex(accept, "text/html"), acceptIndex(accept, "application/xhtml+xml"));
 }
 
 // true iff Accept explicitly names application/json and prefers it over HTML,
@@ -94,10 +95,7 @@ export function wantsJson(request) {
   if (jsonQ <= 0) return false;
   const htmlQ = Math.max(acceptQ(accept, "text/html"), acceptQ(accept, "application/xhtml+xml"));
   if (jsonQ !== htmlQ) return jsonQ > htmlQ;
-  return acceptIndex(accept, "application/json") < Math.min(
-    acceptIndex(accept, "text/html"),
-    acceptIndex(accept, "application/xhtml+xml")
-  );
+  return acceptIndex(accept, "application/json") < Math.min(acceptIndex(accept, "text/html"), acceptIndex(accept, "application/xhtml+xml"));
 }
 
 /** True when Accept names HTML itself (text/html or XHTML, q > 0): a browser
@@ -131,7 +129,10 @@ function acceptQ(accept, type) {
   let best = 0;
   let specificity = -1;
   for (const raw of accept.split(",")) {
-    const parts = raw.trim().split(";").map(s => s.trim());
+    const parts = raw
+      .trim()
+      .split(";")
+      .map((s) => s.trim());
     const media = parts.shift();
     if (!media || !media.includes("/")) continue;
     const [gotType, gotSub] = media.split("/");
@@ -157,9 +158,7 @@ function acceptQ(accept, type) {
 // 5-minute success TTL, so a transient scrape 502 does not pin in browsers.
 export function publicJsonHeaders(status) {
   return {
-    "cache-control": status >= 400
-      ? "public, max-age=30, must-revalidate"
-      : "public, max-age=300, s-maxage=600",
+    "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
     "access-control-allow-origin": "*",
   };
 }
@@ -170,10 +169,7 @@ export function extractTitle(html) {
 }
 
 export function extractMeta(html, name) {
-  const re = new RegExp(
-    `<meta[^>]+(?:name|property)=["']${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*content=["']([^"']+)["']`,
-    "i"
-  );
+  const re = new RegExp(`<meta[^>]+(?:name|property)=["']${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*content=["']([^"']+)["']`, "i");
   const m = html.match(re);
   return m ? decodeEntities(m[1].trim()).slice(0, 240) : "";
 }
@@ -188,8 +184,11 @@ export function extractMeta(html, name) {
 // only the next un-escaped sink would have to catch.
 function decodeEntities(s) {
   return s
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&");
 }
 

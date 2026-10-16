@@ -46,7 +46,12 @@ const LENS_NLWEB = defineLens({
   span: "lens.nlweb",
   budget: "nlweb",
   targets: (params: URLSearchParams) => params.get("url") || "",
-  args: (params) => ({ query: String(params.get("q") || "").trim().slice(0, MAX_QUERY) || DEFAULT_QUERY }),
+  args: (params) => ({
+    query:
+      String(params.get("q") || "")
+        .trim()
+        .slice(0, MAX_QUERY) || DEFAULT_QUERY,
+  }),
   // Keyed on the QUERY as well as the origin. Keying on origin alone would show
   // one visitor's answer to another visitor's question, which on a surface whose
   // whole claim is "this is what the machine actually got" is the exact lie it
@@ -63,9 +68,14 @@ const LENS_NLWEB = defineLens({
       // merging them would have the pane announce that a live endpoint is absent.
       s.setAttribute("lens.detail", probe.detail);
       return {
-        ok: false, status: 200, outcome: probe.unreadable ? "unreadable" : "shut",
+        ok: false,
+        status: 200,
+        outcome: probe.unreadable ? "unreadable" : "shut",
         payload: {
-          ok: false, origin, host, query,
+          ok: false,
+          origin,
+          host,
+          query,
           endpoint: origin.replace(/\/+$/, "") + "/ask",
           unreadable: !!probe.unreadable,
           gated: !!probe.gated,

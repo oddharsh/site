@@ -30,9 +30,7 @@ import { parseCacheControl } from "./dict.ts";
 
 const FETCH_TIMEOUT = 8000;
 
-type HeaderProbe =
-  | { status: number; headers: Record<string, string>; error?: never }
-  | { error: string; status?: never; headers?: never };
+type HeaderProbe = { status: number; headers: Record<string, string>; error?: never } | { error: string; status?: never; headers?: never };
 
 /** One bounded, signed fetch that reads only headers (body cancelled). */
 async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
@@ -57,7 +55,11 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
     const res = read.response;
     const responseHeaders: Record<string, string> = {};
     for (const [key, value] of res.headers) responseHeaders[key.toLowerCase()] = value;
-    try { await res.body?.cancel(); } catch { /* already drained */ }
+    try {
+      await res.body?.cancel();
+    } catch {
+      /* already drained */
+    }
     return { status: res.status, headers: responseHeaders };
   } catch (error) {
     return { error: String(error?.message || error).slice(0, 80) };
@@ -73,9 +75,7 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
 // negotiated is OPTIONAL: it marks a response that varied on Accept, which most
 // callers have no opinion about. The body reads it behind a guard, and the lint's
 // own tests pass three of the four fields.
-export function judgeRevalidation({ first, second, conditional, negotiated }: {
-  first?: any; second?: any; conditional?: any; negotiated?: any;
-}) {
+export function judgeRevalidation({ first, second, conditional, negotiated }: { first?: any; second?: any; conditional?: any; negotiated?: any }) {
   const findings = [];
   const add = (id, verdict, detail) => findings.push({ id, verdict, detail });
 
@@ -94,7 +94,12 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: {
   // Does the validator survive two identical requests? THE big one.
   if (etag1 && etag2) {
     if (etag1 === etag2) add("stability", "ok", "identical across two unconditional fetches");
-    else add("stability", "veto", `CHANGED between identical requests (${etag1.slice(0, 24)} → ${etag2.slice(0, 24)}) — this ETag can never match, so revalidation is theater`);
+    else
+      add(
+        "stability",
+        "veto",
+        `CHANGED between identical requests (${etag1.slice(0, 24)} → ${etag2.slice(0, 24)}) — this ETag can never match, so revalidation is theater`,
+      );
   } else if (etag1 && second && !etag2) {
     add("stability", "warn", "ETag present on one response and absent on the next — intermittent validators cannot be relied on");
   }
@@ -121,11 +126,18 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: {
     // substring test waves through the exact header combination #195 shipped
     // with. This bug existed in this very function for one commit; the contract
     // test caught it before it lied to anyone.
-    const varyTokens = (first.headers?.vary || "").toLowerCase().split(",").map((t) => t.trim());
+    const varyTokens = (first.headers?.vary || "")
+      .toLowerCase()
+      .split(",")
+      .map((t) => t.trim());
     const variesOnAccept = varyTokens.includes("accept") || varyTokens.includes("*");
     const differs = negotiated.headers?.["content-type"] !== first.headers?.["content-type"];
     if (differs && !variesOnAccept) {
-      add("vary", "veto", `negotiates on Accept (${first.headers?.["content-type"]} vs ${negotiated.headers?.["content-type"]}) but Vary is "${first.headers?.vary || "(none)"}" — a shared cache WILL serve the wrong representation`);
+      add(
+        "vary",
+        "veto",
+        `negotiates on Accept (${first.headers?.["content-type"]} vs ${negotiated.headers?.["content-type"]}) but Vary is "${first.headers?.vary || "(none)"}" — a shared cache WILL serve the wrong representation`,
+      );
     } else if (differs) {
       add("vary", "ok", "negotiates on Accept and says so in Vary");
     } else {
@@ -161,7 +173,7 @@ export async function probeRevalidation(url, env) {
   const conditionalHeaders = {};
   if (etag) conditionalHeaders["if-none-match"] = etag;
   if (lastMod) conditionalHeaders["if-modified-since"] = lastMod;
-  const conditional = (etag || lastMod) ? await probeHeaders(url, env, conditionalHeaders) : null;
+  const conditional = etag || lastMod ? await probeHeaders(url, env, conditionalHeaders) : null;
 
   // The negotiation probe only makes sense for HTML documents.
   const isHtml = (first.headers["content-type"] || "").includes("text/html");
@@ -172,7 +184,8 @@ export async function probeRevalidation(url, env) {
     status: first.status,
     observations: { first, second, conditional, negotiated },
     verdict: judgeRevalidation({
-      first, second,
+      first,
+      second,
       conditional: conditional?.error ? null : conditional,
       negotiated: negotiated?.error ? null : negotiated,
     }),

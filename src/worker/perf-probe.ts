@@ -20,8 +20,14 @@ export async function cronHomeProbe(env, ctx) {
     const time = async (fn) => {
       const s = Date.now();
       let r;
-      try { r = await fn(); } catch { return null; }
-      try { await r.body?.cancel(); } catch {}
+      try {
+        r = await fn();
+      } catch {
+        return null;
+      }
+      try {
+        await r.body?.cancel();
+      } catch {}
       return Date.now() - s;
     };
     // warm: false, because the art warm is a visitor-colo side effect that runs

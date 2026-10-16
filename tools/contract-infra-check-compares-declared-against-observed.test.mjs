@@ -14,17 +14,44 @@
 import { assert, readFileSync, test } from "./contract-shared.ts";
 import { agentRepresentation, agentSurfaces } from "./lib/agent-representation.ts";
 import {
-  AGENT_SURFACE_FLOOR, compareAgentCoverage,
-  compareD1Databases, compareDns, compareEdge, compareEdgeCheck, compareKvNamespaces,
-  compareLabels, compareR2Buckets, compareReleaseDeclaration, compareRepository,
-  compareRulesets, compareTokens, compareVersionAffinity, compareWorkerInventory,
-  compareWorkersBuilds, compareZoneSetting, dnsKey, dnsQueries,
-  SHARED_DICTIONARY_SECTION, ZERO_RTT_SECTION,
+  AGENT_SURFACE_FLOOR,
+  compareAgentCoverage,
+  compareD1Databases,
+  compareDns,
+  compareEdge,
+  compareEdgeCheck,
+  compareKvNamespaces,
+  compareLabels,
+  compareR2Buckets,
+  compareReleaseDeclaration,
+  compareRepository,
+  compareRulesets,
+  compareTokens,
+  compareVersionAffinity,
+  compareWorkerInventory,
+  compareWorkersBuilds,
+  compareZoneSetting,
+  dnsKey,
+  dnsQueries,
+  SHARED_DICTIONARY_SECTION,
+  ZERO_RTT_SECTION,
 } from "./lib/infra-compare.ts";
 import {
-  cloudflareReader, edgeFetcher, githubReader, readAgentAnswers, readD1Databases, readDns, readEdge,
-  readKvNamespaces, readR2Buckets, readRepository, readTokens, readVersionAffinity,
-  readWorkerScripts, readWorkersBuilds, readZoneSetting,
+  cloudflareReader,
+  edgeFetcher,
+  githubReader,
+  readAgentAnswers,
+  readD1Databases,
+  readDns,
+  readEdge,
+  readKvNamespaces,
+  readR2Buckets,
+  readRepository,
+  readTokens,
+  readVersionAffinity,
+  readWorkerScripts,
+  readWorkersBuilds,
+  readZoneSetting,
 } from "./lib/infra-ports.ts";
 import { createReport } from "./lib/infra-report.ts";
 
@@ -113,8 +140,10 @@ function matchingDns() {
     if (record.match === "exact") answer(record.name, record.type, record.expect);
     else if (record.match === "contains") answer(record.name, record.type, [`1 . ${record.expect.join(" ")}`]);
     else if (record.match === "present") answer(record.name, record.type, ["v=fixture"]);
-    else if (record.match === "proxied") { answer(record.name, "A", edge); answer(record.name, "AAAA", ["2606:4700::1"]); }
-    else if (record.match === "sameAs") answer(record.name, record.type, edge);
+    else if (record.match === "proxied") {
+      answer(record.name, "A", edge);
+      answer(record.name, "AAAA", ["2606:4700::1"]);
+    } else if (record.match === "sameAs") answer(record.name, record.type, edge);
   }
   answer(infra.zone.name, "NS", infra.zone.nameservers);
   answer(infra.zone.name, "DS", [infra.zone.dnssec.ds]);
@@ -125,7 +154,10 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), { status
 /** A response as Cloudflare's edge serves one: whatever the status, it carries
  *  cf-ray. The edge port measures nothing that lacks it (gotcha 60).
  *  @param {Response} res */
-const edgeServed = (res) => { res.headers.set("cf-ray", "8f1e2d3c4b5a6978-SJC"); return res; };
+const edgeServed = (res) => {
+  res.headers.set("cf-ray", "8f1e2d3c4b5a6978-SJC");
+  return res;
+};
 
 // ------------------------------------------------------------- repository ----
 
@@ -344,7 +376,10 @@ test("edge: Markdown for Agents converting a page with no twin is a drift; the p
 
   const converted = compareEdge(edge, await readEdge(edge, portAnswering("text/markdown; charset=utf-8")), { hostedRunner: false });
   assert.equal(converted[0].level, "fail");
-  assert.ok(converted[0].message.startsWith('production edge: markdown-for-agents-converts-nothing: content-type does not contain "text/html"'), converted[0].message);
+  assert.ok(
+    converted[0].message.startsWith('production edge: markdown-for-agents-converts-nothing: content-type does not contain "text/html"'),
+    converted[0].message,
+  );
 
   // No post to probe is an unmeasured check, never a pass.
   const empty = { probeEarlyData: async () => ({ skip: "unused" }), fetchEdge: async () => edgeServed(json([])) };
@@ -372,7 +407,10 @@ test("early data: a rejection is advisory on a hosted runner and a drift on a wo
   assert.equal(workstation[0].level, "fail");
   assert.ok(workstation[0].message.startsWith("production edge: tls-0rtt-on: TLS early data rejected on 3 spaced resumptions"));
 
-  assert.equal(compareEdgeCheck(check, { kind: /** @type {const} */ ("early-data"), result: { accepted: true, attempts: 1 } }, { hostedRunner: true })[0].level, "pass");
+  assert.equal(
+    compareEdgeCheck(check, { kind: /** @type {const} */ ("early-data"), result: { accepted: true, attempts: 1 } }, { hostedRunner: true })[0].level,
+    "pass",
+  );
   // A machine that cannot run the probe has measured nothing.
   assert.equal(compareEdgeCheck(check, { kind: "early-data", result: { skip: "no openssl" } }, { hostedRunner: false })[0].level, "warn");
 });
@@ -432,12 +470,15 @@ test("agent coverage: HTML where Markdown is owed, and a redirect, are gaps name
   answers.set(moved.path, { kind: "redirect", status: 302, location: "https://open.spotify.com/" });
   const n = agentPages.length;
   // Gaps are listed in registry order.
-  const named = agentPages.filter((p) => p === html || p === moved)
+  const named = agentPages
+    .filter((p) => p === html || p === moved)
     .map((p) => (p === html ? `${p.path} (text/html)` : `${p.path} (302 to https://open.spotify.com/)`));
-  assert.deepEqual(compareAgentCoverage(agentPages, answers), [{
-    level: "warn",
-    message: `agent markdown coverage: ${n - 2}/${n} measured agents:true surfaces answer Accept: text/markdown in their declared representation. No twin: ${named.join(", ")}. Give each one a twin, declare the representation its route serves (mimeType), or drop flags.agents so the registry stops advertising it`,
-  }]);
+  assert.deepEqual(compareAgentCoverage(agentPages, answers), [
+    {
+      level: "warn",
+      message: `agent markdown coverage: ${n - 2}/${n} measured agents:true surfaces answer Accept: text/markdown in their declared representation. No twin: ${named.join(", ")}. Give each one a twin, declare the representation its route serves (mimeType), or drop flags.agents so the registry stops advertising it`,
+    },
+  ]);
   // The rule is per surface: text/plain is right for a terminal tool and a gap
   // where Markdown is owed.
   const swapped = agentAnswersOk();
@@ -450,7 +491,9 @@ test("agent coverage: an unmeasured surface blocks the pass and is never counted
   const lost = plainPage();
   answers.set(lost.path, { kind: "unmeasured", reason: "HTTP 403 without cf-ray" });
   const findings = compareAgentCoverage(agentPages, answers);
-  assert.deepEqual(findings, [{ level: "warn", message: `agent markdown coverage left 1/${agentPages.length} surfaces unmeasured: ${lost.path} (HTTP 403 without cf-ray)` }]);
+  assert.deepEqual(findings, [
+    { level: "warn", message: `agent markdown coverage left 1/${agentPages.length} surfaces unmeasured: ${lost.path} (HTTP 403 without cf-ray)` },
+  ]);
 
   // Alongside a gap, the gap's denominator is what was measured.
   answers.set(markdownPage().path, { kind: "answer", contentType: "text/html" });
@@ -463,10 +506,12 @@ test("agent coverage: an unmeasured surface blocks the pass and is never counted
 test("agent coverage: nothing measured is 'could not run', whether every probe threw or the port never asked", () => {
   /** @type {Map<string, AgentAnswer>} */
   const threw = new Map(agentPages.map((p) => [p.path, { kind: "unmeasured", reason: "fetch failed: socket hang up" }]));
-  assert.deepEqual(compareAgentCoverage(agentPages, threw), [{
-    level: "warn",
-    message: `agent markdown coverage could not run: Cloudflare's edge answered none of the ${agentPages.length} probes (first: ${agentPage(0).path} (fetch failed: socket hang up))`,
-  }]);
+  assert.deepEqual(compareAgentCoverage(agentPages, threw), [
+    {
+      level: "warn",
+      message: `agent markdown coverage could not run: Cloudflare's edge answered none of the ${agentPages.length} probes (first: ${agentPage(0).path} (fetch failed: socket hang up))`,
+    },
+  ]);
   const never = compareAgentCoverage(agentPages, new Map());
   assert.equal(never.length, 1);
   assert.equal(never[0].level, "warn");
@@ -488,30 +533,46 @@ test("agent port: asks manually, records what the edge served, and records the r
     const path = new URL(url).pathname;
     if (path === a.path) return edgeServed(new Response("# twin", { headers: { "content-type": "text/markdown; charset=utf-8" } }));
     if (path === b.path) return edgeServed(new Response(null, { status: 302, headers: { location: "https://open.spotify.com/" } }));
-    if (path === c.path) return new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
+    if (path === c.path)
+      return new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', {
+        status: 403,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
     if (path === d.path) throw new Error("fetch failed: socket hang up");
     return edgeServed(new Response("<!doctype html>", { headers: { "content-type": "text/html" } }));
   };
   const answers = await readAgentAnswers("https://aadhar.sh", [a, b, c, d, e], edgeFetcher(fetchImpl));
-  assert.deepEqual([...answers], [
-    [a.path, { kind: "answer", contentType: "text/markdown" }],
-    [b.path, { kind: "redirect", status: 302, location: "https://open.spotify.com/" }],
-    [c.path, { kind: "unmeasured", reason: "HTTP 403 without cf-ray" }],
-    [d.path, { kind: "unmeasured", reason: "fetch failed: socket hang up" }],
-    [e.path, { kind: "answer", contentType: "text/html" }],
-  ]);
-  assert.ok(asked.every((q) => q.accept === "text/markdown" && q.redirect === "manual"), JSON.stringify(asked));
+  assert.deepEqual(
+    [...answers],
+    [
+      [a.path, { kind: "answer", contentType: "text/markdown" }],
+      [b.path, { kind: "redirect", status: 302, location: "https://open.spotify.com/" }],
+      [c.path, { kind: "unmeasured", reason: "HTTP 403 without cf-ray" }],
+      [d.path, { kind: "unmeasured", reason: "fetch failed: socket hang up" }],
+      [e.path, { kind: "answer", contentType: "text/html" }],
+    ],
+  );
+  assert.ok(
+    asked.every((q) => q.accept === "text/markdown" && q.redirect === "manual"),
+    JSON.stringify(asked),
+  );
 });
 
 // The run that started this, end to end: the sandbox proxy's 403 for every
 // probe. Port plus comparer print exactly what infra:check printed there.
 test("agent port and comparer: a proxy answering every probe reads as 'could not run'", async () => {
-  const proxy = async () => new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
+  const proxy = async () =>
+    new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', {
+      status: 403,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
   const findings = compareAgentCoverage(agentPages, await readAgentAnswers("https://aadhar.sh", agentPages, edgeFetcher(proxy)));
-  assert.deepEqual(findings, [{
-    level: "warn",
-    message: `agent markdown coverage could not run: Cloudflare's edge answered none of the ${agentPages.length} probes (first: ${agentPage(0).path} (HTTP 403 without cf-ray))`,
-  }]);
+  assert.deepEqual(findings, [
+    {
+      level: "warn",
+      message: `agent markdown coverage could not run: Cloudflare's edge answered none of the ${agentPages.length} probes (first: ${agentPage(0).path} (HTTP 403 without cf-ray))`,
+    },
+  ]);
 });
 
 // ------------------------------------------------------- Cloudflare tier ----
@@ -581,7 +642,8 @@ test("version affinity: no ruleset, a disabled rule and a static key each fail",
 test("a read-only token carrying an Edit group fails; one carrying none passes", () => {
   const want = infra.tokens.expected.find((t) => t.checked && !t.may_write);
   assert.ok(want, "infra.json no longer declares a checked read-only token");
-  const token = (groups) => ok([{ name: want.name, policies: [{ permission_groups: groups.map((name) => ({ name })), resources: { "com.cloudflare.api.account.acct": "*" } }] }]);
+  const token = (groups) =>
+    ok([{ name: want.name, policies: [{ permission_groups: groups.map((name) => ({ name })), resources: { "com.cloudflare.api.account.acct": "*" } }] }]);
   const narrow = compareTokens(infra, "acct", token(["Workers Scripts Read"]));
   assert.deepEqual(fails(narrow), []);
   const wide = compareTokens(infra, "acct", token(["Workers Scripts Read", "Workers KV Storage Write"]));
@@ -598,7 +660,9 @@ test("a read-only token carrying an Edit group fails; one carrying none passes",
 const refusals = {
   401: () => json({ success: false, errors: [{ code: 10000, message: "Authentication error" }] }, 401),
   403: () => json({ success: false, errors: [{ code: 9109, message: "Unauthorized to access requested resource" }] }, 403),
-  throw: () => { throw new Error("fetch failed: socket hang up"); },
+  throw: () => {
+    throw new Error("fetch failed: socket hang up");
+  },
 };
 
 for (const [how, respond] of Object.entries(refusals)) {
@@ -612,11 +676,23 @@ for (const [how, respond] of Object.entries(refusals)) {
       ["KV namespaces", "Workers KV Storage:Read", compareKvNamespaces(bindings, await readKvNamespaces(cf, "acct"))],
       ["R2 buckets", "Workers R2 Storage:Read", compareR2Buckets(bindings, await readR2Buckets(cf, "acct"))],
       ["D1 databases", "D1:Read", compareD1Databases(bindings, await readD1Databases(cf, "acct"))],
-      ["Workers Builds release config", "Workers Builds Configuration:Read", compareWorkersBuilds(infra.release, await readWorkersBuilds(cf, "acct", infra.release.worker))],
+      [
+        "Workers Builds release config",
+        "Workers Builds Configuration:Read",
+        compareWorkersBuilds(infra.release, await readWorkersBuilds(cf, "acct", infra.release.worker)),
+      ],
       ["Worker inventory", "Workers Scripts:Read", compareWorkerInventory(infra.workers, await readWorkerScripts(cf, "acct"))],
       ["API token scoping", "API Tokens Read", compareTokens(infra, "acct", await readTokens(cf, "acct"))],
-      ["0-RTT connection resumption", "Zone:Zone Settings:Read and Zone:Zone:Read", compareZoneSetting(ZERO_RTT_SECTION, infra.zone.zero_rtt, zone, await readZoneSetting(cf, zone, "0rtt"))],
-      ["version affinity", "Zone:Transform Rules:Read and Zone:Zone:Read", compareVersionAffinity(infra.zone.version_affinity, zone, await readVersionAffinity(cf, zone, infra.zone.version_affinity.phase))],
+      [
+        "0-RTT connection resumption",
+        "Zone:Zone Settings:Read and Zone:Zone:Read",
+        compareZoneSetting(ZERO_RTT_SECTION, infra.zone.zero_rtt, zone, await readZoneSetting(cf, zone, "0rtt")),
+      ],
+      [
+        "version affinity",
+        "Zone:Transform Rules:Read and Zone:Zone:Read",
+        compareVersionAffinity(infra.zone.version_affinity, zone, await readVersionAffinity(cf, zone, infra.zone.version_affinity.phase)),
+      ],
     ];
     for (const [label, scope, findings] of sections) {
       assert.equal(findings.length, 1, label);
@@ -671,10 +747,11 @@ for (const [how, respond] of Object.entries(refusals)) {
 // never left the sandbox. The control stamps cf-ray on the same bytes and gets
 // the old passes back, so cf-ray is the one thing standing between them.
 test("edge port: an egress proxy's 403 is unmeasured; the same bytes from the edge are measured", async () => {
-  const proxy = () => new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', {
-    status: 403,
-    headers: { "content-type": "text/plain; charset=utf-8", "x-content-type-options": "nosniff" },
-  });
+  const proxy = () =>
+    new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', {
+      status: 403,
+      headers: { "content-type": "text/plain; charset=utf-8", "x-content-type-options": "nosniff" },
+    });
   const absences = ["speed-brain-off", "rocket-loader-off", "webmcp-bridge-off"];
   const edge = { origin: "https://aadhar.sh", checks: infra.edge.checks.filter((c) => absences.includes(c.id) || c.id === "hsts-preload") };
   const port = (respond) => ({ fetchEdge: edgeFetcher(async () => respond()), probeEarlyData: async () => ({ skip: "unused" }) });
@@ -683,9 +760,19 @@ test("edge port: an egress proxy's 403 is unmeasured; the same bytes from the ed
   assert.deepEqual(passes(blocked), []);
   assert.deepEqual(fails(blocked), []);
   assert.equal(warns(blocked).length, edge.checks.length);
-  assert.ok(warns(blocked).every((m) => m.includes("answered HTTP 403 without cf-ray")), warns(blocked).join("\n"));
+  assert.ok(
+    warns(blocked).every((m) => m.includes("answered HTTP 403 without cf-ray")),
+    warns(blocked).join("\n"),
+  );
 
-  const served = compareEdge(edge, await readEdge(edge, port(() => edgeServed(proxy()))), { hostedRunner: false });
+  const served = compareEdge(
+    edge,
+    await readEdge(
+      edge,
+      port(() => edgeServed(proxy())),
+    ),
+    { hostedRunner: false },
+  );
   assert.deepEqual(passes(served).sort(), absences.map((id) => `edge ${id} holds`).sort());
   assert.ok(fails(served).some((m) => m.startsWith("production edge: hsts-preload: ")));
 });
@@ -741,14 +828,19 @@ const TOKEN = "abcd1234abcd1234abcd1234abcd1234abcd1234"; // 40, a Cloudflare to
 test("a token-shaped string in an adapter error never reaches the output", async () => {
   // The worst realistic leak: an upstream (or a proxy) echoes the bearer token
   // back in its error, and the adapter faithfully puts that text in a finding.
-  const echoing = async (_url, init) => { throw new Error(`upstream rejected ${new Headers(init.headers).get("authorization")}`); };
+  const echoing = async (_url, init) => {
+    throw new Error(`upstream rejected ${new Headers(init.headers).get("authorization")}`);
+  };
   const cf = cloudflareReader(TOKEN, echoing);
   const findings = [
     ...compareKvNamespaces(bindings, await readKvNamespaces(cf, "acct")),
     ...compareRepository(repo, await readRepository(githubReader(TOKEN, echoing), repo, { total: 0, without: [] }), { authenticated: true }),
   ];
   assert.equal(findings.length, 2);
-  assert.ok(findings.every((f) => f.message.includes(TOKEN)), "the fixture must really carry the token, or this test proves nothing");
+  assert.ok(
+    findings.every((f) => f.message.includes(TOKEN)),
+    "the fixture must really carry the token, or this test proves nothing",
+  );
 
   const env = { CLOUDFLARE_API_TOKEN: TOKEN, GITHUB_TOKEN: TOKEN };
   const report = createReport(env);
@@ -770,11 +862,17 @@ test("a token-shaped string in an adapter error never reaches the output", async
 
 test("the report renders the three outcomes infra:check has always printed", () => {
   const clean = createReport({});
-  clean.add([{ level: "pass", message: "a" }, { level: "warn", message: "b" }]);
+  clean.add([
+    { level: "pass", message: "a" },
+    { level: "warn", message: "b" },
+  ]);
   assert.deepEqual(clean.render(), { stdout: ["  ok    a", "  note  b", "\ninfra ok: 1 checks passed, 1 skipped or advisory"], stderr: [], exitCode: 0 });
   assert.deepEqual(clean.render({ strict: true }), { stdout: ["  ok    a", "  note  b"], stderr: ["\n--strict: 1 advisory treated as failures"], exitCode: 1 });
 
   const drifted = createReport({});
-  drifted.add([{ level: "fail", message: "c" }, { level: "pass", message: "a" }]);
+  drifted.add([
+    { level: "fail", message: "c" },
+    { level: "pass", message: "a" },
+  ]);
   assert.deepEqual(drifted.render(), { stdout: ["  ok    a"], stderr: ["\ninfra drift detected (1):", "  - c"], exitCode: 1 });
 });

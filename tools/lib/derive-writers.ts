@@ -63,22 +63,20 @@ const SKIP = new Set(["node_modules", ".git", ".build", ".wrangler", ".claude", 
  * dozen). It moved to github.com/oddharsh/av2-tone and builds inside
  * node_modules, which the census never walks.
  */
-const VENDORED = new Set([
-  "tools/photos/libavif/src", "tools/photos/libavif/build",
-]);
+const VENDORED = new Set(["tools/photos/libavif/src", "tools/photos/libavif/build"]);
 
 const SCANNED = [".ts", ".mjs", ".js", ".py"];
 
 /** A write, per language. Exact calls, never a loose path match. */
 const WRITES = [
-  /\bwriteFile(?:Sync)?\s*\(/,          // node
+  /\bwriteFile(?:Sync)?\s*\(/, // node
   // APPENDING IS WRITING, and this list did not say so until 2026-09-22.
   // tools/soak-canary.ts was the first file under these roots to reach for it,
   // which is the only reason the gap surfaced; a generator that appended to a
   // committed artifact would have been invisible to the census whose whole job
   // is noticing an undeclared generator.
   /\bappendFile(?:Sync)?\s*\(/,
-  /\bBun\.write\s*\(/,                  // bun
+  /\bBun\.write\s*\(/, // bun
   /\bopen\s*\([^)]*["']w[b+]?["']\s*\)/, // python
   /\bcreateWriteStream\s*\(/,
 ];
@@ -146,5 +144,4 @@ export async function findShellTouchers(root: string, roots: string[]): Promise<
 }
 
 /** Is this file named by any derivation's regenerate command? */
-export const declaredBy = (file: string, regenerates: string[]): boolean =>
-  regenerates.some((cmd) => cmd.includes(file));
+export const declaredBy = (file: string, regenerates: string[]): boolean => regenerates.some((cmd) => cmd.includes(file));

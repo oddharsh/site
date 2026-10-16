@@ -30,7 +30,10 @@ const localDay = (ms) => new Date(ms).toLocaleDateString("en-CA", { timeZone: TZ
 // local weekday (0=Sun) + hour for an instant, in the host tz
 const localParts = (ms) => {
   const p = new Intl.DateTimeFormat("en-US", {
-    timeZone: TZ, weekday: "short", hour: "numeric", hour12: false,
+    timeZone: TZ,
+    weekday: "short",
+    hour: "numeric",
+    hour12: false,
   }).formatToParts(new Date(ms));
   const wk = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   // `find` can miss, and the old `.value` on the result would have thrown a bare
@@ -61,7 +64,9 @@ describe("fetchBusySWR — stale GET behavior", () => {
       ICAL_URL: "https://calendar.test/availability.ics",
     };
     const ctx = { waitUntil: mock((task) => undefined) };
-    restoreFetch = stubFetch(async () => { throw new Error("calendar unavailable"); });
+    restoreFetch = stubFetch(async () => {
+      throw new Error("calendar unavailable");
+    });
 
     const result = await fetchBusySWR(env, ctx, { allowStale: true });
 
@@ -80,10 +85,13 @@ describe("fetchBusySWR — stale GET behavior", () => {
       },
       ICAL_URL: "https://calendar.test/availability.ics",
     };
-    restoreFetch = stubFetch(async () => new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", {
-      status: 200,
-      headers: { "content-type": "text/calendar" },
-    }));
+    restoreFetch = stubFetch(
+      async () =>
+        new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", {
+          status: 200,
+          headers: { "content-type": "text/calendar" },
+        }),
+    );
 
     const result = await fetchBusySWR(env, null);
 
@@ -93,7 +101,9 @@ describe("fetchBusySWR — stale GET behavior", () => {
 
   it("keeps a live snapshot write off the response path when a context can own it", async () => {
     let finishWrite;
-    const write = new Promise((resolve) => { finishWrite = resolve; });
+    const write = new Promise((resolve) => {
+      finishWrite = resolve;
+    });
     const env = {
       BOOKINGS: {
         get: mock(async () => null),
@@ -126,12 +136,12 @@ describe("generateSlots — invariants", () => {
     const latest = now + 14 * 86400_000;
 
     for (const s of slots) {
-      expect(s.end - s.start).toBe(slotMs);            // exact slot length
+      expect(s.end - s.start).toBe(slotMs); // exact slot length
       expect(s.start).toBeGreaterThanOrEqual(earliest); // min-notice respected
-      expect(s.end).toBeLessThanOrEqual(latest);        // lookahead respected
+      expect(s.end).toBeLessThanOrEqual(latest); // lookahead respected
       const { dow, hour } = localParts(s.start);
-      expect([1, 2, 3, 4, 5]).toContain(dow);           // weekday only
-      expect(hour).toBeGreaterThanOrEqual(9);           // within working hours
+      expect([1, 2, 3, 4, 5]).toContain(dow); // weekday only
+      expect(hour).toBeGreaterThanOrEqual(9); // within working hours
       expect(hour).toBeLessThan(18);
     }
   });
@@ -177,22 +187,20 @@ describe("generateSlots — invariants", () => {
     const busy = Array.from({ length: 10 }, () => ({ start: target.start, end: target.end }));
 
     const after = generateSlots(baseEnv, busy);
-    expect(after.length).toBeGreaterThan(0);                       // not zeroed
+    expect(after.length).toBeGreaterThan(0); // not zeroed
     expect(after.find((s) => s.start === target.start)).toBeUndefined(); // that slot blocked
-    expect(after.some((s) => localDay(s.start) !== day)).toBe(true);     // other days survive
+    expect(after.some((s) => localDay(s.start) !== day)).toBe(true); // other days survive
   });
 
   it("honors MIN_NOTICE_HOURS — a longer notice removes near-term slots", () => {
     const soon = generateSlots({ ...baseEnv, MIN_NOTICE_HOURS: "24" }, []);
     const later = generateSlots({ ...baseEnv, MIN_NOTICE_HOURS: "120" }, []); // +5 days
     expect(later.length).toBeLessThan(soon.length);
-    expect(Math.min(...later.map((s) => s.start)))
-      .toBeGreaterThan(Math.min(...soon.map((s) => s.start)));
+    expect(Math.min(...later.map((s) => s.start))).toBeGreaterThan(Math.min(...soon.map((s) => s.start)));
   });
 
   it("yields no slots when the working window is empty (start ≥ end)", () => {
-    expect(generateSlots({ ...baseEnv, WORKING_HOURS_START: "18", WORKING_HOURS_END: "18" }, []))
-      .toHaveLength(0);
+    expect(generateSlots({ ...baseEnv, WORKING_HOURS_START: "18", WORKING_HOURS_END: "18" }, [])).toHaveLength(0);
   });
 });
 

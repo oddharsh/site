@@ -1,9 +1,6 @@
 // ── lens parse budget: the CPU-bound half ────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import {
-  assert,
-  test,
-} from "./contract-shared.ts";
+import { assert, test } from "./contract-shared.ts";
 
 // ── lens parse budget: the CPU-bound half ────────────────────────────────
 

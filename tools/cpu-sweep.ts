@@ -93,18 +93,39 @@ const CONTROL = "/robots.txt";
 // tools/route-cpu.ts carried until the two tools became this one. The pages
 // come from the site manifest.
 const QUERIES = [
-  "/photos/query.json", "/photos/query.json?q=red+car", "/photos/query.json?q=classic+chrome+bridge&limit=100",
-  "/search?q=brotli", "/search.json?q=brotli", "/search.json?q=what+does+he+think+about+agents",
-  "/ask?query=dictionary", "/finger", "/agent-ready", "/coffee/availability.json", "POST /mcp search_site",
-  "/coffee/slots.html", "/ledger/lines.html", "/inbox/mail.html", "/around/snapshot.html", "/reading/list.html",
-  "/whoareyou/values.html", "/garage/dyno/pulls.html", "/lens/census/table.html", "/photos/grid.html", "/rn/tracks.html",
-  "/llms-full.txt", "/this-page-does-not-exist", "POST /mcp tools/list",
+  "/photos/query.json",
+  "/photos/query.json?q=red+car",
+  "/photos/query.json?q=classic+chrome+bridge&limit=100",
+  "/search?q=brotli",
+  "/search.json?q=brotli",
+  "/search.json?q=what+does+he+think+about+agents",
+  "/ask?query=dictionary",
+  "/finger",
+  "/agent-ready",
+  "/coffee/availability.json",
+  "POST /mcp search_site",
+  "/coffee/slots.html",
+  "/ledger/lines.html",
+  "/inbox/mail.html",
+  "/around/snapshot.html",
+  "/reading/list.html",
+  "/whoareyou/values.html",
+  "/garage/dyno/pulls.html",
+  "/lens/census/table.html",
+  "/photos/grid.html",
+  "/rn/tracks.html",
+  "/llms-full.txt",
+  "/this-page-does-not-exist",
+  "POST /mcp tools/list",
 ];
 
 const { values } = parseArgs({
   options: {
-    one: { type: "string" }, gate: { type: "boolean" }, markdown: { type: "boolean" },
-    routes: { type: "string" }, bundle: { type: "string", default: join(ROOT, ".build/.perfbudget/index.js") },
+    one: { type: "string" },
+    gate: { type: "boolean" },
+    markdown: { type: "boolean" },
+    routes: { type: "string" },
+    bundle: { type: "string", default: join(ROOT, ".build/.perfbudget/index.js") },
     budget: { type: "string", default: join(ROOT, "config/cpu-budget.json") },
     out: { type: "string", default: join(ROOT, ".build/cpu-sweep.json") },
     "cold-icu": { type: "boolean" },
@@ -115,10 +136,17 @@ const BUNDLE = resolve(values.bundle!);
 
 function request(spec: string): Request {
   const [method, path, tool] = spec.startsWith("POST ") ? spec.split(" ") : ["GET", spec];
-  const init: RequestInit = { method, headers: { accept: "text/html,application/json", "accept-encoding": "br", "content-type": "application/json", "mcp-protocol-version": "2025-06-18" } };
+  const init: RequestInit = {
+    method,
+    headers: { accept: "text/html,application/json", "accept-encoding": "br", "content-type": "application/json", "mcp-protocol-version": "2025-06-18" },
+  };
   // "tools/list" is a JSON-RPC method; any other word names a tool to call.
-  if (tool) init.body = JSON.stringify(tool === "tools/list" ? { jsonrpc: "2.0", id: 1, method: tool }
-    : { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: tool, arguments: { q: "brotli dictionary" } } });
+  if (tool)
+    init.body = JSON.stringify(
+      tool === "tools/list"
+        ? { jsonrpc: "2.0", id: 1, method: tool }
+        : { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: tool, arguments: { q: "brotli dictionary" } } },
+    );
   return new Request("https://aadhar.sh" + path, init);
 }
 
@@ -126,13 +154,18 @@ function request(spec: string): Request {
 if (values.one) {
   if (!values["cold-icu"]) await warmIcu();
   registerHooks({
-    resolve: (spec, ctx, next) => spec === "cloudflare:workers"
-      ? { url: "data:text/javascript,export class WorkerEntrypoint{};export class WorkflowEntrypoint{};export const tracing=undefined;", shortCircuit: true }
-      : next(spec, ctx),
+    resolve: (spec, ctx, next) =>
+      spec === "cloudflare:workers"
+        ? { url: "data:text/javascript,export class WorkerEntrypoint{};export class WorkflowEntrypoint{};export const tracing=undefined;", shortCircuit: true }
+        : next(spec, ctx),
   });
   // the Worker logs a line per request; only this process's result goes to stdout
   for (const k of ["log", "info", "warn", "error", "debug"] as const) console[k] = () => {};
-  Object.assign(globalThis, { fetch: async () => { throw new Error("cpu-sweep: outbound fetch refused"); } });
+  Object.assign(globalThis, {
+    fetch: async () => {
+      throw new Error("cpu-sweep: outbound fetch refused");
+    },
+  });
   const miss = { match: async () => undefined, put: async () => {}, delete: async () => false };
   Object.assign(globalThis, { caches: { default: miss, open: async () => miss } });
   const ASSETS = {
@@ -148,26 +181,52 @@ if (values.one) {
   const none = async () => null;
   const binding = (kind: string): unknown => {
     switch (kind) {
-      case "kv": return { get: none, getWithMetadata: async () => ({ value: null, metadata: null }), put: none, delete: none, list: async () => ({ keys: [], list_complete: true }) };
+      case "kv":
+        return {
+          get: none,
+          getWithMetadata: async () => ({ value: null, metadata: null }),
+          put: none,
+          delete: none,
+          list: async () => ({ keys: [], list_complete: true }),
+        };
       case "d1": {
-        const stmt = { bind: () => stmt, first: none, all: async () => ({ results: [], success: true, meta: {} }), run: async () => ({ success: true, meta: {} }), raw: async () => [] };
+        const stmt = {
+          bind: () => stmt,
+          first: none,
+          all: async () => ({ results: [], success: true, meta: {} }),
+          run: async () => ({ success: true, meta: {} }),
+          raw: async () => [],
+        };
         return { prepare: () => stmt, batch: async () => [], exec: async () => ({}) };
       }
-      case "r2": return { get: none, head: none, put: none, delete: none, list: async () => ({ objects: [], truncated: false, delimitedPrefixes: [] }) };
-      case "ae": return { writeDataPoint() {} };
-      case "ratelimit": return { limit: async () => ({ success: true }) };
-      case "do": return { idFromName: () => ({}), idFromString: () => ({}), newUniqueId: () => ({}), get: () => ({ fetch: async () => new Response("no Durable Object here", { status: 503 }) }) };
-      case "workflow": return { create: async () => ({ id: "local" }), get: async () => ({ status: async () => ({ status: "unknown" }) }) };
-      case "version": return { id: "local", tag: "", timestamp: "" };
-      default: return stub();
+      case "r2":
+        return { get: none, head: none, put: none, delete: none, list: async () => ({ objects: [], truncated: false, delimitedPrefixes: [] }) };
+      case "ae":
+        return { writeDataPoint() {} };
+      case "ratelimit":
+        return { limit: async () => ({ success: true }) };
+      case "do":
+        return {
+          idFromName: () => ({}),
+          idFromString: () => ({}),
+          newUniqueId: () => ({}),
+          get: () => ({ fetch: async () => new Response("no Durable Object here", { status: 503 }) }),
+        };
+      case "workflow":
+        return { create: async () => ({ id: "local" }), get: async () => ({ status: async () => ({ status: "unknown" }) }) };
+      case "version":
+        return { id: "local", tag: "", timestamp: "" };
+      default:
+        return stub();
     }
   };
   // Anything else reads as empty: a callable stub whose calls resolve to null,
   // and whose D1-shaped results are empty.
-  const stub = (): any => new Proxy(function () {}, {
-    get: (_, k) => (k === "then" ? undefined : stub()),
-    apply: () => Object.assign(Promise.resolve(null), { all: async () => ({ results: [] }), first: async () => null, run: async () => ({}) }),
-  });
+  const stub = (): any =>
+    new Proxy(function () {}, {
+      get: (_, k) => (k === "then" ? undefined : stub()),
+      apply: () => Object.assign(Promise.resolve(null), { all: async () => ({ results: [] }), first: async () => null, run: async () => ({}) }),
+    });
   // Every binding the config declares is an OWN property, stubbed by its kind,
   // because a route can copy env and a copy keeps only own properties: cal runs
   // on { ...env, BASE_PATH }, and with the bindings only behind the proxy,
@@ -176,15 +235,26 @@ if (values.one) {
   const { siteConfig } = await import("./lib/site-config.ts");
   const c = await siteConfig();
   const declared: Record<string, unknown> = { ASSETS, ...c.vars };
-  const add = (list: { binding?: string; name?: string }[] | undefined, kind: string) => { for (const b of list ?? []) declared[b.binding ?? b.name!] = binding(kind); };
-  add(c.kv_namespaces, "kv"); add(c.d1_databases, "d1"); add(c.r2_buckets, "r2"); add(c.analytics_engine_datasets, "ae");
-  add(c.ratelimits, "ratelimit"); add(c.durable_objects?.bindings, "do"); add(c.workflows, "workflow");
+  const add = (list: { binding?: string; name?: string }[] | undefined, kind: string) => {
+    for (const b of list ?? []) declared[b.binding ?? b.name!] = binding(kind);
+  };
+  add(c.kv_namespaces, "kv");
+  add(c.d1_databases, "d1");
+  add(c.r2_buckets, "r2");
+  add(c.analytics_engine_datasets, "ae");
+  add(c.ratelimits, "ratelimit");
+  add(c.durable_objects?.bindings, "do");
+  add(c.workflows, "workflow");
   for (const k of ["browser", "images", "ai", "analytics"]) if (c[k]?.binding) declared[c[k].binding] = stub();
   if (c.version_metadata?.binding) declared[c.version_metadata.binding] = binding("version");
   const env = new Proxy(declared, { get: (t, k) => (k in t ? t[k as string] : /^[A-Z][A-Z0-9_]*$/.test(String(k)) ? stub() : undefined) });
   const ctx = { waitUntil() {}, passThroughOnException() {} };
   const worker = (await import(pathToFileURL(BUNDLE).href)).default;
-  const run = async (spec: string) => { const r = await worker.fetch(request(spec), env, ctx); await r.arrayBuffer(); return r.status; };
+  const run = async (spec: string) => {
+    const r = await worker.fetch(request(spec), env, ctx);
+    await r.arrayBuffer();
+    return r.status;
+  };
   await run(values.one === CONTROL ? "/favicon.ico" : CONTROL); // the warm-up is never the timed route
   const t0 = process.cpuUsage();
   const status = await run(values.one);
@@ -215,24 +285,46 @@ const known = new Set([...pages, ...QUERIES]);
 const routes = values.routes ? values.routes.split(",") : [...known];
 for (const r of routes) known.add(r);
 
-const sample = (spec: string) => new Promise<{ ms: number; status: number }>((resolve, reject) => {
-  const child = spawn(process.execPath, [import.meta.filename, "--one", spec, "--bundle", BUNDLE, ...(values["cold-icu"] ? ["--cold-icu"] : [])], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
-  let out = "", err = "";
-  child.stdout.on("data", (d) => { out += d; });
-  child.stderr.on("data", (d) => { err += d; });
-  child.on("close", () => {
-    try { resolve(JSON.parse(out.trim().split("\n").at(-1) ?? "")); }
-    catch { reject(new Error(`cpu-sweep: ${spec} produced no reading\n${err.slice(-800)}`)); }
+const sample = (spec: string) =>
+  new Promise<{ ms: number; status: number }>((resolve, reject) => {
+    const child = spawn(process.execPath, [import.meta.filename, "--one", spec, "--bundle", BUNDLE, ...(values["cold-icu"] ? ["--cold-icu"] : [])], {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let out = "",
+      err = "";
+    child.stdout.on("data", (d) => {
+      out += d;
+    });
+    child.stderr.on("data", (d) => {
+      err += d;
+    });
+    child.on("close", () => {
+      try {
+        resolve(JSON.parse(out.trim().split("\n").at(-1) ?? ""));
+      } catch {
+        reject(new Error(`cpu-sweep: ${spec} produced no reading\n${err.slice(-800)}`));
+      }
+    });
   });
-});
 async function pool<T>(jobs: (() => Promise<T>)[]): Promise<T[]> {
   const out: T[] = new Array(jobs.length);
   let next = 0;
-  await Promise.all(Array.from({ length: WIDTH }, async () => { while (next < jobs.length) { const i = next++; out[i] = await jobs[i](); } }));
+  await Promise.all(
+    Array.from({ length: WIDTH }, async () => {
+      while (next < jobs.length) {
+        const i = next++;
+        out[i] = await jobs[i]();
+      }
+    }),
+  );
   return out;
 }
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[xs.length >> 1];
-const iqr = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor((s.length - 1) * 0.75)] - s[Math.floor((s.length - 1) * 0.25)]; };
+const iqr = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.floor((s.length - 1) * 0.75)] - s[Math.floor((s.length - 1) * 0.25)];
+};
 
 // The control is spread through the screening, so it sees the load the routes
 // see rather than a quiet first second.
@@ -242,14 +334,16 @@ const screened = await pool(specs.map((s) => async () => ({ spec: s, ...(await s
 const control = screened.filter((r) => r.spec === CONTROL).map((r) => r.ms);
 const floor = iqr(control);
 const screen = new Map(screened.filter((r) => r.spec !== CONTROL).map((r) => [r.spec, r]));
-const rows = await pool(routes.map((route) => async () => {
-  const first = screen.get(route)!;
-  const raw = [first.ms];
-  // one after another, so the run never has more than WIDTH children
-  const ceilingMs = budget.routes[route]?.ceilingMs ?? GATE_MS;
-  if (first.ms * scale >= ceilingMs * CONFIRM_AT) for (let k = 0; k < CONFIRMS; k++) raw.push((await sample(route)).ms);
-  return { route, status: first.status, ms: median(raw) * scale, rawMs: median(raw), ceilingMs, samples: raw.length };
-}));
+const rows = await pool(
+  routes.map((route) => async () => {
+    const first = screen.get(route)!;
+    const raw = [first.ms];
+    // one after another, so the run never has more than WIDTH children
+    const ceilingMs = budget.routes[route]?.ceilingMs ?? GATE_MS;
+    if (first.ms * scale >= ceilingMs * CONFIRM_AT) for (let k = 0; k < CONFIRMS; k++) raw.push((await sample(route)).ms);
+    return { route, status: first.status, ms: median(raw) * scale, rawMs: median(raw), ceilingMs, samples: raw.length };
+  }),
+);
 rows.sort((a, b) => b.ms - a.ms);
 const over = rows.filter((r) => r.ms > r.ceilingMs);
 const unknown = Object.keys(budget.routes).filter((r) => !known.has(r));
@@ -261,16 +355,33 @@ const noisy = floor * scale > FLOOR_MAX_MS;
 const drift = calibrated && budget.control ? (median(control) * scale) / budget.control.ms - 1 : 0;
 const offModel = budget.control !== undefined && Math.abs(drift) > budget.control.drift;
 const inconclusive = noisy || offModel;
-writeFileSync(values.out!, JSON.stringify({
-  gateMs: GATE_MS, machine, calibration: { calibrated, scale }, control: { median: median(control), iqr: floor, drift }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
-}, null, 2) + "\n");
+writeFileSync(
+  values.out!,
+  JSON.stringify(
+    {
+      gateMs: GATE_MS,
+      machine,
+      calibration: { calibrated, scale },
+      control: { median: median(control), iqr: floor, drift },
+      inconclusive,
+      unknown,
+      stale: stale.map((r) => r.route),
+      rows,
+    },
+    null,
+    2,
+  ) + "\n",
+);
 
-const units = calibrated ? `EPYC 7763 ms (x${scale.toFixed(3)} for this CPU model)`
+const units = calibrated
+  ? `EPYC 7763 ms (x${scale.toFixed(3)} for this CPU model)`
   : `raw ms: config/cpu-budget.json has no factor for this CPU model, so the gate judges nothing`;
 const pct = (x: number) => `${x > 0 ? "+" : ""}${Math.round(x * 100)}%`;
-const verdict = noisy ? `inconclusive: the control's spread was ${(floor * scale).toFixed(2)} ms (over ${FLOOR_MAX_MS})`
-  : offModel ? `inconclusive: the control read ${(median(control) * scale).toFixed(2)} ms, ${pct(drift)} off the ${budget.control!.ms} ms this model's factor expects (over ±${Math.round(budget.control!.drift * 100)}%), so this runner is off its model`
-  : `${over.length} of ${rows.length} routes over their ceiling, against a ${(floor * scale).toFixed(2)} ms floor`;
+const verdict = noisy
+  ? `inconclusive: the control's spread was ${(floor * scale).toFixed(2)} ms (over ${FLOOR_MAX_MS})`
+  : offModel
+    ? `inconclusive: the control read ${(median(control) * scale).toFixed(2)} ms, ${pct(drift)} off the ${budget.control!.ms} ms this model's factor expects (over ±${Math.round(budget.control!.drift * 100)}%), so this runner is off its model`
+    : `${over.length} of ${rows.length} routes over their ceiling, against a ${(floor * scale).toFixed(2)} ms floor`;
 const notes = [
   ...unknown.map((r) => `config/cpu-budget.json allows ${r}, which the sweep doesn't know`),
   ...stale.map((r) => `${r.route} reads ${r.ms.toFixed(2)} ms, under ${STALE_MS} ms, half the gate: drop its entry from config/cpu-budget.json`),
@@ -279,27 +390,41 @@ const shown = rows.filter((r) => r.ms > SCREEN_MS || r.ms > r.ceilingMs);
 if (values.markdown) {
   // Printed for the log, and appended to the job summary when there is one, so
   // the workflow commands below never land in the summary as text.
-  const md = [
-    `### CPU per request, cold isolate\n\n${verdict}. Units: ${units}, on ${machine}.\n`,
-    ...(shown.length ? [`| route | status | CPU ms (median) | ceiling | samples |\n|---|--:|--:|--:|--:|\n${shown.map((r) => `| \`${r.route}\` | ${r.status} | ${r.ms > r.ceilingMs ? "**" + r.ms.toFixed(2) + "**" : r.ms.toFixed(2)} | ${r.ceilingMs} | ${r.samples} |`).join("\n")}`] : []),
-    `\n${rows.length - shown.length} more routes read under ${SCREEN_MS} ms. The control (\`${CONTROL}\`) read ${(median(control) * scale).toFixed(2)} ms.`,
-    ...notes.map((n) => `\n- ${n}`),
-  ].join("\n") + "\n";
+  const md =
+    [
+      `### CPU per request, cold isolate\n\n${verdict}. Units: ${units}, on ${machine}.\n`,
+      ...(shown.length
+        ? [
+            `| route | status | CPU ms (median) | ceiling | samples |\n|---|--:|--:|--:|--:|\n${shown.map((r) => `| \`${r.route}\` | ${r.status} | ${r.ms > r.ceilingMs ? "**" + r.ms.toFixed(2) + "**" : r.ms.toFixed(2)} | ${r.ceilingMs} | ${r.samples} |`).join("\n")}`,
+          ]
+        : []),
+      `\n${rows.length - shown.length} more routes read under ${SCREEN_MS} ms. The control (\`${CONTROL}\`) read ${(median(control) * scale).toFixed(2)} ms.`,
+      ...notes.map((n) => `\n- ${n}`),
+    ].join("\n") + "\n";
   process.stdout.write(md);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
 } else {
   console.log(`cpu-sweep: ${verdict}; units: ${units}; ${machine}; control ${CONTROL} ${(median(control) * scale).toFixed(2)} ms`);
-  for (const r of shown) console.log(`  ${r.ms > r.ceilingMs ? "over " : "     "} ${r.ms.toFixed(2).padStart(6)} ms  ceiling ${String(r.ceilingMs).padStart(4)}  ${String(r.status).padEnd(4)} ${r.route}`);
+  for (const r of shown)
+    console.log(
+      `  ${r.ms > r.ceilingMs ? "over " : "     "} ${r.ms.toFixed(2).padStart(6)} ms  ceiling ${String(r.ceilingMs).padStart(4)}  ${String(r.status).padEnd(4)} ${r.route}`,
+    );
   for (const n of notes) console.log(`  note: ${n}`);
 }
 // Under --gate, each failure and each skipped verdict also reach the workflow
 // run's annotations, where they read without opening the log.
 const judged = calibrated && !inconclusive;
-const annotate = (level: "error" | "warning", text: string) => console.log(process.env.GITHUB_ACTIONS ? `::${level} title=CPU per route::${text}` : `cpu-sweep: ${text}`);
+const annotate = (level: "error" | "warning", text: string) =>
+  console.log(process.env.GITHUB_ACTIONS ? `::${level} title=CPU per route::${text}` : `cpu-sweep: ${text}`);
 if (values.gate) {
   if (!calibrated) annotate("warning", `--gate judged nothing: config/cpu-budget.json has no factor for "${machine}"`);
   else if (inconclusive) annotate("warning", `--gate judged nothing, because the run was ${verdict}`);
-  else for (const r of over) annotate("error", `${r.route} read ${r.ms.toFixed(2)} ms, over ${budget.routes[r.route] ? `the ${r.ceilingMs} ms ceiling config/cpu-budget.json allows it` : `the ${GATE_MS} ms gate`}`);
+  else
+    for (const r of over)
+      annotate(
+        "error",
+        `${r.route} read ${r.ms.toFixed(2)} ms, over ${budget.routes[r.route] ? `the ${r.ceilingMs} ms ceiling config/cpu-budget.json allows it` : `the ${GATE_MS} ms gate`}`,
+      );
   for (const r of unknown) annotate("error", `config/cpu-budget.json allows ${r}, which the sweep doesn't know`);
 }
 process.exit(values.gate && ((judged && over.length) || unknown.length) ? 1 : 0);

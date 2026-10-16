@@ -43,10 +43,17 @@ const PLACE_LABEL = new Map(PLACES.map((place) => [place.path, place.label]));
 
 /** "/garage/encoding" -> ["/garage", "/garage/encoding"] */
 function trail(path: string): string[] {
-  const parts = String(path || "/").split("?")[0].replace(/\/+$/, "").split("/").filter(Boolean);
+  const parts = String(path || "/")
+    .split("?")[0]
+    .replace(/\/+$/, "")
+    .split("/")
+    .filter(Boolean);
   const out: string[] = [];
   let walked = "";
-  for (const part of parts) { walked += `/${part}`; out.push(walked); }
+  for (const part of parts) {
+    walked += `/${part}`;
+    out.push(walked);
+  }
   return out;
 }
 
@@ -83,9 +90,7 @@ export function addressBar({ path = "/", name = "" }: { path?: string; name?: st
     const last = index === parts.length - 1;
     const text = last ? labelFor(step, name) : labelFor(step, step.replace(/^.*\//, ""));
     crumbs.push(html`<span class="axp-sep" aria-hidden="true">›</span>`);
-    crumbs.push(last
-      ? html`<span class="axp-here" aria-current="page">${text}</span>`
-      : html`<a href="${step}">${text}</a>`);
+    crumbs.push(last ? html`<span class="axp-here" aria-current="page">${text}</span>` : html`<a href="${step}">${text}</a>`);
   });
   return html`<div class="axp-address"><span class="axp-addr-label">Address</span><div class="axp-well"><span class="axp-addr-icon" aria-hidden="true"></span>${crumbs}</div></div>`;
 }
@@ -108,10 +113,7 @@ function taskList(items: Task[]): Html {
  * representations, mostly) and `details` are facts the caller has counted.
  * Both are optional; what remains is true of every page.
  */
-export function taskPane(
-  { path = "/", name = "", tasks = [], details = [] }:
-    { path?: string; name?: string; tasks?: Task[]; details?: Detail[] } = {},
-): Html {
+export function taskPane({ path = "/", name = "", tasks = [], details = [] }: { path?: string; name?: string; tasks?: Task[]; details?: Detail[] } = {}): Html {
   const section = sectionOf(path);
   const parent = parentOf(path);
   const boxes: Html[] = [];
@@ -120,7 +122,8 @@ export function taskPane(
   if (parent) objectTasks.push({ href: parent, label: `Up to ${labelFor(parent)}`, glyph: "↑" });
   if (objectTasks.length) boxes.push(group("Object tasks", taskList(objectTasks)));
 
-  const places = PLACES.filter((place) => place.path !== section).slice(0, 6)
+  const places = PLACES.filter((place) => place.path !== section)
+    .slice(0, 6)
     .map((place) => ({ href: place.path, label: place.label, glyph: "■" }));
   if (places.length) boxes.push(group("Other places", taskList(places)));
 
@@ -129,8 +132,7 @@ export function taskPane(
   if (here) rows.push({ term: "Name", value: here });
   rows.push({ term: "Location", value: `aadhar.sh${path === "/" ? "" : String(path).replace(/\/+$/, "")}` });
   for (const detail of details) if (detail && detail.value) rows.push(detail);
-  boxes.push(group("Details", html`<dl>${rows.map((row) =>
-    html`<dt>${row.term}</dt><dd>${row.value}</dd>`)}</dl>`));
+  boxes.push(group("Details", html`<dl>${rows.map((row) => html`<dt>${row.term}</dt><dd>${row.value}</dd>`)}</dl>`));
 
   // A plain container, NOT a <details>. The disclosure was tried and removed:
   // `.axp-pane{display:flex}` is an author rule and beats the UA rule that hides
@@ -142,4 +144,3 @@ export function taskPane(
   // into a bottom strip that reads like page content.
   return html`<div class="axp-tasks"><aside class="axp-pane" aria-label="Explorer tasks">${boxes}</aside></div>`;
 }
-

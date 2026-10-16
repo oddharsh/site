@@ -72,8 +72,11 @@ const SCHEMA_TYPE = { page: "WebPage", writing: "BlogPosting", document: "Digita
 const WEBSITE_NODE = { "@type": "WebSite", "@id": `https://${CANONICAL_HOST}/#website`, name: CANONICAL_HOST, url: `https://${CANONICAL_HOST}/` };
 
 function absolute(path) {
-  try { return new URL(String(path || "/"), `https://${CANONICAL_HOST}/`).toString(); }
-  catch { return `https://${CANONICAL_HOST}/`; }
+  try {
+    return new URL(String(path || "/"), `https://${CANONICAL_HOST}/`).toString();
+  } catch {
+    return `https://${CANONICAL_HOST}/`;
+  }
 }
 
 export function askSchemaObject(record) {
@@ -113,7 +116,7 @@ export function askRelevance(raw, termCount) {
 /**
  * Read the NLWeb parameter set out of whichever dialect arrived.
  */
-export function parseAskRequest(url, body): { ok: true, params: any } | { ok: false, status: number, error: any } {
+export function parseAskRequest(url, body): { ok: true; params: any } | { ok: false; status: number; error: any } {
   const q = url.searchParams;
   const flat = asRecord(body) || {};
   let structured = false;
@@ -153,12 +156,18 @@ export function parseAskRequest(url, body): { ok: true, params: any } | { ok: fa
     return { ok: false, status: 400, error: { error: "query is required", parameter: "query", endpoint: "/ask" } };
   }
 
-  const siteToken = String(site ?? "").trim().toLowerCase().replace(/\/+$/, "");
+  const siteToken = String(site ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\/+$/, "");
   if (!SITE_TOKENS.has(siteToken)) {
     return { ok: false, status: 400, error: { error: `unknown site token "${siteToken}"`, parameter: "site", available_sites: [CANONICAL_HOST, "all"] } };
   }
 
-  const modeToken = String(mode ?? "list").trim().toLowerCase() || "list";
+  const modeToken =
+    String(mode ?? "list")
+      .trim()
+      .toLowerCase() || "list";
   if (!NLWEB_MODES.supported.includes(modeToken)) {
     const known = NLWEB_MODES.known.includes(modeToken);
     return {
@@ -177,12 +186,18 @@ export function parseAskRequest(url, body): { ok: true, params: any } | { ok: fa
 
   // Spec: "defaults to true. To turn off streaming, specify a value of 0 or
   // false". Anything else, including nonsense, is therefore streaming.
-  const streaming = !["0", "false", "no", "off"].includes(String(streamingRaw ?? "").trim().toLowerCase());
+  const streaming = !["0", "false", "no", "off"].includes(
+    String(streamingRaw ?? "")
+      .trim()
+      .toLowerCase(),
+  );
 
   // `prev` is a comma-separated list in the legacy dialect and an array in the
   // structured one.
   const prevList = (Array.isArray(prev) ? prev : String(prev ?? "").split(","))
-    .map((s) => String(s).trim()).filter(Boolean).slice(0, ASK_LIMITS.prevMax);
+    .map((s) => String(s).trim())
+    .filter(Boolean)
+    .slice(0, ASK_LIMITS.prevMax);
 
   const searched = String(decontextualized ?? "").trim() || text;
   const limitRaw = Number(flat.top_k ?? q.get("top_k") ?? q.get("limit"));
@@ -198,7 +213,7 @@ export function parseAskRequest(url, body): { ok: true, params: any } | { ok: fa
       // thing a follow-up query can get silently wrong.
       decontextualized: Boolean(String(decontextualized ?? "").trim()),
       prev: prevList,
-      site: siteToken && siteToken !== "all" ? CANONICAL_HOST : (siteToken || CANONICAL_HOST),
+      site: siteToken && siteToken !== "all" ? CANONICAL_HOST : siteToken || CANONICAL_HOST,
       mode: modeToken,
       streaming,
       structured,
@@ -220,7 +235,7 @@ const FALLBACK = {
 };
 
 type CorpusRow = Awaited<ReturnType<typeof searchCorpusFor>>[number];
-type ClefRanking = { kept: CorpusRow[], p: (url: string) => number } | { fallback: string };
+type ClefRanking = { kept: CorpusRow[]; p: (url: string) => number } | { fallback: string };
 
 /**
  * Clef's ranking of the whole corpus (ask-rank.ts), or the reason there is
@@ -229,7 +244,7 @@ type ClefRanking = { kept: CorpusRow[], p: (url: string) => number } | { fallbac
  */
 async function clefRanked(env, params, request, lexical): Promise<ClefRanking> {
   if (!env?.AI) return { fallback: "no AI binding" };
-  if (request && await overBudget(ASK_BUDGET, request, env)) return { fallback: "rate limited" };
+  if (request && (await overBudget(ASK_BUDGET, request, env))) return { fallback: "rate limited" };
   const lexRank = new Map<string, number>(lexical.results.map((r, i) => [r.url, i]));
   const lexAt = (url: string) => lexRank.get(url) ?? Infinity;
   let corpus = await searchCorpusFor(env, params.searched);
@@ -238,9 +253,7 @@ async function clefRanked(env, params, request, lexical): Promise<ClefRanking> {
   const ranked = await clefRank(env, params.searched, corpus);
   if ("error" in ranked) return { fallback: ranked.error };
   const p = (url: string) => ranked.probabilities.get(url) ?? 0;
-  const kept = corpus
-    .filter((r) => p(r.url) >= ASK_FLOOR || lexRank.has(r.url))
-    .sort((a, b) => p(b.url) - p(a.url) || lexAt(a.url) - lexAt(b.url));
+  const kept = corpus.filter((r) => p(r.url) >= ASK_FLOOR || lexRank.has(r.url)).sort((a, b) => p(b.url) - p(a.url) || lexAt(a.url) - lexAt(b.url));
   return { kept, p };
 }
 
@@ -257,11 +270,12 @@ export async function nlwebAsk(env, params, request: Request | null = null) {
     description: String(record.snippet || record.description || ""),
     schema_object: askSchemaObject(record),
   });
-  const results = "kept" in clef
-    ? clef.kept.slice(0, limit).map((record) => nlwebResult(record, Math.round(clef.p(record.url) * 100)))
-    : lexical.results.slice(0, limit).map((record) => nlwebResult(record, askRelevance(record.score, lexical.terms.length)));
+  const results =
+    "kept" in clef
+      ? clef.kept.slice(0, limit).map((record) => nlwebResult(record, Math.round(clef.p(record.url) * 100)))
+      : lexical.results.slice(0, limit).map((record) => nlwebResult(record, askRelevance(record.score, lexical.terms.length)));
   const total = "kept" in clef ? clef.kept.length : lexical.total;
-  const ranking = "kept" in clef ? "clef" : (FALLBACK[clef.fallback] || `lexical: Clef answered nothing usable (${clef.fallback})`);
+  const ranking = "kept" in clef ? "clef" : FALLBACK[clef.fallback] || `lexical: Clef answered nothing usable (${clef.fallback})`;
 
   // The revision this SERVER speaks, and separately the dialect this REQUEST
   // was read as. `decontextualization` is absent unless it is true of this
@@ -304,7 +318,8 @@ export async function nlwebAsk(env, params, request: Request | null = null) {
   // Only ever present when it is TRUE of this response: a caller who sent no
   // follow-up context should not read a line about follow-up context.
   if (params.prev.length && !params.decontextualized) {
-    payload._meta.decontextualization = "none — `prev` was received and ignored. This origin runs no generative model, so the query was searched verbatim. Send `decontextualized_query` to resolve a follow-up yourself.";
+    payload._meta.decontextualization =
+      "none — `prev` was received and ignored. This origin runs no generative model, so the query was searched verbatim. Send `decontextualized_query` to resolve a follow-up yourself.";
   }
   return payload;
 }
@@ -345,12 +360,15 @@ function streamAnswer(payload, structured) {
   // index and the ranking is synchronous, so there is no phase that could
   // arrive later. Streaming is served because the protocol asks for it, and
   // pretending it bought latency here would be theatre.
-  return new Response(new ReadableStream({
-    start(controller) {
-      for (const frame of frames) controller.enqueue(encoder.encode(frame));
-      controller.close();
-    },
-  }), { status: 200, headers: sseHeaders() });
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        for (const frame of frames) controller.enqueue(encoder.encode(frame));
+        controller.close();
+      },
+    }),
+    { status: 200, headers: sseHeaders() },
+  );
 }
 
 export async function handleAsk(request, env) {
@@ -361,8 +379,11 @@ export async function handleAsk(request, env) {
 
   let body = null;
   if (request.method === "POST") {
-    try { body = await request.json(); }
-    catch { return jsonResponse({ error: "POST body must be JSON" }, 400); }
+    try {
+      body = await request.json();
+    } catch {
+      return jsonResponse({ error: "POST body must be JSON" }, 400);
+    }
   }
 
   const parsed = parseAskRequest(url, body);
@@ -386,7 +407,11 @@ export async function handleAsk(request, env) {
 
     // A HEAD never negotiates a body, and answering one with an open stream
     // leaves the caller holding a connection for frames that cannot arrive.
-    if (request.method === "HEAD") return new Response(null, { status: 200, headers: params.streaming ? sseHeaders() : { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+    if (request.method === "HEAD")
+      return new Response(null, {
+        status: 200,
+        headers: params.streaming ? sseHeaders() : { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+      });
     if (params.streaming) return streamAnswer(payload, params.structured);
     return jsonResponse(payload, 200, { "x-robots-tag": "noindex" });
   });

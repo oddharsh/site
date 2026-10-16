@@ -40,10 +40,10 @@
   // keeping that window short. Not measured: the window is the platform's cap,
   // and nothing in this repo observes it.
   "durable_objects": {
-    "code_update_strategy": { "mode": "deferred", "max_delay": 30 }
+    "code_update_strategy": { "mode": "deferred", "max_delay": 30 },
   },
   "exports": {
     "default": { "type": "worker" },
-    "Counter": { "type": "durable-object", "storage": "sqlite" }
-  }
+    "Counter": { "type": "durable-object", "storage": "sqlite" },
+  },
 }

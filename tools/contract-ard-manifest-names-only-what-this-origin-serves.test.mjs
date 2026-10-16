@@ -47,11 +47,13 @@ function validate(manifest, { routes, publicDir }) {
     seen.add(id);
     assert.ok(typeof entry.displayName === "string" && entry.displayName.length > 0, `${id} needs a displayName`);
     assert.match(entry.type, MEDIA_TYPE, `${id} type must be an IANA media type`);
-    assert.equal(("url" in entry) !== ("data" in entry), true, `${id} must carry exactly one of url or data`);
+    assert.equal("url" in entry !== "data" in entry, true, `${id} must carry exactly one of url or data`);
 
     const queries = entry.representativeQueries;
-    assert.ok(Array.isArray(queries) && queries.length >= 2 && queries.length <= 5,
-      `${id} needs 2-5 representativeQueries, has ${Array.isArray(queries) ? queries.length : "none"}`);
+    assert.ok(
+      Array.isArray(queries) && queries.length >= 2 && queries.length <= 5,
+      `${id} needs 2-5 representativeQueries, has ${Array.isArray(queries) ? queries.length : "none"}`,
+    );
     assert.equal(new Set(queries).size, queries.length, `${id} repeats a representative query`);
     for (const q of queries) assert.ok(typeof q === "string" && q.trim().length > 8, `${id} has an empty or trivial query`);
 
@@ -59,8 +61,7 @@ function validate(manifest, { routes, publicDir }) {
       assert.ok(entry.url.startsWith(`${ORIGIN}/`), `${id} points off-origin: ${entry.url}`);
       const pathname = new URL(entry.url).pathname;
       const file = new URL(`${publicDir}${pathname}`, ROOT);
-      assert.ok(existsSync(file) || routes.has(pathname),
-        `${id} points at ${pathname}, which is neither a file under ${publicDir} nor a Worker route`);
+      assert.ok(existsSync(file) || routes.has(pathname), `${id} points at ${pathname}, which is neither a file under ${publicDir} nor a Worker route`);
     }
   }
   return seen;
@@ -87,17 +88,21 @@ test("every ARD entry is well-formed and points at something this origin serves"
     "urn:air:aadhar.sh:skill:serendipity-events",
     "urn:air:aadhar.sh:nlweb:ask",
     "urn:air:aadhar.sh:api:openapi",
-  ]) assert.ok(ids.has(must), `${must} left the manifest`);
+  ])
+    assert.ok(ids.has(must), `${must} left the manifest`);
 
   // CONTROL. A validator that has never gone red is decoration: the two
   // failure shapes the spec cares most about (both url and data; one query)
   // must each be refused by name.
   const clone = () => JSON.parse(JSON.stringify(manifest));
-  const both = clone(); both.entries[0].data = {};
+  const both = clone();
+  both.entries[0].data = {};
   assert.throws(() => validate(both, ctx), /exactly one of url or data/);
-  const thin = clone(); thin.entries[0].representativeQueries = ["only one"];
+  const thin = clone();
+  thin.entries[0].representativeQueries = ["only one"];
   assert.throws(() => validate(thin, ctx), /2-5 representativeQueries/);
-  const stray = clone(); stray.entries[0].url = `${ORIGIN}/.well-known/no-such-card.json`;
+  const stray = clone();
+  stray.entries[0].url = `${ORIGIN}/.well-known/no-such-card.json`;
   assert.throws(() => validate(stray, ctx), /neither a file/);
 });
 
@@ -107,8 +112,11 @@ test("each MCP entry's capabilities are the tool names on the card it points at"
   assert.equal(mcp.length, 2, "both MCP servers are listed");
   for (const entry of mcp) {
     const card = JSON.parse(await readFile(new URL(`public${new URL(entry.url).pathname}`, ROOT), "utf8"));
-    assert.deepEqual(entry.capabilities, card.tools.map((t) => t.name),
-      `${entry.identifier} capabilities drifted from ${entry.url} (which is itself pinned to tools/list)`);
+    assert.deepEqual(
+      entry.capabilities,
+      card.tools.map((t) => t.name),
+      `${entry.identifier} capabilities drifted from ${entry.url} (which is itself pinned to tools/list)`,
+    );
   }
 });
 
@@ -138,7 +146,11 @@ test("the manifest is served with CORS, and every discovery surface names it", a
     { name: "robots.txt Agentmap directive", text: await read("public/robots.txt"), pattern: /^Agentmap: https:\/\/aadhar\.sh\/\.well-known\/ard\.json$/m },
     { name: "llms.txt", text: await read("public/llms.txt"), pattern: /https:\/\/aadhar\.sh\/\.well-known\/ard\.json/ },
     { name: "api-catalog", text: await read("public/.well-known/api-catalog"), pattern: /"href": "https:\/\/aadhar\.sh\/\.well-known\/ard\.json"/ },
-    { name: "agent-card discovery block", text: await read("public/.well-known/agent-card.json"), pattern: /"ard": "https:\/\/aadhar\.sh\/\.well-known\/ard\.json"/ },
+    {
+      name: "agent-card discovery block",
+      text: await read("public/.well-known/agent-card.json"),
+      pattern: /"ard": "https:\/\/aadhar\.sh\/\.well-known\/ard\.json"/,
+    },
   ];
   for (const { name, text, pattern } of surfaces) assert.match(text, pattern, `${name} does not name the ARD manifest`);
 });

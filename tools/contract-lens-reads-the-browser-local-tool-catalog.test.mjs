@@ -6,11 +6,7 @@
 // running the page, so the probe rides the CDP session /lens/wire already opens.
 //
 // Two invariants, and the first is a security boundary rather than a preference.
-import {
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
 import { WEBMCP_LIMITS, WEBMCP_PROBE, readWebmcpProbe } from "../src/worker/lib/agent-webmcp.ts";
 
 const SOURCE = readFileSync("./src/worker/lib/agent-webmcp.ts", "utf8");
@@ -24,13 +20,13 @@ test("the probe reads the catalog and can never call anything in it", () => {
   // naming the method, and a scanner that cannot tell prose from code would
   // either fail on that sentence or have to be silenced into uselessness. Same
   // shape as the modelContext ownership check next door.
-  const code = SOURCE.split("\n").filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join("\n");
-  assert.ok(!/executeTool/.test(code),
-    "agent-webmcp.ts CALLS executeTool; the probe must only ever read getTools()");
+  const code = SOURCE.split("\n")
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join("\n");
+  assert.ok(!/executeTool/.test(code), "agent-webmcp.ts CALLS executeTool; the probe must only ever read getTools()");
   assert.ok(/getTools\(\)/.test(WEBMCP_PROBE), "the probe should read getTools()");
   // No caller byte reaches the evaluated expression: it is a constant.
-  assert.ok(!/\$\{(?!WEBMCP_LIMITS)/.test(WEBMCP_PROBE.replace(/\$\{[\d]+\}/g, "")),
-    "the probe expression must interpolate nothing but its own caps");
+  assert.ok(!/\$\{(?!WEBMCP_LIMITS)/.test(WEBMCP_PROBE.replace(/\$\{[\d]+\}/g, "")), "the probe expression must interpolate nothing but its own caps");
 });
 
 test("awaitPromise is set, because getTools() is async", () => {
@@ -41,8 +37,7 @@ test("awaitPromise is set, because getTools() is async", () => {
   const at = WIRE.indexOf("expression: WEBMCP_PROBE");
   assert.ok(at > 0, "lens-wire.ts no longer sends the probe to Runtime.evaluate");
   const call = WIRE.slice(at, at + 200);
-  assert.ok(/awaitPromise:\s*true/.test(call),
-    "the WebMCP evaluate must set awaitPromise: true");
+  assert.ok(/awaitPromise:\s*true/.test(call), "the WebMCP evaluate must set awaitPromise: true");
 });
 
 test("a tool that states no readOnlyHint is a THIRD state, never a safe one", () => {
@@ -50,15 +45,19 @@ test("a tool that states no readOnlyHint is a THIRD state, never a safe one", ()
   // read-vs-write is the most a visitor can be told. Folding "the page never
   // said" into either column invents a claim the page did not make.
   const out = readWebmcpProbe({
-    present: true, count: 3, read: 1, write: 1, unstated: 1,
-    origins: ["https://example.com"], tools: [{ name: "a" }, { name: "b" }, { name: "c" }],
+    present: true,
+    count: 3,
+    read: 1,
+    write: 1,
+    unstated: 1,
+    origins: ["https://example.com"],
+    tools: [{ name: "a" }, { name: "b" }, { name: "c" }],
   });
   assert.ok(out, "a well-formed probe payload must not read as absent");
   assert.equal(out.read, 1);
   assert.equal(out.write, 1);
   assert.equal(out.unstated, 1);
-  assert.equal(out.read + out.write + out.unstated, out.count,
-    "the three columns must account for every tool");
+  assert.equal(out.read + out.write + out.unstated, out.count, "the three columns must account for every tool");
 });
 
 test("an engine with no WebMCP is UNMEASURABLE, never a site with no tools", () => {
@@ -87,10 +86,8 @@ test("the engine label comes from CDP, never from the page's user agent", () => 
   // came back `engine: "AadharshBot/1.0 (+https://aadhar.sh/bot)"`.
   // The presence half first, so the absence below is read off the real probe.
   assert.ok(/getTools\(\)/.test(WEBMCP_PROBE), "WEBMCP_PROBE should be the script that reads getTools()");
-  assert.ok(!/navigator\.userAgent/.test(WEBMCP_PROBE),
-    "the probe must not report navigator.userAgent; this route overrides it");
-  assert.ok(/Browser\.getVersion/.test(WIRE),
-    "lens-wire.ts should read the engine from CDP");
+  assert.ok(!/navigator\.userAgent/.test(WEBMCP_PROBE), "the probe must not report navigator.userAgent; this route overrides it");
+  assert.ok(/Browser\.getVersion/.test(WIRE), "lens-wire.ts should read the engine from CDP");
 });
 
 test("a probe that could not run is ABSENT, never an empty catalog", () => {
@@ -122,6 +119,5 @@ test("every axis of a stranger's catalog is bounded", () => {
 });
 
 test("the wire payload separates 'did not run' from 'registered nothing'", () => {
-  assert.ok(/webmcp: out\.webmcp \|\| null/.test(WIRE),
-    "the payload should carry webmcp, null when the probe could not run");
+  assert.ok(/webmcp: out\.webmcp \|\| null/.test(WIRE), "the payload should carry webmcp, null when the probe could not run");
 });

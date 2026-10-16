@@ -24,8 +24,7 @@ const read = (p) => readFileSync(new URL(p, ROOT), "utf8");
 const WEBMENTION = '</webmention>; rel="webmention"';
 
 test("the homepage Link set advertises the webmention endpoint", () => {
-  assert.ok(HOMEPAGE_DISCOVERY_LINK.split(", ").includes(WEBMENTION),
-    "HOMEPAGE_DISCOVERY_LINK must carry the webmention rel");
+  assert.ok(HOMEPAGE_DISCOVERY_LINK.split(", ").includes(WEBMENTION), "HOMEPAGE_DISCOVERY_LINK must carry the webmention rel");
   // the route composes that set into its header (contract-the-speculation-ledger
   // pins HOMEPAGE_HEADERS to it), and _headers states the same set for `/`
   const block = read("public/_headers").match(/^\/\n((?: {2}.+\n)+)/m);
@@ -78,7 +77,7 @@ function parseHtml(html) {
 }
 
 const classes = (n) => (n.attrs?.class ?? "").split(/\s+/).filter(Boolean);
-const text = (n) => (n.text ?? n.children.map(text).join(""));
+const text = (n) => n.text ?? n.children.map(text).join("");
 const roots = (n) => classes(n).filter((c) => c.startsWith("h-"));
 
 function propValue(n, kind) {
@@ -93,7 +92,9 @@ function item(n) {
   const walk = (node) => {
     for (const c of node.children ?? []) {
       if (c.text !== undefined) continue;
-      const props = classes(c).map((k) => k.match(/^(p|u|dt|e)-(.+)$/)).filter(Boolean);
+      const props = classes(c)
+        .map((k) => k.match(/^(p|u|dt|e)-(.+)$/))
+        .filter(Boolean);
       const nested = roots(c).length ? item(c) : null;
       for (const [, kind, name] of props) (out.properties[name] ??= []).push(nested ?? propValue(c, kind));
       if (nested && !props.length) out.children.push(nested);
@@ -106,7 +107,9 @@ function item(n) {
 
 function mf2(html) {
   const items = [];
-  const find = (n) => { for (const c of n.children ?? []) if (c.tag) roots(c).length ? items.push(item(c)) : find(c); };
+  const find = (n) => {
+    for (const c of n.children ?? []) if (c.tag) roots(c).length ? items.push(item(c)) : find(c);
+  };
   find(parseHtml(html));
   return items;
 }
@@ -116,7 +119,11 @@ const env = {
   ASSETS: {
     fetch: async (url) => {
       const path = new URL(url).pathname;
-      try { return new Response(read(`src/content${path}`)); } catch { return new Response("", { status: 404 }); }
+      try {
+        return new Response(read(`src/content${path}`));
+      } catch {
+        return new Response("", { status: 404 });
+      }
     },
   },
 };
@@ -148,8 +155,10 @@ test("the author card names the identity the homepage's representative h-card de
   const [card] = mf2(read("src/pages/index.html")).filter((i) => i.type.includes("h-card"));
   assert.ok(card, "the homepage lost its h-card");
   assert.deepEqual(card.properties.name, [OWNER_NAME]);
-  assert.ok(card.properties.url.includes(OWNER_URL) && card.properties.uid.includes(OWNER_URL),
-    "the homepage h-card must be representative (u-url and u-uid) for the notes' author to resolve to it");
+  assert.ok(
+    card.properties.url.includes(OWNER_URL) && card.properties.uid.includes(OWNER_URL),
+    "the homepage h-card must be representative (u-url and u-uid) for the notes' author to resolve to it",
+  );
 });
 
 test("/writing is an h-feed whose rows are the notes, and its popovers add no second copy", async () => {
@@ -159,9 +168,18 @@ test("/writing is an h-feed whose rows are the notes, and its popovers add no se
   const [feed] = items;
   assert.deepEqual(feed.type, ["h-feed"]);
   assert.equal(feed.properties.author?.[0]?.properties.name?.[0], OWNER_NAME);
-  assert.deepEqual(feed.children.map((c) => c.properties.url[0]), posts.map((p) => `/writing/${p.slug}`));
-  assert.deepEqual(feed.children.map((c) => c.properties.name[0]), posts.map((p) => p.title));
-  assert.deepEqual(feed.children.map((c) => c.properties.published[0]), posts.map((p) => p.date));
+  assert.deepEqual(
+    feed.children.map((c) => c.properties.url[0]),
+    posts.map((p) => `/writing/${p.slug}`),
+  );
+  assert.deepEqual(
+    feed.children.map((c) => c.properties.name[0]),
+    posts.map((p) => p.title),
+  );
+  assert.deepEqual(
+    feed.children.map((c) => c.properties.published[0]),
+    posts.map((p) => p.date),
+  );
 });
 
 test("the control: a window rendered without an entry carries no microformat at all", () => {

@@ -39,26 +39,27 @@ test("every retirement is recorded with a replacement, a date and a measurement"
   // prints a clean pass, which is how every naive scanner in this repository
   // has failed. Deleting one entry deliberately costs nothing; losing the file
   // trips it.
-  assert.ok(ledger.retired.length >= 8,
-    `config/retired.json holds ${ledger.retired.length} entries, expected at least 8`);
+  assert.ok(ledger.retired.length >= 8, `config/retired.json holds ${ledger.retired.length} entries, expected at least 8`);
 
   for (const entry of ledger.retired) {
     const at = `config/retired.json ${JSON.stringify(entry.id)}`;
-    assert.ok(typeof entry.replaced_by === "string" && entry.replaced_by.length > 0,
-      `${at} must name what replaced it, even when that is nothing`);
+    assert.ok(typeof entry.replaced_by === "string" && entry.replaced_by.length > 0, `${at} must name what replaced it, even when that is nothing`);
     for (const field of ["why", "measured"]) {
-      assert.ok(typeof entry[field] === "string" && entry[field].length > 40,
-        `${at} needs a substantive ${field}. A retirement with no measurement is a preference wearing a commit message`);
+      assert.ok(
+        typeof entry[field] === "string" && entry[field].length > 40,
+        `${at} needs a substantive ${field}. A retirement with no measurement is a preference wearing a commit message`,
+      );
     }
     // `on` is checked for SHAPE rather than length, being the one short field.
     assert.match(entry.on, /^\d{4}-\d{2}-\d{2}$/, `${at} must date the retirement`);
 
     const kinds = Object.keys(entry.bans ?? {});
-    assert.ok(kinds.length > 0,
-      `${at} declares no ban, so nothing stops it coming back and the entry is a note rather than a record`);
+    assert.ok(kinds.length > 0, `${at} declares no ban, so nothing stops it coming back and the entry is a note rather than a record`);
     for (const kind of kinds) {
-      assert.ok(BAN_KINDS.includes(kind),
-        `${at} declares a ${JSON.stringify(kind)} ban, which tools/lib/retired.ts does not implement. An unrecognised key sits in the file looking like enforcement while doing nothing, the same way .github/dependabot.yml asked for a label GitHub did not have`);
+      assert.ok(
+        BAN_KINDS.includes(kind),
+        `${at} declares a ${JSON.stringify(kind)} ban, which tools/lib/retired.ts does not implement. An unrecognised key sits in the file looking like enforcement while doing nothing, the same way .github/dependabot.yml asked for a label GitHub did not have`,
+      );
     }
   }
 });
@@ -76,8 +77,7 @@ test("no committed manifest asks for a retired package", async () => {
     const text = await readFile(new URL(manifest, ROOT), "utf8");
     for (const entry of banned) {
       const found = npmViolations(manifest, text, entry.bans.npm);
-      assert.deepEqual(found, [],
-        `${manifest} asks for ${found.join(", ")}, retired ${entry.on}: ${entry.why}`);
+      assert.deepEqual(found, [], `${manifest} asks for ${found.join(", ")}, retired ${entry.on}: ${entry.why}`);
     }
   }
 });
@@ -89,8 +89,7 @@ test("config/tools.json declares no retired binary", async () => {
 
   for (const entry of ledger.retired.filter((e) => e.bans.binary)) {
     const found = binaryViolations(toolsJson, entry.bans.binary);
-    assert.deepEqual(found, [],
-      `config/tools.json declares ${found.join(", ")}, retired ${entry.on} in favour of ${entry.replaced_by}`);
+    assert.deepEqual(found, [], `config/tools.json declares ${found.join(", ")}, retired ${entry.on} in favour of ${entry.replaced_by}`);
   }
 });
 
@@ -98,16 +97,14 @@ test("the zenc crate carries no retired crate or cargo feature", async () => {
   for (const entry of ledger.retired.filter((e) => e.bans.cargo)) {
     const ban = entry.bans.cargo;
     const toml = await readFile(new URL(ban.manifest, ROOT), "utf8");
-    assert.deepEqual(cargoManifestViolations(toml, ban), [],
-      `${ban.manifest} carries something retired ${entry.on}: ${entry.why}`);
+    assert.deepEqual(cargoManifestViolations(toml, ban), [], `${ban.manifest} carries something retired ${entry.on}: ${entry.why}`);
 
     // The LOCKFILE is the right surface here, which is the reverse of the npm
     // case and worth not confusing: rayon reaches this graph through the one
     // banned feature and through nothing else, so its presence is evidence.
     const lock = await readFile(new URL(ban.manifest.replace(/Cargo\.toml$/, "Cargo.lock"), ROOT), "utf8");
     const found = cargoLockViolations(lock, ban.crates ?? []);
-    assert.deepEqual(found, [],
-      `${ban.manifest.replace(/toml$/, "lock")} resolves ${found.join(", ")}, which only arrives through a feature this ledger bans`);
+    assert.deepEqual(found, [], `${ban.manifest.replace(/toml$/, "lock")} resolves ${found.join(", ")}, which only arrives through a feature this ledger bans`);
   }
 });
 
@@ -120,8 +117,7 @@ test("no source tree imports a retired package", async () => {
       for (const file of files) {
         const text = await readFile(new URL(file, ROOT), "utf8");
         const found = sourceViolations(file, text, specifiers);
-        assert.deepEqual(found, [],
-          `${file} imports ${found.join(", ")}, retired ${entry.on} in favour of ${entry.replaced_by}`);
+        assert.deepEqual(found, [], `${file} imports ${found.join(", ")}, retired ${entry.on} in favour of ${entry.replaced_by}`);
         scanned += 1;
       }
     }
@@ -152,9 +148,14 @@ async function exceptionProblems(entries, isCommitted, read) {
   for (const entry of entries.filter((e) => e.bans.source?.except)) {
     const { specifiers, except } = entry.bans.source;
     for (const file of except) {
-      if (isCommitted(file).length !== 1) { problems.push(`config/retired.json excuses ${file}, which is not a committed file`); continue; }
+      if (isCommitted(file).length !== 1) {
+        problems.push(`config/retired.json excuses ${file}, which is not a committed file`);
+        continue;
+      }
       if (sourceViolations(file, await read(file), specifiers).length === 0) {
-        problems.push(`config/retired.json excuses ${file} from the ${entry.id} ban, but it no longer imports it. The retirement is complete: drop the exception and the scope note`);
+        problems.push(
+          `config/retired.json excuses ${file} from the ${entry.id} ban, but it no longer imports it. The retirement is complete: drop the exception and the scope note`,
+        );
       }
     }
   }
@@ -178,26 +179,16 @@ test("each ban kind catches the thing it bans", () => {
   // and reporting a clean pass over a tree that violates it. The real-tree
   // tests above cannot tell a working check from a broken one, because both
   // print the same thing.
-  assert.deepEqual(
-    npmViolations("package.json", JSON.stringify({ devDependencies: { turndown: "^7" } }), ["turndown"]),
-    ["devDependencies.turndown"]);
-  assert.deepEqual(
-    npmViolations("package.json", JSON.stringify({ dependencies: { wrangler: "4" } }), ["turndown"]), []);
+  assert.deepEqual(npmViolations("package.json", JSON.stringify({ devDependencies: { turndown: "^7" } }), ["turndown"]), ["devDependencies.turndown"]);
+  assert.deepEqual(npmViolations("package.json", JSON.stringify({ dependencies: { wrangler: "4" } }), ["turndown"]), []);
 
-  assert.deepEqual(
-    binaryViolations(JSON.stringify({ tools: [{ bin: "jaq" }, { bin: "exiftool" }] }), ["exiftool"]),
-    ["exiftool"]);
-  assert.deepEqual(
-    binaryViolations(JSON.stringify({ tools: [{ bin: "jaq" }] }), ["exiftool"]), []);
+  assert.deepEqual(binaryViolations(JSON.stringify({ tools: [{ bin: "jaq" }, { bin: "exiftool" }] }), ["exiftool"]), ["exiftool"]);
+  assert.deepEqual(binaryViolations(JSON.stringify({ tools: [{ bin: "jaq" }] }), ["exiftool"]), []);
 
   const ban = { manifest: "x", crates: ["rayon"], features: [{ crate: "zenjpeg", feature: "parallel" }] };
-  assert.deepEqual(
-    cargoManifestViolations(`[dependencies]\nzenjpeg = { version = "0.8.4", features = ["trellis", "parallel"] }\n`, ban),
-    ["zenjpeg/parallel"]);
-  assert.deepEqual(
-    cargoManifestViolations(`[dependencies]\nrayon = "1"\n`, ban), ["dependencies.rayon"]);
-  assert.deepEqual(
-    cargoManifestViolations(`[dependencies]\nzenjpeg = { version = "0.8.4", features = ["trellis"] }\n`, ban), []);
+  assert.deepEqual(cargoManifestViolations(`[dependencies]\nzenjpeg = { version = "0.8.4", features = ["trellis", "parallel"] }\n`, ban), ["zenjpeg/parallel"]);
+  assert.deepEqual(cargoManifestViolations(`[dependencies]\nrayon = "1"\n`, ban), ["dependencies.rayon"]);
+  assert.deepEqual(cargoManifestViolations(`[dependencies]\nzenjpeg = { version = "0.8.4", features = ["trellis"] }\n`, ban), []);
 
   assert.deepEqual(cargoLockViolations(`[[package]]\nname = "rayon"\nversion = "1.11.0"\n`, ["rayon"]), ["rayon"]);
   assert.deepEqual(cargoLockViolations(`[[package]]\nname = "image"\n`, ["rayon"]), []);

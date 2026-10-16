@@ -48,12 +48,28 @@ import path from "node:path";
  * fails on any stem where the two projections disagree.
  */
 export const EXIF_KEY_MAP: readonly (readonly [string, string])[] = [
-  ["cm", "camera"], ["ln", "lens"], ["ap", "aperture"], ["sp", "shutter"],
-  ["is", "iso"], ["fl", "focal"], ["ev", "ev"], ["dt", "date"],
-  ["w", "width"], ["h", "height"], ["wb", "white_balance"], ["ct", "color_temp"],
-  ["fs", "flash"], ["fm", "film"], ["dr", "dr"], ["cc", "chrome"],
-  ["cb", "chrome_blue"], ["gr", "grain"], ["gs", "grain_size"],
-  ["ht", "highlight_tone"], ["st", "shadow_tone"], ["sa", "saturation"],
+  ["cm", "camera"],
+  ["ln", "lens"],
+  ["ap", "aperture"],
+  ["sp", "shutter"],
+  ["is", "iso"],
+  ["fl", "focal"],
+  ["ev", "ev"],
+  ["dt", "date"],
+  ["w", "width"],
+  ["h", "height"],
+  ["wb", "white_balance"],
+  ["ct", "color_temp"],
+  ["fs", "flash"],
+  ["fm", "film"],
+  ["dr", "dr"],
+  ["cc", "chrome"],
+  ["cb", "chrome_blue"],
+  ["gr", "grain"],
+  ["gs", "grain_size"],
+  ["ht", "highlight_tone"],
+  ["st", "shadow_tone"],
+  ["sa", "saturation"],
 ];
 
 /** `hi` is the four 64-bin histogram channels. Everything else in a meta file is EXIF text. */
@@ -90,7 +106,9 @@ export async function buildExifIndex(root: string): Promise<Record<string, Recor
  * keeps a stem's record on a single line for anyone reading it raw.
  */
 export function serializeExifIndex(index: Record<string, unknown>): string {
-  const rows = Object.keys(index).sort().map((stem) => `${JSON.stringify(stem)}:${JSON.stringify(index[stem])}`);
+  const rows = Object.keys(index)
+    .sort()
+    .map((stem) => `${JSON.stringify(stem)}:${JSON.stringify(index[stem])}`);
   return `{\n${rows.join(",\n")}\n}\n`;
 }
 
@@ -140,11 +158,13 @@ export function tierFiles(stem: string, entry: Record<string, string>): Record<s
  * and a rebuild that changed no pixel changes no byte of this file.
  */
 export async function buildImageFingerprints(root: string): Promise<{
-  index: Record<string, string>; photos: number; tiers: number;
+  index: Record<string, string>;
+  photos: number;
+  tiers: number;
 }> {
   const hashes = JSON.parse(await readFile(path.join(root, "public/images/hashes.json"), "utf8"));
   const hashed = path.join(root, "public/i");
-  const jobs: { stem: string; tier: typeof TIER_KEYS[number]; file: string }[] = [];
+  const jobs: { stem: string; tier: (typeof TIER_KEYS)[number]; file: string }[] = [];
   for (const stem of Object.keys(hashes).sort()) {
     const files = tierFiles(stem, hashes[stem]);
     for (const tier of TIER_KEYS) jobs.push({ stem, tier, file: files[tier] });
@@ -163,10 +183,7 @@ export async function buildImageFingerprints(root: string): Promise<{
       digests[index] = createHash("sha256").update(bytes).digest("hex");
     }
   };
-  await Promise.all(Array.from(
-    { length: Math.min(FINGERPRINT_READ_CONCURRENCY, jobs.length) },
-    readAndHash,
-  ));
+  await Promise.all(Array.from({ length: Math.min(FINGERPRINT_READ_CONCURRENCY, jobs.length) }, readAndHash));
 
   const index: Record<string, string> = {};
   for (const [jobIndex, { stem, tier, file }] of jobs.entries()) {

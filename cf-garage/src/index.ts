@@ -23,8 +23,11 @@ async function inSpan(tr, name, fn) {
 }
 async function timedSpan(tr, name, t0, spans, fn) {
   const start = Date.now() - t0;
-  try { return await inSpan(tr, name, fn); }
-  finally { spans.push({ name, start, dur: Date.now() - t0 - start }); }
+  try {
+    return await inSpan(tr, name, fn);
+  } finally {
+    spans.push({ name, start, dur: Date.now() - t0 - start });
+  }
 }
 
 // ── Durable Object: an atomic, strongly-consistent counter ────────────────
@@ -38,7 +41,9 @@ export class Counter {
   // `erasableSyntaxOnly` and compiles.
   state: DurableObjectState;
 
-  constructor(state: DurableObjectState) { this.state = state; }
+  constructor(state: DurableObjectState) {
+    this.state = state;
+  }
   async fetch(request) {
     const url = new URL(request.url);
     // The type argument is what makes `n += 1` below legal: DO storage answers
@@ -80,8 +85,7 @@ export default {
 
     // Feature #4 — Workers Logs: structured line per request, captured + filterable
     // in the dashboard (200k events/day free). We log the feature + outcome below.
-    const log = (extra) =>
-      console.log(JSON.stringify({ path, ua: (request.headers.get("user-agent") || "").slice(0, 48), ...extra }));
+    const log = (extra) => console.log(JSON.stringify({ path, ua: (request.headers.get("user-agent") || "").slice(0, 48), ...extra }));
 
     try {
       // Feature #1 — Durable Objects: atomic counter
@@ -111,13 +115,17 @@ export default {
       if (path === "/garage/cf/caption") {
         const stem = (url.searchParams.get("img") || "XT508165").replace(/[^A-Za-z0-9_-]/g, "");
         const img = await fetch(`${ORIGIN}/images/${stem}.jpg`);
-        if (!img.ok) { log({ feature: "workers-ai", err: "thumb-missing" }); return json({ ok: false, error: "thumbnail not found" }, 404); }
+        if (!img.ok) {
+          log({ feature: "workers-ai", err: "thumb-missing" });
+          return json({ ok: false, error: "thumbnail not found" }, 404);
+        }
         const bytes = [...new Uint8Array(await img.arrayBuffer())];
         // ?mode=alt → tight, factual alt text (used to bake <img alt> for the grid).
         // default → the vivid demo caption. alt text shouldn't editorialize or guess.
-        const prompt = url.searchParams.get("mode") === "alt"
-          ? "Write alt text for this photo: one plain, factual sentence naming only what is clearly visible (main subject and setting). No mood, no interpretation, no guessing, no 'image of'. Under 16 words."
-          : "Describe this photograph in one vivid sentence suitable as alt text. Be concrete about subject, light, and mood.";
+        const prompt =
+          url.searchParams.get("mode") === "alt"
+            ? "Write alt text for this photo: one plain, factual sentence naming only what is clearly visible (main subject and setting). No mood, no interpretation, no guessing, no 'image of'. Under 16 words."
+            : "Describe this photograph in one vivid sentence suitable as alt text. Be concrete about subject, light, and mood.";
         // routed through the AI Gateway named in AI_GATEWAY (see wrangler.toml), which
         // is what buys the per-model token counts and cost attribution the Workers Logs
         // line below cannot express: `log()` knows how long the call took, never what it
@@ -125,18 +133,24 @@ export default {
         // on every click, so any cache would make the demo a replay after the first
         // visitor — the same caption forever, and a neuron counter that never moves.
         // The button promises the model runs fresh, so it runs fresh.
-        const out = await env.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
-          image: bytes,
-          prompt,
-          max_tokens: 64,
-        }, env.AI_GATEWAY ? { gateway: { id: env.AI_GATEWAY } } : undefined);
+        const out = await env.AI.run(
+          "@cf/llava-hf/llava-1.5-7b-hf",
+          {
+            image: bytes,
+            prompt,
+            max_tokens: 64,
+          },
+          env.AI_GATEWAY ? { gateway: { id: env.AI_GATEWAY } } : undefined,
+        );
         // The runtime types name `description` alone for an image-to-text model.
         // `response` stays as the fallback it always was (a text-generation shape
         // some models answer in), read through a widened type so typing `env` did
         // not quietly change what the demo does.
-        let caption = (out.description || (out as { response?: string }).response || "").trim()
+        let caption = (out.description || (out as { response?: string }).response || "")
+          .trim()
           .replace(/^(an? |the )?(image|photo|photograph|picture) (of|shows|depicts|captures)\s*/i, "")
-          .replace(/\s+/g, " ").trim();
+          .replace(/\s+/g, " ")
+          .trim();
         if (caption) caption = caption[0].toUpperCase() + caption.slice(1);
         log({ feature: "workers-ai", stem, mode: url.searchParams.get("mode") || "demo", chars: caption.length, ms: Date.now() - t0 });
         return json({ ok: true, stem, caption });
@@ -151,8 +165,7 @@ export default {
       if (path === "/garage/cf/screenshot") {
         if (url.searchParams.get("go") !== "1") {
           log({ feature: "browser-rendering", step: "parked-noop", ms: Date.now() - t0 });
-          return json({ ok: false, parked: true,
-            error: "Browser Run is parked — append ?go=1 to actually launch a browser. See /garage/cloudflare." }, 503);
+          return json({ ok: false, parked: true, error: "Browser Run is parked — append ?go=1 to actually launch a browser. See /garage/cloudflare." }, 503);
         }
         let target = url.searchParams.get("url") || ORIGIN;
         if (!/^https:\/\/(www\.)?aadhar\.sh(\/|$)/.test(target)) target = ORIGIN; // SSRF guard
@@ -191,8 +204,14 @@ export default {
         // /lens/shot made and corrected.
         if (screenshot.status === 429) {
           log({ feature: "browser-rendering", step: "budget-spent", ms: Date.now() - t0 });
-          return json({ ok: false, budget: true,
-            error: "Browser Run is rate-limited right now (free plan: 6/min account-wide, 10 min/day, shared with /lens). Try again shortly." }, 429);
+          return json(
+            {
+              ok: false,
+              budget: true,
+              error: "Browser Run is rate-limited right now (free plan: 6/min account-wide, 10 min/day, shared with /lens). Try again shortly.",
+            },
+            429,
+          );
         }
         const ctype = screenshot.headers.get("content-type") || "";
         if (!screenshot.ok || !ctype.startsWith("image/")) {
@@ -225,15 +244,15 @@ export default {
       // a subrequest, a compute loop), each in its own span with attributes,
       // and return the locally-timed waterfall for the demo page to render.
       if (path === "/garage/cf/trace") {
-        const tr = ctx && ctx.tracing;                 // present when the runtime supports it
-  // Capability probe on the injected tracer; separate Worker, own bundle.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+        const tr = ctx && ctx.tracing; // present when the runtime supports it
+        // Capability probe on the injected tracer; separate Worker, own bundle.
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof
         const available = !!(tr && typeof tr.enterSpan === "function");
         const tt = Date.now();
         const spans = [];
         // The three probes below fill this one key at a time, so its shape is
         // declared here rather than inferred from an empty literal.
-        const facts: { counter?: any, bytes?: number, checksum?: number } = {};
+        const facts: { counter?: any; bytes?: number; checksum?: number } = {};
         const out = await inSpan(tr, "handleTrace", async (root) => {
           if (root.setAttribute) root.setAttribute("url.path", path);
           // 1 — Durable Object peek (read-only, no increment)
@@ -248,7 +267,10 @@ export default {
           facts.bytes = await timedSpan(tr, "fetch.llms_txt", tt, spans, async (s) => {
             const r = await fetch(`${ORIGIN}/llms.txt`, { cf: { cacheTtl: 60 } });
             const txt = await r.text();
-            if (s.setAttribute) { s.setAttribute("http.status", r.status); s.setAttribute("bytes", txt.length); }
+            if (s.setAttribute) {
+              s.setAttribute("http.status", r.status);
+              s.setAttribute("bytes", txt.length);
+            }
             return txt.length;
           });
           // 3 — pure compute, no IO (shows a non-network span in the waterfall)
@@ -274,7 +296,7 @@ export default {
       // and each of those throws with internal names in the text (the DO class,
       // the model, the upstream URL). The demo is about the features working, so
       // the failure line only has to say which one didn't.
-      log({ path, error: String(e && e.message || e).slice(0, 200), ms: Date.now() - t0 });
+      log({ path, error: String((e && e.message) || e).slice(0, 200), ms: Date.now() - t0 });
       return json({ ok: false, error: "this feature failed — the details are in Workers Logs" }, 502);
     }
   },

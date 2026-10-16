@@ -181,21 +181,28 @@ export interface Budget {
  * result, and both real outages here ended with the write that would have
  * recorded what happened being the call that failed. serendipity reserves 6.
  */
-export function createBudget(
-  cap: number,
-  opts: { reserve?: number } = {},
-): Budget {
+export function createBudget(cap: number, opts: { reserve?: number } = {}): Budget {
   const reserve = Math.max(0, opts.reserve ?? 0);
   const limit = Math.max(0, Math.floor(cap) - reserve);
   let spent = 0;
   let overrun = false;
 
   const ledger: Budget = {
-    get limit() { return limit; },
-    get spent() { return spent; },
-    get left() { return Math.max(0, limit - spent); },
-    get exhausted() { return spent >= limit; },
-    get overrun() { return overrun; },
+    get limit() {
+      return limit;
+    },
+    get spent() {
+      return spent;
+    },
+    get left() {
+      return Math.max(0, limit - spent);
+    },
+    get exhausted() {
+      return spent >= limit;
+    },
+    get overrun() {
+      return overrun;
+    },
 
     afford(n = 1) {
       const cost = Math.max(0, Math.floor(n));

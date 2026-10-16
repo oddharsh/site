@@ -44,9 +44,7 @@ export function xpChromeCss() {
 // that is not a section keeps /favicon.ico.
 function faviconLink(route): Html {
   const icon = SECTION_FAVICONS[route];
-  return icon
-    ? html`<link rel="icon" type="image/svg+xml" href="${icon}">`
-    : html`<link rel="icon" href="/favicon.ico">`;
+  return icon ? html`<link rel="icon" type="image/svg+xml" href="${icon}">` : html`<link rel="icon" href="/favicon.ico">`;
 }
 
 /** What `lunaPage` accepts.
@@ -70,21 +68,45 @@ function faviconLink(route): Html {
  *  title and description instead of a bare URL. `image` is site-relative and
  *  must be a JPEG or PNG: no unfurler draws an SVG. Without one the card is
  *  `summary`, which needs no image. */
-export function shareMeta({ title, description = "", path, type = "website", image = "", imageAlt = "" }: {
-  title: string; description?: string; path: string; type?: string; image?: string; imageAlt?: string;
+export function shareMeta({
+  title,
+  description = "",
+  path,
+  type = "website",
+  image = "",
+  imageAlt = "",
+}: {
+  title: string;
+  description?: string;
+  path: string;
+  type?: string;
+  image?: string;
+  imageAlt?: string;
 }): Html {
   const url = `https://aadhar.sh${path}`;
   const img = image ? `https://aadhar.sh${image}` : "";
   return html`
 <meta property="og:type" content="${type}">
 <meta property="og:site_name" content="aadhar.sh">
-<meta property="og:title" content="${title}">${description ? html`
-<meta property="og:description" content="${description}">` : EMPTY}
+<meta property="og:title" content="${title}">${
+    description
+      ? html`
+<meta property="og:description" content="${description}">`
+      : EMPTY
+  }
 <meta property="og:url" content="${url}">
-<meta name="twitter:card" content="summary">${img ? html`
+<meta name="twitter:card" content="summary">${
+    img
+      ? html`
 <meta property="og:image" content="${img}">
-<meta name="twitter:image" content="${img}">${imageAlt ? html`
-<meta property="og:image:alt" content="${imageAlt}">` : EMPTY}` : EMPTY}`;
+<meta name="twitter:image" content="${img}">${
+          imageAlt
+            ? html`
+<meta property="og:image:alt" content="${imageAlt}">`
+            : EMPTY
+        }`
+      : EMPTY
+  }`;
 }
 
 export type LunaPageOptions = {
@@ -174,19 +196,13 @@ export function lunaPage({
 }: LunaPageOptions = {}) {
   const documentTitle = title || path || "aadhar.sh";
   const windowTitle = path || title || "aadhar.sh";
-  const metaDescription = description
-    ? html`\n<meta name="description" content="${description}">`
-    : EMPTY;
-  const metaRobots = robots
-    ? html`\n<meta name="robots" content="${robots}">`
-    : EMPTY;
+  const metaDescription = description ? html`\n<meta name="description" content="${description}">` : EMPTY;
+  const metaRobots = robots ? html`\n<meta name="robots" content="${robots}">` : EMPTY;
   // rel=canonical names the one URL a search engine should index, so the
   // ?query and trailing-slash variants the Worker also answers fold onto it.
   // Only for a page that takes indexing at all: a canonical on a noindex page
   // asks a crawler to index the URL the robots tag just told it to drop.
-  const linkCanonical = route && !/\bnoindex\b/.test(robots)
-    ? html`\n<link rel="canonical" href="https://aadhar.sh${route}">`
-    : EMPTY;
+  const linkCanonical = route && !/\bnoindex\b/.test(robots) ? html`\n<link rel="canonical" href="https://aadhar.sh${route}">` : EMPTY;
   const scriptHtml = html`${scripts}\n<script src="/nav.js" defer></script>`;
   // Back/Forward ship in the HTML so the caption has its final geometry at first
   // paint (gen-desktop-partial.ts, HISTNAV_HTML, says what injecting it cost).
@@ -196,9 +212,7 @@ export function lunaPage({
   // The Markdown twin, advertised only where the build actually wrote one, and
   // offered as this object's first task for the same reason.
   const twin = route ? twinFor(route) : null;
-  const twinLink = twin
-    ? html`\n<link rel="alternate" type="text/markdown" title="markdown source" href="${twin}">`
-    : EMPTY;
+  const twinLink = twin ? html`\n<link rel="alternate" type="text/markdown" title="markdown source" href="${twin}">` : EMPTY;
   const chromeOptions = {
     path: route || "/",
     name: explorerName || title || "",

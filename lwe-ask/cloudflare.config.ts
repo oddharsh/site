@@ -64,10 +64,7 @@ export default defineConfig({
     // `/lwe/ask*` (that wildcard swallows /lwe/ask.js); the exact + subpath pair
     // below covers /lwe/ask (POST, no query) and
     // /lwe/ask/{challenge,verify,reindex} without touching ask.js.
-    triggers: [
-      triggers.fetch({ pattern: "aadhar.sh/lwe/ask", zone: "aadhar.sh" }),
-      triggers.fetch({ pattern: "aadhar.sh/lwe/ask/*", zone: "aadhar.sh" }),
-    ],
+    triggers: [triggers.fetch({ pattern: "aadhar.sh/lwe/ask", zone: "aadhar.sh" }), triggers.fetch({ pattern: "aadhar.sh/lwe/ask/*", zone: "aadhar.sh" })],
 
     env: {
       // Workers AI: embeddings + generation.

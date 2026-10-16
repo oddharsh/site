@@ -67,20 +67,28 @@ if (pinKind === "commit") {
     // Fail closed. A commit pin whose install records no sha is an install we
     // cannot identify, and passing it is exactly the self-agreeing check this
     // block exists to replace.
-    errors.push(`root: node_modules/wrangler resolves to ${rootManifest}, which names no workers-sdk commit, so the install cannot be matched to the pin @${pinned}; run \`${STALE_INSTALL_REMEDY}\``);
+    errors.push(
+      `root: node_modules/wrangler resolves to ${rootManifest}, which names no workers-sdk commit, so the install cannot be matched to the pin @${pinned}; run \`${STALE_INSTALL_REMEDY}\``,
+    );
   } else if (onDisk !== pinned) {
-    errors.push(`root: node_modules holds wrangler@${onDisk} (${installed}) but package.json pins @${pinned}; that is a stale install, run \`${STALE_INSTALL_REMEDY}\``);
+    errors.push(
+      `root: node_modules holds wrangler@${onDisk} (${installed}) but package.json pins @${pinned}; that is a stale install, run \`${STALE_INSTALL_REMEDY}\``,
+    );
   }
   // The lockfile has to name the same tarball, or the install and the pin
   // are two different wranglers that happen to share a version number.
   const lock = await readFile(path.join(ROOT, "bun.lock"), "utf8");
-  if (!lock.includes(`"wrangler@${rootPin}"`)) errors.push(`root: bun.lock does not resolve wrangler to ${rootPin}; run \`bun install\` so the lockfile records that tarball`);
+  if (!lock.includes(`"wrangler@${rootPin}"`))
+    errors.push(`root: bun.lock does not resolve wrangler to ${rootPin}; run \`bun install\` so the lockfile records that tarball`);
 }
 console.log(`root: Wrangler ${rootDeclared} (installed ${installed}, ${pinKind} pin)`);
 
 const manifests = execFileSync("git", ["ls-files", "-z", "--", "package.json", ":(glob)**/package.json"], {
-  cwd: ROOT, encoding: "utf8",
-}).split("\0").filter(Boolean);
+  cwd: ROOT,
+  encoding: "utf8",
+})
+  .split("\0")
+  .filter(Boolean);
 if (!manifests.includes("package.json")) throw new Error("Wrangler check found no tracked root package.json");
 
 for (const manifest of manifests.filter((name) => name !== "package.json")) {
@@ -97,8 +105,10 @@ for (const manifest of manifests.filter((name) => name !== "package.json")) {
   for (const kind of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
     const declared = pkg[kind]?.wrangler;
     if (declared === undefined) continue;
-    if (kind !== "devDependencies") errors.push(`${project}: declares Wrangler under ${kind}; only devDependencies may name it, and only as the root pin ${rootDeclared}`);
-    else if (declared !== rootDeclared) errors.push(`${project}: declares Wrangler ${JSON.stringify(declared)}, which is not the root pin ${JSON.stringify(rootDeclared)}`);
+    if (kind !== "devDependencies")
+      errors.push(`${project}: declares Wrangler under ${kind}; only devDependencies may name it, and only as the root pin ${rootDeclared}`);
+    else if (declared !== rootDeclared)
+      errors.push(`${project}: declares Wrangler ${JSON.stringify(declared)}, which is not the root pin ${JSON.stringify(rootDeclared)}`);
   }
   try {
     const resolved = await realpath(createRequire(path.join(ROOT, manifest)).resolve("wrangler/package.json"));

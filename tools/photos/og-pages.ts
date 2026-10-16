@@ -32,8 +32,7 @@ export const OG_PAGE_DIRS = [
     // library on every request and a regeneration changes every photo.
     id: "home",
     dir: "",
-    alt: "The aadhar.sh homepage as a Windows XP window: Aadharsh Pannirselvam's name "
-       + "and one-line bio above a contact sheet of his photographs.",
+    alt: "The aadhar.sh homepage as a Windows XP window: Aadharsh Pannirselvam's name " + "and one-line bio above a contact sheet of his photographs.",
   },
   {
     id: "access",
@@ -42,8 +41,9 @@ export const OG_PAGE_DIRS = [
     // line the injector synthesises would describe this card as a demo. It is a
     // map, and the alt should say what is actually in the picture. Count-agnostic
     // on purpose: the board grows, and an alt naming a number goes stale silently.
-    alt: "A Windows XP Device Manager window listing the flavors of language-model access "
-       + "as a dependency graph, with yellow-bang and unknown-device icons marking the unfinished ones.",
+    alt:
+      "A Windows XP Device Manager window listing the flavors of language-model access " +
+      "as a dependency graph, with yellow-bang and unknown-device icons marking the unfinished ones.",
   },
   {
     id: "pixel-peeper",
@@ -51,15 +51,17 @@ export const OG_PAGE_DIRS = [
     // Deliberately count-agnostic: the exam picks a two-way or three-way trial at
     // random on every load, so the card is not deterministic and any alt naming a
     // number goes stale the next time someone regenerates it.
-    alt: "A Windows XP window asking which looks best, showing the same photograph side by side "
-       + "at different compression settings, with a hint to hover and pixel-peep.",
+    alt:
+      "A Windows XP window asking which looks best, showing the same photograph side by side " +
+      "at different compression settings, with a hint to hover and pixel-peep.",
   },
   {
     id: "dotfiles",
     dir: "dotfiles",
     // A checklist rather than a demo, so the synthesised "live demo" line would
     // misdescribe it. Count-agnostic like the other two: options get added.
-    alt: "A Windows XP Advanced settings list of macOS defaults, grouped into folders for "
-       + "Keyboard, Trackpad and Appearance, every box ticked and each row showing its factory value.",
+    alt:
+      "A Windows XP Advanced settings list of macOS defaults, grouped into folders for " +
+      "Keyboard, Trackpad and Appearance, every box ticked and each row showing its factory value.",
   },
 ];

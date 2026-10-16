@@ -52,7 +52,7 @@ type El = {
   attrs: Record<string, string>;
   classes: string[];
   children: El[];
-  text?: string;   // set on "#text" nodes alone
+  text?: string; // set on "#text" nodes alone
   innerStart: number;
   innerEnd: number;
 };
@@ -87,9 +87,23 @@ const PROP = /^(p|u|dt|e)-((?:[a-z0-9]+-)?[a-z]+(?:-[a-z]+)*)$/;
 
 // ── entities ───────────────────────────────────────────────────────────────
 const NAMED: Record<string, string> = {
-  amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0",
-  mdash: "\u2014", ndash: "\u2013", hellip: "\u2026", lsquo: "\u2018", rsquo: "\u2019",
-  ldquo: "\u201c", rdquo: "\u201d", copy: "\u00a9", reg: "\u00ae", middot: "\u00b7", bull: "\u2022",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: "\u00a0",
+  mdash: "\u2014",
+  ndash: "\u2013",
+  hellip: "\u2026",
+  lsquo: "\u2018",
+  rsquo: "\u2019",
+  ldquo: "\u201c",
+  rdquo: "\u201d",
+  copy: "\u00a9",
+  reg: "\u00ae",
+  middot: "\u00b7",
+  bull: "\u2022",
 };
 
 export function decodeEntities(s: string): string {
@@ -110,9 +124,9 @@ function parseAttrs(raw: string): Record<string, string> {
   const attrs: Record<string, string> = {};
   for (const m of raw.matchAll(ATTR)) {
     const name = m[1].toLowerCase();
-    if (name in attrs) continue;   // the first occurrence wins, as in a browser
+    if (name in attrs) continue; // the first occurrence wins, as in a browser
     const v = m[2] ?? "";
-    attrs[name] = decodeEntities(v.startsWith("\"") || v.startsWith("'") ? v.slice(1, -1) : v);
+    attrs[name] = decodeEntities(v.startsWith('"') || v.startsWith("'") ? v.slice(1, -1) : v);
   }
   return attrs;
 }
@@ -124,7 +138,9 @@ function buildTree(input: string): El {
   let nodes = 0;
   let last = 0;
   const top = () => stack[stack.length - 1];
-  const pushText = (t: string) => { if (t) top().children.push(textNode(decodeEntities(t))); };
+  const pushText = (t: string) => {
+    if (t) top().children.push(textNode(decodeEntities(t)));
+  };
   const close = (i: number, at: number) => {
     for (let k = stack.length - 1; k >= i; k--) stack[k].innerEnd = at;
     stack.length = i;
@@ -137,12 +153,18 @@ function buildTree(input: string): El {
     if (m[1]) {
       const tag = m[1].toLowerCase();
       for (let i = stack.length - 1; i > 0; i--) {
-        if (stack[i].tag === tag) { close(i, m.index); break; }
+        if (stack[i].tag === tag) {
+          close(i, m.index);
+          break;
+        }
       }
       continue;
     }
-    if (!m[2]) continue;   // comment, doctype, processing instruction
-    if (++nodes > MAX_NODES) { last = src.length; break; }
+    if (!m[2]) continue; // comment, doctype, processing instruction
+    if (++nodes > MAX_NODES) {
+      last = src.length;
+      break;
+    }
 
     const tag = m[2].toLowerCase();
     const closers = AUTO_CLOSE[tag];
@@ -176,7 +198,9 @@ function buildTree(input: string): El {
 
 // ── text helpers ───────────────────────────────────────────────────────────
 const textNode = (text: string): El => ({ tag: "#text", attrs: {}, classes: [], children: [], innerStart: 0, innerEnd: 0, text });
-function elementChildren(el: El): El[] { return el.children.filter((n) => n.tag !== "#text"); }
+function elementChildren(el: El): El[] {
+  return el.children.filter((n) => n.tag !== "#text");
+}
 const cap = (s: string, n = MAX_VALUE) => (s.length > n ? s.slice(0, n) : s);
 
 /** textContent with script and style dropped (the tokenizer never kept them)
@@ -185,7 +209,10 @@ function textOf(el: El, base: string, imgs = true, trim = true): string {
   let out = "";
   const walk = (n: El) => {
     if (out.length > MAX_VALUE) return;
-    if (n.tag === "#text") { out += n.text; return; }
+    if (n.tag === "#text") {
+      out += n.text;
+      return;
+    }
     if (imgs && n.tag === "img") {
       const alt = n.attrs.alt;
       out += alt != null ? ` ${alt} ` : n.attrs.src ? ` ${resolve(n.attrs.src, base)} ` : "";
@@ -198,7 +225,11 @@ function textOf(el: El, base: string, imgs = true, trim = true): string {
 }
 
 function resolve(url: string, base: string): string {
-  try { return new URL(url.trim(), base).href; } catch { return url.trim(); }
+  try {
+    return new URL(url.trim(), base).href;
+  } catch {
+    return url.trim();
+  }
 }
 
 // ── value-class pattern ────────────────────────────────────────────────────
@@ -206,8 +237,11 @@ function valueElements(el: El): El[] {
   const found: El[] = [];
   const walk = (n: El) => {
     for (const c of elementChildren(n)) {
-      if (c.classes.some((k) => ROOT.test(k))) continue;   // a nested item keeps its own values
-      if (c.classes.includes("value") || c.classes.includes("value-title")) { found.push(c); continue; }
+      if (c.classes.some((k) => ROOT.test(k))) continue; // a nested item keeps its own values
+      if (c.classes.includes("value") || c.classes.includes("value-title")) {
+        found.push(c);
+        continue;
+      }
       walk(c);
     }
   };
@@ -232,7 +266,9 @@ const TZ = /^(?:Z|[+-]\d{2}:?(?:\d{2})?)$/i;
  *  timezone and joined as "date time", which is what mf2py and XRay emit. A
  *  part that already carries both halves stands in for the date. */
 function joinDateTime(parts: string[]): string {
-  let date = "", time = "", tz = "";
+  let date = "",
+    time = "",
+    tz = "";
   for (const raw of parts.map((p) => p.trim()).filter(Boolean)) {
     if (!date && /^\d{4}-\d{2}-\d{2}[T ]/.test(raw)) date = raw;
     else if (!date && DATE.test(raw)) date = raw;
@@ -246,7 +282,13 @@ function joinDateTime(parts: string[]): string {
 // ── property parsers ───────────────────────────────────────────────────────
 function parseP(el: El, base: string): string {
   const vals = valueElements(el);
-  if (vals.length) return cap(vals.map((v) => valueOf(v, false, base)).join("").trim());
+  if (vals.length)
+    return cap(
+      vals
+        .map((v) => valueOf(v, false, base))
+        .join("")
+        .trim(),
+    );
   if ((el.tag === "abbr" || el.tag === "link") && el.attrs.title != null) return cap(el.attrs.title);
   if ((el.tag === "data" || el.tag === "input") && el.attrs.value != null) return cap(el.attrs.value);
   if ((el.tag === "img" || el.tag === "area") && el.attrs.alt != null) return cap(el.attrs.alt);
@@ -283,7 +325,9 @@ function parseE(el: El, src: string, base: string): { html: string; value: strin
 }
 
 // ── items ──────────────────────────────────────────────────────────────────
-function rootsOf(el: El): string[] { return el.classes.filter((k) => ROOT.test(k)).sort(); }
+function rootsOf(el: El): string[] {
+  return el.classes.filter((k) => ROOT.test(k)).sort();
+}
 function propsOf(el: El): [string, string][] {
   const out: [string, string][] = [];
   for (const k of el.classes) {
@@ -299,7 +343,9 @@ function parseItem(el: El, ctx: Ctx): Mf2Item {
   const item: Mf2Item = { type: rootsOf(el), properties: {} };
   const children: Mf2Item[] = [];
   const seen = { p: false, u: false, e: false, nested: false };
-  const add = (name: string, v: Mf2Value) => { (item.properties[name] ||= []).push(v); };
+  const add = (name: string, v: Mf2Value) => {
+    (item.properties[name] ||= []).push(v);
+  };
 
   const walk = (node: El) => {
     for (const child of elementChildren(node)) {
@@ -308,22 +354,36 @@ function parseItem(el: El, ctx: Ctx): Mf2Item {
       if (roots.length) {
         const nested = parseItem(child, ctx);
         seen.nested = true;
-        if (!props.length) { children.push(nested); continue; }
+        if (!props.length) {
+          children.push(nested);
+          continue;
+        }
         for (const [prefix, name] of props) {
           const v: Mf2Item = { ...nested };
           if (prefix === "p") v.value = firstString(nested.properties.name) ?? parseP(child, ctx.base);
           else if (prefix === "u") v.value = firstString(nested.properties.url) ?? parseU(child, ctx.base);
           else if (prefix === "dt") v.value = parseDt(child, ctx.base);
-          else { const e = parseE(child, ctx.src, ctx.base); v.value = e.value; v.html = e.html; }
+          else {
+            const e = parseE(child, ctx.src, ctx.base);
+            v.value = e.value;
+            v.html = e.html;
+          }
           add(name, v);
         }
         continue;
       }
       for (const [prefix, name] of props) {
-        if (prefix === "p") { seen.p = true; add(name, parseP(child, ctx.base)); }
-        else if (prefix === "u") { seen.u = true; add(name, parseU(child, ctx.base)); }
-        else if (prefix === "dt") add(name, parseDt(child, ctx.base));
-        else { seen.e = true; add(name, parseE(child, ctx.src, ctx.base)); }
+        if (prefix === "p") {
+          seen.p = true;
+          add(name, parseP(child, ctx.base));
+        } else if (prefix === "u") {
+          seen.u = true;
+          add(name, parseU(child, ctx.base));
+        } else if (prefix === "dt") add(name, parseDt(child, ctx.base));
+        else {
+          seen.e = true;
+          add(name, parseE(child, ctx.src, ctx.base));
+        }
       }
       walk(child);
     }
@@ -337,11 +397,17 @@ function parseItem(el: El, ctx: Ctx): Mf2Item {
   }
   if (!item.properties.photo && !seen.u && !seen.nested) {
     const photo = impliedPhoto(el, ctx.base);
-    if (photo) { item.properties.photo = [photo]; implied.push("photo"); }
+    if (photo) {
+      item.properties.photo = [photo];
+      implied.push("photo");
+    }
   }
   if (!item.properties.url && !seen.u && !seen.nested) {
     const url = impliedUrl(el, ctx.base);
-    if (url) { item.properties.url = [url]; implied.push("url"); }
+    if (url) {
+      item.properties.url = [url];
+      implied.push("url");
+    }
   }
   if (implied.length) item.implied = implied;
   if (children.length) item.children = children;
@@ -413,7 +479,10 @@ export function parseMf2(html: string, pageUrl: string): Mf2Doc {
 
   const findBase = (n: El): boolean => {
     for (const c of elementChildren(n)) {
-      if (c.tag === "base" && c.attrs.href) { base = resolve(c.attrs.href, pageUrl); return true; }
+      if (c.tag === "base" && c.attrs.href) {
+        base = resolve(c.attrs.href, pageUrl);
+        return true;
+      }
       if (findBase(c)) return true;
     }
     return false;
@@ -455,7 +524,10 @@ export function mf2All(doc: Mf2Doc): Mf2Item[] {
     if (out.length >= 2000) return;
     out.push(it);
     for (const vals of Object.values(it.properties)) {
-      for (const v of vals) { const nested = asItem(v); if (nested) visit(nested); }
+      for (const v of vals) {
+        const nested = asItem(v);
+        if (nested) visit(nested);
+      }
     }
     for (const c of it.children || []) visit(c);
   };
@@ -476,7 +548,10 @@ export function mf2Values(item: Mf2Item | undefined, name: string): ({ item: Mf2
   for (const v of item?.properties[name] || []) {
     const nested = asItem(v);
     if (nested) out.push({ item: nested });
-    else { const s = textValue(v); if (s !== null) out.push({ text: s }); }
+    else {
+      const s = textValue(v);
+      if (s !== null) out.push({ text: s });
+    }
   }
   return out;
 }

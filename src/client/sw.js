@@ -8,12 +8,16 @@
 // the moment it activates. The deploy log lives on at /updates.
 // `void`: skipWaiting() returns a promise nobody needs, and a listener that
 // RETURNS it hands a promise to a void slot (no-misused-promises, real).
-self.addEventListener("install", () => { void self.skipWaiting(); });
+self.addEventListener("install", () => {
+  void self.skipWaiting();
+});
 self.addEventListener("activate", (/** @type {ExtendableEvent} */ event) => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.map((k) => caches.delete(k)));
-    await self.clients.claim();
-    await self.registration.unregister();
-  })());
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+      await self.clients.claim();
+      await self.registration.unregister();
+    })(),
+  );
 });

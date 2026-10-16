@@ -119,13 +119,15 @@ export const LENS_RECEIPT_TYPE = "application/lens-receipt";
 // page reads it for free and forges a receipt that passes the check. Measured in
 // Chromium 2026-08-08: `typeof window.__LENS_N` came back "string".
 function harness(nonce, body) {
-  return `(function(__LENS_N){var __me=document.currentScript;`
-    + `function __receipt(r){try{var s=document.createElement("script");`
-    + `s.type=${JSON.stringify(LENS_RECEIPT_TYPE)};s.id=${JSON.stringify(LENS_RECEIPT_ID)};`
-    + `s.textContent=JSON.stringify({v:1,n:__LENS_N,acted:r.acted|0,scanned:r.scanned|0,note:r.note});`
-    + `document.documentElement.appendChild(s);}catch(e){}}`
-    + `try{${body}}catch(e){__receipt({acted:0,scanned:0,note:"threw"});}`
-    + `if(__me&&__me.parentNode)__me.parentNode.removeChild(__me);})(${JSON.stringify(nonce)});`;
+  return (
+    `(function(__LENS_N){var __me=document.currentScript;` +
+    `function __receipt(r){try{var s=document.createElement("script");` +
+    `s.type=${JSON.stringify(LENS_RECEIPT_TYPE)};s.id=${JSON.stringify(LENS_RECEIPT_ID)};` +
+    `s.textContent=JSON.stringify({v:1,n:__LENS_N,acted:r.acted|0,scanned:r.scanned|0,note:r.note});` +
+    `document.documentElement.appendChild(s);}catch(e){}}` +
+    `try{${body}}catch(e){__receipt({acted:0,scanned:0,note:"threw"});}` +
+    `if(__me&&__me.parentNode)__me.parentNode.removeChild(__me);})(${JSON.stringify(nonce)});`
+  );
 }
 
 // Ordered: this array IS the chip order in the UI.
@@ -137,9 +139,10 @@ export const LENS_RECIPES = Object.freeze([
     // Pure DOM, synchronous, no heuristics, no network. This is the control
     // recipe: if it does not work, nothing here works, which is why the probe
     // fixture is built around it.
-    script: `var n=0,seen=0;`
-      + `document.querySelectorAll("details").forEach(function(d){seen++;if(!d.open){d.open=true;n++;}});`
-      + `__receipt({acted:n,scanned:seen,note:n?"acted":"none-found"});`,
+    script:
+      `var n=0,seen=0;` +
+      `document.querySelectorAll("details").forEach(function(d){seen++;if(!d.open){d.open=true;n++;}});` +
+      `__receipt({acted:n,scanned:seen,note:n?"acted":"none-found"});`,
   }),
   Object.freeze({
     id: "consent",
@@ -151,22 +154,23 @@ export const LENS_RECIPES = Object.freeze([
     // the page, big enough to be a wall rather than a badge, and worded like
     // consent. `scanned` counts every pinned element examined, because that
     // number is what makes "found nothing" read as a finding rather than a bug.
-    script: `var n=0,seen=0,W=innerWidth*innerHeight;`
-      + `var RE=/cookie|consent|privacy|gdpr|tracking|newsletter|subscribe/i;`
-      + `Array.prototype.slice.call(document.querySelectorAll("body *")).forEach(function(el){`
-      + `var cs;try{cs=getComputedStyle(el);}catch(e){return;}`
-      + `if(cs.position!=="fixed"&&cs.position!=="sticky")return;seen++;`
-      + `if((parseInt(cs.zIndex,10)||0)<1000)return;`
-      + `var r=el.getBoundingClientRect();if(!W||(r.width*r.height)/W<0.25)return;`
-      + `if(!RE.test(el.innerText||""))return;`
-      + `if(el.parentNode){el.parentNode.removeChild(el);n++;}});`
+    script:
+      `var n=0,seen=0,W=innerWidth*innerHeight;` +
+      `var RE=/cookie|consent|privacy|gdpr|tracking|newsletter|subscribe/i;` +
+      `Array.prototype.slice.call(document.querySelectorAll("body *")).forEach(function(el){` +
+      `var cs;try{cs=getComputedStyle(el);}catch(e){return;}` +
+      `if(cs.position!=="fixed"&&cs.position!=="sticky")return;seen++;` +
+      `if((parseInt(cs.zIndex,10)||0)<1000)return;` +
+      `var r=el.getBoundingClientRect();if(!W||(r.width*r.height)/W<0.25)return;` +
+      `if(!RE.test(el.innerText||""))return;` +
+      `if(el.parentNode){el.parentNode.removeChild(el);n++;}});` +
       // A wall usually locks the scroll and hides the document from a11y trees
       // on its way in. Removing the node without undoing those leaves a page
       // that reads as empty to exactly the machine this lens is imitating.
-      + `[document.documentElement,document.body].forEach(function(e){if(e&&e.style)e.style.overflow="";});`
-      + `var m=document.querySelector("main");`
-      + `if(m){m.removeAttribute("inert");m.removeAttribute("aria-hidden");}`
-      + `__receipt({acted:n,scanned:seen,note:n?"acted":"none-found"});`,
+      `[document.documentElement,document.body].forEach(function(e){if(e&&e.style)e.style.overflow="";});` +
+      `var m=document.querySelector("main");` +
+      `if(m){m.removeAttribute("inert");m.removeAttribute("aria-hidden");}` +
+      `__receipt({acted:n,scanned:seen,note:n?"acted":"none-found"});`,
   }),
 ]);
 
@@ -205,10 +209,7 @@ export function lensRecipeCatalog() {
   return LENS_RECIPES.map((r) => ({ id: r.id, label: r.label, claim: r.claim, script: r.script }));
 }
 
-const RECEIPT_RE = new RegExp(
-  `<script[^>]*\\bid=["']?${LENS_RECEIPT_ID}["']?[^>]*>([\\s\\S]*?)</script\\s*>`,
-  "i",
-);
+const RECEIPT_RE = new RegExp(`<script[^>]*\\bid=["']?${LENS_RECEIPT_ID}["']?[^>]*>([\\s\\S]*?)</script\\s*>`, "i");
 
 const clampCount = (n) => (Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), RECIPE_COUNT_MAX) : 0);
 
@@ -228,7 +229,11 @@ export function lensRecipeReceipt(html, nonce) {
   if (!match) return { receipt: null, html: stripped };
 
   let parsed;
-  try { parsed = JSON.parse(match[1]); } catch (_e) { return { receipt: null, html: stripped }; }
+  try {
+    parsed = JSON.parse(match[1]);
+  } catch (_e) {
+    return { receipt: null, html: stripped };
+  }
   if (!asRecord(parsed)) return { receipt: null, html: stripped };
 
   // The nonce check. A page that shipped its own receipt is REPORTED rather than

@@ -89,8 +89,12 @@ import { isCallable } from "./lib/parse.ts";
 // guard rather than a truthiness check.
 let kitesurfParamLive: boolean | null = null;
 
-export function _resetKitesurfProbe() { kitesurfParamLive = null; }
-export function _kitesurfParamLive() { return kitesurfParamLive; }
+export function _resetKitesurfProbe() {
+  kitesurfParamLive = null;
+}
+export function _kitesurfParamLive() {
+  return kitesurfParamLive;
+}
 
 const REST_BASE = "https://api.cloudflare.com/client/v4/accounts";
 
@@ -104,8 +108,7 @@ export const restUrl = (accountId, action, engine?) =>
 // Either door counts. A deployment holding only a REST token still renders, so
 // a guard that insists on the BINDING would 503 a working configuration.
 export const hasRenderEngine = (env) =>
-  Boolean((env && env.BROWSER && isCallable(env.BROWSER.quickAction))
-    || (env && env.CF_ACCOUNT_ID && env.BROWSER_RUN_TOKEN));
+  Boolean((env && env.BROWSER && isCallable(env.BROWSER.quickAction)) || (env && env.CF_ACCOUNT_ID && env.BROWSER_RUN_TOKEN));
 
 // Runs a Quick Action and reports which engine served it. Returns a Response so
 // callers keep their own status/JSON handling — /lens/browser has four distinct
@@ -128,14 +131,12 @@ export async function runBrowserAction(action, payload, env, { engine = "kitesur
   // door the moment the parameter turned out to be dead, silently demoting every
   // later render to the binding. Only the PARAMETER is conditional.
   const tryEngine = engine === "kitesurf" && kitesurfParamLive !== false;
-  const call = (withEngine) => fetch(
-    restUrl(env.CF_ACCOUNT_ID, action, withEngine ? "kitesurf" : ""),
-    {
+  const call = (withEngine) =>
+    fetch(restUrl(env.CF_ACCOUNT_ID, action, withEngine ? "kitesurf" : ""), {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${env.BROWSER_RUN_TOKEN}` },
       body: JSON.stringify(payload),
-    },
-  );
+    });
   let response = await call(tryEngine);
   // A 400 on the attempt CARRYING the selector is the signal that the beta
   // parameter is not live here. Retry once without it rather than report the
@@ -171,13 +172,14 @@ export function kitesurfPayload(payload) {
 // plain node. Coarse on purpose: both sides of any comparison run through the
 // SAME function, so a systematic undercount cancels and only the difference is
 // ever claimed.
-const stripped = (html) => String(html || "")
-  .replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
-  .replace(/<!--[\s\S]*?-->/g, " ")
-  .replace(/<[^>]+>/g, " ")
-  .replace(/&(?:nbsp|#160);/gi, " ")
-  .replace(/\s+/g, " ")
-  .trim();
+const stripped = (html) =>
+  String(html || "")
+    .replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&(?:nbsp|#160);/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const countMatches = (html, re) => (String(html || "").match(re) || []).length;
 

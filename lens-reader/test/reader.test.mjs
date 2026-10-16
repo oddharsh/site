@@ -40,12 +40,13 @@ test("the oracle and the Worker resolve one parser generation", () => {
   const parser = JSON.parse(readFileSync(new URL("../node_modules/htmlparser2/package.json", import.meta.url), "utf8"));
   const declared = manifest.dependencies?.htmlparser2;
 
-  assert.match(String(declared), /^\d+\.\d+\.\d+$/,
-    "src/dom.ts parses with htmlparser2 directly, so it must be a declared dependency at an EXACT version rather than linkedom's transitive or a range");
-  assert.equal(manifest.devDependencies?.linkedom, "0.18.13",
-    "linkedom is the parity oracle; deleting it deletes the only proof src/dom.ts is faithful");
-  assert.equal(manifest.overrides?.htmlparser2, declared,
-    "without the override the oracle resolves a different parser than the Worker bundles");
+  assert.match(
+    String(declared),
+    /^\d+\.\d+\.\d+$/,
+    "src/dom.ts parses with htmlparser2 directly, so it must be a declared dependency at an EXACT version rather than linkedom's transitive or a range",
+  );
+  assert.equal(manifest.devDependencies?.linkedom, "0.18.13", "linkedom is the parity oracle; deleting it deletes the only proof src/dom.ts is faithful");
+  assert.equal(manifest.overrides?.htmlparser2, declared, "without the override the oracle resolves a different parser than the Worker bundles");
   assert.equal(parser.version, declared, "the installed parser must honor the override");
   assert.equal(
     existsSync(new URL("../node_modules/htmlparser2/node_modules/domutils/package.json", import.meta.url)),
@@ -80,12 +81,13 @@ test("the aligned parser reads a self-closing script the way a browser does", ()
   const root = parseHTML(source).document.documentElement;
   assert.ok(root, "the fitted DOM parsed no documentElement");
   const shipped = root.firstElementChild;
-  assert.equal(shipped?.outerHTML, expected,
-    "a self-closing script is not self-closing: the slash is ignored and the document close is script data");
-  assert.equal(parseLinkedom(source).document.documentElement.firstElementChild?.toString(), expected,
-    "the oracle must agree, or the parity gate is measuring against a different parser");
+  assert.equal(shipped?.outerHTML, expected, "a self-closing script is not self-closing: the slash is ignored and the document close is script data");
+  assert.equal(
+    parseLinkedom(source).document.documentElement.firstElementChild?.toString(),
+    expected,
+    "the oracle must agree, or the parity gate is measuring against a different parser",
+  );
 });
-
 
 test("the focused Markdown walk covers the article vocabulary", () => {
   const md = toMarkdown("<h2>Title</h2><p>Body <strong>text</strong>.</p>");
@@ -141,17 +143,17 @@ test("read publishes Markdown from Readability's finished article node", async (
     // overlap enough for a direct assertion and the hop through `unknown` is what
     // TypeScript asks for. Widening the stub to satisfy the type would be adding
     // a method to a test double for the compiler's benefit.
-    globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (
-      async () => new Response(html, {
-        status: 200,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      })
-    ));
+    globalThis.fetch = /** @type {typeof fetch} */ (
+      /** @type {unknown} */ (
+        async () =>
+          new Response(html, {
+            status: 200,
+            headers: { "content-type": "text/html; charset=utf-8" },
+          })
+      )
+    );
     const result = await read("https://example.com/article");
-    const baseline = new (await import("@mozilla/readability")).Readability(
-      parseHTML(html).document,
-      { charThreshold: 500 },
-    ).parse();
+    const baseline = new (await import("@mozilla/readability")).Readability(parseHTML(html).document, { charThreshold: 500 }).parse();
     // `parse()` answers null on a document it cannot extract. The old
     // `baseline.content` would have thrown a bare TypeError there, blaming the
     // assertion rather than the fixture.
@@ -168,16 +170,20 @@ test("Reader validates redirect hops before fetching and preserves the final URL
   try {
     for (const target of ["http://169.254.169.254/private", "https://example.org/article"]) {
       const seen = [];
-      globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (async (url, init) => {
-        seen.push(String(url));
-        if (String(url) === "https://example.com/start") {
-          if (init.redirect === "manual") return new Response(null, { status: 302, headers: { location: target } });
-          seen.push(target); // model the request automatic following makes
-        }
-        const response = new Response("fixture", { headers: { "content-type": "text/plain" } });
-        Object.defineProperty(response, "url", { value: target });
-        return response;
-      }));
+      globalThis.fetch = /** @type {typeof fetch} */ (
+        /** @type {unknown} */ (
+          async (url, init) => {
+            seen.push(String(url));
+            if (String(url) === "https://example.com/start") {
+              if (init.redirect === "manual") return new Response(null, { status: 302, headers: { location: target } });
+              seen.push(target); // model the request automatic following makes
+            }
+            const response = new Response("fixture", { headers: { "content-type": "text/plain" } });
+            Object.defineProperty(response, "url", { value: target });
+            return response;
+          }
+        )
+      );
       if (target.startsWith("http:")) {
         await assert.rejects(read("https://example.com/start"), (error) => error instanceof ReaderError && /will not follow/.test(error.message));
         assert.deepEqual(seen, ["https://example.com/start"], "refusal must precede the private request");
@@ -188,7 +194,9 @@ test("Reader validates redirect hops before fetching and preserves the final URL
         assert.deepEqual(seen, ["https://example.com/start", target]);
       }
     }
-  } finally { globalThis.fetch = original; }
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
 test("the network deadline aborts a body that stalls after successful headers", async () => {
@@ -207,28 +215,41 @@ test("the network deadline aborts a body that stalls after successful headers", 
       if (ms === FETCH_TIMEOUT_MS) deadlineScheduled = true;
       return originalTimeout.call(AbortSignal, ms === FETCH_TIMEOUT_MS ? 10 : ms);
     };
-    globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (
-      async (_url, { signal }) => new Response(new ReadableStream({
-        start(controller) {
-          body = controller;
-          controller.enqueue(new TextEncoder().encode("<html><body>Partial article"));
-          signal.addEventListener("abort", () => {
-            aborted = true;
-            controller.error(signal.reason);
-          }, { once: true });
-        },
-      }), { headers: { "content-type": "text/html" } })
-    ));
+    globalThis.fetch = /** @type {typeof fetch} */ (
+      /** @type {unknown} */ (
+        async (_url, { signal }) =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                body = controller;
+                controller.enqueue(new TextEncoder().encode("<html><body>Partial article"));
+                signal.addEventListener(
+                  "abort",
+                  () => {
+                    aborted = true;
+                    controller.error(signal.reason);
+                  },
+                  { once: true },
+                );
+              },
+            }),
+            { headers: { "content-type": "text/html" } },
+          )
+      )
+    );
     // A watchdog fails the regression instead of leaving the suite hung when
     // the application clears its timer too early.
     let watchdog;
     try {
-      await assert.rejects(Promise.race([
-        read("https://example.com/slow-body"),
-        new Promise((_resolve, reject) => {
-          watchdog = setTimeout(() => reject(new Error("Reader exceeded its network deadline")), 500);
-        }),
-      ]), (error) => error instanceof ReaderError && /within 8s/.test(error.message));
+      await assert.rejects(
+        Promise.race([
+          read("https://example.com/slow-body"),
+          new Promise((_resolve, reject) => {
+            watchdog = setTimeout(() => reject(new Error("Reader exceeded its network deadline")), 500);
+          }),
+        ]),
+        (error) => error instanceof ReaderError && /within 8s/.test(error.message),
+      );
       assert.equal(aborted, true, "the upstream stream must be aborted, not left running");
       assert.equal(deadlineScheduled, true, "the Reader must schedule its declared network budget");
     } finally {
@@ -254,7 +275,7 @@ test("both word counts come from one function, so the gap is extraction", () => 
 });
 
 test("control counting is an upper bound and never a silent overcount", () => {
-  const { document } = parseHTML('<html><body><button>Run all three</button><button>Close</button></body></html>');
+  const { document } = parseHTML("<html><body><button>Run all three</button><button>Close</button></body></html>");
   // "Close" also appears as ordinary prose, which is precisely why the payload
   // labels this an upper bound instead of reporting it as fact.
   const counted = countControls(collectControlLabels(document), "<p>Run all three now. Then close the window.</p>");
@@ -265,23 +286,35 @@ test("control counting is an upper bound and never a silent overcount", () => {
 
 test("content recovery is four transparent checks over Readability output", () => {
   const score = scoreExtraction({
-    source: { words: 300 }, kept: { words: 180 },
-    controls: { total: 8, kept: 1 }, title: "A readable article", markdown: "# A readable article\n\nBody",
+    source: { words: 300 },
+    kept: { words: 180 },
+    controls: { total: 8, kept: 1 },
+    title: "A readable article",
+    markdown: "# A readable article\n\nBody",
   });
   assert.equal(score.overall, 100);
   assert.equal(score.counted, 4);
   assert.equal(score.passed, 4);
-  assert.deepEqual(score.checks.map((check) => check.key), ["body", "title", "controls", "markdown"]);
+  assert.deepEqual(
+    score.checks.map((check) => check.key),
+    ["body", "title", "controls", "markdown"],
+  );
   assert.match(score.scoringNote, /Readability itself does not publish this score/);
 });
 
 test("control leakage and an empty title reduce recovery without inventing partial credit", () => {
   const score = scoreExtraction({
-    source: { words: 120 }, kept: { words: 80 },
-    controls: { total: 4, kept: 3 }, title: "", markdown: "Body",
+    source: { words: 120 },
+    kept: { words: 80 },
+    controls: { total: 4, kept: 3 },
+    title: "",
+    markdown: "Body",
   });
   assert.equal(score.overall, 50);
-  assert.deepEqual(score.checks.map((check) => check.pass), [true, false, false, true]);
+  assert.deepEqual(
+    score.checks.map((check) => check.pass),
+    [true, false, false, true],
+  );
 });
 
 test("only messages written for the visitor are publishable", async () => {
@@ -291,10 +324,8 @@ test("only messages written for the visitor are publishable", async () => {
   // exposure through a stack trace. The fix is a marker class, so the guard is
   // that the entrypoint gates on it and never falls back to raw message text.
   assert.ok(new ReaderError("x").visitorFacing, "ReaderError must mark itself visitor-facing");
-  assert.match(entry, /error instanceof ReaderError/,
-    "the entrypoint must gate published messages on ReaderError");
-  assert.doesNotMatch(entry, /String\(\(?error(\s*&&\s*error)?\.message/,
-    "the entrypoint must never publish a raw error message again");
+  assert.match(entry, /error instanceof ReaderError/, "the entrypoint must gate published messages on ReaderError");
+  assert.doesNotMatch(entry, /String\(\(?error(\s*&&\s*error)?\.message/, "the entrypoint must never publish a raw error message again");
 });
 
 test("the extractor actually extracts, which no other test here proved", async () => {
@@ -360,8 +391,7 @@ test("the control census survives Readability mutation without a second DOM", as
   const result = new Readability(document, { charThreshold: 500 }).parse();
   if (!result?.content) throw new Error("Readability extracted nothing from the control fixture");
 
-  assert.ok(document.body.innerHTML.length < beforeBytes / 2,
-    "Readability left the document intact, so the mutation boundary is no longer exercised");
+  assert.ok(document.body.innerHTML.length < beforeBytes / 2, "Readability left the document intact, so the mutation boundary is no longer exercised");
   assert.equal(document.querySelectorAll("button").length, 0, "the fixture did not lose its source control");
   const counted = countControls(labels, result.content);
   assert.equal(counted.total, 1, "the pre-extraction label snapshot lost the source control");

@@ -74,9 +74,9 @@ export const SECURITY_HEADERS = {
   // removed), same fate as `interest-cohort` before it.
   "permissions-policy":
     "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
-  "x-frame-options":         "DENY",
-  "x-content-type-options":  "nosniff",
-  "referrer-policy":         "strict-origin-when-cross-origin",
+  "x-frame-options": "DENY",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "strict-origin-when-cross-origin",
 };
 
 const HOMEPAGE_DISCOVERY_LINKS = [

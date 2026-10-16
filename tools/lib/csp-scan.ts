@@ -104,7 +104,7 @@ export async function scanDocument(source: string, label: string): Promise<ScanR
         if (srcdoc) items.push({ srcdoc: decodeCharRefs(srcdoc), label: `${label}: <${tag} srcdoc>` });
 
         if (tag !== "script") return;
-        if (el.getAttribute("src") !== null) return;      // external: covered by 'self'
+        if (el.getAttribute("src") !== null) return; // external: covered by 'self'
         if (!isExecutableType((el.getAttribute("type") || "").toLowerCase())) return;
 
         // Reserved here, so an EMPTY <script></script> still gets its slot and

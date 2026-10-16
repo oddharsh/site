@@ -52,12 +52,15 @@ const site = await siteConfig();
 const dir = mkdtempSync(join(tmpdir(), "workerd-temporal-probe-"));
 try {
   writeFileSync(join(dir, "worker.mjs"), WORKER);
-  writeFileSync(join(dir, "wrangler.jsonc"), JSON.stringify({
-    name: "workerd-temporal-probe",
-    main: "./worker.mjs",
-    compatibility_date: site.compatibility_date,
-    compatibility_flags: site.compatibility_flags,
-  }));
+  writeFileSync(
+    join(dir, "wrangler.jsonc"),
+    JSON.stringify({
+      name: "workerd-temporal-probe",
+      main: "./worker.mjs",
+      compatibility_date: site.compatibility_date,
+      compatibility_flags: site.compatibility_flags,
+    }),
+  );
   const server = createTestHarness({ workers: [{ configPath: join(dir, "wrangler.jsonc") }] });
   try {
     await server.listen();

@@ -35,8 +35,7 @@ const DEFINITION = /(?<!style\(\s*)(--[a-z0-9][a-z0-9-]*)\s*:/g;
 const REFERENCE = /(?:var|style)\(\s*(--[a-z0-9][a-z0-9-]*)/g;
 
 /** A first argument to those APIs that is NOT a literal, which would be unsafe. */
-const PROPERTY_API_DYNAMIC =
-  /(?:setProperty|getPropertyValue|removeProperty|getPropertyPriority)\(\s*(?![`"'])[^)]/g;
+const PROPERTY_API_DYNAMIC = /(?:setProperty|getPropertyValue|removeProperty|getPropertyPriority)\(\s*(?![`"'])[^)]/g;
 
 const matchAll = (re: RegExp, text: string): string[] => [...text.matchAll(re)].map((m) => m[1]);
 
@@ -56,9 +55,7 @@ export function assertNoDynamicPropertyNames(files: Map<string, string>): void {
     }
   }
   if (offenders.length) {
-    throw new Error(
-      `mangle: a custom property name is built at runtime, so it cannot be renamed safely:\n  ${offenders.join("\n  ")}`,
-    );
+    throw new Error(`mangle: a custom property name is built at runtime, so it cannot be renamed safely:\n  ${offenders.join("\n  ")}`);
   }
 }
 
@@ -205,7 +202,9 @@ export function pruneUnread(files: Map<string, string>, isStylesheet: (rel: stri
   const current = new Map(files);
   const dropped: string[] = [];
   for (;;) {
-    const tokens = new Map<string, number>(), definitions = new Map<string, number>(), inStylesheet = new Set<string>();
+    const tokens = new Map<string, number>(),
+      definitions = new Map<string, number>(),
+      inStylesheet = new Set<string>();
     for (const [rel, text] of current) {
       for (const t of text.match(TOKEN) ?? []) tokens.set(t, (tokens.get(t) ?? 0) + 1);
       for (const n of definitionsIn(text)) {
@@ -215,15 +214,18 @@ export function pruneUnread(files: Map<string, string>, isStylesheet: (rel: stri
     }
     const unread = [...inStylesheet].filter((n) => !RESERVED.has(n) && (tokens.get(n) ?? 0) <= (definitions.get(n) ?? 0));
     if (!unread.length) break;
-    const names = new Set(unread), removed = new Set<string>();
+    const names = new Set(unread),
+      removed = new Set<string>();
     for (const [rel, text] of current) {
       if (!isStylesheet(rel)) continue;
       // one declaration: the name at a token boundary, its value up to ; or }
-      const next = text.replace(/(?<![a-z0-9-])(?<!style\(\s*)(--[a-z0-9][a-z0-9-]*)\s*:[^;}]*;?/g, (decl, name) => {
-        if (!names.has(name)) return decl;
-        removed.add(name);
-        return "";
-      }).replace(/;}/g, "}");
+      const next = text
+        .replace(/(?<![a-z0-9-])(?<!style\(\s*)(--[a-z0-9][a-z0-9-]*)\s*:[^;}]*;?/g, (decl, name) => {
+          if (!names.has(name)) return decl;
+          removed.add(name);
+          return "";
+        })
+        .replace(/;}/g, "}");
       if (next !== text) current.set(rel, next);
     }
     if (!removed.size) break;
@@ -233,8 +235,7 @@ export function pruneUnread(files: Map<string, string>, isStylesheet: (rel: stri
 }
 
 /** Rewrite one file. Whole-token lookup, so `--blue-9` cannot match `--blue-95`. */
-export const applyMangle = (text: string, map: Map<string, string>): string =>
-  text.replace(TOKEN, (token) => map.get(token) ?? token);
+export const applyMangle = (text: string, map: Map<string, string>): string => text.replace(TOKEN, (token) => map.get(token) ?? token);
 
 type Scan = { defined: string[]; referenced: string[] };
 const scanOf = (text: string): Scan => ({ defined: definitionsIn(text), referenced: referencesIn(text) });
@@ -243,7 +244,10 @@ const scanOf = (text: string): Scan => ({ defined: definitionsIn(text), referenc
 // keyed by file: one is used only while that file's text is unchanged, which
 // is how assertIntegrity scans the after-tree without re-reading the files the
 // rename left alone (121 of 218 on 2026-10-08).
-function danglingFrom(files: Map<string, string>, reuse?: { text: Map<string, string>; scans: Map<string, Scan> }): {
+function danglingFrom(
+  files: Map<string, string>,
+  reuse?: { text: Map<string, string>; scans: Map<string, Scan> },
+): {
   dangling: Set<string>;
   scans: Map<string, Scan>;
 } {
@@ -275,12 +279,7 @@ export function unresolved(files: Map<string, string>): Set<string> {
  * the set of DANGLING references is exactly what it was, name for name, with
  * the rename applied to it. A file the walk forgot shows up here immediately.
  */
-export function assertIntegrity(
-  before: Map<string, string>,
-  after: Map<string, string>,
-  map: Map<string, string>,
-  floor: number,
-): void {
+export function assertIntegrity(before: Map<string, string>, after: Map<string, string>, map: Map<string, string>, floor: number): void {
   if (map.size < floor) {
     throw new Error(`mangle: only ${map.size} custom properties renamed, expected at least ${floor} — did the collector stop seeing the styles?`);
   }

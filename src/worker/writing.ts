@@ -85,25 +85,37 @@ border:2px solid var(--luna-44);border-right-color:var(--luna-34);border-bottom-
 export function writingShell(o) {
   // The Markdown twin, where the build wrote one: the lookup lunaPage makes.
   const twin = twinFor(o.path);
-  return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
-    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">" +
-    "<meta name=\"theme-color\" content=\"#2D78BD\">" +
-    "<title>" + escHtml(o.title) + "</title>" +
+  return (
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
+    '<meta name="theme-color" content="#2D78BD">' +
+    "<title>" +
+    escHtml(o.title) +
+    "</title>" +
     // The section tile, same as the taskbar pin. Notepad builds its own head
     // rather than going through lunaPage, so it states this itself.
-    "<link rel=\"icon\" type=\"image/svg+xml\" href=\"/section-icons/writing.svg\">" +
-    "<meta name=\"description\" content=\"" + escAttr(o.desc) + "\">" +
-    "<link rel=\"canonical\" href=\"https://aadhar.sh" + escAttr(o.path) + "\">" +
+    '<link rel="icon" type="image/svg+xml" href="/section-icons/writing.svg">' +
+    '<meta name="description" content="' +
+    escAttr(o.desc) +
+    '">' +
+    '<link rel="canonical" href="https://aadhar.sh' +
+    escAttr(o.path) +
+    '">' +
     // A post unfurls as an article and the folder as a site page. No image: a
     // note has none, and an unfurler draws title and description without one.
     String(shareMeta({ title: o.title, description: o.desc, path: o.path, type: o.path === "/writing" ? "website" : "article" })) +
-    (twin ? "<link rel=\"alternate\" type=\"text/markdown\" title=\"markdown source\" href=\"" + escAttr(twin) + "\">" : "") +
+    (twin ? '<link rel="alternate" type="text/markdown" title="markdown source" href="' + escAttr(twin) + '">' : "") +
     // Feed discovery for the whole section, on the index and on every post, which
     // is where a reader's "subscribe" button actually looks.
-    "<link rel=\"alternate\" type=\"application/rss+xml\" title=\"aadhar.sh — writing\" href=\"/writing/feed.xml\">" +
-    "<style>" + NOTEPAD_CSS + "</style><link rel=\"stylesheet\" href=\"/luna.css\"></head><body class=\"np-page\">" + DESKTOP_TOP +
+    '<link rel="alternate" type="application/rss+xml" title="aadhar.sh — writing" href="/writing/feed.xml">' +
+    "<style>" +
+    NOTEPAD_CSS +
+    '</style><link rel="stylesheet" href="/luna.css"></head><body class="np-page">' +
+    DESKTOP_TOP +
     o.body +
-    DESKTOP_CHROME + "<script src=\"/notepad.js\" defer></script><script src=\"/nav.js\" defer></script></body></html>";
+    DESKTOP_CHROME +
+    '<script src="/notepad.js" defer></script><script src="/nav.js" defer></script></body></html>'
+  );
 }
 
 // The site owner as a microformats2 h-card, for p-author on a note and on the
@@ -114,14 +126,14 @@ export function writingShell(o) {
 // inline element draws nothing, so the Luna chrome is untouched.
 export const OWNER_NAME = "Aadharsh Pannirselvam";
 export const OWNER_URL = "https://aadhar.sh/";
-const AUTHOR_CARD = "<span class=\"p-author h-card\"><data class=\"p-name\" value=\"" + OWNER_NAME + "\"></data>" +
-  "<data class=\"u-url\" value=\"" + OWNER_URL + "\"></data></span>";
+const AUTHOR_CARD =
+  '<span class="p-author h-card"><data class="p-name" value="' + OWNER_NAME + '"></data>' + '<data class="u-url" value="' + OWNER_URL + '"></data></span>';
 
 const permalink = (slug) => "https://aadhar.sh/writing/" + slug;
 
 // The page window's maximize control: a native button nav.js wires, so it is
 // reachable and announced (the title bar itself is not aria-hidden).
-const MAX_BUTTON = "<button type=\"button\" class=\"max\" title=\"maximize\" aria-label=\"maximize\"></button>";
+const MAX_BUTTON = '<button type="button" class="max" title="maximize" aria-label="maximize"></button>';
 
 // popId (optional): render the window as an inline popover (id + popover="auto")
 // so it can composite over the folder index instead of being its own page.
@@ -132,46 +144,68 @@ const MAX_BUTTON = "<button type=\"button\" class=\"max\" title=\"maximize\" ari
 // `url` is its canonical permalink.
 export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: { name: string; url: string }) {
   var open = popId
-    ? "<div class=\"np-window np-note\" id=\"" + escAttr(popId) + "\" popover=\"manual\">"
-    : "<div class=\"np-window" + (entry ? " h-entry" : "") + "\">";
+    ? '<div class="np-window np-note" id="' + escAttr(popId) + '" popover="manual">'
+    : '<div class="np-window' + (entry ? " h-entry" : "") + '">';
   // p-name wraps the title inside the caption text, so the caption reads exactly
   // as before and the parsed name is the title alone, without the file
   // extension or the Notepad suffix.
   const title = entry
-    ? "<span class=\"p-name\">" + escHtml(entry.name) + "</span>" +
+    ? '<span class="p-name">' +
+      escHtml(entry.name) +
+      "</span>" +
       escHtml(filename.startsWith(entry.name) ? filename.slice(entry.name.length) : "") +
-      "<data class=\"u-url\" value=\"" + escAttr(entry.url) + "\"></data>" + AUTHOR_CARD
+      '<data class="u-url" value="' +
+      escAttr(entry.url) +
+      '"></data>' +
+      AUTHOR_CARD
     : escHtml(filename);
   // dt-published reads the ISO date off datetime. posts.json's date is also what
   // the RSS feed sends as pubDate, so the two cannot name different days.
-  const stamp = entry && date
-    ? "<time class=\"dt-published\" datetime=\"" + escAttr(date) + "\">" + escHtml(date) + "</time>"
-    : escHtml(date);
-  return open +
-    "<div class=\"np-titlebar\">" + (popId ? "" : DESKTOP_HISTNAV) + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
-      // The standalone note's caption is its page heading. A popover note sits
-      // inside the folder index, whose own caption is that page's one h1.
-      (popId ? "<span class=\"np-title\">" + title + " — Notepad</span>" : "<h1 class=\"np-title\">" + title + " — Notepad</h1>") +
-      // A popover note is never the body-level window nav.js wires, so its max
-      // stays an inert decoration; the standalone window's is a real button.
-      "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + (popId ? "<span class=\"max\" aria-hidden=\"true\"></span>" : MAX_BUTTON) +
-      "<a class=\"close\" href=\"" + escAttr(closeHref) + "\"" + (popId ? " data-pop" : "") + " title=\"back to writing\" aria-label=\"Close\">✕</a></span></div>" +
-    "<div class=\"np-menubar\" role=\"menubar\" aria-label=\"menu\">" +
-      "<span class=\"np-menu\" role=\"menuitem\">File</span><span class=\"np-menu\" role=\"menuitem\">Edit</span><span class=\"np-menu\" role=\"menuitem\">Format</span><span class=\"np-menu\" role=\"menuitem\">View</span><span class=\"np-menu\" role=\"menuitem\">Help</span></div>" +
+  const stamp = entry && date ? '<time class="dt-published" datetime="' + escAttr(date) + '">' + escHtml(date) + "</time>" : escHtml(date);
+  return (
+    open +
+    '<div class="np-titlebar">' +
+    (popId ? "" : DESKTOP_HISTNAV) +
+    '<span class="np-ico" aria-hidden="true"></span>' +
+    // The standalone note's caption is its page heading. A popover note sits
+    // inside the folder index, whose own caption is that page's one h1.
+    (popId ? '<span class="np-title">' + title + " — Notepad</span>" : '<h1 class="np-title">' + title + " — Notepad</h1>") +
+    // A popover note is never the body-level window nav.js wires, so its max
+    // stays an inert decoration; the standalone window's is a real button.
+    '<span class="np-controls"><span class="min" aria-hidden="true"></span>' +
+    (popId ? '<span class="max" aria-hidden="true"></span>' : MAX_BUTTON) +
+    '<a class="close" href="' +
+    escAttr(closeHref) +
+    '"' +
+    (popId ? " data-pop" : "") +
+    ' title="back to writing" aria-label="Close">✕</a></span></div>' +
+    '<div class="np-menubar" role="menubar" aria-label="menu">' +
+    '<span class="np-menu" role="menuitem">File</span><span class="np-menu" role="menuitem">Edit</span><span class="np-menu" role="menuitem">Format</span><span class="np-menu" role="menuitem">View</span><span class="np-menu" role="menuitem">Help</span></div>' +
     // e-content goes on the textarea itself, which holds the canonical text and
     // nothing else. A textarea's children parse as one raw text node, so an mf2
     // parser reads value as the post verbatim and html as that text escaped,
     // which is the honest HTML of a plain-text note. A second visible or hidden
     // copy would double the page to give parsers what they already get here.
-    "<textarea class=\"np-text" + (entry ? " e-content" : "") + "\" spellcheck=\"false\" aria-label=\"" + escAttr(filename) + "\">" + escHtml(text) + "</textarea>" +
-    "<div class=\"xp-statusbar panes np-status\"><span class=\"np-pos\">Ln 1, Col 1</span><span class=\"np-wc fill\"></span>" +
-      (date ? "<span class=\"np-edited\">last changed " + stamp + "</span>" : "") + "</div></div>";
+    '<textarea class="np-text' +
+    (entry ? " e-content" : "") +
+    '" spellcheck="false" aria-label="' +
+    escAttr(filename) +
+    '">' +
+    escHtml(text) +
+    "</textarea>" +
+    '<div class="xp-statusbar panes np-status"><span class="np-pos">Ln 1, Col 1</span><span class="np-wc fill"></span>' +
+    (date ? '<span class="np-edited">last changed ' + stamp + "</span>" : "") +
+    "</div></div>"
+  );
 }
 
 export async function readPosts(env) {
   try {
     const r = await env.ASSETS.fetch("https://a/writing/posts.json");
-    if (r.ok) { const j = await r.json(); if (Array.isArray(j)) return j; }
+    if (r.ok) {
+      const j = await r.json();
+      if (Array.isArray(j)) return j;
+    }
   } catch {}
   return [];
 }
@@ -186,25 +220,34 @@ export function handleWritingPost(request, slug, env, ctx) {
 export async function renderWritingPost(slug, env) {
   const safe = String(slug).replace(/[^a-z0-9-]/gi, "");
   const posts = await readPosts(env);
-  const post = posts.find(function (p) { return p.slug === safe; });
+  const post = posts.find(function (p) {
+    return p.slug === safe;
+  });
   let text = null;
   if (post) {
-    try { const r = await env.ASSETS.fetch("https://a/writing/" + safe + ".txt"); if (r.ok) text = await r.text(); } catch {}
+    try {
+      const r = await env.ASSETS.fetch("https://a/writing/" + safe + ".txt");
+      if (r.ok) text = await r.text();
+    } catch {}
   }
   if (!post || text == null) {
     const body = notepadWindow("(not found).txt", "This note doesn't exist yet. Maybe I haven't written it.\n\nThe index lives at /writing.", "/writing");
-    return new Response(writingShell({ title: "aadhar.sh/writing/not found", path: "/writing/" + safe, desc: "No such note.", body: body }),
-      { status: 404, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=30, must-revalidate" } });
+    return new Response(writingShell({ title: "aadhar.sh/writing/not found", path: "/writing/" + safe, desc: "No such note.", body: body }), {
+      status: 404,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=30, must-revalidate" },
+    });
   }
   const title = post.title || safe;
   const desc = text.replace(/\s+/g, " ").trim().slice(0, 155);
   const body = notepadWindow(title + ".txt", text, "/writing", post.date, undefined, { name: title, url: permalink(safe) });
-  return new Response(writingShell({ title: "aadhar.sh/writing/" + title + ".txt", path: "/writing/" + safe, desc: desc, body: body }),
+  return new Response(
+    writingShell({ title: "aadhar.sh/writing/" + title + ".txt", path: "/writing/" + safe, desc: desc, body: body }),
     // the webmention Link tells other sites where to say "I linked to you"; the
     // garage/lwe statics carry the same header from _headers. A note qualifies
     // because /writing is flagged webmention in site-manifest.json, which
     // vouches for the posts in posts.json.
-    { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300", "link": '</webmention>; rel="webmention"' } });
+    { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300", "link": '</webmention>; rel="webmention"' } },
+  );
 }
 
 export function handleWritingIndex(request, env, ctx) {
@@ -217,59 +260,107 @@ export async function renderWritingIndex(env) {
   // fetch each note's .txt once: the same text feeds the char count shown in
   // the folder listing (so you see a file's size before you open it) AND the
   // inline popover Notepad window below. notes are tiny — cheap to inline.
-  const fmtNum = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ","); };
-  const entries = await Promise.all(posts.map(async function (p) {
-    const safe = String(p.slug).replace(/[^a-z0-9-]/gi, "");
-    let text = "";
-    try { const r = await env.ASSETS.fetch("https://a/writing/" + safe + ".txt"); if (r.ok) text = await r.text(); } catch {}
-    return { p: p, safe: safe, text: text, chars: text.length };
-  }));
-  const files = entries.map(function (e) {
-    const size = fmtNum(e.chars) + (e.chars === 1 ? " character" : " characters");
-    // each row is an h-entry of the folder's h-feed: the link is its u-url, the
-    // name without ".txt" its p-name, the listed date its dt-published. The
-    // author comes from the feed, which the authorship algorithm allows.
-    return "<li class=\"h-entry\"><a class=\"u-url\" href=\"/writing/" + escAttr(e.p.slug) + "\" data-note=\"" + escAttr(e.safe) + "\"><span class=\"np-file-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-file-name\"><span class=\"p-name\">" + escHtml(e.p.title || e.p.slug) + "</span>.txt</span>" +
-      "<span class=\"np-file-meta\">Text Document · " + size +
-        (e.p.date ? " · <time class=\"dt-published\" datetime=\"" + escAttr(e.p.date) + "\">" + escHtml(e.p.date) + "</time>" : "") + "</span></a></li>";
-  }).join("");
+  const fmtNum = function (n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+  const entries = await Promise.all(
+    posts.map(async function (p) {
+      const safe = String(p.slug).replace(/[^a-z0-9-]/gi, "");
+      let text = "";
+      try {
+        const r = await env.ASSETS.fetch("https://a/writing/" + safe + ".txt");
+        if (r.ok) text = await r.text();
+      } catch {}
+      return { p: p, safe: safe, text: text, chars: text.length };
+    }),
+  );
+  const files = entries
+    .map(function (e) {
+      const size = fmtNum(e.chars) + (e.chars === 1 ? " character" : " characters");
+      // each row is an h-entry of the folder's h-feed: the link is its u-url, the
+      // name without ".txt" its p-name, the listed date its dt-published. The
+      // author comes from the feed, which the authorship algorithm allows.
+      return (
+        '<li class="h-entry"><a class="u-url" href="/writing/' +
+        escAttr(e.p.slug) +
+        '" data-note="' +
+        escAttr(e.safe) +
+        '"><span class="np-file-ico" aria-hidden="true"></span>' +
+        '<span class="np-file-name"><span class="p-name">' +
+        escHtml(e.p.title || e.p.slug) +
+        "</span>.txt</span>" +
+        '<span class="np-file-meta">Text Document · ' +
+        size +
+        (e.p.date ? ' · <time class="dt-published" datetime="' + escAttr(e.p.date) + '">' + escHtml(e.p.date) + "</time>" : "") +
+        "</span></a></li>"
+      );
+    })
+    .join("");
   // the list <a>'s real href is the no-JS / permalink path; opening one composites
   // its popover Notepad over the folder (the "selecting menu") with no navigation.
-  const notes = entries.map(function (e) {
-    return notepadWindow((e.p.title || e.safe) + ".txt", e.text, "/writing", e.p.date, "note-" + e.safe);
-  }).join("");
+  const notes = entries
+    .map(function (e) {
+      return notepadWindow((e.p.title || e.safe) + ".txt", e.text, "/writing", e.p.date, "note-" + e.safe);
+    })
+    .join("");
   // the folder window is the h-feed. Its caption is the feed's name, and the
   // u-url and author ride along as empty <data>, the same as on a note.
-  const body = "<div class=\"np-window np-folder h-feed\">" +
-    "<div class=\"np-titlebar\">" + DESKTOP_HISTNAV + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
-      "<h1 class=\"np-title\"><span class=\"p-name\">aadhar.sh/writing</span>" +
-        "<data class=\"u-url\" value=\"https://aadhar.sh/writing\"></data>" + AUTHOR_CARD + "</h1>" +
-      "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + MAX_BUTTON +
-      "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
+  const body =
+    '<div class="np-window np-folder h-feed">' +
+    '<div class="np-titlebar">' +
+    DESKTOP_HISTNAV +
+    '<span class="np-ico" aria-hidden="true"></span>' +
+    '<h1 class="np-title"><span class="p-name">aadhar.sh/writing</span>' +
+    '<data class="u-url" value="https://aadhar.sh/writing"></data>' +
+    AUTHOR_CARD +
+    "</h1>" +
+    '<span class="np-controls"><span class="min" aria-hidden="true"></span>' +
+    MAX_BUTTON +
+    '<a class="close" href="/" title="back home" aria-label="Close">✕</a></span></div>' +
     // The folder view is the one place on this site that was already a complete
     // Explorer window bar the chrome: caption, listing, status bar. The counts
     // below are the ones its own status bar states, so the two cannot disagree.
     String(addressBar({ path: "/writing", name: "My Writing" })) +
-    String(taskPane({
+    String(
+      taskPane({
         path: "/writing",
         name: "My Writing",
         // glyph is optional (taskPane defaults it to "≡"), so the literal is
         // annotated rather than inferred — concat() types against the first
         // array, which would otherwise make the glyph mandatory.
-        tasks: ([{ href: "/writing/posts.json", label: "Open the post registry", glyph: "{" }] as { href: string; label: string; glyph?: string }[])
-          .concat(twinFor("/writing") ? [{ href: twinFor("/writing"), label: "Read this as Markdown" }] : []),
-      details: [{ term: "Contains", value: posts.length + (posts.length === 1 ? " document" : " documents") }],
-    })) +
-    "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one: it's a real text field you can edit, though it reverts to my canonical version on reload.</p>" +
-      "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
-    "<div class=\"xp-statusbar panes np-status\"><span class=\"fill\">" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +
-      "<span>" + fmtNum(entries.reduce(function (a, e) { return a + e.chars; }, 0)) + " characters</span></div></div>" +
+        tasks: ([{ href: "/writing/posts.json", label: "Open the post registry", glyph: "{" }] as { href: string; label: string; glyph?: string }[]).concat(
+          twinFor("/writing") ? [{ href: twinFor("/writing"), label: "Read this as Markdown" }] : [],
+        ),
+        details: [{ term: "Contains", value: posts.length + (posts.length === 1 ? " document" : " documents") }],
+      }),
+    ) +
+    '<div class="np-folder-body"><p class="np-folder-intro">Notes, in flux. Open one: it\'s a real text field you can edit, though it reverts to my canonical version on reload.</p>' +
+    '<ul class="np-files">' +
+    (files || '<li><a><span class="np-file-name">(nothing written yet)</span></a></li>') +
+    "</ul></div>" +
+    '<div class="xp-statusbar panes np-status"><span class="fill">' +
+    posts.length +
+    (posts.length === 1 ? " document" : " documents") +
+    "</span>" +
+    "<span>" +
+    fmtNum(
+      entries.reduce(function (a, e) {
+        return a + e.chars;
+      }, 0),
+    ) +
+    " characters</span></div></div>" +
     notes;
-  return new Response(writingShell({ title: "aadhar.sh/writing", path: "/writing", desc: "Notes in flux: an editable Notepad of writing that reverts to canonical on reload.", body: body }),
+  return new Response(
+    writingShell({
+      title: "aadhar.sh/writing",
+      path: "/writing",
+      desc: "Notes in flux: an editable Notepad of writing that reverts to canonical on reload.",
+      body: body,
+    }),
     // same webmention Link the individual notes carry. /writing is the surface
     // actually flagged in site-manifest.json (the notes inherit it, by vouching),
     // so the folder itself accepting a mention it never advertised was the one
     // page on the site a spec-compliant sender could not discover.
-    { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120", "link": '</webmention>; rel="webmention"' } });
+    { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120", "link": '</webmention>; rel="webmention"' } },
+  );
 }

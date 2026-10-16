@@ -46,9 +46,9 @@ export const ERR_INVALID_PARAMS = -32602;
 // notifications rather than replacing them. `public` throughout because every
 // surface on both servers is public: no auth, no per-caller view, nothing an
 // intermediary would be wrong to share.
-export const CACHE_STATIC = { ttlMs: 3_600_000,  cacheScope: "public" };  // changes at deploy
-export const CACHE_LIVE   = { ttlMs:   300_000,  cacheScope: "public" };  // reads a live page
-export const CACHE_EMPTY  = { ttlMs: 86_400_000, cacheScope: "public" };  // permanently empty
+export const CACHE_STATIC = { ttlMs: 3_600_000, cacheScope: "public" }; // changes at deploy
+export const CACHE_LIVE = { ttlMs: 300_000, cacheScope: "public" }; // reads a live page
+export const CACHE_EMPTY = { ttlMs: 86_400_000, cacheScope: "public" }; // permanently empty
 
 // ── per-request negotiation ─────────────────────────────────────────
 
@@ -105,11 +105,15 @@ export function missingRequiredMeta(msg) {
 // there because "Invalid params" alone tells a client author nothing about
 // WHICH param, and this is a field they have probably never heard of.
 export function malformedRequest(id, missing) {
-  return { jsonrpc: "2.0", id, error: {
-    code: ERR_INVALID_PARAMS,
-    message: `Missing required _meta field: ${missing}`,
-    data: { missing: [missing] },
-  } };
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: {
+      code: ERR_INVALID_PARAMS,
+      message: `Missing required _meta field: ${missing}`,
+      data: { missing: [missing] },
+    },
+  };
 }
 
 // The HTTP status one JSON-RPC response goes out with. The spec pins the
@@ -129,11 +133,15 @@ export function mcpHttpStatus(payload) {
 // dual-era client recognises a modern server at all, so it is a protocol
 // feature rather than a courtesy.
 export function unsupportedVersion(id, requested) {
-  return { jsonrpc: "2.0", id, error: {
-    code: ERR_UNSUPPORTED_PROTOCOL,
-    message: "Unsupported protocol version",
-    data: { supported: MCP_SUPPORTED, requested },
-  } };
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: {
+      code: ERR_UNSUPPORTED_PROTOCOL,
+      message: "Unsupported protocol version",
+      data: { supported: MCP_SUPPORTED, requested },
+    },
+  };
 }
 
 // 2026-07-28 requires Mcp-Method and Mcp-Name on Streamable HTTP POSTs so an
@@ -187,12 +195,16 @@ export function mcpServer({ serverInfo, capabilities, instructions }) {
   // .ts file treats an unannotated parameter as REQUIRED, so the three callers
   // in serendipity that legitimately omit it started failing. The default says
   // what the code already meant and spreads to the same nothing.
-  const result = (id, payload, cache = {}) => ({ jsonrpc: "2.0", id, result: {
-    resultType: "complete",
-    ...payload,
-    ...cache,
-    _meta: { [META_SERVER_INFO]: serverInfo },
-  } });
+  const result = (id, payload, cache = {}) => ({
+    jsonrpc: "2.0",
+    id,
+    result: {
+      resultType: "complete",
+      ...payload,
+      ...cache,
+      _meta: { [META_SERVER_INFO]: serverInfo },
+    },
+  });
 
   return {
     serverInfo,
@@ -204,20 +216,29 @@ export function mcpServer({ serverInfo, capabilities, instructions }) {
     // capabilities and supported versions in one round trip, so a client can
     // render what a server is without probing tools/list + resources/list +
     // prompts/list separately.
-    discover: (id) => result(id, {
-      supportedVersions: MCP_SUPPORTED,
-      capabilities,
-      instructions,
-    }, CACHE_STATIC),
+    discover: (id) =>
+      result(
+        id,
+        {
+          supportedVersions: MCP_SUPPORTED,
+          capabilities,
+          instructions,
+        },
+        CACHE_STATIC,
+      ),
 
     // The legacy handshake. Kept because deleting it strands every pre-2026
     // client; answered in the legacy era only (see MCP_LEGACY_DEFAULT).
-    initialize: (id, requested) => ({ jsonrpc: "2.0", id, result: {
-      protocolVersion: MCP_LEGACY.includes(requested) ? requested : MCP_LEGACY_DEFAULT,
-      capabilities,
-      serverInfo,
-      instructions,
-    } }),
+    initialize: (id, requested) => ({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        protocolVersion: MCP_LEGACY.includes(requested) ? requested : MCP_LEGACY_DEFAULT,
+        capabilities,
+        serverInfo,
+        instructions,
+      },
+    }),
   };
 }
 
@@ -281,7 +302,10 @@ function revision(value) {
   return text && REVISION.test(text) ? text : undefined;
 }
 function clientName(value) {
-  const text = asText(value)?.replace(/[^\x20-\x7e]/g, "").trim().slice(0, 40);
+  const text = asText(value)
+    ?.replace(/[^\x20-\x7e]/g, "")
+    .trim()
+    .slice(0, 40);
   return text || undefined;
 }
 
@@ -294,9 +318,7 @@ function clientName(value) {
 function noteEra(request: Request, msg) {
   const declared = declaredVersion(msg);
   const era = declared ? "modern" : "legacy";
-  const version = declared
-    ? revision(declared)
-    : revision(msg.params?.protocolVersion) ?? revision(request.headers.get("mcp-protocol-version"));
+  const version = declared ? revision(declared) : (revision(msg.params?.protocolVersion) ?? revision(request.headers.get("mcp-protocol-version")));
   const client = declared ? undefined : clientName(asRecord(msg.params?.clientInfo)?.name);
   const seen = ERAS.get(request);
   if (!seen) {
@@ -320,13 +342,17 @@ export function mcpEraOf(request: Request): McpEra | undefined {
 // Only a valid request without an ID is a notification. Malformed envelopes
 // get Invalid Request with an unknown ID, even when they have no ID member.
 export async function mcpRequest(msg, request, dispatch) {
-  if (asRecord(msg) === null || msg.jsonrpc !== "2.0" || asText(msg.method) === null ||
+  if (
+    asRecord(msg) === null ||
+    msg.jsonrpc !== "2.0" ||
+    asText(msg.method) === null ||
     (Object.hasOwn(msg, "id") && msg.id !== null && msg.id !== "" && asText(msg.id) === null && asNumber(msg.id) === null) ||
-    (Object.hasOwn(msg, "params") && asRecord(msg.params) === null && !Array.isArray(msg.params))) {
+    (Object.hasOwn(msg, "params") && asRecord(msg.params) === null && !Array.isArray(msg.params))
+  ) {
     return mcpError(null, -32600, "Invalid Request");
   }
   noteEra(request, msg);
-  const reply = mcpGate(msg, request) ?? await dispatch(msg);
+  const reply = mcpGate(msg, request) ?? (await dispatch(msg));
   return Object.hasOwn(msg, "id") ? reply : null;
 }
 
@@ -334,15 +360,14 @@ export async function mcpRequest(msg, request, dispatch) {
 export function rpcErrorDetail(payload) {
   const error = payload && payload.error;
   const code = Number.isInteger(error && error.code) ? error.code : null;
-  const message = String(
-    (error && error.message)
-    || (payload && payload.error_description)
-    || asText(error)
-    || "",
-  ).trim();
+  const message = String((error && error.message) || (payload && payload.error_description) || asText(error) || "").trim();
   if (code !== null) return `${code}: ${message.slice(0, 80) || "no message"}`;
   if (message) return message.slice(0, 90);
-  try { return JSON.stringify(error).slice(0, 90); } catch { return "an error with no readable message"; }
+  try {
+    return JSON.stringify(error).slice(0, 90);
+  } catch {
+    return "an error with no readable message";
+  }
 }
 
 // A Streamable HTTP response can be JSON or SSE. Select the requested reply,
@@ -355,14 +380,14 @@ export function parseMcpBody(text, contentType, expectedId: string | number) {
   const framing = streamed ? "sse" : "json";
   for (const { data } of streamed ? sseEvents(body) : [{ data: body }]) {
     let payload;
-    try { payload = JSON.parse(data); }
-    catch {
+    try {
+      payload = JSON.parse(data);
+    } catch {
       if (!streamed) return { ok: false, detail: `answered ${type.split(";")[0] || "no content-type"}, not JSON` };
       continue;
     }
     const reply = asRecord(payload);
-    if (reply?.jsonrpc === "2.0" && reply.id === expectedId && !("method" in reply)
-      && Object.hasOwn(reply, "result") !== Object.hasOwn(reply, "error")) {
+    if (reply?.jsonrpc === "2.0" && reply.id === expectedId && !("method" in reply) && Object.hasOwn(reply, "result") !== Object.hasOwn(reply, "error")) {
       return { ok: true, payload, framing };
     }
     // A non-RPC JSON refusal is still worth reading, but cannot authorize a

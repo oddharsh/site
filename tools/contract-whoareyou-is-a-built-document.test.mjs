@@ -26,8 +26,10 @@ test("the island loader is one constant script that checks the marker the respon
   assert.match(a, /data-state","failed"/, "a failed fetch must leave the placeholder and say so");
   // Without crossorigin the preload is no-cors and cannot satisfy the cors fetch.
   assert.equal(islandPreload("/x.html").html, '<link rel="preload" as="fetch" href="/x.html" crossorigin>');
-  assert.match(islandMount("m", "/x.html", html`<i>p</i>`, html`n`).html,
-    /^<div id="m" data-island="\/x\.html" data-state="pending"><i>p<\/i><noscript>n<\/noscript><\/div>$/);
+  assert.match(
+    islandMount("m", "/x.html", html`<i>p</i>`, html`n`).html,
+    /^<div id="m" data-island="\/x\.html" data-state="pending"><i>p<\/i><noscript>n<\/noscript><\/div>$/,
+  );
 });
 
 test("islandResponse is never cached and never indexed", async () => {
@@ -55,19 +57,48 @@ test("renderWhoareyouPage is deterministic, carries its island, and bakes nothin
 
 test("the placeholder and the live values share one renderer and one row set for a browser visitor", () => {
   const data = {
-    host: "aadhar.sh", scheme: "https", ray: "8c1-EWR", ip: "203.0.113.7", asn: 64500, asOrg: "Example Net",
-    country: "US", continent: "NA", isEU: false, region: "New York", city: "New York", postalCode: "10001",
-    latitude: "40.7", longitude: "-74.0", timezone: "America/New_York", colo: "EWR",
-    clientTcpRtt: 8, clientQuicRtt: null, deliveryRate: 123456, requestPriority: "weight=16",
-    httpProtocol: "HTTP/2", tlsVersion: "TLSv1.3", tlsCipher: "AEAD-AES128-GCM-SHA256", tlsExtensions: "abc",
-    acceptEncoding: "gzip, br", userAgent: "<script>x</script>", acceptLanguage: "en", dnt: "not set",
-    referer: "https://elsewhere.example/", cookies: "none", botScore: null, verifiedBot: false,
-    detectionIds: null, corporateProxy: null, ja3Hash: null, ja4: null, when: "2026-09-25T12:00:00.000Z",
+    host: "aadhar.sh",
+    scheme: "https",
+    ray: "8c1-EWR",
+    ip: "203.0.113.7",
+    asn: 64500,
+    asOrg: "Example Net",
+    country: "US",
+    continent: "NA",
+    isEU: false,
+    region: "New York",
+    city: "New York",
+    postalCode: "10001",
+    latitude: "40.7",
+    longitude: "-74.0",
+    timezone: "America/New_York",
+    colo: "EWR",
+    clientTcpRtt: 8,
+    clientQuicRtt: null,
+    deliveryRate: 123456,
+    requestPriority: "weight=16",
+    httpProtocol: "HTTP/2",
+    tlsVersion: "TLSv1.3",
+    tlsCipher: "AEAD-AES128-GCM-SHA256",
+    tlsExtensions: "abc",
+    acceptEncoding: "gzip, br",
+    userAgent: "<script>x</script>",
+    acceptLanguage: "en",
+    dnt: "not set",
+    referer: "https://elsewhere.example/",
+    cookies: "none",
+    botScore: null,
+    verifiedBot: false,
+    detectionIds: null,
+    corporateProxy: null,
+    ja3Hash: null,
+    ja4: null,
+    when: "2026-09-25T12:00:00.000Z",
   };
   const live = renderWhoareyouValues(data, { browser: "Chrome", os: "macOS", device: "" }, null).html;
   const page = renderWhoareyouPage();
   return page.text().then((shell) => {
-    const island = shell.slice(shell.indexOf('data-island='), shell.indexOf("<noscript>", shell.indexOf('data-island=')));
+    const island = shell.slice(shell.indexOf("data-island="), shell.indexOf("<noscript>", shell.indexOf("data-island=")));
     const rows = (s) => (s.match(/<dt>/g) || []).length;
     assert.equal(rows(island), rows(live), "the swap would add or remove rows, which is a layout shift");
     // Values are escaped by construction.

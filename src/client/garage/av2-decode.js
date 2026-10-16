@@ -25,13 +25,18 @@ const WASM_URL = "/garage/av2/av2dec.90fc76df.wasm";
 
 // Find the primary item's bytes and colour signalling in an ISOBMFF file.
 function parseAvif(buf) {
-  const b = new Uint8Array(buf), dv = new DataView(buf);
+  const b = new Uint8Array(buf),
+    dv = new DataView(buf);
   const str = (o) => String.fromCharCode(b[o], b[o + 1], b[o + 2], b[o + 3]);
   const boxes = (start, end) => {
     const out = [];
-    for (let o = start; o + 8 <= end; ) {
-      let size = dv.getUint32(o), hdr = 8;
-      if (size === 1) { size = Number(dv.getBigUint64(o + 8)); hdr = 16; }
+    for (let o = start; o + 8 <= end;) {
+      let size = dv.getUint32(o),
+        hdr = 8;
+      if (size === 1) {
+        size = Number(dv.getBigUint64(o + 8));
+        hdr = 16;
+      }
       if (size === 0) size = end - o;
       if (size < hdr || o + size > end) throw new Error("malformed box at byte " + o);
       out.push({ type: str(o + 4), d: o + hdr, e: o + size });
@@ -41,14 +46,18 @@ function parseAvif(buf) {
   };
   const meta = boxes(0, b.length).find((x) => x.type === "meta");
   if (!meta) throw new Error("not an AVIF file: no meta box");
-  const kids = boxes(meta.d + 4, meta.e), get = (t) => kids.find((k) => k.type === t);
-  const pitm = get("pitm"), iinf = get("iinf"), iloc = get("iloc");
+  const kids = boxes(meta.d + 4, meta.e),
+    get = (t) => kids.find((k) => k.type === t);
+  const pitm = get("pitm"),
+    iinf = get("iinf"),
+    iloc = get("iloc");
   if (!pitm || !iinf || !iloc) throw new Error("not an AVIF file: no primary item");
   const primary = b[pitm.d] === 0 ? dv.getUint16(pitm.d + 4) : dv.getUint32(pitm.d + 4);
 
   let type = "";
   for (const e of boxes(iinf.d + 4 + (b[iinf.d] === 0 ? 2 : 4), iinf.e)) {
-    const wide = b[e.d] >= 3, id = wide ? dv.getUint32(e.d + 4) : dv.getUint16(e.d + 4);
+    const wide = b[e.d] >= 3,
+      id = wide ? dv.getUint32(e.d + 4) : dv.getUint16(e.d + 4);
     if (id === primary) type = str(e.d + 4 + (wide ? 4 : 2) + 2);
   }
   if (type !== "av02") throw new Error(`the image item is ${type || "missing"}, not av02 (AV2)`);
@@ -57,9 +66,16 @@ function parseAvif(buf) {
   let o = iloc.d;
   const v = b[o];
   o += 4;
-  const os = b[o] >> 4, ls = b[o] & 15, bs = b[o + 1] >> 4, is = v >= 1 ? b[o + 1] & 15 : 0;
+  const os = b[o] >> 4,
+    ls = b[o] & 15,
+    bs = b[o + 1] >> 4,
+    is = v >= 1 ? b[o + 1] & 15 : 0;
   o += 2;
-  const rd = (n) => { let x = 0; for (let i = 0; i < n; i++) x = x * 256 + b[o++]; return x; };
+  const rd = (n) => {
+    let x = 0;
+    for (let i = 0; i < n; i++) x = x * 256 + b[o++];
+    return x;
+  };
   const parts = [];
   for (let i = 0, count = v < 2 ? rd(2) : rd(4); i < count; i++) {
     const id = v < 2 ? rd(2) : rd(4);
@@ -68,7 +84,8 @@ function parseAvif(buf) {
     const base = rd(bs);
     for (let j = 0, n = rd(2); j < n; j++) {
       if (v >= 1 && is) rd(is);
-      const off = rd(os), len = rd(ls);
+      const off = rd(os),
+        len = rd(ls);
       if (id === primary) parts.push(b.subarray(base + off, base + off + len));
     }
   }
@@ -81,7 +98,8 @@ function parseAvif(buf) {
   let matrix = null;
   /** @type {boolean | null} */
   let fullRange = null;
-  const iprp = get("iprp"), ipco = iprp && boxes(iprp.d, iprp.e).find((x) => x.type === "ipco");
+  const iprp = get("iprp"),
+    ipco = iprp && boxes(iprp.d, iprp.e).find((x) => x.type === "ipco");
   for (const p of ipco ? boxes(ipco.d, ipco.e) : []) {
     if (p.type === "colr" && str(p.d) === "nclx") {
       matrix = dv.getUint16(p.d + 8);
@@ -111,16 +129,20 @@ function load(wasm = WASM_URL) {
       env: { emscripten_notify_memory_growth() {} },
       wasi_snapshot_preview1: {
         /** @param {number} code */
-        proc_exit(code) { throw new Error("decoder exited with " + code); },
+        proc_exit(code) {
+          throw new Error("decoder exited with " + code);
+        },
         fd_close: () => 0,
         fd_seek: () => 70,
         // stderr carries the decoder's error text; keep it for the message
         /** @param {number} _fd @param {number} iov @param {number} iovcnt @param {number} nwritten */
         fd_write(_fd, iov, iovcnt, nwritten) {
-          const dv = new DataView(memory.buffer), u8 = new Uint8Array(memory.buffer);
+          const dv = new DataView(memory.buffer),
+            u8 = new Uint8Array(memory.buffer);
           let n = 0;
           for (let i = 0; i < iovcnt; i++) {
-            const p = dv.getUint32(iov + i * 8, true), len = dv.getUint32(iov + i * 8 + 4, true);
+            const p = dv.getUint32(iov + i * 8, true),
+              len = dv.getUint32(iov + i * 8 + 4, true);
             stderr = (stderr + new TextDecoder().decode(u8.subarray(p, p + len))).slice(-500);
             n += len;
           }
@@ -129,9 +151,10 @@ function load(wasm = WASM_URL) {
         },
       },
     };
-    const { instance } = ArrayBuffer.isView(wasm) || wasm instanceof ArrayBuffer
-      ? await WebAssembly.instantiate(wasm, imports)
-      : await WebAssembly.instantiateStreaming(fetch(wasm), imports);
+    const { instance } =
+      ArrayBuffer.isView(wasm) || wasm instanceof ArrayBuffer
+        ? await WebAssembly.instantiate(wasm, imports)
+        : await WebAssembly.instantiateStreaming(fetch(wasm), imports);
     const x = /** @type {Av2Exports} */ (/** @type {unknown} */ (instance.exports));
     memory = x.memory;
     x._initialize();
@@ -156,24 +179,32 @@ export async function decode(buf, { wasm = WASM_URL, planes = false } = {}) {
   x.free(p);
   if (err) throw new Error(`AV2 decode failed (${err}) ${stderr()}`.trim());
   const decodeMs = performance.now() - t0;
-  const w = x.av2_width(), h = x.av2_height();
+  const w = x.av2_width(),
+    h = x.av2_height();
   const mc = item.matrix ?? x.av2_matrix();
   const full = item.fullRange ?? x.av2_full_range() === 1;
   const px = x.av2_rgba(mc, full ? 1 : 0);
   // memory.buffer can be replaced by growth inside av2_rgba, so read it after
   const rgba = new Uint8Array(x.memory.buffer, px, w * h * 4).slice().buffer;
-  const sx = x.av2_x_shift(), sy = x.av2_y_shift();
+  const sx = x.av2_x_shift(),
+    sy = x.av2_y_shift();
   const sub = ["4:4:4", "4:2:2", "", "4:2:0"][sx + 2 * sy];
   /** @type {{ width: number, height: number, rgba: ArrayBuffer, depth: number, subsampling: string, decodeMs: number, planes?: Uint8Array[] }} */
   const out = { width: w, height: h, rgba, depth: x.av2_depth(), subsampling: x.av2_monochrome() ? "4:0:0" : sub, decodeMs };
   if (planes) {
     // AVM holds 8-bit content in 16-bit buffers too; narrow those to one byte a
     // sample, the layout avifdec writes, so a comparison reads like for like.
-    const hbd = x.av2_highbd(), narrow = hbd && out.depth === 8, u8 = new Uint8Array(x.memory.buffer);
-    const bps = hbd && !narrow ? 2 : 1, n = x.av2_monochrome() ? 1 : 3;
+    const hbd = x.av2_highbd(),
+      narrow = hbd && out.depth === 8,
+      u8 = new Uint8Array(x.memory.buffer);
+    const bps = hbd && !narrow ? 2 : 1,
+      n = x.av2_monochrome() ? 1 : 3;
     out.planes = Array.from({ length: n }, (_, i) => {
-      const pw = i ? (w + sx) >> sx : w, ph = i ? (h + sy) >> sy : h;
-      const base = x.av2_plane(i), stride = x.av2_stride(i), plane = new Uint8Array(pw * ph * bps);
+      const pw = i ? (w + sx) >> sx : w,
+        ph = i ? (h + sy) >> sy : h;
+      const base = x.av2_plane(i),
+        stride = x.av2_stride(i),
+        plane = new Uint8Array(pw * ph * bps);
       for (let y = 0; y < ph; y++) {
         const row = u8.subarray(base + y * stride, base + y * stride + pw * (hbd ? 2 : 1));
         if (narrow) for (let k = 0; k < pw; k++) plane[y * pw + k] = row[2 * k];

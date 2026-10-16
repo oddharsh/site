@@ -125,7 +125,11 @@ async function main(): Promise<void> {
       return;
     }
     console.error(`histograms: the committed file does NOT reproduce with ${who}`);
-    for (const [label, stems] of [["changed", r.changed], ["committed, not baked", r.missing], ["baked, not committed", r.extra]] as const) {
+    for (const [label, stems] of [
+      ["changed", r.changed],
+      ["committed, not baked", r.missing],
+      ["baked, not committed", r.extra],
+    ] as const) {
       if (stems.length) console.error(`  ${label} (${stems.length}): ${stems.join(", ")}`);
     }
     console.error(

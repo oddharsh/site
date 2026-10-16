@@ -15,7 +15,10 @@ test("an original is its stem's JPEG or JPEG XL, and only a migrated one names a
   // nothing and drop the redirects they guard without a word.
   const entries = Object.values(index);
   assert.ok(entries.length >= 150, `only ${entries.length} photos in photo-index.json`);
-  assert.ok(entries.some((entry) => entry.jpeg !== undefined), "no entry names a retired JPEG, so the migrated half below checks nothing");
+  assert.ok(
+    entries.some((entry) => entry.jpeg !== undefined),
+    "no entry names a retired JPEG, so the migrated half below checks nothing",
+  );
   for (const [stem, entry] of Object.entries(index)) {
     assert.match(entry.full, /\.(jpe?g|jxl)$/i, `${stem}: an original is a JPEG or its lossless JPEG XL`);
     assert.equal(entry.full.replace(/\.[^.]+$/, ""), stem, `${stem}: the key is the stem's`);
@@ -33,10 +36,18 @@ async function serve(path, { get = async () => null, head = async () => null } =
   const had = g.caches;
   g.caches ??= { default: { match: async () => undefined, put: async () => {} } };
   const asked = [];
-  const env = { PHOTOS_R2: {
-    get: async (key, opts) => { asked.push(["get", key]); return get(key, opts); },
-    head: async (key) => { asked.push(["head", key]); return head(key); },
-  } };
+  const env = {
+    PHOTOS_R2: {
+      get: async (key, opts) => {
+        asked.push(["get", key]);
+        return get(key, opts);
+      },
+      head: async (key) => {
+        asked.push(["head", key]);
+        return head(key);
+      },
+    },
+  };
   try {
     const res = await servePhotoFromR2(new Request(`https://aadhar.sh/images/full/${path}`, { headers }), env, { waitUntil() {} });
     return { res, asked };
@@ -65,7 +76,10 @@ test("a JPEG deleted before its move deploys falls back to the .jxl beside it", 
   const { res, asked } = await serve("X9.JPG", { head: async (key) => (key === "X9.jxl" ? {} : null) });
   assert.equal(res.status, 301);
   assert.equal(res.headers.get("location"), "https://aadhar.sh/images/full/X9.jxl");
-  assert.deepEqual(asked, [["get", "X9.JPG"], ["head", "X9.jxl"]]);
+  assert.deepEqual(asked, [
+    ["get", "X9.JPG"],
+    ["head", "X9.jxl"],
+  ]);
   // Controls: no .jxl either is a plain 404, and a JPEG still in R2 is served.
   assert.equal((await serve("X9.JPG")).res.status, 404);
   const present = await serve("X9.jpg", { get: async () => object("jpeg") });

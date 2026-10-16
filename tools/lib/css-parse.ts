@@ -69,7 +69,8 @@ export const parseCss = (filename: string, sourceText: string, { minify = false 
   });
   const out = Buffer.from(result.code).toString();
 
-  const fatal: string[] = [], tolerated: string[] = [];
+  const fatal: string[] = [],
+    tolerated: string[] = [];
   for (const w of result.warnings) {
     const m = UNKNOWN_SELECTOR.exec(w.message);
     if (m) tolerated.push(m[1]);
@@ -82,7 +83,9 @@ export const parseCss = (filename: string, sourceText: string, { minify = false 
   // is what surfaces the bug; the message it surfaces it with is not, hence
   // the translation. Measured on 1.33.0 with `.c { d: 1 ` at EOF.
   if (fatal.some((f) => f === "Unknown at rule: @custom-media")) {
-    throw new Error(`${filename}: a block is never closed (the stylesheet runs to end-of-input inside a rule), so the @custom-media definitions appended after it were read as nested at-rules; add the missing \`}\``);
+    throw new Error(
+      `${filename}: a block is never closed (the stylesheet runs to end-of-input inside a rule), so the @custom-media definitions appended after it were read as nested at-rules; add the missing \`}\``,
+    );
   }
   if (fatal.length) {
     throw new Error(`${filename}: Lightning CSS emitted warnings: ${fatal.join("; ")}`);

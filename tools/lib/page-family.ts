@@ -42,7 +42,7 @@ export const FAMILY_DICT_DIR = "src/dict/f-dict";
 export const FAMILY_DICT_SIZE = 65_536;
 // The committed dictionary ships while its family tier is within this fraction
 // of the fresh derivation's. See the header for the arithmetic behind the number.
-export const FAMILY_DRIFT = 0.10;
+export const FAMILY_DRIFT = 0.1;
 
 // A zstd --train artifact opens with this magic; RFC 9842 needs RAW bytes.
 const ZSTD_DICT_MAGIC = 0xec30a437;
@@ -50,7 +50,7 @@ const ZSTD_DICT_MAGIC = 0xec30a437;
 export const hash8 = (buf: Uint8Array) => createHash("sha256").update(buf).digest("hex").slice(0, 8);
 // Committed brotli'd, so its name is the served dictionary's name plus `.br`.
 export const familyFileName = (bytes: Uint8Array) => `${familyDictionaryName(hash8(bytes))}.br`;
-const committedHash8 = (name: string) => name.endsWith(".br") ? parseFamilyDictionary(name.slice(0, -3)) : null;
+const committedHash8 = (name: string) => (name.endsWith(".br") ? parseFamilyDictionary(name.slice(0, -3)) : null);
 
 export type CommittedFamily = { bytes: Buffer; hash8: string; name: string };
 
@@ -94,9 +94,12 @@ export async function writeCommittedFamily(bytes: Uint8Array, dir = FAMILY_DICT_
   for (const stale of await readdir(dir)) {
     if (stale !== name && !stale.startsWith(".")) await rm(`${dir}/${stale}`, { force: true });
   }
-  await writeFile(`${dir}/${name}`, brotliCompressSync(bytes, {
-    params: { [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_LGWIN]: 24 },
-  }));
+  await writeFile(
+    `${dir}/${name}`,
+    brotliCompressSync(bytes, {
+      params: { [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_LGWIN]: 24 },
+    }),
+  );
   return name;
 }
 
@@ -112,10 +115,10 @@ export async function familyFrames(pages: Uint8Array[], dictionary: Uint8Array, 
 export type FamilyChoice = {
   dictionary: Buffer;
   source: "committed" | "fresh";
-  frames: Buffer[];            // the chosen dictionary's frame per page, in `pages` order
+  frames: Buffer[]; // the chosen dictionary's frame per page, in `pages` order
   freshTotal: number;
   committedTotal: number | null;
-  drift: number | null;        // committedTotal / freshTotal - 1, or null with nothing committed
+  drift: number | null; // committedTotal / freshTotal - 1, or null with nothing committed
   threshold: number;
 };
 
@@ -123,10 +126,19 @@ export type FamilyChoice = {
 // FAMILY_DRIFT of the fresh derivation's; otherwise the fresh corpus does, and
 // the next roll commits it. With nothing committed, fresh ships (first run, or a
 // deliberate re-mint).
-export async function chooseFamilyDictionary(
-  { fresh, committed, pages, threshold = FAMILY_DRIFT, encode = zstdCompressDictionaryBatch }:
-  { fresh: Uint8Array; committed: Uint8Array | null; pages: Uint8Array[]; threshold?: number; encode?: ZstdBatch },
-): Promise<FamilyChoice> {
+export async function chooseFamilyDictionary({
+  fresh,
+  committed,
+  pages,
+  threshold = FAMILY_DRIFT,
+  encode = zstdCompressDictionaryBatch,
+}: {
+  fresh: Uint8Array;
+  committed: Uint8Array | null;
+  pages: Uint8Array[];
+  threshold?: number;
+  encode?: ZstdBatch;
+}): Promise<FamilyChoice> {
   const freshFrames = await familyFrames(pages, fresh, encode);
   const freshTotal = freshFrames.reduce((n, f) => n + f.length, 0);
   if (!committed) {
@@ -145,10 +157,10 @@ export async function chooseFamilyDictionary(
 // roll can read it without re-deriving anything. Every field is a number or a
 // hash8; the roll compares, it does not recompute.
 export type FamilyReport = {
-  shipped: string;             // hash8 of the dictionary at /a/page-family.<hash8>.dict
+  shipped: string; // hash8 of the dictionary at /a/page-family.<hash8>.dict
   source: "committed" | "fresh";
-  fresh: string;               // hash8 of this build's fresh derivation
-  committed: string | null;    // hash8 of src/dict/f-dict's file, if any
+  fresh: string; // hash8 of this build's fresh derivation
+  committed: string | null; // hash8 of src/dict/f-dict's file, if any
   freshTotal: number;
   committedTotal: number | null;
   drift: number | null;

@@ -21,7 +21,8 @@ import { botHeaders, jwkThumbprint } from "../src/worker/lib/botauth.ts";
 
 // RFC 8037 A.1, plus a second Ed25519 pair so "rotated" is a real other key.
 const RFC8037 = {
-  kty: "OKP", crv: "Ed25519",
+  kty: "OKP",
+  crv: "Ed25519",
   d: "nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A",
   x: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
 };
@@ -58,11 +59,7 @@ test("the memoized key is the key that signs, so the signature still verifies un
     const params = (headers.get("signature-input") || "").replace(/^sig1=/, "");
     const signature = (headers.get("signature") || "").match(/^sig1=:(.+):$/)?.[1];
     assert.ok(signature, "every signed request carries a sig1 label");
-    const base = new TextEncoder().encode([
-      `"@authority": ${host}`,
-      `"signature-agent": "https://aadhar.sh/"`,
-      `"@signature-params": ${params}`,
-    ].join("\n"));
+    const base = new TextEncoder().encode([`"@authority": ${host}`, `"signature-agent": "https://aadhar.sh/"`, `"@signature-params": ${params}`].join("\n"));
     assert.equal(
       await crypto.subtle.verify("Ed25519", verifier, Uint8Array.fromBase64(signature), base),
       true,
@@ -87,14 +84,15 @@ test("one secret costs one importKey however many signatures it produces", async
   const env = { RN_SIGNING_KEY_JWK: JSON.stringify(jwk) };
   const real = crypto.subtle.importKey.bind(crypto.subtle);
   let imports = 0;
-  crypto.subtle.importKey = (...args) => { imports++; return real(...args); };
+  crypto.subtle.importKey = (...args) => {
+    imports++;
+    return real(...args);
+  };
   try {
     // Concurrent, because caching the RESULT rather than the promise lets every
     // caller in a fan-out start the same derivation before the first finishes.
     // This is the shape /lens discovery and the /around sweep actually produce.
-    const headers = await Promise.all(
-      Array.from({ length: 12 }, (_, i) => botHeaders(`https://h${i}.example.com/`, env)),
-    );
+    const headers = await Promise.all(Array.from({ length: 12 }, (_, i) => botHeaders(`https://h${i}.example.com/`, env)));
     assert.equal(imports, 1, `12 concurrent signatures cost ${imports} importKey calls, expected 1`);
     assert.equal(new Set(headers.map(keyidOf)).size, 1, "every signature must name the same keyid");
     for (const h of headers) assert.match(h.get("signature") || "", /^sig1=:.+:$/);

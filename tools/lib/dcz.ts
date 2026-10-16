@@ -43,13 +43,14 @@ export function dczEncode(bytes: Uint8Array, dictBytes: Uint8Array) {
 }
 
 export async function dczEncodeBatch(jobs: Array<{ bytes: Uint8Array; dictBytes: Uint8Array }>) {
-  const frames = await zstdCompressDictionaryBatch(jobs.map(({ bytes, dictBytes }) => ({
-    bytes,
-    dictionary: dictBytes,
-  })));
+  const frames = await zstdCompressDictionaryBatch(
+    jobs.map(({ bytes, dictBytes }) => ({
+      bytes,
+      dictionary: dictBytes,
+    })),
+  );
   return jobs.map(({ dictBytes }, index) => frameDcz(frames[index], dictBytes));
 }
 
 // The 16-hex tag for a dictionary's bytes.
-export const dictionaryTag = (dictBytes: Uint8Array): string =>
-  tagOfDigest(createHash("sha256").update(dictBytes).digest());
+export const dictionaryTag = (dictBytes: Uint8Array): string => tagOfDigest(createHash("sha256").update(dictBytes).digest());

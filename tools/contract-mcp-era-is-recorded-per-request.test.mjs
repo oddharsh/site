@@ -14,17 +14,19 @@ const database = { prepare: () => ({ all: async () => [] }) };
 
 function post(server, body, headers = {}) {
   const request = new Request(`https://aadhar.sh/${server === "site" ? "mcp" : "serendipity/mcp"}`, {
-    method: "POST", headers, body: JSON.stringify(body),
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
   });
-  const response = server === "site"
-    ? handleSiteMcp(request, {}, context())
-    : serendipity.handleMcp(request, {}, database);
+  const response = server === "site" ? handleSiteMcp(request, {}, context()) : serendipity.handleMcp(request, {}, database);
   return { request, response };
 }
 
 const discover = { jsonrpc: "2.0", id: 1, method: "server/discover", params: MODERN_META };
 const initialize = (clientInfo, protocolVersion = "2025-06-18") => ({
-  jsonrpc: "2.0", id: 2, method: "initialize",
+  jsonrpc: "2.0",
+  id: 2,
+  method: "initialize",
   params: { protocolVersion, capabilities: {}, clientInfo },
 });
 
@@ -39,8 +41,7 @@ for (const server of ["site", "serendipity"]) {
     assert.deepEqual(mcpEraOf(request), { era: "legacy", version: "2025-06-18", client: "old-client" });
 
     // After the handshake a legacy client names its revision on the header.
-    ({ request, response } = post(server, { jsonrpc: "2.0", id: 3, method: "ping" },
-      { "mcp-protocol-version": "2025-03-26" }));
+    ({ request, response } = post(server, { jsonrpc: "2.0", id: 3, method: "ping" }, { "mcp-protocol-version": "2025-03-26" }));
     await response;
     assert.deepEqual(mcpEraOf(request), { era: "legacy", version: "2025-03-26", client: undefined });
 
@@ -51,7 +52,7 @@ for (const server of ["site", "serendipity"]) {
   });
 
   test(`${server} MCP narrows caller-controlled era fields before they reach a log`, async () => {
-    const hostile = "evil\n{\"s\":500}\u0000" + "x".repeat(200);
+    const hostile = 'evil\n{"s":500}\u0000' + "x".repeat(200);
     let { request, response } = post(server, initialize({ name: hostile }, "not-a-date\n"));
     await response;
     const era = mcpEraOf(request);

@@ -5,11 +5,7 @@
 // published photo is listed exactly once, under the page that shows it, at the
 // full-size URL its tile opens; the XML is well formed enough to parse; and
 // robots.txt names the file.
-import {
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
 
 test("every published photo is listed once, under /photos or its album, at its full-size URL", async () => {
   const { imageSitemapXml, PHOTO_POOL, curatedPool, albumPool } = await import("../src/worker/photos.ts");
@@ -17,13 +13,19 @@ test("every published photo is listed once, under /photos or its album, at its f
   const albums = Object.values(ALBUMS);
   const xml = imageSitemapXml(PHOTO_POOL, albums);
 
-  assert.match(xml, /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9" xmlns:image="http:\/\/www\.google\.com\/schemas\/sitemap-image\/1\.1">/);
+  assert.match(
+    xml,
+    /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9" xmlns:image="http:\/\/www\.google\.com\/schemas\/sitemap-image\/1\.1">/,
+  );
   assert.ok(xml.trimEnd().endsWith("</urlset>"));
 
-  const pages = new Map([...xml.matchAll(/<url>\s*<loc>([^<]+)<\/loc>([\s\S]*?)<\/url>/g)]
-    .map(([, loc, body]) => [loc, [...body.matchAll(/<image:loc>([^<]+)<\/image:loc>/g)].map((m) => m[1])]));
-  const expect = [{ path: "/photos", members: curatedPool(PHOTO_POOL) },
-    ...albums.map((a) => ({ path: albumPath(a), members: albumPool(PHOTO_POOL, a) }))];
+  const pages = new Map(
+    [...xml.matchAll(/<url>\s*<loc>([^<]+)<\/loc>([\s\S]*?)<\/url>/g)].map(([, loc, body]) => [
+      loc,
+      [...body.matchAll(/<image:loc>([^<]+)<\/image:loc>/g)].map((m) => m[1]),
+    ]),
+  );
+  const expect = [{ path: "/photos", members: curatedPool(PHOTO_POOL) }, ...albums.map((a) => ({ path: albumPath(a), members: albumPool(PHOTO_POOL, a) }))];
   assert.equal(pages.size, expect.length, "one <url> per photo page");
   for (const { path, members } of expect) {
     const listed = pages.get(`https://aadhar.sh${path}`);

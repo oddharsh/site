@@ -34,8 +34,16 @@ test("a credential-shaped env value never survives into a message", () => {
 });
 
 test("the name pattern reads the names this repo actually issues", () => {
-  for (const name of ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_API_TOKEN_WRITE", "CLOUDFLARE_API_TOKEN_RAMP",
-    "GITHUB_TOKEN", "SIGNING_SECRET", "RESEND_API_KEY", "BROWSER_RUN_TOKEN", "ANALYTICS_READ_TOKEN"]) {
+  for (const name of [
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_API_TOKEN_WRITE",
+    "CLOUDFLARE_API_TOKEN_RAMP",
+    "GITHUB_TOKEN",
+    "SIGNING_SECRET",
+    "RESEND_API_KEY",
+    "BROWSER_RUN_TOKEN",
+    "ANALYTICS_READ_TOKEN",
+  ]) {
     assert.equal(CREDENTIAL_NAME.test(name), true, `${name} must be treated as a credential`);
   }
   // Read this pair as the point of the whole module. Neither is a secret and
@@ -77,7 +85,11 @@ test("check-infra routes every message through the barrier", async () => {
   report.fail(`drift ${TOKEN}`);
   report.warn(`note ${TOKEN}`);
   report.pass(`ok ${TOKEN}`);
-  for (const [name, store] of [["fail", report.hard], ["warn", report.advisory], ["pass", report.ok]]) {
+  for (const [name, store] of [
+    ["fail", report.hard],
+    ["warn", report.advisory],
+    ["pass", report.ok],
+  ]) {
     assert.equal(store.length, 1, `${name}() must store its message`);
     assert.equal(store[0].includes(TOKEN), false, `${name}() must redact before it stores`);
   }
@@ -87,19 +99,23 @@ test("check-infra routes every message through the barrier", async () => {
   // What is left to pin in the source is that check-infra.ts has no second
   // store and no second printer. Its four message doors come off the report,
   // and the only console calls drain what the report rendered.
-  assert.equal(/const \{ hard, fail, warn, pass \} = report;/.test(src), true,
-    "check-infra.ts must take fail/warn/pass from the redacting report");
-  assert.equal(/\b(hard|advisory|ok)\.push\(/.test(src), false,
-    "check-infra.ts must not push to a store directly; that skips the barrier");
+  assert.equal(/const \{ hard, fail, warn, pass \} = report;/.test(src), true, "check-infra.ts must take fail/warn/pass from the redacting report");
+  assert.equal(/\b(hard|advisory|ok)\.push\(/.test(src), false, "check-infra.ts must not push to a store directly; that skips the barrier");
 
   // A new console call that interpolates something other than rendered output
   // would route around all of it. This is the tripwire for that, and it fails
   // loudly rather than silently widening: the count is the floor.
   const consoles = src.match(/console\.(log|error|warn)\(/g) || [];
-  assert.equal(consoles.length, 2,
-    "check-infra.ts grew or lost a console call. Confirm the new one prints only what report.render() returned, then move this floor");
-  assert.equal(/for \(const line of rendered\.stdout\) console\.log\(line\);\nfor \(const line of rendered\.stderr\) console\.error\(line\);/.test(src), true,
-    "the two console calls must print the report's rendered lines and nothing else");
+  assert.equal(
+    consoles.length,
+    2,
+    "check-infra.ts grew or lost a console call. Confirm the new one prints only what report.render() returned, then move this floor",
+  );
+  assert.equal(
+    /for \(const line of rendered\.stdout\) console\.log\(line\);\nfor \(const line of rendered\.stderr\) console\.error\(line\);/.test(src),
+    true,
+    "the two console calls must print the report's rendered lines and nothing else",
+  );
 
   // The comparers and adapters return data. Neither may print or store.
   for (const lib of ["tools/lib/infra-compare.ts", "tools/lib/infra-ports.ts"]) {

@@ -7,7 +7,10 @@ import path from "node:path";
 
 test("AVIF version declarations read both Homebrew and Ubuntu codec reports", async () => {
   const { tools } = JSON.parse(await readFile(new URL("../config/tools.json", import.meta.url), "utf8"));
-  for (const [bin, prefix] of [["avifenc", "Version:"], ["zenc-avif", "libavif"]]) {
+  for (const [bin, prefix] of [
+    ["avifenc", "Version:"],
+    ["zenc-avif", "libavif"],
+  ]) {
     const pattern = new RegExp(tools.find((tool) => tool.bin === bin).version.match);
     for (const [report, libavif, aom] of [
       ["1.4.2 (dav1d [dec]:1.5.4, aom [enc/dec]:3.15.0)", "1.4.2", "3.15.0"],
@@ -29,20 +32,34 @@ async function fixture(run) {
     await writeFile(path.join(root, file), source);
   };
   const git = (...args) => execFileSync("git", args, { cwd: root, stdio: "pipe" });
-  const cli = () => spawnSync(process.execPath, [path.join(root, "tools/check-tools.ts")], {
-    cwd: tmpdir(), encoding: "utf8", env: { ...process.env, CI: "1" }, timeout: 10_000,
-  });
+  const cli = () =>
+    spawnSync(process.execPath, [path.join(root, "tools/check-tools.ts")], {
+      cwd: tmpdir(),
+      encoding: "utf8",
+      env: { ...process.env, CI: "1" },
+      timeout: 10_000,
+    });
   try {
     await put("tools/check-tools.ts", await readFile(new URL("./check-tools.ts", import.meta.url), "utf8"));
-    await put("config/tools.json", JSON.stringify({ tools: [{
-      bin: "fixture", path: "absent-fixture", install: "brew install fixture",
-      why: "fixture prerequisite", min_version: "1.0.0",
-    }] }));
+    await put(
+      "config/tools.json",
+      JSON.stringify({
+        tools: [
+          {
+            bin: "fixture",
+            path: "absent-fixture",
+            install: "brew install fixture",
+            why: "fixture prerequisite",
+            min_version: "1.0.0",
+          },
+        ],
+      }),
+    );
     await put("CLAUDE.md", "fixture");
     await put("docs/MAINTENANCE.md", "fixture");
     await put(".gitignore", "vendor/\n");
-    for (let i = 0; i < 5; i++) await put(`tools/photos/guard-${i}.sh`,
-      'FIXTURE_MIN=1.0.0\nfor cmd in fixture; do\n  command -v "$cmd" || exit 1\ndone\n# brew install fixture\n');
+    for (let i = 0; i < 5; i++)
+      await put(`tools/photos/guard-${i}.sh`, 'FIXTURE_MIN=1.0.0\nfor cmd in fixture; do\n  command -v "$cmd" || exit 1\ndone\n# brew install fixture\n');
     git("init", "-q");
     git("add", ".");
     const baseline = cli();

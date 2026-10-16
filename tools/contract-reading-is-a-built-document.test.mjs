@@ -21,9 +21,21 @@ const NO_BINDINGS = /** @type {import("../src/worker/lib/env.ts").Env} */ (/** @
 async function withColdCache(fn) {
   const real = globalThis.caches;
   const puts = [];
-  const fake = { default: { match: async () => undefined, put: async (k, v) => { puts.push([k, v]); }, delete: async () => false } };
+  const fake = {
+    default: {
+      match: async () => undefined,
+      put: async (k, v) => {
+        puts.push([k, v]);
+      },
+      delete: async () => false,
+    },
+  };
   globalThis.caches = /** @type {CacheStorage} */ (/** @type {unknown} */ (fake));
-  try { return await fn(puts); } finally { globalThis.caches = real; }
+  try {
+    return await fn(puts);
+  } finally {
+    globalThis.caches = real;
+  }
 }
 
 const ITEMS = [
@@ -71,7 +83,11 @@ test("the placeholder is the list's own markup, and nothing visible follows the 
 test("/reading/list.html is an island, and an empty read is cached briefly", async () => {
   await withColdCache(async (puts) => {
     const waits = [];
-    const res = await handleReadingList(new Request("https://aadhar.sh" + LIST_URL), NO_BINDINGS, { waitUntil(p) { waits.push(p); } });
+    const res = await handleReadingList(new Request("https://aadhar.sh" + LIST_URL), NO_BINDINGS, {
+      waitUntil(p) {
+        waits.push(p);
+      },
+    });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get(ISLAND_MARKER), "1");
     assert.equal(res.headers.get("x-robots-tag"), "noindex");
@@ -89,5 +105,9 @@ test("the owner's bust refuses a wrong or unconfigured secret", async () => {
   const env = { RN_BUST_SECRET: "right" };
   const ctx = { waitUntil() {} };
   assert.equal(await refreshReadingList(new Request("https://aadhar.sh" + LIST_URL + "?bust=wrong"), env, ctx), null);
-  assert.equal(await refreshReadingList(new Request("https://aadhar.sh" + LIST_URL + "?bust=right"), NO_BINDINGS, ctx), null, "no secret configured means no bust");
+  assert.equal(
+    await refreshReadingList(new Request("https://aadhar.sh" + LIST_URL + "?bust=right"), NO_BINDINGS, ctx),
+    null,
+    "no secret configured means no bust",
+  );
 });

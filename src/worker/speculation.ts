@@ -114,7 +114,9 @@ export function countSpeculativeLoad(env, request, response, pathname) {
       doubles: [1],
       indexes: [kind],
     });
-  } catch { /* best-effort; never break a response over a counter */ }
+  } catch {
+    /* best-effort; never break a response over a counter */
+  }
 }
 
 // NUMERATOR. The browser HEADs this when a speculated document gets used.
@@ -136,7 +138,9 @@ export function handlePrefetchActivation(request, env) {
         indexes: [kind],
       });
     }
-  } catch { /* as above */ }
+  } catch {
+    /* as above */
+  }
   // 204 with no body: the browser wants an acknowledgement, not a document.
   return new Response(null, {
     status: 204,
@@ -165,12 +169,17 @@ export const SPECULATION_DATASET = "aadhar_speculation";
 export const SPECULATION_WINDOW_DAYS = 30;
 
 export type SpeculationRow = {
-  path: string; prefetch: number; prerender: number; activated: number;
-  speculated: number; rate: number | null;
+  path: string;
+  prefetch: number;
+  prerender: number;
+  activated: number;
+  speculated: number;
+  rate: number | null;
 };
 
 // the two activation sources, folded into `activated` by taking the larger
-const HEADER = "activated", CLIENT = "activated-client";
+const HEADER = "activated",
+  CLIENT = "activated-client";
 
 // Pure over the SQL rows, so the contract test can pin the arithmetic without a
 // token. Unknown kinds are ignored rather than counted as anything.
@@ -205,18 +214,30 @@ export async function handleSpeculationJson(request, env) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return jsonResponse({ ok: false, error: "method not allowed", code: "method_not_allowed", allow: ["GET", "HEAD"] }, 405, { allow: "GET, HEAD" });
   }
-  const read = await analyticsSql(env, SPECULATION_DATASET, (from, sum) =>
-    `SELECT blob1 AS kind, blob2 AS path, ${sum("double1")} AS n ` +
-    `FROM ${from} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
-    `GROUP BY kind, path`);
+  const read = await analyticsSql(
+    env,
+    SPECULATION_DATASET,
+    (from, sum) =>
+      `SELECT blob1 AS kind, blob2 AS path, ${sum("double1")} AS n ` +
+      `FROM ${from} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
+      `GROUP BY kind, path`,
+  );
   if (!read.ok) {
     const { status, error, code } = analyticsReadError(read.reason);
     return jsonResponse({ ok: false, error, code, reason: read.reason, binding_fallback: read.binding_fallback, window_days: SPECULATION_WINDOW_DAYS }, status);
   }
   const rows = summarizeSpeculation(read.data);
-  return jsonResponse({
-    ok: true, via: read.via, binding_fallback: read.binding_fallback, window_days: SPECULATION_WINDOW_DAYS, dataset: SPECULATION_DATASET,
-    note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate",
-    rows,
-  }, 200, { "cache-control": "public, max-age=300, s-maxage=300" });
+  return jsonResponse(
+    {
+      ok: true,
+      via: read.via,
+      binding_fallback: read.binding_fallback,
+      window_days: SPECULATION_WINDOW_DAYS,
+      dataset: SPECULATION_DATASET,
+      note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate",
+      rows,
+    },
+    200,
+    { "cache-control": "public, max-age=300, s-maxage=300" },
+  );
 }

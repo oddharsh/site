@@ -8,7 +8,8 @@ import { assert, lensReadiness, test } from "./contract-shared.ts";
 import { ISAG_CATALOG, ISAG_LEDGER, NEED_POOLS, lensNeed, openapiOperationIds } from "../src/worker/lens-need.ts";
 
 const words = (n) => Array.from({ length: n }, (_, i) => "word" + i).join(" ");
-const page = (extra = "") => `<!doctype html><html lang="en"><head><link rel="canonical" href="https://blog.test/"></head><body><h1>A blog</h1><p>${words(120)}</p>${extra}</body></html>`;
+const page = (extra = "") =>
+  `<!doctype html><html lang="en"><head><link rel="canonical" href="https://blog.test/"></head><body><h1>A blog</h1><p>${words(120)}</p>${extra}</body></html>`;
 const control = { key: "chrome", role: "control", status: 200 };
 const crawler = (key) => ({ key, role: "answers", status: 200 });
 // find() answers T | undefined; a missing row is itself the failure worth naming.
@@ -20,16 +21,51 @@ const pick = (list, key) => {
 
 // A plain blog that does everything a reader needs and publishes no agent doors.
 function blog(over = {}) {
-  const readiness = /** @type {any} */ (lensReadiness({ headers: {}, robots: { ok: true, status: 200, body: "User-agent: *\nAllow: /\n" }, sitemap: null, terms: null, discovery: null, agent: null, openapi: null, botViews: [] }));
+  const readiness = /** @type {any} */ (
+    lensReadiness({
+      headers: {},
+      robots: { ok: true, status: 200, body: "User-agent: *\nAllow: /\n" },
+      sitemap: null,
+      terms: null,
+      discovery: null,
+      agent: null,
+      openapi: null,
+      botViews: [],
+    })
+  );
   readiness.field = { components: [{ key: "sampledBots", score: 100, detail: "8 of 8 named bot identities received an unblocked response" }] };
   return {
-    status: 200, url: "https://blog.test/", finalUrl: "https://blog.test/", isHtml: true,
+    status: 200,
+    url: "https://blog.test/",
+    finalUrl: "https://blog.test/",
+    isHtml: true,
     anatomy: { rawHtml: page(), text: "A blog " + words(120), headings: [{ level: 1, text: "A blog" }] },
-    structured: { relLinks: [{ rel: "canonical", href: "https://blog.test/" }], og: { image: "https://blog.test/og.png", type: "website" }, meta: {}, jsonld: [] },
-    headers: {}, cost: null, readiness,
-    agent: { mcp: { verdict: "no" }, openapi: { present: false }, apiCatalog: { present: false }, aiPlugin: { present: false }, llmsTxt: { present: false }, nlweb: { verdict: "no" } },
-    terms: { scoreboard: [{ ua: "ChatGPT-User", kind: "answers", verdict: "allow" }, { ua: "Claude-User", kind: "answers", verdict: "allow" }, { ua: "GPTBot", kind: "train", verdict: "block" }] },
-    openapi: null, botViews: [control, crawler("GPTBot")],
+    structured: {
+      relLinks: [{ rel: "canonical", href: "https://blog.test/" }],
+      og: { image: "https://blog.test/og.png", type: "website" },
+      meta: {},
+      jsonld: [],
+    },
+    headers: {},
+    cost: null,
+    readiness,
+    agent: {
+      mcp: { verdict: "no" },
+      openapi: { present: false },
+      apiCatalog: { present: false },
+      aiPlugin: { present: false },
+      llmsTxt: { present: false },
+      nlweb: { verdict: "no" },
+    },
+    terms: {
+      scoreboard: [
+        { ua: "ChatGPT-User", kind: "answers", verdict: "allow" },
+        { ua: "Claude-User", kind: "answers", verdict: "allow" },
+        { ua: "GPTBot", kind: "train", verdict: "block" },
+      ],
+    },
+    openapi: null,
+    botViews: [control, crawler("GPTBot")],
     ...over,
   };
 }
@@ -40,8 +76,10 @@ test("a blog that serves its readers is not docked for OAuth, MCP or payments", 
   for (const s of ["api", "mcp", "auth", "commerce"]) {
     assert.equal(pick(need.surfaces, s).applies, false, `${s} must not apply without evidence`);
   }
-  assert.ok(!need.recommended.checks.some((c) => /protectedResource|mcpFindable|machinePayment|apiDescribed/.test(c.key)),
-    "no surface-gated check may appear when its surface is absent");
+  assert.ok(
+    !need.recommended.checks.some((c) => /protectedResource|mcpFindable|machinePayment|apiDescribed/.test(c.key)),
+    "no surface-gated check may appear when its surface is absent",
+  );
   // Missing JSON-LD and sitemap cost recommended points, nothing more.
   assert.ok((need.overall ?? 0) >= 80, `a blog with only website basics scores ${need.overall}, which should be at least 80`);
   // The mirror's fails it has no reason to fix are named, with a reason.
@@ -54,8 +92,19 @@ test("a blog that serves its readers is not docked for OAuth, MCP or payments", 
 test("refusing a training crawler costs nothing; refusing a user-sent agent does", () => {
   const ok = pick(lensNeed(blog()).essential.checks, "userAgents");
   assert.equal(ok.status, "pass", "GPTBot blocked, ChatGPT-User and Claude-User allowed, is a pass");
-  const refused = pick(lensNeed(blog({ terms: { scoreboard: [{ ua: "ChatGPT-User", kind: "answers", verdict: "block" }, { ua: "Claude-User", kind: "answers", verdict: "allow" }] } }))
-    .essential.checks, "userAgents");
+  const refused = pick(
+    lensNeed(
+      blog({
+        terms: {
+          scoreboard: [
+            { ua: "ChatGPT-User", kind: "answers", verdict: "block" },
+            { ua: "Claude-User", kind: "answers", verdict: "allow" },
+          ],
+        },
+      }),
+    ).essential.checks,
+    "userAgents",
+  );
   assert.equal(refused.status, "partial");
   assert.match(refused.detail, /ChatGPT-User/, "the detail names the refused agent");
 });
@@ -79,7 +128,10 @@ test("emerging doors are capped, and the excess is called out as past need", () 
   const need = lensNeed(b);
   assert.ok(need.bonus.signals.length > NEED_POOLS.bonusCap, "the fixture has more doors than the cap");
   assert.equal(need.bonus.points, NEED_POOLS.bonusCap, "no number of drafts buys more than the cap");
-  assert.ok(need.beyondNeed.some((x) => /emerging doors/.test(x.label)), "the excess is named rather than silently dropped");
+  assert.ok(
+    need.beyondNeed.some((x) => /emerging doors/.test(x.label)),
+    "the excess is named rather than silently dropped",
+  );
 });
 
 test("OAuth metadata guarding nothing is past need; in front of an API it is a requirement", () => {
@@ -99,9 +151,23 @@ test("OAuth metadata guarding nothing is past need; in front of an API it is a r
 });
 
 test("markdown is Recommended only when the HTML tax is real", () => {
-  const lean = blog({ cost: { tiers: [{ key: "html", tokens: 3000 }, { key: "markdown", tokens: 2000 }] } });
+  const lean = blog({
+    cost: {
+      tiers: [
+        { key: "html", tokens: 3000 },
+        { key: "markdown", tokens: 2000 },
+      ],
+    },
+  });
   assert.ok(!lensNeed(lean).recommended.checks.some((c) => c.key === "markdown"), "a lean page owes no twin");
-  const heavy = blog({ cost: { tiers: [{ key: "html", tokens: 60000 }, { key: "markdown", tokens: 3000 }] } });
+  const heavy = blog({
+    cost: {
+      tiers: [
+        { key: "html", tokens: 60000 },
+        { key: "markdown", tokens: 3000 },
+      ],
+    },
+  });
   const md = pick(lensNeed(heavy).recommended.checks, "markdown");
   assert.match(md.detail, /20x/);
 });
@@ -113,11 +179,7 @@ test("operationId coverage reads the OpenAPI document", () => {
 });
 
 test("every Is Agentic check is filed exactly once", () => {
-  const filed = [
-    ...Object.values(ISAG_LEDGER.scored).flat(),
-    ...ISAG_LEDGER.bonus,
-    ...ISAG_LEDGER.declined.flatMap((g) => g.ids),
-  ];
+  const filed = [...Object.values(ISAG_LEDGER.scored).flat(), ...ISAG_LEDGER.bonus, ...ISAG_LEDGER.declined.flatMap((g) => g.ids)];
   const dupes = filed.filter((id, i) => filed.indexOf(id) !== i);
   assert.deepEqual(dupes, [], "an id filed twice says two different things about one check");
   const missing = ISAG_CATALOG.filter((id) => !filed.includes(id));
