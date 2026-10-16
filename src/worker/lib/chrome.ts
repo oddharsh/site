@@ -141,7 +141,7 @@ export function lunaPage({
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>${documentTitle}</title>${metaDescription}${metaRobots}${linkCanonical}${route ? shareMeta({ title: documentTitle, description, path: route, image: ogImage, imageAlt: ogImageAlt }) : EMPTY}${twinLink}

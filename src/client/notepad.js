@@ -385,7 +385,9 @@
     var by = (folder ? folder.getBoundingClientRect().top : 8) + 30;
     var step = 26;
     var x = Math.max(8, Math.min(bx + n * step, innerWidth - pop.offsetWidth - 8));
-    var y = Math.max(8, Math.min(by + n * step, innerHeight - 30 - 90));
+    // the taskbar's real height (luna.css SAFE AREAS registers it as a <length>)
+    var bar = parseFloat(getComputedStyle(D.documentElement).getPropertyValue("--taskbar-h")) || 30;
+    var y = Math.max(8, Math.min(by + n * step, innerHeight - bar - 90));
     pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = x + "px"; pop.style.top = y + "px";
     if (ta) ta.focus();
     window.dispatchEvent(new Event("resize"));
