@@ -93,7 +93,7 @@
     "oxc-minify": "0.154.0",
     "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",
-    "playwright-core": "1.64.0",
+    "playwright-core": "1.64.1",
     "timbrado": "github:oddharsh/timbrado#ec6c6b19dd97b922ce86f49d60711abfe5924670",
     "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@e1d1b77"
   },
