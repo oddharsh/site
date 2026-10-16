@@ -192,7 +192,7 @@ function pngSize(file: string) {
 }
 
 // The depth a browser paints at, and the one both sides are scored at.
-const DECODE = ["--bits_per_sample=8"];
+export const DECODE = ["--bits_per_sample=8"];
 
 export async function hifArchive(hif: string, baseline: string, out: string) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "hif-archive-"));
