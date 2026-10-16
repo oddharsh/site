@@ -391,7 +391,7 @@ const STANDALONE_GUTTER = `/*min*/
 `;
 const SHELL_GEOMETRY = `/*min*/
 html { height: 100dvh; overflow: hidden; }
-body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+body { min-height: 0; height: calc(100vh - 30px - env(safe-area-inset-bottom, 0px)); height: calc(100dvh - 30px - env(safe-area-inset-bottom, 0px));
   overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
 .window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
 .window > .title-bar { flex: 0 0 auto; }
@@ -412,7 +412,7 @@ function shell(title, body, env, head = "") {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <link rel="stylesheet" href="/luna.css">

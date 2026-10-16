@@ -20,6 +20,7 @@ export function createRun(options) {
   var loadPhotos = options.loadPhotos;
   var loadWriting = options.loadWriting;
   var front = options.front;
+  var inset = options.inset || (() => 0);
   var run, input, list, results = /** @type {any[]} */ ([]), sel = -1, lastQuery = /** @type {string | null} */ (null), semantic = { q: "", items: /** @type {any[]} */ ([]) }, searchTimer = /** @type {any} */ (null);
   var preview = /** @type {HTMLElement | null} */ (null), previewHoist = /** @type {any} */ (null), previewLoading = false;
   var PHOTOS = /** @type {any[] | null} */ (null), WRITING = /** @type {any[] | null} */ (null);
@@ -404,7 +405,7 @@ export function createRun(options) {
     var n = Object.keys(ACC_OPEN).length;
     var win = el('<div class="axp-acc"><div class="tb"><span class="ic" aria-hidden="true">' + a.icon + '</span><span class="t">' + a.label + '</span><span class="x" role="button" title="close" aria-label="close">✕</span></div><div class="bd"></div></div>');
     win.style.left = Math.max(8, Math.min(innerWidth - 200, 86 + n * 24)) + "px";
-    win.style.top = Math.max(8, 64 + n * 24) + "px";
+    win.style.top = Math.max(8, 64 + inset("sa-t") + n * 24) + "px";
     D.body.appendChild(win);
     var bd = /** @type {HTMLElement & {_iv?: number}} */ (win.querySelector(".bd"));
     if (!bd) throw new Error("Accessory window is missing its body");
@@ -436,12 +437,12 @@ export function createRun(options) {
       if (e.target instanceof Element && e.target.closest(".x")) return;
       accFront(win);
       var r = win.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, ox = r.left, oy = r.top;
-      var nx = ox, ny = oy;
+      var nx = ox, ny = oy, top = inset("sa-t"), floor = innerHeight - 36 - inset("sa-b");
       try { tb.setPointerCapture(e.pointerId); } catch (er) {}
       win.classList.add("axp-dragging");   // earn-it: will-change on for the gesture, off on drop
       function mv(ev) {
         nx = Math.max(0, Math.min(innerWidth - 40, ox + ev.clientX - sx));
-        ny = Math.max(0, Math.min(innerHeight - 36, oy + ev.clientY - sy));
+        ny = Math.max(top, Math.min(floor, oy + ev.clientY - sy));
         win.style.transform = "translate(" + (nx - ox) + "px," + (ny - oy) + "px)";
       }
       function up() {
