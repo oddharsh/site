@@ -9,7 +9,9 @@ name: Canary tripwire
 #             zstd honours `dictionary`, the lockfile in both directions, a
 #             byte-identical build against the pinned bun, the contract suite,
 #             and cal's suite on wrangler's harness (oven-sh/bun#39247 lives
-#             there). tools/canary-bun.ts.
+#             there), and `bun check` diffed against Microsoft's tsc 7 on
+#             every typecheck program.
+#             tools/canary-bun.ts.
 #   wrangler  workers-sdk's main, installed from pkg.pr.new into a detached
 #             worktree: the dry-run bundle (diffed against the pinned wrangler's),
 #             the route oracle on the candidate's own createTestHarness, cal's

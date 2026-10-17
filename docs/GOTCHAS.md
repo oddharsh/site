@@ -587,7 +587,20 @@ skips it.
     prints the index digest as `docker-content-digest`.
     Checked by: `tools/contract-the-browser-image-matches-playwright-core.test.mjs`.
 
-76. **A walk that names a tree which still exists passes on zero files.**
+76. **`avifdec -d 8` truncates a 10-bit image before converting it.** libavif
+    hands a 10-bit 4:4:4 file to libyuv, which drops the YUV to 8 bits and then
+    converts, so the 8-bit PNG lands up to 3 levels under the file's true
+    pixels, 0.4 to 0.5 under on average, wrong on about 55% of samples.
+    Measured 2026-10-17 against an exact conversion of each file's own YUV
+    planes, for the shipped AV1 and the AV2 build alike: `-d 8` cost 0 to 1.8
+    ssimulacra2 on the 11 /garage/av2 samples (nothing on the 8-bit gray
+    Monochroms). `-d 16`, rounded once by `zenc frame`, has zero samples off,
+    and so does /garage/av2's WebAssembly decoder. djxl's 8-bit output rounds,
+    so until then every AVIF and AV2 score on the /pixel-peeper format axis
+    was handicapped against JPEG XL's by the decode, not the codec.
+    Checked by: `tools/contract-avif-scores-decode-exactly.test.mjs`.
+
+77. **A walk that names a tree which still exists passes on zero files.**
     Invariant 8c in `tools/build.ts` walked `public/garage` and `public/lwe`
     from the 2026-08-18 split (#457) until 2026-10-17. Both directories exist
     (they hold `av2/`, `enc/` and `lean/` assets), so `readdir` succeeded,

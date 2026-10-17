@@ -530,7 +530,7 @@ async function checkInvariants() {
     // 0 files until 2026-10-17 while 39 pages sat in src/pages. The floor is the
     // control: an empty or wrong root reads 0 and fails here. 39 pages walk
     // today, so 30 leaves room to retire a few before the floor needs moving
-    // (gotcha 76).
+    // (gotcha 77).
     const BARE = new Set(["index.html", "vt-b.html", "vt-check.html"]);
     const known = new Set(surfaces.map((s) => s.path));
     for (const dir of ["garage", "lwe"]) {
@@ -689,7 +689,7 @@ async function checkInvariants() {
       ...await flat("cal/src", /\.ts$/),
       // .ts since #523 (2026-08-23). It matched /\.js$/ until 2026-10-17 and
       // scanned 0 of serendipity's 3 files, so each root now has to yield one
-      // (gotcha 76).
+      // (gotcha 77).
       ...await flat("serendipity", /\.ts$/),
     ];
     for (const root of ["src/pages/", "src/worker/", "cal/src/", "serendipity/"]) {
