@@ -231,6 +231,10 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/garage/dyno": routeDyno,
   [DYNO_PULLS_URL]: handleDynoPulls,
   "/garage/dyno.json": handleDynoJson,
+  "/garage/": routeDropSlash,
+  "/lwe/": routeDropSlash,
+  "/coffee/": routeDropSlash,
+  "/serendipity/": routeDropSlash,
   // /perf shipped as the original name and lived for about an hour. The 301s are
   // not for humans: `agents: true` puts a surface in the MCP resources projection,
   // and _headers caches the well-known cards for 30 days, so an agent can hold the
@@ -607,8 +611,10 @@ function routePhotosRedirect(_request, _env, _ctx, url) {
 }
 
 // canonical URLs carry no trailing slash (sitemap + rel=canonical + llms.txt all
-// say so, and the asset layer's drop-trailing-slash agrees). A worker route's own
-// slashed twin 301s to the slashless form rather than serving a duplicate 200.
+// say so). A worker route's own slashed twin 301s to the slashless form rather
+// than serving a duplicate 200. The asset layer's drop-trailing-slash agrees on
+// the direction but redirects with a 307, so a worker-first section root
+// (/garage/, /lwe/) is routed here to get the permanent status.
 function routeDropSlash(_request, _env, _ctx, url) {
   return Response.redirect(url.origin + url.pathname.replace(/\/+$/, "") + url.search, 301);
 }

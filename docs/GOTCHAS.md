@@ -599,3 +599,16 @@ skips it.
     so until then every AVIF and AV2 score on the /pixel-peeper format axis
     was handicapped against JPEG XL's by the decode, not the codec.
     Checked by: `tools/contract-avif-scores-decode-exactly.test.mjs`.
+
+77. **The asset layer's `drop-trailing-slash` redirects with a 307.** The
+    direction is right (`/about/` to `/about`) but the status is temporary,
+    so a crawler keeps the slashed URL and comes back to it. Measured
+    2026-10-17 on production: `/garage/`, `/lwe/` and every slashed page
+    answered 307 while `cloudflare.config.ts` said 301, and `/coffee/` and
+    `/serendipity/` skipped the redirect entirely, since their modules served
+    their own root as a second 200. The route oracle had accepted
+    `[301, 307, 308]` for `/garage/`, so it could not tell. A path that must
+    redirect permanently needs an exact route to `routeDropSlash` in
+    `src/worker/index.ts`, and its row in the route oracle (`bun run
+    routes:check`) pins `status: 301` and the `location`.
+    Checked by: `tools/verify-routes.ts`.

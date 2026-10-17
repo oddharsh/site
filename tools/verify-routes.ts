@@ -74,6 +74,8 @@ try {
 //     may be an array of acceptable prefixes (e.g. Pages says application/javascript,
 //     Workers-assets says text/javascript for the same .js file — both are valid).
 // marker: a substring that must appear in the body (text routes only).
+// location: the path a redirect's Location must name, query aside (the probe
+//     adds a cache-buster). Status alone passes a redirect to the wrong place.
 // cors: the exact Access-Control-Allow-Origin the response must carry. For a
 //     document whose spec requires it: a missing header fails no other column.
 // flaky: true = record the result but never fail the run (external/rate-limited).
@@ -87,6 +89,10 @@ const ROUTES = [
   // exercise GET/HEAD proofs, key mismatch, and the missing-key 503 with fixtures.
   { path: "/.well-known/http-message-signatures-directory", status: 200,
     ct: "application/http-message-signatures-directory+json", marker: '"keys"', remote: true },
+  // From the repo since 2026-10-17. Production answers from Cloudflare's
+  // Security Center until that copy is deleted; infra.json's
+  // security-txt-from-repo watches the edge, this row watches the file.
+  { path: "/.well-known/security.txt", status: 200, ct: "text/plain", marker: "Policy: https://aadhar.sh/contact#security" },
   { path: "/", status: 200, ct: "text/html", marker: "Aadharsh" },
   // The homepage's two per-visit halves are islands (lib/island.ts). These rows
   // pin both mounts in the served document, and the fragment rows pin what
@@ -177,6 +183,7 @@ const ROUTES = [
   // and the fragment always carries a day. /coffee/pick is the no-script page
   // with the same list inline.
   { path: "/coffee", status: 200, ct: "text/html", marker: "data-island=/coffee/slots.html", fullPage: true },
+  { path: "/coffee/", status: 301, location: "/coffee" },   // routeDropSlash, not cal's root as a duplicate 200
   { path: "/coffee/slots.html", status: 200, ct: "text/html", marker: "xp-day-label", fragment: true },
   { path: "/coffee/pick", status: 200, ct: "text/html", marker: 'id="bookform"' },
   { path: "/around.md", status: 200, ct: "text/markdown", marker: "Nothing here is an endorsement" },
@@ -201,7 +208,7 @@ const ROUTES = [
   { path: "/perf.json", status: 301 },
   { path: "/restore", status: 200, ct: "text/html" },
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },
-  { path: "/lens/", status: 301 },   // slashless canonical: routeDropSlash 301s to /lens
+  { path: "/lens/", status: 301, location: "/lens" },   // slashless canonical: routeDropSlash 301s to /lens
   { path: "/lens-boot.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "requestSubmit" },
   { path: "/lens-webmcp.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensWebMcp" },
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
@@ -283,6 +290,7 @@ const ROUTES = [
   // carries no serendipity schema, so the pool read fails and the fragment
   // answers 503 without the island marker, which is the loader's failure arm.
   { path: "/serendipity", status: 200, ct: "text/html", marker: "data-island=/serendipity/events.html", fullPage: true },
+  { path: "/serendipity/", status: 301, location: "/serendipity" },   // routeDropSlash, not a duplicate 200
   { path: "/serendipity/events.html", status: [200, 503], ct: "text/html" },
   // The agents page is a plain bake since 2026-09-25: a fixed tool list, no island.
   { path: "/serendipity/mcp-info", status: 200, ct: "text/html", marker: "list_events", fullPage: true },
@@ -403,7 +411,7 @@ const ROUTES = [
   { path: "/ledger/rum.js", status: 404 },
   { path: "/ledger/rum", status: 404 },
   { path: "/writing", status: 200, ct: "text/html" },
-  { path: "/writing/", status: 301 },   // routeDropSlash 301s to /writing
+  { path: "/writing/", status: 301, location: "/writing" },   // routeDropSlash 301s to /writing
   { path: `/writing/${SLUG}`, status: 200, ct: "text/html" },
   { path: `/writing/${SLUG}.txt`, status: 200, ct: "text/plain" },
   { path: "/writing/posts.json", status: 200, ct: "application/json", encoding: "br" },
@@ -502,7 +510,8 @@ const ROUTES = [
   ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
   // static section pages that are already URL-skeuomorphic (must not regress)
   { path: "/garage", status: 200, ct: "text/html" },
-  { path: "/garage/", status: [301, 307, 308] },   // drop-trailing-slash: /garage serves, /garage/ redirects
+  // routeDropSlash; the asset layer's drop-trailing-slash would 307 (gotcha 77)
+  { path: "/garage/", status: 301, location: "/garage" },
   { path: "/garage/scroll", status: 200, ct: "text/html" },
   { path: "/garage/workers", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/wire", status: 200, ct: "text/html", marker: "x-edge-cache" },
@@ -510,7 +519,7 @@ const ROUTES = [
   { path: "/garage/gpt56", status: 200, ct: "text/html", marker: "5.6 Sol" },
   { path: "/garage/enc/z-zc90.jpg", status: 200, ct: "image/jpeg" },   // the JPEG cell /lwe/encoding actually loads (was z-jl90 until zenjpeg replaced jpegli in the ladder)
   { path: "/lwe", status: 200, ct: "text/html" },
-  { path: "/lwe/", status: [301, 307, 308] },   // drop-trailing-slash
+  { path: "/lwe/", status: 301, location: "/lwe" },   // routeDropSlash, as /garage/
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
   { path: "/pixel-peeper", status: 200, ct: "text/html", marker: "compression eye exam" },
   { path: "/pixel-peeper/manifest.json", status: 200, ct: "application/json" },
@@ -654,6 +663,8 @@ async function probe(r) {
     const okMarker = !r.marker || body.includes(r.marker);
     const cors = res.headers.get("access-control-allow-origin");
     const okCors = !r.cors || cors === r.cors;
+    const location = res.headers.get("location");
+    const okLocation = !r.location || (location !== null && new URL(location, base).pathname === r.location);
     const okBytes = !r.maxBytes || (bytes !== null && bytes <= r.maxBytes);
     // The doctype leads the document, but build.ts stamps a one-line banner
     // pointing at the readable .src.html twin ahead of it. That banner reached
@@ -687,8 +698,8 @@ async function probe(r) {
       !/<(?:!doctype|html|head|body)\b/i.test(body) &&
       (!r.fragmentRoot || body.includes(r.fragmentRoot))
     );
-    const pass = okStatus && okCt && okEnc && okMarker && okCors && okBytes && okFullPage && okFragment;
-    return { path: r.path, status: res.status, ct, enc, wantEnc: r.encoding, cors, wantCors: r.cors, pass, flaky: !!r.flaky, okStatus, okCt, okEnc, okMarker, okCors, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
+    const pass = okStatus && okCt && okEnc && okMarker && okCors && okLocation && okBytes && okFullPage && okFragment;
+    return { path: r.path, status: res.status, ct, enc, wantEnc: r.encoding, cors, wantCors: r.cors, location, wantLocation: r.location, okLocation, pass, flaky: !!r.flaky, okStatus, okCt, okEnc, okMarker, okCors, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
   } catch (e) {
     return { path: r.path, status: 0, ct: "", pass: false, flaky: !!r.flaky, error: String(e && e.message || e), want: r.status };
   }
@@ -724,6 +735,7 @@ async function main() {
       r.okEnc === false ? `content-encoding "${r.enc || "none"}" != "${r.wantEnc}" (twin built but not served?)` : "",
       r.okMarker === false ? `missing marker "${r.marker}"` : "",
       r.okCors === false ? `access-control-allow-origin "${r.cors || "none"}" != "${r.wantCors}"` : "",
+      r.okLocation === false ? `location "${r.location || "none"}" does not name ${r.wantLocation}` : "",
       r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B (unminified? build bypassed?)` : "",
       r.okFullPage === false ? "full-page contract missing document wrapper" : "",
       r.okFragment === false ? "fragment contract returned a document wrapper" : "",

@@ -31,7 +31,7 @@ const ROOT = new URL("../", import.meta.url).pathname;
 const CONFIRM = process.argv.includes("--confirm");
 const PRUNE = process.argv.includes("--prune");
 const API = "https://api.cloudflare.com/client/v4";
-const RRTYPE = { A: 1, NS: 2, CNAME: 5, MX: 15, TXT: 16, AAAA: 28, DS: 43, SVCB: 64 };
+const RRTYPE = { A: 1, NS: 2, CNAME: 5, MX: 15, TXT: 16, AAAA: 28, DS: 43, SVCB: 64, CAA: 257 };
 
 const infra = JSON.parse(await readFile(join(ROOT, "config/infra.json"), "utf8"));
 const policy = infra.apply;
@@ -123,7 +123,11 @@ async function loadApiRecords(zoneId, token) {
       const key = `${r.name}|${r.type}`;
       // MX carries its priority outside `content`; the declaration writes it
       // inline ("25 route3..."), so rebuild that shape to compare like with like.
-      const value = r.type === "MX" ? `${r.priority} ${normalize(r.type, r.content)}` : normalize(r.type, r.content);
+      // CAA likewise: its parts arrive in `data`, and `content` is a rendering
+      // whose quoting the API does not promise, so rebuild from the parts.
+      const value = r.type === "MX" ? `${r.priority} ${normalize(r.type, r.content)}`
+        : r.type === "CAA" && r.data ? normalize(r.type, `${r.data.flags} ${r.data.tag} "${r.data.value}"`)
+        : normalize(r.type, r.content);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push({ id: r.id, value });
     }
@@ -172,6 +176,12 @@ function normalize(type, data) {
     return m ? `${m[1]} ${stripDot(m[2])}` : data.trim();
   }
   if (type === "NS" || type === "CNAME") return stripDot(data.trim());
+  // `0 issue "pki.goog; cansignhttpexchanges=yes"`: flags, tag, and a value that
+  // carries spaces, so it is the one part kept quoted.
+  if (type === "CAA") {
+    const m = /^(\d+)\s+(\S+)\s+"?(.*?)"?$/.exec(data.trim());
+    return m ? `${m[1]} ${m[2]} "${m[3]}"` : data.trim();
+  }
   return data.trim();
 }
 
@@ -191,6 +201,10 @@ function payload(record, value) {
   if (record.type === "MX") {
     const [priority, ...rest] = value.split(" ");
     return { type: "MX", name, ttl, priority: Number(priority), content: rest.join(" ") };
+  }
+  if (record.type === "CAA") {
+    const [, flags, tag, caaValue] = /^(\d+) (\S+) "(.*)"$/.exec(value) || [];
+    return { type: "CAA", name, ttl, data: { flags: Number(flags), tag, value: caaValue } };
   }
   return { type: record.type, name, ttl, content: value };
 }
