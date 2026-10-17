@@ -5,6 +5,7 @@
   // accurate and recreates the caches.default collision documented next door.
   "compilerOptions": {
     "noEmit": true,
+    "erasableSyntaxOnly": true,
     "allowJs": true,
     "checkJs": true,
     "target": "esnext",
@@ -17,38 +18,18 @@
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    // config/ts-baseline.json holds the current per-file counts. Prefer JSDoc
-    // changes when fixing these hashed assets, because splitting a declaration
-    // to host a comment can still change the built bytes. Verify the hashes.
+    // Type-only changes must preserve the minified asset bytes and hashes.
+    // config/ts-baseline.json holds the remaining per-file diagnostic counts.
     "strictNullChecks": true,
     "strict": false
   },
-  // A GLOB, not a list. This named six files until 2026-08-20, and by then ten
-  // more client islands had shipped without joining it — including lens.js, the
-  // largest client asset the site serves. An allowlist only grows when somebody
-  // remembers, so its coverage silently stops following the code, which is the
-  // same failure shape as every scanner in this repo that lost its target.
-  //
-  // public/**/*.js is here for any island that lives outside src/client. None
-  // does today: /lwe/ask.js was the one, and it moved to src/client/lwe/ on
-  // 2026-09-16 when the build started minifying it. The glob stays as the net.
-  //
-  // pipelines/**/*.js is browser code too, and its location is the only reason
-  // it reads otherwise. A page generator's `specs/` directory holds the inline
-  // script the generator INJECTS into the page it authors, so
-  // pipelines/lwe/specs/encoding-demo.js runs in a browser on /lwe/encoding and
-  // nowhere else. It sat in no program at all until 2026-08-23. The generators
-  // BESIDE it (`*.mjs`) are node programs and belong to tsconfig.tools.json,
-  // which is why this glob names the extension rather than the directory.
-  //
-  // sw.js is EXCLUDED because it is a service worker, not a browser module; it
-  // has its own program in tsconfig.sw.json, where its globals are real. This is
-  // an exclusion with a checker behind it, not a gap.
-  "exclude": ["../src/client/sw.js"],
+  // Browser programs and injected page demos use DOM globals. The service
+  // worker has its own program. Vendored pretext remains JavaScript and is
+  // still checked; its published bytes are not ours to migrate.
+  "exclude": ["../src/client/sw.ts"],
   "include": [
-    "../src/client/**/*.js",
-    "../src/client/**/*.d.ts",
-    "../public/**/*.js",
-    "../pipelines/**/*.js"
+    "../src/client/**/*.ts",
+    "../src/client/garage/pretext.lib.js",
+    "../pipelines/**/specs/**/*.ts"
   ]
 }

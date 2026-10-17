@@ -186,7 +186,7 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
 // prose.css built clean, and the flat readdirs elsewhere missed both subtrees
 // (gotcha 55).
 const shellFiles = async (): Promise<string[]> => [
-  ...(await readdir("src/client", { recursive: true })).filter((r) => r.endsWith(".js")).map((r) => `src/client/${r}`),
+  ...(await readdir("src/client", { recursive: true })).filter((r) => /\.(?:js|ts)$/.test(r) && !r.endsWith(".d.ts")).map((r) => `src/client/${r}`),
   ...(await readdir("src/styles", { recursive: true })).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
 ];
 
@@ -310,7 +310,7 @@ async function checkInvariants() {
   const vtSources = [
     ...(await servedFiles((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r))),
     ...(await shellFiles()),
-    "cal/src/templates.ts", "serendipity/serendipity.ts", "pipelines/lwe/generate.mjs",
+    "cal/src/templates.ts", "serendipity/serendipity.ts", "pipelines/lwe/generate.ts",
   ];
   const vtTexts = await readAll(vtSources);
   for (const [i, f] of vtSources.entries()) {
@@ -463,10 +463,10 @@ async function checkInvariants() {
   // sitemap.xml, the garage gallery) must agree with the registry's flags. This is
   // the check that would have caught the 10-vs-12-vs-15 garage drift these three
   // surfaces had accumulated before the manifest existed.
-  let manifestChecked = 0;
+  let manifestChecked = 0, pagesWalked = 0;
   try {
     const { surfaces } = readManifest();
-    const nav = await read("src/client/nav-run.js");
+    const nav = await read("src/client/nav-run.ts");
     const desktop = await read("src/worker/lib/desktop.ts");
 
     // 8a — generated projections match `bun run gen:manifest` output exactly.
@@ -478,7 +478,7 @@ async function checkInvariants() {
     if (readFenceBody(nav, "run-profiles") !== runProfilesBody()) hard.push("nav-run.js profiles drifted from shell-data.ts — run bun run gen:manifest");
 
     // parse the live surfaces out of each hand-authored consumer.
-    const navPagesBlock = (nav.match(/var PAGES = \[([\s\S]*?)\n {2}\];/) || [, ""])[1];
+    const navPagesBlock = (nav.match(/var PAGES(?:\s*:\s*RunItem\[\])? = \[([\s\S]*?)\n {2}\];/) || [, ""])[1];
     const navRun = new Set([...navPagesBlock.matchAll(/path:\s*"(\/[^"]*)"/g)].map((m) => m[1]));
     const navTaskbar = new Set([...desktop.matchAll(/class=\\"axp-pin\\"[^>]*href=\\"([^"]+)\\"/g)].map((m) => m[1]));
     const sitemap = await read("public/sitemap.xml");
@@ -490,7 +490,7 @@ async function checkInvariants() {
     const gallery = (await read("src/pages/garage/index.html"))
       .replace(/<!-- axp:shell -->[\s\S]*?<!-- \/axp:shell -->/g, "");
     // The id class here must match the one the generator ENFORCES, which is
-    // /^[a-z0-9][a-z0-9-]*$/ in pipelines/garage/generate.mjs. It read
+    // /^[a-z0-9][a-z0-9-]*$/ in pipelines/garage/generate.ts. It read
     // `[a-z0-9]+` until 2026-08-24 and no page had ever carried a hyphen, so the
     // two disagreed silently for as long as both existed: the first hyphenated
     // id generated fine, registered fine, got a hand-written shelf card, and
@@ -523,15 +523,25 @@ async function checkInvariants() {
 
     // 8c — every garage/lwe page on disk is registered (or an explicit exclusion),
     // so adding a page forces a registry entry rather than a silent omission.
+    //
+    // The pages live in src/pages/. #457 (2026-08-18) rewrote this walk from
+    // www/ to public/, which still exists (it holds garage/av2/ and lwe/lean/
+    // assets) but holds no .html, so readdir succeeded and the check inspected
+    // 0 files until 2026-10-17 while 39 pages sat in src/pages. The floor is the
+    // control: an empty or wrong root reads 0 and fails here. 39 pages walk
+    // today, so 30 leaves room to retire a few before the floor needs moving
+    // (gotcha 79).
     const BARE = new Set(["index.html", "vt-b.html", "vt-check.html"]);
     const known = new Set(surfaces.map((s) => s.path));
     for (const dir of ["garage", "lwe"]) {
-      for (const f of await readdir(`public/${dir}`)) {
+      for (const f of await readdir(`src/pages/${dir}`)) {
         if (!f.endsWith(".html") || BARE.has(f)) continue;
+        pagesWalked++;
         const p = `/${dir}/${f.slice(0, -5)}`;
         if (!known.has(p)) hard.push(`${p} exists on disk but is not registered in site-manifest.json`);
       }
     }
+    if (pagesWalked < 30) hard.push(`registry invariant 8c walked only ${pagesWalked} garage/lwe pages (39 in src/pages on 2026-10-17); point the walk at the tree the pages live in`);
     manifestChecked = surfaces.length;
   } catch (e) { hard.push(`site-manifest check could not run: ${e.message}`); }
 
@@ -677,8 +687,14 @@ async function checkInvariants() {
       ...await shellFiles(),
       ...await collect("src/worker", /\.ts$/),
       ...await flat("cal/src", /\.ts$/),
-      ...await flat("serendipity", /\.js$/),
+      // .ts since #523 (2026-08-23). It matched /\.js$/ until 2026-10-17 and
+      // scanned 0 of serendipity's 3 files, so each root now has to yield one
+      // (gotcha 79).
+      ...await flat("serendipity", /\.ts$/),
     ];
+    for (const root of ["src/pages/", "src/worker/", "cal/src/", "serendipity/"]) {
+      if (!files.some((f) => f.startsWith(root))) hard.push(`conflict-marker check found no files under ${root}: its walk no longer matches what that root holds`);
+    }
     const MARKER = /^(<{7} |={7}$|>{7} )/;
     const conflictTexts = await readAll(files);
     for (const [i0, f] of files.entries()) {
@@ -698,7 +714,7 @@ async function checkInvariants() {
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
   if (!servedPlan) throw new Error("build: the served tree was never planned");
-  console.log(`invariants ok: ${servedPlan.files.size} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${servedPlan.files.size} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered (${pagesWalked} pages walked), ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
   return servedPlan;
 }
 
@@ -1888,7 +1904,7 @@ phase("2 homepage");
 phase("3 shells");
 // 3) shells: deploy the readable original as <name>.src.js, minify the served file
 for (const { file, twin: srcPath, marker, module } of minifiedScripts()) {
-  const src = await readFile(`src/client/${file}`, "utf8");
+  const src = await readFile(`${OUT}/public/${file}`, "utf8");
   await writeFile(`${OUT}/public/${srcPath.slice(1)}`, src);
 
   // An ES module parses as one (a script parse refuses `export`), and its

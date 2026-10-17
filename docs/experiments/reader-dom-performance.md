@@ -34,9 +34,9 @@ The existing differential suite compares the fitted DOM with linkedom across **5
 From a candidate worktree with frozen root and Reader dependencies installed:
 
 ```sh
-node lens-reader/test/bench-dom.mjs /absolute/baseline 21
-node --expose-gc lens-reader/test/bench-dom-memory.mjs /absolute/baseline
-node --expose-gc lens-reader/test/bench-dom-memory.mjs /absolute/candidate
+node lens-reader/test/bench-dom.ts /absolute/baseline 21
+node --expose-gc lens-reader/test/bench-dom-memory.ts /absolute/baseline
+node --expose-gc lens-reader/test/bench-dom-memory.ts /absolute/candidate
 cd lens-reader
 bun run typecheck
 bun test

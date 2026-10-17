@@ -15,8 +15,6 @@
     // Full strictness is a separate migration; see tsconfig.json.
     "strictNullChecks": true,
     "strict": false,
-    "checkJs": true,
-    "allowJs": true,
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
@@ -29,15 +27,11 @@
     // HTMLRewriter among them.
     "types": ["bun"]
   },
-  // .ts includes the tools' .d.ts declarations and vendored lint rules; .mjs
-  // includes the contract tests. The generators are host programs too, while
-  // pipelines/**/*.js is injected browser code held by tsconfig.browser.json.
-  // These trees fell outside the old tools-only .mjs glob; keep coverage tied
-  // to the files on disk rather than a hand-maintained list.
+  // Tools, contract tests and authoring generators use host globals. Inline
+  // demos under specs/ belong to the DOM program instead.
   "include": [
-    "../tools/**/*.mjs",
     "../tools/**/*.ts",
-    "../pipelines/**/*.mjs"
+    "../pipelines/**/*.ts"
   ],
   // The two vendored encoder builds are gitignored third-party checkouts, and
   // the AV2 one fetches FlatBuffers' own TypeScript under build/, which the glob
@@ -45,6 +39,7 @@
   // them. Naming `exclude` replaces tsc's default, so node_modules is restated.
   "exclude": [
     "../**/node_modules",
+    "../pipelines/**/specs/**",
     "../tools/photos/libavif/src",
     "../tools/photos/libavif/build"
   ]

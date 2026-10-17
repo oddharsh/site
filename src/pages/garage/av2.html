@@ -327,7 +327,7 @@ bun run av2:wasm</code></pre>
     } else eager();
   })(figs[i]);
 
-  // Decoding here: on a click, start the AV2 worker (src/client/garage/av2-decode.js),
+  // Decoding here: on a click, start the AV2 worker (src/client/garage/av2-decode.ts),
   // decode the demo file and the first sample, and open the viewer. Each other
   // sample decodes the first time it's picked. Nothing is fetched before the
   // click, so a reader who skips it pays 0 bytes.

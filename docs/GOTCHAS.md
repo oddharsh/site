@@ -32,7 +32,7 @@ skips it.
    and degrades silently without `-perfect`. `zenc square|resize --orient N`
    permutes decoded pixels instead, exact at any size. jpegtran stays for the
    progressive reorder of the R2 copies.
-   Checked by: `tools/contract-photo-pipeline-failures.test.mjs`.
+   Checked by: `tools/contract-photo-pipeline-failures.test.ts`.
 
 6. **EXIF orientations 5-8 swap width and height.** Transpose source
    dimensions before writing `metadata.json`.
@@ -64,7 +64,7 @@ skips it.
     real workerd. Also: the Worker sees a rewritten `Accept-Encoding`, and the
     edge down-converts br for clients that don't take it, so don't negotiate
     compression in the Worker.
-    Checked by: `tools/contract-encodebody-survives-a-rebuild-in-workerd.test.mjs`, `tools/contract-the-speculation-ledger.test.mjs`.
+    Checked by: `tools/contract-encodebody-survives-a-rebuild-in-workerd.test.ts`, `tools/contract-the-speculation-ledger.test.ts`.
 
 14. **Deltas are dcz (zstd), plain responses are brotli q11.** dcz wins on
     decode time, which scales with the reconstruction rather than the delta.
@@ -86,7 +86,7 @@ skips it.
     else is also imported by the contract suite outside workerd. Tracing is
     injected (`installTracing`) instead. Nothing cal imports may reach
     `cloudflare:workers`, directly or transitively.
-    Checked by: `tools/contract-census-never-publishes-a-refused-check.test.mjs`.
+    Checked by: `tools/contract-census-never-publishes-a-refused-check.test.ts`.
 
 17. **`script-src` is per-document sha256 hashes, computed at build.**
     `lib/csp-hashes.ts` ships empty and build step 7c fills it; a path with no
@@ -96,7 +96,7 @@ skips it.
     (`islandResponse`, cal's slot list) send `script-src 'self'` with no
     hashes, since `innerHTML` never runs their scripts. `bun run csp:sweep` is
     the browser check; perturb one script as its control.
-    Checked by: `tools/contract-worker-pages-hash-their-inline-scripts.test.mjs`.
+    Checked by: `tools/contract-worker-pages-hash-their-inline-scripts.test.ts`.
 
 18. **`scrollbar-color` inherits and disables `::-webkit-scrollbar` rules.**
     So does a non-auto `scrollbar-width` on the element itself. Reset to
@@ -121,12 +121,12 @@ skips it.
     rather than falling back, so it comes from config, never a literal.
     Gateway caching stays off where a repeated request should get a fresh
     answer.
-    Checked by: `tools/contract-serendipity-event-tags.test.mjs`.
+    Checked by: `tools/contract-serendipity-event-tags.test.ts`.
 
 24. **`deploy:promote` reads `checkpoints.json` from your working tree.** Ramp
     from a fresh worktree at `origin/main`, or the changelog row is silently
     skipped.
-    Checked by: `tools/deploy-promote.ts`, `tools/contract-encode-read-the-container-decode-nothing.test.mjs`.
+    Checked by: `tools/deploy-promote.ts`, `tools/contract-encode-read-the-container-decode-nothing.test.ts`.
 
 25. **After changing a secret, don't ramp a version built before the change.**
     Secret versions carry no alias, so the ramp skips them; a version built
@@ -137,7 +137,7 @@ skips it.
 26. **`run_worker_first` caps at 100 RAW rows.** Duplicates count. The list is
     derived from `src/worker/routes.ts`; check for a covering wildcard before
     adding a row. `wrangler deploy --dry-run` catches an over-cap config.
-    Checked by: `tools/contract-the-route-list-derives-every-route-list.test.mjs`.
+    Checked by: `tools/contract-the-route-list-derives-every-route-list.test.ts`.
 
 27. **A red `github-advanced-security` check is usually Copilot's agent
     failing, not your diff.** The tell is `CAPIError: 400` in the job log
@@ -155,7 +155,7 @@ skips it.
     file), never `npx` or `bun x`**, which fetch whatever they can't resolve.
     Change a Workers Builds command in the dashboard FIRST, then
     `config/infra.json`.
-    Checked by: `tools/contract-the-typescript-quarantine.test.mjs`.
+    Checked by: `tools/contract-the-typescript-quarantine.test.ts`.
 
 31. **`_headers` rules combine rather than override.** Two `Cache-Control`
     values ship as one malformed header. To replace one, put the narrow rule
@@ -168,7 +168,7 @@ skips it.
     editorial fields; lint your own diff for the rest. #1001 folded CI into
     one job on 2026-09-28 and left it out until 2026-10-14; `contract-ci-required-gate` now fails
     if `validate` stops running it.
-    Checked by: `tools/check-page-contracts.ts`, `tools/contract-ci-required-gate.test.mjs`.
+    Checked by: `tools/check-page-contracts.ts`, `tools/contract-ci-required-gate.test.ts`.
 
 33. **A speculation rule can't be measured from the page or from an agent's
     backgrounded tab.** Count at the origin (`Sec-Purpose`) with
@@ -196,7 +196,7 @@ skips it.
     off `cpuTime`, never status codes. Pin a version with the FULL UUID in
     `Cloudflare-Workers-Version-Overrides`. A workflow's conclusion doesn't
     say whether a release shipped: ask `bun run deploy:promote --status`.
-    Checked by: `tools/contract-lens-compare-stays-under-the-subrequest-cap.test.mjs`, `tools/contract-no-cron-tick-outspends-the-subrequest-cap.test.mjs`.
+    Checked by: `tools/contract-lens-compare-stays-under-the-subrequest-cap.test.ts`, `tools/contract-no-cron-tick-outspends-the-subrequest-cap.test.ts`.
 
 37. **`Bun.Image` is the OS imaging stack.** It's fine for a throwaway
     thumbnail and wrong for a served tier: fatter output, no 16-bit HEIF
@@ -221,7 +221,7 @@ skips it.
     pipe is the LAST command's; under zsh the first stage is `$pipestatus[1]`,
     under bash `${PIPESTATUS[0]}`. An empty array under bash 3.2 `-u` needs
     `${A+"${A[@]}"}`.
-    Checked by: `tools/contract-committed-shell-scripts-fail-loudly.test.mjs`.
+    Checked by: `tools/contract-committed-shell-scripts-fail-loudly.test.ts`.
 
 41. **cf-garage, lwe-ask and lens-reader use wrangler's TypeScript config.**
     Commands need `--x-new-config` and must run from the Worker's own
@@ -231,7 +231,7 @@ skips it.
 
 42. **JSDoc type tags are inert in `.ts` files.** Write real annotations; a
     contract test fails on a JSDoc type tag in `.ts`.
-    Checked by: `tools/contract-the-typescript-quarantine.test.mjs`.
+    Checked by: `tools/contract-the-typescript-quarantine.test.ts`.
 
 43. **`avifenc --jobs` changes output bytes.** 1 differs from 2+. Treat every
     concurrency flag on an encoder feeding `/i/` as a quality flag.
@@ -247,13 +247,13 @@ skips it.
 45. **On macOS, `mkdtemp(tmpdir())` returns `/var/...` and anything that
     canonicalises reads `/private/var/...`.** `realpath` fixture roots, and
     use `import.meta.main` for main-module guards.
-    Checked by: `tools/contract-main-module-guards-survive-a-symlinked-path.test.mjs`.
+    Checked by: `tools/contract-main-module-guards-survive-a-symlinked-path.test.ts`.
 
 46. **Anything derived from a content-addressed file must be regenerated when
     the hash moves.** `bun run derive:check` compares each derived artifact
     against the inputs recorded in `config/derivations.json`;
     `-- --lock` re-records after a deliberate regeneration.
-    Checked by: `tools/contract-derived-artifacts-name-what-they-were-made-from.test.mjs`.
+    Checked by: `tools/contract-derived-artifacts-name-what-they-were-made-from.test.ts`.
 
 48. **The site config is TypeScript, and most wrangler commands can't read
     it.** `cloudflare.config.ts` + `wrangler.config.ts` are projected by
@@ -268,7 +268,7 @@ skips it.
     test's name and filed RED issues against a healthy bun for two nights
     (#1122, #1124). Use `suiteCounts()` from `tools/lib/bun-gates.ts`. A
     count with no `(fail)` row beside it is the tell.
-    Checked by: `tools/contract-the-bun-pin-is-declared-once.test.mjs`.
+    Checked by: `tools/contract-the-bun-pin-is-declared-once.test.ts`.
 
 50. **`cf` can't replace wrangler here yet; it runs wrangler underneath.**
     Audited on cf 1.0.0-beta.12 (2026-10-05). `cf build` and `cf dev` print
@@ -334,7 +334,7 @@ skips it.
     with `gen-runtime-types.ts`, which deletes and rewrites cf-garage's types
     on a fresh checkout. Before backgrounding a step, list what it writes and
     what reads it; `contract-ci-required-gate` holds the edges known today.
-    Checked by: `tools/contract-ci-required-gate.test.mjs`.
+    Checked by: `tools/contract-ci-required-gate.test.ts`.
 
 55. **A tripwire that walks `servedFiles()` never reads `src/client` or
     `src/styles`.** `servedFiles()` walks `AUTHORED_ROOTS` (`public`,
@@ -361,7 +361,7 @@ skips it.
     `/`, where the handler sees `/bundle`. Measured 2026-10-09 on both shapes.
     Nothing in the Worker lazy-loads today; if something does, keep its top
     level to definitions and do the I/O in a function the handler calls.
-    Checked by: `tools/contract-the-worker-imports-nothing-lazily.test.mjs`.
+    Checked by: `tools/contract-the-worker-imports-nothing-lazily.test.ts`.
 
 57. **A CPU factor per runner model can't see one slow runner.** The CPU
     sweep scales each GitHub runner's CPU model to the EPYC 7763 by a fitted
@@ -373,7 +373,7 @@ skips it.
     over reads tight. Its median caught it, 33% over the reference where
     ordinary runs stay within 16%, so `config/cpu-budget.json` `control` now
     makes such a run inconclusive.
-    Checked by: `tools/contract-cpu-sweep-can-tell-slow-from-fast.test.mjs`.
+    Checked by: `tools/contract-cpu-sweep-can-tell-slow-from-fast.test.ts`.
 
 58. **Cloudflare's on-demand CPU profile reads wall time on a quiet Worker.**
     `cf workers versions profile` samples a live isolate, and between this
@@ -418,7 +418,7 @@ skips it.
     handshake completed, and the sweep passes only when every probe was
     measured. Each miss is an advisory now. The contract test replays the
     proxy's exact bytes, with and without `cf-ray`.
-    Checked by: `tools/contract-infra-check-compares-declared-against-observed.test.mjs`.
+    Checked by: `tools/contract-infra-check-compares-declared-against-observed.test.ts`.
 
 61. **A dedicated worker enforces the CSP on its own script, never the
     page's.** Measured in Chrome 152 on 2026-10-13 with a page and a module
@@ -468,7 +468,7 @@ skips it.
     invocation, one subrequest) or `withSelfFetch` (in-process, the same
     budget). The workerd cron test couldn't see it because the harness
     has no AI binding or secrets, so the dispatch skipped before it fetched.
-    Checked by: `tools/contract-every-cron-fires-in-workerd.test.mjs`, `tools/contract-the-luma-session-jar.test.mjs`.
+    Checked by: `tools/contract-every-cron-fires-in-workerd.test.ts`, `tools/contract-the-luma-session-jar.test.ts`.
 
 65. **A catch on the promise you await doesn't clear the one you handed
     `ctx.waitUntil`.** index.ts's cron helper passes the same promise to
@@ -494,7 +494,7 @@ skips it.
     where the right answer is the longest, or the shortest, on more than
     half its questions, and the contract test holds both guessers near
     chance site-wide with the median length ratio in 0.85 to 1.15.
-    Checked by: `tools/contract-quiz-answers-carry-no-length-tell.test.mjs`.
+    Checked by: `tools/contract-quiz-answers-carry-no-length-tell.test.ts`.
 
 67. **A package.json script named `lint` shadows `bun lint`.** Bun runs the
     script for `bun lint`, `bun lint .` and every flag but `--doctor`, so
@@ -505,7 +505,7 @@ skips it.
     script. `bun lint --doctor` reads the config either way, so it can say
     "117 rules run natively" while the lint step runs something else.
     Measured 2026-10-15 on 408c9374b.
-    Checked by: `tools/contract-the-lint-script-reaches-bun-lint.test.mjs`.
+    Checked by: `tools/contract-the-lint-script-reaches-bun-lint.test.ts`.
 
 68. **The byte-identical build gate read the build's stopwatch.** From
     2026-10-13 `tools/build.ts` writes its phase timings to
@@ -516,7 +516,7 @@ skips it.
     drops exactly that path, and a changed byte anywhere else, a served
     `public/phases.json` included, still fails. Anything else that records
     how long a build took belongs outside `.build/` or in `BUILD_TIMINGS`.
-    Checked by: `tools/contract-the-build-gate-ignores-only-the-stopwatch.test.mjs`.
+    Checked by: `tools/contract-the-build-gate-ignores-only-the-stopwatch.test.ts`.
 
 69. **A dated canary's npm sha can name a different commit from its
     binary.** Through 1.4.3-canary.20261013.1 the tarball's `package.json`
@@ -548,7 +548,7 @@ skips it.
     (59/34px portrait, 59px sides landscape) nothing tappable sat in an inset.
     This is undocumented WebKit behavior. If it moves, the old look comes back.
     (This was 67 in #1366; #1365's merge took the number and dropped the entry.)
-    Checked by: `tools/contract-safari-reads-a-solid-colour-at-each-edge.test.mjs`.
+    Checked by: `tools/contract-safari-reads-a-solid-colour-at-each-edge.test.ts`.
 
 71. **bun fmt reformats the HTML inside `html` tagged templates.** Prettier's
     default `embeddedLanguageFormatting = "auto"` treats a template tagged
@@ -559,7 +559,7 @@ skips it.
     in meaning across 720 files while this happened, because the string is
     data to it. bunfig.toml's `[fmt]` sets it `"off"`. Measured 2026-10-16 on
     1.4.3-canary.20261013.1 by formatting the whole tree and building.
-    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.ts`.
 
 72. **bun fmt renumbers ordered lists in Markdown.** This file numbers its
     entries 1, 2, 3, then skips the retired ones, and the printer rewrote them
@@ -568,17 +568,17 @@ skips it.
     wrong entry. Markdown stays out of `[fmt]` entirely, since the docs here
     also hold version pins and tables that other checks read. Measured
     2026-10-16.
-    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.ts`.
 
 73. **bun fmt unquotes object keys, and lint rules read the result.** With
     Prettier's default `quoteProps = "as-needed"`, `{ "shape": ... }` in
-    `src/client/lens.js` became `{ shape: ... }`. The key means the same thing,
+    `src/client/lens.ts` became `{ shape: ... }`. The key means the same thing,
     and anti-slop's `no-shape-in-symbol-names` now saw an identifier and failed
     `bun run lint` in three files nobody had edited. `[fmt]` sets
     `"preserve"`. The formatter also drops parentheses it thinks are
     redundant (`(a || b) ? x : y` loses them), which broke a contract test's
     regex the same way. Measured 2026-10-16.
-    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.ts`.
 
 74. **Whatever reads a file's exact text breaks when bun fmt rewraps it.**
     Formatting everything on 2026-10-16 broke, in turn: the build's regex for
@@ -595,7 +595,7 @@ skips it.
     the 46 `.src` twins and `sw.js`. The Worker bundle still changes bytes at
     the same size, because esbuild picks minified names by character
     frequency. A new reader of exact source text belongs in the ignore list.
-    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.ts`.
 
 75. **A playwright-core bump strands the canary's browser image.** The
     browsers leg in `canary.yml` runs in `mcr.microsoft.com/playwright`,
@@ -608,7 +608,7 @@ skips it.
     application/vnd.oci.image.index.v1+json'
     https://mcr.microsoft.com/v2/playwright/manifests/v<version>-noble`
     prints the index digest as `docker-content-digest`.
-    Checked by: `tools/contract-the-browser-image-matches-playwright-core.test.mjs`.
+    Checked by: `tools/contract-the-browser-image-matches-playwright-core.test.ts`.
 
 76. **`avifdec -d 8` truncates a 10-bit image before converting it.** libavif
     hands a 10-bit 4:4:4 file to libyuv, which drops the YUV to 8 bits and then
@@ -621,7 +621,7 @@ skips it.
     and so does /garage/av2's WebAssembly decoder. djxl's 8-bit output rounds,
     so until then every AVIF and AV2 score on the /pixel-peeper format axis
     was handicapped against JPEG XL's by the decode, not the codec.
-    Checked by: `tools/contract-avif-scores-decode-exactly.test.mjs`.
+    Checked by: `tools/contract-avif-scores-decode-exactly.test.ts`.
 
 77. **WebKit blurs a window dragged to a fractional offset.** A dragged Luna
     window keeps its `translate()` after the drag, and WebKit's
@@ -636,7 +636,7 @@ skips it.
     shows it. `initDrag` in nav.js lands the window's corner on a device pixel
     through `onGrid`. The icon and accessory drags commit `left`/`top` on
     release, which WebKit snaps itself.
-    Checked by: `tools/contract-a-dragged-window-lands-on-a-device-pixel.test.mjs`.
+    Checked by: `tools/contract-a-dragged-window-lands-on-a-device-pixel.test.ts`.
 
 78. **The asset layer's `drop-trailing-slash` redirects with a 307.** The
     direction is right (`/about/` to `/about`) but the status is temporary,
@@ -650,3 +650,17 @@ skips it.
     `src/worker/index.ts`, and its row in the route oracle (`bun run
     routes:check`) pins `status: 301` and the `location`.
     Checked by: `tools/verify-routes.ts`.
+
+79. **A walk that names a tree which still exists passes on zero files.**
+    Invariant 8c in `tools/build.ts` walked `public/garage` and `public/lwe`
+    from the 2026-08-18 split (#457) until 2026-10-17. Both directories exist
+    (they hold `av2/`, `enc/` and `lean/` assets), so `readdir` succeeded,
+    returned no `.html`, and the check inspected 0 of the 39 pages in
+    `src/pages`. Invariant 10 read serendipity as `/\.js$/` from #523
+    (2026-08-23), when its last `.js` became `.ts`, so it scanned 0 of 3
+    files. A missing directory throws and fails the build; a wrong one passes
+    silently while the summary line printed the registry's 74 entries. Give
+    every walk-and-assert a floor on what it inspected, print the walked
+    count, and break the path once to watch the floor fire. Gotcha 55 is the
+    same split reaching `servedFiles()`.
+    Checked by: `tools/build.ts`.

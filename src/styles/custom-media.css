@@ -11,9 +11,9 @@
    The cost, and the reason to read this before writing `@media (--p3)`:
    `bun run dev` serves the bytes in git, unresolved, so a rule behind a custom
    media query is INVISIBLE in dev (the browser reads `(--p3)` as an unknown
-   query that never matches). Build-only surfaces already have this standing
-   here (/search, /images/meta/*, the /lens shell); a stylesheet is the first
-   place it would be visible on screen. Reach for these where the query is
+   query that never matches). That is the standing the build-only surfaces
+   already have in dev (/search, /images/meta/*, the /lens shell), except that
+   here it shows on screen. Reach for these where the query is
    cosmetic under dev's conditions anyway (a P3 upgrade, a reduced-motion
    opt-out), and keep a layout breakpoint literal until dev resolves them.
 
@@ -24,16 +24,19 @@
    P3 block in luna.css says `(color-gamut: p3)` and stays that way; the alias
    is for CSS this build is the only consumer of.
 
-   Names are what the tree already spells out, counted 2026-09-15 across
-   src/styles and src/pages. The six narrow breakpoints in play (460, 520, 540,
-   560, 620, 760px) are a design question this file does not settle: only the
-   garage scaffold's 520 gets a name here, since it is the one that recurs.
+   Names are what the tree already spelled out, counted 2026-09-15 across
+   src/styles and src/pages. The narrow breakpoints in play (460, 520, 540,
+   560, 620, 760px) are a design question this file does not settle: only 520
+   gets a name here. Recounted 2026-10-17, 620 (the garage scaffold's, in
+   pipelines/garage/generate.ts) recurs more, 22 uses to 520's 18, and
+   has no alias.
    ============================================================================ */
 
 /* wide-gamut upgrades: the OKLCH chroma boosts the Luna brief describes */
 @custom-media --p3 (color-gamut: p3);
 
-/* motion, both directions: the opt-out (8 uses) and the explicit opt-in (2) */
+/* motion, both directions: the opt-out (8 uses in CSS on 2026-10-17) and the
+   explicit opt-in (4) */
 @custom-media --reduced-motion (prefers-reduced-motion: reduce);
 @custom-media --motion-ok (prefers-reduced-motion: no-preference);
 
@@ -43,5 +46,6 @@
 /* Windows High Contrast and friends, where the bevels have to become borders */
 @custom-media --forced-colors (forced-colors: active);
 
-/* the garage scaffold's narrow breakpoint (20 uses across src/pages/garage) */
+/* the narrow breakpoint the LWE pages and /garage/horizon repeat (18 literal
+   uses in src/pages and src/styles on 2026-10-17; none spell the alias yet) */
 @custom-media --narrow (max-width: 520px);

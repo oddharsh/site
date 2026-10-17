@@ -3,7 +3,7 @@
 //
 // There is no second rendering route here on purpose. /lens/browser already
 // renders after JavaScript, already asks for content, screenshot, markdown and
-// the accessibility tree in ONE Quick Action, and src/client/lens-browser.js's
+// the accessibility tree in ONE Quick Action, and src/client/lens-browser.ts's
 // deltaStrip already computes the HTTP-versus-rendered word gap with an honest
 // bail when the render was truncated. A /lens/rendered route (removed) was a
 // thinner copy of that at the cost of an extra subrequest.
@@ -179,7 +179,7 @@ const countMatches = (html, re) => (String(html || "").match(re) || []).length;
 // Words are the honest axis and the rest are structure. Bytes are deliberately
 // NOT a comparison axis here: a framework's inlined payload swings them wildly
 // while changing nothing a reader or a parser gets, which is the same reason
-// src/client/lens-browser.js's deltaStrip already leads with words.
+// src/client/lens-browser.ts's deltaStrip already leads with words.
 export function documentTally(html) {
   const text = stripped(html);
   return {

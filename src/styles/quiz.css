@@ -1,7 +1,7 @@
 /* quiz.css — the understanding check's two skins, loaded by quiz.js.
-   It used to ride inside quiz.js as a string and be injected into a <style>
-   per page. As a sheet it is content-hashed into /a/ like the other
-   first-interaction companions (nav-run.css, nav-tray.css, infotip.css), so a
+   It stays out of quiz.js, where it once rode as a string injected into a
+   <style> per page, so that it is content-hashed into /a/ like the other
+   first-interaction companions (nav-run.css, nav-tray.css, infotip.css): a
    visitor fetches it once for every garage and lwe page instead of parsing it
    out of a script, and it minifies and mangles with the rest of the CSS.
    quiz.js renders only after this sheet loads, so a quiz never paints
@@ -31,7 +31,7 @@
 #luq .luq-credit a{color:#1a4fc4}
 
 /* lwe: the quiz continues the MSN conversation inside .log. Scoped to .log
-   now that both skins share one sheet, so these button rules cannot reach the
+   because both skins share this sheet, so these button rules cannot reach the
    garage skin's radio labels, which share the .luq-opt class. */
 .log .luq-opts{display:flex;flex-direction:column;gap:5px;margin-top:7px}
 .log .luq-opt{font-family:var(--font-ui);font-size:var(--text-sm);text-align:left;padding:4px 10px;cursor:pointer;color:#1a2030;background:linear-gradient(to bottom,#fff,var(--surface-desktop));border:1px solid var(--slate-63);border-radius:3px;box-shadow:inset 1px 1px 0 #fff}
