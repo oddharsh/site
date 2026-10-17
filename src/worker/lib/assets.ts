@@ -1,9 +1,9 @@
-// lib/assets.js: the ways this worker hands out a static file when the default
+// lib/assets.ts: the ways this worker hands out a static file when the default
 // asset path would lie.
+
 import { wantsMarkdown } from "./http.ts";
 import { notModifiedIfFresh } from "./cache.ts";
 import { pageDeltaPaths, parseFamilyDictionary, shellDeltaPath, tagFromAvailableDictionary } from "./dictionary-names.ts";
-//
 
 type AssetOptions = {
   notFoundBody?: BodyInit | null;
@@ -40,16 +40,6 @@ export async function serveFreshAsset(request, env, contentType) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
-// serveMarkdownTwin: answer `Accept: text/markdown` at a page's own URL with the
-// .md twin build.ts generated for it. The twin also lives at a stable, cacheable
-// URL of its own (/garage/encoding -> /garage/encoding.md), which is what
-// llms.txt links and what an agent without a precise Accept header should use.
-// This is the same-URL convenience layered on that, not a replacement for it.
-//
-// Returns null when no twin exists, so the caller falls through to HTML rather
-// than 404ing. Negotiation is a courtesy and every one of these paths has a real
-// page to serve; failing a navigation because a twin did not generate would be
-// the worse trade.
 // Strip the body, keep every header. Not `new Response(null, res)`: Response init
 // is read as a plain object there, so status/headers survive but anything carried
 // out-of-band does not — the same write-only-init trap that made encodeBody a
@@ -59,6 +49,16 @@ function bodiless(res) {
   return new Response(null, { status: res.status, headers: new Headers(res.headers) });
 }
 
+// serveMarkdownTwin: answer `Accept: text/markdown` at a page's own URL with the
+// .md twin build.ts generated for it. The twin also lives at a stable, cacheable
+// URL of its own (/garage/encoding -> /garage/encoding.md), which is what
+// llms.txt links and what an agent without a precise Accept header should use.
+// This is the same-URL convenience layered on that.
+//
+// Returns null when no twin exists, so the caller falls through to HTML rather
+// than 404ing. Negotiation is a courtesy and every one of these paths has a real
+// page to serve; failing a navigation because a twin did not generate would be
+// the worse trade.
 export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {}) {
   const u = new URL(request.url);
   u.pathname = twinPath;
@@ -78,8 +78,7 @@ export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {
       "x-markdown-tokens": String(Math.ceil(body.length / 4)),
       // The edge caches per URL, not per Accept, so a cached negotiated response
       // here could later be handed to a client that asked for HTML. The .md URL
-      // is the cacheable representation; this one must not be. Same reasoning as
-      // the homepage's negotiated "/" in home.js.
+      // is the cacheable representation; this one must not be.
       "cache-control": "no-store, must-revalidate",
       "vary": "accept",
       "x-content-type-options": "nosniff",
@@ -89,7 +88,7 @@ export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {
   // HEAD is answered HERE rather than by each caller, so every negotiated route
   // gets the same header set from one place. The body has already been read to
   // count tokens, so a HEAD carries x-markdown-tokens for the same work a GET
-  // does — which is exactly what the homepage's own HEAD path used to get wrong.
+  // does.
   return request.method === "HEAD" ? bodiless(negotiated) : negotiated;
 }
 
@@ -145,48 +144,18 @@ const identityOpts = (pathname: string): AssetOptions =>
 
 // Which of those may travel the SHARED-DICTIONARY path (the `use-as-dictionary` offer
 // and the dcz delta): js, css and, since 2026-09-26, svg. The family .dict stays off,
-// being the dictionary rather than something one compresses. svg sat out for two
-// months, and the history below is why it came back only once production showed it working.
+// being the dictionary rather than something one compresses.
 //
-// The icon sprite went onto /a/ as a <use> target, where a browser fetches it as a
-// document. #114 turned it into an <img>, and the very next deploy the 12 taskbar and
-// tray icons vanished in Chromium for anyone who had visited before it — a warm
-// Chromium, the only engine that implements shared dictionaries, and the only client
-// that gets the dcz instead of the plain brotli. A hard reload dropped
-// Available-Dictionary and everything came back, which is the whole diagnosis: on a
-// brand-new content-hashed URL nothing else about the client can differ.
-//
-// The delta itself is fine. It round-trips byte-exact under `zstd -d -D`, and
-// luna.css shipped its own dcz in the same deploy and rendered normally. What broke is
-// a dcz response consumed by the IMAGE loader rather than by the CSS or script loader,
-// and that is not something any local test here can reproduce — reproducing it needs a
-// Chromium that already holds the previous deploy's bytes.
-//
-// So the sprite keeps the q11 brotli twin (verified decoding in both engines from
-// production) and steps off the dictionary path entirely. The cost is the ~2.1KB the
-// delta saved, once per deploy, on a file cached for a year. Cheap next to blanking the
-// site's most visible chrome for returning visitors. Re-extending this to images is
-// fine later, behind the ?br= canary the rest of this file was built with, which is how
-// this path is supposed to earn a default in the first place (gotcha 13).
-//
-// THAT CANARY EXISTS NOW, and the diagnosis above never reproduced. On 2026-09-25 a local
-// repro served the exact July bytes (the <symbol> sprite as dictionary, #114's <view>
-// sprite as target, the committed 301-byte .dcz verbatim) to Chrome 154 and Canary 156
-// with Sec-Fetch-Dest: image, and all 12 icons rendered on first load, a second document
-// and a reload. A delta built against the WRONG dictionary failed exactly the July way
-// (blank image, ERR_UNEXPECTED_CONTENT_DICTIONARY_HEADER), so the instrument could see
-// the failure. What the repro could not reach is production's own path (HTTP/2 and 3
-// through Cloudflare) and the Chrome that was stable in July, and only a canary on the
-// site can test the first.
-//
-// SO A COOKIE CANARY TESTED IT (#940), and production passed on 2026-09-26. #943
-// re-minted the sprite while a-dict held the one before it, so production served its
-// first svg delta: 116 B against 2,424 B of plain q11 brotli. Two Chrome profiles that
-// had stored the OLD sprite before that release, Chrome 154.0.8037.58 and Canary
-// 156.0.8074.0, sent Available-Dictionary from the image loader, took the dcz over h2
-// through Cloudflare and drew 14 of 14 icons on first load and reload; the delta also
-// decodes offline to the live sprite byte for byte. That is the July scenario on the
-// July path, and it no longer fails. The cookie came out with this default.
+// svg sat out from July to 2026-09-26 because of one incident: when #114 turned the
+// icon sprite into an <img>, the next deploy blanked the 12 taskbar and tray icons for
+// returning Chromium visitors, and a hard reload (which drops Available-Dictionary)
+// brought them back. A local repro on 2026-09-25 with the exact July bytes never
+// failed in Chrome 154 or Canary 156, while a delta against the WRONG dictionary
+// failed the July way (blank image, ERR_UNEXPECTED_CONTENT_DICTIONARY_HEADER), so the
+// instrument could see the failure. A cookie canary (#940) then tested production's
+// own path: #943 served the first svg delta (116 B against 2,424 B of q11 brotli) to
+// two Chrome profiles holding the old sprite, which took the dcz over h2 through
+// Cloudflare and drew 14 of 14 icons on first load and reload.
 //
 // If the July symptom ever returns, it will look exactly as it did then: icons blank
 // for returning Chromium visitors on the deploy after a sprite change, and a hard
@@ -212,16 +181,15 @@ const DICTIONARY_TYPES = { js: 1, css: 1, svg: 1 };
 // a server may ignore the resulting header. match="/a/*" scopes it to the content-hashed
 // shell, so the next deploy's /a/nav.<newhash>.js is exactly the request that arrives
 // carrying the OLD bytes' hash.
-// match-dest scopes the offer to the fetch destinations we will actually answer with a
-// delta. RFC 9842 makes it optional and DEFAULTS IT TO EVERY DESTINATION, so the earlier
-// bare `match="/a/*"` told Chromium these bytes were a dictionary for any /a/ request —
-// including the icon sprite, fetched as an `image`, back when the worker refused to answer
-// an svg with a dcz. The offer promised more than the server honoured: the client stored
-// state and sent Available-Dictionary on requests we ignored.
 //
-// So each offer names its own destination, and the sprite's names ("image") now that it
+// match-dest scopes the offer to the fetch destinations we will actually answer with a
+// delta. RFC 9842 makes it optional and DEFAULTS IT TO EVERY DESTINATION, so a bare
+// `match="/a/*"` tells Chromium these bytes are a dictionary for any /a/ request, and
+// the client stores state and sends Available-Dictionary on requests we ignore. So each
+// offer names its own destination, and the sprite's names ("image") now that it
 // travels this path too (see DICTIONARY_TYPES). The wire says exactly what we answer.
-// PER-BASE, not a shared /a/* glob. Chrome DevTools reported "Found a matching dictionary,
+//
+// The match is PER-BASE rather than a shared /a/* glob. Chrome DevTools reported "Found a matching dictionary,
 // but the dictionary is not used for the response" on tooltip.js and hoist.js, and the
 // pooled pattern is why: every js/css asset offered the SAME match, so Chromium keyed them
 // all to one scope and, on a request for tooltip.js, could send the hash of nav.js. Delta
@@ -296,14 +264,14 @@ const pageOffer = (pathname) => pathname.length < PAGE_FAMILY_MATCH.length
 // the header says, because no-cache bars reuse without revalidation. s-maxage is
 // invisible to this decision: a browser is a private cache.
 //
-// Gating the offer on the header, rather than deleting it, keeps the coupling honest in
-// both directions, which is what makes the tier a POLICY decision rather than a code one.
-// Both moves since were exactly that, neither touching this function: the pages took
-// `stale-while-revalidate` without `must-revalidate` and lit their tier back up, and `/`
-// dropped no-cache for PAGE_CACHE_CONTROL on 2026-07-31 and joined them. The immutable
-// /a/page-family.<hash>.dict is preferred whenever it is cached. The exact page tier
-// remains useful before that idle-loaded family dictionary arrives, so the two tiers
-// stack without letting an uncaptured exact hash force an avoidable Brotli response.
+// Gating the offer on the header keeps the coupling honest in both directions, so
+// whether a page joins the tier is a cache-control decision and never a change here.
+// The pages took `stale-while-revalidate` without `must-revalidate` and lit their tier
+// back up, and `/` moved to PAGE_CACHE_CONTROL on 2026-07-31 and joined them, neither
+// touching this function. The immutable /a/page-family.<hash>.dict is preferred
+// whenever it is cached. The exact page tier remains useful before that idle-loaded
+// family dictionary arrives, so the two tiers stack without letting an uncaptured
+// exact hash force an avoidable Brotli response.
 const canRegisterAsDictionary = (cacheControl) => {
   const cc = (cacheControl || "").toLowerCase();
   if (/\b(?:no-store|no-cache)\b/.test(cc)) return false;
@@ -345,7 +313,6 @@ const variantEtag = (etag, suffix) => {
 //
 //   dcz deltas: luna.css served as 116 bytes against its previous version, round-tripping
 //   byte-exact. 65x under the plain response for a returning Chromium visitor.
-
 
 // The tag build.ts put in each .dcz filename for the dictionary this client says it
 // holds, or null. The parse (and why it is strict) is lib/dictionary-names.ts, the
@@ -406,14 +373,14 @@ export async function servePrecompressedShell(request, env) {
   const url = new URL(request.url);
   const ext = url.pathname.split(".").pop().toLowerCase();
 
-  // Only the shell's own three text types, and only safe methods. Anything else
+  // Only the shell's own types (SHELL_TYPES), and only GET. Anything else
   // (a range request, a HEAD we'd have to length-match, an unexpected extension)
   // goes down the untouched path rather than through a hand-built response.
   //
   // env.IDENTITY_BODY joins that list: an in-process caller (SELF_FETCH, so /lens
   // scanning this host) has no transport to decode with and the runtime ships no
-  // brotli decoder, so a precompressed body reaches it as mojibake. See the flag's
-  // note in index.js. This is the only branch that can turn it off, so keep the
+  // brotli decoder, so a precompressed body reaches it as mojibake. dispatch.ts
+  // sets the flag on that child env. This is the only branch that can turn it off, so keep the
   // check at the top of the function rather than beside each emission below.
   if (request.method !== "GET" || !SHELL_TYPES[ext] || env.IDENTITY_BODY) {
     return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
@@ -421,7 +388,7 @@ export async function servePrecompressedShell(request, env) {
 
   // ── dcz: the delta path ────────────────────────────────────────────────────────
   // A Chromium client that accepted our Use-As-Dictionary offer sends back the SHA-256
-  // of the shell bytes it already holds. tools/build.ts step 8 has precomputed
+  // of the shell bytes it already holds. tools/build.ts step 7 has precomputed
   // zstd-against-that-dictionary at deploy time, so serving the diff is a filename lookup:
   // /ad/<base>.<hash8>.<dicttag>.dcz. The first real one: luna.css in 115 bytes instead
   // of 7,615, a 98.5% cut, from an ordinary CSS change.
@@ -710,14 +677,14 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
     // subrequest it used to skip; HEAD is rare enough here that an honest
     // content-type is the better side of that trade.
     // The twin is the same page in another representation, so it takes the
-    // page's policy too. Before 2026-10-02 it took none, and a noindex page had
-    // to negotiate by hand ahead of this call to keep its twin noindex.
+    // page's policy too (since 2026-10-02), which is what keeps a noindex page's
+    // twin noindex without the caller negotiating by hand.
     const md = await serveMarkdownTwin(request, env, `/${rel}.md`, twinPolicy(opts.headers));
     if (md) return md;
   }
   // Everything below hands back a precompressed BODY (a dcz delta or the q11 twin)
   // and sizes its headers to those bytes, which a HEAD must not claim. From here it
-  // takes the asset layer's own HEAD handling, exactly as it did before this change.
+  // takes the asset layer's own HEAD handling.
   if (head) return serveAssetWith404Clamp(request, env, opts);
 
   // build.ts names both artifacts after the ASSET path; this function knows only the
@@ -794,7 +761,7 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   // env.IDENTITY_BODY skips both lookups outright and falls through to the plain
   // asset below. An in-process caller (SELF_FETCH, i.e. /lens reading this host)
   // gets no transport decode and the runtime has no brotli decoder, so either of
-  // these bodies would reach it as mojibake — see the flag's note in index.js.
+  // these bodies would reach it as mojibake (dispatch.ts sets the flag).
   // Skipping is content-preserving here rather than a different answer: the twin
   // is a compression of the very asset `plain` returns, so the document is the
   // same one, and the two lookups it avoids are pure cost on this path.

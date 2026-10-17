@@ -10,14 +10,13 @@
 // a new span misspelled its surface, and nothing listed what already existed,
 // so the only way to answer "what does this Worker emit" was to grep.
 //
-// The cost of that is not hypothetical and it is not really about typos. The
-// covers-pending outage went undiagnosed twice, and part of why is that
+// The covers-pending outage went undiagnosed twice, partly because
 // `rn.track_embeds_failed` was already being recorded and nobody knew to read
-// it. An attribute nobody can discover is an attribute nobody reads, and a span
-// vocabulary is worth exactly as much as its discoverability.
+// it. An attribute nobody can discover is an attribute nobody reads.
 //
-// This file is that registry. It is also the reason the contract test beside it
-// can compare declaration against use in both directions.
+// This file is that registry. It is also what lets
+// contract-the-span-vocabulary compare declaration against use in both
+// directions.
 
 /**
  * What a span attribute may hold.
@@ -59,8 +58,8 @@ export type SpanName =
   | "rn.art.warm"
   | "rn.enrich"
 
-  // /lens. The discovery fan-out is 28 probes and was entirely unmeasured
-  // before these existed, because out.elapsedMs is fixed before it runs.
+  // /lens. The discovery fan-out was entirely unmeasured before these existed,
+  // because out.elapsedMs is fixed before it runs.
   | "lens.inspect"
   | "lens.inspect.fetch"
   | "lens.inspect.parse"
@@ -80,13 +79,10 @@ export type SpanName =
   | "lens.markdown"
 
   // The neighborhood crawl, where every degradation is designed to be quiet.
-  // `around.neighbor` is the per-host span the rollup is built from, and it is
-  // worth noting HOW it and rn.scrape.playlist got here: both were missed by
-  // the grep that seeded this list, because that grep required the quote to
-  // follow `span(` on the same line and both call sites wrap. The compiler
-  // caught both the moment this type existed. That is the fourth naive scanner
-  // this repo has recorded and the first one aimed at its own span vocabulary,
-  // which is a reasonable argument for the type over the grep.
+  // `around.neighbor` is the per-host span the rollup is built from. It and
+  // rn.scrape.playlist were missed by the grep that seeded this list, because
+  // both call sites wrap after `span(`, and the compiler caught both the moment
+  // this type existed: the argument for the type over a grep.
   | "around.neighbor"
   | "around.crawl"
   | "around.robots_gate"
@@ -117,8 +113,7 @@ export type SpanName =
   | "dyno.fetch"
 
   // Coffee. cal/src/availability.ts opens these through lib/trace.ts, so the
-  // compiler checks them like every other name here. (cal kept its own untyped
-  // copy of the tracer until 2026-10-05.)
+  // compiler checks them like every other name here.
   | "cal.busy"
   | "cal.refresh"
   | "cal.refresh_background"
@@ -193,8 +188,6 @@ export type SpanAttrs<N extends string> = Partial<
  * INERT stand-in in trace.ts can satisfy it in full and the two cannot drift.
  */
 export interface Span<N extends string = string> {
-  // `keyof SpanAttrs<N>` is already string-keyed, so the `& string` this
-  // carried at first was redundant and oxlint's type-aware pass said so.
   setAttribute(key: keyof SpanAttrs<N>, value: SpanAttrValue): void;
   end(): void;
   readonly isTraced?: boolean;

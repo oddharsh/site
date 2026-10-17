@@ -1,10 +1,10 @@
-// lib/agent-execution.js — what an agent BROWSER does with the page.
+// lib/agent-execution.ts — what an agent BROWSER does with the page.
 //
 // /lens has scored agent readiness since it was built, and every one of those
-// twenty checks is a declaration audit: does robots.txt exist, does the sitemap
+// checks is a declaration audit: does robots.txt exist, does the sitemap
 // parse, does the MCP server card have the right shape. That layer is worth
 // scoring and it is not the whole story. Measured 2026-08-12 against this very
-// site: all twenty declared surfaces answered, the rubric would have called it
+// site: every declared surface answered, the rubric would have called it
 // near-perfect, and an actual agent browser was getting a homepage with twelve
 // blank squares and a script that threw on every page.
 //
@@ -40,10 +40,7 @@ export const EXECUTION_META = {
   agentMedia: { category: "execution", label: "Media decodes" },
 };
 
-/**
- * Turn one agent-browser observation into check statuses.
- *
- */
+/** Turn one agent-browser observation into check statuses. */
 export function executionChecks(ev) {
   if (!ev || ev.ran !== true) {
     const detail = "no agent-browser render in this scan (run the wire lens to measure)";
@@ -80,7 +77,7 @@ export function executionChecks(ev) {
  * The DOM census, as a string, because it has to run inside the page through
  * CDP's Runtime.evaluate rather than being called here.
  *
- * ALT TEXT IS THREE STATES, NOT TWO, and getting that wrong was this feature's
+ * ALT TEXT HAS THREE STATES, and getting that wrong was this feature's
  * own first bug: counting non-empty alt against ALL images scored a page 1/10
  * when fourteen of its sixteen images were taskbar sprites carrying a
  * deliberate alt="". An empty alt is a DECISION that the image owes no

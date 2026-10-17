@@ -372,7 +372,7 @@ footer {
 footer .links { margin-bottom: 6px; }
 footer .links a { margin: 0 2px; }
 footer .signature { font-style: italic; margin-top: 4px; }
-footer .signature small { color: oklch(56.93% 0 0); }
+footer .signature small { color: var(--ink-faint); }
 
 .under-construction {
   text-align: center;
@@ -510,6 +510,10 @@ footer .signature small { color: oklch(56.93% 0 0); }
      luna.css still owns the visuals; this is only the race-proof geometry.
      Matches luna.css:332/396/430. */
   #axp-desktop { position: fixed; inset: 0; z-index: -1; }
+  /* the skip link's geometry too, or it paints in-flow above the window until
+     luna.css lands; its infotip look stays in luna.css */
+  .axp-skip { position: fixed; top: 4px; left: 4px; z-index: 10001; transform: translateY(-200%); }
+  .axp-skip:focus { transform: none; }
   #axp-taskbar { position: fixed; left: 0; right: 0; bottom: 0; height: var(--taskbar-h); padding: 0 var(--sa-r) var(--sa-b) var(--sa-l); box-sizing: border-box; z-index: 99999; display: flex; align-items: stretch; }
   #axp-icons   { position: fixed; inset: calc(var(--sa-t) + var(--hypercam-h)) var(--sa-r) 0 var(--sa-l); z-index: 1; pointer-events: none; }
   /* the icons themselves too: they ship with inline left/top, which is inert
@@ -592,7 +596,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
 <noscript><link rel="stylesheet" href="/luna.css"></noscript>
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 
 <div class="window">
 
@@ -602,7 +606,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" title="close" aria-label="close"></a></span>
   </div><!-- /axp:window -->
 
-  <div class="content">
+  <main id="main" class="content">
 
     <!-- microformats2 h-card — the IndieWeb "who is this" card, twin to the
          schema.org Person JSON-LD up top. representative h-card: u-url + u-uid
@@ -931,7 +935,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
       </noscript>
     </footer>
 
-  </div>
+  </main>
 </div>
 
 <!-- Canonical entity graph (schema.org / JSON-LD). Google supports JSON-LD in

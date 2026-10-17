@@ -1,4 +1,4 @@
-// lib/agent-webmcp.js — the tools a page hands an agent once it RUNS.
+// lib/agent-webmcp.ts — the tools a page hands an agent once it RUNS.
 //
 // /lens has read agent tool catalogs since the Tools tab shipped, and that tab
 // reads `/mcp`: a SERVER catalog, fetched over HTTP, available to anything that
@@ -37,10 +37,10 @@
 // `Browser.getVersion` off the CDP session instead, which no page-level override
 // can touch, and merges it in.
 
-// Caps. A catalog is a stranger's data and lands in a JSON payload this site
-// serves, so every axis is bounded rather than trusted.
 import { asList, asNumber, asRecord, asScalarText, asText } from "./parse.ts";
 
+// Caps. A catalog is a stranger's data and lands in a JSON payload this site
+// serves, so every axis is bounded rather than trusted.
 export const WEBMCP_LIMITS = { tools: 40, description: 300, params: 12, name: 80 };
 
 // Read as ONE expression, evaluated with awaitPromise: true, because

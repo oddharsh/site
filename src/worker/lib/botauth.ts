@@ -1,6 +1,4 @@
-// lib/botauth.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-// ── AadharshBot ─────────────────────────────────────────────────────
+// lib/botauth.ts — AadharshBot, the site's
 // branded crawler. uses our own UA + signs every outbound request per
 // RFC 9421 (HTTP Message Signatures), profile per the Web Bot Auth IETF
 // draft. signatures cover @authority + signature-agent; receiving sites
@@ -37,8 +35,8 @@
 //     cannot disagree with the key that signed.
 //   - the directory publishes exactly the keys the Worker signs with. When sig2
 //     is unavailable, its AKP entry is filtered out of the served directory, so
-//     nothing points at a key we are not signing with (the DNS-AID note's
-//     `_a2a` rule) and sig1's directory keeps serving. When sig2 IS available
+//     nothing points at a key we are not signing with, and sig1's directory
+//     keeps serving. When sig2 IS available
 //     but its key differs from the published one, that is rotation drift, and
 //     it 503s exactly like a drifted ed25519 key always has.
 import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./public-fetch.ts";
@@ -219,8 +217,8 @@ export async function handleSignatureDirectory(request: Request, env: Pick<Env, 
 //
 // The saving is per SIGNATURE, and the signature count is what makes it worth
 // doing: /around walks 20 neighbours at two signed fetches each, /lens
-// discovery fans out to 26 probes, and since #746 every redirect hop signs for
-// its own authority. This account is on Workers Free, where sustained requests
+// discovery fans out to the probes counted beside `postQuantum` above, and
+// since #746 every redirect hop signs for its own authority. This account is on Workers Free, where sustained requests
 // clamp near 10ms of CPU, and the ML-DSA note at the top of this file is what
 // that clamp costs when per-request crypto meets a fan-out.
 //
@@ -238,9 +236,8 @@ export async function handleSignatureDirectory(request: Request, env: Pick<Env, 
 // than overlooked. Every input to the derivation is the secret, so a key that
 // cannot be parsed or imported fails the same way however many times it is
 // retried, and a different secret is a different memo entry. Dropping the entry
-// on rejection was written first and then measured against the tests here: it
-// changes nothing any caller can observe, so it went back out rather than stay
-// as a line nothing can fail on.
+// on rejection was tried against the tests here and changes nothing any caller
+// can observe, so the memo leaves it out.
 let signingKey: { jwkText: string; material: Promise<{ keyId: string; key: CryptoKey }> } | null = null;
 
 function signingMaterial(jwkText: string) {

@@ -46,20 +46,20 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/octane</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>Octane, priced against no framework</h1>
 <p class="garage-intro">A benchmark told me Nextane ships 60.9% less client JavaScript than <a class="term" data-t="nextjs" href="https://en.wikipedia.org/wiki/Next.js" title="A web framework built on React, with server rendering and routing built in." rel="external">Next.js</a> 16. That is a real number, honestly measured, and I checked it against the deployed demo. What the table cannot tell you is where zero sits, because every row in it is a framework. This site makes a useful zero: it ships no framework at all, so putting it on the same axis turns a ranking into a distance.</p>
 
 <h2>The benchmark, and what it leaves out</h2>
 <p><a href="https://github.com/southpolesteve/nextane" target="_blank" rel="noopener">Nextane</a> rebuilds the Next.js Pages Router on <a href="https://github.com/octanejs/octane" target="_blank" rel="noopener">Octane</a>, a compiled <a class="term" data-t="react" href="https://en.wikipedia.org/wiki/React_(software)" title="A JavaScript library from Meta for building user interfaces out of reusable components." rel="external">React</a> replacement descended from Inferno that drops the <a class="term" data-t="virtual-dom" href="https://en.wikipedia.org/wiki/Virtual_DOM" title="An in-memory copy of the page's structure that a framework compares against, to work out the smallest set of real changes to make." rel="external">virtual DOM</a> and has its compiler infer <a class="term" data-t="reactive-programming" href="https://en.wikipedia.org/wiki/Reactive_programming" title="A programming style where values that depend on other values update automatically whenever those change." rel="external">reactivity</a> instead of asking you for <a class="term" data-t="dependency-array" href="https://react.dev/reference/react/useEffect" title="The list of values a React hook watches; the hook runs again only when one of them changes." rel="external">dependency arrays</a>. Its README publishes this, measured on one small <a class="term" data-t="hydration" href="https://en.wikipedia.org/wiki/Hydration_(web_development)" title="Making server-rendered HTML interactive by running a framework's JavaScript over it in the browser to attach state and event handlers." rel="external">hydrated</a> <code>getServerSideProps</code> page:</p>
 <table class="oct-table">
-  <tr><th>Runtime</th><th>Client JavaScript (<a class="term" data-t="gzip" href="https://en.wikipedia.org/wiki/Gzip" title="The oldest compression format every browser accepts for web pages. It's fast and universal, and its files come out larger than brotli's or zstd's." rel="external">gzip</a>)</th><th>Against Next.js</th></tr>
+  <thead><tr><th scope="col">Runtime</th><th scope="col">Client JavaScript (<a class="term" data-t="gzip" href="https://en.wikipedia.org/wiki/Gzip" title="The oldest compression format every browser accepts for web pages. It's fast and universal, and its files come out larger than brotli's or zstd's." rel="external">gzip</a>)</th><th scope="col">Against Next.js</th></tr></thead>
   <tr><td>Next.js 16.2.12</td><td>110.0 KiB</td><td>baseline</td></tr>
   <tr><td><a class="term" data-t="vinext" href="https://github.com/cloudflare/vinext" title="A Vite plugin from Cloudflare that reimplements the Next.js API, so Next.js apps can build with Vite and deploy to Workers or elsewhere." rel="external">Vinext</a> 1.0.0-beta.4</td><td>77.8 KiB</td><td>29.2% less</td></tr>
   <tr><td>Nextane + Octane 0.1.21</td><td>43.0 KiB</td><td>60.9% less</td></tr>
@@ -70,7 +70,7 @@
 <h2>Re-measuring it on the live demo</h2>
 <p>The demo is deployed, so the claim is checkable without building anything. Here is what it puts on the wire, <a class="term" data-t="brotli" href="https://en.wikipedia.org/wiki/Brotli" title="A compression algorithm from Google built for the web. It ships with a built-in dictionary of common web text, which helps on small files." rel="external">brotli</a> as served and gzip so it lines up with the README's axis:</p>
 <table class="oct-table">
-  <tr><th>Asset</th><th>Raw</th><th>gzip</th><th>brotli</th></tr>
+  <thead><tr><th scope="col">Asset</th><th scope="col">Raw</th><th scope="col">gzip</th><th scope="col">brotli</th></tr></thead>
   <tr><td>document</td><td>2,652</td><td>1,247</td><td>1,130</td></tr>
   <tr><td>styles.css</td><td>3,406</td><td>1,364</td><td>1,224</td></tr>
   <tr><td>index-903Z56aL.js</td><td>8,193</td><td>3,336</td><td>2,974</td></tr>
@@ -96,7 +96,7 @@
 <h2>The chunk is the framework</h2>
 <p>The obvious objection is that most of that <data value="125,152 bytes">125 KB</data> is Next.js compatibility <a class="term" data-t="shim" href="https://en.wikipedia.org/wiki/Shim_(computing)" title="A small layer of code that makes one interface behave like another, so code written for the old one keeps working." rel="external">shim</a>, which a plain Octane app would never load. I counted identifiers in the shipped chunk rather than arguing about it:</p>
 <table class="oct-table">
-  <tr><th>Identifier in <code>router-bwM-JHXE.js</code></th><th>Occurrences</th></tr>
+  <thead><tr><th scope="col">Identifier in <code>router-bwM-JHXE.js</code></th><th scope="col">Occurrences</th></tr></thead>
   <tr><td><code>effect</code></td><td>48</td></tr>
   <tr><td><code>octane</code></td><td>34</td></tr>
   <tr><td><code>Suspense</code></td><td>9</td></tr>
@@ -121,7 +121,7 @@
 <p class="oct-falsify">What would change my mind: a tuned, non-alpha Octane build landing anywhere near <code>nav.js</code>'s 14.9 KiB. That would mean the runtime cost measured here is a property of an early build rather than of the architecture, and the crossover argument above would collapse with it. The beta is where that shows up.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-07-31</span></div>
 </div>
 

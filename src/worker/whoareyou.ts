@@ -14,13 +14,13 @@ export const RDAP_CACHE_TTL_S = 86400;
 
 const RDAP_BUDGET_MS = 250;
 
-// ── /whoareyou handler ───────────────────────────────────────────────
-// shows the visitor what their HTTP request revealed. no logging, no
-// storage. one server-side outbound call to ARIN's RDAP service to
-// enrich the IP with its registration metadata (network name, owner,
-// CIDR) — the visitor's browser never speaks to a third party. RDAP
-// results are CF-edge-cached by URL for 24h so visitors from the same
-// IP block don't re-hit ARIN.
+// /whoareyou shows the visitor what their HTTP request revealed. It stores
+// nothing and logs nothing beyond the one line dispatch.ts writes for every
+// request (/privacy says what that line holds). One server-side outbound call
+// to ARIN's RDAP service enriches the IP with its registration metadata
+// (network name, owner, CIDR), so the visitor's browser never speaks to a third
+// party. RDAP results are CF-edge-cached by URL for 24h, so visitors from the
+// same IP block don't re-hit ARIN.
 
 // RDAP returns the registered owner of the IP block — often more
 // specific than the ASN's operator (e.g. "Columbia University" rather
@@ -34,7 +34,7 @@ export async function fetchRdap(ip) {
   try {
     const res = await fetch(`https://rdap.arin.net/registry/ip/${encodeURIComponent(ip)}`, {
       headers: {
-        "user-agent": BOT_UA,                 // identifies as AadharshBot
+        "user-agent": BOT_UA,
         "accept":     "application/rdap+json",
       },
       redirect: "follow",
@@ -83,7 +83,6 @@ export async function fetchRdap(ip) {
       if (fn && asText(fn[3]) !== null) owner = asText(fn[3]);
     }
 
-    // events — registration date + last changed are most interesting.
     const events = asList(data.events).flatMap((raw) => { const event = asRecord(raw); return event ? [event] : []; });
     const regEvent = events.find((event) => event.eventAction === "registration");
     const lastChanged = events.find((event) => event.eventAction === "last changed");
@@ -283,9 +282,8 @@ export async function handleWhoareyouJson(request, env, ctx) {
   });
 }
 
-// ── /whoareyou: a built shell and one island ─────────────────────────
-// The page rendered per request until 2026-09-25, which cost it everything a
-// built document gets: it went out at the edge's roughly-q4 brotli (8,293 B
+// /whoareyou is a built shell and one island. The page rendered per request
+// until 2026-09-25, which cost it everything a built document gets: it went out at the edge's roughly-q4 brotli (8,293 B
 // against 6,836 B at q11, measured that day), with no dcz delta, no ETag, and
 // the loose 'unsafe-inline' script policy every unhashed page falls back to.
 // About half the body is fixed prose, so it takes lib/island.ts's shape: the
@@ -403,7 +401,6 @@ export async function handleWhoareyouValues(request, env, ctx) {
   });
 }
 
-// ── the shell (rendered at BUILD time; see the section header) ────────
 export function renderWhoareyouPage() {
   return lunaPage({
     title: "System Properties · aadhar.sh/whoareyou",
@@ -542,7 +539,7 @@ footer {
   border-top: 1px solid var(--rule);
 }
 footer .signature { font-style: italic; margin-top: 4px; }
-footer .signature small { color: oklch(56.93% 0 0); }
+footer .signature small { color: var(--ink-faint); }
 
 /* the island's failure note, shown only if the values request failed */
 .wy-fail { display: none; color: var(--ink-faint); font-size: var(--text-xs); }
@@ -705,7 +702,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
   });
 }
 
-// ── helpers ──────────────────────────────────────────────────────────
 export function parseUA(ua) {
   const browser =
     /Edg\//.test(ua)             ? "Edge"    :

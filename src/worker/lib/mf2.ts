@@ -85,7 +85,6 @@ const AUTO_CLOSE: Record<string, Set<string>> = {
 const ROOT = /^h-(?:[a-z0-9]+-)?[a-z]+(?:-[a-z]+)*$/;
 const PROP = /^(p|u|dt|e)-((?:[a-z0-9]+-)?[a-z]+(?:-[a-z]+)*)$/;
 
-// ── entities ───────────────────────────────────────────────────────────────
 const NAMED: Record<string, string> = {
   amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0",
   mdash: "\u2014", ndash: "\u2013", hellip: "\u2026", lsquo: "\u2018", rsquo: "\u2019",
@@ -102,7 +101,6 @@ export function decodeEntities(s: string): string {
   });
 }
 
-// ── tokenizer ──────────────────────────────────────────────────────────────
 const TOKEN = /<!--[\s\S]*?(?:-->|$)|<![^>]*>?|<\?[^>]*>?|<\/([a-zA-Z][^\s/>]*)[^>]*>|<([a-zA-Z][^\s/>]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g;
 const ATTR = /([^\s"'>/=]+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'=<>`]+))?/g;
 
@@ -174,7 +172,6 @@ function buildTree(input: string): El {
   return root;
 }
 
-// ── text helpers ───────────────────────────────────────────────────────────
 const textNode = (text: string): El => ({ tag: "#text", attrs: {}, classes: [], children: [], innerStart: 0, innerEnd: 0, text });
 function elementChildren(el: El): El[] { return el.children.filter((n) => n.tag !== "#text"); }
 const cap = (s: string, n = MAX_VALUE) => (s.length > n ? s.slice(0, n) : s);
@@ -201,7 +198,6 @@ function resolve(url: string, base: string): string {
   try { return new URL(url.trim(), base).href; } catch { return url.trim(); }
 }
 
-// ── value-class pattern ────────────────────────────────────────────────────
 function valueElements(el: El): El[] {
   const found: El[] = [];
   const walk = (n: El) => {
@@ -243,7 +239,6 @@ function joinDateTime(parts: string[]): string {
   return time ? `${date} ${time}${tz}` : date;
 }
 
-// ── property parsers ───────────────────────────────────────────────────────
 function parseP(el: El, base: string): string {
   const vals = valueElements(el);
   if (vals.length) return cap(vals.map((v) => valueOf(v, false, base)).join("").trim());
@@ -282,7 +277,6 @@ function parseE(el: El, src: string, base: string): { html: string; value: strin
   return { html: cap(src.slice(el.innerStart, el.innerEnd).trim(), MAX_HTML), value: textOf(el, base) };
 }
 
-// ── items ──────────────────────────────────────────────────────────────────
 function rootsOf(el: El): string[] { return el.classes.filter((k) => ROOT.test(k)).sort(); }
 function propsOf(el: El): [string, string][] {
   const out: [string, string][] = [];
@@ -403,7 +397,6 @@ function firstString(vals: Mf2Value[] | undefined): string | undefined {
   return undefined;
 }
 
-// ── document ───────────────────────────────────────────────────────────────
 export function parseMf2(html: string, pageUrl: string): Mf2Doc {
   const src = String(html ?? "");
   const tree = buildTree(src);

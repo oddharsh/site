@@ -100,11 +100,11 @@ export const SEARCH_TERM_MAX = 13;
 
 /**
  * The ranking pass, with the score and the terms it was scored against still
- * attached. searchSite drops both, correctly: its two callers render a list for
- * a human, and "39" tells a reader nothing. /ask cannot drop them, because
- * NLWeb's result contract carries a `score` and a relevance number is only
- * honest when you can say what its ceiling was.
- *
+ * attached. searchSite drops both, correctly: its callers (the /search page,
+ * /search.json, the terminal and the MCP search_site tool) list results, and
+ * "39" tells a reader nothing. /ask cannot drop them, because NLWeb's result
+ * contract carries a `score` and a relevance number is only honest when you
+ * can say what its ceiling was.
  */
 export async function searchSiteRanked(env, query: string, limit: string | number | null = SEARCH_LIMITS.limitDefault) {
   const q = String(query || "").trim().slice(0, SEARCH_LIMITS.queryMax);

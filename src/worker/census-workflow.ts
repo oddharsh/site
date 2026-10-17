@@ -8,41 +8,32 @@
 // workerd loads), and the work it performs stays in census.ts where the tests
 // can reach it. cal/src/workflow.ts is the same arrangement for the same reason.
 //
-// WHAT IT BUYS. A census host costs ~32 subrequests (29 of them originDiscovery
-// on a cold origin, measured offline against a stubbed fetch) against a ceiling
-// of 50 per invocation on Workers Free. The sweep this replaces ran four hosts
-// CONCURRENTLY inside one cron invocation, demanded ~512, and hit the ceiling
-// inside its first batch. Because every probe in lens.ts swallows its own error
-// and returns `{ ok: false }`, the refusal was stored as a score: stripe.com and
-// shopify.com went into D1 at 0 with no doors while a single-host scan of the
-// same code scores them 20 with one door each.
+// WHAT IT BUYS. A census host costs ~32 subrequests against a ceiling of 50 per
+// invocation on Workers Free, so one host per instance fits by construction.
+// The sweep this replaces ran four hosts CONCURRENTLY inside one cron
+// invocation and stored the refused checks as scores. censusScanOne and
+// censusCapHit in census.ts have the measurements.
 //
-// One host per INSTANCE, not one host per step. The reasoning is at
-// cronCensusInner in census.ts; the short form is that Cloudflare's limits page
+// One host per INSTANCE, not one host per step. The reasoning is above
+// cronCensus in census.ts; the short form is that Cloudflare's limits page
 // is ambiguous about whether a subrequest budget belongs to the instance or the
 // step, and an instance per host is correct either way.
 //
 // NO `[[migrations]]` ENTRY, and that is measured rather than copied from
-// BookingWorkflow. A Workflow is built on a Durable Object and the DO lifecycle
-// note in CLAUDE.md is emphatic that `versions upload` refuses a migration, so
-// the natural inference is that a new Workflow class needs a `deploy:direct`.
-// It does not: this class uploaded through the ordinary non-production deploy
-// command on its own PR branch, and `wrangler versions view` on that version
-// lists env.CENSUS_WORKFLOW (CensusWorkflow) beside the booking one.
+// BookingWorkflow. A Workflow is built on a Durable Object, and `versions
+// upload` refuses a DO migration, so the natural inference is that a new
+// Workflow class needs a `deploy:direct`. It does not: this class uploaded
+// through the ordinary non-production deploy command on its own PR branch, and
+// `wrangler versions view` on that version lists env.CENSUS_WORKFLOW
+// (CensusWorkflow) beside the booking one.
 //
-// THAT PROVED THE BINDING AND NOT THE WORKFLOW, and the gap cost five Sundays.
-// A Workflow is an ACCOUNT resource (`wrangler workflows list`), separate from
-// the script version that binds it, and wrangler registers it in one place:
-// triggersDeploy() PUTs /accounts/<id>/workflows/<name>, and only `wrangler
-// deploy` and `wrangler triggers deploy` call triggersDeploy(). Neither
-// `versions upload` nor `versions deploy` does. This class shipped on
-// 2026-08-28, inside the ramp era, when production reached traffic through
-// exactly those two commands, so every version carried a binding to a Workflow
-// that did not exist and every create() met `workflow.not_found`. The account
-// says so: lens-census-host was created 2026-09-28T21:10:36Z, seven seconds
-// after the first production `wrangler deploy`, with `triggered_on: null`.
-// cal-booking-expiry dates from 2026-07-21, before the ramp, which is why the
-// booking flow never met this.
+// THAT PROVED THE BINDING AND NOT THE WORKFLOW. A Workflow is an ACCOUNT
+// resource (`wrangler workflows list`), separate from the script version that
+// binds it, and only `wrangler deploy` and `wrangler triggers deploy` register
+// one (both call triggersDeploy()). `versions upload` and `versions deploy`
+// don't, so from 2026-08-28 to 2026-09-28, while production shipped through
+// those two, every create() met `workflow.not_found`. The dated account
+// evidence is in contract-census-records-every-dispatch's header.
 //
 // The production deploy command is `wrangler deploy` again, so a new Workflow
 // class registers on its first release. contract-census-records-every-dispatch

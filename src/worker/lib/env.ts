@@ -5,8 +5,9 @@
 //
 // WHY THIS EXISTS. Every handler in index.ts took `env: any`, so a typo'd
 // binding name was a runtime `undefined` and a deleted binding was nothing at
-// all. That is the failure cloudflare.config.ts's `bindings.secret()` entries (wrangler.jsonc's `secrets` block, until 2026-09-28) were added to
-// catch, one layer up: the comment it replaced had drifted in BOTH directions,
+// all. That is the failure cloudflare.config.ts's `bindings.secret()` entries
+// (wrangler.jsonc's `secrets` block, until 2026-09-28) were added to catch,
+// one layer up: the comment it replaced had drifted in BOTH directions,
 // naming two secrets nothing reads and omitting two the Worker genuinely does.
 // A comment cannot fail a deploy and neither can `any`.
 //
@@ -39,7 +40,6 @@
 // because the path degrades without it, and the `?` here is that argument in a
 // form the compiler enforces.
 
-
 import type { BotRobotsRead } from "./botauth.ts";
 import type { PublicTransport } from "./public-fetch.ts";
 import type { BookingWorkflow } from "../../../cal/src/workflow.ts";
@@ -54,7 +54,7 @@ export interface EnvBindings {
   RN_KV: KVNamespace;
   /** Pending and confirmed coffee bookings, plus the per-slot `held:` keys. */
   BOOKINGS: KVNamespace;
-  /** `aadhar-photos`: the SOOC originals, ~3 GB across 158 photos. */
+  /** `aadhar-photos`: the SOOC originals. */
   PHOTOS_R2: R2Bucket;
   /** `aadhar-restore`: the deploy log both /restore and /updates render. */
   RESTORE_DB: D1Database;
@@ -71,8 +71,9 @@ export interface EnvBindings {
   MISS_LEDGER: AnalyticsEngineDataset;
 
   // The eight per-IP /lens budgets plus the one account-wide browser bucket.
-  // LENS_BUDGETS in lens.ts mirrors these ceilings because that is what the 429
-  // message quotes; a contract test pins the two together.
+  // LENS_BUDGETS in lens-pipeline.ts mirrors these ceilings because that is
+  // what the 429 message quotes; contract-lens-per-ip-crawl-budgets pins the
+  // two together.
   LENS_RL_INSPECT: RateLimit;
   LENS_RL_SHOT: RateLimit;
   LENS_RL_COMPARE: RateLimit;
@@ -113,7 +114,8 @@ export interface EnvBindings {
 
   /**
    * UNPARAMETERIZED on purpose, where `wrangler types` writes
-   * `DurableObjectNamespace<Counter>`. Counter hand-rolls its Durable Object
+   * `DurableObjectNamespace<Counter>`. Counter (counter/src/counter.ts, which
+   * aadhar-counter implements) hand-rolls its Durable Object
    * instead of extending the base class, because importing that class means
    * importing `cloudflare:workers`, which the contract suite cannot resolve
    * under plain node. So it carries no `[__DURABLE_OBJECT_BRAND]` and cannot
@@ -125,8 +127,6 @@ export interface EnvBindings {
    */
   COUNTER: DurableObjectNamespace;
   BOOKING_WORKFLOW: Workflow<Parameters<BookingWorkflow["run"]>[0]["payload"]>;
-  // One instance per census roster host. The payload carries ts and ymd so a
-  // whole sweep lands on one census day however long an instance queues.
   CENSUS_WORKFLOW: Workflow<Parameters<CensusWorkflow["run"]>[0]["payload"]>;
 }
 
@@ -161,11 +161,11 @@ export interface EnvVars {
 
 // ---------------------------------------------------------------------------
 // Tier 3 — required secrets. The names (never the values) are in
-// cloudflare.config.ts's `bindings.secret()` entries, which makes them a DEPLOY GATE: wrangler
-// refuses to publish unless each is configured on the Worker. That gate is what
-// earns them a non-optional type here. Set one with the versions form, since
-// `wrangler secret put` deploys immediately and this repo's newest version is
-// normally an unramped upload:
+// cloudflare.config.ts's `bindings.secret()` entries, which makes them a
+// DEPLOY GATE: wrangler refuses to publish unless each is configured on the
+// Worker. That gate is what earns them a non-optional type here. Set one with
+// the versions form, then promote, since `wrangler secret put` deploys
+// immediately (CLAUDE.md, Release path):
 //   bun run wrangler:site versions secret put <NAME>
 // ---------------------------------------------------------------------------
 export interface EnvSecrets {
@@ -183,7 +183,7 @@ export interface EnvSecrets {
 
 // ---------------------------------------------------------------------------
 // Tier 4 — DEGRADING secrets. Read by code, deliberately absent from
-// `secrets.required`, because each one's path is built to degrade and declaring
+// cloudflare.config.ts's `bindings.secret()` entries, because each one's path is built to degrade and declaring
 // it would fail the deploy over a working site. That is cloudflare.config.ts's
 // argument; `?` is what makes the compiler hold the code to it. Removing a `?`
 // here to quiet an error is the one edit this file exists to prevent, since it
@@ -222,14 +222,15 @@ export interface EnvInjected {
    * In-process dispatch back into this Worker, so a /lens self-scan costs no
    * wire request. dispatch.ts sets it to NULL on the inner env, which is what stops
    * a self-scan recursing forever, so the type has to admit null rather than
-   * only absence. Callers read it as
-   * `env.SELF_FETCH ? env.SELF_FETCH(req) : env.ASSETS.fetch(req)`.
+   * only absence. lib/outbound.ts's selfAdapter reads it and falls back to
+   * env.ASSETS.
    */
   SELF_FETCH?: ((request: Request) => Promise<Response>) | null;
   /**
    * The network adapter for AadharshBot's outbound reads (lib/outbound.ts,
-   * lib/botauth.ts). Nothing in the Worker sets it, so production reads go to
-   * the global fetch; a test sets it to supply a fake network by injection.
+   * lib/botauth.ts). Unset, reads go to the global fetch. around.ts sets it to
+   * a subrequest meter (lib/budget.ts) around the real fetch for its crawl,
+   * and a test sets it to supply a fake network by injection.
    * Per-hop URL validation, the robots gate and signing all run in front of it.
    */
   OUTBOUND_TRANSPORT?: PublicTransport | null;
@@ -257,13 +258,7 @@ export interface EnvInjected {
  */
 export type SiteRequest = Request<unknown, IncomingRequestCfProperties>;
 
-/**
- * The site Worker's env. `route()` and every handler take this instead of `any`.
- *
- * Note what is NOT here: COUNTER_SEED, which counter.ts mentions in a comment
- * about how the old cf-garage DO handed its count over, and which no line of
- * code reads. Leaving it out is the point of writing the surface down.
- */
+/** The site Worker's env. `route()` and every handler take this instead of `any`. */
 export interface Env
   extends EnvBindings,
     EnvVars,

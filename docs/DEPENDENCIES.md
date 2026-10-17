@@ -561,6 +561,19 @@ does not make a failed write safe to ignore.
   Review Bun checker upgrades for new checks on unchanged source. The
   type-aware lint ships in the same binary as the checker, so there is no
   second version to pair with it the way tsgolint had to be.
+
+  Microsoft's tsc is not a dependency, and it's still the reference. Since
+  2026-10-17 the canary's bun leg downloads the native tsc at
+  `TSC_REFERENCE` (7.0.2, which the pinned checker matches byte for byte on
+  all 8 programs, measured 2026-10-17) by exact version
+  and registry sha512, then diffs every nightly canary's `bun check` against
+  it on each program `bun run typecheck` checks (`checkerAgreementGate` in
+  `tools/lib/bun-gates.ts`). A canary that drops or invents a diagnostic files
+  the leg's issue before that build can become a pin. The bumper runs the same
+  gate (its 4b), so a candidate that disagrees is never proposed. When Bun
+  moves its port to a newer TypeScript, both read the move as disagreement
+  and the pin holds until `TSC_REFERENCE` is bumped to match, which makes
+  that bump the review of the new checker.
 - @types/bun 1.4.3 is the exact type pin for host tools and tests. It supplies
   Node globals as well as Bun APIs such as HTMLRewriter, so those programs use
   one `types` entry. It adds no runtime dependency or served byte.
@@ -664,8 +677,9 @@ the reason, rather than written here with the caret quietly dropped.
   remove, replace, move, `textContent`, and `innerHTML`.
 
   It stays INSTALLED because it is the oracle.
-  `test/dom-differential.test.mjs` runs the real pipeline twice over 48
-  documents, once on each DOM, and compares title, byline, content, markdown and
+  `test/dom-differential.test.mjs` runs the real pipeline twice over every
+  page in `src/pages` plus the 10 captures (57 documents on 2026-10-17), once
+  on each DOM, and compares title, byline, content, markdown and
   control labels byte for byte; a second gate compares the serialized parse tree
   on the 10 captured real-world pages, and a third pins the SVG rules no capture
   can reach. Deleting linkedom would delete the only
@@ -722,7 +736,7 @@ the reason, rather than written here with the caret quietly dropped.
   at both versions, the Markdown is BYTE-IDENTICAL on 10 of 10. Three pages
   differ in the intermediate content HTML and every difference is one of the
   three rows above: `clipPath` on stripe.com, `<!--?-->` on the two MDN pages.
-  The parity gate is unmoved, at 4 of 4 across 48 documents plus those 10.
+  The parity gate is unmoved, at 4 of 4 across 48 documents, those 10 among them.
 
   The override still forces the oracle onto the same generation, which is what
   keeps that gate meaning anything. Re-evaluate it when linkedom changes its

@@ -1204,7 +1204,7 @@ window.__horizonCaps = (function () {
 </script>
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 
 <div class="window">
 
@@ -1213,7 +1213,7 @@ window.__horizonCaps = (function () {
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
 
-  <div class="content prose">
+  <main id="main" class="content prose">
 
     <h1>Horizon</h1>
     <p class="lede">
@@ -4314,7 +4314,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         string and watch both paths:
       </p>
       <p>
-        <input class="xp-input san-in" id="san-in" type="text"
+        <input class="xp-input san-in" id="san-in" type="text" aria-label="markup to parse"
                value="&lt;img src=x onerror=alert(1)&gt;&lt;b&gt;bold&lt;/b&gt;&lt;script&gt;bad()&lt;/script&gt;">
         <button class="xp-button" id="san-go">Parse both ways</button>
       </p>
@@ -4492,7 +4492,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <button class="xp-button" id="fv-on">Focus target, ring on</button>
         <button class="xp-button" id="fv-off">Focus target, ring off</button>
       </p>
-      <p><input class="xp-input" id="fv-target" type="text" value="focus target"></p>
+      <p><input class="xp-input" id="fv-target" type="text" value="focus target" aria-label="focus target"></p>
       <p class="replaces">
         On the site: <code>nav.js</code> moves focus in two places where this is
         the exact missing control. Opening the Run palette with
@@ -8243,7 +8243,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <hr>
     <section id="luq" aria-label="understanding check"></section>
 
-  </div>
+  </main>
 </div>
 
 <script>

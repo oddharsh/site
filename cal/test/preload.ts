@@ -16,17 +16,19 @@
 //    harness's workerd, so an empty base class is the whole shim. This is the
 //    one `mock.module` in the repository, and it is a virtual module standing
 //    in for a runtime scheme rather than a dependency seam being faked, which
-//    is the distinction .oxlintrc.json's no-module-mocking rule draws.
+//    is the exception .oxlintrc.json names beside its vi.mock ban
+//    (vitest/no-restricted-vi-methods, which does not reach mock.module).
 //
 // 2. `caches`. cal/src/index.ts edge-caches the slot list (/slots.html) for
 //    30s through `caches.default` and deletes the entry on every booking
 //    action. Bun has no CacheStorage global at all (`typeof caches` is
 //    "undefined", measured 2026-09-02 on 1.4.0), so a stand-in that always
 //    misses is installed. What that costs is stated rather than hidden: the
-//    cache HIT path on GET /slots.html is not exercised by this suite. It never
-//    was asserted under the pool either, where miniflare's cache was real but no test read the same page
-//    twice; the loss is potential coverage, not a regression in what is
-//    checked. The DELETE calls sit inside ctx.waitUntil and resolve false.
+//    cache HIT path on GET /slots.html is not exercised by this suite. It was
+//    never asserted under the Vitest pool either, where miniflare's cache was
+//    real but no test read the same page twice, so the loss is potential
+//    coverage and nothing checked before is checked less now. The DELETE calls
+//    sit inside ctx.waitUntil and resolve false.
 import { mock } from "bun:test";
 
 mock.module("cloudflare:workers", () => ({

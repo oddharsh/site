@@ -1,4 +1,5 @@
-// cal.aadhar.sh — coffee booking worker.
+// cal/src/index.ts: the coffee booking module. The site Worker hands it
+// aadhar.sh/coffee/* and cal.aadhar.sh/* (routeCoffee in src/worker/index.ts).
 //
 // flow:
 //   1. visitor GET /         → the booking page (built on aadhar.sh), whose
@@ -17,7 +18,8 @@
 //                              if the host never acts within PENDING_TTL_DAYS
 //
 // design notes:
-//   - all state in KV; nothing in memory, Worker can scale to zero
+//   - all state in KV, plus the per-slot claim in the Counter Durable Object
+//     (reservation.ts); nothing in memory, Worker can scale to zero
 //   - no auth: the only "host" interaction is clicking signed URLs from email
 //   - signing uses HMAC-SHA256 over `${id}|${action}` with SIGNING_SECRET
 //   - timezones are real: HOST_TIMEZONE drives display + working hours
@@ -45,14 +47,15 @@ import { bookingPage, slotsFragment, SLOTS_PATH, PICK_PATH, successPage,
          locationPage, locationSavedPage,
          reschedulePage, rescheduledPage,
          cancelPage, cancelledPage,
-         errorPage }                       from "./templates.ts";
+         errorPage, type BookingAnswers }   from "./templates.ts";
 import { jsonResponse } from "../../src/worker/lib/http.ts";
 import { ISLAND_CSP, ISLAND_MARKER }    from "../../src/worker/lib/island.ts";
 
-// Re-export the expiry-timer Workflow so it resolves as a class_name both from
-// the root worker (which imports this module) and from the Vitest pool, whose
-// `main` is this file. Production's BOOKING_WORKFLOW binding is defined on the
-// root aadhar-sh Worker; this named export just keeps the class reachable here.
+// Re-exported for cal/wrangler.test.toml, whose `main` is this file and whose
+// [[workflows]] entry names BookingWorkflow as its class_name, so the test
+// harness's workerd resolves the class from here. Production's BOOKING_WORKFLOW
+// is bound on the root aadhar-sh Worker, which exports the class from
+// cal/src/workflow.ts itself (src/worker/index.ts).
 export { BookingWorkflow } from "./workflow.ts";
 
 export default {
@@ -113,8 +116,8 @@ async function route_index(req, env, ctx) {
 }
 
 async function route_slots_html(req, env, ctx) {
-  // The island: the next ~14 days of open slots as radios, a fragment and never
-  // a document. Cached 30s at the edge (caches.default), which is what the whole
+  // The island: the open slots inside MAX_LOOKAHEAD_DAYS, as radios, a fragment
+  // and never a document. Cached 30s at the edge (caches.default), which is what the whole
   // page carried before it was built. Safe because /book re-validates the slot
   // against a fresh calendar read, so a briefly stale list can offer a taken
   // slot (one 409 and a retry) but can never confirm one. Every action that
@@ -193,13 +196,21 @@ async function route_book(req, env, ctx) {
   const area  = (payload.area  || "").toString().trim().slice(0, 120);
   const start = parseInt(payload.start, 10);
 
-  if (!name || !email || !topic || !Number.isFinite(start)) {
-    return new Response(errorPage("missing one of: name / email / topic / slot.", env),
-                        { status: 400, headers: htmlHeaders() });
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return new Response(errorPage("that email doesn't look right.", env),
-                        { status: 400, headers: htmlHeaders() });
+  // A refusal re-renders the booking page with everything typed still in it
+  // and a message on each field at fault, rather than an error page whose
+  // retry link reloaded an empty form. The slots render inline, as on /pick,
+  // so the posted one can come back checked and the page works without script.
+  const values = { name, email, area, topic, start: Number.isFinite(start) ? start : undefined };
+  const refuse = (status, errors, slots) =>
+    new Response(bookingPage(env, { slots, answers: { values, errors } }), { status, headers: htmlHeaders() });
+  const errors: BookingAnswers["errors"] = {};
+  if (!Number.isFinite(start)) errors.start = "pick one of the open slots above.";
+  if (!name) errors.name = "add the name that should go on the invite.";
+  if (!email) errors.email = "add an email, so the invite has somewhere to land.";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "that email doesn't look right. it needs a name, an @ and a domain.";
+  if (!topic) errors.topic = "add a sentence or two. this is what i read before saying yes.";
+  if (Object.keys(errors).length) {
+    return refuse(400, errors, (await listOpenSlots(env, ctx, null, { allowStale: true })).slots);
   }
 
   // verify the slot is still open RIGHT NOW (race window) against a calendar we
@@ -212,8 +223,7 @@ async function route_book(req, env, ctx) {
   }
   const slot = slots.find(s => s.start === start);
   if (!slot) {
-    return new Response(errorPage("that slot was taken or expired. pick another.", env),
-                        { status: 409, headers: htmlHeaders() });
+    return refuse(409, { start: "that slot was taken or expired. pick another one." }, slots);
   }
 
   // honeypot: if the hidden 'website' field is filled, silently accept-and-drop.
@@ -248,16 +258,16 @@ async function route_book(req, env, ctx) {
     return new Response(errorPage("someone just took that slot. pick another.", env),
                         { status: 409, headers: htmlHeaders() });
   }
-  // The KV hold stays: it is what /slots and the SSR page read to draw
-  // availability, and it carries the expiry the reservation deliberately does
+  // The KV hold stays: it is what listOpenSlots (/slots, /slots.html, /pick)
+  // reads to draw availability, and it carries the expiry the reservation deliberately does
   // not. The Durable Object decides WHO gets the slot; this records THAT it is
   // taken for every reader that is not racing for it.
   await holdSlot(env, booking);
 
   // spin up the durable expiry timer for this booking. Instance id = booking id,
   // so approve/decline can address it directly. Best-effort + guarded: if the
-  // binding is missing (older config) the booking still works, it just won't
-  // auto-expire — no worse than before, and there's no cron to lean on now.
+  // binding is missing the booking still works and only loses auto-expiry, and
+  // no cron backs it up.
   if (env.BOOKING_WORKFLOW) {
     ctx.waitUntil((async () => {
       try {
@@ -549,7 +559,7 @@ async function route_decline(req, env, ctx, url) {
 // one edge-cache entry per (origin, basePath) for the slots island. Every action
 // that moves a slot deletes it through this same key, whichever route it came in
 // on, so the key is the prefix and never the request path; query strings
-// normalize away. It was /__cal_index while the whole page was the cached thing.
+// normalize away.
 function calSlotsKey(req, env) {
   const url = new URL(req.url);
   return new Request(`${url.origin}${env.BASE_PATH || ""}/__cal_slots`, { method: "GET" });

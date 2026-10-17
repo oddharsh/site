@@ -91,7 +91,7 @@
   --ink-soft:  oklch(38.67% 0 0);        /* body prose / secondary             */
   --ink-quiet: oklch(44.95% 0 0);        /* #555555 notes, footers, field labels */
   --ink-dim:   oklch(51.03% 0 0);        /* meta, captions, disabled label     */
-  --ink-faint: oklch(62.68% 0 0);        /* placeholder / loading text         */
+  --ink-faint: oklch(56.58% 0 0);        /* #767676 placeholder / loading text; the lightest grey at 4.5:1 on white (was #888888, 3.54:1) */
   --rule:      oklch(86.67% 0.0294 calc(var(--hue-luna) - 4)); /* hairline divider */
   --row-alt:   oklch(97.50% 0.0062 calc(var(--hue-luna) - 8)); /* zebra row tint */
   --row-hover: oklch(97.73% 0.0373 var(--hue-rowhover));      /* warm hover tint */
@@ -106,7 +106,7 @@
   /* link states — canonical web-safe blue/purple/red, OKLCH'd */
   --link:         oklch(42.61% 0.235 263.74);
   --link-visited: oklch(42.09% 0.194 328.36);
-  --link-hover:   oklch(62.80% 0.258 29.23);
+  --link-hover:   oklch(58.50% 0.258 29.23);  /* L from 62.80%, where the web-safe red sat at 4.0:1 on white; this holds 4.5:1 */
 
   /* selection */
   --selection:      var(--blue-50);
@@ -218,7 +218,7 @@
   :root {
     --link:        oklch(42.61% 0.30 263.74);
     --link-visited:oklch(42.09% 0.27 328.36);
-    --link-hover:  oklch(62.80% 0.33 29.23);
+    --link-hover:  oklch(58.50% 0.33 29.23);
     --danger:      oklch(58% 0.26 var(--hue-danger));
     --gold:        oklch(86.52% 0.22 90.38);
   }
@@ -556,7 +556,7 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
 .axp-acc{position:fixed;z-index:40;min-width:170px;background:var(--paper);border:2px solid var(--luna-44);border-right-color:var(--luna-34);border-bottom-color:var(--luna-34);border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 var(--luna-56),inset -1px -1px 0 var(--luna-31),3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
 .axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-ui);text-shadow:1px 1px var(--luna-30);background:linear-gradient(180deg,var(--blue-95),var(--blue-65) 60%,var(--blue-55))}
 .axp-acc>.tb .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.axp-acc>.tb .x{width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;border:1px solid var(--red-59);border-radius:3px;background:linear-gradient(180deg,var(--red-70),var(--red-50));font-size:9px;cursor:pointer}.axp-acc>.tb .x:hover{filter:brightness(1.12)}
+.axp-acc>.tb .x{box-sizing:content-box;width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;margin:0;padding:0;border:1px solid var(--red-59);border-radius:3px;background:linear-gradient(180deg,var(--red-70),var(--red-50));font:inherit;font-size:9px;color:inherit;cursor:pointer}.axp-acc>.tb .x:hover{filter:brightness(1.12)}
 .axp-acc>.bd{padding:8px;background:var(--face)}
 .clk{text-align:center;padding:5px 12px}.clk-t{font-family:var(--font-mono);font-size:22pt;font-weight:bold;color:var(--slate-26);letter-spacing:1px}.clk-d{font-size:var(--text-micro);color:var(--slate-45);margin-top:3px;white-space:nowrap}
 /* windows drag by their title bar */
@@ -751,6 +751,10 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
   box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
 }
+/* Keyboard focus adds XP's dotted focus rectangle inside the glyph, the one the
+   Back/Forward pair draws. The hover tint alone was the only cue until
+   2026-10-17, and a tint reads as "the pointer is here", which it isn't. */
+:where(.title-bar .controls :is(.min, .max, .close):focus-visible), :where(.np-controls :is(.min, .max, .close):focus-visible) { outline: 1px dotted #fff; outline-offset: -4px; }
 :where(.title-bar .controls .min:active), :where(.np-controls .min:active), :where(.title-bar .controls .max:active), :where(.np-controls .max:active), :where(.title-bar .controls .close:active), :where(.np-controls .close:active) { filter: brightness(.9); }
 /* white glyphs drawn with pseudo-elements */
 :where(.title-bar .controls .min)::before, :where(.np-controls .min)::before {
@@ -808,6 +812,13 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .axp-histnav button:active:not([disabled]) { filter: brightness(.9); }
 .axp-histnav button:focus-visible { outline: 1px dotted #fff; outline-offset: -4px; }
 .axp-histnav button[disabled] { opacity: .45; cursor: default; filter: none; }
+/* The skip link, first in <body> (gen-desktop-partial.ts). Off-screen until Tab
+   reaches it, then an XP infotip in the window's top-left corner. Moved rather
+   than display:none or visibility:hidden, either of which drops it from the tab
+   order. index.html carries a copy in its critical CSS, since luna.css arrives
+   after first paint there. */
+.axp-skip { position: fixed; top: 4px; left: 4px; z-index: 10001; padding: 4px 8px; background: var(--row-hover); color: var(--ink); border: 1px solid var(--ink); box-shadow: var(--shadow-tip); font: 11px/1.45 var(--font-ui); text-decoration: none; transform: translateY(-200%); }
+.axp-skip:focus { transform: none; }
 /* Two cases draw no pair. Without script the buttons would do nothing. And under
    720px, the width at which windows stop resizing (below), a phone's own back
    gesture already does the job while the pair costs 50px of a ~370px caption:
@@ -839,6 +850,10 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   border-color: #003c74; outline: none;
   box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px #2c628b, 0 0 3px 1px rgba(44,98,139,.45);
 }
+/* The default button and the focused one share the dark border, as in XP, so
+   the border can't say which has focus. XP's answer is the dotted rectangle
+   inset from the face, drawn on the focused button only. */
+:where(.xp-button:focus-visible) { outline: 1px dotted #000; outline-offset: -4px; }
 :where(.xp-button:active:not(:disabled)) {
   background: linear-gradient(180deg, #e1e1d8 0%, #e9e8e0 50%, #f0efe8 100%);
   border-color: #7b9ebd; padding: 4px 11px 2px 13px;
@@ -886,7 +901,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   padding: 4px 10px; font: var(--text-micro)/1.4 var(--font-ui); color: var(--ink-dim);
   background: var(--face-light); border-top: 1px solid var(--rule);
 }
-:where(.xp-statusbar:not(.panes) > span:not(:last-child))::after { content: "·"; margin-left: 8px; color: var(--ink-faint); }
+:where(.xp-statusbar:not(.panes) > span:not(:last-child))::after { content: "·"; margin-left: 8px; color: var(--ink-dim); }
 :where(.xp-statusbar.panes) { flex-wrap: nowrap; gap: 3px; padding: 2px 3px; }
 :where(.xp-statusbar.panes > span) {
   padding: 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -974,7 +989,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .np-list li:nth-child(even) { background: var(--row-alt); }
 .np-list li:last-child { border-bottom: none; }
 .np-list .np-empty {
-  color: var(--ink-faint);
+  color: var(--ink-dim);
   font-style: italic;
   text-align: center;
   padding: 12px;
@@ -993,7 +1008,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   color: var(--blue-40);
 }
 .np-sep {
-  color: var(--ink-faint);
+  color: var(--ink-dim);
   margin: 0 4px;
 }
 .np-artist { color: var(--ink-soft); }
@@ -1018,7 +1033,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .np-duration {
   font-family: var(--font-mono);
   font-size: var(--text-mono);
-  color: var(--ink-faint);
+  color: var(--ink-dim);
   float: right;
   margin-left: 8px;
 }
@@ -1183,7 +1198,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   display: block;
   margin-top: 1px;
   font-size: var(--text-3xs);
-  color: var(--grey-60);
+  color: var(--ink-dim);
 }
 a.car-link:link,
 a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
@@ -1324,7 +1339,7 @@ body:has(.window),body:has(.np-window){padding-top:calc(var(--sa-t) + var(--hype
 .axp-well a{color:oklch(42.61% 0.30 263.74);text-decoration:none}
 .axp-well a:hover{text-decoration:underline}
 .axp-here{color:var(--ink);font-weight:700}
-.axp-sep{padding:0 1px;color:var(--grey-60)}
+.axp-sep{padding:0 1px;color:var(--ink-dim)}
 
 /* task pane — Luna's pale-blue group boxes: gel caption, rounded top only. */
 .axp-pane{display:flex;flex-direction:column;gap:10px;font:11px/1.45 var(--font-ui)}

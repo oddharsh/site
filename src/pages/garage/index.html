@@ -120,7 +120,7 @@ p { margin: 0 0 12px; }
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 
 <div class="window">
 
@@ -129,7 +129,7 @@ p { margin: 0 0 12px; }
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div><!-- /axp:window -->
 
-  <div class="content prose">
+  <main id="main" class="content prose">
 
     <h1>Garage</h1>
     <p class="lede">
@@ -608,16 +608,16 @@ p { margin: 0 0 12px; }
 
       <li>
         <div class="title-row">
-          <span class="name"><a href="/garage/cloudflare">Three free Cloudflare features, live</a></span>
+          <span class="name"><a href="/garage/cloudflare">Four free Cloudflare features, live</a></span>
           <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           Durable Objects (an atomic counter), Workers AI (it captions a real grid
-          photo), and Workers Logs (structured observability): one <em>live</em> demo
-          each, behind a tiny worker at
+          photo), Workers Logs (structured observability) and custom trace spans: one
+          <em>live</em> demo each, behind a tiny worker at
           <code style="font-family: var(--font-mono);font-size:9pt">/garage/cf/*</code>. The
-          free Workers plan quietly bundles them; all three work the moment you click. A fourth,
-          Browser Rendering, is wired but parked on the free tier&apos;s 10-min/day cap.
+          free Workers plan quietly bundles them; all four run live on the page. A fifth,
+          Browser Run, is wired but parked on the free tier&apos;s 10-min/day cap.
         </div>
         <div class="meta">
           shape: platform-feature demos · added 2026-06-06
@@ -795,7 +795,7 @@ p { margin: 0 0 12px; }
       </p>
     </footer>
 
-  </div>
+  </main>
 </div>
 
 <!-- prerender every internal page eagerly (McMaster-style); same exclusions

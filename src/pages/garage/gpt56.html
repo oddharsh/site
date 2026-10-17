@@ -37,7 +37,7 @@ code,.mono{font-family:var(--font-mono);font-size:var(--text-mono)}strong{font-w
 .hero-grid{display:grid;grid-template-columns:minmax(0,1fr) 185px;gap:14px;align-items:stretch;margin:0 0 16px}
 .lcd{border:2px solid #27334a;border-color:#182338 #96a7c5 #96a7c5 #182338;background:#15213a;color:#d9f5b5;padding:9px 10px;box-shadow:inset 1px 1px 0 #07101e,inset -1px -1px 0 var(--slate-50);min-height:112px}
 .lcd .label{display:block;color:#9bb1d5;font:700 var(--text-2xs) var(--font-mono);letter-spacing:.06em;text-transform:uppercase}.lcd strong{display:block;font:700 20pt/1.05 var(--font-mono);color:#e4fcae;margin:8px 0 6px}.lcd p{font:var(--text-micro)/1.35 var(--font-mono);color:#b8c7df;margin:0}
-.bay-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 17px}.bay{border:1px solid #a7b6ca;background:var(--paper-cool);padding:9px 10px;box-shadow:inset 1px 1px 0 #fff,inset -1px -1px 0 var(--slate-90)}.bay h3{color:#2c4e87}.bay p{font-size:var(--text-sm);line-height:1.42;margin:0;color:#454d59}.bay .bay-no{float:right;font:700 var(--text-2xs) var(--font-mono);color:#68727e}
+.bay-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 17px}.bay{border:1px solid #a7b6ca;background:var(--paper-cool);padding:9px 10px;box-shadow:inset 1px 1px 0 #fff,inset -1px -1px 0 var(--slate-90)}.bay h2{font-size:var(--text-body);margin:0 0 3px;color:#2c4e87}.bay p{font-size:var(--text-sm);line-height:1.42;margin:0;color:#454d59}.bay .bay-no{float:right;font:700 var(--text-2xs) var(--font-mono);color:#68727e}
 hr{border:0;border-top:2px groove var(--slate-90);margin:16px 0;height:0}
 .workbench{border:1px solid #6b7f9c;background:#fff;margin:0 0 17px;box-shadow:2px 2px 0 rgba(40,70,115,.16)}.workbench-head{background:linear-gradient(#eef5ff,#d9e8fb);border-bottom:1px solid #8097b6;padding:7px 9px;display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}.workbench-head h2{margin:0;color:#254a87}.workbench-head .mono{color:var(--slate-50);font-size:var(--text-micro)}.workbench-body{padding:10px 11px 11px}
 .modebar{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 10px}.modebar .xp-button[aria-pressed="true"]{background:linear-gradient(var(--slate-92-b),#a9c9f1);border-color:#235ea8;box-shadow:inset 1px 1px 1px #8eaed8}.modebar .xp-button{min-width:72px}
@@ -50,13 +50,13 @@ hr{border:0;border-top:2px groove var(--slate-90);margin:16px 0;height:0}
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon sol-icon" aria-hidden="true"></span>aadhar.sh/garage/5.6 sol</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content">
+  <main id="main" class="content">
     <div class="hero-grid">
       <div>
         <h1>5.6 Sol&apos;s performance pass</h1>
@@ -75,9 +75,9 @@ hr{border:0;border-top:2px groove var(--slate-90);margin:16px 0;height:0}
     </div>
 
     <section class="bay-grid" aria-label="three garage bays">
-      <article class="bay"><span class="bay-no">01</span><h3>Clear first paint</h3><p>Static desktop markup, a tiny critical shell, native fonts, and no <a class="term" data-t="render-blocking" href="https://developer.mozilla.org/en-US/docs/Glossary/Render_blocking" title="A file, usually CSS or JavaScript, that the browser must download and process before it can show the page." rel="external">render-blocking</a> JavaScript. The page can look like itself before the deferred nav arrives.</p></article>
-      <article class="bay"><span class="bay-no">02</span><h3>Give bytes a name</h3><p>Hashed thumbnails, honest 404s, edge-direct assets, and cache keys that change when bytes change. A cache hit is only useful when it is the right file.</p></article>
-      <article class="bay"><span class="bay-no">03</span><h3>Make shipping fail loud</h3><p>Build-time invariants, <a class="term" data-t="minification" href="https://en.wikipedia.org/wiki/Minification_(programming)" title="Stripping spaces, comments and long names out of code so it downloads smaller and still runs the same." rel="external">minified</a> shell budgets, readable source twins, and a route oracle. The fast path includes proving that the fast path shipped.</p></article>
+      <article class="bay"><span class="bay-no">01</span><h2>Clear first paint</h2><p>Static desktop markup, a tiny critical shell, native fonts, and no <a class="term" data-t="render-blocking" href="https://developer.mozilla.org/en-US/docs/Glossary/Render_blocking" title="A file, usually CSS or JavaScript, that the browser must download and process before it can show the page." rel="external">render-blocking</a> JavaScript. The page can look like itself before the deferred nav arrives.</p></article>
+      <article class="bay"><span class="bay-no">02</span><h2>Give bytes a name</h2><p>Hashed thumbnails, honest 404s, edge-direct assets, and cache keys that change when bytes change. A cache hit is only useful when it is the right file.</p></article>
+      <article class="bay"><span class="bay-no">03</span><h2>Make shipping fail loud</h2><p>Build-time invariants, <a class="term" data-t="minification" href="https://en.wikipedia.org/wiki/Minification_(programming)" title="Stripping spaces, comments and long names out of code so it downloads smaller and still runs the same." rel="external">minified</a> shell budgets, readable source twins, and a route oracle. The fast path includes proving that the fast path shipped.</p></article>
     </section>
 
     <section class="workbench" aria-labelledby="bench-title">
@@ -111,7 +111,7 @@ hr{border:0;border-top:2px groove var(--slate-90);margin:16px 0;height:0}
     <p class="source">The long-form design ledger lives in <a href="/garage/blueprint">Blueprint</a>; the byte-level history is in <a href="/garage/wire">Bytes on the wire</a>. <a href="/garage">Back to the garage</a>.</p>
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>performance field note</span><span>local Chrome trace</span><span>no API calls</span><span>added 2026-07-10</span></div>
 </div>
 <script type="application/json" id="luq-data">

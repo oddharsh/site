@@ -1,4 +1,4 @@
-// Integration tests for the worker's request flow (src/index.js). Rather than
+// Integration tests for the worker's request flow (src/index.ts). Rather than
 // dispatching into the harness's workerd, we import the worker and call
 // worker.fetch() directly in THIS process, so the globalThis.fetch stub
 // intercepts its outbound calls. The calendar feed and Resend are both stubbed
@@ -34,7 +34,7 @@ const EMPTY_ICS = [
 ].join("\r\n");
 
 let mailCalls;
-// Approval and /location each send TWO mails now: the guest's invitation and
+// Approval and /location each send TWO mails: the guest's invitation and
 // the host's own PUBLISH copy. ctx.waitUntil orders neither, so these pick by
 // attachment rather than by index.
 const guestMail = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename === "coffee.ics");
@@ -42,10 +42,7 @@ const hostMail  = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename 
 let bookingWf;
 let restoreFetch = () => {};
 beforeEach(async () => {
-  // start every test with an empty booking pool: a stale pending booking from
-  // a prior test would hold a slot / trip generateSlots' daily+weekly limits,
-  // so an assertion like "the slot frees up again" would see a slot suppressed
-  // for an unrelated reason. clearing makes each test's preconditions explicit.
+  // An empty booking pool per test; clearBookings in harness.ts says why.
   await cal.clearBookings();
 
   // route_book spins up a real expiry-timer instance per booking. Left alone,
@@ -147,7 +144,7 @@ const firstSlot = async () => {
 };
 const statusOf = async (id) => (await getBooking(env, id))?.status;
 // the host's approval email carries the only handle to the booking id (t=<id>):
-// there's no pending-index to scan anymore, so tests read the id the same way
+// there's no pending index to scan, so tests read the id the same way
 // the host does — off the signed link in the mail we just captured.
 const lastBookingId = () => {
   // Both steps can miss, and both used to fail as a bare TypeError pointing at
@@ -238,6 +235,64 @@ describe("POST /book validation", () => {
 
   it("rejects a slot that isn't currently open with 409", async () => {
     expect((await postBook({ name: "A", email: "a@b.co", topic: "hi", start: 999 })).status).toBe(409);
+  });
+
+  // A refusal used to be a separate error page whose "try again" link reloaded
+  // an empty form, so a typo in the email cost the topic paragraph too. It is
+  // the booking page now, with what was typed still in it and each field at
+  // fault marked invalid and pointed at its own message.
+  /** The open tag of the control with this id (or the first radio for start). */
+  const control = (html, id) => (id === "start"
+    ? html.match(/<input type="radio" name="start"[^>]*>/)?.[0]
+    : html.match(new RegExp(`<(?:input|textarea)[^>]*\\bid="${id}"[^>]*>`))?.[0]) ?? "";
+  /** Each control that claims to be invalid, and the text of the message it names. */
+  const invalidFields = (html) => ["start", "name", "email", "topic"].flatMap((id) => {
+    const tag = control(html, id);
+    if (!/aria-invalid="true"/.test(tag)) return [];
+    const ref = tag.match(/aria-describedby="([^"]+)"/)?.[1];
+    const text = ref ? html.match(new RegExp(`<p class="field-error" id="${ref}">([^<]+)</p>`))?.[1] : undefined;
+    return [{ id, text }];
+  });
+
+  it("a refused request comes back as the booking page with the typed values kept", async () => {
+    const res = await postBook({ name: "Ada <Lovelace>", email: "nope", area: "Greenpoint", topic: "engines & \"looms\"", start: 123 });
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).toMatch(/<form class="book" id="bookform"/);
+    expect(html).not.toContain("← try again");
+    expect(control(html, "name")).toContain('value="Ada &lt;Lovelace&gt;"');
+    expect(control(html, "area")).toContain('value="Greenpoint"');
+    expect(html).toContain(">engines &amp; &quot;looms&quot;</textarea>");
+    expect(invalidFields(html)).toEqual([{ id: "email", text: "that email doesn&#39;t look right. it needs a name, an @ and a domain." }]);
+    expect(control(html, "email")).toContain("autofocus");
+    expect(control(html, "name")).not.toContain("aria-invalid");
+  });
+
+  it("marks every field at fault at once, each with its own message", async () => {
+    const html = await (await postBook({ name: "", email: "", topic: "" })).text();
+    expect(invalidFields(html).map((f) => f.id)).toEqual(["start", "name", "email", "topic"]);
+    expect(invalidFields(html).every((f) => f.text)).toBe(true);
+    expect(html).toContain("4 things to fix before this can send");
+    // focus lands on the first, which is the slot list
+    expect(control(html, "start")).toContain("autofocus");
+    expect(control(html, "name")).not.toContain("autofocus");
+  });
+
+  it("a slot taken in the meantime is the slot list's error, with the rest kept", async () => {
+    const res = await postBook({ name: "A", email: "a@b.co", topic: "hi", start: 999 });
+    expect(res.status).toBe(409);
+    const html = await res.text();
+    expect(invalidFields(html)).toEqual([{ id: "start", text: "that slot was taken or expired. pick another one." }]);
+    expect(control(html, "email")).toContain('value="a@b.co"');
+  });
+
+  it("a slot that is still open comes back checked when another field is refused", async () => {
+    const page = await (await dispatch("/pick")).text();
+    const start = page.match(/<input type="radio" name="start" value="(\d+)"/)?.[1];
+    expect(start).toBeTruthy();
+    const html = await (await postBook({ name: "A", email: "a@b.co", topic: "", start: Number(start) })).text();
+    expect(html).toMatch(new RegExp(`<input type="radio" name="start" value="${start}"[^>]* checked`));
+    expect(invalidFields(html).map((f) => f.id)).toEqual(["topic"]);
   });
 
   // The bug this closes: availability is READ, then the hold is WRITTEN. Two

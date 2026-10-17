@@ -1,12 +1,13 @@
-// lib/explorer.js — the Explorer address bar and task pane, as markup.
+// lib/explorer.ts — the Explorer address bar and task pane, as markup.
 //
 // Two devices, one builder, used from both sides of the site: build.ts bakes
 // them into every staged static page, and lunaPage() emits them for the
 // Worker-rendered ones. Neither side owns a private copy, for the same reason
-// lib/desktop.js exists — window chrome that changes in two places drifts.
+// lib/desktop.ts exists: window chrome that changes in two places drifts.
 //
 // Node-safe on purpose (no `cloudflare:` import), because build.ts and
-// contract-tests.mjs both import it under plain node. See gotcha 16.
+// contract-explorer-chrome.test.mjs both import it under plain node. See
+// gotcha 16.
 //
 // THE HONESTY RULE IS THE DESIGN CONSTRAINT. Every row here is passed in by a
 // caller that can see the thing it is describing, or derived from the URL. This
@@ -61,7 +62,6 @@ export function parentOf(path) {
   return parts.length > 1 ? parts[parts.length - 2] : "/";
 }
 
-/** The display name for a path we know about, else the caller's fallback. */
 export function labelFor(path, fallback = "") {
   if (path === "/") return "aadhar.sh";
   return PLACE_LABEL.get(path) || fallback || path.replace(/^.*\//, "");
@@ -73,8 +73,7 @@ export function labelFor(path, fallback = "") {
  *
  * There is deliberately no Go button. Every segment here navigates, and a Go
  * that submitted nothing would be exactly the fabricated affordance the brand
- * rules forbid. Making the well a real editable address is the follow-up; /run
- * already exists to answer it.
+ * rules forbid. /run is where a typed address goes.
  */
 export function addressBar({ path = "/", name = "" }: { path?: string; name?: string } = {}): Html {
   const parts = trail(path);
@@ -135,11 +134,11 @@ export function taskPane(
   // A plain container, NOT a <details>. The disclosure was tried and removed:
   // `.axp-pane{display:flex}` is an author rule and beats the UA rule that hides
   // a closed details' content, so the pane rendered outside its 23px collapsed
-  // box and painted straight over the article. luna.css already carries that
-  // lesson for `.np-note[popover]`, whose comment inverts the same logic on
-  // purpose. The wrapper stays explicit so luna.css can hide the whole piece of
-  // secondary navigation at its narrow breakpoint instead of turning the rail
-  // into a bottom strip that reads like page content.
+  // box and painted straight over the article. writing.ts's stylesheet already
+  // carries that lesson for `.np-note[popover]`, whose comment inverts the same
+  // logic on purpose. The wrapper stays explicit so luna.css can hide the whole
+  // piece of secondary navigation at its narrow breakpoint instead of turning
+  // the rail into a bottom strip that reads like page content.
   return html`<div class="axp-tasks"><aside class="axp-pane" aria-label="Explorer tasks">${boxes}</aside></div>`;
 }
 

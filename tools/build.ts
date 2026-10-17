@@ -1380,15 +1380,15 @@ phase("1f updates + restore");
 // 1f) /updates and /restore as deploy-time documents.
 //
 // The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
-// inserts the checkpoint row moments before `bun run deploy:direct`, and nothing else
-// writes that table. So baking them WHOLE costs no freshness at all — unlike
+// stages each entry in the release PR, so it ships in the same build. So baking
+// them WHOLE costs no freshness at all, unlike
 // /reading (6h Curius refresh) or /around (daily crawl), whose feeds move on
 // their own, so only their shells are baked and the feed arrives as an island
 // (step 5b, lib/island.ts).
 //
-// D1 remains the source of truth. checkpoints.json is its committed projection,
-// written by bump-version.sh right after a successful insert, and
-// `bun run checkpoints:check` re-reads D1 and fails on drift.
+// D1 is the record of what shipped; checkpoints.json is what this build serves.
+// `bun run checkpoints:record` copies released entries into D1 from a workstation,
+// and `bun run checkpoints:check` fails on drift (tools/check-checkpoints.ts).
 {
   const nonce = `?build=${BUILD_NONCE}`;
   const updates = await import(pathToFileURL(resolve(OUT, "src/worker/updates.ts")).href + nonce);
@@ -1495,6 +1495,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
 {
   const { PLACES, addressBar, taskPane, taskRow } = await import("../src/worker/lib/explorer.ts");
   const { paneOffersTwin } = await import("./lib/twin-links.ts");
+  const { objectNameOf } = await import("./lib/object-name.ts");
 
   // PLACES is a literal in a Worker module (no data file at runtime), so the
   // manifest is what keeps it honest. A section registered for the taskbar and
@@ -1523,20 +1524,6 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     await writeFile(target, source.replace(marker, `export const TWIN_PATHS = ${JSON.stringify(twinPaths)}; // build:twins`));
   }
 
-  // Read the object's own name out of its h1, minus the status pill the garage
-  // marks each experiment with: the pill is state, not name, and sweeping it up
-  // published "Thumbnail encoding study shipped" as a breadcrumb.
-  const nameOf = (html) => {
-    const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
-    if (!h1) return "";
-    return h1[1]
-      .replace(/<span\b[^>]*\bclass="[^"]*\bstatus\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  };
-
   const pages = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((f) => f.endsWith(".html") && !f.endsWith('.src.html') && !/^(i|images|og|cars|a)\//.test(f))
     .filter((f) => f !== "index.html");
@@ -1561,7 +1548,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
 
     const options = {
       path: normalized,
-      name: nameOf(html),
+      name: objectNameOf(html),
       tasks: twin ? [{ href: twin, label: "Read this as Markdown" }] : [],
       details,
     };
@@ -1591,7 +1578,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
       // Both devices go BEFORE .content as its siblings; luna.css grids the
       // window around them. Putting the pane inside .content cost every page a
       // hole under its heading, because the pane then owned grid row 1.
-      const contentOpen = /<div class="content(?: [^"]*)?"[^>]*>/.exec(out);
+      const contentOpen = /<(?:main|div)\b[^>]*? class="content(?: [^"]*)?"[^>]*>/.exec(out);
       if (contentOpen) {
         out = out.slice(0, contentOpen.index)
           + String(addressBar(options))
@@ -1620,7 +1607,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     const file = `${OUT}/public/${rel}`;
     const html = await readFile(file, "utf8");
     const hasChrome = html.includes('class="axp-tasks"');
-    const windowed = /<div class="content(?: [^"]*)?"[^>]*>/.test(html) && /<div class="window"/.test(html);
+    const windowed = /<(?:main|div)\b[^>]*? class="content(?: [^"]*)?"[^>]*>/.test(html) && /<div class="window"/.test(html);
     if (!hasChrome && !windowed) return null;
     const result = dressPage(html, rel);
     await writeFile(file, result.html);

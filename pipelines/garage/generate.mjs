@@ -95,11 +95,11 @@ export function pageHtml(spec) {
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window -->${titleBar({ caption: `aadhar.sh${path}`, closeHref: "/garage", closeTitle: "back to the garage" })}<!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 ${spec.bodyHtml}
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">${html(spec.status)} · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>${html(spec.status)}</span><span>${html(spec.added || "new")}</span></div>
 </div>
 ${pageJs}

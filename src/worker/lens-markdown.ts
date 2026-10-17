@@ -1,4 +1,4 @@
-// lens-markdown.js — the Markdown lens: which representation an agent actually
+// lens-markdown.ts — the Markdown lens: which representation an agent actually
 // gets back when it asks this URL for Markdown.
 //
 // The four conformance checks here are the ones acceptmarkdown.com scores a URL
@@ -103,7 +103,7 @@ export const AGENT_ACCEPTS = [
 ];
 
 // Every distinct Accept string the run needs, each fetched once. Three agents
-// share one header, so seven rows cost six requests, and two identical requests
+// share one header, so seven rows cost five requests, and two identical requests
 // could not honestly return different answers anyway.
 export function probePlan() {
   const seen = new Map();
@@ -212,10 +212,10 @@ export function markdownAlternate(linkHeader, html) {
 
 // Counts the WHOLE decoded body and keeps only the head of it.
 //
-// The first version of this read `Content-Length` instead, and it was wrong in
-// two ways that a passing test would not have caught. It is usually ABSENT: a
-// chunked or compressed response sends none, so the byte comparison silently
-// declined to render on most origins, including the 38x case that motivated it.
+// `Content-Length` is the wrong instrument, in two ways that a passing test
+// would not catch. It is usually ABSENT: a chunked or compressed response sends
+// none, so a byte comparison on it silently declines to render on most origins,
+// including the 38x case that motivated it.
 // And where both headers DO exist they describe COMPRESSED bytes, while the
 // sample beside them is decoded, so any comparison mixing the two is measuring
 // two different quantities and calling the difference a saving.
@@ -395,7 +395,7 @@ const LENS_MARKDOWN = defineLens({
     // The claim every page about this makes is "a fraction of the bytes". This is
     // that claim as a number, on this URL, from the two responses just fetched.
     // Only where a Markdown representation actually came back, and only from
-    // declared lengths, so nothing here is inferred from a 4KB sample.
+    // measured decoded lengths, so nothing here is inferred from a 4KB sample.
     const viaAgent = answered.find((a) => a.markdown);
     const mdBest = (viaAgent && byId.get(agentProbe.get(viaAgent.key)))
       || (md?.ok && isMarkdown(md.contentType) ? md : null);

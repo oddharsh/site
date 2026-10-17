@@ -12,7 +12,6 @@ import { allowedMethods } from "./api-contract.ts";
 
 export { OPENAPI_PATH } from "./public-api.ts";
 
-// ── schemas ──────────────────────────────────────────────────────────────────
 const intOrNull = (description?: string): Schema => ({ ...int(description), type: ["integer", "null"] });
 /** An object whose every value is a string: headers, meta tags. */
 const strMap = (description?: string): Schema =>
@@ -28,7 +27,7 @@ export const SCHEMAS: Record<string, Schema> = {
   Error: obj({
     ok: bool("Always false on an error, where the endpoint uses an ok flag."),
     error: str("A sentence describing what went wrong, for a person or an agent to read."),
-    code: str("A stable machine token, where the endpoint sets one: not_found, method_not_allowed, unsupported_api_version, rate_limited, storage_unavailable."),
+    code: str("A stable machine token, where the endpoint sets one: not_found, method_not_allowed, unsupported_api_version, rate_limited, storage_unavailable, internal_error."),
     status: int("The HTTP status, repeated in the body."),
     hint: str("What to try next."),
     suggestions: arr(str(undefined, { format: "uri" }), "Absolute URLs of the closest real pages, on a 404."),
@@ -82,7 +81,6 @@ export const SCHEMAS: Record<string, Schema> = {
     total: int(), offset: int(), limit: int(), photos: arr(ref("Photo")),
   }, ["total", "photos"]),
 
-  // ── /lens ──
   RelLink: obj({ rel: str(), href: str(), type: str(), title: str(), hreflang: str() }, ["rel", "href"], "A <link> or Link header entry."),
   Probe: { description: "One well-known path fetched from the target's origin.", anyOf: [
     obj({ ok: bool(), status: int(), url: str(), contentType: str(), headers: strMap(), body: str("The body, capped."), truncated: bool() }, ["ok", "status", "url"], "Reached with a 2xx."),
@@ -267,7 +265,6 @@ export const SCHEMAS: Record<string, Schema> = {
   }, ["basics", "work"], "A JSON Resume document (jsonresume.org)."),
 };
 
-// ── what lib/api-contract.ts adds to every operation ─────────────────────────
 const CONTRACT_HEADERS = { Link: { $ref: "#/components/headers/ServiceDesc" } };
 
 /** One operation as the spec prints it: the contract's 405, its read budget,
@@ -286,7 +283,6 @@ function specOperation(op: Operation, allow: string[]) {
   return { ...rest, responses };
 }
 
-/** The document build.ts writes to /openapi.json. */
 export function openApiDocument() {
   const paths: Record<string, Record<string, unknown>> = {};
   for (const op of OPERATIONS) {

@@ -81,7 +81,11 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     return `<img src="/icons.svg#${name}" alt="">`;
   };
 
-  const desktopHtml = '<div id="axp-desktop" aria-hidden="true"></div>';
+  // The skip link is the first thing in <body> so it's the first Tab stop, ahead
+  // of Back/Forward, the caption buttons, the address bar and the task pane that
+  // every window draws before its content. luna.css keeps it off-screen until
+  // it's focused. #main is the window's <main class="content">.
+  const desktopHtml = '<a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div>';
   const iconsHtml = '<nav id="axp-icons" aria-label="desktop shortcuts">' + DESKTOP.map((item, index) => {
     const external = item.kind === "profile";
     const profile = external ? PROFILES.find((candidate) => candidate.label === item.label) : null;

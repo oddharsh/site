@@ -9,9 +9,9 @@
 //
 // The rule that forced this is anti-slop/no-runtime-typeof, and its argument is
 // the right one: parse input where it enters, then branch on a value you can
-// trust. This repo declares ZERO runtime dependencies and the Worker bundle
-// sits on a 204.24 KiB baseline, so a schema library was not the way to get
-// there. These are the primitives instead, and they are deliberately dull.
+// trust. This repo declares ZERO runtime dependencies and watches the Worker
+// bundle's size (tools/perf-budget.ts), so a schema library was not the way to
+// get there. These are the primitives instead, and they are deliberately dull.
 //
 // The rule is OFF for this file alone, in .oxlintrc.json. That is not a
 // loophole: a hand-rolled parser is made of `typeof` by construction, so the
