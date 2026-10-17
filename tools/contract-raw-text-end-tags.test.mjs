@@ -47,7 +47,7 @@ test("stripUnrendered drops comments and raw text, whichever opens first", () =>
   assert.equal(out("a<!-->b<!--x--!>c"), "a b c", "the abrupt and the tolerated comment closes");
   // the splice CodeQL's js/incomplete-multi-character-sanitization warns of:
   // removing an inner comment must not leave a live <script behind
-  assert.doesNotMatch(out("<scr<!-- -->ipt>x</script>"), /<script>/, "the gap left by a comment never joins a tag back together");
+  assert.doesNotMatch(out("<scr<!-- -->ipt>x</script>"), /<script(?=[\s/>])/i, "the gap left by a comment never joins a tag back together");
   assert.equal(out("a<script>never closed"), "a", "an unterminated element runs to end of document");
 });
 
