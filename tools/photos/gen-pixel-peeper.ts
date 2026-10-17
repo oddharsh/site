@@ -878,10 +878,18 @@ export const AVIF_ARGS = ["-d", "10", "--speed", "2", "--yuv", "444"];
 //   tune      left at libavif's ssim. psnr doubled butteraugli wins and cost
 //             about half a point of ssimulacra2; neither is a still-image
 //             tune, which AVM doesn't have yet.
+//   tool-unlock=6  av2-tone patch 0007: TCQ and the IST/CCTX transform search,
+//             which AVM's speed levels leave off (at speed 3 too: one crop at
+//             qp 107 went 31,363 to 30,972 B). On the densest 320px window of
+//             8 photos at -q 50/63/80 budgets (24 pairs, speed 6, exact
+//             decodes, 2026-10-17), AV2 against the AVIF went from -0.47
+//             ssimulacra2 and 8 wins to +0.38 and 18; /garage/av2's 600px
+//             tiles moved +1.02 the day before (#1381). It costs the encode
+//             about 3x, and the decoder nothing measurable.
 // Measured at speed 6. Speed 3 with qmseg is this axis's first run of the two
 // together, so its numbers are the record, not a re-run of the probes'.
 export const AV2_ARGS = ["-c", "avm", "-d", "10", "--speed", "3", "--yuv", "444", "-a", "sb-size=128",
-  "-a", "enable-qm=1", "-a", "qm-curve=1", "-a", "qmseg=1", "-a", "qmseg-level=12"];
+  "-a", "enable-qm=1", "-a", "qm-curve=1", "-a", "qmseg=1", "-a", "qmseg-level=12", "-a", "tool-unlock=6"];
 
 export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): number {
   if (fs.existsSync(out)) fs.unlinkSync(out);
@@ -897,32 +905,53 @@ export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlA
   return fs.statSync(out).size;
 }
 
-/** Decode with the format's reference decoder to an 8-bit PNG. avifdec would
- *  otherwise write 16 bits for a 10-bit file, and the metrics compare against
- *  an 8-bit reference. */
+/** A 10-bit AVIF (AV1 or AV2) as the 8-bit PNG a screen shows: each sample
+ *  converted once and rounded. NOT `avifdec -d 8`, which truncates the 10-bit
+ *  YUV to 8 bits before converting (its libyuv path), so every output sample
+ *  lands up to 3 levels low, 0.4 to 0.5 low on average, off on about 55% of
+ *  samples. Measured 2026-10-17 against an exact conversion of the file's own
+ *  YUV planes: `-d 8` scored 1.36 ssimulacra2 under the exact decode on one
+ *  600px tile, and 0 to 1.8 under it across the 11 /garage/av2 samples, for
+ *  AV1 and AV2 alike. `-d 16` is exact, and `zenc frame` rounds it to 8 bits
+ *  with zero samples off. djxl's 8-bit output already rounds, so before this
+ *  every AVIF and AV2 score here was handicapped against JPEG XL's.
+ *  Checked by: contract-avif-scores-decode-exactly. */
+export function avifToPng8(avifdec: string, file: string, png: string): string {
+  const wide = `${png}.16.png`;
+  const r = run([avifdec, "-d", "16", file, wide]);
+  if (!fs.existsSync(wide)) throw new Error(`${path.basename(avifdec)} ${path.basename(file)} failed: ${(r.stderr || r.stdout || "").trim().slice(0, 200)}`);
+  zenc(["frame", wide, "--out", png]);
+  fs.rmSync(wide);
+  return png;
+}
+
+/** Decode with the format's reference decoder to an 8-bit PNG, rounded the
+ *  way a screen shows it, since the metrics compare against an 8-bit reference. */
 export function decodeFmt(fmt: Fmt, file: string, png: string): string {
-  const r = fmt === "jxl" ? run([DJXL as string, file, png, "--bits_per_sample=8", "--quiet"])
-    : run([fmt === "av2" ? AVIFDEC_AV2 : AVIFDEC as string, "-d", "8", file, png]);
+  if (fmt !== "jxl") return avifToPng8(fmt === "av2" ? AVIFDEC_AV2 : AVIFDEC as string, file, png);
+  const r = run([DJXL as string, file, png, "--bits_per_sample=8", "--quiet"]);
   if (!fs.existsSync(png)) throw new Error(`${fmt} decode failed: ${(r.stderr || r.stdout || "").trim().slice(0, 200)}`);
   return png;
 }
 
 /** Bisect one format's knob onto `target` bytes; returns the closest attempt. */
-export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): { knob: number; bytes: number; path: string } {
+export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): Got {
   const k = FMT_KNOB[fmt];
-  let lo = k.lo, hi = k.hi, best: { knob: number; bytes: number; path: string } | null = null;
+  let lo = k.lo, hi = k.hi, best: Got | null = null;
+  const tried: Got[] = [];
   for (let step = 0; step < 18; step += 1) {
     const mid = k.int ? Math.floor((lo + hi) / 2) : (lo + hi) / 2;
     const out = path.join(tmp, `fmt-${fmt}-${step}.${FMT_EXT[fmt]}`);
     const size = encodeFmt(fmt, png, out, mid, jxlArgs, avifArgs);
-    if (best === null || Math.abs(size - target) < Math.abs(best.bytes - target)) best = { knob: mid, bytes: size, path: out };
+    tried.push({ knob: mid, bytes: size, path: out });
+    if (best === null || Math.abs(size - target) < Math.abs(best.bytes - target)) best = { knob: mid, bytes: size, path: out, tried };
     if (size === target || Math.abs(size - target) / target < 0.002) break;
     const tooBig = size > target;
     // move toward fewer bytes if too big: lower knob when up, higher when not
     if (tooBig === k.up) hi = k.int ? mid - 1 : mid; else lo = k.int ? mid + 1 : mid;
     if (k.int && lo > hi) break;
   }
-  return best as { knob: number; bytes: number; path: string };
+  return best as Got;
 }
 
 // The page reads a format option's format off its label's first word, so an
@@ -953,7 +982,9 @@ function losslessBytes(png: string, tmp: string): { jxl: number; avif: number; a
 // which favours whichever format loses biggest, so a tally over the shipped
 // calls would describe the gate as much as the formats. This pool is what the
 // page's "where each format wins" table and the run's summary are built from.
-type PoolFmt = { bytes: number; s2: number; bu: number };
+// `between` marks a score read off the two encodes that straddle the budget
+// (see straddle), when no single encode landed inside BUDGET_TOL.
+type PoolFmt = { bytes: number; s2: number; bu: number; between?: [number, number] };
 type PoolRow = { crop: string; tier: FormatTier; budget: number; bpp: number } & Partial<Record<Fmt, PoolFmt>>;
 const formatPool: PoolRow[] = [];
 
@@ -969,7 +1000,25 @@ function buildFormat(cropId: string, srcs: Srcs, refPng: string, tmp: string): B
   });
 }
 
-type Got = { knob: number; bytes: number; path: string };
+// `tried` is every encode searchFmt made on the way, for straddle.
+type Got = { knob: number; bytes: number; path: string; tried?: Got[] };
+
+/** A format's score AT the budget, from the two encodes that straddle it,
+ *  interpolated in bytes: the method /garage/av2's probes use. It is for the
+ *  pool only. A tile in a call is a real file, so it still has to land inside
+ *  BUDGET_TOL. Before this, an AV2 encode that couldn't land inside 2% (its
+ *  qp moves an 8 KB file more than that a step) left its pool row without AV2:
+ *  7 of 43 rows on 2026-10-14, 6 of them at the tight tier, the one tier AV2
+ *  led, so the pool's AV2 average described the miss as much as the codec. */
+function straddle(fmt: Fmt, g: Got, target: number, refPng: string, sub: string): PoolFmt | null {
+  const under = (g.tried ?? []).filter((t) => t.bytes <= target).sort((a, b) => b.bytes - a.bytes)[0];
+  const over = (g.tried ?? []).filter((t) => t.bytes > target).sort((a, b) => a.bytes - b.bytes)[0];
+  if (!under || !over) return null;
+  const at = (t: Got, n: string) => { const dec = decodeFmt(fmt, t.path, path.join(sub, `${fmt}-${n}-dec.png`)); return [ssim2(refPng, dec), butter(refPng, dec)]; };
+  const [s0, b0] = at(under, "under"), [s1, b1] = at(over, "over");
+  const f = (target - under.bytes) / (over.bytes - under.bytes);
+  return { bytes: target, s2: Number((s0 + f * (s1 - s0)).toFixed(2)), bu: Number((b0 + f * (b1 - b0)).toFixed(3)), between: [under.bytes, over.bytes] };
+}
 
 /** The repack tier's two files. JXL's is the shipping JPEG repacked
  *  losslessly (cjxl --lossless_jpeg=1, which is the default for a JPEG input,
@@ -1018,7 +1067,12 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
     const row: PoolRow = { crop: cropId, tier, budget: target, bpp: Number(((target * 8) / (TILE * TILE)).toFixed(3)) };
     for (const [fmt, g] of got) {
       const drift = Math.abs(g.bytes - target) / target;
-      if (drift > BUDGET_TOL) { rejected.push(`${fmt}: closest was ${g.bytes}B, ${(drift * 100).toFixed(1)}% off ${target}B`); continue; }
+      if (drift > BUDGET_TOL) {
+        rejected.push(`${fmt}: closest was ${g.bytes}B, ${(drift * 100).toFixed(1)}% off ${target}B`);
+        const at = straddle(fmt, g, target, refPng, sub);
+        if (at) row[fmt] = at;
+        continue;
+      }
       const dec = decodeFmt(fmt, g.path, path.join(sub, `${fmt}-dec.png`));
       const label = tier !== "repack" ? knobLabel(fmt, g.knob)
         : fmt === "jxl" ? "JPEG XL · the JPEG, repacked losslessly" : `${knobLabel(fmt, g.knob)}, re-encoded from the JPEG`;
@@ -1026,7 +1080,7 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
       options.push(o);
       row[fmt] = { bytes: o.bytes, s2: o.s2 as number, bu: o.butter as number };
     }
-    if (options.length >= 2) formatPool.push(row);
+    if (Object.keys(row).filter((k) => k in FMT_EXT).length >= 2) formatPool.push(row);
     if (options.length < 2) return [null, `${tier}: only ${options.length} format(s) hit ${target}B; ${JSON.stringify(rejected)}`];
     options.sort((a, b) => (a.s2 as number) - (b.s2 as number));
     // best minus worst: with three formats a call is legible when SOME tile is
