@@ -10,8 +10,8 @@
 import { readFileSync } from "node:fs";
 import { ROOT, assert, test } from "./contract-shared.ts";
 
-const read = (path) => readFileSync(new URL(path, ROOT), "utf8");
-const namesTip = (css) => /#axp-tips\b/.test(css.replace(/\/\*[\s\S]*?\*\//g, ""));
+const read = (path: string): string => readFileSync(new URL(path, ROOT), "utf8");
+const namesTip = (css: string): boolean => /#axp-tips\b/.test(css.replace(/\/\*[\s\S]*?\*\//g, ""));
 
 test("the check sees a #axp-tips selector and ignores one in a comment", () => {
   assert.ok(namesTip("#axp-run,#axp-tips{position:fixed}"));
@@ -25,7 +25,7 @@ test("nav-tray.css styles the tip and nav-run.css does not", () => {
 });
 
 test("the title-bar drag leaves the tip balloon alone", () => {
-  const src = read("src/client/nav.js");
+  const src = read("src/client/nav.ts");
   const start = src.indexOf("function initDrag()");
   const grab = src.slice(start, src.indexOf("\"axp-max\"", start));
   assert.ok(start >= 0 && grab.includes("#axp-run .tb"), "initDrag moved; point this test at its selectors");
