@@ -7,7 +7,8 @@
 //   1. generate the page from specs/<concept>.json
 //   2. rebuild the ask corpus if lwe-ask/corpus/<concept>.json exists (the page's
 //      built-in "ask" box is grounded in it, sandboxed to this concept)
-//   3. wire the registry-driven regions (sitemap, buddy list, nav Run entries)
+//   3. wire the registry-driven regions (sitemap, buddy list, ask.js allow-list),
+//      then regenerate the manifest projections, nav Run entries among them
 //
 // Everything here is local and writes only into the source tree. Shipping is
 // PRINTED, never run: the site publishes through merge -> CI -> production ->
@@ -58,9 +59,10 @@ run("pipelines/lwe/generate.mjs", "wire");
 console.log(`\n=== built locally. to ship: ===`);
 console.log(`  1) commit the generated page + wired regions on a branch, open a PR`);
 console.log(`  2) merge it — CI promotes the tested commit to production and Workers`);
-console.log(`     Builds uploads it. Review the canary and approve the full ramp.`);
+console.log(`     Builds deploys it at 100%.`);
 if (existsSync(corpusFile)) {
-  console.log(`  3) cd lwe-ask && bun run wrangler deploy        # the auxiliary ask Worker`);
+  console.log(`  3) the ask Worker redeploys from its own Workers Builds trigger after`);
+  console.log(`     promotion; by hand: cd lwe-ask && bun run deploy`);
   // ${REINDEX_SECRET:?...} and -w are BOTH load-bearing. curl DROPS a header whose
   // value is empty rather than sending it blank, so the previous form here quietly
   // sent no header at all when the variable was unset, and the Worker's honest 401
