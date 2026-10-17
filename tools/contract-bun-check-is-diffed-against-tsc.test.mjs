@@ -26,6 +26,18 @@ test("a diagnostic's chain lines belong to it, and stray text is a block of its 
   assert.deepEqual(diagnosticBlocks(`Stopped before type checking\n${A}\n`), ["Stopped before type checking", A]);
 });
 
+// The shape `bun check` printed on a GitHub runner on 2026-10-17: the plain
+// line, then the same diagnostic as a workflow command.
+const ANNOTATION = "::error file=src/a.ts,line=1,col=7,endLine=1,endColumn=9,title=TS2322::Type 'string' is not assignable to type 'number'.";
+
+test("GitHub annotations beside the plain lines agree with tsc", () => {
+  assert.equal(diffDiagnostics(diagnosticBlocks(OUT), diagnosticBlocks(`${A}\n${ANNOTATION}\n${B}\n${CHAIN}\n`)).agree, true);
+});
+
+test("CONTROL: annotations alone are not the diagnostics", () => {
+  assert.deepEqual(diffDiagnostics(diagnosticBlocks(`${A}\n`), diagnosticBlocks(`${ANNOTATION}\n`)).onlyReference, [A]);
+});
+
 test("the same diagnostics in another order agree", () => {
   assert.equal(diffDiagnostics(diagnosticBlocks(OUT), diagnosticBlocks(`${B}\n${CHAIN}\n${A}\n`)).agree, true);
 });

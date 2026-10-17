@@ -382,7 +382,15 @@ export async function downloadTsc(work: string, version: string = TSC_REFERENCE)
 export function diagnosticBlocks(stdout: string): string[] {
   const blocks: string[] = [];
   for (const line of stdout.split("\n")) {
-    if (!line.trim()) continue;
+    // On a GitHub runner `bun check` also prints each diagnostic as an
+    // `::error file=...` workflow command beside the plain line. Read as
+    // blocks, the first canary dispatch (2026-10-17, run 39047970908) had
+    // every program "disagree" by exactly its own diagnostic count. Locally
+    // only GITHUB_ACTIONS=true with RUNNER_DEBUG=1 reproduces it, so the
+    // lines are skipped here rather than switched off by environment. A
+    // checker that printed ONLY annotations still fails: tsc's lines go
+    // unmatched.
+    if (!line.trim() || line.startsWith("::")) continue;
     // Chain lines are indented under their diagnostic. Any other unindented
     // line opens a block of its own, so nothing printed falls out of the
     // comparison.
