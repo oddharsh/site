@@ -163,7 +163,7 @@ export function renderContactPage() {
       <a href="/coffee/availability.json">/coffee/availability.json</a>.
     </p>
 
-    <h2>Report a security issue</h2>
+    <h2 id="security">Report a security issue</h2>
     <p>
       The disclosure contacts and scope are in
       <a href="/.well-known/security.txt">/.well-known/security.txt</a> (RFC 9116), and

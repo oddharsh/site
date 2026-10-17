@@ -637,3 +637,16 @@ skips it.
     through `onGrid`. The icon and accessory drags commit `left`/`top` on
     release, which WebKit snaps itself.
     Checked by: `tools/contract-a-dragged-window-lands-on-a-device-pixel.test.mjs`.
+
+78. **The asset layer's `drop-trailing-slash` redirects with a 307.** The
+    direction is right (`/about/` to `/about`) but the status is temporary,
+    so a crawler keeps the slashed URL and comes back to it. Measured
+    2026-10-17 on production: `/garage/`, `/lwe/` and every slashed page
+    answered 307 while `cloudflare.config.ts` said 301, and `/coffee/` and
+    `/serendipity/` skipped the redirect entirely, since their modules served
+    their own root as a second 200. The route oracle had accepted
+    `[301, 307, 308]` for `/garage/`, so it could not tell. A path that must
+    redirect permanently needs an exact route to `routeDropSlash` in
+    `src/worker/index.ts`, and its row in the route oracle (`bun run
+    routes:check`) pins `status: 301` and the `location`.
+    Checked by: `tools/verify-routes.ts`.
