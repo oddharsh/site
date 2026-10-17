@@ -1495,6 +1495,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
 {
   const { PLACES, addressBar, taskPane, taskRow } = await import("../src/worker/lib/explorer.ts");
   const { paneOffersTwin } = await import("./lib/twin-links.ts");
+  const { objectNameOf } = await import("./lib/object-name.ts");
 
   // PLACES is a literal in a Worker module (no data file at runtime), so the
   // manifest is what keeps it honest. A section registered for the taskbar and
@@ -1523,20 +1524,6 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     await writeFile(target, source.replace(marker, `export const TWIN_PATHS = ${JSON.stringify(twinPaths)}; // build:twins`));
   }
 
-  // Read the object's own name out of its h1, minus the status pill the garage
-  // marks each experiment with: the pill is state, not name, and sweeping it up
-  // published "Thumbnail encoding study shipped" as a breadcrumb.
-  const nameOf = (html) => {
-    const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
-    if (!h1) return "";
-    return h1[1]
-      .replace(/<span\b[^>]*\bclass="[^"]*\bstatus\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  };
-
   const pages = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((f) => f.endsWith(".html") && !f.endsWith('.src.html') && !/^(i|images|og|cars|a)\//.test(f))
     .filter((f) => f !== "index.html");
@@ -1561,7 +1548,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
 
     const options = {
       path: normalized,
-      name: nameOf(html),
+      name: objectNameOf(html),
       tasks: twin ? [{ href: twin, label: "Read this as Markdown" }] : [],
       details,
     };
