@@ -629,7 +629,27 @@ export function bookingPage(env, opts: { slots?: { start: number, end: number }[
     ${inline ? "" : islandScript().html}
   `;
 
-  return shell("Coffee or a bagel", body, env, inline ? "" : islandPreload(slotsUrl).html);
+  return shell("Coffee or a bagel", body, env, shareCard(env) + (inline ? "" : islandPreload(slotsUrl).html));
+}
+
+// The unfurl card. Absolute URLs on the canonical host, since a crawler reading
+// the cal.aadhar.sh fallback has no other way to find the image. The image is
+// captured by tools/photos/gen-og-cards.ts (OG_ONLY=coffee).
+function shareCard(env) {
+  const home = env.HOST_PUBLIC_URL || "https://aadhar.sh";
+  const img = `${home}/og/coffee.jpg`;
+  return `<meta property="og:type" content="website">
+<meta property="og:site_name" content="aadhar.sh">
+<meta property="og:title" content="Let's grab coffee or a bagel">
+<meta property="og:description" content="Pick an open slot to meet ${esc(env.HOST_NAME)} in NYC. Requests are reviewed by hand.">
+<meta property="og:url" content="${esc(home)}/coffee">
+<meta property="og:image" content="${esc(img)}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Windows XP window titled Let's grab coffee or a bagel, listing open time slots as buttons, on the Bliss desktop.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="${esc(img)}">
+`;
 }
 
 export function successPage(env) {
