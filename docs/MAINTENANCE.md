@@ -1896,7 +1896,7 @@ so pick variants rather than running the whole list.
 ```bash
 bun run av2:build
 bun run av2:wasm
-bun tools/photos/av2-wasm/samples.ts --src "<originals>" --stems XT507488,XT507525,XT508319,XT507399
+bun tools/photos/av2-wasm/samples.ts --src "<originals>" --stems L1000069_3,L1009919_2,L1009920,XT500071,XT500084,XT507399,XT507488,XT507525,XT508194,XT508319,XT509063
 bun tools/photos/av2-wasm/expect.ts
 ```
 `av2:wasm` runs av2-tone's `wasm/build.sh`, which needs `emcc` (`brew install
@@ -1905,7 +1905,8 @@ emscripten`) and the AVM source the first command fetches. It writes
 `src/client/garage/av2-decode.js` to the name it prints. The emscripten version
 decides the bytes: av2-tone's `wasm/build.sh` records the one that minted the
 shipped file. `samples.ts` re-encodes
-the page's AV2 thumbnails and refuses a photo whose shipped AVIF it can't
+the page's AV2 thumbnails with the tuned build (per-segment QM plus
+`tool-unlock=6`, TCQ and the IST/CCTX search), and refuses a photo whose shipped AVIF it can't
 reproduce byte for byte. `expect.ts` records what native AVM decodes each file
 to, and `contract-av2-decoder-matches-avm.test.mjs` holds the shipped WebAssembly
 to it, so re-run it after any AV2 file or the `.wasm` changes. Moving the AVM pin

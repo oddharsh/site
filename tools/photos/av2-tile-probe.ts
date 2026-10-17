@@ -18,6 +18,45 @@
 // won 6 of 30. The budgets are right (the control below matched 38 of 38); the
 // SAMPLE is thin. See WHICH PHOTOS.
 //
+// THE TIER, MEASURED 2026-10-07: `--hif --stratify 8`, 40 tiles cut from HIF
+// originals, 8 per band, control 40 of 40, same tuned build:
+//   band      tiles  base Δs2  s2 wins  bu3 wins   qmseg12 Δs2  tier
+//   <0.3        8     +1.11      8        8          +1.28       30
+//   0.3-0.5     8     +0.54      7        6          +0.67       52
+//   0.5-0.8     8     +0.32      7        5          +0.56       71
+//   0.8-1.2     8     -0.82      1        0          -0.60       86
+//   >1.2        8     -1.47      0        0          -1.49       16
+// Bits per pixel and the base margin correlate at -0.84 (the JPG tiles: -0.33)
+// and a straight fit crosses zero at 0.69, on the tier's 0.67 median. Weighted
+// by the tier: base -0.04 s2, qmseg12 +0.15; AV2 wins about 148 of 255 by s2.
+// The 2026-09-28 JPG set, re-run the same day as a control, reproduced its
+// published numbers exactly (+0.77, 28 of 38; qmseg12 +0.89, 30 of 38).
+// Pooled, the 78 tiles by band (base): <0.3 20 of 20 at +1.41, 0.3-0.5 18 of
+// 20 at +0.63, 0.5-0.8 11 of 19 at +0.03, 0.8-1.2 2 of 10 at -0.21, >1.2 0 of 9
+// at -1.40. Weighted by the tier: base +0.14 s2, about 135 of 255 s2 wins and
+// 111 butteraugli (max-norm) wins; qmseg12 +0.30, 143 and 128. The two samples
+// disagree at 0.5-0.8 (JPG 4 of 11, HIF 7 of 8), the least settled band.
+// The crops lose where these tiles win (4 crops at 0.5-0.8, 0 wins), so at
+// equal bits per pixel a native-resolution detail window is harder than a
+// reduced whole frame, and bpp alone does not decide it.
+//
+// THE TOOLS SPEED 6 SWITCHES OFF, MEASURED 2026-10-14/16. At speed 6 AVM runs
+// with no TCQ, parity hiding, loop restoration or DIP, never searches the
+// IST/CCTX transforms, and libavif turns off the 3-way and uneven 4-way
+// partitions. The configs erp..dip turn each back on (av2-tone patch 0007).
+// The 40 HIF tiles above, alternated by bpp into a 20-tile screen and 20 held
+// out; the tier is now 162 tiles. Tier-weighted Δs2 against the shipped AVIF:
+//   screen    base +0.30  tcq +0.87  tx +0.84  erp +0.37  modes +0.36
+//             ph +0.31  lr +0.31  dip +0.30
+//   held out  base +0.03  tcq +0.56  tx +0.58  tcqtx +1.02  qmseg12 +0.18
+//             tcqtxqm +1.09
+// tcqtx takes AV2 from about 116 to about 148 of 162 s2 wins, with 19 of 20
+// butteraugli wins on the held-out tiles. qmseg12 on top adds +0.07 and costs
+// 4 of the 20. Both surfaces now encode with tcqtxqm (gen-pixel-peeper.ts's
+// AV2_ARGS, av2-wasm/samples.ts). 11 of 40 tiles miss the byte-for-byte AVIF
+// control at the identical file size (ssimulacra2 98 between the two decodes):
+// the tile cut has drifted slightly since 2026-10-07, and the budget hasn't.
+//
 // WHAT IT DOES. Each tile is cut the way add-photos.sh cuts the 600px tier, by
 // `zenc square` (EXIF orientation applied, box filter, linear light). Its budget
 // is the shipped AVIF encode of that tile (-q 63 -d 10 --speed 2 --yuv 444).
@@ -55,15 +94,23 @@
 // WHICH PHOTOS. Fuji JPEGs in --src, minus the 16 crop stems the knob probe uses
 // (so nothing here was tuned on, JXL_ARGS included) and XT507495, a burst
 // neighbour of the train crop XT507494. --stems overrides that with an explicit list.
-// Only .JPG originals qualify, because `zenc square` cuts a tile from a JPEG.
-// In the photo inbox those are 43 frames shot August to December 2025, before
-// the camera moved to HEIF, and they ship sparse: mean 0.48 bpp, against 0.67
-// for the 119 HIF frames beside them and 0.74 for the tier minus all 43. A
-// verdict for the tier needs tiles cut from the HIFs too (a sips decode, the
-// way codec-knob-probe.ts cuts its crops) or a sample stratified by shipped bpp.
+// By default only .JPG originals qualify. In the photo inbox those are 43
+// frames shot August to December 2025, before the camera moved to HEIF, and
+// they ship sparse: mean 0.48 bpp, against 0.67 for the 119 HIF frames beside
+// them and 0.74 for the tier minus all 43. The 2026-09-28 run drew from them.
+//
+// --hif draws from the .HIF originals instead, cut the way add-photos.sh cuts
+// them: `sips -s format tiff` (lossless, 16-bit), then `zenc square` on the
+// TIFF. The control below holds for that path too. --stratify n takes n stems
+// per bits-per-pixel band, read off the SHIPPED /i/ AVIF, spaced evenly through
+// each band, and the summary adds a tier-weighted line: each band's result
+// weighted by how many of the shipped 600px tiles sit in it. That line is the
+// probe's answer for the tier; the plain means describe whatever was sampled.
 //
 // usage: bun tools/photos/av2-tile-probe.ts --src <originals> [--codec avm|jxl]
-//          [--stems a,b] [--configs base,qmseg12] [--parallel n] [--build <dir>] [--json out]
+//          [--hif] [--stratify n] [--list] [--stems a,b] [--configs base,qmseg12]
+//          [--parallel n] [--build <dir>] [--json out]
+// ZENC=<path> overrides the zenc binary (a worktree has no target/ of its own).
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -80,18 +127,49 @@ const arg = (name: string): string | undefined => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const BUILD = path.resolve(arg("build") ?? (fs.existsSync(path.join(AV2_TUNED_BUILD, "avifenc")) ? AV2_TUNED_BUILD : AV2_BUILD));
-const ZENC = path.join(HERE, "zenc/target/release/zenc");
+const ZENC = process.env.ZENC ?? path.join(HERE, "zenc/target/release/zenc");
 const WORK = path.join(os.tmpdir(), "av2-tile-probe");
 const EXCLUDE = new Set([...TRAIN, ...HOLDOUT, "XT507495"]);
 const HASHES = JSON.parse(fs.readFileSync(path.join(REPO, "public/images/hashes.json"), "utf8")) as Record<string, { a: string }>;
+const shippedAvif = (stem: string) => path.join(REPO, "public/i", `${stem}.${HASHES[stem]?.a}.avif`);
+// a 600px tile is 360,000 pixels, so bits per pixel is bytes * 8 / 360000
+const TILE_PX = 600 * 600;
+const BANDS: [number, number][] = [[0, 0.3], [0.3, 0.5], [0.5, 0.8], [0.8, 1.2], [1.2, 99]];
+const bandOf = (bpp: number) => BANDS.findIndex(([lo, hi]) => bpp >= lo && bpp < hi);
+const bandName = ([lo, hi]: [number, number]) => `${lo}-${hi === 99 ? "" : hi}`;
+/** Shipped 600px bits per pixel for every Fuji stem with an AVIF in public/i. */
+function shippedBpp(): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const stem of Object.keys(HASHES)) {
+    if (!/^XT\d+$/.test(stem) || !HASHES[stem]?.a) continue;
+    const f = shippedAvif(stem);
+    if (fs.existsSync(f)) out.set(stem, (fs.statSync(f).size * 8) / TILE_PX);
+  }
+  return out;
+}
 
 // the AV2 arm: speed 6 with the 128px superblock a real 600px tile gets
 const AVM = ["-c", "avm", "-d", "10", "--speed", "6", "--yuv", "444", "-a", "sb-size=128", "--jobs", "4"];
 const QM = ["-a", "enable-qm=1", "-a", "qm-curve=1"];
+// AV2 tools that speed 6 or libavif switch off, turned back on one bit at a
+// time by av2-tone's encoder/patches/0007 (tool-unlock): 3-way and uneven 4-way
+// partitions, the IST/CCTX transform search, TCQ, parity hiding, loop
+// restoration, every intra mode at every transform size, and DIP.
+const unlock = (bits: number) => ["-a", `tool-unlock=${bits}`];
 const AVM_CONFIGS: Record<string, string[]> = {
   base: [],
   curve: QM,
   qmseg12: [...QM, "-a", "qmseg=1", "-a", "qmseg-level=12"],
+  erp: unlock(1),
+  tx: unlock(2),
+  tcq: unlock(4),
+  ph: unlock(8),
+  lr: unlock(16),
+  modes: unlock(32),
+  dip: unlock(64),
+  // the two that won the 2026-10-14 screen, together, and with qmseg12
+  tcqtx: unlock(6),
+  tcqtxqm: [...QM, "-a", "qmseg=1", "-a", "qmseg-level=12", ...unlock(6)],
 };
 // the JXL arms. zencjxlnr's flags go to the repack call, not to an encode.
 const JXL_CONFIGS: Record<string, string[]> = {
@@ -136,8 +214,20 @@ async function orientation(file: string): Promise<number> {
 async function tile(src: string, stem: string): Promise<string> {
   const png = path.join(WORK, `${stem}.png`);
   if (!fs.existsSync(png)) {
-    const file = path.join(src, `${stem}.JPG`);
-    await sh([ZENC, "square", file, "--orient", String(await orientation(file)), "--filter", "box", "--size", "600", "--out", png]);
+    const jpg = path.join(src, `${stem}.JPG`);
+    if (fs.existsSync(jpg)) {
+      await sh([ZENC, "square", jpg, "--orient", String(await orientation(jpg)), "--filter", "box", "--size", "600", "--out", png]);
+    } else {
+      // add-photos.sh's HEIF door: a lossless 16-bit TIFF, then zenc. The TIFF
+      // is about 311 MB, so it goes as soon as the tile is cut.
+      const hif = path.join(src, `${stem}.HIF`), tif = path.join(WORK, `${stem}.tif`);
+      await sh(["sips", "-s", "format", "tiff", hif, "--out", tif]);
+      try {
+        await sh([ZENC, "square", tif, "--orient", String(await orientation(hif)), "--filter", "box", "--size", "600", "--out", png]);
+      } finally {
+        fs.rmSync(tif, { force: true });
+      }
+    }
   }
   return png;
 }
@@ -233,7 +323,7 @@ async function probe(src: string, stem: string, codec: Codec, configs: string[])
   await sh(["avifenc", "-q", "63", "-d", "10", "--speed", "2", "--yuv", "444", "--jobs", "4", ref, avif]);
   await sh(["avifdec", avif, avif.replace(/\.avif$/, ".png")]);
   const budget = fs.statSync(avif).size;
-  const shipped = path.join(REPO, "public/i", `${stem}.${HASHES[stem]?.a}.avif`);
+  const shipped = shippedAvif(stem);
   const control = fs.existsSync(shipped) && Buffer.compare(fs.readFileSync(shipped), fs.readFileSync(avif)) === 0;
   const res: Record<string, Result> = {};
   let hint = 105;
@@ -260,8 +350,26 @@ async function main(): Promise<number> {
   for (const c of configs) if (!known[c]) { console.error(`unknown ${codec} config ${c}; have ${Object.keys(known).join(", ")}`); return 2; }
   if (codec === "avm" && configs.some((c) => c !== "base") && BUILD !== AV2_TUNED_BUILD) console.error(`note: ${configs.join(",")} needs the tuned build (${AV2_BUILD_COMMAND}); using ${BUILD}`);
   const label = codec === "avm" ? `AV2 (${path.basename(BUILD)})` : `JPEG XL (${(await sh(["cjxl", "--version"])).split(" ")[1]})`;
-  const stems = arg("stems")?.split(",") ?? fs.readdirSync(src)
-    .filter((f) => /^XT\d+\.JPG$/.test(f)).map((f) => f.replace(/\.JPG$/, "")).filter((s) => !EXCLUDE.has(s)).sort();
+  const ext = argv.includes("--hif") ? "HIF" : "JPG";
+  const tier = shippedBpp();
+  let stems = arg("stems")?.split(",") ?? fs.readdirSync(src)
+    .filter((f) => f.startsWith("XT") && f.endsWith(`.${ext}`)).map((f) => f.slice(0, -4))
+    .filter((s) => /^XT\d+$/.test(s) && !EXCLUDE.has(s)).sort();
+  const per = Number(arg("stratify") ?? 0);
+  if (per > 0) {
+    // n per band, spaced evenly by shipped bpp through each band, so a band's
+    // pick covers its range rather than bunching at one end
+    const known = stems.filter((s) => tier.has(s));
+    stems = BANDS.flatMap((_, b) => {
+      const pool = known.filter((s) => bandOf(tier.get(s)!) === b).sort((x, y) => tier.get(x)! - tier.get(y)!);
+      if (pool.length <= per) return pool;
+      return Array.from({ length: per }, (_, i) => pool[Math.floor(((i + 0.5) * pool.length) / per)]);
+    }).sort();
+  }
+  if (argv.includes("--list")) {
+    for (const s of stems) console.log(`${s}  ${tier.get(s)?.toFixed(3) ?? "not shipped"} bpp`);
+    return 0;
+  }
   fs.mkdirSync(path.join(WORK, "enc"), { recursive: true });
 
   const rows: Row[] = [];
@@ -285,12 +393,30 @@ async function main(): Promise<number> {
     console.log(`  ${c.padEnd(9)} Δs2 ${signed(mean(s2))}  wins ${s2.filter((x) => x > 0).length}/${rows.length}  Δbu3 ${signed(mean(bu3), 3)}  wins ${bu3.filter((x) => x < 0).length}/${rows.length}`);
   }
   const first = configs[0];
-  console.log(`  by bits per pixel at the AVIF budget (${first}):`);
-  for (const [lo, hi] of [[0, 0.3], [0.3, 0.5], [0.5, 0.8], [0.8, 1.2], [1.2, 99]]) {
-    const band = rows.filter((r) => { const bpp = r.budget * 8 / 360000; return bpp >= lo && bpp < hi; });
-    if (!band.length) continue;
-    const d = band.map((r) => r.res[first].s2 - r.avif.s2);
-    console.log(`    ${lo}-${hi === 99 ? "" : hi} bpp: ${band.length} tiles, Δs2 ${signed(mean(d))}, ${codec === "avm" ? "AV2" : "JXL"} wins ${d.filter((x) => x > 0).length}`);
+  const who = codec === "avm" ? "AV2" : "JXL";
+  const inBand = (b: number) => rows.filter((r) => bandOf((r.budget * 8) / TILE_PX) === b);
+  const tierCount = BANDS.map((_, b) => [...tier.values()].filter((x) => bandOf(x) === b).length);
+  console.log(`  by bits per pixel at the AVIF budget (${first}), beside the shipped tier's ${tier.size} tiles:`);
+  BANDS.forEach((band, b) => {
+    const d = inBand(b).map((r) => r.res[first].s2 - r.avif.s2);
+    const got = d.length ? `${d.length} tiles, Δs2 ${signed(mean(d))}, ${who} wins ${d.filter((x) => x > 0).length}` : "no tiles";
+    console.log(`    ${bandName(band).padEnd(8)} bpp: ${got}  (tier: ${tierCount[b]})`);
+  });
+  // Each band's result weighted by its share of the shipped tier: what the
+  // sample says about the tier, rather than about the sample's own mix.
+  const covered = BANDS.map((_, b) => b).filter((b) => inBand(b).length > 0);
+  const weight = covered.reduce((a, b) => a + tierCount[b], 0);
+  if (weight > 0) {
+    console.log(`  tier-weighted (bands covering ${weight} of ${tier.size} shipped tiles):`);
+    for (const c of configs) {
+      let ds2 = 0, wins = 0;
+      for (const b of covered) {
+        const d = inBand(b).map((r) => r.res[c].s2 - r.avif.s2);
+        ds2 += (tierCount[b] / weight) * mean(d);
+        wins += tierCount[b] * (d.filter((x) => x > 0).length / d.length);
+      }
+      console.log(`    ${c.padEnd(9)} Δs2 ${signed(ds2)}  ${who} would win about ${Math.round(wins)} of ${weight}`);
+    }
   }
   const out = arg("json");
   if (out) fs.writeFileSync(out, `${JSON.stringify(rows, null, 1)}\n`);
