@@ -19,6 +19,11 @@
 // regression signal this repository can offer any runtime: every content
 // addressed `/a/` and `/i/` URL is a hash of what the compiler emitted.
 //
+// THE CHECKER, since 2026-10-17. `bun check` and `bun lint --type-aware`
+// ship inside the binary, so each canary is also a new type checker. One gate
+// diffs its diagnostics against Microsoft's tsc 7 on every program
+// `bun run typecheck` checks. The bumper runs the same gate as its 4b.
+//
 // THE WATCHES are the other half, since 2026-09-15. This repo has seven fixes
 // of its own sitting in bun's review queue, and lib/upstream-watches.ts turns
 // each one's reproduction into a probe that reads false on the pinned bun
@@ -45,6 +50,7 @@
 //
 // Exit codes: 0 green, 1 red (a gate failed), 2 the instrument could not run.
 
+import { spawnSync } from "node:child_process";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,15 +59,19 @@ import { BUN_WATCHES, ensureTimbradoEngine, runWatch, type WatchResult, watchMov
 import { canaryUrl, compareVersions, npmVersion, readPin, releaseAsset, installedMatchesPin } from "./lib/bun-pin.ts";
 import {
   type Gate,
+  TSC_REFERENCE,
   bunIdentity,
   byteIdenticalBuildGate,
   calSuiteGate,
+  checkerAgreementGate,
   contractSuiteGate,
   downloadBun,
+  downloadTsc,
   lockfileFormatGate,
   lockfileReadGate,
   zstdGate,
 } from "./lib/bun-gates.ts";
+import { defaultPrograms } from "./typecheck.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const WORK = join(ROOT, ".bun-canary");
@@ -184,6 +194,24 @@ const step = (g: Gate) => { gates.push(g); print(g); };
 step(zstdGate(candidate));
 step(lockfileReadGate(candidate, ROOT));
 step(lockfileFormatGate(candidate, process.execPath, ROOT, WORK));
+
+// The checker against Microsoft's tsc, on the programs `bun run typecheck`
+// checks (lib/bun-gates.ts says why). It costs seconds, so it runs before the
+// builds. The Worker programs include config/.generated, which only
+// gen-runtime-types writes, so the pinned bun writes it first, as
+// `bun run typecheck` does. Everything in this block that can throw is on the
+// pinned or reference side, so a throw is the instrument.
+try {
+  const gen = spawnSync(process.execPath, ["tools/gen-runtime-types.ts"], { cwd: ROOT, encoding: "utf8" });
+  if (gen.status !== 0) throw new Error(`the pinned bun could not generate the runtime types:\n${`${gen.stderr}\n${gen.stdout}`.trim().split("\n").slice(-4).join("\n")}`);
+  const tsc = await downloadTsc(join(WORK, "tsc"));
+  step(checkerAgreementGate(candidate, process.execPath, tsc, ROOT, defaultPrograms(ROOT)));
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  emit("instrument", subject, `no tsc ${TSC_REFERENCE} reference to compare bun check against`);
+  if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
+  process.exit(2);
+}
 
 try {
   step(byteIdenticalBuildGate(candidate, process.execPath, ROOT));

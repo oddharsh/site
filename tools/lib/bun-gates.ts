@@ -48,14 +48,7 @@ export async function downloadBun(url: string, work: string, integrity?: string)
   mkdirSync(work, { recursive: true });
   const isTgz = url.endsWith(".tgz");
   const archive = join(work, isTgz ? "bun.tgz" : "bun.zip");
-  const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) throw new Error(`could not download ${url}: HTTP ${res.status}`);
-  const bytes = Buffer.from(await res.arrayBuffer());
-  if (integrity) {
-    const got = `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
-    if (got !== integrity) throw new Error(`${url} does not match the registry's integrity: got ${got}, registry says ${integrity}`);
-  }
-  writeFileSync(archive, bytes);
+  writeFileSync(archive, await fetchVerified(url, integrity));
 
   const unpack = isTgz ? run("tar", ["-xzf", archive, "-C", work]) : run("unzip", ["-qo", archive, "-d", work]);
   if (unpack.status !== 0) throw new Error(`${isTgz ? "tar" : "unzip"} failed: ${(unpack.stderr || "").trim()}`);
@@ -74,6 +67,17 @@ export async function downloadBun(url: string, work: string, integrity?: string)
   if (!exe) throw new Error(`no bun binary inside ${url}`);
   chmodSync(exe, 0o755);
   return exe;
+}
+
+async function fetchVerified(url: string, integrity?: string): Promise<Buffer> {
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error(`could not download ${url}: HTTP ${res.status}`);
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (integrity) {
+    const got = `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
+    if (got !== integrity) throw new Error(`${url} does not match the registry's integrity: got ${got}, registry says ${integrity}`);
+  }
+  return bytes;
 }
 
 /** `--version` is the plain triple even on a canary; `--revision` carries the suffix and commit. */
@@ -325,5 +329,125 @@ export function calSuiteGate(exe: string, root: string, timeoutMs = 5 * 60_000):
     ok: !timedOut && fail === 0 && pass > 0 && out.status === 0,
     detail: timedOut ? `hung past ${timeoutMs / 1000}s, which is the shape of oven-sh/bun#39247` : suiteCountsText(counts),
     notes: text.split("\n").filter((l) => l.includes("(fail)")).slice(0, 10).map((l) => l.trim()),
+  };
+}
+
+// THE CHECKER. Since 1.4.3 (2026-10-10) the type checker and the type-aware
+// lint ship inside the bun binary, so every pin bump swaps the checker too,
+// and none of the gates above runs it. `bun check` is Bun's port of
+// typescript-go and says it reports what tsc 7 reports. If a candidate stops
+// reporting some class of error, `bun run typecheck` stays green on every
+// file that has none today, which is most of them: the baseline only notices
+// counts that move in files it already lists.
+//
+// So the reference is Microsoft's own tsc at 7.0.2, the release the pinned
+// checker matches byte for byte (measured below), fetched from the registry
+// by exact version and checked against its sha512. Diagnostics compare as a multiset of blocks
+// (the `file(l,c): error TSn:` line plus the chain lines under it), so output
+// order can't fail the gate and a dropped duplicate still does. When Bun moves
+// its port to a newer TypeScript, this gate reads the move as disagreement:
+// read the candidate's release notes, then bump TSC_REFERENCE.
+//
+// Measured 2026-10-17 on 611e002, pinned bun 1.4.3-canary.20261013.1 against
+// tsc 7.0.2, the eight programs `bun run typecheck` checks: 1629 diagnostics
+// (that checkout had no wrangler, so no generated Workers types), and stdout
+// byte-identical program by program.
+export const TSC_REFERENCE = "7.0.2";
+
+/** Fetch Microsoft's native tsc for this host into `work` and return its path. Its lib .d.ts files sit beside it. Throws. */
+export async function downloadTsc(work: string, version: string = TSC_REFERENCE): Promise<string> {
+  const name = `@typescript/typescript-${process.platform}-${process.arch}`;
+  const res = await fetch(`https://registry.npmjs.org/${name}/${version}`, { headers: { accept: "application/json" } });
+  if (!res.ok) throw new Error(`registry has no ${name}@${version} (HTTP ${res.status})`);
+  const doc = await res.json();
+  const tarball = String(doc?.dist?.tarball ?? "");
+  const integrity = String(doc?.dist?.integrity ?? "");
+  if (!tarball.endsWith(".tgz") || !integrity.startsWith("sha512-")) throw new Error(`registry document for ${name}@${version} carries no tarball or no sha512`);
+
+  rmSync(work, { recursive: true, force: true });
+  mkdirSync(work, { recursive: true });
+  const archive = join(work, "tsc.tgz");
+  writeFileSync(archive, await fetchVerified(tarball, integrity));
+  const unpack = run("tar", ["-xzf", archive, "-C", work]);
+  if (unpack.status !== 0) throw new Error(`tar failed: ${(unpack.stderr || "").trim()}`);
+  const exe = join(work, "package", "lib", process.platform === "win32" ? "tsc.exe" : "tsc");
+  if (!existsSync(exe)) throw new Error(`no tsc binary inside ${tarball}`);
+  chmodSync(exe, 0o755);
+  const reported = run(exe, ["--version"]).stdout?.trim();
+  if (reported !== `Version ${version}`) throw new Error(`${name}@${version} reports ${JSON.stringify(reported)}`);
+  return exe;
+}
+
+/** tsc's `--pretty false` output (and `bun check --no-pretty`'s) as one string per diagnostic, chain lines included. */
+export function diagnosticBlocks(stdout: string): string[] {
+  const blocks: string[] = [];
+  for (const line of stdout.split("\n")) {
+    // On a GitHub runner `bun check` also prints each diagnostic as an
+    // `::error file=...` workflow command beside the plain line. Read as
+    // blocks, the first canary dispatch (2026-10-17, run 39047970908) had
+    // every program "disagree" by exactly its own diagnostic count. Locally
+    // only GITHUB_ACTIONS=true with RUNNER_DEBUG=1 reproduces it, so the
+    // lines are skipped here rather than switched off by environment. A
+    // checker that printed ONLY annotations still fails: tsc's lines go
+    // unmatched.
+    if (!line.trim() || line.startsWith("::")) continue;
+    // Chain lines are indented under their diagnostic. Any other unindented
+    // line opens a block of its own, so nothing printed falls out of the
+    // comparison.
+    if (!/^\s/.test(line) || !blocks.length) blocks.push(line);
+    else blocks[blocks.length - 1] += `\n${line}`;
+  }
+  return blocks;
+}
+
+/** The blocks each side has that the other lacks, counting duplicates. */
+export function diffDiagnostics(reference: string[], candidate: string[]) {
+  const left = new Map<string, number>();
+  for (const b of reference) left.set(b, (left.get(b) ?? 0) + 1);
+  const onlyCandidate: string[] = [];
+  for (const b of candidate) {
+    const n = left.get(b) ?? 0;
+    if (n) left.set(b, n - 1);
+    else onlyCandidate.push(b);
+  }
+  const onlyReference = [...left].flatMap(([b, n]) => Array<string>(n).fill(b));
+  return { onlyReference, onlyCandidate, agree: onlyReference.length === 0 && onlyCandidate.length === 0 };
+}
+
+/**
+ * The candidate's `bun check` against tsc, program by program, with the pinned
+ * bun read the same way so the notes say whether a disagreement is new. THROWS
+ * when tsc itself cannot finish a program, because then there is no reference.
+ */
+export function checkerAgreementGate(candidate: string, pinned: string, tsc: string, root: string, programs: string[]): Gate {
+  const opts = { cwd: root, maxBuffer: 64 << 20 };
+  const bunCheck = (exe: string, config: string) => run(exe, ["check", "-p", config, "--no-pretty", "--all"], opts);
+  const notes: string[] = [];
+  let total = 0;
+  let disagreeing = 0;
+  let pinnedDisagreeing = 0;
+  for (const config of programs) {
+    const ref = run(tsc, ["-p", config, "--noEmit", "--pretty", "false"], opts);
+    if (ref.error || ref.status === null || ref.status > 1) throw new Error(`tsc ${TSC_REFERENCE} could not check ${config} (exit ${ref.status}): ${tail(ref, 4)}`);
+    const reference = diagnosticBlocks(ref.stdout);
+    total += reference.length;
+    const cand = bunCheck(candidate, config);
+    const d = diffDiagnostics(reference, diagnosticBlocks(cand.stdout ?? ""));
+    const pin = diffDiagnostics(reference, diagnosticBlocks(bunCheck(pinned, config).stdout ?? ""));
+    if (!pin.agree) pinnedDisagreeing++;
+    if (d.agree && cand.status === ref.status) continue;
+    disagreeing++;
+    notes.push(`${config}: tsc exit ${ref.status} with ${reference.length}, candidate exit ${cand.status}, ${d.onlyReference.length} only in tsc, ${d.onlyCandidate.length} only in bun check; the pinned bun ${pin.agree ? "agrees with tsc, so this is new" : "disagrees too"}`);
+    for (const b of d.onlyReference.slice(0, 3)) notes.push(`  - tsc: ${b.split("\n")[0]}`);
+    for (const b of d.onlyCandidate.slice(0, 3)) notes.push(`  + bun: ${b.split("\n")[0]}`);
+    if (cand.status !== 0 && cand.status !== 1) notes.push(`  ${tail(cand, 2)}`);
+  }
+  return {
+    name: `bun check agrees with tsc ${TSC_REFERENCE}`,
+    ok: disagreeing === 0,
+    detail: disagreeing === 0
+      ? `${programs.length} programs, ${total} diagnostics, every one identical${pinnedDisagreeing ? ` (the pinned bun disagrees in ${pinnedDisagreeing})` : ""}`
+      : `${disagreeing} of ${programs.length} programs disagree`,
+    notes,
   };
 }
