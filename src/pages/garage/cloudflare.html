@@ -10,7 +10,7 @@
 <link rel="canonical" href="https://aadhar.sh/garage/cloudflare">
 <meta property="og:type" content="website">
 <meta property="og:title" content="aadhar.sh/garage/four free Cloudflare features, live">
-<meta property="og:description" content="Live demos of four free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, Workers Logs structured observability, and custom trace spans) behind a tiny worker. A fifth, Browser Rendering, is wired but parked on the free tier's daily cap.">
+<meta property="og:description" content="Live demos of four free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, Workers Logs structured observability, and custom trace spans) behind a tiny worker. A fifth, Browser Run, is wired but parked on the free tier's daily cap.">
 <meta property="og:url" content="https://aadhar.sh/garage/cloudflare">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="https://aadhar.sh/og/garage-cloudflare.jpg">
@@ -127,7 +127,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       request shows its own spans in the trace waterfall.</p>
 
     <div class="callout" id="parked">
-      <b>The fifth, parked honestly: Browser Rendering.</b> <a class="term" data-t="headless-browser" href="https://en.wikipedia.org/wiki/Headless_browser" title="A web browser that runs with no window on screen, driven by code, so a program can load pages, run their scripts and capture the result." rel="external">Headless Chromium</a> in a Worker
+      <b>The fifth, parked honestly: Browser Run.</b> <a class="term" data-t="headless-browser" href="https://en.wikipedia.org/wiki/Headless_browser" title="A web browser that runs with no window on screen, driven by code, so a program can load pages, run their scripts and capture the result." rel="external">Headless Chromium</a> in a Worker
       via <code class="m">env.BROWSER.quickAction("screenshot", options)</code>, the basis for
       on-the-fly <code class="m">og:image</code> cards. I bind
       it and the worker deploys; no enable toggle exists (the binding
@@ -309,7 +309,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       ]
     },
     {
-      "q": "Browser Rendering is bound and buttonless here. Why does its screenshot path use a Quick Action?",
+      "q": "Browser Run is bound and buttonless here. Why does its screenshot path use a Quick Action?",
       "options": [
         {
           "t": "It is one bounded screenshot operation, so the binding can own the session without bundling a whole CDP client.",
