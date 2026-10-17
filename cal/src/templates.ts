@@ -14,7 +14,7 @@
 // the worst on the site, and production could not reproduce it.
 //
 // design vocab:
-//   - .xp-window           outer panel, blue title bar + chrome buttons
+//   - .window              outer panel, blue title bar + chrome buttons
 //   - .title-bar        title strip with glossy gel min/max/close controls
 //   - .content             inner workspace (white)
 //   - .xp-group            sunken group-box ("Available slots", "Your info")
@@ -370,14 +370,9 @@ form.book .actions {
 // On the cal.aadhar.sh fallback /nav.js 404s, so this is skipped and the page
 // stays a standalone centered window (degrades cleanly).
 //
-// The painted taskbar placeholder that used to sit here (a body::after strip
-// gradient, hand-kept "in sync with nav.js") is GONE: the page now ships the
-// real DESKTOP_CHROME, so there is nothing to stand in for and nothing left to
-// keep in sync by hand.
-//
 // It looks redundant, since luna.css carries every rule here (the 12px right
-// gutter included, since 2026-09-30) and this page links luna render-blocking. It still earns its place, measured
-// 2026-09-30: with only the gutter kept,
+// gutter included, since 2026-09-30) and this page links luna render-blocking.
+// It still earns its place, measured 2026-09-30: with only the gutter kept,
 // `bun run cls --paths /coffee --hold none --runs 5` saw the form jump (0.0704,
 // dy -554 dx -306) on 3 of 5 desktop loads, and with the block in place it saw
 // none. Keep it until that reads clean without it.
@@ -397,10 +392,6 @@ body { min-height: 0; height: calc(100vh - 30px - env(safe-area-inset-bottom, 0p
 .window > .title-bar { flex: 0 0 auto; }
 .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; }
 `;
-
-// the coffee section glyph — mirrors nav.js SECTION_ICONS.coffee + the taskbar
-// app button, so the tab favicon is right on first paint (and on cal.aadhar.sh,
-// where nav.js never loads to set it). hex colors %23-encoded for the data URI.
 
 function shell(title, body, env, head = "") {
   const home = env.HOST_PUBLIC_URL || "https://aadhar.sh";
