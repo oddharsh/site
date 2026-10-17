@@ -1,5 +1,5 @@
 // ── the Reader lens (/lens/read, lens-reader/) ───────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   brotliCompressSync,
@@ -254,12 +254,12 @@ test("the cracker's scorer matches the quadgram table it ships", () => {
   assert.equal(table.slice(0, 4), "THAT", "the table must stay in frequency order; TOP is calibrated to the first entry");
 
   // TOP is log10 of the most common quadgram's corpus share and FLOOR is an
-  // unseen one. gen-quadgram-table.mjs prints both; the page hardcodes them,
+  // unseen one. gen-quadgram-table.ts prints both; the page hardcodes them,
   // and a table rebuilt from a different corpus moves them.
   const top = Number(page.match(/var TOP = (-[\d.]+)/)[1]);
   const floor = Number(page.match(/FLOOR = (-[\d.]+)/)[1]);
   assert.ok(top > floor, "an observed quadgram must outscore an unseen one");
-  assert.ok(top > -3 && top < -2, `TOP looks recalibrated (${top}); rerun gen-quadgram-table.mjs and update the page`);
+  assert.ok(top > -3 && top < -2, `TOP looks recalibrated (${top}); rerun gen-quadgram-table.ts and update the page`);
   assert.ok(floor > -10 && floor < -8, `FLOOR looks recalibrated (${floor})`);
 
   // The page states the wire cost as a fact. It is a fact about these bytes.

@@ -1,5 +1,5 @@
-// gen-og-cards.mjs — build grabby Twitter/OG cards for every garage + lwe page,
-// plus the top-level page directories registered in og-pages.mjs.
+// gen-og-cards.ts — build grabby Twitter/OG cards for every garage + lwe page,
+// plus the top-level page directories registered in og-pages.ts.
 //
 // Each card is a 1200x630 JPEG (PNG until 2026-09-16; see writeCard): the page's live interactive demo screenshotted
 // and floated on the Bliss desktop, with the page's own favicon as a brand stamp
@@ -135,7 +135,7 @@ const HERO = {
   "lwe-tee":      { hero: ["#demo-tee", ".demo"] },
   "lwe-utf8":     { hero: ["#demo-enc", "#demo-anat", ".demo"] },
   "lwe-vigenere": { hero: ["#demo-crank", ".demo"], preset: ".preset[data-crank='trans']" },
-  // ── page dirs (og-pages.mjs) ────────────────────────────────────────────
+  // ── page dirs (og-pages.ts) ────────────────────────────────────────────
   // The whole MMC console in one element: menu bar, toolbar, the device tree,
   // the graph, and the status bar with its live per-state counts. That last row
   // is why this beats cropping to the canvas alone — "39 devices · 15 installed
@@ -153,7 +153,7 @@ const HERO = {
   //
   // NOT deterministic: the trial is drawn at random, so a regeneration changes the
   // photo and can change two tiles to three. Nothing downstream may assume a count
-  // (see the alt text in og-pages.mjs).
+  // (see the alt text in og-pages.ts).
   //
   // Capture this one against PRODUCTION, not the local static server. nav.js
   // adopts the matching taskbar pin's compiled /section-icons SVG as the

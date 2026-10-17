@@ -55,7 +55,8 @@ type PlannedField = {
 
   // ── the planner: JSON Schema in, a description of controls out ────────────
   // Pure, and kept separate from the DOM on purpose: the same shape is unit
-  // tested in contract-tests.mjs, where there is no document to render into.
+  // tested in contract-the-tools-lens-schema-in-form-plan-out.test.ts, where
+  // there is no document to render into.
   var PLAN_LIMITS = { depth: 3, properties: 60, options: 200, desc: 400 };
   var SCALARS = { string: 1, number: 1, integer: 1, boolean: 1 };
 

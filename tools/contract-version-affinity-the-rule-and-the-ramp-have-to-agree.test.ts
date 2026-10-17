@@ -1,5 +1,5 @@
 // ── version affinity: the rule and the ramp have to agree ────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   readFile,
@@ -14,7 +14,7 @@ import {
 //
 // The contract has two halves in two languages. The Transform Rule declared in
 // infra.json derives Cloudflare-Workers-Version-Key from ip.src, and deliberately
-// SKIPS any request that already carries that header. deploy-promote.mjs relies
+// SKIPS any request that already carries that header. deploy-promote.ts relies
 // on that exemption: it sends one key per request so it can still watch a split
 // take from a single IP. Take the exemption out and the rule overwrites those
 // keys, every sample lands on one version, and each intermediate ramp step reads

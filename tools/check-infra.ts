@@ -36,7 +36,7 @@
 //
 // Hard failures are "we checked and it is wrong". Advisories are "we could not
 // check" (resolver unreachable, no token) and never fail the run — same split
-// perf-budget.mjs uses, so a flaky network cannot redden an unrelated PR.
+// perf-budget.ts uses, so a flaky network cannot redden an unrelated PR.
 //
 // Usage:
 //   node tools/check-infra.ts              tree + dns, api if a token exists

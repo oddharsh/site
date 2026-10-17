@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// roll-shell-dictionary.mjs — adopt the CURRENT built shell as a dictionary candidate.
+// roll-shell-dictionary.ts — adopt the CURRENT built shell as a dictionary candidate.
 //
 //   bun run shell:roll
 //
@@ -297,7 +297,7 @@ else {
   // and trusting it. The Worker precompresses and cannot negotiate (gotcha 13), and
   // undici transparently decodes br while LEAVING the header in place, so neither
   // the request header nor the response header is evidence about the bytes in hand.
-  // Try the decode, keep whatever survives — the same defence check-dictionary-support.mjs
+  // Try the decode, keep whatever survives — the same defence check-dictionary-support.ts
   // documents at its own decode.
   const deliveredBytes = async (route) => {
     const res = await fetch(`${ORIGIN}${route}`, { headers: { "accept-encoding": "br" } });

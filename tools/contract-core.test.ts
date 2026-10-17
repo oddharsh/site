@@ -1,4 +1,4 @@
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   botHeaders,
@@ -9,7 +9,7 @@ import {
 //
 // These are deliberately dependency-free and deterministic. They test the
 // public shape of the page/fragment and JSON/HTML handlers without starting a
-// local Worker or making third-party network requests. verify-routes.mjs adds
+// local Worker or making third-party network requests. verify-routes.ts adds
 // the same assertions against a deployed or local HTTP surface.
 
 

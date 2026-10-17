@@ -1,5 +1,5 @@
 // ── security.txt expires at least 60 days out ──────────────────────────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 // RFC 9116 makes Expires mandatory, and a lapsed file tells a reporter its

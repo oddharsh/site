@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// gen-md-twins.mjs — the Markdown twin for every page on the site that has prose,
+// gen-md-twins.ts — the Markdown twin for every page on the site that has prose,
 // plus the per-section llms.txt indexes.
 //
 //   node tools/gen-md-twins.ts [outDir]     # default: .build/public

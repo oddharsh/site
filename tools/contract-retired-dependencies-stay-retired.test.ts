@@ -1,5 +1,5 @@
 // ── retired dependencies stay retired ────────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 import { BAN_KINDS, binaryViolations, cargoLockViolations, cargoManifestViolations, inTree, npmViolations, sourceViolations } from "./lib/retired.ts";

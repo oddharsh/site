@@ -1,5 +1,5 @@
 // ── static text assets ship their q11 twin ───────────────────────────────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import {
   configText, ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 import { existsSync } from "node:fs";

@@ -1,4 +1,4 @@
-// gen-repo-card.mjs — the GitHub social preview for this repository.
+// gen-repo-card.ts — the GitHub social preview for this repository.
 //
 // GitHub wants 1280x640 and crops toward the middle in some unfurls, so nothing
 // load-bearing sits within 40px of an edge. Two variants, because the repo card

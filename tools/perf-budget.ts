@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// perf-budget.mjs — deterministic build/deploy invariants + advisory wire-size
+// perf-budget.ts — deterministic build/deploy invariants + advisory wire-size
 // reporting for aadhar.sh.
 //
 // User experience is measured in a controlled browser lab; this site deliberately

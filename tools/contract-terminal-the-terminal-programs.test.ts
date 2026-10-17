@@ -1,5 +1,5 @@
 // ── the terminal programs (/finger, /photos, /lens, /dict, /cache, /encode, ...) ──
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   MODERN_META,
   TERMINAL_ASSETS,

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// gen-remote-config.mjs — derive a remote-bindings twin of a wrangler config.
+// gen-remote-config.ts — derive a remote-bindings twin of a wrangler config.
 //
 //   node tools/gen-remote-config.ts .wrangler.dev.jsonc           # local dev (bun run dev:remote)
 //   node tools/gen-remote-config.ts .wrangler.site.jsonc --out x.jsonc  # oracle twin (a JSONC config; not the .ts)

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// gen-photo-semantics.mjs — retrieval terms for every photo, written to
+// gen-photo-semantics.ts — retrieval terms for every photo, written to
 // public/images/semantics.json as {stem: {terms, from}}.
 //
 // ── why this exists ───────────────────────────────────────────────────────

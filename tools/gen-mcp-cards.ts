@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// gen-mcp-cards.mjs — project the live MCP tool registries into the
+// gen-mcp-cards.ts — project the live MCP tool registries into the
 // pre-connection server cards agents discover before they can POST MCP.
 //
 // The protocol remains the source of truth at /mcp and /serendipity/mcp:

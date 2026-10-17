@@ -1,5 +1,5 @@
 // ── /encode — read the container, decode nothing ─────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   ROOT,
   assert,

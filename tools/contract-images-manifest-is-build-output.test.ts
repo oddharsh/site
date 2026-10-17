@@ -1,5 +1,5 @@
 // ── /images/manifest.json is build output ────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { existsSync } from "node:fs";
 import { brotliDecompressSync } from "node:zlib";

@@ -1,7 +1,7 @@
-// html-markers.mjs — the load-bearing structures the minified homepage must still
+// html-markers.ts — the load-bearing structures the minified homepage must still
 // carry, as one list both halves of the gate read.
 //
-// build.ts throws if the minifier drops one, and perf-budget.mjs fails the deploy
+// build.ts throws if the minifier drops one, and perf-budget.ts fails the deploy
 // if the shipped file is missing one. Those are the same claim checked at two
 // moments, so they were the same array written out twice, byte-identical. A marker
 // added to one copy and not the other silently narrows the gate to whatever the

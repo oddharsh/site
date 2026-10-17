@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// perf-snapshot.mjs — record the built tree's wire sizes, and diff two recordings.
+// perf-snapshot.ts — record the built tree's wire sizes, and diff two recordings.
 //
-// This is the DIFFERENTIAL half of the performance story. perf-budget.mjs asks
+// This is the DIFFERENTIAL half of the performance story. perf-budget.ts asks
 // "is this number over a line somebody drew?"; this asks "did this change move
 // it, and by how much?" The two answer different questions and neither replaces
 // the other, but the diff is the one that cannot go stale.
 //
-// The reason it exists is written into perf-budget.mjs's own baseline history:
+// The reason it exists is written into perf-budget.ts's own baseline history:
 // WORKER_BASELINE_GZIP_KIB sat at 129.23 while the real number was 204.24, so
 // the advisory fired on EVERY run for months and CI printed "hard checks green"
 // over it. A hand-maintained constant rots by construction — it records the
@@ -98,7 +98,7 @@ async function walk(dir, filter) {
 async function record(outPath, label) {
   // One dry-run gives three things at once: the built tree (via build.command),
   // the bundle's gzip total, and per-module attribution from esbuild's metafile.
-  // perf-budget.mjs runs the same command; they are separate processes because
+  // perf-budget.ts runs the same command; they are separate processes because
   // one gates the deploy and the other reports on it, and coupling them would
   // mean a snapshot failure could redden a PR.
   // WRANGLER'S ENTRY DIRECTLY, through whatever node is running this file, so
@@ -462,15 +462,15 @@ const flag = (name) => {
 const positional = rest.filter((a, i) => !a.startsWith("--") && !(i > 0 && rest[i - 1].startsWith("--")));
 
 if (mode === "record") {
-  if (!positional[0]) { console.error("usage: perf-snapshot.mjs record <out.json> [--label <name>]"); process.exit(2); }
+  if (!positional[0]) { console.error("usage: perf-snapshot.ts record <out.json> [--label <name>]"); process.exit(2); }
   await record(positional[0], flag("--label"));
 } else if (mode === "compare") {
-  if (positional.length < 2) { console.error("usage: perf-snapshot.mjs compare <base.json> <head.json> [--out <file.md>]"); process.exit(2); }
+  if (positional.length < 2) { console.error("usage: perf-snapshot.ts compare <base.json> <head.json> [--out <file.md>]"); process.exit(2); }
   await compare(positional[0], positional[1], flag("--out"));
 } else if (mode === "row") {
-  if (!positional[0]) { console.error("usage: perf-snapshot.mjs row <snapshot.json> [--date YYYY-MM-DD]"); process.exit(2); }
+  if (!positional[0]) { console.error("usage: perf-snapshot.ts row <snapshot.json> [--date YYYY-MM-DD]"); process.exit(2); }
   await row(positional[0], flag("--date"));
 } else {
-  console.error("usage: perf-snapshot.mjs record <out.json> | compare <base.json> <head.json> | row <snapshot.json>");
+  console.error("usage: perf-snapshot.ts record <out.json> | compare <base.json> <head.json> | row <snapshot.json>");
   process.exit(2);
 }

@@ -1,5 +1,5 @@
 // ── the LWE ask surface ─────────────────────────────────────────────────────
-// Split-file convention: shared imports live in contract-shared.mjs.
+// Split-file convention: shared imports live in contract-shared.ts.
 import {
   ROOT,
   assert,
@@ -17,7 +17,7 @@ test("every LWE content page carries a wired ask surface", async () => {
   // The failure is an ABSENCE (a decorative compose bar that never becomes an ask box),
   // so nothing errored and no other check looked. Four registries had been hand-patched
   // around it: the sitemap, the buddy list, its stale "Online · 10" count, and nav-run.
-  // Root cause was generate.mjs resolving three of its four wire targets against
+  // Root cause was generate.ts resolving three of its four wire targets against
   // src/pages/ after the 2026-08-18 layout split moved them, then failing SOFT.
   //
   // This asserts the whole chain per page, derived from the directory, so a new page
@@ -48,7 +48,7 @@ test("every LWE content page carries a wired ask surface", async () => {
     // An indexed concept with no passages retrieves nothing, so the box accepts a
     // question and answers with silence. That is worse than having no box at all.
     assert.ok(passages.includes(`concept: "${id}"`),
-      `${id}: no passages in the corpus. Add lwe-ask/corpus/${id}.json, then run build-corpus.mjs`);
+      `${id}: no passages in the corpus. Add lwe-ask/corpus/${id}.json, then run build-corpus.ts`);
   }
 
   // Reverse direction: a CONCEPTS entry whose page has gone away sends a real question

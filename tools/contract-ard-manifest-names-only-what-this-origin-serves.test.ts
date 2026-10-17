@@ -1,5 +1,5 @@
 // ── the ARD manifest names only what this origin serves ─────────────────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import { ROOT, assert, existsSync, readFile, test } from "./contract-shared.ts";
 
 // /.well-known/ard.json is the ARD (Agentic Resource Discovery) manifest: one

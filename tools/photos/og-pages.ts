@@ -1,11 +1,11 @@
-// og-pages.mjs — the top-level PAGE DIRECTORIES that get an OG card, as one list
+// og-pages.ts — the top-level PAGE DIRECTORIES that get an OG card, as one list
 // both halves of the card pipeline read.
 //
 // There are three static shapes under public/ and the card pipeline only knew
 // about one of them:
 //
 //   SECTION       many .html files under one directory (garage/, lwe/). Walked by
-//                 gen-og-cards.mjs and inject-og-meta.mjs directly.
+//                 gen-og-cards.ts and inject-og-meta.ts directly.
 //   PAGE DIR      one index.html, its own top-level route, no section index
 //                 (access/, pixel-peeper/). Invisible to that walk, which is why
 //                 /access shipped without a card.
@@ -17,11 +17,11 @@
 // the local static server, and unlike a worker route its meta CAN be injected.
 //
 // One list rather than two: EXCLUDE already lives in both scripts held together
-// by a "must match gen-og-cards.mjs" comment, and that is the drift this avoids.
+// by a "must match gen-og-cards.ts" comment, and that is the drift this avoids.
 //
 // Every page dir on disk is registered. The per-page capture config (hero
 // selectors, and the preset click /pixel-peeper needs to get off its intro
-// screen) lives in gen-og-cards.mjs's HERO table with every other page's, so
+// screen) lives in gen-og-cards.ts's HERO table with every other page's, so
 // this file stays the roster and nothing else.
 export const OG_PAGE_DIRS = [
   {

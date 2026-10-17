@@ -1,5 +1,5 @@
 // ── the TypeScript quarantine ───────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   ROOT,
   assert,
@@ -285,7 +285,7 @@ test("the deploy bridge never resolves wrangler from the registry", async () => 
   for (const fetcher of ["npx", "bunx", "dlx", "bun x"]) {
     assert.ok(!script.includes(` ${fetcher} `), `deploy-wrangler.sh must not reach for ${fetcher}`);
   }
-  // The wrangler ARGUMENTS stay in the dashboard string, where check-infra.mjs
+  // The wrangler ARGUMENTS stay in the dashboard string, where check-infra.ts
   // reads them; the script must not smuggle its own.
   const code = script.replace(/^\s*#.*$/gm, "");
   assert.ok(!/versions\s+upload/.test(code),

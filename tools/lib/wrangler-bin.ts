@@ -1,4 +1,4 @@
-// wrangler-bin.mjs — how a tool in this repo spawns wrangler.
+// wrangler-bin.ts — how a tool in this repo spawns wrangler.
 //
 // The rule is one line: NAME NO PACKAGE MANAGER. Every tool here runs under
 // whatever runtime invoked it, and the tree it runs in may be a bun tree or a

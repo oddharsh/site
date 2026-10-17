@@ -1,5 +1,5 @@
 // ── bun.lock resolves what the manifest pins ─────────────────────────────────
-// Split-file convention: shared imports live in contract-shared.mjs.
+// Split-file convention: shared imports live in contract-shared.ts.
 import { assert, test } from "./contract-shared.ts";
 import { auditLockfilePins, readLockfilePins, FLOOR_PINS } from "./lib/lockfile-pins.ts";
 

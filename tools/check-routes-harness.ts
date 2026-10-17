@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// check-routes-harness.mjs — run the route oracle BEFORE the merge.
+// check-routes-harness.ts — run the route oracle BEFORE the merge.
 //
-// verify-routes.mjs has always needed something already serving: production
+// verify-routes.ts has always needed something already serving: production
 // (which means the deploy that broke a route already happened) or a wrangler dev
 // somebody remembered to start. Wrangler 4.112+ ships createTestHarness(), which
 // boots this repo's Worker in-process on a real loopback port, so the same table
@@ -22,7 +22,7 @@
 // What this does NOT prove: local KV/R2/D1 come up EMPTY, so data-backed routes
 // answer from their fallback path. Status and content-type are real; a passing
 // /images/manifest.json here means the handler works, not that the photos exist.
-// Rows tagged `remote` in verify-routes.mjs are skipped for that reason. The
+// Rows tagged `remote` in verify-routes.ts are skipped for that reason. The
 // post-deploy `node tools/verify-routes.ts` sweep against production stays the check
 // that sees real content, and neither one replaces the other.
 
@@ -44,7 +44,7 @@ if (positionals.length > 1 || values.prebuilt === "") {
 
 // --remote boots the harness on a generated config whose KV/R2/Browser bindings
 // reach PRODUCTION (tools/gen-remote-config.ts), which un-skips the five rows
-// verify-routes.mjs marks `remote` — the ones whose whole assertion is content a
+// verify-routes.ts marks `remote` — the ones whose whole assertion is content a
 // local Worker structurally cannot have. That closes the gap this file's own
 // header admits to ("local KV/R2/D1 come up EMPTY, so data-backed routes answer
 // from their fallback path"): with it, a passing /images/manifest.json means the
@@ -78,7 +78,7 @@ if (remote) {
   }
   // No --out: the generator's default is the repo root, which is where the twin
   // has to live for the site config's relative `main` and `assets.directory` to
-  // keep resolving (see gen-remote-config.mjs).
+  // keep resolving (see gen-remote-config.ts).
   const gen = spawnSync(
     process.execPath,
     ["tools/gen-remote-config.ts", config],
@@ -106,7 +106,7 @@ try {
   console.log(`harness: ${config} booted in ${Date.now() - t0}ms at ${url}`);
 
   // VERIFY_REMOTE is left UNSET rather than set to "" on a local run, since
-  // verify-routes.mjs reads presence rather than value.
+  // verify-routes.ts reads presence rather than value.
   // Spread from process.env, so inference freezes the key set at what was
   // spread plus VERIFY_BUILT; VERIFY_REMOTE is added conditionally below.
   const childEnv: Record<string, string | undefined> = { ...process.env, VERIFY_BUILT: "1" };

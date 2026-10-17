@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// verify-routes.mjs — the route oracle for aadhar.sh.
+// verify-routes.ts — the route oracle for aadhar.sh.
 //
 // Curls every known route and asserts status + content-type (+ a body marker
 // where it's cheap and stable). This is the regression tripwire for the repo
@@ -39,7 +39,7 @@ const TIMEOUT_MS = Number(process.env.VERIFY_TIMEOUT_MS || 20000);
 // against a real deploy. Local `wrangler dev` serves the readable public/ tree
 // (unminified, no .src twins), so those checks are gated to non-localhost bases.
 // VERIFY_BUILT=1 forces them back on for a local base pointed at .build/public,
-// which is what check-routes-harness.mjs does: there the built tree IS the tree
+// which is what check-routes-harness.ts does: there the built tree IS the tree
 // under test, so the "deploy bypassed build.ts" tripwire can fire pre-merge.
 const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(base);
 const isProd = !isLocal;

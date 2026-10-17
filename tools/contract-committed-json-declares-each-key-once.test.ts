@@ -1,5 +1,5 @@
 // ── committed JSON declares each key once ────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 // JSON.parse KEEPS THE LAST duplicate key and reports nothing, so a second

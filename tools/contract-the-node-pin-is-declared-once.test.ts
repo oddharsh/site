@@ -1,5 +1,5 @@
 // ── the node pin is declared once ────────────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 
 // The tree tier of `node:pin`. It lives here rather than in that script so

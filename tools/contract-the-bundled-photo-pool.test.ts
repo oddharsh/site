@@ -1,5 +1,5 @@
 // ── the bundled photo pool ──────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   configText,
   testGlobals,
@@ -24,7 +24,7 @@ import {
 // derives the render-ready rows at module scope. These tests run the real
 // derivation over the real committed files, so a half-run pipeline (an index
 // entry without hashes, a hash without an index entry, a malformed /i/ URL)
-// fails here as well as in check-photo-pipeline.mjs — the worker and the
+// fails here as well as in check-photo-pipeline.ts — the worker and the
 // checker must not be able to disagree about what is published.
 test("bundled photo pool derives one well-formed row per committed stem", async () => {
   const index = JSON.parse(await readFile(new URL("src/worker/photo-index.json", ROOT), "utf8"));
@@ -504,7 +504,7 @@ test("production minifies the Worker without obscuring deployed stack traces", a
 
   // Minifying moved the worker-bundle advisory from firing to silent WITHOUT the
   // code shrinking, which is the one way to turn that check green while every
-  // constant in perf-budget.mjs holds still. The guard is a source-bytes twin
+  // constant in perf-budget.ts holds still. The guard is a source-bytes twin
   // that a minifier cannot move, and it is asserted HERE, beside the setting
   // that made it necessary, so removing one while keeping the other fails.
   const budget = await readFile(new URL("tools/perf-budget.ts", ROOT), "utf8");

@@ -1,5 +1,5 @@
 // ── the tools are SERVICES, the frame is a representation ────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   MODERN_META,
   assert,

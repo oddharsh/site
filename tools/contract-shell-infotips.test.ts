@@ -1,5 +1,5 @@
 // ── shell infotips ──────────────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   testGlobals,
   AGENT_SURFACES,
@@ -201,7 +201,7 @@ test("a section's favicon is in its own <head>, never set by script", async () =
   //    generated map the worker actually reads. A route added to TASKBAR without
   //    its tile would otherwise ship a 404 favicon.
   assert.deepEqual(SECTION_FAVICONS, sectionFavicons(),
-    "lib/desktop.js drifted from shell-data.mjs — run bun run gen:shell");
+    "lib/desktop.js drifted from shell-data.ts — run bun run gen:shell");
   for (const item of TASKBAR) {
     const href = SECTION_FAVICONS[item.path];
     assert.equal(href, faviconHref(item.label), `${item.path} favicon href`);
@@ -254,7 +254,7 @@ test("the speculation ruleset has exactly one author", async () => {
   //    silently restored the old rules onto it (src/pages/lwe/encoding.html).
   const generator = await readFile(new URL("pipelines/lwe/generate.ts", ROOT), "utf8");
   assert.doesNotMatch(generator, /speculationrules/,
-    "generate.mjs must emit DESKTOP_CHROME and never its own ruleset; a stale template here re-infects every page it regenerates");
+    "generate.ts must emit DESKTOP_CHROME and never its own ruleset; a stale template here re-infects every page it regenerates");
   assert.doesNotMatch(generator, /serviceWorker\.register\(["']\/sw\.js["']\)/,
     "the LWE generator must not reinstall the retired service worker; /sw.js remains only as a cleanup stub for old clients");
   assert.match(generator, /<!-- axp:desktop -->\$\{DESKTOP_TOP\}<!-- \/axp:desktop -->/,

@@ -1,5 +1,5 @@
 // ── the deploy-time page renderers ──────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   ALBUMS,
   ROOT,

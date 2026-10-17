@@ -71,7 +71,7 @@ const arm = () => {
   // `fetch(u).then(...)` with no await would otherwise get an exception from a
   // line it never guarded, which is a different failure than the one reported.
   //
-  // Assigned through the loose alias for the reason contract-shared.mjs gives at
+  // Assigned through the loose alias for the reason contract-shared.ts gives at
   // `testGlobals`: bun types `globalThis.fetch` as `typeof fetch`, which carries
   // a `preconnect` method, and a double that refuses every request has no
   // business implementing it. This is a partial stand-in being installed on a

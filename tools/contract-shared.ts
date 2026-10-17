@@ -1,4 +1,4 @@
-// contract-shared.mjs — the suite's imports and its cross-section helpers.
+// contract-shared.ts — the suite's imports and its cross-section helpers.
 //
 // Split out of the single 8720-line contract-tests.test.ts on 2026-08-20.
 //

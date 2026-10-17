@@ -1,4 +1,4 @@
-// inject-og-meta.mjs — wire each garage + lwe page, and each registered page
+// inject-og-meta.ts — wire each garage + lwe page, and each registered page
 // directory, to its OG card image.
 //
 // Adds twitter:card=summary_large_image + og:image/twitter:image (absolute) so a
@@ -23,7 +23,7 @@ const PUBLIC = path.join(ROOT, "public");    // the baked cards
 const PAGES = path.join(ROOT, "src/pages");  // the documents whose <head> gets the meta
 const SITE = "https://aadhar.sh";
 const CHECK = process.argv.includes("--check");
-// diagnostic/test harnesses that get no card (must match gen-og-cards.mjs)
+// diagnostic/test harnesses that get no card (must match gen-og-cards.ts)
 const EXCLUDE = new Set(["garage-vt-b", "garage-vt-check"]);
 
 function block(id, alt) {
@@ -81,7 +81,7 @@ for (const section of ["garage", "lwe"]) {
   }
 }
 
-// page directories: one index.html at a top-level route (see og-pages.mjs)
+// page directories: one index.html at a top-level route (see og-pages.ts)
 for (const p of OG_PAGE_DIRS) {
   await wire(path.join(PAGES, p.dir, "index.html"), p.id, p.alt);
 }

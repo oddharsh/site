@@ -1,5 +1,5 @@
 // ── docs/DEPENDENCIES.md states version pins in prose ─────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   BASELINE_HEADING,
   FLOOR_CLAIMS,

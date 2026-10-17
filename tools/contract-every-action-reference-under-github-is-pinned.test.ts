@@ -1,5 +1,5 @@
 // ── every action reference under .github is pinned ───────────────────────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";

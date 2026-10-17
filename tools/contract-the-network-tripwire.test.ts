@@ -1,5 +1,5 @@
 // ── the network tripwire ─────────────────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import {
   assert,
   readFileSync,

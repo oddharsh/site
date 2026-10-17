@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// lens-seed.mjs — render the /lens demo URLs on THIS machine and write the
+// lens-seed.ts — render the /lens demo URLs on THIS machine and write the
 // results into the same KV entries Browser Run would have filled.
 //
-// WHY THIS EXISTS, and how it differs from lens-warm.mjs. That script spends the
+// WHY THIS EXISTS, and how it differs from lens-warm.ts. That script spends the
 // budget early by performing real Browser Run calls ahead of an audience, which
 // is the right tool and the first one to reach for. It cannot help once the
 // account-wide allowance is gone: 10 browser-minutes a day, shared across

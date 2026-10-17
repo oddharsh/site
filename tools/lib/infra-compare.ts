@@ -992,7 +992,7 @@ export function compareVersionAffinity(declared, zoneName: string, observed: Rea
     // matters rather than string-equal against the declaration. Cloudflare
     // normalizes expressions, so a textual diff would false-fire on formatting;
     // what has to hold is that the rule SKIPS a request that already carries the
-    // header. deploy-promote.mjs sends one key per request so it can still watch
+    // header. deploy-promote.ts sends one key per request so it can still watch
     // the split take from a single IP, and a rule that overwrites those keys
     // collapses every sample onto one version, which the ramp reads as dead and
     // aborts on. Fails closed, and loudly, but it aborts healthy releases.

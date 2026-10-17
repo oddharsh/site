@@ -1,5 +1,5 @@
 // ── the bun pin is declared once ─────────────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, newestSeasonedCanary, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";

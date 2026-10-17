@@ -1,6 +1,6 @@
-// shell-data.mjs — authored facts for the shared XP desktop.
+// shell-data.ts — authored facts for the shared XP desktop.
 //
-// This module is build-time only. gen-desktop-partial.mjs projects it into the
+// This module is build-time only. gen-desktop-partial.ts projects it into the
 // static HTML partial, the icon sprite, and the small runtime tables that need
 // to stay in nav.js/nav-run.js. Keeping the facts here means the browser
 // runtime is no longer the build system's database.

@@ -3,7 +3,7 @@
 //
 // Two callers with the same question ("does this stylesheet parse, and did the
 // parser damage it") used to use two different engines: build.ts ran Lightning
-// CSS over every served document, and check-page-contracts.mjs ran esbuild's CSS
+// CSS over every served document, and check-page-contracts.ts ran esbuild's CSS
 // loader over the Garage scaffold. That cost a 20MB Go binary for a single call,
 // and it was worse than the size: THE TWO PARSERS DISAGREE IN BOTH DIRECTIONS.
 // Measured 2026-08-14 on the same four inputs —

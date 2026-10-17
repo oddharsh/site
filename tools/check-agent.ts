@@ -1,4 +1,4 @@
-// check-agent.mjs — is this site agent-accessible IN PRACTICE?
+// check-agent.ts — is this site agent-accessible IN PRACTICE?
 //
 // Every other agent check here reads a declaration: the route oracle sweeps
 // routes, gen-mcp-cards diffs a card against tools/list, build.ts counts the

@@ -1,5 +1,5 @@
 // ── rn: the track-meta map must survive a SHORT playlist read ────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   testGlobals,
   ART_VERSION,

@@ -86,7 +86,7 @@ export async function sampleSplit(target, previous, runId, count = SAMPLES) {
           // healthy ramp would read as dead. The rule skips requests that
           // already carry a key, which is what makes this line survive it;
           // infra.json's zone.version_affinity declares that exemption and
-          // check-infra.mjs asserts it.
+          // check-infra.ts asserts it.
           "cloudflare-workers-version-key": `ramp-${runId}-${i}`,
         },
         cache: "no-store",

@@ -1,5 +1,5 @@
 // ── every install is frozen, and every lockfile has a policy over it ─────────
-// Shared imports live in contract-shared.mjs.
+// Shared imports live in contract-shared.ts.
 import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 

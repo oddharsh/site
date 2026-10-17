@@ -1,5 +1,5 @@
 // ── both MCP servers speak one protocol ─────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   MCP_SUPPORTED_VERSIONS,
   MODERN_META,
@@ -262,7 +262,7 @@ test("Serendipity social reads overlap independent D1 queries", async () => {
 });
 
 test("both CSS checks go through the one parser, and it still tolerates the right family", async () => {
-  // build.ts decides what reaches a visitor; check-page-contracts.mjs is a
+  // build.ts decides what reaches a visitor; check-page-contracts.ts is a
   // pre-build gate on the same stylesheets. They ran DIFFERENT engines until
   // 2026-08-14 (Lightning CSS and esbuild), which disagree in both directions, so
   // a scaffold could pass the gate and fail the build. One parser, one family.

@@ -1,6 +1,6 @@
 import { Script } from "node:vm";
 // ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   testGlobals,
   MODERN_META,

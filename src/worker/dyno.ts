@@ -245,7 +245,7 @@ export function renderDynoPulls(rows) {
     : "";
 
   return unsafeHtml(`${empty ? `<div class="callout">No pulls recorded yet, or the series could not be read just now. The
-    hand-entered points below come from the baseline history in <code>perf-budget.mjs</code>, which is what
+    hand-entered points below come from the baseline history in <code>perf-budget.ts</code>, which is what
     this page exists to replace.</div>` : ""}
     ${rows.length ? chart(rows) : ""}
     ${callout}

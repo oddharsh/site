@@ -1,6 +1,6 @@
-// release-guard.mjs — may this process move production traffic?
+// release-guard.ts — may this process move production traffic?
 //
-// Extracted from deploy-promote.mjs so it can be tested. The script itself
+// Extracted from deploy-promote.ts so it can be tested. The script itself
 // cannot be imported by a test: it runs the ramp at module scope, so importing
 // it to check one condition would deploy.
 //

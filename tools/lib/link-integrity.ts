@@ -1,4 +1,4 @@
-// link-integrity.mjs — does every internal reference in the staged pages point at
+// link-integrity.ts — does every internal reference in the staged pages point at
 // something this site actually serves?
 //
 // The gap this fills: moving or renaming a page changed the pages that LINK to it

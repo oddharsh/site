@@ -1,5 +1,5 @@
 // ── the Luma session jar ────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   ROOT,
   SERENDIPITY_SYNC_LIMITS,

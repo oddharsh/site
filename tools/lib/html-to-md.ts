@@ -1,4 +1,4 @@
-// html-to-md.mjs — the downleveled-render half of the Markdown twin.
+// html-to-md.ts — the downleveled-render half of the Markdown twin.
 //
 // Hand-rolled on purpose. The input is a CLOSED set: the 31 static pages this
 // repo authors itself, all of them well-formed and all of them checked by

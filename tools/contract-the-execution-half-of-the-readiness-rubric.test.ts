@@ -1,5 +1,5 @@
 // ── the execution half of the readiness rubric ──────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   EXECUTION_META,
   EXECUTION_PROBE,

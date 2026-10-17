@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// deploy-promote.mjs — ramp an uploaded version onto production traffic.
+// deploy-promote.ts — ramp an uploaded version onto production traffic.
 //
 //   bun run deploy:promote                  # newest PRODUCTION build, 10% -> 50% -> 100%
 //   bun run deploy:promote --to 25       # one step, park it at 25%

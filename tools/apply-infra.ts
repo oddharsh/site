@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The rebuild path: turn infra.json's declared DNS records back into reality.
 //
-// check-infra.mjs answers "did it drift". This answers "put it back". They are
+// check-infra.ts answers "did it drift". This answers "put it back". They are
 // deliberately separate programs: the check runs on every PR and must never be
 // able to write, so the write code does not live in the file CI executes.
 //
@@ -69,7 +69,7 @@ const OWNER = {
 // quietly degrade the one list whose entire job is explaining what is skipped.
 for (const mode of new Set(infra.dns.map((r) => r.match)) as Set<string>) {
   if (mode !== "exact" && !OWNER[mode]) {
-    console.error(`infra.json uses match mode ${JSON.stringify(mode)}, which has no owner explanation in apply-infra.mjs.`);
+    console.error(`infra.json uses match mode ${JSON.stringify(mode)}, which has no owner explanation in apply-infra.ts.`);
     console.error(`Add one to OWNER so the out-of-scope list says who owns those records instead of naming the mode.`);
     process.exit(1);
   }

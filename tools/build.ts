@@ -325,7 +325,7 @@ async function checkInvariants() {
     // explaining why the rule is gone — a guard that fires on its own
     // documentation gets muted, the same reasoning as the font-law scan below.
     // For HTML that means <style> bodies; elsewhere the file minus its comments
-    // (chrome.js / templates.js / generate.mjs carry CSS in template literals).
+    // (chrome.ts / templates.ts / generate.ts carry CSS in template literals).
     const css = f.endsWith(".html")
       ? [...s.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n")
       : s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -1098,7 +1098,7 @@ const minifyJavaScript = (filename, sourceText, options: MinifyOptions = OXC_MIN
 };
 
 // The tolerated-warning family and the pass-through re-proof live in
-// tools/lib/css-parse.ts, shared with check-page-contracts.mjs so a stylesheet
+// tools/lib/css-parse.ts, shared with check-page-contracts.ts so a stylesheet
 // cannot pass one CSS check and fail the other. See that file for why.
 const minifyCss = (filename, sourceText) => parseCss(filename, sourceText, { minify: true });
 
@@ -1875,7 +1875,7 @@ phase("2 homepage");
 {
   // TWO sources on purpose, and the split is the whole point of the twin:
   //   - `authored` is src/pages/index.html untouched. It is what /index.src.html
-  //     ships, and perf-budget.mjs asserts the twin is byte-identical to it.
+  //     ships, and perf-budget.ts asserts the twin is byte-identical to it.
   //     "Readable source" means the file a human wrote, not a build artifact.
   //   - `staged` is that file plus step 1b's injected client edge, and it is what
   //     gets minified and served. Reading `authored` here instead would drop the

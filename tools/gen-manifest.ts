@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// gen-manifest.mjs — derive the mechanical, drift-prone projections of the site
+// gen-manifest.ts — derive the mechanical, drift-prone projections of the site
 // surface registry from site-manifest.json, so the places that used to list the
 // site's pages by hand cannot fork again.
 //

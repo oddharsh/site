@@ -72,7 +72,7 @@ Editor, NIST, arXiv, IACR ePrint, GitHub, Cloudflare Docs); any other host shows
 3. Spec-backed pages (`pipelines/garage/specs`, `pipelines/lwe/specs`) take
    the markup in the spec, in `bodyHtml` (garage) or `messages[].html` (lwe)
    and never in `understanding` or `editorial`, which ship as JSON. Regenerate
-   with `node pipelines/<garage|lwe>/generate.mjs page <id>`.
+   with `node pipelines/<garage|lwe>/generate.ts page <id>`.
 4. Run `bun run test`.
 
 ## Exact figures: hold Alt

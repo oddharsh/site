@@ -1,5 +1,5 @@
 // ── reading somebody else's site ─────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   test,

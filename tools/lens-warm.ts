@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// lens-warm.mjs — fill /lens's browser caches before a demo.
+// lens-warm.ts — fill /lens's browser caches before a demo.
 //
 // WHY THIS EXISTS. Browser Run on the free plan allows 6 calls a minute
 // account-wide and 10 browser-minutes a DAY, shared by /lens/shot,

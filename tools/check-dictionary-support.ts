@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// check-dictionary-support.mjs — is shared-dictionary compression OPERATIONAL, per
+// check-dictionary-support.ts — is shared-dictionary compression OPERATIONAL, per
 // surface class, against PRODUCTION? (bun run dcz:check)
 //
 // Synthesizes Available-Dictionary from the committed dictionary sets, exactly the way a

@@ -1,7 +1,7 @@
 import { runInThisContext } from "node:vm";
 import { browserJavaScript } from "./lib/browser-source.ts";
 // ── the Tools lens: schema in, form plan out ────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   readFileSync,
