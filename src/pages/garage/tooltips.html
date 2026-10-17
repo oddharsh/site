@@ -236,13 +236,13 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   gap: 4px;
   font-size: 9px;
 }
-.lcd-tip .cell .label { color: var(--grey-60); letter-spacing: 0.04em; }
+.lcd-tip .cell .label { color: var(--ink-faint); letter-spacing: 0.04em; }
 .lcd-tip .cell .val   { color: oklch(98% 0 0); font-weight: bold; }
 .lcd-tip .footer-row {
   display: flex;
   justify-content: space-between;
   font-size: 9px;
-  color: var(--grey-60);
+  color: var(--ink-faint);
   border-top: 1px solid oklch(25% 0 0);
   padding-top: 4px;
   margin-top: 2px;
@@ -580,7 +580,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 
 <!-- two shared popovers, populated on hover -->
 <div id="photo-tip" popover="manual" class="lcd-tip" aria-hidden="true"></div>
@@ -593,7 +593,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
     <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/tooltip experiments</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 
     <h1>Tooltip Experiments</h1>
     <p class="lede">
@@ -849,7 +849,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
     <hr>
     <section id="luq" aria-label="understanding check"></section>
 
-  </div>
+  </main>
 </div>
 
 <script>

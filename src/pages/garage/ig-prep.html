@@ -35,13 +35,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/ig-prep</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>Handing Instagram pixels it has no reason to resample</h1>
 <p class="garage-intro">Instagram resizes and re-encodes whatever it is given, except that it won't <a class="term" data-t="image-scaling" href="https://en.wikipedia.org/wiki/Image_scaling" title="Computing a new grid of pixels for an image at a different size, estimating each new pixel from the old ones around it." rel="external">resample</a> a frame that already arrives at the size it wants. <a href="https://github.com/oddharsh/ig-prep">ig-prep</a> does the destructive work here, carefully, so the platform has as little left to do as possible. It also speaks <a href="https://modelcontextprotocol.io">MCP</a>, so a model can run it against photographs on your own machine without any of them moving.</p>
 
@@ -84,7 +84,7 @@
 <p>The general shape is worth more than the instance. <b>An API that takes a preference and reports no error when it declines will be read as an instruction</b>, and the mismatch surfaces wherever the wrong assumption is first load-bearing, which is rarely where it was made.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-24</span></div>
 </div>
 

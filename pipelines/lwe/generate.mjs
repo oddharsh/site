@@ -124,7 +124,7 @@ ${spec.demoCss ? spec.demoCss + "\n" : ""}</style>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window -->${titleBar({ caption: unsafeHtml(`aadhar.sh/lwe &middot; ${titleSuffix}`), closeHref: "/lwe", closeTitle: "back to Learning With Errors" })}<!-- /axp:window -->
-  <div class="content">
+  <main id="main" class="content">
     <div class="msgr">
 
       <div class="msgr-head">
@@ -142,7 +142,7 @@ ${spec.messages.map((m) => renderMsg(m, c)).join("\n\n")}
       </div>
       <div class="compose"><div class="box"><div class="ta">${spec.composeNote || "This is a recorded conversation. Type into the demos above."}</div></div></div>
     </div>
-  </div>
+  </main>
 </div>
 
 ${demoJs}${understanding}${askScript}
