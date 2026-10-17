@@ -901,7 +901,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   padding: 4px 10px; font: var(--text-micro)/1.4 var(--font-ui); color: var(--ink-dim);
   background: var(--face-light); border-top: 1px solid var(--rule);
 }
-:where(.xp-statusbar:not(.panes) > span:not(:last-child))::after { content: "·"; margin-left: 8px; color: var(--ink-faint); }
+:where(.xp-statusbar:not(.panes) > span:not(:last-child))::after { content: "·"; margin-left: 8px; color: var(--ink-dim); }
 :where(.xp-statusbar.panes) { flex-wrap: nowrap; gap: 3px; padding: 2px 3px; }
 :where(.xp-statusbar.panes > span) {
   padding: 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -989,7 +989,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .np-list li:nth-child(even) { background: var(--row-alt); }
 .np-list li:last-child { border-bottom: none; }
 .np-list .np-empty {
-  color: var(--ink-faint);
+  color: var(--ink-dim);
   font-style: italic;
   text-align: center;
   padding: 12px;
@@ -1008,7 +1008,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   color: var(--blue-40);
 }
 .np-sep {
-  color: var(--ink-faint);
+  color: var(--ink-dim);
   margin: 0 4px;
 }
 .np-artist { color: var(--ink-soft); }
@@ -1033,7 +1033,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .np-duration {
   font-family: var(--font-mono);
   font-size: var(--text-mono);
-  color: var(--ink-faint);
+  color: var(--ink-dim);
   float: right;
   margin-left: 8px;
 }
@@ -1198,7 +1198,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   display: block;
   margin-top: 1px;
   font-size: var(--text-3xs);
-  color: var(--ink-faint);
+  color: var(--ink-dim);
 }
 a.car-link:link,
 a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
@@ -1339,7 +1339,7 @@ body:has(.window),body:has(.np-window){padding-top:calc(var(--sa-t) + var(--hype
 .axp-well a{color:oklch(42.61% 0.30 263.74);text-decoration:none}
 .axp-well a:hover{text-decoration:underline}
 .axp-here{color:var(--ink);font-weight:700}
-.axp-sep{padding:0 1px;color:var(--ink-faint)}
+.axp-sep{padding:0 1px;color:var(--ink-dim)}
 
 /* task pane — Luna's pale-blue group boxes: gel caption, rounded top only. */
 .axp-pane{display:flex;flex-direction:column;gap:10px;font:11px/1.45 var(--font-ui)}
