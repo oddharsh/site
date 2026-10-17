@@ -664,3 +664,22 @@ skips it.
     count, and break the path once to watch the floor fire. Gotcha 55 is the
     same split reaching `servedFiles()`.
     Checked by: `tools/build.ts`.
+
+81. **A CPU step smaller than a route's spread fails later PRs, not its own.**
+    #1386 (2026-10-17) gave a browser's 404 a Luna window, and
+    `/this-page-does-not-exist` moved from a p50 of 7.36 ms over the 10 CPU
+    runs before it to 8.96 ms over the 54 conclusive runs after. Its own run
+    read 8.47 against a 10 ms ceiling and passed, because the route spreads
+    about 11% between runs and earlier runs had read up to 8.93. The PRs
+    after it paid: 16 of those 54 runs read over 10, among them #1397
+    (comments only) and #1408 (a build check). The control can't absorb that
+    spread. Scaled `/robots.txt` and the 404 correlated at r = 0.16 across
+    those runs, and dividing by the control widened the spread (CV 10.7% to
+    11.7%), so a control-relative gate would false-fail more. When a route
+    fails on a PR that changed no Worker byte, read it across main's runs by
+    time: the step sits at a merge. Re-fit the ceiling from 30 or more
+    conclusive runs after it and record them in the row's `measured`. A
+    ceiling 20% over the highest run still misses any step inside that
+    headroom: at 14 ms the 404 passed a spin that added 3 ms and failed one
+    that added 5 ms.
+    Checked by: `tools/contract-cpu-sweep-can-tell-slow-from-fast.test.ts`.
