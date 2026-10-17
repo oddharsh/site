@@ -377,8 +377,8 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
 
   return unsafeHtml(`
       <table class="lg">
-        <tr><th>crawler</th><th>operator</th><th class="num">pages</th><th class="num">rate</th><th class="num">amount</th></tr>
-        ${tableRows}
+        <thead><tr><th scope="col">crawler</th><th scope="col">operator</th><th scope="col" class="num">pages</th><th scope="col" class="num">rate</th><th scope="col" class="num">amount</th></tr></thead>
+        <tbody>${tableRows}</tbody>
       </table>
       <div class="lg-total"><span>Total due</span> <b>$${pending ? dots : totalUsd.toFixed(2)}</b> <span class="dim" style="font-size:var(--text-micro); align-self:center;">(${pending ? dots : groupThousands(totalHits)} pages)</span></div>
       ${costLine}`);

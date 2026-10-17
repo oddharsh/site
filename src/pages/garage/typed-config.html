@@ -50,7 +50,7 @@
 .tc-table th{text-align:left;background:var(--surface-desktop);border:1px solid #c8d2e2;padding:4px 7px;font-family:var(--font-caption);color:var(--slate-38)}
 .tc-table td{border:1px solid var(--slate-90);padding:4px 7px;vertical-align:top}
 .tc-table td code{font-size:var(--text-2xs)}
-.tc-table tr:nth-child(even) td{background:var(--paper-cool)}
+.tc-table tbody tr:nth-child(odd) td{background:var(--paper-cool)}
 .tc-ok{color:#1c6b32;font-weight:bold}
 .tc-no{color:#a3261a;font-weight:bold}
 .tc-mig td,.tc-bun td{line-height:1.5}
@@ -146,7 +146,7 @@ COUNTER: bindings.durableObject({ worker: counterWorker, exportName: "Counter" }
 <h2>Migrations become a state on an export</h2>
 <p>The cumulative migration list is gone. A class declares what it is on its own export, and the storage engine sits beside it:</p>
 <div class="tc-scroll"><table class="tc-table tc-mig">
-  <tr><th>wrangler.toml</th><th>cloudflare.config.ts</th></tr>
+  <thead><tr><th scope="col">wrangler.toml</th><th scope="col">cloudflare.config.ts</th></tr></thead>
   <tr><td><code>[[migrations]] tag = "v1"<br>new_sqlite_classes = ["Counter"]</code></td><td><code>Counter: exports.durableObject({ storage: "sqlite" })</code></td></tr>
   <tr><td><code>deleted_classes = ["Old"]</code></td><td><code>Old: exports.durableObject({ state: "deleted" })</code></td></tr>
   <tr><td><code>renamed_classes = [{ from, to }]</code></td><td><code>Old: exports.durableObject({ state: "renamed", renamedTo: "New" })</code></td></tr>
@@ -164,7 +164,7 @@ COUNTER: bindings.durableObject({ worker: counterWorker, exportName: "Counter" }
 Wrangler does not support the Bun runtime. Please try this command again using Node.js via `npm` or `pnpm`.</code></pre>
 <p>On a repository whose whole toolchain is bun, that reads as a blocker for about a minute. It is a claim about the process that ends up running wrangler, whichever package manager launched it. Re-run on bun 1.4.3-canary.1:</p>
 <div class="tc-scroll"><table class="tc-table tc-bun">
-  <tr><th>invocation</th><th>result</th></tr>
+  <thead><tr><th scope="col">invocation</th><th scope="col">result</th></tr></thead>
   <tr><td><code>bun x --no-install wrangler … --x-new-config</code></td><td class="tc-ok">loads, builds</td></tr>
   <tr><td><code>bun run &lt;script&gt;</code>, resolving the same shim</td><td class="tc-ok">loads</td></tr>
   <tr><td><code>bun run --bun &lt;script&gt;</code></td><td class="tc-no">refused</td></tr>
@@ -348,10 +348,12 @@ Wrangler does not support the Bun runtime. Please try this command again using N
     var head = document.createElement("tr");
     ["binding", "written as", "reaches the platform as", "env type"].forEach(function (h) {
       var th = document.createElement("th");
+      th.scope = "col";
       th.textContent = h;
       head.appendChild(th);
     });
-    table.appendChild(head);
+    table.createTHead().appendChild(head);
+    var tableRows = table.createTBody();
     BINDINGS.forEach(function (b) {
       var tr = document.createElement("tr");
       [b.key, b.call, JSON.stringify(b.resolved), b.env].forEach(function (cell, i) {
@@ -362,7 +364,7 @@ Wrangler does not support the Bun runtime. Please try this command again using N
         if (i === 3) td.className = "tc-envcell";
         tr.appendChild(td);
       });
-      table.appendChild(tr);
+      tableRows.appendChild(tr);
     });
   }
 
