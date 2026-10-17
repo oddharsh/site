@@ -3,15 +3,16 @@
 // families. This stays separate from build.ts so editors can run it without
 // staging the deploy tree. `validate` runs it as a background step (gotcha 32).
 
+import { browserJavaScript } from "./lib/browser-source.ts";
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { parseCss } from "./lib/css-parse.ts";
 import { closeTagSource } from "./lib/html-raw-text.ts";
-import { validateUnderstanding } from "../pipelines/content/page-contract.mjs";
-import { pageHtml as renderLwePage } from "../pipelines/lwe/generate.mjs";
-import { pageHtml as renderGaragePage } from "../pipelines/garage/generate.mjs";
+import { validateUnderstanding } from "../pipelines/content/page-contract.ts";
+import { pageHtml as renderLwePage } from "../pipelines/lwe/generate.ts";
+import { pageHtml as renderGaragePage } from "../pipelines/garage/generate.ts";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
@@ -70,14 +71,14 @@ for (const file of lweSpecFiles) {
   assert.equal((html.match(/<link rel="stylesheet" href="\/luna\.css">/g) || []).length, 1, `pipelines/lwe/specs/${file}: generator omitted parse-time Luna shell CSS`);
   assert.doesNotMatch(html, /<style>[\s\S]*?\*\s*\{\s*box-sizing:/, `pipelines/lwe/specs/${file}: generator re-inlined shared LWE structure`);
   if (spec.demoJsFile) {
-    const demo = (await readFile(join(ROOT, "pipelines/lwe/specs", spec.demoJsFile), "utf8")).trimEnd();
+    const demo = browserJavaScript(await readFile(join(ROOT, "pipelines/lwe/specs", spec.demoJsFile), "utf8"), spec.demoJsFile).trimEnd();
     assert.ok(html.includes(`<script>\n${demo}\n</script>`),
       `pipelines/lwe/specs/${file}: generator omitted its external demo program`);
   }
   // Every LWE spec page is its generator's output byte for byte, the same pin
   // Garage carries.
   const published = await readFile(join(ROOT, "src/pages/lwe", `${spec.id}.html`), "utf8");
-  assert.equal(html, published, `src/pages/lwe/${spec.id}.html: run node pipelines/lwe/generate.mjs page ${spec.id}`);
+  assert.equal(html, published, `src/pages/lwe/${spec.id}.html: run node pipelines/lwe/generate.ts page ${spec.id}`);
 }
 
 const garageSpecFiles = (await readdir(join(ROOT, "pipelines/garage/specs")))
@@ -92,7 +93,7 @@ for (const file of garageSpecFiles) {
   // edit to the page (octane carried its own favicon and --axp-maxw for two
   // months) fails here instead of being dropped by the next regeneration.
   const published = await readFile(join(ROOT, "src/pages/garage", `${spec.id}.html`), "utf8");
-  assert.equal(html, published, `src/pages/garage/${spec.id}.html: run node pipelines/garage/generate.mjs page ${spec.id}`);
+  assert.equal(html, published, `src/pages/garage/${spec.id}.html: run node pipelines/garage/generate.ts page ${spec.id}`);
 }
 const garageFixture = {
   id: "contract-fixture",

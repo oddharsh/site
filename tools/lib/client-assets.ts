@@ -246,6 +246,9 @@ const isScript = (a: ClientAsset): boolean => a.kind === "script" || a.kind === 
 
 // ── projections ──────────────────────────────────────────────────────────────
 
+export const clientSourceFile = (file: string): string =>
+  `src/client/${file === "garage/pretext.lib.js" ? file : file.replace(/\.js$/, ".ts")}`;
+
 export type ScriptRow = { file: string; twin: string; marker: string; module: boolean };
 
 // Step 3's rows: every client script, its twin's served path, its marker.
@@ -289,9 +292,9 @@ export const twinOracleRows = (assets: readonly ClientAsset[] = CLIENT_ASSETS): 
 // 0 bytes, and "lost the LensBrowser marker" is what stopped it). Takes the
 // recursive listing of src/client; returns one problem per line, empty if none.
 export function clientScriptProblems(srcClientFiles: readonly string[], assets: readonly ClientAsset[] = CLIENT_ASSETS): string[] {
-  const rows = new Map(minifiedScripts(assets).map((r) => [r.file, r.marker]));
+  const rows = new Map(minifiedScripts(assets).map((r) => [clientSourceFile(r.file).slice("src/client/".length), r.marker]));
   const problems: string[] = [];
-  const missing = srcClientFiles.filter((f) => f.endsWith(".js") && f !== "sw.js" && !rows.has(f));
+  const missing = srcClientFiles.filter((f) => /\.(?:js|ts)$/.test(f) && !f.endsWith(".d.ts") && f !== "sw.ts" && !rows.has(f));
   if (missing.length) problems.push(`${missing.join(", ")} in src/client but not in the client asset registry, so it would ship unminified with no twin and no marker tripwire`);
   const unmarked = [...rows].filter(([, marker]) => !marker).map(([file]) => file);
   if (unmarked.length) problems.push(`${unmarked.join(", ")} carries no marker, so a minifier deleting it would pass the build`);

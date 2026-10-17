@@ -214,7 +214,7 @@ mv "$OUT.tmp" "$OUT"
 #
 # These files are a local pipeline artifact. The histogram bake and the index
 # build below read them; build.ts derives the served /images/meta/ files from
-# the committed indexes. Bump META_V in tooltip.js when the fields change.
+# the committed indexes. Bump META_V in src/client/tooltip.ts when the fields change.
 META_DIR="$PUBLIC_DIR/images/meta"
 mkdir -p "$META_DIR"
 if [ "$MERGE" -eq 0 ]; then

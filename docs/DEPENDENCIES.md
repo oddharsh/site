@@ -184,13 +184,13 @@ contention. The tables, the isolation argument and the control are at
 `comment:test-parallel`.
 
 **The `Bun.*` globals are the part to be careful with, and the rule is short:
-anything a `.test.mjs` file imports, or spawns with `process.execPath`, runs
+anything a `.test.ts` file imports, or spawns with `process.execPath`, runs
 under node too, so a `Bun.` reference there fails `test:node` and passes every
 local run.** That is why 22 tools walk directories with `readdirSync` rather than
 `Bun.Glob`, why `check-tools.ts` walks `PATH` by hand rather than calling
 `Bun.which`, and why TOML is read by `tools/lib/toml.ts` rather than `Bun.TOML`:
 its three consumers (`tools/lib/dependency-docs.ts`, `tools/lib/retired.ts` and
-`contract-osv-ignore-names-a-url-pin.test.mjs`) are each a test or imported by
+`contract-osv-ignore-names-a-url-pin.test.ts`) are each a test or imported by
 one. That module replaced `smol-toml` on 2026-10-08. Two files are audited exceptions today, each
 run only by bun and spawned by nothing: `gen-runtime-types.ts` (`Bun.TOML`)
 and `gen-repo-card.ts` (`Bun.WebView`, `Bun.write`). No scanner enforces this. `bun run test:node` in CI is the
@@ -317,7 +317,7 @@ bun run node:pin --pretend 22   # in maintenance since 2025-10-21
 ```
 
 The tree half of the check has no network and lives in
-`contract-the-node-pin-is-declared-once.test.mjs`, so `validate` already runs it:
+`contract-the-node-pin-is-declared-once.test.ts`, so `validate` already runs it:
 the pin is a bare major, the three node numbers below stay in order, and every
 workflow reads the file rather than naming a version inline.
 
@@ -677,7 +677,7 @@ the reason, rather than written here with the caret quietly dropped.
   remove, replace, move, `textContent`, and `innerHTML`.
 
   It stays INSTALLED because it is the oracle.
-  `test/dom-differential.test.mjs` runs the real pipeline twice over every
+  `test/dom-differential.test.ts` runs the real pipeline twice over every
   page in `src/pages` plus the 10 captures (57 documents on 2026-10-17), once
   on each DOM, and compares title, byline, content, markdown and
   control labels byte for byte; a second gate compares the serialized parse tree
@@ -726,7 +726,7 @@ the reason, rather than written here with the caret quietly dropped.
   | SVG `clipPath` | lowercased to `clippath` | case preserved, per foreign content |
 
   So linkedom's upstream test is pinning the pre-spec string, which is exactly
-  what this repository's own test was doing (`test/reader.test.mjs` carried the
+  what this repository's own test was doing (`test/reader.test.ts` carried the
   11 serialization as its expectation, with a message naming 12 as the thing
   that would break it). Both were reading a regression where there was a
   correction.

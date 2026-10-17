@@ -128,7 +128,7 @@ pathIgnorePatterns = [
 # `bun fmt` cannot do damage: Bun reads it whenever anyone runs the formatter,
 # and every line below answers a hazard measured on 2026-10-16 by formatting the
 # whole tree and running the build, the suite, lint and the checks against it.
-# tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs holds each
+# tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.ts holds each
 # one, with a --no-config control showing the hazard is real on the pinned bun.
 #
 #   embeddedLanguageFormatting = "off"  the default reformats the HTML inside
@@ -164,8 +164,8 @@ ignorePatterns = [
   "tools/oxlint/anti-slop/**",
   "src/worker/lib/desktop.*",
   "src/worker/lib/site-manifest.*",
-  "src/client/nav-run.js",
-  "src/client/lwe/ask.js",
+  "src/client/nav-run.ts",
+  "src/client/lwe/ask.ts",
   "lwe-ask/src/passages.ts",
   "**/bun.lock",
 ]

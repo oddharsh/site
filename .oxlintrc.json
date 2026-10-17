@@ -232,39 +232,6 @@
   // taken from a partial install as a floor. Same shape as the lens-reader
   // lesson in CLAUDE.md, from the other direction.
   //
-  // These six overrides apply only to .js/.mjs, not the TypeScript source.
-  // The counts below are the original JavaScript-era triage, not a current
-  // census; the program-discovery caveat above applies to all of them:
-  //
-  //   no-base-to-string (14) + restrict-template-expressions (12)
-  //     Both want a provable `string` in a template literal. In a .js file with
-  //     no JSDoc the value is `any`, so these fire on `${url}` where url is a
-  //     URL and on `${method}` where method is a literal string. Neither is
-  //     necessarily a defect. The rules remain enabled for TypeScript.
-  //
-  //   require-array-sort-compare (10)
-  //     `[...services].sort()` in ledger.js is a Set built from String(...), so
-  //     it is provably strings to a reader and `Set<any>` to the checker. The
-  //     rule's own `ignoreStringArrays` option cannot help when the element type
-  //     is unknowable.
-  //
-  //   no-misused-spread (8)
-  //     `[...str]` splitting a string into code points. Correct to flag when the
-  //     input might carry emoji; every site here spreads ASCII the build just
-  //     produced.
-  //
-  //   unbound-method (5)
-  //     All five are in lens-tools.js, on `read: inner.read`. Every `read` is a
-  //     CLOSURE over a DOM node (the file says so at its renderer comment: "a
-  //     plan in, DOM plus a read() closure out"), so none of them touch `this`.
-  //
-  //   no-implied-eval (2)
-  //     Both are deliberate test technique in contract-tests.mjs: `new
-  //     Function(script)` as a syntax check on inline blocks, and again to load
-  //     a browser module under node. Each already carries a comment saying so.
-  //
-  // What stays on is the family that catches the failure this runtime actually
-  // has: a promise nobody awaited, which workerd cancels at request teardown.
   "overrides": [
     {
       // The parse layer itself. A hand-rolled parser is MADE of `typeof`, so
@@ -281,7 +248,7 @@
       // is literally "parse it where it enters, then branch on a value you can
       // trust". A validator is made of `typeof`; the rule cannot be satisfied
       // inside the thing it is asking you to build.
-      "files": ["pipelines/content/page-contract.mjs", "pipelines/garage/generate.mjs"],
+      "files": ["pipelines/content/page-contract.ts", "pipelines/garage/generate.ts"],
       "rules": { "anti-slop/no-runtime-typeof": "off" }
     },
     {
@@ -312,17 +279,6 @@
       // matchers; tools/ asserts with node:assert and is untouched.
       "files": ["cal/test/**"],
       "rules": { "typescript/await-thenable": "off" }
-    },
-    {
-      "files": ["**/*.js", "**/*.mjs"],
-      "rules": {
-        "typescript/no-base-to-string": "off",
-        "typescript/restrict-template-expressions": "off",
-        "typescript/require-array-sort-compare": "off",
-        "typescript/no-misused-spread": "off",
-        "typescript/unbound-method": "off",
-        "typescript/no-implied-eval": "off"
-      }
     }
   ]
 }

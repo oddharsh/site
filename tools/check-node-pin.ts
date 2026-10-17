@@ -31,7 +31,7 @@
 // TWO TIERS, the same split infra:check and tools:check use.
 //
 //   tree      no network, and it lives in
-//             contract-the-node-pin-is-declared-once.test.mjs rather than here,
+//             contract-the-node-pin-is-declared-once.test.ts rather than here,
 //             so `validate` already runs it: the pin is a bare major, the
 //             `engines` floor agrees with it, and every workflow reads the file
 //             instead of naming a version.

@@ -18,7 +18,7 @@
 // merge instead of only after a deploy. A local base drops the rows tagged
 // `remote` (see below); everything else is asserted identically.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { agentRepresentation, agentSurfaces, needsBuiltTwin } from "./lib/agent-representation.ts";
 import { twinOracleRows } from "./lib/client-assets.ts";
 
@@ -42,6 +42,20 @@ const TIMEOUT_MS = Number(process.env.VERIFY_TIMEOUT_MS || 20000);
 const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(base);
 const isProd = !isLocal;
 const builtOutput = isProd || process.env.VERIFY_BUILT === "1";
+
+// A row's `readable` names the repo source its response is minified from. The
+// response must come in at most this fraction of that file's size, read at
+// check time, so a deploy that served the source itself (ratio 1.0) fails.
+// It replaced fixed byte caps on 2026-10-17. A cap has to sit between two sizes
+// that both move, and nav.js's did not. Its readable source was 102,009 B when
+// the 65,000 cap was set (2026-08-11) and 49,704 B a week later, once its
+// islands split out; it measured 61,284 B on 2026-10-17. A bypass passed the
+// size check all that time, leaving only the banner marker. A ratio holds the gap
+// by construction. The loosest row measured 0.60 (nav-tips.js), so 0.8 leaves
+// room for the minifier to do worse. A manual run against production from a
+// checkout whose sources have drifted from the deployed ones moves the ratio
+// too; real budgets live in perf-budget.ts.
+const MINIFIED_MAX_RATIO = 0.8;
 
 // VERIFY_REMOTE=1 keeps the `remote` rows on a LOCAL base. Same shape as
 // VERIFY_BUILT above and for the same reason: the rows are skipped locally
@@ -213,31 +227,25 @@ const ROUTES = [
   { path: "/lens-webmcp.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensWebMcp" },
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
   { path: "/lens-browser.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
-  // maxBytes is a "did the build actually minify this" tripwire, not a byte
-  // budget: the authored sheet is 99,322 B (2026-10-16), so anything near that means the build
-  // was bypassed. Raised 45,000 -> 50,000 when the Explorer chrome added 3.5 KB
-  // of rules (563 B brotli). Keep it comfortably under the unminified size, or
-  // it stops detecting the thing it exists to detect.
-  { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: builtOutput ? 50000 : undefined },
+  // `readable` is the minification tripwire (see MINIFIED_MAX_RATIO): 43,643 B
+  // served against a 99,322 B source on 2026-10-17.
+  { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", readable: builtOutput ? "src/styles/luna.css" : undefined },
   // the retired SW's unregister stub: must keep serving 200 for a year+
   { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
-  // build-output oracle (prod only — dev serves the readable public/ tree): a
-  // deploy that skipped build.ts ships the readable nav.js with no banner
-  // and 404s every .src twin. These are the tripwire for that exact bypass.
-  //
-  // 50,000 -> 65,000 when the shell infotips landed: the minified shell reached
-  // 49,759 B and a 241-byte gap turns a bypass tripwire into an accidental byte
-  // budget, failing on whichever unrelated change happens to cross it. The
-  // readable src/client/nav.js is 61,284 B (2026-10-16), under that cap, so the
-  // "minified at deploy" banner marker is what catches a bypass of nav.js now.
-  // If real byte pressure is the concern, perf-budget.ts is where a budget belongs.
+  // build-output oracle (prod only, since dev serves the readable public/ tree):
+  // a deploy that skipped build.ts ships each shell script as its readable
+  // source with no banner and 404s every .src twin. The banner marker and the
+  // `readable` size check are two independent tripwires for that bypass.
+  // Measured 2026-10-17, served (minified) against readable source, in bytes:
+  //   nav.js 19,106 / 61,284   nav-run.js 16,573 / 33,459   nav-tray.js 6,239 / 11,135
+  //   nav-pipes.js 10,266 / 22,560   nav-tips.js 6,718 / 11,251   tooltip.js 7,001 / 26,824
   ...(builtOutput ? [
-    { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 65000 },
-    { path: "/nav-run.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 25000 },
-    { path: "/nav-tray.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 10000 },
-    { path: "/nav-pipes.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 20000 },
-    { path: "/nav-tips.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 10000 },
-    { path: "/tooltip.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 18000 },
+    { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav.ts" },
+    { path: "/nav-run.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-run.ts" },
+    { path: "/nav-tray.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-tray.ts" },
+    { path: "/nav-pipes.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-pipes.ts" },
+    { path: "/nav-tips.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-tips.ts" },
+    { path: "/tooltip.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/tooltip.ts" },
     // Every client script's readable twin serves and still carries the marker the
     // build holds its minified copy to: one row per script in the client asset
     // registry. /lwe/ask.src.js has its own row further down, which also
@@ -639,7 +647,7 @@ async function probe(r) {
     const ct = res.headers.get("content-type") || "";
     let body = "", bytes = null;
     // read the body when we need a marker or a size assertion on a text response
-    if ((r.marker || r.maxBytes || r.fullPage || r.fragment) && /text|json|javascript|markdown|svg|css/.test(ct)) {
+    if ((r.marker || r.readable || r.fullPage || r.fragment) && /text|json|javascript|markdown|svg|css/.test(ct)) {
       const full = await res.text();
       bytes = Buffer.byteLength(full);
       body = full.slice(0, 200000);
@@ -658,7 +666,8 @@ async function probe(r) {
     const okCors = !r.cors || cors === r.cors;
     const location = res.headers.get("location");
     const okLocation = !r.location || (location !== null && new URL(location, base).pathname === r.location);
-    const okBytes = !r.maxBytes || (bytes !== null && bytes <= r.maxBytes);
+    const maxBytes = r.readable ? Math.floor(statSync(new URL(r.readable, ROOT)).size * MINIFIED_MAX_RATIO) : null;
+    const okBytes = maxBytes === null || (bytes !== null && bytes <= maxBytes);
     // The doctype leads the document, but build.ts stamps a one-line banner
     // pointing at the readable .src.html twin ahead of it.
     //
@@ -676,8 +685,9 @@ async function probe(r) {
     //
     // What is genuinely given up is that a TRUNCATED response no longer looks
     // different from a complete one at the last byte. The oracle still catches
-    // truncation through maxBytes and the marker assertions, which is where it
-    // was really being caught; this line only ever caught it by accident.
+    // truncation through the marker assertions, which is where it was really
+    // being caught; this line only ever caught it by accident. (The size check
+    // can't: it is an upper bound, and a truncated body passes it.)
     const okFullPage = !r.fullPage || (
       /^(?:<!--[\s\S]*?-->\s*)?<!doctype html[\s>]/i.test(body) &&
       /<html\b/i.test(body) &&
@@ -689,7 +699,7 @@ async function probe(r) {
       (!r.fragmentRoot || body.includes(r.fragmentRoot))
     );
     const pass = okStatus && okCt && okEnc && okMarker && okCors && okLocation && okBytes && okFullPage && okFragment;
-    return { path: r.path, status: res.status, ct, enc, wantEnc: r.encoding, cors, wantCors: r.cors, location, wantLocation: r.location, okLocation, pass, flaky: !!r.flaky, okStatus, okCt, okEnc, okMarker, okCors, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
+    return { path: r.path, status: res.status, ct, enc, wantEnc: r.encoding, cors, wantCors: r.cors, location, wantLocation: r.location, okLocation, pass, flaky: !!r.flaky, okStatus, okCt, okEnc, okMarker, okCors, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes, readable: r.readable };
   } catch (e) {
     return { path: r.path, status: 0, ct: "", pass: false, flaky: !!r.flaky, error: String(e && e.message || e), want: r.status };
   }
@@ -726,7 +736,7 @@ async function main() {
       r.okMarker === false ? `missing marker "${r.marker}"` : "",
       r.okCors === false ? `access-control-allow-origin "${r.cors || "none"}" != "${r.wantCors}"` : "",
       r.okLocation === false ? `location "${r.location || "none"}" does not name ${r.wantLocation}` : "",
-      r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B (unminified? build bypassed?)` : "",
+      r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B, ${MINIFIED_MAX_RATIO} of ${r.readable} (unminified? build bypassed?)` : "",
       r.okFullPage === false ? "full-page contract missing document wrapper" : "",
       r.okFragment === false ? "fragment contract returned a document wrapper" : "",
       r.error ? `err ${r.error}` : "",

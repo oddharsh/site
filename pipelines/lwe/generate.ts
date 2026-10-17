@@ -1,0 +1,257 @@
+#!/usr/bin/env node
+import { browserJavaScript } from "../../tools/lib/browser-source.ts";
+// LWE page generator.
+//
+//   node pipelines/lwe/generate.ts page <id>   # specs/<id>.json -> src/pages/lwe/<id>.html
+//   node pipelines/lwe/generate.ts wire         # rewrite the registry-driven regions
+//                                               #   + the canonical manifest projections
+//
+// concepts.json owns LWE content metadata; site-manifest.json owns discovery. A page-spec (specs/<id>.json) carries
+// only what is unique to one concept: the conversation, the demos, the disclosure,
+// the reader model, and the understanding check.
+// Everything structural — the window chrome, the messenger shell, the taskbar desktop —
+// is generated here so every page stays byte-identical in its bones.
+//
+// CONTENT CONTRACT for specs (the voice the structuring step must hit):
+//   - Apply ALL of the below together, never one subset instead of another.
+//   - LRS clarity: every sentence needs a character doing an action. Kill nominalizations
+//     (-tion/-ment/-ance/-ity nouns hiding a verb). Link clauses with real connectors
+//     (because, although, so that), not "and"/"also".
+//   - No AI shibboleths: no em dashes, straight apostrophes, contractions on, no banned
+//     phrases, never the "not X, Y" negation pattern. Emojis only when they earn their
+//     place (a functional glyph or a genuinely apt beat), never as filler reactions.
+//   - Teacher bubbles that quote a source stay verbatim; mark them with `cite`.
+//   - Every spec carries an `editorial` card (reader, problem, thesis, evidence,
+//     uncertainty) and an `understanding` card (3–7 questions, one correct option,
+//     feedback on every option). The shared contract validates both.
+//   - DEMO DETECTION: in the source chat, a request to clarify, to re-explain, or an
+//     explicit "show me" is a demo cue. Those moments become {demo:{...}} slots, authored
+//     by hand. The pipeline flags them; a human builds the actual widget.
+
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { renderUnderstanding, validatePageSpec } from "../content/page-contract.ts";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { unsafeHtml } from "../../src/worker/lib/html.ts";
+import { titleBar } from "../../src/worker/lib/window.ts";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
+const PAGES = join(ROOT, "src/pages");
+const REGISTRY = JSON.parse(readFileSync(join(HERE, "concepts.json"), "utf8")).concepts;
+const byId = (id) => REGISTRY.find((c) => c.id === id);
+
+// Everything structural lives in /lwe-base.css, and the window chrome in
+// /luna.css, so a page says only which concept it is: its glyph and its colors,
+// as custom properties on :root that lwe-base.css's "per-concept chrome" rules
+// read. lwe-base's defaults are this generator's cream Messenger look, so a
+// generated page never restates them. The one inline rule is the code style in
+// a bubble, which lwe-base leaves out because a hand-written page (lean) styles
+// its bubble code differently and would inherit it.
+function chromeCss(c) {
+  const soft = c.accentSoft || "#f6f1e6";
+  const [g0, g1] = c.picGrad;
+  const glyphFont = c.glyphFont ? `;--glyph-font:${c.glyphFont}` : "";
+  return `:root{--accent:${c.accent};--accent-soft:${soft};--glyph:"${c.glyph}";--pic-g0:${g0};--pic-g1:${g1};--pic-border:${c.picBorder};--name-color:${c.nameColor}${glyphFont}}
+.msg .bubble code { font-family: var(--font-mono); font-size: var(--text-sm); background: var(--face-light); padding: 0 3px; border-radius: 2px; }`;
+}
+
+function renderMsg(m, c) {
+  if (m.scrollnote) return `      <div class="scrollnote">${m.scrollnote}</div>`;
+  if (m.demo) {
+    const d = m.demo;
+    return `      <div class="demo"${d.id ? ` id="${d.id}"` : ""}>\n        <div class="bar">${d.bar || "live demo"}</div>\n        <div class="pad">${d.html}</div>\n      </div>`;
+  }
+  const who = m.who === "you" ? "aadharsh" : (c.buddyName || c.title);
+  const cite = m.cite ? ` <a href="${m.cite.url}" rel="external" title="${m.cite.title || "source"}">[src]</a>` : "";
+  return `      <div class="msg ${m.who}"><div class="pic"></div><div><div class="who"><b>${who}</b>${m.time ? `<time>${m.time}</time>` : ""}</div>\n        <div class="bubble">${m.html}${cite}</div></div></div>`;
+}
+
+function demoSource(spec) {
+  if (spec.demoJs && spec.demoJsFile) {
+    throw new Error(`LWE spec "${spec.id}" must use either demoJs or demoJsFile, not both`);
+  }
+  if (!spec.demoJsFile) return spec.demoJs || "";
+  if (!/^[a-z0-9-]+\.ts$/.test(spec.demoJsFile)) {
+    throw new Error(`LWE spec "${spec.id}" has an invalid demoJsFile`);
+  }
+  return browserJavaScript(readFileSync(join(HERE, "specs", spec.demoJsFile), "utf8"), spec.demoJsFile).trimEnd();
+}
+
+function pageHtml(spec) {
+  const c = byId(spec.id);
+  if (!c) throw new Error(`no registry entry for "${spec.id}"`);
+  validatePageSpec(spec, `LWE spec "${spec.id}"`);
+  const titleSuffix = c.title;
+  const stat = spec.buddyStat || c.navHint;
+  const pets = spec.petsLine || "Learning&nbsp;With&nbsp;Errors";
+  const favFill = c.accent.replaceAll("#", "%23");
+  const favFont = c.glyphFont ? c.glyphFont.replace(/"/g, "'") : "Trebuchet MS,sans-serif";
+  const askScript = (spec.hasAsk ?? c.hasAsk) ? `\n<script src="/lwe/ask.js" defer></script>` : "";
+  const demoProgram = demoSource(spec);
+  const demoJs = demoProgram ? `<script>\n${demoProgram}\n</script>\n` : "";
+  const understanding = renderUnderstanding(spec.understanding, "lwe");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh${c.path} · ${titleSuffix}</title>
+<meta name="description" content="${spec.description || ""}">
+<link rel="canonical" href="https://aadhar.sh${c.path}">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='${favFill}'/%3E%3Ctext%20x='16'%20y='23'%20font-size='20'%20font-family='${favFont.replaceAll(" ", "%20")}'%20fill='%23fff'%20text-anchor='middle'%3E${c.glyph}%3C/text%3E%3C/svg%3E">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh${c.path} · ${titleSuffix}">
+<meta property="og:url" content="https://aadhar.sh${c.path}">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh${c.path} · ${titleSuffix}, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.jpg">
+
+<link rel="stylesheet" href="/lwe-base.css">
+<style>${chromeCss(c)}
+${spec.demoCss ? spec.demoCss + "\n" : ""}</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
+<div class="window">
+  <!-- axp:window -->${String(titleBar({ caption: unsafeHtml(`aadhar.sh/lwe &middot; ${titleSuffix}`), closeHref: "/lwe", closeTitle: "back to Learning With Errors" }))}<!-- /axp:window -->
+  <main id="main" class="content">
+    <div class="msgr">
+
+      <div class="msgr-head">
+        <div class="ava" aria-hidden="true"></div>
+        <h1 class="who"><b>${c.buddyName}</b><span class="stat">Online, ${stat}</span></h1>
+        <div class="pets">${pets}</div>
+      </div>
+
+      <p class="disclosure">${spec.disclosure}</p>
+
+      <div class="log">
+
+${spec.messages.map((m) => renderMsg(m, c)).join("\n\n")}
+
+      </div>
+      <div class="compose"><div class="box"><div class="ta">${spec.composeNote || "This is a recorded conversation. Type into the demos above."}</div></div></div>
+    </div>
+  </main>
+</div>
+
+${demoJs}${understanding}${askScript}
+<script src="/nav.js" defer></script>
+<!-- axp:shell -->${DESKTOP_CHROME}<!-- /axp:shell -->
+</body>
+</html>
+`;
+}
+
+// ---- registry-driven wiring ----
+function sitemapBlock(concepts) {
+  const online = concepts.filter((c) => c.status === "online");
+  const rows = online.map((c) => `  <url>\n    <loc>https://aadhar.sh${c.path}</loc>\n    <lastmod>${c.lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.3</priority>\n  </url>`);
+  return rows.join("\n");
+}
+// The buddy list (src/pages/lwe/index.html): the full Online group, count + list,
+// emitted to match the hand-authored markup exactly. Status badge per concept
+// (chat = live ask box, read = page only). The per-buddy .pic CSS stays hand-authored.
+function buddyGroup(concepts) {
+  // Newest first, which is the order /garage's shelf reads in and the order a
+  // returning visitor wants: the buddy they have not seen is at the top. The
+  // sort lives HERE rather than in concepts.json because that file is also the
+  // source for the sitemap block and ask.js, neither of which cares
+  // about recency, and because a display order that depends on where somebody
+  // appended an entry is the drift this exists to prevent. `lastmod` is the only
+  // date the registry carries; git cannot stand in for it, since the whole
+  // section arrived in one 2026-06-30 recovery commit. Ties keep registry order.
+  const online = concepts.filter((c) => c.status === "online")
+    .map((c, i) => ({ c, i }))
+    .sort((x, y) => (x.c.lastmod === y.c.lastmod ? x.i - y.i : (x.c.lastmod < y.c.lastmod ? 1 : -1)))
+    .map(({ c }) => c);
+  const items = online.map((c) =>
+`      <li><a class="buddy ${c.buddyClass}" href="${c.path}">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>${c.buddyName}</b><span class="pm">${c.pm}</span></span>
+        <span class="st on">${c.badge}</span>
+      </a></li>`).join("\n");
+  return `    <div class="grp">Online <span class="n">· ${online.length}</span></div>\n    <ul class="buddies">\n${items}\n    </ul>`;
+}
+// The ask.js CONCEPTS allow-list: only concepts with hasAsk + a grounded corpus.
+// Keeps the include set from drifting (a page ships ask.js only when hasAsk is true).
+function conceptsBlock(concepts) {
+  const entries = concepts.filter((c) => c.hasAsk).map((c) => `"${c.path}": "${c.id}"`).join(", ");
+  return `  var CONCEPTS = { ${entries} };`;
+}
+
+// Replace the text between an explicit start/end marker pair. Markers are passed
+// in full so each file can use its own comment syntax (HTML for .xml/.html, // for .js).
+//
+// `file` is REPO-ROOT relative, never relative to the served tree. Targets left
+// src/pages/ in the 2026-08-18 layout split (sitemap.xml to public/, ask.js to
+// src/client/lwe/ by 2026-09-16), and resolving them against the served tree for
+// months afterwards made `wire` silently skip them, so every later concept got
+// hand-wired into regions this script owns.
+function injectBetween(file, start, end, content) {
+  const path = join(ROOT, file);
+  const src = readFileSync(path, "utf8");
+  const i = src.indexOf(start), j = src.indexOf(end);
+  if (i === -1 || j === -1) { console.log(`  · ${file}: markers not found, SKIPPED (${start})`); return false; }
+  const next = src.slice(0, i + start.length) + "\n" + content + "\n" + src.slice(j);
+  writeFileSync(path, next);
+  console.log(`  · ${file}: rewrote ${start.replace(/[^\w:-]+/g, " ").replace(/^[\s-]+|[\s-]+$/g, "")} region`);
+  return true;
+}
+
+export { pageHtml, chromeCss, renderMsg };
+
+if (import.meta.main) {
+  const [cmd, arg] = process.argv.slice(2);
+  if (cmd === "page") {
+    const spec = JSON.parse(readFileSync(join(HERE, "specs", `${arg}.json`), "utf8"));
+    const out = join(PAGES, "lwe", `${arg}.html`);
+    const next = pageHtml(spec);
+    // REFUSE TO OVERWRITE A PAGE THAT HAS DRIFTED FROM ITS SPEC. Four of the
+    // five published pages once carried work that existed only in the HTML (dac
+    // had a whole tube-distortion demo, ~15KB, in no spec field), and
+    // regenerating discarded it silently. Since 2026-09-30 check-page-contracts
+    // pins html === published for every spec, so a drift fails there first and
+    // this refusal is the second line. --force is the deliberate act, for when
+    // the spec is genuinely the newer of the two (an edit to the spec, then a
+    // regeneration).
+    const prev = existsSync(out) ? readFileSync(out, "utf8") : null;
+    if (prev !== null && prev !== next && !process.argv.includes("--force")) {
+      const delta = prev.length - next.length;
+      console.error(`refusing to overwrite ${out}: it differs from its spec by ${delta > 0 ? "+" : ""}${delta} bytes.`);
+      console.error(`  the published page is what ships, so back-port it into specs/${arg}.json first.`);
+      console.error(`  re-run with --force only if specs/${arg}.json is the newer of the two.`);
+      process.exit(1);
+    }
+    writeFileSync(out, next);
+    console.log(`wrote ${out}`);
+  } else if (cmd === "wire") {
+    console.log("wiring from concepts.json:");
+    const wired = [
+      injectBetween("public/sitemap.xml", "<!-- generated:lwe:start -->", "<!-- generated:lwe:end -->", sitemapBlock(REGISTRY)),
+      injectBetween("src/pages/lwe/index.html", "<!-- generated:buddies:start -->", "<!-- generated:buddies:end -->", buddyGroup(REGISTRY)),
+      injectBetween("src/client/lwe/ask.ts", "// generated:concepts:start", "// generated:concepts:end", conceptsBlock(REGISTRY)),
+    ];
+    // A skipped target is the failure this script had for months, and it was silent
+    // because a soft skip prints beside the successes and reads as noise. Exit
+    // non-zero so a moved file fails the run that depends on it.
+    if (wired.some((ok) => !ok)) {
+      console.error(`wire: ${wired.filter((ok) => !ok).length} of ${wired.length} target(s) skipped, see above`);
+      process.exit(1);
+    }
+    // The manifest owns both navigation and agent discovery. Use its writer so
+    // publishing a concept cannot leave the two projections on different inputs.
+    execFileSync(process.execPath, [join(ROOT, "tools/gen-manifest.ts")], { cwd: ROOT, stdio: "inherit" });
+  } else {
+    console.log("usage: generate.ts page <id> | generate.ts wire");
+  }
+}

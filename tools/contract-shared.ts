@@ -152,7 +152,7 @@ function fakeImages() {
 }
 
 function representationD1() {
-  const rows = [];
+  const rows: Record<string, any>[] = [];
   let batches = 0;
   return {
     prepare(sql) {
@@ -235,7 +235,7 @@ function staticAssets(files) {
 }
 
 function fakeD1() {
-  const rows = [];
+  const rows: Record<string, any>[] = [];
   const statements: string[] = [];
   const run = (sql, args) => {
     const s = sql.replace(/\s+/g, " ").trim();

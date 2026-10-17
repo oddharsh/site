@@ -15,8 +15,9 @@
 // build's collision walk skipped one derived path where its copy skipped
 // three, and dev's skip set missed single-owner directories (linkServedTree
 // now handles that case).
-import { copyFile, mkdir, readdir, rm, rmdir, stat, symlink } from "node:fs/promises";
+import { copyFile, readFile, writeFile, mkdir, readdir, rm, rmdir, stat, symlink } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
+import { browserJavaScripts } from "./browser-source.ts";
 import { cloneTree } from "./clone-tree.ts";
 
 // What a root HOLDS decides which questions it answers. The test for where a
@@ -118,8 +119,10 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
     if (provided) provided.push(root);
     else directories.set(rel, [root]);
     for (const entry of await readdir(resolve(cwd, root, rel), { withFileTypes: true })) {
-      const child = rel ? `${rel}/${entry.name}` : entry.name;
-      const source = `${root}/${child}`;
+      const authored = rel ? `${rel}/${entry.name}` : entry.name;
+      const source = `${root}/${authored}`;
+      const child = root === "src/client" && authored.endsWith(".ts") && !authored.endsWith(".d.ts")
+        ? authored.replace(/\.ts$/, ".js") : authored;
       if (derived.has(source)) {
         skipped.push(source);
         continue;
@@ -185,16 +188,26 @@ async function cloneFirstRoot(plan: ServedTreePlan, out: string, cwd: string): P
 // THE BUILD ADAPTER: copy every planned file to `dest`. Directories are made
 // first, from the plan's union, so no two copies race through mkdir for a
 // directory several roots share, and an empty authored directory still ships.
+async function clientScripts(plan: ServedTreePlan, cwd: string): Promise<Map<string, string>> {
+  const sources = await Promise.all([...plan.files]
+    .filter(([served, source]) => source.endsWith(".ts") && served.endsWith(".js"))
+    .map(async ([, source]): Promise<[string, string]> => [source, await readFile(resolve(cwd, source), "utf8")]));
+  return browserJavaScripts(new Map(sources));
+}
+
 const COPY_WIDTH = 64;
 export async function copyServedTree(plan: ServedTreePlan, dest: string, options: AdapterOptions = {}): Promise<{ files: number; dirs: number; cloned: string | null }> {
   const cwd = options.cwd ?? ".";
   const out = resolve(cwd, dest);
+  const scripts = await clientScripts(plan, cwd);
   const cloned = await cloneFirstRoot(plan, out, cwd);
   await Promise.all([...plan.directories.keys()].map((dir) => mkdir(resolve(out, dir), { recursive: true })));
   const pending = cloned ? [...plan.files].filter(([rel, source]) => source !== `${cloned}/${rel}`) : [...plan.files];
   const worker = async () => {
     for (let next = pending.pop(); next; next = pending.pop()) {
-      await copyFile(resolve(cwd, next[1]), resolve(out, next[0]));
+      if (next[1].endsWith(".ts") && next[0].endsWith(".js")) {
+        await writeFile(resolve(out, next[0]), scripts.get(next[1])!);
+      } else await copyFile(resolve(cwd, next[1]), resolve(out, next[0]));
     }
   };
   await Promise.all(Array.from({ length: COPY_WIDTH }, worker));
@@ -219,6 +232,7 @@ export async function copyServedTree(plan: ServedTreePlan, dest: string, options
 export async function linkServedTree(plan: ServedTreePlan, dest: string, options: AdapterOptions = {}): Promise<{ links: number; dirs: number }> {
   const cwd = options.cwd ?? ".";
   const out = resolve(cwd, dest);
+  const scripts = await clientScripts(plan, cwd);
 
   const children = new Map<string, Set<string>>();
   const adopt = (path: string) => {
@@ -235,7 +249,9 @@ export async function linkServedTree(plan: ServedTreePlan, dest: string, options
   let dirs = 0;
   const link = async (served: string, source: string) => {
     const at = served ? resolve(out, served) : out;
-    await symlink(relative(dirname(at), resolve(cwd, source)), at);
+    if (source.endsWith(".ts") && served.endsWith(".js")) {
+      await writeFile(at, scripts.get(source)!);
+    } else await symlink(relative(dirname(at), resolve(cwd, source)), at);
     links++;
   };
   const hidesSkipped = (source: string) => plan.skipped.some((path) => path.startsWith(`${source}/`));
@@ -243,7 +259,7 @@ export async function linkServedTree(plan: ServedTreePlan, dest: string, options
   const place = async (dir: string): Promise<void> => {
     const providers = plan.directories.get(dir) ?? [];
     const source = dir ? `${providers[0]}/${dir}` : providers[0];
-    if (providers.length === 1 && !hidesSkipped(source)) {
+    if (providers.length === 1 && !hidesSkipped(source) && ![...plan.files].some(([served, authored]) => authored.startsWith(`${source}/`) && authored.endsWith(".ts") && served.endsWith(".js"))) {
       await link(dir, source);
       return;
     }

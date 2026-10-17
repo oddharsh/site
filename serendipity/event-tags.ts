@@ -4,10 +4,9 @@
 // typed answers with calibrated probabilities. It can never answer outside the
 // options below, so there is no string to parse and no label to validate
 // against a list the model might have ignored. It speaks TypeSafe's System One
-// API byte for byte, which is why this file was TypeSafe's Jev until
-// 2026-10-01: the request and the answers did not change, only the door. Clef
-// runs on Workers AI through the AI binding, so the TYPESAFE_API_KEY secret
-// and the gateway's `custom-typesafe` provider both left with Jev.
+// API byte for byte, so the move from TypeSafe's Jev to Clef on 2026-10-01
+// changed the transport (Workers AI's AI binding) and left the request and the
+// answers alone.
 //
 // It is NOT promised to be deterministic, and it is also NOT pinnable: Workers
 // AI names the model `@cf/cloudflare/clef` with no version, where Jev offered

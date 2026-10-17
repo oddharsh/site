@@ -206,7 +206,7 @@ export default {
         // the header logged `bytes: undefined` on every success and the field
         // vanished from Workers Logs. A screenshot is bounded by the 900x600
         // viewport, so holding one is cheaper than losing the only size signal
-        // this feature emits. test/screenshot.test.mjs pins the byte count.
+        // this feature emits. test/screenshot.test.ts pins the byte count.
         const png = await screenshot.arrayBuffer();
         log({ feature: "browser-rendering", target, bytes: png.byteLength, ms: Date.now() - t0 });
         return new Response(png, {

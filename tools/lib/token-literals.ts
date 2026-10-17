@@ -263,7 +263,7 @@ export function cssSources(root: URL): CssSource[] {
   // The generators author INTO src/pages, so a copy there is a copy on the next
   // page anyone generates. The first sweep missed the garage one because it
   // spells the stops `.15` rather than `0.15`, which normalizeColor now folds.
-  for (const rel of ["pipelines/lwe/generate.mjs", "pipelines/garage/generate.mjs"]) out.push({ file: rel, css: read(rel), kind: "generator", offset: 0 });
+  for (const rel of ["pipelines/lwe/generate.ts", "pipelines/garage/generate.ts"]) out.push({ file: rel, css: read(rel), kind: "generator", offset: 0 });
   for (const family of ["lwe", "garage"]) {
     for (const f of ls(`pipelines/${family}/specs`).filter((f) => f.endsWith(".json"))) {
       // Garage specs carry their CSS as `pageCss`, lwe specs as `demoCss`. Until

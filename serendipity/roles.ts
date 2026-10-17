@@ -12,8 +12,8 @@
 // The options ARE the baseline's labels, in its order, so a prediction and a
 // hand label are compared as equals rather than through a mapping table. They
 // name a kind of work rather than a seniority, which is the difference from
-// the tiers: TIER_FITS has to say which labels each tier is right for, and the
-// classifier is simply right or wrong.
+// the tiers: the baseline's TIER_FITS has to say which labels each tier is
+// right for, and the classifier is simply right or wrong.
 //
 // Pure and node-safe (gotcha 16). The caller supplies the transport: the
 // baseline tool posts to the Workers AI REST API from a workstation, and a

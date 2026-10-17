@@ -18,8 +18,6 @@
   // directory's install, typecheck and tests on 2026-09-28 (#1001).
   "compilerOptions": {
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -35,5 +33,5 @@
     "strictNullChecks": true,
     "strict": false
   },
-  "include": ["../lens-reader/test/**/*.mjs"]
+  "include": ["../lens-reader/test/**/*.ts"]
 }

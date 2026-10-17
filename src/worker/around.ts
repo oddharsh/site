@@ -184,7 +184,7 @@ function changeSeverity(changes, current) {
 
 export function diffAroundRows(current, previous) {
   if (!current || !previous) return [];
-  const changes = [];
+  const changes: { field: string; before?: unknown; after?: unknown; detail?: string }[] = [];
   for (const [field, key] of CHANGE_FIELDS) {
     const before = previous[key] ?? null;
     const after = current[key] ?? null;

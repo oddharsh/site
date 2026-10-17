@@ -10,21 +10,21 @@ diff before releasing the site or the separate ask Worker.
   page metadata. `navHint` remains the fallback page subtitle.
 - [`config/site-manifest.json`](../../config/site-manifest.json) owns navigation
   labels and agent discovery. Register each new surface there too.
-- `generate.mjs` — the generator.
+- `generate.ts` — the generator.
 - `specs/<id>.json` — one page-spec per concept. Holds what is unique to that page: the conversation, the demos, the disclosure, the editorial card, and the understanding check. The window chrome, messenger shell, and quiz wiring come from the generator, so every page stays identical in its bones.
 
 ## Commands
 
 ```bash
-node pipelines/lwe/generate.mjs page <id>   # specs/<id>.json -> src/pages/lwe/<id>.html
-node pipelines/lwe/generate.mjs wire        # update sitemap, buddies, ask.js, then manifest projections
-node pipelines/lwe/build-corpus.mjs         # rebuild the ask corpus from lwe-ask/corpus/<concept>.json
-node pipelines/lwe/publish.mjs <id>         # one command: page -> corpus -> wire -> print the deploy steps
+node pipelines/lwe/generate.ts page <id>   # specs/<id>.json -> src/pages/lwe/<id>.html
+node pipelines/lwe/generate.ts wire        # update sitemap, buddies, ask.js, then manifest projections
+node pipelines/lwe/build-corpus.ts         # rebuild the ask corpus from lwe-ask/corpus/<concept>.json
+node pipelines/lwe/publish.ts <id>         # one command: page -> corpus -> wire -> print the deploy steps
 ```
 
 `wire` rewrites three marked LWE regions: `public/sitemap.xml`,
-`src/pages/lwe/index.html`, and `src/client/lwe/ask.js`. It then runs the canonical
-manifest generator, which updates `src/client/nav-run.js` and the Worker's
+`src/pages/lwe/index.html`, and `src/client/lwe/ask.ts`. It then runs the canonical
+manifest generator, which updates `src/client/nav-run.ts` and the Worker's
 agent discovery module from `config/site-manifest.json`. Both registries have
 distinct jobs; a Run label does not come from the page's subtitle.
 
@@ -32,7 +32,7 @@ For a new concept, write the spec and both registry entries, generate the page,
 and run `wire` plus `bun run pages:check`. The per-buddy `.pic` CSS stays authored
 by hand. Existing pages may contain work newer than their specs; page generation
 refuses to overwrite a differing file. Reconcile the spec first. Use `--force`
-only after reviewing which version should replace it; `publish.mjs` does not
+only after reviewing which version should replace it; `publish.ts` does not
 force regeneration.
 
 ## The spec format
@@ -117,8 +117,8 @@ Demos get authored by hand, in real time. But the source chat decides where they
 Every LWE page can carry a live "ask a follow-up" box, grounded only in that concept's own sources and sandboxed from the others (the worker filters retrieval by concept). To turn it on:
 
 1. Set `"hasAsk": true` on the registry entry. The generated page then ships `ask.js`, and `wire` adds the concept to ask.js's CONCEPTS allow-list, so the include set never drifts from the allow-list.
-2. Add `lwe-ask/corpus/<concept>.json`: an array of `{ text, source, title }` passages. `build-corpus.mjs` injects them into the worker's corpus tagged by concept, each carrying its own source link.
-3. Release the page through the [site promotion and ramp](../../docs/MAINTENANCE.md#cicd-release-path). The ask corpus belongs to a separate Worker: deploy it from `lwe-ask/`, then run the reindex command printed by `publish.mjs`. That command requires `REINDEX_SECRET` and prints the HTTP status; a bare POST is refused.
+2. Add `lwe-ask/corpus/<concept>.json`: an array of `{ text, source, title }` passages. `build-corpus.ts` injects them into the worker's corpus tagged by concept, each carrying its own source link.
+3. Release the page through the [site release path](../../docs/MAINTENANCE.md#cicd-release-path): a merged PR is promoted and deploys at 100%. The ask corpus belongs to a separate Worker, which its own [Workers Builds trigger](../../docs/MAINTENANCE.md#auxiliary-workers-deploy-themselves-from-2026-10-05) redeploys after promotion (or deploy it from `lwe-ask/`). Once the new corpus is live, run the reindex command printed by `publish.ts`. That command requires `REINDEX_SECRET` and prints the HTTP status; a bare POST is refused.
 
 **Copyright rule (convention, enforced in code review).** A corpus file may hold the author's own writing, the site's own AI-authored explanation of a topic, or genuinely republishable sources (Wikipedia with attribution, public domain). It must NEVER hold third-party copyrighted text. Copyrighted material (the 0xPARC primer, a book) informs the AI-authored page copy and shows up as a `cite` link, but never enters the retrieval corpus. The "found when building" case (no source supplied) defaults to a few relevant Wikipedia sections, chunked with attribution.
 

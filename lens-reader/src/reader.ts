@@ -17,7 +17,7 @@
 import Readability from "@mozilla/readability/Readability.js";
 // A first-party DOM fitted to what this file and Readability actually call,
 // over the same htmlparser2 linkedom used. See src/dom.ts for the surface count
-// and test/dom-differential.test.mjs for the parity gate that keeps it honest.
+// and test/dom-differential.test.ts for the parity gate that keeps it honest.
 import { parseHTML } from "./dom.ts";
 import { fetchFollowingPublicRedirects, validateLensTarget } from "../../src/worker/lib/public-fetch.ts";
 
@@ -31,7 +31,7 @@ import { fetchFollowingPublicRedirects, validateLensTarget } from "../../src/wor
 // failure was, so collapsing everything to "something went wrong" would cost the
 // feature its point; publishing raw internals would cost more.
 export class ReaderError extends Error {
-  // The visitor-facing marker test/reader.test.mjs asserts; index.ts gates on
+  // The visitor-facing marker test/reader.test.ts asserts; index.ts gates on
   // `instanceof ReaderError`. Declared because a .ts class must declare a field
   // it assigns, and a bare field declaration erases.
   visitorFacing: boolean;

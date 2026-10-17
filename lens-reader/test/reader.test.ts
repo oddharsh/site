@@ -1,0 +1,377 @@
+// The BEHAVIOURAL half of the Reader lens's tests. It lives here rather than in
+// the root contract suite because it imports ../src/reader.ts, which imports
+// readability and htmlparser2, and itself imports linkedom: dependencies of
+// THIS project alone. The root suite runs with the root workspace's deps, so
+// importing this module there fails with ERR_MODULE_NOT_FOUND in CI while
+// passing on a workstation that happened to install them (caught on PR #299's
+// first run).
+//
+// The split by capability:
+//   tools/contract-the-reader-lens-lens-read-lens-reader.test.ts: everything
+//     provable from SOURCE TEXT or the configs: the rate limit against
+//     cloudflare.config.ts, minify and source maps, the shared SSRF guard, the
+//     Markdown walk's shape, the dropped tally, the tab labels, the 429 headers.
+//   here: everything that has to actually RUN.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { parseHTML as parseLinkedom } from "linkedom";
+import { parseHTML } from "../src/dom.ts";
+import { collectControlLabels, countControls, countWords, FETCH_TIMEOUT_MS, read, ReaderError, scoreExtraction, tally, toMarkdown } from "../src/reader.ts";
+
+// The override buys no shipped bytes since the Worker stopped bundling linkedom
+// on 2026-08-23. What it buys is that the parity oracle in
+// dom-differential.test.ts resolves the SAME parser the Worker bundles, and a
+// gate whose reference parses differently proves nothing.
+//
+// The version is DERIVED from package.json rather than written as literals, so
+// a bump edits one file. The property is in the name: ONE generation, reached
+// three ways. Which version is right is argued in docs/DEPENDENCIES.md, where
+// the measurement lives.
+//
+// Deriving costs the floor: three fields read from one file agree trivially
+// if the file is empty. So the exact-version shape is asserted first, and a
+// range fails here rather than silently passing as a string match against
+// itself.
+test("the oracle and the Worker resolve one parser generation", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const parser = JSON.parse(readFileSync(new URL("../node_modules/htmlparser2/package.json", import.meta.url), "utf8"));
+  const declared = manifest.dependencies?.htmlparser2;
+
+  assert.match(String(declared), /^\d+\.\d+\.\d+$/,
+    "src/dom.ts parses with htmlparser2 directly, so it must be a declared dependency at an EXACT version rather than linkedom's transitive or a range");
+  assert.equal(manifest.devDependencies?.linkedom, "0.18.13",
+    "linkedom is the parity oracle; deleting it deletes the only proof src/dom.ts is faithful");
+  assert.equal(manifest.overrides?.htmlparser2, declared,
+    "without the override the oracle resolves a different parser than the Worker bundles");
+  assert.equal(parser.version, declared, "the installed parser must honor the override");
+  assert.equal(
+    existsSync(new URL("../node_modules/htmlparser2/node_modules/domutils/package.json", import.meta.url)),
+    false,
+    "htmlparser2 should share one domutils generation rather than carrying another tree",
+  );
+});
+
+// Runs on the fitted DOM, which is what ships, and checks the oracle agrees, so
+// the property is pinned on the product first and the reference second.
+//
+// HTML has no self-closing `<script/>`: the slash is ignored and everything to
+// the next `</script>` is script data, so the document's own close tag really
+// does land inside the element. htmlparser2 11 honored the slash, 12 does not,
+// and Chrome 148 agrees with 12 byte for byte:
+//
+//   new DOMParser().parseFromString(SOURCE, "text/html")
+//     -> <script src="./main.js" type="module"></html></script>
+//
+// Before the 2026-08-24 bump to 12 this test pinned the v11 string, a behaviour
+// no browser has. The browser is the control.
+test("the aligned parser reads a self-closing script the way a browser does", () => {
+  const source = '<html><script src="./main.js" type="module"/></html>';
+  // Measured in Chrome 148.0.7778.280, 2026-08-24. Re-run the DOMParser line
+  // above before touching this string; a parser disagreeing with it is the
+  // finding, and this expectation is only ever downstream of the browser.
+  const expected = '<script src="./main.js" type="module"></html></script>';
+  const root = parseHTML(source).document.documentElement;
+  assert.ok(root, "the fitted DOM parsed no documentElement");
+  const shipped = root.firstElementChild;
+  assert.equal(shipped?.outerHTML, expected,
+    "a self-closing script is not self-closing: the slash is ignored and the document close is script data");
+  assert.equal(parseLinkedom(source).document.documentElement.firstElementChild?.toString(), expected,
+    "the oracle must agree, or the parity gate is measuring against a different parser");
+});
+
+
+test("the focused Markdown walk covers the article vocabulary", () => {
+  const md = toMarkdown("<h2>Title</h2><p>Body <strong>text</strong>.</p>");
+  assert.match(md, /^## Title/m);
+  assert.match(md, /\*\*text\*\*/);
+});
+
+test("script and style bodies never reach the markdown", () => {
+  // Same rule the Markdown twins enforce: a converter that walks into script
+  // bodies publishes things that are not prose. Here it is a third party's
+  // script rather than our own answer key, which is no better.
+  const md = toMarkdown('<p>Real prose.</p><script>alert("bad")</script><style>.x{color:red}</style>');
+  assert.match(md, /Real prose/);
+  assert.doesNotMatch(md, /alert/);
+  assert.doesNotMatch(md, /color:red/);
+});
+
+test("the focused walk preserves links, code, nested lists, and unknown wrappers", () => {
+  const md = toMarkdown(`<article data-new-wrapper><h2>Title</h2>
+    <p>Body <em>voice</em>, <a href="/notes" title="Notes">a link</a>, and <code>a\`b</code>.</p>
+    <ul><li>One</li><li>Two<ol start="3"><li>Three</li></ol></li></ul>
+    <blockquote><p>Quoted.</p></blockquote>
+    <pre><code class="language-js">const answer = 42;</code></pre>
+    <img src="/x.jpg" alt="Example"><future-article-element>Future prose.</future-article-element></article>`);
+  assert.match(md, /^## Title/m);
+  assert.match(md, /Body \*voice\*, \[a link\]\(\/notes "Notes"\), and `` a`b ``\./);
+  assert.match(md, /^- Two\n\s+3\. Three/m, "the nested ordered list must stay nested");
+  assert.match(md, /^> Quoted\.$/m);
+  assert.match(md, /```js\nconst answer = 42;\n```/);
+  assert.match(md, /!\[Example\]\(\/x\.jpg\)/);
+  assert.match(md, /Future prose\./, "an unknown semantic wrapper must keep its prose");
+});
+
+test("the extracted article node preserves the string path byte for byte", () => {
+  const html = `<article><h2>Title</h2><p>Body <strong>text</strong> and
+    <a href="/notes">a link</a>.</p><ul><li>One</li><li>Two</li></ul>
+    <pre><code>const answer = 42;</code></pre></article>`;
+  const { document } = parseHTML(html);
+  const node = document.querySelector("article");
+  assert.ok(node, "the fixture has no <article> to walk");
+  assert.equal(toMarkdown(node), toMarkdown(node.outerHTML));
+});
+
+test("read publishes Markdown from Readability's finished article node", async () => {
+  const originalFetch = globalThis.fetch;
+  const html = `<!doctype html><html><head><title>Direct Article</title></head><body>
+    <nav>Navigation that should lose.</nav><article><h1>Direct Article</h1>
+    ${"<p>Article prose with <strong>structure</strong> that the extractor should retain.</p>".repeat(12)}
+    </article></body></html>`;
+  try {
+    // The cast is the stub's honesty note. node's `fetch` carries a `preconnect`
+    // property this one does not, and `read()` never calls it, so the two do not
+    // overlap enough for a direct assertion and the hop through `unknown` is what
+    // TypeScript asks for. Widening the stub to satisfy the type would be adding
+    // a method to a test double for the compiler's benefit.
+    globalThis.fetch = ((
+      (async () => new Response(html, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      })) as unknown
+    ) as typeof fetch);
+    const result = await read("https://example.com/article");
+    const baseline = new (await import("@mozilla/readability")).Readability(
+      parseHTML(html).document,
+      { charThreshold: 500 },
+    ).parse();
+    // `parse()` answers null on a document it cannot extract. The old
+    // `baseline.content` would have thrown a bare TypeError there, blaming the
+    // assertion rather than the fixture.
+    if (!baseline) throw new Error("Readability extracted nothing from the fixture");
+    assert.equal(result.title, "Direct Article");
+    assert.equal(result.markdown, toMarkdown(baseline.content));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Reader validates redirect hops before fetching and preserves the final URL", async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const target of ["http://169.254.169.254/private", "https://example.org/article"]) {
+      const seen: any[] = [];
+      globalThis.fetch = ((async (url, init) => {
+        seen.push(String(url));
+        if (String(url) === "https://example.com/start") {
+          if (init.redirect === "manual") return new Response(null, { status: 302, headers: { location: target } });
+          seen.push(target); // model the request automatic following makes
+        }
+        const response = new Response("fixture", { headers: { "content-type": "text/plain" } });
+        Object.defineProperty(response, "url", { value: target });
+        return response;
+      }) as unknown) as typeof fetch;
+      if (target.startsWith("http:")) {
+        await assert.rejects(read("https://example.com/start"), (error) => error instanceof ReaderError && /will not follow/.test(error.message));
+        assert.deepEqual(seen, ["https://example.com/start"], "refusal must precede the private request");
+      } else {
+        const result = await read("https://example.com/start");
+        assert.equal(result.finalUrl, target);
+        assert.equal(result.skipped, "not-html");
+        assert.deepEqual(seen, ["https://example.com/start", target]);
+      }
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test("the network deadline aborts a body that stalls after successful headers", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalTimeout = AbortSignal.timeout.bind(AbortSignal);
+  let aborted = false;
+  let deadlineScheduled = false;
+
+  let body: ReadableStreamDefaultController<Uint8Array> | undefined;
+  try {
+    // Run the production deadline on a short test clock. Only the Reader's exact
+    // deadline is accelerated, and it stays a REAL AbortSignal.timeout, so the
+    // rejection is the TimeoutError the runtime raises; the watchdog keeps its own
+    // real-time budget.
+    AbortSignal.timeout = (ms) => {
+      if (ms === FETCH_TIMEOUT_MS) deadlineScheduled = true;
+      return originalTimeout.call(AbortSignal, ms === FETCH_TIMEOUT_MS ? 10 : ms);
+    };
+    globalThis.fetch = ((
+      async (_url, { signal }) => new Response(new ReadableStream({
+        start(controller) {
+          body = controller;
+          controller.enqueue(new TextEncoder().encode("<html><body>Partial article"));
+          signal.addEventListener("abort", () => {
+            aborted = true;
+            controller.error(signal.reason);
+          }, { once: true });
+        },
+      }), { headers: { "content-type": "text/html" } }) as unknown
+    ) as typeof fetch);
+    // A watchdog fails the regression instead of leaving the suite hung when
+    // the application clears its timer too early.
+    let watchdog;
+    try {
+      await assert.rejects(Promise.race([
+        read("https://example.com/slow-body"),
+        new Promise((_resolve, reject) => {
+          watchdog = setTimeout(() => reject(new Error("Reader exceeded its network deadline")), 500);
+        }),
+      ]), (error) => error instanceof ReaderError && /within 8s/.test(error.message));
+      assert.equal(aborted, true, "the upstream stream must be aborted, not left running");
+      assert.equal(deadlineScheduled, true, "the Reader must schedule its declared network budget");
+    } finally {
+      clearTimeout(watchdog);
+    }
+  } finally {
+    if (!aborted) body?.error(new Error("test cleanup"));
+    AbortSignal.timeout = originalTimeout;
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("both word counts come from one function, so the gap is extraction", () => {
+  // The load-bearing property of the whole lens. If `source` and `kept` were
+  // counted differently the reported drop would be two definitions of "word"
+  // disagreeing, and the pane would report that disagreement as extraction loss.
+  const html = "<html><body><p>one two three four five</p></body></html>";
+  assert.equal(tally(html).words, 5);
+  assert.equal(countWords("one two three four five"), 5);
+  // and the body extractor must not count markup as words
+  assert.equal(tally("<html><body><p><b>a</b> <i>b</i></p></body></html>").words, 2);
+});
+
+test("control counting is an upper bound and never a silent overcount", () => {
+  const { document } = parseHTML('<html><body><button>Run all three</button><button>Close</button></body></html>');
+  // "Close" also appears as ordinary prose, which is precisely why the payload
+  // labels this an upper bound instead of reporting it as fact.
+  const counted = countControls(collectControlLabels(document), "<p>Run all three now. Then close the window.</p>");
+  assert.equal(counted.total, 2);
+  assert.ok(counted.kept >= 1);
+  assert.match(counted.note, /upper bound/);
+});
+
+test("content recovery is four transparent checks over Readability output", () => {
+  const score = scoreExtraction({
+    source: { words: 300 }, kept: { words: 180 },
+    controls: { total: 8, kept: 1 }, title: "A readable article", markdown: "# A readable article\n\nBody",
+  });
+  assert.equal(score.overall, 100);
+  assert.equal(score.counted, 4);
+  assert.equal(score.passed, 4);
+  assert.deepEqual(score.checks.map((check) => check.key), ["body", "title", "controls", "markdown"]);
+  assert.match(score.scoringNote, /Readability itself does not publish this score/);
+});
+
+test("control leakage and an empty title reduce recovery without inventing partial credit", () => {
+  const score = scoreExtraction({
+    source: { words: 120 }, kept: { words: 80 },
+    controls: { total: 4, kept: 3 }, title: "", markdown: "Body",
+  });
+  assert.equal(score.overall, 50);
+  assert.deepEqual(score.checks.map((check) => check.pass), [true, false, false, true]);
+});
+
+test("only messages written for the visitor are publishable", async () => {
+  const { ReaderError } = await import("../src/reader.ts");
+  const entry = await import("node:fs").then((fs) => fs.readFileSync(new URL("../src/index.ts", import.meta.url), "utf8"));
+  // CodeQL flagged the old blanket `String(error.message)` return as information
+  // exposure through a stack trace. The fix is a marker class, so the guard is
+  // that the entrypoint gates on it and never falls back to raw message text.
+  assert.ok(new ReaderError("x").visitorFacing, "ReaderError must mark itself visitor-facing");
+  assert.match(entry, /error instanceof ReaderError/,
+    "the entrypoint must gate published messages on ReaderError");
+  assert.doesNotMatch(entry, /String\(\(?error(\s*&&\s*error)?\.message/,
+    "the entrypoint must never publish a raw error message again");
+});
+
+test("the extractor actually extracts, which no other test here proved", async () => {
+  // Runs the real engine over a fixture and asserts it found the article and
+  // dropped the chrome. When this was written every other test here exercised
+  // a helper in isolation, so the suite stayed green through an extractor swap
+  // that could have been totally broken: an instrument that could not fail
+  // (CLAUDE.md, "Measure before you claim").
+  //
+  // It is deliberately OFFLINE: `read()` fetches, and a test that needs the
+  // network is a test that fails for reasons that are not about this code.
+  const { Readability } = await import("@mozilla/readability");
+  const { parseHTML } = await import("linkedom");
+  const html = `<!doctype html><html><head><title>The Real Article</title></head><body>
+    <nav><a href="/x">Home</a><a href="/y">About</a></nav>
+    <article><h1>The Real Article</h1>
+      ${"<p>This is a sentence of genuine body prose that the extractor should keep.</p>".repeat(12)}
+    </article>
+    <aside><button>Subscribe now</button><p>Advert copy nobody wants.</p></aside>
+  </body></html>`;
+
+  const result = new Readability(parseHTML(html).document, { charThreshold: 500 }).parse();
+  // A THROW rather than `assert.ok`, which reads identically and does not narrow:
+  // TypeScript only applies an `asserts` signature when every name in the call
+  // target carries an explicit type, and `assert.ok` reached through a namespace
+  // import does not qualify. The four reads below are what needs the narrowing.
+  if (!result) throw new Error("extractor returned nothing at all");
+  // Both fields are independently nullable on Readability's result, and a null
+  // reaching `assert.match` fails on the argument type rather than on the thing
+  // this test is about. Named here so the failure says which field was missing.
+  const { title, content } = result;
+  if (title == null || content == null) {
+    throw new Error(`extractor returned no ${title == null ? "title" : "content"}`);
+  }
+  // Readability takes the title from <title>, not <h1>, so the fixture agrees
+  // on both rather than pinning which source wins.
+  assert.match(title, /The Real Article/);
+  assert.match(content, /genuine body prose/);
+  assert.doesNotMatch(content, /Advert copy/, "the aside survived extraction");
+  assert.doesNotMatch(content, /Subscribe now/, "a control label survived as prose");
+});
+
+test("the control census survives Readability mutation without a second DOM", async () => {
+  // Readability REWRITES the document it is handed, in place. Snapshotting the
+  // labels before extraction must preserve the census after the source nodes
+  // disappear, without retaining a second complete hostile-HTML tree.
+  //
+  // Measured on the real /garage/horizon 2026-08-14: body 217,022 -> 2,473
+  // bytes and 29 <button> elements -> 0. The fixture below is sized to
+  // reproduce that stripping; a handful of paragraphs will not, which is how
+  // an earlier version of this test passed while asserting the opposite.
+  const { Readability } = await import("@mozilla/readability");
+  const { parseHTML } = await import("linkedom");
+  const html = `<!doctype html><html><body><article><h1>Real Article</h1>
+      ${"<p>Body prose long enough to clear the character threshold and win the scoring pass.</p>".repeat(40)}
+    </article><aside><button>Buy the thing</button>
+      ${"<p>Sidebar filler that should lose.</p>".repeat(10)}
+    </aside></body></html>`;
+
+  const { document } = parseHTML(html);
+  const labels = collectControlLabels(document);
+  const beforeBytes = document.body.innerHTML.length;
+  const result = new Readability(document, { charThreshold: 500 }).parse();
+  if (!result?.content) throw new Error("Readability extracted nothing from the control fixture");
+
+  assert.ok(document.body.innerHTML.length < beforeBytes / 2,
+    "Readability left the document intact, so the mutation boundary is no longer exercised");
+  assert.equal(document.querySelectorAll("button").length, 0, "the fixture did not lose its source control");
+  const counted = countControls(labels, result.content);
+  assert.equal(counted.total, 1, "the pre-extraction label snapshot lost the source control");
+  assert.equal(counted.kept, 0, "the removed control was reported as surviving extraction");
+});
+
+test("a link destination cannot be closed early by its own backslash", () => {
+  // CodeQL js/incomplete-sanitization on the image half: the anchor escaped
+  // backslash before `)` and the image escaped only `)`, so an input backslash
+  // paired with the escape and left the paren bare, closing the link early and
+  // spilling the rest of the URL into the prose. One escaper now serves both,
+  // and the assertion is that they agree for the same input.
+  const url = String.raw`https://x.test/a\)b`;
+  const escaped = String.raw`https://x.test/a\\\)b`;
+  const { document } = parseHTML(`<div><a href="${url}">label</a><img src="${url}" alt="shot"></div>`);
+  const md = toMarkdown(document.querySelector("div"));
+
+  assert.ok(md.includes(`[label](${escaped})`), `anchor destination not fully escaped: ${md}`);
+  assert.ok(md.includes(`![shot](${escaped})`), `image destination not fully escaped: ${md}`);
+});

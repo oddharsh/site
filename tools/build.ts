@@ -183,7 +183,7 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
 // prose.css built clean, and the flat readdirs elsewhere missed both subtrees
 // (gotcha 55).
 const shellFiles = async (): Promise<string[]> => [
-  ...(await readdir("src/client", { recursive: true })).filter((r) => r.endsWith(".js")).map((r) => `src/client/${r}`),
+  ...(await readdir("src/client", { recursive: true })).filter((r) => /\.(?:js|ts)$/.test(r) && !r.endsWith(".d.ts")).map((r) => `src/client/${r}`),
   ...(await readdir("src/styles", { recursive: true })).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
 ];
 
@@ -300,7 +300,7 @@ async function checkInvariants() {
   const vtSources = [
     ...(await servedFiles((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r))),
     ...(await shellFiles()),
-    "cal/src/templates.ts", "serendipity/serendipity.ts", "pipelines/lwe/generate.mjs",
+    "cal/src/templates.ts", "serendipity/serendipity.ts", "pipelines/lwe/generate.ts",
   ];
   const vtTexts = await readAll(vtSources);
   for (const [i, f] of vtSources.entries()) {
@@ -315,7 +315,7 @@ async function checkInvariants() {
     // explaining why the rule is gone — a guard that fires on its own
     // documentation gets muted, the same reasoning as the font-law scan below.
     // For HTML that means <style> bodies; elsewhere the file minus its comments
-    // (templates.ts / serendipity.ts / generate.mjs carry CSS in template literals).
+    // (templates.ts / serendipity.ts / generate.ts carry CSS in template literals).
     const css = f.endsWith(".html")
       ? [...s.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n")
       : s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -454,7 +454,7 @@ async function checkInvariants() {
   let manifestChecked = 0, pagesWalked = 0;
   try {
     const { surfaces } = readManifest();
-    const nav = await read("src/client/nav-run.js");
+    const nav = await read("src/client/nav-run.ts");
     const desktop = await read("src/worker/lib/desktop.ts");
 
     // 8a — generated projections match `bun run gen:manifest` output exactly.
@@ -465,7 +465,7 @@ async function checkInvariants() {
     }
     if (readFenceBody(nav, "run-profiles") !== runProfilesBody()) hard.push("nav-run.js profiles drifted from shell-data.ts — run bun run gen:manifest");
 
-    const navPagesBlock = (nav.match(/var PAGES = \[([\s\S]*?)\n {2}\];/) || [, ""])[1];
+    const navPagesBlock = (nav.match(/var PAGES(?:\s*:\s*RunItem\[\])? = \[([\s\S]*?)\n {2}\];/) || [, ""])[1];
     const navRun = new Set([...navPagesBlock.matchAll(/path:\s*"(\/[^"]*)"/g)].map((m) => m[1]));
     const navTaskbar = new Set([...desktop.matchAll(/class=\\"axp-pin\\"[^>]*href=\\"([^"]+)\\"/g)].map((m) => m[1]));
     const sitemap = await read("public/sitemap.xml");
@@ -477,7 +477,7 @@ async function checkInvariants() {
     const gallery = (await read("src/pages/garage/index.html"))
       .replace(/<!-- axp:shell -->[\s\S]*?<!-- \/axp:shell -->/g, "");
     // The id class here must match the one the generator ENFORCES, which is
-    // /^[a-z0-9][a-z0-9-]*$/ in pipelines/garage/generate.mjs. It read
+    // /^[a-z0-9][a-z0-9-]*$/ in pipelines/garage/generate.ts. It read
     // `[a-z0-9]+` until 2026-08-24 and no page had ever carried a hyphen, so the
     // two disagreed silently for as long as both existed: the first hyphenated
     // id generated fine, registered fine, got a hand-written shelf card, and
@@ -1849,7 +1849,7 @@ phase("2 homepage");
 phase("3 shells");
 // 3) shells: deploy the readable original as <name>.src.js, minify the served file
 for (const { file, twin: srcPath, marker, module } of minifiedScripts()) {
-  const src = await readFile(`src/client/${file}`, "utf8");
+  const src = await readFile(`${OUT}/public/${file}`, "utf8");
   await writeFile(`${OUT}/public/${srcPath.slice(1)}`, src);
 
   // An ES module parses as one (a script parse refuses `export`), and its

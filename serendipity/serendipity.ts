@@ -6,10 +6,9 @@ const PREFIX = "/serendipity";
 
 // The desktop partial the rest of the site ships. serendipity is staged beside
 // public/ in .build with the same relative layout as the source tree, so this
-// one path resolves in both. Before this, /serendipity loaded /nav.js and let
-// it CONSTRUCT the desktop after load: curl and JS-off visitors got no desktop
-// at all, and everyone else got a shell pop. Now the markup is in the document
-// and nav.js only wires behavior, same as every other page.
+// one path resolves in both. The markup is in the document and nav.js only
+// wires behavior, as on every other page; letting nav.js build the desktop after
+// load gave curl and JS-off visitors no desktop and everyone else a shell pop.
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { BOT_UA } from "../src/worker/lib/botauth.ts";
@@ -47,14 +46,15 @@ function avatar(name, size = 30) {
   return `<span class="ava" style="--ab:oklch(72% 0.13 ${h});width:${size}px;height:${size}px;font-size:${Math.round(size*0.4)}px" aria-hidden="true">${esc(initials)}</span>`;
 }
 
-// Both helpers are Date-only on purpose. They carried a Temporal branch behind
-// `typeof Temporal !== "undefined"`, which never ran in production (workerd
-// ships V8's Temporal switched off, with no compat flag to turn it on) and
-// would have run the day Cloudflare flipped it. That already happened once:
-// cloudflare/workerd#6907 exposed a Temporal whose clock read epoch 0, which
-// would have put every past event here at "today". A vendor switch should not
-// be able to change which code path renders a page, so a watch reports the
-// flip instead (`workerd-exposes-temporal`, tools/lib/upstream-watches.ts).
+// relativeTime and eventDate are Date-only on purpose. They carried a Temporal
+// branch behind `typeof Temporal !== "undefined"`, which never ran in
+// production (workerd ships V8's Temporal switched off, with no compat flag to
+// turn it on) and would have run the day Cloudflare flipped it. That already
+// happened once: cloudflare/workerd#6907 exposed a Temporal whose clock read
+// epoch 0, which would have put every past event here at "today". A vendor
+// switch should not be able to change which code path renders a page, so a
+// watch reports the flip instead (`workerd-exposes-temporal`,
+// tools/lib/upstream-watches.ts).
 function relativeTime(date) {
   const days = Math.floor((Date.now() - date.getTime()) / 86400000);
   if (days <= 0) return "today";
@@ -192,8 +192,8 @@ function db(env) {
     raw: D,
     // build a bound statement (for batching) without executing
     stmt: (sql, ...a) => D.prepare(sql).bind(...norm(a)),
-    // run an array of bound statements in chunks (each chunk = ONE subrequest;
-    // Cloudflare caps subrequests per invocation, so bulk writes MUST batch).
+    // run an array of bound statements in chunks (each chunk = ONE D1 call; the
+    // cron's subrequest budget still reserves room for D1 calls, gotcha 36).
     // Returns every statement's result in order, so a SELECT riding a write
     // batch costs no subrequest of its own (syncEvents counts the pool that way).
     async batch(stmts, size = 50) {
@@ -215,7 +215,7 @@ function db(env) {
   };
 }
 
-// ── query layer — the SINGLE source of truth (HTML now; MCP + JSON reuse it) ─
+// ── query layer: the SINGLE source of truth the pages and MCP both read ─────
 async function queryEvents(d) {
   return d.prepare(
     `SELECT e.id, e.name, e.start_at, e.location, e.url, e.user_status, e.cover_url,
@@ -620,7 +620,7 @@ async function renderEvent(d, id, path) {
   return html(200, shell(ev.name, path, body + EVENT_SCRIPT, "", eventDescription(ev, d0, guests.length)));
 }
 
-// exported for contract-form-fields-have-names.test.mjs
+// exported for contract-form-fields-have-names.test.ts
 export async function renderContribute(d, path, uid, msg) {
   // One summary row owns all three numbers this page needs. These used to be
   // three D1 calls (two overlapped, then the connected browser's event count),
@@ -666,7 +666,7 @@ export async function renderContribute(d, path, uid, msg) {
 
 // parse a Cookie-Editor JSON export (or a "name=value; ..." header) into our
 // stored shape. Throws with a human message if no luma.auth-session-key.
-// Exported for contract-tests.mjs, like MCP_TOOLS.
+// Exported for the contract suite (contract-the-luma-session-jar.test.ts).
 export function parseCookies(raw) {
   const t = (raw || "").trim();
   let cookies;
@@ -682,12 +682,8 @@ export function parseCookies(raw) {
     if (!pairs.length) throw new Error("No cookies found in input");
     cookies = pairs.map((p) => { const eq = p.indexOf("="); return { name: eq === -1 ? p : p.slice(0, eq), value: eq === -1 ? "" : p.slice(eq + 1), domain: ".lu.ma", path: "/", expires: -1, httpOnly: false, secure: true, sameSite: "Lax" }; });
   }
-  // Keep only Luma's own cookies. A whole-domain export drags in Cloudflare
-  // edge cookies (__cf_bm is a 30-minute, IP-bound bot-management token, and
-  // replaying a stale one from Worker egress IPs reads as a scraper) plus
-  // Stripe/analytics noise. None of it authenticates anything, so it never
-  // enters the jar. cookieJar() applies the same filter on load, which heals
-  // rows pasted before this existed.
+  // Keep only Luma's own cookies, for the reason cookieJar() gives; it applies
+  // the same filter on load.
   cookies = cookies.filter((c) => c.name.startsWith("luma."));
   const auth = cookies.find((c) => c.name === "luma.auth-session-key");
   if (!auth) throw new Error("Missing luma.auth-session-key — sign in to lu.ma, then export your cookies again");
@@ -763,6 +759,9 @@ function renderMcpInfo(path) {
 // ════════════════════════════════════════════════════════════════════════════
 const LUMA_API = "https://api2.luma.com";
 
+// The usr- id comes off the auth cookie itself. Luma removed /user/get-self
+// (404 for every caller as of 2026-07-30, with multi-second stalls in the tail),
+// so there is no API call to ask instead.
 function selfIdFrom(cookiesJson) {
   try {
     const auth = (JSON.parse(cookiesJson).cookies || []).find((c) => c.name === "luma.auth-session-key");
@@ -788,7 +787,7 @@ function selfIdFrom(cookiesJson) {
 // reads as a scraper — plus Stripe/analytics noise. None of it authenticates
 // anything, so load strips it and marks the jar dirty, healing pre-existing
 // rows the first time they sync.
-export function cookieJar(cookiesJson) {  // exported for contract-tests.mjs
+export function cookieJar(cookiesJson) {  // exported for contract-the-luma-session-jar.test.ts
   let cookies;
   try { cookies = JSON.parse(cookiesJson).cookies || []; } catch { return null; }
   let dirty = cookies.some((c) => !c.name.startsWith("luma."));
@@ -853,9 +852,6 @@ async function lumaFetch(url, auth) {
   if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`Luma ${res.status}: ${b.slice(0, 200)}`); }
   return res;
 }
-// fetchMe is gone: Luma removed /user/get-self (404 for every caller as of
-// 2026-07-30, with multi-second stalls in the tail), and the auth cookie
-// itself carries the usr- id — selfIdFrom() covers every use it had.
 const toLumaUrl = (raw, id) => (!raw ? `https://lu.ma/${id}` : raw.startsWith("http") ? raw : `https://lu.ma/${raw}`);
 function parseGuest(entryApiId, user) {
   return {
@@ -937,8 +933,7 @@ async function fetchMyEvents(auth, selfId, walked: { pages: number } | null = nu
 // the guests it could afford, whether the walk finished, and (when it did not)
 // the cursor to resume from next tick. This looped `while (true)` with no cap
 // until 2026-08-21: one 1,932-person event costs 20 fetches at 100 a page, and
-// seven past events had parked on "Too many subrequests" because of it. The
-// sibling fetchMyEvents has carried page caps for exactly this reason all along.
+// seven past events had parked on "Too many subrequests" because of it.
 export async function fetchEventGuests(
   eventId, ticketKey, auth,
   opts: { budget?: Budget | null, cursor?: string | null } = {},
@@ -1171,11 +1166,11 @@ const UPSERT_EVENT = `INSERT INTO events (id,name,description,start_at,end_at,lo
    synced_at=datetime('now')`;
 
 // sync one contributor's events into the pool. All writes are collected then
-// run via d.batch() (one subrequest per 50 statements) to stay under the
-// Cloudflare per-invocation subrequest cap. Returns {synced} or {error}.
+// run via d.batch() (one D1 call per 50 statements; see db()). Returns
+// {synced} or {error}.
 //
 // The pool is counted before and after INSIDE the write batch, so how many of
-// the fetched events were new costs no extra subrequest. `jarWritten` says the
+// the fetched events were new costs no extra D1 call. `jarWritten` says the
 // stored jar changed: Luma rotated a key (the session staying warm) or a legacy
 // row shed its non-luma cookies on load.
 async function syncEvents(d, userKey, cookiesJson) {
@@ -1335,10 +1330,8 @@ async function syncGuests(d, eventId, userKey, cookiesJson, budget: Budget | nul
   if (!jar || !jar.header()) return { error: "bad cookie json" };
   // Ahead of the row lookup, so a skip costs nothing at all.
   if (budget && budget.left <= 0) return { skipped: "budget" };
-  // The resume marker rides the row lookup that was already happening. Binding
-  // calls count against the same per-invocation ceiling as fetches, so reading
-  // it separately would have spent one more op per event in the sweep to learn
-  // something this query is already positioned to answer.
+  // The resume marker rides the row lookup that was already happening, so
+  // reading it costs no D1 call of its own per event in the sweep.
   const ev = await d.prepare(
     `SELECT e.ticket_key, e.user_status, s.value AS mark
        FROM events e LEFT JOIN settings s ON s.key = ?
@@ -1373,7 +1366,8 @@ async function syncGuests(d, eventId, userKey, cookiesJson, budget: Budget | nul
     // that prompted this. Both cases keep their inserts, which are upsert-only
     // and safe per page, and defer the prune to the next full walk. The cost is
     // that a roster too large to walk in one budget never prunes cancellations;
-    // at 100 a page and a budget of 24 that starts above ~2,400 guests.
+    // at 100 a page and a one-contributor sweep budget of 22 (guestSweepBudget),
+    // that starts above ~2,200 guests.
     const fullWalk = mayPruneRoster(page, resume);
     let stale: any[] = [];
     if (fullWalk) {
@@ -1557,16 +1551,16 @@ function mcpTags(t) {
   };
 }
 
-// secret-gated trigger: POST /serendipity/sync?key=SECRET[&event=<id>]
-// The three admin triggers shared this gate by copy. It now also reads the
-// secret from a HEADER, because the cron dispatches to /enrich over the wire and
-// a secret in a query string lands in request logs, where the query-string form
-// was the only option before.
+// The one gate for every secret-gated trigger (sync, sync-descriptions, enrich,
+// tag). It reads the secret from the x-sync-key HEADER first, because the cron
+// dispatches to /enrich and /tag over the wire and a secret in a query string
+// lands in request logs; ?key= still works for a manual call.
 export function adminGated(request, env) {
   const supplied = request.headers.get("x-sync-key") || new URL(request.url).searchParams.get("key");
   return !!env && secretMatches(supplied, env.SYNC_SECRET);
 }
 
+// secret-gated trigger: POST /serendipity/sync?key=SECRET[&event=<id>]
 async function handleSync(request, env, d) {
   const url = new URL(request.url);
   if (!adminGated(request, env)) {
@@ -1579,10 +1573,9 @@ async function handleSync(request, env, d) {
   // rather than the sweep's share. Bounded all the same: an admin refresh of a
   // 5,000-person roster would otherwise hit the same ceiling the cron did, and
   // the marker it leaves behind lets the next tick resume where this stopped.
-  // The headroom is a RESERVE now rather than a subtraction, which is the same
-  // arithmetic said properly: an invocation that spends its last subrequest has
-  // none left to write down what it did, and both outages this ledger exists for
-  // ended on exactly that call.
+  // The headroom is a RESERVE because an invocation that spends its last
+  // subrequest has none left to write down what it did, and both outages
+  // lib/budget.ts exists for ended on exactly that call.
   const budget = createBudget(SUBREQUEST_CAP_FREE, { reserve: CRON_BUDGET_HEADROOM });
   for (const s of sets) {
     if (eventId) out.push({ label: s.label, event: eventId, ...(await syncGuests(d, eventId, s.user_key, s.cookies_json, budget)) });
@@ -1592,43 +1585,40 @@ async function handleSync(request, env, d) {
 }
 
 // ── cron: the recurring tick that keeps the pool honest ─────────────────────
-// Deployed serendipity had NO recurring sync. The pool refreshed only when
-// someone re-pasted cookies, so production data froze at the last paste
-// (measured 2026-07-30: last sync 07-11, 8 future events left, 0 "going")
-// while the stored session idled toward Luma's few-weeks expiry. Local dev
-// never showed this because a fresh paste was always minutes old. This tick
-// (23 */6 * * *, wired in index.js scheduled()) does what an active local
-// user did by hand: re-sync every enabled feed, refill guest lists for the
-// next upcoming events, backfill a few descriptions. It is also what keeps
-// the stored session warm, and every request routes through cookieJar, so a
-// rotation Luma issues mid-run lands back in D1 instead of on the floor.
+// Without a recurring sync the pool refreshes only when someone re-pastes
+// cookies, so production data froze at the last paste (measured 2026-07-30:
+// last sync 07-11, 8 future events left, 0 "going") while the stored session
+// idled toward Luma's few-weeks expiry. This tick (SYNC_SCHEDULE, wired in
+// src/worker/index.ts scheduled()) re-syncs every enabled feed, refills guest
+// lists for the next upcoming events, and backfills a few descriptions. It is
+// also what keeps the stored session warm, and every request routes through
+// cookieJar, so a rotation Luma issues mid-run lands back in D1 instead of on
+// the floor.
 //
-// Budgeted in SUBREQUESTS (Luma fetches and D1 calls both count): the feed
-// pass is ≤10 fetches plus chunked D1 batches per contributor, the upcoming
-// sweep ≤4 events, the historical backfill ≤4 events, and descriptions ≤10
-// fetches. The caps keep growth bounded. Failures stay per-arm: one restricted
-// guest list is timestamped and the sweep advances instead of starving behind
-// the same unreadable event forever.
+// Budgeted in SUBREQUESTS: the feed pass is ≤10 fetches plus chunked D1
+// batches per contributor, the upcoming sweep ≤4 events, the historical
+// backfill ≤4 events, and descriptions ≤10 fetches. Failures stay per-arm: one
+// restricted guest list is timestamped and the sweep advances instead of
+// starving behind the same unreadable event forever.
 const CRON_UPCOMING_GUEST_EVENTS = 4;
 const CRON_PAST_GUEST_EVENTS = SERENDIPITY_SYNC_LIMITS.pastGuestEvents;
 const CRON_DESC_LIMIT = 10;
-// Workers Free allows 50 subrequests per invocation and D1 calls count toward it
-// (gotcha 36). The two passes bracketing the roster sweep are already bounded --
-// syncEvents spends futurePages + pastPages per enabled cookie set, and
-// syncDescriptions spends at most CRON_DESC_LIMIT -- so the sweep, the one
-// unbounded pass, gets what those cannot claim, less headroom for the D1 batches.
+// Workers Free allows 50 subrequests per invocation (gotcha 36). Production
+// showed on 2026-10-14 that D1 calls don't count toward it, and this budget
+// still reserves room for them: overcounting costs a deferred page, while
+// undercounting is the outage. The two passes bracketing the roster sweep are
+// already bounded -- syncEvents spends futurePages + pastPages per enabled
+// cookie set, and syncDescriptions spends at most CRON_DESC_LIMIT -- so the
+// sweep, the one unbounded pass, gets what those cannot claim, less headroom.
 // Reserved rather than measured, because syncEvents runs first and reports no
 // spend, and guessing low costs a deferred page while guessing high costs the
 // whole tail of the tick. The cap is a documented plan limit rather than
 // something the runtime reports: the error names no number, so re-measure this
 // against the account's plan before tuning it.
-// The ceiling itself is lib/budget.ts's, imported rather than restated: it was
-// typed out here as `const CRON_SUBREQUEST_CAP = 50` while rn.ts carried its own
-// copy of the same platform fact, which is how a limit gets updated in one place
-// and stays wrong in the other.
+// The ceiling itself is lib/budget.ts's SUBREQUEST_CAP_FREE, imported rather
+// than restated; contract-the-subrequest-budget fails if this file re-declares it.
 // Eight: the D1 batches, the two self-dispatches (enrich, tag) at one
-// subrequest each, and the sync-health record's one write. It was six before
-// the tag pass took the seventh, and seven before the record took the eighth.
+// subrequest each, and the sync-health record's one write.
 const CRON_BUDGET_HEADROOM = 8;
 export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
   const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
@@ -1977,9 +1967,9 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
   return span("serendipity.sync", async (s) => {
     const d = db(env);
     const at = new Date().toISOString();
-    // `descriptions` and `enrich` are filled after the roster loop, so both are
-    // declared here rather than bolted on: an object literal's shape is fixed at
-    // the literal in TypeScript, and this is the log line's whole schema.
+    // `descriptions`, `enrich` and `tag` are filled after the roster loop, so all
+    // three are declared here rather than bolted on: an object literal's shape is
+    // fixed at the literal in TypeScript, and this is the log line's whole schema.
     const out: {
       events: any[], guests: any[], skipped: any[],
       descriptions: any, enrich?: any, tag?: any,
@@ -2042,9 +2032,10 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Exa enrichment — ported from lib/enrich.ts (Exa path only). Web-grounded,
-// cited, never fabricates. name (+ any signal) → {company, role, location, bio,
-// linkedin_url, work_history}. Stealth companies get a second neural drill.
+// Exa enrichment, ported from the Next app's lib/enrich.ts (Exa path only).
+// Web-grounded, cited, never fabricates. name (+ any signal) → {company, role,
+// location, bio, linkedin_url, work_history}. Stealth companies get a second
+// neural drill.
 // ════════════════════════════════════════════════════════════════════════════
 const EXA = "https://api.exa.ai";
 const SUMMARY_PROMPT = `Two parts. Output them in this exact order:
@@ -2210,9 +2201,10 @@ const ENRICH_PROVIDERS = {
   parallel: { keyEnv: "PARALLEL_API_KEY", fn: enrichViaParallel },
 };
 // One attendee costs at most 4 ops: the already-enriched read, the Exa lookup,
-// one more Exa call when the company reads as stealth, and the upsert. Bindings
-// count against the same 50-subrequest invocation ceiling as fetches, so the
-// manual cap of 10 sits at ~41 and the cron default of 6 sits at ~25.
+// one more Exa call when the company reads as stealth, and the upsert. Counting
+// every op against the 50-subrequest ceiling, the manual cap of 10 sits at ~41
+// and the cron default of 6 at ~25. That overcounts, since production showed on
+// 2026-10-14 that D1 calls don't count (gotcha 36).
 const ENRICH_MAX = 10;
 const ENRICH_CRON_BATCH = 6;
 export function enrichBatchLimit(raw, fallback = ENRICH_CRON_BATCH, max = ENRICH_MAX) {
@@ -2241,9 +2233,9 @@ async function handleEnrich(request, env, d) {
       WHERE ea.event_id = ? AND ea.is_host = 0 AND en.attendee_id IS NULL
       ORDER BY (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) DESC LIMIT ?`).all(eid, limit);
   } else if (url.searchParams.get("upcoming")) {
-    // The whole pool is 16,839 attendees against a paid per-person API, and the
-    // question this data actually gets asked is "who is going to X". So the
-    // automatic tier only ever looks at events that have not happened yet.
+    // The whole pool was 16,839 attendees on 2026-08-22, against a paid
+    // per-person API, and the question this data actually gets asked is "who is
+    // going to X". So the automatic tier only looks at events still to come.
     //
     // SOONEST EVENT FIRST, then how often the person turns up across the pool.
     // The spec for this put frequency first; imminence beats it, because a
@@ -2396,7 +2388,7 @@ const MCP = mcpServer({
 //
 // THE TYPE IS THE PUBLIC SCHEMA, so it is worth reading as one. The first block
 // is what every caller gets; the second is what mcpAttendee itself adds when the
-// row carries it; the third is the per-query extensions four callers bolt on
+// row carries it; the third is the per-query extensions three callers bolt on
 // after the fact, which is why they are declared here rather than at each site.
 // A projection whose shape is stated in one place is also the easier guardrail
 // to audit against the no-email/no-phone rule above.
@@ -2785,11 +2777,9 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
     const when = ["upcoming", "past", "all"].includes(args.when) ? args.when : "upcoming";
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 50, 1), 200);
     const q = args.q != null && String(args.q).trim() ? String(args.q).toLowerCase() : null;
-    // rsvp tier: the pool mixes events a contributor actually RSVP'd to / hosts
-    // ("going" — first-class, the ones with rosters) with events synced from just
-    // browsing a Luma feed ("invited"/"pending"/etc — no roster, second-class).
-    // default to the real ones; "all" includes the discovered pile (first-class
-    // first), "discovered" returns only the not-RSVP'd ones.
+    // rsvp tier (mcpEventSummary says what "going" means): default to the RSVP'd
+    // events; "all" includes the discovered pile (first-class first),
+    // "discovered" returns only the not-RSVP'd ones.
     const rsvp = ["going", "all", "discovered"].includes(args.rsvp) ? args.rsvp : "going";
     const now = Date.now();
     let rows = await queryEvents(d);
@@ -2916,17 +2906,17 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
 //
 // Deliberately ONE tool rather than a general proxy. get_event and search_people
 // are drill-downs that only make sense once you are inside the pool, and a bridge
-// that hoisted all four would put four near-duplicate names in front of a model
-// that already has seven.
+// that hoisted all ten tools here would put nine more names in front of a model
+// that already has the site server's own.
 export async function serendipityFindEvents(env, args) {
   if (!env?.SERENDIPITY_DB) return { _error: "the event pool is not bound on this deployment" };
   return mcpCallTool(db(env), "list_events", args || {});
 }
 
-// exported for contract-tests.mjs: the protocol-level methods (server/discover,
+// exported for the contract suite: the protocol-level methods (server/discover,
 // initialize, the list surfaces, the version + header gate) touch no database,
 // so they are drivable with a null `d`. Same reason shouldUseWorkersCache was
-// pulled into lib/cache.js — a dispatcher-private function is a function no
+// pulled into lib/cache.ts: a dispatcher-private function is a function no
 // test can reach, and the bug that taught us that shipped through a green CI.
 export async function handleMcp(request, env, d) {
   const cors = mcpCorsHeaders();
@@ -2963,8 +2953,8 @@ export async function handleMcp(request, env, d) {
         const name = msg.params && msg.params.name;
         // Every tool on this server reads today, so this refuses nothing yet.
         // It is here so that the day one of them writes, the preview guard is
-        // already in place rather than remembered — the site server learned that
-        // lesson the expensive way (lib/preview.js).
+        // already in place rather than remembered. The site server learned that
+        // lesson the expensive way (lib/preview.ts).
         const refusedOnPreview = previewToolRefusal(request, MCP_TOOLS, name);
         if (refusedOnPreview) return MCP.result(id, { content: [{ type: "text", text: refusedOnPreview }], isError: true });
         const out = await mcpCallTool(d, name, (msg.params && msg.params.arguments) || {});
@@ -3012,7 +3002,8 @@ export async function handleSerendipity(request, env, ctx) {
   const msg = url.searchParams.get("msg");
   const eventsKey = new Request(`${url.origin}${EVENTS_URL}`);  // the dashboard island's shared cache key
 
-  // any mutation (sync / enrich / contribute) invalidates the cached dashboard
+  // any mutation (a secret-gated trigger, a cookie paste, a link add)
+  // invalidates the cached dashboard island
   if (request.method === "POST" &&
       (path === `${PREFIX}/sync` || path === `${PREFIX}/sync-descriptions` ||
        path === `${PREFIX}/enrich` || path === `${PREFIX}/tag` ||
@@ -3020,7 +3011,8 @@ export async function handleSerendipity(request, env, ctx) {
     ctx.waitUntil(caches.default.delete(eventsKey));
   }
 
-  // secret-gated triggers (admin/cron): pull from cookies + Exa-enrich attendees
+  // secret-gated triggers (admin/cron): sync, description backfill, Exa
+  // enrichment, Clef tagging
   if (request.method === "POST" && path === `${PREFIX}/sync`) return handleSync(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/sync-descriptions`) return handleSyncDescriptions(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/enrich`) return handleEnrich(request, env, d);
@@ -3076,8 +3068,8 @@ export const SERENDIPITY_SECURITY_HEADERS = {
     // img-src is `https:` (any host) because Luma lets organizers point covers
     // at arbitrary CDNs (lumacdn, unsplash, …); allow-listing hosts was whack-a-
     // mole and silently broke the odd external cover. Covers now route through the
-    // same-origin /cover proxy anyway, so 'self' carries them — `https:` is the
-    // belt-and-suspenders net for the proxy's full-size fallback redirect path.
+    // same-origin /cover proxy, whose full-size fallback is still same-origin, so
+    // 'self' carries them and `https:` stays as a spare net.
     serendipityCsp("'self' 'unsafe-inline'"),
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",

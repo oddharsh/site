@@ -33,7 +33,7 @@ import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { FARM, stage } from "./dev-stage.ts";
+import { FARM, stage, watchClientSources } from "./dev-stage.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const REGISTRY = resolve(ROOT, ".wrangler", "dev-registry");
@@ -58,6 +58,7 @@ const freePort = () => new Promise<number>((done, fail) => {
 const { links, dirs, skipped } = await stage();
 console.log(`dev: ${FARM}/ ready, ${links} links across ${dirs} merged director${dirs === 1 ? "y" : "ies"}`);
 for (const path of skipped) console.warn(`dev: left out ${path} (the build derives it; this copy is a local leftover)`);
+const clientWatcher = watchClientSources();
 mkdirSync(REGISTRY, { recursive: true });
 
 // Counter first, so the site boots with COUNTER already [connected]. Its own
@@ -71,6 +72,7 @@ const counter = spawn(process.execPath, [
 
 let site: ChildProcess | null = null;
 const stopAll = (code: number) => {
+  clientWatcher.close();
   counter.kill("SIGTERM");
   site?.kill("SIGTERM");
   process.exit(code);

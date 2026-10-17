@@ -29,8 +29,6 @@
   // missing property is only visible to a checker.
   "compilerOptions": {
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -63,5 +61,5 @@
   // harness.ts and preload.ts are here deliberately. They decide which runtime
   // the suite gets and what it can import, so a program covering the tests and
   // skipping them covers the tests and not the thing that makes them tests.
-  "include": ["../cal/test/**/*.js", "../cal/test/**/*.ts", "./.generated/workers-runtime.d.ts"]
+  "include": ["../cal/test/**/*.ts", "./.generated/workers-runtime.d.ts"]
 }

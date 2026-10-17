@@ -493,7 +493,7 @@ const PENDING_PER_DAY = 8;
 // listing made two per slot: 8 ms of the 18 ms /coffee/slots.html cost on a
 // cold isolate (a CPU sweep, 2026-10-08). A cached formatter's format() is the
 // same string by spec, since both shapes name their own fields and so take no
-// defaults; cal/test/templates.test.js holds the two together across both
+// defaults; cal/test/templates.test.ts holds the two together across both
 // 2026 New York transitions.
 const SLOT_LABELS = new Map<string | undefined, { day: Intl.DateTimeFormat; time: Intl.DateTimeFormat }>();
 export function slotLabels(tz: string | undefined) {

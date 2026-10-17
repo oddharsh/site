@@ -80,7 +80,7 @@ export const SUB_MANIFEST_POLICY = [
       // that direction has caught a real gap.
       { prose: "htmlparser2", pkg: "htmlparser2" },
       // linkedom is a devDependency now, kept as the parity oracle for
-      // test/dom-differential.test.mjs. It stays claimed so a bump to the
+      // test/dom-differential.test.ts. It stays claimed so a bump to the
       // reference still has to be a documented decision.
       { prose: "linkedom", pkg: "linkedom" },
     ],

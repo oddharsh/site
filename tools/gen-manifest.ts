@@ -8,9 +8,9 @@
 // What this OWNS (regenerated between markers; do not hand-edit those regions):
 //   - src/worker/lib/site-manifest.ts  — AGENT_SURFACES, the projection
 //     MCP resources/list serves (agents:true only, no shell bytes)
-//   - src/client/nav-run.js generated:garage-pages + generated:lwe-pages — the Run
+//   - src/client/nav-run.ts generated:garage-pages + generated:lwe-pages — the Run
 //     palette's garage/lwe sub-entries (terse {label,path,hint}, no temporal data)
-//   - src/client/nav-run.js generated:run-profiles — the desktop profiles from
+//   - src/client/nav-run.ts generated:run-profiles — the desktop profiles from
 //     tools/photos/shell-data.ts
 //
 // What this deliberately does NOT own (hand-authored, VERIFIED by the site-manifest
@@ -18,7 +18,7 @@
 //   - sitemap.xml — carries per-page hand-tuned <lastmod>; generating would
 //     flatten a real SEO freshness signal. build.ts enforces coverage instead.
 //   - src/pages/garage/index.html — rich hand-written gallery cards. Verified.
-//   - nav-run.js top-level PAGES (Home/photos/…) — hand-authored. Verified both ways.
+//   - nav-run.ts top-level PAGES (Home/photos/…) — hand-authored. Verified both ways.
 //
 // The projection functions below are PURE and exported, so build.ts re-runs the
 // exact same logic in-memory and fails the deploy if a committed output drifts.
@@ -28,7 +28,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { PROFILES } from "../tools/photos/shell-data.ts";
 
 export const MANIFEST = "config/site-manifest.json";
-const NAV = "src/client/nav-run.js";
+const NAV = "src/client/nav-run.ts";
 const WORKER_MOD = "src/worker/lib/site-manifest.ts";
 const FENCE_SECTIONS = [["garage", "garage-pages"], ["lwe", "lwe-pages"]];
 
