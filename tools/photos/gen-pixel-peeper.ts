@@ -878,16 +878,17 @@ export const AVIF_ARGS = ["-d", "10", "--speed", "2", "--yuv", "444"];
 //   tune      left at libavif's ssim. psnr doubled butteraugli wins and cost
 //             about half a point of ssimulacra2; neither is a still-image
 //             tune, which AVM doesn't have yet.
-//   tool-unlock=6  av2-tone patch 0007: TCQ and the IST/CCTX transform search,
-//             which AVM's speed levels leave off (at speed 3 too: one crop at
-//             qp 107 went 31,363 to 30,972 B). On the densest 320px window of
-//             8 photos at -q 50/63/80 budgets (24 pairs, speed 6, exact
-//             decodes, 2026-10-17), AV2 against the AVIF went from -0.47
-//             ssimulacra2 and 8 wins to +0.38 and 18; /garage/av2's 600px
-//             tiles moved +1.02 the day before (#1381). It costs the encode
-//             about 3x, and the decoder nothing measurable.
-// Measured at speed 6. Speed 3 with qmseg is this axis's first run of the two
-// together, so its numbers are the record, not a re-run of the probes'.
+//   tool-unlock=6  TCQ and the IST/CCTX transform search, two AV2 additions
+//             that speed 2 and speed 3 switch off (av2-tone patch 0007).
+//             Together +0.99 s2 over plain speed 6 on 20 held-out tier tiles,
+//             tier-weighted, and 19 of 20 butteraugli wins (av2-tile-probe.ts,
+//             2026-10-16). About 4x the encode time at speed 3.
+//             On the densest 320px window of 8 other photos at -q 50/63/80
+//             (24 pairs, speed 6, exact decodes, 2026-10-17): -0.47 to +0.38
+//             s2 against the AVIF, 8 to 18 wins.
+// Measured at speed 6. Speed 3 with qmseg and tool-unlock is this axis's first
+// run of them together, so its numbers are the record, not a re-run of the
+// probes'.
 export const AV2_ARGS = ["-c", "avm", "-d", "10", "--speed", "3", "--yuv", "444", "-a", "sb-size=128",
   "-a", "enable-qm=1", "-a", "qm-curve=1", "-a", "qmseg=1", "-a", "qmseg-level=12", "-a", "tool-unlock=6"];
 

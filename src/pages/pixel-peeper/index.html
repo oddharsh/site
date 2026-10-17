@@ -219,20 +219,24 @@ function av2Line(t){
 // lossless JPEG XL (cjxl -d 0 -e 9, 308,008 B) and AVIF (avifenc -l -s 3,
 // 518,344 B) against the shipped WebP's 341,842 B.
 //
-// AV2's table pools /garage/av2's 38 whole-frame tiles and 16 crops by bits per
-// pixel at the AVIF budget. The "here" column buckets this site's own shipped
-// 600px AVIFs the same way: 255 Fuji frames on 2026-10-07, median 0.67. The
-// probe's 38 tiles averaged 0.46, thinner than the tier as a whole, which is
-// why the copy says "the sparse third" and never "this site's photos".
-const AV2_BANDS=[["under 0.3","12 of 12",30],["0.3 to 0.5","11 of 12",52],["0.5 to 0.8","4 of 15",71],["0.8 to 1.2","2 of 10",86],["over 1.2","0 of 5",16]];
+// AV2's table pools /garage/av2's 78 whole-frame tiles (38 cut from JPGs, 40
+// from HIFs picked evenly by shipped bpp) and its 16 crops at the AVIF budget,
+// by bits per pixel at that budget, re-scored 2026-10-17 with the setting the
+// AV2 tiles here encode with: speed 6, per-segment QM, and tool-unlock=6 (TCQ
+// and the IST/CCTX search, which speed 6 switches off). The "here" column
+// buckets this site's own shipped 600px AVIFs the same way: 162 frames. Pooled
+// at plain speed 6, the same calls read 20/20, 18/20, 11/23, 3/18, 0/13, and
+// the 38 tiles plus 16 crops alone reproduce the old table (12/12, 11/12, 4/15,
+// 2/10, 0/5) exactly, so the pooling is the one the old numbers came from.
+const AV2_BANDS=[["under 0.3","20 of 20",28],["0.3 to 0.5","20 of 20",43],["0.5 to 0.8","21 of 23",48],["0.8 to 1.2","11 of 18",31],["over 1.2","5 of 13",12]];
 const FMT_QS=[
   {q:`why pick JPEG XL over AVIF?`,
    a:`when the picture already exists as a JPEG. the transcode from JPEG to JPEG XL is lossless: every pixel comes back identical, in a file 6 to 13% smaller on this site's photos. AVIF can only re-encode the JPEG, stacking its damage on the JPEG's. for lossless images in general, JPEG XL lands at 53 to 79% of AVIF's bytes. squeeze a fresh photo into a thumbnail budget and AVIF usually wins instead, and with more bytes the two converge. the cost is reach: only Chrome 155+ and Safari 17+ decode it, so it ships with an AVIF or JPEG behind it.`,
    more:()=>winsHTML("jxl")},
   {q:`where does AV2 fit?`,
-   a:`on AVIF's turf, a notch thinner. AV2 succeeds AV1, the codec inside every AVIF, and whether it wins depends on how scarce the bits are. measured at matched bytes against this site's AVIF, it won 23 of 24 calls under half a bit per pixel, and 6 of 30 above it. on 16 dense crops like this exam's, it lost most calls under every setting tried. so AV2 earns its keep on the sparse end: thumbnails, previews, and the frames with the least detail, the third of this site's photos that sit under that line.`,
+   a:`on AVIF's turf. AV2 succeeds AV1, the codec inside every AVIF, and its encoder's default speed leaves two of AV2's own tools off. with them turned back on and measured at matched bytes against this site's AVIF, it won 40 of 40 calls under half a bit per pixel and 37 of 54 above it. on 16 dense crops like this exam's, it won 11 of 32 calls, up from 2. so AV2 now wins on most of this site's photos, and the densest detail is where AVIF still holds.`,
    more:()=>`<table class="fmtcard" style="margin:8px 0 6px"><thead><tr><th>bits per pixel</th><th>AV2 beat AVIF</th><th>this site's photos</th></tr></thead><tbody>${
-     AV2_BANDS.map(([b,w,n])=>`<tr><td>${b}</td><td>${w}</td><td>${n} of 255</td></tr>`).join("")}</tbody></table>
+     AV2_BANDS.map(([b,w,n])=>`<tr><td>${b}</td><td>${w}</td><td>${n} of 162</td></tr>`).join("")}</tbody></table>
      ${winsHTML("av2")}
      <div>two things could widen that. the encoder measured is AV2's reference encoder, and production encoders like SVT-AV1 later moved AV1's dense end; a still-image tune is the first place to look. and it needs a browser that decodes it, under a name that browser can decline: served as AVIF, it draws as a broken image. it does nothing for JPEG XL's turf, with no lossless JPEG transcode and lossless files 29% larger than AV1's. <a href="/garage/av2">the long version</a>.</div>`},
   {q:`so where does each format win, on these photos?`, when:()=>!!(DATA.format_pool&&DATA.format_pool.length),
