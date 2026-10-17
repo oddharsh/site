@@ -10,11 +10,12 @@
 // Going back up (h3 to h2) is fine. Going down skips nothing.
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
+import { stripUnrendered } from "./lib/html-raw-text.ts";
 import { staticShellPages } from "./photos/gen-desktop-partial.ts";
 
 // Markup a browser never renders as headings: comments, and the raw text of
 // script, style and template (lean's theorems name hypotheses h1 and h2).
-const strip = (html) => html.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style|template)\b[\s\S]*?<\/\1>/g, "");
+const strip = (html) => stripUnrendered(html);
 
 function skips(html) {
   const out = [];

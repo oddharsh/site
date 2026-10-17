@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { closeTagSource, stripRawText } from "./lib/html-raw-text.ts";
+import { closeTagSource, stripRawText, stripUnrendered } from "./lib/html-raw-text.ts";
 import { readDocument } from "./lib/html-to-md.ts";
 
 // The four shapes the HTML tokenizer accepts as a close, plus the one it does
@@ -36,6 +36,19 @@ test("stripRawText removes the element whatever shape its end tag takes", () => 
   }
   assert.equal(stripRawText("keep<style>a{b:c} LEAK</style >tail", "style").replace(/\s+/g, " "),
     "keep tail", "style too");
+});
+
+test("stripUnrendered drops comments and raw text, whichever opens first", () => {
+  const out = (html) => stripUnrendered(html).replace(/\s+/g, " ").trim();
+  assert.equal(out("a<!-- <h4>x</h4> -->b"), "a b");
+  assert.equal(out("a<script>'<!--'</script>b<!-- c -->d"), "a b d", "a <!-- inside a script opens no comment");
+  assert.equal(out("a<!-- <script> -->b<h2>c</h2>"), "a b<h2>c</h2>", "a <script> inside a comment opens nothing");
+  assert.equal(out("a<style>:root{--g:\"字\"}</style >b<template><h5></h5></template>c"), "a b c");
+  assert.equal(out("a<!-->b<!--x--!>c"), "a b c", "the abrupt and the tolerated comment closes");
+  // the splice CodeQL's js/incomplete-multi-character-sanitization warns of:
+  // removing an inner comment must not leave a live <script behind
+  assert.doesNotMatch(out("<scr<!-- -->ipt>x</script>"), /<script>/, "the gap left by a comment never joins a tag back together");
+  assert.equal(out("a<script>never closed"), "a", "an unterminated element runs to end of document");
 });
 
 test("document extraction keeps prose after each legal raw-text close", () => {

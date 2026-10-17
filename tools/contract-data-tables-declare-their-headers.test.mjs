@@ -20,10 +20,11 @@
 // rows tinted.
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
+import { stripUnrendered } from "./lib/html-raw-text.ts";
 import { renderLedgerLines } from "../src/worker/ledger.ts";
 import { staticShellPages } from "./photos/gen-desktop-partial.ts";
 
-const strip = (html) => html.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style|template)\b[\s\S]*?<\/\1>/g, "");
+const strip = (html) => stripUnrendered(html);
 
 // Each table holding a <th> whose header row is not a <thead> (of scope="col"
 // cells, when `scoped`).

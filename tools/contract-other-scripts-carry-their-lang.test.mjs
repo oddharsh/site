@@ -13,6 +13,7 @@
 // the demo's own string.
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
+import { stripUnrendered } from "./lib/html-raw-text.ts";
 import { staticShellPages } from "./photos/gen-desktop-partial.ts";
 
 const HAN = /[\p{Script=Han}]/u;
@@ -23,8 +24,9 @@ const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input"
 function unmarked(html) {
   const out = [];
   const stack = [];
-  const src = html.replace(/<!--[\s\S]*?-->/g, "");
+  const src = stripUnrendered(html);
   const token = /<(\/?)([a-zA-Z][\w-]*)([^>]*)>|([^<]+)/g;
+  /** @type {string | null} */
   let raw = null;
   for (const m of src.matchAll(token)) {
     const [, close, tagName, attrs, text] = m;

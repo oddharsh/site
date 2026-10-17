@@ -45,3 +45,41 @@ export const stripRawText = (s: string, tag: string): string => {
   }
   return kept.join(" ");
 };
+
+// Markup a browser never renders as text: comments, and the bodies of script,
+// style and template. One scan takes whichever starts first, because each hides
+// the other: `<script>` inside a comment opens nothing, and `<!--` inside a
+// script opens nothing either. The contract tests that walk a page's headings,
+// labels, tables and lang read what's left. Chained regex replaces did the same
+// job and CodeQL's js/incomplete-multi-character-sanitization flagged each one,
+// since one pass can splice a new `<script` out of the leftovers.
+export const stripUnrendered = (s: string, tags: readonly string[] = ["script", "style", "template"]): string => {
+  const opens = tags.map((tag) => ({ tag, open: new RegExp("<" + tag + "(?=[\\s/>])", "i") }));
+  const kept: string[] = [];
+  let rest = s;
+  for (;;) {
+    const comment = rest.indexOf("<!--");
+    let first = { at: comment, tag: "" };
+    for (const { tag, open } of opens) {
+      const at = rest.search(open);
+      if (at >= 0 && (first.at < 0 || at < first.at)) first = { at, tag };
+    }
+    if (first.at < 0) { kept.push(rest); break; }
+    kept.push(rest.slice(0, first.at));
+    const after = rest.slice(first.at);
+    let end;
+    if (first.tag) {
+      const c = after.search(new RegExp("</" + first.tag + "(?=[\\s/>])", "i"));
+      end = c < 0 ? -1 : after.indexOf(">", c) + 1;
+    } else {
+      // A comment closes at `-->` or the parser's tolerated `--!>`, never
+      // inside its own opener, so `<!-->` is the shortest one.
+      const m = /--!?>/.exec(after.slice(2));
+      end = m ? m.index + 2 + m[0].length : -1;
+    }
+    // Unterminated, it runs to end of document by the parser's own rule.
+    if (end <= 0) break;
+    rest = after.slice(end);
+  }
+  return kept.join(" ");
+};

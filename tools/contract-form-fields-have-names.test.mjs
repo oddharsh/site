@@ -12,10 +12,11 @@
 // attribute) and buttons, which name themselves, are skipped.
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
+import { stripUnrendered } from "./lib/html-raw-text.ts";
 import { renderContribute, renderSerendipityPage } from "../serendipity/serendipity.ts";
 import { staticShellPages } from "./photos/gen-desktop-partial.ts";
 
-const strip = (html) => html.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style|template)\b[\s\S]*?<\/\1>/g, "");
+const strip = (html) => stripUnrendered(html);
 
 function unnamed(source) {
   const html = strip(source);
