@@ -67,9 +67,13 @@ test("every tracked file cites a renamed file by its new name", () => {
   const root = fileURLToPath(ROOT);
   const files = execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8", maxBuffer: 64 << 20 })
     .split("\0").filter(Boolean);
+  // This file is skipped: HISTORY and the header have to spell the old names
+  // to explain them. It passed locally on 2026-10-17 only because it was not
+  // yet tracked, and the first CI run failed on its own six citations.
+  const self = fileURLToPath(import.meta.url).slice(root.length);
   const texts = new Map<string, string>();
   for (const file of files) {
-    if (SKIP.test(file)) continue;
+    if (SKIP.test(file) || file === self) continue;
     try { texts.set(file, readFileSync(`${root}${file}`, "utf8")); } catch { /* a submodule or a deleted path */ }
   }
   // A scan that reads nothing finds nothing and still passes. 900 of 2260
