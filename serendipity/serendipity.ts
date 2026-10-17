@@ -476,7 +476,7 @@ function eventCard(e, isPast) {
     <div class="meta">${eventTime(d)}${isPast && d ? ` · ${esc(relativeTime(d))}` : ""}${e.location ? " · " + esc(e.location) : ""}</div>
     <div class="row">
       ${going ? "" : `<span class="badge browsed" title="synced from a browsed feed — not RSVP'd">browsed</span>`}
-      ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:var(--grey-60)">${going ? "no guest list yet" : "not RSVP&rsquo;d"}</span>`}
+      ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:var(--ink-faint)">${going ? "no guest list yet" : "not RSVP&rsquo;d"}</span>`}
       ${contributors.slice(0, 3).map((c) => `<span class="badge via">via ${esc(c)}</span>`).join("")}
       ${contributors.length > 3 ? `<span class="count">+${contributors.length - 3}</span>` : ""}
     </div>

@@ -91,7 +91,7 @@
   --ink-soft:  oklch(38.67% 0 0);        /* body prose / secondary             */
   --ink-quiet: oklch(44.95% 0 0);        /* #555555 notes, footers, field labels */
   --ink-dim:   oklch(51.03% 0 0);        /* meta, captions, disabled label     */
-  --ink-faint: oklch(62.68% 0 0);        /* placeholder / loading text         */
+  --ink-faint: oklch(56.58% 0 0);        /* #767676 placeholder / loading text; the lightest grey at 4.5:1 on white (was #888888, 3.54:1) */
   --rule:      oklch(86.67% 0.0294 calc(var(--hue-luna) - 4)); /* hairline divider */
   --row-alt:   oklch(97.50% 0.0062 calc(var(--hue-luna) - 8)); /* zebra row tint */
   --row-hover: oklch(97.73% 0.0373 var(--hue-rowhover));      /* warm hover tint */
@@ -106,7 +106,7 @@
   /* link states — canonical web-safe blue/purple/red, OKLCH'd */
   --link:         oklch(42.61% 0.235 263.74);
   --link-visited: oklch(42.09% 0.194 328.36);
-  --link-hover:   oklch(62.80% 0.258 29.23);
+  --link-hover:   oklch(58.50% 0.258 29.23);  /* L from 62.80%, where the web-safe red sat at 4.0:1 on white; this holds 4.5:1 */
 
   /* selection */
   --selection:      var(--blue-50);
@@ -218,7 +218,7 @@
   :root {
     --link:        oklch(42.61% 0.30 263.74);
     --link-visited:oklch(42.09% 0.27 328.36);
-    --link-hover:  oklch(62.80% 0.33 29.23);
+    --link-hover:  oklch(58.50% 0.33 29.23);
     --danger:      oklch(58% 0.26 var(--hue-danger));
     --gold:        oklch(86.52% 0.22 90.38);
   }
@@ -1190,7 +1190,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   display: block;
   margin-top: 1px;
   font-size: var(--text-3xs);
-  color: var(--grey-60);
+  color: var(--ink-faint);
 }
 a.car-link:link,
 a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
@@ -1331,7 +1331,7 @@ body:has(.window),body:has(.np-window){padding-top:calc(var(--sa-t) + var(--hype
 .axp-well a{color:oklch(42.61% 0.30 263.74);text-decoration:none}
 .axp-well a:hover{text-decoration:underline}
 .axp-here{color:var(--ink);font-weight:700}
-.axp-sep{padding:0 1px;color:var(--grey-60)}
+.axp-sep{padding:0 1px;color:var(--ink-faint)}
 
 /* task pane — Luna's pale-blue group boxes: gel caption, rounded top only. */
 .axp-pane{display:flex;flex-direction:column;gap:10px;font:11px/1.45 var(--font-ui)}
