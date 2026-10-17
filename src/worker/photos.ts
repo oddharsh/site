@@ -1,5 +1,7 @@
-// photos.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+// photos.ts: everything photo-shaped the Worker serves. Originals out of R2 at
+// /images/full, the curated and album pools, /photos and the album pages,
+// /photos/query.json, and the image manifest and sitemap.
+
 import { cachedRender } from "./lib/cache.ts";
 import { PHOTO_QUERY_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
@@ -116,7 +118,7 @@ export async function servePhotoFromR2(request, env, ctx) {
   // but the caches.default entry is stored under ?av=ARCHIVE_VERSION. Cloudflare's
   // purge does not evict these per-colo Cache API entries, so an in-place R2
   // overwrite (e.g. re-encoding an existing original) is busted by bumping
-  // ARCHIVE_VERSION in lib/const.js: the new key misses, falling through to fresh
+  // ARCHIVE_VERSION in lib/const.ts: the new key misses, falling through to fresh
   // R2 bytes. The token never rides the served URL, only this internal lookup.
   const cacheKey = new Request(`${url.origin}${url.pathname}?av=${ARCHIVE_VERSION}`, request);
   if (cacheable) {
@@ -189,9 +191,6 @@ export async function servePhotoFromR2(request, env, ctx) {
   return resp;
 }
 
-// (the Apache-styled /images listings lived here until 2026-07-03; /photos
-// superseded them and their signature line moved with it.)
-
 // ── the photo pool ──────────────────────────────────────────────────
 // photo-index.json is the single source of truth for which photos exist:
 // one entry per published stem, written by add-photos.sh when it uploads the
@@ -203,7 +202,7 @@ export async function servePhotoFromR2(request, env, ctx) {
 // derivePhotoPool joins the index with hashes.json into the render-ready rows
 // the SSR slot-builder reads. A stem with an incomplete hash entry is a
 // half-run pipeline: SKIP it rather than bake a broken /i/undefined tile
-// (check-photo-pipeline.mjs fails CI on the same condition, so this guard is
+// (check-photo-pipeline.ts fails CI on the same condition, so this guard is
 // belt on top of braces). Exported for contract-tests, which run it over the
 // real committed files.
 //
@@ -229,12 +228,9 @@ export async function servePhotoFromR2(request, env, ctx) {
 //   thumb_jpg    600px JPG, which the grid never emits — it is what /photos
 //                renders, and the target of index.html's AVIF decode repair
 //
-// This block used to describe thumb_avif as "the <picture> primary", thumb_jpg as
-// "the universal <img src> fallback", and thumb_small as "the 400px mobile AVIF".
-// All three stopped being true, in three separate changes, without the comment
-// moving. AVIF decode failures are still real (Kitesurf, 2026-08-12) and are
-// handled by the recovery listener in index.html rather than by a second
-// candidate here.
+// AVIF decode failures are still real (Kitesurf, 2026-08-12) and are handled by
+// the recovery listener in index.html rather than by a second candidate here.
+//
 // slim hot-path rows: ONLY the fields the SSR slot-builder reads
 // (EXIF rides /images/meta/<stem>.json, fetched per photo on hover).
 export function derivePhotoPool(index: PhotoIndexMap, hashes: ThumbHashMap) {
@@ -277,11 +273,10 @@ export const curatedPool = (pool: ReturnType<typeof derivePhotoPool>) => pool.fi
 export const albumPool = (pool: ReturnType<typeof derivePhotoPool>, album: Album) => pool.filter((p) => p.album === album.slug);
 export const CURATED_POOL = curatedPool(PHOTO_POOL);
 
-// AI alt text (cf-garage Workers AI, ?mode=alt) generated offline into the static
-// asset /images/alt.json {stem: alt}. loaded once per isolate and cached in a module
-// var — deliberately NOT folded into the hot-path manifest (which is JSON-parsed on
-// every no-store homepage hit; alt would bloat it). only the alt strings for the ~12
-// rendered slots ship per page. strippable: delete alt.json + these lookups to revert.
+// AI alt text (tools/photos/gen-alt-text.ts) generated offline into the static
+// asset /images/alt.json {stem: alt}, loaded once per isolate and cached in a
+// module var rather than bundled with the pool. Only the alt strings for the
+// rendered slots ship per page.
 export let _altMap;
 
 export async function getAltMap(env) {
@@ -293,20 +288,10 @@ export async function getAltMap(env) {
   return _altMap;
 }
 
-// content-hash map {stem: {a,j,s}} written by tools/photos/hash-thumbnails.sh at
-// photo-add time. The pool bakes these into /i/ URLs, so a thumbnail URL
-// is born with its bytes: no global ?v= bump, and a cached 404 can never
-// shadow real bytes (a new encode IS a new URL). Module-cached like _altMap.
-//
-// Deliberately still an ASSETS read even though the same file is imported
-// above for the pool: the pool is the render-critical path and wants module
-// memory; these callers (the legacy /images/<thumb> 301 mapper, queryPhotos)
-// are not hot, and keeping them on ASSETS keeps them stubbable in
-// contract-tests. Both readers see the same committed file per deploy.
 // Packed histograms {stem: four modulo-delta channels x 64 bins}, written
 // by tools/photos/build-histogram-index.ts. Module-cached like _altMap, and that memo
 // is the whole reason this is an ASSETS read rather than a bundled import: the
-// fragment draws a random twelve per request so all 158 must be reachable, and
+// fragment draws a random twelve per request so every photo must be reachable, and
 // bundling them costs 22.9 KiB gzip (83% of the bundle's remaining headroom)
 // while reading twelve files per request costs twelve subrequests against a 50
 // cap. One memoised read costs neither.
@@ -326,6 +311,17 @@ export async function getHistogramMap(env) {
   return _histograms;
 }
 
+// content-hash map {stem: {a,j,s}} written by tools/photos/hash-thumbnails.sh at
+// photo-add time. The pool bakes these into /i/ URLs, so a thumbnail URL
+// is born with its bytes: no global ?v= bump, and a cached 404 can never
+// shadow real bytes (a new encode IS a new URL). Module-cached like _altMap.
+//
+// Deliberately still an ASSETS read even though the same file is imported
+// above for the pool: the pool is the render-critical path and wants module
+// memory; these callers (the legacy /images/<thumb> 301 mapper in index.ts,
+// lib/not-found.ts, queryPhotos) are not hot, and keeping them on ASSETS keeps
+// them stubbable in contract-tests. Both readers see the same committed file
+// per deploy.
 export let _thumbHashes;
 
 export async function getThumbHashes(env) {
@@ -337,9 +333,9 @@ export async function getThumbHashes(env) {
   return _thumbHashes;
 }
 
-// Test seam, never called by the worker. _altMap and _thumbHashes are cached
-// per ISOLATE, which is right in production and becomes per-PROCESS under
-// `node --test`: the first fixture to load one pins it for every later test in
+// Test seam, never called by the worker. These memos are cached per ISOLATE,
+// which is right in production and becomes per-PROCESS under the contract
+// suite: the first fixture to load one pins it for every later test in
 // the file. That was invisible until the ranking tests started asserting on
 // caption text, at which point they silently scored against an earlier test's
 // alt map and failed for a reason that had nothing to do with ranking.
@@ -362,9 +358,9 @@ const PHOTO_PUBLIC_FIELDS = [
   "recipe",
 ];
 
-// metadata.json (263 KB) and semantics.json (50 KB) are immutable for a
-// Worker version, and queryPhotos used to fetch and parse both on every
-// request. Memoised per isolate like _altMap, with one difference: only a
+// metadata.json (219 KB on 2026-10-16) and semantics.json (34 KB) are
+// immutable for a Worker version, and queryPhotos used to fetch and parse both
+// on every request. Memoised per isolate like _altMap, with one difference: only a
 // successful read is kept, so a transient ASSETS failure costs one request its
 // answer instead of pinning an empty archive to the isolate.
 const _photoJson = new Map<string, unknown>();
@@ -578,8 +574,8 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
 // count is a footnote.
 //
 // It reads metadata.json once and folds, rather than paging queryPhotos. That
-// query caps `limit` at 100 against a 158-photo archive, so a facet count built
-// on top of it would need two passes and would silently under-report the day the
+// query caps `limit` at 100 against a 165-photo archive (2026-10-16), so a
+// facet count built on top of it would need two passes and would silently under-report the day the
 // archive outgrows the second one. Facets are also the one question where the
 // public-field projection doesn't apply: these are counts, not records.
 export async function photoFacets(env) {
@@ -671,7 +667,7 @@ export function handleImagesManifest() {
 //
 // Extracted from the closure inside handlePhotos so build.ts can call it in Node
 // and emit photos.html at deploy time (step 1e), which buys the page the same q11
-// twin + dcz delta tier the 40 authored pages get. It is the largest page on the
+// twin + dcz delta tier the authored pages get. It is the largest page on the
 // site (60KB), and it was the largest one still taking Cloudflare's on-the-fly
 // zstd-3 with no twin and no delta.
 //

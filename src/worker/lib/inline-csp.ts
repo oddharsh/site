@@ -20,7 +20,7 @@
 // It FAILS OPEN TO THE OLD POLICY, never closed. Anything a hash cannot cover
 // (an inline event handler, a javascript: URL, an srcdoc document that would
 // inherit this policy) makes it return null, and the page keeps the loose
-// policy it had yesterday. A false alarm therefore costs nothing that shipped
+// policy. A false alarm therefore costs nothing that shipped
 // before; a missed script would break the page, and that direction is the one
 // the test hunts.
 import { cspHashed } from "./csp-policy.ts";

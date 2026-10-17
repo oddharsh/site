@@ -1,7 +1,7 @@
 // What does THIS site need an agent to find, and what is it building past need?
 //
 // The readiness mirror beside this (lensReadiness in lens.ts) is Cloudflare's
-// rubric: twenty declarations, each worth the same. That flat weighting docks a
+// rubric: a flat list of declarations, each worth the same. That weighting docks a
 // personal blog for publishing no OAuth discovery, no MCP server card and no
 // auth.md, none of which it has any use for, and it hands the same point for a
 // DNS-AID record as for a page that serves its words without JavaScript.

@@ -342,7 +342,7 @@
       { "name": "aadhar-sh", "config": "cloudflare.config.ts", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
       { "name": "cf-garage", "config": "cf-garage/cloudflare.config.ts", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
       { "name": "lwe-ask", "config": "lwe-ask/cloudflare.config.ts", "why": "The /lwe/ask RAG endpoints." },
-      { "name": "lens-reader", "config": "lens-reader/cloudflare.config.ts", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE because Readability needs a DOM Document, and linkedom supplying one costs 94.6 KB gzip on its own against a site bundle already over its 204.24 KiB budget. The second reason this note used to give, run_worker_first's 100-rule cap, EXPIRED when the eight exact /lens rows were folded to /lens + /lens/* and the config dropped to 94; the size reason is doing the work alone now. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
+      { "name": "lens-reader", "config": "lens-reader/cloudflare.config.ts", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE because Readability needs a DOM Document, and src/dom.ts plus htmlparser2 supplying one adds ~46 KiB gzip (measured 2026-08-23, when src/dom.ts replaced linkedom) to a site bundle already over its 204.24 KiB budget. Size is the only reason: run_worker_first's 100-rule cap no longer argues for the split, since /lens/read sits under the site's /lens/* row. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
     ],
     "retired": [
       {

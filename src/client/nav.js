@@ -527,7 +527,7 @@
     // can't retrieve a window dragged off the top — there's no menu up there), and
     // the bar can't slide under the taskbar or fully off the sides either.
     function move(e) {
-      if (!win) return;
+      if (!win || !r) return;
       var dx = e.clientX - sx, dy = e.clientY - sy;
       var vw = innerWidth, vh = innerHeight;
       // Ordinary windows are clamped by their TITLE BAR and are free to let their
@@ -544,8 +544,17 @@
       if (topLayer) maxDy = Math.min(maxDy, (vh - bar) - r.bottom);
       dy = Math.max(ceil - r.top, Math.min(dy, maxDy));
       dx = Math.max((60 - r.width) - r.left, Math.min(dx, (vw - 60) - r.left));
+      // Land the window's corner on a device pixel. WebKit's PointerEvent.clientX
+      // is a double, so a trackpad drag ends at offsets like 127.296875px, and the
+      // transform outlives the drag. In Search (WKWebView, 2x) that left the whole
+      // window resampled on screen: text sharpness fell 30% (Laplacian 23.3 to
+      // 16.3, measured 2026-10-17), while whole and half pixels lost nothing.
+      // WebKit's own snapshots never show it, only the screen does (gotcha 77).
+      dx = onGrid(r.left + dx) - r.left;
+      dy = onGrid(r.top + dy) - r.top;
       win.style.transform = base + "translate(" + dx + "px," + dy + "px)";
     }
+    function onGrid(v) { var k = devicePixelRatio || 1; return Math.round(v * k) / k; }
     function up() { if (win) { win.classList.remove("axp-dragging"); D.removeEventListener("pointermove", move); win = null; } }
     D.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "touch") return;                       // let touch scroll the page, not drag

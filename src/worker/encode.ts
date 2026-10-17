@@ -1,4 +1,4 @@
-// encode.js — what did your encoder actually do?
+// encode.ts — what did your encoder actually do?
 //
 // ── why this fits in a Worker at all ──────────────────────────────────────
 // Cloudflare Images cannot take HEIC without Enterprise and cannot take RAW at
@@ -8,8 +8,7 @@
 // answered by the container: a JPEG's quantization tables, its scan script, its
 // component sampling factors; an AVIF's av1C configuration record. Reading those
 // is byte walking — microseconds, no decoder, comfortably inside the free plan's
-// 10ms. The blocker was never "images are hard", it was "decoding is hard", and
-// these two are not the same problem.
+// 10ms. Decoding is the hard part, and none of this needs it.
 //
 // ── what it is FOR ────────────────────────────────────────────────────────
 // This site has spent real effort on delivery encoding: zenc (zenjpeg hybrid
@@ -19,7 +18,7 @@
 // that knowledge is currently locked in prose. This turns it into a verdict on
 // a file somebody else made.
 //
-// ── the honesty rule, again ───────────────────────────────────────────────
+// ── the honesty rule ──────────────────────────────────────────────────────
 // Quality is ESTIMATED and says so. There is no quality number in a JPEG — only
 // quantization tables — and every "quality: 82" any tool prints is an inference
 // from those tables. The method is named in the output so the number can be
@@ -242,7 +241,7 @@ export function judgeEncode(info, byteLength) {
     // equal bytes 4:4:4 AVIF beat 4:2:0 by ~0.5 ssimulacra2 on every tier size,
     // butteraugli agreeing. A downscaled photo has full chroma to keep, and AV1
     // spends little on smooth chroma planes, so the halving buys less than the
-    // colour bleed it causes. zenc/src/avif.c carries the numbers.
+    // colour bleed it causes. tools/photos/zenc/src/avif.c carries the numbers.
     if (info.subsampling === "4:4:4") add("chroma", "ok", "4:4:4: full chroma. For AVIF at delivery sizes this measured ahead of 4:2:0 at equal bytes here (~2% bytes, median)");
     else if (info.subsampling === "4:2:0") add("chroma", "ok", "4:2:0: fine, though on downscaled photos 4:4:4 measured ~2% better at equal bytes here");
     else if (info.subsampling) add("chroma", "ok", info.subsampling);

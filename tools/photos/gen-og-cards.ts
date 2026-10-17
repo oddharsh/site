@@ -206,6 +206,19 @@ const WORKER_PAGES = [
     preset: "#lx-browser-run",
     presetWait: 6000,
   },
+  {
+    // The booking page, cropped from the title bar through the slot list. The
+    // slots island fetches after load, so `settle` waits for the real times to
+    // replace the placeholder buttons. The times on the card go stale with the
+    // calendar; nothing on it says when, so a stale card still reads correctly.
+    // Also the card for the unlisted work-calendar slug on cal.aadhar.sh
+    // (lib/link-preview.ts), which has no page of its own to capture.
+    id: "coffee",
+    path: "/coffee",
+    span: [".window .title-bar", ".xp-group"],
+    spanMaxH: 452, // ends below the fourth day of slots rather than through the fifth
+    settle: 1500,
+  },
 ];
 
 // Regenerate a subset without dirtying every committed card: the capture is a

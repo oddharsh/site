@@ -1,4 +1,4 @@
-// email.js — Resend payloads + .ics invite generation. These functions call
+// cal/src/email.ts: Resend payloads + .ics invite generation. These functions call
 // the global fetch (Resend's REST API), so we stub globalThis.fetch and inspect
 // what would have been sent. The module is imported straight into this process,
 // so the stub applies: no harness, no network.
@@ -222,8 +222,8 @@ describe("sendInvite → .ics attachment", () => {
     expect(ics).toContain("SUMMARY:coffee with aadharsh");
     expect(ics).toContain("ORGANIZER;CN=aadharsh:mailto:coffee@aadhar.sh");
     expect(ics).toContain("ATTENDEE;CN=Jordan Lee;RSVP=TRUE:mailto:jordan@example.com");
-    // The guest copy is unchanged by the host-copy work: one attendee, and the
-    // only address on it is the public booking address already on ORGANIZER.
+    // The guest copy carries one attendee, and the only other address on it is
+    // the public booking address on ORGANIZER.
     expect(ics.match(/^ATTENDEE/gm)).toHaveLength(1);
     expect(ics).toContain("METHOD:REQUEST");
     expect(ics).toContain("\r\n");                          // CRLF line endings

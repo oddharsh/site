@@ -1,6 +1,7 @@
-// HMAC-SHA256 signing of the approve/decline links (src/worker/lib/sign.ts). These links
-// are the worker's only auth surface: clicking the host's "approve" email must
-// be unforgeable, and rotating SIGNING_SECRET must invalidate outstanding links.
+// HMAC-SHA256 signing of the host's links (src/worker/lib/sign.ts): approve,
+// decline, location, reschedule and cancel. These links are the worker's only
+// auth surface: clicking the host's "approve" email must be unforgeable, and
+// rotating SIGNING_SECRET must invalidate outstanding links.
 import { describe, it, expect } from "bun:test";
 import { sign, verify } from "../../src/worker/lib/sign.js";
 

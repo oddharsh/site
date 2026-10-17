@@ -1,13 +1,13 @@
-// availability.js — read the host's calendar as an ICS feed, compute free
+// availability.ts: read the host's calendar as an ICS feed, compute free
 // intervals within configured working hours, slice into bookable slots.
 //
 // ICS parsing here reads DTSTART / DTEND on VEVENT blocks to determine "busy",
-// and EXPANDS recurring events (RRULE). The RRULE gap had teeth: Google/iCloud
-// secret-ICS feeds emit a standing weekly meeting as ONE VEVENT carrying its
-// RRULE, so seeing only the first occurrence meant every later week's slot looked
-// free and was bookable over a real meeting. We now expand FREQ=DAILY|WEEKLY|
-// MONTHLY|YEARLY with INTERVAL, COUNT, UNTIL, BYDAY (weekly), and honor EXDATE, out
-// to RRULE_HORIZON_DAYS and capped at RRULE_MAX_INSTANCES per rule.
+// and EXPANDS recurring events (RRULE). Google/iCloud secret-ICS feeds emit a
+// standing weekly meeting as ONE VEVENT carrying its RRULE, so reading only the
+// first occurrence leaves every later week's slot bookable over a real meeting.
+// FREQ=DAILY|WEEKLY|MONTHLY|YEARLY expand with INTERVAL, COUNT, UNTIL, BYDAY
+// (weekly) and EXDATE, out to RRULE_HORIZON_DAYS and capped at
+// RRULE_MAX_INSTANCES per rule.
 //
 // Known deviations: occurrences step in UTC, so a recurrence across a DST
 // boundary can land an hour off; unsupported RRULE shapes keep only the base
@@ -31,36 +31,34 @@ export type Interval = { start: number, end: number };
 type BusySnapshot = { ts?: number, busy?: Interval[] };
 
 // ── calendar snapshot (stale-while-revalidate) ──────────────────────────────
-// The ICS upstream can be slow or briefly down, and the old fetchBusy() gated
-// the whole page on it AND returned [] on failure — which silently made EVERY
-// slot look free during an outage, a double-booking risk. fetchBusySWR keeps the
+// The ICS upstream can be slow or briefly down. Answering [] on a failed fetch
+// would make EVERY slot look free during an outage, a double-booking risk, and
+// blocking on the fetch would gate the whole page on it. fetchBusySWR keeps the
 // last-good PARSED busy[] in KV with a timestamp, caps the upstream fetch with a
-// hard deadline so a slow origin can't gate the page, and falls back to the
-// snapshot when the fetch fails. It returns freshness metadata so the booking
-// path can fail CLOSED — never confirm a slot against a calendar we can't vouch
-// for. The GET page, by contrast, renders happily from a stale snapshot.
+// hard deadline, and falls back to the snapshot when the fetch fails. It returns
+// freshness metadata so the booking path can fail CLOSED: never confirm a slot
+// against a calendar we can't vouch for. The GET page, by contrast, renders
+// happily from a stale snapshot.
 export const BUSY_KEY = "cal:busy";            // KV: { busy:[{start,end}], ts }
 export const CAL_FRESH_MS = 5 * 60_000;        // snapshot is "fresh" under 5 min
 export const CAL_DEADLINE_MS = 2_000;          // hard cap on a blocking ICS fetch
 export const BOOK_MAX_STALE_MS = 15 * 60_000;  // booking refuses a calendar older than this
 
 // returns { busy, ageMs, ok, source }. ok:false only when there is neither a live
-// fetch nor any stored snapshot — that is the signal for the booking path to
-// refuse. source is one of fresh | live | stale | none (surfaced in Server-Timing).
-// Traced on `source`, which is the single most diagnostic value in this module
-// and until now existed only in a Server-Timing header on whichever request
-// happened to produce it — so there was no history of it at all.
+// fetch nor any stored snapshot: that is the signal for the booking path to
+// refuse. source is one of fresh | live | stale | none (the slots fragment also
+// sends it as x-cal-source). Traced on `source`, the single most diagnostic value
+// in this module, because a response header keeps no history of it.
 //
 // The case that matters is source:"none" with ok:false. That is the fail-closed
 // branch: no fresh calendar, no live fetch, and no stored snapshot, so /book 503s
 // rather than risk booking over a meeting it cannot see. Correct behavior, and
-// completely silent — the way you learned it happened was a person telling you
-// they couldn't book a coffee. It is now a span attribute, which makes "how often
-// did booking refuse last week" a query.
+// otherwise silent to everyone but the guest who couldn't book. As a span
+// attribute, "how often did booking refuse last week" is a query.
 //
 // Both catch blocks below swallow their reason by design (a KV blip and a dead
-// ICS feed both just mean "fall back"). The reason is now recorded before it is
-// discarded, so a week of source:"stale" can be traced to which of the two.
+// ICS feed both just mean "fall back"). Each records the reason on the span
+// first, so a week of source:"stale" can be traced to which of the two.
 export async function fetchBusySWR(env, ctx, { allowStale = false } = {}) {
   return span("cal.busy", (s) => fetchBusySWRInner(env, ctx, allowStale, s), {
     "cal.allow_stale": allowStale,
@@ -233,7 +231,7 @@ function expandEvent(dtstart, dtend, rrule, exdates, windowStart, windowEnd) {
 
   const out: Interval[] = [];
   let n = 0;   // occurrence index (counts toward COUNT even before the window)
-  // returns false when the series is exhausted (UTIL / COUNT / cap / past window)
+  // true once the series is exhausted (UNTIL / COUNT / cap / past the window)
   const stop = (start) => (until && start > until) || (count != null && n >= count) || n >= RRULE_MAX_INSTANCES || start > windowEnd;
   const emit = (start) => { if (!ex.has(start) && start >= windowStart && start <= windowEnd) out.push(iv(start)); n++; };
 
@@ -301,7 +299,7 @@ function parseICSDate(value, params = "") {
   // local time: shift by the TZID zone's offset at this instant. the wall clock
   // was read as if UTC, so adding the offset (positive = west of UTC) lands the
   // real instant: 14:30 in a UTC-4 zone becomes 18:30Z. NaN (floating or an
-  // unknown TZID we can't resolve) falls back to the old treat-as-UTC behavior.
+  // unknown TZID we can't resolve) falls back to reading the time as UTC.
   const tzid = (/;TZID=([^:;,]+)/.exec(params) || [])[1];
   const offMin = icsZoneOffsetMinutes(ms, tzid);
   return Number.isFinite(offMin) ? ms + offMin * 60000 : ms;
@@ -347,13 +345,9 @@ export function generateSlots(env, busy: Interval[], bookings: Interval[] = []) 
   const earliest = now + minNotice;
   const latest   = now + lookahead;
 
-  // limits — bookings already pending+confirmed within a day/week count
   const dailyLimit  = +env.DAILY_LIMIT;
   const weeklyLimit = +env.WEEKLY_LIMIT;
 
-  // build slots by walking each day in the lookahead window in HOST_TIMEZONE.
-  // for each day, generate slot starts at every (slotMin+bufferMin) interval
-  // between workStart and workEnd, filter conflicts.
   // a slot is unbookable if it overlaps EITHER a real calendar event or an
   // existing coffee booking. limits, below, only count the coffee bookings.
   const conflicts = [...busy, ...bookings];

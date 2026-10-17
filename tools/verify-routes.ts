@@ -510,7 +510,7 @@ const ROUTES = [
   ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
   // static section pages that are already URL-skeuomorphic (must not regress)
   { path: "/garage", status: 200, ct: "text/html" },
-  // routeDropSlash; the asset layer's drop-trailing-slash would 307 (gotcha 77)
+  // routeDropSlash; the asset layer's drop-trailing-slash would 307 (gotcha 78)
   { path: "/garage/", status: 301, location: "/garage" },
   { path: "/garage/scroll", status: 200, ct: "text/html" },
   { path: "/garage/workers", status: 200, ct: "text/html", marker: "run_worker_first" },

@@ -10,8 +10,6 @@ import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } fro
 import { span } from "./lib/trace.ts";
 import { AROUND_SNAPSHOT_URL } from "./routes.ts";
 
-  // Signature-Agent value (RFC 8941 string)
-
 // the neighborhood — crypto-VC homepages worth checking in on. just funds
 // whose work i follow; the dashboard is mostly an excuse to point a branded
 // crawler at something interesting.
@@ -52,7 +50,7 @@ export const NEIGHBORS = [
 // The request path only READS the snapshot: no visitor, crawler, or speculative
 // prerender can make this site fetch 20 third-party homepages, which is what
 // lets /around join the prerender set with every other page. The crawl runs on
-// the schedule in cloudflare.config.ts (cronAround, via index.js's scheduled handler).
+// the schedule in cloudflare.config.ts (cronAround, via index.ts's scheduled handler).
 // The page itself is a built file served by index.ts (routeAround); its crawl
 // half is renderAroundSnapshot below. The JSON twin keeps its own bust.
 export async function handleAroundJson(request, env, ctx) {
@@ -81,20 +79,12 @@ const AROUND_KEY = "around:report";
 const AROUND_HISTORY_TABLE = "around_crawl_history";
 
 // D1's exec() SPLITS ITS INPUT ON NEWLINES and runs each line as a statement,
-// so it can only ever take one-line statements. This used to hand it a
-// multi-line CREATE TABLE plus two CREATE INDEXes as one string, which fails on
-// the first line with `D1_EXEC_ERROR: Error in line 1: CREATE TABLE IF NOT
-// EXISTS around_crawl_history (: incomplete input`. The table was therefore
-// NEVER created in production, and persistAroundHistory's catch turned that
-// into a returned reason nobody read: from 2026-08-18 until 2026-08-28 every
-// daily crawl published its KV snapshot and wrote zero history rows, while
-// /around/changes.json reported "change history starts with the next scheduled
-// crawl" rather than "the table does not exist".
-//
-// Measured against a local D1 before the repair, with both controls: exec() of
-// a SINGLE-LINE statement succeeds (`{count:1}`), and exec() of TWO single-line
-// statements succeeds reporting `{count:2}`, which is the line-splitting shown
-// directly rather than inferred from the failure.
+// so it can only ever take one-line statements. A multi-line CREATE TABLE
+// handed to exec() fails with `D1_EXEC_ERROR: Error in line 1: ... incomplete
+// input`, and from 2026-08-18 until 2026-08-28 that meant the table never
+// existed in production while every crawl wrote zero history rows. Measured
+// against a local D1 with both controls: exec() of one single-line statement
+// reports `{count:1}`, and of two single-line statements `{count:2}`.
 //
 // batch() rather than a prepare().run() loop (webmention.ts's ensureTable has
 // one statement and so faces no choice): persistAroundHistory sends this DDL,
@@ -217,7 +207,7 @@ export async function readAroundChanges(env, requestedLimit: string | number | n
   }
   let rows;
   try {
-    // The latest 200 rows cover several complete 30-minute snapshots for the
+    // The latest 200 rows cover several complete daily snapshots for the
     // current shortlist without making the public request scan the whole table.
     const result = await env.RESTORE_DB.prepare(
       `SELECT target, name, observed_at, status, final_url, title, description,
@@ -290,14 +280,13 @@ export async function handleAroundChangesJson(request, env) {
 }
 
 // cron entry: crawl the neighborhood and persist the snapshot. Runs on the DAILY
-// outbound tick (41 5) alongside the webmention pass, not on a schedule of its
-// own; see lib/cron.js for why the two share one, and cloudflare.config.ts for why the
-// crawl may never move back onto the request path.
+// 41 5 outbound tick, which it has had to itself since the webmention pass moved
+// to 53 5 on 2026-10-14 (lib/cron.ts has the subrequest numbers). See
+// cloudflare.config.ts for why the crawl may never move back onto the request path.
 //
 // A crawl where EVERY neighbor errored stores nothing, so the last good snapshot
-// keeps serving.
-// (results.length is always NEIGHBORS.length — one row per neighbor, success or
-// error — so the old length>0 guard never fired; check for a non-error row.)
+// keeps serving. results.length is always NEIGHBORS.length (one row per
+// neighbor, success or error), so the check looks for a non-error row.
 export async function cronAround(env) {
   const report = await runAround(env);
   // the snapshot write is conditional: an all-error crawl deliberately does NOT
@@ -308,9 +297,8 @@ export async function cronAround(env) {
     await span("around.publish", () => env.RN_KV.put(AROUND_KEY, JSON.stringify(report)));
   }
   // The result is READ rather than returned into the void. persistAroundHistory
-  // catches everything so a history failure cannot cost the crawl, and for ten
-  // days that catch was the whole reason a broken CREATE TABLE was invisible: it
-  // handed back {ok:false, reason} and the only caller dropped it. A cron has no
+  // catches everything so a history failure cannot cost the crawl, and that catch
+  // is what hid the 2026-08 CREATE TABLE failure for 10 days. A cron has no
   // response and no visitor to complain, so the span is the one place the answer
   // can land. `unconfigured` is a legitimate state (no RESTORE_DB, which is every
   // local dev run) and is reported as itself rather than as a failure.
@@ -330,7 +318,7 @@ async function readAroundReport(request, env) {
   // still allowed to crawl, because it authenticates as the owner.
   const url = new URL(request.url);
   if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {
-    await deleteSWRKV(env, AROUND_KEY);   // this key is written directly above, never by swrKV
+    await deleteSWRKV(env, AROUND_KEY);   // this key is written by a plain put, never by swrKV
     const report = await runAround(env);
     if (report && report.results && report.results.some(r => !r.error) && env.RN_KV) {
       await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
@@ -339,8 +327,8 @@ async function readAroundReport(request, env) {
   }
   // cacheTtl 1800: cronAround rewrites this key once a DAY, so half an hour is 2%
   // of the snapshot's own cadence and the page already says "as of the last cron
-  // crawl". It has to exceed 300 to buy anything at all, because /around and
-  // /around/json both sit behind cachedRender at s-maxage=300 and this read only
+  // crawl". It has to exceed 300 to buy anything at all, because the snapshot
+  // island and /around/json both sit behind cachedRender at s-maxage=300 and this read only
   // runs on an edge miss, so a shorter window would expire alongside the render it
   // was meant to skip ahead of. The owner's ?bust= still renders from its own fresh
   // crawl rather than from KV, so the person who ran it is never the one reading
@@ -389,8 +377,8 @@ async function runAroundInner(env, sCrawl) {
   // botRobotsPolicy and crawlDocument both send every hop through
   // env.OUTBOUND_TRANSPORT, so this one swap puts the whole crawl on the ledger.
   env = { ...env, OUTBOUND_TRANSPORT: meteredTransport(budget, env.OUTBOUND_TRANSPORT) };
-  // Four concurrent origins matches the census worker's bounded fan-out and
-  // avoids turning one cron tick into a burst against twenty sites.
+  // Four concurrent origins keeps one cron tick from becoming a burst against
+  // twenty sites.
   const results = await mapWithConcurrency(NEIGHBORS, 4, async ({ name, url }) => span(
     "around.neighbor",
     async (s) => {
@@ -467,7 +455,6 @@ async function runAroundInner(env, sCrawl) {
     const bn = (b.error || b.skipped) ? Infinity : (b.elapsedMs ?? Infinity);
     return an - bn;
   });
-  // the rollup: the one line that turns twenty quiet rows into a health signal.
   sCrawl.setAttribute("around.crawled", results.filter((r) => !r.error && !r.skipped).length);
   sCrawl.setAttribute("around.skipped", results.filter((r) => r.skipped).length);
   sCrawl.setAttribute("around.errored", results.filter((r) => r.error).length);
@@ -486,7 +473,7 @@ async function runAroundInner(env, sCrawl) {
 // the footer and 3 KB of CSS ship as a q11 twin with a dcz delta and an ETag.
 // The crawl's half (when it ran, and the twenty rows) is the island, fetched
 // from SNAPSHOT_URL. The snapshot changes once a day and is the same for every
-// visitor, so the island is edge-cached behind cachedRender like the page was.
+// visitor, so the island is edge-cached behind cachedRender.
 export const SNAPSHOT_URL = AROUND_SNAPSHOT_URL;
 
 // The placeholder model: one row per neighbour, none of them named. The live

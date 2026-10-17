@@ -3,7 +3,7 @@
 // slot. The listing is the island body every visitor reads, so the cached
 // strings must be the toLocale strings exactly: every 97 minutes of 2026, and
 // six hours around each New York transition minute by minute, in the host
-// zone and three others.
+// zone, three others, and no zone at all (the runtime's default).
 import { describe, it, expect } from "bun:test";
 import { renderSlotList, slotLabels } from "../src/templates.js";
 
