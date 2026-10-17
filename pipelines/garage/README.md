@@ -121,7 +121,7 @@ work, linked, before it says what we did with it. `/garage/pretext` is the model
 > [chenglou/pretext](https://github.com/chenglou/pretext) measures multiline text
 > with the canvas as ground truth instead of the DOM, so asking "how tall at
 > 320px?" never forces a reflow. A from-scratch re-creation of the technique
-> [...] and why it's "watching" not "shipped."
+> [...] and why it's still tagged "watching."
 
 The reader learns whose idea it is before they learn what the page adds, which is
 the honest order. Upstream means a library, a repo, a spec, a release note, or the
