@@ -1,12 +1,10 @@
 // ── /lens/wire — the request waterfall ──────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   assert,
   readFileSync,
   test,
 } from "./contract-shared.ts";
 
-// ── /lens/wire — the request waterfall ──────────────────────────────────────
 // The Wire lens is the only surface here that opens a real CDP browser session,
 // so its tests split the way the module does: the summariser is a pure function
 // of a CDP event array and gets exercised directly, while everything needing
@@ -211,7 +209,7 @@ test("siteOf groups subdomains without a public-suffix list, and says where it i
 
 test("the wire lens shares the SSRF guard and reaches the browser with nothing but the URL", () => {
   const src = readFileSync("./src/worker/lens-wire.ts", "utf8");
-  // The rule lens-recipes.js is built around: this route points a real browser
+  // The rule lens-recipes.ts is built around: this route points a real browser
   // at a visitor-supplied address, so the ONLY caller byte that may reach it is
   // the URL, after the shared guard has passed it.
   // Validation happens in the pipeline, which imports the shared guard. The

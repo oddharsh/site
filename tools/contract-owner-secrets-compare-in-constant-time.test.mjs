@@ -1,14 +1,12 @@
 // ── Owner secrets compare in constant time, through one gate ─────────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { assert, readFileSync, test } from "./contract-shared.ts";
 import { execFileSync } from "node:child_process";
 
-// Ten checks gate owner-only actions on a secret from the request (a cache
-// bust, the playlist admin, the census refresh, serendipity's sync triggers).
-// Four compared with timingSafeEqual and six with `===`, which stops at the
-// first differing character and so leaks the secret's prefix through response
-// timing. lib/http.ts's secretMatches is now the one gate: constant time, and
-// closed when the binding is unset.
+// Owner-only actions (a cache bust, the playlist admin, the census refresh,
+// serendipity's sync triggers) gate on a secret from the request. `===` stops
+// at the first differing character and so leaks the secret's prefix through
+// response timing. lib/http.ts's secretMatches is the one gate: constant time,
+// and closed when the binding is unset.
 
 test("secretMatches: equal only when a configured secret matches exactly", async () => {
   const { secretMatches } = await import("../src/worker/lib/http.ts");

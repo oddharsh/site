@@ -1,5 +1,4 @@
 // ── every "gotcha N" reference names exactly one entry ───────────────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
@@ -26,7 +25,7 @@ test("every gotcha number names exactly one entry", async () => {
 
   // A floor, on the a-dict precedent: a scanner that has quietly stopped
   // matching reports a clean pass over zero headings, and an empty list is
-  // trivially unique. 46 today.
+  // trivially unique. 63 on 2026-10-16.
   assert.ok(nums.length >= 30, `only ${nums.length} gotcha headings found; the scan has stopped matching`);
 
   const seen = new Map();

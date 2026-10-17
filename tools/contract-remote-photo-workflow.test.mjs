@@ -186,9 +186,9 @@ test("the cold runner installs no JSON CLI, because the downloader runs its JSON
     const result = shell("Install image toolchain", { GITHUB_PATH: `${root}/runner-path` });
     assert.equal(result.status, 0, result.stderr);
     // Inverted on 2026-09-15: download-remote-photos.sh reads the manifest and
-    // @uri-encodes keys through pipeline-json.ts, under the node setup-node
-    // already provides, so a brew line that still asks for jaq is a dependency
-    // the ledger retired coming back through the workflow.
+    // @uri-encodes keys through pipeline-json.ts, under bun, so a brew line
+    // that still asks for jaq is a dependency the ledger retired coming back
+    // through the workflow.
     const installed = spawnSync("bash", ["-c", 'test -e "$RUNNER_TEMP/bin/jaq"'], { env: { ...process.env, RUNNER_TEMP: root } });
     assert.equal(installed.status, 1, "the workflow must not brew-install jaq any more");
     const brewed = spawnSync("bash", ["-c", 'ls "$RUNNER_TEMP/bin"'], { env: { ...process.env, RUNNER_TEMP: root }, encoding: "utf8" });

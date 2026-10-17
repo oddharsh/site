@@ -1,20 +1,17 @@
 // ── version affinity: the rule and the ramp have to agree ────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   assert,
   readFile,
   test,
 } from "./contract-shared.ts";
 
-// ── version affinity: the rule and the ramp have to agree ────────────────────
-//
 // STRUCTURAL, and it has to be: Cloudflare's expression language runs at their
 // edge, so nothing here can execute the rule. What can be checked is the seam,
 // and the seam is where this breaks.
 //
 // The contract has two halves in two languages. The Transform Rule declared in
 // infra.json derives Cloudflare-Workers-Version-Key from ip.src, and deliberately
-// SKIPS any request that already carries that header. deploy-promote.mjs relies
+// SKIPS any request that already carries that header. deploy-promote.ts relies
 // on that exemption: it sends one key per request so it can still watch a split
 // take from a single IP. Take the exemption out and the rule overwrites those
 // keys, every sample lands on one version, and each intermediate ramp step reads
@@ -48,19 +45,18 @@ test("the affinity rule exempts the header the ramp sampler sends", async () => 
   // above is exempting nothing and the affinity rule silently governs the
   // sampler again.
   //
-  // BOTH FILES, because the probes moved. `deploy-promote.ts` performs a
-  // credentialed `currentDeployment()` at module scope, so the four functions
-  // that read which version answered were unreachable from any second caller or
-  // any test; they live in `lib/version-probe.ts` since 2026-09-22 and the soak
-  // imports them from there. Reading the pair keeps this assertion about the
-  // ramp's BEHAVIOUR rather than about one file's current contents.
+  // BOTH FILES. `deploy-promote.ts` performs a credentialed
+  // `currentDeployment()` at module scope, so the functions that read which
+  // version answered live in `lib/version-probe.ts` (since 2026-09-22), where a
+  // test can reach them. Reading the pair keeps this assertion about the ramp's
+  // BEHAVIOUR rather than about one file's current contents.
   const rampSource = await readFile(new URL("./deploy-promote.ts", import.meta.url), "utf8");
   const probeSource = await readFile(new URL("./lib/version-probe.ts", import.meta.url), "utf8");
   const ramp = `${rampSource}\n${probeSource}`;
 
   // And the seam itself, so the two cannot become two COPIES. A re-declared
   // sampler in deploy-promote.ts would satisfy every assertion below while
-  // drifting from the one the soak actually runs.
+  // drifting from the one lib/version-probe.ts exports.
   assert.match(rampSource, /from "\.\/lib\/version-probe\.ts"/,
     "deploy-promote must import the probes rather than carry its own");
   assert.doesNotMatch(rampSource, /async function (sampleSplit|probePinned)\b/,

@@ -1,13 +1,10 @@
 // ── the Tools lens: schema in, form plan out ────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   assert,
   readFileSync,
   test,
 } from "./contract-shared.ts";
 
-// ── the Tools lens: schema in, form plan out ────────────────────────────────
-//
 // The planner is a browser IIFE, so it is loaded here the way a browser would
 // and then exercised directly. Only the DOM builders touch `document`, and they
 // are never reached at module scope, so a bare `window` object is enough. The
@@ -84,9 +81,8 @@ test("a blank optional is omitted from the frame, never sent as an empty string"
 
 test("the Tools pane builds foreign strings as NODES, never as markup", () => {
   // Tool names, descriptions and enum labels all come from a stranger's server.
-  // public/terminal.js follows the same rule for third-party page titles; this is
-  // that rule made checkable, because the failure is a stored XSS and the diff
-  // that introduces it looks like ordinary convenience.
+  // This test makes the nodes-only rule checkable, because the failure is a
+  // stored XSS and the diff that introduces it looks like ordinary convenience.
   const src = readFileSync("./src/client/lens-tools.js", "utf8");
   // Anchored: a renamed buildField would otherwise leave a one-character slice
   // with no innerHTML in it.

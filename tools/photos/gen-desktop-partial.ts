@@ -7,7 +7,7 @@
 // sprite, and every static HTML page that loads nav.js. Nothing is extracted
 // from or evaled out of the browser runtime.
 //
-//   node tools/photos/gen-desktop-partial.ts
+//   bun run gen:shell
 
 // Static pages keep the generated partial checked in so direct local serving,
 // curl and JavaScript-off visits see the same desktop as production. build.ts
@@ -233,9 +233,10 @@ export function bakeHistnav(source, histnavHtml = HISTNAV_HTML) {
 
 // ── the page window's title bar, from lib/window.ts (#1026) ─────────────────
 // A static page's bar is rewritten from titleBar(), the function lunaPage and
-// serendipity call, so the 44 copies in src/pages are generated rather than
-// hand-kept. The per-page FIELDS (caption, close target) are read back out of
-// the page's own bar, which keeps the page the place an author edits them.
+// serendipity call, so every copy in src/pages (45 on 2026-10-16) is generated
+// rather than hand-kept. The per-page FIELDS (caption, close target) are read
+// back out of the page's own bar, which keeps the page the place an author
+// edits them.
 //
 // Reading fields back is only safe if nothing else in the bar gets thrown away
 // on the way through, so the old bar and the new one are compared with the
@@ -303,8 +304,8 @@ export function bakeTitleBar(source: string, label = "page") {
   return plain.slice(0, start) + WINDOW_OPEN + next + WINDOW_CLOSE + plain.slice(end);
 }
 
-// The sprite is ONE document, so a paint-server id is document-wide, and the
-// fourteen cells had been carrying their own copies: ten section tiles each
+// The sprite is ONE document, so a paint-server id is document-wide, and on
+// 2026-09-26 its fourteen cells were carrying their own copies: ten section tiles each
 // defined the same gloss gradient and the same drop-shadow filter, and four tray
 // icons repeat each other's gradients. This lifts every definition into one
 // <defs>, keeps the first of each identical body and repoints url(#...) at it.

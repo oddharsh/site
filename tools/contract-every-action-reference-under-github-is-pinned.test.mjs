@@ -1,5 +1,4 @@
 // ── every action reference under .github is pinned ───────────────────────────
-// Shared imports live in contract-shared.mjs.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -7,12 +6,11 @@ import { join } from "node:path";
 
 import { auditActionPins, classifyRef, scanActionRefs } from "./lib/action-pins.ts";
 
-// THIS FILE EXISTS BECAUSE THE FIRST VERSION OF THE SCAN PASSED THREE ATTACKS.
-// It lived inline in check-infra.ts, matched `/^\s*(?:-\s+)?uses:/`, and
-// reported "all 32 third-party action reference(s) in .github are
-// commit-pinned" over a flow-style step running `attacker/evil-action@main`.
-// Every fixture below is one of those attacks, kept runnable so a refactor
-// cannot reopen a hole by tidying a regex.
+// THE FIRST VERSION OF THE SCAN PASSED THREE ATTACKS. It matched
+// `/^\s*(?:-\s+)?uses:/` and reported "all 32 third-party action reference(s)
+// in .github are commit-pinned" over a flow-style step running
+// `attacker/evil-action@main`. Every fixture below is one of those attacks,
+// kept runnable so a refactor cannot reopen a hole by tidying a regex.
 //
 // The floor in infra.json catches a scan that stopped matching and CANNOT catch
 // an evasion, since a hidden ref moves the count by zero or one. These fixtures
@@ -66,8 +64,6 @@ const OK = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 
 const workflow = (body) => `name: fixture\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n${body}\n`;
 
-// ---------------------------------------------------------------- the tree --
-
 test("the walked file set is every workflow plus every composite, and nothing else", async () => {
   const audit = await auditActionPins(diskIo());
   const onDisk = (await readdir(join(root, ".github/workflows")))
@@ -92,13 +88,11 @@ test("the committed tree has no unpinned, unreadable or unresolvable reference",
   // agreeing with a scanner that read nothing.
   assert.ok(audit.remote >= 24, `only ${audit.remote} third-party refs found`);
   assert.ok(audit.local >= 1, "no local ./ refs found, so the resolver never ran");
-  // 7 repositories across 8 paths, because github/codeql-action contributes
-  // `init` and `analyze` from one commit. infra.json's note says so and the
-  // printed pass line used to contradict it by calling paths "actions".
+  // Paths can outnumber repositories: github/codeql-action contributes `init`
+  // and `analyze` from one commit, and infra.json's `$pinned_action_refs` note
+  // counts both.
   assert.ok(audit.paths.size >= audit.repos.size, "paths can never be fewer than repositories");
 });
-
-// ------------------------------------------------------------ the attacks --
 
 test("a flow-style step cannot smuggle an unpinned action past the scan", async () => {
   const io = memoryIo({
@@ -168,8 +162,6 @@ test("a cycle between two composites terminates", async () => {
   assert.equal(audit.files.length, 3);
 });
 
-// ------------------------------------------------------------ degradation --
-
 test("a repository with no .github/actions scans clean rather than throwing", async () => {
   const io = memoryIo({ ".github/workflows/ci.yml": workflow(`      - uses: ${OK}`) });
   const audit = await auditActionPins(io);
@@ -177,8 +169,6 @@ test("a repository with no .github/actions scans clean rather than throwing", as
   assert.equal(audit.remote, 1);
   assert.equal(audit.local, 0);
 });
-
-// ------------------------------------------------------------- the shapes --
 
 test("classifyRef fails closed on anything it does not recognise", () => {
   assert.equal(classifyRef(OK).kind, "pinned");

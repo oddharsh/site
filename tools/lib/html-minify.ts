@@ -29,10 +29,9 @@
 // <script> and <style> keep their bytes, less outer whitespace: the build runs
 // Oxc and Lightning CSS over them first (transformInlineHtmlBlocks).
 //
-//
-// Written for the build-off's bespoke entry (branch buildoff/bespoke), which
-// measured it against minify-html with its parity test and a planted-mutation
-// control. It removes 6 lockfile packages and a 16 MB binary.
+// It was measured against minify-html with its parity test and a
+// planted-mutation control, and it removes 6 lockfile packages and a 16 MB
+// binary.
 //
 // SPEED. The first version tokenized with one regex per alternative and
 // re-matched every tag's attributes with a second one, and ran 1.85x slower

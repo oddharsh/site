@@ -37,8 +37,7 @@ const pageWith = (extra) =>
     "</style>",
   ].join("");
 
-// A second page that shares the local name, the way /access and /pixel-peeper
-// both define their own `--sh`.
+// A second page that defines its own `--sh` too.
 const other = "<style>:root{--sh:#aca899;--sc:#fff}.q{border:1px solid var(--sh);color:var(--sc)}</style>";
 
 const tree = (extra) =>
@@ -123,15 +122,15 @@ test("the rename still passes the dangling-reference invariant", () => {
   assert.throws(() => assertIntegrity(files, missed, map, 3), /newly dangling: --a\n/);
 });
 
-// The page-scoped hashed files (ask.js, the pretext library, dotfiles.js, the
-// pixel-peeper manifest) are content-hashed and still ranked as PAGES: ask.js
-// reads three --font-* tokens, and in the shell set its edits would reorder
-// luna.css's names. "more page uses of a SHELL token" above is that case, so
-// what is left to pin is that 5c actually hands them over on the page side.
+// The page-scoped hashed files (every `scope: "page"` row in
+// tools/lib/client-assets.ts, lwe/ask.js among them) are content-hashed and
+// still ranked as PAGES: ask.js reads 3 --font-* tokens, and in the shell set
+// its edits would reorder luna.css's names. "more page uses of a SHELL token"
+// above is that case, so what is left to pin is that 5c actually hands them
+// over on the page side.
 //
 // The shell set and the set step 6 hashes are two projections of ONE registry
-// (tools/lib/client-assets.ts), so they cannot disagree and the drift throw
-// build.ts carried between its three lists is gone with the lists.
+// (tools/lib/client-assets.ts), so they cannot disagree.
 test("step 5c plans with the registry's shell tier, which is every hashed file minus the page-scoped ones", () => {
   const build = readFileSync(new URL("./build.ts", import.meta.url), "utf8");
   assert.ok(build.includes("planNames(before, SHELL_RANKED)"), "5c must plan with the shell part of the content-hashed set");

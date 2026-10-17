@@ -39,9 +39,9 @@ test("the homepage body carries no webmention <link>, so the rel costs no body b
   assert.doesNotMatch(read("src/pages/index.html"), /rel="?webmention/);
 });
 
-// ── a minimal microformats2 reader ─────────────────────────────────────────
-// Enough of https://microformats.org/wiki/microformats2-parsing for what these
-// pages use: h-* roots, nested h-* as property values, p-/u-/dt-/e- parsing
+// A minimal microformats2 reader: enough of
+// https://microformats.org/wiki/microformats2-parsing for what these pages
+// use: h-* roots, nested h-* as property values, p-/u-/dt-/e- parsing
 // including <data value>, <time datetime> and <a href>. Textarea content is
 // raw text, which is how an HTML parser reads it.
 const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
@@ -111,7 +111,6 @@ function mf2(html) {
   return items;
 }
 
-// ── the notes ───────────────────────────────────────────────────────────────
 const env = {
   ASSETS: {
     fetch: async (url) => {

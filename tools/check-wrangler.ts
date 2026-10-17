@@ -44,10 +44,10 @@ const rootDeclared = rootPackage.devDependencies?.wrangler || rootPackage.depend
 
 // For a release the expected version is the pin; for a commit it is whatever
 // the tarball carries, so `expected` is the installed version and the version
-// comparison below cannot fail for a commit pin. It is NOT the assertion for
-// that shape, and this comment used to imply it was. Two commits of main carry
-// the same version routinely, so the pin is asserted twice by its sha instead:
-// against the install's store path, and against the lockfile.
+// comparison below cannot fail for a commit pin, and it is NOT the assertion
+// for that shape. Two commits of main carry the same version routinely, so the
+// pin is asserted twice by its sha instead: against the install's store path,
+// and against the lockfile.
 const expected = pinKind === "release" ? rootPin.replace(/^v/, "") : installed;
 if (pinKind === "invalid") {
   errors.push(`root package must declare an exact Wrangler version or a pkg.pr.new commit URL, got ${JSON.stringify(rootPin)}`);

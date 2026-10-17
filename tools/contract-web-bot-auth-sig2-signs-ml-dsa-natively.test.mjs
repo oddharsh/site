@@ -1,9 +1,8 @@
 // ── Web Bot Auth: sig2, the post-quantum second label, signed natively ──
 //
-// sig2 shipped 2026-07-27 in pure JS, came out 2026-08-15 because ~8.5ms of
-// signing per request did not fit Workers Free's CPU clamp, and came back once
-// workerd shipped ML-DSA in WebCrypto behind `webcrypto_modern_algorithms`
-// (0.12ms a signature, measured 2026-10-01). lib/botauth.ts has the history.
+// sig2 signs with workerd's native ML-DSA behind `webcrypto_modern_algorithms`
+// (0.12ms a signature, measured 2026-10-01). src/worker/lib/botauth.ts has the
+// history, including why the pure-JS run (2026-07-27 to 2026-08-15) came out.
 //
 // What this file pins is the failure POLICY, because that is what makes a
 // second label safe to carry: sig2 is optional, sig1 never changes because of
@@ -160,8 +159,6 @@ test("an unusable ML-DSA key drops sig2, never fails the request, and never logs
   await assert.rejects(botHeaders("https://example.com/", { RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify((await pqKey()).priv) }));
 });
 
-// ── the directory ──────────────────────────────────────────────────────
-
 function directoryEnv(keys, secrets) {
   const body = JSON.stringify({ keys });
   return { body, env: { ...secrets, ASSETS: { fetch: async () => new Response(body) } } };
@@ -221,8 +218,6 @@ test("the directory refuses real drift: an active sig2 key that is missing, or n
     assert.equal(response.headers.has("signature"), false);
   }
 });
-
-// ── what ships ─────────────────────────────────────────────────────────
 
 test("the committed directory publishes a real ML-DSA-44 public key beside the ed25519 one", async () => {
   const dir = JSON.parse(await readFile(new URL("public/.well-known/http-message-signatures-directory", ROOT), "utf8"));
@@ -301,8 +296,6 @@ test(WORKERD, underNode(import.meta.url, WORKERD, async () => {
   assert.match(bare.errors[0], /sig2 disabled.*NotSupportedError/);
 }));
 
-// ── fan-out carries sig1 alone ─────────────────────────────────────────
-//
 // Measured in production on 2026-10-01 with sig2 on EVERY request: a /lens
 // scan's CPU median went from 22ms to 32ms, ~0.33ms a signature, 3x the laptop
 // figure. So the fan-out (discovery probes, the Markdown replay, the robots.txt

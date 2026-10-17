@@ -91,10 +91,9 @@ test("webmcp.js is the only client module that uses document.modelContext", () =
   assert.deepEqual(mentions, ["lens-boot.js", "nav.js", "webmcp.js"],
     `only webmcp.js may own the WebMCP API, while nav.js and lens-boot.js may feature-check it; found: ${mentions.join(", ")}`);
   // nav.js and lens-boot.js may READ the object to decide whether to spend an
-  // import, and may never touch anything ON it. Counting the mentions was the first version of
-  // this and it was wrong the moment a second guard appeared (the tray reader
-  // needs its own); the number was never the rule. This is: bare truthiness
-  // only, so no property access, no call, no index.
+  // import, and may never touch anything ON it. A count of mentions was wrong
+  // the moment a second guard appeared (the tray reader needs its own), so the
+  // rule is bare truthiness only: no property access, no call, no index.
   for (const [file, source] of [["nav.js", NAV], ["lens-boot.js", LENS_BOOT]]) {
     const uses = codeOnly(source).match(/modelContext\s*[.([]/g) || [];
     assert.deepEqual(uses, [],

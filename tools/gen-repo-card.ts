@@ -1,4 +1,4 @@
-// gen-repo-card.mjs — the GitHub social preview for this repository.
+// gen-repo-card.ts — the GitHub social preview for this repository.
 //
 // GitHub wants 1280x640 and crops toward the middle in some unfurls, so nothing
 // load-bearing sits within 40px of an edge. Two variants, because the repo card
@@ -6,7 +6,7 @@
 //
 //   desktop   the LIVE homepage at 2:1. Says "the repo is this site" with no
 //             copy at all: desktop icons, the window, the taskbar, real photos.
-//             NOT deterministic — the homepage draws a random 12 of 158 photos
+//             NOT deterministic — the homepage draws a random 12 of its photos
 //             per request, so every regeneration ships a different grid.
 //   card      a composed Luna window on the Bliss wallpaper: big name, one line
 //             of subtitle, four measured facts. Reads at thumbnail size, where

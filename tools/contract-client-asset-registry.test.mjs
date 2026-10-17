@@ -109,8 +109,8 @@ test("declaration order cannot change a byte: the registry reversed hashes to th
 
 test("CONTROL: an edge the registry does not declare is refused, because the order was derived without it", async () => {
   // Declared island-first with the leaf's edge to it left out: the island is
-  // hashed before the leaf, which is the bug the old ORDER IS LOAD-BEARING
-  // comment guarded by hand. Without the check its /a/ copy would keep "/leaf.js".
+  // hashed before the leaf, which is the bug build.ts's hand-sorted lists used
+  // to guard by hand. Without the check its /a/ copy would keep "/leaf.js".
   /** @type {ClientAsset[]} */
   const undeclared = [ISLAND, { ...LEAF, loadedBy: ["public/index.html"] }, SHEET];
   await withStage(FILES, async (root) => {
@@ -165,8 +165,6 @@ test("each loader shape rewrites its own syntax and leaves a bare mention of the
   assert.equal(run(asset("icons.svg"), { via: "attr", attr: "src", fragment: true }, '<img src="/icons.svg#pin-a"><img src=/icons.svg#pin-b> src="/icons.svg"'), '<img src="/a/X#pin-a"><img src=/a/X#pin-b> src="/icons.svg"');
   assert.equal(run(asset("nav.js"), { via: "attr", attr: "src" }, '<script src=/nav.js defer></script> path:"/nav.js" "!/nav.js" src=/nav.json>'), '<script src=/a/X defer></script> path:"/nav.js" "!/nav.js" src=/nav.json>');
 });
-
-// ── the real registry ───────────────────────────────────────────────────────
 
 // The order step 6 hashed in when it was two hand-sorted lists (STRING_ASSETS,
 // then ASSETS), copied from build.ts at f5f1a96d. hashOrder() must reproduce it

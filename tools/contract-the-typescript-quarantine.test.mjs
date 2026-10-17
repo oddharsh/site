@@ -1,5 +1,4 @@
 // ── the TypeScript quarantine ───────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   ROOT,
   assert,
@@ -42,24 +41,20 @@ test("every Worker module remains free of ts-nocheck", async () => {
 test("no tool spawns a package manager by name", async () => {
   const { readdirSync, readFileSync } = await import("node:fs");
   const dir = new URL("tools/", ROOT).pathname;
-  // TEST files are excluded, not just the old monolith's name. The rule governs
-  // tools; a test that asserts about `pnpm` necessarily contains the word, and
-  // the suite split on 2026-08-20 turned that one exclusion into 47 files.
+  // TEST files are excluded: the rule governs tools, and a test that asserts
+  // about `pnpm` necessarily contains the word.
   const files = readdirSync(dir).filter((f) =>
     (f.endsWith(".ts") || f.endsWith(".mjs")) && !f.endsWith(".test.mjs")
     && !f.endsWith(".d.ts") && f !== "contract-shared.ts");
   assert.ok(files.length >= 20, `expected the tools directory, got ${files.length} files`);
 
-  // There is NO exception list, and there was one until 2026-08-23. It held
-  // lens-seed.mjs, recorded as "drives a package script as the subject of the
-  // browser recording rather than using a manager to reach another binary".
-  // That reason described no code in the file: its only spawn was
-  // `execFileSync("pnpm", ["exec", "wrangler", ...])`, which is a manager
-  // reaching another binary and is exactly what this test bans. So the one
-  // genuine offender was the one file exempted, and the suite reported green
-  // while every seed run on a bun tree died on "This project is configured to
-  // use bun". An allowlist entry whose stated reason does not match the code it
-  // exempts is worse than no test, because it looks like a considered decision.
+  // There is NO exception list. The one this test held until 2026-08-23
+  // exempted lens-seed with a reason that described no code in the file: its
+  // only spawn was `execFileSync("pnpm", ["exec", "wrangler", ...])`, exactly
+  // what this test bans, and the suite stayed green while every seed run on a
+  // bun tree died. An allowlist entry whose stated reason does not match the
+  // code it exempts is worse than no test, because it looks like a considered
+  // decision.
   const offenders = [];
   for (const f of files) {
     const src = readFileSync(dir + f, "utf8");
@@ -69,15 +64,6 @@ test("no tool spawns a package manager by name", async () => {
   }
   assert.deepEqual(offenders, [], `a tool spawns a package manager:\n  ${offenders.join("\n  ")}\n  Use wranglerCommand() from tools/lib/wrangler-bin.ts, which names the runtime instead.`);
 });
-
-// The `bun:check` assertions stood here until 2026-08-24 and went with the tool
-// they guarded. Their invariant did NOT retire, so read this as a forwarding
-// address rather than a deletion: a comparison whose two halves are the same
-// runtime is a green result with no control, which is why check-bun.ts refused
-// to be invoked through bun. `bump-bun-pin.ts` inherits the same exposure from
-// the other side, since ITS baseline is whatever bun happens to be on PATH, and
-// contract-the-bun-pin-is-declared-once.test.mjs asserts the guard that closes
-// it (the runtime must equal the pin, or the script refuses to run).
 
 // The helper those tools use has to run wrangler under NODE, name no package
 // manager, and resolve the PINNED entry rather than whatever a PATH lookup
@@ -100,8 +86,8 @@ test("wranglerCommand runs the pinned wrangler under node", async () => {
   assert.deepEqual(argv.slice(1), ["versions", "list"], "arguments pass through untouched");
 });
 
-// The two perf tools must stay on node for a different reason: the MEASUREMENT
-// were pinned to node from 2026-08-20 to 2026-09-16. bun 1.4 ships zlib-ng,
+// The two perf tools ran pinned to node from 2026-08-20 to 2026-09-16, for a
+// reason about the MEASUREMENT. bun 1.4 ships zlib-ng,
 // which gzips one byte-identical 2.8MB input to 898,553 bytes against node's
 // 893,610 (0.55% larger), and the fear was that perf-history's nightly series
 // would re-read ~1% heavier with no code change. Measured before lifting the
@@ -164,7 +150,7 @@ test("node is spawned only by the wrangler bridge, the route oracle, the twin su
   assert.deepEqual(spawns, [
     // the bridge Workers Builds runs, which is the whole reason node is pinned
     ".github/deploy-wrangler.sh: node \"$",
-    // the CPU sweep, report-only (the fifth, above)
+    // the CPU sweep (the fifth, above)
     ".github/workflows/ci.yml: node tools",
   ], `node spawns outside the allowlist: ${JSON.stringify(spawns)}`);
 });
@@ -173,11 +159,9 @@ test("node is spawned only by the wrangler bridge, the route oracle, the twin su
 // has to work on whatever branch is being built, so the wrapper is what lets a
 // pnpm branch and a bun branch share it.
 //
-// It runs wrangler under NODE for both, and that is the whole point rather than
-// an implementation detail. WRANGLER DOES NOT SUPPORT BUN, measured 2026-08-20
-// on 4.124.0: `check startup` under bun answers "Wrangler does not support the
-// Bun runtime" and does no work, while `deploy --dry-run` under the same bun
-// returns a correct bundle. The refusal is per-COMMAND, which is exactly why the
+// It runs wrangler under NODE for both, because wrangler refuses bun per
+// COMMAND (measured 2026-08-20, above): `deploy --dry-run` under bun returns a
+// correct bundle while `check startup` does no work, which is exactly why the
 // first bun-built deploy looked fine.
 //
 // Tested by RUNNING it against fixture trees with stub binaries, because the
@@ -281,8 +265,8 @@ test("the deploy bridge never resolves wrangler from the registry", async () => 
   for (const fetcher of ["npx", "bunx", "dlx", "bun x"]) {
     assert.ok(!script.includes(` ${fetcher} `), `deploy-wrangler.sh must not reach for ${fetcher}`);
   }
-  // The wrangler ARGUMENTS stay in the dashboard string, where check-infra.mjs
-  // reads them; the script must not smuggle its own.
+  // The wrangler ARGUMENTS stay in the dashboard string, which config/infra.json
+  // records for tools/check-infra.ts; the script must not smuggle its own.
   const code = script.replace(/^\s*#.*$/gm, "");
   assert.ok(!/versions\s+upload/.test(code),
     "the script takes no opinion on wrangler's arguments outside comments");
@@ -304,7 +288,7 @@ test("the deploy bridge never resolves wrangler from the registry", async () => 
 test("a ramp step hands the remainder to the LARGEST incumbent", () => {
   // The real 2026-08-20 split, in the order the API returned it: the 10% version
   // came first, so `find` picked it and 90% of traffic moved to a build nobody
-  // canaried. This is the regression that change exists to prevent.
+  // canaried. This is the regression remainderHolder exists to prevent.
   const active = [
     { id: "863a5873-ecb6-4153-9e5a-afba4e824f38", pct: 10 },
     { id: "c649f1fc-0000-0000-0000-000000000000", pct: 90 },
@@ -334,13 +318,8 @@ test("a ramp step hands the remainder to the LARGEST incumbent", () => {
 });
 
 // A ramp reports a wrangler failure by trimming its stderr to the first few real
-// lines, which is only readable once the ANSI colour codes come off. Nothing
-// exercised that until 2026-08-27, and the gap cost more than coverage usually
-// does: the pattern carries its ESC as a RAW 0x1b byte, invisible in any
-// rendering of the source, so it reads as though it strips the bracket and
-// leaves the escape. That reading was reported as a bug, and the repair it
-// implies (an escape in front of the byte already there) matches nothing and
-// leaves every colour code in place. This is the two lines that answer it.
+// lines (tools/lib/wrangler-error.ts), which is only readable once the ANSI
+// colour codes come off.
 test("the ramp's error reporter strips wrangler's ANSI colour codes", () => {
   const ESC = "\u001b";
   // Verbatim from wrangler 4.126.0 stderr: `deploy --dry-run` against a config
@@ -363,8 +342,8 @@ test("the ramp's error reporter strips wrangler's ANSI colour codes", () => {
 
   // The control, because the assertion above would pass on a fixture carrying no
   // escapes at all. Dropping the escape from the pattern leaves one ESC per code
-  // and the survivors re-form an `ESC [` introducer, which is the failure the
-  // audit described and the shape this fixture is able to detect.
+  // and the survivors re-form an `ESC [` introducer, which is the shape this
+  // fixture is able to detect.
   const halfStripped = stderr.replace(/\[[0-9;]*m/g, "");
   assert.equal([...halfStripped].filter((c) => c === ESC).length, 7);
   assert.ok(halfStripped.includes(`${ESC}[`), "the old pattern re-forms a CSI introducer");
@@ -386,7 +365,7 @@ test("the ramp's error reporter strips wrangler's ANSI colour codes", () => {
 // code that was written without types. strictNullChecks finds places a null can
 // actually arrive, which is the half worth having.
 //
-// The programs below declare it: most are clean under it outright, and two
+// The programs below declare it: most are clean under it outright, and three
 // carry a per-file baseline that can only fall. The list may only
 // GROW: turning the flag off in one of them, or dropping a program from this
 // list while its config still has it, fails here. That is the same mechanism
@@ -395,7 +374,7 @@ test("the ramp's error reporter strips wrangler's ANSI colour codes", () => {
 //
 // TEXT-BASED on purpose. Proving a program is clean means RUNNING bun check against
 // it, which is what `bun run typecheck` already does on every one of these; a
-// second run per program here would put ~8 compilations on a suite that answers
+// second run per program here would put 10 compilations on a suite that answers
 // in about a second. What this asserts is the declaration, and typecheck is what
 // makes the declaration true.
 test("every program declared null-safe still declares it", async () => {
@@ -415,10 +394,7 @@ test("every program declared null-safe still declares it", async () => {
     "tsconfig.lwe-ask.json",
     "tsconfig.browser.json",
     "tsconfig.tools.json",
-    // The last program to join, on 2026-08-27. It had been the only config in
-    // config/ without the flag, and its header argues why the service worker
-    // needs a separate PROGRAM rather than a laxer one, so the gap read as a
-    // decision purely because it sat where a decision goes. 0 diagnostics.
+    // The last program to join, on 2026-08-27, at 0 diagnostics.
     "tsconfig.sw.json",
   ].sort();
 

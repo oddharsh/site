@@ -7,9 +7,7 @@
 // needed. Both are two-method objects, so the order is tested here ONCE, by
 // running it, with every event the fakes see recorded in sequence.
 //
-// These tests came over from lens-guard.ts (#1107), which shared the cached
-// reads before defineLens took every door. Each assertion carries a control in
-// the same test: a second run where the thing asserted absent is present, so a
+// Each assertion carries a control in the same test: a second run where the thing asserted absent is present, so a
 // fake that cannot observe the event fails the control rather than passing.
 import { assert, context, readFileSync, test } from "./contract-shared.ts";
 import { LENS_BUDGETS, LENS_KV_MAX, budgetMessage, defineLens, lensSha256Hex } from "../src/worker/lens-pipeline.ts";
@@ -103,7 +101,7 @@ test("a guarded read runs in one order: target, cache, per-IP budget, shared bud
 
 test("the seven cached lenses keep the KV prefixes they have always written", () => {
   // The key is `<prefix><sha256 of the identity>[:<variant>]`, the same shape
-  // lens-guard.ts and every handler before it wrote. Changing a prefix orphans
+  // every handler wrote before defineLens took over. Changing a prefix orphans
   // every entry under it, so the literals are pinned here.
   const src = ["lens.ts", "lens-wire.ts", "lens-tools.ts", "lens-nlweb.ts", "lens-markdown.ts"]
     .map((f) => readFileSync("src/worker/" + f, "utf8")).join("\n");

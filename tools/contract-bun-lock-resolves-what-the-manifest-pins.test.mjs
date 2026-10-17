@@ -1,5 +1,4 @@
 // ── bun.lock resolves what the manifest pins ─────────────────────────────────
-// Split-file convention: shared imports live in contract-shared.mjs.
 import { assert, test } from "./contract-shared.ts";
 import { auditLockfilePins, readLockfilePins, FLOOR_PINS } from "./lib/lockfile-pins.ts";
 
@@ -86,10 +85,6 @@ test("the walk finds every committed lockfile and every workspace each one gover
 // is owned by the outside world has an expiry date, and dependabot owns this
 // one. The package is derived for the milder version of the same reason: naming
 // a dependency makes this test fail the day that dependency leaves.
-//
-// There WAS a guard for this (`assert.notEqual(pin, "0.151.0")`), and it sat
-// after the assertion it existed to explain, so the build failed on a bare
-// `0 !== 1` instead. A guard that runs after the thing it guards is a comment.
 test("perturbing one real resolution turns the live check red", () => {
   const lockfiles = readLockfilePins();
   const { packages, devDependencies } = rootOf(lockfiles);

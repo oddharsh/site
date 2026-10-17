@@ -1,5 +1,4 @@
 // ── serendipity sync health ─────────────────────────────────────────
-// Shared imports live in contract-shared.ts.
 //
 // A broken Luma sync and a quiet week wrote the same log line until
 // 2026-09-30: syncEvents RETURNS a Luma 401 rather than throwing it, so the
@@ -60,7 +59,6 @@ function fakeD1({ sets = [{ user_key: "k1", cookies_json: COOKIES, label: "test"
   };
 }
 
-// A tracer double shaped like the runtime's: records every attribute set.
 function recordingTracer() {
   const spans = [];
   return {

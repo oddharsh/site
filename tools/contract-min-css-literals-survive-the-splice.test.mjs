@@ -1,5 +1,4 @@
 // ── a /*min*/ CSS literal means at runtime what Lightning CSS wrote ─────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { readdir, readFile } from "node:fs/promises";
 import {
   assert,

@@ -56,14 +56,13 @@
 // Decoding is charCodeAt minus 63, with no atob, no Buffer and no typed array.
 //
 // Run by extract-photo-metadata.sh so `bun run photos` keeps it current, and
-// rebuilt by check-photo-pipeline.mjs, which fails on any drift.
+// rebuilt by check-photo-pipeline.ts, which fails on any drift.
 //
 // images/meta/ IS A LOCAL PIPELINE ARTIFACT as of 2026-08-17, not a committed
-// tree. This script and build-histogram-index.mjs read it right after
-// extract-photo-metadata.sh writes it, and the two indexes they emit are what
-// gets committed; build.ts then derives the served /images/meta/<stem>.json
-// files back out of those indexes. So the causality runs one way now, and a
-// stale per-photo file is no longer a state the repository can hold.
+// tree. This script reads it right after extract-photo-metadata.sh writes it,
+// and the indexes built from it are what gets committed; build.ts then derives
+// the served /images/meta/<stem>.json files back out of those indexes, so a
+// stale per-photo file is not a state the repository can hold.
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -80,7 +79,7 @@ export const BINS = 64;
 export const HIST_BASE = 63;
 export const HIST_LEVELS = 64;
 
-// Exported so check-photo-pipeline.mjs rebuilds through the SAME function rather
+// Exported so check-photo-pipeline.ts rebuilds through the SAME function rather
 // than through a second copy of the packing rule that could agree with itself.
 export function packHistogram(hi) {
   if (!hi) return null;

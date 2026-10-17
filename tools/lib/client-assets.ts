@@ -9,12 +9,10 @@
 //   perf-budget.ts       budgetedAssets(), unbudgetedAssets(), readableTwins()
 //   verify-routes.ts     twinOracleRows()
 //
-// Until 2026-10-02 those were SHELLS, MODULE_SHELLS, PAGE_SCOPED_HASHED,
-// CONTENT_HASHED, ASSETS, STRING_ASSETS and about 20 hand-written witness
-// throws in build.ts, plus ASSET_ENVELOPES and TWINS in perf-budget.ts and a
-// row pair per script in the route oracle. Adding one island touched about 7
-// places, and two of the lists had fallen behind: 14 minified assets carried
-// no envelope and 13 twins went unchecked, with nothing saying so.
+// One registry replaced those hand-kept lists on 2026-10-02. Adding one island
+// had touched about 7 places, and two of the lists had fallen behind: 14
+// minified assets carried no envelope and 13 twins went unchecked, with nothing
+// saying so.
 //
 // This module is PURE: no filesystem, no build state. It loads under bun and
 // node alike, which is what lets the route oracle and the contract suite read
@@ -114,7 +112,6 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
   { file: "nav-tray.js", kind: "script", marker: "axp-balloon", scope: "shell",
     budget: { role: "first-click tray island", gzipKiB: 5, brotliKiB: 4 },
     load: [IMPORT], loadedBy: ["public/nav.js"] },
-  // The idle screen saver.
   { file: "nav-pipes.js", kind: "script", marker: "axp-pipes", scope: "shell",
     budget: { role: "idle screen-saver island", gzipKiB: 6, brotliKiB: 5 },
     load: [IMPORT], loadedBy: ["public/nav.js"] },
@@ -213,7 +210,6 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
   // Page-scoped since it joined /a/ on 2026-10-02.
   { file: "serendipity.js", kind: "script", marker: "data-event-time", scope: "page", budget: "unbudgeted",
     load: [{ via: "attr", attr: "src" }], loadedBy: ["serendipity/serendipity.ts"] },
-  // The understanding-check widget.
   { file: "quiz.js", kind: "script", marker: "luq-data", scope: "shell",
     budget: { role: "understanding-check island", gzipKiB: 6, brotliKiB: 5 },
     load: [{ via: "attr", attr: "src" }], loadedBy: ["public/garage/encoding.html"] },

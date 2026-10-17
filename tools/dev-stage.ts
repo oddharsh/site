@@ -1,4 +1,4 @@
-// dev-stage.mjs: compose the served URL root for LOCAL DEV, as a symlink farm.
+// dev-stage.ts: compose the served URL root for LOCAL DEV, as a symlink farm.
 //
 //   bun tools/dev-stage.ts         # (re)build .dev-assets/ only
 //
@@ -26,9 +26,9 @@
 //     files created inside it later are served with no re-stage
 //   - a directory SEVERAL roots provide is materialised for real and recursed
 //     into, because a symlink can only point at one of them
-// Exactly three directories collide today (garage, lwe, pixel-peeper — static
-// assets in public/ beside their documents in src/pages/), plus the root. A file
-// created directly in one of those four needs a dev restart to appear; anywhere
+// Four directories collide on 2026-10-16 (dotfiles, garage, lwe, pixel-peeper:
+// static assets in public/ beside their documents in src/pages/), plus the root.
+// A file created directly in one of those five needs a dev restart to appear; anywhere
 // deeper is free. That is the whole cost of not copying.
 //
 // It is NOT a second definition of the served tree. The roots, their order, the
@@ -37,9 +37,7 @@
 // plan; this file symlinks the same plan. A sixth root added there reaches
 // both, and a path two roots claim is refused there, before either adapter runs.
 //
-// Dev derives nothing, so the three DERIVED_PATHS are build-only surfaces here,
-// the same standing as the generated /lens shell and /run that CLAUDE.md
-// records as 404ing under `bun run dev`.
+// Dev derives nothing, so the three DERIVED_PATHS are build-only surfaces here.
 //
 // **THE TOOLTIP LOSES ITS EXIF UNDER `bun run dev`, and that is new as of
 // 2026-08-29.** Both of its tiers (/images/exif.json and /images/meta/) are
@@ -66,8 +64,8 @@ export async function stage() {
   const { links, dirs } = await linkServedTree(plan, FARM);
 
   // A farm that collapses to a handful of links serves a site with no pages, and
-  // wrangler reports that as 404s rather than as a staging failure. 36 documents
-  // author in src/pages today; the floor is deliberately well under that so it
+  // wrangler reports that as 404s rather than as a staging failure. 47 documents
+  // author in src/pages on 2026-10-16; the floor is deliberately well under that so it
   // catches a collapse without firing on ordinary authoring.
   if (links < 20) throw new Error(`dev-stage: only ${links} links staged — the merge found almost nothing, refusing to serve an empty site`);
 

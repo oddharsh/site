@@ -1,5 +1,4 @@
 // ── the Luma session jar ────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   ROOT,
   SERENDIPITY_SYNC_LIMITS,
@@ -222,9 +221,8 @@ test("the cron batches upcoming and past roster selection into one D1 call", asy
 
 
 // ── the enrichment tier ─────────────────────────────────────────────────
-// Enrichment had never run automatically: it was absent from cronSerendipity
-// entirely, and EXA_API_KEY was unset, so 86 of 16,839 attendees carried a
-// profile and the newest was 2026-05-31. These pin the automatic tier.
+// cronSerendipity dispatches enrichment on its own tick (dispatchEnrich).
+// These pin that automatic tier.
 
 test("the admin gate takes the secret from a header as well as the query string", () => {
   const env = { SYNC_SECRET: "s3cret" };

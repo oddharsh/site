@@ -1,5 +1,4 @@
 // ── IndexNow submits the pages whose CONTENT a release changed ───────────────
-// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { changedPages, contentUrl, INDEXNOW_KEY, readStatus, sitemapPaths, submission } from "./lib/indexnow.ts";
 import { SCHEMA } from "./lib/served-manifest.ts";

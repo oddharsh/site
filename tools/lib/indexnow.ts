@@ -11,7 +11,8 @@
 // CONTENT-ONLY representation in the served manifest ci.yml signs (#1073): its
 // Markdown twin, which the build derives from the prose alone with scripts and
 // controls stripped, or a writing post's .txt source, or for a file that IS its
-// content (/resume.pdf) the file itself. 56 of 56 sitemap pages have one.
+// content (/resume.pdf) the file itself. 56 of 56 sitemap pages had one on
+// 2026-10-01.
 //
 // The key is public by design: the protocol proves ownership by serving it at
 // /<key>.txt on the host, so it lives in this tree like any other static file.

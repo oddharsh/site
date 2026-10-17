@@ -1,5 +1,4 @@
 // ── the search corpus ────────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   assert,
   existsSync,

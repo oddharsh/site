@@ -21,8 +21,8 @@ async function filesIn(dir) {
 
 // Case-insensitive, and tolerant of every shape of end tag, because HTML accepts
 // `</script >`, `</script\t\n bar>` and `</script/>` as closes while `</scriptfoo>`
-// is a different element. The close comes from tools/lib/html-raw-text.ts so the
-// three tools that answer this question answer it the same way.
+// is a different element. The close comes from tools/lib/html-raw-text.ts so
+// every tool that answers this question answers it the same way.
 const LUQ_BLOCK = new RegExp(
   `<script\\b[^>]*\\btype="application/json"[^>]*\\bid="luq-data"[^>]*>([\\s\\S]*?)${closeTagSource("script")}`,
   "gi",
@@ -30,8 +30,8 @@ const LUQ_BLOCK = new RegExp(
 
 function payload(html, file) {
   // The CAPTURE GROUP is the payload. Re-stripping the delimiters off the whole
-  // match, which is what this did, means writing the same two patterns a second
-  // time and keeping them in agreement with these.
+  // match would mean writing the same two patterns a second time and keeping
+  // them in agreement with these.
   const matches = [...html.matchAll(LUQ_BLOCK)];
   assert.equal(matches.length, 1, `${file}: expected exactly one luq-data block`);
   return JSON.parse(matches[0][1]);
@@ -75,8 +75,7 @@ for (const file of lweSpecFiles) {
       `pipelines/lwe/specs/${file}: generator omitted its external demo program`);
   }
   // Every LWE spec page is its generator's output byte for byte, the same pin
-  // Garage carries. It held for encoding alone until 2026-09-30, while all six
-  // spec pages already matched.
+  // Garage carries.
   const published = await readFile(join(ROOT, "src/pages/lwe", `${spec.id}.html`), "utf8");
   assert.equal(html, published, `src/pages/lwe/${spec.id}.html: run node pipelines/lwe/generate.mjs page ${spec.id}`);
 }

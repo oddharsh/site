@@ -1,5 +1,4 @@
 // ── D1 exec() is handed one-line statements only ─────────────────────────────
-// Split-file suite; shared imports live in contract-shared.ts.
 import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 

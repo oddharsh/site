@@ -1,5 +1,4 @@
 // ── the node pin is declared once ────────────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
 import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 
 // The tree tier of `node:pin`. It lives here rather than in that script so
@@ -34,8 +33,8 @@ test("the engines floor sits between the zstd floor and the pin", async () => {
   // what set the repository's floor. That was true when it was written and
   // stopped being true silently, because a floor is the MAXIMUM of every
   // constraint and nothing stops a newer one arriving. One had:
-  // Map.prototype.getOrInsertComputed reached node in 26 and is used in three
-  // Worker modules, so package.json claimed 24 while the suite could not run
+  // Map.prototype.getOrInsertComputed reached node in 26 and is used in the
+  // Worker (6 modules on 2026-10-16), so package.json claimed 24 while the suite could not run
   // below 26. Measured 2026-08-31: `typeof Map.prototype.getOrInsertComputed`
   // is undefined on v24.20.0 and v25.4.0, and a function on v26.8.1.
   //
@@ -87,8 +86,8 @@ test("every workflow reads .node-version rather than naming a version", async ()
   assert.ok(checked >= 5, `expected several setup-node steps, matched ${checked}`);
 });
 
-// The commands whose run includes the contract suite. Three harness tests in it
-// re-run under node through underNode() (tools/lib/harness-dispatch.ts), so the
+// The commands whose run includes the contract suite. Harness tests in it (4
+// files on 2026-10-16) re-run under node through underNode() (tools/lib/harness-dispatch.ts), so the
 // SUITE needs the pinned node even in a job that otherwise never touches it.
 const RUNS_THE_SUITE = /\bbun run (?:test|bun:pin|canary:bun|canary:wrangler|wrangler:pin)(?![\w:-])/;
 

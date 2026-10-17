@@ -1,5 +1,4 @@
 // ── the tools are SERVICES, the frame is a representation ────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   MODERN_META,
   assert,
@@ -12,8 +11,6 @@ import {
   terminalGet,
   test,
 } from "./contract-shared.ts";
-
-// ── the tools are SERVICES, the frame is a representation ────────────────
 
 test("every tool is a top-level utility, not a subpage of a presentation", async () => {
   // The site's own manifest encodes the rule: utilities live at the root

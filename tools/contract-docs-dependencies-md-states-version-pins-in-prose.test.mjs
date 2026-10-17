@@ -1,5 +1,4 @@
 // ── docs/DEPENDENCIES.md states version pins in prose ─────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   BASELINE_HEADING,
   FLOOR_CLAIMS,
@@ -21,9 +20,10 @@ import {
 } from "./contract-shared.ts";
 import { spawnSync } from "node:child_process";
 
-// ── docs/DEPENDENCIES.md states version pins in prose ─────────────────────────
-// and dependabot rewrites those pins daily, so the file goes stale on a cadence
-// rather than by accident: twice in two days before this landed. These assert
+// docs/DEPENDENCIES.md states version pins in prose, and the nightly pin bumpers
+// (deps-pin.yml, wrangler-pin.yml, bun-pin.yml, plus Dependabot for cargo)
+// rewrite those pins, so the file goes stale on a cadence rather than by
+// accident: twice in two days before this landed. These assert
 // the doc against the manifests, and then assert the CHECK itself has teeth,
 // because a version of this that only ever agreed with the current tree would
 // be the third check in this repo to pass while asserting nothing.
@@ -480,9 +480,10 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   // keep the offer. Chromium sizes a registered dictionary's lifetime from the response's
   // own freshness, so an offer on a stale-on-arrival response is stored already-expired
   // and dropped, costing a DevTools error per navigation and buying nothing. Measured in
-  // Chrome 2026-07-29 across seven policies; the table is in lib/assets.js.
+  // Chrome 2026-07-29 and re-measured 2026-09-23; the table is in
+  // src/worker/lib/assets.ts.
   for (const cc of [
-    "public, max-age=0, s-maxage=86400",                       // today's page policy
+    "public, max-age=0, s-maxage=86400",                       // PAGE_CACHE_CONTROL minus swr
     "public, max-age=0, must-revalidate, s-maxage=86400",
     "max-age=0, must-revalidate, stale-while-revalidate=604800", // must-revalidate wins
     "max-age=0, must-revalidate, stale-while-revalidate=60",   // ...at any window

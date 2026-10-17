@@ -1,5 +1,4 @@
 // ── every install is frozen, and every lockfile has a policy over it ─────────
-// Shared imports live in contract-shared.mjs.
 import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
@@ -78,8 +77,8 @@ test("every bun install in .github/workflows is --frozen-lockfile", async () => 
   const files = workflows();
 
   // FLOOR. A scanner that matches nothing reports a pass, which is the failure
-  // this repository has shipped three times. Nine installs across eight
-  // workflows today, and the count only grows.
+  // this repository has shipped three times. On 2026-10-16 the scan finds 16
+  // installs across 11 of 15 workflows, and the count only grows.
   assert.ok(files.length >= 8, `found only ${files.length} workflows; the scanner is broken`);
 
   const found = [];

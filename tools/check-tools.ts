@@ -170,7 +170,7 @@ for (const tool of tools) {
   }
 }
 
-// ── tier 1d: every `<TOOL>_MIN=` guard agrees with the declaration ───────────
+// ── tier 1f: every `<TOOL>_MIN=` guard agrees with the declaration ───────────
 //
 // The shape is `<NAME>_MIN=<version>` on its own line, and the tool it governs
 // is the name lowercased with underscores as dashes, so EXIF_SOOC_MIN governs
@@ -236,7 +236,6 @@ async function present(tool: Tool): Promise<string | null> {
       await access(candidate, fsConstants.X_OK);
       return candidate;
     } catch {
-      // next
     }
   }
   return null;
@@ -295,9 +294,9 @@ for (const [bin, where] of found) {
   const found_ = new RegExp(spec.match, "m").exec(text);
 
   if (!found_) {
-    // NOT a skip. A declared pattern that stops matching is the naive-scanner
-    // rot this file's own header warns about: the tier would go on reporting a
-    // pass while reading nothing. The tool changed its output, and that is worth
+    // NOT a skip. A declared pattern that stops matching is scanner rot, the
+    // kind the floors exist for: the tier would go on reporting a pass while
+    // reading nothing. The tool changed its output, and that is worth
     // knowing on the day it happens rather than on the day bytes move.
     versionErrors.push(
       `${bin}: \`${spec.flag}\` no longer matches its declared pattern. It answered: ${JSON.stringify(text.split("\n")[0] ?? "")}`,
@@ -322,7 +321,7 @@ for (const [bin, where] of found) {
 
   // `olderThan` reads one number per dot-separated component, so it cannot rank
   // a multi-part record. Saying so beats comparing anyway: a floor that silently
-  // stops flooring is the same rot this file's header warns about.
+  // stops flooring is the same scanner rot.
   if (tool.min_version && groups) {
     versionErrors.push(
       `config/tools.json: ${bin} declares min_version ${tool.min_version} and a multi-part version pattern, which cannot be ordered`,

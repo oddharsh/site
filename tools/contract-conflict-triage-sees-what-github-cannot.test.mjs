@@ -1,5 +1,4 @@
 // ── conflict triage: which conflicts GitHub's web editor can take ────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

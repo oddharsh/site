@@ -41,7 +41,7 @@ test("folding a garage essay only adds section tags, never moves or changes a wo
     assert.equal(visible(out), visible(html), `${rel}: the fold changed the page's text`);
     assert.equal(foldLongProse(out), out, `${rel}: folding twice must change nothing (the twin writer re-dresses pages)`);
   }
-  // 21 essays fold today; a count far below that means the selectors stopped matching.
+  // 23 essays fold on 2026-10-16; a count far below that means the selectors stopped matching.
   assert.ok(folded >= 15, `only ${folded} garage essays folded; did .content.prose or its h2s change shape?`);
 });
 

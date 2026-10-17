@@ -3,15 +3,15 @@
 // prerendering earlier? (bun run speculation:report)
 //
 // The shell's Speculation Rules prerender every same-origin link on hover
-// ("moderate", tools/photos/shell-data.ts). Chrome caps eager and moderate rules
-// at two prefetches and two prerenders at a time, so promoting a link to an
-// earlier eagerness is a budget decision, and the ledger is the only evidence
-// that says which links get NAVIGATED after being speculated rather than merely
-// speculated. This reads /ledger/speculation.json from production and prints
-// the table that decision needs. It writes nothing: the promotion itself is an
-// edit to SPECULATION in shell-data.ts, gated on tools/speculation-probe.ts
-// showing the promoted rule actually fetches (an eager prefetch rule was
-// measured fetching NOTHING twice before it was deleted; see that file).
+// ("moderate", tools/photos/shell-data.ts). Chrome holds moderate rules to 2
+// prefetches and 2 prerenders at a time (oldest evicted first) and eager rules
+// to 50 and 10, so promoting a link to an earlier eagerness is a budget
+// decision, and the ledger is the only evidence that says which links get
+// NAVIGATED after being speculated rather than merely speculated. This reads
+// /ledger/speculation.json from production and prints the table that decision
+// needs. It writes nothing: the promotion itself is an edit to SPECULATION in
+// shell-data.ts, gated on tools/speculation-probe.ts showing the promoted rule
+// actually fetches.
 //
 //   bun run speculation:report                # last 30 days, from aadhar.sh
 //   bun run speculation:report -- --min 20    # only paths speculated 20+ times
@@ -46,9 +46,9 @@ for (const r of rows) {
 // The recommendation is deliberately narrow. A high activation rate on a
 // moderate rule says the hover already predicts the click; promoting that link
 // to "eager" buys the time between the link scrolling into view and the hover,
-// and costs one of Chrome's two concurrent prerender slots. A LOW rate is the
-// louder finding: it is a link the site is rendering for nobody, and the fix is
-// an exclusion, which costs nothing.
+// and costs one of the eager pool's 10 prerender slots. A LOW rate is the
+// louder finding: it is a link the site is rendering for nobody, and the fix
+// is an exclusion, which costs nothing.
 // THE GRADER CHECK, before any recommendation. Until 2026-09-29 the numerator
 // had no working instrument (the header beacon never shipped; see
 // src/worker/speculation.ts), so every rate read 0% and the exclusion rule below

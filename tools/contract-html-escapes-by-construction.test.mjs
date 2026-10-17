@@ -72,7 +72,8 @@ test("unsafeHtml is the only unescaped door, and it is greppable", async () => {
 
 test("the unescaped door is counted, and the count may only go down", async () => {
   // THE STRANGLER LEDGER. Typing lunaPage's body/head/scripts as Html forced
-  // every caller to say something, and what 20 of them say is `unsafeHtml`:
+  // every caller to say something, and what the callers counted in
+  // config/unsafe-html-baseline.json say is `unsafeHtml`:
   // "this literal predates the tagged template, and its interpolations are
   // escaped by hand." That is honest and it is DEBT, so it is counted.
   //

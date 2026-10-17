@@ -62,7 +62,7 @@ test("every og:image and twitter:image in an authored page is a file in public/"
   }
   // A floor, because every failure this test exists for is an absence: a
   // scanner that quietly stopped matching would report zero missing over zero
-  // checked. 41 pages carry a card today, each named twice (og + twitter).
+  // checked. 43 pages carried a card on 2026-10-16, each named twice (og + twitter).
   assert.ok(checked >= 70, `scanned only ${checked} card references; the scanner has stopped matching`);
   assert.deepEqual(missing, [],
     `these pages hand a crawler a card image that does not exist:\n  ${missing.join("\n  ")}\n`

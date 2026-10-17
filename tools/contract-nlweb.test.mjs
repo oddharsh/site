@@ -1,5 +1,4 @@
 // ── NLWeb ───────────────────────────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   testGlobals,
   assert,
@@ -9,7 +8,6 @@ import {
 } from "./contract-shared.ts";
 import { _resetSearchIndex } from "../src/worker/search.ts";
 
-// ── NLWeb ───────────────────────────────────────────────────────────────────
 // The endpoint half. These drive the real handler; where a specific record
 // matters they test the pure projections instead, because search.ts caches its
 // index in a MODULE-LEVEL singleton, so the first load pins the corpus. That
@@ -30,8 +28,6 @@ const askGet = async (query) => {
 // assert.match throws `TypeError: The "string" argument must be of type string`
 // rather than failing on the thing being asserted — so a route that answered
 // with NO content-type reported as a broken test instead of a broken route.
-// The type only started saying so once span() stopped returning `any`, which is
-// how handleAsk's Response became a Response.
 const contentType = (res) => {
   const value = res.headers.get("content-type");
   assert.ok(value, "response carries no content-type at all");
@@ -85,7 +81,7 @@ test("/ask returns NLWeb's six result fields, with a real schema.org object", as
 });
 
 test("/ask maps a record kind to the schema.org type it actually is", async () => {
-  // Pure and tested directly, the way classifyDoor is: this mapping is the whole
+  // Pure and tested directly, the way classifyDoor (lib/doors.ts) is: this mapping is the whole
   // claim `schema_object` makes, and a wrong @type publishes structured data
   // that is confidently mislabelled.
   const { askSchemaObject } = await import("../src/worker/nlweb.ts");
@@ -322,7 +318,7 @@ test("the NLWeb lens sends the cheapest mode and never a caller's own script", a
   assert.equal(sent.searchParams.get("streaming"), "0");
   assert.equal(sent.searchParams.get("query"), "what is this");
   // Exactly one caller-supplied value reaches the target, and it is a search
-  // string. Same boundary lens-recipes.js draws against a `js=` parameter.
+  // string. Same boundary lens-recipes.ts draws against a `js=` parameter.
   assert.deepEqual([...sent.searchParams.keys()].sort(), ["mode", "query", "streaming"]);
 
   const source = await readFile(new URL("../src/worker/lens-nlweb.ts", import.meta.url), "utf8");
@@ -331,7 +327,7 @@ test("the NLWeb lens sends the cheapest mode and never a caller's own script", a
 
 
 test("discovery caching is scoped by Worker version for THIS origin only", async () => {
-  // Pure and tested directly, the way classifyDoor is. The whole claim is which
+  // Pure and tested directly, the way classifyDoor (lib/doors.ts) is. The whole claim is which
   // origin gets version-scoped and which does not, and driving it through the
   // Cache API would test workerd rather than the rule.
   const { discoveryScope } = await import("../src/worker/lens.ts");
@@ -418,7 +414,6 @@ test("the /ask door probe reads a real NLWeb server as present", async () => {
   const generic = await probe(JSON.stringify({ error: "bad request" }), { status: 400, headers: { "content-type": "application/json" } });
   assert.equal(generic.verdict, "no");
 
-  // Unchanged rungs.
   assert.equal((await probe("{}", { headers: { "content-type": "application/json" } })).verdict, "maybe");
   assert.equal((await probe("<!doctype html>", { headers: { "content-type": "text/html" } })).verdict, "no");
   assert.equal((await probe("", { status: 404 })).verdict, "no");
@@ -503,7 +498,7 @@ test("a refusal that carries a reason reports the reason, not its status code", 
 
   // A body we DID receive and could not parse is a finding about them. A
   // request that never arrived says nothing about whether the server exists,
-  // and the two must not merge — same rule as classifyDoor above.
+  // and the two must not merge — same rule as classifyDoor in lib/doors.ts.
   const shell = await foreignMcpTools("https://aadhar.sh", answer("<!doctype html>", { headers: { "content-type": "text/html" } }));
   assert.equal(shell.ok, false);
   assert.ok(!shell.unreadable, "a 200 that is not JSON-RPC is a shut door, not an unreadable one");

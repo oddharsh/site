@@ -1,5 +1,4 @@
 // ── Workers preview URLs ────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   MODERN_META,
   ROOT,
@@ -12,8 +11,7 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── Workers preview URLs ────────────────────────────────────────────
-// A preview version runs PRODUCTION bindings and secrets (lib/preview.js says
+// A preview version runs PRODUCTION bindings and secrets (lib/preview.ts says
 // why at length), so these tests are the difference between a preview URL and
 // an unaudited write path into the real site. They are cheap; the failure they
 // prevent is a coffee booking emailed to a stranger from a branch.
@@ -102,8 +100,8 @@ test("every preview-guarded GET write names a path the site really routes", asyn
   const cal = readFileSync(new URL("./cal/src/index.ts", ROOT), "utf8");
 
   // Exact ROUTES entries in the site dispatcher, plus cal's own matches, which
-  // reach the visitor one prefix deeper: index.js hands /coffee/* to cal, and
-  // cal strips that prefix before comparing.
+  // reach the visitor one prefix deeper: routes.ts's /coffee/<path> row hands
+  // /coffee/* to cal, and cal strips that prefix before comparing.
   const routed = new Set();
   for (const path of EXACT_PATHS) routed.add(path);
   assert.ok(routed.has("/hit") && routed.has("/webmention/approve"), "the route list must actually carry routes");

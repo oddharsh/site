@@ -19,7 +19,7 @@ const firstPrefix = (path) => routes.PREFIX_ROUTES.find((r) => r.match(path))?.l
 
 test("the allowlist covers every route, under wrangler's cap of 100 rows", () => {
   const rows = routes.RUN_WORKER_FIRST;
-  // 96 on 2026-10-02; a list that lost its claims would cover nothing and agree
+  // 94 on 2026-10-16; a list that lost its claims would cover nothing and agree
   assert.ok(rows.length >= 60, `only ${rows.length} rows derived`);
   assert.ok(rows.length <= 100, `${rows.length} rows: wrangler refuses to boot past 100 (gotcha 26); fold before adding`);
   assert.equal(new Set(rows).size, rows.length, "the cap counts RAW rows, so a duplicate costs one");
@@ -72,11 +72,9 @@ test("the order-sensitive prefixes are in the order their comments promise", () 
 });
 
 test("each consumer reads the derived value rather than a copy of it", async () => {
-  // the deployed config: its projection carries exactly the derived rows
   const projected = parseJsonc(await configText("cloudflare.config.ts")).assets.run_worker_first;
   assert.deepEqual(projected, [...routes.RUN_WORKER_FIRST]);
   assert.match(read("cloudflare.config.ts"), /runWorkerFirst: \[\.\.\.RUN_WORKER_FIRST\]/);
-  // the preview and early-data guards
   const { PREVIEW_GET_WRITES } = await import("../src/worker/lib/preview.ts");
   assert.equal(PREVIEW_GET_WRITES, routes.GET_WRITES);
   assert.ok(routes.GET_WRITES.has("/hit") && routes.GET_WRITES.has("/coffee/approve"), "the write list lost its routes");
@@ -85,7 +83,6 @@ test("each consumer reads the derived value rather than a copy of it", async () 
   const get = (path) => new Request(`https://aadhar.sh${path}`, { headers: { accept: "text/html" } });
   assert.equal(shouldUseWorkersCache(get("/writing/big-screens-and-small-screens"), new Set()), true);
   assert.equal(shouldUseWorkersCache(get("/lens/fetch"), new Set()), false, "the control: an undeclared path stays out");
-  // and the dispatcher's own predicate admits exactly the derived exact paths
   const { isEdgeCacheable } = await import("../src/worker/dispatch.ts");
   assert.equal(isEdgeCacheable(get("/reading")), true, "/reading is declared cacheable in routes.ts");
   assert.equal(isEdgeCacheable(get("/reading/list.html")), false, "the control: its island is not");

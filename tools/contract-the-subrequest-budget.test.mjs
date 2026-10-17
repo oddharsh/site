@@ -1,5 +1,4 @@
 // ── the per-invocation subrequest budget ────────────────────────────
-// Shared imports live in contract-shared.ts.
 import {
   assert,
   readFileSync,

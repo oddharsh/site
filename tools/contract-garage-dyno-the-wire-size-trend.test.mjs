@@ -1,15 +1,11 @@
 // ── /garage/dyno, the wire-size trend ───────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   assert,
   test,
 } from "./contract-shared.ts";
 
-// ── /garage/dyno, the wire-size trend ───────────────────────────────────────
-//
 // The page is a pure function of its rows, which is what lets it be asserted
-// here rather than only looked at. All three tests below came out of building
-// it, and the middle one is a bug that shipped to a screenshot.
+// here rather than only looked at.
 
 test("the dyno series merges hand-entered history under measured rows", async () => {
   const { mergeHistory } = await import("../src/worker/dyno.ts");

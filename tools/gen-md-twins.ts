@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// gen-md-twins.mjs — the Markdown twin for every page on the site that has prose,
+// gen-md-twins.ts — the Markdown twin for every page on the site that has prose,
 // plus the per-section llms.txt indexes.
 //
 //   node tools/gen-md-twins.ts [outDir]     # default: .build/public
@@ -8,7 +8,7 @@
 // A twin is a pure function of the HTML the build just produced, so generating
 // it at deploy time makes drift structurally impossible: there is no committed
 // copy that can fall behind the page it mirrors, and no step to forget. That is
-// the same argument the dcz deltas won in CLAUDE.md, and unlike sitemap.xml
+// the same argument the dcz deltas won, and unlike sitemap.xml
 // there is no hand-tuned signal here worth preserving.
 //
 // WHAT IS AUTHORED BY HAND
@@ -30,12 +30,9 @@
 // check that found them, and build.ts now fails on it.
 //
 // A hand twin is also what a Worker-rendered page in an INDEXED section owes,
-// because the section index lists it. /garage/dyno sat in that state from the
-// day it shipped: registered, agents-flagged, listed in /garage/llms.txt as
-// /garage/dyno.md, and 404 there, since renderSectionIndex linked every
-// registered surface as a twin and the skipped list never reached it. The index
-// now lists only twins the build holds (the rest under "HTML only"), a contract
-// test pins that join, and the twin exists so the list is empty in practice.
+// because the section index lists it (/garage/dyno.md answered 404 from the day
+// /garage/dyno shipped until it got one). The index lists only twins the build
+// holds (the rest under "HTML only"), and a contract test pins that join.
 //
 // Every exported function is PURE so build.ts can re-run this in-memory; only
 // main() touches the filesystem.
@@ -53,8 +50,6 @@ const HAND_DIR = "src/content/md";
 // the sections that earn their own index. A section index is only worth a fetch
 // when the section is big enough that the root llms.txt is the wrong grain.
 export const INDEXED_SECTIONS = ["garage", "lwe"];
-
-// ── inputs ──────────────────────────────────────────────────────────────────
 
 export function readManifest(root = ".") {
   return JSON.parse(readFileSync(join(root, MANIFEST), "utf8"));
@@ -85,8 +80,6 @@ export function htmlFileFor(surface, root = ".") {
 
 /** The URL a twin is published at: /garage/encoding -> /garage/encoding.md */
 export const twinPath = (p) => (p === "/" ? "/index.md" : `${p}.md`);
-
-// ── rendering ───────────────────────────────────────────────────────────────
 
 const yamlString = (s) => `"${String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
@@ -137,14 +130,10 @@ export function renderTwin({ surface, doc, lastmod, body, note }) {
  *
  * `twins` is the set of twin paths this build actually holds, and a surface
  * outside it is listed under its HTML URL rather than under a `.md` it does
- * not have. It used to link every registered surface as `<path>.md` on the
- * strength of being registered, so /garage/dyno, which is Worker-rendered off
- * the perf-history branch and has no source any walk can read, was promised at
- * /garage/dyno.md and answered 404 there. Nothing here could see it: the index
- * is built from the registry, the twin from the tree, and no assertion joined
- * the two. Found from outside, by a sweep that HEADs every URL an llms.txt
- * advertises. With no set given the old behaviour stands, for a caller that
- * has not built the twins yet.
+ * not have. Linking every registered surface as `<path>.md` promised
+ * /garage/dyno.md, which answered 404, because the index is built from the
+ * registry and the twin from the tree. With no set given, every registered
+ * surface is linked as a twin, for a caller that has not built the twins yet.
  */
 export function renderSectionIndex(section, surfaces, { descriptions = {}, twins = null }: { descriptions?: Record<string, string>; twins?: Set<string> | null } = {}) {
   const own = surfaces.filter((s) => s.section === section);
@@ -180,21 +169,6 @@ export function renderSectionIndex(section, surfaces, { descriptions = {}, twins
   return lines.join("\n") + "\n";
 }
 
-// ── the whole set ───────────────────────────────────────────────────────────
-
-/**
- * Build every twin + section index as { path -> contents }. Pure apart from
- * reading the source tree, which build.ts also does.
- *
- * opts.generatedRoot names a staged tree to fall back to for surfaces with no
- * prose source in `root`. That tier did not exist when this file was written:
- * /updates and /restore were Worker-rendered, so they had no twin and could not
- * have one, and when build.ts started baking them into HTML nothing here
- * noticed. They stayed on the skipped list, kept `flags.agents: true`, and kept
- * answering HTML to an agent asking for Markdown. Read only BEFORE the staged
- * pages are rewritten (hashed asset refs, minification); build.ts owns that
- * ordering and reads the source tree first for everything that has one.
- */
 /**
  * The /writing index, from the registry the page itself renders. Sorted newest
  * first, matching the folder view.
@@ -219,6 +193,16 @@ export function renderWritingIndex(root = ".") {
   ].join("\n");
 }
 
+/**
+ * Build every twin + section index as { path -> contents }. Pure apart from
+ * reading the source tree, which build.ts also does.
+ *
+ * opts.generatedRoot names a staged tree to fall back to for surfaces with no
+ * prose source in `root`: pages build.ts bakes into HTML, such as /updates and
+ * /restore, which have no other source a twin could come from. Read only BEFORE
+ * the staged pages are rewritten (hashed asset refs, minification); build.ts
+ * owns that ordering and reads the source tree first for everything that has one.
+ */
 export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
   const manifest = readManifest(root);
   const lastmod = readLastmod(root);
@@ -239,12 +223,9 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
     // prose that predates this script and reads better than any extraction of
     // src/pages/index.html would; it also already ships as a static asset and
     // already answers `Accept: text/markdown`. Generating over it would be a
-    // regression dressed up as consistency.
-    // Looked in public/ until the prose moved: the homepage twin is authored at
-    // src/content/index.md now and STAGES to /index.md, so the check follows the
-    // source rather than the served path. Reading the old location silently
-    // stopped finding it, and the symptom was the hand-written twin being
-    // overwritten by a generated one that is 472 bytes shorter.
+    // regression dressed up as consistency. The homepage twin is authored at
+    // src/content/index.md and STAGES to /index.md, so the check follows the
+    // source rather than the served path.
     if (existsSync(join(root, "src/content", twinPath(surface.path).replace(/^\//, "")))) {
       descriptions[surface.path] = surface.description || "";
       committed.push(twinPath(surface.path));
@@ -296,7 +277,7 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
   }
 
   for (const section of INDEXED_SECTIONS) {
-    // A committed twin is a twin too: /garage/round-trip renders FROM its, and
+    // A committed twin is a twin too: /garage/round-trip renders FROM its committed twin, and
     // listing it as "HTML only" told agents the opposite of what it is.
     files.set(`/${section}/llms.txt`, renderSectionIndex(section, manifest.surfaces, { descriptions, twins: new Set([...files.keys(), ...committed]) }));
   }
@@ -360,10 +341,6 @@ export const TWIN_FACTS = [
       { label: "no-storage claim", source: "src/worker/whoareyou.ts", string: "none of it is stored" },
       // The page's whole subject is what a request reveals, so the ONE script on it
       // that registers a tool catalogue has to be named in both copies or in neither.
-      // It used to pin `/.webmcp/bridge.js`, the edge injection, and the pin did its
-      // job: turning that injection off failed the deploy until both copies stopped
-      // describing a tag that was no longer there. What replaced it is first-party,
-      // so the pin follows the same script to its new name rather than retiring.
       { label: "WebMCP registrar", source: "src/worker/whoareyou.ts", string: "/webmcp.js" },
     ],
   },
@@ -380,14 +357,12 @@ export const TWIN_FACTS = [
       { label: "object-src",      source: "src/worker/lib/csp-policy.ts", string: "object-src 'none'" },
       { label: "Referrer-Policy", source: "src/worker/lib/security.ts", string: "strict-origin-when-cross-origin" },
       {
-        // This used to read the ENFORCE_PAGE_HASHES rollout flag and pick the
-        // sentence the twin had to carry. The flag is gone (2026-08-23), and
-        // reading the EMITTED HEADER SET is the better check anyway: a flag
-        // says what somebody intended, while this says what the module sends.
-        // /security claims 'unsafe-inline' left script-src. That claim goes
-        // false the moment a report-only twin comes back, because the twin is
-        // how the hashed policy ships without being enforced, so this fails the
-        // deploy until either the header set or the page is put right.
+        // Read from the EMITTED HEADER SET: a rollout flag says what somebody
+        // intended, while this says what the module sends. /security claims
+        // 'unsafe-inline' left script-src. That claim goes false the moment a
+        // report-only twin comes back, because the twin is how the hashed policy
+        // ships without being enforced, so this fails the deploy until either
+        // the header set or the page is put right.
         label: "hashed-CSP enforcement state",
         source: "src/worker/lib/security.ts",
         derive: (src) => {
@@ -577,8 +552,6 @@ export function checkTwinFacts(root = ".") {
   }
   return problems;
 }
-
-// ── main ────────────────────────────────────────────────────────────────────
 
 function main() {
   const outDir = process.argv[2] || ".build/public";
