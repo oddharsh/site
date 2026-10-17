@@ -599,3 +599,18 @@ skips it.
     so until then every AVIF and AV2 score on the /pixel-peeper format axis
     was handicapped against JPEG XL's by the decode, not the codec.
     Checked by: `tools/contract-avif-scores-decode-exactly.test.mjs`.
+
+77. **WebKit blurs a window dragged to a fractional offset.** A dragged Luna
+    window keeps its `translate()` after the drag, and WebKit's
+    `PointerEvent.clientX` is a double, so a trackpad drag ended at offsets
+    like `translate(127.297px, 176.617px)`. Measured 2026-10-17 in Search, a
+    WKWebView browser, at 2x: on screen the whole window was resampled, and the
+    Laplacian sharpness of its body text fell from 23.3 to 16.3 (title bar 24.7
+    to 16.7). Whole and half-pixel offsets lost nothing, and dropping the
+    wallpaper's `translateZ(0)` changed nothing. WebKit's own snapshots
+    (`takeSnapshot`, Bun.WebView's `screenshot()`) paint the page crisp at the
+    same offset, so only a capture of the real window (`screencapture -l`)
+    shows it. `initDrag` in nav.js lands the window's corner on a device pixel
+    through `onGrid`. The icon and accessory drags commit `left`/`top` on
+    release, which WebKit snaps itself.
+    Checked by: `tools/contract-a-dragged-window-lands-on-a-device-pixel.test.mjs`.
