@@ -28,11 +28,16 @@ function luminance({ L, a, b }) {
   const bl = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
   return Math.max(0, 0.2126 * r + 0.7152 * g + 0.0722 * bl);
 }
-const onWhite = (oklch) => {
+const Y = (oklch) => {
   const parsed = parseOklch(oklch);
   assert.ok(parsed, `could not parse ${oklch}`);
-  return 1.05 / (luminance(parsed.lab) + 0.05);
+  return luminance(parsed.lab);
 };
+const contrast = (fg, bg) => {
+  const [a, b] = [Y(fg), Y(bg)];
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+};
+const onWhite = (oklch) => contrast(oklch, "oklch(100% 0 0)");
 
 const byName = new Map([...loadTokenValueMap(ROOT)].map(([value, name]) => [name, value]));
 const ratioOf = (name) => {
@@ -91,6 +96,76 @@ test("no text is coloured with a token under 4.5:1 unless it was reviewed", () =
   // A walk that stopped finding rules would pass over nothing.
   assert.ok(uses >= 300, `only ${uses} token text colours found; did cssSources change shape?`);
   assert.deepEqual([...new Set(found)], []);
+});
+
+// ── text on luna.css's tinted grounds ───────────────────────────────────────
+// White is the best case. --ink-faint is the lightest grey that holds 4.5:1 on
+// it, so it misses on everything else: 4.23:1 on --row-alt (the playlist's
+// even rows, where .np-duration, .np-sep and .np-empty sat), 3.93:1 on
+// --face-light (the status bar's dots), 4.42:1 on --paper (the address bar's
+// separators) and 4.05:1 in the car tooltip's caption. Those uses are --ink-dim
+// now, 4.71:1 on the darkest of them. Found by the second
+// specification.website audit, 2026-10-17.
+//
+// Each ground names the rule that paints it, so a refactor that moves the
+// ground fails here instead of leaving the scope measuring the wrong colour.
+// State rules (:hover, :focus, :active, [aria-selected]) paint their own
+// ground and are skipped.
+const LUNA = "src/styles/luna.css";
+const GROUNDS = [
+  { ground: "--row-alt", paints: ".np-list li:nth-child(even) { background: var(--row-alt); }", scope: /^\.np-(?:list|sep|artist|explicit|duration)\b/ },
+  { ground: "--face-light", paints: "background: var(--face-light); border-top: 1px solid var(--rule);", scope: /^:where\(\.xp-statusbar\b/ },
+  { ground: "--face", paints: ".axp-address{display:flex;align-items:center;gap:6px;padding:3px 6px;background:var(--face);", scope: /^\.axp-(?:address|addr-label)\b/ },
+  { ground: "--face", paints: ".axp-acc>.bd{padding:8px;background:var(--face)}", scope: /^\.(?:axp-acc>\.bd|clk)\b/ },
+  { ground: "--paper", paints: "gap:4px;padding:2px 6px;background:var(--paper);", scope: /^\.axp-(?:well|here|sep)\b/ },
+  { ground: "oklch(96% 0.004 240)", paints: "background: oklch(96% 0.004 240);", scope: /^\.xp-tooltip \.car-(?:cap|credit)\b/ },
+];
+const STATE = /:(?:hover|focus|focus-visible|active)\b|\[aria-selected/;
+
+// Every rule in the sheet whose selector list starts with the scope, and the
+// colour token it sets on text.
+function scopedColours(css, scope) {
+  const flat = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const out = [];
+  for (const [, selectors, body] of flat.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const list = selectors.split(",").map((x) => x.trim());
+    if (!list.some((x) => scope.test(x)) || list.some((x) => STATE.test(x))) continue;
+    for (const [, name] of body.matchAll(/(?<![-\w])color\s*:\s*var\((--[a-z0-9-]+)\)/g)) out.push({ selector: list.join(", "), name });
+  }
+  return out;
+}
+
+const groundValue = (ground) => (ground.startsWith("--") ? byName.get(ground) : ground);
+
+test("text on luna.css's tinted grounds holds 4.5:1 against that ground", () => {
+  const css = readFileSync(new URL(LUNA, ROOT), "utf8");
+  const flat = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const misses = [];
+  let measured = 0;
+  for (const { ground, paints, scope } of GROUNDS) {
+    assert.ok(flat.includes(paints), `${LUNA} no longer paints ${ground} with \`${paints}\`; find where it moved`);
+    const bg = groundValue(ground);
+    assert.ok(bg, `${ground} did not resolve`);
+    const uses = scopedColours(css, scope);
+    assert.ok(uses.length >= 1, `no text colour found under ${scope}; did the selectors change?`);
+    for (const { selector, name } of uses) {
+      const fg = byName.get(name);
+      if (!fg) continue;
+      measured++;
+      const ratio = contrast(fg, bg);
+      if (ratio < AA) misses.push(`${selector}: var(${name}) is ${ratio.toFixed(2)}:1 on ${ground}`);
+    }
+  }
+  assert.ok(measured >= 8, `only ${measured} text colours measured on tinted grounds`);
+  assert.deepEqual(misses, []);
+});
+
+test("the ground check fails on the old .np-duration (control)", () => {
+  const old = ".np-list li:nth-child(even) { background: var(--row-alt); }\n.np-duration {\n  font-family: var(--font-mono);\n  color: var(--ink-faint);\n}\n.np-list a:hover .np-title { color: var(--link-hover); }";
+  const uses = scopedColours(old, GROUNDS[0].scope);
+  assert.deepEqual(uses, [{ selector: ".np-duration", name: "--ink-faint" }], "hover rules are skipped, the duration is not");
+  assert.ok(contrast(byName.get("--ink-faint"), byName.get("--row-alt")) < AA);
+  assert.ok(contrast(byName.get("--ink-dim"), byName.get("--face")) >= AA, "--ink-dim, where these uses moved, holds on the darkest ground");
 });
 
 test("the contrast maths matches WCAG's own reference points (control)", () => {

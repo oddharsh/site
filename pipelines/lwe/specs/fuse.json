@@ -294,7 +294,7 @@
     {
       "who": "you",
       "time": "00:53",
-      "html": "<p>got it. thanks.</p><p>→ <a href=\"https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback\" rel=\"external\">the Consumer Rights Wiki writeup</a> &middot; <a href=\"https://source.android.com/docs/security/features/verifiedboot/verified-boot\" rel=\"external\">AOSP Verified Boot</a> &middot; <a href=\"/lwe/tee\">TEEs</a> &middot; <a href=\"/lwe/\">back to Learning With Errors</a></p>"
+      "html": "<p>got it. thanks.</p><p>→ <a href=\"https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback\" rel=\"external\">the Consumer Rights Wiki writeup</a> &middot; <a href=\"https://source.android.com/docs/security/features/verifiedboot/verified-boot\" rel=\"external\">AOSP Verified Boot</a> &middot; <a href=\"/lwe/tee\">TEEs</a> &middot; <a href=\"/lwe\">back to Learning With Errors</a></p>"
     },
     {
       "scrollnote": "end of first pass"

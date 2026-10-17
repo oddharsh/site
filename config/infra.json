@@ -184,6 +184,33 @@
       "setting": "shared_dictionary_mode",
       "value": "passthrough",
       "why": "the dcz shell, family and per-page dictionary tiers all rely on Cloudflare forwarding the dictionary headers and encodings, which the docs say it stops doing when this is disabled"
+    },
+    "ciphers": {
+      "$comment": [
+        "NOT DECLARED, and this block records why rather than leaving the gap",
+        "unexplained. The specification.website audit (2026-10-17) cites RFC 10015",
+        "(July 2026): a TLS 1.2 server MUST NOT select RSA key exchange. This zone",
+        "does. Measured 2026-10-17 with openssl 3 and -tls1_2: AES128-GCM-SHA256 and",
+        "AES256-SHA256 (static RSA, served on the 2048-bit GTS WR1 certificate) and",
+        "AES128-SHA, ECDHE-RSA-AES128-SHA and ECDHE-ECDSA-AES128-SHA (CBC) all",
+        "negotiate. TLS 1.0 and 1.1 are refused.",
+        "",
+        "The fix would be the zone setting `ciphers` set to ECDHE with AEAD only:",
+        "ECDHE-ECDSA-AES128-GCM-SHA256, ECDHE-ECDSA-AES256-GCM-SHA384,",
+        "ECDHE-ECDSA-CHACHA20-POLY1305 and the three ECDHE-RSA twins. Cloudflare",
+        "gates that setting behind Advanced Certificate Manager, a paid add-on on",
+        "every plan (docs, updated 2026-10-15), and this zone is on Free Website",
+        "(the zone API, 2026-10-17). So no declaration and no probe: a check that",
+        "can only go green by buying an add-on is a permanent red line.",
+        "",
+        "Two ways out, both the owner's call. Buy ACM and declare `value` below,",
+        "with an edge probe that AES128-GCM-SHA256 fails to negotiate. Or raise",
+        "`min_tls_version` to 1.3, which IS writable on Free and removes static RSA",
+        "and CBC by construction (TLS 1.3 has neither), at the cost of every",
+        "TLS-1.2-only client and crawler."
+      ],
+      "setting": "ciphers",
+      "status": "blocked-on-plan"
     }
   },
 
@@ -268,6 +295,25 @@
       "expect": ["v=BIMI1; l=https://aadhar.sh/bimi.svg"],
       "why": "BIMI logo for inbox display. This record is the ONLY consumer of public/bimi.svg anywhere in the world, which is why that file reads as detritus to every reference sweep in this tree. The `consumer` field below is what closes the loop: the checker asserts the file exists, so deleting it now goes red here instead of silently breaking mail.",
       "consumer": "public/bimi.svg"
+    },
+    {
+      "name": "aadhar.sh",
+      "type": "CAA",
+      "match": "contains",
+      "expect": [
+        "0 issue \"letsencrypt.org\"",
+        "0 issue \"pki.goog; cansignhttpexchanges=yes\"",
+        "0 issue \"sectigo.com\"",
+        "0 issue \"ssl.com\"",
+        "0 issuewild \"letsencrypt.org\"",
+        "0 issuewild \"pki.goog; cansignhttpexchanges=yes\"",
+        "0 issuewild \"sectigo.com\"",
+        "0 issuewild \"ssl.com\"",
+        "0 iodef \"mailto:security@aadhar.sh\""
+      ],
+      "why": "Names the CAs that may issue for this zone, and where a CA reports a refused request. Absent until 2026-10-17 (the specification.website audit), which let any public CA issue for aadhar.sh. The owner created these nine that day: issue and issuewild for the four CAs Cloudflare's certificate-authorities reference lists for Universal SSL and backup certificates, in its exact strings, plus iodef. Google Trust Services issues today (WE1 for the ECDSA certificate, WR1 for the RSA one, both seen on the wire 2026-10-17). Sectigo only signs backup certificates, and a set that refuses it fails the day Cloudflare swaps one in.",
+      "gotcha": "Matched with `contains`, not `exact`, because Cloudflare owns part of this RRset. Once the zone held any CAA it added four records nobody wrote, hidden from the dashboard and the DNS API: issue and issuewild for comodoca.com and for \"digicert.com; cansignhttpexchanges=yes\". Both authoritative nameservers served all 13 on 2026-10-17, and that is not the set Cloudflare's CAA page says it adds. Exact-matching the 9 fails against 13; exact-matching all 13 would have infra:apply POST Cloudflare's own records. So this asserts ours are present and leaves Cloudflare's to Cloudflare, and infra:apply leaves CAA alone, as it does every `contains` record.",
+      "pairs_with": "public/.well-known/security.txt, whose Contact is the same mailbox the iodef reports to."
     }
   ],
 
@@ -620,6 +666,19 @@
         "request": { "accept": "text/markdown" },
         "assert": { "headerContains": { "content-type": "text/html" } },
         "why": "Watches what markdown-for-agents-off only infers. A /writing post has no Markdown twin on purpose (its .txt is the agent representation), so the worker answers `Accept: text/markdown` there with the HTML page. With the zone feature on, the edge converts that HTML and the response arrives as text/markdown, so content-type alone tells the two apart, and it reads the conversion directly instead of a header Cloudflare chooses to attach. Added 2026-10-11, after Cloudflare's 2026-10-09 release moved conversion in-process and stopped sending x-markdown-tokens, x-original-tokens and Content-Length on converted responses: the homepage check leans on content-signal still being injected, and that release promises nothing about it. If posts ever gain twins this fails by design; point it at another page without one rather than deleting it."
+      },
+      {
+        "id": "security-txt-from-repo",
+        "target": "security-txt",
+        "assert": {
+          "headerEquals": {
+            "x-frame-options": "DENY"
+          },
+          "headerContains": {
+            "content-type": "text/plain"
+          }
+        },
+        "why": "/.well-known/security.txt is public/.well-known/security.txt since 2026-10-17, so its Expires and Policy are in git and a contract test (contract-security-txt-expires-60-days-out) fails 60 days before the date lapses. Until then Cloudflare's dashboard security.txt (Security Center) answered at the edge, ahead of the Worker, with an Expires of 2027-05-19 that nothing in this tree could see. That copy still answers until it is deleted, and it would keep shadowing the repo file. x-frame-options is the discriminator: the Worker sets DENY on everything it serves, and the edge feature's response carried no such header (measured 2026-10-17: content-type, HSTS and nosniff only). Same shape as app-owns-security-headers: a file the repo ships is not a file the visitor gets."
       }
     ]
   },

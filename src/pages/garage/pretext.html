@@ -333,11 +333,24 @@ li { margin: 3px 0; }
     if (cur) lines.push(cur);
     return lines.map(t => ({ text: t, over: mcx.measureText(t).width > maxW }));
   }
+  // Each script run carries its language, so a screen reader switches voice for
+  // the Chinese and the Arabic, and <bdi> keeps the Arabic's right-to-left
+  // order from reordering the English around it. Runs only, after layout, so
+  // the measured lines are the same ones either way.
+  const RUNS = /([\p{Script=Han}\u3000-\u303f\uff00-\uffef]+)|(\p{Script=Arabic}+(?:\s+\p{Script=Arabic}+)*)/gu;
+  function marked(t) {
+    let out = "", at = 0;
+    for (const m of t.matchAll(RUNS)) {
+      out += esc(t.slice(at, m.index)) + (m[1] ? `<span lang="zh-Hans">${esc(m[1])}</span>` : `<bdi lang="ar">${esc(m[2])}</bdi>`);
+      at = m.index + m[0].length;
+    }
+    return out + esc(t.slice(at));
+  }
   const naiveEl = document.getElementById("i18n-naive"), ptEl = document.getElementById("i18n-pretext");
   if (naiveEl && ptEl) {
-    naiveEl.innerHTML = naiveLines(I18N, W18).map(l => `<div class="ln${l.over ? " over" : ""}">${esc(l.text)}</div>`).join("");
+    naiveEl.innerHTML = naiveLines(I18N, W18).map(l => `<div class="ln${l.over ? " over" : ""}">${marked(l.text)}</div>`).join("");
     const lr = layoutWithLines(prepareWithSegments(I18N, FONT), W18, LINE_H);
-    ptEl.innerHTML = lr.lines.map(l => `<div class="ln">${esc(l.text)}</div>`).join("");
+    ptEl.innerHTML = lr.lines.map(l => `<div class="ln">${marked(l.text)}</div>`).join("");
   }
 })();
 </script>

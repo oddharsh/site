@@ -142,6 +142,11 @@ export default {
       BOT_LEDGER: dataset("BOT_LEDGER"),
       SPECULATION: dataset("SPECULATION"),
       BROWSER: tripwire("BROWSER"),
+      // Present, so the serendipity tick's tag gate opens and it dispatches;
+      // a tripwire, so a cron that calls Workers AI itself fails loudly. The
+      // tag pass runs in the invocation it dispatches to, whose env is the
+      // harness's and has no AI, which is what the serendipity check reads.
+      AI: tripwire("AI"),
     }, ctx);
   },
 };
@@ -292,6 +297,14 @@ const JOB_EVIDENCE = {
       assert.ok(summary, "the serendipity sweep never logged its summary");
       assert.equal(summary.events[0]?.label, "cron-test", "the sweep did not read the seeded cookie set");
       assert.ok(summary.events[0]?.error, "the stub answers HTML, so the event sync should report an error");
+      // The tag pass is a self-dispatch (gotcha 64), and /serendipity* is a ROUTE, which a
+      // same-zone fetch() cannot reach: production sent all 55 tag POSTs from
+      // 2026-10-02 to 10-14 to the absent origin and logged 522 for each.
+      // Only a loopback through ctx.exports reaches the handler. "no AI
+      // binding" comes from tagEvents in the callee, whose harness env has no
+      // AI, so reading it proves the POST crossed into a fresh invocation. A
+      // global fetch would land on the stub, which the outbound loop refuses.
+      assert.deepEqual(summary.tag, { skipped: "no AI binding" }, "the tag dispatch never reached the tag handler");
     },
     explains: (o) => o.host === LUMA_HOST,
   },
@@ -345,7 +358,9 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
     // aadhar-counter boots beside the site: COUNTER binds it since step 3 of
     // "Moving Counter out", and workerd refuses a binding to an undefined service.
     workers: [
-      { configPath: join(dir, "wrangler.jsonc"), secrets: { RN_SIGNING_KEY_JWK: JSON.stringify(jwk) } },
+      // SYNC_SECRET gates the serendipity self-dispatches on both ends: the
+      // cron only sends one with it set, and the handler checks the header.
+      { configPath: join(dir, "wrangler.jsonc"), secrets: { RN_SIGNING_KEY_JWK: JSON.stringify(jwk), SYNC_SECRET: "cron-test-sync" } },
       { configPath: at("counter/wrangler.jsonc") },
     ],
   });

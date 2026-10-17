@@ -1396,15 +1396,15 @@ phase("1f updates + restore");
 // 1f) /updates and /restore as deploy-time documents.
 //
 // The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
-// inserts the checkpoint row moments before `bun run deploy:direct`, and nothing else
-// writes that table. So baking them WHOLE costs no freshness at all — unlike
+// stages each entry in the release PR, so it ships in the same build. So baking
+// them WHOLE costs no freshness at all, unlike
 // /reading (6h Curius refresh) or /around (daily crawl), whose feeds move on
 // their own, so only their shells are baked and the feed arrives as an island
 // (step 5b, lib/island.ts).
 //
-// D1 remains the source of truth. checkpoints.json is its committed projection,
-// written by bump-version.sh right after a successful insert, and
-// `bun run checkpoints:check` re-reads D1 and fails on drift.
+// D1 is the record of what shipped; checkpoints.json is what this build serves.
+// `bun run checkpoints:record` copies released entries into D1 from a workstation,
+// and `bun run checkpoints:check` fails on drift (tools/check-checkpoints.ts).
 {
   const nonce = `?build=${BUILD_NONCE}`;
   const updates = await import(pathToFileURL(resolve(OUT, "src/worker/updates.ts")).href + nonce);

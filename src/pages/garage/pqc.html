@@ -74,7 +74,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 
 <h2>Three tiers of signature, and only one is mine</h2>
 <table class="pqc-tiers">
-  <tr><th>Surface</th><th>Algorithm</th><th>Whose problem</th></tr>
+  <thead><tr><th scope="col">Surface</th><th scope="col">Algorithm</th><th scope="col">Whose problem</th></tr></thead>
   <tr><td>TLS to visitors</td><td><a class="term" data-t="ecdsa" href="https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm" title="A widely used digital signature scheme built on elliptic curves. P-256 is a standard curve commonly paired with it." rel="external">ECDSA P-256</a></td><td>The CA and browser ecosystem</td></tr>
   <tr><td>DNSSEC on the zone</td><td>ECDSA P-256 SHA-256</td><td>The registry, plus DNS response sizes</td></tr>
   <tr><td>Booking links, cover URLs</td><td><a class="term" data-t="hmac" href="https://en.wikipedia.org/wiki/HMAC" title="A way to tag a message using a shared secret key and a hash function, so anyone holding the key can check the message wasn't changed." rel="external">HMAC-SHA256</a></td><td>Already fine. Symmetric, so <a class="term" data-t="grovers-algorithm" href="https://en.wikipedia.org/wiki/Grover%27s_algorithm" title="A quantum search method that speeds up guessing a secret key, roughly halving its strength: a 256-bit key gives about 128 bits of security." rel="external">Grover</a> halves it to 128-bit</td></tr>
@@ -135,7 +135,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <p>Neither of those things went wrong. No server rejected the headers, and no verifier choked on the extra label. The prediction above was accurate, but it was aimed in the wrong direction, because it priced the cost to <em>other people</em> and treated the cost to this site as a settled line item: 8.58ms, listed once, in a table.</p>
 <p>The number that mattered was 8.58ms <em>multiplied by fan-out, against a per-invocation budget</em>. This site runs on the Workers free plan, which allows <strong>10ms of CPU per request</strong>. So one signature spent most of a request's entire budget, and every surface that signs more than once had already blown it:</p>
 <table class="pqc-tiers">
-  <tr><th>Surface</th><th>Signatures per request</th><th>ML-DSA CPU</th></tr>
+  <thead><tr><th scope="col">Surface</th><th scope="col">Signatures per request</th><th scope="col">ML-DSA CPU</th></tr></thead>
   <tr><td>A single crawl of one origin</td><td>1</td><td>~8.5ms of a 10ms budget</td></tr>
   <tr class="mine"><td>The <a href="/rn">/rn</a> playlist scrape</td><td>21, one per track</td><td><strong>~180ms</strong></td></tr>
   <tr class="mine"><td><a href="/lens">/lens</a> discovery</td><td>28 probes</td><td><strong>~240ms</strong></td></tr>
@@ -148,7 +148,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <h2 id="native">Then the runtime caught up</h2>
 <p>That last paragraph made a prediction, and on 2026-10-01 I got to check it. Cloudflare has put <a class="term" data-t="ml-kem" href="https://csrc.nist.gov/pubs/fips/203/final" title="A post-quantum standard from NIST (FIPS 203) for two parties to set up a shared secret key, built on lattice math." rel="external">ML-KEM</a> and ML-DSA into WebCrypto on Workers. They run on BoringSSL, and each Worker opts in with the <code>webcrypto_modern_algorithms</code> compatibility flag (<a href="https://blog.cloudflare.com/workers-ml-kem-ml-dsa-support/" target="_blank" rel="noopener">the announcement</a>). This site already pins a <code>workerd</code> build from 2026-09-26 that carries both, so I measured it on the same M3 Max that drew the JavaScript bars.</p>
 <table class="pqc-tiers">
-  <tr><th>Same laptop, same signature base</th><th>JavaScript</th><th>workerd, native</th></tr>
+  <thead><tr><th scope="col">Same laptop, same signature base</th><th scope="col">JavaScript</th><th scope="col">workerd, native</th></tr></thead>
   <tr><td>Sign once with ML-DSA-44</td><td>8.58ms</td><td><strong>0.12ms</strong></td></tr>
   <tr><td>Expand the 32-byte seed into a signing key</td><td>~1.4ms</td><td>0.03ms</td></tr>
   <tr><td>Signature in the header</td><td>3,228 bytes</td><td>3,228 bytes</td></tr>
@@ -156,7 +156,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <p>Signing got 72 times faster, and the header didn't lose a single byte. That's the asymmetry this page bet on in July. Natively, one ML-DSA-44 signature costs about as much as 10 Ed25519 signatures (11.3&micro;s each on the same rig), where the JavaScript version cost as much as 170.</p>
 <p>Here is the table that retired <code>sig2</code>, repriced:</p>
 <table class="pqc-tiers">
-  <tr><th>Surface</th><th>Signatures per request</th><th>JavaScript</th><th>Native, on the laptop</th></tr>
+  <thead><tr><th scope="col">Surface</th><th scope="col">Signatures per request</th><th scope="col">JavaScript</th><th scope="col">Native, on the laptop</th></tr></thead>
   <tr><td>A single crawl of one origin</td><td>1</td><td>~8.5ms</td><td>~0.12ms</td></tr>
   <tr class="mine"><td>The <a href="/rn">/rn</a> playlist scrape</td><td>21</td><td>~180ms</td><td><strong>~2.5ms</strong></td></tr>
   <tr class="mine"><td><a href="/lens">/lens</a> discovery</td><td>28</td><td>~240ms</td><td><strong>~3.4ms</strong></td></tr>
@@ -174,7 +174,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <h3>What production said</h3>
 <p>Those were laptop numbers, and production bills CPU on different hardware, under a clamp that tightens with load. That is exactly where this page went wrong the first time. So before <code>sig2</code> came back, I deployed it at 0% beside the live version and pinned six <code>/lens</code> scans to it, each against a fresh origin so no cache could skip the signing.</p>
 <table class="pqc-tiers">
-  <tr><th>Version</th><th>/lens scan CPU, median of 6</th></tr>
+  <thead><tr><th scope="col">Version</th><th scope="col">/lens scan CPU, median of 6</th></tr></thead>
   <tr><td>Live, sig1 only</td><td>22ms</td></tr>
   <tr class="mine"><td>sig2 on every request</td><td><strong>32ms</strong></td></tr>
   <tr><td>sig2 on primary fetches only</td><td>22ms (live read 20ms in the same run)</td></tr>

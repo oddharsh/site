@@ -106,6 +106,15 @@ export const EXACT_ROUTES = [
   { path: "/garage/dyno", claim: ["/garage/*"] },
   { path: DYNO_PULLS_URL, claim: ["/garage/*"] },
   { path: "/garage/dyno.json", claim: ["/garage/*"] },
+  // The slashed section and module roots, 301 to the slashless canonical. Exact
+  // routes beat the prefix routes below, which would otherwise answer these:
+  // /garage/ and /lwe/ got the asset layer's drop-trailing-slash, which
+  // redirects with a 307 (measured 2026-10-17), and /coffee/ and /serendipity/
+  // got their module's own root as a duplicate 200.
+  { path: "/garage/", claim: ["/garage/*"] },
+  { path: "/lwe/", claim: ["/lwe/*"] },
+  { path: "/coffee/", claim: ["/coffee/*"] },
+  { path: "/serendipity/", claim: ["/serendipity/*"] },
   { path: "/perf", claim: ["/perf*"] },
   { path: "/perf.json", claim: ["/perf*"] },
 

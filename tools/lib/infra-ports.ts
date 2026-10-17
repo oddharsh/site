@@ -44,7 +44,7 @@ export async function attempt<T>(read: () => Promise<T>): Promise<Read<T>> {
 
 // ------------------------------------------------------------- port: DoH ----
 
-const RRTYPE = { A: 1, NS: 2, CNAME: 5, MX: 15, TXT: 16, AAAA: 28, DS: 43, SVCB: 64, HTTPS: 65 };
+const RRTYPE = { A: 1, NS: 2, CNAME: 5, MX: 15, TXT: 16, AAAA: 28, DS: 43, SVCB: 64, HTTPS: 65, CAA: 257 };
 
 // Two independent resolvers. Google renders SVCB in presentation format;
 // Cloudflare returns the RFC 3597 generic form, which decodeSvcb() normalizes
@@ -221,6 +221,7 @@ export async function readEdge(edge, port: EdgePort): Promise<Map<string, EdgeOb
     // exists on every deploy and cannot go missing the way a per-page twin could.
     if (target === "markdown-twin") return `${origin}/index.md`;
     if (target === "writing-post") return (post ??= await writingPostUrl(fetchEdge, origin));
+    if (target === "security-txt") return `${origin}/.well-known/security.txt`;
     throw new Error(`unknown edge target ${JSON.stringify(target)}`);
   };
 
