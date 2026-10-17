@@ -1076,7 +1076,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
    the mechanic and none of the reason. First line is the instruction, the <span>
    is the payoff, deliberately quieter. */
 .lx-empty { color:var(--ink-quiet); font-size:var(--text-ui); padding:18px 14px; text-align:center; text-wrap:pretty; }
-.lx-empty span { display:block; max-width:34ch; margin:5px auto 0; font-size:var(--text-xs); line-height:1.5; color:var(--grey-60); }
+.lx-empty span { display:block; max-width:34ch; margin:5px auto 0; font-size:var(--text-xs); line-height:1.5; color:var(--ink-faint); }
 .lx-spin { color:var(--link); font-size:var(--text-sm); padding:18px 6px; text-align:center; }
 .lx-idle-lens { max-width:620px; margin:22px auto; padding:16px 18px; border:1px solid oklch(78% 0.04 250); border-radius:4px; background:linear-gradient(180deg,#fff,var(--row-alt)); color:var(--slate-30); }
 .lx-idle-kicker { color:oklch(46% 0.13 252); font:var(--text-xs) var(--font-ui); text-transform:uppercase; letter-spacing:.06em; }
@@ -1276,7 +1276,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-kv td:last-child { color:var(--grey-28); word-break:break-word; }
 .lx-tags { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 0; }
 .lx-tag { font-family:var(--font-mono); font-size:var(--text-2xs); color:oklch(33% 0.06 255); background:oklch(95% 0.02 255); border:1px solid oklch(80% 0.03 255); border-radius:3px; padding:1px 6px; }
-.lx-none { font-size:var(--text-xs); color:var(--grey-60); padding:2px 0; }
+.lx-none { font-size:var(--text-xs); color:var(--ink-faint); padding:2px 0; }
 .lx-ogcard { display:flex; gap:9px; border:1px solid var(--slate-85); border-radius:4px; padding:8px; background:oklch(99% 0.004 250); }
 .lx-ogcard img { width:96px; height:96px; object-fit:cover; border-radius:3px; flex:0 0 auto; background:oklch(92% 0 0); }
 .lx-ogcard .t { font-weight:bold; font-size:var(--text-sm); color:oklch(28% 0.04 255); }
@@ -1330,7 +1330,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-readiness-cat > div { display:flex; justify-content:space-between; gap:7px; font-size:var(--text-micro); color:oklch(37% 0.04 255); }
 .lx-readiness-cat > div span { font:var(--text-2xs) var(--font-mono); color:oklch(55% 0 0); white-space:nowrap; }
 .lx-readiness-cat strong { display:block; margin-top:2px; font:bold var(--text-h1) var(--font-mono); color:oklch(43% 0.13 150); }
-.lx-readiness-cat.is-skipped strong { color:var(--grey-60); }
+.lx-readiness-cat.is-skipped strong { color:var(--ink-faint); }
 .lx-projection { margin:0 0 12px; padding:6px 8px; border-left:3px solid oklch(60% 0.15 50); background:oklch(97% 0.035 75); color:oklch(42% 0.06 50); font-size:var(--text-micro); }
 .lx-projection span { color:var(--ink-dim); }
 .lx-readiness-checks { display:grid; gap:5px; margin-top:7px; }
@@ -1352,7 +1352,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-next-actions b { color:oklch(34% 0.07 255); }
 .lx-next-actions span { color:var(--ink-quiet); }
 .lx-need-skip div { grid-template-columns:1fr; gap:1px; border-left-color:var(--grey-60); }
-.lx-readiness-cat strong span { font:var(--text-2xs) var(--font-mono); color:var(--grey-60); }
+.lx-readiness-cat strong span { font:var(--text-2xs) var(--font-mono); color:var(--ink-faint); }
 .lx-bot-matrix { width:100%; border-collapse:collapse; font-size:var(--text-micro); }
 .lx-bot-matrix td, .lx-bot-matrix th { border-bottom:1px solid var(--surface-desktop); padding:4px 7px 4px 0; text-align:left; vertical-align:top; }
 .lx-bot-matrix th { font-size:var(--text-3xs); font-weight:normal; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.04em; }

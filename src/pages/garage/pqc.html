@@ -52,13 +52,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/pqc</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>Post-quantum signatures, priced</h1>
 <p class="garage-intro">Half of this site's <a class="term" data-t="tls-handshake" href="https://www.rfc-editor.org/rfc/rfc8446.html" title="The opening exchange of a secure web connection, where browser and server agree on encryption keys and the server proves its identity." rel="external">TLS handshake</a> is already <a class="term" data-t="post-quantum-cryptography" href="https://en.wikipedia.org/wiki/Post-quantum_cryptography" title="Cryptography designed to stay secure against large quantum computers, which could break the public-key schemes in common use today." rel="external">post-quantum</a> and I did nothing to make that happen. The other half, authentication, moves on a completely different schedule, because signatures live in certificates and registries that a personal site does not control. So I went looking for the signature I <em>do</em> control, and measured what it would cost to migrate it.</p>
 
@@ -185,7 +185,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <p>In July this page priced three costs: CPU, bundle size, and header bytes. Two belonged to the runtime, and the runtime has now paid them. The 3,228 bytes belong to FIPS 204, so they're the only number left to decide on. That's the rule I'd hand anyone timing a post-quantum migration: decide on the sizes, because the speeds come down on someone else's schedule.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-07-27</span></div>
 </div>
 

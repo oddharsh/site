@@ -574,7 +574,20 @@ skips it.
     frequency. A new reader of exact source text belongs in the ignore list.
     Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
 
-75. **A walk that names a tree which still exists passes on zero files.**
+75. **A playwright-core bump strands the canary's browser image.** The
+    browsers leg in `canary.yml` runs in `mcr.microsoft.com/playwright`,
+    pinned by tag and digest, and its pull step refuses an image whose
+    version differs from the installed playwright-core. Dependabot moves the
+    npm pin and never the image. #1364 moved playwright-core to 1.64.1 with
+    the image left on 1.63.0, and the leg failed at the pull step, before any
+    probe, on every nightly from 2026-10-15 to 2026-10-17. Move the tag and
+    its digest in the same PR; `curl -sI -H 'Accept:
+    application/vnd.oci.image.index.v1+json'
+    https://mcr.microsoft.com/v2/playwright/manifests/v<version>-noble`
+    prints the index digest as `docker-content-digest`.
+    Checked by: `tools/contract-the-browser-image-matches-playwright-core.test.mjs`.
+
+76. **A walk that names a tree which still exists passes on zero files.**
     Invariant 8c in `tools/build.ts` walked `public/garage` and `public/lwe`
     from the 2026-08-18 split (#457) until 2026-10-17. Both directories exist
     (they hold `av2/`, `enc/` and `lean/` assets), so `readdir` succeeded,

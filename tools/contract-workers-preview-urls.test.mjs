@@ -209,6 +209,12 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
   const own = new Response("{}", { headers: { "content-type": "application/json", "x-robots-tag": "noindex" } });
   assert.equal(withSecurityHeaders(own, "/whoareyou.json", { noindex: true }).headers.get("x-robots-tag"), "noindex");
 
+  // ...but one that opts IN to indexing is overridden. /lens/census answers
+  // `x-robots-tag: index` in production, and a preview copy carrying that is a
+  // duplicate the canonical host would compete with.
+  const optsIn = new Response("<!doctype html><title>x</title>", { headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": "index" } });
+  assert.equal(withSecurityHeaders(optsIn, "/lens/census", { noindex: true }).headers.get("x-robots-tag"), "noindex, nofollow");
+
   // Null-body statuses. The noindex path REBUILDS the response, and the Response
   // constructor throws if a null-body status is handed a body — so a 304 from
   // notModifiedIfFresh or a 204 from the /hit beacon is exactly the shape that

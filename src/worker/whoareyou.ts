@@ -542,7 +542,7 @@ footer {
   border-top: 1px solid var(--rule);
 }
 footer .signature { font-style: italic; margin-top: 4px; }
-footer .signature small { color: oklch(56.93% 0 0); }
+footer .signature small { color: var(--ink-faint); }
 
 /* the island's failure note, shown only if the values request failed */
 .wy-fail { display: none; color: var(--ink-faint); font-size: var(--text-xs); }

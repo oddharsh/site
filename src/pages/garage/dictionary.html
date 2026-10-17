@@ -43,13 +43,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/dictionary</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>The dictionary the runtime dropped</h1>
 <p class="garage-intro">Most pages on this site reach a returning <a class="term" data-t="chromium" href="https://en.wikipedia.org/wiki/Chromium_(web_browser)" title="The open-source browser project that Chrome, Edge, Brave and Opera are built on." rel="external">Chromium</a> visitor as a <a class="term" data-t="delta-encoding" href="https://en.wikipedia.org/wiki/Delta_encoding" title="Storing or sending only the differences between two versions of data, instead of the whole new version." rel="external">delta</a>. The build compresses each one against a 64 KB <a class="term" data-t="compression-dictionaries" href="https://www.rfc-editor.org/rfc/rfc9842.html" title="A scheme where the browser keeps an earlier copy of a file and the server sends only a compressed difference against it." rel="external">dictionary</a> made from the site's own markup, and a browser that already holds that dictionary downloads only what differs. Measured against production on 2026-09-25, 51 of the 66 pages here answer that way, and 2 more join them with the release rolling out as I write this.</p>
 <p>The other 13 answer as plain <a class="term" data-t="brotli" href="https://en.wikipedia.org/wiki/Brotli" title="A compression algorithm from Google built for the web. It ships with a built-in dictionary of common web text, which helps on small files." rel="external">brotli</a>. They're the pages the <a class="term" data-t="cloudflare-workers" href="https://developers.cloudflare.com/workers/" title="Code that runs on Cloudflare's servers around the world and answers each request directly, with no server of the site's own." rel="external">Worker</a> writes when you ask for them, like <a href="/ledger">/ledger</a>, <a href="/around">/around</a> and <a href="/finger">/finger</a>, so no build ever sees their bytes.</p>
@@ -129,7 +129,7 @@
 <p>What changes the arithmetic is the dictionary itself. A returning visitor already paid for it, 14,754 bytes the first time, and today it earns nothing on the 13 pages the Worker writes. The fix lets one download work on every page the site serves, whoever wrote it.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">watching · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>watching</span><span>2026-09-25</span></div>
 </div>
 

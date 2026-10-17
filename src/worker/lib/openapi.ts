@@ -28,7 +28,7 @@ export const SCHEMAS: Record<string, Schema> = {
   Error: obj({
     ok: bool("Always false on an error, where the endpoint uses an ok flag."),
     error: str("A sentence describing what went wrong, for a person or an agent to read."),
-    code: str("A stable machine token, where the endpoint sets one: not_found, method_not_allowed, unsupported_api_version, rate_limited, storage_unavailable."),
+    code: str("A stable machine token, where the endpoint sets one: not_found, method_not_allowed, unsupported_api_version, rate_limited, storage_unavailable, internal_error."),
     status: int("The HTTP status, repeated in the body."),
     hint: str("What to try next."),
     suggestions: arr(str(undefined, { format: "uri" }), "Absolute URLs of the closest real pages, on a 404."),

@@ -75,13 +75,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/av2</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>AV2, before anyone can see it</h1>
 <p class="garage-intro"><a class="term" data-t="av2" href="https://en.wikipedia.org/wiki/AV2" title="The video codec that follows AV1, from the Alliance for Open Media. Like AV1, it can also compress single still images." rel="external">AV2</a> is the successor to <a class="term" data-t="av1" href="https://en.wikipedia.org/wiki/AV1" title="A royalty-free video codec from the Alliance for Open Media. AVIF images are single AV1 frames stored in an image file." rel="external">AV1</a>, the codec inside every <a class="term" data-t="avif" href="https://en.wikipedia.org/wiki/AVIF" title="An image format that stores a picture compressed with the AV1 video codec. Every current major browser can display it." rel="external">AVIF</a> image, and its reference encoder <a href="https://github.com/AOMediaCodec/avm">shipped 1.0.0 in May</a>. AOM's own <a href="https://arxiv.org/abs/2605.15800">all-intra report</a> puts it <data value="17.82% (PSNR-Y) to 23.58% (VMAF)">18 to 24%</data> ahead of AV1 on stills. That number comes from video test sequences scored with <a class="term" data-t="psnr" href="https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio" title="Peak signal-to-noise ratio: a simple score, in decibels, of how far a compressed image's pixels drift from the original. Higher means closer." rel="external">PSNR</a>, <a class="term" data-t="ssim" href="https://en.wikipedia.org/wiki/Structural_similarity_index_measure" title="Structural similarity: a score up to 1 that compares local brightness, contrast and structure between two images. Closer to 1 means more alike." rel="external">SSIM</a> and <a class="term" data-t="vmaf" href="https://en.wikipedia.org/wiki/Video_Multimethod_Assessment_Fusion" title="Netflix's video quality score, which combines several measurements into one 0 to 100 number that predicts how viewers would rate the picture." rel="external">VMAF</a>. I wanted the answer for photographs, scored the way this site already scores its own images, at the exact byte budgets it ships. No browser can decode an AV2 image yet, so the figures below are decodes I made offline, and one section brings its own decoder to draw AV2 in your browser anyway.</p>
 
@@ -274,7 +274,7 @@ bun run av2:wasm</code></pre>
 <p>The result is small, and it cuts both ways. It covers 38 tiles, sparser than the tier they sample, and 16 crops from one camera. It runs the reference encoder rather than a production one, in a container libavif itself labels experimental, and scores with two metrics that both come from the JPEG XL project. A production AV2 encoder is the likeliest thing to move the dense end, the way SVT-AV1 and later libaom releases did for AV1, and a still-image tune is the first place to look. The thin end is already a win, and it covers a third of this site's thumbnails. To ship that third, AV2 waits on a browser that decodes it and a name that browser can decline. When either arrives, both probes re-run in an afternoon.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">watching · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>watching</span><span>2026-09-27</span></div>
 </div>
 

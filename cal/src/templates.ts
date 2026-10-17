@@ -435,14 +435,14 @@ ${head}<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--fo
       ><a class="close" href="${esc(home)}" title="close" aria-label="close, up to ${esc(env.HOST_NAME)}"></a
     ></span>
   </div>
-  <div class="content">
+  <main id="main" class="content">
     ${body}
     <div class="xp-statusbar">
       <span>← <a href="${esc(home)}">${esc(home.replace(/^https?:\/\//, ""))}</a></span>
       <span>page idea borrowed (with thanks) from <a href="https://jry.io/bagel" rel="external noopener">Jacob Young</a></span>
       <span>cloudflare workers · ${esc(env.HOST_TIMEZONE || "UTC").replace(/_/g, " ")}</span>
     </div>
-  </div>
+  </main>
 </div>${onShell ? `${DESKTOP_CHROME}
 <script src="/nav.js" defer></script>` : ""}
 </body>

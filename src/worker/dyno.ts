@@ -309,7 +309,7 @@ th.num,td.num{text-align:right}
 td{padding:4px 6px;border-bottom:1px solid var(--mist-96);color:var(--slate-38)}
 .mono{font-family:var(--font-mono);font-size:var(--text-2xs)}
 td.sha{color:#7a4eb0}
-td.src{font-size:var(--text-3xs);color:var(--slate-67)}
+td.src{font-size:var(--text-3xs);color:var(--slate-55)}
 .foot{font-size:var(--text-micro);color:var(--slate-55);border-top:1px solid var(--surface-desktop);padding-top:9px;margin-top:13px;line-height:1.55}
 /* the island's failure note, shown only if the pulls request failed */
 .dy-fail{display:none;font-size:var(--text-micro);color:var(--slate-55);margin:0 0 13px}
