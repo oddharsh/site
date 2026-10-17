@@ -9,12 +9,14 @@ import { decodeEntities } from "./html-to-md.ts";
 
 // Read the object's own name out of its h1, minus the status pill the garage
 // marks each experiment with: the pill is state, not name, and sweeping it up
-// published "Thumbnail encoding study shipped" as a breadcrumb.
+// published "Thumbnail encoding study shipped" as a breadcrumb. The garage
+// spells the pill `badge`; matching only `status` let it through on four
+// pages until 2026-10-17. Same class pair as article-ld.ts's h1Of.
 export function objectNameOf(html: string): string {
   const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
   if (!h1) return "";
   return decodeEntities(h1[1]
-    .replace(/<span\b[^>]*\bclass="[^"]*\bstatus\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "")
+    .replace(/<span\b[^>]*\bclass="[^"]*\b(?:badge|status)\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "")
     .replace(/<[^>]+>/g, " "))
     .replace(/\s+/g, " ")
     .trim();

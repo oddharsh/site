@@ -32,8 +32,11 @@ test("the name is the heading's text, with each reference decoded once", () => {
   assert.equal(objectNameOf("<h1>It&#39;s &#x2014; Latin&nbsp;1</h1>"), "It's \u2014 Latin 1");
   // Decoding comes after the tags go, so an escaped tag is text, not markup.
   assert.equal(objectNameOf("<h1>The &lt;h1&gt; tag</h1>"), "The <h1> tag");
-  // The status pill is state, not name.
+  // The pill is state, not name. The garage spells it `badge`; until
+  // 2026-10-17 only `status` was stripped, so four pages printed their pill.
   assert.equal(objectNameOf('<h1>Thumbnail encoding study <span class="status">shipped</span></h1>'), "Thumbnail encoding study");
+  assert.equal(objectNameOf('<h1>Thumbnail encoding study <span class="badge shipped">shipped</span></h1>'), "Thumbnail encoding study");
+  assert.equal(objectNameOf('<h1>Chunking &amp; content-addressing <span class="badge review">in review</span></h1>'), "Chunking & content-addressing");
 });
 
 test("the address bar and the task pane escape the name once, and still escape it", () => {
@@ -66,5 +69,26 @@ test("no staged page's Explorer chrome carries a double escape", { skip: needsBu
   // 1g2 dresses 30+ pages or the build stops, so fewer here means CHROME has
   // stopped matching the staged markup and this test is checking nothing.
   assert.ok(checked >= 30, `found the Explorer chrome on ${checked} staged pages; expected 30+`);
+  assert.deepEqual(offenders, []);
+});
+
+test("no staged page's address bar carries its heading's pill", { skip: needsBuild }, async () => {
+  const pages = (await readdir(BUILT, { recursive: true }))
+    .filter((f) => f.endsWith(".html") && !f.endsWith(".src.html"));
+  let pilled = 0;
+  const offenders = [];
+  for (const rel of pages) {
+    const page = await readFile(new URL(rel, BUILT), "utf8");
+    const here = /class="?axp-here"?[^>]*>([^<]*)</.exec(page);
+    const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(page);
+    if (!here || !h1) continue;
+    for (const pill of h1[1].matchAll(/<span\b[^>]*\bclass="?[^">]*\b(?:badge|status)\b[^>]*>([^<]*)<\/span>/gi)) {
+      pilled++;
+      if (here[1].trim().endsWith(pill[1].trim())) offenders.push(`${rel}: ${here[1]}`);
+    }
+  }
+  // Four garage pages carried a pill on 2026-10-17; none means the pill regex
+  // stopped matching the staged markup.
+  assert.ok(pilled >= 4, `found ${pilled} heading pills on dressed pages; expected 4+`);
   assert.deepEqual(offenders, []);
 });
