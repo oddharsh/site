@@ -650,3 +650,17 @@ skips it.
     `src/worker/index.ts`, and its row in the route oracle (`bun run
     routes:check`) pins `status: 301` and the `location`.
     Checked by: `tools/verify-routes.ts`.
+
+79. **A walk that names a tree which still exists passes on zero files.**
+    Invariant 8c in `tools/build.ts` walked `public/garage` and `public/lwe`
+    from the 2026-08-18 split (#457) until 2026-10-17. Both directories exist
+    (they hold `av2/`, `enc/` and `lean/` assets), so `readdir` succeeded,
+    returned no `.html`, and the check inspected 0 of the 39 pages in
+    `src/pages`. Invariant 10 read serendipity as `/\.js$/` from #523
+    (2026-08-23), when its last `.js` became `.ts`, so it scanned 0 of 3
+    files. A missing directory throws and fails the build; a wrong one passes
+    silently while the summary line printed the registry's 74 entries. Give
+    every walk-and-assert a floor on what it inspected, print the walked
+    count, and break the path once to watch the floor fire. Gotcha 55 is the
+    same split reaching `servedFiles()`.
+    Checked by: `tools/build.ts`.
