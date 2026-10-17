@@ -1,4 +1,4 @@
-// webmention.js — the inbound half of Webmention (W3C REC, 2017): the open
+// webmention.ts — the inbound half of Webmention (W3C REC, 2017): the open
 // web's way to tell this site "I linked to you." Spiritually a trackback, which
 // makes it period-correct for a site that renders as Windows XP, and it is the
 // only standard mechanism by which someone else's page can appear on aadhar.sh.
@@ -51,7 +51,7 @@ const EXCERPT_MAX = 320;
 // Its own database (SOCIAL_DB / aadhar-social), deliberately NOT the deploy-log
 // DB: social content is third-party, moderated, and mutable, while the
 // checkpoints table is the site's own append-only history. Created lazily like
-// census.js and around.js do, so a fresh binding self-provisions instead of
+// census.ts and around.ts do, so a fresh binding self-provisions instead of
 // requiring a migration step before the route works. migrations/0001_webmentions.sql
 // carries the same DDL for anyone who prefers to apply it up front.
 const TABLE = "webmentions";
@@ -86,7 +86,6 @@ async function mentionId(source, target) {
   return new Uint8Array(digest).subarray(0, 12).toHex();
 }
 
-// ── POST /webmention ───────────────────────────────────────────────────────
 export async function handleWebmention(request, env, ctx) {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": "content-type" } });
@@ -208,12 +207,8 @@ async function retract(env, source, target, why) {
 // Identifies honestly as AadharshBot, follows redirects one hop at a time (a
 // mention often comes from a shortened or canonical URL) and checks EVERY hop
 // against the blocklist, so a public URL cannot redirect into private space.
-// Caps both time and bytes.
-//
-// This used to follow redirects in one call and check only the final host. The
-// body was correctly discarded on a blocked landing, so the exposure was a blind
-// request rather than a read — but the request was still made, and the check now
-// runs before each hop instead of after all of them.
+// Caps both time and bytes. The check runs before each hop: checking only the
+// final host still makes the blind request to a private one.
 async function fetchSource(url) {
   try {
     const signal = AbortSignal.timeout(SOURCE_TIMEOUT_MS);
@@ -243,9 +238,6 @@ async function fetchSource(url) {
   }
 }
 
-// Does the source actually link to the target? Compare on href values so a bare
-// mention of the URL in prose doesn't count as a link — the spec wants a real
-// <a href>, and that distinction is the entire anti-forgery property.
 // Regions whose text is NOT document content. An <a> written inside any of them
 // is not a link: a comment is markup the author removed, a script is code, a
 // template is inert until cloned, and a textarea's contents are the field's
@@ -337,36 +329,22 @@ function explicit(entry, prop) {
 }
 
 // Who sent it. The floor is the hostname, which is honest and still useful, and
-// the rule is that NOTHING may win this by being confidently wrong.
+// the rule is that NOTHING may win this by being confidently wrong. The first
+// real webmention this site received (webmention.rocks receiver test 1,
+// 2026-08-28) broke that rule twice under the old regex reader:
 //
-// Both halves of that were broken, and the first real webmention this site ever
-// received is what showed it (webmention.rocks receiver test 1, 2026-08-28,
-// stored with an empty author):
+//   1. An h-card wrapping only a photo, the ordinary IndieWeb shape, captured
+//      whitespace as the author. Whitespace is truthy, so the hostname floor
+//      never ran and the row stored an empty author.
+//   2. A bare p-name fallback is worse than the hostname. Inside an h-card a
+//      p-name is the author's name; inside an h-entry it is the POST's name.
+//      A reader blind to the parent would have called the author "Receiver
+//      Test #1".
 //
-//   <div class="left p-author h-card">
-//     <a href="/"><img class="u-photo" alt="Webmention Rocks!"></a>
-//   </div>
-//   ...
-//   <h1 class="p-name"><a href="/receive/1">Receiver Test #1</a></h1>
-//
-//   1. The p-author pattern matched, then captured the WHITESPACE between that
-//      div's ">" and the "<a" on the next line. A whitespace string is truthy,
-//      so the `||` chain stopped there and the hostname floor never ran. clean()
-//      then reduced it to "". An h-card wrapping a photo is the ordinary shape on
-//      a real IndieWeb site, so this was not a quirk of the test post: every
-//      reply from a site that markes its author up properly would have arrived
-//      blank.
-//   2. Falling back to a bare p-name is worse than falling back to the hostname.
-//      In microformats2 a p-name inside an h-card is the author's name, and a
-//      p-name inside an h-entry is the POST's name, and a pattern that cannot
-//      see which parent it is under picks up the title. On this very document
-//      that fallback would have called the author "Receiver Test #1".
-//
-// That regex reader was replaced on 2026-09-30 by a real mf2 parse (lib/mf2.ts),
-// because it read visible text only. This site's own notes name their author
-// as <data class="p-name" value="Aadharsh Pannirselvam">, which draws nothing,
-// and the regex reported the hostname for them. XRay, mf2py and
-// microformats-parser all read the name.
+// A real mf2 parse (lib/mf2.ts) replaced the regex on 2026-09-30, because the
+// regex read visible text only. This site's own notes name their author as
+// <data class="p-name" value="Aadharsh Pannirselvam">, which draws nothing.
+// XRay, mf2py and microformats-parser all read the name.
 //
 // The rungs, in order. The first four are the IndieWeb authorship algorithm
 // (https://indieweb.org/authorship-spec) without its one network step: we never
@@ -579,7 +557,6 @@ function kindPhrase(kind) {
   return kind === "reply" ? "replied to" : kind === "like" ? "liked" : kind === "repost" ? "reposted" : kind === "bookmark" ? "bookmarked" : "mentioned";
 }
 
-// ── GET /webmention/approve | /decline ─────────────────────────────────────
 export async function handleWebmentionDecision(request, env, ctx, url) {
   const decision = url.pathname.endsWith("/approve") ? "approve" : "decline";
   const id = url.searchParams.get("t") || "";
@@ -599,7 +576,6 @@ export async function handleWebmentionDecision(request, env, ctx, url) {
   return text("Declined — nothing published.", 200);
 }
 
-// ── reads for /inbox ───────────────────────────────────────────────────────
 export async function readApprovedMentions(env, limit = 200) {
   if (!env.SOCIAL_DB) return { state: "unbound", mentions: [] };
   try {
@@ -635,7 +611,6 @@ export async function acceptsWebmention(path, env) {
   } catch { return false; }
 }
 
-// ── helpers ────────────────────────────────────────────────────────────────
 /** A URL a machine sent, rather than a string a person typed: it carries an
  *  http(s) scheme and a host of its own, and nothing is inferred.
  *

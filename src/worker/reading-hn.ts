@@ -34,9 +34,9 @@ const HN_ITEM = "https://news.ycombinator.com/item?id=";
 
 // THIS JOB'S SHARE OF THE TICK, and the sum has to be redone if any of the
 // three jobs on it grows. The platform cap is per INVOCATION, and :07/:37 runs
-// three jobs in one: the home probe (about 8 at worst, counting an SWR rebuild
-// of the tracks fragment), rn.enrich (23 at worst, its own comment has the
-// sum), and this. 8 + 23 + 14 = 45 of 50.
+// three jobs in one: the home probe (counting an SWR rebuild of the tracks
+// fragment), rn.enrich (23 at worst, rn.ts has the sum), and this job's 14.
+// contract-every-cron-fires-in-workerd pins the per-tick sum.
 //
 // Inside the 14: one bulk KV read, up to 3 for the robots gate (a KV read, a
 // robots.txt fetch and a KV write, all inside signedFetch where this ledger

@@ -1,12 +1,10 @@
-// Booking KV lifecycle (src/booking.js). Runs against a real (miniflare) KV
+// Booking KV lifecycle (src/booking.ts). Runs against a real (miniflare) KV
 // binding from wrangler.test.toml, the BOOKINGS namespace, reached through
 // wrangler's test harness (see harness.ts).
 //
-// The old pending/confirmed comma-indexes (and the cron-driven expireOld sweep)
-// are gone: bookings now hold slots via per-slot `held:<start>:<end>` keys, and
-// abandoned pending bookings are reclaimed by their BookingWorkflow, not a batch
-// job. These tests cover the booking-record CRUD + the held-slot helpers; the
-// expiry timer itself is covered in workflow.test.js.
+// Bookings hold slots via per-slot `held:<start>:<end>` keys. These tests cover
+// the booking-record CRUD + the held-slot helpers; the expiry timer that
+// reclaims an abandoned pending booking is covered in workflow.test.js.
 //
 // env here is the worker env: it carries the [vars] from wrangler.test.toml
 // (PENDING_TTL_DAYS = "7") and the BOOKINGS binding.
@@ -56,7 +54,7 @@ const soon = (offsetH = 48) => {
 // still overrides it through `fields`.
 //
 // The return annotation is doing work too. Without it the literal widens
-// `status` to `string`, which is not the four-member union the record declares,
+// `status` to `string`, which is not the five-member union the record declares,
 // so the helper produces a shape createBooking would refuse.
 /**
  * @param {Partial<Omit<Booking, "id">>} [fields]

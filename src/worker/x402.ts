@@ -1,4 +1,4 @@
-// x402.js — the /llms-full.txt bot paywall. The llms.txt MAP is free next
+// x402.ts — the /llms-full.txt bot paywall. The llms.txt MAP is free next
 // door; the FULL machine-readable corpus (map + every writing post + every Garage
 // and LWE explainer, inlined)
 // costs one cent, payable by machine, per the x402 protocol (x402.org):
@@ -121,24 +121,18 @@ async function facilitatorPost(url, body) {
 // writing post, and the Markdown twin of every Garage and LWE page, staged at the
 // asset path this route shadows. /llms-full.txt is run_worker_first, so the file is
 // reachable only through this handler and the paywall stays in front of it.
-// It goes out through the q11 twin, which is why this is no longer a `.text()`
-// read. The corpus is 516 KB and this route is `no-store`, so every agent fetch
-// re-paid the edge's on-the-fly compression at about q4: measured 2026-09-26
-// against production, 188,404 B on the wire where q11 is 156,709, a flat
-// 31,695 B (16.8%) off the largest text artifact this site serves. The gap was
-// worth about 1 KB when the twin allowlist was written (2026-09-01, #692, which
-// names llms.txt and not this file), and #903 took the corpus from 20.5 KB to
-// 516 KB three days before anyone looked. Nothing joins "a file grew" to "a
-// file has no twin", which is why no check caught it.
 //
-// The comment here used to say to read `.text()` rather than hand the asset's
-// body on, so as not to rebuild another response (gotcha 13). That reasoning is
-// intact and now lives one layer down: servePrecompressedText owns the
-// `encodeBody: "manual"` rebuild that 430 other twins already ship through, and
-// it falls back to the plain asset when no twin was built.
+// It goes out through the q11 twin. This route is `no-store`, so without a twin
+// every agent fetch re-pays the edge's on-the-fly compression at about q4:
+// measured 2026-09-26 against production, the 516 KB corpus took 188,404 B on
+// the wire where q11 is 156,709, a flat 31,695 B (16.8%) off the largest text
+// artifact this site serves. Nothing joins "a file grew" to "a file has no
+// twin", so no check catches losing it.
 //
-// With no staged file at all (`bun run dev` stages nothing derived) that helper
-// 404s, and the writing half is assembled live through the same renderer.
+// servePrecompressedText owns the `encodeBody: "manual"` rebuild (gotcha 13) and
+// falls back to the plain asset when no twin was built. With no staged file at
+// all (`bun run dev` stages nothing derived) it 404s, and the writing half is
+// assembled live through the same renderer.
 //
 // no-store: the paid response carries a per-payment receipt header, so it must
 // never be shared from a cache.

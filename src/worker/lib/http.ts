@@ -1,5 +1,7 @@
-// lib/http.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+// lib/http.ts: the HTTP kit every route shares. JSON and error responses,
+// Accept negotiation for Markdown and JSON, HTML escaping, entity decoding for
+// crawled titles, and the constant-time owner-secret check.
+
 import { escape } from "./html.ts";
 
 export function escAttr(s) {
@@ -25,11 +27,9 @@ export function jsonResponse(body, status = 200, extraHeaders = {}, { pretty = t
 // answering its own Worker) that should stay byte-identical to it.
 export const PLAIN_JSON = { "content-type": "application/json", "cache-control": null };
 
-// short-cache error response. matches the CF Cache Rule that pins edge
-// TTL to 30s on 4xx/5xx — sending max-age=30 makes the browser cache
-// honor the same window, so a transient 404 during a deploy race
-// doesn't get pinned in either CF's edge OR the visitor's browser for
-// the platform's default 4h negative-cache. use everywhere we emit a 4xx/5xx ourselves.
+// short-cache error response. max-age=30 bounds how long a transient 404 from
+// a deploy race can be pinned, at the edge or in the visitor's browser. Use
+// everywhere we emit a 4xx/5xx ourselves.
 export function errorResp(body, status) {
   return new Response(body, {
     status,
@@ -64,7 +64,7 @@ export function errorResp(body, status) {
 // one that costs an agent the whole point of asking.
 //
 // Deliberately narrow. It changes nothing about a browser, which never names
-// text/markdown at all and is stopped by the guard above; nothing about a client
+// text/markdown at all and is stopped by the function's first test; nothing about a client
 // that ranks HTML higher; and nothing about `text/markdown;q=0`, which is an
 // explicit refusal and still returns false.
 export function wantsMarkdown(request) {
@@ -183,7 +183,7 @@ export function extractMeta(html, name) {
 // a page saying the literal text "&lt;" — comes out as a real `<`. That turns
 // inert prose from an arbitrary third party into markup, which is exactly the
 // input this sees: every caller runs it over a crawled page's <title>, meta
-// description, or author (crawl.js, around.js, webmention.js). The sinks escape
+// description, or author (lib/crawl.ts, around.ts, webmention.ts). The sinks escape
 // today, so this was never live XSS; it was a decoder manufacturing tags that
 // only the next un-escaped sink would have to catch.
 function decodeEntities(s) {
@@ -194,14 +194,7 @@ function decodeEntities(s) {
 }
 
 // constant-time string compare so we don't leak the secret via timing.
-export function timingSafeEqual(a, b) {
-  // NOT parsed through lib/parse.js, deliberately. `asText` treats "" as absent,
-  // which is right at a boundary and wrong here: two empty secrets must still
-  // compare equal rather than fall out as a type failure. This is a precondition
-  // on an internal call, not a boundary parse, and it guards a timing-safe
-  // compare, so it stays the plain type test.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  if (typeof a !== "string" || typeof b !== "string") return false;
+export function timingSafeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -211,9 +204,8 @@ export function timingSafeEqual(a, b) {
 // The one gate for an owner secret arriving in a request: a query parameter, a
 // header, a form field. It fails CLOSED when the secret is unset or empty, so a
 // missing binding can never match a missing parameter, and it compares in
-// constant time. Six of ten owner checks compared with `===` before this
-// existed, because the rule lived in a comment above timingSafeEqual rather
-// than in the one function every gate calls.
+// constant time. Every owner gate calls this one function, so the rule lives
+// in code; when it lived in a comment, 6 of 10 owner checks compared with `===`.
 export function secretMatches(supplied: string | null | undefined, secret: string | undefined): boolean {
   if (!secret || supplied == null) return false;
   return timingSafeEqual(supplied, secret);

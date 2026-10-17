@@ -1,6 +1,6 @@
 import { span } from "./lib/trace.ts";
 import { BOT_UA } from "./lib/botauth.ts";
-// lens.js does not import this file, so the edge runs one way and there is no
+// lens.ts does not import this file, so the edge runs one way and there is no
 // cycle. The route's validation, cache, budgets and span are lens-pipeline.ts's;
 // the SSRF guard it validates through is lib/public-fetch.ts's, never a copy.
 import { BROWSER_FREE_PLAN } from "./lens.ts";
@@ -34,8 +34,8 @@ const WIRE_MAX_ROWS = 60;
 
 // ── pure summariser ────────────────────────────────────────────────────────
 // Split out from the transport on purpose: this half is a pure function of a
-// CDP event array, so `node --test` can exercise the interesting logic without
-// a browser, a binding, or a network. Everything below the transport line needs
+// CDP event array, so the contract suite can exercise the interesting logic
+// without a browser, a binding, or a network. Everything below the transport line needs
 // workerd; everything above it does not.
 
 // Registrable-domain-ish grouping. Deliberately NOT a public-suffix list: PSL is

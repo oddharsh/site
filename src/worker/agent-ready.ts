@@ -5,7 +5,7 @@ const INNER = COLS - 4;
 
 // ── the bill ──────────────────────────────────────────────────────────────
 // HAND-MAINTAINED with a checked date, the same contract lens's census runs on
-// (lens.js: "Hand-maintained; each fact carries a 'checked' date and a source").
+// (lens.ts: "Hand-maintained; each fact carries a 'checked' date and a source").
 // A generator would drift less but would mean extending build.ts, which this
 // repo does not do without the owner saying so. A stale number with an honest
 // date beats a fresh number nobody sanctioned.
@@ -17,7 +17,6 @@ export const LIFT_CHECKED = "2026-08-05";
 // and the sum below stops type-checking for a reason that has nothing to do
 // with the arithmetic.
 export const LIFT: Array<[name: string, files: number, lines: number, what: string]> = [
-  // [capability, files, lines, what it buys]
   ["MCP server", 3, 574, "tools/list + tools/call, stateless 2026-07-28"],
   ["llms.txt", 1, 208, "a readable map, hand-written"],
   ["agent discovery", 1, 113, "agent-card, api-catalog, anonymous auth"],

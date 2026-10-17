@@ -1,4 +1,4 @@
-// lib/preview.js — the guard that makes a Workers preview URL safe to hand out.
+// lib/preview.ts — the guard that makes a Workers preview URL safe to hand out.
 //
 // Preview URLs are how a branch gets a real, servable address before it is
 // production (`previewUrls: true` in cloudflare.config.ts). The thing to understand
@@ -31,13 +31,14 @@
 // only, so a version that has never been deployed never runs the /around crawl,
 // the census sweep, or the webmention pass, whatever this file says.
 
-// Preview and *.workers.dev URLs share a suffix, and production deliberately has
-// no workers.dev URL at all (`workers_dev: false`), so the suffix alone is an
-// exact test for "not the canonical host". Checked on hostname, never on the Host
-// header directly, because a spoofed Host must not be able to turn the guard OFF.
 import { asText } from "./parse.ts";
 import { GET_WRITES, PER_TOOL_WRITES } from "../routes.ts";
 
+// Preview and *.workers.dev URLs share a suffix, and production deliberately has
+// no workers.dev URL at all (`workersDev: false` in cloudflare.config.ts), so the
+// suffix alone is an exact test for "not the canonical host". Checked on
+// hostname, never on the Host header directly, because a spoofed Host must not
+// be able to turn the guard OFF.
 export function isPreviewHost(hostname) {
   return asText(hostname, "").toLowerCase().endsWith(".workers.dev");
 }
@@ -51,11 +52,10 @@ export const PREVIEW_ROBOTS = "noindex, nofollow";
 // here because refusing it outright would make the MCP server the one surface a
 // preview cannot exercise, which is a surface worth reviewing before it ships.
 //
-// It is NOT here because nothing behind it writes. That WAS the bar, in this
-// comment, until the representation vault landed: `representation_capture` and
-// `representation_compare` each INSERT a D1 row, so for as long as the old text
-// stood, any POST to a preview's /mcp could write the production vault with no
-// signature and no secret. The endpoint is admitted and the WRITING TOOLS are
+// Admitting it is no claim that nothing behind it writes:
+// `representation_capture` and `representation_compare` each INSERT a D1 row,
+// so an unguarded POST to a preview's /mcp could write the production vault
+// with no signature and no secret. The endpoint is admitted and the WRITING TOOLS are
 // refused one layer down, by previewToolRefusal() below. Declared on the route
 // in routes.ts as `writes: "per-tool"`.
 const SAFE_UNSAFE_METHODS = PER_TOOL_WRITES;
@@ -67,11 +67,11 @@ const SAFE_UNSAFE_METHODS = PER_TOOL_WRITES;
 // /coffee route's `getWrites`), with the reason beside each, since 2026-10-02.
 //
 // Every entry has to be a pathname the dispatcher really routes, because a stale
-// one reads as protection while protecting nothing. The coffee pair spent its
-// whole life here as bare /approve and /decline, which were the retired
-// cal.aadhar.sh spellings; the live routes arrive under the /coffee prefix
-// (index.js hands /coffee/* to cal, which strips it before matching), so the
-// guard was open on exactly the two routes that email a real person. Declaring
+// one reads as protection while protecting nothing. The coffee pair once sat
+// here as bare /approve and /decline, the retired cal.aadhar.sh spellings, while
+// the live routes arrive under the /coffee prefix (index.ts hands /coffee/* to
+// cal, which strips it before matching), so the guard was open on exactly the
+// two routes that email a real person. Declaring
 // the write ON the route is what makes a stale entry hard to write now; a
 // contract test still pins each one against both route tables.
 const UNSAFE_READS = GET_WRITES;
@@ -101,7 +101,7 @@ export function previewDenial(pathname, method) {
 // The predicate is the tool's OWN `readOnlyHint: false` annotation rather than a
 // second list of names here, and that is the whole point: this repo's convention
 // is that a tool which writes declares so on its definition, beside the code that
-// makes it untrue (lib/mcp-tools.js says why). Deriving the guard from that
+// makes it untrue (lib/mcp-tools.ts says why). Deriving the guard from that
 // declaration means the next writing tool is refused on previews the day it is
 // written, which is the same argument default-deny wins on the method rule. A
 // hand-kept name list here would rot exactly the way the coffee pair above did.

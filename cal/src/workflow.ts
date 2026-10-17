@@ -1,13 +1,12 @@
-// workflow.js — the durable per-booking expiry timer.
+// workflow.ts: the durable per-booking expiry timer.
 //
-// Replaces the weekly cron sweep (expireOld) that used to reclaim pending
-// bookings the host never acted on. Instead of one batch job scanning a shared
-// index every Sunday, every booking gets its own Workflow instance whose whole
-// job is: wait up to PENDING_TTL_DAYS for the host to decide, and if they never
-// do, expire the booking and free its slot.
+// Every booking gets its own Workflow instance whose whole job is: wait up to
+// PENDING_TTL_DAYS for the host to decide, and if they never do, expire the
+// booking and free its slot. One instance per booking needs no shared index to
+// scan, which a batch cron sweep would.
 //
 // The confirm/decline transitions themselves stay in the request routes
-// (index.js) — they're synchronous, instantly reflected in /slots, and their
+// (index.ts): they're synchronous, instantly reflected in /slots, and their
 // emails are covered by the integration tests' fetch stub, which can't reach a
 // Workflow's outbound calls. So the workflow deliberately does NOT send mail;
 // its only side effect is a guarded KV reclaim. When the host DOES act, the
@@ -19,7 +18,7 @@
 //
 // This class is exported from the ROOT worker entry (src/worker/index.ts
 // re-exports it) because the `workflows` binding's class_name must resolve on
-// the deployed Worker, the same way the Counter Durable Object does.
+// the deployed Worker.
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { getBooking, releaseSlot, setStatus } from "./booking.ts";
@@ -48,10 +47,9 @@ export class BookingWorkflow extends WorkflowEntrypoint<Record<string, any>> {
     }
     if (acted) return;
 
-    // Timed out. Reclaim the slot, but only if it's still pending: an event we
-    // failed to receive (redeploy, missed sendEvent) must never clobber a
-    // booking the route already confirmed. The guard makes the reclaim safe
-    // even when the cancel event is lost.
+    // Timed out. Reclaim the slot, but only if it's still pending: a
+    // host-decision event we failed to receive (redeploy, missed sendEvent)
+    // must never clobber a booking the route already confirmed.
     await step.do("expire-if-still-pending", async () => {
       const booking = await getBooking(this.env, id);
       if (booking && booking.status === "pending") {

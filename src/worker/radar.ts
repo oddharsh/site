@@ -1,4 +1,4 @@
-// radar.js — the instrument half of a signal radar.
+// radar.ts — the instrument half of a signal radar.
 //
 // ── the split, and why this is the interesting shape ──────────────────────
 // A server has no antenna. Neither does an agent. Browsers expose no wifi RSSI
@@ -83,7 +83,6 @@ export function readSamples(payload) {
   return out.sort((a, b) => b.rssi - a.rssi);
 }
 
-/** Trend, which is the whole point when you are walking around looking for something. */
 function sparkline(history) {
   if (history.length < 2) return "";
   const lo = Math.min(...history), hi = Math.max(...history);
@@ -93,7 +92,7 @@ function sparkline(history) {
 
 /**
  * The ring plot. A character grid, because a circle drawn with box characters is
- * the one thing lib/tui.js's line primitives cannot express.
+ * the one thing lib/tui.ts's line primitives cannot express.
  */
 export function ringPlot(samples, { height = 17 } = {}) {
   const cy = Math.floor(height / 2);
@@ -138,7 +137,6 @@ export function ringPlot(samples, { height = 17 } = {}) {
   return { lines, placed };
 }
 
-/** The whole instrument: rings, then a meter per device. */
 export function radarFrame(samples, { source = "" } = {}) {
   if (!samples.length) {
     return {
