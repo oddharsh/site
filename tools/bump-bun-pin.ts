@@ -44,6 +44,10 @@
 //      updater for every repository on a current bun and did it silently, by
 //      discarding the file and writing the old format back. A runtime that
 //      changes the lockfile format is a migration rather than a bump.
+//  4b. Does its `bun check` print what Microsoft's tsc prints, on every
+//      program `bun run typecheck` checks? Since 1.4.3 the checker and the
+//      type-aware lint ship inside the binary, so a pin bump is also a
+//      checker bump. Seconds, so it runs before the builds.
 //   5. Is the build output BYTE-IDENTICAL, and does the suite still pass? The
 //      real bar, and higher than "the build succeeds": one differing byte mints
 //      a different URL, orphans every a-dict snapshot naming the old hash, and
@@ -75,6 +79,7 @@
 // Without it, a run that reports "nothing to do" on a day when the pin is
 // already current proves only that the comparison ran.
 
+import { spawnSync } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -95,15 +100,19 @@ import {
 } from "./lib/bun-pin.ts";
 import {
   type Gate,
+  TSC_REFERENCE,
   bunIdentity,
   byteIdenticalBuildGate,
+  checkerAgreementGate,
   contractSuiteGate,
   downloadBun,
+  downloadTsc,
   lockfileFormatGate,
   lockfileReadGate,
   zstdGate,
 } from "./lib/bun-gates.ts";
 import { ensureTimbradoEngine } from "./lib/upstream-watches.ts";
+import { defaultPrograms } from "./typecheck.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const WORK = join(ROOT, ".bun-candidate");
@@ -407,6 +416,26 @@ if (!gate(zstdGate(candidate))) {
 // ---------------------------------------------------------------------------
 gate(lockfileReadGate(candidate, ROOT));
 gate(lockfileFormatGate(candidate, process.execPath, ROOT, WORK));
+
+// ---------------------------------------------------------------------------
+// 4b. the checker, against Microsoft's tsc (lib/bun-gates.ts says why)
+// ---------------------------------------------------------------------------
+// The same gate the canary runs. Here a disagreement holds the pin, so the day
+// Bun ports a newer TypeScript is the day someone reads the diff and bumps
+// TSC_REFERENCE. The Worker programs need gen-runtime-types first, as
+// `bun run typecheck` does; it and the download run on the pinned side, so a
+// failure in either is the instrument.
+try {
+  const gen = spawnSync(process.execPath, ["tools/gen-runtime-types.ts"], { cwd: ROOT, encoding: "utf8" });
+  if (gen.status !== 0) throw new Error(`the pinned bun could not generate the runtime types:\n${`${gen.stderr}\n${gen.stdout}`.trim().split("\n").slice(-4).join("\n")}`);
+  const tsc = await downloadTsc(join(WORK, "tsc"));
+  gate(checkerAgreementGate(candidate, process.execPath, tsc, ROOT, defaultPrograms(ROOT)));
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  console.error(`bun:pin: no tsc ${TSC_REFERENCE} reference to compare bun check against`);
+  if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
+  process.exit(2);
+}
 
 if (results.some((r) => !r.ok)) {
   console.log(`\nbun:pin: ${target} fails a gate above. Not proposing it.`);

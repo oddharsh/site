@@ -569,9 +569,11 @@ does not make a failed write safe to ignore.
   and registry sha512, then diffs every nightly canary's `bun check` against
   it on each program `bun run typecheck` checks (`checkerAgreementGate` in
   `tools/lib/bun-gates.ts`). A canary that drops or invents a diagnostic files
-  the leg's issue before that build can become a pin. The bumper doesn't run
-  this gate. When Bun moves its port to a newer TypeScript, the gate reads the
-  move as disagreement; bump `TSC_REFERENCE` to match.
+  the leg's issue before that build can become a pin. The bumper runs the same
+  gate (its 4b), so a candidate that disagrees is never proposed. When Bun
+  moves its port to a newer TypeScript, both read the move as disagreement
+  and the pin holds until `TSC_REFERENCE` is bumped to match, which makes
+  that bump the review of the new checker.
 - @types/bun 1.4.3 is the exact type pin for host tools and tests. It supplies
   Node globals as well as Bun APIs such as HTMLRewriter, so those programs use
   one `types` entry. It adds no runtime dependency or served byte.

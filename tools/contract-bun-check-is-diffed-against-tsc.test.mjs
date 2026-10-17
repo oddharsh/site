@@ -116,12 +116,19 @@ test("a tsc that cannot finish throws, because then there is no reference", () =
   }
 });
 
-test("the canary runs the gate on typecheck's own programs, against an exact tsc", async () => {
+test("the canary and the bumper run the gate on typecheck's own programs, against an exact tsc", async () => {
   assert.match(TSC_REFERENCE, /^\d+\.\d+\.\d+$/, "a range would let the reference move under the gate");
   const programs = defaultPrograms();
   assert.ok(programs.includes("config/tsconfig.json") && programs.includes("config/tsconfig.tools.json"));
   assert.ok(!programs.some((p) => p.includes("lens-reader")), "lens-reader has its own node_modules and its own typecheck run");
-  const leg = await readFile(new URL("tools/canary-bun.ts", ROOT), "utf8");
-  assert.match(leg, /checkerAgreementGate\(candidate, process\.execPath, tsc, ROOT, defaultPrograms\(ROOT\)\)/);
-  assert.match(leg, /gen-runtime-types\.ts/, "the Worker programs need the generated runtime types before either checker reads them");
+  for (const file of ["tools/canary-bun.ts", "tools/bump-bun-pin.ts"]) {
+    const code = await readFile(new URL(file, ROOT), "utf8");
+    const at = code.indexOf("checkerAgreementGate(candidate, process.execPath, tsc, ROOT, defaultPrograms(ROOT))");
+    assert.ok(at > 0, `${file} must run the checker gate on defaultPrograms`);
+    assert.ok(code.lastIndexOf("gen-runtime-types.ts", at) > 0, `${file} must generate the runtime types before either checker reads the Worker programs`);
+    assert.ok(at < code.indexOf("byteIdenticalBuildGate(candidate"), `${file} runs a seconds-long gate after the minutes-long build`);
+    // The download and the types are the pinned side: failing them is exit 2,
+    // never a red gate that would read as a finding about the candidate.
+    assert.match(code.slice(at, at + 600), /catch \(err\) \{[\s\S]*?process\.exit\(2\);/, `${file} must treat a missing reference as the instrument`);
+  }
 });

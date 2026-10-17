@@ -22,7 +22,7 @@
 // THE CHECKER, since 2026-10-17. `bun check` and `bun lint --type-aware`
 // ship inside the binary, so each canary is also a new type checker. One gate
 // diffs its diagnostics against Microsoft's tsc 7 on every program
-// `bun run typecheck` checks. Only this leg runs it; the bumper does not.
+// `bun run typecheck` checks. The bumper runs the same gate as its 4b.
 //
 // THE WATCHES are the other half, since 2026-09-15. This repo has seven fixes
 // of its own sitting in bun's review queue, and lib/upstream-watches.ts turns
