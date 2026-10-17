@@ -8,22 +8,22 @@
 //
 //   bun run wrangler deploy -c counter/wrangler.jsonc --x-provision=false --x-auto-create=false
 //
-// THE TRANSFER IS DONE (2026-09-29), in five alternating deploys: the site
-// declared Counter in exports (#1004), this Worker expected it, the site marked
-// it transferred and bound it here (#1006), this Worker became a plain sqlite
-// class, and the site dropped the class code and tombstone (step 5). CLAUDE.md
-// "Moving Counter out" has the sequence and both rehearsals. The namespace kept
-// its id throughout, so the odometer and every coffee slot claim are the same
-// objects they were in aadhar-sh.
-//
-// A lifecycle change here from now on is an ordinary one for a Worker that owns
-// its class: `wrangler deploy`, never `versions upload`, which refuses them.
+// Counter was transferred here from aadhar-sh on 2026-09-29, in five
+// alternating deploys: the site declared Counter in exports (#1004), this
+// Worker expected it, the site marked it transferred and bound it here (#1006),
+// this Worker became a plain sqlite class, and the site dropped the class code
+// and tombstone (#1009). The namespace kept its id throughout, so the odometer
+// and every coffee slot claim are the same objects they were in aadhar-sh. The
+// sequence and both rehearsals are in the "Moving Counter out" section that
+// CLAUDE.md carried until #1126 (`git show c3af691b^:CLAUDE.md`).
 {
   "name": "aadhar-counter",
   "account_id": "1c99acdb6141579023fb97d24261ea58",
   "main": "src/index.ts",
-  // The class runs under THIS Worker's compatibility settings once the
-  // transfer commits, so they match aadhar-sh's exactly. A drift here changes
+  // The class runs under THIS Worker's compatibility settings since the
+  // transfer, so they match aadhar-sh's date and flags, minus the
+  // webcrypto_modern_algorithms flag aadhar-sh added on 2026-10-01 for
+  // AadharshBot's ML-DSA signing, which nothing here calls. A drift here changes
   // the runtime the odometer and the slot claims run on without touching them.
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["enable_request_signal", "new_module_registry"],

@@ -149,9 +149,8 @@ export function renderUnderstanding(understanding, skin) {
   return `<script type="application/json" id="luq-data">\n${payload}\n</script>\n<script src="/quiz.js" defer></script>`;
 }
 
-// AUTHORING GUIDE — the shape every garage/lwe page owes its reader. Prose, not
-// code: it was an exported string nothing ever imported, so it now lives where an
-// author actually reads it, next to the contract that enforces the rest.
+// Authoring guide: the shape every garage/lwe page owes its reader, beside the
+// contract that enforces the parts a check can see.
 //
 // Every page starts with a reader, a problem, and a thesis. The page then shows
 // the mechanism, the evidence that supports it, and the uncertainty that remains.
