@@ -8,7 +8,7 @@ const here = import.meta.dir;
 const site = `${here}/../../../..`;
 const corpus = process.argv[2] ?? `${here}/../build/corpus`;
 const roots: [string, string][] = [
-  ["/garage/av2-decode.js", `${site}/src/client/garage/av2-decode.js`],
+  ["/garage/av2-decode.js", `${site}/src/client/garage/av2-decode.ts`],
   ["/garage/av2/", `${site}/public/garage/av2/`],
   ["/corpus/", `${corpus}/`],
   ["/luna.css", `${site}/src/styles/luna.css`],

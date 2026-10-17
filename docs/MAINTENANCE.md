@@ -1283,7 +1283,7 @@ publish a new run, refresh `src/data/ua-survey.json`, then re-embed the compact
 copy in `pipelines/garage/specs/useragent.json` under `pageJs` and regenerate:
 
 ```bash
-node pipelines/garage/generate.mjs page useragent && bun run gen:shell
+node pipelines/garage/generate.ts page useragent && bun run gen:shell
 ```
 
 **Read the control rows before reading anything else.** Every target carries a
@@ -1324,7 +1324,7 @@ under "What the automation does, and why it stopped".
 
 The [LWE guide](../pipelines/lwe/README.md) and
 [Garage guide](../pipelines/garage/README.md) own the creation steps. Both use
-[`page-contract.mjs`](../pipelines/content/page-contract.mjs) for the editorial
+[`page-contract.mjs`](../pipelines/content/page-contract.ts) for the editorial
 card and three-to-seven-question understanding check.
 
 Render the selected page with its generator and register the surface in
@@ -1554,7 +1554,7 @@ photo. Two flags on the same command:
 $EDITOR src/worker/albums.ts
 # 2. register the page: path "/<slug>", section "photos", then project it
 $EDITOR config/site-manifest.json && bun run gen:manifest
-#    plus one Run-palette row in src/client/nav-run.js, a sitemap.xml <url>,
+#    plus one Run-palette row in src/client/nav-run.ts, a sitemap.xml <url>,
 #    "/<slug>" and "/<slug>/" in cloudflare.config.ts runWorkerFirst (gotcha 26:
 #    each album costs two rows), and a row in tools/verify-routes.ts
 # 3. ingest with the flags
@@ -1920,13 +1920,13 @@ bun tools/photos/av2-wasm/expect.ts
 `av2:wasm` runs av2-tone's `wasm/build.sh`, which needs `emcc` (`brew install
 emscripten`) and the AVM source the first command fetches. It writes
 `public/garage/av2/av2dec.<sha8>.wasm`; then set `WASM_URL` in
-`src/client/garage/av2-decode.js` to the name it prints. The emscripten version
+`src/client/garage/av2-decode.ts` to the name it prints. The emscripten version
 decides the bytes: av2-tone's `wasm/build.sh` records the one that minted the
 shipped file. `samples.ts` re-encodes
 the page's AV2 thumbnails with the tuned build (per-segment QM plus
 `tool-unlock=6`, TCQ and the IST/CCTX search), and refuses a photo whose shipped AVIF it can't
 reproduce byte for byte. `expect.ts` records what native AVM decodes each file
-to, and `contract-av2-decoder-matches-avm.test.mjs` holds the shipped WebAssembly
+to, and `contract-av2-decoder-matches-avm.test.ts` holds the shipped WebAssembly
 to it, so re-run it after any AV2 file or the `.wasm` changes. Moving the AVM pin
 changes the bitstream the decoder reads, so re-encode the samples with it.
 

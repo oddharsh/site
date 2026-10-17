@@ -27,7 +27,7 @@
 //
 // THE ORACLE IS LINKEDOM, not the browser. `img.src` in a browser is a resolved
 // absolute URL; here it is the raw attribute, because that is what linkedom
-// returns and what test/dom-differential.test.mjs holds this file to. Matching
+// returns and what test/dom-differential.test.ts holds this file to. Matching
 // the spec where linkedom does not would fail the parity gate, correctly.
 import { Parser } from "htmlparser2";
 
@@ -94,7 +94,7 @@ const EMPTY_ATTRIBUTES = new Set([
  *  every attribute on it, SVG children included. A real page's
  *  `<path d="M0&0" data-q="a&b<c">` round-trips raw on both sides. The fuller
  *  escape only applies to a document parsed as XML, which this Worker never
- *  builds. test/dom-differential.test.mjs pins the measurement. */
+ *  builds. test/dom-differential.test.ts pins the measurement. */
 const serializeAttr = (attr) => {
   if (EMPTY_ATTRIBUTES.has(attr.name) && !attr.value) {
     // id, class and style are DROPPED when empty rather than written bare.
@@ -304,7 +304,7 @@ class Element extends Node {
     // the DOCUMENT, not of the element's namespace. So inside an HTML document
     // an SVG <path> reports tagName "PATH", measured 2026-08-23. The corpus
     // cannot catch a regression here; the SVG test in
-    // test/dom-differential.test.mjs pins it.
+    // test/dom-differential.test.ts pins it.
     this.tagName = localName.toUpperCase();
     // Tracked for SERIALIZATION alone: an SVG element with no children
     // self-closes. Nothing else branches on it.

@@ -6,7 +6,7 @@
 // lib/desktop.ts exists: window chrome that changes in two places drifts.
 //
 // Node-safe on purpose (no `cloudflare:` import), because build.ts and
-// contract-explorer-chrome.test.mjs both import it under plain node. See
+// contract-explorer-chrome.test.ts both import it under plain node. See
 // gotcha 16.
 //
 // THE HONESTY RULE IS THE DESIGN CONSTRAINT. Every row here is passed in by a

@@ -25,7 +25,7 @@
 import type { Interval } from "./availability.ts";
 
 // The booking record, written to KV and read back by every route that acts on
-// one. cal/test/booking.test.js types its fixtures against it through a JSDoc
+// one. cal/test/booking.test.ts types its fixtures against it through a JSDoc
 // import, so `bun run typecheck` fails there if a field changes shape.
 export type Booking = {
   id: string;
@@ -131,7 +131,7 @@ export async function setSchedule(env, id: string, slot: Interval): Promise<{ bo
 // has a client compare SEQUENCE before applying a CANCEL, so a withdrawal sent
 // at the same sequence as the invite is one a client may legitimately ignore,
 // and the entry then sits on the guest's calendar for a coffee that is off.
-// cal/test/index.test.js asserts the withdrawal goes out at SEQUENCE:1.
+// cal/test/index.test.ts asserts the withdrawal goes out at SEQUENCE:1.
 //
 // Unconditional, unlike setLocation's bump, because /cancel only ever reaches a
 // CONFIRMED booking. A pending one has no invite out and is declined instead.

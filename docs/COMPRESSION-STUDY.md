@@ -186,7 +186,7 @@ The SVG image loader stays off DCZ until a browser test overturns the documented
 ```bash
 bun run build
 bun tools/measure-dictionary-preference.ts
-bun test tools/contract-dictionary-preference-model.test.mjs
+bun test tools/contract-dictionary-preference-model.test.ts
 node tools/workerd-zstd-probe.ts
 bun run dcz:check
 ```

@@ -77,7 +77,7 @@ export async function readReservation(storage) {
  * Returns `true` when the binding is absent, which keeps cal runnable and
  * testable without a Durable Object, the same way a missing BOOKING_WORKFLOW
  * only costs the expiry timer. Production always binds it, and
- * tools/contract-the-perf-probe.test.mjs asserts that, so the fallback cannot
+ * tools/contract-the-perf-probe.test.ts asserts that, so the fallback cannot
  * become the quiet default.
  */
 export async function reserveSlot(env, booking) {

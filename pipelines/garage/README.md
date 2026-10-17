@@ -20,7 +20,7 @@ HTML, CSS, and JavaScript; keep `pageCss` to what is actually that page's own.
 4. Render the spec into `src/pages/garage/<id>.html`:
 
 ```bash
-node pipelines/garage/generate.mjs page <id>
+node pipelines/garage/generate.ts page <id>
 ```
 
 5. Register the surface in [`site-manifest.json`](../../config/site-manifest.json) and
@@ -133,7 +133,7 @@ owe the dashboard a citation.
 `/garage/blueprint`, `/garage/gpt56` and `/garage/dyno` are about this site.
 Manufacturing a citation for them would be worse than the gap.
 
-[`contract-rss-feeds.test.mjs`](../../tools/contract-rss-feeds.test.mjs) enforces the half that rots: **every external URL in a card
+[`contract-rss-feeds.test.ts`](../../tools/contract-rss-feeds.test.ts) enforces the half that rots: **every external URL in a card
 also has to appear on the page it describes.** A citation that lives only on the
 card credits a repo the page never mentions, and the reader who clicks through
 finds nothing. Add the link to the page first, then to the card.

@@ -1,6 +1,6 @@
 // contract-shared.mjs — the suite's imports and its cross-section helpers.
 //
-// Split out of the single 8720-line contract-tests.test.mjs on 2026-08-20.
+// Split out of the single 8720-line contract-tests.test.ts on 2026-08-20.
 //
 // The test files sit in tools/ rather than a tools/test/ subdirectory ON
 // PURPOSE. The suite carries 111 dynamic relative imports plus 6
@@ -152,7 +152,7 @@ function fakeImages() {
 }
 
 function representationD1() {
-  const rows = [];
+  const rows: Record<string, any>[] = [];
   let batches = 0;
   return {
     prepare(sql) {
@@ -235,7 +235,7 @@ function staticAssets(files) {
 }
 
 function fakeD1() {
-  const rows = [];
+  const rows: Record<string, any>[] = [];
   const statements: string[] = [];
   const run = (sql, args) => {
     const s = sql.replace(/\s+/g, " ").trim();

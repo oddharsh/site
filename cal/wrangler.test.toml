@@ -6,7 +6,7 @@ name = "cal-aadhar-sh-tests"
 # Resolved literally, by the harness and by any wrangler command, so a wrong path
 # fails cal's suite. It said `src/index.js` from the TypeScript conversion until
 # 2026-08-23 while the old Vitest pool, which mapped `.js` onto `.ts`, stayed
-# green; tools/contract-every-wrangler-entry-point-exists.test.mjs now checks it.
+# green; tools/contract-every-wrangler-entry-point-exists.test.ts now checks it.
 main = "src/index.ts"
 compatibility_date = "2026-06-01"
 # Mirrors the root cloudflare.config.ts so the harness boots the module on the

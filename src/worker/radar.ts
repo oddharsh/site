@@ -65,7 +65,7 @@ const MARKERS = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
  */
 export function readSamples(payload) {
   const raw = Array.isArray(payload) ? payload : Array.isArray(payload?.samples) ? payload.samples : [];
-  const out = [];
+  const out: { name: string; rssi: number; kind: string; history: number[] }[] = [];
   for (const item of raw) {
     const rssi = Number(item?.rssi);
     if (!Number.isFinite(rssi) || rssi > 0 || rssi < -200) continue;   // dBm is negative

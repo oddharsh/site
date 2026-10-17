@@ -240,12 +240,12 @@ const ROUTES = [
   //   nav.js 19,106 / 61,284   nav-run.js 16,573 / 33,459   nav-tray.js 6,239 / 11,135
   //   nav-pipes.js 10,266 / 22,560   nav-tips.js 6,718 / 11,251   tooltip.js 7,001 / 26,824
   ...(builtOutput ? [
-    { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav.js" },
-    { path: "/nav-run.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-run.js" },
-    { path: "/nav-tray.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-tray.js" },
-    { path: "/nav-pipes.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-pipes.js" },
-    { path: "/nav-tips.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-tips.js" },
-    { path: "/tooltip.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/tooltip.js" },
+    { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav.ts" },
+    { path: "/nav-run.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-run.ts" },
+    { path: "/nav-tray.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-tray.ts" },
+    { path: "/nav-pipes.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-pipes.ts" },
+    { path: "/nav-tips.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav-tips.ts" },
+    { path: "/tooltip.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/tooltip.ts" },
     // Every client script's readable twin serves and still carries the marker the
     // build holds its minified copy to: one row per script in the client asset
     // registry. 11 of these 23 were hand-written here until 2026-10-02.
