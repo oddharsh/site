@@ -403,7 +403,7 @@ export function createRun(options) {
     if (ACC_OPEN[id]) { accFront(ACC_OPEN[id].win); return; }
     sound.play("open");
     var n = Object.keys(ACC_OPEN).length;
-    var win = el('<div class="axp-acc"><div class="tb"><span class="ic" aria-hidden="true">' + a.icon + '</span><span class="t">' + a.label + '</span><span class="x" role="button" title="close" aria-label="close">✕</span></div><div class="bd"></div></div>');
+    var win = el('<div class="axp-acc"><div class="tb"><span class="ic" aria-hidden="true">' + a.icon + '</span><span class="t">' + a.label + '</span><button type="button" class="x" title="Close" aria-label="Close">✕</button></div><div class="bd"></div></div>');
     win.style.left = Math.max(8, Math.min(innerWidth - 200, 86 + n * 24)) + "px";
     win.style.top = Math.max(8, 64 + inset("sa-t") + n * 24) + "px";
     D.body.appendChild(win);
@@ -417,9 +417,23 @@ export function createRun(options) {
     btn.addEventListener("click", () => { accFront(win); });
     ACC_OPEN[id] = { win: win, btn: btn };
     win.addEventListener("pointerdown", () => { accFront(win); });
-    win.querySelector(".x").addEventListener("click", (ev) => {
-      ev.stopPropagation(); if (bd._iv) clearTimeout(bd._iv); win.remove(); btn.remove(); delete ACC_OPEN[id];
+    var close = /** @type {HTMLButtonElement} */ (win.querySelector(".x"));
+    function closeAcc() {
+      // Focus inside a removed node falls to <body>; hand it back to Start,
+      // where the Run box that opened this window lives.
+      var held = win.contains(D.activeElement);
+      if (bd._iv) clearTimeout(bd._iv); win.remove(); btn.remove(); delete ACC_OPEN[id];
+      var start = D.getElementById("axp-start"); if (held && start) start.focus();
+    }
+    close.addEventListener("click", (ev) => { ev.stopPropagation(); closeAcc(); });
+    // Escape closes the window with focus in it, the way it closes Run. Focus
+    // starts on the close button, so a keyboard user who opened the clock from
+    // Run can dismiss it without hunting for it.
+    win.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault(); closeAcc();
     });
+    close.focus();
     var tb = win.querySelector(".tb");
     if (!(tb instanceof HTMLElement)) throw new Error("Accessory window is missing its title bar");
     // Same ProMotion discipline as initIconDrag / initDrag: the gesture writes

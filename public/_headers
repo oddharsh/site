@@ -364,9 +364,14 @@
   Access-Control-Allow-Origin: *
   Cache-Control: public, max-age=3600, s-maxage=86400
 
-# (security.txt is served by Cloudflare's managed Security Center now —
-# no local file, no _headers rule needed. the Link header on / and the
-# llms.txt entry still resolve because the URL responds.)
+# RFC 9116 contact file, in git since 2026-10-17 so its Expires is watched
+# (contract-security-txt-expires-60-days-out). Cloudflare's Security Center
+# copy answered here before, at the edge and ahead of the Worker; infra.json's
+# security-txt-from-repo check fails while that copy still shadows this file.
+# A day of cache, so an Expires bump reaches readers well inside the 60 days.
+/.well-known/security.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=86400, s-maxage=86400
 
 # shared shell scripts — the ONE external asset every page pulls. without a
 # rule these shipped Pages' default (max-age=0, must-revalidate), so a first-

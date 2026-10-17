@@ -13,29 +13,25 @@
 // So the response NEVER claims to be what the machine got. It reports the
 // extractor by name and version, what it kept, and what it threw away.
 //
-// WHY ITS OWN WORKER, and the argument is WEAKER than it was, so read the
-// numbers rather than the habit. Readability needs a DOM `Document`; Workers
-// have HTMLRewriter. Supplying one cost linkedom at 94.6 KB gzip, then 65.27
-// after the 2026-08-20 parser alignment, against a site Worker budget of
-// 204.24 KiB already in breach. That made the split obvious.
+// WHY ITS OWN WORKER: bundle size, and the margin is smaller than it was.
+// Readability needs a DOM `Document`; Workers have HTMLRewriter. Supplying one
+// cost linkedom 94.6 KB gzip, then 65.27 after the 2026-08-20 parser
+// alignment, against a site Worker budget of 204.24 KiB already in breach.
 //
 // src/dom.ts replaced linkedom on 2026-08-23 with a first-party DOM over the
 // same htmlparser2, and this Worker went 80.57 -> 46.18 KiB gzip. The DOM is no
 // longer most of it: the parser is ~26.6 and the extractor ~11.6, so the split
-// now rests on adding ~46 KiB to a budget that is still in breach rather than
-// on ~95. That is a real reason and a much smaller one. If the site Worker ever
-// comes back under budget, re-open this rather than assuming it is settled.
+// now rests on adding ~46 KiB to a budget that is still in breach. If the site
+// Worker ever comes back under budget, re-open this rather than assuming it is
+// settled.
 //
-// The SECOND reason this comment used to give has EXPIRED. `run_worker_first`
-// capped at 100 rules with the repo at exactly 100 (docs/GOTCHAS.md gotcha 26), but
-// folding the eight exact /lens rows to /lens + /lens/* dropped it to 94. The
-// size argument is carrying this alone now; do not cite the cap again.
+// `run_worker_first`'s 100-row cap (gotcha 26) is no reason to keep the split.
+// /lens/read sits under the site's /lens/* row, and this Worker claims it with
+// a zone route (cloudflare.config.ts), so folding it back adds no row.
 //
 // This module is the ENTRYPOINT and nothing else. Everything testable lives in
-// reader.ts, because a Worker entrypoint may export only the default handler
-// and Durable Object / Workflow classes — workerd rejects a named value export
-// with "Incorrect type for map entry '<name>': the provided value is not of
-// type 'function or ExportedHandler'", which is how that rule was learned here.
+// reader.ts, because workerd rejects a named value export from an entrypoint;
+// reader.ts's header quotes the error.
 import { EXTRACTOR, READER_LIMIT_PER_MIN, READER_NOTE, ReaderError, read } from "./reader.ts";
 import { jsonResponse } from "../../src/worker/lib/http.ts";
 import { validateLensTarget } from "../../src/worker/lib/public-fetch.ts";
@@ -68,14 +64,10 @@ export default {
     try {
       return json(await read(target.url), 200, { "ratelimit-policy": rateLimitPolicy("reader", READER_LIMIT_PER_MIN) });
     } catch (error) {
-      // Only messages WE wrote for the visitor get published. Everything else is
-      // an internal failure whose text is not ours to hand to an unauthenticated
-      // caller — CodeQL flagged the old blanket `error.message` return as
-      // information exposure through a stack trace, and it was right.
-      //
-      // The generic arm still says whose fault it probably was, because "the
-      // reader failed" with no attribution is exactly the ambiguity this whole
-      // pane exists to remove. The real error goes to Workers Logs, where it is
+      // Only ReaderError messages are published (reader.ts says why). The
+      // generic arm still says whose fault it probably was, because "the reader
+      // failed" with no attribution is exactly the ambiguity this whole pane
+      // exists to remove. The real error goes to Workers Logs, where it is
       // readable by the owner and by nobody else.
       if (error instanceof ReaderError) return json({ ok: false, error: error.message }, 502);
       console.error("lens-reader: unhandled failure", error);

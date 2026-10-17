@@ -76,7 +76,7 @@
       "path": "/lwe/utf8",
       "status": "online",
       "buddyName": "UTF-8",
-      "pm": "ASCII vs UTF-32 vs UTF-8: bytes, code points, 中文",
+      "pm": "ASCII vs UTF-32 vs UTF-8: bytes, code points, <span lang=\"zh\">中文</span>",
       "navHint": "text encoding, ascii, utf-32, utf-8, live byte demos",
       "accent": "#9a6a16",
       "accentSoft": "#fbf3dd",

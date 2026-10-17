@@ -1,11 +1,11 @@
 // lens-reader/src/dom.ts — a DOM fitted to ONE workload, over htmlparser2.
 //
-// WHY THIS EXISTS. linkedom is 65.27 KiB gzip of the Reader Worker's 80.57
-// (measured 2026-08-23 by bundling each package alone under this project's
-// wrangler config). Of that, htmlparser2 is 26.62 and does the hard part:
-// tolerant parsing of whatever the open web serves. The remaining ~38.6 KiB is
-// a general DOM plus a CSS selector engine plus a CSSOM, and this Worker uses
-// 39 members of it.
+// WHY THIS EXISTS. linkedom was 65.27 KiB gzip of the Reader Worker's 80.57
+// when this file replaced it (measured 2026-08-23 by bundling each package
+// alone under this project's wrangler config). Of that, htmlparser2 is 26.62
+// and does the hard part: tolerant parsing of whatever the open web serves.
+// The remaining ~38.6 KiB is a general DOM plus a CSS selector engine plus a
+// CSSOM, of which this Worker uses only the members counted below.
 //
 // WHAT WAS TRIED FIRST AND FAILED, so nobody spends the afternoon again.
 // @mozilla/readability ships JSDOMParser.js, 1278 lines, described in its own
@@ -87,11 +87,11 @@ const EMPTY_ATTRIBUTES = new Set([
 
 /** linkedom's Attr#toString, which is the byte the parity gate compares.
  *
- *  This carried a KNOWN GAP note claiming upstream escapes SVG and XML
- *  attribute values more fully than HTML ones. Measured 2026-08-23, that branch
- *  is UNREACHABLE from parseHTML: linkedom picks it with `ignoreCase(this)`,
- *  which resolves to `ownerDocument[MIME].ignoreCase`, and an HTML document
- *  answers true for every attribute on it, SVG children included. A real page's
+ *  linkedom's fuller escape for SVG and XML attribute values is not copied,
+ *  because it is UNREACHABLE from parseHTML (measured 2026-08-23): linkedom
+ *  picks it with `ignoreCase(this)`, which resolves to
+ *  `ownerDocument[MIME].ignoreCase`, and an HTML document answers true for
+ *  every attribute on it, SVG children included. A real page's
  *  `<path d="M0&0" data-q="a&b<c">` round-trips raw on both sides. The fuller
  *  escape only applies to a document parsed as XML, which this Worker never
  *  builds. test/dom-differential.test.mjs pins the measurement. */
@@ -302,10 +302,9 @@ class Element extends Node {
     // ALWAYS uppercased, SVG included. linkedom derives tagName through
     // localCase(), which reads `ownerDocument[MIME].ignoreCase` — a property of
     // the DOCUMENT, not of the element's namespace. So inside an HTML document
-    // an SVG <path> reports tagName "PATH", measured 2026-08-23. This was
-    // `svg ? localName : ...` on the reasonable-sounding guess that SVG is
-    // case-sensitive, and no page in the corpus could tell the difference
-    // because Readability only ever compares tagName against HTML names.
+    // an SVG <path> reports tagName "PATH", measured 2026-08-23. The corpus
+    // cannot catch a regression here; the SVG test in
+    // test/dom-differential.test.mjs pins it.
     this.tagName = localName.toUpperCase();
     // Tracked for SERIALIZATION alone: an SVG element with no children
     // self-closes. Nothing else branches on it.
@@ -533,7 +532,7 @@ function collectByTag(root: Node, name: string, includeRoot = false): Element[] 
 }
 
 // ── the selector grammar, which is as small as the workload ─────────────────
-//
+
 /** One arm of the comma list: a tag, an attribute test, or both. */
 type Compound = { tag: string | null; attr: string | null; value: string | null };
 
@@ -618,13 +617,13 @@ function serializeNode(node) {
 
 // ── parsing ─────────────────────────────────────────────────────────────────
 
-/** Streams htmlparser2's events straight into this DOM. domhandler is skipped
- *  on purpose: it would build a second tree we immediately throw away. */
 // Copied from linkedom/esm/shared/parse-from-string.js rather than chosen.
 // lowerCaseTags is left at its HTML-mode default of true; recognizeSelfClosing
 // is left OFF, so `<div />` does NOT self-close, exactly as linkedom sees it.
 const PARSER_OPTIONS = { lowerCaseAttributeNames: false, decodeEntities: true, xmlMode: false };
 
+/** Streams htmlparser2's events straight into this DOM. domhandler is skipped
+ *  on purpose: it would build a second tree we immediately throw away. */
 function parseInto(html, root, ownerDocument) {
   let current = root;
   let svgRoot: Element | null = null;
@@ -632,7 +631,7 @@ function parseInto(html, root, ownerDocument) {
     onopentag(name, attribs) {
       const svg = svgRoot !== null || name === "svg" || name === "SVG";
       const el = new Element(name, ownerDocument, svg);
-        // Parsing APPENDS in source order; only setAttribute prepends. `class`
+      // Parsing APPENDS in source order; only setAttribute prepends. `class`
       // is normalized here too, because linkedom's parser assigns it through
       // element.className rather than storing the raw attribute.
       for (const [k, v] of Object.entries(attribs)) {

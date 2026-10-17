@@ -183,7 +183,7 @@ sel = keep ? indexOfIdentity(items, keep)
     <h2>The rest<span class="sev low">verified, shipped</span></h2>
     <p class="note" style="margin-top:2px">Smaller findings that did not need a diagram, each confirmed and fixed:</p>
     <table class="rest">
-      <tr><th>where</th><th>what</th></tr>
+      <thead><tr><th scope="col">where</th><th scope="col">what</th></tr></thead>
       <tr><td>_worker.js</td><td>Speculative loads (prefetch, prerender, Speed Brain) now <em>peek</em> the visitor counter instead of ticking it, via a <code>Sec-Purpose</code> guard. A page that may never be seen no longer counts as a visit.</td></tr>
       <tr><td>_worker.js</td><td>The JSON helper caps a transient Spotify 5xx at a 30s browser cache instead of pinning the error for 5 minutes, matching the rest of the codebase's error discipline.</td></tr>
       <tr><td>nav.js</td><td><code>prefers-reduced-motion</code> now also stills the <a class="term" data-t="view-transitions" href="https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API" title="A browser API that animates the change between two views or two pages by snapshotting the old one and morphing into the new." rel="external">view-transition</a> <em>group</em> that morphs the window, on top of the old and new snapshots.</td></tr>

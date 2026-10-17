@@ -24,16 +24,19 @@ export async function handleWindowsUpdate(request, env, ctx) {
 // cannot disagree. Baking costs no freshness, because the file changes only in
 // the PR that ships a release (tools/photos/bump-version.sh writes the entry).
 //
-// D1 records what actually SHIPPED (`bun run deploy:promote` writes it at 100%),
-// and `bun run checkpoints:check` fails when the two diverge beyond a tail of
-// unreleased entries. env stays in the signature because the handlers pass it.
+// D1 records what actually SHIPPED. Nothing on the release path writes it since
+// 2026-09-28 (#1002), so `bun run checkpoints:record` copies released entries in
+// from a workstation, and `bun run checkpoints:check` fails when the two diverge
+// beyond a tail of staged entries (tools/lib/checkpoints.ts). env stays in the
+// signature because the handlers pass it.
 export async function readCheckpoints(env) {
   return { points: checkpoints, state: checkpoints.length ? "ok" : "empty" };
 }
 
 export async function renderWindowsUpdate(cp) {
-  // The newest entry is the running build and the recent entries ARE the
-  // changelog.
+  // The recent entries ARE the changelog. The newest is the newest LOGGED release,
+  // the running build only when the release that serves carried an entry;
+  // /whoareyou.json reports the serving version itself.
   const state = cp.state;
   const pts = cp.points.slice(-18).reverse();          // newest first
   let build = "aadhar.sh", log = [];

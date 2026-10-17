@@ -1,15 +1,17 @@
 // The BEHAVIOURAL half of the Reader lens's tests. It lives here rather than in
-// the root contract-tests.mjs because it imports ../src/reader.ts, which imports
-// readability and linkedom — dependencies of THIS project alone. The root
-// suite runs under plain node with the root workspace's deps, so importing this
-// module there fails with ERR_MODULE_NOT_FOUND in CI while passing on a
-// workstation that happened to install them (caught on PR #299's first run).
+// the root contract suite because it imports ../src/reader.ts, which imports
+// readability and htmlparser2, and itself imports linkedom: dependencies of
+// THIS project alone. The root suite runs with the root workspace's deps, so
+// importing this module there fails with ERR_MODULE_NOT_FOUND in CI while
+// passing on a workstation that happened to install them (caught on PR #299's
+// first run).
 //
 // The split by capability:
-//   root contract-tests.mjs — everything provable from SOURCE TEXT: the rate
-//     limit against cloudflare.config.ts, the shared SSRF guard, the dependency floor,
-//     the dropped tally, the tab labels.
-//   here — everything that has to actually RUN.
+//   tools/contract-the-reader-lens-lens-read-lens-reader.test.mjs: everything
+//     provable from SOURCE TEXT or the configs: the rate limit against
+//     cloudflare.config.ts, minify and source maps, the shared SSRF guard, the
+//     Markdown walk's shape, the dropped tally, the tab labels, the 429 headers.
+//   here: everything that has to actually RUN.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -17,24 +19,20 @@ import { parseHTML as parseLinkedom } from "linkedom";
 import { parseHTML } from "../src/dom.ts";
 import { collectControlLabels, countControls, countWords, FETCH_TIMEOUT_MS, read, ReaderError, scoreExtraction, tally, toMarkdown } from "../src/reader.ts";
 
-// The override's REASON changed on 2026-08-23 and the assertion outlived it, so
-// this now says what it is for today. The Worker no longer bundles linkedom, so
-// the override buys no shipped bytes at all. What it buys is that the parity
-// oracle in dom-differential.test.mjs resolves the SAME parser the Worker
-// bundles, and a gate whose reference parses differently proves nothing.
+// The override buys no shipped bytes since the Worker stopped bundling linkedom
+// on 2026-08-23. What it buys is that the parity oracle in
+// dom-differential.test.mjs resolves the SAME parser the Worker bundles, and a
+// gate whose reference parses differently proves nothing.
 //
-// The three version literals this used to carry are DERIVED now. They read
-// 11.0.0 until 2026-08-24 and the bump to 12 had to edit all three by hand,
-// which is a test asking to be edited rather than a test asserting a property.
-// The property is in the name: ONE generation, reached three ways. A literal
-// additionally claimed that a specific version was the right one, and the
-// paragraph in DEPENDENCIES.md that argued for it is the honest place for that
-// claim, since it can carry the measurement.
+// The version is DERIVED from package.json rather than written as literals, so
+// a bump edits one file. The property is in the name: ONE generation, reached
+// three ways. Which version is right is argued in docs/DEPENDENCIES.md, where
+// the measurement lives.
 //
-// Deriving costs the floor, which is the usual price: three fields read from
-// one file agree trivially if the file is empty. So the exact-version shape is
-// asserted first, and a range fails here rather than silently passing as a
-// string match against itself.
+// Deriving costs the floor: three fields read from one file agree trivially
+// if the file is empty. So the exact-version shape is asserted first, and a
+// range fails here rather than silently passing as a string match against
+// itself.
 test("the oracle and the Worker resolve one parser generation", () => {
   const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   const parser = JSON.parse(readFileSync(new URL("../node_modules/htmlparser2/package.json", import.meta.url), "utf8"));
@@ -54,23 +52,19 @@ test("the oracle and the Worker resolve one parser generation", () => {
   );
 });
 
-// Was asserted against linkedom, which is no longer what ships. It runs on the
-// fitted DOM now and checks the oracle agrees, so the property is pinned on the
-// product first and the reference second.
+// Runs on the fitted DOM, which is what ships, and checks the oracle agrees, so
+// the property is pinned on the product first and the reference second.
 //
-// The EXPECTED STRING FLIPPED on 2026-08-24 with htmlparser2 12, and the flip
-// is the fix rather than the damage. HTML has no self-closing `<script/>`: the
-// slash is ignored and everything to the next `</script>` is script data, so
-// the document's own close tag really does land inside the element. v11 honored
-// the slash, v12 does not, and Chrome 148 agrees with v12 byte for byte:
+// HTML has no self-closing `<script/>`: the slash is ignored and everything to
+// the next `</script>` is script data, so the document's own close tag really
+// does land inside the element. htmlparser2 11 honored the slash, 12 does not,
+// and Chrome 148 agrees with 12 byte for byte:
 //
 //   new DOMParser().parseFromString(SOURCE, "text/html")
 //     -> <script src="./main.js" type="module"></html></script>
 //
-// So this test spent its life pinning the one behaviour of the two that a
-// browser does not have, on the surface whose whole premise is showing what a
-// machine actually saw. The browser is the control now, and it is written here
-// rather than left as a memory of a session.
+// Before the 2026-08-24 bump to 12 this test pinned the v11 string, a behaviour
+// no browser has. The browser is the control.
 test("the aligned parser reads a self-closing script the way a browser does", () => {
   const source = '<html><script src="./main.js" type="module"/></html>';
   // Measured in Chrome 148.0.7778.280, 2026-08-24. Re-run the DOMParser line
@@ -244,8 +238,7 @@ test("the network deadline aborts a body that stalls after successful headers", 
 test("both word counts come from one function, so the gap is extraction", () => {
   // The load-bearing property of the whole lens. If `source` and `kept` were
   // counted differently the reported drop would be two definitions of "word"
-  // disagreeing, which is the failure gotcha 24 names: a number that cannot be
-  // wrong because nothing independent produced it.
+  // disagreeing, and the pane would report that disagreement as extraction loss.
   const html = "<html><body><p>one two three four five</p></body></html>";
   assert.equal(tally(html).words, 5);
   assert.equal(countWords("one two three four five"), 5);
@@ -298,11 +291,11 @@ test("only messages written for the visitor are publishable", async () => {
 });
 
 test("the extractor actually extracts, which no other test here proved", async () => {
-  // Every test above this line exercises a helper in isolation, so the whole
-  // suite stayed green through an extractor swap that could have been totally
-  // broken. That is the same "a check that can only agree with itself is
-  // decoration" failure CLAUDE.md records twice. This one runs the real engine
-  // over a fixture and asserts it found the article and dropped the chrome.
+  // Runs the real engine over a fixture and asserts it found the article and
+  // dropped the chrome. When this was written every other test here exercised
+  // a helper in isolation, so the suite stayed green through an extractor swap
+  // that could have been totally broken: an instrument that could not fail
+  // (CLAUDE.md, "Measure before you claim").
   //
   // It is deliberately OFFLINE: `read()` fetches, and a test that needs the
   // network is a test that fails for reasons that are not about this code.

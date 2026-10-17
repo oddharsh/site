@@ -447,6 +447,29 @@ skips it.
     caller an exit code, because the diff can only show what changed.
     Checked by: `tools/photos/gen-og-cards.ts`.
 
+63. **An edge 504 with origin status 0 is usually a cache miss, not an
+    error.** Zone analytics for 2026-09-14 to 10-14 held 18,921 of them
+    and none reached a visitor. `requestSource` splits them: 14,398
+    `edgeWorkerCacheAPI` (a `cache.match()` miss, which Workers sees as
+    `undefined`) and 4,523 `earlyHintsCache` (an Early Hints lookup for a
+    URL with no cached `Link`). The control is the same source's other
+    rows: hits log 200 and `cache.put` logs 204. Filter
+    `requestSource: "eyeball"` before reading any 5xx count, as the
+    dashboard does.
+    Checked by: nothing (how to measure).
+
+64. **A Worker can't reach its own route with a global `fetch()`.** A
+    same-zone fetch to a URL that a route claims skips the Worker and goes to
+    the zone's origin, and this zone has none, so the request ends in a 522.
+    The serendipity cron self-dispatched its tag pass to
+    `/serendipity/tag` that way, and all 55 POSTs from 2026-10-02 to
+    10-14 failed with nothing visible beyond `tag: {error: "tag 522"}` on a
+    log line. Call yourself through `ctx.exports.default.fetch()` (a fresh
+    invocation, one subrequest) or `withSelfFetch` (in-process, the same
+    budget). The workerd cron test couldn't see it because the harness
+    has no AI binding or secrets, so the dispatch skipped before it fetched.
+    Checked by: `tools/contract-every-cron-fires-in-workerd.test.mjs`, `tools/contract-the-luma-session-jar.test.mjs`.
+
 65. **A catch on the promise you await doesn't clear the one you handed
     `ctx.waitUntil`.** index.ts's cron helper passes the same promise to
     both, so `await cron(...).catch(() => {})` keeps the next job running
@@ -615,7 +638,20 @@ skips it.
     release, which WebKit snaps itself.
     Checked by: `tools/contract-a-dragged-window-lands-on-a-device-pixel.test.mjs`.
 
-78. **A walk that names a tree which still exists passes on zero files.**
+78. **The asset layer's `drop-trailing-slash` redirects with a 307.** The
+    direction is right (`/about/` to `/about`) but the status is temporary,
+    so a crawler keeps the slashed URL and comes back to it. Measured
+    2026-10-17 on production: `/garage/`, `/lwe/` and every slashed page
+    answered 307 while `cloudflare.config.ts` said 301, and `/coffee/` and
+    `/serendipity/` skipped the redirect entirely, since their modules served
+    their own root as a second 200. The route oracle had accepted
+    `[301, 307, 308]` for `/garage/`, so it could not tell. A path that must
+    redirect permanently needs an exact route to `routeDropSlash` in
+    `src/worker/index.ts`, and its row in the route oracle (`bun run
+    routes:check`) pins `status: 301` and the `location`.
+    Checked by: `tools/verify-routes.ts`.
+
+79. **A walk that names a tree which still exists passes on zero files.**
     Invariant 8c in `tools/build.ts` walked `public/garage` and `public/lwe`
     from the 2026-08-18 split (#457) until 2026-10-17. Both directories exist
     (they hold `av2/`, `enc/` and `lean/` assets), so `readdir` succeeded,

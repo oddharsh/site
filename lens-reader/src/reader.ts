@@ -9,7 +9,7 @@
 //   the provided value is not of type 'function or ExportedHandler'.
 //
 // so the constants and helpers the contract tests assert against cannot live
-// beside `export default { fetch }`. Same shape as lib/tui.js: pure module,
+// beside `export default { fetch }`. Same shape as lib/tui.ts: pure module,
 // three callers (the Worker, the tests, and anything that wants the numbers).
 // The package barrel also loads isProbablyReaderable, which this Worker never
 // calls. The exact dependency pin makes the direct extractor entry stable and
@@ -31,9 +31,9 @@ import { fetchFollowingPublicRedirects, validateLensTarget } from "../../src/wor
 // failure was, so collapsing everything to "something went wrong" would cost the
 // feature its point; publishing raw internals would cost more.
 export class ReaderError extends Error {
-  // The flag index.ts reads to decide whether a message may be shown. Declared
-  // rather than left implicit, which is what a .ts file needs; same shape as the
-  // site Worker's counter.ts, and a bare field declaration erases.
+  // The visitor-facing marker test/reader.test.mjs asserts; index.ts gates on
+  // `instanceof ReaderError`. Declared because a .ts class must declare a field
+  // it assigns, and a bare field declaration erases.
   visitorFacing: boolean;
 
   constructor(message) { super(message); this.name = "ReaderError"; this.visitorFacing = true; }
@@ -126,11 +126,9 @@ export async function read(targetUrl) {
       articleNode = element;
       return element.innerHTML;
     },
-  // A REAL cast rather than the JSDoc one this line carried until 2026-08-24.
-  // #514 fixed the five `.parse()` property reads below with `@type`, and a .ts
-  // file ignores JSDoc, so the rename made that fix inert and every one of them
-  // came back. That is the trap in converting a file that already documented its
-  // types: the better-annotated module is the one that regresses.
+  // A TypeScript cast, because a .ts file ignores JSDoc: the `@type` cast #514
+  // put here went inert when the file became .ts (#528), and the five
+  // `.parse()` property reads below stopped typechecking.
   }).parse() || ({} as Partial<NonNullable<ReturnType<Readability["parse"]>>>);
   const extractMs = Date.now() - t2;
 
@@ -169,7 +167,7 @@ export async function read(targetUrl) {
     // tell a label from a sentence, which is exactly the failure
     // `tools/lib/html-to-md.ts` rule 2 refuses.
     //
-    // Measured 2026-08-14 over the same five-page corpus, this is where the
+    // Measured 2026-08-14 over a five-page corpus, this is where the
     // extractor swap paid: on /garage/horizon Defuddle leaked 14 of 26 distinct
     // control labels and Readability leaks 3. It is NOT a uniform win, which is
     // why this number stays on the payload rather than being retired as solved:
@@ -185,7 +183,7 @@ export async function read(targetUrl) {
 // ── markdown, over Readability's finished DOM ───────────────────────────────
 
 // This is deliberately a focused serializer rather than a general HTML parser.
-// Linkedom has already parsed hostile HTML, and Readability has already reduced
+// src/dom.ts has already parsed hostile HTML, and Readability has already reduced
 // that document to an article node. Walking that node directly covers the prose
 // vocabulary an article can carry without cloning the tree or bringing a second
 // DOM implementation into node_modules. Unknown elements are transparent, so a

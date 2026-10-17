@@ -1,11 +1,15 @@
-// passages.js — the corpus the "ask" feature is grounded in.
+// passages.ts: the corpus the "ask" feature is grounded in.
 //
-// IMPORTANT: every passage here is from the AUTHOR'S OWN essay
-// ("Privacy 2.0: PETs and the Promise of Private Shared State", by Aadharsh
-// Pannirselvam, archetype.fund) — his content, used verbatim with attribution.
-// Do NOT add third-party text (e.g. the programmable-cryptography PDF) here; that
-// would republish someone else's copyrighted work. Third-party material can only
-// inform AI-authored, attributed explanations on the page — never the corpus.
+// Two parts. The FHE, MPC and TEE passages are hand-kept and come from the
+// AUTHOR'S OWN essay ("Privacy 2.0: PETs and the Promise of Private Shared
+// State", by Aadharsh Pannirselvam, archetype.fund), used verbatim with
+// attribution. Everything between the generated:corpus markers is written by
+// pipelines/lwe/build-corpus.mjs (see the note above that block).
+// Do NOT add third-party copyrighted text (e.g. the programmable-cryptography
+// PDF) here; that would republish someone else's work. Such material can only
+// inform AI-authored, attributed explanations on the page, never the corpus.
+// The generated block takes republishable sources only (Wikipedia with
+// attribution, the author's own docs).
 //
 // The reindex route embeds each `text` and upserts it into Vectorize with the
 // metadata below, so retrieval can return the real sourced passage + a link.

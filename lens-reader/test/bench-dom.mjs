@@ -1,5 +1,8 @@
 // node lens-reader/test/bench-dom.mjs /absolute/path/to/baseline [pairs]
-// Offline parse -> control census -> Readability -> Markdown, alternating order.
+// CPU benchmark of this checkout's src/dom.ts + reader.ts against a baseline
+// worktree's, over the test/corpus captures: offline parse -> control census
+// -> Readability -> Markdown. It asserts both sides produce identical output,
+// warms up, then times alternating pairs and prints the medians as JSON.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { brotliDecompressSync } from 'node:zlib';

@@ -109,6 +109,24 @@ test("around persists DDL, observations, and retention in one ordered D1 batch",
   assert.match(batches[0][5].sql, /^DELETE FROM /);
 });
 
+test("each row's ↗ link names where it goes", () => {
+  // The link column was a bare ↗, which a screen reader reads as "north east
+  // arrow, link" on every row, with nothing to tell one firm's site from the
+  // next. Found by the second specification.website audit, 2026-10-17. Its
+  // header cell is named too, since the arrow alone reads the same way there.
+  const [a, b] = NEIGHBORS;
+  const result = (n) => ({ name: n.name, url: n.url, status: 200, title: "t", description: "", elapsedMs: 10 });
+  const html = renderAroundSnapshot({ crawledAt: "2026-10-17T00:00:00Z", results: [result(a), result(b)] }).html;
+  const links = [...html.matchAll(/<td class="link"><a ([^>]*)>↗<\/a>/g)].map((m) => m[1]);
+  assert.equal(links.length, 2, "one ↗ per row");
+  for (const [i, n] of [a, b].entries()) {
+    const label = /aria-label="([^"]+)"/.exec(links[i])?.[1] ?? "";
+    assert.ok(label.includes(n.name) && label.includes(new URL(n.url).host), `the ${n.name} row's link must name the firm and its host, got "${label}"`);
+    assert.match(label, /new tab/, "and say it opens a new tab, since target=_blank does");
+  }
+  assert.match(html, /<th aria-label="Link">↗<\/th>/);
+});
+
 test("around renders an honest empty panel rather than a fabricated table", async () => {
   // The failure-honesty rule this file states at renderAroundSnapshot: no
   // snapshot means a visibly pending panel, never invented rows. Only ever seen

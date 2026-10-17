@@ -36,12 +36,12 @@ export default {
       if (req.method === "POST" && url.pathname === "/lwe/ask")           return await ask(req, env);
       return json({ error: "not found" }, 404);
     } catch (e) {
-      // `detail` used to carry e.message straight to the client, uncapped. The
-      // three things that throw under here are env.AI.run (whose message names
-      // the model id held in EMBED_MODEL / GEN_MODEL and the "lwe" gateway),
+      // The error text goes to Workers Logs and never to the client. The three
+      // things that throw under here are env.AI.run (whose message names the
+      // model id held in EMBED_MODEL / GEN_MODEL and the "lwe" gateway),
       // env.VECTORIZE (which names the index and the metadata filter), and the
-      // HMAC when SIGNING_SECRET is missing — all internal configuration a
-      // caller has no other way to learn. It goes to Workers Logs instead.
+      // HMAC when SIGNING_SECRET is missing: all internal configuration a
+      // caller has no other way to learn.
       console.error("lwe-ask unhandled", url.pathname, String((e && e.stack) || e));
       return json({ error: "something broke" }, 500);
     }
@@ -55,9 +55,10 @@ async function hmac(secret, msg) {
   return new Uint8Array(sig).toHex();
 }
 function timingSafeEq(a, b) {
-  // Same reasoning as lib/http.js: asText treats "" as absent, which is right at
-  // a boundary and wrong for a constant-time compare where two empty secrets must
-  // still compare equal. A precondition on an internal call, not a parse.
+  // Same reasoning as timingSafeEqual in src/worker/lib/http.ts: asText treats
+  // "" as absent, which is right at a boundary and wrong for a constant-time
+  // compare where two empty secrets must still compare equal. A precondition on
+  // an internal call, not a parse.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
   if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
   let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -180,10 +181,10 @@ async function search(req, env) {
 // ── /lwe/ask/reindex — embed + upsert the corpus ──────────────────────────────
 async function reindex(req, env) {
   if (!env.REINDEX_SECRET || !timingSafeEq(req.headers.get("x-reindex-secret") || "", env.REINDEX_SECRET)) return json({ error: "unauthorized" }, 401);
-  // Batch the embeddings: the model takes an array of texts per call, so a per-passage
-  // loop fires ~80 Workers AI requests and trips the rate limit (2003). ~25 per call keeps
-  // it to a handful. Direct env.AI.run, not the per-text gateway cache, since this is a
-  // one-shot bulk embed.
+  // Batch the embeddings: the model takes an array of texts per call, and a
+  // per-passage loop fires one Workers AI request per passage, which trips the
+  // rate limit (2003). 25 per call keeps it to a handful. Direct env.AI.run,
+  // without the per-text gateway cache, since this is a one-shot bulk embed.
   // `source` and `title` are omitted rather than empty-stringed: Vectorize
   // metadata is queryable, and an empty string is a value that matches filters a
   // missing key does not.
