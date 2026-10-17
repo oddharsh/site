@@ -101,6 +101,9 @@ test("every 429 the spec documents carries the Retry-After the site sends", asyn
 });
 
 test("every response schema is typed all the way down", () => {
+  // A function-calling client builds its types from these. An empty schema
+  // ({}), an object with no properties to name, or additionalProperties: true
+  // all read as "anything", which is how 7 of 14 operations scored as untyped.
   /** @returns {string[]} */
   function untyped(node, at, seen = new Set()) {
     if (!node || typeof node !== "object") return [];
@@ -132,6 +135,7 @@ test("every response schema is typed all the way down", () => {
       }
     }
   }
+  // The control: the walk does see an open object.
   assert.equal(untyped({ type: "object", additionalProperties: true }, "probe").length, 2);
   assert.equal(untyped({}, "probe").length, 1);
 });

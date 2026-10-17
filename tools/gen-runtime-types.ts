@@ -2,6 +2,36 @@
 // gen-runtime-types.ts — the Workers runtime declarations, generated from the
 // PINNED workerd rather than depended on as a package.
 //
+// WHY. `@cloudflare/workers-types` was 12 of the 29 Dependabot PRs in the
+// thirty days to 2026-09-02, each a date-stamped release describing a runtime
+// this repo does not yet run on, and each needing the hand relock commit
+// (bun run deps:relock, retired 2026-10-06). Wrangler ships the same declarations itself:
+// `wrangler types --include-runtime` boots the pinned workerd's own types
+// worker (workerd/worker.mjs, no network) and asks it for the surface at a
+// given compatibility date and flag set. Wrangler's own migration notice says
+// the command "supersedes @cloudflare/workers-types" and to uninstall it. So
+// the types move when wrangler moves, which is a lane this repo already
+// reviews, and they describe the workerd that actually runs the dry-runs, the
+// route oracle and the cal harness instead of a newer one.
+//
+// Measured before switching, 2026-09-02, wrangler 4.127.1 / workerd
+// 1.20260828.1: all four Worker programs (site, cf-garage, lwe-ask,
+// lens-reader) produced the SAME diagnostics against the generated file as
+// against the package, 259 / 0 / 0 / 3, every line identical. The package
+// carried 23 names the generated set does not (Buffer, process, setImmediate,
+// the Performance* family, two Hyperdrive and one Browser Run shape): none of
+// them is referenced anywhere in the tree, which is what an identical count
+// proves.
+//
+// A SHARED FILE IS ASSERTED rather than assumed. The runtime section is a
+// function of compatibility date and flags, and the Workers here sit on
+// different dates with different flag sets. On 2026-09-02, generated
+// separately, their runtime sections came back byte-identical below the header
+// line. The site now has its own file (AUX_OUT, below, says why), and this
+// script regenerates lwe-ask and lens-reader alongside it and FAILS if those
+// two diverge, because that is the day the programs need a file each and a
+// silent divergence would type one Worker against another's runtime.
+//
 // CF-GARAGE GETS ITS OWN FILE, FROM ITS OWN CONFIG, since 2026-09-26. It is the
 // one Worker on wrangler's experimental cloudflare.config.ts (gotcha 41), and
 // `wrangler types` still refuses `--x-new-config`. What changed is a second
@@ -14,11 +44,41 @@
 // door, below, and tsconfig.cf-garage.json includes what it writes in place of
 // the site's file.
 //
+// Measured the day it moved (wrangler 3572193, workerd 1.20260925.1): the
+// runtime section at 2026-06-16 + nodejs_compat,new_module_registry is
+// BYTE-IDENTICAL to the site's at 2026-06-01 + enable_request_signal,
+// new_module_registry (604,981 B each). nodejs_compat adds nothing to the
+// generated declarations, since workerd's types describe the Workers globals
+// and leave `node:*` to @types/node. So the switch buys the Env, not a
+// different runtime, and it will start buying the runtime the day cf-garage's
+// date or flags move somewhere the site's do not.
+//
 // RUNTIME ONLY. `--include-env=false`, because the Env half wrangler would
 // write types COUNTER and the two Workflows by importing `.build/src/worker/
 // index`, which is build output that does not exist in a fresh checkout;
 // src/worker/lib/env.ts's header has the long version of why the site's Env is
 // hand-written and checked against cloudflare.config.ts instead.
+//
+// The output is NOT COMMITTED. It is a pure function of the wrangler pin and
+// the config, the same argument the Markdown twins and the search index won,
+// so `bun run typecheck` runs this first and config/.generated/ is ignored.
+// Running tsc on one of these programs without it fails on the missing include
+// rather than silently checking against nothing.
+//
+// IT IS CACHED ON ITS INPUTS, because three `wrangler types` runs cost 5.3s of
+// wrangler startup (3.1s for one, measured 2026-09-02) on a typecheck that
+// took 2.6s before this step existed. The first line of the output names a
+// key over everything the surface can depend on: wrangler's version (which
+// pins workerd) and the bytes of the three configs (which carry the dates and
+// flags). A matching key skips the whole run; anything else regenerates. Note
+// what the key does NOT cover, on purpose: a config edit that leaves the file
+// byte-identical cannot change the output, and a workerd that moved without
+// wrangler moving cannot happen under an exact pin.
+//
+// On Wrangler 4.129.0, `types --include-env=false` also resolves the entrypoint
+// and runs its custom build. The temporary runtime-only configs below removed
+// that extra build: 6.15s -> 3.03s in a 2026-09-08 workstation comparison,
+// with byte-identical declarations and no writes to the staged site.
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -32,9 +92,17 @@ import { asList, asRecord, asText } from "../src/worker/lib/parse.ts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 export const OUT = join(REPO, "config", ".generated", "workers-runtime.d.ts");
+// TWO FILES SINCE 2026-10-01. The site took `webcrypto_modern_algorithms` for
+// AadharshBot's native ML-DSA signature (sig2), which adds the ML-DSA/ML-KEM
+// surface to its runtime: 623,650 bytes against the auxiliaries' 621,909 on
+// the day it landed. The divergence check below did exactly its job and refused
+// to type lwe-ask and lens-reader against a runtime they do not run, so those
+// two now share AUX_OUT, and THEY are the pair that must agree.
 export const AUX_OUT = join(REPO, "config", ".generated", "workers-runtime-aux.d.ts");
 const KEY_PREFIX = "// gen-runtime-types key ";
 
+// Order is read below: the first writes OUT, the second writes AUX_OUT, and
+// every config after the second must generate the same surface as it.
 const CONFIGS = [
   { name: "site", config: "cloudflare.config.ts" },
   { name: "lwe-ask", config: "lwe-ask/cloudflare.config.ts" },
@@ -53,6 +121,8 @@ const inputsKey = () => {
 const FORCE = process.argv.includes("--force");
 const wranglerVersion = () => JSON.parse(readFileSync(join(REPO, "node_modules", "wrangler", "package.json"), "utf8")).version;
 
+// ── cf-garage: wrangler writes this one, from cloudflare.config.ts ─────────
+//
 // The path is wrangler's constant (NEW_CONFIG_TYPES_OUTPUT_PATH), resolved
 // against the working directory, which is why the spawn runs in cf-garage/.
 // Both `.cloudflare/` trees are gitignored by the root rule.
@@ -129,6 +199,11 @@ if (!FORCE && current(OUT) && current(AUX_OUT)) {
   process.exit(0);
 }
 
+// The two auxiliary configs are cloudflare.config.ts since 2026-09-28 (`cf
+// migrate`), a program rather than data, so the runtime fields are read by
+// IMPORTING it: this script runs under bun, which runs TypeScript, and
+// `defineConfig` returns the object it was given. A regex over the source would
+// be a second parser of a format that is explicitly allowed to be a function.
 async function runtimeFields(config: string) {
   const source = readFileSync(join(REPO, config), "utf8");
   if (config.endsWith(".ts")) {
@@ -140,6 +215,8 @@ async function runtimeFields(config: string) {
   return { compatibility_date: parsed.compatibility_date, compatibility_flags: parsed.compatibility_flags ?? [] };
 }
 
+// Resolved before the loop so generate() stays synchronous: an import is the
+// only async step, and the configs are few.
 const FIELDS = new Map();
 for (const c of CONFIGS) FIELDS.set(c.config, await runtimeFields(c.config));
 
@@ -176,6 +253,7 @@ try {
       );
     }
   }
+  // A floor on each, because a generator that writes an empty file passes every include.
   for (const r of [site, aux]) {
     if (r.body.length < 400_000) throw new Error(`gen-runtime-types: ${r.config} runtime surface is only ${r.body.length} bytes; expected ~620 KB`);
   }

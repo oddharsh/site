@@ -1,11 +1,16 @@
 // ── the /hit beacon ─────────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   assert,
   handleHit,
   test,
 } from "./contract-shared.ts";
 
+// The counter's Durable Object is a single global instance, so reaching it costs
+// a real round trip (185-308ms from SJC; 630ms observed on a cold contended
+// load). The ?tick=1 beacon discards the number, so it must not wait for one —
+// but the tick still has to happen, which is what waitUntil buys. The SVG shape
+// DOES need the number, so it must keep waiting. These two tests pin that split;
+// collapsing either direction is a real regression.
 function slowCounter() {
   let release;
   const gate = new Promise((r) => { release = r; });
@@ -37,7 +42,7 @@ test("the /hit beacon answers 204 without waiting on the Durable Object", async 
   assert.equal(kept.length, 1, "the unfinished DO trip must be handed to waitUntil");
 
   release();
-  await kept[0];
+  await kept[0];   // and it still completes behind the response
 });
 
 test("the homepage's one /hit request ticks without waiting and answers the mirrored count", async () => {
@@ -59,7 +64,7 @@ test("the homepage's one /hit request ticks without waiting and answers the mirr
 
 test("the /hit beacon still ticks when there is no ctx to defer onto", async () => {
   const { env, seen, release } = slowCounter();
-  release();
+  release();   // resolve immediately; without a ctx the handler must await it
   const res = await handleHit(new Request("https://aadhar.sh/hit?tick=1"), env, undefined);
   assert.equal(res.status, 204);
   assert.equal(seen.length, 1, "no ctx must mean await, never a dropped tick");

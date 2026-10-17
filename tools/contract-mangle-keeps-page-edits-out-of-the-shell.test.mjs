@@ -5,6 +5,12 @@
 // luna.css's `--blue-65` (23), the two swapped letters inside luna.css, and
 // luna.5e0c7979.css became luna.5b20cdaa.css: 311 staged files, every page and
 // every page dictionary, for a one-line edit to one page (gotcha 35's cost).
+//
+// planNames now takes the shell set. A name the shell DEFINES is ranked by the
+// shell's own uses; everything else is placed by a hash of its name. This file
+// pins both halves on a fixture shaped like that incident, plus the control
+// that shows the fixture could fail: the old single ranking, on the same edit,
+// does move the shell.
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { applyMangle, assertIntegrity, planNames } from "./lib/mangle-custom-properties.ts";
@@ -12,6 +18,8 @@ import { CLIENT_ASSETS, contentHashedFiles, shellRankedFiles } from "./lib/clien
 
 const SHELL = new Set(["public/luna.css"]);
 
+// Shell: --blue-65 is its most-used token (7 site-wide against --sh's 5), so
+// it earns the shortest name, and the edits below push --sh past it.
 const luna = [
   ":root{--blue-65:#3169c6;--face:#ece9d8;--ink:#000}",
   ".a{color:var(--blue-65)}.b{border-color:var(--blue-65)}.c{outline-color:var(--blue-65)}",
@@ -19,6 +27,7 @@ const luna = [
   ".d{background:var(--face)}.e{color:var(--ink)}",
 ].join("");
 
+// A page with its own local token, used more than anything in the shell.
 const pageWith = (extra) =>
   [
     "<style>:root{--sh:#aca899}",
@@ -28,6 +37,7 @@ const pageWith = (extra) =>
     "</style>",
   ].join("");
 
+// A second page that defines its own `--sh` too.
 const other = "<style>:root{--sh:#aca899;--sc:#fff}.q{border:1px solid var(--sh);color:var(--sc)}</style>";
 
 const tree = (extra) =>
@@ -74,6 +84,8 @@ for (const [label, extra] of Object.entries(EDITS)) {
 }
 
 test("CONTROL: the old site-wide ranking DOES move the shell on the same edit", () => {
+  // Without a shell set every file counts, which is the pre-2026-09-24 plan.
+  // If this ever passes identical, the fixture stopped exercising the bug.
   const before = render(tree(""));
   const after = render(tree(EDITS["one more var() use of the page-local name"]));
   assert.notEqual(after.out.get("public/luna.css"), before.out.get("public/luna.css"));
@@ -89,6 +101,7 @@ test("page-local names come from the two-character tier and never shadow a shell
   const shellNames = new Set(["--blue-65", "--face", "--ink"].map((n) => map.get(n)));
   for (const local of ["--sh", "--sc"]) {
     const short = map.get(local);
+    // `--sh` is already four characters, so the two-character tier cannot beat it.
     if (short) {
       assert.equal(short.length, 4, `${local} -> ${short}`);
       assert.ok(!shellNames.has(short), `${local} took a shell name`);
@@ -109,6 +122,15 @@ test("the rename still passes the dangling-reference invariant", () => {
   assert.throws(() => assertIntegrity(files, missed, map, 3), /newly dangling: --a\n/);
 });
 
+// The page-scoped hashed files (every `scope: "page"` row in
+// tools/lib/client-assets.ts, lwe/ask.js among them) are content-hashed and
+// still ranked as PAGES: ask.js reads 3 --font-* tokens, and in the shell set
+// its edits would reorder luna.css's names. "more page uses of a SHELL token"
+// above is that case, so what is left to pin is that 5c actually hands them
+// over on the page side.
+//
+// The shell set and the set step 6 hashes are two projections of ONE registry
+// (tools/lib/client-assets.ts), so they cannot disagree.
 test("step 5c plans with the registry's shell tier, which is every hashed file minus the page-scoped ones", () => {
   const build = readFileSync(new URL("./build.ts", import.meta.url), "utf8");
   assert.ok(build.includes("planNames(before, SHELL_RANKED)"), "5c must plan with the shell part of the content-hashed set");

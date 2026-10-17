@@ -5,6 +5,10 @@
 // missed them a different way: build.ts baked them after the twin step and only
 // logged the miss, the route oracle listed Markdown rows by hand, and
 // check-infra's production tier read `kind === "page"` alone.
+//
+// One rule now (tools/lib/agent-representation.ts) and three enforcers. This
+// file proves the rule separates the cases it has to, and that each enforcer
+// reads it rather than a private copy that can drift.
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { agentSurfacesWithoutTwin, buildTwins, readManifest, twinPath } from "./gen-md-twins.ts";
@@ -23,6 +27,7 @@ test("the rule flags an agents surface with no twin and no declared representati
     { path: "/human-only", flags: { agents: false } },
   ];
   assert.deepEqual(agentSurfacesWithoutTwin(surfaces, [twinPath("/twinned")]), ["/missing", "/explicit-html"]);
+  // The control: the same registry with every twin present flags nothing.
   assert.deepEqual(agentSurfacesWithoutTwin(surfaces, surfaces.map((s) => twinPath(s.path))), []);
 
   assert.equal(agentRepresentation({ path: "/a" }), "text/markdown");
@@ -39,8 +44,13 @@ test("the six island pages baked after the twin step each have a hand twin", () 
 });
 
 test("every agents surface the source tree cannot twin is one the build generates before the twin step", () => {
+  // From source alone, the only misses are pages build.ts renders at 1d-1f and
+  // twins from the staged tree. The build's own throw covers the full set; this
+  // pins the source-side list so a new miss shows up here without a build.
   const { files, committed } = buildTwins(root);
   const missing = agentSurfacesWithoutTwin(readManifest(root).surfaces, [...files.keys(), ...committed]).sort();
+  // /about, /contact, /privacy and /developers joined 2026-10-13: trust.ts
+  // renders them at 1e, so their twins are generated rather than hand-kept.
   assert.deepEqual(missing, ["/about", "/contact", "/developers", "/photos", "/privacy", "/restore", "/updates"],
     "a new agents:true surface has no Markdown twin: add a hand twin in src/content/md/, declare mimeType for a live representation, or drop flags.agents");
 });

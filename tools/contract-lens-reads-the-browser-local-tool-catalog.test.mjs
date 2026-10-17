@@ -1,4 +1,11 @@
 // ── the WebMCP catalog: read it, never call it ─────────────────────────────
+//
+// The Tools tab reads /mcp, a SERVER catalog anything can POST to. This one is
+// the other kind: tools a page registers into document.modelContext with its own
+// JavaScript, which nothing you can fetch will ever reveal. Reading them means
+// running the page, so the probe rides the CDP session /lens/wire already opens.
+//
+// Reading and never calling is a security boundary: the first test holds it.
 import {
   assert,
   readFileSync,
@@ -10,10 +17,19 @@ const SOURCE = readFileSync("./src/worker/lib/agent-webmcp.ts", "utf8");
 const WIRE = readFileSync("./src/worker/lens-wire.ts", "utf8");
 
 test("the probe reads the catalog and can never call anything in it", () => {
+  // Executing a stranger's tool from a render this site initiated is the
+  // remote-code-execution proxy lens-recipes.ts refuses to become, one layer in.
+  // The tool being named `delete_document` would not stop it.
+  // Comments are stripped first: this module's own header EXPLAINS the rule by
+  // naming the method, and a scanner that cannot tell prose from code would
+  // either fail on that sentence or have to be silenced into uselessness. Same
+  // shape as the modelContext ownership check in
+  // contract-webmcp-one-door-onto-the-browser-catalog.test.mjs.
   const code = SOURCE.split("\n").filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join("\n");
   assert.ok(!/executeTool/.test(code),
     "agent-webmcp.ts CALLS executeTool; the probe must only ever read getTools()");
   assert.ok(/getTools\(\)/.test(WEBMCP_PROBE), "the probe should read getTools()");
+  // No caller byte reaches the evaluated expression: it is a constant.
   assert.ok(!/\$\{(?!WEBMCP_LIMITS)/.test(WEBMCP_PROBE.replace(/\$\{[\d]+\}/g, "")),
     "the probe expression must interpolate nothing but its own caps");
 });
@@ -22,6 +38,7 @@ test("awaitPromise is set, because getTools() is async", () => {
   // Without it the evaluate resolves to a pending Promise handle and every
   // origin reads as having no tools, which is indistinguishable from the truth
   // on a site that has none. This is the single option the feature rests on.
+  // indexOf finds the IMPORT first, which is not the call site.
   const at = WIRE.indexOf("expression: WEBMCP_PROBE");
   assert.ok(at > 0, "lens-wire.ts no longer sends the probe to Runtime.evaluate");
   const call = WIRE.slice(at, at + 200);
@@ -30,6 +47,9 @@ test("awaitPromise is set, because getTools() is async", () => {
 });
 
 test("a tool that states no readOnlyHint is a THIRD state, never a safe one", () => {
+  // Chrome carries exactly one of MCP's five annotations across registration, so
+  // read-vs-write is the most a visitor can be told. Folding "the page never
+  // said" into either column invents a claim the page did not make.
   const out = readWebmcpProbe({
     present: true, count: 3, read: 1, write: 1, unstated: 1,
     origins: ["https://example.com"], tools: [{ name: "a" }, { name: "b" }, { name: "c" }],
@@ -43,11 +63,19 @@ test("a tool that states no readOnlyHint is a THIRD state, never a safe one", ()
 });
 
 test("an engine with no WebMCP is UNMEASURABLE, never a site with no tools", () => {
+  // Measured 2026-08-25 against the real binding: Browser Run renders in
+  // Chrome/128.0.6613.137, and WebMCP's origin trial is Chrome 149-156. So this
+  // engine cannot see a catalogue on ANY origin, and the first version of this
+  // probe reported that as `present: false` for aadhar.sh/whoareyou, a page
+  // measured at 25 registered tools minutes earlier. On the one surface whose
+  // premise is never reporting a failed check as a negative result, that is the
+  // worst bug it could have shipped.
   const out = readWebmcpProbe({ supported: false });
   assert.ok(out, "an unsupported engine must still return a record");
   assert.equal(out.supported, false);
   assert.equal(out.present, null, "an engine that cannot look must not report absence");
   assert.equal(out.count, 0);
+  // Supported and genuinely empty is a DIFFERENT claim.
   const empty = readWebmcpProbe({ supported: true, present: false });
   assert.ok(empty, "a supported-but-empty probe must still return a record");
   assert.equal(empty.supported, true);
@@ -55,6 +83,10 @@ test("an engine with no WebMCP is UNMEASURABLE, never a site with no tools", () 
 });
 
 test("the engine label comes from CDP, never from the page's user agent", () => {
+  // /lens/wire overrides navigator.userAgent to AadharshBot, so asking the page
+  // which browser it is returns this site's own mask. It did, once: the reading
+  // came back `engine: "AadharshBot/1.0 (+https://aadhar.sh/bot)"`.
+  // The presence half first, so the absence below is read off the real probe.
   assert.ok(/getTools\(\)/.test(WEBMCP_PROBE), "WEBMCP_PROBE should be the script that reads getTools()");
   assert.ok(!/navigator\.userAgent/.test(WEBMCP_PROBE),
     "the probe must not report navigator.userAgent; this route overrides it");
@@ -63,12 +95,14 @@ test("the engine label comes from CDP, never from the page's user agent", () => 
 });
 
 test("a probe that could not run is ABSENT, never an empty catalog", () => {
+  // /lens's standing rule: never report a failed check as a negative result.
   assert.equal(readWebmcpProbe(null), null, "no payload is not an empty catalog");
   assert.equal(readWebmcpProbe("nonsense"), null);
   const errored = readWebmcpProbe({ probeError: "boom" });
   assert.ok(errored, "a probe error must still return a record");
   assert.equal(errored.present, null, "a probe error must not read as present:false");
   assert.equal(errored.error, "boom");
+  // Ran, and the page really registered nothing. A different claim.
   const empty = readWebmcpProbe({ present: false });
   assert.ok(empty, "a ran-and-found-nothing probe must still return a record");
   assert.equal(empty.present, false);
@@ -80,6 +114,7 @@ test("every axis of a stranger's catalog is bounded", () => {
   for (const [key, cap] of Object.entries(WEBMCP_LIMITS)) {
     assert.ok(Number.isInteger(cap) && cap > 0 && cap <= 1000, `${key} cap should be a small positive integer`);
   }
+  // The caps have to reach the probe, or they are documentation.
   for (const cap of [WEBMCP_LIMITS.tools, WEBMCP_LIMITS.description, WEBMCP_LIMITS.params, WEBMCP_LIMITS.name]) {
     assert.ok(WEBMCP_PROBE.includes(String(cap)), `cap ${cap} never reaches the probe expression`);
   }

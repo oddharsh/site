@@ -1,5 +1,4 @@
 // ── tag stripping: the closers HTML allows and a regex forgets ───────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   assert,
   test,
@@ -20,6 +19,8 @@ test("a spaced end tag and an --!> comment close their elements", async () => {
   assert.ok(!lensMarkdown("<body><!-- gone --!><p>after</p></body>", "https://x/").includes("gone"),
     "--!> closes a comment");
 
+  // <head> must not swallow a page that opens with <header>, which is what a
+  // missing word boundary buys: the strip runs to the next literal </head>.
   assert.ok(lensMarkdown("<body><header><p>nav</p></header><p>body</p></body>", "https://x/").includes("body"),
     "<header> is not <head>");
 

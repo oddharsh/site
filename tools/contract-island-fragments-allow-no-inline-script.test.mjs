@@ -35,6 +35,7 @@ test("withSecurityHeaders keeps the fragment's policy", () => {
   const out = withSecurityHeaders(islandResponse(html`<p>x</p>`), "/ledger/lines.html");
   assert.equal(out.headers.get("content-security-policy"), ISLAND_CSP);
   assert.notEqual(out.headers.get("content-security-policy"), CSP_LOOSE);
+  // the control: an HTML response with no policy of its own still gets the loose stamp
   const bare = withSecurityHeaders(new Response("<p>x</p>", { headers: { "content-type": "text/html" } }), "/not-built");
   assert.equal(bare.headers.get("content-security-policy"), CSP_LOOSE);
 });
@@ -63,6 +64,8 @@ test("real fragments hold nothing the policy would block", async () => {
     approved: true,
   };
   const pending = /** @type {{ readonly pending: true }} */ ({ pending: true });
+  // The census table is left out: its renderer needs a grouped report, and its
+  // empty state is an identity check on a module-private placeholder.
   const fragments = {
     "/around/snapshot.html": renderAroundSnapshot(null),
     "/garage/dyno/pulls.html": renderDynoPulls([]),
@@ -76,6 +79,7 @@ test("real fragments hold nothing the policy would block", async () => {
   for (const [name, fragment] of Object.entries(fragments)) {
     const body = typeof fragment === "string" ? fragment : fragment.html;
     assert.ok(body.length > 0, `${name} rendered something`);
+    // [] means no inline script; null would mean a handler or javascript: URL
     assert.deepEqual(inlineScriptHashes(body), [], `${name} carries script the policy would block`);
   }
 });

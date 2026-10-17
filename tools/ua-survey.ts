@@ -1,12 +1,30 @@
 #!/usr/bin/env node
 // What a site serves depends on who it thinks is asking. This measures that.
+//
+// One GET per identity per trial, public pages only, read-only. Every UA string
+// it sends is printed on /garage/useragent, because a survey that hides its own
+// method is asking the reader to take the numbers on faith.
+//
+// The CONTROL rows are the load-bearing part and the reason this exists rather
+// than a shell loop. A crawler identity that gets a 403 proves nothing on its
+// own: the same 403 arrives when the origin is blocking our datacenter IP, our
+// TLS fingerprint, or the absence of a cookie. Chrome and curl answer "could
+// this instrument have seen anything at all", and a target where the controls
+// disagree with each other is reported UNMEASURABLE rather than blocked.
+// Measured 2026-08-21: medium.com and quora.com answer 403 to Chrome too, so
+// every AI-crawler row on those hosts is uninterpretable.
 
 const IDENTITIES = [
+  // controls first; the report refuses to grade a target whose controls failed.
   { key: "chrome",  label: "Chrome",       owner: "a browser", role: "control",
     ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" },
   { key: "curl",    label: "curl",         owner: "a plain HTTP client", role: "control",
     ua: "curl/8.7.1" },
 
+  // The honest row, and the survey's own disclosure. It claims nothing it cannot
+  // back and points at the page that publishes these numbers. Read it against
+  // `googlebot` on en.wikipedia.org: claiming NOTHING is served, and claiming a
+  // verifiable identity from an IP that cannot back it is refused.
   { key: "honest", label: "ua-survey (ours)", owner: "aadhar.sh", role: "control",
     ua: "aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)" },
 
@@ -35,6 +53,8 @@ const IDENTITIES = [
     ua: "aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)",
     headers: { "signature-agent": '"https://aadhar.sh"' } },
 
+  // The two the source claim named by name. Neither is a documented crawler
+  // token, which is the point: they cost nothing to type and nothing verifies them.
   { key: "oai_fd",  label: "OpenAI File Downloader", owner: "OpenAI (claimed)", role: "claimed",
     ua: "OpenAI File Downloader" },
   { key: "xai_img", label: "XaiImageApiFetch",       owner: "xAI (claimed)",    role: "claimed",
@@ -59,13 +79,18 @@ const TARGETS = [
 ];
 
 const TIMEOUT_MS = 20000;
-const SHELL_WORDS = 50;
+const SHELL_WORDS = 50; // below this, a 200 is a frame rather than a document
+// stripRawText lives in tools/lib/html-raw-text.ts since 2026-08-24, when CodeQL
+// flagged a THIRD file for the same missed end-tag shapes, and the argument for
+// the scan lives there. /garage/useragent's word counts are why the shapes have
+// to be right; contract-ua-survey-raw-text-stripping tests them through `words`.
 import { stripRawText } from "./lib/html-raw-text.ts";
 export { stripRawText };
 
 export const words = (s: string) => stripRawText(stripRawText(s, "script"), "style")
                       .replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length;
 
+// One measured fetch of one URL as one identity.
 type Sample = {
   status: number | null;
   bytes?: number;
@@ -116,6 +141,11 @@ async function sample(
       words: wordCount,
       contentType: (res.headers.get("content-type") || "").split(";")[0].trim(),
       challenge, blocked,
+      // A 200 carrying no prose is a shell, not a document. reddit.com answers 200
+      // with ONE word to every identity here, browsers included, because the page
+      // renders client-side. Scoring that as retrieval credits an origin for
+      // serving an empty frame, and it is a THIRD state rather than a failure:
+      // the request was allowed and the content still is not there.
       shell: !blocked && res.status >= 200 && res.status < 300 && wordCount < SHELL_WORDS,
       markers,
     };
@@ -138,7 +168,7 @@ async function main() {
       const runs = [];
       for (let i = 0; i < trials; i++) {
         runs.push(await sample(target, identity));
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 400)); // one request at a time, deliberately slow
       }
       const ok = runs.filter((r) => r.status !== null);
       results[identity.key] = {
@@ -149,13 +179,26 @@ async function main() {
         blocked: ok.length ? ok.filter((r) => r.blocked).length > ok.length / 2 : false,
         shell: ok.length ? ok.filter((r) => r.shell).length > ok.length / 2 : false,
         challenge: ok.some((r) => r.challenge),
+        // A target that answers differently across identical trials is reporting
+        // rate-limit state, not policy. en.wikipedia.org gave ClaudeBot 403 and
+        // then 200 minutes apart, so an unstable row must not read as a verdict.
         unstable: new Set(ok.map((r) => r.status)).size > 1,
         markers: ok.find((r) => r.markers)?.markers || null,
         errors: runs.filter((r) => r.error).length,
       };
       process.stderr.write(`  ${target.key} / ${identity.key}: ${results[identity.key].status} ${results[identity.key].words ?? "-"}w\n`);
     }
+    // The control gate, and the whole reason this file is not a shell loop. With
+    // every control refused the instrument never got in, so nothing on this row
+    // is a fact about user-agent policy. ONE control getting through is enough:
+    // linkedin.com answers 999 to curl unconditionally, and requiring every
+    // control to pass threw away a target that Chrome could read perfectly.
     const controls = IDENTITIES.filter((i) => i.role === "control");
+    // A control that got a SHELL still got in. reddit.com answers 200 with one word
+    // to a browser because the page renders client-side, which is a fact about the
+    // site rather than a refusal, and excluding it here marked the single most
+    // interesting row in the survey unmeasurable: reddit serves Chrome 29 words and
+    // facebookexternalhit 6,168 off the same URL. Only a genuine refusal disqualifies.
     const controlsPassed = controls.some((i) => {
       const r = results[i.key];
       return r && !r.blocked && r.status && r.status < 400;
@@ -172,7 +215,12 @@ async function main() {
   }
   process.stdout.write(JSON.stringify(report, null, 2) + "\n");
 }
+// Importing this module must not fire a survey. The contract test exercises
+// `words` directly, and a bare import that made 500 outbound requests would be
+// a memorable way to find that out.
 if (import.meta.main) main().catch((e) => {
+  // A survey that dies half way must not leave a truncated JSON body looking
+  // like a complete result. Fail loudly and write nothing usable.
   process.stderr.write(`ua-survey failed: ${(e && e.stack) || e}\n`);
   process.exitCode = 1;
 });

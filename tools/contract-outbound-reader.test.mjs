@@ -1,4 +1,14 @@
 // ── the outbound reader, against a fake transport ────────────────────────
+//
+// lib/outbound.ts decides self-dispatch or network, validates every hop before
+// requesting it, applies the identity's gate (signature plus robots, or robots
+// alone), and returns a refusal as a value. These tests reach it by INJECTION:
+// env.OUTBOUND_TRANSPORT is the network adapter, so nothing here replaces the
+// global fetch. The suite's no-network preload stays armed underneath, which
+// means a read that slipped past the injected adapter fails the whole run.
+//
+// Each test carries its control: the same fixture with the guard taken away,
+// showing the fake network CAN see the request the guard prevents.
 import { assert, test } from "./contract-shared.ts";
 import { dispatchesToSelf, outboundRead, selfAdapter } from "../src/worker/lib/outbound.ts";
 import { fetchFollowingPublicRedirects } from "../src/worker/lib/public-fetch.ts";
@@ -16,6 +26,8 @@ async function signingEnv() {
   return { RN_SIGNING_KEY_JWK: JSON.stringify(await crypto.subtle.exportKey("jwk", pair.privateKey)) };
 }
 
+// The third adapter. It records what reached "the network" and answers from
+// the fixture; robots.txt is answered separately so a test states its policy.
 /**
  * @param {(record: any) => Response} respond
  * @param {(record: any) => Response} [robots]
@@ -49,6 +61,8 @@ test("a redirect to a private address is refused at the hop, as a value, before 
     assert.ok(net.seen.every((r) => r.redirect === "manual"), "every hop is requested with redirect: manual");
   }
 
+  // CONTROL: the same fake network under a check that allows everything DOES
+  // request the metadata address, so the assertion above can fail.
   const net = fakeNetwork(({ url }) => url === metadata ? new Response("secret") : new Response(null, { status: 302, headers: { location: metadata } }));
   const walked = await fetchFollowingPublicRedirects(origin + "/start", () => ({}), () => ({ ok: true }), 4, net.transport);
   assert.equal(walked.ok, true);
@@ -78,6 +92,7 @@ test("the robots gate stops a disallowed read for both identities, as a value", 
     assert.equal(read.cause.name, "BotPolicyError");
     assert.deepEqual(net.seen.map((r) => r.url), [origin + "/robots.txt"], "only the policy was read");
 
+    // CONTROL: a path the same policy allows IS fetched through the same fake.
     const allowed = fakeNetwork(() => new Response("content"), disallow);
     const ok = await outboundRead(origin + "/public", { ...key, OUTBOUND_TRANSPORT: allowed.transport }, get(identity));
     assert.equal(ok.ok, true);
@@ -115,15 +130,19 @@ test("this origin goes to self-dispatch, unsigned, and never to the network", as
     assert.equal(requests[0].headers.get("user-agent"), identity === BOT ? "AadharshBot/1.0 (+https://aadhar.sh/bot)" : "fixture-agent/1.0");
     assert.equal(net.seen.length, 0, "no network request and no robots read");
 
+    // A dead binding is a FAULT: it throws, and it is not permission to go out.
     const broken = async () => { throw new Error("fixture local failure"); };
     await assert.rejects(outboundRead(self, { ...env, SELF_FETCH: binding === "SELF_FETCH" ? broken : undefined, ASSETS: binding === "ASSETS" ? { fetch: broken } : undefined }, get(identity)), /fixture local failure/);
     assert.equal(net.seen.length, 0, "a binding failure never falls through to the network");
   }
 
+  // SELF_FETCH wins over ASSETS when both are present.
   const both = await outboundRead(self, { SELF_FETCH: async () => new Response("route"), ASSETS: { fetch: async () => new Response("static") } }, get(PROBE));
   assert.ok(both.ok);
   assert.equal(await both.response.text(), "route");
 
+  // CONTROL: the same URL with no binding to dispatch through DOES reach the
+  // fake network, so "never the network" above is something the fake can see.
   const net = fakeNetwork(() => new Response("over the wire"));
   const read = await outboundRead(self, { ...key, OUTBOUND_TRANSPORT: net.transport }, get(BOT));
   assert.ok(read.ok);
@@ -161,11 +180,15 @@ test("the two identities differ exactly where they are meant to", async () => {
   for (const header of ["signature", "signature-input", "signature-agent"]) assert.equal(bare.headers.has(header), false, `unsigned-probe sends no ${header}`);
   assert.equal(probe.seen[0].url, origin + "/robots.txt", "and still reads the policy first");
 
+  // The signed identity needs a key BEFORE any network activity; the probe does not sign at all.
   const keyless = fakeNetwork(answer);
   await assert.rejects(outboundRead(origin + "/page", { OUTBOUND_TRANSPORT: keyless.transport }, get(BOT)), /signing key/);
   assert.equal(keyless.seen.length, 0);
 });
 
+// The hop limit is each caller's own, stated at its call site. These pin the
+// values that existed before the readers shared a module: 4 for the lens and
+// door probes, native fetch's 20 for the cache probe.
 test("each caller keeps its own identity, method and hop limit", async () => {
   const key = await signingEnv();
   const loop = ({ url }) => new Response(null, { status: 302, headers: { location: "/" + (Number(new URL(url).pathname.replace(/\D/g, "") || 0) + 1) } });

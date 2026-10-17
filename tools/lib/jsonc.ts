@@ -5,6 +5,7 @@ export function parseJsonc(text: string) {
     /"(?:\\[\s\S]|[^"\\])*"|\/\*[\s\S]*?(\*\/|$)|\/\/[^\r\n]*/g,
     (token, blockEnd) => {
       if (blockEnd === "") throw new SyntaxError("Unterminated JSONC block comment");
+      // Whitespace keeps tokens apart: 1/* comment */2 must not become 12.
       return token.startsWith('"') ? token : " ";
     },
   );
@@ -14,6 +15,7 @@ export function parseJsonc(text: string) {
       if (!closing) return token;
       let before = offset - 1;
       while (/\s/.test(json[before])) before--;
+      // Do not turn a missing value ([,], {,}, or [1,,]) into valid JSON.
       return "[{,:".includes(json[before]) ? token : closing;
     },
   ));

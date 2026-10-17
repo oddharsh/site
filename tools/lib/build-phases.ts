@@ -1,4 +1,15 @@
 // build-phases.ts: wall and CPU time per step of tools/build.ts.
+//
+// The build is one top-level script, so a phase is the stretch between two
+// phase() calls: each call closes the open phase and starts the next. CPU is
+// process.cpuUsage(), which counts every thread of this process (the zlib pool
+// included) and no child: a spawnSync child's CPU lands in nobody's column, so
+// a phase whose CPU sits far under its wall time is waiting on a subprocess or
+// on disk. CPU well above wall means threads ran in parallel.
+//
+// The first row, "startup", is everything before the first phase() call:
+// module loading and the top-level definitions, timed from the process's own
+// time origin.
 
 export interface PhaseRow {
   name: string;
@@ -31,6 +42,8 @@ export function phaseClock() {
   };
 }
 
+// One line for every build log, the slowest phases first; the full table is
+// the JSON file the build writes beside the staged tree.
 export function phaseSummary(rows: PhaseRow[], top = 5): string {
   const total = rows.reduce((t, r) => t + r.wallMs, 0);
   const slowest = [...rows].sort((a, b) => b.wallMs - a.wallMs).slice(0, top);

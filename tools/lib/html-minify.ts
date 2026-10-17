@@ -1,8 +1,54 @@
 // html-minify.ts: the build's HTML minifier, one pass over tokens with a stack
 // of open elements.
+//
+// It replaced @minify-html/node on 2026-10-07 and makes exactly the choices the
+// build's old HTML_MINIFY_CFG made, so the two agree byte for byte on every
+// staged page but one: /garage/horizon, where minify-html rewrote
+// `hidden="until-found"` to a bare `hidden`. That broke the page's
+// find-in-page demo in production, because bare `hidden` cannot be revealed by
+// a search. Here `hidden` loses its value only when the value is empty or
+// "hidden". The rest it reproduces:
+//   - comments go, except SSI comments (<!--#...-->), which carry markers
+//   - whitespace collapses, except inside <pre>, <textarea> and <code>; it is
+//     trimmed at the edges of block-ish elements, and a run of only whitespace
+//     between the children of a layout element (div, ul, table, nav ...) goes
+//     entirely. That rule is lossy in normal flow (<div><b>a</b> <b>b</b></div>
+//     loses its space); the site's layouts are flex and grid, where that space
+//     never rendered, and minify-html made the same call
+//   - attributes sort (quoted values first, then by name), lose quotes they do
+//     not need, and empty class, id, style, title, name and value attributes go,
+//     as do empty action, src (off <script>) and meta content, and any value
+//     that equals the attribute's default (DEFAULTS). A boolean loses an empty or
+//     self-named value; a class's spacing and the spaces around a viewport's
+//     commas collapse. contract-the-minifier-keeps-every-page-meaning copies
+//     these rules, so change both together
+//   - end tags the HTML spec lets a parser infer are omitted (</p> before a
+//     block, </li> before <li>, </td>, </tr>, </option>, </body>, </html> ...)
+//   - named and numeric references decode to the characters they name, except
+//     "<", and "&" where a bare one would start another reference
+// <script> and <style> keep their bytes, less outer whitespace: the build runs
+// Oxc and Lightning CSS over them first (transformInlineHtmlBlocks).
+//
+// It was measured against minify-html with its parity test and a
+// planted-mutation control, and it removes 6 lockfile packages and a 16 MB
+// binary.
+//
+// SPEED. The first version tokenized with one regex per alternative and
+// re-matched every tag's attributes with a second one, and ran 1.85x slower
+// than minify-html. This one scans char codes, parses attributes once, sorts
+// them on keys it already holds, and decodes references only where a run has
+// an "&". Over the 69 staged pages (2.6 MB) on 2026-10-08: about 26 ms warm
+// against minify-html's 27.5 and the regex version's 51, and 35 ms cold with
+// load against minify-html's 32. A differential fuzz over 200,000 generated
+// fragments found no output that differs from the regex version, and caught
+// each of three planted mistakes. The regex version also hung on a raw element
+// whose end tag never closed (`<script>x</script` at end of input); this one
+// runs to the end of the document, as the parser does.
 
 const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+// no tags inside: copied through to their end tag
 const RAW = new Set(["script", "style", "textarea", "title", "xmp", "plaintext"]);
+// whitespace inside is content
 const SENSITIVE = new Set(["pre", "textarea", "code"]);
 const LAYOUT = new Set(["html", "head", "body", "div", "section", "nav", "blockquote", "form", "figure", "header", "footer", "article", "fieldset",
   "aside", "dialog", "main", "ol", "ul", "dl", "menu", "hgroup", "select", "optgroup", "datalist", "table", "thead", "tbody", "tfoot", "tr",
@@ -32,27 +78,41 @@ const OMIT_BEFORE: Record<string, (next: string) => boolean> = {
 const OMIT_AT_END = new Set(["li", "dt", "dd", "option", "optgroup", "tr", "td", "th", "tbody", "body", "html"]);
 const P_KEEPS_END_IN = new Set(["a", "audio", "del", "ins", "map", "noscript", "video"]);
 
+// Every named reference the site's pages use, so each decodes to its character
+// as minify-html did. An unknown name stays as written.
 const ENTITIES: Record<string, string> = {
   quot: '"', apos: "'", amp: "&", lt: "<", gt: ">", nbsp: " ", middot: "·", times: "×", rarr: "→", larr: "←", uarr: "↑", darr: "↓",
   hellip: "…", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“", mdash: "—", ndash: "–", egrave: "è", minus: "−", copy: "©", deg: "°",
   ge: "≥", le: "≤", divide: "÷", sup2: "²", rsaquo: "›", lsaquo: "‹", plusmn: "±", nacute: "ń", micro: "µ", chi: "χ", boxbox: "⧉",
   blacktriangle: "▴", approx: "≈",
 };
+// ── the scanner: replaces the TOKEN and ATTR regexes ─────────────────────────
+// One pass over char codes. Each branch is one alternative of the old TOKEN
+// regex, in its order: comment, other `<!...>`, end tag, start tag, text, and a
+// lone "<" as text when no tag shape fits. Attributes are parsed here, once,
+// instead of being re-matched from the raw attribute string.
 
+// JavaScript's \s, which the old regexes used
 const isWs = (c: number) =>
   c === 32 || (c >= 9 && c <= 13) || c === 0xa0 || c === 0x1680 || (c >= 0x2000 && c <= 0x200a) ||
   c === 0x2028 || c === 0x2029 || c === 0x202f || c === 0x205f || c === 0x3000 || c === 0xfeff;
 const isAlpha = (c: number) => (c >= 65 && c <= 90) || (c >= 97 && c <= 122);
+// [\w-]
 const isNameRest = (c: number) => isAlpha(c) || (c >= 48 && c <= 57) || c === 95 || c === 45;
+// [^\s"'>/=]
 const isAttrName = (c: number) => c >= 0 && !isWs(c) && c !== 34 && c !== 39 && c !== 62 && c !== 47 && c !== 61;
+// [^\s"'=<>`]
 const isBare = (c: number) => c >= 0 && !isWs(c) && c !== 34 && c !== 39 && c !== 61 && c !== 60 && c !== 62 && c !== 96;
 
+// Filled by scanStart and read by attributes() before the next tag is scanned:
+// parallel arrays reused across tags, so the hot path allocates no objects.
 const attrNames: string[] = [];
 const attrValues: (string | undefined)[] = [];
 let attrCount = 0;
 let rawAttrs = "";
 let selfClose = false;
 
+/** Parse a start tag at `i` (src[i] is "<", src[i+1] a letter). Returns the index after ">" or -1. */
 function scanStart(src: string, i: number, nameEnd: number): number {
   attrCount = 0;
   selfClose = false;
@@ -91,6 +151,7 @@ function scanStart(src: string, i: number, nameEnd: number): number {
   return src.charCodeAt(e) === 62 ? e + 1 : -1;
 }
 
+/** The old `src.toLowerCase().indexOf("</" + tag, from)`, without lowering the whole document. `tag` is lower case. */
 function findEndTag(src: string, tag: string, from: number): number {
   for (let at = src.indexOf("</", from); at >= 0; at = src.indexOf("</", at + 1)) {
     let k = 0;
@@ -111,12 +172,17 @@ const BLANK = /^\s*$/;
 export function minifyHtml(src: string): string {
   const out: Tok[] = [];
   const stack: string[] = [];
+  // open <pre>, <textarea> and <code> elements, so a text run asks a counter
+  // rather than walking the stack
   let sensitive = 0;
   const push = (tag: string) => { stack.push(tag); if (SENSITIVE.has(tag)) sensitive++; };
   const pop = () => { const tag = stack.pop() as string; if (SENSITIVE.has(tag)) sensitive--; return tag; };
+  // the last end tag, already in `out`, whose bytes wait on what follows it
   let held: Tok | null = null;
 
   const close = (tag: string) => { held = tok(`</${tag}>`, "close", tag); out.push(held); };
+  // Settle the held end tag: empty it if the next start tag (or, with null,
+  // the parent's end) lets the parser infer it.
   const settle = (next: string | null) => {
     if (!held || !held.tag) return;
     const omit = next === null
@@ -127,6 +193,8 @@ export function minifyHtml(src: string): string {
   };
 
   const text = (t: string) => {
+    // Text: the whitespace decision waits until both neighbours are known.
+    // Text keeps a held end tag; so does whitespace that will survive (any parent but a layout one).
     const top = stack.at(-1);
     if (!BLANK.test(t) || (stack.length && !LAYOUT.has(top as string))) settle("#text");
     out.push(tok(references(sensitive ? t : t.replace(COLLAPSE, " ")), sensitive ? "raw" : "text", undefined, top));
@@ -143,6 +211,7 @@ export function minifyHtml(src: string): string {
       continue;
     }
     const c1 = src.charCodeAt(i + 1);
+    // <!-- ... -->, and the other <!...> forms (an unterminated comment falls through to them)
     if (c1 === 33) {
       let end = src.startsWith("<!--", i) ? src.indexOf("-->", i + 4) : -1;
       if (end >= 0) end += 3;
@@ -162,6 +231,7 @@ export function minifyHtml(src: string): string {
       if (src.charCodeAt(g) === 62) {
         const tag = src.slice(i + 2, e).toLowerCase();
         i = g + 1;
+        // a stray end tag means nothing
         if (VOID.has(tag) || !stack.includes(tag)) continue;
         settle(null);
         while (stack.at(-1) !== tag) { close(pop()); settle(null); }
@@ -206,12 +276,15 @@ export function minifyHtml(src: string): string {
         continue;
       }
     }
+    // no tag shape fits: the "<" is text on its own
     text("<");
     i++;
   }
   settle(null);
   while (stack.length) { close(pop()); settle(null); }
 
+  // Whitespace: trim at the edges of layout and content elements, drop
+  // whitespace-only runs between a layout element's children.
   let html = "";
   for (let k = 0; k < out.length; k++) {
     const tok = out[k];
@@ -245,6 +318,8 @@ function references(s: string): string {
   });
 }
 
+// Attributes: sorted, unquoted where the value allows, and empty or default
+// values dropped the way minify-html dropped them.
 const DEFAULTS: Record<string, Record<string, string>> = {
   img: { loading: "eager" }, button: { type: "submit" }, script: { type: "text/javascript" }, style: { type: "text/css", media: "all" },
   form: { method: "get" }, a: { target: "_self" }, area: { "shape": "rect" },
@@ -277,6 +352,7 @@ function attributes(raw: string, tag: string): string {
     else if (!value.includes('"')) kept.push({ name, text: `${name}="${value}"`, quoted: true });
     else kept.push({ name, text: `${name}='${value.replace(/'/g, "&#39;")}'`, quoted: true });
   }
+  // quoted values first, then the rest, each group by name (minify-html's order)
   if (kept.length > 1) kept.sort(byGroupThenName);
   let s = "";
   for (let k = 0; k < kept.length; k++) s += " " + kept[k].text;

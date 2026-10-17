@@ -5,6 +5,10 @@
 // stacks were spelled out by hand. The scale now covers what the site
 // actually sets (7pt to 14pt, half-point steps where it uses them), off-grid
 // sizes were snapped to it, and this holds the line at zero.
+//
+// What is not a finding, and why, lives in tools/lib/type-literals.ts: px
+// (pixel-exact chrome, SVG text), relative units, display sizes over 14pt,
+// var() with a fallback list, and a rule that says `@type demo`.
 import { readFileSync } from "node:fs";
 import { ROOT, assert, test } from "./contract-shared.ts";
 import { cssSources } from "./lib/token-literals.ts";
@@ -12,6 +16,7 @@ import { typeFindings } from "./lib/type-literals.ts";
 
 test("the matcher finds a hand-written size or family, and only that", () => {
   const lits = (css) => typeFindings(css).map((f) => `${f.kind}:${f.literal}`);
+  // A finding in a fixture IS found, so an empty report below means clean and not blind.
   assert.deepEqual(lits(".a{font-size:9pt}"), ["size:9pt"]);
   assert.deepEqual(lits(".a{font:bold 8.6pt/1.3 \"Courier New\",monospace}"), ["size:8.6pt", 'family:"Courier New",monospace']);
   assert.deepEqual(lits(".a{font-family:Tahoma,Verdana,sans-serif}"), ["family:Tahoma,Verdana,sans-serif"]);
@@ -25,6 +30,9 @@ test("the matcher finds a hand-written size or family, and only that", () => {
 });
 
 test("the homepage defines every type token it reads, at typography.css's value", () => {
+  // The homepage loads luna.css without blocking first paint, so a size it reads
+  // through var() has to be defined in its own inline :root or the text paints
+  // at the browser default and jumps when luna lands.
   const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
   const scale = new Map([...read("design/tokens/typography.css").matchAll(/(--(?:text|font)-[a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].replace(/\s+/g, "")]));
   const page = read("src/pages/index.html");

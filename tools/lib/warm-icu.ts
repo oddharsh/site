@@ -13,6 +13,15 @@
 //   localeCompare    6.50          0.03
 //   toLocaleString   8.54          0.07   (number)
 //   Segmenter        7.18          0.06   (word)
+//
+// So this runs each service once in a throwaway isolate and waits for it to
+// exit, leaving this isolate's own state untouched: what the route pays for its
+// own formatter objects and zones is still charged to it. It names no zone the
+// site uses; a second zone measured 0.06 ms.
+//
+// It assumes every ICU service is warm in production, which a shared process
+// all but guarantees for en-US. A route that reaches an unusual locale's data
+// would pay a little more there than here.
 import { Worker } from "node:worker_threads";
 
 const WARM = `"b".localeCompare("a"); (1234.5).toLocaleString("en-US");

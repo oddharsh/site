@@ -1,4 +1,10 @@
 // Cut the served manifest from a staged tree: `bun run served:manifest`.
+//
+//   bun run served:manifest -- --commit <sha> --out served-manifest.json
+//
+// CI runs it on every push to main, against the `.build/public` its wrangler
+// dry-run just staged, and signs the output. tools/lib/served-manifest.ts says
+// what the manifest covers and what it cannot.
 
 import { writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
@@ -20,6 +26,9 @@ if (commit !== null && !/^[0-9a-f]{40}$/.test(commit)) {
 
 const manifest = buildManifest(values.root, commit);
 const count = Object.keys(manifest.files).length;
+// The floor, since every failure here is an absence: 1850 URLs on 2026-10-01. A
+// walk pointed at the wrong root, or an ignore rule that swallowed a directory,
+// reads as a smaller site and would verify perfectly.
 if (count < 1000) {
   console.error(`served-manifest: only ${count} URLs under ${values.root} (expected 1000+); is that a built tree?`);
   process.exit(2);

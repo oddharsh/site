@@ -10,10 +10,27 @@
 // the Dependabot Updates log, and the cargo and actions jobs kept opening PRs,
 // so the queue never looked empty. oxc-minify 0.152 and 0.153 and two oxlint
 // releases went by with no PR before anyone noticed.
+//
+// THE POLICY IS DEPENDABOT'S, carried over rather than redesigned:
+//   - A version younger than bunfig.toml's `minimumReleaseAge` is invisible.
+//     That is the same 24 hours Dependabot's `cooldown` stated, and here it is
+//     load-bearing: bun refuses to resolve an exact pin younger than the window,
+//     so proposing one would open a PR nobody can install.
+//   - Prereleases are skipped unless the pin is itself a prerelease.
+//   - Deprecated versions are skipped.
+//   - The named groups below are the ones .github/dependabot.yml declared. A
+//     named group takes every update type, majors included; whatever is left
+//     goes to `minor-and-patch` when it is minor or patch, and to a PR of its
+//     own when it is major.
+//
+// Only EXACT pins are planned. A range, a URL (the wrangler pin is a pkg.pr.new
+// commit with its own job, wrangler-pin.yml), `workspace:` or a git spec is
+// left alone, because nothing here can say what "newer" means for it.
 
 import { EXACT_PIN } from "./dependency-docs.ts";
 
 export type Manifest = {
+  /** Repo-relative path, "package.json" for the root. */
   path: string;
   json: {
     dependencies?: Record<string, string>;
@@ -23,6 +40,7 @@ export type Manifest = {
   };
 };
 
+/** The two fields of a registry document the plan reads. */
 export type RegistryDoc = {
   versions?: Record<string, { deprecated?: string }>;
   time?: Record<string, string>;
@@ -36,18 +54,36 @@ export type Bump = {
   to: string;
   type: UpdateType;
   group: string;
+  /** Every manifest that pins `pkg` at `from`; they move together. */
   manifests: string[];
 };
 
 export type Group = { name: string; patterns: string[] };
 
+// Carried from .github/dependabot.yml on 2026-10-06, reasons included. A
+// pattern is an exact name or a scope glob (`@cloudflare/*`); the FIRST group
+// that matches wins, so order is load-bearing.
+//
+// Groups replaced `open-pull-requests-limit: 1`, which queued every pin behind
+// one PR: seven packages were outdated at once on 2026-08-19 with zero PRs
+// open, because the fastest-releasing four outran a serialized queue.
 export const GROUPS: Group[] = [
   // The oxlint and tsgolint groups left on 2026-10-15 with the packages: the
   // linter is Bun's now (`bun lint`), pinned with the runtime in
   // config/bun-pin.json. `@oxlint/plugins` stays as the adapter the vendored
   // anti-slop rules import, and moves on its own.
   { name: "typescript", patterns: ["typescript"] },
+  // One resolved Cloudflare stack: one miniflare, one workerd, one undici. A
+  // @cloudflare/* package carrying its own wrangler, bumped apart, splits that
+  // stack in two. wrangler itself is a pkg.pr.new commit URL today, owned by
+  // wrangler-pin.yml and skipped here as a non-exact pin; the pattern stays for
+  // the day it returns to a release number.
   { name: "cloudflare-toolchain", patterns: ["wrangler", "@cloudflare/*"] },
+  // The packages that REWRITE BUILT BYTES, in their own lane so a
+  // content-hash re-mint is always one identifiable PR. Measured 2026-08-19 on
+  // oxc-minify 0.144.0 -> 0.145.0: 10 hashed /a/ assets re-minted for 22 B of
+  // brotli, and a new hash costs returning visitors the shell dictionary tier
+  // until dictionary-roll.yml catches up that night.
   { name: "minifiers", patterns: ["oxc-minify", "lightningcss"] },
 ];
 export const CATCH_ALL = "minor-and-patch";
@@ -62,6 +98,7 @@ export function parseSemver(v: string): Semver | null {
   return { major: +m[1], minor: +m[2], patch: +m[3], pre: m[4] ? m[4].split(".") : [] };
 }
 
+/** Semver 2.0 precedence: negative when a < b. */
 export function compareSemver(a: string, b: string): number {
   const x = parseSemver(a);
   const y = parseSemver(b);
@@ -69,6 +106,7 @@ export function compareSemver(a: string, b: string): number {
   for (const k of ["major", "minor", "patch"] as const) {
     if (x[k] !== y[k]) return x[k] - y[k];
   }
+  // A release outranks every prerelease of the same triple.
   if (!x.pre.length || !y.pre.length) return y.pre.length - x.pre.length;
   for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
     const p = x.pre[i];
@@ -103,6 +141,10 @@ export function groupFor(pkg: string, type: UpdateType, groups = GROUPS): string
   return type === "major" ? pkg : CATCH_ALL;
 }
 
+/**
+ * The newest version of a package that is old enough, not deprecated, and a
+ * release (or a prerelease, when `from` is one). Null when nothing beats `from`.
+ */
 export function newestEligible(doc: RegistryDoc, from: string, nowMs: number, minAgeSeconds: number): string | null {
   const allowPre = (parseSemver(from)?.pre.length ?? 0) > 0;
   let best: string | null = null;
@@ -112,6 +154,7 @@ export function newestEligible(doc: RegistryDoc, from: string, nowMs: number, mi
     if (sv.pre.length && !allowPre) continue;
     if (meta?.deprecated) continue;
     const published = Date.parse(doc.time?.[v] ?? "");
+    // No timestamp means no proof of age, which reads as too young.
     if (!Number.isFinite(published) || nowMs - published < minAgeSeconds * 1000) continue;
     if (compareSemver(v, from) <= 0) continue;
     if (!best || compareSemver(v, best) > 0) best = v;
@@ -119,6 +162,7 @@ export function newestEligible(doc: RegistryDoc, from: string, nowMs: number, mi
   return best;
 }
 
+/** Every exact pin across the manifests, as name -> version -> manifest paths. */
 export function exactPins(manifests: Manifest[]) {
   const pins = new Map<string, Map<string, string[]>>();
   for (const m of manifests) {
@@ -163,6 +207,12 @@ export function planBumps({
   return bumps.sort((a, b) => a.group.localeCompare(b.group) || a.pkg.localeCompare(b.pkg));
 }
 
+/**
+ * Rewrite one manifest's text so every exact pin of `pkg` at `from` reads `to`,
+ * in each dependency field and in `overrides`, without reformatting the file.
+ * An override that holds the old version moves with it, since an override left
+ * behind would force the old version back underneath the bump.
+ */
 export function rewriteManifest(text: string, pkg: string, from: string, to: string): string {
   const key = JSON.stringify(pkg).replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
   const val = JSON.stringify(from).replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");

@@ -18,6 +18,7 @@ const SITEMAP = `<?xml version="1.0"?><urlset>
     .map((p) => `<url><loc>https://aadhar.sh${p}</loc></url>`).join("")}</urlset>`;
 
 /**
+ * An ASSETS binding serving a sitemap, a hashes.json and whatever else is listed.
  * @param {Record<string, any>} [extra]
  * @param {Record<string, Response>} [files]
  * @returns {any}
@@ -87,6 +88,8 @@ test("share cards, terminal tools and MCP card probes go where the thing actuall
     assert.equal((await recover(from)).response.headers.get("location"), `https://aadhar.sh${to}`, from);
   }
   for (const to of new Set(Object.values(DISCOVERY_ALIASES))) {
+    // /openapi.json is written by build.ts from lib/public-api.ts, /developers is
+    // a Worker route; every other target is a file in public/
     assert.ok(to === OPENAPI_PATH || EXACT_PATHS.includes(to) || existsSync(`public${to}`), `an alias may only point at something this site serves: ${to}`);
   }
   for (const honest of ["/openapi.yaml", "/.well-known/ai-plugin.json", "/.well-known/x402", "/.well-known/agents.json"]) {
@@ -184,7 +187,7 @@ test("the counter records caller class, bucket and outcome for every miss", asyn
   const miss = await recoverNotFound(req, e, empty404());
   countMiss(e, req, "/garage/resampe", miss);
   assert.deepEqual(points, [{ blobs: ["ai-crawler", "page", "404:suggested", "/garage/resampe"], doubles: [1], indexes: ["page"] }]);
-  countMiss({}, req, "/x", miss);
+  countMiss({}, req, "/x", miss);   // no binding: nothing to write, and nothing thrown
 
   assert.equal(callerClass("curl/8.7.1"), "http-tool");
   assert.equal(callerClass("tphotobot/0.1 (+https://crawler.estidraft.com/bot)"), "other-bot");
@@ -226,6 +229,8 @@ test("a client that asks for JSON gets the Error object /openapi.json declares",
 });
 
 test("an API-shaped miss answers JSON unless the caller names HTML", async () => {
+  // Whatever asked for /v1/users or /data.json will parse the body, and curl,
+  // fetch() and most HTTP libraries send */* or nothing at all.
   for (const path of ["/v1/users", "/api/things", "/api", "/no-such-endpoint.json", "/V2/x"]) {
     for (const init of [undefined, { headers: { accept: "*/*" } }]) {
       const r = await recover(path, env(), init);
@@ -234,6 +239,8 @@ test("an API-shaped miss answers JSON unless the caller names HTML", async () =>
       assert.equal((await r.response.json()).code, "not_found");
     }
   }
+  // A browser names text/html, and a page-shaped path stays plain text: the
+  // control that shows the test can see the other branch.
   const browser = await recover("/v1/users", env(), { headers: { accept: "text/html,application/xhtml+xml,*/*;q=0.8" } });
   assert.match(browser.response.headers.get("content-type") || "", /^text\/plain/, "a browser keeps the text page");
   const page = await recover("/garage/resampe", env(), { headers: { accept: "*/*" } });

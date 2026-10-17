@@ -1,5 +1,4 @@
 // ── lens cost: origin-level discovery is cached ──────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   testGlobals,
   assert,
@@ -7,12 +6,39 @@ import {
   test,
 } from "./contract-shared.ts";
 
+// The fan-out reaches the real internet, and both tests below were latent
+// flakes because of it. The probes that go through lensProbe need the
+// AadharshBot signing key and so fail instantly under plain node
+// ("AadharshBot signing key is unavailable") without a packet leaving. The
+// exceptions are lensProbeDnsAid and lensProbeEch, which query
+// cloudflare-dns.com over DNS-over-HTTPS, each request guarded by a 4.5s
+// AbortSignal.timeout: a ceiling that sits just under the 5s test timeout, so
+// ONE slow DoH round fails the whole file.
+//
+// Measured 2026-08-21, three fan-outs (the exact sequence the
+// first test runs): 206ms live on a good network, 1ms with fetch stubbed, and
+// 4503ms for a SINGLE fan-out when the DoH endpoint never answers. That last
+// number is the flake: the reported failure was 5004.15ms against a 5s budget
+// and passed on three identical reruns, which is the signature of a wall clock
+// that belongs to the internet rather than to the code.
+//
+// So fetch is stubbed. Nothing here asserts on what a probe found — the subject
+// is the origin-keyed CACHE — and the DoH answer is discarded either way.
 const doh = () => new Response(JSON.stringify({ Status: 3 }), { headers: { "content-type": "application/dns-json" } });
 
+// COUNTING those calls is what turns the stub above into an assertion. The
+// first test is titled for a warm origin not being RE-PROBED, and nothing
+// checked it: `cached: true` is a flag the cache path sets about itself, so a
+// version that returned the flag AND fanned out anyway passed here. Once fetch
+// is a double, the count is free and it is the claim the title makes.
 let dohCalls = 0;
 const countedDoh = () => { dohCalls++; return doh(); };
 
 test("a second scan of the same origin reuses discovery instead of re-probing", async () => {
+  // This is where lens's cost lived: a production trace put lens.discovery at
+  // 656ms of a 685ms scan, re-asking one host the same questions it had
+  // already answered. The cache is keyed by ORIGIN, not URL, because not one of
+  // those probes depends on which page was scanned.
   const { originDiscovery } = await import("../src/worker/lens.ts");
   const store = new Map();
   const realCaches = globalThis.caches;
@@ -35,15 +61,19 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
     const second = await originDiscovery("https://example.com", "example.com", {});
     assert.equal(second.cached, true, "a warm origin must not re-probe");
     assert.equal(dohCalls, cold, "a warm origin re-probed the network behind the cached flag");
+    // Same answers, minus the flag — a cache that returned different data would
+    // make two surfaces on this site disagree about the same host.
     const { cached: _a, ...firstBody } = first;
     const { cached: _b, ...secondBody } = second;
     assert.deepEqual(secondBody, firstBody);
 
+    // A different origin is a different key, not a stale hit.
     const other = await originDiscovery("https://other.example", "other.example", {});
     assert.equal(other.cached, false);
     assert.equal(store.size, 2);
     assert.ok(dohCalls > cold, "a different origin must actually be probed, not served a stale hit");
 
+    // And `fresh` bypasses for a caller that needs the live answer.
     const warm = dohCalls;
     const forced = await originDiscovery("https://example.com", "example.com", {}, { fresh: true });
     assert.equal(forced.cached, false);
@@ -55,6 +85,8 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
 });
 
 test("discovery still works with no cache at all", async () => {
+  // Under plain node `caches` does not exist, and a scan must degrade to the
+  // previous behaviour (a live fan-out every time) rather than throw.
   const { originDiscovery } = await import("../src/worker/lens.ts");
   const realCaches = globalThis.caches;
   const realFetch = globalThis.fetch;
@@ -71,6 +103,9 @@ test("discovery still works with no cache at all", async () => {
 });
 
 test("readDoors reads lens's discovery rather than re-probing the same files", async () => {
+  // readDoors once fetched llms.txt, the agent card and the api-catalog
+  // itself, duplicating four of lens's probes. Worse than wasteful:
+  // two surfaces on one site could disagree about the same origin.
   const src = readFileSync("src/worker/lib/doors.ts", "utf8");
   // The call, inside readDoors itself. A bare /originDiscovery/ also matched the
   // import line, so a readDoors that stopped calling it still passed.

@@ -1,5 +1,4 @@
-// ── around.js ────────────────────────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
+// ── around.ts ────────────────────────────────────────────────────────────────
 import {
   NEIGHBORS,
   assert,
@@ -9,6 +8,12 @@ import {
   renderAroundSnapshot,
   test,
 } from "./contract-shared.ts";
+
+// Every degradation in the neighbourhood crawler is designed to be QUIET: a
+// disallowing robots.txt is a legitimate skip, and a neighbour that has gone
+// dark simply stops contributing rows. That is correct behaviour and it is also
+// why nothing here announces a regression, which is how the module reached 24.9%
+// line coverage while owning the site's only scheduled crawl.
 
 test("around diffAroundRows() reports nothing without two snapshots to compare", () => {
   const row = { status: 200, title: "t", body_hash: "a" };
@@ -31,6 +36,12 @@ test("around diffAroundRows() names the field that moved", () => {
 });
 
 test("around a content change requires BOTH snapshots to be live", () => {
+  // The sharp rule in that function, and the one worth pinning: body_hash is
+  // only compared when the neighbour was reachable on both sides. Without it
+  // every outage and every recovery would report "content changed", because an
+  // error page hashes differently from the real one — and the whole point of
+  // this surface is that a quiet degradation stays legible rather than drowning
+  // in noise it generated itself.
   const live = { status: 200, body_hash: "aaa" };
   const alsoLive = { status: 200, body_hash: "bbb" };
   const down = { status: 500, body_hash: "err" };
@@ -97,6 +108,10 @@ test("around persists DDL, observations, and retention in one ordered D1 batch",
 });
 
 test("around renders an honest empty panel rather than a fabricated table", async () => {
+  // The failure-honesty rule src/worker/around.ts states at renderAroundSnapshot: no
+  // snapshot means a visibly pending panel, never invented rows. Only ever seen
+  // before the first cron run, which is exactly when nobody is looking. The
+  // panel is the island's body now; the shell around it is noindex either way.
   const empty = renderAroundSnapshot(null).html;
   assert.match(empty, /class="pending"/, "no snapshot is a pending panel");
   assert.doesNotMatch(empty, /<table/, "and never a table");
@@ -105,6 +120,7 @@ test("around renders an honest empty panel rather than a fabricated table", asyn
   }
   const shell = await renderAroundPage().text();
   assert.match(shell, /<meta name="robots" content="noindex">/, "the page is not indexable");
+  // The built shell's placeholder names no firm either: it is a frame, not a guess.
   for (const n of NEIGHBORS) {
     assert.ok(!shell.includes(`class="firm">${n.name}`), `the baked placeholder must not name ${n.name}`);
   }

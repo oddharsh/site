@@ -12,6 +12,7 @@ import {
 } from "../src/worker/lens-walls.ts";
 import { lensFieldEvidence } from "../src/worker/lens.ts";
 
+/** One element by key, or a loud failure rather than an undefined to read through. */
 function pick(list, key, field = "key") {
   const found = list.find((x) => x[field] === key);
   assert.ok(found, `no ${field} ${key}`);
@@ -21,6 +22,7 @@ function pick(list, key, field = "key") {
 const PAGE = "<!doctype html><title>A real page</title><main>Words a reader came for.</main>";
 const WALL = "<!doctype html><title>Access to this page has been denied</title><div id=px-captcha></div>";
 
+// Ten identities shaped like LENS_BOT_VIEWS: two controls, eight crawlers.
 /** @param {(key: string, i: number) => string} [sampleFor] @param {number} [status] @returns {any[]} */
 function scan(sampleFor = () => PAGE, status = 200) {
   const keys = ["Chrome", "curl", "Googlebot", "GPTBot", "ClaudeBot", "CCBot", "Google-Extended", "PerplexityBot", "ChatGPT-User", "Claude-User"];
@@ -31,6 +33,7 @@ function scan(sampleFor = () => PAGE, status = 200) {
   });
 }
 
+// A Workers AI binding that answers every question with `p`, counting calls.
 /** @param {number | ((q: any) => number)} p @param {any[]} [calls] */
 function ai(p, calls = []) {
   return {

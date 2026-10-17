@@ -1,6 +1,37 @@
 #!/usr/bin/env bun
 // avif-chroma-probe.ts — which chroma layout wins for the AVIF tiers the site
 // actually serves, at the SAME bytes as the shipped encode?
+//
+// It asked "would 4:4:4 beat the shipped 4:2:0" on 2026-09-26, the answer was
+// yes, and the tiers moved to 4:4:4 on the strength of it (zenc/src/avif.c has
+// the numbers). It compares all three layouts against whatever SHIPS, so it
+// stays a valid check after that change and can be re-run on the next one.
+//
+// codec-knob-probe.ts measured +0.3 ssimulacra2 for 4:4:4 on 320px crops cut at
+// native resolution. The site serves nothing at native resolution: every AVIF
+// tier is a 600/400/200px square reduced ~9-26x from the frame. So this re-asks
+// the question on those tiers, produced by the pipeline's own `zenc square`.
+//
+// Per photo and tier:
+//   control   the reproduced tier must be BYTE-IDENTICAL to the shipped /i/
+//             file, or the run is measuring some other encode. A mismatch is
+//             reported and the tier still scored, marked.
+//   420/422/444  each scored at exactly the shipped tier's byte count, by
+//             bracketing avifenc -q and interpolating (codec-knob-probe.ts's
+//             bracketed()), so every layout is compared at identical bytes.
+//   equiv     600 tier only: how many MORE bytes 4:2:0 needs to reach 4:4:4's
+//             score at the shipped budget. The unit an encoder change is
+//             decided in here, rather than a metric delta.
+//   rt420     4:2:0 with NO compression: the tier's chroma halved both ways and
+//             upsampled back, nothing else. What subsampling alone throws away
+//             is the ceiling on what 4:4:4 can win back.
+//   rt420@1:1 the same round trip on a native-resolution crop, for contrast.
+//
+// Every colour source here is 4:2:2 (chroma halved horizontally, full height),
+// read off the JPEG frame headers and zenc's own note on the Fuji HIFs.
+//
+// Usage:
+//     bun tools/photos/avif-chroma-probe.ts [--n 24] [--jobs 5] [--json out.json]
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -13,7 +44,10 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const SRC_DIR = "/Users/aadharsh/Downloads/to post (from ssd)";
 const ZENC = path.join(REPO, "tools", "photos", "zenc", "target", "release", "zenc");
 const HASHES = JSON.parse(fs.readFileSync(path.join(REPO, "public", "images", "hashes.json"), "utf8")) as Record<string, { a: string; s: string; x: string }>;
+// size, the /i/ filename suffix, and the hashes.json key
 const TIERS = [[600, "", "a"], [400, "-400", "s"], [200, "-200", "x"]] as const;
+
+// ------------------------------------------------------------ chroma round trip
 
 type Rgb = { w: number; h: number; px: Uint8Array };
 const readPpm = (file: string): Rgb => {
@@ -23,6 +57,10 @@ const readPpm = (file: string): Rgb => {
   return { w, h, px: new Uint8Array(buf.buffer, buf.byteOffset + m[0].length, w * h * 3) };
 };
 
+/** Full-range BT.601 YCbCr (the matrix zenc's AVIF path signals), chroma
+ *  box-averaged 2x2, upsampled back with centre-sited bilinear weights (the
+ *  3/4-1/4 "fancy" kernel libjpeg and libyuv use), then RGB again. Float
+ *  throughout, one rounding at the end, so the loss is subsampling's alone. */
 function roundTrip420(im: Rgb, out: string): void {
   const { w, h, px } = im, cw = w >> 1, ch = h >> 1;
   const Y = new Float32Array(w * h), cb = new Float32Array(cw * ch), cr = new Float32Array(cw * ch);
@@ -35,6 +73,7 @@ function roundTrip420(im: Rgb, out: string): void {
   }
   const at = (p: Float32Array, x: number, y: number) => p[Math.min(ch - 1, Math.max(0, y)) * cw + Math.min(cw - 1, Math.max(0, x))];
   const up = (p: Float32Array, x: number, y: number) => {
+    // output pixel x sits between chroma samples; nearest gets 3/4, the neighbour 1/4
     const cx = x >> 1, cy = y >> 1, nx = cx + (x & 1 ? 1 : -1), ny = cy + (y & 1 ? 1 : -1);
     return (9 * at(p, cx, cy) + 3 * at(p, nx, cy) + 3 * at(p, cx, ny) + at(p, nx, ny)) / 16;
   };
@@ -49,11 +88,15 @@ function roundTrip420(im: Rgb, out: string): void {
   fs.writeFileSync(out, Buffer.concat([Buffer.from(`P6\n${w} ${h}\n255\n`), o]));
 }
 
+// ------------------------------------------------------------------ worker
+
 type Score = { s2: number; bu: number };
 type Tier = { size: number; bytes: number; control: boolean; base: Score; y420: Score; y422: Score; y444: Score; rt420: number };
 type Result = { stem: string; tiers: Tier[]; rt420native: number; equiv: number | null };
 const withYuv = (yuv: string) => AVIF_ARGS.map((a, i) => (AVIF_ARGS[i - 1] === "--yuv" ? yuv : a));
 
+/** The budget multiple at which 4:2:0 reaches `want`, to 0.3%: 1 when it
+ *  already does at the budget, null when even +40% does not get there. */
 function equivalent(png: string, dir: string, budget: number, want: number): number | null {
   let n = 0;
   const at = (b: number) => { const d = path.join(dir, `eq${n++}`); fs.mkdirSync(d); return bracketed(png, d, Math.round(b), withYuv("420")).s2; };
@@ -89,6 +132,7 @@ function work(stem: string): Result {
       roundTrip420(readPpm(ppm), rt);
       return { size, bytes, control, base: { s2: ssim2(png, dec), bu: butter(png, dec) }, y420: at("420"), y422: at("422"), y444: at("444"), rt420: ssim2(ppm, rt) };
     });
+    // the contrast: the same round trip at native resolution, on the frame's most detailed window
     const crop = bestCrop(src, "detail", tmp);
     const nrt = path.join(tmp, "native-rt.ppm");
     roundTrip420(readPpm(crop.ppm), nrt);
@@ -99,6 +143,11 @@ function work(stem: string): Result {
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 }
 
+// -------------------------------------------------------------------- main
+
+/** Colour sources with a shipped tier set, every k-th in name order so both
+ *  cameras and the whole date range are represented. Monochrom frames (one
+ *  JPEG component) are skipped: they ship as 4:0:0 and have no chroma. */
 function sample(n: number): string[] {
   const colour = fs.readdirSync(SRC_DIR).filter((f) => /\.(hif|jpe?g)$/i.test(f)).filter((f) => {
     const stem = path.parse(f).name;

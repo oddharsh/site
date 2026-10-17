@@ -8,6 +8,7 @@
 import { assert, test } from "./contract-shared.ts";
 import { analyticsSql as read } from "../src/worker/ledger.ts";
 
+/** A partial Env is the point: each test hands the reader only the doors it means to open. */
 const analyticsSql = (/** @type {any} */ env, /** @type {string} */ dataset, /** @type {any} */ build) => read(env, dataset, build);
 
 const QUERY = (from, sum) => `SELECT blob1 AS bot, ${sum("double1")} AS hits FROM ${from} GROUP BY bot`;
@@ -51,11 +52,15 @@ test("a binding that throws falls back to the token door and says why", async ()
     analyticsSql({ ANALYTICS: b.ANALYTICS, ANALYTICS_READ_TOKEN: "t", CF_ACCOUNT_ID: "a" }, "aadhar_bot_ledger", QUERY));
   assert.deepEqual(result, { ok: true, data: [], via: "token", binding_fallback: "Analytics SQL is not enabled for this account" });
 
+  // With neither door able to answer, the token's reason leads and the binding's rides along.
   const none = await analyticsSql({ ANALYTICS: b.ANALYTICS }, "aadhar_bot_ledger", QUERY);
   assert.deepEqual(none, { ok: false, reason: "unconfigured", binding_fallback: "Analytics SQL is not enabled for this account" });
 });
 
 test("'not found' from the binding never reads as an empty ledger", async () => {
+  // A dataset with no writes and a misnamed one answer the binding with the
+  // same words, and the first preview hit the misnamed case: had this read as
+  // empty, /ledger would have shown zero crawlers with ok: true.
   const b = binding(() => { throw new Error("Input was invalid: Error during planning: table `aadhar_bot_ledger` not found"); });
   const { result, calls } = await withFetch(() => new Response("no such table: aadhar_bot_ledger", { status: 422 }), () =>
     analyticsSql({ ANALYTICS: b.ANALYTICS, ANALYTICS_READ_TOKEN: "t", CF_ACCOUNT_ID: "a" }, "aadhar_bot_ledger", QUERY));

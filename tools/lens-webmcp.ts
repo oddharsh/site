@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 // Probe a URL in a Cloudflare Browser Run Chrome-beta lab session.
+//
+// This is intentionally a local/owner workflow. Browser Run's lab pool is
+// experimental and is not currently available through the Workers browser
+// binding. The script discovers WebMCP tools without executing them, prints a
+// short-lived Live View URL, and closes the session unless --keep-open is set.
 
 import { cf } from "./lib/cf.ts";
 

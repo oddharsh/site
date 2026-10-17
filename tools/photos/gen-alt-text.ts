@@ -3,6 +3,47 @@
 // public/images/alt.json as {stem: alt}. The worker bakes it into each grid
 // <img alt> and nav.js's Run palette reads it for the photo destinations, so a
 // stem with no entry ships an unlabelled image.
+//
+// Two routes to the same model (@cf/llava-hf/llava-1.5-7b-hf) under the same
+// prompt, so a caption reads identically whichever one produced it:
+//
+//   LOCAL (preferred; needs CLOUDFLARE_API_TOKEN) reads the square thumbnail
+//   already sitting in public/i/ and posts those bytes to the Workers AI REST
+//   API. Because it never asks production for anything, it captions a photo
+//   that has never been deployed, which is the whole reason add-photos.sh can
+//   caption a shot in the same run that encodes it.
+//
+//   REMOTE (fallback; no credentials) hands a stem to /garage/cf/caption and
+//   lets that worker fetch the thumbnail from aadhar.sh. It only sees photos
+//   that are already live, so it cannot close the gap on a fresh add. It stays
+//   so the script still does useful work on a machine with no token.
+//
+// Both routes read the SAME bytes (public/i/<stem>.<hash8>.jpg is exactly what
+// production serves), so switching routes does not change what the model sees.
+//
+// Resumable either way: a re-run only fills stems that have no caption, so a
+// 429 (the free 10k neurons/day) just means run again later.
+//
+//   export CLOUDFLARE_API_TOKEN=...   # Account · Workers AI · Read
+//   export CLOUDFLARE_AI_GATEWAY=""   # opt OUT of gateway routing (defaults to "default")
+//   bun run captions                  # or: bun tools/photos/gen-alt-text.ts
+//
+// Strippable: delete alt.json plus the worker/template lookups to revert to
+// empty alt.
+//
+// TypeScript since 2026-09-15; it was gen-alt-text.py, the last python3 step
+// in the pipeline. As Python it was the one file gotcha 40's shell path sweep
+// could not see (a repointed ROOT captioned nothing for five days), and its
+// caller's `|| echo` turned a traceback into a warning. As TS it is held by
+// typecheck, the writer census and the same scanners as its siblings.
+//
+// The FILE FORMAT is the old script's, byte for byte, because alt.json is
+// committed and a serializer change would diff every line on a run that
+// captioned nothing: Python's json.dump(indent=0, sort_keys=True,
+// ensure_ascii=False) is one key per line, no indentation, keys in code-point
+// order, and no trailing newline. serializeAlt below reproduces that, and
+// contract-the-photo-pipeline-runs-no-python round-trips the committed file
+// through it.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,19 +57,25 @@ const HASHES = path.join(ROOT, "images", "hashes.json");
 const HASHED = path.join(ROOT, "i");
 const OUT = path.join(ROOT, "images", "alt.json");
 
+// keep in sync with cf-garage/src/index.ts's ?mode=alt branch: that endpoint is
+// the public /garage/cf demo and carries its own copy of this prompt.
 export const PROMPT = "Write alt text for this photo: one plain, factual sentence naming only "
   + "what is clearly visible (main subject and setting). No mood, no "
   + "interpretation, no guessing, no 'image of'. Under 16 words.";
 const ENDPOINT = "https://aadhar.sh/garage/cf/caption?mode=alt&img=";
+// a real UA: Cloudflare's WAF 403s a bare library default
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 alt-gen";
 const DRY_RUN = process.argv.includes("--dry-run");
 
+/** Match the worker's post-processing so both routes emit the same shape. The
+ *  regex is cf-garage/src/index.ts's, and a contract test holds the two equal. */
 export function clean(caption: string): string {
   let cap = caption.trim().replace(/^(an? |the )?(image|photo|photograph|picture) (of|shows|depicts|captures)\s*/i, "");
   cap = cap.replace(/\s+/g, " ").trim();
   return cap ? cap[0].toUpperCase() + cap.slice(1) : "";
 }
 
+/** alt.json in the exact shape the Python script wrote (see the header). */
 export function serializeAlt(alt: Record<string, string>): string {
   const keys = Object.keys(alt).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   return `{\n${keys.map((k) => `${JSON.stringify(k)}: ${JSON.stringify(alt[k])}`).join(",\n")}\n}`;
@@ -40,6 +87,7 @@ function thumbPath(stem: string, hashes: Record<string, { j?: string }>): string
   return path.join(HASHED, `${stem}.${entry.j}.jpg`);
 }
 
+/** POST the committed thumbnail bytes straight to Workers AI. */
 async function captionLocal(stem: string, hashes: Record<string, { j?: string }>): Promise<string> {
   const body = visionBody(thumbPath(stem, hashes), PROMPT, 64);
   if (DRY_RUN) {
@@ -49,6 +97,7 @@ async function captionLocal(stem: string, hashes: Record<string, { j?: string }>
   return clean(await runVision(body, { timeoutMs: 90_000 }));
 }
 
+/** Ask the deployed worker to fetch the thumbnail from production itself. */
 async function captionRemote(stem: string): Promise<string> {
   if (DRY_RUN) {
     console.log(`      would GET ${ENDPOINT}${stem}`);
@@ -57,6 +106,7 @@ async function captionRemote(stem: string): Promise<string> {
   const response = await fetch(ENDPOINT + stem, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(40_000) });
   if (!response.ok) throw new WorkersAiHttpError(response.status, response.statusText, "");
   const d = await response.json();
+  // the usual cause of ok:false: the photo is not deployed yet, so the worker 404s on it
   if (!d?.ok) throw new Error(d?.error || "caption endpoint returned ok:false");
   return clean(d.caption || "");
 }
@@ -101,7 +151,7 @@ async function main(): Promise<number> {
         break;
       }
       console.log(`  ${tag}: ERROR ${msg}`);
-      if (msg.includes("429")) {
+      if (msg.includes("429")) {  // neuron budget hit: stop, resume later
         console.log("  rate-limited (429), stopping; re-run to resume.");
         break;
       }

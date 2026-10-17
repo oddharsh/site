@@ -14,6 +14,8 @@ import {
 const { minifyHtml } = await import("./lib/html-minify.ts");
 
 test("a boolean attribute keeps a value that names another state", () => {
+  // minify-html wrote bare `hidden` here, which a find-in-page search cannot
+  // reveal: the /garage/horizon until-found demo shipped broken.
   assert.equal(
     minifyHtml('<p hidden="until-found" id="t">x</p>'),
     "<p hidden=until-found id=t>x",
@@ -24,6 +26,10 @@ test("a boolean attribute keeps a value that names another state", () => {
 });
 
 test("a start tag that closes the open <p> trims it as a written </p> would", () => {
+  // `<p>a <p>b` is two paragraphs. The first one's end tag is implied, so its
+  // trailing space is the edge of a block and goes; minify-html did the same,
+  // and the twin-based parity test missed it on horizon until the whole-build
+  // diff caught it.
   assert.equal(minifyHtml("<div><p>a <p>b</div>"), "<div><p>a<p>b</div>");
   assert.equal(minifyHtml("<ul><li>a <li>b</ul>"), "<ul><li>a<li>b</ul>");
   assert.equal(minifyHtml("<p>a</p><p>b</p>"), "<p>a<p>b", "both end tags are inferable");
@@ -38,6 +44,10 @@ test("raw and whitespace-sensitive content keeps its bytes", () => {
 });
 
 test("malformed markup reads the way the regex tokenizer read it", () => {
+  // The scanner replaced a TOKEN regex; these pin the shapes where a hand
+  // scanner and that regex most easily part ways. A "<" that starts no tag is
+  // text; an attribute glued to a quoted value spoils the whole tag; an
+  // unterminated comment runs to the next ">" (the regex's `<![^>]*>` arm).
   assert.equal(minifyHtml("<p>a < b</p>"), "<p>a < b");
   assert.equal(minifyHtml("<p>1 <2 and 3> 0</p>"), "<p>1 <2 and 3> 0");
   assert.equal(minifyHtml('<div><a b="x"c>d</div>'), '<div><a b="x"c>d</div>');
@@ -45,6 +55,11 @@ test("malformed markup reads the way the regex tokenizer read it", () => {
 });
 
 test("a raw element whose end tag never closes ends the document instead of hanging", () => {
+  // The regex version set lastIndex from indexOf(">") + 1, which is 0 when no
+  // ">" follows the end tag, and rescanned from the top forever. That loop is
+  // synchronous, so the runner's per-test timeout never fires and the whole
+  // suite hangs (measured: killed by timeout(1), exit 124). A child process
+  // with a deadline turns that into a failure here.
   const probe = `import { minifyHtml } from ${JSON.stringify(new URL("lib/html-minify.ts", import.meta.url).pathname)};
     console.log(JSON.stringify([minifyHtml("<p>a<script>x</script"), minifyHtml("<title>t</TITLE")]));`;
   const run = spawnSync(process.execPath, ["-e", probe], {
@@ -56,6 +71,8 @@ test("a raw element whose end tag never closes ends the document instead of hang
 });
 
 test("attributes come out in the order and quoting the build's readers expect", () => {
+  // csp-scan, link-integrity and client-assets all read unquoted values; this
+  // is the shape they are tested against.
   assert.equal(
     minifyHtml('<a title="two words" href="/x" class="  a  b ">y</a>'),
     '<a class="a b" title="two words" href=/x>y</a>',
@@ -67,5 +84,6 @@ test("attributes come out in the order and quoting the build's readers expect", 
 test("the built horizon page still carries its until-found target", () => {
   const src = readFileSync(new URL("src/pages/garage/horizon.html", ROOT), "utf8");
   assert.ok(src.includes('<p hidden="until-found" id="huf-target"'), "the source still authors the demo");
+  // the source is buildless: run it through the minifier the build uses
   assert.match(minifyHtml(src), /<p class=huf hidden=until-found id=huf-target>/);
 });

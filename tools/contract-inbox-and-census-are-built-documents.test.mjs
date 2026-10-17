@@ -37,6 +37,9 @@ test("the inbox shell names no sender, advertises the endpoint, and ends at its 
   assert.match(page.headers.get("link") || "", /<\/webmention>; rel="webmention"/);
   const shell = await page.text();
   assert.doesNotMatch(shell, /id="m-\d|rel="noopener ugc external"/, "a real mention row in the bake would be one build's mail");
+  // After the mount: its failure note (hidden unless the fetch failed) and the
+  // window chrome. The endpoint line moved into the island so nothing below it
+  // moves when the mail arrives.
   const mountEnd = shell.indexOf("</noscript></div>");
   assert.ok(mountEnd > 0 && shell.lastIndexOf('class="oe-foot"') < mountEnd, "the endpoint line belongs inside the island");
 });

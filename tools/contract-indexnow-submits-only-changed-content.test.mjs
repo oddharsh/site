@@ -1,8 +1,13 @@
 // ── IndexNow submits the pages whose CONTENT a release changed ───────────────
-// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { changedPages, contentUrl, INDEXNOW_KEY, readStatus, sitemapPaths, submission } from "./lib/indexnow.ts";
 import { SCHEMA } from "./lib/served-manifest.ts";
+
+// After each release, tools/indexnow.ts diffs the two signed served manifests
+// and submits the sitemap pages whose content moved. "Content" is the page's
+// Markdown twin (or a writing post's .txt, or the file itself), because HTML
+// bytes move on every shell re-mint: measured across #1063, 53 of 56 sitemap
+// pages changed bytes and 0 changed content.
 
 /** @param {Record<string, string>} files @returns {import("./lib/served-manifest.ts").ServedManifest} */
 const manifest = (files) => ({ schema: SCHEMA, commit: null, files });
@@ -30,6 +35,7 @@ test("indexnow: a page's content is its twin, else its .txt source, else itself"
 test("indexnow: a shell re-mint submits nothing, a prose edit or a new page submits that page", () => {
   const paths = ["/", "/garage/x", "/garage/new", "/gone"];
   const prev = manifest({ "/": "h1", "/index.md": "m1", "/garage/x": "h2", "/garage/x.md": "m2", "/gone": "h9" });
+  // Every HTML hash moves (a new /a/nav.<hash8>.js ref), no twin does.
   const remint = manifest({ "/": "H1", "/index.md": "m1", "/garage/x": "H2", "/garage/x.md": "m2" });
   assert.deepEqual(changedPages(prev, remint, paths, "aadhar.sh"), []);
 
@@ -47,6 +53,7 @@ test("indexnow: the real sitemap parses to every page", async () => {
 test("indexnow: the sitemap parse and every protocol status", () => {
   const xml = "<urlset><url><loc>https://aadhar.sh</loc></url><url><loc>https://aadhar.sh/garage</loc></url><url><loc>https://elsewhere.test/x</loc></url></urlset>";
   assert.deepEqual(sitemapPaths(xml, "aadhar.sh"), ["/", "/garage"]);
+  // Hosts are compared parsed and exact, never pattern-matched.
   const tricky = "<loc>https://aadhar.sh.evil.test/x</loc><loc>https://aadharXsh/y</loc><loc>http://aadhar.sh/z</loc><loc>not a url</loc><loc> https://aadhar.sh/ok </loc>";
   assert.deepEqual(sitemapPaths(tricky, "aadhar.sh"), ["/ok"]);
   assert.equal(readStatus(200).ok, true);

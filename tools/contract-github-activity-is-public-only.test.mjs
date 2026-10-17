@@ -26,6 +26,7 @@ test("every query names is:public, because the result cannot be filtered after",
     assert.ok(query.includes("is:public"), `${tier}: ${query}`);
     assert.ok(query.includes(`author:${GITHUB_USER}`), `${tier} is not scoped to the owner`);
   }
+  // PRs and issues are OUTWARD work; commits are to the owner's own repos.
   assert.ok(decodeURIComponent(q.prs).includes(`-user:${GITHUB_USER}`));
   assert.ok(decodeURIComponent(q.issues).includes(`-user:${GITHUB_USER}`));
   assert.ok(decodeURIComponent(q.commits).includes(` user:${GITHUB_USER}`));
@@ -77,6 +78,7 @@ test("issues are newest first and a non-github URL is dropped", () => {
 test("commit counts say how far back they reach when the page was truncated", () => {
   const items = [commit("oddharsh/site", "a", "2026-09-30T00:00:00Z"), commit("oddharsh/site", "b", "2026-09-28T12:00:00Z")];
   assert.equal(normalizeCommits({ total_count: 2, items }, SINCE).coveredSince, SINCE, "complete page covers the window");
+  // The control: same two items, but GitHub says there were 500.
   assert.equal(normalizeCommits({ total_count: 500, items }, SINCE).coveredSince, "2026-09-28");
 });
 

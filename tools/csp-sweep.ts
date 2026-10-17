@@ -4,12 +4,36 @@
 // because the thing it measures did not change: the failure is silent, so a
 // blocked inline script leaves the page rendering and merely dead. With no flag
 // left, this IS the rollback signal.
+//
+// Reads securitypolicyviolation events rather than the console, because that is
+// the authoritative signal and it carries the directive and the blocked sample.
+//
+// Run it against a LOCALLY BUILT worker (`bun run wrangler:site dev`, the
+// production config through its generated legacy twin), never the readable dev
+// tree: the committed hash map is empty by design, so `bun run dev` serves every
+// page loose and this would sweep documents that cannot fail.
+//
+// PROVE THE INSTRUMENT BEFORE BELIEVING A GREEN RUN. Two ways this reports a clean
+// sweep while measuring nothing, both hit for real while it was being written:
+//
+//   1. The worker answers from `caches.default`, persisted in `.wrangler/state`.
+//      A cached entry carries the CSP it was stored with, so a stale one serves
+//      the loose policy and nothing can ever be blocked. `CF-Cache-Status: HIT`
+//      on a cache-busted URL is the tell. Delete `.wrangler/state` and restart.
+//   2. Editing a staged `.html` changes nothing, because build step 8 precompresses
+//      and the `.br` twin is what ships. Perturb both, or perturb nothing.
+//
+// The control: add a space inside one inline script in a staged document AND its
+// .br twin, leaving the hash map alone, then sweep that one path. It must FAIL with
+// `blocked script-src-elem`. A control that passes means the sweep is decoration.
 import { chromium } from "playwright-core";
 import { chromeChannel } from "./lib/browser-channel.ts";
 import { readFileSync } from "node:fs";
 
 const BASE = process.env.BASE || "http://localhost:8812";
 
+// Default to every document the build could hash, read from the staged module the
+// worker itself imports, so the sweep and the policy cannot disagree about scope.
 const pathsFrom = (file) => {
   const src = readFileSync(file, "utf8");
   const m = /PAGE_SCRIPT_HASHES = (.*); \/\/ build:csp-hashes/.exec(src);

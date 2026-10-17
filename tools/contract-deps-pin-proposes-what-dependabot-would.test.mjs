@@ -2,6 +2,10 @@
 // dependabot-core#16220 made the npm updater refuse a bun.lock tree. These pin
 // the policy it carried over (age window, prereleases, deprecations, the named
 // groups) against a synthetic registry, so no test here touches the network.
+//
+// THE CONTROL IS THE FIRST TEST: a registry with a newer, old-enough release
+// must produce a bump. Every other test asserts an absence, and a planner that
+// proposed nothing at all would pass every one of those.
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -19,6 +23,7 @@ const DAY = 86400;
 const NOW = Date.parse("2026-10-06T12:00:00Z");
 const ago = (hours) => new Date(NOW - hours * 3600e3).toISOString();
 
+/** A registry document from [version, hoursAgo, deprecated?] triples. */
 function doc(...entries) {
   const versions = {};
   const time = {};
@@ -44,6 +49,8 @@ test("control: an old-enough newer release is proposed", () => {
 });
 
 test("a release younger than the window is invisible, and the next-newest wins", () => {
+  // bun refuses to resolve an exact pin younger than minimumReleaseAge, so a
+  // PR naming 0.153.0 at 7 hours old could not be installed by anyone.
   assert.equal(newestEligible(doc(["0.151.0", 400], ["0.152.0", 200], ["0.153.0", 7]), "0.151.0", NOW, DAY), "0.152.0");
   assert.equal(newestEligible(doc(["0.151.0", 400], ["0.153.0", 7]), "0.151.0", NOW, DAY), null);
 });
@@ -115,5 +122,6 @@ test("a manifest rewrite moves the pin and its override, and nothing else", () =
 `;
   const out = rewriteManifest(text, "htmlparser2", "12.0.0", "12.1.0");
   assert.equal(out, text.replaceAll(`"htmlparser2": "12.0.0"`, `"htmlparser2": "12.1.0"`));
+  // A different version of the same name is someone else's pin.
   assert.equal(rewriteManifest(text, "htmlparser2", "11.0.0", "12.1.0"), text);
 });

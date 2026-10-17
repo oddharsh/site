@@ -1,4 +1,22 @@
 // infra-ports.ts — the adapters behind `bun run infra:check`.
+//
+// Four ports, one production adapter each: DNS-over-HTTPS, the edge
+// (production over the wire), the Cloudflare API and the GitHub API. An adapter
+// FETCHES and hands back an observation. It decides nothing about drift: that
+// is tools/lib/infra-compare.ts, which takes the observation as plain data.
+//
+// EVERY ADAPTER IS READ-ONLY. Each request here is a GET. The one write path in
+// this repository, tools/apply-infra.ts, keeps its own client on purpose, so
+// nothing here can ever be handed CLOUDFLARE_API_TOKEN_WRITE by sharing code.
+//
+// A FAILED READ COMES BACK AS A VALUE. The readers return `Read<T>`, whose
+// failed arm carries the error text, so a 401, a 403 and a dropped socket all
+// reach the comparer as "could not check" rather than as an exception that
+// skips a tier or an empty list that compares clean.
+//
+// `fetchImpl` is a parameter on each adapter so the contract suite can stand a
+// recorded response in for the network. That second adapter is what makes
+// these seams real.
 import type {
   AgentAnswer, DnsObservation, DnsObservations, EarlyDataResult, EdgeObservation, Read,
   RepositoryObservation, RulesetsObservation, VersionAffinityObservation,
@@ -10,8 +28,12 @@ export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 const globalFetch: Fetch = (input, init) => fetch(input, init);
 
+// Identify honestly in the edge tier's own logs, same rule the Worker's
+// outbound fetches follow. This is not AadharshBot: it does not sign, and
+// pretending otherwise in the access log would be a small lie.
 export const BOT_UA = "aadhar-sh-infra-check/1.0 (+https://aadhar.sh/bot)";
 
+/** Run one read and hand its outcome back as a value. */
 export async function attempt<T>(read: () => Promise<T>): Promise<Read<T>> {
   try {
     return { ok: true, value: await read() };
@@ -20,8 +42,14 @@ export async function attempt<T>(read: () => Promise<T>): Promise<Read<T>> {
   }
 }
 
+// ------------------------------------------------------------- port: DoH ----
+
 const RRTYPE = { A: 1, NS: 2, CNAME: 5, MX: 15, TXT: 16, AAAA: 28, DS: 43, SVCB: 64, HTTPS: 65 };
 
+// Two independent resolvers. Google renders SVCB in presentation format;
+// Cloudflare returns the RFC 3597 generic form, which decodeSvcb() normalizes
+// back. Asking Cloudflare about a Cloudflare-hosted zone is also a bit
+// incestuous, which is why Google goes first.
 const RESOLVERS = [
   { name: "dns.google", url: (n, t) => `https://dns.google/resolve?name=${n}&type=${t}` },
   { name: "cloudflare-dns.com", url: (n, t) => `https://cloudflare-dns.com/dns-query?name=${n}&type=${t}` },
@@ -93,6 +121,9 @@ async function query(fetchImpl: Fetch, resolver, name: string, type: string) {
   return { answers: answers.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), authenticated: body.AD === true };
 }
 
+// Try each resolver in turn. A resolver that errors is an availability problem,
+// not a drift signal, so it comes back as an unreachable report (which the
+// comparer turns into an advisory) rather than as an empty answer.
 export async function resolveWithFallback(name: string, type: string, fetchImpl: Fetch = globalFetch): Promise<DnsObservation> {
   const errors: string[] = [];
   for (const resolver of RESOLVERS) {
@@ -105,11 +136,14 @@ export async function resolveWithFallback(name: string, type: string, fetchImpl:
   return { unreachable: errors };
 }
 
+/** Answer every lookup the comparer will ask for (see dnsQueries). */
 export async function readDns(queries: { name: string; type: string }[], fetchImpl: Fetch = globalFetch): Promise<DnsObservations> {
   const observed: DnsObservations = new Map();
   for (const { name, type } of queries) observed.set(dnsKey(name, type), await resolveWithFallback(name, type, fetchImpl));
   return observed;
 }
+
+// ------------------------------------------------------------ port: edge ----
 
 export type EdgeFetch = (url: string, headers?: Record<string, string>, opts?: { redirect?: RequestRedirect }) => Promise<Response>;
 
@@ -121,8 +155,18 @@ export function edgeFetcher(fetchImpl: Fetch = globalFetch): EdgeFetch {
   });
 }
 
+/** Only an answer Cloudflare's edge served says anything about the zone, and
+ *  every one of those carries cf-ray, whatever its status. Anything else came
+ *  from in between: a sandbox egress proxy's 403 ("request blocked", text/plain,
+ *  no cf-ray) read as production for a whole run, so speed-brain-off,
+ *  rocket-loader-off and webmcp-bridge-off "held" (an error page lacks every
+ *  header and script), hsts-preload and compression-on reported drift, and the
+ *  agent Markdown sweep counted the six text/plain surfaces as answering. */
 export const servedByEdge = (res: Response) => res.headers.has("cf-ray");
 
+// The thumbnail URLs are content-hashed, so a re-encode mints new ones and any
+// URL pinned in infra.json would rot within a release. Resolve one from the
+// live manifest instead, which is the same indirection the site itself uses.
 async function sampleImageUrl(fetchEdge: EdgeFetch, origin: string) {
   const res = await fetchEdge(`${origin}/images/manifest.json`);
   if (!res.ok) throw new Error(`manifest returned HTTP ${res.status}`);
@@ -133,6 +177,10 @@ async function sampleImageUrl(fetchEdge: EdgeFetch, origin: string) {
   return path.startsWith("http") ? path : `${origin}${path}`;
 }
 
+// A page the site deliberately answers in HTML whatever the Accept header says:
+// a /writing post has no Markdown twin, because its .txt is the source an agent
+// should read. Resolved from the live post list for the same reason as the
+// sample image, since a pinned slug would 404 the day the post is retired.
 async function writingPostUrl(fetchEdge: EdgeFetch, origin: string) {
   const res = await fetchEdge(`${origin}/writing/posts.json`);
   if (!res.ok) throw new Error(`posts.json returned HTTP ${res.status}`);
@@ -144,11 +192,17 @@ async function writingPostUrl(fetchEdge: EdgeFetch, origin: string) {
 
 export type EdgePort = {
   fetchEdge: EdgeFetch;
+  /** The TLS 0-RTT probe. No HTTP response can carry that answer, so it is its
+   *  own instrument (openssl, in check-infra.ts) handed in here. */
   probeEarlyData: (host: string) => Promise<EarlyDataResult>;
 };
 
+/** One observation per declared edge check, keyed by its id. What to ASK is
+ *  read off the check's `assert` (an encoding to offer, a body to keep); what
+ *  the answer MEANS is the comparer's. */
 export async function readEdge(edge, port: EdgePort): Promise<Map<string, EdgeObservation>> {
   const { origin, checks } = edge;
+  // An answer from in between is unmeasured, which the catches below already say.
   const fetchEdge: EdgeFetch = async (url, headers, opts) => {
     const res = await port.fetchEdge(url, headers, opts);
     if (!servedByEdge(res)) throw new Error(`${new URL(url).pathname} answered HTTP ${res.status} without cf-ray, so Cloudflare's edge did not serve it`);
@@ -161,6 +215,10 @@ export async function readEdge(edge, port: EdgePort): Promise<Map<string, EdgeOb
   const targetUrl = async (target) => {
     if (target === "homepage") return `${origin}/`;
     if (target === "sample-image") return (sample ??= await sampleImageUrl(fetchEdge, origin));
+    // The Markdown twins are their own target because they are their own content
+    // type, and content type is what compression is keyed on. /index.md is the
+    // stable one: it is served from a committed file rather than generated, so it
+    // exists on every deploy and cannot go missing the way a per-page twin could.
     if (target === "markdown-twin") return `${origin}/index.md`;
     if (target === "writing-post") return (post ??= await writingPostUrl(fetchEdge, origin));
     throw new Error(`unknown edge target ${JSON.stringify(target)}`);
@@ -188,22 +246,36 @@ export async function readEdge(edge, port: EdgePort): Promise<Map<string, EdgeOb
       } else if (want.earlyData) {
         observed.set(check.id, { kind: "early-data", result: await port.probeEarlyData(new URL(url).hostname) });
       } else {
+        // A check may need to ASK for something before it can assert what comes back.
+        // Content negotiation is the case that forced this: "the zone is not converting
+        // our HTML" is only observable on a request that says `Accept: text/markdown`,
+        // and a check that cannot set a request header cannot see it at all.
         const res = await fetchEdge(url, check.request || {});
         const headers: Record<string, string> = {};
+        // Through get(), so a repeated header reads exactly as the comparer's
+        // old `res.headers.get(name)` did. keys() names only headers that are
+        // present, so the `?? ""` arm never runs; it is there for the type.
         for (const name of res.headers.keys()) headers[name.toLowerCase()] = res.headers.get(name) ?? "";
         observed.set(check.id, want.bodyLacks ? { kind: "response", headers, body: await res.text() } : { kind: "response", headers });
       }
     } catch (e) {
+      // Production being unreachable is an availability problem, not drift.
       observed.set(check.id, { kind: "unreachable", error: `${e.message}` });
     }
   }
   return observed;
 }
 
+/** One `Accept: text/markdown` probe per agents:true surface, in order. What
+ *  each answer MEANS is compareAgentCoverage's. */
 export async function readAgentAnswers(origin: string, pages: { path: string }[], fetchEdge: EdgeFetch): Promise<Map<string, AgentAnswer>> {
   const answers = new Map<string, AgentAnswer>();
   for (const p of pages) {
     try {
+      // redirect: "manual". Following one made this probe report the DESTINATION's
+      // content-type as the site's, and it named the wrong defect for a full
+      // release: /rn was a bare 302 to Spotify, so the advisory read "/rn
+      // (text/html)" and sent a reader looking for a page that does not exist.
       const res = await fetchEdge(`${origin}${p.path}`, { accept: "text/markdown" }, { redirect: "manual" });
       if (!servedByEdge(res)) answers.set(p.path, { kind: "unmeasured", reason: `HTTP ${res.status} without cf-ray` });
       else if (res.status >= 300 && res.status < 400) answers.set(p.path, { kind: "redirect", status: res.status, location: res.headers.get("location") || "" });
@@ -215,10 +287,15 @@ export async function readAgentAnswers(origin: string, pages: { path: string }[]
   return answers;
 }
 
+// ------------------------------------------------------ port: Cloudflare ----
+
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 
 export type CloudflareGet = (path: string) => Promise<any>;
 
+/** A read-only Cloudflare API client: GET, bearer token, the v4 envelope
+ *  unwrapped. It throws on a refusal, naming the path and Cloudflare's own
+ *  error codes, which is what the comparer matches a missing scope on. */
 export function cloudflareReader(token: string, fetchImpl: Fetch = globalFetch): CloudflareGet {
   return async (path) => {
     const res = await fetchImpl(`${CLOUDFLARE_API}${path}`, {
@@ -249,6 +326,8 @@ export const readWorkerScripts = (cf: CloudflareGet, accountId: string) =>
 export const readTokens = (cf: CloudflareGet, accountId: string) =>
   attempt<any[]>(() => cf(`/accounts/${accountId}/tokens?per_page=100`));
 
+/** The Workers Builds triggers for one Worker. Two reads: the script listing
+ *  carries the build tag, and the tag names the triggers endpoint. */
 export function readWorkersBuilds(cf: CloudflareGet, accountId: string, worker: string): Promise<Read<WorkersBuildsObservation>> {
   return attempt(async () => {
     const scripts = await cf(`/accounts/${accountId}/workers/scripts`);
@@ -288,10 +367,15 @@ export function readVersionAffinity(cf: CloudflareGet, zoneName: string, phase: 
   });
 }
 
+// ---------------------------------------------------------- port: GitHub ----
+
 export type GithubGet = (path: string) => Promise<any>;
 
+/** A read-only GitHub API client. The token is optional: on the public
+ *  endpoints it buys rate-limit headroom alone. */
 export function githubReader(token: string | undefined, fetchImpl: Fetch = globalFetch): GithubGet {
   return async (path) => {
+    // authorization is added below when a token is present.
     const headers: Record<string, string> = {
       accept: "application/vnd.github+json",
       "x-github-api-version": "2022-11-28",
@@ -315,6 +399,11 @@ export function githubReader(token: string | undefined, fetchImpl: Fetch = globa
   };
 }
 
+/** Everything the repository tier compares, read in the order the tier used to
+ *  ask for it. `repo` is the declaration, read only for WHAT to fetch: the
+ *  slug, the declared ruleset names, and which optional blocks exist. When the
+ *  first read fails nothing else is attempted, since every later comparer
+ *  stands on it. */
 export async function readRepository(gh: GithubGet, repo, workflowBlocks: RepositoryObservation["workflowBlocks"]): Promise<RepositoryObservation> {
   const slug = `${repo.owner}/${repo.name}`;
 

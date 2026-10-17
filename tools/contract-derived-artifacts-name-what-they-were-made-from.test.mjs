@@ -24,6 +24,9 @@ test("derivations: a pinned entry declares inputs and carries a recorded digest"
   }
 });
 
+// An unverifiable entry is the one place this graph can quietly cover less than
+// it claims, so the REASON is mandatory. tools.json makes the same demand of the
+// two tools that report no version: say what is skipped, never skip silently.
 test("derivations: an unverifiable entry says which inputs are missing and why", () => {
   for (const d of graph.filter((x) => x.tier === "unverifiable")) {
     assert.ok(d.unverifiable && d.unverifiable.length > 80, `${d.id}: no reason for being unverifiable`);
@@ -40,6 +43,8 @@ test("derivations: every declared output exists", async () => {
   }
 });
 
+// A graph that has been emptied reports a clean pass, which is the failure every
+// scanner floor in this repo exists to refuse.
 test("derivations: the pinned set has not collapsed", () => {
   const pinned = graph.filter((d) => d.tier === "pinned");
   assert.ok(pinned.length >= 4, `only ${pinned.length} pinned derivations; the graph has been emptied`);
@@ -66,6 +71,10 @@ test("derivations: package.json exposes the check", async () => {
   assert.ok(pkg.scripts["derive:check"], "no derive:check script");
 });
 
+// ── the kernel's teeth, tested on a scratch tree rather than on the repo ──────
+// Everything above asserts the DECLARATION is tidy, and a tidy declaration over a
+// digest that never moves is decoration. These four run the property directly.
+
 const scratch = async (files) => {
   const dir = await mkdtemp(path.join(tmpdir(), "derive-"));
   await mkdir(path.join(dir, "in"), { recursive: true });
@@ -83,6 +92,10 @@ test("derive: a changed byte moves the digest", async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+// The case that matters most here, and the reason the digest is built from
+// `path hash` lines rather than from concatenated bytes. A re-encode mints a NEW
+// /i/ filename for the same picture, so a digest blind to names would call the
+// library unchanged at the exact moment every URL in it moved.
 test("derive: a rename moves the digest even when every byte is identical", async () => {
   const dir = await scratch({ "a.1234.jpg": "pixels", "b.txt": "two" });
   const before = await digestFor(dir, SPEC);
@@ -117,6 +130,9 @@ test("derive: a declared input that has vanished is an error, never an empty set
   await rm(dir, { recursive: true, force: true });
 });
 
+// The property set mode exists for. An artifact keyed by stem must NOT go stale
+// when a photo is re-encoded, or the check cries wolf on every encode and gets
+// re-recorded without anybody looking at it.
 test("derive: set mode ignores a re-encode and notices a new photo", async () => {
   const spec = { paths: ["in"], include: [".jpg"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$" };
   /** @type {Derivation} */
@@ -134,6 +150,8 @@ test("derive: set mode ignores a re-encode and notices a new photo", async () =>
   await rm(dir, { recursive: true, force: true });
 });
 
+// A projection that silently skips what it cannot parse reports a pass over an
+// empty set, which is the failure every scanner floor in this repo refuses.
 test("derive: set mode refuses an input it cannot project", async () => {
   const spec = { paths: ["in"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$" };
   const dir = await scratch({ "a.11111111.jpg": "px", "README": "not a thumbnail" });
@@ -147,6 +165,9 @@ test("derive: set mode refuses an input it cannot project", async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+// The one verdict --lock cannot clear, which is the whole point of computing
+// coverage live. semantics.json sat at 158 of 165 and a recorded digest would
+// have called that fresh forever.
 test("derive: coverage is computed live, so --lock cannot clear a gap", async () => {
   const spec = { paths: ["in"], include: [".jpg"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$" };
   const dir = await scratch({ "a.11111111.jpg": "px", "b.22222222.jpg": "px" });
@@ -172,6 +193,7 @@ test("derive: coverage reports an entry left behind by a deleted input", async (
   const d = { id: "t", tier: "pinned", why: "", outputs: ["out.json"], inputs: spec, covers: "out.json" };
   const made = await record(dir, d);
   assert.ok(made, "record() returned nothing");
+  // Nothing moved, so the digest is fresh; the orphan is reported rather than failed.
   const v = await verify(dir, { ...d, recorded: made.recorded }, made.hashes);
   assert.equal(v.state, "fresh", "an orphaned entry was treated as a failure");
   const forced = await verify(dir, { ...d, recorded: { ...made.recorded, inputs: "forced-mismatch" } }, made.hashes);
@@ -179,6 +201,10 @@ test("derive: coverage reports an entry left behind by a deleted input", async (
   assert.deepEqual(forced.orphaned, ["gone"]);
   await rm(dir, { recursive: true, force: true });
 });
+
+// ── `bytes`: whole-file inputs beside a set ──────────────────────────────────
+// semantics.json read fresh for as long as nobody re-captioned a photo, because
+// its captions and recipes were inputs the set could not see (2026-09-22).
 
 const SET_WITH_BYTES = { paths: ["in"], include: [".jpg"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$", bytes: ["cap.json"] };
 const withCaptions = async () => {
@@ -204,6 +230,7 @@ test("derive: a changed `bytes` file makes a set-mode artifact stale, and names 
   await rm(dir, { recursive: true, force: true });
 });
 
+// The reason set mode exists survives the new field: a re-encode still moves nothing.
 test("derive: `bytes` leaves a set-mode digest blind to a re-encode", async () => {
   const dir = await withCaptions();
   /** @type {Derivation} */
@@ -215,6 +242,8 @@ test("derive: `bytes` leaves a set-mode digest blind to a re-encode", async () =
   await rm(dir, { recursive: true, force: true });
 });
 
+// Lock rows for `bytes` are bare paths, so a re-record prunes one that left and
+// never touches another derivation's `#`-namespaced keys.
 test("derive: `bytes` rows are bare paths in the lock, owned by the derivation that declares them", async () => {
   const dir = await withCaptions();
   /** @type {Derivation} */
@@ -240,6 +269,9 @@ test("derive: `bytes` outside set mode is refused, and a vanished `bytes` file i
   await rm(dir, { recursive: true, force: true });
 });
 
+// The declaration is only as good as its memory of what the generator reads. These
+// two are the reads strace found; hashes.json it also opens, and correctly stays
+// out, since it only locates the thumbnail for the --vision pass.
 test("derivations: images/semantics declares the caption and recipe files its generator folds in", async () => {
   const d = graph.find((x) => x.id === "images/semantics");
   assert.ok(d, "images/semantics left the graph");
@@ -249,6 +281,15 @@ test("derivations: images/semantics declares the caption and recipe files its ge
     assert.ok(d.inputs.bytes?.includes(`public/images/${file}`), `images/semantics does not declare public/images/${file}`);
   }
 });
+
+// ── the lock is rewritten, not accumulated ───────────────────────────────────
+// The --lock path merged the prior lock forward and pruned nothing, so a row
+// survived every input it named. public/i is content-addressed, so a re-encode
+// mints a new filename rather than editing a row: the 2026-08-26 full-library
+// re-encode took the lock from 998 rows for 663 files to 1493 for 660, 498 of
+// them naming a path no checkout can open. Inert, because verify() hashes disk
+// rather than reading the lock, and still the opposite of what a file whose own
+// $comment says it exists to "name what moved" should be filling with.
 
 test("derive: a rewrite drops the row for an input that is gone", async () => {
   const dir = await scratch({ "a.txt": "one", "b.txt": "two" });
@@ -270,6 +311,11 @@ test("derive: a rewrite drops the row for an input that is gone", async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+// The distinction the pruning turns on, and the one a blunt rewrite gets wrong.
+// --only re-records ONE derivation, so pruning has to drop what is GONE while
+// keeping every path that still exists and simply was not part of this
+// derivation's inputs. Two derivations here: a set-mode one keyed by stem and a
+// path-mode one over a sibling tree neither run touches.
 test("derive: --only prunes its own dead rows and leaves every other derivation's alone", async () => {
   const dir = await scratch({ "a.11111111.jpg": "px", "b.22222222.jpg": "px" });
   const fs = await import("node:fs/promises");
@@ -288,6 +334,7 @@ test("derive: --only prunes its own dead rows and leaves every other derivation'
   lockAll = relock(lockAll, madeSibling.hashes, madeSibling.owns).next;
   assert.deepEqual(Object.keys(lockAll).sort(), ["other/keep.txt", "stems#a", "stems#b"]);
 
+  // A photo leaves. Re-record ONLY the stem derivation, the way --only does.
   await fs.rm(path.join(dir, "in/b.22222222.jpg"));
   const again = await record(dir, stems);
   assert.ok(again, "record() returned nothing on the re-record");
@@ -298,6 +345,10 @@ test("derive: --only prunes its own dead rows and leaves every other derivation'
   await rm(dir, { recursive: true, force: true });
 });
 
+// The same property asserted on the REAL lock, which is the half that would have
+// caught this: every row has to be one some pinned derivation still collects. It
+// covers set mode too, where the key is a projected stem rather than a path and a
+// stat cannot answer.
 test("derivations: every lock row is an input some derivation still collects", async () => {
   const live = new Set();
   for (const d of graph.filter((x) => x.tier === "pinned")) {
@@ -312,6 +363,9 @@ test("derivations: every lock row is an input some derivation still collects", a
   );
 });
 
+// Every set-mode derivation in the real graph declares `covers`. Set mode without
+// it answers a strictly weaker question, and the two artifacts using it are both
+// built one key at a time by a resumable generator.
 test("derivations: a set-mode entry declares what it covers", () => {
   for (const d of graph.filter((x) => x.inputs?.set)) {
     assert.ok(d.covers, `${d.id}: set mode with no covers, so a half-written artifact reads fresh`);
@@ -344,6 +398,8 @@ test("census: an exemption states why, at length", () => {
   }
 });
 
+// An exemption for a file that no longer writes is stale bookkeeping, and left
+// alone it makes the list look more considered than it is.
 test("census: no exemption outlives the file it exempts", () => {
   const stale = Object.keys(decl.writers.exempt).filter((f) => !everything.includes(f));
   assert.deepEqual(stale, [], `exempt but no longer writing: ${stale.join(", ")}`);
@@ -354,6 +410,9 @@ test("census: a file is never both declared and exempt", () => {
   assert.deepEqual(both, [], `both declared and exempt: ${both.join(", ")}`);
 });
 
+// A regenerate command that names no script cannot be linked to the census, and
+// a reader following it has to go guess which file to run. gen-og-cards.ts was
+// exactly this on the day the census was written: declared, and invisible to it.
 test("census: every regenerate command names a file that exists", async () => {
   const fs = await import("node:fs/promises");
   for (const d of graph) {
@@ -367,10 +426,16 @@ test("census: every regenerate command names a file that exists", async () => {
   }
 });
 
+// The shell tier asks a wider question than the exact one, because shell has no
+// exact answer: a script writes through redirects, cp, sed -i, and through the
+// encoders it drives. Over-approximating fails CLOSED, which is the property
+// being asserted here.
 test("census: the shell scan has not stopped matching", () => {
   assert.ok(shell.length >= SHELL_FLOOR, `only ${shell.length} shell scripts matched, under the floor of ${SHELL_FLOOR}`);
 });
 
+// It shipped with shell as a stated hole and the hole was real: all four of these
+// write committed bytes and none was classified until the tier existed.
 test("census: the shell tier still sees the scripts it was built for", () => {
   for (const f of [
     "tools/photos/add-car-photo.sh",
@@ -389,11 +454,33 @@ test("census: the standalone re-encode path points at derive:check", async () =>
   assert.ok(src.includes("derive:check"), "reencode-thumbnails.sh no longer names derive:check");
 });
 
+// ── the one thing the census still asks about tests ──────────────────────────
+// findWriters SKIPS test files, on the reasoning that a test writing a fixture is
+// not a generator of anything committed. That reasoning holds for a fixture in a
+// temp directory and fails completely for a test that writes into the REPO, which
+// is invisible to the census by construction.
+//
+// It is not hypothetical. contract-the-bun-pin-is-declared-once.test.mjs used to
+// call writePin(root, "9.9.9") against the live package.json and restore it in a
+// finally. `node --test` runs test FILES in parallel processes and writeFileSync
+// truncates before writing, so for the width of that write any other file's module
+// resolution could read a half-written package.json. CI died with
+// ERR_INVALID_PACKAGE_CONFIG naming the repo root, on an unrelated test file,
+// while the test that caused it reported green.
+//
+// This guard is NARROW on purpose: it catches the exact shape (handing the repo
+// root to a write-shaped function), not every way a test could reach outside its
+// sandbox. A wider version would need to resolve expressions, and a heuristic that
+// fires on temp-dir writes would be muted within a week.
 test("census: no test hands the repo root to a write-shaped call", async () => {
   const fs = await import("node:fs/promises");
   const dir = path.join(root, "tools");
   const offenders = [];
   for (const name of (await fs.readdir(dir)).filter((f) => f.includes(".test."))) {
+    // Comment lines are stripped FIRST, because the note explaining this guard
+    // names the very call it forbids, and a test that fails on its own
+    // explanation can only be fixed by deleting the explanation. The JSDoc-tag
+    // contract learned this the same way.
     const src = (await fs.readFile(path.join(dir, name), "utf8"))
       .split("\n")
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))

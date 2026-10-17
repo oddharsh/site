@@ -6,17 +6,29 @@
 // that stops on a conflict exits 1, and a non-zero Bash command fires
 // PostToolUseFailure. Git's own hooks cannot do this job at all, because
 // post-merge does not fire on a conflicted merge.
+//
+// It reads STATE rather than output. Git's "CONFLICT (content)" lines are
+// human text that changes between versions and vanishes under -q, while an
+// unmerged index entry is the definition of a conflict. So the command text
+// only gates whether to look (a git verb that can stop mid-merge), and the
+// index decides whether there is anything to say. A `git status` in a tree
+// that is still mid-merge says nothing, which is what keeps this from
+// repeating on every command until the merge is done.
+//
+// It never fails the tool call: anything unexpected exits 0 with no output.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 
+/** Git verbs that can leave a worktree stopped on conflicts. */
 export const STOPS = /\bgit\b[^\n;|&]*?\s(merge|rebase|cherry-pick|pull|revert|am|stash\s+(?:pop|apply))\b/;
 
 type HookInput = { hook_event_name?: string; cwd?: string; tool_input?: { command?: string } };
 
 const git = (dir: string, args: string[]) => execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
 
+/** Every directory the command could have run git in: the session's, each `cd` target, each `git -C`. */
 export function candidateDirs(command: string, cwd: string): string[] {
   const out = [cwd];
   for (const m of command.matchAll(/(?:^|[;&|]\s*|\s)(?:cd|pushd)\s+("[^"]+"|'[^']+'|[^\s;&|]+)/g)) out.push(m[1].replace(/^["']|["']$/g, ""));

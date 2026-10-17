@@ -38,11 +38,13 @@ for (const server of ["site", "serendipity"]) {
     await response;
     assert.deepEqual(mcpEraOf(request), { era: "legacy", version: "2025-06-18", client: "old-client" });
 
+    // After the handshake a legacy client names its revision on the header.
     ({ request, response } = post(server, { jsonrpc: "2.0", id: 3, method: "ping" },
       { "mcp-protocol-version": "2025-03-26" }));
     await response;
     assert.deepEqual(mcpEraOf(request), { era: "legacy", version: "2025-03-26", client: undefined });
 
+    // A batch mixing eras is one request with no single revision.
     ({ request, response } = post(server, [discover, initialize({ name: "old-client" })]));
     await response;
     assert.deepEqual(mcpEraOf(request), { era: "mixed", version: undefined, client: "old-client" });
@@ -59,6 +61,8 @@ for (const server of ["site", "serendipity"]) {
     assert.equal(client.length, 40);
     assert.match(client, /^[\x20-\x7e]+$/, "control characters never reach the log line");
 
+    // A request that fails envelope validation never reached a server, so it
+    // records nothing and cannot be counted as either era.
     ({ request, response } = post(server, { jsonrpc: "1.0", method: "ping" }));
     await response;
     assert.equal(mcpEraOf(request), undefined);

@@ -18,6 +18,7 @@ test("compactSvg folds a whole-value hex colour and nothing else", () => {
   assert.equal(compactSvg('<stop stop-color="#FFFFFF"/>'), '<stop stop-color="#fff"/>');
   assert.equal(compactSvg('<rect fill="#aabbcc"/>'), '<rect fill="#abc"/>');
   assert.equal(compactSvg('<rect fill="#abcdef"/>'), '<rect fill="#abcdef"/>');
+  // A fragment reference is not a colour, even when it looks like one.
   assert.equal(compactSvg('<rect fill="url(#aabbcc)"/>'), '<rect fill="url(#aabbcc)"/>');
 });
 
@@ -32,5 +33,6 @@ test("the committed sprite has no foldable colour and no duplicate paint definit
     assert.ok(!seen.has(body), `${m[3]} repeats ${seen.get(body)} in every attribute but the id`);
     seen.set(body, m[3]);
   }
+  // A floor, so a PAINT_DEF that stops matching cannot pass over zero definitions.
   assert.ok(defs >= 20, `only ${defs} paint definitions matched`);
 });

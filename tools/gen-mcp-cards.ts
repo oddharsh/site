@@ -1,6 +1,11 @@
 #!/usr/bin/env node
-// gen-mcp-cards.mjs — project the live MCP tool registries into the
+// gen-mcp-cards.ts — project the live MCP tool registries into the
 // pre-connection server cards agents discover before they can POST MCP.
+//
+// The protocol remains the source of truth at /mcp and /serendipity/mcp:
+// server/discover and tools/list are live. These files are only the static
+// discovery layer, so a card can never quietly acquire a tool that the Worker
+// does not serve.
 
 import { mkdir, writeFile } from "node:fs/promises";
 

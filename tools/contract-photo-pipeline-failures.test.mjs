@@ -9,6 +9,8 @@ import { photoInputs } from "./photos/photo-inputs.ts";
 
 const REPO = fileURLToPath(new URL("../", import.meta.url));
 
+// Real shell entrypoints, deterministic encoder stubs, no network or private
+// originals. Copy the shell corpus so sourced helpers run unchanged too.
 async function fixture(run) {
   // CANONICAL root. The selector resolves directory aliases on purpose, so a
   // fixture rooted at a symlink compares its resolved paths against unresolved
@@ -31,8 +33,21 @@ async function fixture(run) {
       TRACE: `${root}/trace`, JOBS: "1", REMOTE_RENDER_ONLY: "1", ...env },
   });
   try {
+    // Take the corpus from git rather than from a directory listing, which is
+    // the census check-tools.ts itself takes. A listing of tools/photos alone
+    // misses the nested AVIF builder, so a declaration naming it reads as a
+    // stale path, and it would copy an ignored download that no check sees.
+    // photo-inputs.ts is named outright because the shells call it: it is a
+    // dependency of the corpus rather than a member of it. Every file a
+    // `required_by` in config/tools.json names joins for the same reason, read
+    // from the declaration rather than listed here: check-tools.ts fails on a
+    // required_by it cannot open, so the fixture has to hold whatever the real
+    // declaration points at, and that set changed the day python3's only
+    // consumer became a .py outside the shell glob (2026-09-15).
     const declared = JSON.parse(await readFile(new URL("../config/tools.json", import.meta.url), "utf8"))
       .tools.flatMap((t) => t.required_by ?? []);
+    // pipeline-json.ts is the shells' JSON since 2026-09-15 and runs for real
+    // under the fixture's node, with the one module it imports.
     const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts", "tools/photos/pipeline-json.ts", "tools/lib/photo-indexes.ts", ...new Set(declared)];
     for (const rel of execFileSync("git", ["ls-files", "-z", ...corpus], { cwd: REPO, encoding: "utf8" }).split("\0").filter(Boolean)) {
       await put(rel, await readFile(path.join(REPO, rel), "utf8"));
@@ -108,8 +123,12 @@ printf encoded > "$last"`);
     await command("bin/stat", 'test "$1" = -f%z; test -f "$2"; echo 7');
     await command("bin/cargo", 'echo cargo >> "$TRACE"');
     await command("bin/pkg-config", "exit 0");
+    // The shells spawn `bun` for their TS since 2026-09-16; under `bun test` that
+    // is this very runtime, and under test:node it is node running the same TS.
     await command("bin/bun", `exec "${process.execPath}" "$@"`);
     await command("node_modules/.bin/wrangler", 'echo forbidden-upload >> "$TRACE"; exit 99');
+    // Stop the successful ingest control at the next phase, before unrelated
+    // index/caption work; failed phase 1 must never reach this sentinel.
     await command("tools/photos/hash-thumbnails.sh", 'echo downstream-hash >> "$TRACE"; exit 23');
     await run({ root, put, read, shell, command });
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -187,6 +206,8 @@ test("ingest preserves previous tiers on failure and rebuilds an incomplete cach
     }
     assert.equal(shell("add-photos.sh", ["source/frame.jpg"]).status, 23);
     for (const file of files) assert.equal(await read(file), "encoded");
+    // A complete current set skips encoding; a missing or empty smallest tier
+    // must invalidate it even though the JPEG remains newer than the source.
     await put("trace", "");
     assert.equal(shell("add-photos.sh", ["source/frame.jpg"]).status, 23);
     assert.doesNotMatch(await read("trace"), /zenc|metadata|avifenc/);
@@ -283,6 +304,11 @@ log({ event: 'end', key, failed });
 process.exit(failed ? 9 : 0);
 `);
     await f.command("node_modules/.bin/wrangler", `exec "${process.execPath}" "$FIXTURE_ROOT/upload.mjs" "$@"`);
+    // The JPEG XL original, stubbed so the body says what it was made from:
+    // cjxl wraps its input in "jxl:", and djxl unwraps it, so the rebuild
+    // matches unless BAD_REBUILD makes it differ by one byte. cjxl also notes
+    // whether jpegtran's rejected copy of its input still exists, the check the
+    // uploader made when the JPEG itself went up.
     await f.command("bin/cjxl", `
 for last in "$@"; do :; done
 for a in "$@"; do case "$a" in -*|9) ;; *) [ "$a" = "$last" ] || src="$a" ;; esac; done
@@ -323,6 +349,8 @@ test("failed source or HEIF-companion uploads stop before hashing and index writ
     assert.match(await read("trace"), /downstream-hash/);
     const sent = (await uploads()).filter(row => row.event === "start").map(({key,body}) => ({key,body}));
     assert.deepEqual(sent.sort((a,b) => a.key.localeCompare(b.key)), [
+      // Only the JPEG XL goes up, wrapping the prepared JPEG: for a HIF that is
+      // zenc's re-encode AFTER jpegtran's DC-first reorder, never the source.
       { key: "aadhar-photos/companion.jxl", body: "jxl:progressive" },
       { key: "aadhar-photos/frame.jxl", body: "jxl:progressive" },
     ]);
@@ -343,6 +371,9 @@ test("progressive-copy failure uploads the untouched source and removes the reje
   });
 });
 
+// The HIF branch has no untouched original to fall back to: zenc's own file is
+// the one whose luma-first scan order kept 53 archives blank until 66-99% of the
+// download, so a failed reorder must fail the photo rather than upload that.
 test("a HIF archive whose DC-first reorder fails is never uploaded", async () => {
   await uploadFixture(async ({ put, read, ingest, uploads }) => {
     await put("source/companion.HIF", "HEIF original");
@@ -351,6 +382,7 @@ test("a HIF archive whose DC-first reorder fails is never uploaded", async () =>
     assert.match(result.stderr, /phase 2 incomplete/);
     assert.deepEqual(await uploads(), []);
     assert.doesNotMatch(await read("trace"), /downstream-hash/);
+    // control: the same source with a working reorder uploads the reordered bytes
     const good = ingest(["source/companion.HIF"]);
     assert.equal(good.status, 23, good.stderr + good.stdout);
     const sent = (await uploads()).filter(row => row.event === "start");
@@ -360,6 +392,9 @@ test("a HIF archive whose DC-first reorder fails is never uploaded", async () =>
   });
 });
 
+// The .jxl is the only copy R2 will hold, so one whose rebuild differs from the
+// prepared JPEG by a byte must never reach R2, and the photo fails the way a
+// failed HEIF upload does: before hashing, with the index untouched.
 test("a JPEG XL original that does not rebuild the prepared JPEG is never uploaded", async () => {
   await uploadFixture(async ({ put, read, ingest, uploads }) => {
     await put("src/worker/photo-index.json", '{"existing":{"full":"existing.jpg"}}');
@@ -370,6 +405,7 @@ test("a JPEG XL original that does not rebuild the prepared JPEG is never upload
     assert.deepEqual(await uploads(), [], "nothing went up, the JPEG included");
     assert.doesNotMatch(await read("trace"), /downstream-hash/);
     assert.equal(await read("src/worker/photo-index.json"), '{"existing":{"full":"existing.jpg"}}');
+    // Control: an exact rebuild uploads it, with its own content type.
     await put("uploads", "");
     const good = ingest(["source/frame.jpg"]);
     assert.equal(good.status, 23, good.stderr + good.stdout);
@@ -378,6 +414,10 @@ test("a JPEG XL original that does not rebuild the prepared JPEG is never upload
   });
 });
 
+// A HIF photo's archive is encoded from the HIF's own pixels when that beats
+// the JPEG ingest prepared on both metrics, with the HIF's EXIF copied on
+// (sips drops every Fujifilm maker note), and is that JPEG repacked when it
+// does not. A JPEG photo is always the repack: it has no better source.
 test("a HIF photo's archive is its own pixels when they beat the JPEG bar, and the repacked JPEG when not", async () => {
   await uploadFixture(async ({ root, put, read, ingest, uploads }) => {
     await put("source/companion.HIF", "HEIF original");
@@ -385,9 +425,13 @@ test("a HIF photo's archive is its own pixels when they beat the JPEG bar, and t
     const direct = ingest(["source"], win);
     assert.equal(direct.status, 23, direct.stderr + direct.stdout);
     const sent = Object.fromEntries((await uploads()).filter((r) => r.event === "start").map((r) => [r.key, r.body]));
+    // sips's PNG of the HIF ("encoded") went through cjxl, not the JPEG bar
     assert.equal(sent["aadhar-photos/companion.jxl"], "jxl:encoded");
     assert.equal(sent["aadhar-photos/frame.jxl"], "jxl:progressive", "a JPEG source is repacked whatever the metrics say");
+    // the HIF's EXIF goes onto the .jxl (phase 2 also copies it onto the JPEG bar)
     assert.match(await read("trace"), new RegExp(`metadata -TagsFromFile ${root}/source/companion\\.HIF -all:all -overwrite_original \\S+\\.jxl`));
+    // Control: a candidate that wins only one metric is no win, so the HIF
+    // photo falls back to the repack.
     for (const half of [{ CAND_S2: "96" }, { CAND_BA: "0.4" }]) {
       await put("uploads", ""); await put("trace", "");
       const lost = ingest(["source/companion.HIF"], half);
@@ -413,6 +457,7 @@ test("upload batching stays at four regardless of encoder concurrency", async ()
     }
     assert.equal(maximum, 4);
     assert.equal(active, 0);
+    // nine photos, one JPEG XL original each
     assert.equal(keys.length, 9);
     assert.equal(new Set(keys).size, 9);
     assert.ok(keys.includes("aadhar-photos/extra 0.jxl"));
@@ -503,6 +548,10 @@ test("remote ingest preserves the existing JPEG key and refuses a HEIF that woul
   });
 });
 
+// The remote pipeline gets a migrated original as its .jxl plus the JPEG djxl
+// rebuilt beside it. The JPEG feeds the encoders; the index has to keep naming
+// the .jxl and its size, or a rerender would point every link at a key R2 no
+// longer holds.
 test("remote ingest of a JPEG XL original records the .jxl key and size, not the rebuilt JPEG", async () => {
   await uploadFixture(async ({ root, put, command, ingest, read, uploads }) => {
     await put("moved/Moved.jpg", "rebuilt JPEG bytes");
@@ -512,6 +561,7 @@ test("remote ingest of a JPEG XL original records the .jxl key and size, not the
     assert.deepEqual(await photoInputs([path.join(root, "moved")], { remote: true }), [
       { stem: "Moved", source: jpg, original: jxl, full: "Moved.jxl" },
     ]);
+    // Control: a local ingest of the same folder ignores the .jxl entirely.
     assert.deepEqual(await photoInputs([path.join(root, "moved")]), [
       { stem: "Moved", source: jpg, original: jpg, full: "Moved.jpg" },
     ]);
@@ -526,6 +576,12 @@ test("remote ingest of a JPEG XL original records the .jxl key and size, not the
   });
 });
 
+// The remote downloader meets two kinds of JPEG XL original. A transcode
+// rebuilds its JPEG, and the .jxl must leave the scanned folder: its metadata
+// is Brotli-compressed, and exif-sooc 0.4.0 reads .jxl, so beside the JPEG it
+// would be a second, failing read of the same photo. A HIF photo's direct
+// encode has no JPEG inside: it decodes to a 16-bit PNG and the .jxl stays,
+// as the only copy of the HIF's EXIF.
 test("the remote downloader rebuilds a transcode's JPEG and decodes a direct archive, keeping only the latter's .jxl in the folder", async () => {
   await fixture(async ({ root, put, command, shell, read }) => {
     const box = (kind, body) => { const b = Buffer.alloc(8); b.writeUInt32BE(body.length + 8); b.write(kind, 4, "latin1"); return Buffer.concat([b, Buffer.from(body)]); };
@@ -546,6 +602,8 @@ test("the remote downloader rebuilds a transcode's JPEG and decodes a direct arc
     assert.match(await read("dest/New.png"), /--bits_per_sample=16/, "a direct archive decodes to 16-bit PNG");
     assert.equal(await exists("dest/New.jxl"), true, "a direct archive's .jxl stays, as its metadata source");
     assert.equal(await exists("dest/New.jpg"), false, "djxl must not be asked for a JPEG it would invent");
+    // Remote ingest finds the transcode's key in its new home and refuses the
+    // direct archive by name rather than dropping it from the plan.
     await assert.rejects(photoInputs([path.join(root, "dest")], { remote: true }), /cannot re-ingest New/);
     await rm(path.join(root, "dest/New.jxl")); await rm(path.join(root, "dest/New.png"));
     assert.deepEqual(await photoInputs([path.join(root, "dest")], { remote: true }), [
@@ -580,6 +638,7 @@ test("the shell input plan preserves filename whitespace and JPEG companion exte
     const result = ingest([`source/${stem}.hEiC`]);
     assert.equal(result.status, 23, result.stderr + result.stdout);
     const sent = (await uploads()).filter(row => row.event === "start");
+    // the key is the companion JPEG's, tab and newline intact, with .jxl
     assert.deepEqual(sent.map(({ key, body }) => [key, body]), [[`aadhar-photos/${stem}.jxl`, "jxl:progressive"]]);
   });
 });
@@ -590,6 +649,10 @@ test("ingest forwards exactly the selected metadata sources across folders as a 
     await put("other/second photo.jpeg", "second original");
     await put("src/worker/photo-index.json", "{}");
     await command("tools/photos/hash-thumbnails.sh", "exit 0");
+    // The index writer is pipeline-json.ts under the fixture's real node, so
+    // it runs here rather than being stubbed: this fixture used to stand in a
+    // constant `bin/jaq` because installing a JSON CLI in contract CI was the
+    // alternative, and that alternative is gone.
     await command("tools/photos/extract-photo-metadata.sh", `printf '%s\\0' "$@" > "$FIXTURE_ROOT/metadata-args"; exit 31`);
     const result = ingest(["source", "other/second photo.jpeg"]);
     assert.equal(result.status, 31, result.stderr + result.stdout);
@@ -619,6 +682,11 @@ test("an index write failure stops ingest before metadata can advance", async ()
     const previous = '{"held":{"full":"held.jpg","size":9}}';
     await put("src/worker/photo-index.json", previous);
     await command("tools/photos/hash-thumbnails.sh", "exit 0");
+    // A REAL write failure rather than a stub exiting 17: the writer lands its
+    // output at <index>.tmp and renames, so a directory squatting on that path
+    // fails the write with EISDIR after the merge has been computed, which is
+    // the latest point a failure can land and the one that must leave the
+    // committed bytes alone.
     await put("src/worker/photo-index.json.tmp/squatter", "");
     await command("tools/photos/extract-photo-metadata.sh", 'echo unexpected-metadata >> "$TRACE"; exit 31');
     const result = ingest(["source/frame.jpg"]);

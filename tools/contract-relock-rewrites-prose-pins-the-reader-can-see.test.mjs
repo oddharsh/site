@@ -1,6 +1,11 @@
 // `bun run deps:pin` rewrites the version claims in docs/DEPENDENCIES.md, and
 // the audit beside it reads them back. The two share findClaims on purpose, so
 // what this pins is that the WRITER lands on the same spans the READER matches.
+//
+// The wrapped-sentence case is the one that earned the test. A `\s+` between the
+// prose name and the version means a claim can straddle a newline, which a
+// line-oriented sweep silently skips: measured 2026-08-26 on the oxlint 1.80.0
+// bump, a sed fixed three mentions of four and CI caught the fourth.
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -8,6 +13,8 @@ import { BASELINE_HEADING, auditDependencyDocs, planDocPinRewrites } from "./lib
 
 const ALIASES = [{ prose: "Oxlint", pkg: "oxlint" }, { prose: "Wrangler", pkg: "wrangler" }];
 
+// Prose ABOVE the baseline heading is out of scope for the reader, so it must be
+// out of scope for the writer too.
 const DOC = `# Dependencies
 
 Oxlint 1.79.0 is mentioned up here, outside the baseline section.
@@ -30,7 +37,9 @@ test("rewrites every claim the reader can see, including one that wraps", () => 
   assert.equal(edits.length, 2, "both in-scope Oxlint claims move; Wrangler already agrees");
   assert.deepEqual(edits.map((e) => [e.from, e.to]), [["1.79.0", "1.80.0"], ["1.79.0", "1.80.0"]]);
 
+  // The wrapped mention is the whole point.
   assert.match(updated, /The pinned Oxlint\n {2}1\.80\.0 does support/);
+  // Untouched: above the heading, and a pin that already agreed.
   assert.match(updated, /Oxlint 1\.79\.0 is mentioned up here/);
   assert.match(updated, /Wrangler 4\.125\.0 are exact root pins/);
 });
@@ -47,6 +56,8 @@ test("the rewrite satisfies the audit that gates CI", () => {
 
 test("leaves alone what it cannot know a pin for", () => {
   const doc = `${BASELINE_HEADING}\n\n- Oxlint 1.79.0 and Wrangler 4.125.0.\n`;
+  // A range pin names no single version the prose could be wrong about, and an
+  // absent pin or versionless source names none at all. Guessing invents a claim.
   /** @type {import("./lib/dependency-docs.ts").DependencyVersions[]} */
   const cases = [{ oxlint: "^1.80.0" }, { oxlint: "^1.80.0", wrangler: null }];
   for (const pins of cases) {

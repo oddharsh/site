@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 // node tools/workerd-zstd-probe.ts
 //
+// Does the workerd that THIS tree's wrangler ships honour `zstdCompressSync`'s
+// `dictionary` option? It prints one JSON line, `{ none, good, wrong }`, the
+// three byte counts the four-line control in lib/bun-pin.ts describes, and
+// `interpretZstdProbe` there is what reads it: honoured means the right
+// dictionary alone came back smaller.
+//
 // WHY IT EXISTS. workerd accepts the option and ignores it (measured
 // 2026-08-05, gotcha 14), which is why every dcz delta here is built at
 // deploy time and the runtime tier that would take another ~25% off the
@@ -10,6 +16,12 @@
 // notices. The failure it is watching for is SILENT in every runtime: a frame
 // compressed without the dictionary still decodes against it, so nothing
 // throws and the only signal is a byte count that never shrank.
+//
+// It boots the Worker through wrangler's own `createTestHarness`, the door the
+// route oracle already uses, so the workerd under test is whichever one the
+// `wrangler` this file resolves to depends on: the pinned tree's from the
+// repository root, the candidate's from the detached worktree the canary leg
+// installs into. Nothing is written outside a temp directory it removes.
 //
 // Under node, never bun: wrangler refuses bun per command (gotcha 38), and a
 // harness that hung would read as the probe failing rather than as its answer.

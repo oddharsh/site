@@ -8,6 +8,16 @@
 // lost the LensBrowser marker" is what stopped it. A file in src/client that is
 // NOT a row gets none of that: it stages readable and verbatim, with no twin
 // and nothing watching it.
+//
+// Three tests pinned three files by name (infotip, webmcp, lens-webmcp), each
+// written the day its file was nearly left out. That is the allowlist that
+// only grows when somebody remembers. These read the directory instead, so
+// the next island is covered on the day it is written. The build runs the same
+// function as an invariant; this is the copy `bun run test` reaches without a
+// build. sw.js is the one exception, and clientScriptProblems says why.
+//
+// It imports the registry rather than regex-slicing build.ts's source (the
+// approach until 2026-10-02), so it reads the rows the build reads.
 import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 import { CLIENT_ASSETS, clientScriptProblems, minifiedScripts } from "./lib/client-assets.ts";
 
@@ -27,6 +37,7 @@ test("CONTROL: a script the registry does not name, and a row with no marker, ar
   const files = await clientFiles();
   const [missing] = clientScriptProblems([...files, "lens-unregistered.js"]);
   assert.match(missing, /^lens-unregistered\.js in src\/client but not in the client asset registry/);
+  // sw.js is exempt, and nothing else is.
   assert.deepEqual(clientScriptProblems(["sw.js"], []), []);
   assert.equal(clientScriptProblems(["sw2.js"], []).length, 1);
   const unmarked = CLIENT_ASSETS.map((a) => (a.file === "lens-browser.js" ? { ...a, marker: "" } : a));

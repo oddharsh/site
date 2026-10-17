@@ -1,11 +1,15 @@
 // ── the Tools lens: schema in, form plan out ────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   assert,
   readFileSync,
   test,
 } from "./contract-shared.ts";
 
+// The planner is a browser IIFE, so it is loaded here the way a browser would
+// and then exercised directly. Only the DOM builders touch `document`, and they
+// are never reached at module scope, so a bare `window` object is enough. The
+// alternative was a structural test, and a structural test cannot tell whether a
+// numeric enum survives — which is the one property this thing exists to have.
 function loadLensTools() {
   const src = readFileSync("./src/client/lens-tools.js", "utf8");
   const win = {};
@@ -15,6 +19,7 @@ function loadLensTools() {
 
 test("the Tools planner keeps an enum's ORIGINAL type, so a numeric enum stays numeric", () => {
   const { _plan } = loadLensTools();
+  // The site's own image_transform ships exactly this.
   const plan = _plan({ type: "object", properties: { rotate: { type: "integer", enum: [0, 90, 180, 270] } } });
   const field = plan.fields[0];
   assert.equal(field.kind, "select");
@@ -26,6 +31,7 @@ test("the Tools planner keeps an enum's ORIGINAL type, so a numeric enum stays n
 test("every shape a control cannot carry degrades to JSON and names the reason", () => {
   const { _plan } = loadLensTools();
   const plan = _plan({ type: "object", properties: {
+    // anyOf is not hypothetical: mcp.deepwiki.com's ask_question.repoName is one.
     either: { anyOf: [{ type: "string" }, { items: { type: "string" }, type: "array" }] },
     linked: { $ref: "#/definitions/Thing" },
     loose: { type: "object" },
@@ -74,6 +80,9 @@ test("a blank optional is omitted from the frame, never sent as an empty string"
 });
 
 test("the Tools pane builds foreign strings as NODES, never as markup", () => {
+  // Tool names, descriptions and enum labels all come from a stranger's server.
+  // This test makes the nodes-only rule checkable, because the failure is a
+  // stored XSS and the diff that introduces it looks like ordinary convenience.
   const src = readFileSync("./src/client/lens-tools.js", "utf8");
   // Anchored: a renamed buildField would otherwise leave a one-character slice
   // with no innerHTML in it.
@@ -85,6 +94,9 @@ test("the Tools pane builds foreign strings as NODES, never as markup", () => {
 });
 
 test("the Tools lens reads a catalogue and has NO path to calling a tool", () => {
+  // The whole safety argument: /lens must never become a public button that
+  // fires strangers' tools from this account's IP and under AadharshBot's
+  // signature. Same shape as lens-wire's single-params.get assertion.
   const client = readFileSync("./src/client/lens-tools.js", "utf8");
   const fetches = client.match(/fetch\(/g) || [];
   assert.equal(fetches.length, 1, "the pane makes exactly one request, to our own route");
@@ -100,6 +112,10 @@ test("foreignMcpTools carries schemas ONLY when asked, and drops one it cannot b
   const { DOOR_LIMITS } = await import("../src/worker/lib/doors.ts");
   const doors = readFileSync("./src/worker/lib/doors.ts", "utf8");
   assert.ok(DOOR_LIMITS.schemaBytes > 0, "a foreign schema is bounded like every other foreign string");
+  // Truncating JSON is not an option: half a schema is not a schema, and a form
+  // built from one silently describes the wrong contract. So the cap drops the
+  // schema whole and flags it, and the pane says "too large to carry" rather
+  // than the opposite claim, "takes no arguments".
   assert.ok(/oversize/.test(doors), "an over-cap schema is reported rather than silently absent");
   assert.ok(/if \(!opts\.schemas\) return row;/.test(doors),
     "the three prose callers keep the catalogue they already had");

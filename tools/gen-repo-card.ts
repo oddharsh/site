@@ -1,4 +1,28 @@
-// gen-repo-card.mjs — the GitHub social preview for this repository.
+// gen-repo-card.ts — the GitHub social preview for this repository.
+//
+// GitHub wants 1280x640 and crops toward the middle in some unfurls, so nothing
+// load-bearing sits within 40px of an edge. Two variants, because the repo card
+// has two honest jobs and they pull apart:
+//
+//   desktop   the LIVE homepage at 2:1. Says "the repo is this site" with no
+//             copy at all: desktop icons, the window, the taskbar, real photos.
+//             NOT deterministic — the homepage draws a random 12 of its photos
+//             per request, so every regeneration ships a different grid.
+//   card      a composed Luna window on the Bliss wallpaper: big name, one line
+//             of subtitle, four measured facts. Reads at thumbnail size, where
+//             a screenshot of a whole desktop reads as blue mush.
+//
+//     bun tools/gen-repo-card.ts                 # both, into .github/
+//     bun tools/gen-repo-card.ts desktop         # one variant
+//     bun tools/gen-repo-card.ts --out /tmp/x    # somewhere else
+//
+// Bun.WebView drives the installed Chrome directly. The wallpaper is read
+// straight out of luna.css so the card background is pixel-identical to the
+// real desktop (no second asset), and the screenshot is supersampled at DSF 2
+// then downscaled into a 1x card.
+//
+// The FACTS row is derived, never typed: a number nobody re-counts is a number
+// that rots, and this card outlives most of what it describes.
 
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -57,6 +81,8 @@ async function setContent(view, html) {
   await view.evaluate('document.readyState === "complete" ? true : new Promise(resolve => addEventListener("load", () => resolve(true), { once: true }))');
 }
 
+// The homepage favicon, reused as the window icon so the card carries the same
+// brand stamp the tab does. Lifted from index.html rather than re-drawn.
 async function favicon() {
   const html = await readFile(path.join(PAGES, "index.html"), "utf8");
   const m = html.match(/<link rel="icon"[^>]*href="([^"]+)"/);
@@ -71,12 +97,15 @@ async function bliss() {
   return m[1];
 }
 
+// colors + bevels only. The font tokens are @font-face local() rules that must
+// never reach a served page, and this card only needs the three house stacks.
 async function tokens() {
   const files = ["colors.css", "bevels.css"];
   const parts = await Promise.all(files.map((f) => readFile(path.join(ROOT, "design/tokens", f), "utf8")));
   return parts.join("\n");
 }
 
+// Counted, not typed. Each of these is one number the repo already keeps.
 async function facts() {
   const [manifest, hashes] = await Promise.all([
     readFile(path.join(ROOT, "config/site-manifest.json"), "utf8"),
@@ -91,6 +120,9 @@ async function facts() {
 }
 
 function cardHtml({ wallpaper, icon, tokenCss, chips }) {
+  // One Luna window, centered, with 60px of clearance on every side so GitHub's
+  // 40pt safe border is met with room to spare. Trebuchet for the name (the
+  // house display stack), Tahoma for everything else.
   return `<!doctype html><html><head><meta charset="utf-8"><style>
   ${tokenCss}
   *{margin:0;box-sizing:border-box}
@@ -146,10 +178,14 @@ function cardHtml({ wallpaper, icon, tokenCss, chips }) {
   </div></body></html>`;
 }
 
+// The live homepage at the card's own aspect, full bleed. Captured at 1400x700
+// and downscaled into the 1280x640 frame (the same supersample the OG cards use).
+// The viewport is the composition: at 1600 wide the window swims in wallpaper,
+// because it is centered at a fixed max-width and the desktop takes the slack.
 async function shootDesktop() {
   await using view = await openView(1400, 700, 2);
   await navigate(view, BASE);
-  await wait(2200);
+  await wait(2200); // photo grid decode + the taskbar clock
   const buf = await view.screenshot({ format: "png", encoding: "buffer" });
   return "data:image/png;base64," + buf.toString("base64");
 }

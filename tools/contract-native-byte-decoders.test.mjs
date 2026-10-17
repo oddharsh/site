@@ -4,6 +4,12 @@
 // Uint8Array.fromBase64 and .fromHex now, and these pin what that kept and what
 // it changed. Every oracle here is node's Buffer or node:crypto, never the
 // built-in under test.
+//
+// Three of them fail on the code this replaced, on purpose: x402 (the payment
+// read as Latin-1, and the receipt throwing on a curly quote after settlement),
+// the cover proxy accepting a signature re-spelled in the standard alphabet, and
+// an HTTPS record written in two-byte words reading as no ECH. The other two pin
+// behaviour the swap had to keep. cal/test/sign.test.js carries the fourth.
 import { createHash, createHmac } from "node:crypto";
 import { assert, context, test, testGlobals } from "./contract-shared.ts";
 import { serveStaticPage } from "../src/worker/lib/assets.ts";
@@ -13,6 +19,9 @@ import { handleLlmsFull } from "../src/worker/x402.ts";
 import { handleSerendipity } from "../serendipity/serendipity.ts";
 
 test("Available-Dictionary selects the delta named by the digest's first 8 bytes, in hex", async () => {
+  // 0x07 needs its leading zero and 0xb8 is past 0x7f: the two places a hand-rolled
+  // hex encoder goes wrong. An all-0x01 digest, which the older negotiation test
+  // uses, hexes the same under either mistake.
   const digest = Uint8Array.from({ length: 32 }, (_, i) => (i * 0x3b + 0x07) & 0xff);
   const tag = Buffer.from(digest).subarray(0, 8).toString("hex");
   const requested = [];
@@ -31,6 +40,7 @@ test("Available-Dictionary selects the delta named by the digest's first 8 bytes
   assert.equal(hit.headers.get("content-encoding"), "dcz");
   assert.ok(requested.includes(`/pd/lwe__drivers.${tag}.dcz`), requested.join(" "));
 
+  // 31 bytes is no SHA-256, so no delta path is even asked for
   requested.length = 0;
   await offer(digest.subarray(0, 31));
   assert.equal(requested.some((p) => p.startsWith("/pd/")), false, requested.join(" "));
@@ -40,6 +50,7 @@ test("image_data decodes to the same bytes however its base64 is wrapped", async
   const bytes = Uint8Array.from({ length: 300 }, (_, i) => (i * 7 + 3) & 0xff);
   const b64 = Buffer.from(bytes).toString("base64");
   assert.match(b64, /[+/]/, "the fixture needs a character base64url spells differently");
+  // the receipt's sha256 is the Worker hashing what it decoded; node hashes the original
   const want = createHash("sha256").update(bytes).digest("hex");
   const env = { IMAGES: { async info() { return { format: "png", width: 1, height: 1 }; } } };
 
@@ -47,6 +58,8 @@ test("image_data decodes to the same bytes however its base64 is wrapped", async
     ["plain", b64],
     ["data URL", `data:image/png;base64,${b64}`],
     ["CRLF every 76", b64.replace(/(.{76})(?!$)/g, "$1\r\n")],
+    // \s admits more than the ASCII whitespace fromBase64 skips, which is why
+    // decodeBase64 still strips before it decodes
     ["NBSP inside", `${b64.slice(0, 40)}\u00a0${b64.slice(40)}`],
   ]) {
     const receipt = await imageInspect({ image_data }, env);
@@ -70,6 +83,9 @@ test("x402 reads the payment as UTF-8 and writes a receipt btoa could not", asyn
   const env = /** @type {any} */ ({
     X402_PAY_TO: `0x${"12".repeat(20)}`,
     X402_FACILITATOR: "https://facilitator.test",
+    // 404 on the q11 twin, so this test stays about the UTF-8 receipt. An asset
+    // layer answering every path would hand back plain text as the "twin" and
+    // the handler would label it br.
     ASSETS: { fetch: async (req) => new URL(req.url).pathname.endsWith(".br")
       ? new Response("not found", { status: 404 })
       : new Response("the full corpus") },
@@ -91,9 +107,12 @@ test("x402 reads the payment as UTF-8 and writes a receipt btoa could not", asyn
     const { res, posts } = await pay(receipt);
     assert.equal(res.status, 200);
     assert.equal(await res.text(), "the full corpus");
+    // atob handed JSON.parse Latin-1, so the facilitator was sent "cafÃ©"
     assert.deepEqual(posts.map((p) => p.body.paymentPayload), [payment, payment]);
+    // btoa threw on the check mark and the curly quotes, after /settle had moved the money
     assert.equal(Buffer.from(res.headers.get("x-payment-response") ?? "", "base64").toString("utf8"), JSON.stringify(receipt));
 
+    // an ASCII receipt, which is every receipt that worked before, keeps btoa's exact bytes
     const ascii = { success: true, transaction: `0x${"cd".repeat(32)}`, network: "base" };
     const plain = await pay(ascii);
     assert.equal(plain.res.headers.get("x-payment-response"), btoa(JSON.stringify(ascii)));
@@ -104,6 +123,7 @@ test("the cover proxy refuses a signature re-spelled in the standard alphabet", 
   const secret = "cover-secret-for-the-contract-suite";
   const env = { SERENDIPITY_DB: {}, COVER_SECRET: secret };
   const sign = (raw) => createHmac("sha256", secret).update(raw).digest("base64url");
+  // a signature needs a "-" or "_" before it has a standard-alphabet spelling at all
   let raw = "", sig = "";
   for (let i = 0; !/[-_]/.test(sig); i++) { raw = `https://images.lumacdn.com/event-covers/${i}.jpg`; sig = sign(raw); }
   const cover = (s) => handleSerendipity(new Request(
@@ -112,8 +132,10 @@ test("the cover proxy refuses a signature re-spelled in the standard alphabet", 
   const hadCaches = "caches" in globalThis;
   const realCaches = testGlobals.caches;
   try {
+    // the cache lookup is the first step past the signature check, so a hit proves it passed
     testGlobals.caches = { default: { match: async () => new Response("past the signature check") } };
     assert.equal(await (await cover(sig)).text(), "past the signature check");
+    // the decoder this replaced mapped "-" to "+" and "_" to "/", so both spellings were one key
     const respelled = await cover(sig.replace(/-/g, "+").replace(/_/g, "/"));
     assert.equal(respelled.status, 403);
   } finally {
@@ -133,6 +155,8 @@ test("an RFC 3597 HTTPS record reads the same in any word grouping", () => {
     assert.deepEqual(svcbHasEch(record(withEch, width)), { ech: true, parsed: true }, `words of ${width}`);
     assert.deepEqual(svcbHasEch(record(withoutEch, width)), { ech: false, parsed: true }, `words of ${width}`);
   }
+  // an odd digit count is no byte string, so it reports unparsed rather than "no ECH"
   assert.deepEqual(svcbHasEch("\\# 1 0"), { ech: false, parsed: false });
+  // the presentation-form fallback never reaches the decoder
   assert.deepEqual(svcbHasEch('1 . alpn="h2" ech="AEX+/w=="'), { ech: true, parsed: true });
 });

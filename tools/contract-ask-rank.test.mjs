@@ -8,6 +8,8 @@ import { assert, test } from "./contract-shared.ts";
 import { _resetSearchIndex } from "../src/worker/search.ts";
 import { ASK_BUDGET, ASK_FLOOR, ASK_MODEL, MAX_OPTIONS, buildAskRequest } from "../src/worker/ask-rank.ts";
 
+// "crawled" is not "crawler": the lexical pass finds /writing/bots-log and
+// never /ledger, which is the measured recall miss this change exists for.
 const RECORDS = [
   { url: "/ledger", title: "Crawl ledger", description: "A commentary ledger of identified AI-crawler visits.", text: "crawler visits priced", kind: "utility" },
   { url: "/writing/bots-log", title: "A note", description: "Which bots I saw", text: "bots recently", kind: "writing" },
@@ -21,6 +23,7 @@ function env(extra = {}) {
   return { ASSETS: { fetch: async () => new Response(JSON.stringify({ version: 1, records: RECORDS })) }, ...extra };
 }
 
+/** A Workers AI binding answering the choice with `probs` by url, counting calls. */
 function ai(probs, calls = []) {
   return {
     calls,

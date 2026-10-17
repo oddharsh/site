@@ -8,6 +8,20 @@
 // elements, nesting, attributes and text. It minifies the twin itself rather
 // than reading the served page, because other steps (asset hashing) also sit
 // between the two, and this is the minifier's check.
+//
+// Idea and controls from the build-off's bespoke entry (buildoff/bespoke,
+// test/html-parity.js), which compared against minify-html; this compares each
+// page against its own source, so it outlives that dependency.
+//
+// Two things are normalized, because the minifier changes them on purpose (its
+// header lists each): whitespace, which collapses, and which is trimmed at block
+// edges and dropped between a layout element's children; and attributes it drops
+// or rewrites without changing what they say (an empty class, a value equal to
+// the attribute's default, a boolean's self-named value, a class's spacing, the
+// spaces around a viewport's commas). Every list below is a COPY of the
+// minifier's, so a change to its policy fails here until both change on purpose.
+// <script> and <style> bodies are left out: the build runs Oxc and Lightning CSS
+// over them first, and the parser drops them.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,6 +47,7 @@ const DEFAULTS = {
 const BOOLEAN = new Set(["checked", "disabled", "hidden", "selected", "readonly", "required", "multiple", "autofocus", "novalidate", "async", "defer",
   "nomodule", "ismap", "reversed", "open", "inert", "formnovalidate", "allowfullscreen", "default", "playsinline"]);
 
+// An attribute as the minifier is allowed to leave it, or null where it may drop it.
 function attribute(tag, name, value, attrs) {
   if (name === "class") value = value.trim().replace(/\s+/g, " ");
   if (tag === "meta" && name === "content" && attrs.name === "viewport") value = value.replace(/\s*,\s*/g, ",");
@@ -43,9 +58,12 @@ function attribute(tag, name, value, attrs) {
   return value;
 }
 
+// A page as a list of lines: an open tag with its sorted attributes, a text run,
+// a close tag. Two pages mean the same thing when their lists are equal.
 export function meaning(html) {
   const out = [];
   const walk = (node, keepSpace) => {
+    // merge neighbouring text (a dropped comment splits one run into two)
     const kids = [];
     for (const c of node.children) {
       if (c.name === "#text" && kids.at(-1)?.name === "#text") kids[kids.length - 1] = { name: "#text", value: kids.at(-1).value + c.value };
@@ -91,6 +109,7 @@ function pages() {
   return found.sort();
 }
 
+// The first place two pages part, with a little context on each side.
 function firstDifference(a, b) {
   let i = 0;
   while (i < a.length && i < b.length && a[i] === b[i]) i++;
@@ -110,6 +129,8 @@ test("every built page means what its readable source means", { skip: needsBuild
   assert.deepEqual(failures, [], `${failures.length} of ${list.length} pages changed meaning when minified`);
 });
 
+// Each planted change is one the minifier could make by mistake, and the check
+// must see it, or a clean pass above means nothing.
 test("the check sees a glued word, a changed attribute and a lost end tag", { skip: needsBuild }, () => {
   const served = minifyHtml(readFileSync(join(BUILT, "garage/horizon.src.html"), "utf8"));
   const base = meaning(served);
@@ -119,9 +140,15 @@ test("the check sees a glued word, a changed attribute and a lost end tag", { sk
   };
   plant(/([a-z]) (<(?:a|b|em|code)\b)/, "$1$2", "space removed before an inline element");
   plant(/\bid=("?)([\w-]+)\1/, "id=$1$2x$1", "changed id");
+  // text right after it, so the text moves inside: the reader unwinds a stray
+  // open element at its parent's end, so a lost </a> before </li> reads the same
   plant(/<\/(?:b|em|code)>(?=[^<\s])/, "", "missing end tag before text");
 });
 
+// The reader above decodes a named reference only if its table has the name, and
+// so do the Markdown twins, which share it. The first run of this check found six
+// names missing, printed as written in the twins and llms-full.txt. So every name
+// a built page uses has to decode, and a page that adds a new one fails here.
 test("every named reference a built page uses decodes in the twin reader", { skip: needsBuild }, () => {
   const names = new Set();
   for (const src of pages()) for (const m of readFileSync(join(BUILT, src), "utf8").matchAll(/&([a-zA-Z][a-zA-Z0-9]*);/g)) names.add(m[1]);

@@ -1,5 +1,4 @@
 // ── Workers preview URLs ────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   MODERN_META,
   ROOT,
@@ -11,6 +10,11 @@ import {
   readFileSync,
   test,
 } from "./contract-shared.ts";
+
+// A preview version runs PRODUCTION bindings and secrets (lib/preview.ts says
+// why at length), so these tests are the difference between a preview URL and
+// an unaudited write path into the real site. They are cheap; the failure they
+// prevent is a coffee booking emailed to a stranger from a branch.
 
 test("the preview host test matches workers.dev and nothing that merely looks like it", async () => {
   const { isPreviewHost } = await import("../src/worker/lib/preview.ts");
@@ -26,9 +30,9 @@ test("the preview host test matches workers.dev and nothing that merely looks li
   for (const host of [
     "aadhar.sh",
     "cal.aadhar.sh",
-    "aadhar-sh.workers.dev.evil.example",
-    "notworkers.dev",
-    "workers.dev",
+    "aadhar-sh.workers.dev.evil.example",      // suffix match, not substring
+    "notworkers.dev",                          // ".workers.dev" must not match "notworkers.dev"
+    "workers.dev",                             // the bare apex is not a subdomain of itself
     undefined,
   ]) {
     assert.equal(isPreviewHost(host), false, `${host} is NOT a preview host`);
@@ -38,6 +42,9 @@ test("the preview host test matches workers.dev and nothing that merely looks li
 test("previews refuse every unsafe method, and the GET-shaped writes too", async () => {
   const { previewDenial } = await import("../src/worker/lib/preview.ts");
 
+  // DEFAULT-DENY is the property worth pinning: the guard must not depend on
+  // somebody remembering to list a new POST route. Paths here are deliberately
+  // ones the guard has never heard of.
   for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "post"]) {
     for (const path of ["/book", "/webmention", "/search", "/serendipity/sync", "/a-route-invented-tomorrow"]) {
       const denied = previewDenial(path, method);
@@ -48,8 +55,16 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
     }
   }
 
+  // /mcp is the one POST exception, and it is admitted so the MCP server can be
+  // exercised on a preview, NOT because nothing behind it writes. Two vault
+  // tools do; they are refused a layer down, by the next test.
   assert.equal(previewDenial("/mcp", "POST"), null, "JSON-RPC survives the method rule");
 
+  // The other direction: writes that arrive as a plain GET, which the method
+  // rule structurally cannot catch. Read the entries off the module rather than
+  // restating them — a copy of the list here asserts only that the list equals
+  // itself, which is how the stale coffee paths survived. What gives this teeth
+  // is the pin in the next test.
   const { PREVIEW_GET_WRITES } = await import("../src/worker/lib/preview.ts");
   assert.ok(PREVIEW_GET_WRITES.size >= 6, "the GET-write list must not quietly collapse");
   for (const path of PREVIEW_GET_WRITES) {
@@ -58,6 +73,9 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
     assert.equal(denied.status, 403);
   }
 
+  // ...and reads pass, or the preview is useless. /lens/* is on this list on
+  // purpose: it fetches third parties and costs Browser Run, but it reads
+  // only, and a /lens change you cannot exercise is a /lens change you cannot review.
   for (const path of ["/", "/garage/encoding", "/whoareyou.json", "/photos", "/lens/fetch", "/lens/shot", "/coffee", "/slots"]) {
     for (const method of ["GET", "HEAD"]) {
       assert.equal(previewDenial(path, method), null, `${method} ${path} must still serve on a preview`);
@@ -65,6 +83,14 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
   }
 });
 
+// The guard's own list is the half a test cannot check by reading the guard. An
+// entry that names a path nothing routes reads as protection and protects
+// nothing, which is what happened to the coffee pair: it sat here as bare
+// /approve and /decline (the retired cal.aadhar.sh spellings) while the live
+// routes arrived under /coffee/*, so a signed approve link opened against a
+// preview confirmed a real booking and emailed a real person, on production's
+// SIGNING_SECRET. So pin every entry against the route tables it claims to guard.
+//
 // The site's routes come from routes.ts, the data-only route list (it was
 // index.ts's source text until 2026-10-02). cal's are still read as TEXT: cal's
 // Worker imports "cloudflare:workers" through its Workflow (gotcha 16).
@@ -73,6 +99,9 @@ test("every preview-guarded GET write names a path the site really routes", asyn
   const { EXACT_PATHS, PREFIX_ROUTES } = await import("../src/worker/routes.ts");
   const cal = readFileSync(new URL("./cal/src/index.ts", ROOT), "utf8");
 
+  // Exact ROUTES entries in the site dispatcher, plus cal's own matches, which
+  // reach the visitor one prefix deeper: routes.ts's /coffee/<path> row hands
+  // /coffee/* to cal, and cal strips that prefix before comparing.
   const routed = new Set();
   for (const path of EXACT_PATHS) routed.add(path);
   assert.ok(routed.has("/hit") && routed.has("/webmention/approve"), "the route list must actually carry routes");
@@ -89,6 +118,13 @@ test("every preview-guarded GET write names a path the site really routes", asyn
   }
 });
 
+// The other stale claim, and the more exposed one: /mcp needs no signature and
+// no secret, so for as long as the guard admitted the endpoint on the grounds
+// that nothing behind it wrote, any POST to a preview's /mcp could INSERT into
+// the production representation vault. The refusal is derived from each tool's
+// own readOnlyHint, so a new writing tool is covered on the day it declares
+// itself. Swept over BOTH servers on this origin, which is what keeps the
+// serendipity call site honest while it still has nothing to refuse.
 test("MCP tools that write are refused on a preview host, and reads still run", async () => {
   const { handleMcp: handleSerendipityMcp, MCP_TOOLS: SERENDIPITY_TOOLS } = await import("../serendipity/serendipity.ts");
   const servers = [
@@ -111,23 +147,32 @@ test("MCP tools that write are refused on a preview host, and reads still run", 
       assert.equal(body.result?.isError, true, `${server.what} ${tool.name} writes and must be refused on a preview`);
       assert.match(body.result.content[0].text, /disabled on preview URLs/, `${tool.name}'s refusal must say why`);
 
+      // ...and the same call off a preview must NOT be refused for this reason.
+      // It may still fail on absent bindings here, which is a different answer.
       const live = await (await call("aadhar.sh", tool.name)).json();
       const liveText = live.result?.content?.[0]?.text || "";
       assert.ok(!/disabled on preview URLs/.test(liveText), `${tool.name} must run normally on production`);
     }
 
+    // A read tool has to survive the guard, or the preview loses the surface the
+    // /mcp exception exists to preserve.
     const read = server.tools.find((t) => t.annotations.readOnlyHint !== false);
     const readBody = await (await call("v1-aadhar-sh.workers.dev", read.name)).json();
     const readText = readBody.result?.content?.[0]?.text || "";
     assert.ok(!/disabled on preview URLs/.test(readText), `${server.what} ${read.name} reads and must still run on a preview`);
   }
 
+  // The vault tools are the reason this test exists. If the count ever drops to
+  // zero the sweep above is asserting nothing, and would say so silently.
   assert.equal(writesChecked, 2, "expected exactly the two representation-vault writers");
 });
 
 test("preview noindex reaches the responses the security wrapper otherwise skips", async () => {
   const { withSecurityHeaders } = await import("../src/worker/lib/security.ts");
 
+  // The wrapper bails early on redirects and images, which is correct for CSP
+  // and wrong for robots: both are independently indexable, so a preview that
+  // marked only its HTML would still publish a duplicate photo corpus.
   // Built fresh per pass, deliberately. `withSecurityHeaders` rebuilds every
   // response as `new Response(response.body, …)`, which per Fetch LOCKS the
   // body it was handed, so reusing one case object across both passes feeds the
@@ -146,11 +191,19 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
     assert.equal(marked.headers.get("x-robots-tag"), "noindex, nofollow", `${what} must carry noindex on a preview`);
   }
 
+  // ...and production is untouched. This is the regression that would matter
+  // most: a bug here deindexes the real site.
   for (const [what, response] of makeCases()) {
     const plain = withSecurityHeaders(response, "/photos");
     assert.equal(plain.headers.get("x-robots-tag"), null, `${what} must NOT be noindexed off a preview`);
   }
 
+  // The wrapper is only half of it: what decides `noindex` is the dispatcher,
+  // which noindexes every hostname but the canonical one. That half is asserted
+  // by calling it, in contract-the-dispatch-pipeline.
+
+  // A route that already set its own x-robots-tag keeps it (/whoareyou.json and
+  // /updates.json both do), so the guard can't weaken an existing directive.
   const own = new Response("{}", { headers: { "content-type": "application/json", "x-robots-tag": "noindex" } });
   assert.equal(withSecurityHeaders(own, "/whoareyou.json", { noindex: true }).headers.get("x-robots-tag"), "noindex");
 
@@ -168,9 +221,14 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
   }
 });
 
+// /access is a graph rendered from a table in its own bytes, and three of its
+// authored invariants were verified once by hand in a browser rather than checked.
+// Each one fails silently: a node with no downside still renders, a mis-ordered
+// label still parses into something, and a dangling rival just draws no edge.
 test("every /access device previews a cost, and the clause order its parser depends on holds", async () => {
   const html = await readFile(new URL("src/pages/access/index.html", ROOT), "utf8");
   const rows = [...html.matchAll(/<tr data-id="([^"]+)"([^>]*)>([\s\S]*?)<\/tr>/g)];
+  // A collapsed roster would satisfy every assertion below, so pin the count too.
   assert.ok(rows.length >= 60, `expected the full device table, saw ${rows.length} rows`);
 
   const ids = new Set(rows.map(([, id]) => id));
@@ -178,21 +236,27 @@ test("every /access device previews a cost, and the clause order its parser depe
 
   for (const [, id, attrs, body] of rows) {
     const status = (attrs.match(/data-status="([^"]+)"/) || [])[1];
+    // the prose cell is the last bare <td> before the examples cell
     const beforeEx = body.split('<td class="ex">')[0];
     const cells = [...beforeEx.matchAll(/<td>([\s\S]*?)<\/td>/g)];
     const prose = cells.length ? cells[cells.length - 1][1] : "";
     assert.ok(prose.length > 40, `${id}: no prose cell found`);
 
+    // 1. no device previews as pure upside. A shipped node needs an authored
+    //    Costs clause; an unfinished one falls back to whatever blocks it.
     const cost = /<b>Costs:<\/b>/.test(prose);
     const blocker = /<b>(In the way|Passed over because):<\/b>/.test(prose);
     assert.ok(cost || blocker, `${id}: previews no downside (needs Costs, In the way, or Passed over because)`);
     if (cost) withCost++;
 
+    // 2. the page claims every unfinished device carries a dated bet
     if (status !== "shipped") {
       assert.match(prose, /<b>Bet:<\/b>/, `${id}: ${status} but carries no Bet`);
       withBet++;
     }
 
+    // 3. the parser slices labels off in reverse prose order and takes Costs
+    //    FIRST, so Costs must be authored last or `why` keeps a stray clause.
     if (cost) {
       const at = prose.indexOf("<b>Costs:</b>");
       for (const other of ["Bet:", "In the way:", "Passed over because:"]) {

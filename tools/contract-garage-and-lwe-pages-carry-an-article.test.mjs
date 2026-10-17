@@ -20,6 +20,7 @@ test("every Garage and LWE content page yields an Article with a headline, a dat
   const { sitemapDates } = await import("./gen-feeds.ts");
   const dates = sitemapDates(readFileSync("public/sitemap.xml", "utf8"));
   const pages = content();
+  // The floor mirrors build.ts's: a collector that stops matching must not pass over nothing.
   assert.ok(pages.length >= 30, `only ${pages.length} content pages found`);
   for (const s of pages) {
     const html = readFileSync(`src/pages${s.path}.html`, "utf8");

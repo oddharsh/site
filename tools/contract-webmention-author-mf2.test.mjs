@@ -24,6 +24,11 @@ import { readFileSync } from "node:fs";
 
 const TARGET = "https://aadhar.sh/garage/chunks";
 
+// A standalone note as the site really renders it (renderWritingPost, the
+// same path /writing/<slug> serves), so this pins the receiver against the
+// markup that ships rather than a copy of it. The author is two empty <data>
+// elements, so there is no visible text to read at all. A textarea's contents
+// are inert to linksTo, so a paragraph carrying the link goes in before </body>.
 const NOTE_SLUG = "in-flux";
 const noteEnv = {
   ASSETS: {
@@ -58,6 +63,9 @@ test("this site's own note parses to its real author, name, url and date", () =>
 });
 
 test("the note's author is what gets stored, where the hostname used to be", async () => {
+  // Measured before this change on the same fixture: author "notes.example",
+  // author_url "https://notes.example". A mirror host stands in for aadhar.sh,
+  // which refuses a mention from itself.
   const db = fakeD1();
   const real = globalThis.fetch;
   testGlobals.fetch = async () => new Response(NOTE(), { headers: { "content-type": "text/html" } });
@@ -129,6 +137,8 @@ test("dt-* reads datetime, title, value and the value-class date and time parts"
 });
 
 test("a nested h-card author gives its name, url and photo, implied or explicit", () => {
+  // An h-card that is only a linked photo: name from the img alt, url from the
+  // a@href, photo from the img@src, all by the implied rules.
   const implied = parseSource(page(`<article class="h-entry"><p class="e-content">hi</p>
     <a class="p-author h-card" href="https://mari.example/"><img src="/me.jpg" alt="Mari Kondo"></a></article>`),
   "https://mari.example/post", TARGET);
@@ -153,6 +163,8 @@ test("an author given as a URL takes its name from the h-card that URL names", (
   assert.equal(withCard.author, "Mari Kondo");
   assert.equal(withCard.authorUrl, "https://mari.example/");
 
+  // No card for it on the page: the author page's host is the honest name, and
+  // nothing is fetched to find a better one.
   const bare = parseSource(page(`<article class="h-entry"><a class="u-author" href="https://www.kondo.example/"></a></article>`),
     "https://mari.example/post", TARGET);
   assert.equal(bare.author, "kondo.example");
@@ -199,6 +211,8 @@ test("an author URL that is not http(s) is dropped, and a hostile name stays tex
 });
 
 test("the parse is bounded on a hostile page", () => {
+  // 60,000 unclosed divs: past the node cap and far past the depth cap, and deep
+  // enough to overflow any walk that recursed once per open tag.
   const hostile = "<div>".repeat(60000) + '<article class="h-entry"><span class="p-author">late</span></article>';
   const t0 = performance.now();
   const p = parseSource(hostile, "https://mari.example/post", TARGET);

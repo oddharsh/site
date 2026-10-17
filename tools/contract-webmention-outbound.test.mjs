@@ -1,5 +1,4 @@
 // ── webmention (outbound) ───────────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   PROFILES,
   SELF_LINK_HOSTS,
@@ -38,12 +37,17 @@ test("outbound citations exclude the shell, self-links, and non-public URLs", ()
   assert.equal(found.filter((u) => u.includes("officialunofficial")).length, 1, "deduped");
 
   for (const bad of ["oddharsh", "spotify", "instagram", "aadhar.sh/garage", "127.0.0.1", "169.254", "mailto", "head-link",
+                     // an anchor that exists to open a hover card is chrome. These
+                     // point at Google SEARCH pages, so a webmention to them would
+                     // be noise rather than credit.
                      "google.com/search"]) {
     assert.ok(!found.some((u) => u.includes(bad)), `must not send to ${bad}`);
   }
 });
 
 test("outbound self-link list stays in sync with the desktop shell profiles", async () => {
+  // The filter is only correct while it knows every profile the canonical shell
+  // compiler stamps on every page; a new profile must be excluded here too.
   const urls = PROFILES.map((profile) => profile.url);
   assert.ok(urls.length >= 5);
   for (const raw of urls) {
@@ -56,6 +60,18 @@ test("outbound self-link list stays in sync with the desktop shell profiles", as
   }
 });
 
+// ── the send loop itself ────────────────────────────────────────────────────
+// Everything above tests the pure filters. Nothing tested the LOOP, which is how
+// the outbound half shipped and then did nothing at all for weeks: fetchOwnPage
+// called plain fetch() at our own origin, a Worker cannot do that (error 1042),
+// the catch turned it into "", and every page was skipped. Measured 2026-08-28,
+// both D1 tables empty since the feature shipped. These pin the loop's four
+// load-bearing behaviours: it reads pages through the injected dispatcher, it
+// records what every probe learned, it rotates, and it stays inside the platform
+// budget.
+
+// A stand-in for `webmentions_sent` alone: enough SQL to answer the two shapes
+// this loop issues, and nothing more.
 function sentTable() {
   const rows = [];
   const run = (sql, args) => {
@@ -86,6 +102,9 @@ function sentTable() {
   };
 }
 
+// One own page carrying one citation, plus a target that advertises an endpoint
+// and an endpoint that accepts. The third-party halves go through global fetch,
+// which is what discoverEndpoint and postMention use.
 const CITED = "https://example.org/cited";
 const ENDPOINT = "https://example.org/wm";
 
@@ -139,6 +158,8 @@ test("outbound cron reads its own pages through the injected dispatcher", async 
 });
 
 test("outbound cron with no dispatcher records nothing rather than pretending", async () => {
+  // The failure mode being pinned: a page read that returns "" must not look like
+  // a page with no citations. With neither seam present the run is a clean no-op.
   const h = outboundHarness({ selfFetch: false, assets: false });
   try {
     const out = await cronSendWebmentions(h.env, "https://aadhar.sh");

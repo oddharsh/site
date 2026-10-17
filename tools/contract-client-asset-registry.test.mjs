@@ -4,6 +4,18 @@
 // root. Every /a/ URL on the site comes out of that pair, so this file pins it
 // without a build: the hasher takes a directory, so it runs here against a
 // temp dir holding three fixture files.
+//
+// What each half protects:
+//   - ORDER. A dependent hashed before its dependency ships an /a/ copy that
+//     still names the plain URL, forever, because the rewrite skips a/. The
+//     order is derived from the declared loadedBy edges; the tests show the
+//     derivation reproduces the hand-sorted order build.ts carried, that
+//     declaration order cannot change a byte, and that an edge the registry
+//     does not know is refused rather than hashed around.
+//   - WITNESSES. A loader whose spelling moved out from under its pattern
+//     leaves the page on the plain URL and nothing else fails.
+//   - PRECISION. The garage pages name /nav.js and /hoist.js in prose; only
+//     call and attribute syntax may be rewritten.
 import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +31,7 @@ import { hashClientAssets } from "./lib/hash-client-assets.ts";
 
 const sha8 = (bytes) => createHash("sha256").update(bytes).digest("hex").slice(0, 8);
 
+// Three assets: a leaf, an island that imports it, and a stylesheet a page links.
 /** @type {ClientAsset} */
 const LEAF = { file: "leaf.js", kind: "script", marker: "leaf", scope: "shell", budget: "unbudgeted",
   load: [{ via: "import" }], loadedBy: ["public/island.js", "public/index.html"] };
@@ -28,6 +41,7 @@ const ISLAND = { file: "sub/island.js", kind: "script", marker: "island", base: 
 /** @type {ClientAsset} */
 const SHEET = { file: "sheet.css", kind: "style", scope: "shell", budget: "unbudgeted",
   load: [{ via: "attr", attr: "href" }], loadedBy: ["public/index.html", "src/worker/page.ts"] };
+// island.js lives in a subdirectory, so the edge names its staged path.
 /** @type {ClientAsset[]} */
 const FIXTURE = [{ ...LEAF, loadedBy: ["public/sub/island.js", "public/index.html"] }, ISLAND, SHEET];
 
@@ -35,6 +49,8 @@ const FILES = {
   "public/leaf.js": "/*! leaf */export const leaf=1;",
   "public/sub/island.js": '/*! island */import("/leaf.js").then(()=>{});',
   "public/sheet.css": "/*! sheet */.a{color:red}",
+  // quoted, unquoted (the HTML minifier) and an import() in an inline script, plus a
+  // PROSE mention of each path that must survive untouched.
   "public/index.html": '<link rel=stylesheet href=/sheet.css><script src="/sub/island.js" defer></script><script type=module>import("/leaf.js")</script><p>the file <code>/leaf.js</code> and "/sheet.css" in prose</p>',
   "public/index.src.html": '<link rel="stylesheet" href="/sheet.css"><script src="/sub/island.js"></script>',
   "src/worker/page.ts": 'export const head = "<link rel=\\"stylesheet\\" href=\\"/sheet.css\\">";',
@@ -65,6 +81,7 @@ test("the hasher, over a directory: each asset gets one /a/ copy naming its fina
   await withStage(FILES, async (root) => {
     const { urls } = await hashClientAssets(root, { assets: FIXTURE });
     const after = snapshot(root);
+    // The leaf is hashed as staged; the island is hashed AFTER the leaf was written into it.
     assert.equal(urls["leaf.js"], `/a/leaf.${sha8(FILES["public/leaf.js"])}.js`);
     const islandFinal = `/*! island */import("${urls["leaf.js"]}").then(()=>{});`;
     assert.equal(after["public/sub/island.js"], islandFinal, "the staged island carries the leaf's hashed URL");
@@ -72,6 +89,7 @@ test("the hasher, over a directory: each asset gets one /a/ copy naming its fina
     assert.equal(after[`public${urls["sub/island.js"]}`], islandFinal, "and the /a/ copy is those bytes");
     assert.equal(after[`public${urls["leaf.js"]}`], FILES["public/leaf.js"]);
     assert.equal(urls["sheet.css"], `/a/sheet.${sha8(FILES["public/sheet.css"])}.css`);
+    // The page: attribute refs quoted and unquoted, and the inline import().
     assert.equal(
       after["public/index.html"],
       `<link rel=stylesheet href=${urls["sheet.css"]}><script src="${urls["sub/island.js"]}" defer></script><script type=module>import("${urls["leaf.js"]}")</script><p>the file <code>/leaf.js</code> and "/sheet.css" in prose</p>`,
@@ -90,6 +108,9 @@ test("declaration order cannot change a byte: the registry reversed hashes to th
 });
 
 test("CONTROL: an edge the registry does not declare is refused, because the order was derived without it", async () => {
+  // Declared island-first with the leaf's edge to it left out: the island is
+  // hashed before the leaf, which is the bug build.ts's hand-sorted lists used
+  // to guard by hand. Without the check its /a/ copy would keep "/leaf.js".
   /** @type {ClientAsset[]} */
   const undeclared = [ISLAND, { ...LEAF, loadedBy: ["public/index.html"] }, SHEET];
   await withStage(FILES, async (root) => {
@@ -100,10 +121,12 @@ test("CONTROL: an edge the registry does not declare is refused, because the ord
 });
 
 test("CONTROL: a declared loader that no longer names the asset the way its pattern matches fails by name", async () => {
+  // The page switches to a spelling no loader shape covers (an href preload, not a script src).
   const moved = { ...FILES, "public/index.html": FILES["public/index.html"].replace('<script src="/sub/island.js" defer></script>', '<link rel=modulepreload href="/sub/island.js">') };
   await withStage(moved, async (root) => {
     await assert.rejects(hashClientAssets(root, { assets: FIXTURE }), /public\/index\.html was not repointed to \/a\/island\.[0-9a-f]{8}\.js/);
   });
+  // A witness that is not staged at all is its own message.
   const noWorker = Object.fromEntries(Object.entries(FILES).filter(([rel]) => rel !== "src/worker/page.ts"));
   await withStage(noWorker, async (root) => {
     await assert.rejects(hashClientAssets(root, { assets: FIXTURE }), /src\/worker\/page\.ts, declared in sheet\.css's loadedBy, is not in the staged tree/);
@@ -143,6 +166,9 @@ test("each loader shape rewrites its own syntax and leaves a bare mention of the
   assert.equal(run(asset("nav.js"), { via: "attr", attr: "src" }, '<script src=/nav.js defer></script> path:"/nav.js" "!/nav.js" src=/nav.json>'), '<script src=/a/X defer></script> path:"/nav.js" "!/nav.js" src=/nav.json>');
 });
 
+// The order step 6 hashed in when it was two hand-sorted lists (STRING_ASSETS,
+// then ASSETS), copied from build.ts at f5f1a96d. hashOrder() must reproduce it
+// exactly, which is the proof that deriving the order moved no /a/ URL.
 const HAND_SORTED = [
   "nav-run.css", "nav-tray.css", "infotip.css", "quiz.css", "hoist.js", "webmcp.js", "nav-run.js", "nav-tray.js", "nav-pipes.js", "nav-tips.js",
   "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js", "lens-webmcp.js", "lens.js",
@@ -164,7 +190,9 @@ test("the derived hash order reproduces the hand-sorted one, and puts every asse
       assert.ok(order.indexOf(a.file) < order.indexOf(dependent), `${a.file} must be hashed before ${dependent}, which loads it`);
     }
   }
+  // 25 on 2026-10-02. A floor, so a registry whose edges stopped resolving does not pass over nothing.
   assert.ok(edges >= 20, `only ${edges} asset-to-asset edges resolved`);
+  // The same holds shuffled: a rotation of the registry still sorts every edge.
   const rotated = hashOrder([...CLIENT_ASSETS.slice(11), ...CLIENT_ASSETS.slice(0, 11)]).map((a) => a.file);
   for (const a of CLIENT_ASSETS) for (const rel of a.loadedBy) {
     if (registered.has(rel)) assert.ok(rotated.indexOf(a.file) < rotated.indexOf(registered.get(rel) ?? ""));
@@ -172,6 +200,8 @@ test("the derived hash order reproduces the hand-sorted one, and puts every asse
 });
 
 test("every declared asset-to-asset edge is a loader the dependent's SOURCE really carries", async () => {
+  // The build's witness proves this on staged bytes. This is the copy that
+  // names the file and the spelling without a build.
   const sourceOf = (a) => (a.kind === "style" ? `src/styles/${a.file}` : a.kind === "static" ? `public/${a.file}` : `src/client/${a.file}`);
   const registered = new Map(CLIENT_ASSETS.map((a) => [stagedPath(a), a]));
   for (const a of CLIENT_ASSETS) {
@@ -190,8 +220,10 @@ test("perf-budget and the route oracle read projections of the same rows", () =>
   const budgeted = budgetedAssets().map((b) => b.file);
   const unbudgeted = unbudgetedAssets();
   assert.deepEqual([...budgeted, ...unbudgeted].sort(), [...minified].sort(), "every minified asset is either budgeted or declared unbudgeted");
+  // The 16 envelopes perf-budget.ts carried by hand, unchanged in number.
   assert.equal(budgeted.length, 16);
   assert.deepEqual(budgetedAssets().find((b) => b.file === "nav.js")?.envelope, { role: "shared deferred shell", gzipKiB: 20, brotliKiB: 18 });
+  // The declared gap, named so that closing part of it is a visible edit.
   assert.deepEqual([...unbudgeted].sort(), [
     "dotfiles.js", "garage/av2-decode.js", "garage/md-to-html.js", "garage/pretext.lib.js", "infotip.css", "infotip.js", "lens-markdown.js", "lens-nlweb.js", "lens-reader.js", "lens-wire.js",
     "lwe/ask.js", "nav-run.css", "nav-tray.css", "prose.css", "quiz.css", "serendipity.js", "webmcp.js",

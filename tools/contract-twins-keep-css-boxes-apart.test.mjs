@@ -37,6 +37,7 @@ test("a flex row is one line unless it wraps", () => {
 });
 
 test("a grid reads row by row, with columns from a contextual rule", () => {
+  // /garage/av2's shape: the grid is declared on the row, its columns by context
   const body = md(".r{display:grid}.t .r{grid-template-columns:2fr repeat(2,1fr)}@media(max-width:620px){.t .r{grid-template-columns:1fr 1fr}}",
     '<div class="t"><div class="r"><span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span></div></div>');
   assert.match(body, /^a · b · c\n\nd · e · f$/m);
@@ -45,6 +46,7 @@ test("a grid reads row by row, with columns from a contextual rule", () => {
 });
 
 test("a box holding structure keeps its own lines", () => {
+  // joining blindly fused /garage/blueprint's code fence onto one line
   const body = md(".row{display:flex}", '<div class="row"><span>as built</span><pre>line one\nline two</pre></div>');
   assert.match(body, /^```\nline one\nline two\n```$/m);
   assert.doesNotMatch(body, /as built · /);

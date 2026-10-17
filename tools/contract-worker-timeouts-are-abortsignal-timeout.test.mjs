@@ -3,6 +3,13 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { ROOT, assert, test } from "./contract-shared.ts";
 
+// Every outbound deadline in the Worker code is `AbortSignal.timeout(ms)`. It
+// replaced 18 hand-rolled ones (an AbortController, a setTimeout that aborted
+// it, and a finally that cleared the timer) on 2026-10-01. The platform owns the
+// timer, so there is nothing to clear, and the deadline covers the body read as
+// well as the headers. Four /lens probes used to clear theirs as soon as headers
+// arrived, which left a slow-drip body unbounded.
+//
 // The one behaviour that changes is the error NAME. A fetch cut off by
 // AbortSignal.timeout rejects with `TimeoutError`, where `controller.abort()`
 // rejected with `AbortError` (both measured in workerd 2026-09-26). Two callers
@@ -12,6 +19,8 @@ import { ROOT, assert, test } from "./contract-shared.ts";
 test("a /lens scan that times out still says it timed out", async () => {
   const { handleLensFetch } = await import("../src/worker/lens.ts");
   const scan = async (error) => {
+    // aadhar.sh scans dispatch through SELF_FETCH, so the deadline's rejection can
+    // be injected without the network, with the exact shape workerd throws.
     const env = { SELF_FETCH: async () => { throw error; } };
     const res = await handleLensFetch(
       new Request("https://aadhar.sh/lens/fetch?url=https%3A%2F%2Faadhar.sh%2F&phases=page"),
@@ -25,11 +34,13 @@ test("a /lens scan that times out still says it timed out", async () => {
   assert.equal(timedOut.status, 502);
   assert.equal(timedOut.body.error, "The site took too long to answer (8s timeout).");
 
+  // Control: a cancellation that is NOT the deadline must not claim to be one.
   const cancelled = await scan(new DOMException("The operation was aborted", "AbortError"));
   assert.equal(cancelled.status, 502);
   assert.notEqual(cancelled.body.error, timedOut.body.error);
 });
 
+// A hand-rolled abort timer, in the shape the 18 replaced sites had.
 const HAND_ROLLED = /setTimeout\(\s*\(\)\s*=>\s*\w+\.abort\(/;
 
 test("the matcher sees a hand-rolled abort timer (control)", () => {
@@ -42,6 +53,7 @@ test("no Worker code arms its own abort timer", () => {
   const files = execFileSync("git", ["ls-files", "-z", "--", ...roots], { cwd: new URL(".", ROOT), encoding: "utf8" })
     .split("\0")
     .filter((rel) => /\.(?:ts|js|mjs)$/.test(rel));
+  // FLOOR. An enumerator that returns nothing passes everything.
   assert.ok(files.length >= 100, `found only ${files.length} Worker source files; the enumerator is broken`);
   const offenders = files.filter((rel) => HAND_ROLLED.test(readFileSync(new URL(rel, new URL(".", ROOT)), "utf8")));
   assert.deepEqual(offenders, [],

@@ -1,7 +1,16 @@
 // ── the ARD manifest names only what this origin serves ─────────────────────
-// Shared imports live in contract-shared.mjs.
 import { ROOT, assert, existsSync, readFile, test } from "./contract-shared.ts";
 
+// /.well-known/ard.json is the ARD (Agentic Resource Discovery) manifest: one
+// document naming every agentic resource here as a urn:air:aadhar.sh:… entry
+// with 2-5 representative queries, which is the signal a registry builds its
+// semantic index from. It is hand-authored, because the queries are prose and
+// every url in it already exists; what a test can hold is that each entry
+// points at something this origin serves and that each MCP entry's
+// `capabilities` are the tool names its card actually lists. The cards are
+// deep-equalled against each server's live tools/list elsewhere, so pinning to
+// the card is pinning to the server.
+//
 // ARD v0.91 §5.1 makes ard.json + rel="ard" the path a consumer MUST fetch and
 // names ai-catalog.json as a predecessor a consumer MAY consult. That path
 // 301s here (lib/not-found.ts) rather than holding a second copy.
@@ -10,12 +19,18 @@ const ORIGIN = "https://aadhar.sh";
 const URN = /^urn:air:aadhar\.sh:[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)+$/;
 const MEDIA_TYPE = /^(?:application|text)\/[a-z0-9][a-z0-9.+-]*$/;
 
+// The Worker's exact routes, so a url with no file behind it (/ask) still has
+// to be something the Worker answers. Imported from routes.ts, the data-only
+// route list, which keeps this file free of the Worker's module graph.
 async function workerRoutes() {
   const { EXACT_PATHS } = await import("../src/worker/routes.ts");
+  // /openapi.json is written by build.ts from lib/openapi.ts: neither a file
+  // under public/ nor a Worker route, and served all the same.
   const { OPENAPI_PATH } = await import("../src/worker/lib/public-api.ts");
   return new Set([...EXACT_PATHS, OPENAPI_PATH]);
 }
 
+// The validator, as a function, so the control below can prove it rejects.
 function validate(manifest, { routes, publicDir }) {
   assert.equal(manifest.specVersion, "1.0", "specVersion is the ai-catalog data model version");
   assert.equal(typeof manifest.host?.displayName, "string", "host.displayName is required");
@@ -60,6 +75,9 @@ test("every ARD entry is well-formed and points at something this origin serves"
   const ctx = { routes: await workerRoutes(), publicDir: "public" };
   const ids = validate(manifest, ctx);
 
+  // The floor: the two MCP servers, the agent card, the skill, NLWeb and the
+  // OpenAPI description are the resources the whole discovery story here rests on. Dropping one is a
+  // deliberate act, and it should fail here first.
   for (const must of [
     "urn:air:aadhar.sh:mcp:site",
     "urn:air:aadhar.sh:mcp:serendipity",
@@ -69,6 +87,9 @@ test("every ARD entry is well-formed and points at something this origin serves"
     "urn:air:aadhar.sh:api:openapi",
   ]) assert.ok(ids.has(must), `${must} left the manifest`);
 
+  // CONTROL. A validator that has never gone red is decoration: the two
+  // failure shapes the spec cares most about (both url and data; one query)
+  // must each be refused by name.
   const clone = () => JSON.parse(JSON.stringify(manifest));
   const both = clone(); both.entries[0].data = {};
   assert.throws(() => validate(both, ctx), /exactly one of url or data/);
@@ -98,12 +119,18 @@ test("the manifest is served with CORS, and every discovery surface names it", a
     assert.match(block, /^\s+Content-Type: application\/json/m, `${path} must be application/json`);
   }
 
+  // rel="ard" is the link relation a conformant consumer honours. It has to be
+  // on the homepage in BOTH copies of that header set (the static one in
+  // _headers and the Worker's, which serves the markdown twin and the preview).
   const { HOMEPAGE_DISCOVERY_LINK } = await import("../src/worker/lib/security.ts");
   const rel = /<\/\.well-known\/ard\.json>;\s*rel="ard"/;
   assert.match(HOMEPAGE_DISCOVERY_LINK, rel, "the Worker's homepage Link set must carry rel=ard");
   const home = headers.split(/\n(?=\S)/).find((b) => b.startsWith("/\n")) ?? "";
   assert.match(home, rel, "the _headers homepage Link set must carry rel=ard");
 
+  // The other advertising surfaces. Each is a different door an agent arrives
+  // through, and an agent that came in through one should not have to guess
+  // that the manifest exists.
   const read = (p) => readFile(new URL(p, ROOT), "utf8");
   const surfaces = [
     { name: "robots.txt Agentmap directive", text: await read("public/robots.txt"), pattern: /^Agentmap: https:\/\/aadhar\.sh\/\.well-known\/ard\.json$/m },

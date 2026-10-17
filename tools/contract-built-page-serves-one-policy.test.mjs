@@ -29,6 +29,8 @@ const POLICY = {
   "referrer-policy": "strict-origin-when-cross-origin",
 };
 
+// A staged tree: path -> [body, headers]. Counts every lookup, so a test can
+// say the built file was never asked for.
 function stagedAssets(files) {
   const asked = [];
   return {
@@ -85,6 +87,8 @@ test("the Markdown twin carries the policy, keeps its no-store and drops the she
   assert.equal(await head.text(), "");
   assert.deepEqual([...head.headers].sort(), [...get.headers].sort(), "HEAD and GET agree on every header of the twin");
 
+  // CONTROL: the shape every un-negotiated route had before, a twin served with
+  // no policy. Each assertion above fails against it.
   const before = await serveMarkdownTwin(ask("/page", { headers: MD }), env, "/page.md");
   assert.ok(before, "the fixture stages the twin");
   assert.equal(before.headers.get("x-robots-tag"), null);
@@ -133,6 +137,7 @@ test("a live answer that is not the document keeps its own headers", async () =>
   });
   assert.equal(text.headers.get("cache-control"), null, "only an HTML 200 is the page");
 
+  // no live renderer declared: the asset layer's clamped 404 is the answer
   const none = await serveBuiltPage(ask("/page"), env, { headers: POLICY });
   assert.equal(none.status, 404);
   assert.equal(none.headers.get("cache-control"), "public, max-age=0, must-revalidate");
@@ -153,10 +158,14 @@ test("a diverted request skips the built file and the policy", async () => {
 
   const plain = await serveBuiltPage(ask("/page"), env, page);
   assert.equal(plain.headers.get("content-encoding"), "br", "without the query the predicate declines and the document is served");
+  // an async predicate that declines is awaited, not taken as truthy
   const declined = await serveBuiltPage(ask("/page"), env, { ...page, divert: async () => null });
   assert.equal(declined.headers.get("content-encoding"), "br");
 });
 
+// The two routes outside index.ts, through their real handlers. /inbox is the
+// measured instance: its twin answered with no Link at all, so a webmention
+// sender that negotiated Markdown could not discover the endpoint.
 test("/inbox and /reading serve their twins under the page's policy", async () => {
   const twin = (path) => stagedAssets({ [`${path}.md`]: ["# twin\n\nbody", { "content-type": "text/markdown" }] });
 
@@ -164,6 +173,7 @@ test("/inbox and /reading serve their twins under the page's policy", async () =
   assert.equal(inbox.headers.get("content-type"), "text/markdown; charset=utf-8");
   assert.match(inbox.headers.get("link") || "", /^<[^>]*\/webmention>; rel="webmention"$/, "the endpoint is discoverable from the twin, and nothing else rides with it");
   assert.match(inbox.headers.get("cache-control") || "", /no-store/);
+  // CONTROL: the call the route made before, which is what dropped it.
   const before = await serveMarkdownTwin(ask("/inbox", { headers: MD }), { ASSETS: twin("/inbox") }, "/inbox.md");
   assert.ok(before, "the fixture stages the twin");
   assert.equal(before.headers.get("link"), null);
@@ -172,12 +182,15 @@ test("/inbox and /reading serve their twins under the page's policy", async () =
   assert.equal(reading.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
   assert.equal(reading.headers.get("link"), null, "/reading's Link is the shell preload alone, which the twin leaves out");
 
+  // and with nothing staged, both render live under their policy
   const live = await handleInbox(ask("/inbox"), { ASSETS: stagedAssets({}) });
   assert.equal(live.status, 200);
   assert.match(live.headers.get("link") || "", /rel="webmention"/);
   assert.match(live.headers.get("cache-control") || "", /stale-while-revalidate/);
 });
 
+// serveStaticPage is the engine under the module, and prefix routes call it with
+// no policy at all. Their twins must be exactly what they were.
 test("a page with no policy serves the twin it always did", async () => {
   const env = { ASSETS: stagedAssets(BUILT) };
   const viaEngine = await serveStaticPage(ask("/page", { headers: MD }), env);

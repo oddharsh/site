@@ -1,10 +1,49 @@
 #!/usr/bin/env bun
 // bun run canary:bun [--json <path>] [--keep] [--url <zip>]
 //
+// The bun CANARY, run through the same gates the pin bumper runs a release
+// through, every night, proposing nothing.
+//
+// WHY A SECOND SCRIPT RATHER THAN A FLAG ON bump-bun-pin.ts. The bumper's
+// whole design is that only a stable release can be proposed, and a contract
+// test pins that: the target comes from `releases/latest`, the tag has to be a
+// plain `bun-vX.Y.Z`, and it writes config/bun-pin.json. None of that applies to
+// a rolling tag, and a canary that "clears every gate" must never be one flag
+// away from being written into package.json. So this shares the GATES
+// (lib/bun-gates.ts) and none of the decisions.
+//
+// WHAT IT BUYS. bun's main is a hundred-odd commits past each release and
+// most of them are robobun's, so a regression in Bun.Image, the CSS minifier,
+// zlib or the wrangler harness reaches `canary` weeks before it reaches a
+// version this repo could pin. The byte-identical build gate is the strongest
+// regression signal this repository can offer any runtime: every content
+// addressed `/a/` and `/i/` URL is a hash of what the compiler emitted.
+//
+// THE WATCHES are the other half, since 2026-09-15. lib/upstream-watches.ts
+// turns each bun fix this repo is waiting on (BUN_WATCHES) into a probe that
+// reads false on the pinned bun today. Every run answers each watch under the
+// pin AND under the canary; a row that differs is a `changed` verdict naming
+// the fix that arrived and the build it arrived in, which is the day this
+// becomes a bun worth pinning. A row landed in both is the reader's cue to
+// retire it.
+//
+// WHAT IT NEVER DOES. Write the pin, roll a dictionary, touch a credential.
+// It is an instrument. `.github/workflows/canary.yml` runs it nightly and
+// files one rolling issue per leg when the verdict flips; the workstation form
+// prints the same table.
+//
+// THE CONTROL is the pinned bun itself, which builds first and is the
+// baseline half of the byte comparison. A red canary whose baseline build
+// also failed is the instrument, and the script says so with exit 2 rather
+// than 1, because a tripwire that cannot tell "the canary broke" from "the
+// runner has no unzip" trains the reader to ignore both.
+//
 // `--version` ON A CANARY PRINTS THE PLAIN TRIPLE. Measured 2026-09-14: the
 // binary under the `canary` tag answers `1.4.3` to `--version` and
 // `1.4.3-canary.1+b820c70d6` to `--revision`. The revision is the identity a
 // bug report needs, so it is what the JSON and the issue carry.
+//
+// Exit codes: 0 green, 1 red (a gate failed), 2 the instrument could not run.
 
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -62,6 +101,9 @@ const emit = (verdict: Report["verdict"], subject: Report["subject"], reason?: s
     leg: "bun",
     verdict,
     subject,
+    // The signature is WHAT failed or moved, never which canary did it: the
+    // issue dedupes on this, so a fresh canary carrying the same broken gate
+    // (or the same landed fix) adds no comment, and a different one does.
     signature: verdict === "green" ? "green" : `${verdict}:${[...failing, ...moved].join("|") || reason || "unknown"}`,
     gates,
     watches,
@@ -72,6 +114,9 @@ const emit = (verdict: Report["verdict"], subject: Report["subject"], reason?: s
   return report;
 };
 
+// The running bun is the baseline, so it has to BE the pin, for the reason
+// the bumper gives: a stale bun on PATH would compare the canary against a
+// third runtime and report a byte-identical build that says nothing.
 const pin = readPin(ROOT);
 const asset = releaseAsset();
 const url = flag("--url") ?? canaryUrl(asset);
@@ -93,6 +138,11 @@ if (!process.versions.bun) {
   }
 }
 
+// The watch runner is timbrado's Rust engine, built on demand from the
+// installed package (lib/upstream-watches.ts says why a missing one has to
+// throw). Asked for HERE, before the download and the two builds, so a runner
+// without cargo is an instrument failure that costs seconds rather than one
+// that surfaces after minutes of work as a column of unmeasured rows.
 try {
   ensureTimbradoEngine();
 } catch (err) {
@@ -127,6 +177,8 @@ if (compareVersions(identity.version, pin.version === "canary" ? process.version
 }
 console.log("");
 
+// Cheapest disqualifier first, then the two that cost a minute, then the two
+// that cost several. The order is the bumper's, for the bumper's reason.
 const step = (g: Gate) => { gates.push(g); print(g); };
 
 step(zstdGate(candidate));
@@ -137,6 +189,8 @@ try {
   step(byteIdenticalBuildGate(candidate, process.execPath, ROOT));
 } catch (err) {
   const message = err instanceof Error ? err.message : String(err);
+  // The pinned build failing is the instrument; the candidate build failing
+  // is a finding. The message names which.
   if (message.startsWith("pinned build failed")) {
     console.error(message);
     emit("instrument", subject, "the PINNED build failed, so there is no baseline");
@@ -149,6 +203,8 @@ try {
 step(contractSuiteGate(candidate, ROOT));
 step(calSuiteGate(candidate, ROOT));
 
+// The watches, each read under the pin and under the canary. A watch never
+// makes a run red: it is a fix arriving, which is `changed`.
 console.log("\nwatches (pinned -> canary):");
 const mark = (v: boolean | null) => (v === null ? "?" : v ? "landed" : "not yet");
 for (const w of BUN_WATCHES) {

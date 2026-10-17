@@ -1,6 +1,10 @@
 // ── The playlist id has one reader ───────────────────────────────────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { assert, test } from "./contract-shared.ts";
+
+// rn.ts's readPlaylistId and currentPlaylistId own the 22-character Spotify id
+// check and the RN_FALLBACK fallback for every request-path and cron read of KV
+// "playlist-id". The /rn/admin read-back stays raw on purpose: it shows
+// whatever was written, malformed or not.
 
 const GOOD = "0raTdu2MZH4dNvfG5keVAL";
 const FALLBACK = "4IRq9W1N2tOWHhH0O3vXiF";
@@ -35,6 +39,8 @@ test("readPlaylistId: a valid id, else null; KV failures propagate", async () =>
   assert.equal(await readPlaylistId(kvEnv("not-an-id").env), null);
   assert.equal(await readPlaylistId(kvEnv(GOOD + "x").env), null, "23 characters is not an id");
   assert.equal(await readPlaylistId({}), null, "no binding reads as unset");
+  // Control: /rn/tracks reports a KV failure as its own outcome, so the plain
+  // reader must not swallow it.
   await assert.rejects(readPlaylistId(kvEnv(GOOD, { throws: true }).env), /kv down/);
 });
 

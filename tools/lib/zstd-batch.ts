@@ -3,6 +3,8 @@ import { constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
 import { DCZ_ZSTD_LEVEL } from "../../src/worker/lib/dictionary-names.ts";
 
+// The level is part of the wire contract the tools re-measure against, so it
+// is declared with the rest of it.
 const LEVEL = DCZ_ZSTD_LEVEL;
 
 if (!isMainThread) {
@@ -16,6 +18,8 @@ if (!isMainThread) {
   parentPort.postMessage(results);
 }
 
+// The worker posts back one framed result per job, each carrying the index it
+// was given so the flattened set can be re-sorted into input order.
 type Framed = { index: number; frame: Uint8Array };
 
 function runWorker(jobs): Promise<Framed[]> {
@@ -31,6 +35,8 @@ function runWorker(jobs): Promise<Framed[]> {
 
 export async function zstdCompressDictionaryBatch(jobs) {
   if (!jobs.length) return [];
+  // Eight workers reached the flat part of the curve on a 14-core workstation
+  // (12 was within run-to-run noise) without taking every core from the host.
   const workerCount = Math.min(8, availableParallelism(), jobs.length);
   const chunks = Array.from({ length: workerCount }, () => []);
   jobs.forEach((job, index) => chunks[index % workerCount].push({ index, ...job }));

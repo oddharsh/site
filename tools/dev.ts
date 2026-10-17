@@ -1,5 +1,19 @@
 // dev.ts: `bun run dev`. Local dev on the TypeScript config, through `cf dev`.
 //
+//   bun run dev                 # stage the farm, boot Counter, then cf dev
+//   bun run dev -- --port 8790  # anything after -- goes to cf dev
+//
+// TWO PROCESSES, ONE REGISTRY. The site Worker binds COUNTER to a class in
+// ANOTHER Worker (aadhar-counter), so dev has to run that Worker too. Wrangler
+// did it in one process with `-c .wrangler.dev.jsonc -c counter/wrangler.jsonc`,
+// which needed config/dev/ projected to JSON first, because a TypeScript config
+// refuses `-c`. `cf dev` refuses it as well: its delegate (wrangler's
+// cf-wrangler.js) parses only --mode, --host, --port and --local, and runs with
+// MULTIWORKER off. What both DO support is the dev registry: a Worker in one
+// `wrangler dev` process binds a Durable Object served by another, and the
+// binding table reads `[connected]`. Measured 2026-10-05 (cf 1.0.0-beta.5,
+// wrangler f025bbf): COUNTER connected and /hit?peek=1 answered digits.
+//
 // THE REGISTRY IS PINNED HERE, for two reasons. cf points its delegate at the
 // XDG config dir (CLOUDFLARE_REGISTRY_PATH; ~/Library/Preferences/.wrangler on
 // macOS), while plain `wrangler dev` prefers a legacy ~/.wrangler whenever one

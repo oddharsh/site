@@ -1,5 +1,4 @@
 // ── every wrangler config points at a file that exists ──────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   ROOT,
   assert,
@@ -32,6 +31,14 @@ import { dirname, join } from "node:path";
 // it through createTestHarness, which resolves `main` the way a deploy would,
 // so a wrong path now fails the suite before it reaches this check.
 
+/** Directories that hold a Worker config, discovered rather than listed, so a
+ *  seventh Worker is covered by existing rather than by an edit here.
+ *
+ *  TWO FORMATS. `wrangler.{toml,jsonc}` is the settled one; `cloudflare.config.ts`
+ *  is wrangler's experimental TypeScript config, which cf-garage moved to on
+ *  2026-08-23 as the cheapest place to be wrong. Both are matched, because a
+ *  check that only knows the old format stops covering a Worker on the day it
+ *  migrates and says nothing. */
 async function wranglerConfigs() {
   const found = [];
   const roots = ["."];
@@ -53,11 +60,25 @@ async function wranglerConfigs() {
   return found;
 }
 
+// TOML writes `main = "x"`, JSONC writes `"main": "x"`, and the TypeScript
+// config renames the field to `entrypoint: "./x"`. One pattern reads all three,
+// anchored at line start so the word inside a comment cannot match.
+//
+// THE RENAME IS THE TRAP, and the floor below is what caught it. A scanner
+// keyed on `main` alone finds nothing in cloudflare.config.ts, skips the file
+// without complaint, and reports a pass over one fewer Worker than it did the
+// day before. That is this check's own failure mode, arriving within a day of
+// it being written.
 const ENTRY = /^\s*"?(?:main|entrypoint)"?\s*[:=]\s*"([^"]+)"/m;
 
 test("every wrangler config's entry point resolves to a real file", async () => {
   const configs = await wranglerConfigs();
 
+  // FLOOR. A scanner that matches nothing reports a pass, which is the failure
+  // this repository has shipped three times. Six configs exist on 2026-10-16:
+  // the root cloudflare.config.ts, cal's wrangler.test.toml and counter's
+  // wrangler.jsonc, plus cf-garage, lens-reader and lwe-ask on
+  // cloudflare.config.ts.
   assert.ok(configs.length >= 6, `found only ${configs.length} Worker configs; the scanner is broken`);
 
   const missing = [];
@@ -65,15 +86,22 @@ test("every wrangler config's entry point resolves to a real file", async () => 
   for (const { dir, path } of configs) {
     const source = await readFile(new URL(path, ROOT), "utf8");
     const match = ENTRY.exec(source);
-    if (!match) continue;
+    if (!match) continue;              // a config may legitimately declare no main
     checked++;
     const declared = match[1];
 
+    // cloudflare.config.ts points at `.build/src/worker/index.ts`, which the build
+    // STAGES rather than commits. build.ts mirrors the source path there
+    // deliberately, so the staged path is checkable against
+    // its source twin without running a build.
     const resolved = declared.replace(/^\.\//, "").replace(/^\.build\//, "");
     const onDisk = new URL(dir === "." ? resolved : `${dir}/${resolved}`, ROOT);
     if (!existsSync(onDisk)) missing.push(`${path} → ${declared}`);
   }
 
+  // A SECOND floor, on the extraction rather than the discovery. Finding six
+  // files and reading an entry point out of five is the shape the rename would
+  // have produced, and it is invisible to the count above.
   assert.ok(checked >= 6, `only ${checked} of ${configs.length} configs declared an entry point; expected at least 6`);
   assert.deepEqual(missing, [], `Worker entry points that do not exist:\n  ${missing.join("\n  ")}`);
 });
@@ -90,6 +118,14 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
   };
   const run = (status, pattern, extraEnv = {}) => {
     const result = spawnSync(process.execPath, [join(dir, "tools/check-wrangler.ts")], {
+      // Per SPAWN, and not a claim about how long check-wrangler.ts takes:
+      // this case runs it twenty-eight times, 2.7s under bun and 15s under
+      // node (2026-09-27). It guards against a HANG, and a hang never
+      // finishes, so 30s catches exactly what 5s caught and only waits
+      // longer to say so. The suite runs its files in parallel since
+      // 2026-09-10 and one spawn was measured past 5s under that load,
+      // surfacing as `spawnSync ... ETIMEDOUT`, which reads like a broken
+      // tool rather than a busy machine.
       cwd: tmpdir(), env: { ...env, ...extraEnv }, encoding: "utf8", timeout: 30_000,
     });
     assert.equal(result.error, undefined);
@@ -99,6 +135,8 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
   try {
     await mkdir(join(dir, "tools"));
     await writeFile(join(dir, "tools/check-wrangler.ts"), await readFile(new URL("tools/check-wrangler.ts", ROOT)));
+    // The script reads the installed tarball's sha through this helper, so the
+    // scratch repository needs it beside the script or every run dies on import.
     await mkdir(join(dir, "tools/lib"));
     await writeFile(join(dir, "tools/lib/wrangler-provenance.ts"),
       await readFile(new URL("tools/lib/wrangler-provenance.ts", ROOT)));
@@ -112,6 +150,10 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
     await symlink(".bun/wrangler@current/node_modules/wrangler", join(dir, "node_modules/wrangler"));
     run(0, /Wrangler/);
 
+    // EQUALITY: a project may name Wrangler as a devDependency only by the
+    // root's exact string, which is how cf-garage gives the `cf` CLI a dev
+    // server to delegate to. Anything else, and any other dependency kind,
+    // fails. Both a newly tracked nested project and a standalone install join.
     for (const project of ["cal", "lens-reader", "nested/new project"]) {
       await write(`${project}/package.json`, { devDependencies: { wrangler: version } });
       run(0, /Wrangler/);
@@ -125,6 +167,7 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
       }
       await write(`${project}/package.json`, {});
     }
+    // A matching version in a second installation still isn't the root install.
     for (const localVersion of [version, "9.9.9"]) {
       await write("cal/node_modules/wrangler/package.json", { version: localVersion });
       run(1, /cal:.*must use the root Wrangler/);
@@ -133,7 +176,7 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
     await symlink(join(dir, "node_modules/wrangler"), join(dir, "cal/node_modules/wrangler"));
     await write("node_modules/.bun/wrangler@unused/node_modules/wrangler/package.json", { version: "9.9.9" });
     await write("scratch/package.json", { devDependencies: { wrangler: "9.9.9" } });
-    run(0, /6 projects/);
+    run(0, /6 projects/); // Same physical install; unused cache and untracked scratch are not consumers.
 
     await write("node_modules/.bun/wrangler@current/node_modules/wrangler/package.json", { version: "9.9.9" });
     run(1, /installed.*9\.9\.9|resolves Wrangler.*9\.9\.9/);
@@ -143,6 +186,12 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
     await write("package.json", { ...pkg, devDependencies: { wrangler: `^${version}` } });
     run(1, /exact Wrangler version/);
 
+    // COMMIT PINS, where the version field cannot tell two installs apart. Two
+    // tarballs of workers-sdk main carry one version, the committed lockfile
+    // names the pin on every checkout, and so until 2026-09-27 a stale install
+    // passed this check: `expected` was the installed version, compared against
+    // itself. The store path is what separates them, so each case below keeps
+    // the version and the lockfile identical and varies only the path.
     const pin = (sha) => `https://pkg.pr.new/cloudflare/workers-sdk/wrangler@${sha}`;
     const store = (sha) => `.bun/wrangler@https+++pkg.pr.new+cloudflare+workers-sdk+wrangler@${sha}+496e088b118d3618/node_modules/wrangler`;
     const install = async (target) => {
@@ -156,10 +205,14 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
     }
     await install(store("3572193"));
     run(0, /6 projects/);
+    // The measured case: @b168333 on disk, @3572193 pinned and locked.
     await install(store("b168333"));
     run(1, /holds wrangler@b168333 \(4\.129\.1\) but package\.json pins @3572193.*rm -rf node_modules && bun install --frozen-lockfile/);
+    // An install whose path names no commit cannot be matched, so it fails
+    // rather than passing on the version alone.
     await install(".bun/wrangler@current/node_modules/wrangler");
     run(1, /names no workers-sdk commit/);
+    // The lockfile check still stands on its own, with the install correct.
     await install(store("3572193"));
     await writeFile(join(dir, "bun.lock"), `"wrangler": ["wrangler@${pin("b168333")}", {}],\n`);
     run(1, /bun\.lock does not resolve wrangler/);
@@ -168,7 +221,7 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
 
     await write("package.json", pkg);
     await rm(join(dir, "lens-reader/package.json"));
-    run(1, /ENOENT/);
+    run(1, /ENOENT/); // A tracked manifest that cannot be read is not an empty project.
     await write("lens-reader/package.json", {});
     execFileSync("git", ["-C", dir, "rm", "--cached", "--quiet", "package.json"]);
     run(1, /no tracked root package.json/);

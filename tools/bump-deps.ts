@@ -1,5 +1,25 @@
 #!/usr/bin/env bun
 // bun run deps:pin [--json <plan.json>] [--group <name> --write [--body <pr.md>]]
+//
+// The npm half of Dependabot, run by this repo, because Dependabot can no longer
+// read it. tools/lib/deps-plan.ts says why and holds the policy; this file
+// fetches the registry, prints the plan, and with --write carries ONE group into
+// the tree: package.json pins, bun.lock, lens-reader/bun.lock, and the version
+// claims in docs/DEPENDENCIES.md. .github/workflows/deps-pin.yml runs it nightly
+// and opens one PR per group.
+//
+// With no flags it only reads, so it is safe to run anywhere. --write edits the
+// CURRENT tree, which is what the workflow wants (a fresh checkout per group);
+// locally, run it on a clean branch.
+//
+// --ignore-scripts ON EVERY INSTALL. The packages being bumped ARE the
+// toolchain (oxc-minify, lightningcss, wrangler's neighbours), and the workflow
+// later holds a token that can push. bun runs
+// lifecycle scripts only for `trustedDependencies` (esbuild, sharp, workerd),
+// and this flag shuts that last door, so no newly published code executes in
+// the job. Resolution does not depend on scripts, so the lockfile is
+// byte-identical either way. The gates that DO execute the bump (lint,
+// typecheck, tests, build) are `validate`'s, on the PR, holding no credential.
 
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -28,6 +48,9 @@ if (WRITE && !GROUP) {
 
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
 
+// The root, its workspaces, and lens-reader, which sits OUTSIDE the workspace
+// with its own bun.lock. Dependabot watched `/` and `/lens-reader`; the
+// workspaces were reached through the root block.
 function manifestPaths(): string[] {
   const root = JSON.parse(read("package.json"));
   return ["package.json", ...(root.workspaces ?? []).map((w: string) => `${w}/package.json`), "lens-reader/package.json"];
@@ -48,6 +71,8 @@ async function fetchDoc(pkg: string): Promise<RegistryDoc | null> {
 
 async function registryFor(names: string[]) {
   const registry = new Map<string, RegistryDoc>();
+  // Eight at a time: enough to finish in seconds, few enough not to look like
+  // a scrape.
   for (let i = 0; i < names.length; i += 8) {
     const batch = names.slice(i, i + 8);
     const docs = await Promise.all(batch.map(fetchDoc));
@@ -64,6 +89,10 @@ function install(dir: string, frozen: boolean) {
   }
 }
 
+// docs/DEPENDENCIES.md states versions in sentences, and a contract test holds
+// them against the manifests, so a relocked branch is still red until the prose
+// moves. planDocPinRewrites shares the READER's pattern, which is why this is
+// not a line-oriented sweep: a wrapped mention would slip past one.
 function rewriteDocPins() {
   const pkg = JSON.parse(read("package.json"));
   const subManifests = SUB_MANIFEST_POLICY.flatMap((entry) => {
@@ -107,6 +136,8 @@ function prBody(group: string, bumps: Bump[]) {
 }
 
 const manifests: Manifest[] = manifestPaths().map((p) => ({ path: p, json: JSON.parse(read(p)) }));
+// Exact pins only: a git or URL spec (timbrado, wrangler) has no registry
+// document worth fetching, and planBumps would skip it anyway.
 const names = [...exactPins(manifests).keys()].sort();
 
 const registry = await registryFor(names);
@@ -143,6 +174,8 @@ if (WRITE) {
   const lensReader = [...touched].some((m) => m.startsWith("lens-reader/"));
   if (lensReader) install("lens-reader", false);
   for (const e of rewriteDocPins()) console.log(`  prose: ${e.prose} ${e.from} -> ${e.to}`);
+  // The frozen install is its own assertion: it is the exact command CI runs
+  // first, and a plain install succeeding does not prove it.
   install("", true);
   if (lensReader) install("lens-reader", true);
   if (BODY_OUT) writeFileSync(BODY_OUT, prBody(GROUP!, mine) + "\n");

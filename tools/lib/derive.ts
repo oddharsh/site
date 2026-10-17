@@ -10,6 +10,33 @@
 // hashed client asset re-mints 1400 files (gotcha 35). The search index froze
 // twice under two unrelated causes (the search-corpus note).
 //
+// Each of those bought one more tripwire. This is the general form: a derived
+// artifact declares its INPUTS, the digest of those inputs is recorded beside the
+// declaration, and one check asks whether the bytes on disk still hash to what
+// the artifact was made from. No generator runs, nothing is mutated, and it
+// answers from a clean checkout with no local pipeline state.
+//
+// ── why the check cannot simply rebuild and diff ──────────────────────────────
+// The obvious design is "re-run the generator, byte-compare the output". It does
+// not work for the artifacts that actually go stale. images/meta/ is a LOCAL
+// pipeline artifact rather than a committed one, so histograms.json is not
+// recomputable from a checkout at all; metadata.json reads the SOOC originals,
+// which live in R2 and on one laptop; og cards capture PRODUCTION.
+//
+// exif.json was named here too until 2026-08-29, and the fix was to stop
+// committing it: it IS recomputable from a checkout, being a projection of
+// metadata.json, so build.ts step 1a derives it and this graph has nothing left
+// to say about it. Worth reading as the preferred outcome rather than an
+// exception. An artifact a checkout can rebuild does not want a digest, it wants
+// to be build output; a digest is what you record when rebuilding is impossible.
+// A rebuild-and-diff check would therefore be unrunnable on exactly the three
+// families that have gone stale, while a check of INPUT bytes runs on all of them
+// for the cost of a hash.
+//
+// That is also why a rebuild-and-diff would have to mutate the tree to work,
+// which is not a thing a check may do in CI or under somebody else's uncommitted
+// edits (the collaboration rule in CLAUDE.md).
+//
 // ── the two tiers, and why the second one is honest rather than lazy ──────────
 // PINNED     the inputs are committed bytes, so the recorded digest is checkable
 //            here, now, with no tool and no network. This is the tier that
@@ -20,6 +47,16 @@
 //            pass, because the alternative to an honest note is a check that
 //            quietly covers less than its summary line claims. Same standing as
 //            the two entries in config/tools.json that report no version.
+//
+// A tool version can be part of a derivation's identity too. config/tools.json
+// already records which encoder made the bytes committed today (its `recorded`
+// field), and an artifact whose meaning depends on that encoder names the tool
+// here, so swapping encoders reads as staleness rather than as nothing.
+//
+// ── on being extractable ──────────────────────────────────────────────────────
+// Zero dependencies, node:* only, no bun globals, no knowledge of this site. The
+// declaration file is data. This is meant to be liftable into any repository that
+// commits derived artifacts, which is most of them.
 
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
@@ -28,10 +65,44 @@ import path from "node:path";
 export type Tier = "pinned" | "unverifiable";
 
 export type InputSpec = {
+  /** Files and directories, relative to the repo root. A directory is walked. */
   paths: string[];
+  /** Keep only these extensions. Absent means every file found. */
   include?: string[];
+  /** Drop any relative path containing one of these segments. */
   exclude?: string[];
+  /**
+   * SET MODE. A regex with one capture group, applied to each resolved path. The
+   * digest is taken over the sorted unique captures rather than over file bytes.
+   *
+   * This exists because some artifacts depend on WHICH inputs exist rather than
+   * on what is in them. images/semantics.json is keyed by stem, and re-encoding a
+   * photo does not change what is in the picture, so pinning it to pixel bytes
+   * would report it stale on every re-encode and train somebody to re-record it
+   * without looking. Pinned to the stem SET it goes stale for the one reason it
+   * can actually be stale: a photo arrived or left.
+   *
+   * Every resolved path must match. A projection that silently skips what it
+   * cannot parse is the shape of scanner that reports a pass over an empty set,
+   * which is what every floor in this repo exists to refuse.
+   */
   set?: string;
+  /**
+   * Files hashed BY CONTENT beside a set. Set mode only, since in path mode they
+   * would simply be more `paths`.
+   *
+   * The set premise above is true of the pixels and was false of the artifact it
+   * was written for. gen-photo-semantics.ts folds each photo's caption (alt.json)
+   * and Fuji recipe (metadata.json) into its terms, so re-captioning a photo
+   * leaves semantics.json describing the old caption while the stem set, and so
+   * the digest, never moves. Found by tracing the generator's file reads under
+   * strace on 2026-09-22, and proven the direct way: one changed caption changed
+   * semantics.json on regeneration while derive:check kept reporting it fresh.
+   *
+   * These are files a generator reads WHOLE, so they are hashed whole. Coverage
+   * never sees them: `covers` asks for an entry per KEY of the set, and a caption
+   * file is not a photo.
+   */
   bytes?: string[];
 };
 
@@ -41,9 +112,22 @@ export type Derivation = {
   why: string;
   outputs: string[];
   inputs?: InputSpec;
+  /** Names in config/tools.json whose `recorded` version is part of this identity. */
   tools?: string[];
+  /** The command that regenerates it. Printed on a stale result. */
   regenerate?: string;
+  /** Required on the unverifiable tier: what is not in the repository, and why. */
   unverifiable?: string;
+  /**
+   * A JSON output whose TOP-LEVEL KEYS must cover every input key. Set mode only.
+   *
+   * The digest answers "did the input set move since this was made". That is the
+   * wrong question on its own for an artifact built one key at a time: a resumable
+   * generator that dies halfway leaves a file covering most of the set, and
+   * re-recording the digest afterwards would call it fresh forever. This asks the
+   * question the reader actually has, which is whether the artifact HAS an entry
+   * for every input, and it is what caught semantics.json sitting at 158 of 165.
+   */
   covers?: string;
   recorded?: Recorded;
 };
@@ -54,6 +138,12 @@ export type Recorded = {
   tools?: Record<string, string>;
 };
 
+/**
+ * Per-input hashes, machine-owned, so a stale result can NAME what moved rather
+ * than only that something did. FLAT and deduped across derivations on purpose:
+ * images/hashes and images/histograms both declare public/i by path, and keying
+ * by derivation id would store its 660 hashes twice to say the same thing.
+ */
 export type Lock = Record<string, string>;
 
 const HASH = "sha256";
@@ -67,10 +157,15 @@ export const keeps = (spec: InputSpec, rel: string): boolean => {
   return true;
 };
 
+/** Is this repo-relative path one the spec would have collected? */
 export const claims = (spec: InputSpec, rel: string): boolean =>
   keeps(spec, rel) &&
   spec.paths.some((p) => rel === p || rel.startsWith(p.endsWith("/") ? p : `${p}/`));
 
+/**
+ * Every file a spec resolves to, repo-relative and sorted, so the digest is a
+ * function of the bytes rather than of readdir order or of the machine.
+ */
 export async function resolveInputs(root: string, spec: InputSpec): Promise<string[]> {
   const found: string[] = [];
   const keep = (rel: string) => keeps(spec, rel);
@@ -101,11 +196,20 @@ export async function resolveInputs(root: string, spec: InputSpec): Promise<stri
   return found.sort();
 }
 
+/**
+ * What one derivation's digest is taken over, plus how those entries are named in
+ * the flat lock. Two modes behind one shape, so verify() and record() never
+ * branch on the mode and the lock stays a single flat map.
+ */
 export type Projection = {
   entries: Record<string, string>;
+  /** How an entry appears in the lock. Namespaced in set mode so stems from two
+   *  derivations cannot collide, and so removals can be attributed. */
   lockName: (name: string) => string;
+  /** Does a lock entry belong to this derivation? Used to name what was removed. */
   owns: (lockName: string) => boolean;
   count: number;
+  /** The keys `covers` must account for: the set's keys, never its `bytes` files. */
   keys: string[];
 };
 
@@ -134,7 +238,12 @@ export async function project(root: string, d: Derivation): Promise<Projection> 
     }
     keys.add(m[1]);
   }
+  // The digest is over the BARE keys, never over the namespaced lock names, so
+  // renaming a derivation does not move its digest.
   const setEntries = Object.fromEntries([...keys].sort().map((k) => [k, "set"]));
+  // `bytes` rows keep their repo path as their lock name, flat and shared with any
+  // path-mode derivation declaring the same file. A path always carries a slash
+  // and a key from this flat tree never does, which the check below holds.
   const byteSpec: InputSpec = { paths: spec.bytes ?? [] };
   const byteEntries = await hashInputs(root, await resolveInputs(root, byteSpec));
   for (const k of keys) {
@@ -150,12 +259,18 @@ export async function project(root: string, d: Derivation): Promise<Projection> 
   };
 }
 
+/** sha256 of each resolved input, keyed by repo-relative path. */
 export async function hashInputs(root: string, files: string[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const rel of files) out[rel] = hashBytes(await readFile(path.join(root, rel)));
   return out;
 }
 
+/**
+ * One digest over the whole input set. Built from `path hash` lines rather than
+ * from concatenated bytes, so a rename with identical content still moves the
+ * digest: for a content-addressed tree the NAME is half the artifact's meaning.
+ */
 export const digestOf = (hashes: Record<string, string>): string =>
   hashBytes(
     Object.keys(hashes)
@@ -181,6 +296,11 @@ export type Verdict =
       tools: { name: string; recorded: string; now: string }[];
     };
 
+/**
+ * Compare one derivation's declaration against the bytes on disk. `toolVersions`
+ * is the caller's projection of config/tools.json, passed in rather than read
+ * here so this module stays free of any one repository's layout.
+ */
 export async function verify(
   root: string,
   d: Derivation,
@@ -204,6 +324,8 @@ export async function verify(
     return { id: d.id, state: "fresh", count };
   }
 
+  // The lock is what turns "something moved" into "these 316 files moved", which
+  // is the difference between a check somebody acts on and one they re-run.
   const changed: string[] = [];
   const added: string[] = [];
   for (const [name, value] of Object.entries(entries)) {
@@ -211,6 +333,9 @@ export async function verify(
     if (!(key in lock)) added.push(name);
     else if (lock[key] !== value) changed.push(name);
   }
+  // A DELETED input still moves the digest, so it is caught either way. Naming it
+  // takes the flat lock read backwards: anything this derivation owns, that the
+  // lock knows and the projection no longer produces, left.
   const present = new Set(Object.keys(entries).map(lockName));
   const removed = Object.keys(lock)
     .filter((key) => owns(key) && !present.has(key))
@@ -230,6 +355,12 @@ export async function verify(
   };
 }
 
+/**
+ * Which input keys the covering artifact has no entry for, and which entries it
+ * carries for inputs that are gone. An orphan is reported rather than failed: it
+ * is dead weight rather than a missing answer, and the deletion that created it
+ * has already moved the digest.
+ */
 async function coverage(
   root: string,
   d: Derivation,
@@ -245,6 +376,7 @@ async function coverage(
   };
 }
 
+/** Recompute what the declaration should record. Used by the --lock path. */
 export async function record(
   root: string,
   d: Derivation,
@@ -262,6 +394,40 @@ export async function record(
   return { recorded, hashes, owns };
 }
 
+/**
+ * The lock after ONE derivation re-records: its fresh rows in, and the rows it
+ * OWNS that the projection no longer produces out.
+ *
+ * The pruning half is the whole point, and merging alone is what the --lock path
+ * did until 2026-08-29. public/i is content-addressed, so a re-encode does not
+ * edit a row, it mints a new filename beside the old one and leaves the old row
+ * with nothing behind it. Measured on the commit that added this: 1493 rows
+ * describing 660 files, 498 of them naming a path no checkout can open, 495 of
+ * those minted by one full-library re-encode (#660). Every future re-encode adds
+ * another ~495. A dead row cannot produce a wrong verdict, because verify()
+ * hashes the inputs on disk rather than reading the lock; it only fills the lock
+ * with rows that can never be what moved.
+ *
+ * SCOPED TO `owns`, because --only re-records one derivation at a time and must
+ * leave every other derivation's rows exactly as it found them. A key is dropped
+ * for one reason: this derivation would have collected it and did not, which for
+ * a path spec means the file is gone and for a set spec means the key left the
+ * set. Two derivations declaring the same tree (images/hashes and
+ * images/histograms both declare public/i) project the same entries, so either
+ * one prunes the same rows.
+ *
+ * The trade that buys: under --only, a row this derivation owns and prunes may
+ * also be owned by a derivation NOT being recorded, which then loses the ability
+ * to name that file in its `removed` list. Its verdict does not move, since the
+ * digest lives on the declaration rather than in the lock, so the cost is one
+ * shorter diagnostic line on a result that is already STALE. A full --lock run
+ * records every pinned derivation and has no such gap.
+ *
+ * It returns what it dropped rather than only how many, so the caller can NAME
+ * them without re-deciding the rule. A second copy of that predicate at the call
+ * site is a second thing to keep in agreement, and the one that would rot is the
+ * printed count, which nothing checks.
+ */
 export function relock(
   lock: Lock,
   fresh: Record<string, string>,

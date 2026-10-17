@@ -1,5 +1,30 @@
-// gen-og-cards.mjs — build grabby Twitter/OG cards for every garage + lwe page,
-// plus the top-level page directories registered in og-pages.mjs.
+// gen-og-cards.ts — build grabby Twitter/OG cards for every garage + lwe page,
+// plus the top-level page directories registered in og-pages.ts.
+//
+// Each card is a 1200x630 JPEG (PNG until 2026-09-16; see writeCard): the page's live interactive demo screenshotted
+// and floated on the Bliss desktop, with the page's own favicon as a brand stamp
+// bottom-left. There is NO route label on the card. `route` is still computed in
+// capture(), but only for the per-card console line, so a run prints
+// `aadhar.sh/<page>` beside every card without that text being on it (checked
+// 2026-08-15 by cropping four committed cards: favicon and wallpaper, no text).
+// The demo panels already carry their own `.bar` title strip, so on the wallpaper
+// they read as a little open XP app — which is exactly the "grabby, unmistakably
+// this site" look we want in a link unfurl.
+//
+// Static by design: X's card fetcher hits the image URL once and caches it, so a
+// cold on-the-fly render would risk a timeout + a blank card. We pre-bake, commit,
+// and serve immutable. Regenerate when a demo's look changes:
+//
+//     bun run og-cards                                                 # captures the LIVE site (aadhar.sh)
+//     OG_BASE=http://localhost:8787 bun tools/photos/gen-og-cards.ts   # local static server instead
+//
+// Captures production by default so data-driven demos (the photo grid, the live
+// counters, the routing prober) render populated, not empty — which is exactly
+// the alive look we want in an unfurl. The demos themselves are client-side and
+// stable, so a card never depends on an undeployed edit. Point OG_BASE at a local
+// server to preview a not-yet-live page (it self-boots one for localhost).
+//
+// Deps: playwright-core (scripts-only devDep) driving the installed Google Chrome.
 
 import { chromium } from "playwright-core";
 import { chromeChannel } from "../lib/browser-channel.ts";
@@ -21,25 +46,41 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../.
 // shipped on 2026-08-21 with no card and nothing said so. Same family as gotcha
 // 40, and the same repair: name the tree each use actually wants, so the next
 // rename breaks loudly at the constant instead of silently at the output.
-const PUBLIC = path.join(ROOT, "public");
-const PAGES = path.join(ROOT, "src/pages");
-const STYLES = path.join(ROOT, "src/styles");
-const SERVE = path.join(ROOT, ".build/public");
+const PUBLIC = path.join(ROOT, "public");        // bytes that ship unchanged; the cards land here
+const PAGES = path.join(ROOT, "src/pages");      // the documents the section walk enumerates
+const STYLES = path.join(ROOT, "src/styles");    // luna.css authors here, and stages to the URL root
+const SERVE = path.join(ROOT, ".build/public");  // the merged URL root exists only as build output
 const OUT = path.join(PUBLIC, "og");
 const BASE = (process.env.OG_BASE || "https://aadhar.sh").replace(/\/$/, "");
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(BASE);
 const CARD_W = 1200, CARD_H = 630;
 
+// Diagnostic/test harnesses that live under garage/ but aren't shareable content.
 const EXCLUDE = new Set(["garage-vt-b", "garage-vt-check"]);
 
+// Hero selector per page id (`<section>-<name>`). The generator tries each in
+// order and takes the first visible, sensibly-sized match; anything not listed
+// (or whose selectors all miss) falls back to the demo/canvas sweep, then to the
+// top of the page's `.window`. `preset` clicks a control to populate a demo that
+// renders empty on load.
 const HERO = {
+  // ── garage ──────────────────────────────────────────────────────────────
   "garage-blueprint": { hero: [".map"] },
   "garage-chunks":    { hero: [".method", "#cdc-chunks"] },
   "garage-cloudflare":{ hero: [".cf-feat", ".demo"] },
+  // These three name their demo wrappers rather than reusing `.demo`, so the
+  // FALLBACK sweep missed all three and they fell through to the window top.
+  // That fallback stopped being an acceptable default when the Explorer chrome
+  // shipped (#275): the `.window` now carries an address bar and a task pane, so
+  // a whole-window card reads as a screenshot of a browser rather than this
+  // file's house style, which is one demo panel floated on the desktop.
   "garage-compression": { hero: [".cmp"] },
   "garage-octane":    { hero: [".oct-demo"] },
   "garage-pqc":       { hero: [".pqc-demo"] },
   "garage-encoding":  { hero: [".demo", ".sample-grid"] },
+  // Three more that name their own demo wrapper, for the reason above.
+  // hidden-flags has two .hf-demo blocks and the first is the inventory,
+  // which is the one worth unfurling.
   "garage-hidden-flags": { hero: [".hf-demo"] },
   "garage-typed-config": { hero: [".tc-demo"] },
   "garage-useragent":  { hero: [".ua-demo"] },
@@ -54,31 +95,95 @@ const HERO = {
   "garage-tooltips":  { hero: [".vinyl-demo", ".recipe-grid"] },
   "garage-wire":      { hero: [".knob-panel", ".knob-grid"] },
   "garage-workers":   { hero: [".cf-feat:has(#probe-btn)"], preset: "#probe-btn" },
+  // av2 spans into the verdict line because the broken third tile only reads as
+  // the finding once the sentence under it says the fallback never loaded.
   "garage-av2":        { span: [".av2-demo", "#av2-verdict"], hero: [".av2-demo"] },
+  // NOT #dd-demo, which is the obvious pick: it fills from a fetch() after load,
+  // so at capture time it can still be the one-line no-JS placeholder, under the
+  // 120px floor, and the card fell to the whole window. The per-route savings
+  // chart is static markup and is the page's thesis as data.
   "garage-dictionary": { hero: [".dd-chart"] },
   "garage-htmx":       { hero: [".hb-demo"] },
+  // No interactive demo. The chroma table is the page's one measurement, and at
+  // 111px it misses the single-hero floor, so it spans from its own heading.
   "garage-ig-prep":    { span: ['h2:has-text("What the chroma choice costs")', "#ig-chroma"], hero: [".ig-conf"] },
   "garage-resample":   { hero: ["#hl-demo"] },
   "garage-round-trip": { hero: ["#rt-demo"] },
+  // ── lwe ─────────────────────────────────────────────────────────────────
   "lwe-dac":      { hero: ["#demo-ladder", ".demo"] },
   "lwe-drivers":  { hero: ["#demo-motion", ".demo"] },
   "lwe-encoding": { hero: ["#demo-chroma", ".demo"] },
   "lwe-fhe":      { hero: ["#demo-add", ".demo"] },
   "lwe-knots":    { hero: ["#demo-knot", ".demo"] },
+  // The FALLBACK sweep already lands here, because #demo-spec is the first
+  // `.demo` on the page. Naming it anyway, like every other lwe entry: it is the
+  // page's thesis (the bug relocated into the spec), and a demo added above it
+  // would otherwise silently become the card.
   "lwe-lean":     { hero: ["#demo-spec", ".demo"] },
   "lwe-mpc":      { hero: ["#demo-mpc", ".demo"] },
   "lwe-pcrypto":  { hero: ["#demo-snark", ".demo"] },
   "lwe-tee":      { hero: ["#demo-tee", ".demo"] },
   "lwe-utf8":     { hero: ["#demo-enc", "#demo-anat", ".demo"] },
   "lwe-vigenere": { hero: ["#demo-crank", ".demo"], preset: ".preset[data-crank='trans']" },
+  // ── page dirs (og-pages.ts) ─────────────────────────────────────────────
+  // The whole MMC console in one element: menu bar, toolbar, the device tree,
+  // the graph, and the status bar with its live per-state counts. That last row
+  // is why this beats cropping to the canvas alone — "39 devices · 15 installed
+  // · 9 yellow bang" is the page's thesis rendered as a status line. ~1272x660
+  // sits close to the card's own 2.2:1, so it fills the frame instead of
+  // floating in margins.
   "access": { hero: [".mmc"] },
+  // The exam boots to an intro screen, so without the preset the card would show
+  // a paragraph and a Start button. #go runs one trial; the tile <img>s are built
+  // in JS after that click, which is what presetWait is covering, not a repaint.
+  // The span reaches from the "which looks best?" row down through the GroupBox so
+  // the card carries the question, the "same photo · N ways" legend, the tiles, and
+  // the hint line. `.gb` alone is the fallback if the trial screen ever
+  // restructures — it is self-describing, being the thing with the legend on it.
+  //
+  // NOT deterministic: the trial is drawn at random, so a regeneration changes the
+  // photo and can change two tiles to three. Nothing downstream may assume a count
+  // (see the alt text in og-pages.ts).
+  //
+  // Capture this one against PRODUCTION, not the local static server. nav.js
+  // adopts the matching taskbar pin's compiled /section-icons SVG as the
+  // favicon, and its exact pathname match sees /pixel-peeper in production but
+  // /pixel-peeper/index.html under a plain static server. Locally the favicon
+  // never gets set and the card's brand stamp silently falls back to blue.
   "pixel-peeper": { preset: "#go", presetWait: 2600, span: [".row", ".gb"], hero: [".gb", ".tiles"] },
+  // The checklist sheet alone: folders, ticked rows, the factory value on each,
+  // and the "N of N ticked" count. A span down through the generated script was
+  // tried (2026-09-29) and tells the whole story at 1200px, but it halves the
+  // type, and at the ~500px a timeline unfurls the card both sheets turn to
+  // noise. The script is what the click is for; the card only has to show the list.
   "dotfiles": { hero: [".sheet:has(#df-list)"] },
+  // The name and bio down through the photo grid: who, and the first thing the
+  // page shows of their work. Capped so the card holds the top rows of photos
+  // rather than shrinking the whole sheet to thumbnails. Capture against
+  // PRODUCTION: the grid is an island (/photos/grid.html) that a plain static
+  // server cannot answer, so locally it keeps only the baked fallback, if any.
   "home": { span: ["h1.p-name", ".photos"], spanMaxH: 640, hero: [".photos"] },
 };
 
+// Selectors tried when a page has no HERO entry, or its listed heroes all miss.
 const FALLBACK = [".demo", ".workbench", "canvas", ".map", ".content > figure"];
 
+// Worker-rendered pages have no src/pages/<section>/*.html file for listPages()
+// to find, so they're listed by hand. `path` is the exact route to capture —
+// including query state, so a card can show the page mid-task rather than
+// empty. `span` crops from the top of the first selector to the bottom of the
+// second (both must resolve; falls back to HERO/FALLBACK sweeps otherwise).
+// `settle` adds ms after networkidle for client hydration that repaints panes.
+//
+// The /lens card captures a live scan of stripe.com: the address bar, the
+// seeded example chips, and the three panes with the dollar verdict + the
+// readiness score rendered. Prewarm the screenshot cache first or networkidle
+// waits out the cold Browser-Rendering call:
+//   curl -s "https://aadhar.sh/lens/shot?url=https%3A%2F%2Fstripe.com%2F" -o /dev/null
+// `spanMaxH` top-anchors the span and slices its bottom, the same bargain the
+// single-hero cap strikes: a crop near the card's own 2.2:1 aspect renders the
+// content ~30% larger than a full-height 1.4:1 crop that floats in margins.
+// `presetWait` covers presets that trigger a network render, not just a repaint.
 const WORKER_PAGES = [
   {
     id: "lens",
@@ -86,26 +191,40 @@ const WORKER_PAGES = [
     span: [".lx-addr", ".lx-panes"],
     spanMaxH: 500,
     settle: 4000,
+    // fill the third pane: run the (prewarmed) Browser Run snapshot so the card
+    // shows all three readers reading, not two panes and an empty intro box.
     preset: "#lx-browser-run",
     presetWait: 6000,
   },
 ];
 
+// Regenerate a subset without dirtying every committed card: the capture is a
+// screenshot of the LIVE site, so re-running untouched pages rewrites their
+// cards with fresh-but-equal pixels and git sees every card modified for a
+// one-card change. OG_ONLY=lens (comma-separated ids) scopes the run.
 const ONLY = process.env.OG_ONLY ? new Set(process.env.OG_ONLY.split(",").map((s) => s.trim())) : null;
 
 async function blissBackground() {
+  // Reuse the exact wallpaper the live desktop paints, straight out of luna.css,
+  // so the card background is pixel-identical to the real site (no second asset).
   const css = await readFile(path.join(STYLES, "luna.css"), "utf8");
   const m = css.match(/#axp-desktop\s*\{[^}]*?background:\s*url\("([^"]+)"\)/);
   if (!m) throw new Error("could not find the Bliss wallpaper in luna.css");
   return m[1];
 }
 
+// The section's taskbar mark, inlined as a data URI so it resolves inside a
+// document built with setContent. Returns null when a section has no icon on
+// disk, which keeps the blue-square fallback rather than rendering an empty box.
 async function sectionIcon(section) {
   const file = path.join(PUBLIC, "section-icons", `${section}.svg`);
   if (!existsSync(file)) return null;
   return `data:image/svg+xml,${encodeURIComponent(await readFile(file, "utf8"))}`;
 }
 
+// A `data:` href passes through. A root-relative `.svg` href naming a file in
+// public/ comes back inlined, since the card document has no base URL (see
+// capture()). Anything else is returned as-is.
 async function inlineRootRelative(href) {
   if (!/^\/[^/].*\.svg$/.test(href)) return href;
   const file = path.join(PUBLIC, href.slice(1));
@@ -114,6 +233,10 @@ async function inlineRootRelative(href) {
 }
 
 function cardHtml({ bliss, shot, favicon }) {
+  // shot: data URI of the demo screenshot (captured at DSF 2, downscaled by the
+  // browser to fit). Top-anchor so the grabbiest part (title bar + controls +
+  // first result) survives. The only chrome is the page's favicon as a small
+  // brand stamp bottom-left; the route reads fine from the tweet's own link text.
   const fav = favicon
     ? `<img class="fav" src="${favicon}" width="42" height="42" alt="">`
     : `<span class="fav fav--fallback"></span>`;
@@ -143,9 +266,10 @@ async function listPages() {
     for (const f of (await readdir(dir)).sort()) {
       if (!f.endsWith(".html")) continue;
       const name = f.slice(0, -5);
-      if (name === "index") continue;
+      if (name === "index") continue; // folder listings get no demo card
       const id = `${section}-${name}`;
       if (EXCLUDE.has(id)) continue;
+      // clean routes on the live worker; the local static server needs the .html
       const url = LOCAL ? `${BASE}/${section}/${f}` : `${BASE}/${section}/${name}`;
       out.push({ id, section, name, url });
     }
@@ -154,7 +278,12 @@ async function listPages() {
     if (LOCAL) { console.log(`  - ${p.id}  skipped: worker route, and ${BASE} is the static server`); continue; }
     out.push({ id: p.id, url: BASE + p.path });
   }
+  // Page directories: one index.html at a top-level route, so the section walk
+  // above cannot see them. These are real files, so they capture against the
+  // local static server too — no LOCAL skip, unlike the worker routes. The
+  // static server serves raw paths, the live worker serves the clean route.
   for (const p of OG_PAGE_DIRS) {
+    // An empty dir is the site root: `/` live, `/index.html` on the static server.
     const local = `${BASE}/${p.dir ? p.dir + "/" : ""}index.html`;
     out.push({ id: p.id, url: LOCAL ? local : `${BASE}/${p.dir}` });
   }
@@ -164,7 +293,7 @@ async function listPages() {
 async function capture(page, cardPage, p, bliss) {
   await page.setViewportSize({ width: 1440, height: 1680 });
   await page.goto(p.url, { waitUntil: "networkidle", timeout: 25000 });
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(900); // let demo JS + canvases settle
 
   const cfg = HERO[p.id] || WORKER_PAGES.find((w) => w.id === p.id) || {};
   if (cfg.settle) await page.waitForTimeout(cfg.settle);
@@ -173,17 +302,43 @@ async function capture(page, cardPage, p, bliss) {
     if (await btn.count()) { await btn.click().catch(() => {}); await page.waitForTimeout(cfg.presetWait || 1600); }
   }
 
+  // route, for the per-card console line (never drawn on the card): the page's
+  // own title-bar text, already "aadhar.sh/…".
   const route = (await page.locator(".window .title-bar .title-text").first().textContent().catch(() => null))
     ?.replace(/\s+/g, " ").trim() || (p.section ? `aadhar.sh/${p.section}/${p.name}` : `aadhar.sh${p.url.replace(BASE, "")}`);
+  // The generated pages (pipelines/garage, pipelines/lwe) ship no `rel="icon"`,
+  // so this read comes back null for every one of them and the card falls through
+  // to a blank blue square, where a hand-authored page's card carries a glyph.
+  // The section icon is the honest stamp there: the same mark the taskbar tile
+  // carries, so a garage card reads as garage rather than as nothing. A page that
+  // DOES declare an icon keeps its own, which is why this is a fallback.
+  //
+  // IT HAS TO BE INLINED, and the first attempt at this shipped `/section-icons/
+  // <section>.svg` as the src and rendered an EMPTY WHITE BOX, which is worse
+  // than the blue square it replaced. The card is built with `setContent`, so the
+  // document has no base URL and a root-relative path resolves against nothing.
+  // Every page whose icon works declares it as `data:image/svg+xml,...` for the
+  // same reason. Measured 2026-08-24, twice, because the first fix looked right.
+  //
+  // A DECLARED icon can be root-relative too, and /lens is: #346 moved it to
+  // `/section-icons/lens.svg`, so its 2026-09-30 recapture stamped the same empty
+  // box. A root-relative href that names a file in public/ is inlined from that
+  // file here, the same bytes the page serves.
   const declared = await page.getAttribute('link[rel="icon"]', "href").catch(() => null);
   const favicon = (declared ? await inlineRootRelative(declared) : null) || (p.section ? await sectionIcon(p.section) : null);
 
+  // pick the crop: a span (top of A to bottom of B) beats single-hero sweeps,
+  // because pages like /lens tell their story across stacked rows — address
+  // bar, example chips, then the three panes — that no one element contains.
   let box = null;
   if (cfg.span && cfg.span.length === 2) {
     const a = await page.locator(cfg.span[0]).first().boundingBox().catch(() => null);
     const b = await page.locator(cfg.span[1]).first().boundingBox().catch(() => null);
     if (a && b) {
       const x = Math.min(a.x, b.x);
+      // exact: a span is a deliberate composition, so the proportional height
+      // cap below (meant for runaway single-element demos) does not apply —
+      // only the span's own optional spanMaxH does.
       const spanH = b.y + b.height - a.y;
       box = { x, y: a.y, width: Math.max(a.x + a.width, b.x + b.width) - x, height: cfg.spanMaxH ? Math.min(spanH, cfg.spanMaxH) : spanH, exact: true };
     }
@@ -201,13 +356,26 @@ async function capture(page, cardPage, p, bliss) {
 
   let clip;
   if (box) {
+    // cap the height so a very tall demo doesn't shrink to a stamp
     const h = box.exact ? Math.min(box.height, 900) : Math.min(box.height, Math.max(box.width * 0.72, 340), 900);
     clip = { x: box.x, y: Math.max(box.y, 0), width: box.width, height: h };
   } else {
+    // last resort: the top of the page window (title bar + first screenful)
     const win = await page.locator(".window").first().boundingBox();
     clip = { x: win.x, y: Math.max(win.y, 0), width: win.width, height: Math.min(win.height, 760) };
   }
 
+  // the demo is captured at 2x (supersampled); the card renders at 1x/1200x630
+  // (the standard OG size), so the downscaled demo stays crisp while the file
+  // stays a quarter the size of a full 2x card.
+  //
+  // `animations: "disabled"` finishes every CSS animation and transition at its
+  // END STATE and holds it there for the capture. The waitForTimeout calls above
+  // are the older way of buying the same thing, and they buy it by racing a
+  // timer: a demo whose transition is 200ms lands mid-flight if the machine is
+  // busy, so two runs of an unchanged page can differ. The timers stay, because
+  // they also wait out JS that has nothing to do with CSS (canvas draws, fetches
+  // the demos make on load), which this option does not touch.
   const shotBuf = await page.screenshot({ clip, type: "png", animations: "disabled" });
   const shot = "data:image/png;base64," + shotBuf.toString("base64");
 
@@ -218,6 +386,17 @@ async function capture(page, cardPage, p, bliss) {
   return { id: p.id, route, usedFallback: !box };
 }
 
+// A card is a JPEG since 2026-09-16, encoded by zenc from Chrome's lossless
+// capture. The 39 PNGs were 9.2 MB and lossless optimisation found 0.4% in them
+// (measured: ffmpeg at level 100 with mixed predictors, 621,149 to 618,569 on
+// the largest); the format was the only lever, and the consumer is an unfurl
+// crawler that re-encodes anyway. q92 at 4:4:4 rather than the photo tiers' 4:2:0:
+// a card is XP chrome and body text on a gradient, and it is the chroma edges of
+// text that 4:2:0 smears. Measured on garage-workers.png (263,706 B): q92/444
+// 102,814, q92/420 91,649, q88/420 79,497; a 3x crop of the q92/444 text is
+// indistinguishable from the PNG. Chrome's own `type: "jpeg"` was not used
+// because it offers no subsampling control and its encoder is not the one this
+// repository trusts for every other JPEG it ships.
 const ZENC = path.join(ROOT, "tools", "photos", "zenc", "target", "release", "zenc");
 async function writeCard(id, pngBuf) {
   if (!existsSync(ZENC)) {
@@ -236,6 +415,8 @@ async function writeCard(id, pngBuf) {
   }
 }
 
+// Boot a throwaway static server over .build/public so the generator is one
+// command. Skipped when OG_BASE names a remote origin.
 function waitForPort(port, ms = 8000) {
   const deadline = Date.now() + ms;
   return new Promise((resolve, reject) => {
@@ -247,8 +428,12 @@ function waitForPort(port, ms = 8000) {
   });
 }
 async function maybeStartServer() {
-  if (!LOCAL) return null;
+  if (!LOCAL) return null; // capturing a remote origin (production) — nothing to boot
   const port = 8787;
+  // The merged URL root (public/ + src/pages/ + src/client/ + src/styles/) is
+  // assembled by the build, so a local capture has to serve .build/public and
+  // nothing else composes it. Fail by name rather than serving an empty tree,
+  // which reads as every page having lost its demo.
   if (!existsSync(SERVE)) {
     throw new Error(`${SERVE} is missing — run \`bun run build\` before capturing against a local server`);
   }
@@ -264,8 +449,17 @@ async function main() {
   const bliss = await blissBackground();
   const pages = await listPages();
   const browser = await chromium.launch({ channel: chromeChannel(), headless: true, args: ["--hide-scrollbars"] });
-  const ctxHi = await browser.newContext({ deviceScaleFactor: 2 });
-  const ctxLo = await browser.newContext({ deviceScaleFactor: 1, viewport: { width: CARD_W, height: CARD_H } });
+  // NEITHER context sets `reducedMotion: "reduce"`, and it is the obvious
+  // companion to the `animations: "disabled"` capture, so here is why not.
+  // That option emulates `prefers-reduced-motion`, and pages these cards
+  // capture answer it with real rules: `/garage/scroll` pins `.xp-progress-fill`
+  // at `width: 60% !important` and forces `transform: none` on the zoom demo.
+  // So it would not stabilise the card, it would photograph a DIFFERENT card,
+  // which is the fallback state rather than the demo the unfurl is meant to
+  // show. `animations: "disabled"` settles the same motion under the page's
+  // normal media conditions.
+  const ctxHi = await browser.newContext({ deviceScaleFactor: 2 }); // demo capture (supersampled)
+  const ctxLo = await browser.newContext({ deviceScaleFactor: 1, viewport: { width: CARD_W, height: CARD_H } }); // 1200x630 card
   const cardPage = await ctxLo.newPage();
   const results = [];
   try {

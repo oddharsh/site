@@ -68,6 +68,8 @@ async function sample(src: string, stem: string) {
     "--size", "600", "--out", tile, "--avif-out", avif]);
   if (input !== file) fs.rmSync(input);
 
+  // <stem>.<hash8>.avif, matched as strings: the stem is a CLI argument, so it
+  // never becomes part of a pattern
   const shipped = fs.readdirSync(path.join(REPO, "public/i"))
     .find((f) => f.startsWith(`${stem}.`) && f.endsWith(".avif") && HASH8.test(f.slice(stem.length + 1, -".avif".length)));
   if (!shipped) throw new Error(`${stem}: no shipped 600px AVIF in public/i`);
@@ -77,6 +79,7 @@ async function sample(src: string, stem: string) {
   // PNG colour type, IHDR byte 25: 0 is gray
   const gray = fs.readFileSync(tile)[25] === 0;
 
+  // a higher qp writes a smaller file: find the lowest qp that fits
   let lo = 0, hi = 255, best = -1;
   while (lo <= hi) {
     const qp = (lo + hi) >> 1, out = path.join(WORK, `${stem}.${qp}.avif`);

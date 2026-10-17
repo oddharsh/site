@@ -3,6 +3,10 @@
 // redirect hop is checked BEFORE it is requested (lib/public-fetch.ts). Until
 // 2026-10-01 it checked the URL it was handed and let fetch() follow the rest,
 // so a public host that 302'd to a private address was followed.
+//
+// The fetch stub below FOLLOWS redirects itself unless asked not to, because
+// that is what the runtime does. A stub that never followed would make the old
+// code look safe too, and this test would pass on the bug it exists to catch.
 import { createHmac } from "node:crypto";
 import { assert, context, test, testGlobals } from "./contract-shared.ts";
 import { handleSerendipity } from "../serendipity/serendipity.ts";

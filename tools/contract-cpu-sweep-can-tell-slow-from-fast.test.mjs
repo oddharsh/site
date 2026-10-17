@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 const ROOT = new URL("../", import.meta.url);
+// relative to the repo root, the sweep's cwd: a relative --bundle has to name a file
 const BUNDLE = "tools/fixtures/cpu-sweep/worker.mjs";
 // node, whatever runs this test: the sweep times V8, workerd's engine
 const node = process.versions.bun ? "node" : process.execPath;
@@ -53,6 +54,8 @@ test("--gate fails on the slow route with an annotation, and passes once the all
 });
 
 test("this CPU model's factor scales every reading, and an unknown allowlist entry still fails", { timeout: 90_000 }, () => {
+  // A factor of a hundredth: a model 100x faster, so /spin's 12 ms here is about
+  // 0.12 reference ms, and only the stray entry fails.
   const { code, report } = sweep("/spin,/still", atFactor(0.01, { "/nope": { ceilingMs: 20, why: "a route that doesn't exist" } }), "--gate");
   assert.equal(report.calibration.calibrated, true);
   const spin = row(report, "/spin");
@@ -92,12 +95,17 @@ test("the committed budget names a control reference, so the drift check can't g
   assert.ok(control.drift > 0 && control.drift < 1, `control.drift is ${control?.drift}`);
 });
 
+// The warm-up has to be what makes /icu cheap, so --cold-icu, which skips it,
+// must read it heavy again. Raw milliseconds, uncalibrated.
 test("a route's first date format is cheap in a warm process, and --cold-icu shows the cold one", { timeout: 90_000 }, () => {
   const warm = row(sweep("/icu", UNCALIBRATED).report, "/icu"), cold = row(sweep("/icu", UNCALIBRATED, "--cold-icu").report, "/icu");
   assert.ok(warm.ms < 2, `warm process: /icu read ${warm.ms} ms`);
   assert.ok(cold.ms > 5, `cold process: /icu read ${cold.ms} ms, so the warm-up proves nothing`);
 });
 
+// A route measured without its bindings measures a crash: cal copies env, and a
+// binding that lived only behind the env proxy was gone from the copy, so
+// /coffee/slots.html threw on BOOKINGS. Every declared binding is an own property.
 test("a declared binding survives a copy of env", { timeout: 60_000 }, () => {
   assert.equal(row(sweep("/copy", UNCALIBRATED).report, "/copy").status, 200, "/copy lost BOOKINGS or HOST_TIMEZONE");
 });

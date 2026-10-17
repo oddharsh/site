@@ -1,5 +1,28 @@
 #!/usr/bin/env node
 // The rebuild path: turn infra.json's declared DNS records back into reality.
+//
+// check-infra.ts answers "did it drift". This answers "put it back". They are
+// deliberately separate programs: the check runs on every PR and must never be
+// able to write, so the write code does not live in the file CI executes.
+//
+// SCOPE is narrow on purpose (see infra.json's `apply` block for the full
+// reasoning): DNS records whose `match` is `exact`, and nothing else. That is
+// the exact set where infra.json knows the whole desired value. Records owned
+// by someone else (Resend's DKIM, the Cloudflare-managed proxied apex) and
+// resources owned by wrangler are excluded because recreating them from here
+// would mean inventing values this file never captured.
+//
+// This is the layer with no other tooling. Wrangler can recreate a KV namespace
+// and Workers Builds can redeploy the Worker, but nothing except this rebuilds
+// the MX/SPF/DMARC/BIMI/SVCB set, which is also the set that carries mail. That
+// is the whole reason it earns a write path.
+//
+//   bun tools/apply-infra.ts              plan only, no credential needed
+//   bun tools/apply-infra.ts --confirm    apply (needs the write token)
+//   bun tools/apply-infra.ts --prune      also delete extras on declared names
+//
+// Refuses to run in CI. A write token in GitHub would undo the property the
+// whole release design rests on: that GitHub cannot reach production.
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -22,6 +45,9 @@ if (process.env.CI) {
   process.exit(1);
 }
 
+// Only `exact` records carry a complete declared value, so only they can be
+// rebuilt. Everything else is reported as out-of-scope with its owner named,
+// rather than silently omitted, so the plan is honest about what it will NOT fix.
 const managed = infra.dns.filter((r) => r.match === "exact");
 const unmanaged = infra.dns.filter((r) => r.match !== "exact");
 
@@ -32,6 +58,11 @@ const OWNER = {
   contains: "generated and rotated by Cloudflare; only its parameters are ours",
 };
 
+// A match mode with no OWNER entry falls back to printing its own name, which
+// reads as a category rather than a reason ("HTTPS aadhar.sh  contains"). That
+// is how the HTTPS RR looked after the `contains` mode arrived in a later
+// change than this map. Fail loudly instead, so the next new mode cannot
+// quietly degrade the one list whose entire job is explaining what is skipped.
 for (const mode of new Set(infra.dns.map((r) => r.match)) as Set<string>) {
   if (mode !== "exact" && !OWNER[mode]) {
     console.error(`infra.json uses match mode ${JSON.stringify(mode)}, which has no owner explanation in apply-infra.mjs.`);
@@ -40,7 +71,23 @@ for (const mode of new Set(infra.dns.map((r) => r.match)) as Set<string>) {
   }
 }
 
-let apiRecords = null;
+// Two sources for live state, and which one is in use is a safety property, not
+// a detail.
+//
+// Public DNS over DoH is free and needs no credential, which is why a bare
+// `infra:apply` can show you a plan. But a resolver answers from cache, so it
+// lags a write by up to the record's TTL. Planning a WRITE from it is unsafe in
+// a specific, reproducible way: apply once, run again within the TTL, and the
+// second plan cannot see the record the first one just created, so it issues
+// another CREATE and you end up with duplicates. That is not hypothetical; it
+// is what the first live run of this script did to a throwaway TXT record.
+//
+// So the rule is: DoH may inform a plan, never drive a write. Whenever a token
+// exists the state comes from the Cloudflare API instead, which is the same
+// authority the writes go to and is therefore always consistent with them.
+// Since --confirm already requires a token, every applied plan is authoritative
+// by construction.
+let apiRecords = null; // name|type -> [{id, content}], populated when a token exists
 
 async function liveAnswers(name, type) {
   if (apiRecords) return (apiRecords.get(`${name}|${type}`) || []).map((r) => r.value);
@@ -52,6 +99,9 @@ async function liveAnswers(name, type) {
   return (body.Answer || []).filter((a) => a.type === RRTYPE[type]).map((a) => normalize(type, a.data));
 }
 
+// One paginated sweep of the zone, so the plan and the writes that follow read
+// the same snapshot. Also gives every record its id up front, which is what the
+// update and prune paths need anyway.
 async function loadApiRecords(zoneId, token) {
   const map = new Map();
   for (let page = 1; ; page++) {
@@ -137,6 +187,8 @@ function payload(record, value) {
   return { type: record.type, name, ttl, content: value };
 }
 
+// Resolved BEFORE the plan, not after, because which source the plan read is
+// the difference between a correct apply and a duplicate-creating one.
 const token = process.env[policy.token.env];
 
 // headers is narrowed to a plain record on purpose. RequestInit allows a Headers
@@ -168,6 +220,8 @@ if (token) {
   apiRecords = await loadApiRecords(zoneId, token);
 }
 
+// The plan, as three lists of what would change. `value`, `from` and `to` are
+// record contents, which is what the printer below interpolates.
 type PlanEntry = { record: any; value?: string; from?: string; to?: string; id?: string };
 const create: PlanEntry[] = [];
 const update: PlanEntry[] = [];
@@ -182,6 +236,9 @@ for (const record of managed) {
     blocked.push(`${record.type} ${record.name}: could not read live state (${e.message})`);
     continue;
   }
+  // Both sides through the same normaliser. Comparing a declared value against
+  // a normalised live one would be an asymmetry, and for SVCB that asymmetry is
+  // the whole bug: the declaration's param order is not the API's.
   const want = new Set(record.expect.map((v) => normalize(record.type, v))) as Set<string>;
   const have = new Set(live) as Set<string>;
 
@@ -201,6 +258,12 @@ for (const c of [...create]) {
   }
 }
 
+// Last line of defence against the failure that produced a duplicate SVCB: a
+// CREATE landing at a name+type that already holds records, where the
+// declaration only ever wanted one value. Any normaliser that stops recognising
+// an existing record as the declared one shows up here as "create beside" rather
+// than as a silent second copy. MX is unaffected, since it genuinely declares
+// several values at one name.
 for (const c of create) {
   const declared = c.record.expect.length;
   const liveCount = (apiRecords?.get(`${c.record.name}|${c.record.type}`) || []).length;
@@ -261,6 +324,9 @@ if (!pending) {
   process.exit(0);
 }
 
+// A plan we could not fully compute is not a plan, so `blocked` fails a
+// --confirm run too. Otherwise it would write the parts it did understand and
+// ignore the parts it did not.
 if (blocked.length) {
   console.error(`\nrefusing to apply: ${plural(blocked.length, "problem")} with the plan itself.`);
   for (const line of blocked) console.error(`  - ${line}`);
@@ -274,6 +340,9 @@ if (!token) {
   process.exit(1);
 }
 
+// Belt and braces. --confirm already implies a token, and a token means the
+// plan above came from the API, but assert it rather than assume it: applying a
+// plan built from cached public DNS is precisely the bug this guards.
 if (!apiRecords) {
   console.error(`\nrefusing to apply: the plan was built from public DNS, not the Cloudflare API.`);
   console.error(`Cached answers lag a write by up to the TTL, so a plan built from them can`);
@@ -294,6 +363,10 @@ for (const { record, value } of create) {
   } catch (e) { failed.push(`create ${record.type} ${record.name}: ${e.message}`); }
 }
 
+// The id comes from the same snapshot the plan was computed against, so an
+// update can never target a record the plan did not actually see. Re-querying
+// here would reintroduce a window where the zone changed under us between plan
+// and write.
 const idFor = (record, value) =>
   (apiRecords.get(`${record.name}|${record.type}`) || []).find((r) => r.value === value)?.id;
 

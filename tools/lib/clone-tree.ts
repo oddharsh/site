@@ -6,6 +6,11 @@
 // 2026-10-08); one clone of the same tree took 7.7 ms. Copy-on-write is what
 // makes it safe where a hard link would not be: later build steps rewrite
 // staged files in place, and a write to a clone never reaches the source.
+//
+// macOS under bun only, because the call comes through bun:ffi; it returns
+// false anywhere else, and on any failure (another volume, an existing
+// destination), so a caller falls back to copying. BUILD_CLONE=0 forces that
+// fallback, which is how the two paths are compared byte for byte.
 
 export async function cloneTree(src: string, dst: string): Promise<boolean> {
   if (process.platform !== "darwin" || !process.versions.bun || process.env.BUILD_CLONE === "0") return false;

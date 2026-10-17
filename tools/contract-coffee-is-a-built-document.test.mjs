@@ -19,13 +19,17 @@ import { siteConfig } from "./lib/site-config.ts";
 const ROOT = new URL("../", import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
 
+// The env build.ts bakes with: the Worker's own vars, under the /coffee prefix.
 const bakeEnv = async () => ({ ...(await siteConfig()).vars, BASE_PATH: "/coffee" });
 const SLOTS_URL = `/coffee${SLOTS_PATH}`;
+// Three open slots on two days, in the host timezone's working hours.
 const SLOTS = [
   { start: Date.UTC(2026, 9, 6, 14, 0), end: Date.UTC(2026, 9, 6, 14, 30) },
   { start: Date.UTC(2026, 9, 6, 15, 0), end: Date.UTC(2026, 9, 6, 15, 30) },
   { start: Date.UTC(2026, 9, 7, 14, 0), end: Date.UTC(2026, 9, 7, 14, 30) },
 ];
+// build.ts step 5b's own tripwire, restated: a radio carrying a slot, a day label
+// with a real weekday in it, or the no-slots note.
 const LIVE = /name="start" value=|class="xp-day-label">[A-Z][a-z]+day,|no open slots in the next/;
 
 test("cal imports the site's island contract rather than keeping a copy", async () => {
@@ -36,6 +40,8 @@ test("cal imports the site's island contract rather than keeping a copy", async 
   for (const file of ["cal/src/templates.ts", "cal/src/index.ts"]) {
     assert.match(read(file), /from\s+"\.\.\/\.\.\/src\/worker\/lib\/island\.ts"/, `${file} must import lib/island.ts`);
   }
+  // And the page ships the site's loader verbatim, so /coffee shares its CSP
+  // hash with every other island page.
   assert.ok(bookingPage(await bakeEnv()).includes(site.islandScript().html));
 });
 
@@ -53,6 +59,8 @@ test("/coffee's shell is deterministic and carries its island", async () => {
 test("the bake names no slot, and the patterns that say so do match a live list", async () => {
   const env = await bakeEnv();
   assert.doesNotMatch(bookingPage(env), LIVE);
+  // The control: the same patterns match the live fragment, the inline page,
+  // and an empty calendar's note, so the tripwire is not vacuous.
   assert.match(slotsFragment(SLOTS, env), LIVE);
   assert.match(bookingPage(env, { slots: SLOTS }), LIVE);
   assert.match(slotsFragment([], env), LIVE);
@@ -66,6 +74,7 @@ test("the placeholder is the slot list's own markup", async () => {
     assert.ok(placeholder.includes(`class="${cls}"`), `the placeholder lost .${cls}`);
     assert.ok(live.includes(`class="${cls}"`), `the live list lost .${cls}`);
   }
+  // A placeholder radio posts nothing: no name, no value, disabled.
   assert.doesNotMatch(placeholder, /<input[^>]*name=/);
   assert.match(placeholder, /<input type="radio" disabled>/);
 });
@@ -83,6 +92,7 @@ test("a slot is a native radio that names the form, so booking needs no script",
   assert.doesNotMatch(shell, /id="start"/, "the hidden start input the button script filled is gone");
   assert.match(shell, /<button type="submit" class="xp-button primary" id="submit" data-tz="America\/New_York">send request<\/button>/,
     "the submit is enabled from the start, since only a script could enable a disabled one");
+  // The relabel script is a constant: nothing caller-supplied reaches script text.
   const scripts = [...shell.matchAll(/<script>([\s\S]*?)<\/script>/gi)].map((m) => m[1]);
   const relabel = scripts.find((s) => s.includes('addEventListener("change"'));
   assert.ok(relabel, "the relabel script is still shipped");

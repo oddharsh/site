@@ -1,5 +1,4 @@
 // ── the bun pin is declared once ─────────────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, newestSeasonedCanary, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";
@@ -11,14 +10,24 @@ import { join } from "node:path";
 
 const root = fileURLToPath(ROOT);
 
+// config/bun-pin.json is the one dependency version here that no updater owns, and
+// the one that compiles the site: wrangler.config.ts builds with `bun
+// tools/build.ts`, so it decides every content-addressed /a/ and /i/ URL. Every
+// reader shares this one file, and none may carry a copy.
+
 test("the pin lib reads the same string config/bun-pin.json holds, and package.json declares none", async () => {
   const declared = JSON.parse(await readFile(new URL("config/bun-pin.json", ROOT), "utf8"));
   const pin = readPin(root);
   assert.equal(pin.version, declared.bun);
   assert.equal(pin.raw, `bun@${declared.bun}`);
+  // Fixed sources are exact npm versions; canary explicitly follows GitHub
+  // and resolves its identity at installation time.
   assert.match(pin.version, /^(canary|\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)$/);
   if (channelOf(pin.version) === "canary") assert.ok(parseVersion(pin.version).sha, "a canary pin must carry the build sha the running bun proves itself by");
 
+  // NO packageManager, on purpose. Cloudflare's build image reads that field
+  // and cannot resolve a canary in it (measured 2026-09-15, three probes), so
+  // a second declaration there is a production build waiting to stop.
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
   assert.equal(pkg.packageManager, undefined, "package.json must not carry packageManager; config/bun-pin.json is the declaration and the build image reads that field");
 });
@@ -45,11 +54,25 @@ test("writePin edits one field and reflows nothing else", async () => {
 });
 
 test("the zstd capability probe is declared once", async () => {
+  // Two copies of one measurement agree on the day they are written and rot
+  // separately after, which is the argument lib/mcp-protocol.ts already won for
+  // MCP_SUPPORTED. This probe is worse than most to duplicate, because what it
+  // detects is SILENT: a runtime that accepts `dictionary` and ignores it emits
+  // plain zstd that still decodes, so a stale copy reports a pass.
   const lib = await readFile(new URL("tools/lib/bun-pin.ts", ROOT), "utf8");
   assert.match(lib, /zstdCompressSync/, "lib/bun-pin.ts is supposed to be the one that holds the probe");
 
+  // ONE consumer today, and the list stays a list. check-bun.ts was the second
+  // until it was retired on 2026-08-24, and the next runtime control to want
+  // this probe should join this array rather than paste the three compressions.
   for (const file of ["tools/bump-bun-pin.ts"]) {
     const body = await readFile(new URL(file, ROOT), "utf8");
+    // CODE, not mention. These files EXPLAIN the probe in prose, and the first
+    // draft of this assertion read `zstdCompressSync({ dictionary })` out of a
+    // header comment and failed on it. Same shape as the
+    // workflow test stripping `echo` lines, and as every other naive scanner
+    // this repo has had to sharpen: searching source text for a token finds the
+    // paragraph describing it too.
     const code = body.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
     assert.ok(
       !/const\s+PROBE\s*=|zstdCompressSync\(/.test(code),
@@ -58,22 +81,30 @@ test("the zstd capability probe is declared once", async () => {
     assert.match(body, /from "\.\/lib\/bun-pin\.ts"/, `${file} must import the shared pin lib`);
   }
 
+  // The teeth: the stripper must not be so eager that it would miss a real
+  // re-declaration sitting in code.
   const sample = ['// zstdCompressSync({ dictionary }) in prose', 'const PROBE = zstdCompressSync(x);'].join("\n");
   const stripped = sample.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
   assert.match(stripped, /const\s+PROBE\s*=/, "the comment stripper ate a real declaration");
 });
 
 test("the probe reader calls the silent case correctly", async () => {
+  // The teeth. A reader that returned `honoured: true` for the collapsed shape
+  // would pass every real run and wave through exactly the runtime this exists
+  // to refuse, so both shapes are asserted rather than only the good one.
   assert.equal(interpretZstdProbe('{"none":73,"good":24,"wrong":73}').honoured, true);
   assert.equal(interpretZstdProbe('{"none":73,"good":73,"wrong":73}').honoured, false, "the collapse must read as NOT honoured");
   assert.equal(interpretZstdProbe("not json").honoured, null, "a probe that never ran is neither honoured nor refused");
 });
 
 test("versions compare numerically, so 1.10 is newer than 1.4, and canaries order by date under their release", () => {
+  // The one comparison a string sort gets wrong, and bun will reach 1.10.
   assert.equal(compareVersions("1.10.0", "1.4.0"), 1);
   assert.equal(compareVersions("1.4.0", "1.4.0"), 0);
   assert.equal(compareVersions("1.3.14", "1.4.0"), -1);
   assert.equal(compareVersions("2.0.0", "1.99.99"), 1);
+  // npm names the canaries of the unreleased 1.4.3 `1.4.2-canary.<date>`, so a
+  // release outranks its own canaries and two canaries compare by date, then build.
   assert.equal(compareVersions("1.4.2-canary.20260914.1", "1.4.2-canary.20260913.1"), 1);
   assert.equal(compareVersions("1.4.2-canary.20260913.2", "1.4.2-canary.20260913.1"), 1);
   assert.equal(compareVersions("1.4.2-canary.20260913.1", "1.4.2-canary.20260913.1"), 0);
@@ -93,6 +124,9 @@ test("the channel is the pin's own shape, and the npm tarball names the platform
   assert.equal(parseVersion("1.4.2").canary, null);
   assert.equal(npmVersion("1.4.2-canary.20260913.1+09bb546"), "1.4.2-canary.20260913.1");
   assert.equal(compareVersions("1.4.2-canary.20260913.1+09bb546", "1.4.2-canary.20260913.1"), 0, "the sha is identity, never order");
+  // The baseline guard: a release by version, a canary by revision, because a
+  // canary binary reports the NEXT release as its version (1.4.3 for a
+  // 1.4.2-canary tarball, measured 2026-09-14).
   assert.equal(runningMatchesPin("1.4.2", { version: "1.4.2", revision: "744846f8" }).ok, true);
   assert.equal(runningMatchesPin("1.4.2", { version: "1.4.3", revision: "09bb5463" }).ok, false);
   assert.equal(runningMatchesPin("1.4.2-canary.20260913.1+09bb546", { version: "1.4.3", revision: "09bb5463058074ef" }).ok, true);
@@ -104,6 +138,10 @@ test("the channel is the pin's own shape, and the npm tarball names the platform
     npmTarballUrl("1.4.2-canary.20260913.1", "bun-linux-x64"),
     "https://registry.npmjs.org/@oven/bun-linux-x64/-/bun-linux-x64-1.4.2-canary.20260913.1.tgz",
   );
+  // ONE installer, shared by the CI action and the Workers Builds wrapper, so
+  // the two cannot name different tarballs or verify different things for one
+  // pin. Two copies is how the CI side grew canary support the deploy side
+  // never saw (2026-09-15).
   return Promise.all([
     readFile(new URL(".github/install-bun.sh", ROOT), "utf8"),
     readFile(new URL(".github/actions/setup-bun/action.yml", ROOT), "utf8"),
@@ -130,6 +168,9 @@ test("the release-age window is read from bunfig rather than restated", async ()
   const declared = Number(match[1]);
   assert.equal(minimumReleaseAgeSeconds(root), declared);
 
+  // UNIT TRAP, and the reason this is asserted at all: pnpm counted MINUTES and
+  // bun counts SECONDS, so a faithful-looking port of the same number cuts a
+  // 24-hour window to 24 minutes. Anything under an hour is that mistake.
   assert.ok(declared >= 3600, `minimumReleaseAge is ${declared}s, which is the minutes-versus-seconds trap`);
 
   const bumper = await readFile(new URL("tools/bump-bun-pin.ts", ROOT), "utf8");
@@ -141,17 +182,31 @@ test("the release-age window is read from bunfig rather than restated", async ()
 
 test("the bumper walks the pin's channel and never crosses it", async () => {
   const body = await readFile(new URL("tools/bump-bun-pin.ts", ROOT), "utf8");
+  // STABLE: `releases/latest` skips drafts and prereleases, so the rolling
+  // `canary` tag can never become a release-channel target.
   assert.match(body, /releases\/latest/, "the stable target must come from releases/latest, which excludes prereleases");
   assert.match(body, /\^bun-v\(\\d\+\\\.\\d\+\\\.\\d\+\)\$/, "the tag must be matched as a plain bun-vX.Y.Z");
+  // CANARY: the candidate is the newest DATED canary already past gate 2's
+  // window, chosen by the resolver. It was npm's `canary` dist-tag until
+  // 2026-09-21, and that tag names the newest daily publish by definition, so
+  // gate 2 refused it every night for six nights while the job exited green.
+  // Re-reading the tag is how that deadlock comes back.
   assert.match(body, /newestSeasonedCanary\(npmMeta, window\)/, "the canary target must come from the seasoned resolver, handed bunfig's window");
   assert.doesNotMatch(body, /dist-tags"?\]?\??\.?\[?"?canary/, "the bumper must not read npm's canary dist-tag; it names a version the window refuses by construction");
   assert.match(body, /channelOf\(target\) !== channel/, "a target on the other channel must be refused");
   assert.match(body, /npmBunDist\(npmVersion\(target\)\)/, "a canary must be fetched with the registry's integrity, by the version npm names");
 
+  // The baseline guard. Without it a stale bun on PATH compares the candidate
+  // against a third runtime and reports a byte-identical build that says nothing
+  // about what production ships. check-bun.ts refused the mirror image of this
+  // (being invoked through bun, which would have compared bun with bun) and the
+  // assertion moved here when it was retired.
   assert.match(body, /baselineVersion !== pin\.version/, "the bumper must refuse a baseline that is not the pin");
 });
 
 test("the canary resolver picks the newest dated canary already past the window, never the newest publish", () => {
+  // bun publishes at ~14:20 UTC daily. Freeze "now" at 16:00 UTC on the 21st,
+  // which is the shape every one of the six deadlocked runs saw.
   const now = Date.parse("2026-09-21T16:00:00Z");
   const H = 3600;
   const meta = {
@@ -179,17 +234,25 @@ test("the canary resolver picks the newest dated canary already past the window,
   assert.notEqual(picked.version, meta["dist-tags"].canary, "the control: the dist-tag's answer is exactly the one the window refuses");
   assert.equal(picked.publishedAt, Date.parse("2026-09-20T14:20:00Z"));
   assert.deepEqual(picked.skipped, [{ version: "1.4.2-canary.20260921.1", ageSeconds: Math.floor((now - Date.parse("2026-09-21T14:20:33Z")) / 1000) }]);
+  // Gate 2 then agrees with the choice by construction, which is the property
+  // the old shape lacked: the candidate it handed gate 2 could never pass it.
   assert.ok((now - picked.publishedAt) / 1000 >= 24 * H);
 
+  // A wider window walks further back; a window nothing clears is null, not
+  // the newest thing on the list.
   assert.equal(newestSeasonedCanary(meta, 40 * H, now)?.version, "1.4.2-canary.20260919.1");
   assert.equal(newestSeasonedCanary(meta, 100 * H, now), null);
   assert.equal(newestSeasonedCanary(null, 24 * H, now), null, "no registry document is no candidate");
 
+  // Releases are never a canary candidate, however old.
   assert.equal(newestSeasonedCanary({ versions: { "1.4.2": {} }, time: meta.time }, 1, now), null);
 
+  // The next release line outranks the current one once its canary is seasoned:
+  // after 1.4.3 ships, npm names canaries 1.4.3-canary.<date>.
   const next = { versions: { ...meta.versions, "1.4.3-canary.20260918.1": {} }, time: { ...meta.time, "1.4.3-canary.20260918.1": "2026-09-18T14:20:00Z" } };
   assert.equal(newestSeasonedCanary(next, 24 * H, now)?.version, "1.4.3-canary.20260918.1");
 
+  // A canary with no publish time is skipped and named, never read as old.
   const { "1.4.2-canary.20260920.1": _dropped, ...timeWithoutThe20th } = meta.time;
   const untimed = { versions: meta.versions, time: timeWithoutThe20th };
   const p2 = newestSeasonedCanary(untimed, 24 * H, now);
@@ -201,7 +264,7 @@ test("the canary resolver picks the newest dated canary already past the window,
 test("the release asset names match what oven-sh/bun tags", () => {
   assert.equal(releaseAsset("linux", "x64"), "bun-linux-x64.zip");
   assert.equal(releaseAsset("darwin", "arm64"), "bun-darwin-aarch64.zip");
-  assert.throws(() => releaseAsset("sunos", "sparc"), /no bun release asset known/);
+  assert.throws(() => releaseAsset("sunos", "sparc"), /no bun release asset known/); // a platform pair bun has no asset for
   assert.equal(
     releaseUrl("1.4.0", "bun-linux-x64.zip"),
     "https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-x64.zip",
@@ -209,6 +272,10 @@ test("the release asset names match what oven-sh/bun tags", () => {
 });
 
 test("the suite gate runs `bun run test`'s own flags, and a failed gate reaches an issue rather than a green run", async () => {
+  // The gate restated `--preload` and dropped `--timeout=30000`, so candidates
+  // ran on bun's 5s default. bun test kills a spawnSync'd child at the timeout,
+  // which is how a cold cargo build of timbrado's engine read "exited null"
+  // every night from 2026-09-15 while validate's copy of the suite passed.
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
   const args = suiteArgs(root);
   assert.equal(["bun", "test", ...args].join(" "), pkg.scripts.test.trim().split(/\s+/).join(" "), "the gate's arguments are the test script's, word for word");
@@ -217,6 +284,8 @@ test("the suite gate runs `bun run test`'s own flags, and a failed gate reaches 
   const gates = await readFile(new URL("tools/lib/bun-gates.ts", ROOT), "utf8");
   assert.match(gates, /run\(exe, \["test", \.\.\.suiteArgs\(root\)\]/, "contractSuiteGate runs suiteArgs rather than a restated flag list");
 
+  // Behavioural: a fake `bun` that answers green ONLY when handed the fixture
+  // script's arguments. A gate that restates its flags reads red here.
   const dir = await mkdtemp(join(tmpdir(), "suite-gate-"));
   try {
     await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test --timeout=12345 --preload ./p.ts tools/" } }));
@@ -225,6 +294,7 @@ test("the suite gate runs `bun run test`'s own flags, and a failed gate reaches 
     await chmod(fake, 0o755);
     const g = contractSuiteGate(fake, dir, 10_000);
     assert.ok(g.ok, `the gate did not hand bun the script's flags: ${g.detail}; ${(g.notes ?? []).join(" ")}`);
+    // The control: the same fake refuses any other argument list.
     await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test --preload ./p.ts tools/" } }));
     assert.ok(!contractSuiteGate(fake, dir, 10_000).ok, "the fake bun accepts any flags, so the check above measures nothing");
     await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }));
@@ -233,6 +303,8 @@ test("the suite gate runs `bun run test`'s own flags, and a failed gate reaches 
     await rm(dir, { recursive: true, force: true });
   }
 
+  // The visibility half. bun-pin.yml stays green on a failed gate on purpose,
+  // so the gate has to land somewhere a person reads: timbrado's one issue.
   const yml = await readFile(new URL(".github/workflows/bun-pin.yml", ROOT), "utf8");
   assert.match(yml, /issues:\s*write/, "bun-pin.yml cannot file its issue");
   assert.equal((yml.match(/bun run bun:pin --write --json pin-report\.json/g) ?? []).length, 2, "both bumper invocations write the report");
@@ -262,6 +334,7 @@ test("suite gates read bun's summary rows, never a test name that happens to say
     "Ran 1217 tests across 177 files. [8.49s]",
   ].join("\n");
   assert.deepEqual(suiteCounts(output), { pass: 1217, fail: 0 });
+  // The control: the old pattern misreads this exact output, so the fixture can fail.
   assert.equal(Number(output.match(/(\d+) fail/)?.[1]), 1, "the fixture no longer trips the unanchored regex, so the check above measures nothing");
   assert.deepEqual(suiteCounts("no summary here"), { pass: 0, fail: -1 }, "a run with no summary reads as no verdict, never as zero failures");
 
@@ -278,6 +351,7 @@ test("suite gates read bun's summary rows, never a test name that happens to say
     await rm(dir, { recursive: true, force: true });
   }
 
+  // One reader, so the next gate cannot bring the unanchored copy back.
   for (const file of ["tools/lib/bun-gates.ts", "tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/bump-bun-pin.ts"]) {
     const src = (await readFile(new URL(file, ROOT), "utf8")).replace(/^\s*(\*|\/\/).*$/gm, "");
     const own = file === "tools/lib/bun-gates.ts" ? src.replace(/export function suiteCounts[\s\S]*?\n}\n/, "") : src;
@@ -287,6 +361,10 @@ test("suite gates read bun's summary rows, never a test name that happens to say
 });
 
 test("the cal gates read a summary that `bun run --filter` prefixed with the package name", async () => {
+  // cal's suite runs as `bun run --filter cal-aadhar-sh test`, and --filter
+  // prefixes every line. The anchor #1134 added could not see those rows, so
+  // both cal gates read "0 pass, -1 fail" over a suite that passed and filed
+  // RED on #1124 and #1170. This is cal's real tail from 2026-10-05.
   const output = [
     "cal-aadhar-sh test: (pass) a renamed D1 fails [0.10ms]",
     "cal-aadhar-sh test:  88 pass",
@@ -296,6 +374,7 @@ test("the cal gates read a summary that `bun run --filter` prefixed with the pac
     "cal-aadhar-sh test: Exited with code 0",
   ].join("\n");
   assert.deepEqual(suiteCounts(output), { pass: 88, fail: 0 });
+  // The control: the anchor without the prefix finds no summary in this exact output.
   assert.equal(output.match(/^\s*(\d+) fail$/m), null, "the fixture no longer carries the --filter prefix, so the check above measures nothing");
 
   const dir = await mkdtemp(join(tmpdir(), "cal-gate-"));
@@ -310,5 +389,6 @@ test("the cal gates read a summary that `bun run --filter` prefixed with the pac
     await rm(dir, { recursive: true, force: true });
   }
 
+  // A missing summary reads as what it is, never as "-1 fail".
   assert.equal(suiteCountsText(suiteCounts("no summary here")), "no bun test summary in the output");
 });

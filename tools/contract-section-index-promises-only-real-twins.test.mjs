@@ -15,6 +15,7 @@ const mdLinks = (index) => [...index.matchAll(/\]\((https:\/\/aadhar\.sh)(\/[^)\
 
 test("every .md a section index links is a twin the same build holds", () => {
   const { files, committed } = buildTwins(root);
+  // A committed twin (/index.md, /garage/round-trip.md) is a file the build holds too.
   const held = new Set([...files.keys(), ...committed]);
   let linked = 0;
   for (const section of INDEXED_SECTIONS) {
@@ -25,6 +26,7 @@ test("every .md a section index links is a twin the same build holds", () => {
       assert.ok(held.has(path), `/${section}/llms.txt promises ${path} and this build holds no such twin`);
     }
   }
+  // A scanner that matches nothing reports a pass; the garage index alone links a dozen.
   assert.ok(linked >= 20, `matched only ${linked} .md links across the section indexes, so the link pattern no longer fits the index`);
 });
 
@@ -48,6 +50,7 @@ test("control: the twins set is what decides, so an empty set lists every page a
   const none = renderSectionIndex("garage", manifest.surfaces, { twins: new Set() });
   assert.equal(mdLinks(none).length, 0, "with no twins held, no .md may be promised");
   assert.ok(none.includes("## HTML only"), "the HTML-only heading must appear when a page has no twin");
+  // Legacy shape, documented at the function: no set means link everything.
   const all = renderSectionIndex("garage", manifest.surfaces);
   assert.ok(mdLinks(all).length >= 20 && !all.includes("## HTML only"));
 });

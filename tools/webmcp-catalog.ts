@@ -1,5 +1,39 @@
 // webmcp-catalog.ts — does every tool this site declares reach the browser's
 // live WebMCP catalog?
+//
+// contract-webmcp-one-door-onto-the-browser-catalog reads SOURCE: no Lens page
+// tool shares a /mcp name, and nothing reaches document.modelContext around
+// webmcp.js. What it can't see is the result. The catalog is shared and
+// append-only, so a duplicate name, a schema the browser rejects, or a
+// registrar that never boots all leave the page working while the tool is gone.
+// Playwright 1.64 added page.webmcp, which lists what a page actually
+// registered, so this reads that and diffs it against what should be there:
+//
+//   - every page: the tools the ORIGIN's own /mcp answers tools/list with
+//     (webmcp.js registers exactly those), read live rather than from
+//     src/worker/mcp.ts, so a production run can't fail on deploy skew;
+//   - /lens: those plus the six page tools in lens-webmcp.js (local source).
+//
+//     bun run webmcp:check                          # production, the sample
+//     bun run webmcp:check -- /lens /whoareyou      # chosen paths
+//     ORIGIN=http://localhost:8787 bun run webmcp:check
+//
+// Exit 0 when every page matches, 1 when one doesn't, 2 when the instrument
+// failed (no WebMCP in this Chrome, or /mcp listed nothing).
+//
+// ── the control ───────────────────────────────────────────────────────────
+// It runs first, every time: the same page in a Chrome WITHOUT
+// --enable-features=WebMCP must make page.webmcp.tools() throw. If it doesn't,
+// the "live" catalog could be coming from somewhere else and a green run means
+// nothing. Measured 2026-10-11 on Chrome 155.0.8059.40, production: the control
+// throws "WebMCP is not enabled"; with the flag, /, /garage and /whoareyou read
+// the 25 /mcp tools and /lens reads 31.
+//
+// ── what it does NOT do ───────────────────────────────────────────────────
+// It doesn't gate CI. It needs a Chrome with WebMCP and a reachable origin, the
+// same reasons check-agent.ts and csp-sweep.ts run by hand. Registration
+// happens on idle (nav.js loads webmcp.js then), so each page is polled until
+// its catalog stops growing rather than read once.
 import { chromium, type Page } from "playwright-core";
 import { readFileSync } from "node:fs";
 import { chromeChannel } from "./lib/browser-channel.ts";
@@ -10,11 +44,14 @@ const args = process.argv.slice(2).filter((a) => a.startsWith("/"));
 const ROUTES = args.length ? args : ["/", "/lens", "/whoareyou", "/garage"];
 const FLAG = "--enable-features=WebMCP";
 
+// Settled means the count held for STEADY_MS; DEADLINE_MS caps a page that
+// never registers, which then reads as every tool missing.
 const POLL_MS = 250;
 const STEADY_MS = 1500;
 const DEADLINE_MS = 15_000;
 
 async function siteTools(): Promise<string[]> {
+  // The same request webmcp.js makes, so this lists what the page will.
   const response = await fetch(`${ORIGIN}/mcp`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "Mcp-Method": "tools/list" },
@@ -72,6 +109,8 @@ const browser = await chromium.launch({ channel: chromeChannel(), headless: true
 console.log(`webmcp:check: ${ORIGIN}, Chrome ${browser.version()}, control ok, /mcp lists ${site.length}, Lens declares ${lens.length}`);
 let failures = 0;
 for (const route of ROUTES) {
+  // A fresh context per page: the catalog is per document, and a reused one
+  // would carry nothing over anyway, but a fresh one can't leak storage either.
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(`${ORIGIN}${route}`, { waitUntil: "load" });

@@ -1,4 +1,16 @@
 // Submit the pages a release changed to IndexNow: `bun run indexnow`.
+//
+//   bun run indexnow -- --since <previous release commit>            # submit
+//   bun run indexnow -- --since <commit> --commit <commit> --dry-run # just list
+//
+// Reads the commit production reports, downloads the served manifests ci.yml
+// cut for it and for --since, and submits every sitemap page whose CONTENT
+// changed between them (tools/lib/indexnow.ts says what that means). The
+// after-release job in promote-production.yml runs it once per release.
+//
+// It never submits the whole site: with no --since, or no manifest for it, it
+// submits nothing and says why. Exit 0 when it submitted or had nothing to
+// submit; 1 when IndexNow refused; 2 when it could not tell what changed.
 
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
@@ -30,6 +42,7 @@ if (!prevPath) { say(`no served-manifest for ${values.since.slice(0, 12)} (it pr
 const next = parseManifest(readFileSync(nextPath, "utf8"));
 const prev = parseManifest(readFileSync(prevPath, "utf8"));
 
+// The live sitemap, not the checkout's: what is indexable is what production says.
 const sm = await fetch(new URL("/sitemap.xml", values.origin));
 if (!sm.ok) instrument(`${values.origin}/sitemap.xml answered ${sm.status}`);
 const paths = sitemapPaths(await sm.text(), host);

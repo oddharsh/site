@@ -3,9 +3,67 @@
 // q11? (bun run q11:check [-- --url <base>] [--concurrency <n>]) Gotcha 14 says
 // plain responses are brotli q11; this is what checks that they arrive that way.
 //
+// build.ts writes a q11 `.br` twin beside 500-odd files (the /a/ shell, every
+// page, the static text assets), and the Worker hands one over when a client
+// offers br. A twin that is built and never served still returns a correct body
+// of the right type, only larger, so every other check here reads it as a pass.
+// That is how /garage and /lwe shipped 16% fat for weeks in July 2026, and how
+// /llms-full.txt shipped 31.7 KB fat per fetch until 2026-09-26. The route
+// oracle's `encoding: br` rows cannot see it either: the local harness
+// re-encodes an unencoded text response to br on its own, so a row asserting
+// the header passes whether or not the twin was used.
+//
+// So this measures what arrived. For every twin in .build/public it requests
+// the URL the twin stands behind with the Accept-Encoding a browser sends,
+// decodes what comes back, re-encodes it at the build's q11 settings, and
+// judges the wire on SIZE against that re-encode. The re-encode is what makes
+// the verdict independent of which commit this checkout is on, so "is this
+// q11" is a question about the response alone. The checkout supplies only the
+// list of URLs, and a URL production does not have (an /a/ hash from a newer
+// build) reads as absent rather than failed. Run it from the deployed commit
+// for a complete list.
+//
+// SIZE, NOT BYTE IDENTITY, because q11 is not the same stream on every machine.
+// The first version demanded identity and failed /writing from a Mac: production
+// answered with the Linux-built twin (its ETag is that file's asset hash), 5,841
+// B, and macOS arm64 re-encoded the same body to 5,847 B, while on Linux x64
+// node 26, the pinned bun and the previous bun pin all reproduce 5,841 exactly.
+// q11's cost model is floating point, so an encoder built for a different
+// architecture can pick a different stream on an occasional input. That is a
+// false alarm about bytes nobody pays for, so the rule is the one a reader cares
+// about: at most q11 + max(1%, 8 B). The edge's on-the-fly encoding lands 12-26%
+// over on anything real, and drift was 0.1%. The cost is that on six tiny files
+// (four per-photo meta JSONs, /writing/posts.json, an 87 B writing .txt) the
+// edge's q4 lands within that slack of q11 or under it, so size cannot tell them
+// apart; it also cannot matter there, since nothing is over. Those twins are
+// still built ON PURPOSE: skipping them (8 B between the six) was tried on
+// 2026-09-26 and reverted the same day, owner call, because q11 everywhere keeps
+// every file in a directory behaving the same. A stream that passes on size but
+// is not byte-identical is still counted and named, because a re-encode
+// somewhere is worth seeing.
+//
+// AGAINST A LOCAL WORKER, PASS `--accept-encoding br`. wrangler's harness puts
+// miniflare's asset layer in front of the Worker, and offered the browser's
+// `gzip, deflate, br, zstd` it re-encodes every compressible response to gzip,
+// including ones the Worker already sent as br: measured 2026-09-26, 464 of 522
+// twins arrived as gzip that way, and all 522 arrived as the twin's exact bytes
+// with `br` alone. Production passes origin brotli through, which is the claim
+// the default header is here to test, so the default stays the browser's.
+//
 // Raw bytes come through node:http(s), never fetch: undici and bun's fetch both
 // decode br on the way in, which hides the one thing this measures. Both
 // runtimes leave node:http's body alone (measured 2026-09-26).
+//
+// Two controls run first, and a failed control is exit 2 with no verdict:
+//   offline  a q4 encoding of a real file must read as OVER, and its twin as
+//            q11, so the classifier can tell the two apart at all
+//   live     /robots.txt has no twin by design (the q11-twin contract test pins
+//            it as edge-direct), so it must arrive NOT at q11: 1,505 B at q4
+//            against 1,194 B at q11. If it reads q11, something between here and
+//            the Worker re-encodes, and every other row is about that instead.
+//
+// Advisory, like dcz:check: it reads production, so it must never be a required
+// check. Exit 0 every twin served at q11, 1 a finding, 2 the instrument.
 import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { request as httpRequest } from "node:http";
@@ -17,9 +75,13 @@ import {
 } from "node:zlib";
 
 const BUILT = ".build/public/";
+// What Chrome sends. The edge chooses among these, so offering br alone would
+// measure a request no browser makes.
 export const BROWSER_ACCEPT_ENCODING = "gzip, deflate, br, zstd";
 const LIVE_CONTROL = "/robots.txt";
 
+// build.ts's brotliQ11, verbatim. A drift here would read every served twin as
+// a finding, which the offline control catches before any row prints.
 export function q11(bytes: Buffer): Buffer {
   return brotliCompressSync(bytes, {
     params: {
@@ -30,6 +92,7 @@ export function q11(bytes: Buffer): Buffer {
   });
 }
 
+/** The request path a twin at `rel` (relative to .build/public) stands behind. */
 export function urlForTwin(rel: string): string {
   const plain = rel.slice(0, -3);
   if (plain.endsWith(".html") && !plain.endsWith(".src.html")) {
@@ -47,16 +110,25 @@ export function kindOfTwin(rel: string): "shell" | "page" | "text" {
   return rel.endsWith(".html.br") && !rel.endsWith(".src.html.br") ? "page" : "text";
 }
 
+/** How far over a fresh q11 encode a body may land and still count as q11. */
 export function q11Slack(q11Bytes: number): number {
   return Math.max(Math.ceil(q11Bytes * 0.01), 8);
 }
 
+// `q11` is byte-identical to this machine's re-encode; `q11-size` is a different
+// stream within the slack (encoder drift across platforms, or a re-encode that
+// cost nothing); `over` is what the edge's on-the-fly encoding looks like.
 export type Verdict =
   | { verdict: "q11"; wire: number }
   | { verdict: "q11-size"; encoding: string; wire: number; q11: number }
   | { verdict: "over"; encoding: string; wire: number; q11: number }
   | { verdict: "undecodable"; encoding: string; wire: number };
 
+/**
+ * Is `body`, as it arrived with `encoding`, no larger than the q11 encoding of
+ * its content? Judged on size against a fresh q11 encode, with byte identity
+ * reported separately rather than required (see the header for why).
+ */
 export function classify(encoding: string | null | undefined, body: Buffer): Verdict {
   const enc = (encoding || "identity").toLowerCase().trim();
   let plain: Buffer;
@@ -76,6 +148,7 @@ export function classify(encoding: string | null | undefined, body: Buffer): Ver
   return { verdict, encoding: enc, wire: body.length, q11: want.length };
 }
 
+/** Did it arrive at q11 size, byte-identical or not? */
 export const atQ11 = (v: Verdict) => v.verdict === "q11" || v.verdict === "q11-size";
 
 type Got = { status: number; encoding: string | null; body: Buffer };
@@ -120,6 +193,7 @@ async function main() {
     process.exit(2);
   }
   const twins = (await readdir(BUILT, { recursive: true })).filter((f) => f.endsWith(".br")).sort();
+  // Same floor shape as build.ts: a walk that found nothing would pass silently.
   if (twins.length < 400) {
     console.error(`q11:check found ${twins.length} twins under ${BUILT}, expected 400+ (521 on 2026-09-26); is the build complete?`);
     process.exit(2);
@@ -185,6 +259,8 @@ async function main() {
   if (absent.length) console.log(`  absent  ${absent.length} URL(s) 404 here, so this checkout differs from what ${base} serves: ${absent.slice(0, 4).map((r) => r.path).join(", ")}${absent.length > 4 ? ", ..." : ""}`);
   if (other.length) console.log(`  unread  ${other.length}: ${other.map((r) => `${r.path} (${r.error ?? r.status})`).join(", ")}`);
 
+  // At q11 size but a different stream: not a finding, and still worth a line,
+  // since a re-encode somewhere on the path is the other way to land here.
   if (drifted.length) {
     console.log(`\n${drifted.length} at q11 size in a different stream (encoder drift across platforms, or a re-encode that cost nothing):`);
     for (const r of drifted.slice(0, 10)) {

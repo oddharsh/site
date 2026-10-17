@@ -1,7 +1,28 @@
 #!/usr/bin/env node
-// gen-manifest.mjs — derive the mechanical, drift-prone projections of the site
+// gen-manifest.ts — derive the mechanical, drift-prone projections of the site
 // surface registry from site-manifest.json, so the places that used to list the
 // site's pages by hand cannot fork again.
+//
+//   bun run gen:manifest        # regen the worker module + Run fences
+//
+// What this OWNS (regenerated between markers; do not hand-edit those regions):
+//   - src/worker/lib/site-manifest.ts  — AGENT_SURFACES, the projection
+//     MCP resources/list serves (agents:true only, no shell bytes)
+//   - src/client/nav-run.js generated:garage-pages + generated:lwe-pages — the Run
+//     palette's garage/lwe sub-entries (terse {label,path,hint}, no temporal data)
+//   - src/client/nav-run.js generated:run-profiles — the desktop profiles from
+//     tools/photos/shell-data.ts
+//
+// What this deliberately does NOT own (hand-authored, VERIFIED by the site-manifest
+// check in build.ts's invariants phase):
+//   - sitemap.xml — carries per-page hand-tuned <lastmod>; generating would
+//     flatten a real SEO freshness signal. build.ts enforces coverage instead.
+//   - src/pages/garage/index.html — rich hand-written gallery cards. Verified.
+//   - nav-run.js top-level PAGES (Home/photos/…) — hand-authored. Verified both ways.
+//
+// The projection functions below are PURE and exported, so build.ts re-runs the
+// exact same logic in-memory and fails the deploy if a committed output drifts.
+// Only main() touches the filesystem, and only when run directly.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { PROFILES } from "../tools/photos/shell-data.ts";
@@ -15,11 +36,14 @@ export function readManifest() {
   return JSON.parse(readFileSync(MANIFEST, "utf8"));
 }
 
+// palette label: "<section> · <short|last-path-segment>" — a few surfaces carry a
+// custom `short` the path can't spell (vigenère's accent, "programmable crypto").
 const seg = (p) => p.split("/").pop();
 const paletteLabel = (s) => `${s.section} · ${s.short || seg(s.path)}`;
 const navEntry = (s) =>
   `    { label: ${JSON.stringify(paletteLabel(s))}, path: ${JSON.stringify(s.path)}, hint: ${JSON.stringify(s.hint)} },`;
 
+// the Run-palette entries for one fenced section (garage / lwe), in registry order.
 export function navFenceBody(surfaces, section) {
   return surfaces
     .filter((s) => s.section === section && s.kind === "content" && s.flags.run)
@@ -27,6 +51,8 @@ export function navFenceBody(surfaces, section) {
     .join("\n");
 }
 
+// The Run island is a browser projection of the same profiles the shell compiler
+// stamps onto the desktop. This fence keeps search and visible shortcuts exact.
 export function runProfilesBody(profiles = PROFILES) {
   return profiles.map((profile) => {
     const fields = ["label", "icon", "hint", "url"]
@@ -37,12 +63,19 @@ export function runProfilesBody(profiles = PROFILES) {
   }).join("\n").replace(/,$/, "");
 }
 
+// the agent catalog: only agents:true surfaces, only the fields resources/list
+// needs, so the worker bundle carries a purpose-built list rather than the registry.
+// mimeType selects the on-site representation for both discovery and reads.
 export function agentSurfaces(surfaces) {
   return surfaces
     .filter((s) => s.flags.agents)
     .map((s) => ({ path: s.path, title: s.title, mimeType: s.mimeType ?? "text/html", description: s.description }));
 }
 
+// the webmention projection: paths that accept an inbound mention. A section
+// surface flagged webmention (e.g. /writing) also vouches for its leaf content,
+// which lives in its own registry (posts.json) rather than here — webmention.ts
+// resolves those, so this list stays exactly "what the manifest itself knows".
 export function webmentionPaths(surfaces) {
   return surfaces.filter((s) => s.flags.webmention).map((s) => s.path);
 }

@@ -1,5 +1,4 @@
 // ── /mcp: the 2026-07-28 dual-era contract ──────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   MODERN_META,
   assert,
@@ -29,6 +28,7 @@ test("server/discover answers identity, versions and capabilities in one round t
   assert.deepEqual(result.capabilities, { tools: {}, resources: {} });
   assert.equal(result._meta["io.modelcontextprotocol/serverInfo"].name, "aadhar.sh");
   assert.ok(result.instructions.length > 20);
+  // server/discover is a cacheable result like the list methods.
   assert.equal(typeof result.ttlMs, "number");
   assert.equal(result.cacheScope, "public");
 });
@@ -42,9 +42,13 @@ test("an unsupported protocol version is refused with the list the client can re
 
   assert.equal(error.code, -32022, "UnsupportedProtocolVersion, from the reserved -32020..-32099 range");
   assert.equal(error.message, "Unsupported protocol version");
+  // The data payload is the whole point: without `supported` the client has
+  // nothing to retry with, and this error is also how a dual-era client
+  // RECOGNISES a modern server, so its shape is load-bearing.
   assert.equal(error.data.requested, "1900-01-01");
   assert.ok(error.data.supported.includes("2026-07-28"));
 
+  // A version we do speak passes the gate.
   const ok = await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 8, method: "tools/list", params: { ...MODERN_META } }), {}, context());
   assert.ok((await ok.json()).result.tools.length > 0);
 });
@@ -65,10 +69,13 @@ test("a modern request without clientCapabilities is malformed, and a legacy one
   assert.deepEqual(error.data.missing, ["io.modelcontextprotocol/clientCapabilities"]);
   assert.equal(res.status, 400, "the spec pins this one to 400 on HTTP");
 
+  // A legacy caller sends no `_meta` at all and MUST still be served at 200.
   const legacy = await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 12, method: "tools/list" }), {}, context());
   assert.equal(legacy.status, 200);
   assert.ok((await legacy.json()).result.tools.length > 0, "no _meta is legacy, not malformed");
 
+  // Empty is a valid declaration; a non-object is not. Accepting the key's mere
+  // presence would make this a spelling check instead of a contract.
   for (const [caps, ok] of [[{}, true], [{ roots: {} }, true], [true, false], ["none", false], [[], false], [null, false]]) {
     const r = await handleSiteMcp(mcpPost({
       jsonrpc: "2.0", id: 13, method: "tools/list",
@@ -78,6 +85,8 @@ test("a modern request without clientCapabilities is malformed, and a legacy one
     assert.equal(!body.error, ok, `clientCapabilities: ${JSON.stringify(caps)} should ${ok ? "pass" : "be refused"}`);
   }
 
+  // Version first: a caller on a version we do not speak is told THAT, not that
+  // its `_meta` is malformed under a revision it never claimed to follow.
   const both = await handleSiteMcp(mcpPost({
     jsonrpc: "2.0", id: 14, method: "tools/list",
     params: { _meta: { "io.modelcontextprotocol/protocolVersion": "1900-01-01" } },
@@ -97,6 +106,7 @@ test("a modern request without clientCapabilities is malformed, and a legacy one
 });
 
 test("every result carries resultType and server identity, and lists carry cache hints", async () => {
+  // tools/call needs a real binding to reach a tool; the list methods do not.
   const env = { ASSETS: staticAssets({
     "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes", text: "cloudflare", kind: "writing" }] },
   }) };
@@ -118,6 +128,7 @@ test("every result carries resultType and server identity, and lists carry cache
     assert.equal(result.resultType, "complete", `${method} must carry resultType`);
     assert.equal(result._meta["io.modelcontextprotocol/serverInfo"].name, "aadhar.sh", `${method} must identify the server`);
     if (cacheable) {
+      // CacheableResult: a freshness hint so a client can cache instead of poll.
       assert.ok(result.ttlMs > 0, `${method} must carry ttlMs`);
       assert.ok(["public", "private"].includes(result.cacheScope), `${method} must carry cacheScope`);
     }
@@ -137,7 +148,7 @@ test("the legacy initialize handshake still works and never hands back a modern 
   for (const [asked, expected] of [
     ["2025-06-18", "2025-06-18"],
     ["2024-11-05", "2024-11-05"],
-    ["2026-07-28", "2025-06-18"],
+    ["2026-07-28", "2025-06-18"],   // modern version over the legacy door
     [undefined,    "2025-06-18"],
   ]) {
     const res = await handleSiteMcp(mcpPost({
@@ -149,6 +160,7 @@ test("the legacy initialize handshake still works and never hands back a modern 
     assert.equal(result.serverInfo.name, "aadhar.sh");
   }
 
+  // A legacy client sends no _meta and must still be served, not version-gated.
   const legacy = await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 2, method: "tools/list" }), {}, context());
   assert.ok((await legacy.json()).result.tools.length > 0, "a request with no _meta is legacy, not invalid");
 });
@@ -160,6 +172,7 @@ test("the routing headers are checked when present and never required", async ()
   // transport layer, which is the row of the spec's compatibility matrix this
   // server exists to avoid.
   assert.ok((await (await handleSiteMcp(mcpPost(body), {}, context())).json()).result);
+  // Agreeing: fine.
   assert.ok((await (await handleSiteMcp(mcpPost(body, { "mcp-method": "tools/list" }), {}, context())).json()).result);
   // Disagreeing: refused. This is the case the header exists to prevent — an
   // intermediary authorizing tools/list while the body calls a tool.

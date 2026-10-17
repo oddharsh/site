@@ -2,12 +2,30 @@
 // Build the compact English quadgram table the /lwe/vigenere solver demo scores
 // candidate decrypts against.
 //
+// WHY THIS SHAPE. The demo hill-climbs a key against an n-gram model, which is
+// the one part of a Vigenere solver that needs DATA rather than code. A full
+// model is 46,040 quadgrams with counts, 83.1 KB brotli, which is bigger than
+// nav.js and luna.css put together for a demo nobody has clicked yet.
+//
+// Two cuts, both measured (2026-08-11) against the ported solver:
+//
+//   1. RANK ORDER ONLY, no counts. The scorer needs a monotone log-probability,
+//      not the true one, so a Zipf curve over the rank reproduces the real
+//      table's verdict on every test case. Counts are ~60% of the bytes.
+//   2. TOP 4,000. Solves a 200-letter text under a 10-letter key, a 150-letter
+//      text under a 7-letter key, and a 61-letter text under a 6-letter key.
+//      It MISSES a 61-letter text under a 10-letter key, which the full table
+//      gets; that case is 6 letters per column, and the demo says so out loud
+//      rather than hiding it. Losing that case is what buys 7.9 KB over 83.1.
+//
 // Source table: buttcrack (github.com/0xdiid/buttcrack, MIT, Copyright 2026
 // diid), src/buttcrack/data/english_quadgrams.txt, itself the standard
 // practicalcryptography.com English quadgram counts. Pinned to the one commit
 // that has touched that file, and regenerating from it reproduces the committed
 // public/lwe/quadgrams.txt byte for byte (checked 2026-10-01):
 // https://raw.githubusercontent.com/0xdiid/buttcrack/c398ef10b5810f14e3065f9addea871bce028ffe/src/buttcrack/data/english_quadgrams.txt
+//
+// Usage: node tools/photos/gen-quadgram-table.ts <path-to-english_quadgrams.txt>
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { brotliCompressSync, constants } from "node:zlib";
@@ -42,6 +60,9 @@ const total = rows.reduce((sum, [, count]) => sum + count, 0);
 const kept = rows.slice(0, KEEP);
 const table = kept.map(([gram]) => gram).join("");
 
+// The solver derives every score from a gram's RANK, so the one number it needs
+// from the real counts is where the curve starts: log10 of the top quadgram's
+// share of the corpus. Printed here so the constant in the page can cite it.
 const top = Math.log10(kept[0][1] / total);
 const floor = Math.log10(0.01 / total);
 

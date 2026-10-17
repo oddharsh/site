@@ -2,6 +2,23 @@
 // an INSTRUMENT: it runs moving targets through gates this repository already
 // holds its pins to, and files at most one quiet issue per leg. Every
 // assertion here is about the ways an instrument turns into something else.
+//
+//   1. it never writes a pin, opens a PR, or holds a Cloudflare credential
+//   2. the gates are shared with the bumper rather than copied
+//   3. every Playwright launch reads the channel from one place
+//   4. the legs' reports flow through timbrado's reporter unchanged: the
+//      verdict strings, the signature, the browsers leg's tables
+//   5. the honest-false detector matches the page's own convention, and the
+//      shipped-card scanner finds the cards
+//   6. every upstream watch names a thread, RUNS on the pinned bun, and
+//      answers a boolean rather than "did not run"
+//   7. timbrado itself is pinned to a full commit sha, so the frozen lockfile
+//      is the whole guarantee about which reporter runs
+//
+// The reporter's decision table and the digest parser are timbrado's and are
+// asserted in its conformance suite, so nothing here restates them. 5 and 6
+// are the ones that could pass while measuring nothing, which is why each
+// carries a control that has to come back non-empty.
 
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
@@ -71,7 +88,7 @@ test("every Playwright launch in tools reads its channel from browser-channel.ts
     const src = await readFile(file, "utf8");
     if (!/from "playwright-core"/.test(src)) continue;
     const rel = file.slice(dir.length);
-    if (rel === "canary-browsers.ts") continue;
+    if (rel === "canary-browsers.ts") continue; // it launches every engine by name; the channel IS its input
     assert.doesNotMatch(src, /channel:\s*"chrome/, `tools/${rel} hardcodes a Chrome channel; use chromeChannel()`);
     if (/chromium\.launch\(/.test(src)) {
       assert.match(src, /channel: chromeChannel\(\)/, `tools/${rel} launches Chromium without chromeChannel()`);
@@ -90,6 +107,8 @@ test("chromeChannel() reads CHROME_CHANNEL and defaults to stable Chrome", () =>
 });
 
 test("the legs' reports flow through timbrado's reporter: leg-shaped JSON, the verdict strings, the browsers tables", () => {
+  // A leg writes `leg`; the workflow passes `--target <leg>`, and the reporter
+  // reads `target`. The join is one word, so it is pinned here.
   const asTimbrado = (report, target) => ({ ...report, target });
   const red = asTimbrado({ leg: "bun", verdict: "red", signature: "red:zstd honours `dictionary`", subject: { revision: "1.4.3-canary.1+b820c70d6" }, gates: [{ name: "zstd honours `dictionary`", ok: false, detail: "73 none / 73 good | 73 wrong" }] }, "bun");
   assert.deepEqual(plan(red, null), { kind: "create" });
@@ -99,6 +118,8 @@ test("the legs' reports flow through timbrado's reporter: leg-shaped JSON, the v
   assert.ok(body.includes("Reproduce with `bun run canary:bun`"));
   assert.deepEqual(plan(red, { number: 7, text: body }), { kind: "none" }, "the same signature already on the issue stays quiet");
   assert.equal(title("bun", "2026-10-09"), "timbrado: bun (2026-10-09)", "a filed issue carries the day it was filed");
+  // #1245 and #816 were filed undated and are still open: the reporter has to
+  // keep finding them, or the next red night files a dated twin beside each.
   assert.ok(isTitleFor("timbrado: bun", "bun") && isTitleFor("timbrado: browsers", "browsers"), "an undated issue is still the open one");
   assert.ok(!isTitleFor("timbrado: bun-pin (2026-10-09)", "bun"), "the bun leg never claims the bun-pin issue");
 
@@ -165,11 +186,15 @@ test("every upstream watch names a thread, and every bun watch RUNS on the pinne
 });
 
 test("every wrangler watch has a runner in the wrangler leg, which otherwise skips it without a word", async () => {
+  // canary-wrangler.ts looks each watch up by name and `continue`s past a
+  // miss, so a watch declared without a runner is a row that never appears.
   const leg = await readFile(new URL("tools/canary-wrangler.ts", ROOT), "utf8");
   for (const w of WRANGLER_WATCHES) assert.ok(leg.includes(`"${w.name}": (tree`), `${w.name} has no runner in canary-wrangler.ts`);
 });
 
 test("the Temporal watch reads a Temporal with a broken clock as NOT landed", () => {
+  // The control is the #6907 build: Temporal present, Temporal.Now at epoch 0.
+  // Reading that as landed would announce the one build the watch exists for.
   assert.equal(interpretTemporalProbe('{"present":true,"skewMs":-1790000000000,"date":"2026-06-01"}').landed, false);
   assert.equal(interpretTemporalProbe('{"present":true,"skewMs":3,"date":"2026-06-01"}').landed, true);
   assert.equal(interpretTemporalProbe('{"present":false,"skewMs":null,"date":"2026-06-01"}').landed, false);
@@ -186,6 +211,11 @@ test("timbrado is pinned to a full commit sha, so the frozen lockfile is the who
 });
 
 test("a missing Rust engine is an instrument failure, never eight watch rows reading null", async () => {
+  // timbrado 0.2.0 answers a missing engine as `landed: null`, and null never
+  // moves a verdict, so the bare re-export would let the bun leg print GREEN
+  // over unmeasured rows. The list module has to export its OWN runWatch,
+  // behind a guard that throws, and the leg has to ask for the engine before
+  // it spends minutes downloading and building a canary.
   const lib = strip(await readFile(new URL("tools/lib/upstream-watches.ts", ROOT), "utf8"));
   assert.doesNotMatch(lib, /export \{[^}]*\brunWatch\b[^}]*\} from "timbrado\/watch"/, "runWatch is re-exported bare from timbrado; a missing engine would read null");
   assert.match(lib, /export function runWatch\([^)]*\)[^{]*\{\s*ensureTimbradoEngine\(\);/, "the exported runWatch builds the engine before it measures");
@@ -196,6 +226,10 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
   assert.ok(ensureAt < leg.indexOf("for (const w of BUN_WATCHES)"), "the engine is asked for after the watch loop it exists for");
   assert.match(leg.slice(ensureAt, ensureAt + 400), /emit\("instrument", bare, [^)]*engine[^)]*\);\s*process\.exit\(2\);/, "an engine that cannot be built is exit 2, the instrument, so the reporter files nothing");
 
+  // The BUMPER runs the same suite gate, and it did not ask. So the suite's
+  // first watch paid for a cold cargo build under bun's clock, bun test killed
+  // cargo at 5010ms, and the pin sat still for eleven nights while bun-pin.yml
+  // read the failed gate as green (2026-09-15 to 09-26).
   const bumper = strip(await readFile(new URL("tools/bump-bun-pin.ts", ROOT), "utf8"));
   const askAt = bumper.indexOf("ensureTimbradoEngine();");
   assert.ok(askAt > 0, "bump-bun-pin.ts never asks for the engine, so the suite gate builds it on the candidate's clock");
@@ -204,11 +238,17 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
   assert.ok(askAt > bumper.indexOf("is not proposable yet"), "the bumper builds the engine before gates 1 and 2, so every quiet night pays a cargo build");
   assert.match(bumper.slice(askAt, askAt + 400), /process\.exit\(2\);/, "an engine the bumper cannot build is exit 2, which bun-pin.yml reds, never a failed gate it reads as green");
 
+  // CI is the third caller of the same suite, and it did not ask either: the
+  // cold build ran inside one test's 30s and killed cargo in the bun legs of
+  // runs 36294774979 and 36285475911.
   const ci = await readFile(new URL(".github/workflows/ci.yml", ROOT), "utf8");
   const buildAt = ci.indexOf("ensureTimbradoEngine()");
   assert.ok(buildAt > 0, "CI never builds timbrado's engine, so the suite builds it on one test's clock");
   assert.ok(buildAt < ci.indexOf("Run the contract suite"), "CI builds the engine after the suite that needs it");
 
+  // Behavioural: point TIMBRADO_BIN (timbrado's own override, read on every
+  // call) at an engine that does not exist. The guard and the wrapped runWatch
+  // both have to THROW; a `{ landed: null }` return here is the exact failure.
   const had = process.env.TIMBRADO_BIN;
   process.env.TIMBRADO_BIN = "/definitely/not/a/timbrado/engine";
   try {
@@ -218,6 +258,9 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
     if (had === undefined) delete process.env.TIMBRADO_BIN;
     else process.env.TIMBRADO_BIN = had;
   }
+  // The control: with nothing named, the guard returns an engine that exists
+  // and is executable, which is what the "every bun watch RUNS" test above
+  // rests on without saying so.
   const engine = ensureTimbradoEngine();
   const probe = spawnSync(engine, ["--version"], { encoding: "utf8" });
   assert.match(probe.stdout, /^timbrado \d+\.\d+\.\d+/, `${engine} --version answered ${JSON.stringify(probe.stdout)}`);
@@ -234,13 +277,22 @@ test("the JXL fixture is a real codestream and the live probes are named where t
 });
 
 test("every name in the browsers leg's default pairs is an installation target the pinned playwright accepts", () => {
+  // The installer's target list is narrower than its launch channels and it
+  // moves: `chromium-tip-of-tree` and `firefox-beta` were valid when the leg
+  // was written and refused by playwright-core 1.63, which killed the first
+  // scheduled run at the install step. `--dry-run` answers without a download.
   const names = [...new Set(DEFAULT_PAIRS.split(",").flatMap((p) => p.split(":")))];
   assert.ok(names.length >= 4, "the default pairs collapsed");
   for (const name of names) {
+    // The workflow runs the installer under bun since 2026-09-16 (canary.yml,
+    // the browsers job, which sets up no node at all now); this mirrors it.
     const runtime = process.versions.bun ? process.execPath : "bun";
     const run = spawnSync(runtime, ["node_modules/playwright-core/cli.js", "install", "--dry-run", name], { cwd: fileURLToPath(ROOT), encoding: "utf8", timeout: 60_000 });
     assert.doesNotMatch(`${run.stdout}${run.stderr}`, /Invalid installation targets/, `${name} is not an installation target of the pinned playwright-core`);
   }
+  // The image ships only the bundled engines, so every branded channel a pair
+  // launches has to be on the workflow's install line too. Pairing chrome-beta
+  // with `chrome` instead of the bundled chromium (#816) added one.
   const yml = readFileSync(fileURLToPath(new URL(".github/workflows/canary.yml", ROOT)), "utf8");
   const installed = yml.match(/playwright-core\/cli\.js install ([\w\s-]+?) \|\|/)?.[1]?.split(/\s+/) ?? [];
   assert.ok(installed.length, "canary.yml's browsers leg no longer installs channels where this test looks");

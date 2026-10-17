@@ -13,6 +13,7 @@ require_zenc_avif() {
   pkg-config --atleast-version=1.0.0 libavif || {
       echo "error: libavif development files >= 1.0 are required (brew install libavif)" >&2; return 1;
   }
+  # Run even for an existing binary: Cargo checks sources, compiler and lock.
   (cd "$directory/../../.." && cargo build --release --locked \
     --manifest-path "$directory/Cargo.toml" --target-dir "$directory/target") >&2 || return 1
   # config/tools.json names this second version query zenc-avif: it records

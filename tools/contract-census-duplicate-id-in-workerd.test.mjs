@@ -19,6 +19,14 @@
 // the first one reads `WorkflowError: (instance.already_exists) ...` instead,
 // which is why the capture happens in the Worker, where cronCensus runs.
 //
+// THE FIRST RUN OF THIS FOUND THE REAL BUG, and it was not the regex. The
+// regex matched. What failed was the id: censusInstanceId kept `.` in its
+// allowed set, every roster label is a hostname, and the binding's pattern is
+// `^[a-zA-Z0-9_][a-zA-Z0-9-_]*$`. With the dotted ids the very first create
+// below was refused ("Workflow instance has invalid id") before uniqueness was
+// ever consulted, and every roster id carries a dot, so a sweep could only
+// count sixteen `failed`. The raw row and the sweep rows both hold that shut.
+//
 // The fixture's Workflow is a no-op bound as CENSUS_WORKFLOW, so no instance
 // scans a roster host: the real CensusWorkflow's run() would fetch sixteen
 // sites. The fixture imports the real census.ts, so the id, the classifier and
@@ -90,6 +98,16 @@ export default {
 };
 `;
 
+// A STALE INSTALL FAILS THE CONTROL EXACTLY LIKE A REGRESSION DOES. Measured
+// 2026-09-27: a worktree whose node_modules still held the previous pin
+// (b168333, workerd 1.20260921.1) under a lockfile naming 3572193 failed the
+// control below every run, while CI passed on the same commit. The older
+// binding predates workers-sdk#14847, so it really does accept a repeated id,
+// and the old message blamed the binding. The store path carries the tarball's
+// sha, so the message compares it against the pin and says which case it is.
+// The parse is tools/lib/wrangler-provenance.ts, which check-wrangler also
+// reads, so `bun run check-wrangler` names the same stale tree without
+// booting workerd.
 function wranglerProvenance() {
   const pin = JSON.parse(readFileSync(new URL("package.json", ROOT), "utf8")).devDependencies.wrangler;
   const manifest = realpathSync(createRequire(import.meta.url).resolve("wrangler/package.json"));
@@ -111,8 +129,11 @@ function wranglerProvenance() {
 /** cronCensus's return, as the fixture serialises it.
  *  @typedef {{ ok: boolean, created: number, duplicate: number, failed: number, ymd: string }} Sweep */
 
+// Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.
 const DISPATCH = "a same-day census re-run counts every host as a duplicate, measured on the pinned workerd";
 test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
+  // Production's flags, for the reason the encodeBody probe gives: a binding
+  // measured under different flags is a measurement of a different runtime.
   const site = parseJsonc(await configText("cloudflare.config.ts"));
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "census-dup-")));
   writeFileSync(join(dir, "worker.js"),
@@ -137,6 +158,10 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
       return response.json();
     };
 
+    // THE CONTROL, first. The instrument can only see a duplicate if the
+    // binding enforces uniqueness at all, so a second create that returns
+    // quietly fails here by name rather than letting every row below pass for
+    // a binding that never refuses anything.
     const raw = /** @type {{ id: string, first: Attempt, second: Attempt, invalid: Attempt }} */ (
       await call("/create-twice"));
     assert.equal(raw.first.threw, false,
@@ -144,26 +169,36 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
     assert.equal(raw.second.threw, true,
       `a second create with the same id returned quietly: ${raw.second.threw ? "" : wranglerProvenance()}`);
 
+    // The real classifier, on the real error object, inside workerd.
     assert.match(String(raw.second.message), /instance\.already_exists|already exists/,
       `the duplicate error changed shape: ${JSON.stringify(raw.second.message)}`);
     assert.equal(raw.second.duplicate, true,
       `isDuplicateInstance did not recognise the binding's duplicate error: ${JSON.stringify(raw.second.message)}`);
 
+    // And the other refusal the binding makes, which must stay a failure: an
+    // invalid id counted as a duplicate would be a sweep that did nothing and
+    // reported sixteen harmless skips.
     assert.equal(raw.invalid.threw, true, "the binding accepted an id with a dot in it");
     assert.equal(raw.invalid.duplicate, false,
       `isDuplicateInstance classified an invalid-id refusal as a duplicate: ${JSON.stringify(raw.invalid.message)}`);
 
+    // The dispatch itself, twice, through cronCensus. The first sweep is the row
+    // that fails if an id ever turns illegal again, whichever host it is.
     const firstSweep = /** @type {Sweep} */ (await call("/sweep"));
     assert.deepEqual(
       { created: firstSweep.created, duplicate: firstSweep.duplicate, failed: firstSweep.failed },
       { created: CENSUS_ROSTER.length, duplicate: 0, failed: 0 },
       `the first sweep of the day should create one instance per host: ${JSON.stringify(firstSweep)}`);
 
+    // The record, in real SQLite: one `dispatched` row per host.
     const dispatched = /** @type {{ ymd: string, host: string, stage: string, outcome: string, detail: string | null }[]} */ (await call("/runs"));
     assert.deepEqual(dispatched.map((r) => [r.ymd, r.stage, r.outcome]),
       CENSUS_ROSTER.map(() => [firstSweep.ymd, "dispatch", "dispatched"]),
       `the first sweep's record is wrong: ${JSON.stringify(dispatched)}`);
 
+    // One host's instance finishes before the re-run. Its `written` has to
+    // survive the re-run's dispatch rows, which is the WHERE clause on
+    // CENSUS_RUN_UPSERT_DISPATCH, checked where SQLite actually parses it.
     await call(`/scan-written?ymd=${firstSweep.ymd}`);
     const secondSweep = /** @type {Sweep} */ (await call("/sweep"));
     assert.equal(secondSweep.ymd, firstSweep.ymd,
@@ -186,6 +221,8 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
 }));
 
 test("isDuplicateInstance refuses errors that are not a duplicate id", () => {
+  // Host-side, for the shapes the Worker above cannot easily produce. The
+  // proxy spelling is the harness's own, recorded the same day.
   assert.equal(isDuplicateInstance(new Error(
     "WorkflowError: (instance.already_exists) Workflow instance with id \"x\" already exists")), true);
   assert.equal(isDuplicateInstance(new Error("Workflow instance has invalid id")), false);

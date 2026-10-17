@@ -1,5 +1,63 @@
 // UPSTREAM WATCHES: the fixes this repository is waiting on, each as a probe
 // that reads FALSE today and TRUE the day the fix lands.
+//
+// The canary legs were built to diff a moving target against a fixed pin and
+// report a regression. A watch inverts that: it is a control that is expected
+// to fail on the pinned toolchain, and the interesting event is the first
+// green. Every entry below is an issue this repository filed or commented on,
+// with the one-line reproduction from that issue turned into a script that
+// prints `{ landed, detail }`. canary-bun.ts runs each one under the PINNED
+// bun and under the candidate and reports the rows that disagree; the day a
+// canary answers `landed: true` where the pin answers false, the nightly issue
+// says which fix arrived and in which build, and the reader has a bun to pin.
+//
+// A watch that reads landed in BOTH is one to retire: the pin already carries
+// the fix, the upstream issue can be closed if it is still open, and the row
+// is noise from then on. The reporter says so in the table.
+//
+// ONE ENTRY WATCHES A PACKAGE RATHER THAN BUN. `oxc-minifier-reaches-swc-parity`
+// reads the pinned oxc-minify, which dependabot bumps, so it answers the same
+// under pin and canary and can only ever arrive as "landed in both" the first
+// night after a bump. For that row, "landed in both" is the finding rather than
+// the cue to retire, and its comment says which threads it waits on.
+//
+// THREE RULES for an entry, because a watch that cannot fail is decoration:
+//
+//   1. It was measured false on the pinned bun the day it was written, and
+//      the measurement is recorded beside it. A probe that reads true on the
+//      first run is not watching anything.
+//   2. It probes the BEHAVIOUR the issue is about rather than a version
+//      string, because bun ships fixes in canaries whose `--version` is the
+//      next release and robobun's fix PRs land in any order.
+//   3. It prints one JSON line and nothing else, so a probe that crashes reads
+//      as `landed: null` (did not run) rather than as either answer. `null`
+//      never flips a verdict; a watch is advisory by construction.
+//
+// Scripts are plain JavaScript for `bun -e`, run in a scratch directory the
+// runner creates and removes, so a watch may write files there and nowhere
+// else. The two image fixtures are inline: a 2x1 8-bit PNG (black, white)
+// and a 1x1 16-bit PNG whose low sample byte an 8-bit decode has to lose.
+//
+// THE RUNNER IS TIMBRADO'S, since 2026-09-15. This file is the LIST, which is
+// this repository's; the probe runner, the row semantics (`null` never moves
+// a verdict) and the signature live in github.com/oddharsh/timbrado, the
+// tool extracted from these legs, and are re-exported here so the legs keep
+// one import path. A change to how a watch is read is a change there.
+//
+// THE RUNNER IS A RUST BINARY since timbrado 0.2.0 (2026-09-20 here), built
+// on demand from the installed package the way zenc is. Two facts decide the
+// shape of `ensureTimbradoEngine` below. bun lays the git dependency out
+// under `node_modules/.bun/timbrado@github+oddharsh+timbrado+<sha>/`, so a pin
+// bump is a FRESH directory with no `target/` in it and "build when missing"
+// is sound; cargo's own fingerprint check makes the every-run form cost ~0.2s
+// when nothing moved, so it runs every time like zenc's guard does. And
+// timbrado's `runWatch` answers a MISSING engine as `landed: null` ("did not
+// run"), which by rule 3 above never moves a verdict: a leg reading eight
+// unmeasured rows would print GREEN over them. So the `runWatch` this module
+// exports is a wrapper that builds first and THROWS when it cannot, and
+// canary-bun.ts turns that throw into exit 2 before it downloads anything.
+// `TIMBRADO_BIN` (an absolute path to a built engine) skips the build, which
+// is timbrado's own override and the one a runner without cargo would use.
 
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -14,11 +72,18 @@ import { OXC_MINIFY_OPTIONS } from "./oxc-minify-options.ts";
 export type { Watch, WatchResult } from "timbrado/watch";
 export { checkWatch, watchMoved, watchRow, watchSignature } from "timbrado/watch";
 
+/** The installed timbrado package, wherever bun laid it out (a symlink into node_modules/.bun). */
 export const TIMBRADO_PACKAGE = dirname(createRequire(import.meta.url).resolve("timbrado/package.json"));
+/** Where `cargo build --release` in that package puts the engine, and where timbrado's own loader looks. */
 export const TIMBRADO_ENGINE = join(TIMBRADO_PACKAGE, "target", "release", "timbrado");
 
 let built: string | null = null;
 
+/**
+ * Makes sure timbrado's Rust engine exists and returns its path. Honours
+ * `TIMBRADO_BIN`; otherwise builds it in place from the installed package.
+ * Throws rather than degrading, because the degraded reading is `null`.
+ */
 export function ensureTimbradoEngine(): string {
   const named = process.env.TIMBRADO_BIN;
   if (named !== undefined) {
@@ -35,6 +100,7 @@ export function ensureTimbradoEngine(): string {
   return (built = TIMBRADO_ENGINE);
 }
 
+/** timbrado's `runWatch`, behind the engine guard: a missing engine throws here instead of reading `null`. */
 export function runWatch(exe: string, watch: Watch, timeoutMs?: number): Reading {
   ensureTimbradoEngine();
   return measureWatch(exe, watch, timeoutMs);
@@ -46,6 +112,10 @@ const PNG_1X1_16BIT = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABEAIAAADA54+dAAAADElEQVR4n
 const out = (expr: string) => `console.log(JSON.stringify(${expr}));`;
 const firstLine = `(e) => String(e && e.message || e).split("\\n")[0].slice(0, 90)`;
 
+// The runner spawns `bun -e` in a scratch directory, where a bare specifier
+// resolves nothing, so the one watch that needs this repository's pinned
+// oxc-minify and its frozen fixtures is handed both by ABSOLUTE path, computed
+// here where the list module knows where it lives.
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 
 export const BUN_WATCHES: Watch[] = [
@@ -148,6 +218,28 @@ export const BUN_WATCHES: Watch[] = [
     `,
   },
   {
+    // THIS ONE IS NOT A BUN FIX, and it moves through a different door. The
+    // probe reads oxc-minify, which is pinned in package.json and bumped by
+    // dependabot's minifiers group, so under the bun leg it answers the SAME
+    // under pin and canary every night and never reads `moved`. What it does
+    // is turn "did that oxc-minify bump reach SWC" into a row the first
+    // nightly after the merge answers: the day it reads `landed` in both
+    // columns is the day oxc's compressor caught up, and the note beside it
+    // says so. The comparison this waits on was measured 2026-09-15: oxc
+    // trails SWC 1.16.2 by 0.84% brotli across the 19 client assets, and the
+    // whole of it is three passes (guard-clause inversion into nested ifs,
+    // hoisting every `var` of a scope into one declaration, and inlining or
+    // reordering inner function declarations). The nearest open threads are
+    // oxc-project/oxc#14310 and #14311; no single issue asks for parity, so
+    // the thread named here is the repository.
+    //
+    // The fixtures are FROZEN copies of two client files (quiz.js and
+    // lens-wire.js as of #823), because a live file drifts and takes the
+    // constant with it. SWC's number is what `@swc/core` 1.16.2 produces on
+    // those exact bytes with `compress: { ecma: 2022, toplevel: false },
+    // mangle: { toplevel: false }`, brotli q11, and bun's and node's brotli
+    // agree on it to the byte. Re-derive it with the scratch bench recorded
+    // in the wire-byte sweep note before changing either fixture.
     name: "oxc-minifier-reaches-swc-parity",
     issue: "https://github.com/oxc-project/oxc",
     landed: "oxc-minify at the pin, run with the build's exact options over the two frozen fixtures, produces no more brotli q11 bytes than SWC 1.16.2 did on the same bytes (5,786 B)",
@@ -173,6 +265,12 @@ export const BUN_WATCHES: Watch[] = [
   },
 ];
 
+/**
+ * The wrangler leg's watches. These need a tree and a wrangler entry file
+ * rather than a bun executable, so canary-wrangler.ts holds the runners and
+ * this is the record: the name that goes in the signature, the thread each
+ * one waits on, and the reading on the day it was written.
+ */
 export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measured">[] = [
   {
     name: "workerd-honours-zstd-dictionary",
@@ -180,17 +278,57 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
     landed: "the workerd this wrangler ships compresses SMALLER with the right zstd dictionary than with none (tools/workerd-zstd-probe.ts), which is what a runtime dcz tier for the pages build.ts cannot precompress would need; cloudflare/workerd#7106 is this repository's fix for cloudflare/workerd#6967",
     measured: "2026-09-15, workerd 1.20260911.1 via wrangler 982b806: 73 none / 73 good / 73 wrong, the option is accepted and ignored",
   },
+  // RETIRED 2026-09-26: `wrangler-types-accepts-x-new-config`. It watched the
+  // COMMAND, and what it waited for was the NEED, an Env for cf-garage that
+  // follows cloudflare.config.ts. workers-sdk#15778 met the need through another
+  // door: `wrangler build --x-new-config --x-cf-build-output` writes
+  // cf-garage/.cloudflare/types/index.d.ts, and tools/gen-runtime-types.ts runs
+  // it before every typecheck. `types --x-new-config` still exits 1 on the pin
+  // (3572193, "Unknown arguments"), so the watch would have gone on reading
+  // false while the thing it stood for already shipped. The build door is a
+  // GATE now (typecheck fails without its file), which is the stronger form.
+  // RETIRED 2026-10-11: `vitest-plugin-accepts-vitest-5`. It held the revisit
+  // for Vitest in the Worker suite: #703 took the pool out, and on 2026-09-22
+  // the owner kept the harness test in its place until the plugin could ride the
+  // SAME workers-sdk commit as the wrangler pin. workers-sdk#16132 widened the
+  // peer range, and the pin has carried it since bd7aa67 (#1244). Re-read on
+  // the pin c09832d: `^4.1.0 || ^5.0.0`. The control, e3d1867 from before
+  // #16132, still reads `^4.1.0`. What landed is a decision rather than a fix:
+  // whether the Worker suite goes back to Vitest is the owner's call.
   {
+    // Not a fix this repository filed. It watches a vendor switch that already
+    // flipped once without notice: cloudflare/workerd#6907 exposed Temporal in
+    // production with `Temporal.Now` stuck at epoch 0, and every `typeof
+    // Temporal` guard in a Worker changed paths that week. The CLOCK is part of
+    // "landed", so a rerun of that build reads not-yet rather than landed.
     name: "workerd-exposes-temporal",
     issue: "https://github.com/cloudflare/workerd/issues/6907",
     landed: "the workerd this wrangler ships exposes a Temporal under production's compatibility date and flags, and `Temporal.Now.instant()` agrees with Date.now() within a minute (tools/workerd-temporal-probe.ts); until then Worker code here uses Date and the client islands keep their typeof guard",
     measured: "2026-09-23, workerd 1.20260921.1 via wrangler a1f05a3 at compatibility_date 2026-06-01: Temporal absent; V8's harmony_temporal is compiled in and no compat flag enables it",
   },
+  // RETIRED 2026-10-05: `new-config-dev-boots-auxiliary-workers`. Like the
+  // types watch above, it watched one DOOR (`wrangler dev --x-new-config -c
+  // counter/wrangler.jsonc`, refused since 4.146.0) for a NEED, TS-native dev
+  // with COUNTER bound. workers-sdk#16002 was declined on 2026-10-02 in favour
+  // of `cf`, whose dev delegate refuses -c too, so the door was never going to
+  // open. The need was met through the dev registry instead: Counter in its own
+  // `wrangler dev` process and the site under `cf dev` from config/dev/, on one
+  // registry directory, read COUNTER [connected] and /hit?peek=1 digits.
+  // tools/dev.ts is that door, so `bun run dev` reads config/dev/ natively and
+  // the projection no longer runs on every dev start.
+
 ];
 
+/**
+ * Reads tools/workerd-temporal-probe.ts's one JSON line. Landed means present
+ * AND sane: a Temporal whose clock is more than a minute off Date.now() is the
+ * #6907 failure, and reading it as landed would announce the one build this
+ * watch exists to warn about. A line that does not parse is `null`, which by
+ * rule 3 moves nothing.
+ */
 export function interpretTemporalProbe(stdout: unknown): { landed: boolean | null; detail: string } {
   let raw: unknown = null;
-  try { raw = JSON.parse(String(stdout).trim().split("\n").at(-1) ?? ""); } catch {}
+  try { raw = JSON.parse(String(stdout).trim().split("\n").at(-1) ?? ""); } catch { /* left null on purpose */ }
   const parsed = asRecord(raw);
   if (!parsed || (parsed.present !== true && parsed.present !== false)) return { landed: null, detail: "probe did not run" };
   const date = asText(parsed.date);

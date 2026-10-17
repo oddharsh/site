@@ -1,4 +1,11 @@
 // ── /dotfiles: the committed script is the page with everything ticked ───────
+//
+// The page renders its checklist from an inline data block and generates a
+// script in the browser; public/dotfiles/macos.sh is the same data through the
+// same renderer with every box ticked, committed so it can be curled. Two copies
+// of one projection drift unless something diffs them, so this does. It also
+// pins the shape of the data, because every failure on that page is silent: a
+// malformed option renders as a missing row, never as an error.
 import { assert, readFileSync, test } from "./contract-shared.ts";
 import { PAGE, SCRIPT, pageData, projectScript } from "./gen-dotfiles.ts";
 import { renderScript, writeLine } from "../src/client/dotfiles.js";
@@ -33,6 +40,9 @@ test("every option is well-formed and says what has to restart", () => {
       assert.ok(line.startsWith("defaults "), line);
       assert.ok(!/[\n;&|]/.test(line), `${o.id}: shell metacharacter in ${line}`);
     }
+    // A sudo row is root-only lines and nothing else; every other raw line is a
+    // defaults write. The flag is what puts `sudo -v` at the top, so a row that
+    // ran sudo without it would prompt halfway down the script.
     if (o.sudo) {
       assert.ok(!o.writes, `${o.id}: a sudo row carries raw lines only`);
       for (const r of o.raw || []) assert.ok(r.startsWith("sudo "), `${o.id}: sudo row line without sudo`);
@@ -66,6 +76,7 @@ test("the group order survives into the script and the apply tail names every re
   }
   if (restarts.has("login")) assert.match(script, /^echo 'log out and back in for the rest: /m);
   if (restarts.has("settings")) assert.match(script, /activateSettings -u$/m);
+  // an empty pick is a script that says so, never an empty file
   assert.match(renderScript(data, new Set()), /nothing ticked/);
 });
 

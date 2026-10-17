@@ -1,5 +1,4 @@
 // ── conflict triage: which conflicts GitHub's web editor can take ────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,6 +6,11 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, test } from "./contract-shared.ts";
 import { HEAVY_HUNK, gradeHunk, parseHunks, renderHtml } from "./conflict-triage.ts";
+
+// tools/conflict-triage.ts answers "can this conflict go through GitHub's web
+// editor". The fixture carries one conflict of each kind that matters, merged
+// by a real git. The root is canonicalised so /var vs /private/var cannot split
+// paths on macOS.
 
 const repoRoot = fileURLToPath(ROOT);
 const tool = join(repoRoot, "tools", "conflict-triage.ts");
@@ -18,6 +22,7 @@ function git(cwd, args) {
 const pkg = (scripts) => JSON.stringify({ name: "fixture", scripts }, null, 2) + "\n";
 const notes = (line2) => ["one", line2, "three", "four", "five"].join("\n") + "\n";
 
+/** base, then a `main` and a `feature` that conflict three different ways. */
 function fixture() {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "conflict-triage-")));
   git(dir, ["init", "-q", "-b", "main"]);
@@ -35,10 +40,13 @@ function fixture() {
   git(dir, ["commit", "-qm", "base"]);
   git(dir, ["branch", "-q", "feature"]);
 
+  // main: a line edit, a deletion, and an added script.
   write({ "package.json": pkg({ build: "bun build", test: "bun test", lint: "oxlint" }), "notes.txt": notes("two, as main has it") });
   git(dir, ["rm", "-q", "gone.txt"]);
   git(dir, ["commit", "-qam", "main"]);
 
+  // feature: the same line edited differently, the deleted file modified, and a
+  // different script added beside main's.
   git(dir, ["checkout", "-q", "feature"]);
   write({
     "package.json": pkg({ build: "bun build", test: "bun test", dev: "bun dev" }),
@@ -62,14 +70,17 @@ test("each conflict gets the verdict its kind earns, and the PR as a whole goes 
     const byPath = Object.fromEntries(report.files.map((f) => [f.path, f]));
     assert.deepEqual(Object.keys(byPath).sort(), ["gone.txt", "notes.txt", "package.json"]);
 
+    // A line conflict: exactly what GitHub's editor is for.
     assert.equal(byPath["notes.txt"].verdict, "web-ok");
     assert.equal(byPath["notes.txt"].hunks.length, 1);
     assert.equal(byPath["notes.txt"].hunks[0].clash, "edit-edit");
 
+    // Deleted on main, modified on the feature: GitHub disables its button.
     assert.equal(byPath["gone.txt"].verdict, "local-required");
     assert.equal(byPath["gone.txt"].github, "structural");
     assert.ok(byPath["gone.txt"].kinds.includes("modify/delete"), JSON.stringify(byPath["gone.txt"].kinds));
 
+    // Two scripts added side by side: a plain line conflict.
     assert.equal(byPath["package.json"].github, "content");
     assert.equal(byPath["package.json"].verdict, "web-ok");
 
@@ -119,6 +130,7 @@ test("a ref git cannot merge is the instrument failing, never a clean merge", ()
 test("hunk grades separate keep-both from near-duplicates and size from kind", () => {
   assert.deepEqual(gradeHunk(["a  b"], ["x"], ["a b"]), { clash: "whitespace", grade: "trivial" });
   assert.deepEqual(gradeHunk(["lint: oxlint"], [], ["dev: bun dev"]), { clash: "add-add", grade: "easy" });
+  // Two branches landing near-copies of one helper: keeping both duplicates it.
   const helper = ["function f() {", "  return 1;", "}"];
   assert.deepEqual(gradeHunk(helper, [], [...helper, "// newer"]), { clash: "add-add", grade: "judgment" });
   assert.deepEqual(gradeHunk([], ["old"], ["new"]), { clash: "edit-delete", grade: "judgment" });
@@ -131,6 +143,13 @@ test("hunk grades separate keep-both from near-duplicates and size from kind", (
   assert.deepEqual([hunk.main, hunk.base, hunk.pr], [1, 1, 2]);
 });
 
+// ── why each side looks the way it does ─────────────────────────────────────
+// A verdict says where to resolve a conflict; `why` says what each side was
+// doing, which is what a resolution actually needs. The control is the part
+// that matters: a commit that touched the SAME FILE but none of the hunk's
+// lines must not be credited with the hunk, or every busy file's top commit
+// would claim every conflict in it.
+
 test("each side of a hunk is attributed to the commit that wrote it, and only that one", () => {
   const dir = fixture();
   try {
@@ -142,9 +161,12 @@ test("each side of a hunk is attributed to the commit that wrote it, and only th
     const hunk = report.files.find((f) => f.path === "notes.txt").hunks[0];
     assert.deepEqual(hunk.sides, { main: ["two, as main has it"], base: ["two"], pr: ["two, as the feature has it"] });
     assert.deepEqual(hunk.why.main.map((o) => o.subject), ["main"]);
+    // The control: "unrelated edit" touched notes.txt and none of this hunk.
     assert.deepEqual(hunk.why.pr.map((o) => o.subject), ["feature"]);
     assert.equal(hunk.why.pr[0].lines, 2, "the added line and the base line it replaced");
 
+    // A modify/delete has no hunk to attribute, so the file carries its history:
+    // main's side is the commit that deleted it.
     const gone = report.files.find((f) => f.path === "gone.txt");
     assert.equal(gone.hunks.length, 0);
     assert.equal(gone.history.main[0].subject, "main");
@@ -192,15 +214,19 @@ test("the conflict hook speaks only when git left unmerged files behind", () => 
   };
   try {
     git(dir, ["checkout", "-q", "feature"]);
+    // Before anything conflicts: a merge verb, no unmerged files, nothing to say.
     assert.equal(call({ hook_event_name: "PostToolUse", cwd: dir, tool_input: { command: "git merge --ff-only main" } }), null);
 
     spawnSync("git", ["merge", "-q", "main"], { cwd: dir });
+    // The failing merge, reached through a `cd` from somewhere else.
     const said = call({ hook_event_name: "PostToolUseFailure", cwd: tmpdir(), tool_input: { command: `cd ${dir} && git merge main` } });
     assert.equal(said.hookSpecificOutput.hookEventName, "PostToolUseFailure");
     assert.match(said.hookSpecificOutput.additionalContext, /notes\.txt/);
     assert.match(said.hookSpecificOutput.additionalContext, /conflict-triage/);
     assert.match(said.hookSpecificOutput.additionalContext, /--in-progress/);
 
+    // Controls: the tree is still mid-merge, but neither of these could have
+    // caused it, so repeating the note on every command would be noise.
     assert.equal(call({ hook_event_name: "PostToolUse", cwd: dir, tool_input: { command: "git status" } }), null);
     assert.equal(call({ hook_event_name: "PostToolUse", cwd: dir, tool_input: { command: "ls" } }), null);
     assert.equal(spawnSync("bun", [hook], { input: "not json", encoding: "utf8" }).status, 0);
@@ -210,6 +236,8 @@ test("the conflict hook speaks only when git left unmerged files behind", () => 
 });
 
 test("the three-way view escapes every side and every note", () => {
+  // Hunk text is file content and notes are model-written, so neither may
+  // reach the page as markup.
   /** @type {import("./conflict-triage.ts").Report} */
   const report = {
     label: "fixture",

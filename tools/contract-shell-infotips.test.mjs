@@ -1,5 +1,4 @@
 // ── shell infotips ──────────────────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   testGlobals,
   AGENT_SURFACES,
@@ -46,16 +45,28 @@ import { existsSync, readFileSync } from "node:fs";
 test("\"what was hovered\" is answered in exactly one place", async () => {
   const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
   const tip = await readFile(new URL("src/client/infotip.js", ROOT), "utf8");
+  // nav.js's loader has to match the same elements the module does, or the
+  // first hover over something it forgot never loads the module at all — and
+  // the failure is a tooltip that works everywhere except where you look first.
+  // So the matcher is a function nav.js passes over, not a selector each side
+  // keeps a copy of.
   assert.match(nav, /var INFOTIP_TARGETS = \[/, "nav.js owns the target selector");
   assert.match(nav, /var INFOTIP_SKIP = /, "and the list of hovers a richer surface already owns");
   assert.match(nav, /find: targetFor/, "and hands the matcher itself to the module");
   assert.match(tip, /const findTarget = o\.find;/, "infotip.js takes the matcher it is given");
+  // It still reads the DOM for per-family facts (which builder, and whether the
+  // target sits on the taskbar), and those are single selectors. What it must
+  // never grow is a LIST — that is the copy this test exists to stop.
   assert.doesNotMatch(tip, /\.axp-\w[^\n"]*,[^\n"]*\.axp-/, "a second target list in infotip.js is the drift this test exists to stop");
 });
 
 test("the infotip yields to every richer hover surface on the page", async () => {
   const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
   const skip = (nav.match(/var INFOTIP_SKIP = "([^"]+)"/) || [, ""])[1].split(",");
+  // Each of these draws its own card from the same engine, and `.lx-term` is
+  // the sharp one: those ship a `title` as their no-JS fallback and lens.js
+  // strips it once its surface is live, so without the skip a race between two
+  // lazy modules decides whether you get the glossary card or a flat line.
   for (const owned of [".lx-term", ".photos a", ".np-list li", ".np-artist-link", ".car-link", ".ev[data-cover]"]) {
     assert.ok(skip.includes(owned), `${owned} has its own hover card — the infotip must not double up on it`);
   }
@@ -63,6 +74,13 @@ test("the infotip yields to every richer hover surface on the page", async () =>
 
 test("every string an infotip prints is escaped on the way in", async () => {
   const tip = await readFile(new URL("src/client/infotip.js", ROOT), "utf8");
+  // The surface renders `title` text from ANY page now, and some of those
+  // strings are not ours: /inbox carries webmention titles, /around and
+  // /reading carry text from sites this server crawled. innerHTML with one
+  // un-escaped hole would turn a remote string into markup on every page that
+  // loads the shell. Verified in a browser too (a title holding
+  // `<img src=x onerror=alert(1)>` renders as text and creates no element),
+  // but the source assertion is what fails a future edit.
   for (const hole of [/<div class="n">\$\{esc\(/, /<div class="h">\$\{esc\(/, /<dt>\$\{esc\(/, /<dd>\$\{esc\(/]) {
     assert.match(tip, hole, `${hole} must interpolate through esc()`);
   }
@@ -73,11 +91,18 @@ test("every string an infotip prints is escaped on the way in", async () => {
 
 test("an infotip row is dropped rather than filled in", async () => {
   const tip = await readFile(new URL("src/client/infotip.js", ROOT), "utf8");
+  // Same rule the photo tooltip follows: a missing value prints nothing. A
+  // card that rendered "Contains: 0 pages" or "Colo: unknown" would be stating
+  // something the shell does not know, on chrome describing the shell.
   assert.match(tip, /\.filter\(\(p\) => p && p\[1\]\)/, "card() must drop pairs with no value");
   assert.doesNotMatch(tip, /"unknown"|"n\/a"|\|\| 0\)\s*\+\s*" page/i, "no placeholder stands in for a value");
 });
 
 test("the shell infotip ships minified, hashed, and with a readable twin", async () => {
+  // Missing from the client asset registry it would ship unminified with no
+  // /infotip.src.js twin; without an import loader its specifier would stay
+  // unhashed and the module would serve at max-age=300 forever beside its
+  // immutable peers.
   assert.equal(minifiedScripts().find((row) => row.file === "infotip.js")?.twin, "/infotip.src.js", "infotip.js belongs in the registry");
   const infotip = CLIENT_ASSETS.find((asset) => asset.file === "infotip.js");
   assert.ok(infotip, "infotip.js is a registry row");
@@ -89,7 +114,15 @@ test("the shell infotip ships minified, hashed, and with a readable twin", async
 });
 
 test("every workflow bootstraps the Bun source that config/bun-pin.json declares", async () => {
+  // Inherited from the pnpm era, and the reasoning survives the swap with one
+  // change: pnpm self-switched, so a workflow naming the wrong version merely
+  // wasted time. Nothing self-switches here. A workflow that installs some
+  // other bun builds this repo with a compiler nobody declared, and the output
+  // is content-addressed, so that re-mints URLs rather than erroring.
+  //
   const declared = JSON.parse(await readFile(new URL("config/bun-pin.json", ROOT), "utf8"));
+  // Fixed sources are exact npm versions. The rolling canary, when selected,
+  // resolves its verified commit through the same installer on every build path.
   assert.match(String(declared.bun), /^(canary|\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)$/,
     `config/bun-pin.json names ${declared.bun}; it must select a supported Bun source`);
 
@@ -100,8 +133,15 @@ test("every workflow bootstraps the Bun source that config/bun-pin.json declares
   let checked = 0;
   for (const file of files) {
     const body = await readFile(new URL(file, dir), "utf8");
+    // EXECUTION, not mention. promote-production.yml prints "bun run
+    // deploy:promote" as advice in an echo and runs no bun at all; a scanner
+    // that reads the string demands a bootstrap that workflow does not need.
+    // Same shape as every other naive scanner this repo has had to sharpen.
     const commands = body.split("\n").filter((l) => !/\becho\b/.test(l)).join("\n");
     if (!/^\s*bun\s+(install|run|test|x)\b/m.test(commands)) continue;
+    // ONE bootstrap, and it reads config/bun-pin.json itself. A workflow that curls
+    // its own bun, or names a version inline, is a second declaration that can
+    // drift from the first.
     assert.match(body, /uses: \.\/\.github\/actions\/setup-bun/,
       `.github/workflows/${file} runs bun without going through the shared setup-bun action`);
     assert.ok(!/bun-version:|oven-sh\/setup-bun/.test(body),
@@ -110,6 +150,8 @@ test("every workflow bootstraps the Bun source that config/bun-pin.json declares
   }
   assert.ok(checked >= 4, `expected several bun bootstraps, matched ${checked}`);
 
+  // The shared installer is the single place the version is read, so it must
+  // read it, and the action must go through it rather than carrying a copy.
   const action = await readFile(new URL(".github/actions/setup-bun/action.yml", ROOT), "utf8");
   const installer = await readFile(new URL(".github/install-bun.sh", ROOT), "utf8");
   assert.match(installer, /config\/bun-pin\.json/, "install-bun.sh must read the version from config/bun-pin.json");
@@ -118,6 +160,11 @@ test("every workflow bootstraps the Bun source that config/bun-pin.json declares
 });
 
 test("every trustedDependencies entry is a live approval, never a dead one", async () => {
+  // bun's answer to pnpm's allowBuilds, and the failure mode this guards is the
+  // same one: an entry for a package the tree no longer has reads as a reviewed
+  // decision and is actually nothing. It also cannot be caught by a clean
+  // install, which is why it needs asserting rather than noticing.
+  //
   // Declaring this key REPLACES bun's built-in default allowlist rather than
   // adding to it, so the moment it exists, a dependency that genuinely needs a
   // postinstall and is absent here silently does not run one.
@@ -133,14 +180,25 @@ test("every trustedDependencies entry is a live approval, never a dead one", asy
 });
 
 test("a section's favicon is in its own <head>, never set by script", async () => {
+  // setFavicon() used to read a data-favicon attribute off the matching taskbar
+  // pin at boot. That cost one attribute per pin on EVERY page so that 11 of them
+  // could read one, and it painted the wrong icon first and swapped. The document
+  // states its own favicon now, so the three ways it can regress are asserted.
+
+  // 1. The pins carry no favicon data. A reintroduced attribute is the whole
+  //    per-page cost coming back, and nothing would fail without this.
   const chrome = await readFile(new URL("src/worker/lib/desktop.ts", ROOT), "utf8");
   assert.doesNotMatch(chrome, /data-favicon/,
     "taskbar pins must not carry favicon data: the page's own <head> owns this");
 
+  // 2. nav.js sets no favicon. A favicon applied after boot is a visible flip.
   const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
   assert.doesNotMatch(nav, /setFavicon|rel\s*=\s*["']icon["']/,
     "nav.js must not set the tab favicon; the document declares it");
 
+  // 3. Every taskbar route resolves to an icon that EXISTS on disk, through the
+  //    generated map the worker actually reads. A route added to TASKBAR without
+  //    its tile would otherwise ship a 404 favicon.
   assert.deepEqual(SECTION_FAVICONS, sectionFavicons(),
     "lib/desktop.js drifted from shell-data.mjs — run bun run gen:shell");
   for (const item of TASKBAR) {
@@ -149,6 +207,8 @@ test("a section's favicon is in its own <head>, never set by script", async () =
     await readFile(new URL("public" + href, ROOT), "utf8");
   }
 
+  // 4. The three hand-authored section pages link their own tile. These are the
+  //    only section pages outside lunaPage, so they are the ones that go quiet.
   for (const [file, slug] of [["garage", "garage"], ["lwe", "lwe"], ["pixel-peeper", "pixel-peeper"]]) {
     const page = await readFile(new URL(`src/pages/${file}/index.html`, ROOT), "utf8");
     assert.match(page, new RegExp(`<link rel="icon" type="image/svg\\+xml" href="/section-icons/${slug}\\.svg">`),
@@ -157,22 +217,40 @@ test("a section's favicon is in its own <head>, never set by script", async () =
 });
 
 test("the speculation ruleset has exactly one author", async () => {
+  // This block lived in 26 documents plus a runtime injector, and the copies had
+  // forked (#338). Since 2026-09-30 it is ONE file, /a/speculation.<hash8>.json,
+  // written by build.ts from SPECULATION and named on every HTML response by a
+  // Speculation-Rules header. The ways it can fork again are structural, so they
+  // are asserted here rather than left to review.
+  //
+  // 1. An inline block anywhere in src/pages. The browser would union it with the
+  //    header's ruleset, so any copy is a second author. The build byte-compares
+  //    every static page against a fresh render too; this names the rule.
   const pages = (await readdir(new URL("src/pages", ROOT), { recursive: true }))
     .filter((relative) => relative.endsWith(".html"));
   let scanned = 0;
   for (const relative of pages) {
     const html = await readFile(new URL(`src/pages/${relative}`, ROOT), "utf8");
+    // Count real tags only. /garage/horizon discusses this very block in prose as
+    // escaped `&lt;script type="speculationrules"&gt;`, and it is the fourth naive
+    // scanner that page's demo content would have caught.
     const blocks = html.match(/<script\b[^>]*\btype=["']?speculationrules\b[^>]*>/g) || [];
     assert.equal(blocks.length, 0, `${relative} carries an inline ruleset; the Speculation-Rules header is the one author`);
     scanned++;
   }
   assert.ok(scanned >= 40, `only ${scanned} pages scanned; the walk has collapsed`);
+  // The shared chrome is what used to carry it to every surface, worker pages included.
   assert.doesNotMatch(DESKTOP_CHROME, /speculationrules/, "lib/desktop.ts must not carry a ruleset");
+  // The file is the one serialization of SPECULATION, and the Worker is the one
+  // sender: security.ts names the build-patched URL and nothing else.
   assert.equal(speculationRulesJson(), JSON.stringify(SPECULATION));
   const security = await readFile(new URL("src/worker/lib/security.ts", ROOT), "utf8");
   assert.match(security, /headers\.set\("speculation-rules", `"\$\{SPECULATION_RULES\}"`\)/,
     "withSecurityHeaders names the ruleset file in a Speculation-Rules header");
 
+  // 2. The lwe generator getting its own template back. It had one, it went stale
+  //    when two commits removed exclusions site-wide, and regenerating a page then
+  //    silently restored the old rules onto it (src/pages/lwe/encoding.html).
   const generator = await readFile(new URL("pipelines/lwe/generate.mjs", ROOT), "utf8");
   assert.doesNotMatch(generator, /speculationrules/,
     "generate.mjs must emit DESKTOP_CHROME and never its own ruleset; a stale template here re-infects every page it regenerates");
@@ -181,12 +259,20 @@ test("the speculation ruleset has exactly one author", async () => {
   assert.match(generator, /<!-- axp:desktop -->\$\{DESKTOP_TOP\}<!-- \/axp:desktop -->/,
     "the LWE template must hand its desktop to the canonical shell compiler inside one generated sentinel");
 
+  // 3. nav.js building one at runtime again, which is where the injected copy
+  //    lived. Rules in the HTML parse with the document; injected ones landed
+  //    after first paint and could not prerender anything hovered before that.
   const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
   assert.doesNotMatch(nav, /type\s*=\s*["']speculationrules["']/,
     "nav.js must not inject a ruleset; it ships in the chrome now");
 });
 
 test("the staged Worker names the built ruleset on HTML and only on HTML", { skip: !existsSync(".build/src/worker/lib/shell-assets.ts") && "needs a build" }, async () => {
+  // The STAGED modules, because the ruleset URL exists only once build.ts has
+  // written the file and patched the marker line; source reads "" by design.
+  // Imported through a computed URL so the type checker leaves them alone:
+  // typecheck runs before any build in CI, and a literal specifier into
+  // .build/ is two unresolved-module errors against the tools baseline.
   const { SPECULATION_RULES } = await import(new URL("../.build/src/worker/lib/shell-assets.ts", import.meta.url).href);
   assert.match(SPECULATION_RULES, /^\/a\/speculation\.[0-9a-f]{8}\.json$/, "build.ts patched the ruleset URL in");
   const bytes = readFileSync(`.build/public${SPECULATION_RULES}`, "utf8");
@@ -211,12 +297,23 @@ test("outbound endpoint discovery follows the spec's precedence", () => {
   assert.equal(findEndpointIn('<link rel="webmention" href="/wm">', null, base), "https://example.com/wm");
   // then <a>, and rel lists with extra tokens still count
   assert.equal(findEndpointIn('<a rel="me webmention" href="https://wm.example/e">x</a>', null, base), "https://wm.example/e");
+  // no endpoint is the common case, and is not an error
   assert.equal(findEndpointIn("<p>nothing here</p>", null, base), null);
 });
 
 test("the excerpt survives a page full of inline SVG chrome", async () => {
+  // A real mention from a GitHub gist arrived with 280 characters of SVG path
+  // geometry as its excerpt, which is what made a legitimate mention read as
+  // spam. Two causes: <svg> was not stripped alongside <script>/<style>, and the
+  // fixed-width window around the link opens mid-attribute (the target lives in
+  // an href), leaving a partial tag that the complete-tag stripper cannot touch.
   const db = fakeD1();
   const target = "https://aadhar.sh/writing/in-flux";
+  // The path has to be long enough that the 400-character window opening before
+  // the link lands INSIDE the d="..." attribute, because that is the only way
+  // the geometry escapes: the tag stripper removes complete tags, attributes and
+  // all, so a short icon is harmless. On the real gist the icon sat directly
+  // before the link with roughly this much path data, which is why it leaked.
   const path = "M9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018Z".repeat(12);
   const page = `<html><body>
     <svg aria-hidden="true"><path d="${path}"></path></svg>
@@ -313,6 +410,8 @@ test("site-manifest.json is a well-formed registry with unique paths", async () 
 });
 
 test("committed manifest projections match a fresh generation", async () => {
+  // guards against a commit that edits site-manifest.json but forgets
+  // `bun run gen:manifest` — the same drift build.ts blocks, checked here too.
   const { surfaces } = readManifest();
   const mod = await readFile("src/worker/lib/site-manifest.ts", "utf8");
   assert.equal(mod.trim(), workerModule(surfaces).trim(), "lib/site-manifest.js is stale — run bun run gen:manifest");
@@ -334,6 +433,8 @@ test("site MCP lists the agent surfaces as resources", async () => {
   assert.equal(home.uri, "https://aadhar.sh/", "uri is absolute against the request origin");
   assert.equal(home.mimeType, "text/html");
   assert.equal(resources.find((r) => r.name === "/rn").mimeType, "text/markdown", "music advertises its on-site representation");
+  // The terminal tools advertise the 80-column frame they answer anything but a
+  // browser with, so resources/read asks for it rather than the page around it.
   const frames = ["/finger", "/radar", "/dict", "/cache", "/encode", "/agent-ready"];
   for (const name of frames) assert.equal(resources.find((r) => r.name === name).mimeType, "text/plain", `${name} advertises its frame`);
   assert.ok(resources.filter((r) => r.name !== "/rn" && !frames.includes(r.name)).every((r) => r.mimeType === "text/html"));
@@ -351,6 +452,7 @@ test("MCP reads a terminal tool's URI as its text/plain frame", async () => {
   assert.match(out.result.contents[0].text, /aadharsh@aadhar\.sh/);
 });
 
+// Direct handler tests inject the same local dispatcher that /mcp receives.
 async function readMcpResource(uri, env, origin = "https://aadhar.sh") {
   const response = await handleSiteMcp(new Request(origin + "/mcp", {
     method: "POST", headers: { "content-type": "application/json", cookie: "private=fixture", authorization: "Bearer fixture" },
@@ -451,6 +553,7 @@ test("site MCP resources/read returns whole bounded UTF-8 pages and cancels over
   const realFetch = globalThis.fetch;
   const cap = 512 * 1024;
   try {
+    // The 256 KB Horizon page already exceeded the old 200,000-character slice.
     for (const text of ["", "a".repeat(cap), "é".repeat(cap / 2)]) {
       const fetch = async () => new Response(text, { headers: { "content-type": "text/html" } });
       testGlobals.fetch = fetch;
@@ -476,6 +579,8 @@ test("site MCP resources/read returns whole bounded UTF-8 pages and cancels over
 test("site MCP resources/read deadlines cover stalled dispatch and body reads", async () => {
   const realFetch = globalThis.fetch, realTimer = globalThis.setTimeout;
   const budgets = [];
+  // Advance only this endpoint's eight-second budget; use real stream and timer
+  // scheduling for the cancellation and late-response races.
   testGlobals.setTimeout = (fn, ms, ...args) => {
     if (ms === 8000) { budgets.push(ms); return realTimer(fn, 10, ...args); }
     return realTimer(fn, ms, ...args);
@@ -506,6 +611,9 @@ test("site MCP resources/read deadlines cover stalled dispatch and body reads", 
   } finally { testGlobals.fetch = realFetch; testGlobals.setTimeout = realTimer; }
 });
 
+// Server cards are pre-connection metadata. The live `server/discover` and
+// `tools/list` responses remain the protocol source of truth, so the cards are
+// generated projections rather than a second hand-maintained tool catalog.
 test("published MCP server cards and discovery files stay aligned with both live servers", async () => {
   const { handleMcp } = await import("../serendipity/serendipity.ts");
   const siteLive = await (await handleSiteMcp(mcpPost({

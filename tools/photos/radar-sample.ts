@@ -1,6 +1,17 @@
 #!/usr/bin/env node
 // radar-sample.ts — the SENSOR half of /radar.
 //
+// A server has no antenna, so the sampling has to happen here, on a machine that
+// does. This reads wifi and Bluetooth signal strength on macOS and either prints
+// the readings or POSTs them to the instrument, which draws them.
+//
+//   node tools/photos/radar-sample.ts                 # print the frame
+//   node tools/photos/radar-sample.ts --json          # print the samples
+//   node tools/photos/radar-sample.ts --watch         # redraw every 2s
+//   node tools/photos/radar-sample.ts --anonymize     # hash the names first
+//   node tools/photos/radar-sample.ts --at http://localhost:8795
+//
+// ── what it reads, and what that costs ────────────────────────────────────
 // Both come from `system_profiler`, which needs NO SUDO — the older `airport -I`
 // route was removed in macOS 14.4 and `wdutil info` requires root, so this is the
 // one that still works unattended. Verified on darwin 27:
@@ -8,6 +19,20 @@
 //   SPAirPortDataType   spairport_signal_noise  "-58 dBm / -94 dBm" per network,
 //                       for the joined network AND every other one in range.
 //   SPBluetoothDataType device_rssi             per paired/nearby device.
+//
+// system_profiler takes a second or two, which sets the floor on --watch. That is
+// slow for a hunt: findphone gets ~3 readings a second off a live GATT link,
+// which is why it can click like a parking sensor and this cannot.
+//
+// ── PRIVACY, read this before pointing it at a public host ────────────────
+// Network names and device names are personal — "Archetype 5g" says where you
+// work, an AirPods name often says who you are. The instrument stores NOTHING
+// (it renders a frame and forgets), but the names do travel in the request body
+// and will appear in any request log along the way.
+//
+// So: --anonymize replaces every name with a short stable hash before anything
+// leaves the machine. You still get the radar, the trend, and the hunt; you just
+// cannot read the labels. Use it by default when posting anywhere but localhost.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
@@ -58,6 +83,8 @@ async function wifi() {
   };
 
   for (const iface of data?.SPAirPortDataType?.[0]?.spairport_airport_interfaces || []) {
+    // The joined network first and marked with a star, because "am I on the good
+    // one" is a question this answers and a plain list does not.
     const current = iface.spairport_current_network_information;
     if (current?._name) push(current._name, dbm(current.spairport_signal_noise), "wifi*");
     for (const net of iface.spairport_airport_other_local_wireless_networks || []) {
@@ -88,6 +115,9 @@ async function bluetooth() {
   return out;
 }
 
+// Trend needs memory, and this process is the only thing that has any — the
+// instrument is stateless by design. Keyed by name so a device keeps its history
+// across ticks of --watch.
 const history = new Map();
 function withHistory(samples) {
   return samples.map((sample) => {

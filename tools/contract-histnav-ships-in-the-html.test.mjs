@@ -5,6 +5,11 @@
 // bun run cls (tools/layout-shift-lab.ts) found `.title-bar dx+50` on 65 of 65
 // pages at desktop width, and at 390px four garage captions wrapped onto a
 // second line and pushed the document down 19px.
+//
+// The pair is baked into every renderer's markup now, and luna.css carries its
+// rules. Each assertion below renders the real surface rather than grepping
+// source, because the failure is silent: a renderer that forgets the bake still
+// gets working buttons from nav.js's fallback, and pays with the layout shift.
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { DESKTOP_HISTNAV, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
@@ -17,6 +22,14 @@ import { HISTNAV_HTML, bakeHistnav, staticShellPages } from "./photos/gen-deskto
 
 const count = (haystack) => haystack.split(DESKTOP_HISTNAV).length - 1;
 
+// ── the title bar is reachable, not aria-hidden ─────────────────────────────
+// Every page window's title bar used to carry aria-hidden="true" while holding
+// the Back/Forward buttons, the close link, and a .max that nav.js turns into a
+// focusable control: focusable content inside aria-hidden, which a screen
+// reader skips while the keyboard still lands on it. The bar is exposed now,
+// its decorations (.icon, .min) are hidden one by one, and .max is a native
+// button. `maxButton: false` is for a window nothing wires (a popover note, the
+// standalone cal host), where .max stays an inert hidden span.
 const TITLE_BAR = /<div class="(?:title-bar|np-titlebar)"([^>]*)>/;
 function assertAccessibleTitleBar(source, label, { maxButton = true } = {}) {
   const open = TITLE_BAR.exec(source);
@@ -63,8 +76,10 @@ test("bakeHistnav is idempotent, skips a comment, and honours data-no-histnav", 
   assert.equal(count(once), 1);
   assert.ok(once.includes(`<div class="title-bar">${DESKTOP_HISTNAV}\n`));
   assert.equal(bakeHistnav(once), once, "a second bake must not stack a second pair");
+  // an OLDER generator's pair converges on the canonical one rather than doubling
   const stale = once.replace(DESKTOP_HISTNAV, '<span class="axp-histnav"><button type="button" class="axp-back"></button></span>');
   assert.equal(bakeHistnav(stale), once);
+  // the control: the opt-out window gets nothing, and a baked one is removed
   const optedOut = once.replace('<div class="window">', '<div class="window" data-no-histnav>');
   assert.equal(count(bakeHistnav(optedOut)), 0);
 });
@@ -79,6 +94,7 @@ test("lunaPage bakes the pair into its title bar, byte-equal to the generated on
 });
 
 test("a standalone Notepad window bakes the pair and a popover note does not", () => {
+  // nav.js wires the FIRST body-level window only; a popover note never is one
   assert.equal(count(notepadWindow("a.txt", "text", "/writing")), 1);
   assert.equal(count(notepadWindow("a.txt", "text", "/writing", undefined, "note-a")), 0);
   assertAccessibleTitleBar(notepadWindow("a.txt", "text", "/writing"), "notepad window");
@@ -88,12 +104,16 @@ test("a standalone Notepad window bakes the pair and a popover note does not", (
 test("cal bakes the pair under /coffee and not on the standalone cal host", () => {
   const env = { HOST_NAME: "aadhar.sh", HOST_PUBLIC_URL: "https://aadhar.sh" };
   assert.equal(count(successPage({ ...env, BASE_PATH: "/coffee" })), 1);
+  // cal.aadhar.sh loads no nav.js, so nothing would ever wire the buttons there
   assert.equal(count(successPage({ ...env, BASE_PATH: "" })), 0);
   assertAccessibleTitleBar(successPage({ ...env, BASE_PATH: "/coffee" }), "cal under /coffee");
   assertAccessibleTitleBar(successPage({ ...env, BASE_PATH: "" }), "standalone cal", { maxButton: false });
 });
 
 test("serendipity's window is body-level, so nav.js wires it like every other", async () => {
+  // It sat inside a .wrap until 2026-09-30, and nav.js only wires `body > .window`,
+  // so /serendipity had no Back/Forward, no maximize and no close-to-home. Every
+  // view goes through one shell(), so the two built pages stand for all of them.
   const views = [{ label: "/serendipity", response: renderSerendipityPage() }, { label: "/serendipity/mcp-info", response: renderMcpInfoPage() }];
   for (const { label, response } of views) {
     const page = await response.text();
@@ -111,6 +131,9 @@ test("the pair's rules are in luna.css at first paint, and nav.js injects none",
     "the pair must hide with script off (dead buttons) and on a phone (wrapped captions)");
   const nav = readFileSync("src/client/nav.js", "utf8");
   assert.doesNotMatch(nav, /\.axp-histnav[^\n]*\{/, "nav.js must not carry the pair's CSS again");
+  // The homepage alone loads luna.css non-blocking (media=print swap), so its
+  // inline critical block has to carry the SIZE of the pair, or the caption paints
+  // with two 16x6 native buttons and grows 15px when luna lands.
   const home = readFileSync("src/pages/index.html", "utf8");
   assert.match(home, /\.axp-histnav button \{ box-sizing: border-box; width: 21px; height: 21px;/);
   assert.match(home, /@media \(width < 720px\) \{ \.axp-histnav \{ display: none; \} \}/);

@@ -1,5 +1,11 @@
 // ── the understanding check's payload ships as its own /a/ file ─────────────
-// Split-file convention: shared imports live in contract-shared.ts.
+//
+// build.ts step 5d moves each page's inline luq-data JSON into
+// /a/quiz-<page>.<hash8>.json and leaves an empty element with a data-src, and
+// quiz.js fetches the file as the reader nears the end. These pin the three
+// claims that change makes: the file holds exactly the bytes the page used to
+// ship, the served page carries no answer key, and quiz.js reads the new shape
+// lazily while still accepting the authored inline form.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { assert, test } from "./contract-shared.ts";
@@ -13,6 +19,8 @@ test("extraction moves the payload byte-for-byte and leaves an empty reference",
   const html = `<main><section id="luq"></section></main>\n<script type="application/json" id="luq-data">${body}</script>\n<script src="/quiz.js" defer></script>`;
   const out = extractQuizData(html, "garage/fixture.html", hash8);
   assert.ok(out, "a page with a quiz extracts");
+  // The file is what the inline block used to ship: the same serializer, so the
+  // same bytes, and the answer key with it.
   assert.equal(out.file.bytes.toString("utf8"), minifyJsonScript("fixture", body));
   assert.equal(out.file.url, `/a/quiz-garage-fixture.${hash8(out.file.bytes)}.json`);
   assert.doesNotMatch(out.html, /"ok"/, "no answer flag survives in the document");
@@ -21,12 +29,16 @@ test("extraction moves the payload byte-for-byte and leaves an empty reference",
   assert.ok(out.html.startsWith(`<main><section id="luq"></section></main>\n<script type="application/json" id="luq-data" data-src="${out.file.url}"></script>`));
   assert.ok(out.html.endsWith(`<script src="/quiz.js" defer></script>`));
 
+  // A second pass is a build-order bug, and it says so rather than no-op.
   assert.throws(() => extractQuizData(out.html, "garage/fixture.html", hash8), /extracted twice/);
   assert.equal(extractQuizData("<p>no quiz</p>", "garage/plain.html", hash8), null);
+  // Two blocks break the one-quiz contract.
   assert.throws(() => extractQuizData(html + html, "garage/twice.html", hash8), /exactly one/);
 });
 
 test("the reader recognises the minifier's unquoted, reordered form", () => {
+  // the HTML minifier sorts attributes and unquotes them; this is the shape the build
+  // actually serves, taken from a real staged page.
   const served = `<script data-src=/a/quiz-lwe-tee.caa9af0c.json id=luq-data type=application/json></script>`;
   assert.deepEqual(quizReference(served), { inline: "", src: "/a/quiz-lwe-tee.caa9af0c.json" });
   assert.equal(quizReference(`<script type=application/json id=luq-data-x></script>`), null, "a different id is not the quiz");
@@ -53,7 +65,9 @@ test("quiz.js fetches the payload lazily and still reads an inline one", () => {
   assert.match(src, /new IntersectionObserver\([\s\S]*rootMargin:/, "start() waits on an observer with a margin");
   assert.match(src, /getAttribute\("data-src"\)/, "the served reference is read");
   assert.match(src, /JSON\.parse\(inline\)/, "the authored inline form still works for dev and the .src.html twin");
+  // The build repoints this exact shape to the hashed sheet (the client asset registry's quiz.css loader).
   assert.match(src, /\.href\s*=\s*"\/quiz\.css"/, "the quiz.css href keeps the shape step 6 rewrites");
+  // Rendering waits for both halves: never unstyled, never without data.
   assert.match(src, /Promise\.all\(\[payload, styled\]\)/);
 });
 
@@ -75,5 +89,7 @@ test("the staged tree serves no inline answer key, and every reference resolves"
     assert.ok(existsSync(`.build/public${ref.src}.br`), `${rel}: ${ref.src} has no q11 twin`);
     checked++;
   }
+  // Count what was checked, so a reader that stopped matching fails here rather
+  // than passing over nothing.
   assert.ok(checked >= 30, `only ${checked} quiz references checked; the reader probably stopped matching`);
 });

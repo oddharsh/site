@@ -43,6 +43,10 @@ async function withFetch(respond, run, robots = (_record) => new Response(null, 
   finally { testGlobals.fetch = original; }
 }
 
+// The same fixture by INJECTION: env.OUTBOUND_TRANSPORT is the network adapter
+// (lib/outbound.ts, lib/botauth.ts), so these tests leave the global fetch
+// alone and the no-network preload stays armed under them. `net(env)` returns
+// the env with the fake network attached.
 async function withTransport(respond, run, robots = (_record) => new Response(null, { status: 404 })) {
   const seen = [];
   const transport = async (url, init = {}) => {

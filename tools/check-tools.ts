@@ -15,10 +15,15 @@ const argv = process.argv.slice(2);
 const STRICT = argv.includes("--strict");
 const IN_CI = Boolean(process.env.CI) && !STRICT;
 
+// Floors. Each is comfortably under today's count and above zero, so ordinary
+// edits never trip them and a scanner that stops matching always does.
 const FLOOR_GUARD_LISTS = 4;
 const FLOOR_BREW_HINTS = 4;
+// The five photo writers now source one shared minimum-version guard.
 const FLOOR_MIN_GUARDS = 1;
 
+/** One entry of config/tools.json. Declared rather than inferred from JSON.parse,
+ *  which hands back `any` and takes every downstream field with it. */
 type Tool = {
   bin: string;
   path?: string;
@@ -47,13 +52,24 @@ const byBin = new Map(tools.map((t) => [t.bin, t]));
 const declaredBins = new Set(byBin.keys());
 const declaredInstalls = new Set(tools.map((t) => t.install).filter(Boolean)) as Set<string>;
 
+// These prerequisites already have canonical repository pins and checks:
+// .node-version (contract-the-node-pin-is-declared-once) and package.json
+// (check-wrangler.ts). Do not duplicate them in the system-tool declaration.
 const REPO_PINNED = new Set(["node", "wrangler"]);
 
+// ── the shell corpus ─────────────────────────────────────────────────────────
+// Git owns the census at every depth, including the nested AVIF builder but
+// excluding its ignored downloads. Stage new scripts before checking them.
+// A failed census or unreadable tracked script must fail the check.
 const scripts = execFileSync("git", ["ls-files", "-z", "*.sh"], { cwd: ROOT, encoding: "utf8" })
   .split("\0").filter(Boolean).sort();
 const source = new Map();
 for (const rel of scripts) source.set(rel, await readFile(path.join(ROOT, rel), "utf8"));
 
+// ── tier 1a: every declared file exists and names its tool ───────────────────
+//
+// Catches a declaration that has gone stale, which is the failure mode a list
+// like this acquires once the scripts move on without it.
 for (const tool of tools) {
   for (const rel of tool.required_by ?? []) {
     let text = source.get(rel);
@@ -71,6 +87,8 @@ for (const tool of tools) {
   }
 }
 
+// ── tier 1b: every `for cmd in …` guard list is declared ─────────────────────
+//
 // The shape is `for <var> in <words>; do … command -v "$<var>" …`, which is how
 // most of these scripts check their preconditions. A grep for the binary NAME
 // cannot see these, because the name only exists as a loop word. That blind spot
@@ -80,10 +98,13 @@ const guardPattern = /^[ \t]*for[ \t]+(\w+)[ \t]+in[ \t]+([^;\n]+);?[ \t]*(?:do)
 for (const [rel, text] of source) {
   for (const match of text.matchAll(guardPattern)) {
     const [, variable, wordsRaw] = match;
+    // Only a loop whose body probes the loop variable is a precondition guard.
     const after = text.slice(match.index, match.index + 400);
     if (!after.includes(`command -v "$${variable}"`) && !after.includes(`-x "$${variable}"`)) continue;
     guardLists += 1;
     for (const word of wordsRaw.trim().split(/\s+/)) {
+      // Words that are themselves variables hold a path resolved earlier; the
+      // binary they point at is declared under its own name instead.
       if (word.includes("$")) continue;
       const bin = word.replace(/^["']|["']$/g, "");
       if (!bin || declaredBins.has(bin) || REPO_PINNED.has(bin)) continue;
@@ -98,6 +119,7 @@ if (guardLists < FLOOR_GUARD_LISTS) {
   );
 }
 
+// ── tier 1c: every `command -v <literal>` is declared ────────────────────────
 let literalProbes = 0;
 for (const [rel, text] of source) {
   for (const match of text.matchAll(/command -v[ \t]+"?([A-Za-z][\w.-]*)"?/g)) {
@@ -109,6 +131,8 @@ for (const [rel, text] of source) {
   }
 }
 
+// ── tier 1d: every `brew install …` hint maps to a declaration ───────────────
+//
 // A formula is not a binary (mozjpeg gives jpegtran and cjpeg, libavif gives
 // avifenc, webp gives cwebp), so this matches on the install STRING rather than
 // trying to translate. A new hint that nothing declares is a new prerequisite.
@@ -118,6 +142,8 @@ for (const [rel, text] of source) {
     const hint = `brew install ${match[1].trim()}`;
     brewHints += 1;
     if (declaredInstalls.has(hint)) continue;
+    // A multi-formula hint is satisfied when every formula in it is declared
+    // somewhere, since the docs write them as one line.
     const formulae = match[1].trim().split(/\s+/);
     const covered = formulae.every((f) => [...declaredInstalls].some((i) => i.split(/\s+/).includes(f)));
     if (!covered) {
@@ -132,6 +158,10 @@ if (brewHints < FLOOR_BREW_HINTS) {
   );
 }
 
+// ── tier 1e: the docs name every tool ────────────────────────────────────────
+//
+// The whole reason this file exists is that a prerequisite can be real and
+// undocumented. Asserting the docs mention it is what keeps that from recurring.
 const DOCS = ["CLAUDE.md", "docs/MAINTENANCE.md"];
 const docText = (await Promise.all(DOCS.map((d) => readFile(path.join(ROOT, d), "utf8")))).join("\n");
 for (const tool of tools) {
@@ -140,6 +170,16 @@ for (const tool of tools) {
   }
 }
 
+// ── tier 1f: every `<TOOL>_MIN=` guard agrees with the declaration ───────────
+//
+// The shape is `<NAME>_MIN=<version>` on its own line, and the tool it governs
+// is the name lowercased with underscores as dashes, so EXIF_SOOC_MIN governs
+// exif-sooc. Bounded, like every other scanner here, and floored for the same
+// reason: one that stops matching reports a pass while checking nothing.
+//
+// Note it asserts AGREEMENT where a guard exists rather than requiring one
+// everywhere. download-remote-photos.sh uses exif-sooc to READ two dimensions
+// and needs no write-capability floor, which is why it correctly has none.
 let minGuards = 0;
 const minPattern = /^[ \t]*([A-Z][A-Z0-9_]*)_MIN=([0-9][0-9A-Za-z.-]*)[ \t]*$/gm;
 for (const [rel, text] of source) {
@@ -159,6 +199,8 @@ for (const [rel, text] of source) {
     }
   }
 }
+// The other direction, so a declared floor cannot become decorative the way
+// min_version already had: something must actually enforce it.
 for (const tool of tools) {
   if (!tool.min_version) continue;
   const enforced = [...source.values()].some((text) =>
@@ -175,12 +217,17 @@ if (minGuards < FLOOR_MIN_GUARDS) {
   );
 }
 
+// ── tier 2: presence ─────────────────────────────────────────────────────────
 // Walk PATH directly rather than shelling out to `command -v`. Passing an
 // argument array with `shell: true` concatenates instead of escaping, which
 // node 26 deprecates (DEP0190), and a lookup needs no shell anyway.
 const PATH_DIRS = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
 
 async function present(tool: Tool): Promise<string | null> {
+  // A declared `path` resolves against the REPOSITORY, not the working
+  // directory, so a tool built into the tree (zenc) can be declared by its
+  // committed location and still be found when this runs from anywhere.
+  // `path.resolve` leaves an absolute path (jpegtran's) untouched.
   const candidates = tool.path
     ? [path.resolve(ROOT, tool.path)]
     : PATH_DIRS.map((dir) => path.join(dir, tool.bin));
@@ -202,11 +249,16 @@ for (const tool of tools) {
   else missing.push(tool);
 }
 
+// ── tier 3: version, and what the version DECIDES ────────────────────────────
+//
+// Compare the executable actually found with its declared record. Callers may
+// select another build, so drift here does not identify which artifacts changed.
 const versionErrors: string[] = [];
 const versionNotices: string[] = [];
 const versionLines: string[] = [];
 const noVersion: string[] = [];
 
+/** Numeric per component, so 1.10.0 reads as newer than 1.4.0. */
 function olderThan(have: string, want: string): boolean {
   const a = String(have).split(".").map(Number);
   const b = String(want).split(".").map(Number);
@@ -227,6 +279,9 @@ for (const [bin, where] of found) {
     continue;
   }
 
+  // A spec that neither reports nor says how to ask is a malformed declaration,
+  // and saying so beats narrowing it away: the alternative is a tool that is
+  // silently never version-checked, which is the shape of every absence here.
   if (!spec.flag || !spec.match) {
     versionErrors.push(`config/tools.json: ${bin} declares a version block with no flag or match, and does not say it reports none`);
     continue;
@@ -239,6 +294,10 @@ for (const [bin, where] of found) {
   const found_ = new RegExp(spec.match, "m").exec(text);
 
   if (!found_) {
+    // NOT a skip. A declared pattern that stops matching is scanner rot, the
+    // kind the floors exist for: the tier would go on reporting a pass while
+    // reading nothing. The tool changed its output, and that is worth
+    // knowing on the day it happens rather than on the day bytes move.
     versionErrors.push(
       `${bin}: \`${spec.flag}\` no longer matches its declared pattern. It answered: ${JSON.stringify(text.split("\n")[0] ?? "")}`,
     );
@@ -260,6 +319,9 @@ for (const [bin, where] of found) {
         .join(", ")
     : found_[1];
 
+  // `olderThan` reads one number per dot-separated component, so it cannot rank
+  // a multi-part record. Saying so beats comparing anyway: a floor that silently
+  // stops flooring is the same scanner rot.
   if (tool.min_version && groups) {
     versionErrors.push(
       `config/tools.json: ${bin} declares min_version ${tool.min_version} and a multi-part version pattern, which cannot be ordered`,
@@ -281,6 +343,7 @@ for (const [bin, where] of found) {
   versionLines.push(`  ${bin.padEnd(18)} ${version}${tool.bytes ? "  (bytes)" : ""}${marks.length ? `  <-- ${marks.join(", ")}` : ""}`);
 }
 
+// ── report ───────────────────────────────────────────────────────────────────
 console.log(`tools: ${tools.length} declared across ${scripts.length} shell scripts`);
 console.log(`declaration: ${guardLists} guard loops, ${literalProbes} literal probes, ${brewHints} brew hints scanned`);
 
@@ -317,6 +380,9 @@ const blocking = missing.filter((t) => !t.optional);
 const lines = missing.map((t) => `  - ${t.bin}${t.optional ? " (optional)" : ""} — ${t.install}\n      ${t.why}`);
 
 if (IN_CI) {
+  // A hosted runner has none of these and is not supposed to. Reporting keeps
+  // the tier visible in the log; failing would make every PR red for a machine
+  // that never runs the photo pipeline.
   console.log(`\npresence: ${missing.length} not on this machine (advisory in CI)`);
   for (const line of lines) console.log(line);
   process.exit(0);

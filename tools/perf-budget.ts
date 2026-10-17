@@ -1,6 +1,38 @@
 #!/usr/bin/env node
-// perf-budget.mjs — deterministic build/deploy invariants + advisory wire-size
+// perf-budget.ts — deterministic build/deploy invariants + advisory wire-size
 // reporting for aadhar.sh.
+//
+// User experience is measured in a controlled browser lab; this site deliberately
+// collects no browser RUM, and this script cannot honestly turn a guessed byte
+// number into an LCP guarantee.
+// It therefore HARD-fails only on facts that must never be ambiguous:
+//   1. luna.css parses clean (the v143-corruption tripwire);
+//   2. deploy assets are actually minified and retain readable source twins;
+//   3. the build output contains every expected asset.
+//
+// It also reports gzip + Brotli sizes against generous, role-aware envelopes.
+// Those envelopes are ADVISORY because there is no field dataset from which to
+// derive a user-centered threshold. A deferred page island is not allowed to veto a
+// homepage feature merely because its raw source grew.
+//
+//   bun run perf-budget
+//
+// Not measured here (needs a real browser): LCP/FCP/INP/CLS, TTFB by field
+// cohort, and the per-viewport photo-transfer delta. A controlled 4G lab run is
+// the repeatable pre-merge signal; no field-RUM outcome source is currently wired.
+//
+// Also not measured here: whether THIS CHANGE moved anything. Every threshold
+// below is an absolute line against a constant somebody typed, and the baseline
+// history at WORKER_BASELINE_GZIP_KIB is the record of what that costs: a number
+// that sat 58% stale for months while CI printed "hard checks green" over it.
+// The differential half lives in `tools/perf-snapshot.ts`, run by
+// .github/workflows/perf-diff.yml, which builds the merge base and HEAD and
+// posts the delta as a PR comment. It has no constants, so it cannot go stale.
+//
+// THIS script is the gate (structural invariants that must never ship broken,
+// plus a coarse alarm for a change large enough that nobody could have meant
+// it), and the diff is the signal (what moved, by how much, in this PR). A slow
+// 500-bytes-per-PR drift is invisible to everything here and obvious there.
 
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, stat } from "node:fs/promises";
@@ -13,6 +45,16 @@ import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { siteWranglerArgs } from "./lib/site-config.ts";
 import { budgetedAssets, readableTwins, unbudgetedAssets } from "./lib/client-assets.ts";
 
+// Wire-size envelopes, not raw-source ceilings. These start from the current
+// built output with enough room for ordinary feature work; they are deliberately
+// advisory while the site has no field-RUM baseline for path prioritization.
+//
+// Each envelope is declared on its asset in the client asset registry
+// (tools/lib/client-assets.ts), beside what the build needs to know about the
+// same file. This list was a second, hand-kept one until 2026-10-02 and had
+// fallen 14 minified assets behind the build's. Those are declared
+// "unbudgeted" there now: section 3 holds them to the banner and prints their
+// sizes, and nobody has invented a number for them.
 const ASSET_ENVELOPES = budgetedAssets();
 const UNBUDGETED = unbudgetedAssets();
 
@@ -92,9 +134,45 @@ const UNBUDGETED = unbudgetedAssets();
 const WORKER_BASELINE_GZIP_KIB = 204.24;
 const WORKER_ALERT_GROWTH = 0.25;
 
+// The minify-invariant twin of the number above, in SOURCE bytes, summed from
+// esbuild's metafile inputs. Measured 2026-08-16: 1376.65 KiB across 83 modules,
+// every one of them first-party (the metafile carries no node_modules input at
+// all, which is worth knowing before splitting this by vendor again).
+//
+// It answers a question the gzip figure stopped being able to answer the moment
+// production started minifying: how much code is in here. Gzip is what the
+// deploy uploads and what a cold start parses; source bytes are what the
+// repository wrote, and only the second one is invariant under a change to how
+// the first is produced.
+//
+// Shares WORKER_ALERT_GROWTH on purpose, so there is one headroom knob rather
+// than two that can drift apart. Advisory, like everything else here.
 const WORKER_BASELINE_SOURCE_KIB = 1376.65;
 
+// `wrangler check startup` advisory ceiling, in ms of ACTIVE startup CPU.
+//
+// The baseline note above measured startup cost by hand on 2026-08-04; this
+// re-takes that measurement on every CI run. `check startup` ranks frames and
+// does not cost them, and it profiles a local machine whose CPU is not
+// Cloudflare's. So this is a DIAGNOSTIC, not a prediction of production
+// startup, and a breach here means "go re-measure", never "cold start regressed".
+//
+// It cannot catch a regression either. The profile window is ~20ms and lands
+// about 5 samples: three consecutive runs of identical bytes read 9.6, 7.6 and
+// 6.4 ms, and a fourth on 2026-08-08 read 16.4 ms. The tripwires are the bundle
+// gzip above and the per-module attribution below, both deterministic, and the
+// per-PR movement in those is what tools/perf-snapshot.ts reports.
+//
+// That is also why the snapshot deliberately does NOT record this number.
+// Diffing two draws from a noisy distribution manufactures findings: a run that
+// sampled 9.6 against one that sampled 6.4 would read as a 50% startup
+// regression. Measure the deterministic thing, and keep the sampled one as the
+// flamegraph you open once it fires.
+//
+// 50ms is ~6x the observed 6.4-9.6ms and still an order of magnitude under the
+// 400ms platform limit. Advisory, never fatal.
 const WORKER_STARTUP_ALERT_MS = 50;
+// Every minified asset's readable twin, from the same registry.
 const TWINS = readableTwins();
 const HTML_TWIN = "index.src.html";
 const HTML_ENVELOPE = {
@@ -119,6 +197,7 @@ const fmt = (value) => `${value.toFixed(1)} KiB`;
 
 console.log("perf-budget: aadhar.sh pre-deploy gate\n");
 
+// 1) luna.css parses clean ---------------------------------------------------
 try {
   const css = await readFile("src/styles/luna.css", "utf8");
   const { warnings } = transformCss({ filename: "src/styles/luna.css", code: Buffer.from(css), minify: false });
@@ -128,6 +207,7 @@ try {
   bad(`luna.css: could not read/parse (${e.message})`);
 }
 
+// 2) worker bundle gzip via wrangler dry-run (self-builds .build/public) -----
 let dryOut = "";
 let dryRunFailed = false;
 try {
@@ -140,6 +220,15 @@ try {
   dryRunFailed = true;
 }
 
+// A dry-run that could not RUN is a broken gate, never an advisory condition.
+// Everything below reads numbers out of its output, so a refusal leaves every
+// budget unmeasured while the script goes on to print "hard checks green".
+//
+// It is not hypothetical. This spawned `pnpm exec wrangler` until 2026-08-20,
+// and pnpm REFUSES on a bun tree ("This project is configured to use bun"), so
+// the day the toolchain moved, this required check passed on every PR without
+// measuring one byte. Its sibling perf-snapshot had the identical bug and
+// reported "No change, 0 files" for a full run.
 if (dryRunFailed) {
   bad(`wrangler dry-run failed, so NO budget below was measured. Its output ended:\n        ${dryOut.trim().split("\n").slice(-6).join("\n        ")}`);
 }
@@ -155,12 +244,25 @@ if (gz) {
   warn("could not read bundle gzip from wrangler dry-run (offline/unauth?); skipping bundle-size check");
 }
 
+// 2a) startup CPU, from `wrangler check startup` ------------------------------
+// The check above measures how BIG the Worker is; this one measures what that
+// size costs at cold start, which is the constraint the size was ever a proxy
+// for. Available since 2026-07-30 and it needs no credential.
+//
+// The repo's standing conclusion is that cold start here is not eval-bound
+// (measured 2026-07-28, when lazy route imports were tried and bought nothing
+// but +27KB of wrappers). That was reasoned from bundle structure; this
+// measures it directly, and it agrees: ~8ms of active startup CPU against a
+// 400ms platform limit, on a Worker whose bundle grew 57% in the interim.
+//
+// Runs on the prebuilt bundle from the dry-run above, so it adds no build.
 try {
   const startOut = execFileSync(...wranglerCommand(await siteWranglerArgs([
     "check", "startup",
     "--workerBundle", ".build/.perfbudget/worker.bundle",
     "--outfile", ".build/.perfbudget/worker-startup.cpuprofile",
   ])), { encoding: "utf8" });
+  // "│   Active: 9.6 ms (including 0.0 ms garbage collection)"
   const active = startOut.match(/Active:\s*([\d.]+)\s*ms/);
   if (active) {
     const ms = parseFloat(active[1]);
@@ -174,6 +276,11 @@ try {
   warn(`\`wrangler check startup\` did not run (${(e.message || "").split("\n")[0]}); skipping the startup check`);
 }
 
+// 2b) bundle attribution, from esbuild's metafile (--metafile, above) ---------
+// The gzip number above says the bundle grew; it cannot say WHAT grew. The
+// metafile carries per-input bytes, so the advisory can name the modules
+// instead of leaving a number for someone to bisect by hand. Attribution only
+// prints when the advisory fires: on a green run it is noise.
 try {
   const meta = JSON.parse(await readFile(".build/.perfbudget/bundle-meta.json", "utf8"));
   const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][])
@@ -187,6 +294,15 @@ try {
     for (const [name, bytes] of inputs.slice(0, 5)) console.log(`          ${fmt(kib(bytes)).padStart(9)}  ${name}`);
   } else ok(`bundle attribution available (${inputs.length} modules, largest ${inputs[0][0]} at ${fmt(kib(inputs[0][1]))})`);
 
+  // 2c) the same bundle in SOURCE bytes, which no transform can shrink ---------
+  // `bytesInOutput` above is post-minify and moves when the pipeline changes.
+  // `meta.inputs[path].bytes` is the file esbuild read, so this total answers
+  // "how much code is in here" independently of how it is emitted. Both the
+  // 2026-08-16 minify drop and any future compression change leave it alone.
+  //
+  // A collapsed count is the failure mode worth guarding: an empty or tiny
+  // metafile would otherwise report a huge improvement. Floor it at 40 modules,
+  // under half the 83 the bundle carried on 2026-08-16.
   const sourceKib = kib((Object.values(meta.inputs ?? {}) as { bytes?: number }[])
     .reduce((sum, input) => sum + (input.bytes ?? 0), 0));
   const sourceAlertAt = WORKER_BASELINE_SOURCE_KIB * (1 + WORKER_ALERT_GROWTH);
@@ -202,6 +318,7 @@ try {
   warn(`could not read bundle metafile (${e.message}); skipping bundle breakdown`);
 }
 
+// 3) minified shells + luna.css: banner + compressed advisory envelope --------
 for (const { file, envelope } of ASSET_ENVELOPES) {
   const path = `.build/public/${file}`;
   let bytes;
@@ -216,6 +333,9 @@ for (const { file, envelope } of ASSET_ENVELOPES) {
   if (overGzip || overBrotli) warn(`${line}; advisory envelope ${envelope.gzipKiB}/${envelope.brotliKiB} KiB gzip/Brotli`);
   else ok(`${line}; envelope ${envelope.gzipKiB}/${envelope.brotliKiB} KiB gzip/Brotli`);
 }
+// The declared gap: minified and banner-checked like the rest, with no envelope
+// to compare against. Printed so the sizes are on the record when somebody
+// decides a number.
 for (const file of UNBUDGETED) {
   let bytes;
   try { bytes = await readFile(`.build/public/${file}`); } catch { bad(`${file}: missing from build output (run build first)`); continue; }
@@ -225,11 +345,13 @@ for (const file of UNBUDGETED) {
   ok(`${file}: ${bytes.length} B raw, ${fmt(sizes.gzip)} gzip, ${fmt(sizes.brotli)} Brotli (unbudgeted: no envelope declared)`);
 }
 
+// 4) readable twins present --------------------------------------------------
 for (const t of TWINS) {
   try { await stat(`.build/public/${t}`); ok(`twin ${t} present`); }
   catch { bad(`twin ${t} missing from build output`); }
 }
 
+// 4b) dictionary + generated-page pipeline ----------------------------------
 try {
   const name = (await readdir(".build/public/a"))
     .find((f) => parseFamilyDictionary(f));
@@ -255,6 +377,11 @@ try {
   const pages = (await readdir(".build/public", { recursive: true }))
     .filter((path) => path.endsWith(".html") && !path.endsWith(".src.html"));
   const deltas = await readdir(".build/public/pd");
+  // PAGE_FAMILY_MATCH makes this the dictionary Chrome selects whenever both the
+  // family and an exact page snapshot are cached. Coverage by EITHER tier is no
+  // longer an honest gate: a page with only an exact delta would still receive the
+  // family hash and fall through to Brotli. Require the preferred family tag on
+  // every deterministic page; exact snapshots remain a high-ratio cold-family path.
   const familyName = (await readdir(".build/public/a"))
     .find((name) => parseFamilyDictionary(name));
   if (!familyName) throw new Error("page-family dictionary is missing");
@@ -263,6 +390,14 @@ try {
   const absent = pages
     .filter((path) => !deltas.includes(pageDeltaName(pageSlug(path), familyTag)));
 
+  // build.ts step 8 SKIPS a family delta that is not smaller than the page's q11
+  // twin, and it is right to: Chrome sends the family hash either way, so with no
+  // variant it gets the q11 bytes, which are the smaller answer. /garage/horizon is
+  // the first page this happened to (2026-09-30, once its quiz payload left the
+  // document: 66,660 B delta against 66,291 B q11). So an absent variant is a
+  // breach only when it would have been USEFUL, and that is recomputed here the
+  // way the build encodes it (its own encoder in tools/lib/dcz.ts: zstd 19, raw
+  // dictionary, 40 B skippable header) rather than trusted, so a build that forgets a useful delta still fails.
   const missing: string[] = [];
   const notUseful: string[] = [];
   for (const path of absent) {
@@ -301,6 +436,7 @@ for (const path of [
   }
 }
 
+// 5) homepage HTML: minification banner, readable twin, and semantic anchors
 let homepage;
 try {
   homepage = await readFile(".build/public/index.html");
@@ -322,6 +458,14 @@ if (homepage) {
   } catch {
     bad("index.src.html: readable homepage twin missing");
   }
+  // Every OTHER served page has carried the same contract since 2026-07-31. This is
+  // the shipped-artifact half of the gate build.ts step 7b enforces at write time,
+  // the same two-moment arrangement HTML_MARKERS already uses.
+  //
+  // The twin is checked for EXISTENCE and readability rather than byte-equality with
+  // a source file, because some of these pages are generated into the staged tree and
+  // have no authored file to compare against. Readability is the claim that matters:
+  // a twin that came back minified would make View Source a dead link.
   try {
     const { readdir } = await import("node:fs/promises");
     const served = (await readdir(".build/public", { recursive: true }))
@@ -335,6 +479,14 @@ if (homepage) {
       let twin;
       try { twin = (await readFile(`.build/public/${twinRel}`)).toString("utf8"); }
       catch { missing++; continue; }
+      // The claim is that the twin is the PRE-minification document, so the exact
+      // test is that it does not itself carry the banner the minifier stamps on.
+      //
+      // A line-count comparison was the obvious heuristic and it was wrong: the
+      // /writing Notepad pages hold their text inside a <textarea>, whose newlines
+      // the minifier must preserve, so twin and page have the same line count and the
+      // banner tipped it the wrong way. Minification is non-expanding, so the size
+      // floor below is the honest sanity bound.
       if (twin.startsWith("<!-- minified at deploy;")) unreadable++;
       else if (twin.length < page.length - 120) unreadable++;
     }

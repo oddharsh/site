@@ -1,6 +1,20 @@
 #!/usr/bin/env bun
 // typecheck.ts — run bun check on each program the root tsconfig.json references and
 // hold every file's error count to config/ts-baseline.json.
+//
+// The baseline exists because strictNullChecks went on with errors still owed.
+// A file's count may only fall: a new error fails, and so does a fix that isn't
+// recorded. After fixing errors, run `bun run typecheck -- --update`.
+//
+// Some programs import code from another tree (tools import Worker source, for
+// instance). Only errors in a program's own tree count; the owning program
+// reports the rest.
+//
+// With no arguments it checks every program except lens-reader's, which has its
+// own node_modules and runs from lens-reader/package.json with config paths as
+// arguments. A full run also checks that every tracked source file belongs to
+// some program and is named by one of its include globs, because the
+// type-aware lint only finds files a tsconfig names.
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -10,6 +24,8 @@ import { parseJsonc } from "./lib/jsonc.ts";
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const BASELINE = join(REPO, "config/ts-baseline.json");
 
+// Which tree's errors each program reports. Explicit scopes also keep a
+// partial --update from erasing another program's baseline.
 const OWNS: Record<string, string[]> = {
   "config/tsconfig.json": ["src/worker/", "cal/", "serendipity/", "counter/"],
   "config/tsconfig.browser.json": ["src/client/", "public/", "pipelines/"],
@@ -24,6 +40,7 @@ const OWNS: Record<string, string[]> = {
 };
 const SEPARATE = ["config/tsconfig.lens-reader.json", "config/tsconfig.lens-reader-test.json"];
 
+/** Execute the running Bun's checker; crashes and incomplete checks fail closed. */
 function check(root: string, config: string, flags: string[], executable: string) {
   // --all because `bun check` groups identical errors above 50. Piped
   // --no-pretty output listed all 80 of 80 without it (measured 2026-10-06 on
@@ -136,6 +153,9 @@ function main() {
     for (const config of SEPARATE) {
       for (const file of programFiles(REPO, config)) covered.add(file);
     }
+    // Disabling import resolution leaves the files selected directly by the
+    // config. Bun owns include/exclude/extends semantics; no second glob parser
+    // or TypeScript CLI is needed to distinguish named from imported source.
     const named = new Set(referenced.flatMap((config) => programFiles(REPO, config, true)));
     problems.push(...coverageProblems(owned, covered, named));
   }

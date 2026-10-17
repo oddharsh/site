@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// check-dictionary-support.mjs — is shared-dictionary compression OPERATIONAL, per
+// check-dictionary-support.ts — is shared-dictionary compression OPERATIONAL, per
 // surface class, against PRODUCTION? (bun run dcz:check)
 //
 // Synthesizes Available-Dictionary from the committed dictionary sets, exactly the way a
@@ -21,6 +21,9 @@ import { parseFamilyDictionary, parseShellAsset } from "../src/worker/lib/dictio
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
 const get = (url, dict?, extra: Record<string, string> = {}) => {
+  // The header is ABSENT on the control arm rather than empty: an empty
+  // `available-dictionary` is a different request from one that never offered a
+  // dictionary, and the control depends on the second.
   const headers: Record<string, string> = { "accept-encoding": "zstd, br, dcz", ...extra };
   if (dict) headers["available-dictionary"] = dict;
   return fetch(url, { headers, redirect: "manual" });
@@ -29,6 +32,7 @@ const get = (url, dict?, extra: Record<string, string> = {}) => {
 let fail = 0;
 const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}  ${detail}`); if (!ok) fail++; };
 
+// 1. shell js — nav delta against an a-dict candidate that is NOT the live hash
 {
   const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
   const live = home.match(/\/a\/nav\.([0-9a-f]{8})\.js/)?.[1];
@@ -40,6 +44,12 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     report("shell js (nav)", ce === "dcz", `ce=${ce} vs candidate ${cand}`);
   }
 }
+// 1b. shell COVERAGE: is the a-dict set built against the bytes browsers actually HOLD?
+//
+// Probe 1 above offers a committed candidate and asserts the worker answers dcz. That is
+// true by construction: build.ts builds a delta for every a-dict entry, so the probe can
+// only ever agree with itself. It reads the live hash purely to EXCLUDE it.
+//
 // The question a returning visitor asks is the opposite one. They hold whatever `/a/` asset
 // production served them last, they offer ITS hash, and they get a delta only if that hash
 // was in a-dict when the new version was built. So the assertion is coverage of the LIVE
@@ -47,10 +57,35 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 // tier already has (gotcha 20). Without it the shell tier can go months uncovered while every
 // row here reads PASS. Measured 2026-08-12, live nav.1c6af07b.js and luna.1523f4f6.css were
 // absent while a-dict still held the three candidates from #178 on 2026-07-30.
+//
+// Bases with no a-dict entry at all are SKIPPED, not failed: a newly shipped asset cannot
+// have a dictionary until it has been served once, and `bun run shell:roll` adopts it on the
+// next roll. What this catches is a base that HAS a history and whose live bytes are missing
+// from it, which is the drift that matters.
+//
+// Advisory on purpose. Like infra:check's edge tier this reads production, so it stays red
+// until a deploy fixes it. Do NOT make dcz:check a required check or it deadlocks the very
+// release that would clear it.
 {
   const committed = (await readdir("src/dict/a-dict")).filter((n) => parseShellAsset(n));
   const bases = new Set(committed.map((n) => parseShellAsset(n)!.base));
 
+  // Discovery has to match the ROLL's, or this assertion grades a different set from the
+  // one the nightly job adopts. It walks the same documents (SHELL_DISCOVERY_ROOTS, one
+  // list the two import) and then closes over the /a/ graph, because an asset loaded
+  // lazily from JavaScript appears in no document.
+  //
+  // This check shipped with an HTML-only scan of two pages, and that is the same gap the
+  // roll had until it grew `liveShell()`; the fix landed there and was never mirrored
+  // here. Measured 2026-08-19: documents alone found 5 of 17 live assets and the 12 it
+  // could not see included lens.js, the largest script on the site at 22,807 B brotli. It
+  // reported one uncovered asset that day when there were two. A coverage assertion that
+  // cannot see the asset it is covering is the same "could only ever agree with itself"
+  // failure this block was written to fix, one layer out.
+  //
+  // Bodies are CACHED so the byte comparison below reuses what the walk already read. That
+  // is not only a saved request: re-fetching opens a window for a deploy to land between
+  // the scan and the compare, which would grade bytes this run never saw.
   const body = new Map();
   const assetRefs = (buf) => shellAssetRefs(buf.toString("utf8"));
   const fetchLive = async (path) => {
@@ -66,6 +101,8 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     const doc = await fetchLive(path);
     if (doc) for (const n of assetRefs(doc)) see(n);
   }
+  // Only .js can name another asset, and the visited set is the termination proof: the
+  // /a/ namespace is finite and each name is fetched at most once.
   const queue = [...refs.keys()], walked = new Set();
   while (queue.length) {
     const name = queue.shift();
@@ -88,6 +125,8 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     if (!served) { missing.push(`${name} (could not be read from production)`); continue; }
     if (!served.equals(await readFile(`src/dict/a-dict/${name}`))) missing.push(`${name} (filename matches, bytes do not)`);
   }
+  // An empty read means production is down or the ref shape moved, and reporting PASS on
+  // nothing is exactly the false green this assertion exists to prevent.
   if (!refs.size) missing.push("no /a/ references found at aadhar.sh");
   const skipped = [...refs].filter(([, base]) => !bases.has(base)).map(([n]) => n);
   report("live shell is covered by a-dict", missing.length === 0,
@@ -96,6 +135,16 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
            : `${tracked.length} live asset(s) present in a-dict${skipped.length ? `; ${skipped.length} untracked base(s) skipped: ${skipped.join(", ")}` : ""}`);
 }
 
+// 1c. FAMILY dictionary: is the one production advertises the one that is COMMITTED?
+//
+// build.ts ships the committed src/dict/f-dict dictionary whenever it is within drift
+// of the fresh derivation, which is what keeps /a/page-family.<hash8>.dict stable
+// across deploys (a re-mint costs every returning visitor a 17 KB fetch). The two
+// disagree in exactly two states: the build shipped a fresh corpus because the
+// committed one drifted, and the roll has not committed it yet; or someone forced a
+// re-mint by emptying the directory. Both want `bun run dict:roll`, which is why this
+// is a row here and not an error anywhere else. Advisory, like every row: it reads
+// production.
 {
   let committed: CommittedFamily | null = null, problem: string | null = null;
   try { committed = await readCommittedFamily(); } catch (e) { problem = e instanceof Error ? e.message : String(e); }
@@ -112,6 +161,10 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
                 : `production serves ${liveHash}, ${FAMILY_DICT_DIR} holds ${committed.hash8}; run \`bun run dict:roll\` (or the last deploy re-minted on purpose and the roll has not run yet)`);
 }
 
+// 2. page html — exercise both dictionary tiers. The family dictionary is read from
+// the production page's Link header; the per-page candidate is a committed snapshot
+// of the previous release. Both are real Available-Dictionary values a browser can
+// send, and the worker must answer each with dcz when that candidate is present.
 {
   const page = await fetch("https://aadhar.sh/garage/pretext", { headers: { "accept-encoding": "identity" } });
   const offered = page.headers.get("link")?.match(/<([^>]+)>;\s*rel="compression-dictionary"/)?.[1];
@@ -131,7 +184,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     const res = await fetch(`https://aadhar.sh${offered}`, { headers: { "accept-encoding": "br" } });
     const body = Buffer.from(await res.arrayBuffer());
     let raw = body;
-    try { raw = brotliDecompressSync(body); } catch { }
+    try { raw = brotliDecompressSync(body); } catch { /* already decoded upstream */ }
     const uad = res.headers.get("use-as-dictionary") || "";
     report("page dictionary offered", uad === `match="${PAGE_FAMILY_MATCH}", match-dest=("document")`,
            `${offered} ${raw.length} B, uad=${uad || "(absent)"}`);
@@ -146,6 +199,12 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   if (!candidates.length) {
     report("page html per-page tier", true, "no committed pretext snapshot — family tier is the only candidate");
   } else {
+    // Try EVERY committed snapshot and pass if any one earns a delta, rather than
+    // picking candidates[0] and hoping. Two states make one-candidate probing wrong:
+    // readdir order is not adoption order, and a snapshot rolled since the last
+    // deploy has no delta built against it yet (deltas are build output). Both read
+    // as a broken tier when the tier is fine. "At least one committed snapshot is
+    // usable against production right now" is the property worth asserting.
     const tried = [];
     for (const name of candidates) {
       const raw = brotliDecompressSync(await readFile(`src/dict/p-dict/${name}`));
@@ -158,6 +217,21 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
              ? `ce=dcz vs ${tried.at(-1).replace("=dcz", "")}`
              : `no committed snapshot earned a delta (${tried.join(", ")}) — the deployed /pd/ deltas predate every one of them`);
 
+    // A snapshot is only a dictionary if a BROWSER holds those bytes, so it has to be
+    // what the wire sent, not what the build produced. The tier above cannot see the
+    // difference: it offers the committed tag, so it passes on a snapshot no browser
+    // could ever offer. That is exactly what happened when WebMCP turned on and
+    // Cloudflare started injecting `<script src="/.webmcp/bridge.js">` at the edge,
+    // downstream of this Worker — every snapshot rolled from `.build/public` hashed
+    // to bytes nobody had, and the per-page tier fell back to the family dictionary
+    // in total silence.
+    //
+    // The invariant that catches it in general: a script the live document loads must
+    // appear in at least one committed snapshot. Hashed `/a/` refs are normalised away
+    // because those legitimately change every deploy; what is left is the set of
+    // scripts an EDGE feature can add behind the Worker's back. Fires either when
+    // injection is newly on or when a roll read the build, and the remedy is the same
+    // for both: re-roll from the wire.
     const srcs = (html) => new Set(
       [...String(html).matchAll(/<script[^>]+src=["']?([^"'\s>]+)/gi)]
         .map((m) => m[1].replace(/\.[0-9a-f]{8}\.(js|css)$/, ".$1")),
@@ -172,6 +246,9 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
              : `no snapshot carries ${unheld.join(", ")} — an edge feature is rewriting HTML after the Worker, so re-run bun run shell:roll (it reads production)`);
   }
 }
+// 3. svg: on the dictionary path for everyone since 2026-09-26. The offer must be
+// scoped to the image destination and must NOT vary on cookie: that header belonged to
+// the canary (#940), and leaving it would key every browser's cache on its cookies.
 {
   const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
   const live = home.match(/\/a\/icons\.([0-9a-f]{8})\.svg/)?.[1] ?? "";
@@ -181,6 +258,9 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const offer = on.headers.get("use-as-dictionary") || "";
   report("svg offers (icons)", offer.includes('match-dest=("image")') && !/\bcookie\b/i.test(on.headers.get("vary") || ""),
     `use-as-dictionary=${offer || "(none)"} vary=${on.headers.get("vary")}`);
+  // The delta row needs a sprite in a-dict that is NOT the live one, which exists only
+  // after a roll has adopted a sprite and a later deploy re-minted it. Until then this
+  // is a skip rather than a failure: there is nothing a returning browser could hold yet.
   const cand = (await readdir("src/dict/a-dict")).find((n) => /^icons\.[0-9a-f]{8}\.svg$/.test(n) && !n.includes(live));
   if (!cand) console.log("  SKIP  svg delta (icons)  no non-live sprite in a-dict yet; it arrives with the first sprite change after a roll");
   else {
@@ -189,6 +269,19 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     report("svg delta (icons)", ce === "dcz", `ce=${ce} vs candidate ${cand}`);
   }
 }
+// 4. offers are SCOPED to destinations we answer. The spec defaults match-dest to every
+// destination, so a bare `match=` promises deltas for image/fetch/etc too. Assert the
+// scope AND that a delta still comes back — a malformed inner list would make Chromium
+// drop the offer and every delta would vanish silently into plain brotli.
+//
+// Each asset carries its OWN scope, matching its own destination: nav.js is
+// ("script"), luna.css is ("style"). This assertion used to require both names on
+// every offer, which was right while one `/a/*` glob covered the pair, and became
+// wrong the moment #138 split the offers per asset. It then failed for eleven days
+// against correct behaviour — and because dcz:check is a manual check rather than a
+// CI gate, a red line here is exactly the kind that gets read as background noise.
+// So: assert each asset's own destination, and assert they DIFFER, which is the
+// property that a regression back to a shared glob would actually break.
 {
   const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
   const navHash = home.match(/\/a\/nav\.([0-9a-f]{8})\.js/)?.[1];
@@ -246,14 +339,38 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const puad = p.headers.get("use-as-dictionary");
   const pcc = p.headers.get("cache-control") || "";
   try { await p.body?.cancel(); } catch {}
+  // The offer and the policy have to agree in BOTH directions. Advertising a dictionary
+  // no browser will keep is the bug this check was written for; silently dropping the
+  // offer on a page whose policy WOULD have kept it is the per-page tier going dark
+  // with nothing on the wire to say so.
   report("page self-offer matches what the policy can keep", !!puad === canRegister(pcc),
          puad
            ? `offers itself (${puad}) under "${pcc}"${canRegister(pcc) ? "" : " — stale on arrival, so no browser can keep it"}`
            : `no self-offer under "${pcc}"${canRegister(pcc) ? " — but this policy WOULD register; the tier is dark for nothing" : " (correct; the family dictionary carries the page tier)"}`);
+  // A short swr window registers a short-lived dictionary, which fails as a slow leak
+  // rather than a hard error: the offer still looks right and simply stops matching.
   const swr = Number(pcc.match(/\bstale-while-revalidate=(\d+)/)?.[1] || 0);
   report("page dictionary lifetime is useful", !puad || swr === 0 || swr >= 86400,
          swr ? `stale-while-revalidate=${swr}s of dictionary lifetime` : "(freshness, not swr, carries the lifetime)");
 }
+// 5. the cache key actually SEPARATES dictionaries. Everything above reads
+// `content-encoding` and stops there, which cannot see the one failure that would
+// actually break visitors: a shared cache that stored one client's delta and hands it
+// to a client holding a DIFFERENT dictionary. That response is labelled dcz, arrives
+// with a 200, and is undecodable — and every check above it still says PASS, because
+// the header is right and only the bytes are wrong.
+//
+// The separation is not ours to implement. Cloudflare's shared-dictionaries support
+// (RFC 9842, open beta 2026-04-30) is what extends the edge cache key to
+// `Available-Dictionary` + `Accept-Encoding`; src/worker/lib/assets.ts sets the Vary
+// that asks for it. A zone-side regression, or that setting being flipped, would land
+// here as two dictionaries collapsing onto one cached body. Verified separating
+// 2026-07-29 (1072 B / 651 B / 13490 B, all three cf-cache-status: HIT), so this
+// asserts a property production HAS rather than one we hope for.
+//
+// Needs two distinct dictionaries that BOTH earn a delta against the live nav hash,
+// so it discovers them instead of hardcoding: a dictionary roll changes which
+// committed snapshots still have deltas deployed.
 {
   const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
   const live = home.match(/\/a\/nav\.([0-9a-f]{8})\.js/)?.[1];
@@ -282,6 +399,9 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
              : `${a.name}=${a.bytes} B (${a.sha}) vs ${b.name}=${b.bytes} B (${b.sha})`);
   }
 
+  // The other half of the same key: a client that sends NO dictionary must never be
+  // handed a delta. This is the direction that breaks a first-time visitor rather than
+  // a returning one, so it is the more expensive of the two to get wrong.
   const plain = await get(url);
   const pce = plain.headers.get("content-encoding");
   try { await plain.body?.cancel(); } catch {}

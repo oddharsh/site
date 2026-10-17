@@ -1,5 +1,15 @@
 // ── infra:check compares a declaration against a RECORDED observation ───────
-// Split-file suite; shared imports live in contract-shared.ts.
+//
+// These tests drive responses through the comparers instead of reading
+// tools/check-infra.ts's SOURCE. A regex over source can say "a comparison is
+// written here". It cannot say "a bypass actor fails by name", because that
+// needs a response to compare. The comparers are a module
+// (tools/lib/infra-compare.ts) and the adapters take a `fetch`
+// (tools/lib/infra-ports.ts), so every drift case below is a fixture.
+//
+// Each drift test carries its control in the same test: the unmodified fixture
+// produces zero failures, so the failure asserted is the mutation's and not
+// the fixture's. The declaration is the real config/infra.json throughout.
 import { assert, readFileSync, test } from "./contract-shared.ts";
 import { agentRepresentation, agentSurfaces } from "./lib/agent-representation.ts";
 import {
@@ -31,6 +41,7 @@ const passes = (findings) => findings.filter((f) => f.level === "pass").map((f) 
 const ok = (value) => ({ ok: true, value });
 const clone = (value) => structuredClone(value);
 
+/** A ruleset detail as GitHub returns one, built to match its declaration. */
 function rulesetDetail(want) {
   return {
     name: want.name,
@@ -55,6 +66,8 @@ function rulesetDetail(want) {
 
 const liveLabels = () => repo.triage.labels.map((l) => ({ name: l.name, color: l.color, description: l.description }));
 
+/** The repository tier's observation with everything matching. `core` is what
+ *  an unauthenticated read sees: no `security_and_analysis` on the metadata. */
 function matchingRepository() {
   return {
     core: ok({
@@ -77,6 +90,7 @@ function matchingRepository() {
 
 const anonymous = { authenticated: false };
 
+/** Workers Builds triggers matching the release block. */
 const matchingTriggers = () => [
   {
     branch_includes: [infra.release.production_branch],
@@ -87,6 +101,7 @@ const matchingTriggers = () => [
   { branch_includes: ["*"], branch_excludes: [infra.release.production_branch], deploy_command: infra.release.non_production_deploy_command },
 ];
 
+/** DNS answers matching every declared record. */
 function matchingDns() {
   const observed = new Map();
   const answer = (name, type, answers) => observed.set(dnsKey(name, type), { answers: [...answers].sort(), authenticated: true, resolver: "fixture" });
@@ -125,6 +140,9 @@ test("a bypass actor added to the main ruleset fails by name", () => {
 });
 
 test("bypass actors are asserted EMPTY: no declaration can turn one green", () => {
+  // The control the old shape could not have: declare the same actor in
+  // infra.json and the comparer still fails. A diff against a declared list
+  // would pass here, which is the change the check exists to catch.
   const declared = clone(repo);
   const actor = { actor_type: "Integration", actor_id: 15368, bypass_mode: "always" };
   declared.rulesets.find((r) => r.name === "main").bypass_actors = [actor];
@@ -144,6 +162,8 @@ test("a ruleset with enforcement disabled fails", () => {
 test("visibility private fails FIRST, and nothing under it is compared", () => {
   const observed = matchingRepository();
   observed.core.value.meta.visibility = "private";
+  // Drift underneath that must NOT be reported: on a private repo the rules
+  // have gone dark, so four missing rules would name the symptom.
   observed.core.value.details.main.value.enforcement = "disabled";
   observed.labels = ok([]);
   const findings = compareRepository(repo, observed, anonymous);
@@ -222,6 +242,7 @@ test("API tier: a live deploy command that lost --x-provision=false fails, on bo
   assert.equal(branchFailed.length, 1);
   assert.ok(branchFailed[0].includes("it is missing --x-provision=false, so a push to ANY branch publishes with resource creation ON"));
 
+  // The wrapped envelope reads the same as the bare list.
   assert.deepEqual(fails(compareWorkersBuilds(infra.release, ok({ tag: "tag-1", triggers: { triggers: matchingTriggers() } }))), []);
 });
 
@@ -268,6 +289,7 @@ test("a lookup nobody made is an advisory, never a missing record and never a pa
   const findings = compareDns(infra, observed);
   assert.deepEqual(fails(findings), []);
   assert.deepEqual(warns(findings), [`could not resolve ${txt.type} ${txt.name} (no observation was recorded for this lookup)`]);
+  // Control: the EMPTY answer the gap must not be mistaken for is a failure.
   observed.set(dnsKey(txt.name, txt.type), { answers: [], authenticated: true, resolver: "fixture" });
   assert.equal(fails(compareDns(infra, observed)).length, 1);
 });
@@ -288,6 +310,10 @@ test("edge: a header the zone added is a production drift; its absence passes", 
   assert.ok(drift[0].message.startsWith('production edge: speed-brain-off: speculation-rules is present ("/cdn-cgi/speculation")'));
 });
 
+// The probe goes to a page with no twin and asks for Markdown, so the zone
+// converting it is the only way text/markdown comes back. Driven through the
+// real port: a target that resolved to the homepage would hold a twin, and the
+// worker's own Markdown would read as the zone's.
 test("edge: Markdown for Agents converting a page with no twin is a drift; the page's own HTML passes", async () => {
   const check = edgeCheck("markdown-for-agents-converts-nothing");
   const edge = { origin: "https://aadhar.sh", checks: [check] };
@@ -309,12 +335,18 @@ test("edge: Markdown for Agents converting a page with no twin is a drift; the p
   assert.equal(converted[0].level, "fail");
   assert.ok(converted[0].message.startsWith('production edge: markdown-for-agents-converts-nothing: content-type does not contain "text/html"'), converted[0].message);
 
+  // No post to probe is an unmeasured check, never a pass.
   const empty = { probeEarlyData: async () => ({ skip: "unused" }), fetchEdge: async () => edgeServed(json([])) };
   const unresolved = compareEdge(edge, await readEdge(edge, empty), { hostedRunner: false });
   assert.equal(unresolved[0].level, "warn");
   assert.ok(unresolved[0].message.includes("could not resolve its target: posts.json carried no post slug"), unresolved[0].message);
 });
 
+// Replaces a source-text assertion: the old test sliced check-infra.ts at
+// `if (want.earlyData)` and matched `process.env.GITHUB_ACTIONS) warn(` in the
+// slice. That passes on any code that merely SPELLS the split. Three spaced
+// rejections from GitHub's network have read as drift while the zone was fine
+// (2026-08-20, and twice on 2026-09-02); a workstation has never produced one.
 test("early data: a rejection is advisory on a hosted runner and a drift on a workstation", () => {
   const check = edgeCheck("tls-0rtt-on");
   /** @type {import("./lib/infra-compare.ts").EdgeObservation} */
@@ -330,6 +362,7 @@ test("early data: a rejection is advisory on a hosted runner and a drift on a wo
   assert.ok(workstation[0].message.startsWith("production edge: tls-0rtt-on: TLS early data rejected on 3 spaced resumptions"));
 
   assert.equal(compareEdgeCheck(check, { kind: /** @type {const} */ ("early-data"), result: { accepted: true, attempts: 1 } }, { hostedRunner: true })[0].level, "pass");
+  // A machine that cannot run the probe has measured nothing.
   assert.equal(compareEdgeCheck(check, { kind: "early-data", result: { skip: "no openssl" } }, { hostedRunner: false })[0].level, "warn");
 });
 
@@ -347,6 +380,8 @@ test("edge: an observation of the wrong kind, a missing body and a missing check
   assert.equal(partial[0].level, "warn", "an encoding nobody asked for cannot be reported as served");
 });
 
+// The registry these tests judge is the real one, so a surface added tomorrow
+// is covered by them without an edit.
 /** @typedef {import("./lib/agent-representation.ts").AgentSurface} AgentSurface */
 /** @typedef {import("./lib/infra-compare.ts").AgentAnswer} AgentAnswer */
 /** @type {AgentSurface[]} */
@@ -383,12 +418,15 @@ test("agent coverage: HTML where Markdown is owed, and a redirect, are gaps name
   answers.set(html.path, { kind: "answer", contentType: "text/html" });
   answers.set(moved.path, { kind: "redirect", status: 302, location: "https://open.spotify.com/" });
   const n = agentPages.length;
+  // Gaps are listed in registry order.
   const named = agentPages.filter((p) => p === html || p === moved)
     .map((p) => (p === html ? `${p.path} (text/html)` : `${p.path} (302 to https://open.spotify.com/)`));
   assert.deepEqual(compareAgentCoverage(agentPages, answers), [{
     level: "warn",
     message: `agent markdown coverage: ${n - 2}/${n} measured agents:true surfaces answer Accept: text/markdown in their declared representation. No twin: ${named.join(", ")}. Give each one a twin, declare the representation its route serves (mimeType), or drop flags.agents so the registry stops advertising it`,
   }]);
+  // The rule is per surface: text/plain is right for a terminal tool and a gap
+  // where Markdown is owed.
   const swapped = agentAnswersOk();
   swapped.set(plainPage().path, { kind: "answer", contentType: "text/markdown" });
   assert.equal(compareAgentCoverage(agentPages, swapped)[0].level, "warn");
@@ -401,6 +439,7 @@ test("agent coverage: an unmeasured surface blocks the pass and is never counted
   const findings = compareAgentCoverage(agentPages, answers);
   assert.deepEqual(findings, [{ level: "warn", message: `agent markdown coverage left 1/${agentPages.length} surfaces unmeasured: ${lost.path} (HTTP 403 without cf-ray)` }]);
 
+  // Alongside a gap, the gap's denominator is what was measured.
   answers.set(markdownPage().path, { kind: "answer", contentType: "text/html" });
   const both = compareAgentCoverage(agentPages, answers);
   assert.equal(both.length, 2);
@@ -451,6 +490,8 @@ test("agent port: asks manually, records what the edge served, and records the r
   assert.ok(asked.every((q) => q.accept === "text/markdown" && q.redirect === "manual"), JSON.stringify(asked));
 });
 
+// The run that started this, end to end: the sandbox proxy's 403 for every
+// probe. Port plus comparer print exactly what infra:check printed there.
 test("agent port and comparer: a proxy answering every probe reads as 'could not run'", async () => {
   const proxy = async () => new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
   const findings = compareAgentCoverage(agentPages, await readAgentAnswers("https://aadhar.sh", agentPages, edgeFetcher(proxy)));
@@ -482,6 +523,10 @@ test("a retired Worker still deployed fails, and an unaccounted one is an adviso
   assert.ok(warns(findings).includes("Worker mystery-worker is deployed but not accounted for in infra.json"));
 });
 
+// Replaces a source-text assertion: the old test matched
+// `assertZoneSetting(...infra.zone?.shared_dictionary)` in check-infra.ts,
+// which proves a call is written and nothing about what it does with
+// `disabled`, the one value that drops every dcz tier to plain brotli.
 test("zone settings: shared_dictionary_mode disabled and 0-RTT off each fail; an unseen zone is an advisory", () => {
   const shared = infra.zone.shared_dictionary;
   assert.equal(shared.value, "passthrough");
@@ -528,6 +573,11 @@ test("a read-only token carrying an Edit group fails; one carrying none passes",
   assert.ok(fails(wide)[0].startsWith(`token ${want.name} (${want.env}) is declared read-only but carries Workers KV Storage Write`));
 });
 
+// The invariant: a read that failed or was refused is an ADVISORY. It is never
+// a pass, never a hard failure, and never an empty observation that compares
+// clean. Each port gets a 401, a 403 and a network throw through its real
+// adapter, so the whole seam is exercised and not the comparer alone.
+
 const refusals = {
   401: () => json({ success: false, errors: [{ code: 10000, message: "Authentication error" }] }, 401),
   403: () => json({ success: false, errors: [{ code: 9109, message: "Unauthorized to access requested resource" }] }, 403),
@@ -555,6 +605,8 @@ for (const [how, respond] of Object.entries(refusals)) {
       assert.equal(findings.length, 1, label);
       assert.equal(findings[0].level, "warn", label);
       assert.ok(findings[0].message.startsWith(`${label} unchecked: `), findings[0].message);
+      // An unauthorised read names the scope the token is missing. A network
+      // failure names no scope, because no scope would have helped.
       assert.equal(findings[0].message.includes(`token is missing ${scope}`), how !== "throw", findings[0].message);
     }
   });
@@ -578,6 +630,7 @@ for (const [how, respond] of Object.entries(refusals)) {
   test(`edge port, ${how}: a response that carries nothing asserted is never a pass by omission`, async () => {
     const port = { fetchEdge: edgeFetcher(fetchImpl), probeEarlyData: async () => ({ skip: "fixture has no openssl" }) };
     const findings = compareEdge(infra.edge, await readEdge(infra.edge, port), { hostedRunner: false });
+    // Nothing here carries cf-ray, so no answer came from the edge.
     assert.deepEqual(fails(findings), []);
     assert.deepEqual(passes(findings), []);
     assert.equal(warns(findings).length, infra.edge.checks.length);
@@ -587,12 +640,19 @@ for (const [how, respond] of Object.entries(refusals)) {
     test(`edge port, ${how} from the edge itself: an observation, never a pass by omission`, async () => {
       const port = { fetchEdge: edgeFetcher(async () => edgeServed(respond())), probeEarlyData: async () => ({ skip: "fixture has no openssl" }) };
       const findings = compareEdge(infra.edge, await readEdge(infra.edge, port), { hostedRunner: false });
+      // A 401 from production IS an observation: the edge answered, without the
+      // headers the declaration requires. It must not read as "holds".
       assert.ok(fails(findings).some((m) => m.startsWith("production edge: hsts-preload: strict-transport-security is ")));
       assert.ok(!passes(findings).some((m) => m.includes("hsts-preload") || m.includes("compression-on")));
     });
   }
 }
 
+// Measured 2026-10-13: an agent sandbox's egress proxy answered every request to
+// aadhar.sh with exactly this, and a whole infra:check run read it as production.
+// The absence checks held and the presence checks drifted, all on a page that
+// never left the sandbox. The control stamps cf-ray on the same bytes and gets
+// the old passes back, so cf-ray is the one thing standing between them.
 test("edge port: an egress proxy's 403 is unmeasured; the same bytes from the edge are measured", async () => {
   const proxy = () => new Response('request blocked: no rule or allowlist entry allows host "aadhar.sh"', {
     status: 403,
@@ -649,15 +709,19 @@ test("GitHub port: one ruleset detail failing to load costs that ruleset an advi
 });
 
 test("a failed read is not an empty read: the empty list it must not become is a failure", async () => {
+  // The control for the whole block above. If an adapter swallowed its error
+  // and handed back `[]`, these are the findings the run would print.
   const empty = cloudflareReader("unused-token-value", async () => json({ success: true, result: [] }));
   assert.equal(fails(compareKvNamespaces(bindings, await readKvNamespaces(empty, "acct"))).length, 1);
   assert.equal(fails(compareWorkerInventory(infra.workers, await readWorkerScripts(empty, "acct"))).length, infra.workers.expected.length);
   assert.equal(fails(compareLabels(repo, ok([]), anonymous)).length, repo.triage.labels.length);
 });
 
-const TOKEN = "abcd1234abcd1234abcd1234abcd1234abcd1234";
+const TOKEN = "abcd1234abcd1234abcd1234abcd1234abcd1234"; // 40, a Cloudflare token's length
 
 test("a token-shaped string in an adapter error never reaches the output", async () => {
+  // The worst realistic leak: an upstream (or a proxy) echoes the bearer token
+  // back in its error, and the adapter faithfully puts that text in a finding.
   const echoing = async (_url, init) => { throw new Error(`upstream rejected ${new Headers(init.headers).get("authorization")}`); };
   const cf = cloudflareReader(TOKEN, echoing);
   const findings = [
@@ -678,6 +742,8 @@ test("a token-shaped string in an adapter error never reaches the output", async
   }
   assert.equal([...report.hard, ...report.advisory, ...report.ok].join("\n").includes(TOKEN), false, "the store itself never holds it");
 
+  // Control: the same findings through a report that knows no credential print
+  // the token, so the assertion above is the barrier's doing.
   const blind = createReport({});
   blind.add(findings);
   assert.equal(blind.render().stdout.join("\n").includes(TOKEN), true);

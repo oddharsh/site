@@ -1,4 +1,4 @@
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
+// AadharshBot's signing door: no key means no external request, and a self-dispatch carries no signature.
 import {
   assert,
   botHeaders,

@@ -1,5 +1,4 @@
 // ── rn: the track-meta map must survive a SHORT playlist read ────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   testGlobals,
   ART_VERSION,
@@ -36,6 +35,12 @@ import {
   warmArtCache,
 } from "./contract-shared.ts";
 
+// ── rn: the track-meta map must survive a SHORT playlist read ────────
+// Regression, 2026-08-15. The prune deleted any entry missing from
+// `payload.tracks`, and `shouldStore` accepts any non-empty payload, so one
+// truncated playlist embed stored a 6-track playlist as the whole thing and
+// took 15 covers with it. Absence from a single read is not evidence.
+
 function metaEnv({ tracks, meta, seed = {} }) {
   const store = new Map([
     ["playlist-id", "0raTdu2MZH4dNvfG5keVAL"],
@@ -43,6 +48,9 @@ function metaEnv({ tracks, meta, seed = {} }) {
     ["trackmeta:v1", JSON.stringify(meta)],
     ...Object.entries(seed).map(([k, v]) => [k, JSON.stringify(v)]),
   ]);
+  // One entry per get(), holding the key or the key ARRAY it was called with.
+  // The charge the ledger makes is per CALL, so the call shape is the thing a
+  // test here can actually check.
   const reads = [];
   const decode = (raw, t) => {
     if (raw === undefined) return null;
@@ -94,7 +102,7 @@ test("a SHORT playlist read cannot delete track meta", async () => {
 test("an entry unseen past the age window is pruned, so the map stays bounded", async () => {
   const stale = 31 * 24 * 60 * 60 * 1000;
   const meta = metaFor(["a", "b"]);
-  meta.b.seen = Date.now() - stale;
+  meta.b.seen = Date.now() - stale;          // dropped from the playlist a month ago
   const { store, env } = metaEnv({ tracks: [{ id: "a" }], meta });
   await cronEnrichTracks(env, null);
   const after = JSON.parse(store.get("trackmeta:v1"));
@@ -102,7 +110,7 @@ test("an entry unseen past the age window is pruned, so the map stays bounded", 
 });
 
 test("an entry written before `seen` existed is stamped, never dropped", async () => {
-  const meta = { a: { image_url: "https://i.scdn.co/image/a", artists: [] } };
+  const meta = { a: { image_url: "https://i.scdn.co/image/a", artists: [] } };  // no `seen`
   const { store, env } = metaEnv({ tracks: [{ id: "a" }], meta });
   await cronEnrichTracks(env, null);
   const after = JSON.parse(store.get("trackmeta:v1"));
@@ -111,6 +119,10 @@ test("an entry written before `seen` existed is stamped, never dropped", async (
 });
 
 test("the enrich tick reads KV in bulk, so its cost does not scale with artists", async () => {
+  // A KV read is a subrequest, and this pass used to spend one per pending
+  // artist. Cloudflare charges a bulk read of up to 100 keys as ONE operation
+  // against that ceiling, so the property worth pinning is the CALL COUNT: it
+  // must not move when the pending set grows.
   const artistIds = ["p", "q", "r", "s", "t"];
   const seed = Object.fromEntries(artistIds.map((a) => [
     `artist:${a}`, { name: a.toUpperCase(), image_url: `https://i.scdn.co/image/${a}` },
@@ -125,12 +137,16 @@ test("the enrich tick reads KV in bulk, so its cost does not scale with artists"
   const { store, reads, env } = metaEnv({ tracks: [{ id: "a" }], meta, seed });
   await cronEnrichTracks(env, null);
 
+  // playlist id, then the two setup keys together, then all five artists
+  // together. Five separate artist reads is the shape this replaced.
   assert.deepEqual(reads, [
     "playlist-id",
     ["tracks:0raTdu2MZH4dNvfG5keVAL", "trackmeta:v1"],
     artistIds.map((id) => `artist:${id}`),
   ], "the tick must read three times regardless of how many artists are pending");
 
+  // And the cache hits still land, which is what makes the collapse free rather
+  // than merely cheap: no artist was scraped, so no fetch left the isolate.
   const after = JSON.parse(store.get("trackmeta:v1"));
   for (const a of after.a.artists) {
     assert.equal(a.image_url, `https://i.scdn.co/image/${a.id}`, `${a.id} keeps its photo`);
@@ -138,9 +154,15 @@ test("the enrich tick reads KV in bulk, so its cost does not scale with artists"
 });
 
 test("the artist slots go to live tracks, and an artist with no photo stops asking", async () => {
+  // Production, 2026-09-27: after a playlist swap 24 of 38 map entries were a
+  // retired playlist's, kept for the 30-day window, and the slot walk ran in
+  // map order, so their artists took slots ahead of the live ones. And
+  // `scarletchoir`, an artist with no Spotify photo, was cached as a null image,
+  // which `!a.image_url` read as pending on every tick for good.
   const now = Date.now();
   const staleArtists = ["s1", "s2", "s3", "s4", "s5", "s6"];
   const meta = {
+    // map order is insertion order, so the retired entry is walked first
     gone: {
       image_url: "https://i.scdn.co/image/gone",
       seen: now,
@@ -172,10 +194,13 @@ test("the artist slots go to live tracks, and an artist with no photo stops aski
   const payload = JSON.parse(store.get("tracks:0raTdu2MZH4dNvfG5keVAL"));
   assert.ok(payload.tracks[0].artists.every((a) => !("checked" in a)), "bookkeeping stays out of /rn/tracks");
 
+  // The next tick has nothing left to ask about, so it makes no artist read.
   reads.length = 0;
   await cronEnrichTracks(env, null);
   assert.equal(reads.length, 2, `a settled artist must not be read again: ${JSON.stringify(reads)}`);
 
+  // CONTROL: once the mark is older than the artist cache's TTL, it lapses, so
+  // an artist who later uploads a photo is picked up again.
   const aged = JSON.parse(store.get("trackmeta:v1"));
   aged.live.artists[0].checked = now - 31 * 24 * 60 * 60 * 1000;
   store.set("trackmeta:v1", JSON.stringify(aged));
@@ -186,6 +211,13 @@ test("the artist slots go to live tracks, and an artist with no photo stops aski
 
 test("the published key directory advertises only what the bot signs with", async () => {
   const dir = JSON.parse(await readFile(new URL("./public/.well-known/http-message-signatures-directory", ROOT), "utf8"));
+  // Advertising a key we no longer sign with is the dangling-pointer problem
+  // the DNS-AID note refuses for `_a2a`: it passes a scanner and misleads a
+  // verifier that goes looking for the label. Since sig2 came back
+  // (2026-10-01) the rule is enforced per request: the Worker serves the AKP
+  // entry only while it can sign with that key, and filters it out otherwise.
+  // contract-web-bot-auth-sig2-signs-ml-dsa-natively pins both halves; what is
+  // left here is that no published key carries private material.
   for (const key of dir.keys) assert.equal(key.d ?? key.priv, undefined, `the published ${key.kty} key must never carry its private half`);
   const ed = dir.keys.find((k) => k.kty === "OKP" && k.crv === "Ed25519");
   assert.ok(ed, "directory must publish the ed25519 key the bot signs sig1 with");
@@ -328,6 +360,10 @@ test("track HTML renderer emits rows only", () => {
 });
 
 test("the tracks fragment answers as an island, marker and all, even in its error state", async () => {
+  // The homepage's island script swaps a body in only when it carries x-island,
+  // because an edge error page is also text/html. A missing KV binding is the
+  // cheapest way to reach the fragment's honest error state: it must still be
+  // an island response, and the script's r.ok check is what keeps it out.
   const res = await handleRnTracksHtml(new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil() {} });
   assert.equal(res.headers.get("x-island"), "1");
   assert.equal(res.headers.get("x-rn-fragment"), null, "one marker, the island convention's");
@@ -339,18 +375,22 @@ test("the tracks fragment answers as an island, marker and all, even in its erro
 
 test("Spotify art collapses onto one host, and only where it is safe to", () => {
   const hash = "ab67616d00001e026b458d1409d938dad4e3ba2c";
+  // every alias lands on the canonical host, path untouched
   for (const host of ["image-cdn-fa", "image-cdn-ak", "image-cdn-zz9"]) {
     assert.equal(
       canonicalArtUrl(`https://${host}.spotifycdn.com/image/${hash}`),
       `https://i.scdn.co/image/${hash}`,
     );
   }
+  // already canonical is a no-op, so applying it at both scrape and emit is safe
   assert.equal(canonicalArtUrl(`https://i.scdn.co/image/${hash}`), `https://i.scdn.co/image/${hash}`);
+  // anything the rewrite was not proven safe for passes through UNCHANGED. a
+  // wrong rewrite is a broken image; the untouched value is one that already works.
   for (const keep of [
-    "https://mosaic.scdn.co/640/abc",
-    "https://image-cdn-fa.spotifycdn.com/other/xyz",
-    "https://evil.example.com/image/abc",
-    "not-a-url",
+    "https://mosaic.scdn.co/640/abc",                          // different scdn service
+    "https://image-cdn-fa.spotifycdn.com/other/xyz",           // right host, not an /image/ path
+    "https://evil.example.com/image/abc",                      // unrelated host
+    "not-a-url",                                               // unparseable
     "",
     null,
     undefined,
@@ -363,33 +403,44 @@ test("art URLs are derived from the hash, whatever alias it arrived under", () =
   for (const host of ["i.scdn.co", "image-cdn-fa.spotifycdn.com", "image-cdn-ak.spotifycdn.com"]) {
     assert.equal(spotifyArtHash(`https://${host}/image/${ART_HASH_A}`), ART_HASH_A);
   }
+  // null means "emit no browser image", so every unrecognized shape has to land
+  // here rather than produce a /rn/art/ URL that would 404 or a CSP-blocked
+  // third-party frame.
   for (const no of [
     "https://mosaic.scdn.co/640/abc",
     `https://evil.example.com/image/${ART_HASH_A}`,
     "https://i.scdn.co/image/NOTHEX",
-    "https://i.scdn.co/image/ab67616d",
-    `https://i.scdn.co/image/${ART_HASH_A}extra`,
+    "https://i.scdn.co/image/ab67616d",            // too short
+    `https://i.scdn.co/image/${ART_HASH_A}extra`,  // too long
     "not-a-url", "", null, undefined,
   ]) assert.equal(spotifyArtHash(no), null);
 
   const u = artUrls(`https://i.scdn.co/image/${ART_HASH_A}`);
   assert.equal(u.src, `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.avif`);
+  // The warm tier and browser tier are the SAME URL. Keeping a JPEG fallback
+  // and 120w candidate beside it is what let repeated hover reconstruction turn
+  // one cover into an unbounded list of image work in the 2026-08-11 HAR.
   assert.equal(u.warm, `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.avif`);
   assert.equal(u.src, u.warm);
   assert.equal("srcset" in u, false);
   assert.equal(artUrls("https://mosaic.scdn.co/640/abc"), null);
 });
 
+// 40 lowercase hex, the shape ART_HASH demands, and injective in n so no two
+// fixtures can collide and quietly weaken a dedupe or cap assertion.
 const artHash = (n) => n.toString(16).padStart(40, "0");
 
 test("the art warm list covers first, dedupes, and skips what cannot be re-hosted", () => {
   const payload = {
     tracks: [
+      // Two tracks sharing one album cover, so the dedupe has something to do.
       { image_url: `https://i.scdn.co/image/${artHash(1)}`,
         artists: [{ image_url: `https://image-cdn-fa.spotifycdn.com/image/${artHash(3)}` }] },
       { image_url: `https://i.scdn.co/image/${artHash(1)}`,
         artists: [{ image_url: `https://i.scdn.co/image/${artHash(4)}` }] },
       { image_url: `https://i.scdn.co/image/${artHash(2)}`, artists: [] },
+      // A collage cover and an artist with no picture: neither can be re-hosted,
+      // so neither may appear. A /rn/art/ URL for these would 404 on hover.
       { image_url: "https://mosaic.scdn.co/640/abc", artists: [{ image_url: null }] },
     ],
   };
@@ -401,9 +452,13 @@ test("the art warm list covers first, dedupes, and skips what cannot be re-hoste
     `https://aadhar.sh/rn/art/${artHash(3)}-240-${ART_VERSION}.avif`,
     `https://aadhar.sh/rn/art/${artHash(4)}-240-${ART_VERSION}.avif`,
   ]);
+  // Covers ahead of artist pictures, because the cap truncates the tail and a
+  // row is a far bigger hover target than the artist name inside it.
   assert.ok(urls.indexOf(`https://aadhar.sh/rn/art/${artHash(2)}-240-${ART_VERSION}.avif`)
           < urls.indexOf(`https://aadhar.sh/rn/art/${artHash(3)}-240-${ART_VERSION}.avif`));
 
+  // Every warmed URL must be one handleRnArt will actually serve, or the warm
+  // spends a subrequest and a transformation to cache a 404.
   for (const u of urls) {
     assert.match(new URL(u).pathname,
       /^\/rn\/art\/[0-9a-f]{40}-(120|240)-\d{1,4}\.(avif|jpg)$/);
@@ -420,9 +475,22 @@ test("the art warm is capped, so one long playlist cannot drain the subrequest b
   })) };
   const urls = artWarmList(many, "https://aadhar.sh");
   assert.equal(urls.length, WARM_MAX_URLS);
+  // Workers Free allows 50 subrequests per invocation and the warm spends one
+  // per cold URL, so the cap has to fit inside that budget. It is asserted
+  // because an uncapped warm scales with a playlist anyone can lengthen.
   assert.ok(WARM_MAX_URLS <= 50);
 });
 
+// REGRESSION. The first version of the warm probed urls[0] and returned early on
+// a cache hit, assuming the set is only ever warmed as a set. It is not: one
+// HOVER warms one URL, /rn/art is immutable for a year, and the first track's
+// cover is the likeliest thing to be hovered first. Measured in production
+// 2026-08-10 on the shipped build — urls[0] was `hit`, and 11 of 13 artist
+// images the warm should have covered were still cold.
+//
+// This drives the real handleRnArt against a fake cache and a fake upstream,
+// because the bug lived in the interaction between the two, and a test of
+// artWarmList alone could never have seen it.
 test("the art warm attempts every URL even when one is already cached", async () => {
   const store = new Map();
   const realFetch = globalThis.fetch;
@@ -445,6 +513,8 @@ test("the art warm attempts every URL even when one is already cached", async ()
     const urls = artWarmList(payload, "https://aadhar.sh");
     assert.equal(urls.length, 3);
 
+    // The exact production state: ONE url already warm because somebody hovered
+    // it. The old guard read that as "the whole set is warm" and did nothing.
     store.set(urls[0], new Response(new Uint8Array([9]), { status: 200 }));
 
     const waits = [];
@@ -462,6 +532,10 @@ test("the art warm attempts every URL even when one is already cached", async ()
   }
 });
 
+// REGRESSION. Until 2026-10-09 anything that wasn't a hit counted as `warmed`,
+// so the 502 handleRnArt answers when every fetch throws (the subrequest cap, in
+// production) and the untransformed fallback it never stores both read as work
+// done. A CDG trace threw "Too many subrequests" under a span reading warmed 40.
 test("the art warm counts a failed or untransformed cover as such, never as warmed", async () => {
   const store = new Map();
   const realFetch = globalThis.fetch;
@@ -472,6 +546,9 @@ test("the art warm counts a failed or untransformed cover as such, never as warm
       async put(req, res) { store.set(req.url, res); },
     },
   };
+  // Cover 1 transforms. Cover 2's transform fails and the plain fetch works,
+  // which is the Images fallback. Cover 3 throws on every fetch, as a spent
+  // subrequest budget does.
   const ok = () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
   testGlobals.fetch = async (url, init) => {
     if (String(url).includes(artHash(3))) throw new Error("Too many subrequests by single Worker invocation.");
@@ -507,8 +584,13 @@ test("rendered track rows re-host recognized art and pass everything else throug
   assert.match(html, new RegExp(`data-artist-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.avif"`));
   assert.doesNotMatch(html, /data-(?:track|artist)-imageset=|\/rn\/art\/[^" ]+\.jpg/,
     "each hover target must name the one warmed AVIF, not alternate browser resources");
+  // the whole point: a hover no longer reaches Spotify at all
   assert.doesNotMatch(html, /scdn\.co|spotifycdn\.com/);
 
+  // art with no parseable hash emits NO image attribute at all. It used to fall
+  // back to the Spotify URL, which was right while img-src still allowed those
+  // hosts; now that it does not, that URL would render as a frame the browser
+  // refuses to load. The row falls through to the text card instead.
   const odd = renderTrackListHtml({
     tracks: [{ title: "t", song_link_url: "https://song.link/x",
                image_url: "https://mosaic.scdn.co/640/abc", artists: [] }],
@@ -516,15 +598,23 @@ test("rendered track rows re-host recognized art and pass everything else throug
   assert.doesNotMatch(odd, /data-track-image/);
   assert.doesNotMatch(odd, /data-track-imageset/);
   assert.doesNotMatch(odd, /scdn\.co|spotifycdn\.com/);
+  // the text card's inputs still have to survive, or "falls through to the text
+  // card" is a claim about a card with nothing on it
   assert.match(odd, /data-track-title="t"/);
 });
 
+// (the CSP's img-src end of this bargain is asserted in
+// contract-the-bundled-photo-pool.test.mjs, alongside the other directives)
+
 test("the art route 404s every shape that is not one it minted", async () => {
+  // This grammar is the only thing between the route and an open image proxy,
+  // so each rejection below is a way someone could otherwise aim it or burn the
+  // monthly transformation allowance by hand.
   const bad = [
-    `/rn/art/${ART_HASH_A}-999-${ART_VERSION}.avif`,
-    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.png`,
-    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}`,
-    `/rn/art/${ART_HASH_A.toUpperCase()}-240-1.avif`,
+    `/rn/art/${ART_HASH_A}-999-${ART_VERSION}.avif`,   // width not in the tier set
+    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.png`,    // format we do not mint
+    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}`,        // no extension
+    `/rn/art/${ART_HASH_A.toUpperCase()}-240-1.avif`,  // uppercase hex
     "/rn/art/nothex-240-1.avif",
     `/rn/art/${ART_HASH_A}.avif`,
     "/rn/art/",
@@ -560,6 +650,10 @@ test("track endpoints keep JSON and HTML contracts independent of Accept", async
   assert.match(body, /^<li\b/);
   assert.doesNotMatch(body, /<(?:!doctype|html|head|body)\b/i);
 
+  // Both representations say "read me, don't list me" with the header that can
+  // actually say it. robots.txt used to try with `Disallow: /rn/tracks` while
+  // four discovery surfaces pointed agents here, which blocked the fetch and so
+  // blocked its own noindex.
   assert.equal(json.headers.get("x-robots-tag"), "noindex");
   assert.equal(html.headers.get("x-robots-tag"), "noindex");
 });
@@ -627,6 +721,9 @@ test("Lens caches only the completed Cloudflare score response, never progress o
 });
 
 test("Lens field evidence scores observed access without borrowing the standards rubric", () => {
+  // Eight SCORED crawler identities, two of them refused, plus the two controls.
+  // The controls must not move this number: they answer whether the instrument
+  // got in, and a browser is not a bot identity that retrieved anything.
   const crawlers = Array.from({ length: 8 }, (_, i) => ({ status: i < 2 ? 403 : 200, blocked: i < 2, challenge: false }));
   const controls = [
     { role: "control", status: 200, blocked: false, challenge: false },
@@ -646,6 +743,9 @@ test("Lens field evidence scores observed access without borrowing the standards
 });
 
 test("Lens refuses to read crawler refusals as policy when no control got in", () => {
+  // Every crawler 403s, which reads as a total AI block. It is only that if
+  // something else got through: medium.com and quora.com answer 403 to Chrome
+  // too, and grading them would report our own exclusion as their policy.
   const crawlers = Array.from({ length: 8 }, () => ({ status: 403, blocked: true, challenge: false }));
   const shut = lensFieldEvidence({
     status: 200, anatomy: { wordCount: 300 }, agent: null,
@@ -655,6 +755,7 @@ test("Lens refuses to read crawler refusals as policy when no control got in", (
   assert.equal(shutBots.score, null, "with every control refused, crawler rows are not user-agent policy");
   assert.match(shutBots.detail, /no control identity/);
 
+  // One control in, and the identical crawler rows become a real 0.
   const open = lensFieldEvidence({
     status: 200, anatomy: { wordCount: 300 }, agent: null,
     botViews: [{ role: "control", status: 200, blocked: false }, { role: "control", status: 403, blocked: true }, ...crawlers],
@@ -697,16 +798,26 @@ test("Lens proxies Cloudflare's public scanner but stores only the normalized sc
 });
 
 test("the WebMCP detector sees a CDN bridge, not just hand-written call sites", () => {
+  // The detector read the document for `navigator.modelContext` and friends, which
+  // finds a site that wrote its own tools and MISSES the far larger population that
+  // flipped WebMCP on at their CDN: the loader tag is all that reaches the HTML, and
+  // every registerTool call lives in the external module. That population grows by
+  // dashboard toggle, so the blind spot widens on its own.
   const bridge = lensDetectWebmcp('<script type="module" src="/.webmcp/bridge.js" data-packs="c2pa,mcp-server-client"></script>');
   assert.equal(bridge.found, true, "an injected bridge loader is WebMCP");
   assert.equal(bridge.kind, "bridge");
 
+  // Both spellings of the page API. Chrome 146 ships `document.modelContext`; the
+  // earlier drafts (and this site's own retired inline block) used `navigator`.
   for (const marker of ["document.modelContext.registerTool({})", "navigator.modelContext.registerTool({})"]) {
     const hit = lensDetectWebmcp(`<script>${marker}</script>`);
     assert.equal(hit.found, true, `${marker} must register as WebMCP`);
     assert.equal(hit.kind, "inline", "a page that calls the API itself is not a bridge");
   }
 
+  // The claim has to stay falsifiable: a page merely TALKING about WebMCP is not a
+  // page serving it. /garage and /lwe are full of prose about specs the site does
+  // not implement, and this detector runs over arbitrary third-party HTML.
   assert.equal(lensDetectWebmcp("<p>WebMCP is a browser standard for model context.</p>").found, false);
   assert.equal(lensDetectWebmcp("").found, false);
 });
@@ -727,6 +838,13 @@ test("Lens Browser Run endpoint validates targets before invoking the binding", 
 });
 
 test("both browser routes report an upstream 429 as a 429, not a bad gateway", async () => {
+  // Production, 2026-08-06: /lens/browser answered 502 with a body carrying
+  // {"code":2001,"message":"Rate limit exceeded"}. /lens/shot had already been
+  // taught that Browser Run refusing US is not the scanned site failing; the
+  // sibling route had not, so the same bug shipped on half the surface. On the
+  // free plan (one Quick Action per 10s account-wide) this is the single most
+  // likely response either route will ever get, and a 502 sends whoever reads it
+  // to go inspect a third-party site that is perfectly healthy.
   const env = { BROWSER: { quickAction: async () => new Response('{"errors":[{"code":2001}]}', { status: 429 }) } };
   const url = "?url=https%3A%2F%2Fexample.com%2F";
 
@@ -737,9 +855,13 @@ test("both browser routes report an upstream 429 as a 429, not a bad gateway", a
   for (const [name, handler] of lensHandlers) {
     const response = await handler(new Request(`https://aadhar.sh/lens/${name}${url}`), env, context());
     assert.equal(response.status, 429, `/lens/${name} must pass the upstream 429 through as a 429`);
+    // Retry-After is ours to promise only for our own 60s budgets; Browser Run's
+    // window (per minute or per day) is not one this Worker can see.
     assert.equal(response.headers.get("retry-after"), null, `/lens/${name} must not quote our window for Browser Run's limit`);
     const body = await response.json();
     assert.equal(body.ok, false);
+    // The message has to name OUR budget, since that is the thing the reader can
+    // act on. Naming the target would be the same lie the 502 told.
     assert.match(body.error, /rate-limited|budget/i, `/lens/${name} must say whose limit was hit`);
   }
 });
@@ -802,6 +924,17 @@ test("Lens screenshot endpoint delegates PNG rendering to the Browser Run bindin
 });
 
 test("neither browser route waits on a condition a live site never reaches", async () => {
+  // `networkidle0` demands ZERO in-flight connections for 500ms, which any page
+  // carrying analytics, ads, a websocket or a poll never reaches. The wait then
+  // burns the whole timeout and Cloudflare discards a render it already had
+  // (`422 / code 6002`). Both routes shipped it until 2026-08-07; measured
+  // against production, theverge.com failed on BOTH at ~18.8s while the static
+  // example.com passed, so the failure tracked the TARGET and read as flaky.
+  //
+  // This is pinned rather than left to review because the cost is invisible at
+  // the call site: the setting is one word in a payload, the failure looks like
+  // the scanned site being slow, and each timeout also spends 18s of a browser
+  // budget that is 10 MINUTES PER DAY account-wide on the free plan.
   const captured = {};
   const env = {
     BROWSER: {
@@ -822,5 +955,6 @@ test("neither browser route waits on a condition a live site never reaches", asy
     assert.equal(payload.gotoOptions.waitUntil, "networkidle2", `${action} must wait for the page to settle, not go silent`);
     assert.ok(payload.gotoOptions.timeout > 0, `${action} must keep a bounded timeout`);
   }
+  // One object, so a later edit cannot fix one route and leave the other.
   assert.equal(captured.screenshot.gotoOptions, captured.snapshot.gotoOptions, "both routes must share one goto config");
 });

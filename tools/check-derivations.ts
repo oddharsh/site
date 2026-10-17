@@ -1,6 +1,25 @@
 #!/usr/bin/env node
 // Does every committed derived artifact still describe the bytes it was derived
 // from?
+//
+//   bun run derive:check              verify, exit 1 on anything stale
+//   bun run derive:check -- --lock    re-record, AFTER regenerating by hand
+//   bun run derive:check -- --only images/histograms
+//
+// The declaration is config/derivations.json and the argument for the whole idea
+// is in its header. This file is the runner: it reads the graph, hashes what each
+// artifact was made from, and prints what moved.
+//
+// It runs no generator and writes nothing outside config/ (and nothing at all
+// without --lock). Both halves matter. Several sessions work in this tree at once,
+// so a check that regenerated artifacts in place would be overwriting somebody
+// else's uncommitted work, and one that needed a local pipeline state could not
+// answer from a fresh worktree, which is where this repo says to start.
+//
+// --lock DOES NOT REGENERATE ANYTHING. It records that the current inputs are
+// what the current outputs were made from, which is a CLAIM the person running it
+// is making. Running it to clear a red check without re-baking is how the graph
+// becomes decoration, so it prints the outputs it is vouching for and says so.
 
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -30,6 +49,7 @@ const readJson = async (file: string, fallback: unknown = null) => {
 const declaration = await readJson(DECL);
 const lock: Lock = ((await readJson(LOCK, {})) as { files?: Lock }).files ?? {};
 
+/** Declared version records included in the relevant derivation input digests. */
 const toolVersions: Record<string, string> = Object.fromEntries(
   ((await readJson(path.join(ROOT, "config/tools.json"), { tools: [] })).tools ?? [])
     .filter((t: { recorded?: string }) => t.recorded)
@@ -43,6 +63,9 @@ if (ONLY && !graph.length) {
   process.exit(2);
 }
 
+// A declaration that reaches zero pinned entries is a graph that has been emptied
+// rather than a repository with nothing to check, and it would otherwise report a
+// clean pass. Same floor the scanners in check-tools.ts carry.
 const pinned = all.filter((d) => d.tier === "pinned");
 if (!ONLY && pinned.length < 4) {
   console.error(`derive: only ${pinned.length} pinned derivations declared; the graph has been emptied`);
@@ -56,6 +79,9 @@ const list = (files: string[], label: string, cap = 8) => {
 };
 
 if (WRITE) {
+  // Each derivation's rows are REPLACED rather than merged over, which relock()
+  // argues at length: a merge-only rewrite carried every input forward forever, so
+  // one full-library re-encode left 495 rows naming filenames nobody can open.
   let nextLock: Lock = { ...lock };
   let vouched = 0;
   let pruned = 0;
@@ -74,6 +100,13 @@ if (WRITE) {
     if (gone.length) console.log(`      pruned ${gone.length} lock row(s) for inputs that are gone: ${gone.slice(0, 4).join(", ")}${gone.length > 4 ? ", ..." : ""}`);
     for (const out of d.outputs) console.log(`      vouching for ${out}`);
   }
+  // relock() prunes only rows its derivation still OWNS, so an input taken OUT of
+  // a declaration (rather than deleted from disk) is owned by nobody and survives
+  // every per-derivation pass. Measured 2026-09-28: zenc's three sources left the
+  // histogram digest and a full --lock kept all three rows, while the contract
+  // test that caught them told you to run exactly that. A FULL run has recorded
+  // every pinned derivation, so any row outside what they collected is dead.
+  // --only still cannot do this, since it saw one derivation's inputs.
   if (!ONLY) {
     const orphans = Object.keys(nextLock).filter((key) => !live.has(key));
     for (const key of orphans) delete nextLock[key];
@@ -122,6 +155,9 @@ for (const d of graph) {
 
 for (const n of notes) console.log(n);
 
+// ── the census: is there a generator nobody declared? ────────────────────────
+// Skipped under --only, which is a single-derivation debugging mode rather than a
+// statement about the repository.
 let undeclared: string[] = [];
 if (!ONLY) {
   const { roots, exempt } = declaration.writers;
@@ -130,6 +166,8 @@ if (!ONLY) {
     console.error(`derive: the writer scan found ${writers.length} files, under the floor of ${WRITER_FLOOR}. It has stopped matching.`);
     process.exit(2);
   }
+  // The shell tier asks a wider question than "does this write", because shell
+  // has no exact answer to that one. See the header of derive-writers.ts.
   const shell = await findShellTouchers(ROOT, declaration.writers.shellRoots ?? roots);
   if (shell.length < SHELL_FLOOR) {
     console.error(`derive: the shell scan found ${shell.length} scripts, under the floor of ${SHELL_FLOOR}. It has stopped matching.`);
@@ -140,6 +178,8 @@ if (!ONLY) {
   const everything = [...writers, ...shell];
   undeclared = everything.filter((f) => !declaredBy(f, regenerates) && !(f in exempt));
 
+  // An exemption for a file that no longer writes is stale bookkeeping, and left
+  // alone it makes the list look more considered than it is.
   const stale = Object.keys(exempt).filter((f) => !everything.includes(f));
   for (const f of stale) console.log(`  note  ${f} is exempt but no longer writes; drop the entry`);
 

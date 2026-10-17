@@ -1,5 +1,4 @@
 // ── the Luma session jar ────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   ROOT,
   SERENDIPITY_SYNC_LIMITS,
@@ -18,6 +17,15 @@ import {
   test,
 } from "./contract-shared.ts";
 import { createBudget } from "../src/worker/lib/budget.ts";
+
+// ── the Luma session jar ────────────────────────────────────────────
+// Two failure modes these guard. (1) A whole-domain browser export drags in
+// cookies that must never be stored or replayed: __cf_bm is a 30-minute,
+// IP-bound Cloudflare bot-management token, and replaying a stale one from
+// Worker egress IPs reads as a scraper. (2) Luma rotates luma.* cookies via
+// Set-Cookie on api2 responses; a client that drops those ends up presenting
+// a key Luma no longer honours, which is how the deployed sync went stale
+// where local dev (cookies pasted minutes earlier) never did.
 
 const LUMA_EXPORT = JSON.stringify([
   { name: "__cf_bm", value: "edge-noise", domain: ".luma.com" },
@@ -104,6 +112,13 @@ test("serendipity keeps historical feed and roster backfills alive", () => {
 });
 
 
+// ── the roster sweep's fetch budget ─────────────────────────────────
+// Seven past events sat parked on "Too many subrequests by single Worker
+// invocation" (last written 2026-08-21 12:24:07) because fetchEventGuests
+// paginated `while (true)` with no cap: one 1,932-person roster costs 20 fetches
+// at 100 a page, which is most of a Workers Free invocation on its own. These
+// pin the budget, the resume, and above all the prune gate.
+
 test("a budget-limited roster walk stops on the budget and hands back its cursor", async () => {
   const pages = [
     { entries: [{ api_id: "g1", user: {} }], has_more: true, next_cursor: "c1" },
@@ -127,6 +142,7 @@ test("a budget-limited roster walk stops on the budget and hands back its cursor
     assert.equal(budget.spent, 2, "it spends exactly the budget it was given");
     assert.equal(budget.left, 0);
 
+    // the resumed pass picks up at the cursor rather than re-buying page one
     const rest = await fetchEventGuests("evt-x", null, "cookie=1", {
       budget: createBudget(10), cursor: first.cursor,
     });
@@ -147,6 +163,10 @@ test("an unbudgeted roster walk still finishes, so the manual path is unchanged"
 });
 
 test("a roster is only pruned by a pass that saw all of it in one invocation", () => {
+  // THE regression this whole change exists to prevent. syncGuests deletes every
+  // stored link absent from the response, so pruning against a partial page (or
+  // against a resumed pass, which holds only the tail) would delete the guests
+  // the earlier pages already stored: 1,932 rows down to 100 on a real event.
   assert.equal(mayPruneRoster({ done: true }, null), true,
     "a complete walk from the start is the one authoritative case");
   assert.equal(mayPruneRoster({ done: false, cursor: "c1" }, null), false,
@@ -159,7 +179,10 @@ test("a roster is only pruned by a pass that saw all of it in one invocation", (
 
 test("a parked cursor round-trips through the guest-sync marker", () => {
   assert.deepEqual(parseGuestSyncMark("partial:250@cur-abc"), { cursor: "cur-abc", seen: 250 });
+  // Luma cursors are opaque: splitting on every "@" would truncate one that
+  // contains its own separator, so only the first is a separator.
   assert.deepEqual(parseGuestSyncMark("partial:100@cur@with@ats"), { cursor: "cur@with@ats", seen: 100 });
+  // everything else starts from the top rather than resuming into nonsense
   for (const v of ["ok:1932", "error:GUEST_LIST_RESTRICTED", "partial:5@", "partial:nope", "", null, undefined]) {
     assert.deepEqual(parseGuestSyncMark(v), { cursor: null, seen: 0 }, `"${v}" must not resume`);
   }
@@ -197,6 +220,10 @@ test("the cron batches upcoming and past roster selection into one D1 call", asy
 });
 
 
+// ── the enrichment tier ─────────────────────────────────────────────────
+// cronSerendipity dispatches enrichment on its own tick (dispatchEnrich).
+// These pin that automatic tier.
+
 test("the admin gate takes the secret from a header as well as the query string", () => {
   const env = { SYNC_SECRET: "s3cret" };
   const req = (url, headers) => new Request(url, { headers: headers || {} });
@@ -205,6 +232,7 @@ test("the admin gate takes the secret from a header as well as the query string"
   assert.equal(adminGated(req("https://x/serendipity/enrich?key=nope"), env), false);
   assert.equal(adminGated(req("https://x/serendipity/enrich", { "x-sync-key": "nope" }), env), false);
   assert.equal(adminGated(req("https://x/serendipity/enrich"), env), false, "no secret at all is refused");
+  // an unset SYNC_SECRET must never make the gate permissive
   assert.equal(adminGated(req("https://x/serendipity/enrich?key=undefined"), {}), false);
   assert.equal(adminGated(req("https://x/serendipity/enrich"), {}), false);
 });
@@ -219,6 +247,8 @@ test("the enrich batch limit clamps, defaults, and refuses garbage", () => {
 });
 
 test("the cron enrich dispatch never puts the secret in the URL", async () => {
+  // A query-string secret lands in request logs. The whole reason adminGated
+  // grew a header arm is this one call, so the property is worth pinning.
   let seen = null;
   await dispatchEnrich(
     { SYNC_SECRET: "s3cret", EXA_API_KEY: "k", HOST_PUBLIC_URL: "https://aadhar.sh" },
@@ -232,6 +262,9 @@ test("the cron enrich dispatch never puts the secret in the URL", async () => {
 });
 
 test("the cron enrich dispatch skips cleanly when it is not configured", async () => {
+  // This is production's state, and dormant by owner call (2026-09-30, see
+  // dispatchEnrich), so the skip has to stay quiet and self-describing rather
+  // than become an error on every tick.
   let called = false;
   const spy = async () => { called = true; return { ok: true, json: async () => ({}) }; };
   assert.deepEqual(await dispatchEnrich({ SYNC_SECRET: "s" }, spy), { skipped: "EXA_API_KEY not set" });
@@ -247,6 +280,8 @@ test("the cron enrich dispatch reports outcomes and swallows its own failures", 
   }));
   assert.deepEqual(ok, { attempted: 3, outcomes: { success: 2, not_found: 1 } });
 
+  // enrichment is the lower-priority half: it may never redden a tick whose
+  // roster sweep succeeded, so every failure shape returns rather than throws.
   assert.deepEqual(await dispatchEnrich(env, async () => ({ ok: false, status: 500, json: async () => ({}) })), { error: "enrich 500" });
   assert.deepEqual(await dispatchEnrich(env, async () => { throw new Error("boom"); }), { error: "boom" });
   const weird = await dispatchEnrich(env, async () => ({ ok: true, json: async () => ({}) }));

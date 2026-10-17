@@ -1,6 +1,21 @@
 #!/usr/bin/env node
 // speculation-report.ts — which links does the speculation ledger say are worth
 // prerendering earlier? (bun run speculation:report)
+//
+// The shell's Speculation Rules prerender every same-origin link on hover
+// ("moderate", tools/photos/shell-data.ts). Chrome holds moderate rules to 2
+// prefetches and 2 prerenders at a time (oldest evicted first) and eager rules
+// to 50 and 10, so promoting a link to an earlier eagerness is a budget
+// decision, and the ledger is the only evidence that says which links get
+// NAVIGATED after being speculated rather than merely speculated. This reads
+// /ledger/speculation.json from production and prints the table that decision
+// needs. It writes nothing: the promotion itself is an edit to SPECULATION in
+// shell-data.ts, gated on tools/speculation-probe.ts showing the promoted rule
+// actually fetches.
+//
+//   bun run speculation:report                # last 30 days, from aadhar.sh
+//   bun run speculation:report -- --min 20    # only paths speculated 20+ times
+
 import type { SpeculationRow } from "../src/worker/speculation.ts";
 
 const ORIGIN = process.env.SPECULATION_ORIGIN || "https://aadhar.sh";
@@ -15,6 +30,10 @@ if (!report.ok) {
   console.error(`speculation:report — ${ORIGIN} answered ${res.status}: ${report.reason || "unreadable"}`);
   process.exit(1);
 }
+// A document is served extensionless and outside /a/. Rows that are neither are
+// sub-resources a prerendered page fetched with the same Sec-Purpose, which the
+// denominator counted until 2026-09-29 and still holds for the rest of the
+// window. No navigation can activate them, so they are hidden rather than rated.
 const isDocument = (p: string) => !p.startsWith("/a/") && !/\.[a-z0-9]+$/i.test(p.split("/").pop() || "");
 const all = report.rows || [];
 const hidden = all.filter((r) => !isDocument(r.path)).length;
@@ -24,6 +43,18 @@ console.log("path".padEnd(34), "prefetch".padStart(9), "prerender".padStart(10),
 for (const r of rows) {
   console.log(r.path.slice(0, 34).padEnd(34), String(r.prefetch).padStart(9), String(r.prerender).padStart(10), String(r.activated).padStart(10), (r.rate === null ? "n/a" : `${(r.rate * 100).toFixed(0)}%`).padStart(7));
 }
+// The recommendation is deliberately narrow. A high activation rate on a
+// moderate rule says the hover already predicts the click; promoting that link
+// to "eager" buys the time between the link scrolling into view and the hover,
+// and costs one of the eager pool's 10 prerender slots. A LOW rate is the
+// louder finding: it is a link the site is rendering for nobody, and the fix
+// is an exclusion, which costs nothing.
+// THE GRADER CHECK, before any recommendation. Until 2026-09-29 the numerator
+// had no working instrument (the header beacon never shipped; see
+// src/worker/speculation.ts), so every rate read 0% and the exclusion rule below
+// recommended dropping /, /writing and /garage, the most-visited links on the
+// site. A window with no activation anywhere is a missing instrument, never a
+// finding, so it gets no recommendation at all.
 const activations = all.reduce((n, r) => n + r.activated, 0);
 if (!activations) {
   console.log(`\nno activations recorded on any of ${all.length} paths in ${report.window_days} days. That is a missing instrument, not a finding:`);

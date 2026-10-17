@@ -1,6 +1,25 @@
 #!/usr/bin/env node
 
-// check-checkpoints.mjs — does the committed projection still match D1?
+// check-checkpoints.ts — does the committed projection still match D1?
+//
+// D1 is the source of truth for the deploy log; src/worker/checkpoints.json
+// is a derived read of it that build.ts renders /updates and /restore from.
+// tools/photos/bump-version.sh stages the next entry in the file, and
+// deploy:promote inserts that row into D1 once traffic reaches 100%, so the
+// normal path keeps them in step. This catches the paths it cannot: a row
+// inserted by hand or by another machine, or a projection edited directly.
+//
+// Drift is not cosmetic. The pages are precomputed at build time, so a stale
+// projection means /updates and /restore silently ship the PREVIOUS log — the
+// failure mode is a changelog that looks fine and is wrong, which is exactly the
+// class of bug the whole site's check discipline exists for.
+//
+//   bun run checkpoints:check         compare the committed file against D1
+//   bun run checkpoints:sync          rewrite the file from D1 (then commit it)
+//
+// Needs a D1 read. Locally that is `bun run cf auth login` (tools/lib/cf.ts).
+// CI does not run it: .github/workflows/ci.yml lists it with the network checks
+// that run from a workstation, by hand.
 
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -13,12 +32,16 @@ const SYNC = process.argv.includes("--sync");
 
 const fail = (msg) => { console.error(`checkpoints: ${msg}`); process.exit(1); };
 
+// The fields a checkpoints.json row carries, in vnum order: --sync writes these
+// rows out as the file.
 const QUERY = "SELECT vnum, ymd, version, slug, title FROM checkpoints ORDER BY vnum;";
 
 let live;
 try {
   live = await d1Rows(D1["aadhar-restore"], QUERY);
 } catch (e) {
+  // An unreachable D1 is an availability problem, not drift. Say so and do not
+  // fail a PR over someone else's outage or a missing local login.
   console.error(`checkpoints: could not read D1 (${String(e.message || e).slice(0, 120)})`);
   console.error("  this is an availability problem, not drift — not failing");
   process.exit(0);
@@ -40,6 +63,14 @@ const byVnum = (rows): Map<number, any> => new Map(rows.map((r) => [r.vnum, r]))
 const c = byVnum(committed), l = byVnum(live);
 const liveMax = live.length ? Math.max(...l.keys()) : 0;
 
+// PENDING entries are the projection running ahead of D1, which is now the
+// normal state between staging a release and ramping it. bump-version.sh writes
+// the projection inside the PR (so /updates ships the entry with the deploy it
+// describes, instead of needing a second one), and deploy:promote records the
+// row in D1 only once traffic actually reached 100%.
+//
+// So "ahead" is legal and "behind" never is. A projection row BELOW D1's high
+// -water mark that D1 does not have is not pending, it is a rewrite of history.
 const pending = committed.filter((r) => !l.has(r.vnum) && r.vnum > liveMax)
   .sort((a, b) => a.vnum - b.vnum);
 const pendingVnums = new Set(pending.map((r) => r.vnum));
@@ -57,6 +88,9 @@ for (const vnum of c.keys()) {
     diffs.push(`v${vnum} present in the projection, absent from D1, and BELOW D1's newest (v${liveMax}) — that is a rewrite, not a pending release`);
   }
 }
+// The tail has to be contiguous. A gap means a vnum was minted, shipped or
+// abandoned somewhere this check cannot see, and silently renumbering around it
+// would put two different releases on one number later.
 pending.forEach((row, i) => {
   const expected = liveMax + i + 1;
   if (row.vnum !== expected) diffs.push(`pending v${row.vnum} breaks the sequence — expected v${expected} after D1's v${liveMax}`);

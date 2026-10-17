@@ -14,6 +14,7 @@ import {
 
 const { buildCache, buildCacheEnabled } = await import("./lib/build-cache.ts");
 
+// A counting brotli encoder: how many inputs actually reached it.
 function counted(name = "brotli test") {
   const enc = {
     calls: 0,
@@ -93,6 +94,11 @@ test("switched off, the cache never touches the disk", async () => {
   assert.equal(buildCacheEnabled({}), true);
 });
 
+// ── memo: the minifiers' synchronous form ──────────────────────────────────
+// A minified block cannot be decoded back to its input, so memo's guarantees
+// are different ones: the name carries what the output depends on, an entry
+// carries its own digest, and a throw is never remembered.
+
 test("memo returns a stored minification and refuses a damaged one", () => {
   const dir = fresh();
   try {
@@ -126,6 +132,8 @@ test("memo never remembers a failure, and shares within a build with the disk of
 });
 
 test("whatever wrangler publishes is built with the cache off", async () => {
+  // wrangler.config.ts's build.command is the build behind deploy:direct and
+  // every versions upload; a cache entry must never reach a published byte.
   const { readFile } = await import("node:fs/promises");
   const config = await readFile(new URL("../wrangler.config.ts", import.meta.url), "utf8");
   assert.match(config, /build:\s*\{\s*command:\s*"BUILD_CACHE=0 bun tools\/build\.ts"\s*\}/);
@@ -141,8 +149,8 @@ test("prune keeps what this build used, drops stale strangers, and runs at most 
     writeFileSync(join(dir, "stranger"), "x");
     writeFileSync(join(dir, "recent"), "x");
     const old = new Date(Date.now() - 30 * 86_400_000);
-    utimesSync(join(dir, usedEntry), old, old);
-    utimesSync(join(dir, "stranger"), old, old);
+    utimesSync(join(dir, usedEntry), old, old);   // old, but read by this build
+    utimesSync(join(dir, "stranger"), old, old);  // old and unused: goes
     assert.equal(await cache.prune(14), 1);
     assert.ok(existsSync(join(dir, usedEntry)), "an entry this build used survives its age");
     assert.ok(!existsSync(join(dir, "stranger")));

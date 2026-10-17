@@ -3,6 +3,15 @@
 // using the settings docs/MAINTENANCE.md declares ("Auxiliary Workers deploy
 // themselves"). Workstation only, like infra:apply: it needs a credential that
 // can write Workers Builds configuration, and CI's token must stay read-only.
+//
+//   bun tools/aux-builds.ts            plan: print what would be created
+//   bun tools/aux-builds.ts --apply    create the missing triggers
+//
+// Log in first (`bun run cf auth login`) or export a token with "Workers Builds
+// Configuration: Edit" as CLOUDFLARE_API_TOKEN. cf runs through tools/lib/cf.ts. Each Worker
+// borrows the repository connection and build token from aadhar-sh's existing
+// production trigger, so the repo connection the site already uses is reused.
+// A Worker that already has a trigger is skipped, so a re-run is safe.
 
 import { cf } from "./lib/cf.ts";
 

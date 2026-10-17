@@ -11,12 +11,14 @@ const words = (n) => Array.from({ length: n }, (_, i) => "word" + i).join(" ");
 const page = (extra = "") => `<!doctype html><html lang="en"><head><link rel="canonical" href="https://blog.test/"></head><body><h1>A blog</h1><p>${words(120)}</p>${extra}</body></html>`;
 const control = { key: "chrome", role: "control", status: 200 };
 const crawler = (key) => ({ key, role: "answers", status: 200 });
+// find() answers T | undefined; a missing row is itself the failure worth naming.
 const pick = (list, key) => {
   const row = list.find((x) => x.key === key);
   assert.ok(row, `${key} should be in the list`);
   return row;
 };
 
+// A plain blog that does everything a reader needs and publishes no agent doors.
 function blog(over = {}) {
   const readiness = /** @type {any} */ (lensReadiness({ headers: {}, robots: { ok: true, status: 200, body: "User-agent: *\nAllow: /\n" }, sitemap: null, terms: null, discovery: null, agent: null, openapi: null, botViews: [] }));
   readiness.field = { components: [{ key: "sampledBots", score: 100, detail: "8 of 8 named bot identities received an unblocked response" }] };
@@ -40,7 +42,9 @@ test("a blog that serves its readers is not docked for OAuth, MCP or payments", 
   }
   assert.ok(!need.recommended.checks.some((c) => /protectedResource|mcpFindable|machinePayment|apiDescribed/.test(c.key)),
     "no surface-gated check may appear when its surface is absent");
+  // Missing JSON-LD and sitemap cost recommended points, nothing more.
   assert.ok((need.overall ?? 0) >= 80, `a blog with only website basics scores ${need.overall}, which should be at least 80`);
+  // The mirror's fails it has no reason to fix are named, with a reason.
   const skipped = need.skip.map((s) => s.key);
   for (const k of ["oauthDiscovery", "oauthProtectedResource", "authMd", "mcpServerCard"]) {
     assert.ok(skipped.includes(k), `${k} belongs on the skip list for a site with no API or MCP`);
@@ -57,6 +61,8 @@ test("refusing a training crawler costs nothing; refusing a user-sent agent does
 });
 
 test("a check Lens did not measure leaves the denominator", () => {
+  // A self-scan skips bot views. Docking the site for that would be docking it
+  // for our own instrument, the rule lensReadiness keeps for execution checks.
   const need = lensNeed(blog({ botViews: [] }));
   const reach = pick(need.essential.checks, "crawlerReach");
   assert.equal(reach.status, "neutral");

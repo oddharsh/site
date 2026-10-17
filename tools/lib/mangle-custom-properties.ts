@@ -1,7 +1,25 @@
 // Shorten every CSS custom property name the site defines, in the STAGED tree.
+//
+// The palette is authored for people (`--surface-window`, `--blue-inactive`),
+// and 106 of those names are unique strings, which is exactly what brotli
+// cannot discount: a repeated string costs one backreference, a distinct one
+// costs its length. Measured 2026-09-08 over the five stylesheets, shortening
+// them is -272 B brotli (-2.24%), and 93% of that is luna.css.
+//
+// This is safe to do mechanically ONLY because nothing builds a property name
+// at runtime. Every setProperty/getPropertyValue/removeProperty call in the
+// tree passes a literal, and the five names they pass are RESERVED below. A
+// single dynamic `setProperty("--" + kind)` anywhere would defeat the whole
+// pass silently, which is what `assertNoDynamicPropertyNames` exists to catch.
+//
+// The readable `.src.css` / `.src.html` / `.src.js` twins are deliberately NOT
+// mangled. They are the View Source copy, the same way they are the unminified
+// copy, so `--surface-window` still means something to anyone reading them.
 
+/** Names a DOM call passes as a literal, so the rename may not touch them. */
 export const RESERVED = new Set(["--x", "--y", "--lx", "--ly", "--tail"]);
 
+/** Any custom-property-shaped token. CLI flags match too and simply miss the map. */
 const TOKEN = /--[a-z0-9][a-z0-9-]*/g;
 // A definition is `--name:` at the head of a declaration. A style container
 // query, `@container style(--name: true)` (and `if(style(--name: 1): …)` from
@@ -16,6 +34,7 @@ const TOKEN = /--[a-z0-9][a-z0-9-]*/g;
 const DEFINITION = /(?<!style\(\s*)(--[a-z0-9][a-z0-9-]*)\s*:/g;
 const REFERENCE = /(?:var|style)\(\s*(--[a-z0-9][a-z0-9-]*)/g;
 
+/** A first argument to those APIs that is NOT a literal, which would be unsafe. */
 const PROPERTY_API_DYNAMIC =
   /(?:setProperty|getPropertyValue|removeProperty|getPropertyPriority)\(\s*(?![`"'])[^)]/g;
 
@@ -24,6 +43,11 @@ const matchAll = (re: RegExp, text: string): string[] => [...text.matchAll(re)].
 export const definitionsIn = (text: string): string[] => matchAll(DEFINITION, text);
 export const referencesIn = (text: string): string[] => matchAll(REFERENCE, text);
 
+/**
+ * Throw if any file hands a property-name API something other than a literal.
+ * The rename is a whole-tree find-and-replace, so a name assembled at runtime
+ * is the one input it cannot follow.
+ */
 export function assertNoDynamicPropertyNames(files: Map<string, string>): void {
   const offenders: string[] = [];
   for (const [name, text] of files) {
@@ -40,6 +64,7 @@ export function assertNoDynamicPropertyNames(files: Map<string, string>): void {
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
+/** The i-th short name: `--a` .. `--9`, then `--aa` .. `--99`, then three characters. */
 const short = (i: number): string => {
   let s = "";
   for (let n = i; ; n = Math.floor(n / ALPHABET.length) - 1) {
@@ -49,9 +74,11 @@ const short = (i: number): string => {
   return `--${s}`;
 };
 
+/** Where the two-character names start in `short`'s sequence, and how many there are. */
 const TWO_CHAR_FIRST = ALPHABET.length;
 const TWO_CHAR_COUNT = ALPHABET.length * ALPHABET.length;
 
+/** FNV-1a, 32-bit. Stable across runtimes, which is the only property wanted from it. */
 const fnv1a = (text: string): number => {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
@@ -108,6 +135,12 @@ export function planNames(files: Map<string, string>, shellFiles?: ReadonlySet<s
   }
   for (const n of RESERVED) defined.delete(n);
 
+  // Seed with every custom-property-shaped token ALREADY in the tree, not just
+  // the reserved ones. A generated `--l` that happens to collide with a name
+  // something references and nothing defines would silently start resolving.
+  // The integrity check caught exactly that on this pass's first run. This is
+  // the one way a page can still move a shell name, and it takes a LITERAL
+  // short token (an authored `--q`), which no count edit produces.
   const taken = new Set(RESERVED);
   for (const text of files.values()) for (const t of text.match(TOKEN) ?? []) taken.add(t);
 
@@ -117,6 +150,7 @@ export function planNames(files: Map<string, string>, shellFiles?: ReadonlySet<s
     if (candidate.length < name.length) map.set(name, candidate);
   };
 
+  // Tier 1. Most-used first, so the shortest names land where they repeat most.
   const byName = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
   const tier1 = [...defined].filter((n) => shellDefined.has(n));
   tier1.sort((a, b) => (shellUses.get(b) ?? 0) - (shellUses.get(a) ?? 0) || byName(a, b));
@@ -127,6 +161,8 @@ export function planNames(files: Map<string, string>, shellFiles?: ReadonlySet<s
     claim(name, candidate);
   }
 
+  // Tier 2. Sorted by name so the probe order, and so any collision, is a
+  // function of the set of names and never of the order files were read in.
   const tier2 = [...defined].filter((n) => !shellDefined.has(n)).sort(byName);
   let overflow = TWO_CHAR_FIRST + TWO_CHAR_COUNT;
   for (const name of tier2) {
@@ -136,12 +172,35 @@ export function planNames(files: Map<string, string>, shellFiles?: ReadonlySet<s
       const c = short(TWO_CHAR_FIRST + ((home + k) % TWO_CHAR_COUNT));
       if (!taken.has(c)) candidate = c;
     }
+    // All 1296 two-character names taken: carry on into three characters.
     while (!candidate || taken.has(candidate)) candidate = short(overflow++);
     claim(name, candidate);
   }
   return map;
 }
 
+/**
+ * Drop the custom-property definitions nothing reads, from the stylesheets only.
+ *
+ * The palette is defined for people too, so luna.css carries tokens no page,
+ * script or Worker CSS ever reads: 42 of 174 on 2026-10-09, 205 B brotli of
+ * an 8.6 KB stylesheet. design/tokens stays the whole palette; only the staged
+ * copy loses the names nothing asks for.
+ *
+ * A READ is any appearance of the name that is not its definition: a var() or
+ * style() query, but also a name a script passes to getPropertyValue, or one a
+ * comment mentions. That is deliberately loose: a mention keeps a definition
+ * alive, which costs a few bytes and never a colour. A name that is only ever
+ * WRITTEN (a script's `cssText = "--x:1"`, another stylesheet's definition)
+ * is unread, since a value nothing reads does nothing. RESERVED is always kept.
+ *
+ * Only files `isStylesheet` accepts are edited, because a definition inside a
+ * script or an HTML attribute is text a regex should not cut. It runs to a fixed
+ * point: dropping `--a: var(--b)` can leave `--b` unread. It reports only what
+ * it removed, and stops when a round removes nothing: a BEM selector such as
+ * `.tab--active:hover` reads to DEFINITION as `--active:`, which the removal
+ * rightly leaves alone, and the first version looped on it forever.
+ */
 export function pruneUnread(files: Map<string, string>, isStylesheet: (rel: string) => boolean): { files: Map<string, string>; dropped: string[] } {
   const current = new Map(files);
   const dropped: string[] = [];
@@ -159,6 +218,7 @@ export function pruneUnread(files: Map<string, string>, isStylesheet: (rel: stri
     const names = new Set(unread), removed = new Set<string>();
     for (const [rel, text] of current) {
       if (!isStylesheet(rel)) continue;
+      // one declaration: the name at a token boundary, its value up to ; or }
       const next = text.replace(/(?<![a-z0-9-])(?<!style\(\s*)(--[a-z0-9][a-z0-9-]*)\s*:[^;}]*;?/g, (decl, name) => {
         if (!names.has(name)) return decl;
         removed.add(name);
@@ -172,12 +232,17 @@ export function pruneUnread(files: Map<string, string>, isStylesheet: (rel: stri
   return { files: current, dropped: dropped.sort() };
 }
 
+/** Rewrite one file. Whole-token lookup, so `--blue-9` cannot match `--blue-95`. */
 export const applyMangle = (text: string, map: Map<string, string>): string =>
   text.replace(TOKEN, (token) => map.get(token) ?? token);
 
 type Scan = { defined: string[]; referenced: string[] };
 const scanOf = (text: string): Scan => ({ defined: definitionsIn(text), referenced: referencesIn(text) });
 
+// The dangling set from per-file scans. `reuse` holds scans already taken,
+// keyed by file: one is used only while that file's text is unchanged, which
+// is how assertIntegrity scans the after-tree without re-reading the files the
+// rename left alone (121 of 218 on 2026-10-08).
 function danglingFrom(files: Map<string, string>, reuse?: { text: Map<string, string>; scans: Map<string, Scan> }): {
   dangling: Set<string>;
   scans: Map<string, Scan>;
@@ -196,10 +261,20 @@ function danglingFrom(files: Map<string, string>, reuse?: { text: Map<string, st
   return { dangling: referenced, scans };
 }
 
+/** Referenced somewhere and defined nowhere. Must not grow across the rename. */
 export function unresolved(files: Map<string, string>): Set<string> {
   return danglingFrom(files).dangling;
 }
 
+/**
+ * The integrity assertion, and the reason this pass is allowed to exist.
+ *
+ * A missed file is silent: its `var(--surface-window)` keeps the old name,
+ * nothing defines it any more, and the colour falls back to nothing three
+ * commits later. So the invariant is not "the output looks right", it is that
+ * the set of DANGLING references is exactly what it was, name for name, with
+ * the rename applied to it. A file the walk forgot shows up here immediately.
+ */
 export function assertIntegrity(
   before: Map<string, string>,
   after: Map<string, string>,

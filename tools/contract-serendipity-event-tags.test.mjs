@@ -44,6 +44,8 @@ test("one event per request, naming a model the binding accepts, with a bounded 
 
 test("the input hash moves when the event, the taxonomy or the model moves, and only then", async () => {
   const base = await tagInputHash(buildTagRequest(EV));
+  // lowercase SHA-256 hex of the exact request, checked against node:crypto rather than
+  // the Worker's own encoder, so every tag already stored under it keeps its key
   assert.equal(base, createHash("sha256").update(JSON.stringify(buildTagRequest(EV))).digest("hex"));
   assert.equal(await tagInputHash(buildTagRequest({ ...EV })), base, "same event, same hash");
   assert.notEqual(await tagInputHash(buildTagRequest({ ...EV, description: EV.description + " Now with talks." })), base);
@@ -87,6 +89,9 @@ test("the runtime DDL is the migration's statement, on one line", () => {
   assert.ok(!EVENT_TAGS_DDL.includes("\n"));
 });
 
+// A D1 just deep enough for tagEvents: the scan returns `rows`, and every
+// INSERT's bound args are recorded. The SQL itself is exercised against real
+// SQLite by hand, since a regex fake cannot hold an ORDER BY to account.
 async function fakeTagDb(rows) {
   const writes = [];
   const stmt = (sql, ...args) => ({ sql, args });

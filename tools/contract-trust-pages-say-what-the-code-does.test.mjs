@@ -28,6 +28,9 @@ const PAGES = [
   ["/developers", trust.renderDevelopersPage],
 ];
 
+// The text between the page's <h1> and its <footer>: the document itself,
+// without the chrome. That region holds no <script> or <style> (asserted
+// below), so dropping tags is enough to read it.
 const text = (html) => html
   .replace(/<[^>]+>/g, " ")
   .replace(/&quot;/g, "\"").replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")

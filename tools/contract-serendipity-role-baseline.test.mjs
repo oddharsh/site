@@ -30,6 +30,7 @@ test("founders are read the way they write a bio", () => {
   for (const bio of ["Cofounder @ Colosseum", "cofounder of strobe", "Co founder of Kaleidoscope", "building @halldon", "Building Exa.ai", "Building Doorman | Ex-Ramp"]) {
     assert.equal(roleTier(bio).tier, "founder", bio);
   }
+  // The "Building <Name>" rule reads the capital, and only at the start.
   assert.equal(roleTier("building software for fun").tier, "unmatched");
   assert.equal(roleTier("Love traveling and Building Things").tier, "unmatched");
 });
@@ -52,11 +53,11 @@ test("saying nothing and saying something untiered are different", () => {
 
 test("the baseline scores precision over matches and recall over stated roles", () => {
   const bios = [
-    { id: "a", bio: "Founder of X" },
-    { id: "b", bio: "aspiring product manager" },
-    { id: "c", bio: "Growth at Corgi" },
-    { id: "d", bio: "espresso and tennis" },
-    { id: "e", bio: "Engineer at Z" },
+    { id: "a", bio: "Founder of X" },            // matched, right
+    { id: "b", bio: "aspiring product manager" }, // matched, wrong
+    { id: "c", bio: "Growth at Corgi" },          // stated, missed
+    { id: "d", bio: "espresso and tennis" },      // not stated, ignored by recall
+    { id: "e", bio: "Engineer at Z" },            // unlabelled, ignored entirely
   ];
   const s = scoreTiers(bios, { a: "founder", b: "other", c: "operator", d: "not_stated" });
   assert.deepEqual({ matched: s.matched, right: s.right, stated: s.stated, found: s.found }, { matched: 2, right: 1, stated: 3, found: 1 });
@@ -65,7 +66,9 @@ test("the baseline scores precision over matches and recall over stated roles", 
   assert.throws(() => scoreTiers(bios, { a: "ceo" }), /not one of/);
 });
 
+// ── the Clef role classifier (serendipity/roles.ts) ──────────────────────────
 test("the classifier's options are the label vocabulary every label file uses", () => {
+  // Pinned by value: a renamed option would silently score every old label as a miss.
   assert.deepEqual([...LABELS], ["founder", "investor", "operator", "engineer", "researcher", "student", "creator", "other", "not_stated"]);
   assert.deepEqual(Object.keys(ROLE_CRITERIA), [...LABELS]);
 });
@@ -94,12 +97,12 @@ test("Clef is scored like the regex: abstentions cost recall, never precision", 
   const labels = { a: "founder", b: "operator", c: "operator", d: "creator", e: "not_stated", f: "investor" };
   const p = (role, confidence) => ({ role, confidence, probabilities: {} });
   const predictions = {
-    a: p("founder", 0.95),
-    b: p("operator", 0.6),
-    c: p("founder", 0.9),
-    d: p("creator", 0.9),
-    e: p("not_stated", 0.99),
-    f: null,
+    a: p("founder", 0.95),   // claimed, right
+    b: p("operator", 0.6),   // claimed at 0, abstains at 0.7
+    c: p("founder", 0.9),    // claimed, wrong
+    d: p("creator", 0.9),    // right, on a label no tier can fit
+    e: p("not_stated", 0.99), // an abstention whatever its confidence
+    f: null,                 // the call failed
   };
   const at0 = scoreClef(bios, labels, predictions, 0);
   assert.deepEqual(
@@ -111,6 +114,7 @@ test("Clef is scored like the regex: abstentions cost recall, never precision", 
   assert.equal(at7.found, 2, "a below-threshold right answer is a miss, not a hit");
   assert.deepEqual(at7.missed, { operator: 2, investor: 1 });
   assert.throws(() => scoreClef(bios, { a: "ceo" }, predictions), /not one of/);
+  // The regex's like-for-like recall: founder hit, operators missed, creator excluded.
   assert.deepEqual(tierRecallOnTierable(bios, labels), { tierable: 4, found: 1 });
 });
 

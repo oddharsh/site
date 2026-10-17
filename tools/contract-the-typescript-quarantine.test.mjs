@@ -1,5 +1,4 @@
 // ── the TypeScript quarantine ───────────────────────────────────────────────
-// Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   ROOT,
   assert,
@@ -10,6 +9,9 @@ import {
   wranglerErrorLines,
 } from "./contract-shared.ts";
 
+// ── the TypeScript quarantine ───────────────────────────────────────────────
+// The migration quarantine is empty. Keep the restriction directly in source:
+// no Worker module may opt out, and no fixed module count can drift on additions.
 test("every Worker module remains free of ts-nocheck", async () => {
   const workerModules = (await readdir(new URL("src/worker", ROOT), { recursive: true }))
     .filter((rel) => rel.endsWith(".ts"));
@@ -39,11 +41,20 @@ test("every Worker module remains free of ts-nocheck", async () => {
 test("no tool spawns a package manager by name", async () => {
   const { readdirSync, readFileSync } = await import("node:fs");
   const dir = new URL("tools/", ROOT).pathname;
+  // TEST files are excluded: the rule governs tools, and a test that asserts
+  // about `pnpm` necessarily contains the word.
   const files = readdirSync(dir).filter((f) =>
     (f.endsWith(".ts") || f.endsWith(".mjs")) && !f.endsWith(".test.mjs")
     && !f.endsWith(".d.ts") && f !== "contract-shared.ts");
   assert.ok(files.length >= 20, `expected the tools directory, got ${files.length} files`);
 
+  // There is NO exception list. The one this test held until 2026-08-23
+  // exempted lens-seed with a reason that described no code in the file: its
+  // only spawn was `execFileSync("pnpm", ["exec", "wrangler", ...])`, exactly
+  // what this test bans, and the suite stayed green while every seed run on a
+  // bun tree died. An allowlist entry whose stated reason does not match the
+  // code it exempts is worse than no test, because it looks like a considered
+  // decision.
   const offenders = [];
   for (const f of files) {
     const src = readFileSync(dir + f, "utf8");
@@ -75,6 +86,18 @@ test("wranglerCommand runs the pinned wrangler under node", async () => {
   assert.deepEqual(argv.slice(1), ["versions", "list"], "arguments pass through untouched");
 });
 
+// The two perf tools ran pinned to node from 2026-08-20 to 2026-09-16, for a
+// reason about the MEASUREMENT. bun 1.4 ships zlib-ng,
+// which gzips one byte-identical 2.8MB input to 898,553 bytes against node's
+// 893,610 (0.55% larger), and the fear was that perf-history's nightly series
+// would re-read ~1% heavier with no code change. Measured before lifting the
+// pin: the series never saw the runtime. A snapshot recorded under node and one
+// under bun differ in exactly one field name, `gzip`, across 70 leaves, and the
+// nightly ROW built from each is byte-identical, because the row's only gzip
+// figure is the Worker bundle's, which wrangler reports and wrangler runs under
+// node whoever spawns it. perf-budget's own gzip readings moved by 0.1 KiB on
+// two assets against 12 KiB envelopes. So the claim to hold is structural: the
+// row must never take a gzip figure from the runtime's zlib.
 test("the nightly row's gzip figure is wrangler's, never the runtime's zlib", async () => {
   const { readFileSync } = await import("node:fs");
   const src = readFileSync(new URL("tools/perf-snapshot.ts", ROOT).pathname, "utf8");
@@ -97,6 +120,20 @@ test("the nightly row's gzip figure is wrangler's, never the runtime's zlib", as
 // 2026-09-16), so the bridge and the route oracle stay on node; test:node is
 // the twin suite and exists to be the other runtime. Everything else runs
 // under bun, and this is the list, so a fourth node spawn is a decision.
+//
+// THE FOURTH, taken 2026-09-30: tools/lib/harness-dispatch.ts. Since the wrangler
+// pin ddaa558, getWorker().fetch() reaches workerd only through an undici
+// Dispatcher that bun's fetch ignores, so the three contract tests that dispatch
+// through the harness re-run themselves in a node child when bun collects them.
+// It spawns from a module rather than a script, so the scan below cannot see it;
+// this paragraph and the module's header are its record.
+//
+// THE FIFTH, taken 2026-10-08: `cpu:sweep` (tools/cpu-sweep.ts, which absorbed
+// tools/route-cpu.ts on 2026-10-09). It measures
+// CPU per request against workerd's budget, and workerd runs V8. So does node;
+// bun runs JavaScriptCore, whose JIT tiers, regex engine and ICU setup are the
+// very costs the report would otherwise be reading off a different engine. It
+// also stubs `cloudflare:workers` through node's module.registerHooks.
 test("node is spawned only by the wrangler bridge, the route oracle, the twin suite, the harness dispatch tests and the CPU sweep", async () => {
   const { readFileSync } = await import("node:fs");
   const { execFileSync } = await import("node:child_process");
@@ -111,11 +148,24 @@ test("node is spawned only by the wrangler bridge, the route oracle, the twin su
     for (const m of code.matchAll(/(?:^|[ "(;&|])node (?:tools|\.perf|"\$|\S*\.(?:m?js|ts))/gm)) spawns.push(`${rel}: ${m[0].trim()}`);
   }
   assert.deepEqual(spawns, [
+    // the bridge Workers Builds runs, which is the whole reason node is pinned
     ".github/deploy-wrangler.sh: node \"$",
+    // the CPU sweep (the fifth, above)
     ".github/workflows/ci.yml: node tools",
   ], `node spawns outside the allowlist: ${JSON.stringify(spawns)}`);
 });
 
+// THE DEPLOY BRIDGE. The dashboard holds one command string per trigger and it
+// has to work on whatever branch is being built, so the wrapper is what lets a
+// pnpm branch and a bun branch share it.
+//
+// It runs wrangler under NODE for both, because wrangler refuses bun per
+// COMMAND (measured 2026-08-20, above): `deploy --dry-run` under bun returns a
+// correct bundle while `check startup` does no work, which is exactly why the
+// first bun-built deploy looked fine.
+//
+// Tested by RUNNING it against fixture trees with stub binaries, because the
+// failure it guards is a broken production deploy.
 test("the deploy bridge runs the pinned wrangler under node, on either tree", async () => {
   const { execFileSync } = await import("node:child_process");
   const { mkdtempSync, mkdirSync, writeFileSync, chmodSync, realpathSync } = await import("node:fs");
@@ -126,11 +176,17 @@ test("the deploy bridge runs the pinned wrangler under node, on either tree", as
   // The REAL path: macOS tmpdir() is /var/folders, a symlink to /private/var, and
   // the script prints the resolved path, so a symlinked root fails the match.
   const root = realpathSync(mkdtempSync(join(tmpdir(), "bridge-")));
+  // A HERMETIC PATH: the stub directory is the whole of it, so nothing can fall
+  // through to a real binary and pass this test for the wrong reason. bash has
+  // to be linked in, since the parent resolves it through this same PATH.
   const { symlinkSync } = await import("node:fs");
   const bash = execFileSync("bash", ["-c", "command -v bash"], { encoding: "utf8" }).trim();
   const stub = join(root, "stub");
   mkdirSync(stub);
   symlinkSync(bash, join(stub, "bash"));
+  // A stub for each, so the test can tell WHICH ran. bun and the managers are
+  // present and must go unused: their absence would pass this test for the
+  // wrong reason.
   for (const name of ["node", "bun", "pnpm", "npx", "bunx"]) {
     writeFileSync(join(stub, name), `#!/bin/sh\necho "${name} ran: $*"\n`);
     chmodSync(join(stub, name), 0o755);
@@ -157,6 +213,8 @@ test("the deploy bridge runs the pinned wrangler under node, on either tree", as
     assert.doesNotMatch(out, /(pnpm|npx|bunx) ran:/, `${tree} must not go through a package manager`);
   }
 
+  // An AUXILIARY Worker: WRANGLER_CWD names its directory. The root's pinned
+  // entry runs from there, and --x-new-config follows THAT directory's config.
   const repo = withEntry(join(root, "aux-tree"), "bun.lock");
   mkdirSync(join(repo, "lwe-ask"));
   writeFileSync(join(repo, "lwe-ask/cloudflare.config.ts"), "");
@@ -170,6 +228,8 @@ test("the deploy bridge runs the pinned wrangler under node, on either tree", as
     "an aux Worker without one gets no flag");
   assert.throws(() => runIn("missing", ["deploy"]), /Command failed/, "a WRANGLER_CWD that does not exist must fail");
 
+  // Every failure is LOUD, because a deploy command that half-works is worse
+  // than one that stops.
   const half = join(root, "half");
   mkdirSync(half);
   assert.throws(() => run(half, ["versions", "upload"]), /Command failed/,
@@ -177,6 +237,8 @@ test("the deploy bridge runs the pinned wrangler under node, on either tree", as
   assert.throws(() => run(withEntry(join(root, "noargs"), "bun.lock"), []), /Command failed/,
     "no arguments must exit rather than run a bare wrangler");
 
+  // A missing node FAILS rather than falling back to bun. A quiet fallback would
+  // ship a production deploy from the runtime wrangler disclaims.
   const noNode = join(root, "stub-no-node");
   mkdirSync(noNode);
   symlinkSync(bash, join(noNode, "bash"));
@@ -203,9 +265,18 @@ test("the deploy bridge never resolves wrangler from the registry", async () => 
   for (const fetcher of ["npx", "bunx", "dlx", "bun x"]) {
     assert.ok(!script.includes(` ${fetcher} `), `deploy-wrangler.sh must not reach for ${fetcher}`);
   }
+  // The wrangler ARGUMENTS stay in the dashboard string, which config/infra.json
+  // records for tools/check-infra.ts; the script must not smuggle its own.
   const code = script.replace(/^\s*#.*$/gm, "");
   assert.ok(!/versions\s+upload/.test(code),
     "the script takes no opinion on wrangler's arguments outside comments");
+  // ONE named exception since 2026-09-28: `--x-new-config`, the flag the site's
+  // cloudflare.config.ts needs, added here because only an in-repo switch lands
+  // atomically with the merge that adds the config. It is pinned rather than
+  // allowed: it must be the only flag the script writes, and it must be
+  // conditioned on the config FILE, never on which command runs.
+  // What can reach wrangler's argv is a `set --` rewrite of the positional
+  // arguments or the exec line itself; bun's own flags elsewhere never do.
   const argvLines = code.split("\n").filter((line) => /^\s*set -- |exec node "\$entry"/.test(line));
   const flags = [...new Set(argvLines.join("\n").match(/--[a-z][a-z-]*/g) ?? [])];
   assert.deepEqual(flags, ["--x-new-config"], "the only wrangler flag the script may add is --x-new-config");
@@ -215,6 +286,9 @@ test("the deploy bridge never resolves wrangler from the registry", async () => 
 });
 
 test("a ramp step hands the remainder to the LARGEST incumbent", () => {
+  // The real 2026-08-20 split, in the order the API returned it: the 10% version
+  // came first, so `find` picked it and 90% of traffic moved to a build nobody
+  // canaried. This is the regression remainderHolder exists to prevent.
   const active = [
     { id: "863a5873-ecb6-4153-9e5a-afba4e824f38", pct: 10 },
     { id: "c649f1fc-0000-0000-0000-000000000000", pct: 90 },
@@ -225,21 +299,31 @@ test("a ramp step hands the remainder to the LARGEST incumbent", () => {
     "the 90% incumbent must hold the remainder, whatever order the API listed",
   );
 
+  // Order must not decide it, so the reversed list has to give the same answer.
   assert.equal(
     remainderHolder([...active].reverse(), "7634b9d8-fc15-48e0-9821-b384373a490e"),
     "c649f1fc-0000-0000-0000-000000000000",
   );
 
+  // The target is never its own remainder holder, compared on the 8-char prefix
+  // because that is what the ramp and its logs use.
   assert.equal(remainderHolder([{ id: "7634b9d8-fc15-48e0-9821-b384373a490e", pct: 100 }],
     "7634b9d8-fc15-48e0-9821-b384373a490e"), null);
 
+  // One incumbent is the ordinary case and still works.
   assert.equal(remainderHolder([{ id: "c649f1fc-aaaa", pct: 100 }], "7634b9d8-fc15"), "c649f1fc-aaaa");
 
+  // Nothing serving yet: a first deploy has no remainder to hand out.
   assert.equal(remainderHolder([], "7634b9d8-fc15"), null);
 });
 
+// A ramp reports a wrangler failure by trimming its stderr to the first few real
+// lines (tools/lib/wrangler-error.ts), which is only readable once the ANSI
+// colour codes come off.
 test("the ramp's error reporter strips wrangler's ANSI colour codes", () => {
   const ESC = "\u001b";
+  // Verbatim from wrangler 4.126.0 stderr: `deploy --dry-run` against a config
+  // whose entry point does not exist, captured under FORCE_COLOR=3.
   const stderr = [
     `${ESC}[31m✘ ${ESC}[41;31m[${ESC}[41;97mERROR${ESC}[41;31m]${ESC}[0m ${ESC}[1mThe entry-point file at "does-not-exist.ts" was not found.${ESC}[0m`,
     "",
@@ -256,21 +340,50 @@ test("the ramp's error reporter strips wrangler's ANSI colour codes", () => {
   ]);
   assert.ok(!lines.join("\n").includes(ESC), "no ESC byte may survive into the reported text");
 
+  // The control, because the assertion above would pass on a fixture carrying no
+  // escapes at all. Dropping the escape from the pattern leaves one ESC per code
+  // and the survivors re-form an `ESC [` introducer, which is the shape this
+  // fixture is able to detect.
   const halfStripped = stderr.replace(/\[[0-9;]*m/g, "");
   assert.equal([...halfStripped].filter((c) => c === ESC).length, 7);
   assert.ok(halfStripped.includes(`${ESC}[`), "the old pattern re-forms a CSI introducer");
 
+  // stdout is the fallback when a failure says nothing on stderr, then message.
   assert.deepEqual(wranglerErrorLines({ stdout: `${ESC}[1monly stdout${ESC}[0m` }), ["only stdout"]);
   assert.deepEqual(wranglerErrorLines({ message: "spawn ENOENT" }), ["spawn ENOENT"]);
   assert.deepEqual(wranglerErrorLines({}), []);
 
+  // Capped, so one chatty failure cannot bury the ramp's own message under it.
   const many = { stderr: Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n") };
   assert.equal(wranglerErrorLines(many).length, 6);
 });
 
+// ── strictNullChecks is a RATCHET, and it only ever tightens ────────────────
+// `strict` is off everywhere and stays off: it bundles noImplicitAny, measured
+// at 7,197 diagnostics across this repo against strictNullChecks' 1,544, and the
+// two answer different questions. noImplicitAny finds missing annotations on
+// code that was written without types. strictNullChecks finds places a null can
+// actually arrive, which is the half worth having.
+//
+// The programs below declare it: most are clean under it outright, and three
+// carry a per-file baseline that can only fall. The list may only
+// GROW: turning the flag off in one of them, or dropping a program from this
+// list while its config still has it, fails here. That is the same mechanism
+// the completed Worker migration used for its quarantine, pointed the other
+// way — that one could only shrink, this one can only grow.
+//
+// TEXT-BASED on purpose. Proving a program is clean means RUNNING bun check against
+// it, which is what `bun run typecheck` already does on every one of these; a
+// second run per program here would put 10 compilations on a suite that answers
+// in about a second. What this asserts is the declaration, and typecheck is what
+// makes the declaration true.
 test("every program declared null-safe still declares it", async () => {
   const { readdirSync } = await import("node:fs");
 
+  // Some of these are clean under the flag; tsconfig.json, tsconfig.tools.json
+  // and tsconfig.browser.json are ratcheted against config/ts-baseline.json by
+  // tools/typecheck.ts. Both kinds belong here, because what this asserts is
+  // that the flag stays ON, not that a program is clean.
   const DECLARED = [
     "tsconfig.json",
     "tsconfig.cf-garage.json",
@@ -281,12 +394,15 @@ test("every program declared null-safe still declares it", async () => {
     "tsconfig.lwe-ask.json",
     "tsconfig.browser.json",
     "tsconfig.tools.json",
+    // The last program to join, on 2026-08-27, at 0 diagnostics.
     "tsconfig.sw.json",
   ].sort();
 
   const configs = readdirSync(new URL("config/", ROOT).pathname)
     .filter((f) => /^tsconfig\..+\.json$/.test(f) || f === "tsconfig.json");
 
+  // A FLOOR on the scan itself, because a test that read no configs would agree
+  // with an empty declaration list and report a clean run.
   assert.ok(configs.length >= 8,
     `only ${configs.length} tsconfigs found — this is reading the wrong directory`);
 
@@ -301,6 +417,9 @@ test("every program declared null-safe still declares it", async () => {
     `these programs are declared null-safe but no longer set strictNullChecks:\n  ${missing.join("\n  ")}\n` +
     "The flag comes off only by fixing whatever made it fail, never by editing this list down.");
 
+  // The other direction, so a program that gains the flag joins the record
+  // rather than sitting outside it: a config can be ahead of this list only by
+  // somebody forgetting to add it.
   const undeclared = strict.filter((name) => !DECLARED.includes(name));
   assert.deepEqual(undeclared, [],
     `these programs set strictNullChecks but are not in the declared list: ${undeclared.join(", ")} — add them`);
@@ -335,6 +454,7 @@ test("no .ts file carries a JSDoc type annotation, which TypeScript ignores", as
   const files = execFileSync("git", ["ls-files", "*.ts"], { cwd: root, encoding: "utf8" })
     .split("\n").filter((f) => f && !f.endsWith(".d.ts"));
 
+  // A FLOOR, because a test that scanned nothing would agree with any tree.
   assert.ok(files.length >= 100, `only ${files.length} .ts files found — the enumeration is broken`);
 
   const tag = /@(type|param|returns|typedef)\s*\{/;
@@ -343,7 +463,7 @@ test("no .ts file carries a JSDoc type annotation, which TypeScript ignores", as
     const lines = (await readFile(new URL(rel, ROOT), "utf8")).split("\n");
     lines.forEach((line, i) => {
       if (!tag.test(line)) return;
-      if (line.trimStart().startsWith("//")) return;
+      if (line.trimStart().startsWith("//")) return;   // prose about this very trap
       offenders.push(`${rel}:${i + 1}`);
     });
   }

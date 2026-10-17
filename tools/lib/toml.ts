@@ -1,4 +1,25 @@
 // toml.ts: the TOML reader for the repository's own TOML files.
+//
+// It replaced smol-toml on 2026-10-08. Three readers use it, and each runs
+// under node as well as bun (a contract test, or imported by one), so
+// Bun.TOML can't stand in: tools/lib/dependency-docs.ts and tools/lib/retired.ts
+// read tools/photos/zenc/Cargo.toml, and contract-osv-ignore-names-a-url-pin
+// reads osv-scanner.toml.
+//
+// It reads what the repository's TOML uses: comments, [tables] and
+// [[arrays of tables]] with dotted names, bare, quoted and dotted keys, basic
+// and literal one-line strings, integers (decimal, hex, octal, binary, with
+// underscores; a BigInt past 2^53), floats, inf and nan, booleans, and arrays
+// and inline tables, nested, across lines. It throws, naming the line, on
+// what it doesn't read: dates and times, multi-line strings, and a key set
+// twice. On 2026-10-08 its output deep-equalled smol-toml 1.9.0's on all 8
+// TOML files in the tree.
+//
+// Why own it: the tools that read TOML are one-shot processes, so loading the
+// parser is most of their cost. smol-toml's ES module build is 9 files, which
+// took 2.4 ms to load under bun and 3.2 ms under node; this one file took 0.4
+// and 0.5 (medians of 15 fresh processes on 2026-10-08). Parsing warm,
+// smol-toml is the faster one, at 34 against 80 µs for 7 of those files under bun.
 
 export type TomlValue = string | number | bigint | boolean | TomlValue[] | TomlTable;
 export type TomlTable = { [key: string]: TomlValue };
@@ -14,6 +35,7 @@ export function parse(src: string): TomlTable {
     throw new Error(`toml: ${what} at line ${src.slice(0, i).split("\n").length}`);
   };
   const space = () => { while (src[i] === " " || src[i] === "\t") i++; };
+  // whitespace, newlines and comments: between lines, and inside arrays
   const gap = () => {
     for (;;) {
       while (/\s/.test(src[i] ?? "")) i++;
@@ -59,11 +81,13 @@ export function parse(src: string): TomlTable {
     while (src[i] === ".") { i++; parts.push(key()); space(); }
     return parts;
   };
+  // A table under `keys`, made on the way down; an array of tables yields its last.
   const descend = (from: TomlTable, keys: string[]): TomlTable => {
     let at = from;
     for (const k of keys) {
       const next = (at[k] ??= {});
       const table = Array.isArray(next) ? next.at(-1) : next;
+      // a table is the only non-array object this parser makes
       if (!(table instanceof Object) || Array.isArray(table)) return fail(`${keys.join(".")} is not a table`);
       at = table as TomlTable;
     }

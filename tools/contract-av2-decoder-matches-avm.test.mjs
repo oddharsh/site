@@ -1,4 +1,13 @@
 // ── /garage/av2's in-page AV2 decoder draws what native AVM draws ────────────
+//
+// The page decodes AV2 with AVM 1.0.0 compiled to WebAssembly and says it draws
+// exactly the pixels the native build does. Two things could quietly make that
+// false: a rebuilt .wasm that decodes differently (a compiler flag, a different
+// AVM tree), or a worker that hands the decoder the wrong bytes (the container
+// parse, the item extents). CI has no AVM, so tools/photos/av2-wasm/expect.ts
+// records the native decode's sample hashes into expected.json on a machine
+// that does, and this decodes the same shipped files through the shipped
+// worker module and the shipped .wasm, and compares.
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";

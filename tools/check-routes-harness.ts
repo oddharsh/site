@@ -1,5 +1,30 @@
 #!/usr/bin/env node
-// check-routes-harness.mjs — run the route oracle BEFORE the merge.
+// check-routes-harness.ts — run the route oracle BEFORE the merge.
+//
+// verify-routes.ts has always needed something already serving: production
+// (which means the deploy that broke a route already happened) or a wrangler dev
+// somebody remembered to start. Wrangler 4.112+ ships createTestHarness(), which
+// boots this repo's Worker in-process on a real loopback port, so the same table
+// can gate a PR instead of only auditing a deployment.
+//
+//   bun run routes:check                 # boot .build/public, sweep, exit non-zero on failure
+//   bun run perf-budget && bun run routes:check --prebuilt .build/.perfbudget
+//
+// It points at cloudflare.config.ts, NOT the local-dev config (config/dev/), deliberately: that config
+// carries `build.command`, so the harness runs build.ts itself and serves the
+// minified tree with the /a/<hash8> shell — the bytes a deploy would ship. That
+// is also why VERIFY_BUILT=1 is set, which re-arms the build-output rows
+// (minified banners, .src twins, the luna.css size ceiling) that verify-routes
+// otherwise skips on a local base.
+// With --prebuilt, Wrangler loads the specified dry-run bundle instead. CI
+// builds it through perf-budget in this same job; standalone runs still build.
+//
+// What this does NOT prove: local KV/R2/D1 come up EMPTY, so data-backed routes
+// answer from their fallback path. Status and content-type are real; a passing
+// /images/manifest.json here means the handler works, not that the photos exist.
+// Rows tagged `remote` in verify-routes.ts are skipped for that reason. The
+// post-deploy `node tools/verify-routes.ts` sweep against production stays the check
+// that sees real content, and neither one replaces the other.
 
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -17,6 +42,25 @@ if (positionals.length > 1 || values.prebuilt === "") {
   process.exit(2);
 }
 
+// --remote boots the harness on a generated config whose KV/R2/Browser bindings
+// reach PRODUCTION (tools/gen-remote-config.ts), which un-skips the rows
+// verify-routes.ts marks `remote` — the ones whose whole assertion is content a
+// local Worker structurally cannot have. That closes the gap this file's own
+// header admits to ("local KV/R2/D1 come up EMPTY, so data-backed routes answer
+// from their fallback path"): with it, a passing /images/manifest.json means the
+// photos are really there, not just that the handler runs.
+//
+// It closes PART of it. Remote bindings cover KV/R2/D1/Browser and cannot cover
+// SECRETS, so /lens/fetch and /lens/shot (which want the AadharshBot signing key)
+// need a gitignored .dev.vars on top. /around/json, /photos and /images/full go
+// green on the bindings alone. Expect a partial pass on a clean checkout; that is
+// the tool being honest, not broken.
+//
+// Workstation-only, and CI must never pass it. Remote bindings stand up a proxy
+// Worker in the account, which takes a token that can write; the read-only token
+// CI holds cannot do it, and widening that token is the one thing this repo's
+// release design will not trade away. `bun run routes:check` stays the CI gate
+// and stays honest about what it does not see.
 const remote = values.remote;
 const [positional] = positionals;
 
@@ -32,6 +76,9 @@ if (remote) {
     console.error("routes:check --remote cannot run in CI (remote bindings need a write-capable token).");
     process.exit(2);
   }
+  // No --out: the generator's default is the repo root, which is where the twin
+  // has to live for the site config's relative `main` and `assets.directory` to
+  // keep resolving (see gen-remote-config.ts).
   const gen = spawnSync(
     process.execPath,
     ["tools/gen-remote-config.ts", config],
@@ -41,8 +88,8 @@ if (remote) {
   config = "./.wrangler.remote.jsonc";
 }
 
-// The site's COUNTER binding names the aadhar-counter Worker since step 3 of
-// "Moving Counter out" (CLAUDE.md), and workerd refuses to start a Worker whose
+// The site's COUNTER binding names the aadhar-counter Worker (CLAUDE.md,
+// Invariants), and workerd refuses to start a Worker whose
 // binding names a service nobody defined. So the counter boots beside the site:
 // the site stays first, which is the one the harness URL serves.
 const server = createTestHarness({
@@ -58,6 +105,10 @@ try {
   const { url } = await server.listen();
   console.log(`harness: ${config} booted in ${Date.now() - t0}ms at ${url}`);
 
+  // VERIFY_REMOTE is set only on a --remote run; verify-routes.ts un-skips the
+  // remote rows when it reads "1".
+  // Spread from process.env, so inference freezes the key set at what was
+  // spread plus VERIFY_BUILT; VERIFY_REMOTE is added conditionally below.
   const childEnv: Record<string, string | undefined> = { ...process.env, VERIFY_BUILT: "1" };
   if (remote) childEnv.VERIFY_REMOTE = "1";
 

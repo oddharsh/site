@@ -19,8 +19,10 @@ test("jwkThumbprint reproduces RFC 8037's Ed25519 vector, and reads x", async ()
   // RFC 8037 appendix A.3, the one published OKP thumbprint vector.
   const vector = { kty: "OKP", crv: "Ed25519", x: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo" };
   assert.equal(await jwkThumbprint(vector), "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k");
+  // Control: the function must depend on the public key bytes, not on kty and crv alone.
   const perturbed = { ...vector, x: vector.x.slice(0, -1) + (vector.x.endsWith("o") ? "p" : "o") };
   assert.notEqual(await jwkThumbprint(perturbed), await jwkThumbprint(vector));
+  // And it must ignore members that are not part of the thumbprint input.
   assert.equal(await jwkThumbprint({ ...vector, kid: "anything", alg: "EdDSA", use: "sig" }), await jwkThumbprint(vector));
 });
 
@@ -160,6 +162,10 @@ test("directory failures never fall back to an unsigned or mismatched success", 
 });
 
 test("both asset routers send the directory to the Worker within the platform's rule limit", async () => {
+  // An exact row or a covering wildcard: `*` spans slashes in this allowlist,
+  // which is how build.ts's own coverage check reads it. The directory's row
+  // folded into "/.well-known/*" on 2026-09-16, and what this test guards is
+  // that the Worker still sees the request, not the spelling of the rule.
   const claims = (rule, path) => rule === path || (rule.endsWith("*") && path.startsWith(rule.slice(0, -1)));
   const name = "cloudflare.config.ts";
   const config = parseJsonc(await configText(name));

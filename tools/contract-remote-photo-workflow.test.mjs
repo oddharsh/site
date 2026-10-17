@@ -7,6 +7,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 
 const workflow = await readFile(new URL("../.github/workflows/photo-pipeline.yml", import.meta.url), "utf8");
 
+// Execute the actual workflow shell, with encoders/network commands replaced by
+// deterministic producers. Every named block must exist; no missing-step pass.
 function step(name) {
   const marker = `      - name: ${name}\n`;
   assert.equal(workflow.split(marker).length, 2, `one workflow step: ${name}`);
@@ -44,12 +46,16 @@ for (const routine of ["reencode-thumbnails", "refresh-metadata"]) test(`remote 
     await command("tools/photos/reencode-thumbnails.sh", 'echo pixels >> "$TRACE"');
     await command("tools/photos/hash-thumbnails.sh", 'echo hashes >> "$TRACE"');
     await command("tools/photos/extract-photo-metadata.sh", 'test "$1" = --merge\ntest "$2" = "$RUNNER_TEMP/photo-source"\necho metadata-and-histograms >> "$TRACE"\ntouch rebuilt-metadata rebuilt-histograms');
+    // One fake bun answers both spawns the routine makes, in order: the
+    // semantics generator (a TS file, under bun since 2026-09-16) and then the
+    // verification script.
     await command("bin/bun", 'if [ "$1" = tools/photos/gen-photo-semantics.ts ]; then test -e rebuilt-metadata; echo semantics >> "$TRACE"; touch rebuilt-semantics; else test "$*" = "run photos:check"; test -e rebuilt-histograms; test -e rebuilt-semantics; echo verified >> "$TRACE"; fi');
     const result = shell("Run the selected photo routine", { ROUTINE: routine });
     assert.equal(result.status, 0, result.stderr);
     const expected = routine === "reencode-thumbnails" ? ["pixels", "hashes"] : [];
     assert.deepEqual((await readFile(trace, "utf8")).trim().split("\n"),
       [...expected, "metadata-and-histograms", "semantics", "verified"]);
+    // A failed producer must prevent both verification and later publication.
     await put("calls", "");
     await command("tools/photos/extract-photo-metadata.sh", "exit 7");
     assert.equal(shell("Run the selected photo routine", { ROUTINE: routine }).status, 7);
@@ -84,9 +90,13 @@ const artifacts = {
 };
 
 for (const [routine, paths] of Object.entries(artifacts)) test(`remote ${routine} publishes all its artifacts and refuses unaccounted output`, async () => {
+  // Local Git is real; push and PR creation are replaced at the executable boundary.
   const git = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
   await fixture(async ({ root, put, command, shell, trace }) => {
     execFileSync(git, ["init", "-q"], { cwd: root });
+    // The commit identity is .github/actions/bot-pr-token's job, in the step
+    // before this one, so the fixture stands in for it. Without this the step
+    // passes only on a machine with a global git identity, which CI is not.
     execFileSync(git, ["config", "user.name", "Fixture"], { cwd: root });
     execFileSync(git, ["config", "user.email", "fixture@example.com"], { cwd: root });
     await put(".gitignore", "bin/\ncalls\n");
@@ -175,6 +185,10 @@ test("the cold runner installs no JSON CLI, because the downloader runs its JSON
     await command("bin/python", 'test "$1" = -m\ntest "$2" = venv\nmkdir -p "$3/bin"');
     const result = shell("Install image toolchain", { GITHUB_PATH: `${root}/runner-path` });
     assert.equal(result.status, 0, result.stderr);
+    // Inverted on 2026-09-15: download-remote-photos.sh reads the manifest and
+    // @uri-encodes keys through pipeline-json.ts, under bun, so a brew line
+    // that still asks for jaq is a dependency the ledger retired coming back
+    // through the workflow.
     const installed = spawnSync("bash", ["-c", 'test -e "$RUNNER_TEMP/bin/jaq"'], { env: { ...process.env, RUNNER_TEMP: root } });
     assert.equal(installed.status, 1, "the workflow must not brew-install jaq any more");
     const brewed = spawnSync("bash", ["-c", 'ls "$RUNNER_TEMP/bin"'], { env: { ...process.env, RUNNER_TEMP: root }, encoding: "utf8" });

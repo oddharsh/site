@@ -4,7 +4,7 @@
 // "Windows cannot find 'garage/av2'". Now a name resolves against the site
 // manifest too, by path or by a last segment only one page has, and a miss keeps
 // XP's error with a filled-in site search inside it (XP's own error points to
-// Search). From the build-off's simple entry (buildoff/simple, worker.js run()).
+// Search).
 import { handleRun } from "../src/worker/run.ts";
 import { AGENT_SURFACES } from "../src/worker/lib/site-manifest.ts";
 import { assert, test } from "./contract-shared.ts";
@@ -19,6 +19,7 @@ test("a registered page opens by its path or by a last segment only it has", asy
   assert.equal(await opens("/lwe/fhe/"), "https://aadhar.sh/lwe/fhe");
   assert.equal(await opens("AV2"), "https://aadhar.sh/garage/av2");
   assert.equal(await opens("census"), "https://aadhar.sh/lens/census");
+  // the hand-listed names still win, and still take a unique prefix
   assert.equal(await opens("garage"), "https://aadhar.sh/garage");
   assert.equal(await opens("gar"), "https://aadhar.sh/garage");
 });

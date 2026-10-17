@@ -10,6 +10,8 @@ const baseline = resolve(process.argv[2]), candidate = resolve(process.argv[3]);
 const pairs = Number(process.argv[4] || 5);
 assert.ok(Number.isInteger(pairs) && pairs >= 3);
 const hashes = JSON.parse(readFileSync('public/images/hashes.json', 'utf8'));
+// An explicit finite sample lets callers repeat a subset when a baseline
+// decode fails. The chosen stems are always printed; failures never skip rows.
 const stems = (process.env.PHOTO_BENCH_STEMS || 'L1000069_3,L1009919_2,L1009920,XT500010,XT507831,XT509986').split(',');
 for (const stem of stems) assert.ok(Object.hasOwn(hashes, stem), `unknown committed photo ${stem}`);
 const inputs = stems.map(stem => resolve(`public/i/${stem}.${hashes[stem].j}.jpg`));
@@ -43,16 +45,20 @@ try {
       const matches = sources.filter(name => parse(name).name === stems[i] && /\.(jpe?g|hif|heic|heif)$/i.test(name));
       assert.equal(matches.length, 1, `expected one source for ${stems[i]}`);
       const source = join(sourceDir, matches[0]);
+      // The ingest script treats an absent Orientation tag as upright too.
       const orientation = String(run('exif-sooc', ['-s', '-s', '-s', '-n', '-Orientation', source])).trim() || '1';
       assert.match(orientation, /^[1-8]$/, 'source must declare orientation');
       orientations[i] = orientation;
       if (/\.(hif|heic|heif)$/i.test(source)) {
+        // A shared, untimed preparation step; both candidates still read and
+        // decode the same lossless TIFF through production load_linear.
         inputs[i] = join(root, `${stems[i]}.tiff`);
         decodedFormats[i] = 'TIFF prepared from HEIF';
         run('sips', ['-s', 'format', 'tiff', source, '--out', inputs[i]]);
       } else inputs[i] = source;
     }
   }
+  // Correctness is outside the timed region and checks every byte, not quality proxies.
   for (let i = 0; i < inputs.length; i++) {
     const b = join(root, `b${i}`), c = join(root, `c${i}`);
     baselineTiers(inputs[i], b, orientations[i]); candidateTiers(inputs[i], c, orientations[i]);
@@ -66,6 +72,8 @@ try {
     }
     console.error(`tiers pair ${pair + 1}/${pairs}: ${samples.baseline[pair].toFixed(1)} / ${samples.candidate[pair].toFixed(1)} ms`);
   }
+  // Isolate reference decode/process reuse across fixed quality trials. This is
+  // not an adaptive quality search and excludes SSIMULACRA2/Butteraugli cost.
   for (let pair = 0; pair < pairs; pair++) {
     for (const name of pair % 2 ? ['candidate', 'baseline'] : ['baseline', 'candidate']) {
       const start = performance.now();

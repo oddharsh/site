@@ -1,5 +1,4 @@
 // ── no Worker module imports another lazily ──────────────────────────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
@@ -16,6 +15,7 @@ const WORKER_SOURCES = [
   "cf-garage/src/**.ts", "lwe-ask/src/**.ts", "lens-reader/src/**.ts",
 ];
 
+/** Lines that call `import()`, skipping comments and `typeof import()` types. */
 function lazyImports(text) {
   return text.split("\n").flatMap((line, i) => {
     const code = line.trimStart();
@@ -36,6 +36,7 @@ test("no Worker module imports another lazily", async () => {
   const files = execFileSync("git", ["ls-files", ...WORKER_SOURCES], {
     cwd: new URL(".", ROOT), encoding: "utf8",
   }).split("\n").filter(Boolean);
+  // 127 on 2026-10-14; a glob that stopped matching would pass over nothing.
   assert.ok(files.length >= 80, `only ${files.length} Worker sources found; the globs have stopped matching`);
 
   const found = [];
