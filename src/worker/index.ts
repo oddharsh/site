@@ -25,6 +25,7 @@ import { serveBuiltPage } from "./lib/built-page.ts";
 import { BOT_UA, handleSignatureDirectory, withBotPolicyCache } from "./lib/botauth.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
+import { isLinkPreviewBot, previewCardHtml, WORK_CALENDAR_CARD } from "./lib/link-preview.ts";
 import { wantsMarkdown } from "./lib/http.ts";
 import { handleSiteMcp } from "./mcp.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
@@ -34,7 +35,7 @@ import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManif
 import type { Album } from "./albums.ts";
 import { createDispatch, isEdgeCacheable, type RouteHandler } from "./dispatch.ts";
 import {
-  AROUND_SNAPSHOT_URL, CENSUS_TABLE_URL, DYNO_PULLS_URL, INBOX_MAIL_URL, LEDGER_LINES_URL,
+  AROUND_SNAPSHOT_URL, CAL_HOST, CENSUS_TABLE_URL, DYNO_PULLS_URL, INBOX_MAIL_URL, LEDGER_LINES_URL,
   READING_LIST_URL, WHOAREYOU_VALUES_URL, type ExactPath, type PrefixLabel,
 } from "./routes.ts";
 import { handleReading, handleReadingList } from "./reading.ts";
@@ -448,6 +449,21 @@ async function routeCalHost(request: SiteRequest, env: Env, ctx: ExecutionContex
         throw new Error("unexpected work-calendar target");
       }
       const resolved = await resolveWorkCalendar(seed.href, env, ctx);
+      // A link-preview bot gets our card instead of following Google's to a
+      // generic one; people keep the redirect (lib/link-preview.ts).
+      if (isLinkPreviewBot(request.headers.get("user-agent"))) {
+        return new Response(previewCardHtml({
+          ...WORK_CALENDAR_CARD,
+          url: `https://${CAL_HOST.host}${path}`,
+          href: resolved || seed.href,
+        }).html, {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store",
+            "referrer-policy": "no-referrer",
+          },
+        });
+      }
       return noStoreRedirect(resolved || seed.href);
     } catch {
       // Fail closed: an absent or malformed target must not become an open
