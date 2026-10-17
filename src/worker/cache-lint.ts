@@ -67,7 +67,7 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
 /**
  * The verdict, as a pure function of the three observations (plus the optional
  * negotiation pair). Pure so the rules are testable without a network
- * (tools/contract-cache-the-behavioral-revalidation-lint.test.mjs).
+ * (tools/contract-cache-the-behavioral-revalidation-lint.test.ts).
  */
 // negotiated is OPTIONAL: it marks a response that varied on Accept, which most
 // callers have no opinion about. The body reads it behind a guard, and the lint's

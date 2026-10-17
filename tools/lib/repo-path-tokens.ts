@@ -1,7 +1,7 @@
 // repo-path-tokens.ts: every repository path cited in a text, for build step 7b-paths.
 //
 // It returns exactly what `text.match(REPO_PATH_REGEX)` returns, in order, and
-// contract-repo-path-tokens-match-the-regex.test.mjs holds the two together. The
+// contract-repo-path-tokens-match-the-regex.test.ts holds the two together. The
 // regex is the readable statement of the rule. This scanner exists because the
 // regex starts with a lookbehind and a 17-way alternation, which gives the
 // engine no literal to search for, so it runs both at every byte of every staged

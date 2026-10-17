@@ -30,7 +30,7 @@ const OWNS: Record<string, string[]> = {
   "config/tsconfig.json": ["src/worker/", "cal/", "serendipity/", "counter/"],
   "config/tsconfig.browser.json": ["src/client/", "public/", "pipelines/"],
   "config/tsconfig.tools.json": ["tools/", "pipelines/"],
-  "config/tsconfig.sw.json": ["src/client/sw.js", "src/client/sw-globals.d.ts"],
+  "config/tsconfig.sw.json": ["src/client/sw.ts", "src/client/sw-globals.d.ts"],
   "config/tsconfig.lwe-ask.json": ["lwe-ask/"],
   "config/tsconfig.cf-garage.json": ["cf-garage/"],
   "config/tsconfig.cf-garage-test.json": ["cf-garage/test/"],

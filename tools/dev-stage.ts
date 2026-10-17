@@ -1,4 +1,4 @@
-// dev-stage.mjs: compose the served URL root for LOCAL DEV, as a symlink farm.
+// dev-stage.ts: compose the served URL root for LOCAL DEV, as a symlink farm.
 //
 //   bun tools/dev-stage.ts         # (re)build .dev-assets/ only
 //
@@ -18,8 +18,8 @@
 // file and directory symlinks, and an edit to a symlink TARGET is picked up
 // live — measured 2026-08-19 against wrangler 4.123.0 / workerd 1.20260811.1,
 // including wrangler noticing the change and reloading on its own. So the farm
-// is built once at `bun run dev` startup and then gets out of the way; there is
-// no watcher, no second build path, and no dependency.
+// is built once at `bun run dev` startup. A watcher erases client TypeScript
+// edits with the same compiler as the build; the other assets stay symlinked.
 //
 // THE MERGE RULE, and the one thing worth knowing before adding a page:
 //   - a directory only ONE root provides becomes a single directory symlink, so
@@ -46,7 +46,11 @@
 // derived now, so a hover in dev draws the frame and no EXIF lines.
 // `photo_recipe`'s byte-match arm degrades the same way, since it reads
 // fingerprints.json through ASSETS. Build if you need either.
-import { rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { realpathSync, watch } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { spawn } from "node:child_process";
+import { browserJavaScript } from "./lib/browser-source.ts";
 import { linkServedTree, planServedTree, STAGED_ROOTS } from "./lib/served-tree.ts";
 
 // Re-exported under the name this file has always used for them.
@@ -74,8 +78,40 @@ export async function stage() {
   return { links, dirs, skipped: plan.skipped };
 }
 
+// Other assets stay live through symlinks. Client TypeScript needs erasure on
+// edits too, using the same compiler as both staging adapters.
+export function watchClientSources(dest = FARM, cwd = ".") {
+  let pending = Promise.resolve();
+  return watch(realpathSync(resolve(cwd, "src/client")), { recursive: true }, (_event, filename) => {
+    if (!filename || !filename.endsWith(".ts") || filename.endsWith(".d.ts")) return;
+    const source = resolve(cwd, "src/client", filename);
+    const output = resolve(cwd, dest, filename.replace(/\.ts$/, ".js"));
+    pending = pending.then(async () => {
+      let text: string;
+      try { text = await readFile(source, "utf8"); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        await rm(output, { force: true });
+        return;
+      }
+      const js = browserJavaScript(text, filename);
+      await mkdir(dirname(output), { recursive: true });
+      await writeFile(output, js);
+    }).catch((error) => { console.error(`dev: ${filename}: ${error.message}`); });
+  });
+}
+
 if (import.meta.main) {
   const { links: n, dirs: d, skipped } = await stage();
   console.log(`dev-stage: ${FARM}/ ready — ${n} links across ${d} merged director${d === 1 ? "y" : "ies"} from ${ASSET_ROOTS.join(", ")}`);
+  if (process.argv.includes("--watch")) {
+    const command = process.argv.slice(process.argv.indexOf("--") + 1);
+    if (!process.argv.includes("--") || command.length === 0) throw new Error("dev-stage --watch -- <command> [args]");
+    const watcher = watchClientSources();
+    const child = spawn(command[0], command.slice(1), { stdio: "inherit" });
+    for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => { watcher.close(); child.kill(signal); });
+    child.once("error", (error) => { watcher.close(); console.error(error); process.exitCode = 1; });
+    child.once("exit", (code) => { watcher.close(); process.exitCode = code ?? 1; });
+  }
   for (const path of skipped) console.warn(`dev-stage: left out ${path} (the build derives it; this copy is a local leftover)`);
 }

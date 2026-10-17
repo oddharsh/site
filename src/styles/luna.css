@@ -45,7 +45,7 @@
    generated design system, until 2026-10-06: the chrome sat up to dE 0.040
    from its hex (--darkshadow) and the title blues up to 0.042 (--blue-95).
    Each comment that names a hex now states its measured distance, and
-   tools/contract-design-tokens-reach-every-page.test.mjs holds the four
+   tools/contract-design-tokens-reach-every-page.test.ts holds the four
    chrome and four title values to it.
    ============================================================================ */
 

@@ -48,7 +48,7 @@ body { font-family: var(--font-ui); font-size: var(--text-body); line-height: 1.
  * --pic-border and --name-color on :root; the /lwe/ index draws only the
  * title-bar icon, so it sets just the glyph and the icon colors. The rest have
  * defaults, which are the generator's cream Messenger look
- * (pipelines/lwe/generate.mjs), so a generated page sets only what its concept
+ * (pipelines/lwe/generate.ts), so a generated page sets only what its concept
  * owns and a hand-written page overrides the handful of colors it chose
  * differently. */
 .title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: var(--icon-bg, #fff); border: 1px solid var(--icon-border, var(--pic-border)); }

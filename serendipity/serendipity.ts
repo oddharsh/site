@@ -620,7 +620,7 @@ async function renderEvent(d, id, path) {
   return html(200, shell(ev.name, path, body + EVENT_SCRIPT, "", eventDescription(ev, d0, guests.length)));
 }
 
-// exported for contract-form-fields-have-names.test.mjs
+// exported for contract-form-fields-have-names.test.ts
 export async function renderContribute(d, path, uid, msg) {
   // One summary row owns all three numbers this page needs. These used to be
   // three D1 calls (two overlapped, then the connected browser's event count),
@@ -666,7 +666,7 @@ export async function renderContribute(d, path, uid, msg) {
 
 // parse a Cookie-Editor JSON export (or a "name=value; ..." header) into our
 // stored shape. Throws with a human message if no luma.auth-session-key.
-// Exported for the contract suite (contract-the-luma-session-jar.test.mjs).
+// Exported for the contract suite (contract-the-luma-session-jar.test.ts).
 export function parseCookies(raw) {
   const t = (raw || "").trim();
   let cookies;
@@ -787,7 +787,7 @@ function selfIdFrom(cookiesJson) {
 // reads as a scraper — plus Stripe/analytics noise. None of it authenticates
 // anything, so load strips it and marks the jar dirty, healing pre-existing
 // rows the first time they sync.
-export function cookieJar(cookiesJson) {  // exported for contract-the-luma-session-jar.test.mjs
+export function cookieJar(cookiesJson) {  // exported for contract-the-luma-session-jar.test.ts
   let cookies;
   try { cookies = JSON.parse(cookiesJson).cookies || []; } catch { return null; }
   let dirty = cookies.some((c) => !c.name.startsWith("luma."));

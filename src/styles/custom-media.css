@@ -28,7 +28,7 @@
    src/styles and src/pages. The narrow breakpoints in play (460, 520, 540,
    560, 620, 760px) are a design question this file does not settle: only 520
    gets a name here. Recounted 2026-10-17, 620 (the garage scaffold's, in
-   pipelines/garage/generate.mjs) recurs more, 22 uses to 520's 18, and
+   pipelines/garage/generate.ts) recurs more, 22 uses to 520's 18, and
    has no alias.
    ============================================================================ */
 

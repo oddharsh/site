@@ -742,7 +742,7 @@ function renderTable(table, outer) {
         // GitHub's own GFM renderer on 2026-08-24 over pipes, backslash-then-pipe,
         // double-backslash-then-pipe, lone and trailing backslashes, in both a text
         // and a code-span cell: 10 of 10 round-tripped to the source content, no cell
-        // split and no backslash lost. contract-md-table-escapes.test.mjs pins the
+        // split and no backslash lost. contract-md-table-escapes.test.ts pins the
         // bytes that measurement blessed. `ctx.raw` is never set, so there is no
         // third path that skips escapeMd.
         const cells = (c.children || [])

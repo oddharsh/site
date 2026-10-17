@@ -1,6 +1,6 @@
 // The /*min*/ pass's round trip: JS template literal in, minified CSS out, JS
 // template literal back in. build.ts step 5 runs it over every Worker module,
-// and contract-min-css-literals-survive-the-splice.test.mjs proves it on the
+// and contract-min-css-literals-survive-the-splice.test.ts proves it on the
 // cases that broke it.
 //
 // A template literal is JS source, so its text and its runtime value differ

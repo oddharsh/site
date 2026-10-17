@@ -416,7 +416,7 @@ function intersectsAny(start, end, intervals) {
 // Workers runtime runs in UTC, where the two readings are identical: 1.08
 // million old-against-new comparisons under TZ=UTC (nine zones, every 37
 // minutes of 2026 and each DST transition minute by minute, bun and node) found
-// no difference. cal/test/availability.test.js pins the helpers against known
+// no difference. cal/test/availability.test.ts pins the helpers against known
 // values at both 2026 New York transitions, in any process zone.
 const ZONE_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
 function zoneFormatter(tz: string): Intl.DateTimeFormat {

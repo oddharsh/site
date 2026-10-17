@@ -42,7 +42,7 @@ export function bootsHarness(source: string): boolean {
  *  relative to `root`, sorted. */
 export function harnessTests(root: string): string[] {
   return readdirSync(join(root, "tools"))
-    .filter((name) => name.endsWith(".test.mjs"))
+    .filter((name) => name.endsWith(".test.ts"))
     .filter((name) => bootsHarness(readFileSync(join(root, "tools", name), "utf8")))
     .map((name) => `tools/${name}`)
     .sort();
