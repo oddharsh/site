@@ -1,6 +1,8 @@
 // node --expose-gc lens-reader/test/bench-dom-memory.mjs WORKTREE_ROOT
-// Run baseline and candidate in separate, alternating processes. Each sample
-// includes fifteen sweeps; report the median of five samples for each side.
+// One memory sample of a worktree's Reader pipeline: 15 sweeps over the
+// test/corpus captures, then peak RSS and live heap as JSON. Run baseline and
+// candidate in separate, alternating processes; report the median of 5
+// samples for each side.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';

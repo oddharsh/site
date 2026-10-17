@@ -1,3 +1,6 @@
+// src/dom.ts's cached textContent, replaceChild ordering and first-match
+// searches, each run through the same edits on linkedom and asserted equal, so
+// a stale cache shows up as a disagreement with the oracle.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHTML as fitted } from '../src/dom.ts';

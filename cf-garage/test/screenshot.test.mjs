@@ -1,3 +1,7 @@
+// cf-garage's /garage/cf/screenshot endpoint (Browser Run): the parked no-op,
+// the exact quickAction payload, the SSRF clamp, the logged byte count and the
+// three failure answers. Each test hands the Worker a stub BROWSER binding, so
+// nothing launches a browser. Run from cf-garage/ (`bun test`; bunfig.toml).
 import assert from "node:assert/strict";
 import test from "node:test";
 import worker from "../src/index.ts";
