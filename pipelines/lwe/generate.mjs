@@ -57,7 +57,6 @@ function chromeCss(c) {
 .msg .bubble code { font-family: var(--font-mono); font-size: var(--text-sm); background: var(--face-light); padding: 0 3px; border-radius: 2px; }`;
 }
 
-// ---- message rendering ----
 function renderMsg(m, c) {
   if (m.scrollnote) return `      <div class="scrollnote">${m.scrollnote}</div>`;
   if (m.demo) {
@@ -80,7 +79,6 @@ function demoSource(spec) {
   return readFileSync(join(HERE, "specs", spec.demoJsFile), "utf8").trimEnd();
 }
 
-// ---- the full page ----
 function pageHtml(spec) {
   const c = byId(spec.id);
   if (!c) throw new Error(`no registry entry for "${spec.id}"`);
@@ -193,11 +191,11 @@ function conceptsBlock(concepts) {
 // Replace the text between an explicit start/end marker pair. Markers are passed
 // in full so each file can use its own comment syntax (HTML for .xml/.html, // for .js).
 //
-// `file` is REPO-ROOT relative, never relative to the served tree. Three of the four
-// targets left src/pages/ in the 2026-08-18 layout split (sitemap.xml to public/,
-// ask.js to src/client/lwe/ (public/lwe/ until 2026-09-16), nav.js to src/client/nav-run.js) and this resolved them
-// against HOLDING for months afterwards, so `wire` silently rewrote one file of four
-// and every later concept got hand-wired into regions this script owns.
+// `file` is REPO-ROOT relative, never relative to the served tree. Targets left
+// src/pages/ in the 2026-08-18 layout split (sitemap.xml to public/, ask.js to
+// src/client/lwe/ by 2026-09-16), and resolving them against the served tree for
+// months afterwards made `wire` silently skip them, so every later concept got
+// hand-wired into regions this script owns.
 function injectBetween(file, start, end, content) {
   const path = join(ROOT, file);
   const src = readFileSync(path, "utf8");
@@ -211,7 +209,6 @@ function injectBetween(file, start, end, content) {
 
 export { pageHtml, chromeCss, renderMsg };
 
-// ---- CLI ----
 if (import.meta.main) {
   const [cmd, arg] = process.argv.slice(2);
   if (cmd === "page") {
@@ -244,7 +241,7 @@ if (import.meta.main) {
       injectBetween("src/client/lwe/ask.js", "// generated:concepts:start", "// generated:concepts:end", conceptsBlock(REGISTRY)),
     ];
     // A skipped target is the failure this script had for months, and it was silent
-    // because a soft skip prints beside three successes and reads as noise. Exit
+    // because a soft skip prints beside the successes and reads as noise. Exit
     // non-zero so a moved file fails the run that depends on it.
     if (wired.some((ok) => !ok)) {
       console.error(`wire: ${wired.filter((ok) => !ok).length} of ${wired.length} target(s) skipped, see above`);
