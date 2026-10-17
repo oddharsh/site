@@ -1,3 +1,5 @@
+// cal/src/reservation.ts: the slot claim's decision logic over a Map, and
+// reserveSlot / releaseSlotClaim against a stubbed COUNTER binding.
 import { describe, expect, it } from "bun:test";
 import {
   claimReservation,
@@ -92,8 +94,8 @@ describe("slot reservations", () => {
 
   // Booking must keep working where no Durable Object is bound, the same way a
   // missing BOOKING_WORKFLOW only costs the expiry timer. Production always
-  // binds it, and a contract test asserts that, so this cannot become the quiet
-  // default.
+  // binds it, and tools/contract-the-perf-probe.test.mjs asserts that, so this
+  // cannot become the quiet default.
   it("does not block booking when no Durable Object is bound", async () => {
     expect(await reserveSlot({}, { id: "x", start, end })).toBe(true);
     expect(await releaseSlotClaim({}, { id: "x", start, end })).toBe(false);

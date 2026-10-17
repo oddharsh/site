@@ -1,41 +1,32 @@
-// booking.js — KV ops for bookings and the slots they hold.
+// booking.ts: KV ops for bookings and the slots they hold.
 //
 // keys:
 //   booking:<id>          full booking payload (JSON), kept 90d for rendering
 //                         approve/decline pages and post-hoc introspection.
 //   held:<start>:<end>    a slot currently held by a pending-or-confirmed
 //                         booking. Presence = held; the value is the booking id
-//                         (for debugging). One key PER SLOT, not a shared list.
+//                         (for debugging). One key PER SLOT.
 //
-// Per-slot keys replace shared pending/confirmed indexes, so writes for different
-// slots cannot clobber each other. The per-slot Durable Object in reservation.ts
-// decides which booking owns a slot; these KV keys expose that hold to availability
-// readers. KV alone cannot make the availability check and claim atomic.
+// Per-slot keys mean writes for different slots cannot clobber each other, which
+// a shared pending/confirmed index could. The per-slot Durable Object in
+// reservation.ts decides which booking owns a slot; these KV keys expose that
+// hold to availability readers. KV alone cannot make the availability check and
+// claim atomic.
 //
 // A held key self-expires ~1 day after its slot ends, so a confirmed booking
 // keeps holding its slot (and counting toward the daily/weekly caps) right up to
 // the event, and even a leaked hold can't shadow availability for a future slot.
-// That also means there's nothing to sweep: the weekly cron is gone (the
-// per-booking BookingWorkflow reclaims abandoned pending slots on timeout).
-
-// The booking record, written to KV and read back by every route that acts on
-// one. Declared so `bun run typecheck` has a shape to enforce: in a .js file
-// TypeScript treats an unannotated object literal as expandable, so a typo like
-// `booking.statis` is only an error against a declaration like this one.
-//
-// `status` is a union rather than a string because the whole approve/decline
-// flow turns on it, and `expired` in particular is the value that makes a record
-// unactionable.
+// That also means there's nothing to sweep: each booking's BookingWorkflow
+// (workflow.ts) reclaims an abandoned pending slot on timeout.
 
 // A held slot is the same half-open span of unix-ms that availability.ts calls
 // an Interval, and generateSlots takes both as conflict lists, so it is that
 // type rather than a second declaration of it.
 import type { Interval } from "./availability.ts";
 
-// REAL TYPE DECLARATIONS, not JSDoc @typedef. TypeScript reads JSDoc types in
-// .js files only, so the moment this module became .ts the typedefs here went inert
-// and `import("./booking.ts").Booking` resolved to nothing — which is how
-// cal/test/booking.test.js caught the conversion.
+// The booking record, written to KV and read back by every route that acts on
+// one. cal/test/booking.test.js types its fixtures against it through a JSDoc
+// import, so `bun run typecheck` fails there if a field changes shape.
 export type Booking = {
   id: string;
   name: string;
@@ -140,8 +131,7 @@ export async function setSchedule(env, id: string, slot: Interval): Promise<{ bo
 // has a client compare SEQUENCE before applying a CANCEL, so a withdrawal sent
 // at the same sequence as the invite is one a client may legitimately ignore,
 // and the entry then sits on the guest's calendar for a coffee that is off.
-// Caught by a test rather than by review: the first version of this route did
-// call setStatus, and everything else about it looked right.
+// cal/test/index.test.js asserts the withdrawal goes out at SEQUENCE:1.
 //
 // Unconditional, unlike setLocation's bump, because /cancel only ever reaches a
 // CONFIRMED booking. A pending one has no invite out and is declined instead.
@@ -181,8 +171,6 @@ export async function releaseSlot(env, b: Interval) {
 // toward the caps), so a single list is all generateSlots needs. start/end are
 // encoded in the key name, so this is one list() with no per-key gets.
 export async function listHeld(env): Promise<Interval[]> {
-  // A REAL annotation. This was `/** @type {Slot[]} */`, which a .ts file
-  // ignores, so the array inferred `never[]` the moment strictNullChecks came on.
   const held: Interval[] = [];
   let cursor;
   do {
