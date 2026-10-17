@@ -559,9 +559,9 @@
     D.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "touch") return;                       // let touch scroll the page, not drag
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      var b = e.target instanceof Element && e.target.closest(".title-bar,.np-titlebar,#axp-run .tb,#axp-tips .tb");
+      var b = e.target instanceof Element && e.target.closest(".title-bar,.np-titlebar,#axp-run .tb");
       if (!b || (e.target instanceof Element && e.target.closest("a,button,.controls,.np-controls,.x"))) return;
-      var w = b.closest(".window,.np-window,#axp-run,#axp-tips");
+      var w = b.closest(".window,.np-window,#axp-run");
       if (!w) return;
       if (w.classList.contains("axp-max")) return;   // a maximized window is pinned, not draggable
       var t = getComputedStyle(w).transform;

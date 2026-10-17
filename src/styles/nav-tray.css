@@ -41,7 +41,11 @@ font:bold 9px/12px var(--font-ui,Tahoma,Verdana,sans-serif);text-align:center;po
 .axp-traybadge.no{background:oklch(52% 0.19 27)}
 .axp-trayico{position:relative}
 /* Tip of the Day. A paragraph rather than a readout, so it runs a little wider
-   and at the balloon's body size; the footer holds its one checkbox. */
+   and at the balloon's body size; the footer holds its one checkbox. This is
+   the only sheet that styles #axp-tips. Run's "Tip of the Day" row opens it
+   with nav-run.css loaded too, so a #axp-tips rule there would win or lose by
+   link order (centred, or shoved off the clock by its translate); the
+   one-sheet contract test pins it. */
 #axp-tips{width:min(340px,calc(100vw - 16px))}
 #axp-tips .ln{margin:2px 0 4px}
 #axp-tips .ln a{color:var(--link)}
