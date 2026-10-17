@@ -677,8 +677,9 @@ the reason, rather than written here with the caret quietly dropped.
   remove, replace, move, `textContent`, and `innerHTML`.
 
   It stays INSTALLED because it is the oracle.
-  `test/dom-differential.test.mjs` runs the real pipeline twice over 48
-  documents, once on each DOM, and compares title, byline, content, markdown and
+  `test/dom-differential.test.mjs` runs the real pipeline twice over every
+  page in `src/pages` plus the 10 captures (57 documents on 2026-10-17), once
+  on each DOM, and compares title, byline, content, markdown and
   control labels byte for byte; a second gate compares the serialized parse tree
   on the 10 captured real-world pages, and a third pins the SVG rules no capture
   can reach. Deleting linkedom would delete the only
@@ -735,7 +736,7 @@ the reason, rather than written here with the caret quietly dropped.
   at both versions, the Markdown is BYTE-IDENTICAL on 10 of 10. Three pages
   differ in the intermediate content HTML and every difference is one of the
   three rows above: `clipPath` on stripe.com, `<!--?-->` on the two MDN pages.
-  The parity gate is unmoved, at 4 of 4 across 48 documents plus those 10.
+  The parity gate is unmoved, at 4 of 4 across 48 documents, those 10 among them.
 
   The override still forces the oracle onto the same generation, which is what
   keeps that gate meaning anything. Re-evaluate it when linkedom changes its

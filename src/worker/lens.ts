@@ -3350,7 +3350,7 @@ export function lensText(html) {
 // best-effort, dependency-free HTML→Markdown, roughly what a basic LLM scraper
 // ingests. The high-fidelity read is a deliberate SEPARATE surface rather than a
 // v2 of this one: /lens/read runs Readability in the lens-reader Worker, because
-// a real extractor needs a DOM and linkedom alone is 94.6 KB gzip. This stays
+// a real extractor needs a DOM, ~46 KiB gzip there (lens-reader/src/index.ts). This stays
 // crude on purpose, since the AI view is showing what a crude scraper sees.
 export function lensMarkdown(html, baseUrl) {
   let s = html;
