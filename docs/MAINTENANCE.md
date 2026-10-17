@@ -205,6 +205,10 @@ rotation and treat all previously emailed links as compromised.
    report the new version, runs the advisory `dcz:check`, and dispatches
    `dictionary-roll.yml`. There is no automatic ramp or rollback since
    2026-09-28; roll back from a workstation with `bun run deploy:promote --rollback`.
+5. If the release carried a changelog entry, record it in D1 from a
+   workstation once step 4 passes: `bun run checkpoints:record`. Nothing above
+   writes D1, because CI's Cloudflare token is read-only.
+   [Release a change](#release-a-change) has the detail.
 
 ### Auxiliary Workers deploy themselves (from 2026-10-05)
 
@@ -1654,18 +1658,31 @@ projection, so it needs no D1, no wrangler and no account selection. Commit it
 with the work. `/updates` and `/restore` render from that file at build time, so
 the entry ships with the deploy it describes instead of needing a second one.
 
-`bun run deploy:promote` records the staged rows in D1 when traffic reaches
-**100%** — the one place that knows traffic actually moved. A ramp that stops at
-10% leaves the entry staged, which is exactly what it is. `bun run
-checkpoints:check` therefore allows the projection to run AHEAD by a contiguous
-tail of unreleased entries, and fails on anything else: behind, mismatched, or a
-gap in the tail.
+D1 holds the record of what **shipped**, and since 2026-09-28 (#1002) nothing
+on the release path writes it. Production traffic moves when Workers Builds
+deploys a promoted commit at 100%, and CI's Cloudflare token is read-only by
+rule. So after a release that carried an entry, once the promote workflow's
+`after-release` job reports the new version serving, record it from a
+workstation:
+```bash
+bun run checkpoints:check    # names any entry production carries that D1 lacks
+bun run checkpoints:record   # fetches origin/production, inserts those rows
+```
+"Released" means present in `origin/production`'s copy of
+`src/worker/checkpoints.json` (`tools/lib/checkpoints.ts`), so a stale working
+tree can't hide a row or record a title that never shipped. `--record` inserts
+oldest first and stops at the first failure, so a rerun continues where it
+stopped. It refuses to run in CI.
 
-Production traffic moves when Workers Builds deploys a promoted commit at 100%.
-A workstation `bun run deploy:promote` is the only thing that splits it. Nothing
-writes the D1 changelog rows since the ramp was deleted on 2026-09-28, so
-`checkpoints:check` reports released entries as staged until that table is
-retired or written by hand.
+`checkpoints:check` allows the projection to run AHEAD of D1 by a contiguous
+tail of entries production doesn't carry yet (staged), and fails on anything
+else: behind, mismatched, a gap in the tail, or a released entry D1 lacks. A
+manual `bun run deploy:promote` to 100% still writes the row itself, but normal
+releases don't run it.
+
+Measured 2026-10-17: D1 and the projection agree at v195 (2026-09-12, #793),
+and no entry has been staged since, across 540 commits on `main`. So no row is
+missing yet; the newest `/updates` entry is 35 days older than what serves.
 
 ### Kitesurf for the Browser view
 `/lens/browser` (the Browser view) renders on Kitesurf, Cloudflare's WASM browser
@@ -2244,9 +2261,9 @@ the cheap ones. Cut spans on the surface that emits them.
 
 Run `./tools/photos/bump-version.sh <slug> "<title>"` inside the release PR. It
 stages the next entry in `src/worker/checkpoints.json` and performs no network
-or D1 write. Commit that entry with the change it describes. The full ramp
-records it in D1 after traffic reaches 100%; see the
-[release path](#cicd-release-path). Keep the `/sw.js` unregister stub: it still
+or D1 write. Commit that entry with the change it describes. After the release
+serves, `bun run checkpoints:record` copies it into D1 from a workstation; see
+[Release a change](#release-a-change). Keep the `/sw.js` unregister stub: it still
 cleans up old service-worker installations and carries no version counter.
 
 ---
