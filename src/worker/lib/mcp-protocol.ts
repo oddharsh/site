@@ -2,7 +2,7 @@
 // CORS and result envelopes. Tool dispatch and data stay with each server.
 // Keep this module free of cloudflare:workers imports: both servers also run
 // in the host-runtime contract suite.
-
+//
 // ── the revisions ───────────────────────────────────────────────────
 // 2026-07-28 deleted the initialize handshake, deleted protocol-level sessions
 // and Mcp-Session-Id, and moved protocol version, client identity and
@@ -182,11 +182,9 @@ export function mcpCorsHeaders() {
 // result fields, and the spec tells modern clients to read a missing
 // `resultType` as "complete" anyway. One code path beats two that must agree.
 export function mcpServer({ serverInfo, capabilities, instructions }) {
-  // `cache` has always been optional: every caller that omits it spreads
-  // undefined, which contributes nothing. A .js file let that pass silently; a
-  // .ts file treats an unannotated parameter as REQUIRED, so the three callers
-  // in serendipity that legitimately omit it started failing. The default says
-  // what the code already meant and spreads to the same nothing.
+  // `cache` is optional: a tools/call result carries no freshness hint, and
+  // the default spreads to nothing. TypeScript reads an unannotated parameter
+  // as REQUIRED, so the default is what lets those callers omit it.
   const result = (id, payload, cache = {}) => ({ jsonrpc: "2.0", id, result: {
     resultType: "complete",
     ...payload,
@@ -258,8 +256,8 @@ export const mcpError = (id, code, message) => ({ jsonrpc: "2.0", id: id ?? null
 //
 // It rides the EXISTING log line rather than emitting its own, because every
 // console.log and every span is one observability event on the 200K/day Free
-// quota from 2026-10-01 (CLAUDE.md, Observability). A second line per /mcp call
-// would buy nothing this field does not.
+// quota from 2026-10-01 (CLAUDE.md's Workers Free invariant). A second line per
+// /mcp call would buy nothing this field does not.
 //
 // Keyed on the Request OBJECT, which is the one value both the MCP handlers and
 // serveWorkerRequest hold: route() hands the same object all the way down. A

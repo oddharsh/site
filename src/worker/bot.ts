@@ -1,5 +1,6 @@
-// bot.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+// bot.ts: /bot, the page that tells a site owner who AadharshBot is, what it
+// reads, and how to turn it away.
+
 import { serveMarkdownTwin } from "./lib/assets.ts";
 import { BOT_NAME, BOT_UA, SIG_AGENT } from "./lib/botauth.ts";
 import { cachedRender } from "./lib/cache.ts";
@@ -7,9 +8,8 @@ import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { esc, wantsMarkdown } from "./lib/http.ts";
 
-// ── /bot info page ──────────────────────────────────────────────────
-// static shell: ride the caches.default layer like the other rendered pages;
-// edge TTL = the s-maxage in the render, version-keyed so a deploy busts it.
+// The HTML rides the caches.default layer like the other rendered pages: edge
+// TTL is the s-maxage in the render, version-keyed so a deploy busts it.
 export async function handleBotPage(request, env, ctx) {
   // This is the page a stranger reads after finding AadharshBot in their logs,
   // and that stranger is increasingly an agent. Answer in Markdown when asked;

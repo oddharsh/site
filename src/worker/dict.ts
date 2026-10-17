@@ -1,4 +1,4 @@
-// dict.js — the compression-dictionary oracle: will a browser ever actually use
+// dict.ts — the compression-dictionary oracle: will a browser ever actually use
 // the dictionary you are serving?
 //
 // ── why this is a lint and not a delta calculator ─────────────────────────
@@ -14,7 +14,9 @@
 // out confident and false, which is worse than not offering the feature.
 //
 // So the delta stays in build.ts, where real node computes it, and this route
-// does the half that is genuinely missing from the world.
+// does the half that is genuinely missing from the world. tools/lib/
+// upstream-watches.ts tracks the workerd fix (workerd-honours-zstd-dictionary,
+// cloudflare/workerd#7106) that would make a delta here honest.
 //
 // ── the half that is missing ──────────────────────────────────────────────
 // Compression dictionaries fail SILENTLY in the other direction too. Chromium
@@ -24,8 +26,7 @@
 // believe it is serving deltas. The rules that decide it are not written down
 // anywhere convenient, and they are not guessable.
 //
-// This encodes them, measured on this site (see CLAUDE.md and the local probe
-// recipe in MAINTENANCE.md) rather than inferred from the spec.
+// This encodes them, measured on this site rather than inferred from the spec.
 import { lensProbe } from "./lens.ts";
 
 // The verdicts a single rule can return. `veto` means the dictionary is dead;
@@ -113,7 +114,6 @@ export const RULES = [
   },
 ];
 
-/** `max-age=60, stale-while-revalidate=600` -> Map plus a has() for bare tokens. */
 export function parseCacheControl(value) {
   const map = new Map();
   for (const part of String(value || "").split(",")) {
@@ -169,7 +169,6 @@ export function auditConsumer(headers) {
   };
 }
 
-/** Fetch a target and audit it, through Lens's guarded, signed, capped fetcher. */
 export async function auditUrl(target, env) {
   const probe = await lensProbe(target, env);
   if (probe?.error) return { ok: false, unreadable: true, why: String(probe.error).slice(0, 80) };

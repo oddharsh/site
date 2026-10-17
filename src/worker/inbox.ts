@@ -1,4 +1,4 @@
-// inbox.js — /inbox, the Outlook Express window where approved webmentions land.
+// inbox.ts — /inbox, the Outlook Express window where approved webmentions land.
 //
 // The web writing back to this site is mail, so it renders as mail: a folder
 // tree of the pages people wrote about, a striped message list, and a preview

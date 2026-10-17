@@ -242,3 +242,43 @@ test("the per-request log line carries the MCP era, and only on MCP requests", a
   assert.equal(page.p, "/reading");
   assert.equal("mcp" in page, false);
 });
+
+// A throw used to fall through to Cloudflare's generic error page. It answers
+// 500 in the caller's format now, still behind the security headers, and the
+// error reaches console.error, which is what Workers Issues counts.
+test("a handler that throws answers 500 in the caller's format, and the error is logged", async () => {
+  const boom = () => { throw new Error("boom"); };
+  const r = rig({ exact: { ...fakeHandlers().exact, "/reading": boom } });
+  const logged = [];
+  const realError = console.error;
+  console.error = (...args) => logged.push(args);
+  try {
+    const page = await r.serve("https://aadhar.sh/reading", { headers: { accept: "text/html,*/*;q=0.8", "cf-ray": "8f00test-EWR" } });
+    assert.equal(page.status, 500);
+    assert.equal(page.headers.get("content-type"), "text/html; charset=utf-8");
+    assert.equal(page.headers.get("cache-control"), "no-store");
+    assert.ok(page.headers.get("content-security-policy"), "the security headers still apply");
+    const body = await page.text();
+    assert.match(body, /The page cannot be displayed/);
+    assert.match(body, /8f00test-EWR/, "the ray is the reference a visitor can quote");
+    assert.match(body, /<meta name="robots" content="noindex">/);
+
+    const json = await r.serve("https://aadhar.sh/reading", { headers: { accept: "application/json" } });
+    assert.equal(json.status, 500);
+    const error = await json.json();
+    assert.equal(error.code, "internal_error");
+    assert.equal(error.status, 500);
+
+    const text = await r.serve("https://aadhar.sh/reading");
+    assert.equal(text.status, 500);
+    assert.match(text.headers.get("content-type") || "", /^text\/plain/);
+
+    assert.equal(logged.length, 3, "every throw is logged");
+    assert.ok(logged.every((args) => args.some((a) => a instanceof Error && a.message === "boom")), "with the error itself");
+  } finally {
+    console.error = realError;
+  }
+  // the control: a handler that doesn't throw is untouched
+  const ok = await rig().serve("https://aadhar.sh/reading");
+  assert.equal(ok.status, 200);
+});

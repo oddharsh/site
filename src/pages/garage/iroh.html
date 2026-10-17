@@ -44,13 +44,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/iroh</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>Dial by key</h1>
     <p class="lede"><a href="https://github.com/n0-computer/iroh" rel="external">iroh</a> hit 1.0. It is a networking library where you reach another machine by its <a class="term" data-t="public-key-cryptography" href="https://en.wikipedia.org/wiki/Public-key_cryptography" title="Cryptography with a key pair: a public key anyone can see and a private key kept secret. What one key signs or locks, the other checks or opens." rel="external">public key</a> rather than its IP address: a 32-byte <a class="term" data-t="ed25519" href="https://en.wikipedia.org/wiki/EdDSA" title="A widely used digital signature scheme built on an elliptic curve, with 32-byte public keys and 64-byte signatures that are fast to make and check." rel="external">ed25519</a> identity that stays put while the network under it changes, with <a class="term" data-t="quic" href="https://www.rfc-editor.org/rfc/rfc9000.html" title="A transport protocol that runs fast, encrypted connections over UDP, with many streams sharing one connection. HTTP/3 is built on it." rel="external">QUIC</a> <a class="term" data-t="hole-punching" href="https://en.wikipedia.org/wiki/Hole_punching_(networking)" title="A trick that lets two devices behind home routers or firewalls connect directly, by having both send packets toward each other at the same time." rel="external">hole-punching</a> for a direct encrypted link and a relay only as a fallback. I went looking for a way to use it here. This is where I landed, plus a small piece of it you can run right now.</p>
 
@@ -93,7 +93,7 @@ const nodeId = base32(pub);   // this string is the address</pre>
 
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
 </div>
 
 <script>

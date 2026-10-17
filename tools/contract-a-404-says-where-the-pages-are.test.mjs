@@ -10,7 +10,7 @@ import { EXACT_PATHS } from "../src/worker/routes.ts";
 import { HASHED_ASSETS } from "../src/worker/lib/shell-assets.ts";
 import { _resetPhotoCaches } from "../src/worker/photos.ts";
 import {
-  DISCOVERY_ALIASES, MISS_LINKS, _resetSitemap, callerClass, canonicalPage, countMiss, missBucket, nearestPages, recoverNotFound,
+  DISCOVERY_ALIASES, MISS_LINKS, _resetSitemap, callerClass, canonicalPage, countMiss, missBucket, missPage, nearestPages, recoverNotFound,
 } from "../src/worker/lib/not-found.ts";
 
 const SITEMAP = `<?xml version="1.0"?><urlset>
@@ -153,9 +153,13 @@ test("an agent that asks for Markdown gets the same 404 as Markdown", async () =
   const probe = await recover("/.env", env(), { headers: { accept: "text/markdown" } });
   assert.ok(!(await probe.response.text()).includes("Closest pages"), "a probe is still offered no pages");
 
-  for (const accept of ["text/html,application/xhtml+xml,*/*;q=0.8", "*/*", "text/html, text/markdown;q=0.5", "text/markdown;q=0"]) {
+  for (const accept of ["*/*", "text/markdown;q=0"]) {
     const r = await recover("/garage/resampe", env(), { headers: { accept } });
     assert.match(r.response.headers.get("content-type") || "", /^text\/plain/, `${accept} keeps plain text`);
+  }
+  for (const accept of ["text/html,application/xhtml+xml,*/*;q=0.8", "text/html, text/markdown;q=0.5"]) {
+    const r = await recover("/garage/resampe", env(), { headers: { accept } });
+    assert.match(r.response.headers.get("content-type") || "", /^text\/html/, `${accept} gets the page`);
   }
 
   const head = await recover("/garage/resampe", env(), { method: "HEAD", headers: { accept: "text/markdown" } });
@@ -165,6 +169,35 @@ test("an agent that asks for Markdown gets the same 404 as Markdown", async () =
   const json = new Response('{"error":"not found"}', { status: 404, headers: { "content-type": "application/json" } });
   const kept = await recover("/serendipity/event/nope", env(), { headers: { accept: "text/markdown" } }, json);
   assert.equal(kept.response.headers.get("content-type"), "application/json", "a handler's own 404 is never rewritten");
+});
+
+test("a browser's 404 is a Luna window whose suggestions are links", async () => {
+  const accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+  const r = await recover("/garage/resampe", env(), { headers: { accept } });
+  assert.equal(r.response.status, 404, "the status never changes with the body");
+  assert.equal(r.outcome, "404:suggested");
+  assert.equal(r.response.headers.get("content-type"), "text/html; charset=utf-8");
+  assert.equal(r.response.headers.get("cache-control"), "no-store");
+  assert.equal(r.response.headers.get("vary"), "accept");
+  assert.ok((r.response.headers.get("link") || "").endsWith(MISS_LINKS), "the miss links ride after the shell preloads");
+  const page = await r.response.text();
+  assert.match(page, /^<!DOCTYPE html>/);
+  assert.match(page, /<meta name="robots" content="noindex">/);
+  assert.ok(!page.includes('rel="canonical"'), "a missing URL names nothing to canonicalize");
+  assert.match(page, /<li><a href="\/garage\/resample">\/garage\/resample<\/a><\/li>/, "the typo's sibling is a link");
+  assert.match(page, /<a href="\/garage">\/garage<\/a>/, "and so is its section");
+  assert.match(page, /<a href="\/">The homepage<\/a>/);
+
+  // The path is the visitor's own text, so it is escaped where it is printed.
+  // Called directly: a request URL would percent-encode the brackets first and
+  // make this pass without escaping anything.
+  const hostile = await missPage("/<script>x</script>", { section: null, pages: [] }).text();
+  assert.ok(!hostile.includes("<script>x</script>"), "the missing path is escaped");
+  assert.ok(hostile.includes("&lt;script&gt;x&lt;/script&gt;"));
+
+  const head = await recover("/garage/resampe", env(), { method: "HEAD", headers: { accept } });
+  assert.equal(head.response.headers.get("content-type"), "text/html; charset=utf-8", "HEAD says what GET would send");
+  assert.equal(await head.response.text(), "");
 });
 
 test("a probe gets the pointers and nothing else; a handler's own 404 keeps its body", async () => {
@@ -222,10 +255,12 @@ test("a client that asks for JSON gets the Error object /openapi.json declares",
 
   const md = await recover("/garage/resampe", env(), { headers: { accept: "text/markdown, application/json" } });
   assert.match(md.response.headers.get("content-type") || "", /^text\/markdown/, "Markdown is checked first");
-  for (const accept of ["text/html,application/xhtml+xml,application/json;q=0.9", "*/*", "application/json;q=0"]) {
+  for (const accept of ["*/*", "application/json;q=0"]) {
     const plain = await recover("/garage/resampe", env(), { headers: { accept } });
     assert.match(plain.response.headers.get("content-type") || "", /^text\/plain/, `${accept} keeps plain text`);
   }
+  const browser = await recover("/garage/resampe", env(), { headers: { accept: "text/html,application/xhtml+xml,application/json;q=0.9" } });
+  assert.match(browser.response.headers.get("content-type") || "", /^text\/html/, "HTML named first wins over JSON");
 });
 
 test("an API-shaped miss answers JSON unless the caller names HTML", async () => {
@@ -239,10 +274,10 @@ test("an API-shaped miss answers JSON unless the caller names HTML", async () =>
       assert.equal((await r.response.json()).code, "not_found");
     }
   }
-  // A browser names text/html, and a page-shaped path stays plain text: the
-  // control that shows the test can see the other branch.
+  // A browser names text/html and gets the page, and a page-shaped path stays
+  // plain text: the controls that show the test can see the other branches.
   const browser = await recover("/v1/users", env(), { headers: { accept: "text/html,application/xhtml+xml,*/*;q=0.8" } });
-  assert.match(browser.response.headers.get("content-type") || "", /^text\/plain/, "a browser keeps the text page");
+  assert.match(browser.response.headers.get("content-type") || "", /^text\/html/, "a browser gets the HTML page");
   const page = await recover("/garage/resampe", env(), { headers: { accept: "*/*" } });
   assert.match(page.response.headers.get("content-type") || "", /^text\/plain/, "a page-shaped miss stays text");
   for (const notApi of ["/version1", "/apiary", "/v1x/y", "/notes.jsonl"]) {

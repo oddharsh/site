@@ -15,16 +15,14 @@ import { DYNO_PULLS_URL } from "./routes.ts";
 // A BRANCH rather than D1 or a commit to main, and the reason is the repo's own
 // rules rather than preference. `main` carries a ruleset with zero bypass
 // actors, so no workflow may push to it; D1 writes need a Cloudflare Edit token,
-// and the one that exists is environment-gated behind a required reviewer for
-// the ramp. A branch outside both rulesets is the only write target a nightly
-// job can reach without weakening something load-bearing.
+// and CI's Cloudflare token is read-only by rule. A branch outside both
+// rulesets (main's and production's) is the only write target a nightly job can
+// reach without weakening something load-bearing.
 const HISTORY_URL = "https://raw.githubusercontent.com/oddharsh/site/perf-history/history.jsonl";
 
 const KV_KEY = "dyno:history";
 const KV_TTL = 6 * 3600;      // the source updates once a night; 6h is generous
 const FETCH_BUDGET_MS = 3000;
-
-// ── data ────────────────────────────────────────────────────────────────────
 
 // Rows come back stale-while-revalidate. The isValid guard is load-bearing: a
 // GitHub outage that returned an empty array would otherwise overwrite a good
@@ -73,8 +71,8 @@ async function fetchHistory() {
   });
 }
 
-// Seed rows are hand-entered history from perf-budget.mjs's baseline comment;
-// nightly rows are measured. Merging them here rather than seeding the branch
+// Seed rows are hand-entered history from tools/perf-budget.ts's baseline
+// comment; nightly rows are measured. Merging them here rather than seeding the branch
 // keeps every hand-entered number in the repo, where a PR review can see it.
 // Dedupe on ts so a nightly row always wins over a seeded one for the same day.
 export function mergeHistory(nightly) {
@@ -83,8 +81,6 @@ export function mergeHistory(nightly) {
   for (const r of nightly) if (r && r.ts) byTs.set(r.ts, r);
   return [...byTs.values()].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
 }
-
-// ── chart ───────────────────────────────────────────────────────────────────
 
 const W = 620, H = 210, PAD_L = 46, PAD_R = 12, PAD_T = 14, PAD_B = 26;
 const PLOT_W = W - PAD_L - PAD_R;
@@ -126,8 +122,8 @@ function dots(rows, sc, pick, cls) {
 }
 
 function chart(rows) {
-  // Three series on one axis. They span 57-466 KiB, which is close enough that a
-  // shared axis reads fine and far better than three stacked charts: the whole
+  // Three series on one axis. They span 58-666 KiB (2026-10-16), close enough
+  // that a shared axis reads fine and far better than three stacked charts: the whole
   // question this page answers is how the parts move against each other.
   const series = [
     { key: "pages_br",    cls: "s-pages",  label: "all pages, Brotli" },
@@ -188,8 +184,6 @@ function chart(rows) {
   <li><i class="s-dash"></i>dashed: recorded by hand before this series existed</li>
 </ul>`;
 }
-
-// ── page ────────────────────────────────────────────────────────────────────
 
 // /garage/dyno is a BUILT document since 2026-09-25, in lib/island.ts's shape:
 // build.ts step 5b renders the shell once, so the lede, the footnote and 4 KB of
@@ -309,7 +303,7 @@ th.num,td.num{text-align:right}
 td{padding:4px 6px;border-bottom:1px solid var(--mist-96);color:var(--slate-38)}
 .mono{font-family:var(--font-mono);font-size:var(--text-2xs)}
 td.sha{color:#7a4eb0}
-td.src{font-size:var(--text-3xs);color:var(--slate-67)}
+td.src{font-size:var(--text-3xs);color:var(--slate-55)}
 .foot{font-size:var(--text-micro);color:var(--slate-55);border-top:1px solid var(--surface-desktop);padding-top:9px;margin-top:13px;line-height:1.55}
 /* the island's failure note, shown only if the pulls request failed */
 .dy-fail{display:none;font-size:var(--text-micro);color:var(--slate-55);margin:0 0 13px}

@@ -1,4 +1,4 @@
-// lib/doors.js — read what is actually BEHIND another origin's agent doors.
+// lib/doors.ts — read what is actually BEHIND another origin's agent doors.
 //
 // /lens knocks: it reports that a site has an llms.txt, that /mcp answers
 // JSON-RPC, that the page negotiates Markdown. It never walks through. That is
@@ -156,7 +156,7 @@ function refusedDoor(refusal: OutboundRefusal): { ok: false; unreadable: true; d
  * servers read as broken doors.
  *
  * `opts.schemas` additionally carries each tool's inputSchema, title and
- * annotations. OFF by default, because the three existing callers render a
+ * annotations. OFF by default, because the other callers render a
  * catalogue as prose and a schema would be dead weight in a terminal frame. The
  * Tools lens turns it on: a schema is the only thing a form can be built from.
  */
@@ -302,7 +302,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
       }),
     };
   } catch (error) {
-    // Same distinction as readable() above: a thrown request never reached the
+    // Same distinction as classifyDoor() below: a thrown request never reached the
     // server, so it says nothing about whether that server exists. A body we
     // DID receive and could not parse is a finding about them, not about us,
     // and is reported as a shut door above rather than as an unreadable one.
@@ -566,7 +566,7 @@ export async function readDoors(target, env) {
   const hostname = new URL(target).hostname;
   // The origin-level doors come from lens's CACHED discovery rather than being
   // re-probed here. This module originally fetched llms.txt, the agent card and
-  // the api-catalog itself, which duplicated four of lens's twenty-six probes —
+  // the api-catalog itself, which duplicated four of lens's probes —
   // wasteful, and worse, two surfaces on one site could disagree about the same
   // origin. One probe set, one answer, and a second read of the same host is now
   // free.
@@ -584,13 +584,6 @@ export async function readDoors(target, env) {
   ]);
   const { llms, agentCard, apiCatalog } = disco;
 
-  // SHUT and UNREADABLE are different answers and the frame must not merge them.
-  // A 404 means the door is not there. A transport error means we never got to
-  // look — locally that is the missing AadharshBot signing key, which fails
-  // EVERY external probe, and reporting that as "shut" would have this thing
-  // confidently announcing that well-known origins serve no llms.txt. Reporting
-  // a failed check as a negative result is the one dishonesty a tool like this
-  // cannot afford.
   const readable = classifyDoor;
 
   return {

@@ -573,3 +573,44 @@ skips it.
     the same size, because esbuild picks minified names by character
     frequency. A new reader of exact source text belongs in the ignore list.
     Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+
+75. **A playwright-core bump strands the canary's browser image.** The
+    browsers leg in `canary.yml` runs in `mcr.microsoft.com/playwright`,
+    pinned by tag and digest, and its pull step refuses an image whose
+    version differs from the installed playwright-core. Dependabot moves the
+    npm pin and never the image. #1364 moved playwright-core to 1.64.1 with
+    the image left on 1.63.0, and the leg failed at the pull step, before any
+    probe, on every nightly from 2026-10-15 to 2026-10-17. Move the tag and
+    its digest in the same PR; `curl -sI -H 'Accept:
+    application/vnd.oci.image.index.v1+json'
+    https://mcr.microsoft.com/v2/playwright/manifests/v<version>-noble`
+    prints the index digest as `docker-content-digest`.
+    Checked by: `tools/contract-the-browser-image-matches-playwright-core.test.mjs`.
+
+76. **`avifdec -d 8` truncates a 10-bit image before converting it.** libavif
+    hands a 10-bit 4:4:4 file to libyuv, which drops the YUV to 8 bits and then
+    converts, so the 8-bit PNG lands up to 3 levels under the file's true
+    pixels, 0.4 to 0.5 under on average, wrong on about 55% of samples.
+    Measured 2026-10-17 against an exact conversion of each file's own YUV
+    planes, for the shipped AV1 and the AV2 build alike: `-d 8` cost 0 to 1.8
+    ssimulacra2 on the 11 /garage/av2 samples (nothing on the 8-bit gray
+    Monochroms). `-d 16`, rounded once by `zenc frame`, has zero samples off,
+    and so does /garage/av2's WebAssembly decoder. djxl's 8-bit output rounds,
+    so until then every AVIF and AV2 score on the /pixel-peeper format axis
+    was handicapped against JPEG XL's by the decode, not the codec.
+    Checked by: `tools/contract-avif-scores-decode-exactly.test.mjs`.
+
+77. **WebKit blurs a window dragged to a fractional offset.** A dragged Luna
+    window keeps its `translate()` after the drag, and WebKit's
+    `PointerEvent.clientX` is a double, so a trackpad drag ended at offsets
+    like `translate(127.297px, 176.617px)`. Measured 2026-10-17 in Search, a
+    WKWebView browser, at 2x: on screen the whole window was resampled, and the
+    Laplacian sharpness of its body text fell from 23.3 to 16.3 (title bar 24.7
+    to 16.7). Whole and half-pixel offsets lost nothing, and dropping the
+    wallpaper's `translateZ(0)` changed nothing. WebKit's own snapshots
+    (`takeSnapshot`, Bun.WebView's `screenshot()`) paint the page crisp at the
+    same offset, so only a capture of the real window (`screencapture -l`)
+    shows it. `initDrag` in nav.js lands the window's corner on a device pixel
+    through `onGrid`. The icon and accessory drags commit `left`/`top` on
+    release, which WebKit snaps itself.
+    Checked by: `tools/contract-a-dragged-window-lands-on-a-device-pixel.test.mjs`.

@@ -10,7 +10,7 @@
 <link rel="canonical" href="https://aadhar.sh/garage/cloudflare">
 <meta property="og:type" content="website">
 <meta property="og:title" content="aadhar.sh/garage/four free Cloudflare features, live">
-<meta property="og:description" content="Live demos of four free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, Workers Logs structured observability, and custom trace spans) behind a tiny worker. A fifth, Browser Rendering, is wired but parked on the free tier's daily cap.">
+<meta property="og:description" content="Live demos of four free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, Workers Logs structured observability, and custom trace spans) behind a tiny worker. A fifth, Browser Run, is wired but parked on the free tier's daily cap.">
 <meta property="og:url" content="https://aadhar.sh/garage/cloudflare">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="https://aadhar.sh/og/garage-cloudflare.jpg">
@@ -44,13 +44,13 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/four free Cloudflare features, live</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>Four free Cloudflare features, live</h1>
     <p class="lede">
       The free Workers plan quietly bundles things that used to cost money or
@@ -127,7 +127,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       request shows its own spans in the trace waterfall.</p>
 
     <div class="callout" id="parked">
-      <b>The fifth, parked honestly: Browser Rendering.</b> <a class="term" data-t="headless-browser" href="https://en.wikipedia.org/wiki/Headless_browser" title="A web browser that runs with no window on screen, driven by code, so a program can load pages, run their scripts and capture the result." rel="external">Headless Chromium</a> in a Worker
+      <b>The fifth, parked honestly: Browser Run.</b> <a class="term" data-t="headless-browser" href="https://en.wikipedia.org/wiki/Headless_browser" title="A web browser that runs with no window on screen, driven by code, so a program can load pages, run their scripts and capture the result." rel="external">Headless Chromium</a> in a Worker
       via <code class="m">env.BROWSER.quickAction("screenshot", options)</code>, the basis for
       on-the-fly <code class="m">og:image</code> cards. I bind
       it and the worker deploys; no enable toggle exists (the binding
@@ -145,7 +145,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
 
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
 </div>
 
 <script>
@@ -309,7 +309,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       ]
     },
     {
-      "q": "Browser Rendering is bound and buttonless here. Why does its screenshot path use a Quick Action?",
+      "q": "Browser Run is bound and buttonless here. Why does its screenshot path use a Quick Action?",
       "options": [
         {
           "t": "It is one bounded screenshot operation, so the binding can own the session without bundling a whole CDP client.",

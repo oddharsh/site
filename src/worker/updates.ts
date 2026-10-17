@@ -1,5 +1,6 @@
-// updates.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+// updates.ts: /updates (Windows Update) and /restore (System Restore), two XP
+// views of the site's release checkpoints, plus /updates.json.
+
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
@@ -10,51 +11,34 @@ import checkpoints from "./checkpoints.json" with { type: "json" };
 export async function handleWindowsUpdate(request, env, ctx) {
   // Version-keyed edge cache (caches.default): the changelog changes only on
   // deploy, and a deploy mints a fresh cache key, so the rendered shell serves
-  // for up to s-maxage=300 without re-querying D1 on every visit.
+  // for up to s-maxage=300 without re-rendering on every visit.
   return cachedRender(request, ctx, () => readCheckpoints(env).then(renderWindowsUpdate), "/updates", env);
 }
 
-// The deploy log, read ONCE and handed to the three renderers that project it.
+// The release log, read ONCE and handed to the three renderers that project it.
 //
-// The one reader behind /updates, /updates.json and /restore, which is what keeps
-// them from drifting apart. Each used to run its own D1 SELECT with its own LIMIT
-// and its own error handling.
+// It reads the BUNDLED projection (src/worker/checkpoints.json) rather than D1,
+// and that is the point. build.ts calls the three renderers in Node against the
+// same file and bakes updates.html + restore.html at deploy time, so /updates.json
+// serves literally the same bytes the two HTML pages render from, and the three
+// cannot disagree. Baking costs no freshness, because the file changes only in
+// the PR that ships a release (tools/photos/bump-version.sh writes the entry).
 //
-// It also makes the three renderers PURE, so build.ts can call them in Node against
-// the committed projection (src/worker/checkpoints.json, written by
-// bump-version.sh) and emit updates.html + restore.html at deploy time. Those two
-// pages are the only dynamic surfaces whose data changes ONLY at deploy (an entry
-// enters the projection in the PR that ships with it), so baking them costs no
-// freshness at all, unlike /reading or /around whose feeds move on their own.
+// D1 records what actually SHIPPED. Nothing on the release path writes it since
+// 2026-09-28 (#1002), so `bun run checkpoints:record` copies released entries in
+// from a workstation, and `bun run checkpoints:check` fails when the two diverge
+// beyond a tail of staged entries (tools/lib/checkpoints.ts). env stays in the
+// signature because the handlers pass it.
 export async function readCheckpoints(env) {
-  // The BUNDLED projection, not a D1 read, and that is the point.
-  //
-  // /updates and /restore are precomputed from this file at build time. If this
-  // function went to D1 at runtime, /updates.json would answer from a different
-  // source than the two HTML pages render from, and the three could disagree the
-  // moment a checkpoint landed without a deploy. CLAUDE.md calls out that /updates
-  // and /restore reading one table "is what stops those two pages drifting apart";
-  // reading one committed file is the same guarantee, made stronger — all three
-  // surfaces now serve literally the same bytes rather than the same query.
-  //
-  // D1 is the record of what shipped. bump-version.sh stages an entry in this file
-  // inside the release PR, `bun run checkpoints:record` copies released entries
-  // into D1 from a workstation, and `bun run checkpoints:check` fails when the two
-  // disagree or production carries an entry D1 lacks (tools/lib/checkpoints.ts).
-  // env is kept in the signature because the handlers pass it and a future caller
-  // may want the live table; nothing here needs it today.
   return { points: checkpoints, state: checkpoints.length ? "ok" : "empty" };
 }
 
 export async function renderWindowsUpdate(cp) {
-  // The same projection that backs /restore, so the two cannot drift apart. One
-  // row per logged release (tools/photos/bump-version.sh mints the next vnum from
-  // the projection; the retired service worker used to carry it as CACHE_VERSION).
-  // The recent rows ARE the changelog. The newest row is the newest LOGGED release,
-  // which is the running build only when the release that serves carried an entry;
+  // The recent entries ARE the changelog. The newest is the newest LOGGED release,
+  // the running build only when the release that serves carried an entry;
   // /whoareyou.json reports the serving version itself.
   const state = cp.state;
-  const pts = cp.points.slice(-18).reverse();          // newest first, same as the old DESC LIMIT 18
+  const pts = cp.points.slice(-18).reverse();          // newest first
   let build = "aadhar.sh", log = [];
   if (pts.length) { build = pts[0].version; log = pts.map((p) => [p.slug, p.title]); }
   const rows = log.length
@@ -109,13 +93,13 @@ export async function renderWindowsUpdate(cp) {
 }
 
 // brief JSON for the Windows Update tray balloon: running build + recent changelog,
-// read from the same D1 checkpoints log as /updates and /restore.
+// read from the same checkpoints projection as /updates and /restore.
 export async function handleUpdatesJson(request, env, ctx) {
   return cachedRender(request, ctx, () => readCheckpoints(env).then(renderUpdatesJson), "/updates.json", env);
 }
 
 export async function renderUpdatesJson(cp) {
-  const pts = cp.points.slice(-8).reverse();           // newest first, same as the old DESC LIMIT 8
+  const pts = cp.points.slice(-8).reverse();           // newest first
   let build = "aadhar.sh", items = [];
   if (pts.length) { build = pts[0].version; items = pts.map((p) => ({ slug: p.slug, title: p.title })); }
   return jsonResponse({ build, items }, 200, {
@@ -125,13 +109,11 @@ export async function renderUpdatesJson(cp) {
   }, { pretty: false });
 }
 
-// ── /restore handler (Windows System Restore reskin, backed by D1) ───
-// Restore points live in the aadhar-restore D1 database, one row per logged
-// deploy (bump-version.sh insert), seeded from this repo's git history. The
+// ── /restore handler (Windows System Restore reskin) ─────────────────
+// One restore point per release entry in the checkpoints projection. The
 // scrubber previews the recorded state at any past point; it changes nothing.
-// A real rollback is a destructive D1 Time Travel restore run from the CLI
-// (7-day window on the free plan), never exposed to a visitor. env.RESTORE_DB
-// is a dashboard binding; this page degrades gracefully when it is absent.
+// A real rollback is `bun run deploy:promote --rollback` from a workstation,
+// never exposed to a visitor.
 export async function handleSystemRestore(request, env, ctx) {
   return cachedRender(request, ctx, () => readCheckpoints(env).then(renderSystemRestore), "/restore", env);
 }
@@ -139,8 +121,8 @@ export async function handleSystemRestore(request, env, ctx) {
 export async function renderSystemRestore(cp) {
   const points = cp.points;
   const state = cp.state;
-  // "You are here" tracks the newest checkpoint in D1, so it can't go stale on deploy
-  // the way a hardcoded constant did. Backfill recent deploys into the log to keep it current.
+  // "You are here" tracks the newest checkpoint, so it can't go stale on deploy
+  // the way a hardcoded constant did.
   const newest = points.length ? points[points.length - 1] : null;
   const live = newest
     ? { version: newest.version, title: newest.title, ymd: newest.ymd }

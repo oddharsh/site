@@ -208,10 +208,6 @@ export function parseAskRequest(url, body): { ok: true, params: any } | { ok: fa
   };
 }
 
-/**
- * The answer itself, in NLWeb's result shape. Shared by /ask and the `ask` MCP
- * tool, so the two doors cannot describe this origin differently.
- */
 // Why a query was ranked lexically, in the words `_meta.ranking` reports.
 const FALLBACK = {
   "no AI binding": "lexical: no Workers AI binding here",
@@ -244,6 +240,10 @@ async function clefRanked(env, params, request, lexical): Promise<ClefRanking> {
   return { kept, p };
 }
 
+/**
+ * The answer itself, in NLWeb's result shape. Shared by /ask and the `ask` MCP
+ * tool, so the two doors cannot describe this origin differently.
+ */
 export async function nlwebAsk(env, params, request: Request | null = null) {
   const limit = Math.min(50, Math.max(1, Number(params.limit) || 20));
   const lexical = await searchSiteRanked(env, params.searched, 50);
@@ -341,9 +341,9 @@ function streamAnswer(payload, structured) {
     plain({ message_type: "end-nlweb-response", conversation_id: payload.query_id, timestamp: Date.now() });
   }
 
-  // The whole answer is in hand before the first byte: the corpus is a bundled
-  // index and the ranking is synchronous, so there is no phase that could
-  // arrive later. Streaming is served because the protocol asks for it, and
+  // The whole answer is in hand before the first byte: nlwebAsk has finished
+  // searching and ranking (Clef included) before this stream opens, so there is
+  // no phase that could arrive later. Streaming is served because the protocol asks for it, and
   // pretending it bought latency here would be theatre.
   return new Response(new ReadableStream({
     start(controller) {

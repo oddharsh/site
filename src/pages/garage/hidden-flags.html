@@ -56,13 +56,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/hidden-flags</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>Flags the docs don't list</h1>
 <p class="garage-intro"><a class="term" data-t="wrangler" href="https://developers.cloudflare.com/workers/wrangler/" title="Cloudflare's command-line tool for developing, configuring and deploying Workers." rel="external">Wrangler</a> 4.125.0 carries nineteen flags marked hidden, so they appear in no help output and no documentation page. Reading them is easy. The hard part is that an option a tool silently ignores and an option it honours produce the same <a class="term" data-t="exit-code" href="https://en.wikipedia.org/wiki/Exit_status" title="The number a program reports when it finishes; 0 means success and anything else signals an error." rel="external">exit code</a>, the same output, and the same success. This page is about the control that separates those two, why it usually costs nothing, and four times the difference decided something real on this site.</p>
 
@@ -149,7 +149,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
 <p>A tool that accepts unknown flags silently would break the free half outright, and the check for that is the bogus-flag control itself: an exit code of 0 on an invented name means every conclusion on this page has to be re-earned with real runs. A hidden flag becoming documented would move its row from this list to an ordinary reference, which is the outcome to hope for. And a measurement showing the capture does honour <code>waitForTimeout</code> would close the one case here that is deliberately still open.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-24</span></div>
 </div>
 

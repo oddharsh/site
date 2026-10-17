@@ -30,7 +30,7 @@
 #axp-run .opt{display:flex;align-items:baseline;gap:8px;padding:3px 9px;cursor:pointer;white-space:nowrap;text-decoration:none;color:inherit}
 #axp-run .opt .nm{font-weight:bold;color:oklch(30% 0.03 255)}
 #axp-run .opt .ht{color:var(--ink-dim);font-size:11px;overflow:hidden;text-overflow:ellipsis}
-#axp-run .opt .pa{margin-left:auto;color:var(--grey-60);font-family:var(--font-mono,'Courier New',monospace);font-size:10px}
+#axp-run .opt .pa{margin-left:auto;color:var(--ink-faint);font-family:var(--font-mono,'Courier New',monospace);font-size:10px}
 #axp-run .opt[aria-selected=true]{background:oklch(50% 0.22 263);color:oklch(100% 0 0)}
 #axp-run .opt[aria-selected=true] .nm,#axp-run .opt[aria-selected=true] .ht,#axp-run .opt[aria-selected=true] .pa{color:oklch(100% 0 0)}
 #axp-run .empty{padding:8px 10px;color:var(--ink-dim);font-style:italic}
