@@ -1,17 +1,11 @@
-import { claimReservation, dropReservation } from "../../cal/src/reservation.ts";
-import { jsonResponse, PLAIN_JSON } from "../../src/worker/lib/http.ts";
-
-// Same bytes and headers as json(): this only ever answers aadhar-sh.
-const json = (body, status = 200) => jsonResponse(body, status, PLAIN_JSON, { pretty: false });
-
 // counter.ts — the Counter Durable Object, which aadhar-counter implements and
 // aadhar-sh binds as COUNTER.
 //
 // It lived in the site Worker (src/worker/counter.ts) from 2026-07-01 until it
 // moved here by transfer on 2026-09-29, because a Worker that implements a
-// Durable Object gets no preview URLs (CLAUDE.md, "Moving Counter out"). The
-// code moved unchanged. So did the data: the transfer kept the namespace, so
-// "homepage-visits" and every coffee slot claim are the same objects they were.
+// Durable Object gets no preview URLs (docs/MAINTENANCE.md, "Preview URLs").
+// The transfer kept the namespace, so "homepage-visits" and every coffee slot
+// claim are the same objects they were.
 //
 // Same wire protocol the site's /hit handler speaks: GET https://do/ increments
 // and returns {n}; ?peek=1 reads without bumping (bots, prerender). Storage is
@@ -29,6 +23,13 @@ const json = (body, status = 200) => jsonResponse(body, status, PLAIN_JSON, { pr
 // It is hand-rolled rather than extending DurableObject from
 // "cloudflare:workers", for the reason gotcha 16 gives: the contract suite
 // imports these modules outside workerd, where that scheme does not resolve.
+
+import { claimReservation, dropReservation } from "../../cal/src/reservation.ts";
+import { jsonResponse, PLAIN_JSON } from "../../src/worker/lib/http.ts";
+
+// Same bytes and headers as Response.json(): this only ever answers aadhar-sh.
+const json = (body, status = 200) => jsonResponse(body, status, PLAIN_JSON, { pretty: false });
+
 export class Counter {
   state: DurableObjectState;
 
@@ -58,7 +59,6 @@ export class Counter {
 
     let n = (await this.state.storage.get<number>("n")) || 0;
 
-    // read-only: bots + speculative prerenders see the value without bumping it
     if (url.searchParams.has("peek")) return json({ n });
 
     // default: atomic increment (classic-90s-counter behavior, no session dedup)
