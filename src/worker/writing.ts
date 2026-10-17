@@ -44,6 +44,9 @@ font:11px var(--font-ui);color:var(--ink);padding:4px 8px 4px 2px;text-align:lef
 .np-text{flex:0 1 auto;field-sizing:content;min-height:8em;max-height:calc(100dvh - 150px);width:100%;box-sizing:border-box;border:0;outline:none;resize:none;padding:9px 11px;background:oklch(100% 0 0);
 color:oklch(16% 0 0);font-family:var(--font-mono);font-size:13px;line-height:1.55;white-space:pre-wrap;overflow:auto;tab-size:4}
 .np-text.nowrap{white-space:pre;overflow:auto}
+/* the standalone note's <main> passes the window's flex column through, so
+   the textarea still fills the window it did before the landmark wrapped it */
+.np-main{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 .np-edited{color:var(--ink-quiet)}
 /* a note opened as a popover — floats over the folder ("selecting menu"),
    clears the taskbar, and keeps the window chrome (drag/resize/scrollbar). */
@@ -163,7 +166,11 @@ export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: 
     // parser reads value as the post verbatim and html as that text escaped,
     // which is the honest HTML of a plain-text note. A second visible or hidden
     // copy would double the page to give parsers what they already get here.
+    // The standalone note's textarea is the skip link's #main. A popover note
+    // sits inside the folder page, which has its own <main>, so it gets none.
+    (popId ? "" : "<main id=\"main\" class=\"np-main\">") +
     "<textarea class=\"np-text" + (entry ? " e-content" : "") + "\" spellcheck=\"false\" aria-label=\"" + escAttr(filename) + "\">" + escHtml(text) + "</textarea>" +
+    (popId ? "" : "</main>") +
     "<div class=\"xp-statusbar panes np-status\"><span class=\"np-pos\">Ln 1, Col 1</span><span class=\"np-wc fill\"></span>" +
       (date ? "<span class=\"np-edited\">last changed " + stamp + "</span>" : "") + "</div></div>";
 }
@@ -261,8 +268,8 @@ export async function renderWritingIndex(env) {
           .concat(twinFor("/writing") ? [{ href: twinFor("/writing"), label: "Read this as Markdown" }] : []),
       details: [{ term: "Contains", value: posts.length + (posts.length === 1 ? " document" : " documents") }],
     })) +
-    "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one: it's a real text field you can edit, though it reverts to my canonical version on reload.</p>" +
-      "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
+    "<main id=\"main\" class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one: it's a real text field you can edit, though it reverts to my canonical version on reload.</p>" +
+      "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></main>" +
     "<div class=\"xp-statusbar panes np-status\"><span class=\"fill\">" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +
       "<span>" + fmtNum(entries.reduce(function (a, e) { return a + e.chars; }, 0)) + " characters</span></div></div>" +
     notes;
