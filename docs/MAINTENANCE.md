@@ -431,8 +431,9 @@ For eight weeks before that they served nothing: `aadhar-sh` exported the
 `Counter` Durable Object, Cloudflare generates no version URLs for a Worker
 that implements one, and every version carried `has_preview: false` while
 every config said previews were on. Moving `Counter` to `aadhar-counter`
-fixed it. CLAUDE.md, "Preview URLs SERVE since 2026-09-29" and "Moving Counter
-out", have the diagnosis and the move. **Keep this Worker free of Durable
+fixed it. The diagnosis and the move are in the CLAUDE.md sections "Preview
+URLs SERVE since 2026-09-29" and "Moving Counter out", cut in #1126 and still
+readable with `git show c3af691b^:CLAUDE.md`. **Keep this Worker free of Durable
 Objects**, or every preview URL goes back to a 404 that says nothing about why.
 The one-read check is the version's `has_preview`:
 

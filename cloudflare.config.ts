@@ -137,7 +137,7 @@ const worker = defineWorker({
   // They SERVE since 2026-09-29, and served nothing for the eight weeks before:
   // this Worker exported the Counter Durable Object, and Cloudflare mints no
   // preview URL for a Worker that implements one, whatever this line says.
-  // Counter moved to aadhar-counter; CLAUDE.md "Moving Counter out" has it. So
+  // Counter moved to aadhar-counter; docs/MAINTENANCE.md "Preview URLs" has it. So
   // this Worker must implement NO Durable Object, and a contract test holds it.
   //
   // A preview runs production bindings and secrets (Cloudflare has no
@@ -316,7 +316,7 @@ const worker = defineWorker({
     SOCIAL_DB: bindings.d1({ name: "aadhar-social", id: "b3ab51c4-da04-40ec-9b36-c7e06611f4ab" }),
 
     // The Counter Durable Object lives in the aadhar-counter Worker (counter/)
-    // since step 3 of "Moving Counter out" (CLAUDE.md): this Worker binds it
+    // since the 2026-09-29 transfer (counter/wrangler.jsonc): this Worker binds it
     // there and no longer implements it, which is what lets it have preview
     // URLs. Same class name, same instances, same storage: the namespace moved
     // by transfer, so "homepage-visits" and every coffee-slot claim came with it.
